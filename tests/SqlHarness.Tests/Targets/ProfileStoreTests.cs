@@ -66,6 +66,36 @@ public sealed class ProfileStoreTests
         finally { File.Delete(path); }
     }
 
+    [Theory]
+    [InlineData("{ \"prod\": { \"server\": \"s\", \"database\": \"d\", \"vars\": {}, \"auth\": \"integrated\" }, \"prod\": { \"server\": \"other\", \"database\": \"d\", \"vars\": {}, \"auth\": \"integrated\" } }")]
+    [InlineData("{ \"prod\": { \"server\": \"s\", \"server\": \"other\", \"database\": \"d\", \"vars\": {}, \"auth\": \"integrated\" } }")]
+    [InlineData("{ \"prod\": { \"server\": \"s\", \"database\": \"d\", \"vars\": { \"tenant\": \"x\", \"tenant\": \"y\" }, \"auth\": \"integrated\" } }")]
+    public void Duplicate_names_and_members_are_rejected(string json)
+    {
+        var path = WriteTemp(json);
+        try
+        {
+            var error = Assert.Throws<SqlHarnessSafetyException>(() => ProfileStore.Load(path));
+            Assert.Contains(path, error.Message);
+            Assert.DoesNotContain("other", error.ToString());
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Null_regex_value_is_rejected_as_safety_error()
+    {
+        var path = WriteTemp("""
+            { "prod": { "server": "s", "database": "d-{tenant}", "vars": { "tenant": null }, "auth": "integrated" } }
+            """);
+        try
+        {
+            var error = Assert.Throws<SqlHarnessSafetyException>(() => ProfileStore.Load(path));
+            Assert.Contains(path, error.Message);
+        }
+        finally { File.Delete(path); }
+    }
+
     private static string WriteTemp(string content)
     {
         var path = Path.Combine(Path.GetTempPath(), $"targets-{Guid.NewGuid():N}.json");

@@ -41,7 +41,10 @@ public sealed record SqlTargetRequest(
     string? Server = null,
     string? Database = null,
     string? Auth = null,
-    bool UnsafeDirect = false);
+    bool UnsafeDirect = false,
+    string? SqlUser = null,
+    string? PasswordEnvVar = null,
+    bool TrustServerCertificate = false);
 
 public sealed record SqlHarnessOutcome(
     SqlHarnessExitCode ExitCode,

@@ -86,6 +86,46 @@ public sealed class TargetResolverTests
     }
 
     [Fact]
+    public void Invalid_profile_auth_is_rejected_without_echoing_config_value()
+    {
+        const string secretAuth = "SECRET_AUTH_STRATEGY";
+        var profiles = new Dictionary<string, TargetProfile>
+        {
+            ["broken"] = new("server", "database", EmptyVars(), secretAuth),
+        };
+
+        var error = Assert.Throws<SqlHarnessSafetyException>(() =>
+            TargetResolver.Resolve(new SqlTargetRequest("broken", EmptyVars()), profiles));
+
+        Assert.DoesNotContain(secretAuth, error.ToString());
+        Assert.Null(error.InnerException);
+    }
+
+    [Fact]
+    public void Regex_timeout_is_sanitized_without_value_or_inner_exception()
+    {
+        const string secretSuffix = "SECRET_TIMEOUT_VALUE";
+        var profiles = new Dictionary<string, TargetProfile>
+        {
+            ["slow"] = new(
+                "server",
+                "db-{tenant}",
+                new Dictionary<string, string> { ["tenant"] = "^(a+)+$" },
+                "integrated"),
+        };
+        var value = new string('a', 100_000) + secretSuffix;
+
+        var error = Assert.Throws<SqlHarnessSafetyException>(() =>
+            TargetResolver.Resolve(
+                new SqlTargetRequest("slow", new Dictionary<string, string> { ["tenant"] = value }),
+                profiles));
+
+        Assert.Contains("timed out", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(secretSuffix, error.ToString());
+        Assert.Null(error.InnerException);
+    }
+
+    [Fact]
     public void Resolves_direct_target()
     {
         var request = new SqlTargetRequest(null, EmptyVars(), "server", "database", "integrated", true);
@@ -96,6 +136,80 @@ public sealed class TargetResolverTests
         Assert.Equal("database", target.Database);
         Assert.Equal(AuthStrategy.Integrated, target.Auth.Strategy);
         Assert.Equal("direct", target.Mode);
+    }
+
+    [Theory]
+    [InlineData("azure-cli", AuthStrategy.AzureCli)]
+    [InlineData("ad-default", AuthStrategy.AdDefault)]
+    [InlineData("integrated", AuthStrategy.Integrated)]
+    public void Resolves_each_non_sql_direct_auth_strategy(string auth, AuthStrategy expected)
+    {
+        var request = new SqlTargetRequest(null, EmptyVars(), "server", "database", auth, true);
+
+        Assert.Equal(expected, TargetResolver.Resolve(request, Profiles).Auth.Strategy);
+    }
+
+    [Fact]
+    public void Resolves_direct_sql_auth_with_password_environment_variable()
+    {
+        const string passwordVariable = "SQLHARNESS_TEST_PASSWORD";
+        Environment.SetEnvironmentVariable(passwordVariable, "test-only-password");
+        try
+        {
+            var request = new SqlTargetRequest(
+                null, EmptyVars(), "server", "database", "sql", true,
+                SqlUser: "agent", PasswordEnvVar: passwordVariable);
+
+            var target = TargetResolver.Resolve(request, Profiles);
+
+            Assert.Equal(AuthStrategy.Sql, target.Auth.Strategy);
+            Assert.Equal("agent", target.Auth.SqlUser);
+            Assert.Equal(passwordVariable, target.Auth.PasswordEnvVar);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(passwordVariable, null);
+        }
+    }
+
+    [Theory]
+    [InlineData(null, "PASSWORD", "user")]
+    [InlineData("agent", null, "password")]
+    public void Rejects_direct_sql_auth_with_missing_fields(string? user, string? passwordVariable, string expected)
+    {
+        var request = new SqlTargetRequest(
+            null, EmptyVars(), "server", "database", "sql", true,
+            SqlUser: user, PasswordEnvVar: passwordVariable);
+
+        AssertSafety(request, expected);
+    }
+
+    [Fact]
+    public void Preserves_direct_trust_server_certificate_flag()
+    {
+        var request = new SqlTargetRequest(
+            null, EmptyVars(), "server", "database", "integrated", true,
+            TrustServerCertificate: true);
+
+        Assert.True(TargetResolver.Resolve(request, Profiles).Auth.TrustServerCertificate);
+    }
+
+    [Theory]
+    [InlineData("agent", null, false)]
+    [InlineData(null, "PASSWORD", false)]
+    [InlineData(null, null, true)]
+    [InlineData("", null, false)]
+    [InlineData(null, "", false)]
+    public void Rejects_direct_auth_fields_in_profile_mode(string? user, string? passwordVariable, bool trust)
+    {
+        var request = new SqlTargetRequest(
+            "prod-eu",
+            new Dictionary<string, string> { ["tenant"] = "acme", ["env"] = "uat" },
+            SqlUser: user,
+            PasswordEnvVar: passwordVariable,
+            TrustServerCertificate: trust);
+
+        AssertSafety(request, "profile");
     }
 
     [Fact]
@@ -117,6 +231,37 @@ public sealed class TargetResolverTests
     [Fact]
     public void Rejects_neither_profile_nor_direct_target() =>
         AssertSafety(new SqlTargetRequest(null, EmptyVars()), "target");
+
+    [Fact]
+    public void Rejects_terminal_newline_regex_bypass()
+    {
+        var request = new SqlTargetRequest("prod-eu", new Dictionary<string, string>
+        {
+            ["tenant"] = "acme\n", ["env"] = "uat",
+        });
+
+        AssertSafety(request, "tenant");
+    }
+
+    [Fact]
+    public void Rejects_null_vars_dictionary_without_null_reference_exception()
+    {
+        var error = Assert.Throws<SqlHarnessSafetyException>(() =>
+            TargetResolver.Resolve(new SqlTargetRequest("prod-eu", null!), Profiles));
+
+        Assert.Contains("vars", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Rejects_null_var_value_without_null_reference_exception()
+    {
+        var request = new SqlTargetRequest("prod-eu", new Dictionary<string, string>
+        {
+            ["tenant"] = null!, ["env"] = "uat",
+        });
+
+        AssertSafety(request, "tenant");
+    }
 
     private static IReadOnlyDictionary<string, string> EmptyVars() => new Dictionary<string, string>();
 

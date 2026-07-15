@@ -20,7 +20,9 @@ public static class ProfileStore
         try
         {
             using var stream = File.OpenRead(path);
-            var profiles = JsonSerializer.Deserialize<Dictionary<string, TargetProfile>>(stream, Options)
+            using var document = JsonDocument.Parse(stream);
+            RejectDuplicateProperties(document.RootElement);
+            var profiles = document.RootElement.Deserialize<Dictionary<string, TargetProfile>>(Options)
                 ?? throw new JsonException("The profile document was null.");
 
             foreach (var (name, profile) in profiles)
@@ -32,6 +34,12 @@ public static class ProfileStore
                 {
                     throw new JsonException("A profile is incomplete.");
                 }
+
+                if (profile.Vars.Any(variable =>
+                        string.IsNullOrWhiteSpace(variable.Key) || variable.Value is null))
+                {
+                    throw new JsonException("A profile variable rule is invalid.");
+                }
             }
 
             return profiles;
@@ -39,6 +47,25 @@ public static class ProfileStore
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
             throw new SqlHarnessSafetyException($"Could not parse target profiles file '{path}'.");
+        }
+    }
+
+    private static void RejectDuplicateProperties(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var property in element.EnumerateObject())
+            {
+                if (!names.Add(property.Name))
+                    throw new JsonException("A duplicate JSON property was found.");
+                RejectDuplicateProperties(property.Value);
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+                RejectDuplicateProperties(item);
         }
     }
 }

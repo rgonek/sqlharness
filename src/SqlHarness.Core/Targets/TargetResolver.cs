@@ -17,12 +17,19 @@ public static class TargetResolver
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(profiles);
 
+        if (request.Vars is null)
+            throw new SqlHarnessSafetyException("Target vars cannot be null.");
+
         var hasProfile = !string.IsNullOrWhiteSpace(request.Profile);
         var hasDirectFields = !string.IsNullOrWhiteSpace(request.Server) ||
                               !string.IsNullOrWhiteSpace(request.Database) ||
                               !string.IsNullOrWhiteSpace(request.Auth);
 
-        if (hasProfile && (request.UnsafeDirect || hasDirectFields))
+        var hasDirectAuthSettings = request.SqlUser is not null ||
+                                    request.PasswordEnvVar is not null ||
+                                    request.TrustServerCertificate;
+
+        if (hasProfile && (request.UnsafeDirect || hasDirectFields || hasDirectAuthSettings))
             throw new SqlHarnessSafetyException("A profile cannot be combined with direct target options.");
 
         if (hasProfile)
@@ -56,6 +63,11 @@ public static class TargetResolver
         var database = profile.Database;
         foreach (var (name, pattern) in profile.Vars)
         {
+            if (pattern is null)
+                throw new SqlHarnessSafetyException($"Profile var '{name}' has an invalid validation regex.");
+            if (request.Vars[name] is null)
+                throw new SqlHarnessSafetyException($"Profile var '{name}' cannot be null.");
+
             Regex validator;
             try
             {
@@ -71,12 +83,13 @@ public static class TargetResolver
 
             try
             {
-                if (!validator.IsMatch(request.Vars[name]))
+                var match = validator.Match(request.Vars[name]);
+                if (!match.Success || match.Index != 0 || match.Length != request.Vars[name].Length)
                     throw new SqlHarnessSafetyException($"Profile var '{name}' does not match its validation rule.");
             }
-            catch (RegexMatchTimeoutException exception)
+            catch (RegexMatchTimeoutException)
             {
-                throw new SqlHarnessSafetyException($"Validation timed out for profile var '{name}'.", exception);
+                throw new SqlHarnessSafetyException($"Validation timed out for profile var '{name}'.");
             }
 
             database = database.Replace($"{{{name}}}", request.Vars[name], StringComparison.Ordinal);
@@ -85,11 +98,21 @@ public static class TargetResolver
         if (Placeholder.IsMatch(database))
             throw new SqlHarnessSafetyException("The database template contains an unresolved placeholder.");
 
-        return new ResolvedTarget(
-            profile.Server,
-            database,
-            AuthSpec.Parse(profile.Auth, profile.SqlUser, profile.PasswordEnvVar, profile.TrustServerCertificate),
-            "profile");
+        AuthSpec auth;
+        try
+        {
+            auth = AuthSpec.Parse(
+                profile.Auth,
+                profile.SqlUser,
+                profile.PasswordEnvVar,
+                profile.TrustServerCertificate);
+        }
+        catch (SqlHarnessSafetyException)
+        {
+            throw new SqlHarnessSafetyException("The profile authentication settings are invalid.");
+        }
+
+        return new ResolvedTarget(profile.Server, database, auth, "profile");
     }
 
     private static ResolvedTarget ResolveDirect(SqlTargetRequest request)
@@ -106,7 +129,11 @@ public static class TargetResolver
         return new ResolvedTarget(
             request.Server,
             request.Database,
-            AuthSpec.Parse(request.Auth, null, null, false),
+            AuthSpec.Parse(
+                request.Auth,
+                request.SqlUser,
+                request.PasswordEnvVar,
+                request.TrustServerCertificate),
             "direct");
     }
 }
