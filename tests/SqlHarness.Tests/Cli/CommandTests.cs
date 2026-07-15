@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text;
 using SqlHarness.Cli;
 using SqlHarness.Core;
 
@@ -37,6 +38,22 @@ public sealed class CommandTests
         Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
         Assert.Empty(module.Operations);
         Assert.Contains("key=value", output.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("region=eu", "region=us")]
+    [InlineData("Region=eu", "region=us")]
+    public async Task Query_rejects_duplicate_var_keys_case_insensitively_before_dispatch(string first, string second)
+    {
+        var module = new FakeModule(Success(QueryReport()));
+        var output = new StringWriter();
+        var app = SqlHarnessCli.Create(module, output, new StringReader("select 1"), true);
+
+        var exit = await app.RunAsync(["query", "dev", "--var", first, "--var", second]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+        Assert.Empty(module.Operations);
+        Assert.Equal($"Duplicate --var key 'region'.{Environment.NewLine}", output.ToString(), ignoreCase: true);
     }
 
     public static TheoryData<string[]> InvalidTargets => new()
@@ -117,6 +134,58 @@ public sealed class CommandTests
         Assert.Contains("[REDACTED]", output.ToString(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Text_command_completes_receipt_once_with_actual_utf8_and_platform_lines()
+    {
+        OutputFootprint? footprint = null;
+        var completions = 0;
+        var report = QueryReport() with { Messages = ["Zażółć \u001b[31mgęślą\u001b[0m jaźń"] };
+        var receipt = new SqlHarnessEmissionReceipt((emitted, _) =>
+        {
+            completions++;
+            footprint = emitted;
+            return Task.FromResult(SqlHarnessExitCode.Success);
+        });
+        var module = new FakeModule(Success(report) with { EmissionReceipt = receipt });
+        var output = new StringWriter();
+
+        var exit = await SqlHarnessCli.Create(module, output, new StringReader("select 1"), true).RunAsync(["query", "dev"]);
+
+        Assert.Equal(0, exit);
+        Assert.Equal(1, completions);
+        Assert.NotNull(footprint);
+        var visible = output.ToString().Replace("\u001b[31m", string.Empty).Replace("\u001b[0m", string.Empty);
+        Assert.Equal(Encoding.UTF8.GetByteCount(visible), footprint.Bytes);
+        Assert.Equal(CountLines(visible), footprint.Lines);
+        Assert.Contains("Zażółć \u001b[31mgęślą\u001b[0m jaźń", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Json_command_receipt_failure_overrides_exit_once_without_output_corruption()
+    {
+        OutputFootprint? footprint = null;
+        var completions = 0;
+        var receipt = new SqlHarnessEmissionReceipt((emitted, _) =>
+        {
+            completions++;
+            footprint = emitted;
+            return Task.FromResult(SqlHarnessExitCode.LocalStorage);
+        });
+        var report = QueryReport() with { Messages = ["Łódź"] };
+        var module = new FakeModule(Success(report) with { EmissionReceipt = receipt });
+        var output = new StringWriter();
+
+        var exit = await SqlHarnessCli.Create(module, output, new StringReader("select 1"), true).RunAsync(["query", "dev", "--json"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.LocalStorage, exit);
+        Assert.Equal(1, completions);
+        Assert.NotNull(footprint);
+        Assert.Equal(Encoding.UTF8.GetByteCount(output.ToString()), footprint.Bytes);
+        Assert.Equal(CountLines(output.ToString()), footprint.Lines);
+        using var json = JsonDocument.Parse(output.ToString());
+        Assert.Equal("Łódź", json.RootElement.GetProperty("messages")[0].GetString());
+    }
+
     private static SqlHarnessOutcome Success(object report) => new(SqlHarnessExitCode.Success, report, null);
     private static SqlHarnessQueryReport QueryReport() => new(new("expected", "db", "expected", "db", "profile"), "read-only", [], [], 0, 1, "hash", new(10, 1));
     private static CompareVariantReport Variant(string name) => new(name, new(1, 2, 3), new(1, 2, 3), new(1, 2, 3), new Dictionary<string, long>(), [], []);
@@ -124,6 +193,7 @@ public sealed class CommandTests
     private static SqlHarnessCompareReport CompareReport() => new(new("s", "d", "s", "d", "profile"), 5, 10, true, Variant("baseline"), Variant("candidate"), null);
     private static SqlHarnessGainReport GainReport() { var s = new SqlHarnessGainSummary(0, 0, 0, 0, 0, 0, 0, 0, 0, 0); return new(s, s, s); }
     private static string TempFile(string content) { var path = Path.GetTempFileName(); File.WriteAllText(path, content); return path; }
+    private static long CountLines(string value) => value.Length == 0 ? 0 : value.Count(c => c == '\n') + (value[^1] == '\n' ? 0 : 1);
 
     private sealed class FakeModule(SqlHarnessOutcome outcome) : ISqlHarnessModule
     {

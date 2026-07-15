@@ -39,7 +39,15 @@ public abstract class TargetSettings : CommandSettings
         {
             var separator = item.IndexOf('=');
             if (separator < 1) { error = "Each --var must use key=value format."; return false; }
-            vars[item[..separator]] = item[(separator + 1)..];
+            var key = item[..separator];
+            if (!vars.TryAdd(key, item[(separator + 1)..]))
+            {
+                var safeKey = key.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.');
+                error = safeKey
+                    ? $"Duplicate --var key '{key.ToLowerInvariant()}'."
+                    : "Duplicate --var key.";
+                return false;
+            }
         }
         target = new(Profile, vars, Server, Database, Auth, UnsafeDirect, SqlUser, PasswordEnvVar, TrustServerCertificate);
         return true;
