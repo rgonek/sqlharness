@@ -13,7 +13,7 @@ internal sealed class SqlHarnessSafetyException(string message, Exception? inner
 internal enum SqlUsage
 {
     Query,
-    PerfSetup,
+    CompareSetup,
 }
 
 internal enum SqlSafetyReason
@@ -162,7 +162,7 @@ internal sealed class SqlSafetyClassifier
         return usage switch
         {
             SqlUsage.Query => ClassifyQuery(statements, inspection, database, allowMutation, confirmDatabase),
-            SqlUsage.PerfSetup => ClassifyPerfSetup(statements, inspection),
+            SqlUsage.CompareSetup => ClassifyCompareSetup(statements, inspection),
             _ => Denied(SqlSafetyReason.UnsupportedStatement),
         };
     }
@@ -237,7 +237,7 @@ internal sealed class SqlSafetyClassifier
         _ => false,
     };
 
-    private static SqlSafetyDecision ClassifyPerfSetup(
+    private static SqlSafetyDecision ClassifyCompareSetup(
         IReadOnlyList<TSqlStatement> statements,
         SafetyInspectionVisitor inspection)
     {

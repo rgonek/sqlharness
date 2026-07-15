@@ -75,10 +75,10 @@ public class SqlSafetyTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void Classifier_denies_OPENDATASOURCE(bool perfSetup)
+    public void Classifier_denies_OPENDATASOURCE(bool compareSetup)
     {
         const string sql = "SELECT * FROM OPENDATASOURCE('MSOLEDBSQL', 'Server=other;Trusted_Connection=yes;').db.dbo.Clients";
-        var usage = perfSetup ? SqlUsage.PerfSetup : SqlUsage.Query;
+        var usage = compareSetup ? SqlUsage.CompareSetup : SqlUsage.Query;
 
         Assert.False(_classifier.Classify(sql, usage, "db", false, null).Allowed);
     }
@@ -159,11 +159,11 @@ public class SqlSafetyTests
     }
 
     [Fact]
-    public void Perf_setup_allows_select_into_local_temp_only()
+    public void Compare_setup_allows_select_into_local_temp_only()
     {
-        Assert.True(_classifier.Classify("SELECT Id INTO #ids FROM dbo.Clients", SqlUsage.PerfSetup,
+        Assert.True(_classifier.Classify("SELECT Id INTO #ids FROM dbo.Clients", SqlUsage.CompareSetup,
             "db", false, null).Allowed);
-        Assert.False(_classifier.Classify("SELECT Id INTO dbo.Ids FROM dbo.Clients", SqlUsage.PerfSetup,
+        Assert.False(_classifier.Classify("SELECT Id INTO dbo.Ids FROM dbo.Clients", SqlUsage.CompareSetup,
             "db", false, null).Allowed);
     }
 
@@ -176,8 +176,8 @@ public class SqlSafetyTests
     [InlineData("DROP TABLE #ids")]
     [InlineData("DECLARE @id int = 1")]
     [InlineData("SELECT c.Id INTO #ids FROM dbo.Clients c; CREATE INDEX IX_ids ON #ids(Id); UPDATE #ids SET Id = Id + 1; SELECT Id FROM #ids")]
-    public void Perf_setup_allows_session_only_work(string sql) =>
-        Assert.True(_classifier.Classify(sql, SqlUsage.PerfSetup, "db", false, null).Allowed);
+    public void Compare_setup_allows_session_only_work(string sql) =>
+        Assert.True(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
 
     [Theory]
     [InlineData("CREATE TABLE dbo.Ids(Id int)")]
@@ -188,27 +188,27 @@ public class SqlSafetyTests
     [InlineData("DROP TABLE dbo.Clients")]
     [InlineData("SELECT Id INTO ##ids FROM dbo.Clients")]
     [InlineData("INSERT ##ids(Id) VALUES (1)")]
-    public void Perf_setup_denies_writes_outside_local_temp_objects(string sql) =>
-        Assert.False(_classifier.Classify(sql, SqlUsage.PerfSetup, "db", false, null).Allowed);
+    public void Compare_setup_denies_writes_outside_local_temp_objects(string sql) =>
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
 
     [Fact]
-    public void Perf_setup_denies_INSERT_EXEC_even_when_destination_is_local_temp() =>
-        Assert.False(_classifier.Classify("INSERT #t EXEC dbo.DoWork", SqlUsage.PerfSetup, "db", false, null).Allowed);
+    public void Compare_setup_denies_INSERT_EXEC_even_when_destination_is_local_temp() =>
+        Assert.False(_classifier.Classify("INSERT #t EXEC dbo.DoWork", SqlUsage.CompareSetup, "db", false, null).Allowed);
 
     [Theory]
     [InlineData("UPDATE #t SET Id = 2 OUTPUT inserted.Id INTO dbo.PersistentAudit")]
     [InlineData("INSERT #t(Id) OUTPUT inserted.Id INTO dbo.PersistentAudit VALUES (1)")]
     [InlineData("DELETE #t OUTPUT deleted.Id INTO dbo.PersistentAudit WHERE Id = 1")]
-    public void Perf_setup_denies_persistent_OUTPUT_INTO_destinations(string sql) =>
-        Assert.False(_classifier.Classify(sql, SqlUsage.PerfSetup, "db", false, null).Allowed);
+    public void Compare_setup_denies_persistent_OUTPUT_INTO_destinations(string sql) =>
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
 
     [Theory]
     [InlineData("EXEC dbo.DoWork")]
     [InlineData("USE otherdb")]
     [InlineData("SELECT * FROM otherdb.dbo.Clients")]
     [InlineData("BEGIN TRANSACTION")]
-    public void Perf_setup_keeps_always_forbidden_constructs_denied(string sql) =>
-        Assert.False(_classifier.Classify(sql, SqlUsage.PerfSetup, "db", false, null).Allowed);
+    public void Compare_setup_keeps_always_forbidden_constructs_denied(string sql) =>
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
 
     [Fact]
     public void Multiple_statement_batch_is_denied_if_any_statement_is_unsafe() =>
