@@ -80,6 +80,35 @@ public sealed class ProcessRunnerTests
         }
     }
 
+    [Fact]
+    public async Task WaitForPidsAsync_WaitsWhilePublisherOwnsFileExclusively()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sqlharness-pids-{Guid.NewGuid():N}.pid");
+
+        try
+        {
+            Task<int[]> wait;
+            await using (var publisher = new FileStream(
+                path,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None))
+            {
+                wait = WaitForPidsAsync(path);
+                await Task.Yield();
+            }
+
+            await File.WriteAllLinesAsync(path, ["123", "456"]);
+            var publishedPids = await wait;
+
+            Assert.Equal([123, 456], publishedPids);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private static async Task<int[]> ReadPublishedPidsAsync(string path)
     {
         if (!File.Exists(path))
@@ -97,9 +126,16 @@ public sealed class ProcessRunnerTests
         {
             if (File.Exists(path))
             {
-                var lines = await File.ReadAllLinesAsync(path);
-                if (lines.Length == 2 && lines.All(line => int.TryParse(line, out _)))
-                    return lines.Select(int.Parse).ToArray();
+                try
+                {
+                    var lines = await File.ReadAllLinesAsync(path);
+                    if (lines.Length == 2 && lines.All(line => int.TryParse(line, out _)))
+                        return lines.Select(int.Parse).ToArray();
+                }
+                catch (IOException)
+                {
+                    // The PowerShell publisher may still own the file exclusively.
+                }
             }
 
             await Task.Delay(25);
