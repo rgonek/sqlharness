@@ -3,9 +3,9 @@ using System.Text.Json;
 
 namespace SqlHarness.Core.Auth;
 
-public readonly record struct ProcessResult(int ExitCode, string StandardOutput, string StandardError);
+internal readonly record struct ProcessResult(int ExitCode, string StandardOutput, string StandardError);
 
-public interface IProcessRunner
+internal interface IProcessRunner
 {
     Task<ProcessResult> RunAsync(
         string fileName,
@@ -14,7 +14,7 @@ public interface IProcessRunner
         CancellationToken cancellationToken = default);
 }
 
-public sealed class ProcessRunner : IProcessRunner
+internal sealed class ProcessRunner : IProcessRunner
 {
     public async Task<ProcessResult> RunAsync(
         string fileName,
@@ -37,24 +37,51 @@ public sealed class ProcessRunner : IProcessRunner
 
         using var process = new Process { StartInfo = startInfo };
         if (!process.Start())
-            throw new InvalidOperationException($"Failed to start process: {fileName}");
+            throw new InvalidOperationException("Failed to start process.");
 
         var standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
         var standardError = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
-        return new ProcessResult(process.ExitCode, await standardOutput, await standardError);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+            return new ProcessResult(process.ExitCode, await standardOutput, await standardError);
+        }
+        catch (OperationCanceledException)
+        {
+            await TerminateProcessTreeAsync(process);
+            throw;
+        }
+    }
+
+    private static async Task TerminateProcessTreeAsync(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+
+            await process.WaitForExitAsync(CancellationToken.None);
+        }
+        catch
+        {
+            // Cleanup is best-effort and must never mask the original cancellation.
+        }
     }
 }
 
-public sealed class AzureCli(IProcessRunner runner) : IAzureCli
+public sealed class AzureCli : IAzureCli
 {
+    private readonly IProcessRunner _runner;
+
+    internal AzureCli(IProcessRunner runner) => _runner = runner;
+
     private static string Executable => OperatingSystem.IsWindows() ? "cmd.exe" : "az";
 
     public async Task<bool> IsLoggedInAsync(CancellationToken cancellationToken = default)
     {
-        var result = await runner.RunAsync(
+        var result = await _runner.RunAsync(
             Executable,
-            BuildArguments(["account", "show", "-o", "json"]),
+            BuildArguments(["account", "show", "-o", "json"], OperatingSystem.IsWindows()),
             cancellationToken: cancellationToken);
         return result.ExitCode == 0;
     }
@@ -64,24 +91,29 @@ public sealed class AzureCli(IProcessRunner runner) : IAzureCli
         CancellationToken cancellationToken = default)
     {
         var fullArgs = new List<string>(args) { "-o", "json" };
-        var result = await runner.RunAsync(
+        var result = await _runner.RunAsync(
             Executable,
-            BuildArguments(fullArgs),
+            BuildArguments(fullArgs, OperatingSystem.IsWindows()),
             cancellationToken: cancellationToken);
         if (result.ExitCode != 0)
         {
-            var error = result.StandardError.Trim();
-            throw new AzureCliException(
-                $"az {string.Join(' ', args)} failed: {(error.Length > 0 ? error : "exit " + result.ExitCode)}");
+            throw new AzureCliException($"Azure CLI command failed with exit code {result.ExitCode}.");
         }
 
-        using var document = JsonDocument.Parse(result.StandardOutput);
-        return document.RootElement.Clone();
+        try
+        {
+            using var document = JsonDocument.Parse(result.StandardOutput);
+            return document.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            throw new AzureCliException("Azure CLI returned invalid JSON.");
+        }
     }
 
-    private static IReadOnlyList<string> BuildArguments(IEnumerable<string> args)
+    internal static IReadOnlyList<string> BuildArguments(IEnumerable<string> args, bool isWindows)
     {
-        if (!OperatingSystem.IsWindows())
+        if (!isWindows)
             return args.ToList();
 
         var fullArgs = new List<string> { "/c", "az" };

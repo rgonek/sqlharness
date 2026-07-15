@@ -51,6 +51,12 @@ public sealed class AuthSpecTests
 
             Assert.Equal("app-user", builder.UserID);
             Assert.Equal(password, builder.Password);
+            Assert.Equal("localhost", builder.DataSource);
+            Assert.Equal("AppDb", builder.InitialCatalog);
+            Assert.True(builder.Encrypt);
+            Assert.Equal(5, builder.ConnectTimeout);
+            Assert.Equal(SqlAuthenticationMethod.NotSpecified, builder.Authentication);
+            Assert.False(builder.IntegratedSecurity);
             Assert.True(builder.TrustServerCertificate);
             Assert.Contains("Trust Server Certificate=True", connectionString, StringComparison.OrdinalIgnoreCase);
             Assert.False(spec.RequiresAccessToken);
