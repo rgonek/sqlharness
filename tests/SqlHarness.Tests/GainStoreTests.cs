@@ -2,6 +2,7 @@ using SqlHarness.Core;
 
 namespace SqlHarness.Tests;
 
+[Collection(SqlHarnessHomeCollection.Name)]
 public class GainStoreTests
 {
     [Fact]

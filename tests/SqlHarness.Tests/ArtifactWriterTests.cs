@@ -3,6 +3,7 @@ using SqlHarness.Core;
 
 namespace SqlHarness.Tests;
 
+[Collection(SqlHarnessHomeCollection.Name)]
 public class ArtifactWriterTests
 {
     [Fact]

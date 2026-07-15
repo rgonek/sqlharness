@@ -2,9 +2,30 @@ using SqlHarness.Core;
 
 namespace SqlHarness.Tests;
 
+[Collection(SqlHarnessHomeCollection.Name)]
 public class SqlHarnessPathsTests
 {
     private static readonly object EnvironmentLock = new();
+
+    [Fact]
+    public void Task_four_path_sensitive_tests_share_the_sqlharness_home_collection()
+    {
+        var definition = Assert.Single(
+            typeof(SqlHarnessHomeCollection).CustomAttributes,
+            attribute => attribute.AttributeType == typeof(CollectionDefinitionAttribute));
+        var disableParallelization = Assert.Single(
+            definition.NamedArguments,
+            argument => argument.MemberName == nameof(CollectionDefinitionAttribute.DisableParallelization));
+        Assert.Equal(true, disableParallelization.TypedValue.Value);
+
+        foreach (var type in new[] { typeof(SqlHarnessPathsTests), typeof(GainStoreTests), typeof(ArtifactWriterTests) })
+        {
+            var collection = Assert.Single(
+                type.CustomAttributes,
+                attribute => attribute.AttributeType == typeof(CollectionAttribute));
+            Assert.Equal("SQLHARNESS_HOME", Assert.Single(collection.ConstructorArguments).Value);
+        }
+    }
 
     [Fact]
     public void Paths_default_to_dot_sqlharness_under_user_profile()
