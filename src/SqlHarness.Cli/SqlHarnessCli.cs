@@ -1,5 +1,7 @@
 using System.Reflection;
+
 using Spectre.Console.Cli;
+
 using SqlHarness.Cli.Commands;
 using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
@@ -22,6 +24,7 @@ public static class SqlHarnessCli
             c.AddCommand<QueryCommand>("query"); c.AddCommand<MeasureCommand>("measure");
             c.AddCommand<CompareCommand>("compare"); c.AddCommand<GainCommand>("gain");
             c.AddCommand<PlanCommand>("plan");
+            c.AddCommand<SchemaCommand>("schema");
         });
         return new SqlHarnessApp(app);
     }

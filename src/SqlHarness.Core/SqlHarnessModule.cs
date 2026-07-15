@@ -1,7 +1,9 @@
 ﻿using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+
 using Microsoft.Data.SqlClient;
+
 using SqlHarness.Core.Auth;
 using SqlHarness.Core.Targets;
 
@@ -87,6 +89,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
         if (operation is SqlHarnessMeasureOperation measure)
             return await ExecuteMeasureAsync(measure, ct);
+
+        if (operation is SqlHarnessSchemaOperation schema)
+            return await ExecuteSchemaAsync(schema, ct);
 
         if (operation is not SqlHarnessQueryOperation query)
         {
@@ -749,6 +754,25 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         Authentication,
         Sql,
         Artifact,
+    }
+
+    private async Task<SqlHarnessOutcome> ExecuteSchemaAsync(SqlHarnessSchemaOperation schema, CancellationToken ct)
+    {
+        var stopwatch = Stopwatch.StartNew(); var phase = ExecutionPhase.Validation; var raw = new OutputFootprint(0, 0);
+        try
+        {
+            if (schema.TimeoutSeconds is < 1 or > 300) throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
+            if (schema.MaxObjects is < 1 or > 500) throw new SqlHarnessSafetyException("Schema object limit must be between 1 and 500.");
+            var target = TargetResolver.Resolve(schema.Target, _loadProfiles()); phase = ExecutionPhase.Authentication;
+            await using var session = await _sessionFactory.ConnectAsync(target, ct); phase = ExecutionPhase.Sql;
+            await using var reader = await session.ExecuteReaderAsync(new SqlExecutionCommand(SchemaReader.Sql, SchemaReader.Parameters(schema.Filter), schema.TimeoutSeconds), ct);
+            var result = await SchemaReader.ReadAsync(reader, schema.MaxObjects, ct); raw = result.Raw;
+            return WithReceipt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, new SqlHarnessSchemaReport(session.Identity, result.Objects, result.Omitted), null), stopwatch.ElapsedMilliseconds, raw, "schema");
+        }
+        catch (Exception exception)
+        {
+            return WithReceipt(new SqlHarnessOutcome(MapException(exception, phase), null, SecretRedactor.Redact(exception, schema.Filter is null ? [] : [schema.Filter])), stopwatch.ElapsedMilliseconds, raw, "schema");
+        }
     }
 
     private SqlHarnessOutcome ExecutePlan(SqlHarnessPlanOperation operation)

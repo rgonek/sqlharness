@@ -37,6 +37,12 @@ public sealed record SqlHarnessGainOperation : SqlHarnessOperation;
 
 public sealed record SqlHarnessPlanOperation(string ShowplanXml, OutputFootprint RawFootprint) : SqlHarnessOperation;
 
+public sealed record SqlHarnessSchemaOperation(
+    SqlTargetRequest Target,
+    string? Filter,
+    int TimeoutSeconds,
+    int MaxObjects = 50) : SqlHarnessOperation;
+
 public sealed record SqlTargetRequest(
     string? Profile,
     IReadOnlyDictionary<string, string> Vars,

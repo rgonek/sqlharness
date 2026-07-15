@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+
 using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 
@@ -39,6 +40,18 @@ public sealed class Renderer
         }
         else if (outcome.Report is DistilledPlan plan)
             RenderPlan(plan, output);
+        else if (outcome.Report is SqlHarnessSchemaReport schema)
+        {
+            output.WriteLine($"Target: {schema.Target.ActualServer}/{schema.Target.ActualDatabase} ({schema.Target.Mode})");
+            foreach (var obj in schema.Objects)
+            {
+                output.WriteLine($"{obj.Kind}\t{obj.Schema}.{obj.Name}");
+                foreach (var c in obj.Columns) output.WriteLine($"c\t{c.Name}\t{c.Type}\t{(c.Nullable ? "null" : "not-null")}{(c.InPrimaryKey ? "\tpk" : "")}");
+                foreach (var i in obj.Indexes) output.WriteLine($"i\t{i.Name}\t{(i.Unique ? "unique" : "nonunique")}\tkeys={string.Join(',', i.Keys)}\tinclude={string.Join(',', i.Includes)}{(i.Filter is null ? "" : $"\tfilter={i.Filter}")}");
+                foreach (var f in obj.ForeignKeys) output.WriteLine($"fk\t{f.Name}\t{f.Columns}->{f.ReferencedTable}({f.ReferencedColumns})");
+            }
+            if (schema.OmittedObjects > 0) output.WriteLine($"Omitted objects: {schema.OmittedObjects}");
+        }
         else if (!string.IsNullOrWhiteSpace(outcome.SafeError))
             output.WriteLine($"SQLHarness {outcome.ExitCode}: {SecretRedactor.Redact(outcome.SafeError, [])}");
     }
