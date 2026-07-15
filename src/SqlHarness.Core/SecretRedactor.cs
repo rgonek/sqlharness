@@ -7,8 +7,25 @@ internal static partial class SecretRedactor
     internal static string Redact(Exception exception, IReadOnlyList<string> knownSecrets)
     {
         var messages = new List<string>();
-        for (Exception? current = exception; current is not null; current = current.InnerException)
+        var pending = new Stack<Exception>();
+        var visited = new HashSet<Exception>(ReferenceEqualityComparer.Instance);
+        pending.Push(exception);
+        while (pending.TryPop(out var current))
+        {
+            if (!visited.Add(current))
+                continue;
+
             messages.Add(current.Message);
+            if (current is AggregateException aggregate)
+            {
+                for (var index = aggregate.InnerExceptions.Count - 1; index >= 0; index--)
+                    pending.Push(aggregate.InnerExceptions[index]);
+            }
+            else if (current.InnerException is { } inner)
+            {
+                pending.Push(inner);
+            }
+        }
         return Redact(string.Join(" | ", messages), knownSecrets);
     }
 
