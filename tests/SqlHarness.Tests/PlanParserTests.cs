@@ -22,7 +22,7 @@ public class PlanParserTests
         var parent = Assert.Single(plan.Operators, x => x.NodeId == 1);
 
         Assert.Null(parent.Object);
-        Assert.Equal("Cards_SubStatus", plan.Operators.Single(x => x.NodeId == 2).Object);
+        Assert.Equal("SampleDetail", plan.Operators.Single(x => x.NodeId == 2).Object);
     }
 
     [Fact]

@@ -16,7 +16,7 @@ public class ContractsTests
     }
 
     [Fact]
-    public void Operation_family_is_closed_to_query_perf_measure_and_gain()
+    public void Operation_family_is_closed_to_query_compare_measure_and_gain()
     {
         Assert.Equal(
             [typeof(SqlHarnessQueryOperation), typeof(SqlHarnessCompareOperation), typeof(SqlHarnessMeasureOperation), typeof(SqlHarnessGainOperation)],
