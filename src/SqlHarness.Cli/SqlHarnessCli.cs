@@ -8,7 +8,7 @@ namespace SqlHarness.Cli;
 
 public static class SqlHarnessCli
 {
-    public static CommandApp Create(ISqlHarnessModule module, TextWriter? output = null, TextReader? stdin = null, bool? stdinRedirected = null)
+    public static SqlHarnessApp Create(ISqlHarnessModule module, TextWriter? output = null, TextReader? stdin = null, bool? stdinRedirected = null)
     {
         var registrar = new Registrar();
         registrar.Add(module); registrar.Add(new OutputContext(output ?? Console.Out)); registrar.Add(new Renderer());
@@ -20,8 +20,9 @@ public static class SqlHarnessCli
             c.SetApplicationVersion(Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0");
             c.AddCommand<QueryCommand>("query"); c.AddCommand<MeasureCommand>("measure");
             c.AddCommand<CompareCommand>("compare"); c.AddCommand<GainCommand>("gain");
+            c.AddCommand<PlanCommand>("plan");
         });
-        return app;
+        return new SqlHarnessApp(app);
     }
     private sealed class Registrar : ITypeRegistrar
     {
@@ -49,5 +50,16 @@ public static class SqlHarnessCli
         }
         private object Create(Type type) => Activator.CreateInstance(type, type.GetConstructors().Single().GetParameters().Select(p => Resolve(p.ParameterType)).ToArray())!;
         public void Dispose() { }
+    }
+}
+
+public sealed class SqlHarnessApp(CommandApp app)
+{
+    public Task<int> RunAsync(IEnumerable<string> args)
+    {
+        var normalized = args.ToArray();
+        if (normalized.Length >= 2 && string.Equals(normalized[0], "plan", StringComparison.OrdinalIgnoreCase) && normalized[1] == "-")
+            normalized = [normalized[0], .. normalized.Skip(2)];
+        return app.RunAsync(normalized);
     }
 }

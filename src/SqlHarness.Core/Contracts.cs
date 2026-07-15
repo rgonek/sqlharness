@@ -35,6 +35,8 @@ public sealed record SqlHarnessMeasureOperation(
 
 public sealed record SqlHarnessGainOperation : SqlHarnessOperation;
 
+public sealed record SqlHarnessPlanOperation(string ShowplanXml) : SqlHarnessOperation;
+
 public sealed record SqlTargetRequest(
     string? Profile,
     IReadOnlyDictionary<string, string> Vars,

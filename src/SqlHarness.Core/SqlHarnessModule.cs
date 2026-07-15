@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using Microsoft.Data.SqlClient;
 using SqlHarness.Core.Auth;
 using SqlHarness.Core.Targets;
@@ -77,6 +78,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     SecretRedactor.Redact(exception, []));
             }
         }
+
+        if (operation is SqlHarnessPlanOperation plan)
+            return ExecutePlan(plan);
 
         if (operation is SqlHarnessCompareOperation compare)
             return await ExecuteCompareAsync(compare, ct);
@@ -745,5 +749,25 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         Authentication,
         Sql,
         Artifact,
+    }
+
+    private SqlHarnessOutcome ExecutePlan(SqlHarnessPlanOperation operation)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var bytes = Encoding.UTF8.GetByteCount(operation.ShowplanXml);
+        var lines = operation.ShowplanXml.Length == 0
+            ? 0
+            : operation.ShowplanXml.Count(character => character == '\n') + (operation.ShowplanXml[^1] == '\n' ? 0 : 1);
+        var raw = new OutputFootprint(bytes, lines);
+        try
+        {
+            var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, PlanDistiller.Distill(operation.ShowplanXml), null);
+            return WithReceipt(outcome, stopwatch.ElapsedMilliseconds, raw, "plan");
+        }
+        catch (Exception exception)
+        {
+            var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, SecretRedactor.Redact(exception, [operation.ShowplanXml]));
+            return WithReceipt(outcome, stopwatch.ElapsedMilliseconds, raw, "plan");
+        }
     }
 }

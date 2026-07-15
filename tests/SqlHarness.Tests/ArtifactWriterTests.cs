@@ -10,7 +10,7 @@ public class ArtifactWriterTests
     public void Writer_creates_safe_unique_metadata_and_exact_plan_files()
     {
         using var temp = new TempDirectory();
-        const string plan = "<ShowPlanXML><Value>returned-secret-value</Value></ShowPlanXML>\r\n";
+        var plan = FixturePlan();
         var report = new SqlHarnessCompareReport(
             new SqlHarnessTargetIdentityReport("safe-server", "safe-db", "safe-server", "safe-db", "profile"),
             1, 2, true, Variant("baseline"), Variant("candidate"), null);
@@ -30,8 +30,11 @@ public class ArtifactWriterTests
         Assert.True(File.Exists(Path.Combine(first, "runs.jsonl")));
         var planPath = Assert.Single(Directory.GetFiles(Path.Combine(first, "plans"), "*.sqlplan"));
         Assert.Equal(plan, File.ReadAllText(planPath));
+        var distilledPath = Assert.Single(Directory.GetFiles(Path.Combine(first, "plans"), "*.plan.json"));
+        using var distilled = JsonDocument.Parse(File.ReadAllText(distilledPath));
+        Assert.True(distilled.RootElement.TryGetProperty("statements", out _));
         var metadata = File.ReadAllText(Path.Combine(first, "report.json")) + File.ReadAllText(Path.Combine(first, "runs.jsonl"));
-        Assert.DoesNotContain("returned-secret-value", metadata, StringComparison.Ordinal);
+        Assert.DoesNotContain("SELECT ...", metadata, StringComparison.Ordinal);
         Assert.Contains("\"messageCount\":2", metadata, StringComparison.OrdinalIgnoreCase);
         Assert.NotNull(JsonDocument.Parse(File.ReadAllText(Path.Combine(first, "report.json"))));
     }
@@ -45,7 +48,7 @@ public class ArtifactWriterTests
             new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile"),
             1, 1, true, Variant("measure"), null);
         var run = new CompareRunArtifact("measure", 1, 1, 2, 3,
-            new Dictionary<string, long>(), "HASH", ["<plan />"], 0);
+            new Dictionary<string, long>(), "HASH", [FixturePlan()], 0);
 
         var directory = writer.Write(report, [run], "wind");
 
@@ -61,8 +64,9 @@ public class ArtifactWriterTests
         var report = new SqlHarnessCompareReport(
             new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile"),
             1, 2, true, Variant("baseline"), Variant("candidate"), null);
+        var plans = new[] { FixturePlan(), FixturePlan() + Environment.NewLine };
         var run = new CompareRunArtifact("baseline", 1, 1, 2, 3,
-            new Dictionary<string, long>(), "HASH", ["<plan id=\"1\" />", "<plan id=\"2\" />"], 0);
+            new Dictionary<string, long>(), "HASH", plans, 0);
 
         var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
             .Write(report, [run], "wind");
@@ -70,7 +74,7 @@ public class ArtifactWriterTests
         var files = Directory.GetFiles(Path.Combine(directory, "plans"), "*.sqlplan")
             .Order(StringComparer.Ordinal).ToArray();
         Assert.Equal(2, files.Length);
-        Assert.Equal(["<plan id=\"1\" />", "<plan id=\"2\" />"], files.Select(File.ReadAllText));
+        Assert.Equal(plans, files.Select(File.ReadAllText));
         Assert.Equal(2, files.Select(Path.GetFileName).Distinct(StringComparer.Ordinal).Count());
     }
 
@@ -82,6 +86,9 @@ public class ArtifactWriterTests
         new Dictionary<string, long> { ["Clients"] = 4 },
         [new CompareOperatorReport(1, "Index Seek", "Clients", false, false, false)],
         []);
+
+    private static string FixturePlan() => File.ReadAllText(
+        Path.Combine(AppContext.BaseDirectory, "Fixtures", "distiller-sample.sqlplan"));
 
     private sealed class TempDirectory : IDisposable
     {

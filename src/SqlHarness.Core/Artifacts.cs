@@ -88,10 +88,15 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
                 run.Variant, run.Repetition, run.CpuTimeMilliseconds, run.ElapsedTimeMilliseconds,
                 run.LogicalReads, run.LogicalReadsByTable, run.ResultHash, run.MessageCount,
                 PlanFiles = run.PlanXmls.Select((_, planIndex) => PlanFileName(run, index, planIndex)).ToArray(),
+                PlanJsonFiles = run.PlanXmls.Select((_, planIndex) => PlanJsonFileName(run, index, planIndex)).ToArray(),
             }, JsonLineOptions));
             for (var planIndex = 0; planIndex < run.PlanXmls.Count; planIndex++)
+            {
                 File.WriteAllText(Path.Combine(plansDirectory, PlanFileName(run, index, planIndex)),
                     run.PlanXmls[planIndex], new UTF8Encoding(false));
+                File.WriteAllText(Path.Combine(plansDirectory, PlanJsonFileName(run, index, planIndex)),
+                    JsonSerializer.Serialize(PlanDistiller.Distill(run.PlanXmls[planIndex]), JsonOptions), new UTF8Encoding(false));
+            }
         }
         return directory;
     }
@@ -105,6 +110,9 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
 
     private static string PlanFileName(CompareRunArtifact run, int runIndex, int planIndex) =>
         $"{run.Variant}-{run.Repetition:D3}-{runIndex:D3}-{planIndex:D3}.sqlplan";
+
+    private static string PlanJsonFileName(CompareRunArtifact run, int runIndex, int planIndex) =>
+        $"{run.Variant}-{run.Repetition:D3}-{runIndex:D3}-{planIndex:D3}.plan.json";
 
     [GeneratedRegex("[^A-Za-z0-9_-]+", RegexOptions.CultureInvariant)]
     private static partial Regex UnsafePathCharacter();

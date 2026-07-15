@@ -6,6 +6,17 @@ namespace SqlHarness.Tests;
 public class GainStoreTests
 {
     [Fact]
+    public void Plan_and_schema_records_are_valid_and_contribute_to_total()
+    {
+        using var temp = new TempDirectory("plan-schema");
+        var store = new GainStore(temp.FilePath);
+        store.Append(Record("plan", true, 1, 4, 1, 0, 0, 1, 0, 1));
+        store.Append(Record("schema", true, 1, 4, 1, 0, 0, 1, 0, 1));
+
+        Assert.Equal(2, store.Aggregate().Total.Executions);
+    }
+
+    [Fact]
     public void Invalid_commands_and_inconsistent_token_counters_are_rejected()
     {
         using var temp = new TempDirectory("gain");

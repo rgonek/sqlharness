@@ -86,7 +86,7 @@ internal sealed class GainStore : IGainStore
                     continue;
                 var record = ReadRecord(line);
                 total.Add(record);
-                GetAccumulator(record.Command, query, compare, measure).Add(record);
+                GetAccumulator(record.Command, query, compare, measure)?.Add(record);
             }
             return CreateReport(total, query, compare, measure);
         }
@@ -97,14 +97,15 @@ internal sealed class GainStore : IGainStore
         SummaryAccumulator compare, SummaryAccumulator measure) =>
         new(total.ToSummary(), query.ToSummary(), compare.ToSummary()) { Measure = measure.ToSummary() };
 
-    private static SummaryAccumulator GetAccumulator(
+    private static SummaryAccumulator? GetAccumulator(
         string command, SummaryAccumulator query, SummaryAccumulator compare, SummaryAccumulator measure) =>
         command switch
         {
             "query" => query,
             "compare" => compare,
             "measure" => measure,
-            _ => throw new ArgumentException("Gain command must be query, compare, or measure.", nameof(command)),
+            "plan" or "schema" => null,
+            _ => throw new ArgumentException("Gain command must be query, compare, measure, plan, or schema.", nameof(command)),
         };
 
     private static GainRecord ReadRecord(string line)
@@ -127,8 +128,8 @@ internal sealed class GainStore : IGainStore
 
     private static void Validate(GainRecord record)
     {
-        if (record.Command is not ("query" or "compare" or "measure"))
-            throw new ArgumentException("Gain command must be query, compare, or measure.", nameof(record));
+        if (record.Command is not ("query" or "compare" or "measure" or "plan" or "schema"))
+            throw new ArgumentException("Gain command must be query, compare, measure, plan, or schema.", nameof(record));
 
         ArgumentOutOfRangeException.ThrowIfNegative(record.DurationMilliseconds);
         ArgumentOutOfRangeException.ThrowIfNegative(record.RawBytes);
