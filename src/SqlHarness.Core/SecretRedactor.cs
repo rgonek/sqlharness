@@ -2,9 +2,9 @@ using System.Text.RegularExpressions;
 
 namespace SqlHarness.Core;
 
-internal static partial class SecretRedactor
+public static partial class SecretRedactor
 {
-    internal static string Redact(Exception exception, IReadOnlyList<string> knownSecrets)
+    public static string Redact(Exception exception, IReadOnlyList<string> knownSecrets)
     {
         var messages = new List<string>();
         var pending = new Stack<Exception>();
@@ -29,7 +29,7 @@ internal static partial class SecretRedactor
         return Redact(string.Join(" | ", messages), knownSecrets);
     }
 
-    internal static string Redact(string value, IReadOnlyList<string> knownSecrets)
+    public static string Redact(string value, IReadOnlyList<string> knownSecrets)
     {
         var safe = value;
         foreach (var secret in knownSecrets.Where(secret => !string.IsNullOrEmpty(secret)))
