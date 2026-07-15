@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+  <BatchSequence>
+    <Batch>
+      <Statements>
+        <StmtSimple StatementText="SELECT operator fixture">
+          <QueryPlan>
+            <RelOp NodeId="1" PhysicalOp="Nested Loops" LogicalOp="Inner Join">
+              <NestedLoops>
+                <RelOp NodeId="2" PhysicalOp="Index Seek" LogicalOp="Index Seek">
+                  <IndexScan>
+                    <Object Database="[db]" Schema="[dbo]" Table="[Cards_SubStatus]" Index="[IX_Cards_SubStatus]" />
+                  </IndexScan>
+                </RelOp>
+                <RelOp NodeId="3" PhysicalOp="Concatenation" LogicalOp="Concatenation">
+                  <Concat>
+                    <RelOp NodeId="4" PhysicalOp="Index Scan" LogicalOp="Index Scan">
+                      <IndexScan>
+                        <Object Database="[db]" Schema="[dbo]" Table="[Cards]" Index="[IX_Cards]" />
+                      </IndexScan>
+                    </RelOp>
+                    <RelOp NodeId="5" PhysicalOp="Table Scan" LogicalOp="Table Scan">
+                      <TableScan>
+                        <Object Database="[db]" Schema="[dbo]" Table="[Clients]" />
+                      </TableScan>
+                    </RelOp>
+                    <RelOp NodeId="6" PhysicalOp="Key Lookup" LogicalOp="Key Lookup">
+                      <IndexScan Lookup="1">
+                        <Object Database="[db]" Schema="[dbo]" Table="[Cards]" Index="[PK_Cards]" />
+                      </IndexScan>
+                    </RelOp>
+                  </Concat>
+                </RelOp>
+              </NestedLoops>
+            </RelOp>
+          </QueryPlan>
+        </StmtSimple>
+      </Statements>
+    </Batch>
+  </BatchSequence>
+</ShowPlanXML>

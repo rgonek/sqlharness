@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+  <BatchSequence>
+    <Batch>
+      <Statements>
+        <StmtSimple StatementText="SELECT warning fixture">
+          <QueryPlan>
+            <RelOp NodeId="10" PhysicalOp="Hash Match" LogicalOp="Inner Join">
+              <Warnings NoJoinPredicate="1">
+                <SpillToTempDb SpillLevel="2" SpilledThreadCount="1" />
+                <PlanAffectingConvert ConvertIssue="Cardinality Estimate" Expression="CONVERT_IMPLICIT(int,[c].[Value],0)" />
+              </Warnings>
+              <Hash />
+            </RelOp>
+          </QueryPlan>
+        </StmtSimple>
+      </Statements>
+    </Batch>
+  </BatchSequence>
+</ShowPlanXML>
