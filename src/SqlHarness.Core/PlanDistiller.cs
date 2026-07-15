@@ -6,6 +6,8 @@ using System.Xml.Linq;
 
 namespace SqlHarness.Core;
 
+/// <summary>A compact, deterministic projection of SQL Server Showplan XML.</summary>
+/// <remarks>The model is produced from XML and serialized to JSON; JSON deserialization is not supported.</remarks>
 public sealed record DistilledPlan(IReadOnlyList<PlanStatement> Statements);
 
 [JsonConverter(typeof(PlanStatementJsonConverter))]
@@ -35,18 +37,26 @@ public sealed record MissingIndex(
     IReadOnlyList<string> IncludeColumns,
     double Impact);
 
+internal sealed record PlanDistillerLimits(int MaximumCharacters, int MaximumElements, int MaximumDepth);
+
 public static class PlanDistiller
 {
     private const string ShowplanNamespace = "http://schemas.microsoft.com/sqlserver/2004/07/showplan";
-    private const int MaximumCharacters = 16 * 1024 * 1024;
-    private const int MaximumElements = 100_000;
-    private const int MaximumDepth = 128;
+    private static readonly PlanDistillerLimits DefaultLimits = new(16 * 1024 * 1024, 100_000, 128);
     private const int MaximumPredicateLength = 200;
     private const string InvalidPlanMessage = "The execution plan is not a valid SQL Server Showplan document.";
 
-    public static DistilledPlan Distill(string showplanXml)
+    /// <summary>Distills SQL Server Showplan XML without database or network access.</summary>
+    /// <remarks>The returned model supports deterministic JSON serialization only; its converters intentionally reject JSON deserialization.</remarks>
+    public static DistilledPlan Distill(string showplanXml) => Distill(showplanXml, DefaultLimits);
+
+    internal static DistilledPlan Distill(string showplanXml, PlanDistillerLimits limits)
     {
-        if (showplanXml is null || showplanXml.Length > MaximumCharacters)
+        if (showplanXml is null
+            || limits.MaximumCharacters <= 0
+            || limits.MaximumElements <= 0
+            || limits.MaximumDepth <= 0
+            || showplanXml.Length > limits.MaximumCharacters)
             throw SafetyFailure();
 
         try
@@ -55,14 +65,14 @@ public static class PlanDistiller
             {
                 DtdProcessing = DtdProcessing.Prohibit,
                 XmlResolver = null,
-                MaxCharactersInDocument = MaximumCharacters,
+                MaxCharactersInDocument = limits.MaximumCharacters,
                 MaxCharactersFromEntities = 0
             };
 
             using var stringReader = new StringReader(showplanXml);
             using var reader = XmlReader.Create(stringReader, settings);
             var document = XDocument.Load(reader, LoadOptions.None);
-            ValidateDocument(document);
+            ValidateDocument(document, limits);
 
             var statements = document
                 .Descendants(Showplan("StmtSimple"))
@@ -155,7 +165,7 @@ public static class PlanDistiller
     {
         var warnings = owned.Where(element => element.Name == Showplan("Warnings"));
         return warnings.SelectMany(warning =>
-                warning.Attributes().Select(FormatAttribute)
+                warning.Attributes().Where(IsUnqualified).Select(FormatAttribute)
                     .Concat(warning.Elements().Select(FormatElement)))
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -164,6 +174,7 @@ public static class PlanDistiller
     private static string FormatElement(XElement element)
     {
         var attributes = element.Attributes()
+            .Where(IsUnqualified)
             .OrderBy(attribute => attribute.Name.LocalName, StringComparer.Ordinal)
             .Select(attribute => $"{attribute.Name.LocalName}={attribute.Value}");
         var suffix = string.Join(';', attributes);
@@ -225,11 +236,13 @@ public static class PlanDistiller
     }
 
     private static string? Attribute(XElement? element, string localName) =>
-        element?.Attributes().FirstOrDefault(attribute => attribute.Name.LocalName == localName)?.Value;
+        element?.Attribute(localName)?.Value;
+
+    private static bool IsUnqualified(XAttribute attribute) => attribute.Name.NamespaceName.Length == 0;
 
     private static XName Showplan(string localName) => XName.Get(localName, ShowplanNamespace);
 
-    private static void ValidateDocument(XDocument document)
+    private static void ValidateDocument(XDocument document, PlanDistillerLimits limits)
     {
         if (document.Root?.Name != Showplan("ShowPlanXML"))
             throw SafetyFailure();
@@ -237,7 +250,8 @@ public static class PlanDistiller
         var elementCount = 0;
         foreach (var element in document.Descendants())
         {
-            if (++elementCount > MaximumElements || element.Ancestors().Take(MaximumDepth + 1).Count() > MaximumDepth)
+            if (++elementCount > limits.MaximumElements
+                || element.Ancestors().Take(limits.MaximumDepth + 1).Count() > limits.MaximumDepth)
                 throw SafetyFailure();
         }
     }
