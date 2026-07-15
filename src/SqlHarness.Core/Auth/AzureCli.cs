@@ -73,6 +73,10 @@ public sealed class AzureCli : IAzureCli
 {
     private readonly IProcessRunner _runner;
 
+    public AzureCli() : this(new ProcessRunner())
+    {
+    }
+
     internal AzureCli(IProcessRunner runner) => _runner = runner;
 
     private static string Executable => OperatingSystem.IsWindows() ? "cmd.exe" : "az";
@@ -116,8 +120,19 @@ public sealed class AzureCli : IAzureCli
         if (!isWindows)
             return args.ToList();
 
+        var validatedArgs = args.ToList();
+        if (validatedArgs.Any(IsUnsafeForWindowsCommand))
+        {
+            throw new AzureCliException(
+                "Azure CLI argument is unsafe for Windows command execution.");
+        }
+
         var fullArgs = new List<string> { "/c", "az" };
-        fullArgs.AddRange(args);
+        fullArgs.AddRange(validatedArgs);
         return fullArgs;
     }
+
+    private static bool IsUnsafeForWindowsCommand(string argument) =>
+        argument.Any(char.IsWhiteSpace) ||
+        argument.IndexOfAny(['"', '\'', '&', '|', '<', '>', '^', '%', '!', '(', ')']) >= 0;
 }

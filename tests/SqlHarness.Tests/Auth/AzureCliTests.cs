@@ -5,6 +5,14 @@ namespace SqlHarness.Tests.Auth;
 public sealed class AzureCliTests
 {
     [Fact]
+    public void DefaultConstructor_IsPubliclyAvailable()
+    {
+        IAzureCli cli = new AzureCli();
+
+        Assert.IsType<AzureCli>(cli);
+    }
+
+    [Fact]
     public async Task RunJsonAsync_NonzeroExitUsesRedactedException()
     {
         var sensitiveArgument = $"arg-{Guid.NewGuid():N}";
@@ -40,6 +48,48 @@ public sealed class AzureCliTests
         Assert.Equal(expected, AzureCli.BuildArguments(["account", "show"], isWindows));
     }
 
+    [Theory]
+    [InlineData("two words")]
+    [InlineData("quoted\"value")]
+    [InlineData("quoted'value")]
+    [InlineData("left&right")]
+    [InlineData("left|right")]
+    [InlineData("left<right")]
+    [InlineData("left>right")]
+    [InlineData("left^right")]
+    [InlineData("left%right")]
+    [InlineData("left!right")]
+    [InlineData("left(right")]
+    [InlineData("left)right")]
+    public async Task RunJsonAsync_WindowsRejectsUnsafeArgumentBeforeExecution(string unsafeArgument)
+    {
+        var runner = new TrackingProcessRunner();
+        var cli = new AzureCli(runner);
+
+        var exception = await Assert.ThrowsAsync<AzureCliException>(() =>
+            cli.RunJsonAsync([unsafeArgument]));
+
+        Assert.Equal("Azure CLI argument is unsafe for Windows command execution.", exception.Message);
+        Assert.DoesNotContain(unsafeArgument, exception.ToString(), StringComparison.Ordinal);
+        Assert.Equal(0, runner.InvocationCount);
+    }
+
+    [Fact]
+    public void BuildArguments_WindowsPreservesSafeTokenFlowValues()
+    {
+        string[] args =
+        [
+            "account",
+            "get-access-token",
+            "--resource",
+            "https://management.azure.com/",
+            "12345678-1234-1234-1234-123456789abc",
+            "name.with-dots/value:part",
+        ];
+
+        Assert.Equal(["/c", "az", .. args], AzureCli.BuildArguments(args, isWindows: true));
+    }
+
     private sealed class StubProcessRunner(ProcessResult result) : IProcessRunner
     {
         public Task<ProcessResult> RunAsync(
@@ -47,5 +97,20 @@ public sealed class AzureCliTests
             IEnumerable<string> arguments,
             string? workingDirectory = null,
             CancellationToken cancellationToken = default) => Task.FromResult(result);
+    }
+
+    private sealed class TrackingProcessRunner : IProcessRunner
+    {
+        public int InvocationCount { get; private set; }
+
+        public Task<ProcessResult> RunAsync(
+            string fileName,
+            IEnumerable<string> arguments,
+            string? workingDirectory = null,
+            CancellationToken cancellationToken = default)
+        {
+            InvocationCount++;
+            return Task.FromResult(new ProcessResult(0, "{}", ""));
+        }
     }
 }
