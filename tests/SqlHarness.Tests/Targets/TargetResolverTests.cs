@@ -209,7 +209,8 @@ public sealed class TargetResolverTests
             PasswordEnvVar: passwordVariable,
             TrustServerCertificate: trust);
 
-        AssertSafety(request, "profile");
+        var error = Assert.Throws<SqlHarnessSafetyException>(() => TargetResolver.Resolve(request, Profiles));
+        Assert.Equal("A profile cannot be combined with direct target options.", error.Message);
     }
 
     [Fact]
@@ -227,6 +228,52 @@ public sealed class TargetResolverTests
     [Fact]
     public void Rejects_profile_combined_with_server() =>
         AssertSafety(new SqlTargetRequest("prod-eu", EmptyVars(), "server"), "profile");
+
+    [Theory]
+    [InlineData("server", "")]
+    [InlineData("server", "   ")]
+    [InlineData("database", "")]
+    [InlineData("database", "   ")]
+    [InlineData("auth", "")]
+    [InlineData("auth", "   ")]
+    public void Rejects_profile_combined_with_supplied_empty_or_whitespace_direct_field(
+        string field,
+        string value)
+    {
+        var request = field switch
+        {
+            "server" => new SqlTargetRequest("prod-eu", EmptyVars(), Server: value),
+            "database" => new SqlTargetRequest("prod-eu", EmptyVars(), Database: value),
+            "auth" => new SqlTargetRequest("prod-eu", EmptyVars(), Auth: value),
+            _ => throw new InvalidOperationException(),
+        };
+
+        var error = Assert.Throws<SqlHarnessSafetyException>(() => TargetResolver.Resolve(request, Profiles));
+        Assert.Equal("A profile cannot be combined with direct target options.", error.Message);
+    }
+
+    [Theory]
+    [InlineData("server", "")]
+    [InlineData("server", "   ")]
+    [InlineData("database", "")]
+    [InlineData("database", "   ")]
+    [InlineData("auth", "")]
+    [InlineData("auth", "   ")]
+    public void Classifies_supplied_direct_field_without_unsafe_as_direct_combination(
+        string field,
+        string value)
+    {
+        var request = field switch
+        {
+            "server" => new SqlTargetRequest(null, EmptyVars(), Server: value),
+            "database" => new SqlTargetRequest(null, EmptyVars(), Database: value),
+            "auth" => new SqlTargetRequest(null, EmptyVars(), Auth: value),
+            _ => throw new InvalidOperationException(),
+        };
+
+        var error = Assert.Throws<SqlHarnessSafetyException>(() => TargetResolver.Resolve(request, Profiles));
+        Assert.Equal("Direct target options require --unsafe-direct.", error.Message);
+    }
 
     [Fact]
     public void Rejects_neither_profile_nor_direct_target() =>

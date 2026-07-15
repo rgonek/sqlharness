@@ -21,9 +21,9 @@ public static class TargetResolver
             throw new SqlHarnessSafetyException("Target vars cannot be null.");
 
         var hasProfile = !string.IsNullOrWhiteSpace(request.Profile);
-        var hasDirectFields = !string.IsNullOrWhiteSpace(request.Server) ||
-                              !string.IsNullOrWhiteSpace(request.Database) ||
-                              !string.IsNullOrWhiteSpace(request.Auth);
+        var hasDirectFields = request.Server is not null ||
+                              request.Database is not null ||
+                              request.Auth is not null;
 
         var hasDirectAuthSettings = request.SqlUser is not null ||
                                     request.PasswordEnvVar is not null ||
