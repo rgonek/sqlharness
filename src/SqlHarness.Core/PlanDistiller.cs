@@ -166,7 +166,9 @@ public static class PlanDistiller
         var warnings = owned.Where(element => element.Name == Showplan("Warnings"));
         return warnings.SelectMany(warning =>
                 warning.Attributes().Where(IsUnqualified).Select(FormatAttribute)
-                    .Concat(warning.Elements().Select(FormatElement)))
+                    .Concat(warning.Elements()
+                        .Where(element => element.Name.NamespaceName == ShowplanNamespace)
+                        .Select(FormatElement)))
             .Order(StringComparer.Ordinal)
             .ToArray();
     }

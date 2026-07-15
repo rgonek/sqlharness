@@ -104,6 +104,25 @@ public sealed class PlanDistillerTests
     }
 
     [Fact]
+    public void Ignores_foreign_warning_children_and_orders_genuine_showplan_warnings()
+    {
+        var xml = MinimalPlan("xmlns:attacker=\"urn:attacker\"", "PhysicalOp=\"Scan\"", """
+            <Warnings>
+              <SpillToTempDb SpillLevel="1" />
+              <attacker:SpillToTempDb SpillLevel="999" />
+              <PlanAffectingConvert ConvertIssue="Cardinality Estimate" />
+            </Warnings>
+            """);
+
+        var warnings = Assert.Single(PlanDistiller.Distill(xml).Statements).Root.Warnings;
+
+        Assert.Equal([
+            "PlanAffectingConvert[ConvertIssue=Cardinality Estimate]",
+            "SpillToTempDb[SpillLevel=1]"
+        ], warnings);
+    }
+
+    [Fact]
     public void Rejects_dtd_and_external_entities_without_resolving_or_leaking_content()
     {
         const string secret = "distiller-secret-value";
