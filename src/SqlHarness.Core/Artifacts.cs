@@ -48,17 +48,29 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
     private readonly string _root;
     private readonly Func<DateTimeOffset> _utcNow;
     private readonly Action<string, string, Encoding> _writeText;
+    private readonly Action<string> _deleteFile;
+    private readonly Action<string, bool> _deleteDirectory;
 
     internal CompareArtifactWriter() : this(SqlHarnessPaths.CompareDir, () => DateTimeOffset.UtcNow) { }
 
     internal CompareArtifactWriter(string root, Func<DateTimeOffset> utcNow)
-        : this(root, utcNow, File.WriteAllText) { }
+        : this(root, utcNow, File.WriteAllText, File.Delete, Directory.Delete) { }
 
     internal CompareArtifactWriter(string root, Func<DateTimeOffset> utcNow, Action<string, string, Encoding> writeText)
+        : this(root, utcNow, writeText, File.Delete, Directory.Delete) { }
+
+    internal CompareArtifactWriter(
+        string root,
+        Func<DateTimeOffset> utcNow,
+        Action<string, string, Encoding> writeText,
+        Action<string> deleteFile,
+        Action<string, bool> deleteDirectory)
     {
         _root = Path.GetFullPath(root);
         _utcNow = utcNow;
         _writeText = writeText;
+        _deleteFile = deleteFile;
+        _deleteDirectory = deleteDirectory;
     }
 
     public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target)
@@ -78,15 +90,16 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
             directory = Path.Combine(_root, $"{_utcNow():yyyyMMddTHHmmssfffZ}-{safeTarget}-{Guid.NewGuid():N}");
         } while (Directory.Exists(directory));
 
-        Directory.CreateDirectory(directory);
-        var plansDirectory = Path.Combine(directory, "plans");
-        Directory.CreateDirectory(plansDirectory);
+        var staging = directory + ".staging-" + Guid.NewGuid().ToString("N");
         persistedReport = WithArtifactDirectory(persistedReport, directory);
-        File.WriteAllText(Path.Combine(directory, "report.json"),
-            JsonSerializer.Serialize(persistedReport, JsonOptions), new UTF8Encoding(false));
 
         try
         {
+            Directory.CreateDirectory(staging);
+            var plansDirectory = Path.Combine(staging, "plans");
+            Directory.CreateDirectory(plansDirectory);
+            _writeText(Path.Combine(staging, "report.json"),
+                JsonSerializer.Serialize(persistedReport, JsonOptions), new UTF8Encoding(false));
             for (var index = 0; index < runs.Count; index++)
             {
                 var run = runs[index];
@@ -94,12 +107,11 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
                     WritePair(plansDirectory, run, index, planIndex, preparedPlans[index][planIndex]);
             }
 
-            using var stream = new FileStream(Path.Combine(directory, "runs.jsonl"), FileMode.CreateNew, FileAccess.Write, FileShare.Read);
-            using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+            var lines = new StringBuilder();
             for (var index = 0; index < runs.Count; index++)
             {
                 var run = runs[index];
-                writer.WriteLine(JsonSerializer.Serialize(new
+                lines.AppendLine(JsonSerializer.Serialize(new
                 {
                     run.Variant, run.Repetition, run.CpuTimeMilliseconds, run.ElapsedTimeMilliseconds,
                     run.LogicalReads, run.LogicalReadsByTable, run.ResultHash, run.MessageCount,
@@ -107,11 +119,12 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
                     PlanJsonFiles = run.PlanXmls.Select((_, planIndex) => PlanJsonFileName(run, index, planIndex)).ToArray(),
                 }, JsonLineOptions));
             }
+            _writeText(Path.Combine(staging, "runs.jsonl"), lines.ToString(), new UTF8Encoding(false));
+            Directory.Move(staging, directory);
         }
         catch
         {
-            foreach (var path in Directory.GetFiles(plansDirectory)) File.Delete(path);
-            File.Delete(Path.Combine(directory, "runs.jsonl"));
+            Cleanup(staging);
             throw;
         }
         return directory;
@@ -123,18 +136,32 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
         var jsonPath = Path.Combine(directory, PlanJsonFileName(run, runIndex, planIndex));
         var xmlTemp = xmlPath + ".tmp";
         var jsonTemp = jsonPath + ".tmp";
-        try
-        {
-            _writeText(xmlTemp, plan.Xml, new UTF8Encoding(false));
-            _writeText(jsonTemp, plan.Json, new UTF8Encoding(false));
-            File.Move(xmlTemp, xmlPath);
-            File.Move(jsonTemp, jsonPath);
-        }
-        catch
-        {
-            foreach (var path in new[] { xmlTemp, jsonTemp, xmlPath, jsonPath }) File.Delete(path);
-            throw;
-        }
+        _writeText(xmlTemp, plan.Xml, new UTF8Encoding(false));
+        _writeText(jsonTemp, plan.Json, new UTF8Encoding(false));
+        File.Move(xmlTemp, xmlPath);
+        File.Move(jsonTemp, jsonPath);
+    }
+
+    private void Cleanup(string directory)
+    {
+        if (!Directory.Exists(directory)) return;
+        string[] files;
+        try { files = Directory.GetFiles(directory, "*", SearchOption.AllDirectories); }
+        catch { files = []; }
+        foreach (var file in files) Try(() => _deleteFile(file));
+
+        string[] directories;
+        try { directories = Directory.GetDirectories(directory, "*", SearchOption.AllDirectories); }
+        catch { directories = []; }
+        foreach (var child in directories.OrderByDescending(path => path.Length))
+            Try(() => _deleteDirectory(child, false));
+        Try(() => _deleteDirectory(directory, false));
+    }
+
+    private static void Try(Action action)
+    {
+        try { action(); }
+        catch { }
     }
 
     private sealed record PreparedPlan(string Xml, string Json);

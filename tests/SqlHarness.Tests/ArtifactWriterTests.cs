@@ -104,9 +104,7 @@ public class ArtifactWriterTests
         var run = new CompareRunArtifact("measure", 1, 1, 1, 1, new Dictionary<string, long>(), "H", [FixturePlan()], 0);
 
         Assert.Throws<IOException>(() => writer.Write(report, [run], "target"));
-        var directory = Assert.Single(Directory.GetDirectories(temp.Path));
-        Assert.False(File.Exists(Path.Combine(directory, "runs.jsonl")));
-        Assert.Empty(Directory.GetFiles(Path.Combine(directory, "plans")));
+        Assert.Empty(Directory.GetFileSystemEntries(temp.Path));
     }
 
     [Fact]
@@ -124,9 +122,55 @@ public class ArtifactWriterTests
         var run = new CompareRunArtifact("measure", 1, 1, 1, 1, new Dictionary<string, long>(), "H", [FixturePlan()], 0);
 
         Assert.Throws<IOException>(() => writer.Write(report, [run], "target"));
-        var directory = Assert.Single(Directory.GetDirectories(temp.Path));
-        Assert.False(File.Exists(Path.Combine(directory, "runs.jsonl")));
-        Assert.Empty(Directory.GetFiles(Path.Combine(directory, "plans")));
+        Assert.Empty(Directory.GetFileSystemEntries(temp.Path));
+    }
+
+    [Fact]
+    public void Runs_metadata_failure_rolls_back_report_plans_and_directory()
+    {
+        using var temp = new TempDirectory();
+        var writer = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch,
+            (path, content, encoding) =>
+            {
+                if (path.EndsWith("runs.jsonl", StringComparison.Ordinal)) throw new IOException("runs failure");
+                File.WriteAllText(path, content, encoding);
+            });
+        var report = new SqlHarnessMeasureReport(new("s", "d", "s", "d", "profile"), 1, 1, true, Variant("measure"), null);
+        var run = new CompareRunArtifact("measure", 1, 1, 1, 1, new Dictionary<string, long>(), "H", [FixturePlan()], 0);
+
+        var exception = Assert.Throws<IOException>(() => writer.Write(report, [run], "target"));
+
+        Assert.Equal("runs failure", exception.Message);
+        Assert.Empty(Directory.GetFileSystemEntries(temp.Path));
+    }
+
+    [Fact]
+    public void Rollback_delete_failure_preserves_original_exception_and_attempts_remaining_paths()
+    {
+        using var temp = new TempDirectory();
+        var deletes = new List<string>();
+        var writer = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch,
+            (path, content, encoding) =>
+            {
+                File.WriteAllText(path, content, encoding);
+                if (path.EndsWith(".plan.json.tmp", StringComparison.Ordinal)) throw new IOException("original failure");
+            },
+            path =>
+            {
+                deletes.Add(path);
+                if (path.EndsWith("report.json", StringComparison.Ordinal)) throw new IOException("delete failure");
+                File.Delete(path);
+            },
+            (path, recursive) => Directory.Delete(path, recursive));
+        var report = new SqlHarnessMeasureReport(new("s", "d", "s", "d", "profile"), 1, 1, true, Variant("measure"), null);
+        var run = new CompareRunArtifact("measure", 1, 1, 1, 1, new Dictionary<string, long>(), "H", [FixturePlan()], 0);
+
+        var exception = Assert.Throws<IOException>(() => writer.Write(report, [run], "target"));
+
+        Assert.Equal("original failure", exception.Message);
+        Assert.Contains(deletes, path => path.EndsWith("report.json", StringComparison.Ordinal));
+        Assert.Contains(deletes, path => path.EndsWith(".sqlplan.tmp", StringComparison.Ordinal));
+        Assert.DoesNotContain(Directory.GetDirectories(temp.Path), path => !Path.GetFileName(path).Contains(".staging-", StringComparison.Ordinal));
     }
 
     private static CompareVariantReport Variant(string name) => new(
