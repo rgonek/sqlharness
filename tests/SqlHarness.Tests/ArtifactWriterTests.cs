@@ -12,7 +12,7 @@ public class ArtifactWriterTests
         using var temp = new TempDirectory();
         const string plan = "<ShowPlanXML><Value>returned-secret-value</Value></ShowPlanXML>\r\n";
         var report = new SqlHarnessCompareReport(
-            new SqlHarnessTargetIdentityReport("safe-server", "safe-db", "safe-server", "safe-db"),
+            new SqlHarnessTargetIdentityReport("safe-server", "safe-db", "safe-server", "safe-db", "profile"),
             1, 2, true, Variant("baseline"), Variant("candidate"), null);
         var runs = new[]
         {
@@ -42,7 +42,7 @@ public class ArtifactWriterTests
         using var temp = new TempDirectory();
         var writer = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch);
         var report = new SqlHarnessMeasureReport(
-            new SqlHarnessTargetIdentityReport("server", "db", "server", "db"),
+            new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile"),
             1, 1, true, Variant("measure"), null);
         var run = new CompareRunArtifact("measure", 1, 1, 2, 3,
             new Dictionary<string, long>(), "HASH", ["<plan />"], 0);
@@ -59,7 +59,7 @@ public class ArtifactWriterTests
     {
         using var temp = new TempDirectory();
         var report = new SqlHarnessCompareReport(
-            new SqlHarnessTargetIdentityReport("server", "db", "server", "db"),
+            new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile"),
             1, 2, true, Variant("baseline"), Variant("candidate"), null);
         var run = new CompareRunArtifact("baseline", 1, 1, 2, 3,
             new Dictionary<string, long>(), "HASH", ["<plan id=\"1\" />", "<plan id=\"2\" />"], 0);

@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 namespace SqlHarness.Core;
 
 public sealed record SqlHarnessTargetIdentityReport(
-    string RequestedServer, string RequestedDatabase, string ActualServer, string ActualDatabase);
+    string RequestedServer, string RequestedDatabase, string ActualServer, string ActualDatabase, string Mode);
 
 public sealed record CompareDistribution(long Min, long Median, long Max);
 
