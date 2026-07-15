@@ -36,6 +36,8 @@ internal interface ISqlSessionFactory
     Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct);
 }
 
+internal sealed class SqlTargetMismatchException(string message) : Exception(message);
+
 internal static class SqlExecution
 {
     internal const string IdentitySql =
@@ -84,7 +86,7 @@ internal sealed class SqlClientSessionFactory : ISqlSessionFactory
             session = await _connector(connectionString, accessToken, ct);
             var identity = await ReadIdentityAsync(session, _connectTimeoutSeconds, ct);
             if (!TargetMatches(target, identity.Server, identity.Database))
-                throw new SqlHarnessSafetyException("Connected SQL target identity does not match the resolved target.");
+                throw new SqlTargetMismatchException("Connected SQL target identity does not match the resolved target.");
 
             session.Identity = new SqlHarnessTargetIdentityReport(
                 target.Server, target.Database, identity.Server, identity.Database, target.Mode);

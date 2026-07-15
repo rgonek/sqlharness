@@ -91,7 +91,7 @@ public sealed class SqlExecutionTests
         var connector = new FakeConnector("other-server", "database");
         var factory = new SqlClientSessionFactory(new FakeAzureCli("unused"), connector.ConnectAsync);
 
-        var error = await Assert.ThrowsAsync<SqlHarnessSafetyException>(() => factory.ConnectAsync(
+        var error = await Assert.ThrowsAsync<SqlTargetMismatchException>(() => factory.ConnectAsync(
             new ResolvedTarget("server", "database", AuthSpec.Parse("integrated", null, null, false), "direct"),
             default));
 

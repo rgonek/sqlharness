@@ -583,7 +583,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         if (compare.TimeoutSeconds is < 1 or > 300)
             throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
         if (compare.Repeat is < 1 or > 100)
-            throw new SqlHarnessSafetyException("Compareormance repetitions must be between 1 and 100.");
+            throw new SqlHarnessSafetyException("Compare repetitions must be between 1 and 100.");
     }
 
     private static void ValidateMeasure(SqlHarnessMeasureOperation measure)
@@ -710,10 +710,11 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
     private static SqlHarnessExitCode MapException(Exception exception, ExecutionPhase phase) => exception switch
     {
-        SqlHarnessSafetyException safety when
-            safety.Message.Contains("identity does not match", StringComparison.OrdinalIgnoreCase) => SqlHarnessExitCode.TargetMismatch,
+        SqlTargetMismatchException => SqlHarnessExitCode.TargetMismatch,
         SqlHarnessSafetyException => SqlHarnessExitCode.Safety,
+        IOException or UnauthorizedAccessException when phase == ExecutionPhase.Validation => SqlHarnessExitCode.LocalStorage,
         AzureCliException => SqlHarnessExitCode.Authentication,
+        SqlException when phase == ExecutionPhase.Authentication => SqlHarnessExitCode.Authentication,
         SqlException => SqlHarnessExitCode.SqlExecution,
         TimeoutException => SqlHarnessExitCode.SqlExecution,
         OperationCanceledException when phase == ExecutionPhase.Sql => SqlHarnessExitCode.SqlExecution,

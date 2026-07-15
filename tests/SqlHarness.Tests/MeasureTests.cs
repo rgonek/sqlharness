@@ -70,6 +70,20 @@ public class SqlHarnessMeasureTests
         Assert.Equal(0, session.FactoryOpenCount);
     }
 
+    [Fact]
+    public async Task Measure_loads_profiles_exactly_once()
+    {
+        var loads = 0;
+        var outcome = await Module(FakeMeasureSession.Create(), loadProfiles: () =>
+        {
+            loads++;
+            return Profiles();
+        }).ExecuteAsync(Measure(repeat: 1));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(1, loads);
+    }
+
     [Theory]
     [InlineData("DELETE dbo.Clients", "SELECT Value FROM dbo.Clients")]
     [InlineData("SELECT Id INTO #ids FROM dbo.Clients", "UPDATE dbo.Clients SET Value = 1")]
@@ -243,8 +257,13 @@ public class SqlHarnessMeasureTests
     private static string StatisticsMessage(int reads, int cpu, int elapsed) =>
         $"Table 'Clients'. Scan count 1, logical reads {reads}, physical reads 0, lob logical reads 0.\nSQL Server Execution Times: CPU time = {cpu} ms, elapsed time = {elapsed} ms.";
 
-    private static SqlHarnessModule Module(FakeMeasureSession session, FakeAzureCli? azure = null, FakeGainStore? gain = null, ICompareArtifactWriter? writer = null) =>
-        new(session, gain ?? new FakeGainStore(), writer ?? new CapturingArtifactWriter(), Profiles);
+    private static SqlHarnessModule Module(
+        FakeMeasureSession session,
+        FakeAzureCli? azure = null,
+        FakeGainStore? gain = null,
+        ICompareArtifactWriter? writer = null,
+        Func<IReadOnlyDictionary<string, TargetProfile>>? loadProfiles = null) =>
+        new(session, gain ?? new FakeGainStore(), writer ?? new CapturingArtifactWriter(), loadProfiles ?? Profiles);
 
     private sealed class FakeAzureCli : IAzureCli
     {

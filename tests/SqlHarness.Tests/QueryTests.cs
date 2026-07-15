@@ -322,6 +322,101 @@ public class SqlHarnessQueryTests
     }
 
     [Fact]
+    public async Task Sql_exception_during_connect_maps_to_authentication_but_execution_maps_to_sql_execution()
+    {
+        var connectOutcome = await Module(
+                FakeSqlSession.WithIdentity("test-server", "testdb-a"),
+                connectFailure: FakeSqlException())
+            .ExecuteAsync(Query("SELECT 1"));
+        var executionOutcome = await Module(
+                FakeSqlSession.WithIdentity("test-server", "testdb-a", failure: FakeSqlException()))
+            .ExecuteAsync(Query("SELECT 1"));
+
+        Assert.Equal(SqlHarnessExitCode.Authentication, connectOutcome.ExitCode);
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, executionOutcome.ExitCode);
+    }
+
+    [Fact]
+    public async Task Typed_target_mismatch_maps_to_four_without_running_user_sql()
+    {
+        var session = FakeSqlSession.WithIdentity("test-server", "testdb-a");
+        var gain = new FakeGainStore();
+        var outcome = await Module(
+                session,
+                gain: gain,
+                connectFailure: new SqlTargetMismatchException($"different target access_token={Token}"))
+            .ExecuteAsync(Query("SELECT 1"));
+        var receipt = Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt);
+        var first = await receipt.CompleteAsync(new OutputFootprint(4, 1));
+        var second = await receipt.CompleteAsync(new OutputFootprint(99, 9));
+
+        Assert.Equal(SqlHarnessExitCode.TargetMismatch, outcome.ExitCode);
+        Assert.Equal(SqlHarnessExitCode.TargetMismatch, first);
+        Assert.Equal(first, second);
+        Assert.Single(gain.Records);
+        Assert.Equal(4, gain.Records[0].EmittedBytes);
+        Assert.Empty(session.Commands);
+        Assert.DoesNotContain(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Validation_message_containing_identity_phrase_remains_safety()
+    {
+        var outcome = await Module(
+                FakeSqlSession.WithIdentity("test-server", "testdb-a"),
+                loadProfiles: () => throw new SqlHarnessSafetyException("profile identity does not match rule"))
+            .ExecuteAsync(Query("SELECT 1"));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Profile_load_io_failures_map_to_local_storage_and_are_redacted(bool unauthorized)
+    {
+        var secret = "access-token-profile-secret-never-emit";
+        Exception failure = unauthorized
+            ? new UnauthorizedAccessException($"denied {secret}")
+            : new IOException($"failed {secret}");
+        var outcome = await Module(
+                FakeSqlSession.WithIdentity("test-server", "testdb-a"),
+                loadProfiles: () => throw failure)
+            .ExecuteAsync(Query("SELECT 1"));
+
+        Assert.Equal(SqlHarnessExitCode.LocalStorage, outcome.ExitCode);
+        Assert.DoesNotContain(secret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Query_loads_profiles_exactly_once()
+    {
+        var loads = 0;
+        var outcome = await Module(
+                FakeSqlSession.WithIdentity("test-server", "testdb-a", FakeSqlReader.Rows(["Value"], [1])),
+                loadProfiles: () =>
+                {
+                    loads++;
+                    return Profiles();
+                })
+            .ExecuteAsync(Query("SELECT 1"));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(1, loads);
+    }
+
+    [Fact]
+    public async Task Malformed_profile_error_remains_safety()
+    {
+        var outcome = await Module(
+                FakeSqlSession.WithIdentity("test-server", "testdb-a"),
+                loadProfiles: () => throw new SqlHarnessSafetyException("Could not parse target profiles file."))
+            .ExecuteAsync(Query("SELECT 1"));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+    }
+
+    [Fact]
     public async Task Gain_returns_the_aggregate_without_loading_profiles_or_opening_SQL()
     {
         var session = FakeSqlSession.WithIdentity("test-server", "testdb-a");
@@ -355,8 +450,14 @@ public class SqlHarnessQueryTests
     private static SqlHarnessModule Module(
         FakeSqlSession session,
         FakeAzureCli? azure = null,
-        FakeGainStore? gain = null) =>
-        new(new FakeSqlSessionFactory(session, azure ?? new FakeAzureCli(Token)), gain ?? new FakeGainStore(), Profiles);
+        FakeGainStore? gain = null,
+        Exception? connectFailure = null,
+        Func<IReadOnlyDictionary<string, TargetProfile>>? loadProfiles = null) =>
+        new(new FakeSqlSessionFactory(session, azure ?? new FakeAzureCli(Token), connectFailure), gain ?? new FakeGainStore(), loadProfiles ?? Profiles);
+
+    private static Microsoft.Data.SqlClient.SqlException FakeSqlException() =>
+        (Microsoft.Data.SqlClient.SqlException)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(
+            typeof(Microsoft.Data.SqlClient.SqlException));
 
     private static SqlHarnessQueryOperation Query(string sql, int maxRows = 50) =>
         new(Target(), sql, [], 30, maxRows, false, null);
@@ -410,10 +511,12 @@ public class SqlHarnessQueryTests
             aggregateFailure is not null ? throw aggregateFailure : aggregate ?? throw new NotSupportedException();
     }
 
-    private sealed class FakeSqlSessionFactory(FakeSqlSession session, FakeAzureCli azure) : ISqlSessionFactory
+    private sealed class FakeSqlSessionFactory(FakeSqlSession session, FakeAzureCli azure, Exception? connectFailure) : ISqlSessionFactory
     {
         public async Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
         {
+            if (connectFailure is not null)
+                throw connectFailure;
             var tokenResponse = await azure.RunJsonAsync(
                 ["account", "get-access-token", "--resource", "https://database.windows.net/"], ct);
             var accessToken = tokenResponse.GetProperty("accessToken").GetString()!;
@@ -421,7 +524,7 @@ public class SqlHarnessQueryTests
             session.FactoryAccessToken = accessToken;
             if (!string.Equals(target.Server, session.Identity.ActualServer, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(target.Database, session.Identity.ActualDatabase, StringComparison.Ordinal))
-                throw new SqlHarnessSafetyException("Connected SQL target identity does not match the resolved target.");
+                throw new SqlTargetMismatchException("Connected SQL target identity does not match the resolved target.");
             return session;
         }
     }

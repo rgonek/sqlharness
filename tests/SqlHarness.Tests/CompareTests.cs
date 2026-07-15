@@ -72,6 +72,30 @@ public class SqlHarnessCompareTests
     }
 
     [Fact]
+    public async Task Compare_invalid_repeat_uses_compare_wording()
+    {
+        var outcome = await Module(FakeCompareSession.Create()).ExecuteAsync(Compare(repeat: 0));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Contains("Compare repetitions", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("Compare" + "ormance", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Compare_loads_profiles_exactly_once()
+    {
+        var loads = 0;
+        var outcome = await Module(FakeCompareSession.Create(), loadProfiles: () =>
+        {
+            loads++;
+            return Profiles();
+        }).ExecuteAsync(Compare(repeat: 1));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(1, loads);
+    }
+
+    [Fact]
     public async Task Compare_rejects_a_parameter_referenced_by_none_of_setup_baseline_or_candidate()
     {
         var session = FakeCompareSession.Create();
@@ -218,8 +242,9 @@ public class SqlHarnessCompareTests
     private static SqlHarnessModule Module(
         FakeCompareSession session,
         FakeAzureCli? azure = null,
-        FakeGainStore? gain = null) =>
-        new(session, gain ?? new FakeGainStore(), new NullArtifactWriter(), Profiles);
+        FakeGainStore? gain = null,
+        Func<IReadOnlyDictionary<string, TargetProfile>>? loadProfiles = null) =>
+        new(session, gain ?? new FakeGainStore(), new NullArtifactWriter(), loadProfiles ?? Profiles);
 
     private static SqlHarnessCompareOperation Compare(int repeat) =>
         new(Target(), "SELECT Id INTO #ids FROM dbo.Clients", "SELECT Value FROM dbo.Clients", "SELECT Value FROM dbo.Clients -- candidate", [], 30, repeat);
