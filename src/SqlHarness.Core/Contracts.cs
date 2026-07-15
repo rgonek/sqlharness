@@ -35,7 +35,7 @@ public sealed record SqlHarnessMeasureOperation(
 
 public sealed record SqlHarnessGainOperation : SqlHarnessOperation;
 
-public sealed record SqlHarnessPlanOperation(string ShowplanXml) : SqlHarnessOperation;
+public sealed record SqlHarnessPlanOperation(string ShowplanXml, OutputFootprint RawFootprint) : SqlHarnessOperation;
 
 public sealed record SqlTargetRequest(
     string? Profile,

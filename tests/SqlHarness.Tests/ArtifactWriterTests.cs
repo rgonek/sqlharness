@@ -78,6 +78,57 @@ public class ArtifactWriterTests
         Assert.Equal(2, files.Select(Path.GetFileName).Distinct(StringComparer.Ordinal).Count());
     }
 
+    [Fact]
+    public void Invalid_captured_plan_leaves_no_published_artifacts()
+    {
+        using var temp = new TempDirectory();
+        var writer = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch);
+        var report = new SqlHarnessMeasureReport(new("s", "d", "s", "d", "profile"), 1, 1, true, Variant("measure"), null);
+        var run = new CompareRunArtifact("measure", 1, 1, 1, 1, new Dictionary<string, long>(), "H", ["<invalid />"], 0);
+
+        Assert.Throws<SqlHarnessSafetyException>(() => writer.Write(report, [run], "target"));
+        Assert.Empty(Directory.GetFileSystemEntries(temp.Path));
+    }
+
+    [Fact]
+    public void Paired_plan_write_failure_leaves_no_run_metadata_or_orphan_plan()
+    {
+        using var temp = new TempDirectory();
+        var writer = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch,
+            (path, content, encoding) =>
+            {
+                if (path.EndsWith(".plan.json.tmp", StringComparison.Ordinal)) throw new IOException("injected");
+                File.WriteAllText(path, content, encoding);
+            });
+        var report = new SqlHarnessMeasureReport(new("s", "d", "s", "d", "profile"), 1, 1, true, Variant("measure"), null);
+        var run = new CompareRunArtifact("measure", 1, 1, 1, 1, new Dictionary<string, long>(), "H", [FixturePlan()], 0);
+
+        Assert.Throws<IOException>(() => writer.Write(report, [run], "target"));
+        var directory = Assert.Single(Directory.GetDirectories(temp.Path));
+        Assert.False(File.Exists(Path.Combine(directory, "runs.jsonl")));
+        Assert.Empty(Directory.GetFiles(Path.Combine(directory, "plans")));
+    }
+
+    [Fact]
+    public void Paired_plan_collision_cleans_staged_and_published_files_before_metadata()
+    {
+        using var temp = new TempDirectory();
+        var writer = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch,
+            (path, content, encoding) =>
+            {
+                File.WriteAllText(path, content, encoding);
+                if (path.EndsWith(".plan.json.tmp", StringComparison.Ordinal))
+                    File.WriteAllText(path[..^4], "collision", encoding);
+            });
+        var report = new SqlHarnessMeasureReport(new("s", "d", "s", "d", "profile"), 1, 1, true, Variant("measure"), null);
+        var run = new CompareRunArtifact("measure", 1, 1, 1, 1, new Dictionary<string, long>(), "H", [FixturePlan()], 0);
+
+        Assert.Throws<IOException>(() => writer.Write(report, [run], "target"));
+        var directory = Assert.Single(Directory.GetDirectories(temp.Path));
+        Assert.False(File.Exists(Path.Combine(directory, "runs.jsonl")));
+        Assert.Empty(Directory.GetFiles(Path.Combine(directory, "plans")));
+    }
+
     private static CompareVariantReport Variant(string name) => new(
         name,
         new CompareDistribution(1, 2, 3),

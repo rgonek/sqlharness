@@ -754,11 +754,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     private SqlHarnessOutcome ExecutePlan(SqlHarnessPlanOperation operation)
     {
         var stopwatch = Stopwatch.StartNew();
-        var bytes = Encoding.UTF8.GetByteCount(operation.ShowplanXml);
-        var lines = operation.ShowplanXml.Length == 0
-            ? 0
-            : operation.ShowplanXml.Count(character => character == '\n') + (operation.ShowplanXml[^1] == '\n' ? 0 : 1);
-        var raw = new OutputFootprint(bytes, lines);
+        var raw = operation.RawFootprint;
         try
         {
             var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, PlanDistiller.Distill(operation.ShowplanXml), null);

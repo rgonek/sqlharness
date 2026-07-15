@@ -5,7 +5,7 @@ using SqlHarness.Core;
 
 namespace SqlHarness.Cli.Commands;
 
-public sealed class PlanCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer, CliInput input)
+public sealed class PlanCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer, PlanInput input)
     : SqlHarnessCommand<PlanCommand.Settings>(module, output, renderer)
 {
     public sealed class Settings : CommandSettings
@@ -22,12 +22,14 @@ public sealed class PlanCommand(ISqlHarnessModule module, OutputContext output, 
     {
         try
         {
-            var xml = string.IsNullOrWhiteSpace(settings.File) || settings.File == "-"
-                ? await input.Stdin.ReadToEndAsync(ct)
-                : await System.IO.File.ReadAllTextAsync(settings.File, ct);
-            return await Dispatch(new SqlHarnessPlanOperation(xml), settings.Json, ct);
+            await using var file = string.IsNullOrWhiteSpace(settings.File) || settings.File == "-"
+                ? null
+                : new FileStream(settings.File, FileMode.Open, FileAccess.Read, FileShare.Read, 8192, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            var bounded = await BoundedPlanInputReader.ReadAsync(file ?? input.Stream, ct);
+            return await Dispatch(new SqlHarnessPlanOperation(bounded.Text, bounded.Footprint), settings.Json, ct);
         }
         catch (OperationCanceledException) { throw; }
+        catch (PlanInputSafetyException exception) { return Invalid(exception.Message); }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             return Invalid("Unable to read execution plan input.");

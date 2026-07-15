@@ -8,11 +8,12 @@ namespace SqlHarness.Cli;
 
 public static class SqlHarnessCli
 {
-    public static SqlHarnessApp Create(ISqlHarnessModule module, TextWriter? output = null, TextReader? stdin = null, bool? stdinRedirected = null)
+    public static SqlHarnessApp Create(ISqlHarnessModule module, TextWriter? output = null, TextReader? stdin = null, bool? stdinRedirected = null, Stream? planStdin = null)
     {
         var registrar = new Registrar();
         registrar.Add(module); registrar.Add(new OutputContext(output ?? Console.Out)); registrar.Add(new Renderer());
         registrar.Add(new CliInput(stdin ?? Console.In, stdinRedirected ?? Console.IsInputRedirected));
+        registrar.Add(new PlanInput(planStdin ?? Console.OpenStandardInput()));
         var app = new CommandApp(registrar);
         app.Configure(c =>
         {
