@@ -1,0 +1,11 @@
+{
+  "prod-eu": {
+    "server": "contoso.database.windows.net",
+    "database": "contoso-{tenant}-{env}",
+    "vars": {
+      "tenant": "^[a-z0-9]{3,20}$",
+      "env": "^(dev|test|uat)$"
+    },
+    "auth": "ad-default"
+  }
+}
