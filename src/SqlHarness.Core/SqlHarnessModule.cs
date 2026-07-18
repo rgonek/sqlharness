@@ -765,8 +765,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             if (schema.MaxObjects is < 1 or > 500) throw new SqlHarnessSafetyException("Schema object limit must be between 1 and 500.");
             var target = TargetResolver.Resolve(schema.Target, _loadProfiles()); phase = ExecutionPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct); phase = ExecutionPhase.Sql;
-            await using var reader = await session.ExecuteReaderAsync(new SqlExecutionCommand(SchemaReader.Sql, SchemaReader.Parameters(schema.Filter), schema.TimeoutSeconds), ct);
-            var result = await SchemaReader.ReadAsync(reader, schema.MaxObjects, ct); raw = result.Raw;
+            await using var reader = await session.ExecuteReaderAsync(new SqlExecutionCommand(SchemaReader.Sql, SchemaReader.Parameters(schema.Filter, schema.MaxObjects), schema.TimeoutSeconds), ct);
+            var result = await SchemaReader.ReadAsync(reader, ct); raw = result.Raw;
             return WithReceipt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, new SqlHarnessSchemaReport(session.Identity, result.Objects, result.Omitted), null), stopwatch.ElapsedMilliseconds, raw, "schema");
         }
         catch (Exception exception)
