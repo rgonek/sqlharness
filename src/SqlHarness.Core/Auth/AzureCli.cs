@@ -72,20 +72,29 @@ internal sealed class ProcessRunner : IProcessRunner
 public sealed class AzureCli : IAzureCli
 {
     private readonly IProcessRunner _runner;
+    private readonly bool _isWindows;
 
-    public AzureCli() : this(new ProcessRunner())
+    public AzureCli() : this(new ProcessRunner(), OperatingSystem.IsWindows())
     {
     }
 
-    internal AzureCli(IProcessRunner runner) => _runner = runner;
+    internal AzureCli(IProcessRunner runner) : this(runner, OperatingSystem.IsWindows())
+    {
+    }
 
-    private static string Executable => OperatingSystem.IsWindows() ? "cmd.exe" : "az";
+    internal AzureCli(IProcessRunner runner, bool isWindows)
+    {
+        _runner = runner;
+        _isWindows = isWindows;
+    }
+
+    private string Executable => _isWindows ? "cmd.exe" : "az";
 
     public async Task<bool> IsLoggedInAsync(CancellationToken cancellationToken = default)
     {
         var result = await _runner.RunAsync(
             Executable,
-            BuildArguments(["account", "show", "-o", "json"], OperatingSystem.IsWindows()),
+            BuildArguments(["account", "show", "-o", "json"], _isWindows),
             cancellationToken: cancellationToken);
         return result.ExitCode == 0;
     }
@@ -97,7 +106,7 @@ public sealed class AzureCli : IAzureCli
         var fullArgs = new List<string>(args) { "-o", "json" };
         var result = await _runner.RunAsync(
             Executable,
-            BuildArguments(fullArgs, OperatingSystem.IsWindows()),
+            BuildArguments(fullArgs, _isWindows),
             cancellationToken: cancellationToken);
         if (result.ExitCode != 0)
         {
