@@ -6,6 +6,8 @@ namespace SqlHarness.Tests.Auth;
 
 public sealed class ProcessRunnerTests
 {
+    private const int PidPublicationWaitAttempts = 300;
+
     [Fact]
     public void ProcessAbstractions_AreInternal()
     {
@@ -110,6 +112,27 @@ public sealed class ProcessRunnerTests
         }
     }
 
+    [Fact]
+    public async Task WaitForPidsAsync_ToleratesSlowPublisher()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sqlharness-pids-{Guid.NewGuid():N}.pid");
+
+        try
+        {
+            var wait = WaitForPidsAsync(path);
+            await Task.Delay(TimeSpan.FromSeconds(8));
+            await File.WriteAllLinesAsync(path, ["123", "456"]);
+
+            var publishedPids = await wait;
+
+            Assert.Equal([123, 456], publishedPids);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private static async Task<int[]> ReadPublishedPidsAsync(string path)
     {
         if (!File.Exists(path))
@@ -123,7 +146,7 @@ public sealed class ProcessRunnerTests
 
     private static async Task<int[]> WaitForPidsAsync(string path)
     {
-        for (var attempt = 0; attempt < 100; attempt++)
+        for (var attempt = 0; attempt < PidPublicationWaitAttempts; attempt++)
         {
             if (File.Exists(path))
             {
