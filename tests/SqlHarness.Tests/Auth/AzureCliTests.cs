@@ -64,7 +64,7 @@ public sealed class AzureCliTests
     public async Task RunJsonAsync_WindowsRejectsUnsafeArgumentBeforeExecution(string unsafeArgument)
     {
         var runner = new TrackingProcessRunner();
-        var cli = new AzureCli(runner);
+        var cli = new AzureCli(runner, isWindows: true);
 
         var exception = await Assert.ThrowsAsync<AzureCliException>(() =>
             cli.RunJsonAsync([unsafeArgument]));
@@ -72,6 +72,17 @@ public sealed class AzureCliTests
         Assert.Equal("Azure CLI argument is unsafe for Windows command execution.", exception.Message);
         Assert.DoesNotContain(unsafeArgument, exception.ToString(), StringComparison.Ordinal);
         Assert.Equal(0, runner.InvocationCount);
+    }
+
+    [Fact]
+    public async Task RunJsonAsync_NonWindowsPassesUnsafeArgumentToRunner()
+    {
+        var runner = new TrackingProcessRunner();
+        var cli = new AzureCli(runner, isWindows: false);
+
+        await cli.RunJsonAsync(["two words"]);
+
+        Assert.Equal(1, runner.InvocationCount);
     }
 
     [Fact]

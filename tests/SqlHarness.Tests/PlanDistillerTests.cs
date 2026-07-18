@@ -72,6 +72,16 @@ public sealed class PlanDistillerTests
     }
 
     [Fact]
+    public void Distilled_json_meets_the_sixty_percent_contract_for_canonical_lf_input()
+    {
+        var xml = Fixture("warnings.sqlplan").ReplaceLineEndings("\n");
+        var json = JsonSerializer.Serialize(PlanDistiller.Distill(xml));
+
+        Assert.True(Encoding.UTF8.GetByteCount(json) <= Encoding.UTF8.GetByteCount(xml) * 0.4,
+            $"Distilled JSON was {Encoding.UTF8.GetByteCount(json)} bytes for {Encoding.UTF8.GetByteCount(xml)} source bytes.");
+    }
+
+    [Fact]
     public void Ignores_attacker_namespaced_attributes_even_when_they_appear_first()
     {
         var xml = MinimalPlan("""
@@ -240,7 +250,7 @@ public sealed class PlanDistillerTests
         var second = JsonSerializer.Serialize(plan, options);
 
         Assert.Equal(first, second);
-        Assert.Equal("{\"statements\":[{\"statementText\":\"x\",\"root\":{\"physicalOp\":\"Scan\",\"logicalOp\":\"Logical\",\"estimatedRows\":1.5,\"actualRows\":2,\"executions\":1,\"costFraction\":0.25,\"predicate\":\"a\\u0022b\"}}]}", first);
+        Assert.Equal("{\"statements\":[{\"sql\":\"x\",\"root\":{\"physicalOp\":\"Scan\",\"logicalOp\":\"Logical\",\"estimatedRows\":1.5,\"actualRows\":2,\"executions\":1,\"costFraction\":0.25,\"predicate\":\"a\\u0022b\"}}]}", first);
     }
 
     private static IEnumerable<PlanNode> Flatten(PlanNode node)

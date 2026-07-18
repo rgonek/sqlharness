@@ -270,7 +270,7 @@ internal sealed class PlanStatementJsonConverter : JsonConverter<PlanStatement>
     {
         writer.WriteStartObject();
         if (value.StatementText is not null)
-            writer.WriteString(Name(options, nameof(value.StatementText)), value.StatementText);
+            writer.WriteString(Name(options, "Sql"), value.StatementText);
         writer.WritePropertyName(Name(options, nameof(value.Root)));
         JsonSerializer.Serialize(writer, value.Root, options);
         if (value.MissingIndexes.Count > 0)

@@ -37,6 +37,8 @@ sqlharness plan .\artifacts\orders.sqlplan --json
 sqlharness gain --json
 ```
 
+`plan --json` emits a compact, deterministic plan contract: `statements` preserves input order; each statement has optional `sql`, a `root` node, and optional `missingIndexes`. Nodes retain `physicalOp`, optional `logicalOp`, operator metadata and runtime values, warnings (with their Showplan attributes), and child nodes. This output is serialization-only; it is not accepted as plan input.
+
 Use `--json` for automation. `query` reads SQL from exactly one source: `--file` or redirected stdin. Bind runtime values with repeatable `--param name[:type]=value`, never by string interpolation.
 
 ## Commands
