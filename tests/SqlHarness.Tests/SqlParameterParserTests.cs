@@ -1,5 +1,6 @@
 using System.Data;
 using System.Globalization;
+
 using SqlHarness.Core;
 
 namespace SqlHarness.Tests;

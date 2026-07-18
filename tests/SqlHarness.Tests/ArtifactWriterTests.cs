@@ -1,4 +1,5 @@
 using System.Text.Json;
+
 using SqlHarness.Core;
 
 namespace SqlHarness.Tests;

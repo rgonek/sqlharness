@@ -1,6 +1,8 @@
 using System.ComponentModel;
+
 using Spectre.Console;
 using Spectre.Console.Cli;
+
 using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 
@@ -110,7 +112,8 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         if (string.IsNullOrWhiteSpace(s.Query)) return Invalid("--query SQL file is required.");
         if (s.Timeout is < 1 or > 300 || s.Repeat is < 1 or > 100) return Invalid("--timeout must be 1..300 and --repeat must be 1..100.");
         try { return await Dispatch(new SqlHarnessMeasureOperation(target, await Read(s.Setup, ct), (await Read(s.Query, ct))!, s.Parameters, s.Timeout, s.Repeat), s.Json, ct); }
-        catch (OperationCanceledException) { throw; } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file."); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file."); }
     }
 }
 
@@ -131,7 +134,8 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
         if (string.IsNullOrWhiteSpace(s.Baseline) || string.IsNullOrWhiteSpace(s.Candidate)) return Invalid("Both --baseline and --candidate SQL files are required.");
         if (s.Timeout is < 1 or > 300 || s.Repeat is < 1 or > 100) return Invalid("--timeout must be 1..300 and --repeat must be 1..100.");
         try { return await Dispatch(new SqlHarnessCompareOperation(target, await Read(s.Setup, ct), (await Read(s.Baseline, ct))!, (await Read(s.Candidate, ct))!, s.Parameters, s.Timeout, s.Repeat), s.Json, ct); }
-        catch (OperationCanceledException) { throw; } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file."); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file."); }
     }
 }
 

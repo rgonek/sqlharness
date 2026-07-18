@@ -1,8 +1,9 @@
-using System.Data;
 using System.Collections;
+using System.Data;
 using System.Globalization;
 using System.Reflection;
 using System.Text.RegularExpressions;
+
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace SqlHarness.Core;

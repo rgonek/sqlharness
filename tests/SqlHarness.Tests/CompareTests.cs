@@ -1,8 +1,9 @@
 ﻿using System.Data;
 using System.Text.Json;
+
+using SqlHarness.Core;
 using SqlHarness.Core.Auth;
 using SqlHarness.Core.Targets;
-using SqlHarness.Core;
 
 namespace SqlHarness.Tests;
 

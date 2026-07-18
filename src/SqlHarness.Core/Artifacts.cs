@@ -113,8 +113,14 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
                 var run = runs[index];
                 lines.AppendLine(JsonSerializer.Serialize(new
                 {
-                    run.Variant, run.Repetition, run.CpuTimeMilliseconds, run.ElapsedTimeMilliseconds,
-                    run.LogicalReads, run.LogicalReadsByTable, run.ResultHash, run.MessageCount,
+                    run.Variant,
+                    run.Repetition,
+                    run.CpuTimeMilliseconds,
+                    run.ElapsedTimeMilliseconds,
+                    run.LogicalReads,
+                    run.LogicalReadsByTable,
+                    run.ResultHash,
+                    run.MessageCount,
                     PlanFiles = run.PlanXmls.Select((_, planIndex) => PlanFileName(run, index, planIndex)).ToArray(),
                     PlanJsonFiles = run.PlanXmls.Select((_, planIndex) => PlanJsonFileName(run, index, planIndex)).ToArray(),
                 }, JsonLineOptions));

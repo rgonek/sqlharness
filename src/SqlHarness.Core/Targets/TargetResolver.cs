@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+
 using SqlHarness.Core.Auth;
 
 namespace SqlHarness.Core.Targets;

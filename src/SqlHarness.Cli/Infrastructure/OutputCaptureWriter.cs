@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+
 using SqlHarness.Core;
 
 namespace SqlHarness.Cli.Infrastructure;

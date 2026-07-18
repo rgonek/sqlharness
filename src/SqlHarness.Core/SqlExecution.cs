@@ -1,7 +1,9 @@
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
+
 using Microsoft.Data.SqlClient;
+
 using SqlHarness.Core.Auth;
 using SqlHarness.Core.Targets;
 

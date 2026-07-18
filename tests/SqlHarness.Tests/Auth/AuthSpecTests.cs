@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
 

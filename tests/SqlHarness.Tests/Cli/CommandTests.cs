@@ -1,5 +1,6 @@
-using System.Text.Json;
 using System.Text;
+using System.Text.Json;
+
 using SqlHarness.Cli;
 using SqlHarness.Core;
 

@@ -50,14 +50,17 @@ public sealed class TargetResolverTests
     public void Rejects_extra_var() =>
         AssertSafety(new SqlTargetRequest("prod-eu", new Dictionary<string, string>
         {
-            ["tenant"] = "acme", ["env"] = "uat", ["extra"] = "value",
+            ["tenant"] = "acme",
+            ["env"] = "uat",
+            ["extra"] = "value",
         }), "Extra");
 
     [Fact]
     public void Rejects_regex_mismatch() =>
         AssertSafety(new SqlTargetRequest("prod-eu", new Dictionary<string, string>
         {
-            ["tenant"] = "ACME", ["env"] = "uat",
+            ["tenant"] = "ACME",
+            ["env"] = "uat",
         }), "tenant");
 
     [Fact]
@@ -284,7 +287,8 @@ public sealed class TargetResolverTests
     {
         var request = new SqlTargetRequest("prod-eu", new Dictionary<string, string>
         {
-            ["tenant"] = "acme\n", ["env"] = "uat",
+            ["tenant"] = "acme\n",
+            ["env"] = "uat",
         });
 
         AssertSafety(request, "tenant");
@@ -304,7 +308,8 @@ public sealed class TargetResolverTests
     {
         var request = new SqlTargetRequest("prod-eu", new Dictionary<string, string>
         {
-            ["tenant"] = null!, ["env"] = "uat",
+            ["tenant"] = null!,
+            ["env"] = "uat",
         });
 
         AssertSafety(request, "tenant");

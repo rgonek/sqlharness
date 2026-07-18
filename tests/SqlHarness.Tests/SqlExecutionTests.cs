@@ -1,6 +1,8 @@
-using System.Text.Json;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
+
 using Microsoft.Data.SqlClient;
+
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
 using SqlHarness.Core.Targets;

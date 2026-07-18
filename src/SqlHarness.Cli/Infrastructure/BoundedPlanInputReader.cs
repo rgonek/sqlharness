@@ -1,4 +1,5 @@
 using System.Text;
+
 using SqlHarness.Core;
 
 namespace SqlHarness.Cli.Infrastructure;

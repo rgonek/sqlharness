@@ -1,4 +1,5 @@
 using System.Diagnostics;
+
 using SqlHarness.Core.Auth;
 
 namespace SqlHarness.Tests.Auth;
