@@ -33,7 +33,9 @@ public class ArtifactWriterTests
         Assert.Equal(plan, File.ReadAllText(planPath));
         var distilledPath = Assert.Single(Directory.GetFiles(Path.Combine(first, "plans"), "*.plan.json"));
         using var distilled = JsonDocument.Parse(File.ReadAllText(distilledPath));
-        Assert.True(distilled.RootElement.TryGetProperty("statements", out _));
+        var statement = Assert.Single(distilled.RootElement.GetProperty("statements").EnumerateArray());
+        Assert.Equal("SELECT ...", statement.GetProperty("sql").GetString());
+        Assert.False(statement.TryGetProperty("statementText", out _));
         var metadata = File.ReadAllText(Path.Combine(first, "report.json")) + File.ReadAllText(Path.Combine(first, "runs.jsonl"));
         Assert.DoesNotContain("SELECT ...", metadata, StringComparison.Ordinal);
         Assert.Contains("\"messageCount\":2", metadata, StringComparison.OrdinalIgnoreCase);

@@ -83,6 +83,8 @@ public sealed class AzureCliTests
         await cli.RunJsonAsync(["two words"]);
 
         Assert.Equal(1, runner.InvocationCount);
+        Assert.Equal("az", runner.FileName);
+        Assert.Equal(["two words", "-o", "json"], runner.Arguments);
     }
 
     [Fact]
@@ -113,6 +115,8 @@ public sealed class AzureCliTests
     private sealed class TrackingProcessRunner : IProcessRunner
     {
         public int InvocationCount { get; private set; }
+        public string? FileName { get; private set; }
+        public IReadOnlyList<string>? Arguments { get; private set; }
 
         public Task<ProcessResult> RunAsync(
             string fileName,
@@ -121,6 +125,8 @@ public sealed class AzureCliTests
             CancellationToken cancellationToken = default)
         {
             InvocationCount++;
+            FileName = fileName;
+            Arguments = arguments.ToArray();
             return Task.FromResult(new ProcessResult(0, "{}", ""));
         }
     }
