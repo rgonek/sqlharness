@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+  <BatchSequence>
+    <Batch>
+      <Statements>
+        <StmtSimple StatementText="SELECT ...">
+          <QueryPlan>
+            <MissingIndexes>
+              <MissingIndexGroup Impact="87.5">
+                <MissingIndex Database="[db]" Schema="[dbo]" Table="[Orders]">
+                  <ColumnGroup Usage="EQUALITY"><Column Name="[CustomerId]" /></ColumnGroup>
+                  <ColumnGroup Usage="INCLUDE"><Column Name="[OrderDate]" /></ColumnGroup>
+                </MissingIndex>
+              </MissingIndexGroup>
+            </MissingIndexes>
+            <RelOp NodeId="0" PhysicalOp="Nested Loops" LogicalOp="Inner Join" EstimateRows="7" EstimatedTotalSubtreeCost="1">
+              <NestedLoops>
+                <RelOp NodeId="1" PhysicalOp="Index Seek" LogicalOp="Index Seek" EstimateRows="7" EstimatedTotalSubtreeCost="0.6">
+                  <RunTimeInformation>
+                    <RunTimeCountersPerThread Thread="0" ActualRows="3" ActualExecutions="1" />
+                    <RunTimeCountersPerThread Thread="1" ActualRows="4" ActualExecutions="1" />
+                  </RunTimeInformation>
+                  <IndexScan>
+                    <Object Table="[dbo].[Orders]" Index="[IX_Orders_Customer]" />
+                    <SeekPredicates><SeekPredicateNew><SeekKeys><Prefix><RangeColumns><ColumnReference Column="[CustomerId]" /></RangeColumns><RangeExpressions><ScalarOperator ScalarString="[dbo].[Orders].[CustomerId]=[@CustomerId]" /></RangeExpressions></Prefix></SeekKeys></SeekPredicateNew></SeekPredicates>
+                  </IndexScan>
+                </RelOp>
+                <RelOp NodeId="2" PhysicalOp="Table Scan" LogicalOp="Table Scan" EstimateRows="10" EstimatedTotalSubtreeCost="0.4">
+                  <TableScan>
+                    <Warnings><SpillToTempDb SpillLevel="1" /></Warnings>
+                    <Object Table="[dbo].[Customers]" />
+                  </TableScan>
+                </RelOp>
+              </NestedLoops>
+            </RelOp>
+          </QueryPlan>
+        </StmtSimple>
+      </Statements>
+    </Batch>
+  </BatchSequence>
+</ShowPlanXML>

@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: macos-14
+            rid: osx-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet test -c Release
+      - name: Publish single-file binary
+        run: >-
+          dotnet publish src/SqlHarness.Cli -c Release -r ${{ matrix.rid }}
+          --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false
+          -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None
+          -p:DebugSymbols=false -o out/${{ matrix.rid }}
+      - name: Archive Windows binary
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: Compress-Archive -Path "out/${{ matrix.rid }}/sqlharness.exe" -DestinationPath "sqlharness-${{ matrix.rid }}.zip"
+      - name: Archive Unix binary
+        if: matrix.rid != 'win-x64'
+        shell: bash
+        run: tar -C "out/${{ matrix.rid }}" -czf "sqlharness-${{ matrix.rid }}.tar.gz" sqlharness
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.rid }}
+          path: sqlharness-${{ matrix.rid }}.*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: artifacts
+          merge-multiple: true
+      - name: Generate checksums
+        run: cd artifacts && sha256sum sqlharness-* > SHA256SUMS
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" artifacts/* --generate-notes --title "$GITHUB_REF_NAME"

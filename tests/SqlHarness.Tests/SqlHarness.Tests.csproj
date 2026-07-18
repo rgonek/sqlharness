@@ -20,6 +20,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="Fixtures\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\SqlHarness.Core\SqlHarness.Core.csproj" />
     <ProjectReference Include="..\..\src\SqlHarness.Cli\SqlHarness.Cli.csproj" />
   </ItemGroup>
