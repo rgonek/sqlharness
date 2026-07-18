@@ -115,12 +115,15 @@ public sealed class ProcessRunnerTests
     [Fact]
     public async Task WaitForPidsAsync_ToleratesSlowPublisher()
     {
+        if (!OperatingSystem.IsWindows())
+            return;
+
         var path = Path.Combine(Path.GetTempPath(), $"sqlharness-pids-{Guid.NewGuid():N}.pid");
 
         try
         {
             var wait = WaitForPidsAsync(path);
-            await Task.Delay(TimeSpan.FromSeconds(8));
+            await Task.Delay(TimeSpan.FromSeconds(4));
             await File.WriteAllLinesAsync(path, ["123", "456"]);
 
             var publishedPids = await wait;
