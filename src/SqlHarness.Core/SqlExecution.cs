@@ -126,17 +126,57 @@ internal sealed class SqlClientSessionFactory : ISqlSessionFactory
         return (server, database);
     }
 
-    private static bool TargetMatches(ResolvedTarget expected, string server, string database) =>
-        string.Equals(NormalizeServer(expected.Server), NormalizeServer(server), StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(expected.Database, database, StringComparison.Ordinal);
+    private static bool TargetMatches(ResolvedTarget expected, string server, string database)
+    {
+        // Database identity is always authoritative: Initial Catalog must match DB_NAME().
+        if (!string.Equals(expected.Database, database, StringComparison.Ordinal))
+            return false;
+
+        // Loopback endpoints (Docker-published SQL, local instances) connect by client host:port.
+        // SERVERPROPERTY('ServerName') returns the machine/container hostname, not localhost —
+        // so only the database name can be verified for those targets.
+        if (IsLoopbackEndpoint(expected.Server))
+            return true;
+
+        return string.Equals(
+            NormalizeServer(expected.Server),
+            NormalizeServer(server),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// True when the resolved DataSource is a loopback endpoint (optional tcp: prefix and port).
+    /// </summary>
+    internal static bool IsLoopbackEndpoint(string server)
+    {
+        var host = HostFromDataSource(server);
+        return host is "localhost" or "127.0.0.1" or "::1" or "[::1]" or "." or "(local)";
+    }
 
     private static string NormalizeServer(string server)
     {
-        const string suffix = ".database.windows.net";
+        const string azureSuffix = ".database.windows.net";
+        var host = HostFromDataSource(server);
+        return host.EndsWith(azureSuffix, StringComparison.OrdinalIgnoreCase)
+            ? host[..^azureSuffix.Length]
+            : host;
+    }
+
+    /// <summary>
+    /// Extracts the host (or host\instance) from a SqlClient DataSource, stripping tcp: and port.
+    /// </summary>
+    private static string HostFromDataSource(string server)
+    {
         var normalized = server.Trim();
-        return normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
-            ? normalized[..^suffix.Length]
-            : normalized;
+        if (normalized.StartsWith("tcp:", StringComparison.OrdinalIgnoreCase))
+            normalized = normalized[4..].TrimStart();
+
+        // Port is always after the final comma in host,port or host\instance,port.
+        var comma = normalized.LastIndexOf(',');
+        if (comma > 0)
+            normalized = normalized[..comma];
+
+        return normalized.Trim();
     }
 
     private static async Task<ISqlSession> ConnectSqlClientAsync(

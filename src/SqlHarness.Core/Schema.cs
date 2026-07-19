@@ -69,7 +69,12 @@ ORDER BY x.SchemaName,x.ObjectName,f.name,fc.constraint_column_id;
         raw.BeginResultSet(columns);
         while (await reader.ReadAsync(ct))
         {
-            var row = Enumerable.Range(0, reader.FieldCount).Select(i => reader.GetValue(i) is DBNull ? null : reader.GetValue(i)).ToArray();
+            var row = Enumerable.Range(0, reader.FieldCount).Select(i =>
+            {
+                // SequentialAccess allows each ordinal only once per row.
+                var value = reader.GetValue(i);
+                return value is DBNull ? null : value;
+            }).ToArray();
             raw.AddRow(row); add(row);
         }
         raw.EndResultSet();
