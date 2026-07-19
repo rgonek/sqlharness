@@ -28,6 +28,43 @@ public sealed class CommandTests
     }
 
     [Fact]
+    public async Task Query_prefers_file_over_redirected_stdin()
+    {
+        // Agent shells redirect empty stdin; --file must still win (AGENTS.md / CivicLens workflow).
+        var path = TempFile("select from_file");
+        try
+        {
+            var module = new FakeModule(Success(QueryReport()));
+            var app = SqlHarnessCli.Create(
+                module, new StringWriter(), new StringReader("select from_stdin"), stdinRedirected: true);
+
+            var exit = await app.RunAsync(["query", "dev", "--file", path]);
+
+            Assert.Equal(0, exit);
+            var operation = Assert.IsType<SqlHarnessQueryOperation>(Assert.Single(module.Operations));
+            Assert.Equal("select from_file", operation.Sql);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Query_rejects_missing_sql_source_when_stdin_is_not_redirected()
+    {
+        var module = new FakeModule(Success(QueryReport()));
+        var output = new StringWriter();
+        var app = SqlHarnessCli.Create(module, output, new StringReader(""), stdinRedirected: false);
+
+        var exit = await app.RunAsync(["query", "dev"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+        Assert.Empty(module.Operations);
+        Assert.Contains("exactly one SQL source", output.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Query_rejects_var_without_equals_before_module_dispatch()
     {
         var module = new FakeModule(Success(QueryReport()));

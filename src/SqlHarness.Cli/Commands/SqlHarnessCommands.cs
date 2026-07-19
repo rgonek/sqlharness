@@ -85,7 +85,10 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
     {
         if (!settings.TryTarget(out var target, out var error)) return Invalid(error);
         var hasFile = !string.IsNullOrWhiteSpace(settings.File);
-        if (hasFile == input.StdinRedirected) return Invalid("Provide exactly one SQL source: --file or redirected stdin.");
+        // Prefer explicit --file when present. Agent shells often redirect an empty stdin,
+        // which must not block --file (xor of hasFile and StdinRedirected was too strict).
+        if (!hasFile && !input.StdinRedirected)
+            return Invalid("Provide exactly one SQL source: --file or redirected stdin.");
         try
         {
             var sql = hasFile ? await File.ReadAllTextAsync(settings.File!, ct) : await input.Stdin.ReadToEndAsync(ct);

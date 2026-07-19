@@ -101,6 +101,83 @@ public sealed class SqlExecutionTests
         Assert.True(connector.Session.Disposed);
     }
 
+    [Theory]
+    [InlineData("localhost,14334")]
+    [InlineData("127.0.0.1,14334")]
+    [InlineData("tcp:localhost,14334")]
+    [InlineData("::1,14334")]
+    [InlineData("[::1],14334")]
+    [InlineData(".")]
+    [InlineData("(local)")]
+    public async Task Loopback_endpoint_accepts_container_or_machine_server_name(string dataSource)
+    {
+        // Docker SQL reports a container hostname via SERVERPROPERTY('ServerName'), not localhost.
+        var connector = new FakeConnector("9134b03e1a34", "CivicLens");
+        var factory = new SqlClientSessionFactory(new FakeAzureCli("unused"), connector.ConnectAsync);
+        const string passwordVariable = "SQLHARNESS_LOOPBACK_IDENTITY_PASSWORD";
+        Environment.SetEnvironmentVariable(passwordVariable, "secret");
+        try
+        {
+            var auth = AuthSpec.Parse("sql", "sa", passwordVariable, true);
+            await using var session = await factory.ConnectAsync(
+                new ResolvedTarget(dataSource, "CivicLens", auth, "profile"), default);
+
+            Assert.Equal(dataSource, session.Identity.RequestedServer);
+            Assert.Equal("CivicLens", session.Identity.ActualDatabase);
+            Assert.Equal("9134b03e1a34", session.Identity.ActualServer);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(passwordVariable, null);
+        }
+    }
+
+    [Fact]
+    public async Task Loopback_endpoint_still_rejects_database_mismatch()
+    {
+        var connector = new FakeConnector("9134b03e1a34", "OtherDb");
+        var factory = new SqlClientSessionFactory(new FakeAzureCli("unused"), connector.ConnectAsync);
+        const string passwordVariable = "SQLHARNESS_LOOPBACK_DB_MISMATCH_PASSWORD";
+        Environment.SetEnvironmentVariable(passwordVariable, "secret");
+        try
+        {
+            var auth = AuthSpec.Parse("sql", "sa", passwordVariable, true);
+            var error = await Assert.ThrowsAsync<SqlTargetMismatchException>(() => factory.ConnectAsync(
+                new ResolvedTarget("localhost,14334", "CivicLens", auth, "profile"), default));
+
+            Assert.Contains("identity", error.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.True(connector.Session.Disposed);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(passwordVariable, null);
+        }
+    }
+
+    [Fact]
+    public async Task Remote_server_with_client_port_matches_machine_server_name()
+    {
+        // On-prem targets often use host,port while SERVERPROPERTY returns the host only.
+        var connector = new FakeConnector("sql-box", "AppDb");
+        var factory = new SqlClientSessionFactory(new FakeAzureCli("unused"), connector.ConnectAsync);
+
+        await using var session = await factory.ConnectAsync(
+            new ResolvedTarget("sql-box,1433", "AppDb", AuthSpec.Parse("integrated", null, null, false), "direct"),
+            default);
+
+        Assert.Equal("sql-box,1433", session.Identity.RequestedServer);
+        Assert.Equal("sql-box", session.Identity.ActualServer);
+    }
+
+    [Theory]
+    [InlineData("localhost,14334", true)]
+    [InlineData("127.0.0.1", true)]
+    [InlineData("tcp:localhost,1433", true)]
+    [InlineData("sql-box,1433", false)]
+    [InlineData("logical.database.windows.net", false)]
+    public void IsLoopbackEndpoint_classifies_data_sources(string dataSource, bool expected) =>
+        Assert.Equal(expected, SqlClientSessionFactory.IsLoopbackEndpoint(dataSource));
+
     [Fact]
     public void Command_binds_parsed_parameters_without_interpolating_values()
     {
