@@ -103,3 +103,104 @@ dotnet run --project src\SqlHarness.Cli -- --help
 ```
 
 The test suite uses fake adapters and fixtures; it does not connect to a real database.
+
+### Optional local AdventureWorks playground
+
+SQLHarness does not require a database to build, install, start, or run offline commands such as `plan` and `gain`. The local AdventureWorks environment exists only for development, manual experiments, and opt-in SQL Server integration tests. Docker resources and secrets remain local to your machine.
+
+Docker stores the SQL Server bootstrap password in local container metadata, so the playground password must be development-only and unique. Do not reuse production credentials.
+
+#### Setup
+
+```powershell
+$env:SQLHARNESS_PLAYGROUND_PASSWORD = Read-Host 'Local playground password'
+.\scripts\setup-local-adventureworks.ps1
+```
+
+The script creates or reuses fixed local Docker resources (`sqlharness-sql` on host port `14335`, volume `sqlharness-sql-data`) and restores `AdventureWorks2022` when that database is absent. It never edits `~/.sqlharness/targets.json`.
+
+#### Profile merge (manual CLI)
+
+Merge—do not replace—this entry into `~/.sqlharness/targets.json`:
+
+```json
+{
+  "local-playground": {
+    "server": "localhost,14335",
+    "database": "AdventureWorks2022",
+    "vars": {},
+    "auth": "sql",
+    "sqlUser": "sa",
+    "passwordEnvVar": "SQLHARNESS_PLAYGROUND_PASSWORD",
+    "trustServerCertificate": true
+  }
+}
+```
+
+If an existing `local-playground` entry has different values, review it manually before changing anything. The bootstrap script never writes this file.
+
+Keep `SQLHARNESS_PLAYGROUND_PASSWORD` set in the process that runs `sqlharness` against this profile.
+
+#### Read-only CLI smoke checks
+
+Use the installed command first:
+
+```powershell
+sqlharness schema local-playground --json
+```
+
+Create the local smoke query outside tracked repository paths:
+
+```powershell
+$smokeQuery = Join-Path $env:TEMP 'sqlharness-playground-smoke.sql'
+@'
+SELECT TOP (10) p.ProductID, p.Name, p.ListPrice
+FROM Production.Product AS p
+WHERE p.ListPrice > @minimumPrice
+ORDER BY p.ListPrice DESC;
+'@ | Set-Content $smokeQuery -Encoding utf8
+
+sqlharness measure local-playground `
+    --query $smokeQuery `
+    --param minimumPrice:decimal=100 `
+    --repeat 2 `
+    --json
+```
+
+Expected: both commands exit `0`; schema identifies `AdventureWorks2022`, and measure returns bounded JSON output.
+
+#### Opt-in SQL Server integration tests
+
+Integration tests never load `~/.sqlharness/targets.json`. Construct the connection string only in the current process:
+
+```powershell
+$env:SQLHARNESS_INTEGRATION_CONNECTION_STRING = `
+    "Server=localhost,14335;Database=AdventureWorks2022;User ID=sa;Password=$($env:SQLHARNESS_PLAYGROUND_PASSWORD);TrustServerCertificate=True"
+
+dotnet test .\tests\SqlHarness.Tests `
+    --filter Category=SqlServerIntegration `
+    --no-restore
+```
+
+Clean skip check (variable unset):
+
+```powershell
+Remove-Item Env:SQLHARNESS_INTEGRATION_CONNECTION_STRING -ErrorAction SilentlyContinue
+dotnet test .\tests\SqlHarness.Tests `
+    --filter Category=SqlServerIntegration `
+    --no-restore
+```
+
+Expected: configured tests PASS; unconfigured tests report skipped tests and zero failures.
+
+#### Container lifecycle
+
+Non-destructive stop, start, and restart only:
+
+```powershell
+docker stop sqlharness-sql
+docker start sqlharness-sql
+docker restart sqlharness-sql
+```
+
+Deleting the container or volume destroys local playground state and must be a separate, explicit user action. Automated removal is intentionally not part of the setup path.
