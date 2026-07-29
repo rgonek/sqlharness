@@ -113,29 +113,64 @@ These additions do not permit:
 `--param` and `--matrix` share one parser and one typed parameter
 representation. Supported types are:
 
-- implicit or explicit bounded `nvarchar`;
-- `int`;
-- `bigint`;
-- `bit`;
-- `uniqueidentifier`;
-- `date`;
-- `datetime`;
-- `datetime2`;
-- `datetimeoffset`;
-- `decimal`;
-- `decimal(p,s)`.
+**Strings**
 
-Parsing is culture-invariant. Date/time values use ISO 8601 input and must fit
-the range of the selected SQL Server type.
-`decimal(p,s)` validates SQL Server precision and scale bounds, validates that
-the supplied value fits, and binds `Precision` and `Scale` on `SqlParameter`.
-The unqualified `decimal` form retains the current provider-inferred precision
-and scale: SQLHarness sets the decimal value but does not set `Precision` or
-`Scale`. This behavior is documented and is identical across `--param` and
-`--matrix`.
+- implicit or explicit `nvarchar` (bounded size from the value length; values
+  longer than 4000 characters bind as `nvarchar(max)` with `Size = -1`);
+- `nvarchar(max)`, `varchar`, `varchar(max)`, `char`, `nchar`;
+- optional fixed/max sizes where applicable (`nvarchar(n)`, `varchar(n)`,
+  `char(n)`, `nchar(n)`, `varbinary(n)`, and the `(max)` forms).
+
+**Integers and boolean**
+
+- `int`, `bigint`, `smallint`, `tinyint`, `bit`.
+
+**Exact and approximate numeric**
+
+- `decimal`, `decimal(p,s)`, `numeric`, `numeric(p,s)` (`numeric` is an alias of
+  `decimal`);
+- `float`, `real`;
+- `money`, `smallmoney`.
+
+**Temporal**
+
+- `date`, `time`, `datetime`, `datetime2`, `smalldatetime`, `datetimeoffset`.
+
+**Identity, binary, and UDT**
+
+- `uniqueidentifier` (any standard GUID format: `D`, `N`, `B`, `P`);
+- `varbinary`, `varbinary(max)`, `binary(n)` (values are Base64);
+- `hierarchyid`, `geography`, `geometry` as true SQL UDTs via
+  `Microsoft.SqlServer.Types` (`SqlDbType.Udt` with the matching `UdtTypeName`).
+
+**Nulls**
+
+- `name:null` binds `DBNull` as `nvarchar`;
+- `name:type:null` binds typed `DBNull` for any supported type (including UDT
+  types).
+
+Parsing is culture-invariant. Date/time values use ISO 8601 input (with
+`time` as an invariant time-of-day) and must fit the range of the selected SQL
+Server type. `datetimeoffset` requires an explicit `Z` or signed offset so a
+machine-local timezone cannot change the bound value.
+
+`decimal(p,s)` / `numeric(p,s)` validate SQL Server precision and scale bounds
+(`1 <= p <= 38`, `0 <= s <= p`), validate that the supplied value fits, and bind
+`Precision` and `Scale` on `SqlParameter`. The unqualified `decimal` / `numeric`
+forms retain provider-inferred precision and scale: SQLHarness sets the decimal
+value but does not set `Precision` or `Scale`.
+
+`hierarchyid` values are hierarchy paths (for example `/1/2/`).
+`geography` and `geometry` values are WKT, optionally prefixed with
+`srid;WKT` (defaults: geography SRID `4326`, geometry SRID `0`). Spatial UDT
+binding depends on the package's native spatial runtime on supported Windows
+RIDs; Linux/macOS spatial UDT binding is not guaranteed.
+
+This behavior is documented and is identical across `--param` and `--matrix`.
 
 Command help, README, `AGENTS.md`, and the SQLHarness skill list every supported
-type and show at least one date/time and one `decimal(p,s)` example.
+type and show at least one date/time, one `decimal(p,s)`, and representative
+GUID / UDT examples.
 
 ### Result comparison
 
@@ -340,9 +375,13 @@ Tests cover:
 - rejection of the same constructs on persistent and global temporary objects;
 - safe window-function syntax and continued rejection of unsupported syntax;
 - bounded unsupported statement and fragment diagnostics;
-- each supported parameter type, invalid format, overflow, precision, scale,
-  and culture independence;
-- consistent binding of precision and scale into `SqlParameter`;
+- each supported parameter type (including string sizes, small integers, float
+  family, money, time/smalldatetime, numeric alias, varbinary Base64, GUID
+  formats, and UDT hierarchyid/geography/geometry), invalid format, overflow,
+  precision, scale, and culture independence;
+- consistent binding of precision and scale into `SqlParameter`, `Size = -1` for
+  max strings/binaries, and `UdtTypeName` for UDT parameters;
+- typed and untyped null declarations (`name:null`, `name:type:null`);
 - `--file` remaining authoritative when the process exposes redirected stdin;
 - each comparison mode, duplicates, ordering-only changes, result-set
   boundaries, and directional counts;
