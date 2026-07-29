@@ -27,6 +27,58 @@ public sealed class SchemaCommandTests
         Assert.Single(module.Operations);
     }
 
+    [Fact]
+    public async Task Schema_dispatches_object_mode()
+    {
+        var module = new FakeModule();
+        var exit = await SqlHarnessCli.Create(module, new StringWriter()).RunAsync([
+            "schema", "dev", "--object", "SyncRuns", "--timeout", "12", "--json"
+        ]);
+
+        Assert.Equal(0, exit);
+        var op = Assert.IsType<SqlHarnessSchemaOperation>(Assert.Single(module.Operations));
+        Assert.Equal("SyncRuns", op.Object);
+        Assert.Null(op.Filter);
+        Assert.Equal(12, op.TimeoutSeconds);
+    }
+
+    [Fact]
+    public async Task Schema_rejects_object_combined_with_filter()
+    {
+        var module = new FakeModule();
+        var output = new StringWriter();
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync([
+            "schema", "dev", "--object", "SyncRuns", "--filter", "%Order%"
+        ]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+        Assert.Empty(module.Operations);
+        Assert.Contains("--object", output.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("--filter", output.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Schema_object_mode_preserves_profile_and_direct_options()
+    {
+        var module = new FakeModule();
+        var app = SqlHarnessCli.Create(module, new StringWriter());
+
+        Assert.Equal(0, await app.RunAsync(["schema", "dev", "--var", "env=a", "--object", "dbo.Orders"]));
+        var profileOp = Assert.IsType<SqlHarnessSchemaOperation>(module.Operations[0]);
+        Assert.Equal("dev", profileOp.Target.Profile);
+        Assert.Equal("a", profileOp.Target.Vars["env"]);
+        Assert.Equal("dbo.Orders", profileOp.Object);
+
+        Assert.Equal(0, await app.RunAsync([
+            "schema", "--unsafe-direct", "--server", "s", "--database", "d", "--auth", "azure-cli",
+            "--object", "audit.Runs"
+        ]));
+        var directOp = Assert.IsType<SqlHarnessSchemaOperation>(module.Operations[1]);
+        Assert.True(directOp.Target.UnsafeDirect);
+        Assert.Equal("s", directOp.Target.Server);
+        Assert.Equal("audit.Runs", directOp.Object);
+    }
+
     private sealed class FakeModule : ISqlHarnessModule
     {
         public List<SqlHarnessOperation> Operations { get; } = [];

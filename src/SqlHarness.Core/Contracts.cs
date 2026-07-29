@@ -42,7 +42,26 @@ public sealed record SqlHarnessSchemaOperation(
     SqlTargetRequest Target,
     string? Filter,
     int TimeoutSeconds,
-    int MaxObjects = 50) : SqlHarnessOperation;
+    int MaxObjects = 50,
+    string? Object = null) : SqlHarnessOperation;
+
+public sealed record SqlHarnessPingOperation(
+    SqlTargetRequest Target, int TimeoutSeconds) : SqlHarnessOperation;
+
+public sealed record SqlHarnessCountsOperation(
+    SqlTargetRequest Target, IReadOnlyList<string> Tables, string? Like,
+    int Top, bool Exact, int TimeoutSeconds) : SqlHarnessOperation;
+
+public sealed record SqlHarnessPingReport(
+    SqlHarnessTargetIdentityReport Target, string Server, string Database,
+    string Login, long DurationMilliseconds);
+
+public sealed record SqlHarnessCountReport(
+    string Schema, string Name, long Rows, string Method);
+
+public sealed record SqlHarnessCountsReport(
+    SqlHarnessTargetIdentityReport Target,
+    IReadOnlyList<SqlHarnessCountReport> Tables, int Omitted);
 
 public sealed record SqlTargetRequest(
     string? Profile,

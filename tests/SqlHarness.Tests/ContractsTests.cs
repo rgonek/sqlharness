@@ -23,7 +23,16 @@ public class ContractsTests
     public void Operation_family_is_closed_to_query_compare_measure_gain_and_plan()
     {
         Assert.Equal(
-            [typeof(SqlHarnessQueryOperation), typeof(SqlHarnessCompareOperation), typeof(SqlHarnessMeasureOperation), typeof(SqlHarnessGainOperation), typeof(SqlHarnessPlanOperation), typeof(SqlHarnessSchemaOperation)],
+            [
+                typeof(SqlHarnessQueryOperation),
+                typeof(SqlHarnessCompareOperation),
+                typeof(SqlHarnessMeasureOperation),
+                typeof(SqlHarnessGainOperation),
+                typeof(SqlHarnessPlanOperation),
+                typeof(SqlHarnessSchemaOperation),
+                typeof(SqlHarnessPingOperation),
+                typeof(SqlHarnessCountsOperation),
+            ],
             typeof(SqlHarnessOperation).Assembly.GetTypes()
                 .Where(t => t.BaseType == typeof(SqlHarnessOperation))
                 .OrderBy(OperationOrder));
@@ -37,6 +46,8 @@ public class ContractsTests
         nameof(SqlHarnessGainOperation) => 3,
         nameof(SqlHarnessPlanOperation) => 4,
         nameof(SqlHarnessSchemaOperation) => 5,
+        nameof(SqlHarnessPingOperation) => 6,
+        nameof(SqlHarnessCountsOperation) => 7,
         _ => int.MaxValue,
     };
 
