@@ -29,6 +29,10 @@ For Linux/macOS, verify the downloaded archive with the checksum utility availab
 Create `~/.sqlharness/targets.json` from [docs/example-targets.json](docs/example-targets.json), replacing the example server and database template with your own closed target definition. The example uses the `prod-eu` profile with required `tenant` and `env` variables.
 
 ```powershell
+sqlharness ping prod-eu --var tenant=acme --var env=uat --json
+sqlharness counts prod-eu --var tenant=acme --var env=uat --table Contracts --table SourceFiles --exact --json
+sqlharness counts prod-eu --var tenant=acme --var env=uat --like "%Sync%" --json
+sqlharness schema prod-eu --var tenant=acme --var env=uat --object dbo.Contracts --json
 sqlharness schema prod-eu --var tenant=acme --var env=uat --json
 sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --json
 sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\queries\orders.sql --repeat 5 --json
@@ -37,6 +41,8 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\
 sqlharness plan .\artifacts\orders.sqlplan --json
 sqlharness gain --json
 ```
+
+Read-only database helpers (`ping`, `counts`, and `schema --object`) use fixed internal catalog/probe SQL only: they never accept an arbitrary user SQL batch or mutations. `counts` defaults to approximate row counts from partition statistics; pass `--exact` for `COUNT_BIG(*)`. Prefer `--json` for machine-readable reports.
 
 `plan --json` emits a compact, deterministic plan contract: `statements` preserves input order; each statement has optional `sql`, a `root` node, and optional `missingIndexes`. Nodes retain `physicalOp`, optional `logicalOp`, operator metadata and runtime values, warnings (with their Showplan attributes), and child nodes. Persisted `*.plan.json` files from `compare` and `measure` use this same schema, including `sql`. This output is serialization-only; it is not accepted as plan input.
 
@@ -103,10 +109,12 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat `
 
 | Command | Purpose |
 | --- | --- |
+| `ping` | Verify connection readiness with a fixed internal probe (no user SQL). |
+| `counts` | Inventory table row counts (partition estimates by default; `--exact` for `COUNT_BIG(*)`). |
 | `query` | Run one bounded, classified SQL batch. |
 | `measure` | Collect repeated timing, IO, and plan evidence for one query. |
 | `compare` | Compare baseline and candidate queries, including result equivalence. |
-| `schema` | Return a compact read-only catalog description. |
+| `schema` | Return a compact read-only catalog description (`--object` for one table/view). |
 | `plan` | Distill a showplan XML file or stdin without connecting to a database. |
 | `gain` | Summarize recorded raw-versus-emitted output savings. |
 
@@ -121,7 +129,7 @@ Run `sqlharness <command> --help` for the final option surface.
 | Direct targets | `--unsafe-direct` deliberately bypasses the closed-profile guardrail and requires `--server`, `--database`, and `--auth`. Do not mix it with a profile or `--var`. |
 | Mutations | Read-only is the default. Persistent-object mutation requires fresh, single-use approval for the exact batch and exact resolved database, plus `--allow-mutation --confirm-database <exact-resolved-name>`. |
 | Session `#temp` | Local `#temp` setup/DML/indexes are session-only and do not require mutation confirmation; setup runs once per connection and shares that session with warm-up and measured runs. |
-| SQL input | Use exactly one query source (`--file` or stdin) and bound `--param` values. |
+| SQL input | Use exactly one query source (`--file` or stdin) and bound `--param` values. Helpers (`ping`, `counts`, `schema`) never accept arbitrary user SQL. |
 | Secrets | Tokens and passwords remain only in process memory; do not put them in command arguments, configuration output, logs, reports, or artifacts. |
 | Artifacts | Comparison artifacts, `.sqlplan` files, and runtime parameter material are locally sensitive because they can embed SQL text and parameter values. |
 

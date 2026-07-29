@@ -9,6 +9,53 @@ public class ContractsTests
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
     [Fact]
+    public void Documentation_covers_read_only_database_helpers()
+    {
+        var readme = ReadRepositoryFile("README.md");
+        var agents = ReadRepositoryFile("AGENTS.md");
+        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
+
+        foreach (var doc in new[] { readme, agents, skill })
+        {
+            Assert.Contains("ping", doc, StringComparison.Ordinal);
+            Assert.Contains("counts", doc, StringComparison.Ordinal);
+            Assert.Contains("--exact", doc, StringComparison.Ordinal);
+            Assert.Contains("--object", doc, StringComparison.Ordinal);
+            Assert.True(
+                doc.Contains("partition", StringComparison.OrdinalIgnoreCase)
+                || doc.Contains("approximate", StringComparison.OrdinalIgnoreCase),
+                "Helper docs must describe counts partition/approximate defaults.");
+            Assert.True(
+                doc.Contains("arbitrary SQL", StringComparison.OrdinalIgnoreCase)
+                || doc.Contains("no user SQL", StringComparison.OrdinalIgnoreCase)
+                || doc.Contains("never accept arbitrary", StringComparison.OrdinalIgnoreCase)
+                || doc.Contains("does not accept arbitrary", StringComparison.OrdinalIgnoreCase)
+                || doc.Contains("fixed internal", StringComparison.OrdinalIgnoreCase),
+                "Helper docs must state that helpers do not accept arbitrary SQL.");
+        }
+
+        Assert.Contains("Prefer `--json`", skill, StringComparison.Ordinal);
+        Assert.Contains("sqlharness ping prod-eu", readme, StringComparison.Ordinal);
+        Assert.Contains("sqlharness counts prod-eu", agents, StringComparison.Ordinal);
+        Assert.Contains("sqlharness schema prod-eu", skill, StringComparison.Ordinal);
+        Assert.Contains("--object dbo.Contracts", skill, StringComparison.Ordinal);
+    }
+
+    private static string ReadRepositoryFile(params string[] path)
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            var candidate = Path.Combine([directory.FullName, .. path]);
+            if (File.Exists(candidate))
+            {
+                return File.ReadAllText(candidate);
+            }
+        }
+
+        throw new FileNotFoundException($"Could not locate repository file: {string.Join('/', path)}");
+    }
+
+    [Fact]
     public void Exit_codes_are_stable()
     {
         Assert.Equal(0, (int)SqlHarnessExitCode.Success);

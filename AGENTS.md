@@ -12,6 +12,10 @@ sqlharness --help
 Prefer `--json` for full reports, or `--json-summary` on `measure`/`compare` for a bounded agent-sized projection (mutually exclusive with `--json`). For a database request, lock one profile and one variable set per invocation; a different profile or variables needs a new explicit user request. Prefer closed named profiles to direct targets.
 
 ```powershell
+sqlharness ping prod-eu --var tenant=acme --var env=uat --json
+sqlharness counts prod-eu --var tenant=acme --var env=uat --table Contracts --table SourceFiles --exact --json
+sqlharness counts prod-eu --var tenant=acme --var env=uat --like "%Sync%" --json
+sqlharness schema prod-eu --var tenant=acme --var env=uat --object dbo.Contracts --json
 sqlharness schema prod-eu --var tenant=acme --var env=uat --json
 sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --json
 sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\queries\orders.sql --repeat 5 --json
@@ -21,7 +25,7 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\
 
 Use parameters instead of SQL interpolation. Supported types: `nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`, `nchar`, `int`, `bigint`, `smallint`, `tinyint`, `bit`, `decimal`, `decimal(p,s)`, `numeric`, `numeric(p,s)`, `float`, `real`, `money`, `smallmoney`, `date`, `time`, `datetime`, `datetime2`, `smalldatetime`, `datetimeoffset`, `uniqueidentifier`, `varbinary`, `varbinary(max)`, `hierarchyid`, `geography`, `geometry`. Values are culture-invariant; date/time use ISO 8601 (for example `--param asOf:datetime2=2026-07-29T12:00:00` and `--param amount:decimal(19,4)=1234.5600`). GUIDs accept any standard format; `varbinary` is Base64; long strings and `nvarchar(max)` use `Size = -1`; `hierarchyid`/`geography`/`geometry` bind as true SQL UDTs (`Microsoft.SqlServer.Types`; spatial WKT may use `srid;WKT`); nulls are `name:null` or `name:type:null`.
 
-`query` accepts exactly one SQL source: `--file` or redirected stdin. `schema` is read-only catalog inspection. `plan` is offline, needs no target or scope lock, and accepts a showplan XML file or stdin:
+`query` accepts exactly one SQL source: `--file` or redirected stdin. `schema` is read-only catalog inspection (`--object` selects exactly one table or view). `ping` and `counts` are fixed internal probes with no user SQL: `counts` defaults to partition estimates and uses `--exact` for `COUNT_BIG(*)`. None of `ping`, `counts`, or `schema` accepts arbitrary SQL or mutations. `plan` is offline, needs no target or scope lock, and accepts a showplan XML file or stdin:
 
 ```powershell
 sqlharness plan .\artifacts\orders.sqlplan --json

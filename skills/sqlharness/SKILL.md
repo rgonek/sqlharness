@@ -1,6 +1,6 @@
 ---
 name: sqlharness
-description: Use when a coding agent needs safe, repeatable SQL Server or Azure SQL query evidence, performance comparison, execution-plan distillation, or compact schema inspection.
+description: Use when a coding agent needs safe, repeatable SQL Server or Azure SQL query evidence, performance comparison, execution-plan distillation, compact schema inspection, readiness probes, or row-count inventory.
 ---
 
 # SQLHarness
@@ -16,13 +16,17 @@ Get-Command sqlharness
 sqlharness --help
 ```
 
-Lock one profile + one variable set per invocation; a different profile/vars requires a new explicit user request. Use the named profile and its required variables rather than direct connection details:
+Lock one profile + one variable set per invocation; a different profile/vars requires a new explicit user request. Use the named profile and its required variables rather than direct connection details. Prefer read-only helpers before authoring ad-hoc SQL:
 
 ```powershell
+sqlharness ping prod-eu --var tenant=acme --var env=uat --json
+sqlharness counts prod-eu --var tenant=acme --var env=uat --table Contracts --table SourceFiles --exact --json
+sqlharness counts prod-eu --var tenant=acme --var env=uat --like "%Sync%" --json
+sqlharness schema prod-eu --var tenant=acme --var env=uat --object dbo.Contracts --json
 sqlharness schema prod-eu --var tenant=acme --var env=uat --json
 ```
 
-Prefer `--json` for full reports. On `measure` / `compare`, prefer `--json-summary` when the agent only needs the bounded projection (target, classification, distributions, table reads, warnings, ≤10 noteworthy operators, equivalence for compare, artifact directory). Do not pass both `--json` and `--json-summary`. Pass SQL through `--file` or stdin exactly as the command requires, and use repeatable `--param name[:type]=value` parameters instead of interpolating values into SQL.
+`ping`, `counts`, and `schema` never accept arbitrary user SQL or mutations. `counts` defaults to approximate partition estimates; use `--exact` when the agent needs `COUNT_BIG(*)`. Prefer `--json` for full reports. On `measure` / `compare`, prefer `--json-summary` when the agent only needs the bounded projection (target, classification, distributions, table reads, warnings, ≤10 noteworthy operators, equivalence for compare, artifact directory). Do not pass both `--json` and `--json-summary`. Pass SQL through `--file` or stdin exactly as the command requires, and use repeatable `--param name[:type]=value` parameters instead of interpolating values into SQL.
 
 Supported types: `nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`, `nchar`, `int`, `bigint`, `smallint`, `tinyint`, `bit`, `decimal`, `decimal(p,s)`, `numeric`, `numeric(p,s)`, `float`, `real`, `money`, `smallmoney`, `date`, `time`, `datetime`, `datetime2`, `smalldatetime`, `datetimeoffset`, `uniqueidentifier`, `varbinary`, `varbinary(max)`, `hierarchyid`, `geography`, `geometry`. Parsing is culture-invariant; date/time values use ISO 8601. GUIDs accept any standard format; `varbinary` is Base64; `hierarchyid`/`geography`/`geometry` bind as true SQL UDTs (`path`, WKT, optional `srid;WKT`); nulls are `name:null` or `name:type:null`.
 
@@ -39,11 +43,13 @@ Supported types: `nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`,
 ## Safe workflow
 
 1. Inventory representative cases offline before measuring: row count, cardinality distribution, ordering ties, missing history, boundary dates, and empty results. Keep ticket SQL outside the application repository.
-2. Inspect with `schema` when object shape is unknown.
-3. Use `query` for a bounded read-only result.
-4. Use `measure` for repeated timing, IO, and plan evidence for one query.
-5. Use `compare` for baseline/candidate evidence and technical result equivalence.
-6. Use `gain --json` to inspect recorded output savings.
+2. Confirm readiness with `ping --json` when the target may still be starting.
+3. Inventory tables with `counts` (partition estimates by default; `--exact` when needed) instead of hand-built `COUNT(*)` batches.
+4. Inspect with `schema` / `schema --object` when object shape is unknown.
+5. Use `query` for a bounded read-only result.
+6. Use `measure` for repeated timing, IO, and plan evidence for one query.
+7. Use `compare` for baseline/candidate evidence and technical result equivalence.
+8. Use `gain --json` to inspect recorded output savings.
 
 ```powershell
 sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --json
@@ -89,9 +95,10 @@ sqlharness plan .\artifacts\orders.sqlplan --json
 
 `.sqlplan` artifacts, comparison artifacts, and runtime parameters are locally sensitive: they can contain batch text and parameter values. Do not paste or publish them without explicit review.
 
-`schema` uses only internal catalog queries and returns compact tables, views, columns, indexes, and foreign keys:
+`schema` uses only internal catalog queries (no arbitrary SQL) and returns compact tables, views, columns, indexes, and foreign keys. Prefer `--object` for exactly one table or view; use `--filter` for a LIKE catalog walk:
 
 ```powershell
+sqlharness schema prod-eu --var tenant=acme --var env=uat --object dbo.Contracts --json
 sqlharness schema prod-eu --var tenant=acme --var env=uat --filter "%Order%" --max-objects 50 --json
 ```
 
