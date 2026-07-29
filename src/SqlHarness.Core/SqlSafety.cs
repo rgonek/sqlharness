@@ -38,6 +38,8 @@ internal sealed record SqlSafetyDecision(
     bool HasMutation = false,
     string? Detail = null)
 {
+    internal bool HasSessionLocalWork { get; init; }
+
     internal string RejectionDescription =>
         Detail is null ? $"{Reason}." : $"{Reason}. {Detail}";
 }
@@ -205,15 +207,19 @@ internal sealed class SqlSafetyClassifier
         }
 
         var hasMutation = false;
+        var hasSessionLocal = false;
         foreach (var statement in statements)
         {
-            if (statement is SelectStatement)
+            if (statement is SelectStatement select)
             {
+                if (IsSessionOnlyWork(select))
+                    hasSessionLocal = true;
                 continue;
             }
 
             if (IsSessionOnlyWork(statement))
             {
+                hasSessionLocal = true;
                 continue;
             }
 
@@ -228,7 +234,7 @@ internal sealed class SqlSafetyClassifier
 
         if (!hasMutation)
         {
-            return Allowed();
+            return Allowed(hasSessionLocal: hasSessionLocal);
         }
 
         if (!allowMutation)
@@ -246,7 +252,7 @@ internal sealed class SqlSafetyClassifier
             return Denied(SqlSafetyReason.DatabaseConfirmationMismatch);
         }
 
-        return Allowed(hasMutation: true);
+        return Allowed(hasMutation: true, hasSessionLocal: hasSessionLocal);
     }
 
     private static bool IsSessionOnlyWork(TSqlStatement statement) => statement switch
@@ -294,7 +300,7 @@ internal sealed class SqlSafetyClassifier
             }
         }
 
-        return Allowed();
+        return Allowed(hasSessionLocal: statements.Any(IsSessionOnlyWork));
     }
 
     private static bool IsDirectMutation(TSqlStatement statement) =>
@@ -411,8 +417,8 @@ internal sealed class SqlSafetyClassifier
         return string.Join(" ", parts);
     }
 
-    private static SqlSafetyDecision Allowed(bool hasMutation = false) =>
-        new(true, SqlSafetyReason.Allowed, hasMutation);
+    private static SqlSafetyDecision Allowed(bool hasMutation = false, bool hasSessionLocal = false) =>
+        new(true, SqlSafetyReason.Allowed, hasMutation) { HasSessionLocalWork = hasSessionLocal };
 
     private static SqlSafetyDecision Denied(SqlSafetyReason reason, string? detail = null) =>
         new(false, reason, Detail: detail);

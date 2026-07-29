@@ -51,7 +51,60 @@ public class SqlHarnessMeasureTests
         Assert.Equal(new CompareDistribution(12, 22, 32), report.Query.ElapsedTimeMilliseconds);
         Assert.Equal(new CompareDistribution(5, 10, 15), report.Query.LogicalReads);
         Assert.Equal(30, report.Query.TotalLogicalReadsByTable["Clients"]);
+        Assert.Equal(new CompareDistribution(5, 10, 15), report.Query.LogicalReadsByTable["Clients"]);
         Assert.Contains(report.Query.Operators, op => op is { NodeId: 1, PhysicalOp: "Index Seek" });
+    }
+
+    [Fact]
+    public async Task Measure_reports_per_table_distributions_classifications_and_parameter_metadata()
+    {
+        var session = FakeMeasureSession.Create(
+            ioTable: "dbo.Orders",
+            tableReadsForMeasured: measured => measured switch
+            {
+                1 => 1,
+                2 => 5,
+                3 => 9,
+                _ => measured * 5,
+            });
+        var operation = Measure(3) with
+        {
+            SetupSql = "SELECT Id INTO #ids FROM dbo.Clients WHERE Created <= @AsOfDate",
+            QuerySql = "SELECT Value FROM dbo.Clients WHERE AsOf <= @AsOfDate",
+            Parameters = ["AsOfDate:datetime2=2026-07-29T12:00:00"],
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        var report = Assert.IsType<SqlHarnessMeasureReport>(outcome.Report);
+        Assert.Equal(
+            new CompareDistribution(1, 5, 9),
+            report.Query.LogicalReadsByTable["dbo.Orders"]);
+        Assert.Equal(15, report.Query.TotalLogicalReadsByTable["dbo.Orders"]);
+        Assert.Equal("session-local", report.Classification.Setup);
+        Assert.Equal("read-only", report.Classification.Query);
+        var parameter = Assert.Single(report.Parameters);
+        Assert.Equal("@AsOfDate", parameter.Name);
+        Assert.Equal("datetime2", parameter.Type);
+        Assert.Null(parameter.Size);
+        Assert.Null(parameter.Precision);
+        Assert.Null(parameter.Scale);
+        var json = JsonSerializer.Serialize(report);
+        Assert.DoesNotContain("2026-07-29", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("T12:00:00", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Measure_without_setup_classifies_setup_as_none()
+    {
+        var session = FakeMeasureSession.Create();
+
+        var outcome = await Module(session).ExecuteAsync(Measure(1) with { SetupSql = null });
+
+        var report = Assert.IsType<SqlHarnessMeasureReport>(outcome.Report);
+        Assert.Equal("none", report.Classification.Setup);
+        Assert.Equal("read-only", report.Classification.Query);
+        Assert.Empty(report.Parameters);
     }
 
     [Theory]
@@ -255,8 +308,8 @@ public class SqlHarnessMeasureTests
         accumulator.EndResultSet();
     }
 
-    private static string StatisticsMessage(int reads, int cpu, int elapsed) =>
-        $"Table 'Clients'. Scan count 1, logical reads {reads}, physical reads 0, lob logical reads 0.\nSQL Server Execution Times: CPU time = {cpu} ms, elapsed time = {elapsed} ms.";
+    private static string StatisticsMessage(long reads, int cpu, int elapsed, string table = "Clients") =>
+        $"Table '{table}'. Scan count 1, logical reads {reads}, physical reads 0, lob logical reads 0.\nSQL Server Execution Times: CPU time = {cpu} ms, elapsed time = {elapsed} ms.";
 
     private static SqlHarnessModule Module(
         FakeMeasureSession session,
@@ -310,6 +363,8 @@ public class SqlHarnessMeasureTests
         private readonly CancellationTokenSource? _cancelOnQuery;
         private readonly bool _emitMessageBeforeQueryFailure;
         private readonly bool _failSetup;
+        private readonly string _ioTable;
+        private readonly Func<int, long>? _tableReadsForMeasured;
         private readonly List<string> _messages = [];
         private int _queryCount;
 
@@ -321,7 +376,16 @@ public class SqlHarnessMeasureTests
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("test-server", "testdb-a", "test-server", "testdb-a", "profile");
 
-        private FakeMeasureSession(bool changeLastResult, bool includeSetupResult, bool includeExtraMessage, int? failOnQueryNumber, CancellationTokenSource? cancelOnQuery, bool emitMessageBeforeQueryFailure, bool failSetup)
+        private FakeMeasureSession(
+            bool changeLastResult,
+            bool includeSetupResult,
+            bool includeExtraMessage,
+            int? failOnQueryNumber,
+            CancellationTokenSource? cancelOnQuery,
+            bool emitMessageBeforeQueryFailure,
+            bool failSetup,
+            string ioTable,
+            Func<int, long>? tableReadsForMeasured)
         {
             _changeLastResult = changeLastResult;
             _includeSetupResult = includeSetupResult;
@@ -330,10 +394,21 @@ public class SqlHarnessMeasureTests
             _cancelOnQuery = cancelOnQuery;
             _emitMessageBeforeQueryFailure = emitMessageBeforeQueryFailure;
             _failSetup = failSetup;
+            _ioTable = ioTable;
+            _tableReadsForMeasured = tableReadsForMeasured;
         }
 
-        public static FakeMeasureSession Create(bool changeLastResult = false, bool includeSetupResult = false, bool includeExtraMessage = false, int? failOnQueryNumber = null, CancellationTokenSource? cancelOnQuery = null, bool emitMessageBeforeQueryFailure = false, bool failSetup = false) =>
-            new(changeLastResult, includeSetupResult, includeExtraMessage, failOnQueryNumber, cancelOnQuery, emitMessageBeforeQueryFailure, failSetup);
+        public static FakeMeasureSession Create(
+            bool changeLastResult = false,
+            bool includeSetupResult = false,
+            bool includeExtraMessage = false,
+            int? failOnQueryNumber = null,
+            CancellationTokenSource? cancelOnQuery = null,
+            bool emitMessageBeforeQueryFailure = false,
+            bool failSetup = false,
+            string ioTable = "Clients",
+            Func<int, long>? tableReadsForMeasured = null) =>
+            new(changeLastResult, includeSetupResult, includeExtraMessage, failOnQueryNumber, cancelOnQuery, emitMessageBeforeQueryFailure, failSetup, ioTable, tableReadsForMeasured);
 
         public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
         {
@@ -377,7 +452,8 @@ public class SqlHarnessMeasureTests
             }
             Labels.Add(queryNumber == 1 ? "warmup" : $"query-{queryNumber - 1}");
             var measured = Math.Max(queryNumber - 1, 1);
-            _messages.Add(StatisticsMessage(measured * 5, measured * 10, measured * 10 + 2));
+            var reads = _tableReadsForMeasured?.Invoke(measured) ?? measured * 5L;
+            _messages.Add(StatisticsMessage(reads, measured * 10, measured * 10 + 2, _ioTable));
             if (_includeExtraMessage)
                 _messages.Add("ordinary diagnostic message");
             var value = _changeLastResult && queryNumber == 4 ? 43 : 42;

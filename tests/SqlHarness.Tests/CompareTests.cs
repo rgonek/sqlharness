@@ -47,10 +47,81 @@ public class SqlHarnessCompareTests
         Assert.Equal(new CompareDistribution(12, 22, 32), report.Baseline.ElapsedTimeMilliseconds);
         Assert.Equal(new CompareDistribution(5, 10, 15), report.Baseline.LogicalReads);
         Assert.Equal(30, report.Baseline.TotalLogicalReadsByTable["Clients"]);
+        Assert.Equal(new CompareDistribution(5, 10, 15), report.Baseline.LogicalReadsByTable["Clients"]);
         Assert.Contains(report.Baseline.Operators, op => op is { NodeId: 1, PhysicalOp: "Index Seek", Object: "Clients" });
         Assert.Empty(report.Baseline.Warnings);
         Assert.Contains(report.Candidate.Operators, op => op is { NodeId: 2, PhysicalOp: "Hash Match", HasSpill: true });
         Assert.Contains("SpillToTempDb", report.Candidate.Warnings);
+    }
+
+    [Fact]
+    public async Task Compare_reports_per_table_logical_read_distributions_classifications_and_parameter_metadata()
+    {
+        var session = FakeCompareSession.Create(
+            ioTable: "dbo.Orders",
+            tableReadsForMeasured: measured => measured switch
+            {
+                1 => 1,
+                2 => 5,
+                3 => 9,
+                _ => measured * 5,
+            });
+        var operation = Compare(repeat: 3) with
+        {
+            SetupSql = "SELECT Id INTO #ids FROM dbo.Clients WHERE Created <= @AsOfDate",
+            BaselineSql = "SELECT Value FROM dbo.Clients WHERE AsOf <= @AsOfDate",
+            CandidateSql = "SELECT Value FROM dbo.Clients WHERE AsOf <= @AsOfDate -- candidate",
+            Parameters = ["AsOfDate:datetime2=2026-07-29T12:00:00"],
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        var report = Assert.IsType<SqlHarnessCompareReport>(outcome.Report);
+        Assert.Equal(
+            new CompareDistribution(1, 5, 9),
+            report.Baseline.LogicalReadsByTable["dbo.Orders"]);
+        Assert.Equal(
+            new CompareDistribution(1, 5, 9),
+            report.Candidate.LogicalReadsByTable["dbo.Orders"]);
+        Assert.Equal(15, report.Baseline.TotalLogicalReadsByTable["dbo.Orders"]);
+        Assert.Equal("session-local", report.Classification.Setup);
+        Assert.Equal("read-only", report.Classification.Baseline);
+        Assert.Equal("read-only", report.Classification.Candidate);
+        var parameter = Assert.Single(report.Parameters);
+        Assert.Equal("@AsOfDate", parameter.Name);
+        Assert.Equal("datetime2", parameter.Type);
+        Assert.Null(parameter.Size);
+        Assert.Null(parameter.Precision);
+        Assert.Null(parameter.Scale);
+        var json = JsonSerializer.Serialize(report);
+        Assert.DoesNotContain("2026-07-29", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("T12:00:00", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Compare_treats_missing_table_reads_as_zero_in_distributions()
+    {
+        var session = FakeCompareSession.Create(
+            ioTable: "dbo.Orders",
+            tableReadsForMeasured: measured => measured switch
+            {
+                1 => 1,
+                2 => 5,
+                3 => 9,
+                _ => measured * 5,
+            },
+            secondaryIoTable: "dbo.Lines",
+            secondaryTableReadsForMeasured: measured => measured == 2 ? 4L : 0L);
+
+        var outcome = await Module(session).ExecuteAsync(Compare(repeat: 3));
+
+        var report = Assert.IsType<SqlHarnessCompareReport>(outcome.Report);
+        Assert.Equal(
+            new CompareDistribution(1, 5, 9),
+            report.Baseline.LogicalReadsByTable["dbo.Orders"]);
+        Assert.Equal(
+            new CompareDistribution(0, 0, 4),
+            report.Baseline.LogicalReadsByTable["dbo.Lines"]);
     }
 
     [Fact]
@@ -257,8 +328,11 @@ public class SqlHarnessCompareTests
         accumulator.EndResultSet();
     }
 
-    private static string StatisticsMessage(int reads, int cpu, int elapsed) =>
-        $"Table 'Clients'. Scan count 1, logical reads {reads}, physical reads 0, lob logical reads 0.\nSQL Server Execution Times: CPU time = {cpu} ms, elapsed time = {elapsed} ms.";
+    private static string StatisticsMessage(long reads, int cpu, int elapsed, string table = "Clients") =>
+        $"Table '{table}'. Scan count 1, logical reads {reads}, physical reads 0, lob logical reads 0.\nSQL Server Execution Times: CPU time = {cpu} ms, elapsed time = {elapsed} ms.";
+
+    private static string TableIoLine(string table, long reads) =>
+        $"Table '{table}'. Scan count 1, logical reads {reads}, physical reads 0, lob logical reads 0.";
 
     [Fact]
     public async Task Caller_cancellation_uses_bounded_non_cancelled_OFF_cleanup_token()
@@ -328,6 +402,10 @@ public class SqlHarnessCompareTests
         private readonly bool _includeExtraMessage;
         private readonly int? _failOnBenchmarkNumber;
         private readonly bool _reorderCandidate;
+        private readonly string _ioTable;
+        private readonly Func<int, long>? _tableReadsForMeasured;
+        private readonly string? _secondaryIoTable;
+        private readonly Func<int, long>? _secondaryTableReadsForMeasured;
         private int _baseline;
         private int _candidate;
         private readonly List<string> _messages = [];
@@ -348,7 +426,11 @@ public class SqlHarnessCompareTests
             bool includeSecondPlan,
             bool includeExtraMessage,
             int? failOnBenchmarkNumber,
-            bool reorderCandidate)
+            bool reorderCandidate,
+            string ioTable,
+            Func<int, long>? tableReadsForMeasured,
+            string? secondaryIoTable,
+            Func<int, long>? secondaryTableReadsForMeasured)
         {
             _candidateValue = candidateValue;
             _failStatisticsEnable = failStatisticsEnable;
@@ -358,6 +440,10 @@ public class SqlHarnessCompareTests
             _includeExtraMessage = includeExtraMessage;
             _failOnBenchmarkNumber = failOnBenchmarkNumber;
             _reorderCandidate = reorderCandidate;
+            _ioTable = ioTable;
+            _tableReadsForMeasured = tableReadsForMeasured;
+            _secondaryIoTable = secondaryIoTable;
+            _secondaryTableReadsForMeasured = secondaryTableReadsForMeasured;
         }
 
         public static FakeCompareSession Create(
@@ -368,8 +454,12 @@ public class SqlHarnessCompareTests
             bool includeSecondPlan = false,
             bool includeExtraMessage = false,
             int? failOnBenchmarkNumber = null,
-            bool reorderCandidate = false) =>
-            new(candidateValue, failStatisticsEnable, cancelOnBenchmark, includeSetupResult, includeSecondPlan, includeExtraMessage, failOnBenchmarkNumber, reorderCandidate);
+            bool reorderCandidate = false,
+            string ioTable = "Clients",
+            Func<int, long>? tableReadsForMeasured = null,
+            string? secondaryIoTable = null,
+            Func<int, long>? secondaryTableReadsForMeasured = null) =>
+            new(candidateValue, failStatisticsEnable, cancelOnBenchmark, includeSetupResult, includeSecondPlan, includeExtraMessage, failOnBenchmarkNumber, reorderCandidate, ioTable, tableReadsForMeasured, secondaryIoTable, secondaryTableReadsForMeasured);
 
         public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
         {
@@ -414,8 +504,15 @@ public class SqlHarnessCompareTests
             Labels.Add(count == 1 ? $"warmup-{(baseline ? "A" : "B")}" : baseline ? "A" : "B");
             var cpu = measured * 10;
             var elapsed = cpu + 2;
-            var reads = measured * 5;
-            _messages.Add(StatisticsMessage(reads, cpu, elapsed));
+            var reads = _tableReadsForMeasured?.Invoke(measured) ?? measured * 5L;
+            var message = StatisticsMessage(reads, cpu, elapsed, _ioTable);
+            if (_secondaryIoTable is not null)
+            {
+                var secondaryReads = _secondaryTableReadsForMeasured?.Invoke(measured) ?? 0L;
+                if (secondaryReads > 0)
+                    message = TableIoLine(_secondaryIoTable, secondaryReads) + "\n" + message;
+            }
+            _messages.Add(message);
             if (_includeExtraMessage)
                 _messages.Add("ordinary diagnostic message");
             var plans = _includeSecondPlan ? new[] { PlanA, PlanB } : new[] { baseline ? PlanA : PlanB };

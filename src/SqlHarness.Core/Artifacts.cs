@@ -20,7 +20,17 @@ public sealed record CompareVariantReport(
     CompareDistribution LogicalReads,
     IReadOnlyDictionary<string, long> TotalLogicalReadsByTable,
     IReadOnlyList<CompareOperatorReport> Operators,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings)
+{
+    public IReadOnlyDictionary<string, CompareDistribution> LogicalReadsByTable { get; init; }
+        = new Dictionary<string, CompareDistribution>();
+}
+
+public sealed record BenchmarkClassificationReport(string Setup, string Query);
+
+public sealed record CompareClassificationReport(string Setup, string Baseline, string Candidate);
+
+public sealed record BenchmarkParameterReport(string Name, string Type, int? Size, byte? Precision, byte? Scale);
 
 public sealed record SqlHarnessCompareReport(
     SqlHarnessTargetIdentityReport Target,
@@ -33,11 +43,22 @@ public sealed record SqlHarnessCompareReport(
 {
     public ResultEquivalenceReport Equivalence { get; init; } =
         new(ResultComparisonMode.Ordered, ResultsEquivalent, 0, 0, 0);
+
+    public CompareClassificationReport Classification { get; init; } =
+        new("none", "read-only", "read-only");
+
+    public IReadOnlyList<BenchmarkParameterReport> Parameters { get; init; } = [];
 }
 
 public sealed record SqlHarnessMeasureReport(
     SqlHarnessTargetIdentityReport Target, int Repetitions, int MeasuredRunCount,
-    bool ResultsStable, CompareVariantReport Query, string? ArtifactDirectory);
+    bool ResultsStable, CompareVariantReport Query, string? ArtifactDirectory)
+{
+    public BenchmarkClassificationReport Classification { get; init; } =
+        new("none", "read-only");
+
+    public IReadOnlyList<BenchmarkParameterReport> Parameters { get; init; } = [];
+}
 
 internal sealed record CompareRunArtifact(
     string Variant, int Repetition, long CpuTimeMilliseconds, long ElapsedTimeMilliseconds,

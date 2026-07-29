@@ -226,10 +226,16 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             ValidateCompare(compare);
             var target = TargetResolver.Resolve(compare.Target, _loadProfiles());
             var classifier = new SqlSafetyClassifier();
-            EnsureSafe(classifier.Classify(compare.BaselineSql, SqlUsage.Query, target.Database, false), "baseline");
-            EnsureSafe(classifier.Classify(compare.CandidateSql, SqlUsage.Query, target.Database, false), "candidate");
+            var baselineSafety = classifier.Classify(compare.BaselineSql, SqlUsage.Query, target.Database, false);
+            EnsureSafe(baselineSafety, "baseline");
+            var candidateSafety = classifier.Classify(compare.CandidateSql, SqlUsage.Query, target.Database, false);
+            EnsureSafe(candidateSafety, "candidate");
+            SqlSafetyDecision? setupSafety = null;
             if (!string.IsNullOrWhiteSpace(compare.SetupSql))
-                EnsureSafe(classifier.Classify(compare.SetupSql, SqlUsage.CompareSetup, target.Database, false), "setup");
+            {
+                setupSafety = classifier.Classify(compare.SetupSql, SqlUsage.CompareSetup, target.Database, false);
+                EnsureSafe(setupSafety, "setup");
+            }
             var parameters = SqlParameterParser.Parse(compare.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, compare.SetupSql, compare.BaselineSql, compare.CandidateSql);
 
@@ -283,6 +289,11 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 null)
             {
                 Equivalence = equivalence,
+                Classification = new CompareClassificationReport(
+                    ClassificationLabel(setupSafety),
+                    ClassificationLabel(baselineSafety),
+                    ClassificationLabel(candidateSafety)),
+                Parameters = ToParameterReports(parameters),
             };
 
             phase = ExecutionPhase.Artifact;
@@ -324,9 +335,14 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             ValidateMeasure(measure);
             var target = TargetResolver.Resolve(measure.Target, _loadProfiles());
             var classifier = new SqlSafetyClassifier();
-            EnsureSafe(classifier.Classify(measure.QuerySql, SqlUsage.Query, target.Database, false), "query");
+            var querySafety = classifier.Classify(measure.QuerySql, SqlUsage.Query, target.Database, false);
+            EnsureSafe(querySafety, "query");
+            SqlSafetyDecision? setupSafety = null;
             if (!string.IsNullOrWhiteSpace(measure.SetupSql))
-                EnsureSafe(classifier.Classify(measure.SetupSql, SqlUsage.CompareSetup, target.Database, false), "setup");
+            {
+                setupSafety = classifier.Classify(measure.SetupSql, SqlUsage.CompareSetup, target.Database, false);
+                EnsureSafe(setupSafety, "setup");
+            }
             var parameters = SqlParameterParser.Parse(measure.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, measure.SetupSql, measure.QuerySql);
 
@@ -357,7 +373,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 runs.Count,
                 runs.Select(run => run.ResultHash).Distinct(StringComparer.Ordinal).Count() == 1,
                 CreateVariantReport("measure", runs),
-                null);
+                null)
+            {
+                Classification = new BenchmarkClassificationReport(
+                    ClassificationLabel(setupSafety),
+                    ClassificationLabel(querySafety)),
+                Parameters = ToParameterReports(parameters),
+            };
 
             phase = ExecutionPhase.Artifact;
             var directory = _artifactWriter.Write(report, runs.Select(run => run.Artifact).ToArray(), target.Database);
@@ -585,6 +607,16 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         var tables = runs.SelectMany(run => run.Artifact.LogicalReadsByTable)
             .GroupBy(pair => pair.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Sum(pair => pair.Value), StringComparer.Ordinal);
+        var tableNames = runs
+            .SelectMany(run => run.Artifact.LogicalReadsByTable.Keys)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var logicalReadsByTable = tableNames.ToDictionary(
+            table => table,
+            table => ToPublic(Distribution.From(runs.Select(run =>
+                run.Artifact.LogicalReadsByTable.TryGetValue(table, out var reads) ? reads : 0L))),
+            StringComparer.Ordinal);
         return new CompareVariantReport(
             name,
             ToPublic(Distribution.From(runs.Select(run => run.Artifact.CpuTimeMilliseconds))),
@@ -592,10 +624,32 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             ToPublic(Distribution.From(runs.Select(run => run.Artifact.LogicalReads))),
             tables,
             operators,
-            warnings.Order(StringComparer.Ordinal).ToArray());
+            warnings.Order(StringComparer.Ordinal).ToArray())
+        {
+            LogicalReadsByTable = logicalReadsByTable,
+        };
     }
 
     private static CompareDistribution ToPublic(Distribution value) => new(value.Min, value.Median, value.Max);
+
+    private static string ClassificationLabel(SqlSafetyDecision? decision) =>
+        decision is null ? "none"
+        : decision.HasMutation ? "mutation"
+        : decision.HasSessionLocalWork ? "session-local"
+        : "read-only";
+
+    private static IReadOnlyList<BenchmarkParameterReport> ToParameterReports(IReadOnlyList<SqlHarnessParameter> parameters) =>
+        parameters.Select(parameter => new BenchmarkParameterReport(
+            parameter.Name,
+            FormatParameterType(parameter),
+            parameter.Size,
+            parameter.Precision,
+            parameter.Scale)).ToArray();
+
+    private static string FormatParameterType(SqlHarnessParameter parameter) =>
+        parameter.Type == System.Data.SqlDbType.Udt && !string.IsNullOrEmpty(parameter.UdtTypeName)
+            ? parameter.UdtTypeName.ToLowerInvariant()
+            : parameter.Type.ToString().ToLowerInvariant();
 
     private static void ValidateCompare(SqlHarnessCompareOperation compare)
     {
