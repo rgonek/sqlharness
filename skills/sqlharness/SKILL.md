@@ -22,7 +22,7 @@ Lock one profile + one variable set per invocation; a different profile/vars req
 sqlharness schema prod-eu --var tenant=acme --var env=uat --json
 ```
 
-Prefer `--json` for agent consumption. Pass SQL through `--file` or stdin exactly as the command requires, and use repeatable `--param name[:type]=value` parameters instead of interpolating values into SQL.
+Prefer `--json` for full reports. On `measure` / `compare`, prefer `--json-summary` when the agent only needs the bounded projection (target, classification, distributions, table reads, warnings, ≤10 noteworthy operators, equivalence for compare, artifact directory). Do not pass both `--json` and `--json-summary`. Pass SQL through `--file` or stdin exactly as the command requires, and use repeatable `--param name[:type]=value` parameters instead of interpolating values into SQL.
 
 Supported types: `nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`, `nchar`, `int`, `bigint`, `smallint`, `tinyint`, `bit`, `decimal`, `decimal(p,s)`, `numeric`, `numeric(p,s)`, `float`, `real`, `money`, `smallmoney`, `date`, `time`, `datetime`, `datetime2`, `smalldatetime`, `datetimeoffset`, `uniqueidentifier`, `varbinary`, `varbinary(max)`, `hierarchyid`, `geography`, `geometry`. Parsing is culture-invariant; date/time values use ISO 8601. GUIDs accept any standard format; `varbinary` is Base64; `hierarchyid`/`geography`/`geometry` bind as true SQL UDTs (`path`, WKT, optional `srid;WKT`); nulls are `name:null` or `name:type:null`.
 
@@ -42,13 +42,14 @@ Supported types: `nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`,
 2. Inspect with `schema` when object shape is unknown.
 3. Use `query` for a bounded read-only result.
 4. Use `measure` for repeated timing, IO, and plan evidence for one query.
-5. Use `compare` for baseline/candidate evidence and result equivalence.
+5. Use `compare` for baseline/candidate evidence and technical result equivalence.
 6. Use `gain --json` to inspect recorded output savings.
 
 ```powershell
 sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --json
-sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\queries\orders.sql --setup .\queries\setup.sql --repeat 5 --json
-sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\before.sql --candidate .\queries\after.sql --setup .\queries\setup.sql --repeat 5 --json
+sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\queries\orders.sql --setup .\queries\setup.sql --repeat 5 --json-summary
+sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\before.sql --candidate .\queries\after.sql --setup .\queries\setup.sql --repeat 5 --json-summary
+sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\before.sql --candidate .\queries\after.sql --compare-results multiset --repeat 5 --json-summary
 sqlharness gain --json
 ```
 
@@ -57,6 +58,12 @@ sqlharness gain --json
 For `measure` and `compare`, setup runs exactly once per connection; warm-up and all measured repetitions reuse that same SQL Server session. Session-local `#temp` tables created in setup are visible to measured SQL. A rejected or failed setup stops the run—do not retry via persistent objects.
 
 Local `#temp` only (name starts with exactly one `#`): setup may create/index/DML/`DROP` session temps with supported constraints without mutation confirmation. Persistent objects, `##temp`, dynamic SQL, external access, cross-database references, and transaction control remain denied.
+
+### Technical vs domain equivalence
+
+`compare --compare-results` defaults to `ordered`. Modes: `ordered` (schema + multiset + row order), `multiset` (schema + multiset; order free), `set` (schema + distinct rows), `off` (no comparison; null equivalence fields). Every measured run participates; warm-ups do not. Directional counts are the max over any baseline/candidate measured pair. Fingerprint retention is capped at 1,000,000 rows per measured variant run.
+
+Technical equivalence is not domain/business equivalence. When the ticket needs set semantics, verify with two-direction `EXCEPT`; when duplicates matter, use grouped counts. Inventory ordering ties and missing-history cases offline before treating a run as representative.
 
 ## Mutation gate
 

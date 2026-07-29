@@ -33,13 +33,14 @@ sqlharness schema prod-eu --var tenant=acme --var env=uat --json
 sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --json
 sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\queries\orders.sql --repeat 5 --json
 sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\before.sql --candidate .\queries\after.sql --repeat 5 --json
+sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\before.sql --candidate .\queries\after.sql --compare-results multiset --repeat 5 --json-summary
 sqlharness plan .\artifacts\orders.sqlplan --json
 sqlharness gain --json
 ```
 
 `plan --json` emits a compact, deterministic plan contract: `statements` preserves input order; each statement has optional `sql`, a `root` node, and optional `missingIndexes`. Nodes retain `physicalOp`, optional `logicalOp`, operator metadata and runtime values, warnings (with their Showplan attributes), and child nodes. Persisted `*.plan.json` files from `compare` and `measure` use this same schema, including `sql`. This output is serialization-only; it is not accepted as plan input.
 
-Use `--json` for automation. `query` reads SQL from exactly one source: `--file` or redirected stdin. Bind runtime values with repeatable `--param name[:type]=value`, never by string interpolation.
+Use `--json` for the full report (automation and artifacts). For agent-sized stdout on `measure` / `compare`, use `--json-summary` instead: a bounded projection (target, classification, distributions, table reads, warnings, at most ten noteworthy operators, equivalence for compare, artifact directory) without full operator/run arrays, plan XML, or result hashes. `--json` and `--json-summary` are mutually exclusive (`Choose only one of --json or --json-summary.`). `query` reads SQL from exactly one source: `--file` or redirected stdin. Bind runtime values with repeatable `--param name[:type]=value`, never by string interpolation.
 
 Supported `--param` types (culture-invariant; date/time values use ISO 8601):
 
@@ -76,6 +77,27 @@ Session-local `#temp` objects created in setup remain visible to warm-up and mea
 Local temporary objects whose unqualified name starts with exactly one `#` may use session-only work without mutation confirmation: `CREATE TABLE #t` / `SELECT INTO #t`, `#temp` DML, `#temp` indexes and supported constraints (`NULL`/`NOT NULL`, `PRIMARY KEY`, `UNIQUE`), and `DROP TABLE #t`. Persistent objects, `##temp`, dynamic SQL, external access, cross-database references, and transaction control remain denied.
 
 Before measuring, inventory a representative parameter range offline: row count, cardinality distribution (small/median/large/exceptional), ordering ties, missing history, boundary dates, and empty results. Keep ticket-specific benchmark SQL outside the application repository (ticket workspace or isolated temp directory). Treat plans, comparison artifacts, and runtime parameters as locally sensitive.
+
+## Result equivalence and compact output
+
+`compare` reports **technical equivalence** under `--compare-results` (default `ordered`):
+
+| Mode | Meaning |
+| --- | --- |
+| `ordered` | Same schema, same multiset of rows, same row order. |
+| `multiset` | Same schema and row multiset; order may differ. |
+| `set` | Same schema and distinct-row set; duplicates and order ignored. |
+| `off` | Skip result comparison; equivalence fields are null. |
+
+Every measured run participates; warm-ups do not. Directional counts (`baselineOnlyCount`, `candidateOnlyCount`, and for `ordered` also `differingPositions`) are the maximum over any baseline/candidate measured-run pair. Modes that retain directional fingerprints accept at most **1,000,000** row fingerprints per measured variant run; exceeding that bound fails the operation.
+
+Order-only mismatches: under `ordered`, `differingPositions` can be non-zero while multiset equivalence would still hold—use `--compare-results multiset` when order is not part of the contract. Technical equivalence is not domain/business equivalence: prove ticket-specific semantics separately (for example two-direction `EXCEPT` for set differences, or grouped counts when duplicates matter; check ordering ties and missing-history cases offline).
+
+```powershell
+sqlharness compare prod-eu --var tenant=acme --var env=uat `
+  --baseline .\queries\before.sql --candidate .\queries\after.sql `
+  --compare-results multiset --repeat 5 --json-summary
+```
 
 ## Commands
 

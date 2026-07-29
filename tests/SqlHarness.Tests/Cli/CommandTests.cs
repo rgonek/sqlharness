@@ -278,6 +278,134 @@ public sealed class CommandTests
     }
 
     [Fact]
+    public async Task Compare_rejects_json_and_json_summary_together_before_dispatch()
+    {
+        var query = TempFile("select 1");
+        var candidate = TempFile("select 2");
+        try
+        {
+            var module = new FakeModule(Success(CompareReport()));
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(module, output).RunAsync(
+            [
+                "compare", "dev",
+                "--baseline", query,
+                "--candidate", candidate,
+                "--json",
+                "--json-summary",
+            ]);
+
+            Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+            Assert.Empty(module.Operations);
+            Assert.Equal(
+                $"Choose only one of --json or --json-summary.{Environment.NewLine}",
+                output.ToString());
+        }
+        finally
+        {
+            File.Delete(query);
+            File.Delete(candidate);
+        }
+    }
+
+    [Fact]
+    public async Task Measure_rejects_json_and_json_summary_together_before_dispatch()
+    {
+        var query = TempFile("select 1");
+        try
+        {
+            var module = new FakeModule(Success(MeasureReport()));
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(module, output).RunAsync(
+                ["measure", "dev", "--query", query, "--json", "--json-summary"]);
+
+            Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+            Assert.Empty(module.Operations);
+            Assert.Equal(
+                $"Choose only one of --json or --json-summary.{Environment.NewLine}",
+                output.ToString());
+        }
+        finally
+        {
+            File.Delete(query);
+        }
+    }
+
+    [Fact]
+    public async Task Compare_json_summary_emits_projected_object_without_full_operator_arrays()
+    {
+        var operators = Enumerable.Range(1, 15)
+            .Select(i => new CompareOperatorReport(i, $"Op{i:D2}", $"dbo.T{i:D2}", i <= 3, false, false))
+            .ToArray();
+        var report = CompareReport() with
+        {
+            Baseline = new CompareVariantReport(
+                "baseline",
+                new(1, 2, 3),
+                new(4, 5, 6),
+                new(7, 8, 9),
+                new Dictionary<string, long>(StringComparer.Ordinal) { ["dbo.Orders"] = 9 },
+                operators,
+                ["PlanWarning"])
+            {
+                LogicalReadsByTable = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
+                {
+                    ["dbo.Orders"] = new(1, 2, 3),
+                },
+            },
+            Candidate = new CompareVariantReport(
+                "candidate",
+                new(10, 20, 30),
+                new(11, 21, 31),
+                new(12, 22, 32),
+                new Dictionary<string, long>(StringComparer.Ordinal) { ["dbo.Lines"] = 12 },
+                operators.Select(op => op with { NodeId = op.NodeId + 100 }).ToArray(),
+                ["PlanWarning"])
+            {
+                LogicalReadsByTable = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
+                {
+                    ["dbo.Lines"] = new(2, 4, 6),
+                },
+            },
+            ArtifactDirectory = @"C:\tmp\compare-artifacts",
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Ordered, true, 0, 0, 0),
+            Classification = new CompareClassificationReport("none", "read-only", "read-only"),
+        };
+
+        var query = TempFile("select 1");
+        var candidate = TempFile("select 2");
+        try
+        {
+            var module = new FakeModule(Success(report));
+            var summaryOutput = new StringWriter();
+            var fullOutput = new StringWriter();
+
+            Assert.Equal(0, await SqlHarnessCli.Create(module, summaryOutput).RunAsync(
+                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--json-summary"]));
+            Assert.Equal(0, await SqlHarnessCli.Create(module, fullOutput).RunAsync(
+                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--json"]));
+
+            using var summary = JsonDocument.Parse(summaryOutput.ToString());
+            using var full = JsonDocument.Parse(fullOutput.ToString());
+
+            Assert.True(summary.RootElement.TryGetProperty("noteworthyOperators", out var noteworthy));
+            Assert.True(noteworthy.GetArrayLength() <= 10);
+            Assert.False(summary.RootElement.GetProperty("baseline").TryGetProperty("operators", out _));
+            Assert.False(summary.RootElement.GetProperty("candidate").TryGetProperty("operators", out _));
+            Assert.Equal(15, full.RootElement.GetProperty("baseline").GetProperty("operators").GetArrayLength());
+            Assert.Equal(15, full.RootElement.GetProperty("candidate").GetProperty("operators").GetArrayLength());
+            Assert.DoesNotContain("PlanXmls", summaryOutput.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("ResultHash", summaryOutput.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("runs", summaryOutput.ToString(), StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            File.Delete(query);
+            File.Delete(candidate);
+        }
+    }
+
+    [Fact]
     public async Task Module_safe_error_is_redacted_again_before_emission_and_exit_code_is_preserved()
     {
         var module = new FakeModule(new(SqlHarnessExitCode.Authentication, null, "Password=hunter2; access_token=abc"));

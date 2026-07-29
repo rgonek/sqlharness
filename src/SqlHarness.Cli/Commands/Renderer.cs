@@ -9,11 +9,19 @@ namespace SqlHarness.Cli.Commands;
 public sealed class Renderer
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
-    public void Render(SqlHarnessOutcome outcome, bool json, OutputCaptureWriter output)
+    public void Render(SqlHarnessOutcome outcome, OutputMode mode, OutputCaptureWriter output)
     {
-        if (outcome.Report is not null && json)
+        if (outcome.Report is not null && mode is OutputMode.Json or OutputMode.JsonSummary)
         {
-            output.WriteLine(JsonSerializer.Serialize(outcome.Report, outcome.Report.GetType(), Json));
+            var rendered = mode == OutputMode.JsonSummary
+                ? outcome.Report switch
+                {
+                    SqlHarnessCompareReport compare => (object)BenchmarkSummaryProjector.Project(compare),
+                    SqlHarnessMeasureReport measure => BenchmarkSummaryProjector.Project(measure),
+                    _ => outcome.Report,
+                }
+                : outcome.Report;
+            output.WriteLine(JsonSerializer.Serialize(rendered, rendered.GetType(), Json));
             return;
         }
         if (outcome.Report is SqlHarnessQueryReport query)

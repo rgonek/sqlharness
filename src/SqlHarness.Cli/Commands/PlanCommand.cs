@@ -28,7 +28,7 @@ public sealed class PlanCommand(ISqlHarnessModule module, OutputContext output, 
                 ? null
                 : new FileStream(settings.File, FileMode.Open, FileAccess.Read, FileShare.Read, 8192, FileOptions.Asynchronous | FileOptions.SequentialScan);
             var bounded = await BoundedPlanInputReader.ReadAsync(file ?? input.Stream, ct);
-            return await Dispatch(new SqlHarnessPlanOperation(bounded.Text, bounded.Footprint), settings.Json, ct);
+            return await Dispatch(new SqlHarnessPlanOperation(bounded.Text, bounded.Footprint), ResolveOutputMode(settings.Json), ct);
         }
         catch (OperationCanceledException) { throw; }
         catch (PlanInputSafetyException exception) { return Invalid(exception.Message); }
