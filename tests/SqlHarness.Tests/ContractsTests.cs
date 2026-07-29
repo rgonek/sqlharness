@@ -41,6 +41,41 @@ public class ContractsTests
         Assert.Contains("--object dbo.Contracts", skill, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Documentation_covers_database_space_inspection()
+    {
+        var readme = ReadRepositoryFile("README.md");
+        var agents = ReadRepositoryFile("AGENTS.md");
+        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
+
+        foreach (var doc in new[] { readme, agents, skill })
+        {
+            Assert.Contains("space", doc, StringComparison.Ordinal);
+            Assert.Contains("--top", doc, StringComparison.Ordinal);
+            Assert.Contains("--object", doc, StringComparison.Ordinal);
+            Assert.True(
+                doc.Contains("DMV", StringComparison.OrdinalIgnoreCase)
+                || doc.Contains("dm_db", StringComparison.OrdinalIgnoreCase),
+                "Space docs must describe read-only DMV inspection.");
+            Assert.True(
+                doc.Contains("shrink", StringComparison.OrdinalIgnoreCase)
+                && doc.Contains("recovery", StringComparison.OrdinalIgnoreCase)
+                && doc.Contains("compression", StringComparison.OrdinalIgnoreCase),
+                "Space docs must prohibit shrink/recovery/compression mutation.");
+            Assert.True(
+                doc.Contains("diagnos", StringComparison.OrdinalIgnoreCase)
+                || doc.Contains("storage only", StringComparison.OrdinalIgnoreCase),
+                "Space docs must state that the command diagnoses storage only.");
+            Assert.Contains("allow-mutation", doc, StringComparison.OrdinalIgnoreCase);
+        }
+
+        Assert.Contains("sqlharness space prod-eu", readme, StringComparison.Ordinal);
+        Assert.Contains("sqlharness space prod-eu", agents, StringComparison.Ordinal);
+        Assert.Contains("sqlharness space prod-eu", skill, StringComparison.Ordinal);
+        Assert.Contains("--top 25", skill, StringComparison.Ordinal);
+        Assert.Contains("--object dbo.Contracts", skill, StringComparison.Ordinal);
+    }
+
     private static string ReadRepositoryFile(params string[] path)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)

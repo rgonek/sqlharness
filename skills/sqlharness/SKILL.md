@@ -1,6 +1,6 @@
 ---
 name: sqlharness
-description: Use when a coding agent needs safe, repeatable SQL Server or Azure SQL query evidence, performance comparison, execution-plan distillation, compact schema inspection, readiness probes, or row-count inventory.
+description: Use when a coding agent needs safe, repeatable SQL Server or Azure SQL query evidence, performance comparison, execution-plan distillation, compact schema inspection, readiness probes, row-count inventory, or read-only database storage (space) diagnosis.
 ---
 
 # SQLHarness
@@ -24,9 +24,11 @@ sqlharness counts prod-eu --var tenant=acme --var env=uat --table Contracts --ta
 sqlharness counts prod-eu --var tenant=acme --var env=uat --like "%Sync%" --json
 sqlharness schema prod-eu --var tenant=acme --var env=uat --object dbo.Contracts --json
 sqlharness schema prod-eu --var tenant=acme --var env=uat --json
+sqlharness space prod-eu --var tenant=acme --var env=uat --top 25 --json
+sqlharness space prod-eu --var tenant=acme --var env=uat --object dbo.Contracts --json
 ```
 
-`ping`, `counts`, and `schema` never accept arbitrary user SQL or mutations. `counts` defaults to approximate partition estimates; use `--exact` when the agent needs `COUNT_BIG(*)`. Prefer `--json` for full reports. On `measure` / `compare`, prefer `--json-summary` when the agent only needs the bounded projection (target, classification, distributions, table reads, warnings, ≤10 noteworthy operators, equivalence for compare, artifact directory). Do not pass both `--json` and `--json-summary`. Pass SQL through `--file` or stdin exactly as the command requires, and use repeatable `--param name[:type]=value` parameters instead of interpolating values into SQL.
+`ping`, `counts`, `schema`, and `space` never accept arbitrary user SQL or mutations. `counts` defaults to approximate partition estimates; use `--exact` when the agent needs `COUNT_BIG(*)`. `space` diagnoses storage only via fixed read-only DMV/catalog SQL (database files, reserved/used/data MB, top tables by reserved space; `--object` adds per-index detail for one exact table/view). Default `--top` is 25 (bounds 1..500). It never performs shrink, recovery-model change, compression change, or index mutation—any mutation still requires a separately approved `query --allow-mutation` batch. Prefer `--json` for full reports. On `measure` / `compare`, prefer `--json-summary` when the agent only needs the bounded projection (target, classification, distributions, table reads, warnings, ≤10 noteworthy operators, equivalence for compare, artifact directory). Do not pass both `--json` and `--json-summary`. Pass SQL through `--file` or stdin exactly as the command requires, and use repeatable `--param name[:type]=value` parameters instead of interpolating values into SQL.
 
 Supported types: `nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`, `nchar`, `int`, `bigint`, `smallint`, `tinyint`, `bit`, `decimal`, `decimal(p,s)`, `numeric`, `numeric(p,s)`, `float`, `real`, `money`, `smallmoney`, `date`, `time`, `datetime`, `datetime2`, `smalldatetime`, `datetimeoffset`, `uniqueidentifier`, `varbinary`, `varbinary(max)`, `hierarchyid`, `geography`, `geometry`. Parsing is culture-invariant; date/time values use ISO 8601. GUIDs accept any standard format; `varbinary` is Base64; `hierarchyid`/`geography`/`geometry` bind as true SQL UDTs (`path`, WKT, optional `srid;WKT`); nulls are `name:null` or `name:type:null`.
 
@@ -46,10 +48,11 @@ Supported types: `nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`,
 2. Confirm readiness with `ping --json` when the target may still be starting.
 3. Inventory tables with `counts` (partition estimates by default; `--exact` when needed) instead of hand-built `COUNT(*)` batches.
 4. Inspect with `schema` / `schema --object` when object shape is unknown.
-5. Use `query` for a bounded read-only result.
-6. Use `measure` for repeated timing, IO, and plan evidence for one query.
-7. Use `compare` for baseline/candidate evidence and technical result equivalence.
-8. Use `gain --json` to inspect recorded output savings.
+5. Diagnose storage with `space` / `space --object` (read-only DMVs only; no shrink/recovery/compression/index mutation).
+6. Use `query` for a bounded read-only result.
+7. Use `measure` for repeated timing, IO, and plan evidence for one query.
+8. Use `compare` for baseline/candidate evidence and technical result equivalence.
+9. Use `gain --json` to inspect recorded output savings.
 
 ```powershell
 sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --json
@@ -100,6 +103,13 @@ sqlharness plan .\artifacts\orders.sqlplan --json
 ```powershell
 sqlharness schema prod-eu --var tenant=acme --var env=uat --object dbo.Contracts --json
 sqlharness schema prod-eu --var tenant=acme --var env=uat --filter "%Order%" --max-objects 50 --json
+```
+
+`space` uses only fixed internal DMV/catalog SQL (no arbitrary SQL) and diagnoses storage only: database files, aggregate reserved/used/data MB, and top tables by reserved space (default `--top 25`). Pass `--object name` or `--object schema.name` for optional per-index detail on one exact table or view. It never shrinks files, changes recovery model or compression, or mutates indexes; any mutation still requires a separately approved `query --allow-mutation` batch:
+
+```powershell
+sqlharness space prod-eu --var tenant=acme --var env=uat --top 25 --json
+sqlharness space prod-eu --var tenant=acme --var env=uat --object dbo.Contracts --json
 ```
 
 ## Outcomes

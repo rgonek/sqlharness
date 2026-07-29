@@ -22,6 +22,7 @@ public sealed class SmokeTests
         Assert.Contains("ping", standardOutput, StringComparison.Ordinal);
         Assert.Contains("counts", standardOutput, StringComparison.Ordinal);
         Assert.Contains("schema", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("space", standardOutput, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -44,6 +45,18 @@ public sealed class SmokeTests
         Assert.True(exit == 0, standardError);
         Assert.Contains("--object", standardOutput, StringComparison.Ordinal);
         Assert.Contains("--filter", standardOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Space_help_lists_top_and_object_options()
+    {
+        var (exit, standardOutput, standardError) = await RunCliAsync("space", "--help");
+
+        Assert.True(exit == 0, standardError);
+        Assert.Contains("--top", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--object", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--json", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--timeout", standardOutput, StringComparison.Ordinal);
     }
 
     [Fact]
