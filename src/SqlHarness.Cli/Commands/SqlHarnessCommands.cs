@@ -75,7 +75,9 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
     public sealed class Settings : TargetSettings
     {
         [CommandOption("--file <PATH>")] public string? File { get; set; }
-        [CommandOption("--param <VALUE>")] public string[] Parameters { get; set; } = [];
+        [Description("Bind name[[:type]]=value. Types: nvarchar, int, bigint, decimal, decimal(p,s), bit, date, datetime, datetime2, datetimeoffset, uniqueidentifier.")]
+        [CommandOption("--param <VALUE>")]
+        public string[] Parameters { get; set; } = [];
         [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
         [CommandOption("--max-rows <COUNT>")][DefaultValue(50)] public int MaxRows { get; set; } = 50;
         [CommandOption("--allow-mutation")] public bool AllowMutation { get; set; }
@@ -105,7 +107,9 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
     {
         [CommandOption("--query <PATH>")] public string? Query { get; set; }
         [CommandOption("--setup <PATH>")] public string? Setup { get; set; }
-        [CommandOption("--param <VALUE>")] public string[] Parameters { get; set; } = [];
+        [Description("Bind name[[:type]]=value. Types: nvarchar, int, bigint, decimal, decimal(p,s), bit, date, datetime, datetime2, datetimeoffset, uniqueidentifier.")]
+        [CommandOption("--param <VALUE>")]
+        public string[] Parameters { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;
         [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
     }
@@ -127,7 +131,9 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
         [CommandOption("--baseline <PATH>")] public string? Baseline { get; set; }
         [CommandOption("--candidate <PATH>")] public string? Candidate { get; set; }
         [CommandOption("--setup <PATH>")] public string? Setup { get; set; }
-        [CommandOption("--param <VALUE>")] public string[] Parameters { get; set; } = [];
+        [Description("Bind name[[:type]]=value. Types: nvarchar, int, bigint, decimal, decimal(p,s), bit, date, datetime, datetime2, datetimeoffset, uniqueidentifier.")]
+        [CommandOption("--param <VALUE>")]
+        public string[] Parameters { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;
         [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
     }
