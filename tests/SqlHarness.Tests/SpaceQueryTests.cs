@@ -91,4 +91,23 @@ public sealed class SpaceQueryTests
         Assert.Equal("Contracts", Assert.Single(parameters, p => p.Name == "@objectName").Value);
         Assert.DoesNotContain("Contracts", SpaceQuery.Sql, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Index_set_joins_partition_stats_to_partitions_by_partition_number()
+    {
+        // Multi-partition indexes would inflate SUM(ps.*_page_count) if partitions and
+        // dm_db_partition_stats were joined only on (object_id, index_id) (P×P cross product).
+        Assert.Contains(
+            "ps.partition_number = p.partition_number",
+            SpaceQuery.Sql,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "ps.object_id = p.object_id",
+            SpaceQuery.Sql,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "ps.index_id = p.index_id",
+            SpaceQuery.Sql,
+            StringComparison.OrdinalIgnoreCase);
+    }
 }

@@ -92,12 +92,13 @@ BEGIN
     FROM sys.tables t
     INNER JOIN sys.schemas s ON s.schema_id = t.schema_id
     INNER JOIN sys.indexes i ON i.object_id = t.object_id
-    LEFT JOIN sys.dm_db_partition_stats ps
-        ON ps.object_id = i.object_id
-       AND ps.index_id = i.index_id
     LEFT JOIN sys.partitions p
         ON p.object_id = i.object_id
        AND p.index_id = i.index_id
+    LEFT JOIN sys.dm_db_partition_stats ps
+        ON ps.object_id = p.object_id
+       AND ps.index_id = p.index_id
+       AND ps.partition_number = p.partition_number
     WHERE t.name = @objectName
       AND (@objectSchema IS NULL OR s.name = @objectSchema)
     GROUP BY s.name, t.name, i.name, i.index_id, i.type_desc
