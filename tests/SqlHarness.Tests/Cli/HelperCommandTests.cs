@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using SqlHarness.Cli;
 using SqlHarness.Core;
 
@@ -5,6 +7,78 @@ namespace SqlHarness.Tests.Cli;
 
 public sealed class HelperCommandTests
 {
+    [Fact]
+    public async Task Ping_text_renders_one_readiness_line()
+    {
+        var module = new FakeModule(PingReport());
+        var output = new StringWriter();
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["ping", "dev"]);
+
+        Assert.Equal(0, exit);
+        var text = output.ToString().TrimEnd();
+        Assert.Equal("Ready: sql-server/app-db as dbo-login; 12 ms", text);
+        Assert.DoesNotContain("Password=", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("connection", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain('\n', text);
+    }
+
+    [Fact]
+    public async Task Counts_text_renders_schema_name_rows_method()
+    {
+        var module = new FakeModule(CountsReport());
+        var output = new StringWriter();
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["counts", "dev"]);
+
+        Assert.Equal(0, exit);
+        var lines = output.ToString().Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal("Schema\tName\tRows\tMethod", lines[0]);
+        Assert.Equal("dbo\tContracts\t123\tapprox", lines[1]);
+        Assert.Equal("audit\tRuns\t0\texact", lines[2]);
+        Assert.DoesNotContain("Password=", output.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Ping_json_round_trips_typed_report()
+    {
+        var report = PingReport();
+        var module = new FakeModule(report);
+        var output = new StringWriter();
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["ping", "dev", "--json"]);
+
+        Assert.Equal(0, exit);
+        using var json = JsonDocument.Parse(output.ToString());
+        var root = json.RootElement;
+        Assert.Equal(report.Server, root.GetProperty("server").GetString());
+        Assert.Equal(report.Database, root.GetProperty("database").GetString());
+        Assert.Equal(report.Login, root.GetProperty("login").GetString());
+        Assert.Equal(report.DurationMilliseconds, root.GetProperty("durationMilliseconds").GetInt64());
+        Assert.Equal(report.Target.ActualServer, root.GetProperty("target").GetProperty("actualServer").GetString());
+        Assert.DoesNotContain("Password=", output.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Counts_json_round_trips_typed_report()
+    {
+        var report = CountsReport();
+        var module = new FakeModule(report);
+        var output = new StringWriter();
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["counts", "dev", "--json"]);
+
+        Assert.Equal(0, exit);
+        using var json = JsonDocument.Parse(output.ToString());
+        var root = json.RootElement;
+        Assert.Equal(0, root.GetProperty("omitted").GetInt32());
+        var tables = root.GetProperty("tables");
+        Assert.Equal(2, tables.GetArrayLength());
+        Assert.Equal("dbo", tables[0].GetProperty("schema").GetString());
+        Assert.Equal("Contracts", tables[0].GetProperty("name").GetString());
+        Assert.Equal(123, tables[0].GetProperty("rows").GetInt64());
+        Assert.Equal("approx", tables[0].GetProperty("method").GetString());
+        Assert.Equal("audit", tables[1].GetProperty("schema").GetString());
+        Assert.Equal("exact", tables[1].GetProperty("method").GetString());
+        Assert.DoesNotContain("Password=", output.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task Counts_dispatches_explicit_tables_and_exact_mode()
     {
@@ -175,10 +249,16 @@ public sealed class HelperCommandTests
     }
 
     private static SqlHarnessPingReport PingReport() =>
-        new(new("s", "d", "s", "d", "profile"), "s", "d", "login", 1);
+        new(new("sql-server", "app-db", "sql-server", "app-db", "profile"),
+            "sql-server", "app-db", "dbo-login", 12);
 
     private static SqlHarnessCountsReport CountsReport() =>
-        new(new("s", "d", "s", "d", "profile"), [], 0);
+        new(new("sql-server", "app-db", "sql-server", "app-db", "profile"),
+            [
+                new("dbo", "Contracts", 123, "approx"),
+                new("audit", "Runs", 0, "exact"),
+            ],
+            0);
 
     private sealed class FakeModule(SqlHarnessOutcome outcome) : ISqlHarnessModule
     {

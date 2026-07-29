@@ -45,6 +45,7 @@ public sealed class Renderer
             output.WriteLine("Scope\tExecutions\tFailures\tSaved tokens\tSavings %");
             WriteGain("total", gain.Total, output); WriteGain("query", gain.Query, output);
             WriteGain("compare", gain.Compare, output); WriteGain("measure", gain.Measure, output);
+            WriteGain("ping", gain.Ping, output); WriteGain("counts", gain.Counts, output);
         }
         else if (outcome.Report is DistilledPlan plan)
             RenderPlan(plan, output);
@@ -59,6 +60,16 @@ public sealed class Renderer
                 foreach (var f in obj.ForeignKeys) output.WriteLine($"fk\t{f.Name}\t{f.Columns}->{f.ReferencedTable}({f.ReferencedColumns})");
             }
             if (schema.OmittedObjects > 0) output.WriteLine($"Omitted objects: {schema.OmittedObjects}");
+        }
+        else if (outcome.Report is SqlHarnessPingReport ping)
+            output.WriteLine($"Ready: {ping.Server}/{ping.Database} as {ping.Login}; {ping.DurationMilliseconds.ToString(CultureInfo.InvariantCulture)} ms");
+        else if (outcome.Report is SqlHarnessCountsReport counts)
+        {
+            output.WriteLine("Schema\tName\tRows\tMethod");
+            foreach (var table in counts.Tables)
+                output.WriteLine($"{table.Schema}\t{table.Name}\t{table.Rows.ToString(CultureInfo.InvariantCulture)}\t{table.Method}");
+            if (counts.Omitted > 0)
+                output.WriteLine($"Omitted tables: {counts.Omitted.ToString(CultureInfo.InvariantCulture)}");
         }
         else if (!string.IsNullOrWhiteSpace(outcome.SafeError))
             output.WriteLine($"SQLHarness {outcome.ExitCode}: {SecretRedactor.Redact(outcome.SafeError, [])}");

@@ -22,6 +22,8 @@ public sealed record SqlHarnessGainReport(
     SqlHarnessGainSummary Compare)
 {
     public SqlHarnessGainSummary Measure { get; init; } = Empty;
+    public SqlHarnessGainSummary Ping { get; init; } = Empty;
+    public SqlHarnessGainSummary Counts { get; init; } = Empty;
     private static SqlHarnessGainSummary Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 }
 
@@ -77,8 +79,10 @@ internal sealed class GainStore : IGainStore
             var query = new SummaryAccumulator();
             var compare = new SummaryAccumulator();
             var measure = new SummaryAccumulator();
+            var ping = new SummaryAccumulator();
+            var counts = new SummaryAccumulator();
             if (!File.Exists(_path))
-                return CreateReport(total, query, compare, measure);
+                return CreateReport(total, query, compare, measure, ping, counts);
 
             foreach (var line in File.ReadLines(_path))
             {
@@ -86,26 +90,36 @@ internal sealed class GainStore : IGainStore
                     continue;
                 var record = ReadRecord(line);
                 total.Add(record);
-                GetAccumulator(record.Command, query, compare, measure)?.Add(record);
+                GetAccumulator(record.Command, query, compare, measure, ping, counts)?.Add(record);
             }
-            return CreateReport(total, query, compare, measure);
+            return CreateReport(total, query, compare, measure, ping, counts);
         }
     }
 
     private static SqlHarnessGainReport CreateReport(
         SummaryAccumulator total, SummaryAccumulator query,
-        SummaryAccumulator compare, SummaryAccumulator measure) =>
-        new(total.ToSummary(), query.ToSummary(), compare.ToSummary()) { Measure = measure.ToSummary() };
+        SummaryAccumulator compare, SummaryAccumulator measure,
+        SummaryAccumulator ping, SummaryAccumulator counts) =>
+        new(total.ToSummary(), query.ToSummary(), compare.ToSummary())
+        {
+            Measure = measure.ToSummary(),
+            Ping = ping.ToSummary(),
+            Counts = counts.ToSummary(),
+        };
 
     private static SummaryAccumulator? GetAccumulator(
-        string command, SummaryAccumulator query, SummaryAccumulator compare, SummaryAccumulator measure) =>
+        string command, SummaryAccumulator query, SummaryAccumulator compare, SummaryAccumulator measure,
+        SummaryAccumulator ping, SummaryAccumulator counts) =>
         command switch
         {
             "query" => query,
             "compare" => compare,
             "measure" => measure,
+            "ping" => ping,
+            "counts" => counts,
             "plan" or "schema" => null,
-            _ => throw new ArgumentException("Gain command must be query, compare, measure, plan, or schema.", nameof(command)),
+            _ => throw new ArgumentException(
+                "Gain command must be query, compare, measure, plan, schema, ping, or counts.", nameof(command)),
         };
 
     private static GainRecord ReadRecord(string line)
@@ -128,8 +142,9 @@ internal sealed class GainStore : IGainStore
 
     private static void Validate(GainRecord record)
     {
-        if (record.Command is not ("query" or "compare" or "measure" or "plan" or "schema"))
-            throw new ArgumentException("Gain command must be query, compare, measure, plan, or schema.", nameof(record));
+        if (record.Command is not ("query" or "compare" or "measure" or "plan" or "schema" or "ping" or "counts"))
+            throw new ArgumentException(
+                "Gain command must be query, compare, measure, plan, schema, ping, or counts.", nameof(record));
 
         ArgumentOutOfRangeException.ThrowIfNegative(record.DurationMilliseconds);
         ArgumentOutOfRangeException.ThrowIfNegative(record.RawBytes);

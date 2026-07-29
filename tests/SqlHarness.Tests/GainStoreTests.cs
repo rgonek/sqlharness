@@ -17,6 +17,41 @@ public class GainStoreTests
     }
 
     [Fact]
+    public void Ping_and_counts_records_increment_command_scopes()
+    {
+        using var temp = new TempDirectory("ping-counts");
+        var store = new GainStore(temp.FilePath);
+        store.Append(Record("ping", true, 1, 4, 1, 0, 0, 1, 0, 1));
+        store.Append(Record("counts", true, 2, 8, 2, 4, 1, 2, 1, 1));
+
+        var gain = store.Aggregate();
+
+        Assert.Equal(1, gain.Ping.Executions);
+        Assert.Equal(1, gain.Counts.Executions);
+        Assert.Equal(2, gain.Total.Executions);
+        Assert.Equal(0, gain.Query.Executions);
+        Assert.Equal(0, gain.Compare.Executions);
+        Assert.Equal(0, gain.Measure.Executions);
+    }
+
+    [Fact]
+    public void Existing_jsonl_without_ping_or_counts_still_aggregates()
+    {
+        using var temp = new TempDirectory("legacy-without-helpers");
+        var store = new GainStore(temp.FilePath);
+        store.Append(Record("query", true, 10, 100, 10, 20, 2, 25, 5, 20));
+        store.Append(Record("plan", true, 1, 4, 1, 0, 0, 1, 0, 1));
+        store.Append(Record("schema", true, 1, 4, 1, 0, 0, 1, 0, 1));
+
+        var gain = store.Aggregate();
+
+        Assert.Equal(3, gain.Total.Executions);
+        Assert.Equal(1, gain.Query.Executions);
+        Assert.Equal(0, gain.Ping.Executions);
+        Assert.Equal(0, gain.Counts.Executions);
+    }
+
+    [Fact]
     public void Invalid_commands_and_inconsistent_token_counters_are_rejected()
     {
         using var temp = new TempDirectory("gain");
