@@ -28,6 +28,160 @@ internal sealed record CanonicalColumn(int Ordinal, string Name, string DataType
 
 internal sealed record CanonicalResult(string Hash, OutputFootprint Footprint);
 
+internal static class CanonicalScalarCodec
+{
+    internal readonly record struct PreparedScalar(object? Value, string? InvariantValue);
+
+    public static PreparedScalar Prepare(object? value) => value switch
+    {
+        float number when !float.IsFinite(number) => throw new NotSupportedException(
+            "Non-finite System.Single values are not supported canonical scalars."),
+        double number when !double.IsFinite(number) => throw new NotSupportedException(
+            "Non-finite System.Double values are not supported canonical scalars."),
+        null or DBNull or string or char or bool or byte[] or
+            byte or sbyte or short or ushort or int or uint or long or ulong or
+            decimal or float or double or Guid or DateTime or DateTimeOffset or
+            DateOnly or TimeOnly or TimeSpan => new PreparedScalar(value, null),
+        IFormattable formattable => new PreparedScalar(
+            value,
+            formattable.ToString(null, CultureInfo.InvariantCulture)
+                ?? throw new NotSupportedException(
+                    $"Canonical scalar type '{value.GetType().FullName}' returned no invariant value.")),
+        _ => throw new NotSupportedException(
+            $"Canonical scalar type '{value.GetType().FullName}' is not supported."),
+    };
+
+    public static void Write(Utf8JsonWriter writer, PreparedScalar scalar)
+    {
+        var value = scalar.Value;
+        writer.WriteStartObject();
+        if (value is null or DBNull)
+        {
+            WriteScalarHeader(writer, "null", true, 0);
+            writer.WriteNull("value");
+            writer.WriteEndObject();
+            return;
+        }
+
+        switch (value)
+        {
+            case string text:
+                WriteScalarHeader(writer, "string", false, Utf8Length(text));
+                writer.WriteString("value", text);
+                break;
+            case char character:
+                var characterText = character.ToString();
+                WriteScalarHeader(writer, "char", false, Utf8Length(characterText));
+                writer.WriteString("value", characterText);
+                break;
+            case bool boolean:
+                WriteScalarHeader(writer, "boolean", false, boolean ? 4 : 5);
+                writer.WriteBoolean("value", boolean);
+                break;
+            case byte number:
+                WriteInteger(writer, "byte", number, number.ToString(CultureInfo.InvariantCulture));
+                break;
+            case sbyte number:
+                WriteInteger(writer, "sbyte", number, number.ToString(CultureInfo.InvariantCulture));
+                break;
+            case short number:
+                WriteInteger(writer, "int16", number, number.ToString(CultureInfo.InvariantCulture));
+                break;
+            case ushort number:
+                WriteInteger(writer, "uint16", number, number.ToString(CultureInfo.InvariantCulture));
+                break;
+            case int number:
+                WriteInteger(writer, "int32", number, number.ToString(CultureInfo.InvariantCulture));
+                break;
+            case uint number:
+                WriteInteger(writer, "uint32", number, number.ToString(CultureInfo.InvariantCulture));
+                break;
+            case long number:
+                WriteInteger(writer, "int64", number, number.ToString(CultureInfo.InvariantCulture));
+                break;
+            case ulong number:
+                WriteInteger(writer, "uint64", number, number.ToString(CultureInfo.InvariantCulture));
+                break;
+            case decimal number:
+                var decimalText = number.ToString(CultureInfo.InvariantCulture);
+                WriteScalarHeader(writer, "decimal", false, Utf8Length(decimalText));
+                writer.WriteNumber("value", number);
+                break;
+            case float number when float.IsFinite(number):
+                var singleText = number.ToString("R", CultureInfo.InvariantCulture);
+                WriteScalarHeader(writer, "single", false, Utf8Length(singleText));
+                writer.WriteNumber("value", number);
+                break;
+            case double number when double.IsFinite(number):
+                var doubleText = number.ToString("R", CultureInfo.InvariantCulture);
+                WriteScalarHeader(writer, "double", false, Utf8Length(doubleText));
+                writer.WriteNumber("value", number);
+                break;
+            case byte[] bytes:
+                var base64 = Convert.ToBase64String(bytes);
+                WriteScalarHeader(writer, "bytes", false, bytes.LongLength);
+                writer.WriteString("value", base64);
+                break;
+            case Guid guid:
+                WriteInvariantText(writer, "guid", guid.ToString("D"));
+                break;
+            case DateTime dateTime:
+                WriteInvariantText(writer, "dateTime", dateTime.ToString("O", CultureInfo.InvariantCulture));
+                break;
+            case DateTimeOffset dateTimeOffset:
+                WriteInvariantText(writer, "dateTimeOffset", dateTimeOffset.ToString("O", CultureInfo.InvariantCulture));
+                break;
+            case DateOnly date:
+                WriteInvariantText(writer, "date", date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                break;
+            case TimeOnly time:
+                WriteInvariantText(writer, "time", time.ToString("O", CultureInfo.InvariantCulture));
+                break;
+            case TimeSpan timeSpan:
+                WriteInvariantText(writer, "timeSpan", timeSpan.ToString("c", CultureInfo.InvariantCulture));
+                break;
+            case IFormattable formattable:
+                WriteInvariantText(
+                    writer,
+                    formattable.GetType().FullName ?? formattable.GetType().Name,
+                    scalar.InvariantValue!);
+                break;
+            default:
+                throw new NotSupportedException(
+                    $"Canonical scalar type '{value.GetType().FullName}' is not supported.");
+        }
+
+        writer.WriteEndObject();
+    }
+
+    private static void WriteInteger(Utf8JsonWriter writer, string type, long value, string invariant)
+    {
+        WriteScalarHeader(writer, type, false, Utf8Length(invariant));
+        writer.WriteNumber("value", value);
+    }
+
+    private static void WriteInteger(Utf8JsonWriter writer, string type, ulong value, string invariant)
+    {
+        WriteScalarHeader(writer, type, false, Utf8Length(invariant));
+        writer.WriteNumber("value", value);
+    }
+
+    private static void WriteInvariantText(Utf8JsonWriter writer, string type, string invariant)
+    {
+        WriteScalarHeader(writer, type, false, Utf8Length(invariant));
+        writer.WriteString("value", invariant);
+    }
+
+    private static void WriteScalarHeader(Utf8JsonWriter writer, string type, bool isNull, long length)
+    {
+        writer.WriteString("type", type);
+        writer.WriteBoolean("isNull", isNull);
+        writer.WriteNumber("length", length);
+    }
+
+    private static int Utf8Length(string value) => Encoding.UTF8.GetByteCount(value);
+}
+
 internal sealed class CanonicalResultAccumulator : IDisposable
 {
     private readonly HashingWriteStream _stream = new();
@@ -80,13 +234,13 @@ internal sealed class CanonicalResultAccumulator : IDisposable
             throw new InvalidOperationException("A result set must begin before rows are added.");
 
         ArgumentNullException.ThrowIfNull(values);
-        var preparedValues = values.Select(PrepareScalar).ToArray();
+        var preparedValues = values.Select(CanonicalScalarCodec.Prepare).ToArray();
         _writer.WriteStartObject();
         _writer.WriteString("kind", "row");
         _writer.WritePropertyName("values");
         _writer.WriteStartArray();
         foreach (var value in preparedValues)
-            WriteScalar(value);
+            CanonicalScalarCodec.Write(_writer, value);
         _writer.WriteEndArray();
         _writer.WriteEndObject();
         _writer.Flush();
@@ -115,12 +269,12 @@ internal sealed class CanonicalResultAccumulator : IDisposable
 
         ArgumentException.ThrowIfNullOrWhiteSpace(messageKind);
         ArgumentNullException.ThrowIfNull(value);
-        var preparedValue = PrepareScalar(value);
+        var preparedValue = CanonicalScalarCodec.Prepare(value);
         _writer.WriteStartObject();
         _writer.WriteString("kind", "message");
         _writer.WriteString("messageKind", messageKind);
         _writer.WritePropertyName("value");
-        WriteScalar(preparedValue);
+        CanonicalScalarCodec.Write(_writer, preparedValue);
         _writer.WriteEndObject();
         _writer.Flush();
     }
@@ -152,161 +306,11 @@ internal sealed class CanonicalResultAccumulator : IDisposable
         _stream.Dispose();
     }
 
-    private static PreparedScalar PrepareScalar(object? value) => value switch
-    {
-        float number when !float.IsFinite(number) => throw new NotSupportedException(
-            "Non-finite System.Single values are not supported canonical scalars."),
-        double number when !double.IsFinite(number) => throw new NotSupportedException(
-            "Non-finite System.Double values are not supported canonical scalars."),
-        null or DBNull or string or char or bool or byte[] or
-            byte or sbyte or short or ushort or int or uint or long or ulong or
-            decimal or float or double or Guid or DateTime or DateTimeOffset or
-            DateOnly or TimeOnly or TimeSpan => new PreparedScalar(value, null),
-        IFormattable formattable => new PreparedScalar(
-            value,
-            formattable.ToString(null, CultureInfo.InvariantCulture)
-                ?? throw new NotSupportedException(
-                    $"Canonical scalar type '{value.GetType().FullName}' returned no invariant value.")),
-        _ => throw new NotSupportedException(
-            $"Canonical scalar type '{value.GetType().FullName}' is not supported."),
-    };
-
-    private void WriteScalar(PreparedScalar scalar)
-    {
-        var value = scalar.Value;
-        _writer.WriteStartObject();
-        if (value is null or DBNull)
-        {
-            WriteScalarHeader("null", true, 0);
-            _writer.WriteNull("value");
-            _writer.WriteEndObject();
-            return;
-        }
-
-        switch (value)
-        {
-            case string text:
-                WriteScalarHeader("string", false, Utf8Length(text));
-                _writer.WriteString("value", text);
-                break;
-            case char character:
-                var characterText = character.ToString();
-                WriteScalarHeader("char", false, Utf8Length(characterText));
-                _writer.WriteString("value", characterText);
-                break;
-            case bool boolean:
-                WriteScalarHeader("boolean", false, boolean ? 4 : 5);
-                _writer.WriteBoolean("value", boolean);
-                break;
-            case byte number:
-                WriteInteger("byte", number, number.ToString(CultureInfo.InvariantCulture));
-                break;
-            case sbyte number:
-                WriteInteger("sbyte", number, number.ToString(CultureInfo.InvariantCulture));
-                break;
-            case short number:
-                WriteInteger("int16", number, number.ToString(CultureInfo.InvariantCulture));
-                break;
-            case ushort number:
-                WriteInteger("uint16", number, number.ToString(CultureInfo.InvariantCulture));
-                break;
-            case int number:
-                WriteInteger("int32", number, number.ToString(CultureInfo.InvariantCulture));
-                break;
-            case uint number:
-                WriteInteger("uint32", number, number.ToString(CultureInfo.InvariantCulture));
-                break;
-            case long number:
-                WriteInteger("int64", number, number.ToString(CultureInfo.InvariantCulture));
-                break;
-            case ulong number:
-                WriteInteger("uint64", number, number.ToString(CultureInfo.InvariantCulture));
-                break;
-            case decimal number:
-                var decimalText = number.ToString(CultureInfo.InvariantCulture);
-                WriteScalarHeader("decimal", false, Utf8Length(decimalText));
-                _writer.WriteNumber("value", number);
-                break;
-            case float number when float.IsFinite(number):
-                var singleText = number.ToString("R", CultureInfo.InvariantCulture);
-                WriteScalarHeader("single", false, Utf8Length(singleText));
-                _writer.WriteNumber("value", number);
-                break;
-            case double number when double.IsFinite(number):
-                var doubleText = number.ToString("R", CultureInfo.InvariantCulture);
-                WriteScalarHeader("double", false, Utf8Length(doubleText));
-                _writer.WriteNumber("value", number);
-                break;
-            case byte[] bytes:
-                var base64 = Convert.ToBase64String(bytes);
-                WriteScalarHeader("bytes", false, bytes.LongLength);
-                _writer.WriteString("value", base64);
-                break;
-            case Guid guid:
-                WriteInvariantText("guid", guid.ToString("D"));
-                break;
-            case DateTime dateTime:
-                WriteInvariantText("dateTime", dateTime.ToString("O", CultureInfo.InvariantCulture));
-                break;
-            case DateTimeOffset dateTimeOffset:
-                WriteInvariantText("dateTimeOffset", dateTimeOffset.ToString("O", CultureInfo.InvariantCulture));
-                break;
-            case DateOnly date:
-                WriteInvariantText("date", date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-                break;
-            case TimeOnly time:
-                WriteInvariantText("time", time.ToString("O", CultureInfo.InvariantCulture));
-                break;
-            case TimeSpan timeSpan:
-                WriteInvariantText("timeSpan", timeSpan.ToString("c", CultureInfo.InvariantCulture));
-                break;
-            case IFormattable formattable:
-                WriteInvariantText(
-                    formattable.GetType().FullName ?? formattable.GetType().Name,
-                    scalar.InvariantValue!);
-                break;
-            default:
-                throw new NotSupportedException(
-                    $"Canonical scalar type '{value.GetType().FullName}' is not supported.");
-        }
-
-        _writer.WriteEndObject();
-    }
-
-    private void WriteInteger(string type, long value, string invariant)
-    {
-        WriteScalarHeader(type, false, Utf8Length(invariant));
-        _writer.WriteNumber("value", value);
-    }
-
-    private void WriteInteger(string type, ulong value, string invariant)
-    {
-        WriteScalarHeader(type, false, Utf8Length(invariant));
-        _writer.WriteNumber("value", value);
-    }
-
-    private void WriteInvariantText(string type, string invariant)
-    {
-        WriteScalarHeader(type, false, Utf8Length(invariant));
-        _writer.WriteString("value", invariant);
-    }
-
-    private void WriteScalarHeader(string type, bool isNull, long length)
-    {
-        _writer.WriteString("type", type);
-        _writer.WriteBoolean("isNull", isNull);
-        _writer.WriteNumber("length", length);
-    }
-
     private void EnsureActive()
     {
         if (_completed)
             throw new InvalidOperationException("The canonical result is already complete.");
     }
-
-    private static int Utf8Length(string value) => Encoding.UTF8.GetByteCount(value);
-
-    private readonly record struct PreparedScalar(object? Value, string? InvariantValue);
 
     private sealed class HashingWriteStream : Stream
     {
