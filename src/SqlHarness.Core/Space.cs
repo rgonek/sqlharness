@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 
 namespace SqlHarness.Core;
 
@@ -8,6 +9,15 @@ namespace SqlHarness.Core;
 /// </summary>
 internal static class SpaceQuery
 {
+    internal const string MissingOrAmbiguousMessage = "Space object was not found or was ambiguous.";
+
+    internal sealed record CollectedSpaceReport(
+        IReadOnlyList<DatabaseFileSpaceReport> Files,
+        DatabaseAllocationReport Allocation,
+        IReadOnlyList<TableSpaceReport> Tables,
+        IReadOnlyList<IndexSpaceReport> Indexes,
+        OutputFootprint Raw);
+
     internal const string Sql = """
 -- 1. Exact object match count (0 when @objectName is null; used for missing/ambiguous checks).
 SELECT COUNT_BIG(*) AS MatchCount
@@ -132,4 +142,154 @@ END
         new("@objectSchema", SqlDbType.NVarChar, objectSchema is null ? DBNull.Value : objectSchema, 128),
         new("@objectName", SqlDbType.NVarChar, objectName is null ? DBNull.Value : objectName, 128),
     ];
+
+    /// <summary>
+    /// Reads the five-result space batch. <paramref name="reader"/> must be positioned on the match-count set.
+    /// Object mode requires exactly one match; non-object mode requires zero matches.
+    /// </summary>
+    internal static async Task<CollectedSpaceReport> ReadAsync(
+        ISqlReader reader,
+        bool objectRequested,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        using var raw = new CanonicalResultAccumulator();
+
+        long? matchCount = null;
+        await ReadSet(reader, raw, row =>
+        {
+            if (matchCount is not null)
+                throw new InvalidOperationException("Space object match count result set returned extra rows.");
+            matchCount = Convert.ToInt64(row[0], CultureInfo.InvariantCulture);
+        }, ct);
+
+        if (matchCount is null)
+            throw new InvalidOperationException("Space object match count result set is empty.");
+
+        if (objectRequested)
+        {
+            if (matchCount.Value != 1)
+                throw new SqlHarnessSafetyException(MissingOrAmbiguousMessage);
+        }
+        else if (matchCount.Value != 0)
+        {
+            throw new InvalidOperationException(
+                "Space object match count must be zero when no object was requested.");
+        }
+
+        if (!await reader.NextResultAsync(ct))
+            throw new InvalidOperationException("Space files result set is missing.");
+
+        var files = new List<DatabaseFileSpaceReport>();
+        await ReadSet(reader, raw, row =>
+        {
+            if (row.Length < 6)
+                throw new InvalidOperationException("Space files result set has unexpected columns.");
+            files.Add(new DatabaseFileSpaceReport(
+                Text(row[0]),
+                Text(row[1]),
+                NullText(row[2]),
+                Decimal(row[3]),
+                Decimal(row[4]),
+                Decimal(row[5])));
+        }, ct);
+
+        if (!await reader.NextResultAsync(ct))
+            throw new InvalidOperationException("Space allocation result set is missing.");
+
+        DatabaseAllocationReport? allocation = null;
+        await ReadSet(reader, raw, row =>
+        {
+            if (allocation is not null)
+                throw new InvalidOperationException("Space allocation result set returned extra rows.");
+            if (row.Length < 3)
+                throw new InvalidOperationException("Space allocation result set has unexpected columns.");
+            allocation = new DatabaseAllocationReport(Decimal(row[0]), Decimal(row[1]), Decimal(row[2]));
+        }, ct);
+
+        if (allocation is null)
+            throw new InvalidOperationException("Space allocation result set is empty.");
+
+        if (!await reader.NextResultAsync(ct))
+            throw new InvalidOperationException("Space tables result set is missing.");
+
+        var tables = new List<TableSpaceReport>();
+        await ReadSet(reader, raw, row =>
+        {
+            if (row.Length < 6)
+                throw new InvalidOperationException("Space tables result set has unexpected columns.");
+            tables.Add(new TableSpaceReport(
+                Text(row[0]),
+                Text(row[1]),
+                Convert.ToInt64(row[2], CultureInfo.InvariantCulture),
+                Decimal(row[3]),
+                Decimal(row[4]),
+                Decimal(row[5])));
+        }, ct);
+
+        if (!await reader.NextResultAsync(ct))
+            throw new InvalidOperationException("Space indexes result set is missing.");
+
+        var indexes = new List<IndexSpaceReport>();
+        await ReadSet(reader, raw, row =>
+        {
+            if (row.Length < 8)
+                throw new InvalidOperationException("Space indexes result set has unexpected columns.");
+            indexes.Add(new IndexSpaceReport(
+                Text(row[0]),
+                Text(row[1]),
+                Text(row[2]),
+                Text(row[3]),
+                Decimal(row[4]),
+                Decimal(row[5]),
+                Decimal(row[6]),
+                NullText(row[7])));
+        }, ct);
+
+        while (await reader.NextResultAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+            }
+        }
+
+        return new CollectedSpaceReport(files, allocation, tables, indexes, raw.Complete().Footprint);
+    }
+
+    private static async Task ReadSet(
+        ISqlReader reader,
+        CanonicalResultAccumulator raw,
+        Action<object?[]> add,
+        CancellationToken ct)
+    {
+        var columns = Enumerable.Range(0, reader.FieldCount)
+            .Select(i => new CanonicalColumn(
+                i,
+                reader.GetName(i),
+                reader.GetFieldType(i).FullName ?? "object",
+                reader.GetAllowNull(i)))
+            .ToArray();
+        raw.BeginResultSet(columns);
+        while (await reader.ReadAsync(ct))
+        {
+            var row = Enumerable.Range(0, reader.FieldCount).Select(i =>
+            {
+                // SequentialAccess allows each ordinal only once per row.
+                var value = reader.GetValue(i);
+                return value is DBNull ? null : value;
+            }).ToArray();
+            raw.AddRow(row);
+            add(row);
+        }
+        raw.EndResultSet();
+    }
+
+    private static string Text(object? value) =>
+        Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+
+    private static string? NullText(object? value) =>
+        value is null or DBNull ? null : Text(value);
+
+    private static decimal Decimal(object? value) =>
+        Convert.ToDecimal(value, CultureInfo.InvariantCulture);
 }
