@@ -851,19 +851,30 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     private async Task<SqlHarnessOutcome> ExecuteSchemaAsync(SqlHarnessSchemaOperation schema, CancellationToken ct)
     {
         var stopwatch = Stopwatch.StartNew(); var phase = ExecutionPhase.Validation; var raw = new OutputFootprint(0, 0);
+        var knownSecrets = new List<string>();
+        if (schema.Filter is not null) knownSecrets.Add(schema.Filter);
+        if (schema.Object is not null) knownSecrets.Add(schema.Object);
         try
         {
             if (schema.TimeoutSeconds is < 1 or > 300) throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
             if (schema.MaxObjects is < 1 or > 500) throw new SqlHarnessSafetyException("Schema object limit must be between 1 and 500.");
+            var selection = SchemaReader.ParseObjectSelection(schema.Object);
             var target = TargetResolver.Resolve(schema.Target, _loadProfiles()); phase = ExecutionPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct); phase = ExecutionPhase.Sql;
-            await using var reader = await session.ExecuteReaderAsync(new SqlExecutionCommand(SchemaReader.Sql, SchemaReader.Parameters(schema.Filter, schema.MaxObjects), schema.TimeoutSeconds), ct);
+            await using var reader = await session.ExecuteReaderAsync(
+                new SqlExecutionCommand(
+                    SchemaReader.Sql,
+                    SchemaReader.Parameters(schema.Filter, schema.MaxObjects, selection.Schema, selection.Name),
+                    schema.TimeoutSeconds),
+                ct);
             var result = await SchemaReader.ReadAsync(reader, ct); raw = result.Raw;
+            if (selection.IsObjectMode && (result.Objects.Count != 1 || result.Omitted != 0))
+                throw new SqlHarnessSafetyException(SchemaReader.MissingOrAmbiguousMessage);
             return WithReceipt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, new SqlHarnessSchemaReport(session.Identity, result.Objects, result.Omitted), null), stopwatch.ElapsedMilliseconds, raw, "schema");
         }
         catch (Exception exception)
         {
-            return WithReceipt(new SqlHarnessOutcome(MapException(exception, phase), null, SecretRedactor.Redact(exception, schema.Filter is null ? [] : [schema.Filter])), stopwatch.ElapsedMilliseconds, raw, "schema");
+            return WithReceipt(new SqlHarnessOutcome(MapException(exception, phase), null, SecretRedactor.Redact(exception, knownSecrets)), stopwatch.ElapsedMilliseconds, raw, "schema");
         }
     }
 

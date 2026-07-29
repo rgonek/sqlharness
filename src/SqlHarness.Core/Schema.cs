@@ -11,16 +11,36 @@ public sealed record SqlHarnessSchemaReport(SqlHarnessTargetIdentityReport Targe
 
 internal static class SchemaReader
 {
+    internal const string MissingOrAmbiguousMessage = "Schema object was not found or was ambiguous.";
+    internal const string InvalidObjectMessage = "Schema --object must be a single object name or schema.name.";
+
+    /// <summary>Object selection: Schema is null when unqualified; Name is null when not in object mode.</summary>
+    internal readonly record struct ObjectSelection(string? Schema, string? Name)
+    {
+        public bool IsObjectMode => Name is not null;
+    }
+
     internal const string Sql = """
 SELECT COUNT_BIG(*) AS TotalObjects
 FROM sys.objects o
-WHERE o.type IN ('U','V') AND (@filter IS NULL OR o.name LIKE @filter);
+JOIN sys.schemas s ON s.schema_id=o.schema_id
+WHERE o.type IN ('U','V') AND (
+    (@objectName IS NULL AND (@filter IS NULL OR o.name LIKE @filter))
+    OR
+    (@objectName IS NOT NULL AND o.name = @objectName
+     AND (@objectSchema IS NULL OR s.name = @objectSchema))
+);
 
 DECLARE @objects TABLE (object_id int PRIMARY KEY, SchemaName sysname, ObjectName sysname, Kind nvarchar(5));
 INSERT @objects
 SELECT TOP (@maxObjects) o.object_id, s.name, o.name, CASE o.type WHEN 'U' THEN 'TABLE' ELSE 'VIEW' END
 FROM sys.objects o JOIN sys.schemas s ON s.schema_id=o.schema_id
-WHERE o.type IN ('U','V') AND (@filter IS NULL OR o.name LIKE @filter)
+WHERE o.type IN ('U','V') AND (
+    (@objectName IS NULL AND (@filter IS NULL OR o.name LIKE @filter))
+    OR
+    (@objectName IS NOT NULL AND o.name = @objectName
+     AND (@objectSchema IS NULL OR s.name = @objectSchema))
+)
 ORDER BY s.name, o.name, o.object_id;
 
 SELECT SchemaName,ObjectName,Kind FROM @objects ORDER BY SchemaName,ObjectName,object_id;
@@ -36,10 +56,45 @@ FROM @objects x JOIN sys.foreign_keys f ON f.parent_object_id=x.object_id JOIN s
 ORDER BY x.SchemaName,x.ObjectName,f.name,fc.constraint_column_id;
 """;
 
-    internal static IReadOnlyList<SqlHarnessParameter> Parameters(string? filter, int maxObjects) =>
+    /// <summary>
+    /// PARSENAME-style split only when the value contains exactly one dot.
+    /// Unqualified name → Schema null; null/absent object → filter mode (Name null).
+    /// Rejects more than two parts or empty parts.
+    /// </summary>
+    internal static ObjectSelection ParseObjectSelection(string? objectSpec)
+    {
+        if (objectSpec is null)
+            return new ObjectSelection(null, null);
+
+        if (string.IsNullOrWhiteSpace(objectSpec))
+            throw new SqlHarnessSafetyException(InvalidObjectMessage);
+
+        var firstDot = objectSpec.IndexOf('.');
+        if (firstDot < 0)
+            return new ObjectSelection(null, objectSpec);
+
+        var lastDot = objectSpec.LastIndexOf('.');
+        if (firstDot != lastDot)
+            throw new SqlHarnessSafetyException(InvalidObjectMessage);
+
+        var schema = objectSpec[..firstDot];
+        var name = objectSpec[(firstDot + 1)..];
+        if (schema.Length == 0 || name.Length == 0)
+            throw new SqlHarnessSafetyException(InvalidObjectMessage);
+
+        return new ObjectSelection(schema, name);
+    }
+
+    internal static IReadOnlyList<SqlHarnessParameter> Parameters(
+        string? filter,
+        int maxObjects,
+        string? objectSchema = null,
+        string? objectName = null) =>
     [
         new("@filter", SqlDbType.NVarChar, filter is null ? DBNull.Value : filter, 4000),
         new("@maxObjects", SqlDbType.Int, maxObjects, null),
+        new("@objectSchema", SqlDbType.NVarChar, objectSchema is null ? DBNull.Value : objectSchema, 128),
+        new("@objectName", SqlDbType.NVarChar, objectName is null ? DBNull.Value : objectName, 128),
     ];
 
     internal static async Task<(IReadOnlyList<SchemaObjectReport> Objects, int Omitted, OutputFootprint Raw)> ReadAsync(ISqlReader reader, CancellationToken ct)

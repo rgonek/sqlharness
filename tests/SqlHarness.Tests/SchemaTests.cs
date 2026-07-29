@@ -104,11 +104,157 @@ public sealed class SchemaTests
         Assert.DoesNotContain("%secret%", command.Sql, StringComparison.Ordinal);
         Assert.Contains("COUNT_BIG", command.Sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("TOP (@maxObjects)", command.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("@objectName IS NULL", command.Sql, StringComparison.Ordinal);
+        Assert.Contains("o.name = @objectName", command.Sql, StringComparison.Ordinal);
         Assert.Collection(command.Parameters,
             p => { Assert.Equal("@filter", p.Name); Assert.Equal(SqlDbType.NVarChar, p.Type); Assert.Equal("%secret%", p.Value); },
-            p => { Assert.Equal("@maxObjects", p.Name); Assert.Equal(SqlDbType.Int, p.Type); Assert.Equal(75, p.Value); });
+            p => { Assert.Equal("@maxObjects", p.Name); Assert.Equal(SqlDbType.Int, p.Type); Assert.Equal(75, p.Value); },
+            p => { Assert.Equal("@objectSchema", p.Name); Assert.Equal(SqlDbType.NVarChar, p.Type); Assert.Equal(DBNull.Value, p.Value); },
+            p => { Assert.Equal("@objectName", p.Name); Assert.Equal(SqlDbType.NVarChar, p.Type); Assert.Equal(DBNull.Value, p.Value); });
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt).CompleteAsync(new(20, 2));
         Assert.Equal("schema", Assert.Single(gain.Records).Command);
+    }
+
+    [Fact]
+    public async Task Object_mode_binds_schema_and_name_and_returns_one_object()
+    {
+        var session = new FakeSession(Reader(1, [["audit", "Runs", "TABLE"]]));
+        var outcome = await Module(session).ExecuteAsync(
+            new SqlHarnessSchemaOperation(Target(), null, 30, 50, "audit.Runs"));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessSchemaReport>(outcome.Report);
+        Assert.Equal("Runs", Assert.Single(report.Objects).Name);
+        Assert.Equal("audit", report.Objects[0].Schema);
+        Assert.Equal(0, report.OmittedObjects);
+        Assert.Contains(session.Commands.Single().Parameters,
+            p => p.Name == "@objectSchema" && Equals(p.Value, "audit"));
+        Assert.Contains(session.Commands.Single().Parameters,
+            p => p.Name == "@objectName" && Equals(p.Value, "Runs"));
+        Assert.Contains(session.Commands.Single().Parameters,
+            p => p.Name == "@filter" && Equals(p.Value, DBNull.Value));
+    }
+
+    [Fact]
+    public async Task Object_mode_unqualified_unique_binds_name_only()
+    {
+        var session = new FakeSession(Reader(1, [["dbo", "SyncRuns", "TABLE"]]));
+        var outcome = await Module(session).ExecuteAsync(
+            new SqlHarnessSchemaOperation(Target(), null, 30, 50, "SyncRuns"));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessSchemaReport>(outcome.Report);
+        Assert.Equal("SyncRuns", Assert.Single(report.Objects).Name);
+        Assert.Contains(session.Commands.Single().Parameters,
+            p => p.Name == "@objectSchema" && Equals(p.Value, DBNull.Value));
+        Assert.Contains(session.Commands.Single().Parameters,
+            p => p.Name == "@objectName" && Equals(p.Value, "SyncRuns"));
+    }
+
+    [Fact]
+    public async Task Object_mode_supports_views()
+    {
+        var session = new FakeSession(Reader(1, [["sales", "vOrders", "VIEW"]]));
+        var outcome = await Module(session).ExecuteAsync(
+            new SqlHarnessSchemaOperation(Target(), null, 30, 50, "sales.vOrders"));
+
+        var report = Assert.IsType<SqlHarnessSchemaReport>(outcome.Report);
+        var obj = Assert.Single(report.Objects);
+        Assert.Equal("VIEW", obj.Kind);
+        Assert.Equal("vOrders", obj.Name);
+    }
+
+    [Fact]
+    public async Task Object_mode_exact_match_binds_wildcard_characters_literally()
+    {
+        var session = new FakeSession(Reader(1, [["dbo", "Order%", "TABLE"]]));
+        var outcome = await Module(session).ExecuteAsync(
+            new SqlHarnessSchemaOperation(Target(), null, 30, 50, "Order%"));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var command = Assert.Single(session.Commands);
+        Assert.Contains(command.Parameters, p => p.Name == "@objectName" && Equals(p.Value, "Order%"));
+        Assert.Contains("o.name = @objectName", command.Sql, StringComparison.Ordinal);
+        // Filter LIKE path must not apply when object mode is active in the predicate shape.
+        Assert.Contains("@objectName IS NOT NULL AND o.name = @objectName", command.Sql, StringComparison.Ordinal);
+        Assert.Equal("Order%", Assert.Single(Assert.IsType<SqlHarnessSchemaReport>(outcome.Report).Objects).Name);
+    }
+
+    [Fact]
+    public async Task Object_mode_missing_object_exits_safety()
+    {
+        var session = new FakeSession(Reader(0, []));
+        var outcome = await Module(session).ExecuteAsync(
+            new SqlHarnessSchemaOperation(Target(), null, 30, 50, "MissingTable"));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Null(outcome.Report);
+        Assert.Contains("not found or was ambiguous", outcome.SafeError, StringComparison.OrdinalIgnoreCase);
+        Assert.Single(session.Commands);
+    }
+
+    [Fact]
+    public async Task Object_mode_ambiguous_unqualified_name_exits_safety()
+    {
+        var session = new FakeSession(Reader(2,
+        [
+            ["dbo", "Contracts", "TABLE"],
+            ["sales", "Contracts", "TABLE"],
+        ]));
+        var outcome = await Module(session).ExecuteAsync(
+            new SqlHarnessSchemaOperation(Target(), null, 30, 50, "Contracts"));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Null(outcome.Report);
+        Assert.Contains("not found or was ambiguous", outcome.SafeError, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Object_mode_fails_when_total_matches_exceed_returned_rows()
+    {
+        // TOP limited to 1 but COUNT found 2 — still ambiguous.
+        var session = new FakeSession(Reader(2, [["dbo", "X", "TABLE"]]));
+        var outcome = await Module(session).ExecuteAsync(
+            new SqlHarnessSchemaOperation(Target(), null, 30, 1, "X"));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Null(outcome.Report);
+    }
+
+    [Theory]
+    [InlineData("a.b.c")]
+    [InlineData("a.b.c.d")]
+    [InlineData(".Runs")]
+    [InlineData("audit.")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Object_mode_rejects_invalid_object_specs_without_executing(string objectSpec)
+    {
+        var session = new FakeSession(Reader(0, []));
+        var outcome = await Module(session).ExecuteAsync(
+            new SqlHarnessSchemaOperation(Target(), null, 30, 50, objectSpec));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Empty(session.Commands);
+        Assert.NotNull(outcome.SafeError);
+    }
+
+    [Fact]
+    public async Task Filter_mode_still_returns_multiple_objects_when_object_is_null()
+    {
+        var session = new FakeSession(Reader(2,
+        [
+            ["dbo", "A", "TABLE"],
+            ["dbo", "B", "TABLE"],
+        ]));
+        var outcome = await Module(session).ExecuteAsync(
+            new SqlHarnessSchemaOperation(Target(), "%", 30, 50));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessSchemaReport>(outcome.Report);
+        Assert.Equal(2, report.Objects.Count);
+        Assert.Contains(session.Commands.Single().Parameters,
+            p => p.Name == "@objectName" && Equals(p.Value, DBNull.Value));
     }
 
     [Fact]
@@ -120,6 +266,9 @@ public sealed class SchemaTests
         Assert.Equal(SqlHarnessExitCode.TargetMismatch, outcome.ExitCode);
         Assert.Empty(session.Commands);
     }
+
+    private static SqlHarnessModule Module(FakeSession session) =>
+        new(session, new FakeGain(), Profiles);
 
     private static async Task<SqlHarnessSchemaReport> Execute(FakeReader reader, int max = 50)
     {
