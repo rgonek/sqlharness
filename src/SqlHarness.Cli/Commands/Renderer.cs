@@ -46,6 +46,7 @@ public sealed class Renderer
             WriteGain("total", gain.Total, output); WriteGain("query", gain.Query, output);
             WriteGain("compare", gain.Compare, output); WriteGain("measure", gain.Measure, output);
             WriteGain("ping", gain.Ping, output); WriteGain("counts", gain.Counts, output);
+            WriteGain("space", gain.Space, output);
         }
         else if (outcome.Report is DistilledPlan plan)
             RenderPlan(plan, output);
@@ -71,9 +72,63 @@ public sealed class Renderer
             if (counts.Omitted > 0)
                 output.WriteLine($"Omitted tables: {counts.Omitted.ToString(CultureInfo.InvariantCulture)}");
         }
+        else if (outcome.Report is SqlHarnessSpaceReport space)
+            RenderSpace(space, output);
         else if (!string.IsNullOrWhiteSpace(outcome.SafeError))
             output.WriteLine($"SQLHarness {outcome.ExitCode}: {SecretRedactor.Redact(outcome.SafeError, [])}");
     }
+
+    private static void RenderSpace(SqlHarnessSpaceReport space, TextWriter output)
+    {
+        output.WriteLine("Files");
+        foreach (var file in space.Files)
+        {
+            output.WriteLine(string.Join('\t',
+                file.LogicalName,
+                file.Type,
+                file.PhysicalName ?? string.Empty,
+                Mb(file.SizeMb),
+                Mb(file.UsedMb),
+                Mb(file.FreeMb)));
+        }
+
+        output.WriteLine("Allocation");
+        output.WriteLine(string.Join('\t',
+            Mb(space.Allocation.ReservedMb),
+            Mb(space.Allocation.UsedMb),
+            Mb(space.Allocation.DataMb)));
+
+        output.WriteLine("Tables");
+        foreach (var table in space.Tables)
+        {
+            output.WriteLine(string.Join('\t',
+                table.Schema,
+                table.Name,
+                table.Rows.ToString(CultureInfo.InvariantCulture),
+                Mb(table.ReservedMb),
+                Mb(table.UsedMb),
+                Mb(table.DataMb)));
+        }
+
+        if (space.Indexes.Count == 0)
+            return;
+
+        output.WriteLine("Indexes");
+        foreach (var index in space.Indexes)
+        {
+            output.WriteLine(string.Join('\t',
+                index.Schema,
+                index.Table,
+                index.Index,
+                index.Type,
+                Mb(index.ReservedMb),
+                Mb(index.UsedMb),
+                Mb(index.DataMb),
+                index.Compression ?? string.Empty));
+        }
+    }
+
+    private static string Mb(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
     private static string Value(object? value) => value is null ? "NULL" : Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
     private static string Dist(CompareDistribution d) => $"{d.Min}/{d.Median}/{d.Max}";
     private static string FormatTechnicalEquivalence(ResultEquivalenceReport equivalence)

@@ -35,6 +35,22 @@ public class GainStoreTests
     }
 
     [Fact]
+    public void Space_records_increment_space_scope()
+    {
+        using var temp = new TempDirectory("space-gain");
+        var store = new GainStore(temp.FilePath);
+        store.Append(Record("space", true, 3, 12, 3, 4, 1, 3, 1, 2));
+
+        var gain = store.Aggregate();
+
+        Assert.Equal(1, gain.Space.Executions);
+        Assert.Equal(1, gain.Total.Executions);
+        Assert.Equal(0, gain.Query.Executions);
+        Assert.Equal(0, gain.Ping.Executions);
+        Assert.Equal(0, gain.Counts.Executions);
+    }
+
+    [Fact]
     public void Existing_jsonl_without_ping_or_counts_still_aggregates()
     {
         using var temp = new TempDirectory("legacy-without-helpers");
@@ -49,6 +65,7 @@ public class GainStoreTests
         Assert.Equal(1, gain.Query.Executions);
         Assert.Equal(0, gain.Ping.Executions);
         Assert.Equal(0, gain.Counts.Executions);
+        Assert.Equal(0, gain.Space.Executions);
     }
 
     [Fact]

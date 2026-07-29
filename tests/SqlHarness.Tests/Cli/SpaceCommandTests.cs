@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text.Json;
+
 using SqlHarness.Cli;
 using SqlHarness.Core;
 
@@ -5,6 +8,82 @@ namespace SqlHarness.Tests.Cli;
 
 public sealed class SpaceCommandTests
 {
+    [Fact]
+    public async Task Space_text_renders_sections_in_order_with_invariant_mb()
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("pl-PL");
+            var module = new FakeModule(SpaceReport());
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(module, output).RunAsync(["space", "dev"]);
+
+            Assert.Equal(0, exit);
+            var text = output.ToString();
+            var lines = text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            Assert.Equal("Files", lines[0]);
+            Assert.Equal(@"Primary	ROWS	C:\data.mdf	200.5	80	119.5", lines[1]);
+            Assert.Equal("Allocation", lines[2]);
+            Assert.Equal("100.25	80	60", lines[3]);
+            Assert.Equal("Tables", lines[4]);
+            Assert.Equal("dbo	Contracts	42	50.5	40	30", lines[5]);
+            Assert.Equal("Indexes", lines[6]);
+            Assert.Equal("dbo	Contracts	IX_Contracts_Date	NONCLUSTERED	12.75	10	8	PAGE", lines[7]);
+            Assert.DoesNotContain(",", text, StringComparison.Ordinal);
+            Assert.Contains(@"C:\data.mdf", lines[1], StringComparison.Ordinal);
+            Assert.DoesNotContain(@"C:\data.mdf", string.Join('\n', lines.Skip(2)), StringComparison.Ordinal);
+            Assert.DoesNotContain("Password=", text, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    [Fact]
+    public async Task Space_text_omits_indexes_section_when_empty()
+    {
+        var report = SpaceReport() with { Indexes = [] };
+        var module = new FakeModule(report);
+        var output = new StringWriter();
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["space", "dev"]);
+
+        Assert.Equal(0, exit);
+        var text = output.ToString();
+        Assert.Contains("Files", text, StringComparison.Ordinal);
+        Assert.Contains("Allocation", text, StringComparison.Ordinal);
+        Assert.Contains("Tables", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Indexes", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Space_json_round_trips_typed_report()
+    {
+        var report = SpaceReport();
+        var module = new FakeModule(report);
+        var output = new StringWriter();
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["space", "dev", "--json"]);
+
+        Assert.Equal(0, exit);
+        using var json = JsonDocument.Parse(output.ToString());
+        var root = json.RootElement;
+        Assert.Equal(report.Target.ActualServer, root.GetProperty("target").GetProperty("actualServer").GetString());
+        var file = Assert.Single(root.GetProperty("files").EnumerateArray());
+        Assert.Equal("Primary", file.GetProperty("logicalName").GetString());
+        Assert.Equal("ROWS", file.GetProperty("type").GetString());
+        Assert.Equal(@"C:\data.mdf", file.GetProperty("physicalName").GetString());
+        Assert.Equal(200.5m, file.GetProperty("sizeMb").GetDecimal());
+        Assert.Equal(100.25m, root.GetProperty("allocation").GetProperty("reservedMb").GetDecimal());
+        var table = Assert.Single(root.GetProperty("tables").EnumerateArray());
+        Assert.Equal("Contracts", table.GetProperty("name").GetString());
+        Assert.Equal(42, table.GetProperty("rows").GetInt64());
+        var index = Assert.Single(root.GetProperty("indexes").EnumerateArray());
+        Assert.Equal("IX_Contracts_Date", index.GetProperty("index").GetString());
+        Assert.Equal("PAGE", index.GetProperty("compression").GetString());
+        Assert.DoesNotContain("Password=", output.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task Space_dispatches_top_object_timeout_and_json()
     {
@@ -135,21 +214,52 @@ public sealed class SpaceCommandTests
         Assert.Empty(module.Operations);
     }
 
+    private static SqlHarnessSpaceReport SpaceReport() =>
+        new(
+            new SqlHarnessTargetIdentityReport("sql-server", "app-db", "sql-server", "app-db", "profile"),
+            [
+                new DatabaseFileSpaceReport("Primary", "ROWS", @"C:\data.mdf", 200.5m, 80m, 119.5m),
+            ],
+            new DatabaseAllocationReport(100.25m, 80m, 60m),
+            [
+                new TableSpaceReport("dbo", "Contracts", 42, 50.5m, 40m, 30m),
+            ],
+            [
+                new IndexSpaceReport(
+                    "dbo", "Contracts", "IX_Contracts_Date", "NONCLUSTERED",
+                    12.75m, 10m, 8m, "PAGE"),
+            ]);
+
     private sealed class FakeModule : ISqlHarnessModule
     {
+        private readonly SqlHarnessOutcome _outcome;
+
         public List<SqlHarnessOperation> Operations { get; } = [];
+
+        public FakeModule()
+            : this(new SqlHarnessOutcome(
+                SqlHarnessExitCode.Success,
+                new SqlHarnessSpaceReport(
+                    new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "profile"),
+                    [],
+                    new DatabaseAllocationReport(0m, 0m, 0m),
+                    [],
+                    []),
+                null))
+        {
+        }
+
+        public FakeModule(object report)
+            : this(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null))
+        {
+        }
+
+        public FakeModule(SqlHarnessOutcome outcome) => _outcome = outcome;
 
         public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default)
         {
             Operations.Add(operation);
-            var identity = new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "profile");
-            var report = new SqlHarnessSpaceReport(
-                identity,
-                [],
-                new DatabaseAllocationReport(0m, 0m, 0m),
-                [],
-                []);
-            return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null));
+            return Task.FromResult(_outcome);
         }
     }
 }
