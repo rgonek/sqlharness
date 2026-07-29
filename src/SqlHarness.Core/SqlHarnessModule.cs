@@ -109,6 +109,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         if (operation is SqlHarnessCountsOperation counts)
             return await ExecuteCountsAsync(counts, ct);
 
+        if (operation is SqlHarnessSpaceOperation space)
+            return await ExecuteSpaceAsync(space, ct);
+
         if (operation is not SqlHarnessQueryOperation query)
         {
             return new SqlHarnessOutcome(
@@ -1002,6 +1005,61 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         }
     }
 
+    private async Task<SqlHarnessOutcome> ExecuteSpaceAsync(SqlHarnessSpaceOperation space, CancellationToken ct)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var phase = ExecutionPhase.Validation;
+        var raw = new OutputFootprint(0, 0);
+        var knownSecrets = new List<string>(CollectTargetSecrets(space.Target));
+        if (space.Object is not null)
+            knownSecrets.Add(space.Object);
+
+        try
+        {
+            if (space.TimeoutSeconds is < 1 or > 300)
+                throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
+            if (space.Top is < 1 or > 500)
+                throw new SqlHarnessSafetyException("Space top limit must be between 1 and 500.");
+
+            // Parse object before target resolution: name, schema.name, or null (no object).
+            var (objectSchema, objectName) = ParseSpaceObject(space.Object);
+            var target = TargetResolver.Resolve(space.Target, _loadProfiles());
+            phase = ExecutionPhase.Authentication;
+            await using var session = await _sessionFactory.ConnectAsync(target, ct);
+            phase = ExecutionPhase.Sql;
+            await using var reader = await session.ExecuteReaderAsync(
+                new SqlExecutionCommand(
+                    SpaceQuery.Sql,
+                    SpaceQuery.Parameters(space.Top, objectSchema, objectName),
+                    space.TimeoutSeconds),
+                ct);
+            var collected = await SpaceQuery.ReadAsync(reader, objectRequested: objectName is not null, ct);
+            raw = collected.Raw;
+            var report = new SqlHarnessSpaceReport(
+                session.Identity,
+                collected.Files,
+                collected.Allocation,
+                collected.Tables,
+                collected.Indexes);
+            return WithReceipt(
+                new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null),
+                stopwatch.ElapsedMilliseconds,
+                raw,
+                "space");
+        }
+        catch (Exception exception)
+        {
+            return WithReceipt(
+                new SqlHarnessOutcome(
+                    MapException(exception, phase),
+                    null,
+                    SecretRedactor.Redact(exception, knownSecrets)),
+                stopwatch.ElapsedMilliseconds,
+                raw,
+                "space");
+        }
+    }
+
     private static IReadOnlyList<string> CollectTargetSecrets(SqlTargetRequest target)
     {
         var secrets = new List<string>();
@@ -1016,6 +1074,34 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         if (!string.IsNullOrEmpty(target.PasswordEnvVar))
             secrets.Add(target.PasswordEnvVar);
         return secrets;
+    }
+
+    /// <summary>
+    /// Space --object: null = database-wide; one name; or schema.name. Same part rules as schema.
+    /// </summary>
+    private static (string? Schema, string? Name) ParseSpaceObject(string? objectSpec)
+    {
+        if (objectSpec is null)
+            return (null, null);
+
+        const string invalid = "Space --object must be a single object name or schema.name.";
+        if (string.IsNullOrWhiteSpace(objectSpec))
+            throw new SqlHarnessSafetyException(invalid);
+
+        var firstDot = objectSpec.IndexOf('.');
+        if (firstDot < 0)
+            return (null, objectSpec);
+
+        var lastDot = objectSpec.LastIndexOf('.');
+        if (firstDot != lastDot)
+            throw new SqlHarnessSafetyException(invalid);
+
+        var schema = objectSpec[..firstDot];
+        var name = objectSpec[(firstDot + 1)..];
+        if (schema.Length == 0 || name.Length == 0)
+            throw new SqlHarnessSafetyException(invalid);
+
+        return (schema, name);
     }
 
     private SqlHarnessOutcome ExecutePlan(SqlHarnessPlanOperation operation)
