@@ -100,16 +100,28 @@ exit /b 0
 :exec_select1
 if exist "%ST%\ready.fail" (echo Sqlcmd: Error: Microsoft ODBC Driver& exit /b 1)
 echo 1
+echo.
+echo (1 rows affected)
 exit /b 0
 :exec_dbid
-if exist "%ST%\db.exists" (echo 5& exit /b 0)
+REM Real sqlcmd often prints value + blank + "(1 rows affected)".
+REM Absent DB must NOT be treated as present because of the rows-affected trailer.
+if exist "%ST%\db.exists" (
+  echo 5
+  echo.
+  echo (1 rows affected)
+  exit /b 0
+)
 echo NULL
+echo.
+echo (1 rows affected)
 exit /b 0
 :exec_filelist
-if exist "%ST%\filelist.bad" (echo LogicalName PhysicalName Type& echo OnlyData C:\x.mdf D& exit /b 0)
-echo LogicalName         PhysicalName  Type FileGroupName
+if exist "%ST%\filelist.bad" (echo LogicalName PhysicalName Type& echo OnlyData C:\x.mdf D& echo.& echo (1 rows affected)& exit /b 0)
 echo AdventureWorks2022  C:\aw.mdf     D    PRIMARY
 echo AdventureWorks2022_log C:\aw.ldf  L    NULL
+echo.
+echo (2 rows affected)
 exit /b 0
 :exec_restore
 type nul > "%ST%\db.exists"
@@ -190,15 +202,32 @@ function Invoke-SetupScript {
     $previousPassword = $env:SQLHARNESS_PLAYGROUND_PASSWORD
     $previousMssql = $env:MSSQL_SA_PASSWORD
     $previousPoll = $env:SQLHARNESS_PLAYGROUND_READY_POLL_SECONDS
+    $previousSkipPort = $env:SQLHARNESS_PLAYGROUND_SKIP_HOST_PORT_CHECK
+    $hadGlobalIwr = Test-Path Function:\global:Invoke-WebRequest
 
     try {
         $env:PATH = $FakeRoot + [IO.Path]::PathSeparator + $previousPath
         $env:SQLHARNESS_PLAYGROUND_READY_POLL_SECONDS = '0'
+        $env:SQLHARNESS_PLAYGROUND_SKIP_HOST_PORT_CHECK = '1'
         if ($ClearPassword) {
             Remove-Item Env:SQLHARNESS_PLAYGROUND_PASSWORD -ErrorAction SilentlyContinue
         }
         else {
             $env:SQLHARNESS_PLAYGROUND_PASSWORD = $Password
+        }
+
+        # Never hit the network from unit tests if restore runs (db absent).
+        function global:Invoke-WebRequest {
+            [CmdletBinding()]
+            param(
+                [string]$Uri,
+                [string]$OutFile,
+                [switch]$UseBasicParsing
+            )
+            if ([string]::IsNullOrWhiteSpace($OutFile)) {
+                throw 'unit-test Invoke-WebRequest mock requires -OutFile'
+            }
+            [System.IO.File]::WriteAllBytes($OutFile, [byte[]](0x01, 0x02, 0x03, 0x04))
         }
 
         $outputLines = New-Object System.Collections.Generic.List[string]
@@ -241,6 +270,9 @@ function Invoke-SetupScript {
     }
     finally {
         $env:PATH = $previousPath
+        if (-not $hadGlobalIwr) {
+            Remove-Item Function:\global:Invoke-WebRequest -ErrorAction SilentlyContinue
+        }
         if ($null -eq $previousPassword) {
             Remove-Item Env:SQLHARNESS_PLAYGROUND_PASSWORD -ErrorAction SilentlyContinue
         }
@@ -258,6 +290,12 @@ function Invoke-SetupScript {
         }
         else {
             $env:SQLHARNESS_PLAYGROUND_READY_POLL_SECONDS = $previousPoll
+        }
+        if ($null -eq $previousSkipPort) {
+            Remove-Item Env:SQLHARNESS_PLAYGROUND_SKIP_HOST_PORT_CHECK -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:SQLHARNESS_PLAYGROUND_SKIP_HOST_PORT_CHECK = $previousSkipPort
         }
     }
 }
@@ -382,6 +420,39 @@ Describe 'setup-local-adventureworks.ps1' {
         # docker cp should not appear
         if ($callText -match '(^|\s)cp\s+') { throw "unexpected docker cp: $callText" }
         $result.Output | Should Match 'AdventureWorks2022'
+    }
+
+    It 'does not treat sqlcmd NULL plus rows-affected as an existing database' {
+        # Fake docker returns:
+        #   NULL
+        #
+        #   (1 rows affected)
+        # for missing DBs. A buggy parser that treats any non-empty text as
+        # "exists" would skip restore; this case must still attempt restore.
+        $state = @{
+            containerExists = $true
+            running         = $true
+            hostPort        = '14335'
+            volumeName      = 'sqlharness-sql-data'
+            volumeExists    = $true
+            dbExists        = $false
+            ready           = $true
+            infoOk          = $true
+            fileListOk      = $true
+        }
+        $result = Invoke-SetupScript -FakeRoot $fakeRoot -State $state
+        if ($result.ExitCode -ne 0) {
+            Write-Host "DEBUG output: $($result.Output)"
+            Write-Host "DEBUG calls: $($result.Calls -join ' | ')"
+        }
+        $result.ExitCode | Should Be 0
+
+        $callText = ($result.Calls -join "`n")
+        $callText | Should Match 'DB_ID'
+        $callText | Should Match 'FILELISTONLY'
+        $callText | Should Match 'RESTORE DATABASE'
+        $callText | Should Match '(^|\s)cp\s+'
+        $result.State.dbExists | Should Be $true
     }
 
     It 'stops on a conflicting port mapping' {

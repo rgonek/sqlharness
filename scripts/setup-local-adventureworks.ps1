@@ -92,6 +92,14 @@ function Invoke-SqlcmdInContainer {
         [switch]$AllowFailure
     )
 
+    # SET NOCOUNT ON avoids trailing "(N rows affected)" lines that break simple parsers.
+    # Keep the batch single-line: multi-line -Q payloads are fragile under Windows docker exec.
+    $batch = $Query.Trim()
+    if ($batch -notmatch '(?i)^\s*SET\s+NOCOUNT\s+ON') {
+        $batch = "SET NOCOUNT ON; $batch"
+    }
+    $batch = ($batch -replace '[\r\n]+', ' ').Trim()
+
     # Password is passed only via container process env for sqlcmd; never Write-Host it.
     $dockerArgs = @(
         'exec'
@@ -102,7 +110,7 @@ function Invoke-SqlcmdInContainer {
         '-S', 'localhost'
         '-U', 'sa'
         '-C'
-        '-Q', $Query
+        '-Q', $batch
         '-b'
         '-W'
         '-h', '-1'
@@ -115,8 +123,31 @@ function Get-QuotedSqlIdentifier {
     return '[' + ($Name -replace ']', ']]') + ']'
 }
 
+function Get-QuotedSqlUnicodeLiteral {
+    param([Parameter(Mandatory)][string]$Value)
+    return "N'" + ($Value -replace "'", "''") + "'"
+}
+
+function Get-FirstSqlcmdDataLine {
+    param([string]$Text)
+
+    foreach ($line in @($Text -split '[\r\n]+')) {
+        $trimmed = $line.Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmed)) { continue }
+        # Ignore sqlcmd chatter that can appear when NOCOUNT is off or tools differ.
+        if ($trimmed -match '^\(\d+\s+rows?\s+affected\)$') { continue }
+        if ($trimmed -match '^(Msg\s+\d+|Sqlcmd:|Changed database context)') { continue }
+        return $trimmed
+    }
+    return $null
+}
+
 function Test-HostPortFree {
     param([int]$Port)
+    # Unit tests set this so a live playground on 14335 does not fail fake-docker runs.
+    if ($env:SQLHARNESS_PLAYGROUND_SKIP_HOST_PORT_CHECK -eq '1') {
+        return $true
+    }
     $listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
     return ($listeners.Count -eq 0)
 }
@@ -256,16 +287,19 @@ function Wait-SqlServerReady {
 }
 
 function Test-DatabaseExists {
-    $result = Invoke-SqlcmdInContainer -Query "SELECT DB_ID(N'$databaseName')"
-    $text = $result.Text.Trim()
-    if ([string]::IsNullOrWhiteSpace($text) -or $text -eq 'NULL') {
+    # DB_ID returns NULL when the database is absent. Real sqlcmd often appends
+    # blank lines and "(1 rows affected)" unless NOCOUNT is on — never treat that
+    # trailing chatter as proof the database exists.
+    $result = Invoke-SqlcmdInContainer -Query "SELECT CAST(DB_ID(N'$databaseName') AS nvarchar(32));"
+    $line = Get-FirstSqlcmdDataLine -Text $result.Text
+    if ([string]::IsNullOrWhiteSpace($line)) {
         return $false
     }
-    # sqlcmd may return the id alone or with headers depending on flags; treat any non-NULL as present.
-    if ($text -match '(?im)^NULL$') {
+    if ($line -eq 'NULL') {
         return $false
     }
-    return $true
+    # Present databases yield a positive integer database_id.
+    return ($line -match '^\d+$')
 }
 
 function Get-BackupLogicalFiles {
@@ -273,21 +307,27 @@ function Get-BackupLogicalFiles {
 
     $query = "RESTORE FILELISTONLY FROM DISK = N'$BackupPathInContainer'"
     $result = Invoke-SqlcmdInContainer -Query $query
-    $lines = @($result.Text -split '[\r\n]+' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    $lines = @(
+        $result.Text -split '[\r\n]+' |
+            ForEach-Object { $_.Trim() } |
+            Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_) -and
+                $_ -notmatch '^\(\d+\s+rows?\s+affected\)$' -and
+                $_ -notmatch '^(LogicalName|---)'
+            }
+    )
 
     $dataName = $null
     $logName = $null
+    $dataCount = 0
+    $logCount = 0
 
     foreach ($line in $lines) {
-        $trimmed = $line.Trim()
-        if ($trimmed -match '^(LogicalName|---)') { continue }
-
         # Prefer tabular output with Type column; sqlcmd -W -h -1 yields space-separated columns.
-        $parts = @($trimmed -split '\s+' | Where-Object { $_ })
+        $parts = @($line -split '\s+' | Where-Object { $_ })
         if ($parts.Count -lt 3) { continue }
 
         $logical = $parts[0]
-        # Type is typically column 3 (index 2) in FILELISTONLY output
         $type = $null
         foreach ($p in $parts) {
             if ($p -eq 'D' -or $p -eq 'L') {
@@ -295,25 +335,17 @@ function Get-BackupLogicalFiles {
                 break
             }
         }
-        if ($type -eq 'D' -and -not $dataName) { $dataName = $logical }
-        elseif ($type -eq 'L' -and -not $logName) { $logName = $logical }
-    }
-
-    if (-not $dataName -or -not $logName) {
-        throw 'STOP: expected one AdventureWorks2022 data file and one log file.'
-    }
-
-    # Ensure we did not find extras of either kind that would make "exactly one" fail.
-    $dataCount = 0
-    $logCount = 0
-    foreach ($line in $lines) {
-        $parts = @($line.Trim() -split '\s+' | Where-Object { $_ })
-        foreach ($p in $parts) {
-            if ($p -eq 'D') { $dataCount++; break }
-            if ($p -eq 'L') { $logCount++; break }
+        if ($type -eq 'D') {
+            $dataCount++
+            if (-not $dataName) { $dataName = $logical }
+        }
+        elseif ($type -eq 'L') {
+            $logCount++
+            if (-not $logName) { $logName = $logical }
         }
     }
-    if ($dataCount -ne 1 -or $logCount -ne 1) {
+
+    if ($dataCount -ne 1 -or $logCount -ne 1 -or -not $dataName -or -not $logName) {
         throw 'STOP: expected one AdventureWorks2022 data file and one log file.'
     }
 
@@ -344,17 +376,16 @@ function Restore-AdventureWorks {
 
         Write-SetupInfo 'Reading backup logical file names...'
         $logical = Get-BackupLogicalFiles -BackupPathInContainer $containerBackupPath
-        $dataId = Get-QuotedSqlIdentifier -Name $logical.Data
-        $logId = Get-QuotedSqlIdentifier -Name $logical.Log
+        # N'...' MOVE targets are single-line safe for docker exec + sqlcmd -Q.
+        $dataLit = Get-QuotedSqlUnicodeLiteral -Value $logical.Data
+        $logLit = Get-QuotedSqlUnicodeLiteral -Value $logical.Log
+        $dbId = Get-QuotedSqlIdentifier -Name $databaseName
+        $bakLit = Get-QuotedSqlUnicodeLiteral -Value $containerBackupPath
+        $dataPathLit = Get-QuotedSqlUnicodeLiteral -Value $containerDataPath
+        $logPathLit = Get-QuotedSqlUnicodeLiteral -Value $containerLogPath
 
         Write-SetupInfo "Restoring database '$databaseName'..."
-        $restoreSql = @"
-RESTORE DATABASE [$databaseName]
-FROM DISK = N'$containerBackupPath'
-WITH MOVE $dataId TO N'$containerDataPath',
-     MOVE $logId TO N'$containerLogPath',
-     REPLACE
-"@
+        $restoreSql = "RESTORE DATABASE $dbId FROM DISK = $bakLit WITH MOVE $dataLit TO $dataPathLit, MOVE $logLit TO $logPathLit, REPLACE"
         Invoke-SqlcmdInContainer -Query $restoreSql | Out-Null
 
         Write-SetupInfo 'Removing backup copy from container...'
