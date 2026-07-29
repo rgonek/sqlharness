@@ -50,7 +50,9 @@ Notes:
 - Untyped `name=value` is `nvarchar`; strings longer than 4000 characters bind as `nvarchar(max)` (`Size = -1`).
 - `uniqueidentifier` accepts any standard GUID format (`D`, `N`, `B`, `P`).
 - `varbinary` values are Base64.
-- `hierarchyid` / `geography` / `geometry` bind the path or WKT as `nvarchar` (cast in SQL when you need the native type).
+- `hierarchyid` binds a path (for example `/1/2/`) as SQL UDT `HierarchyId`.
+- `geography` / `geometry` bind WKT as native UDTs (via `Microsoft.SqlServer.Types`). Optional form: `srid;WKT` (defaults: geography `4326`, geometry `0`), for example `4326;POINT(-122.3 47.6)`.
+- Spatial types need the package's native `SqlServerSpatial*` runtime on supported Windows RIDs; Linux/macOS spatial UDT binding is not guaranteed.
 - Nulls: `name:null` or typed `name:type:null` (for example `count:int:null`).
 
 ```powershell

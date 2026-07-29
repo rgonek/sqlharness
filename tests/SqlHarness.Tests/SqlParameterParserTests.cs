@@ -176,9 +176,33 @@ public class SqlParameterParserTests
         Assert.Equal(longText, parameters[3].Value);
         Assert.Equal(SqlDbType.Char, parameters[4].Type);
         Assert.Equal(5, parameters[4].Size);
-        Assert.Equal(SqlDbType.NVarChar, parameters[5].Type);
-        Assert.Equal("/1/2/", parameters[5].Value);
-        Assert.Equal(SqlDbType.NVarChar, parameters[6].Type);
+        Assert.Equal(SqlDbType.Udt, parameters[5].Type);
+        Assert.Equal("HierarchyId", parameters[5].UdtTypeName);
+        Assert.Equal(SqlDbType.Udt, parameters[6].Type);
+        Assert.Equal("Geometry", parameters[6].UdtTypeName);
+    }
+
+    [Fact]
+    public void Parse_binds_geography_with_optional_srid_prefix()
+    {
+        var plain = Assert.Single(SqlParameterParser.Parse([
+            "loc:geography=POINT(-122.34900 47.65100)"]));
+        Assert.Equal(SqlDbType.Udt, plain.Type);
+        Assert.Equal("Geography", plain.UdtTypeName);
+
+        var withSrid = Assert.Single(SqlParameterParser.Parse([
+            "loc:geography=4326;POINT(-122.34900 47.65100)"]));
+        Assert.Equal(SqlDbType.Udt, withSrid.Type);
+        Assert.Equal("Geography", withSrid.UdtTypeName);
+    }
+
+    [Fact]
+    public void Parse_binds_udt_typed_null()
+    {
+        var parameter = Assert.Single(SqlParameterParser.Parse(["path:hierarchyid:null"]));
+        Assert.Equal(SqlDbType.Udt, parameter.Type);
+        Assert.Equal("HierarchyId", parameter.UdtTypeName);
+        Assert.Same(DBNull.Value, parameter.Value);
     }
 
     [Fact]

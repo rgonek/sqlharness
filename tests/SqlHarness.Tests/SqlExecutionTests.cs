@@ -242,6 +242,25 @@ public sealed class SqlExecutionTests
     }
 
     [Fact]
+    public void Command_binds_hierarchyid_and_geography_as_udt()
+    {
+        using var command = new SqlCommand();
+        SqlClientSession.BindCommand(
+            command,
+            new SqlExecutionCommand(
+                "SELECT @path, @loc",
+                SqlParameterParser.Parse([
+                    "path:hierarchyid=/1/2/",
+                    "loc:geography=4326;POINT(-122.34900 47.65100)"]),
+                30));
+
+        Assert.Equal(System.Data.SqlDbType.Udt, command.Parameters["@path"].SqlDbType);
+        Assert.Equal("HierarchyId", command.Parameters["@path"].UdtTypeName);
+        Assert.Equal(System.Data.SqlDbType.Udt, command.Parameters["@loc"].SqlDbType);
+        Assert.Equal("Geography", command.Parameters["@loc"].UdtTypeName);
+    }
+
+    [Fact]
     public async Task Reader_disposal_always_disposes_command_when_reader_disposal_throws()
     {
         using var command = new SqlCommand();

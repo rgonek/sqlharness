@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 
 using Microsoft.SqlServer.TransactSql.ScriptDom;
+using Microsoft.SqlServer.Types;
 
 namespace SqlHarness.Core;
 
@@ -497,7 +498,8 @@ internal sealed record SqlHarnessParameter(
     object Value,
     int? Size,
     byte? Precision = null,
-    byte? Scale = null);
+    byte? Scale = null,
+    string? UdtTypeName = null);
 
 internal static partial class SqlParameterParser
 {
@@ -643,7 +645,9 @@ internal static partial class SqlParameterParser
             "smalldatetime" => CreateSmallDateTime(name, value),
             "datetimeoffset" => CreateDateTimeOffset(name, value),
             "uniqueidentifier" => new($"@{name}", SqlDbType.UniqueIdentifier, Guid.Parse(value), null),
-            "hierarchyid" or "geography" or "geometry" => CreateSpatialOrHierarchy(name, value),
+            "hierarchyid" => CreateHierarchyId(name, value),
+            "geography" => CreateGeography(name, value),
+            "geometry" => CreateGeometry(name, value),
             _ => throw new SqlHarnessSafetyException($"Unsupported SQL parameter type '{type}'."),
         };
     }
@@ -693,13 +697,18 @@ internal static partial class SqlParameterParser
             "smalldatetime" => CreateNull(name, SqlDbType.SmallDateTime, null),
             "datetimeoffset" => CreateNull(name, SqlDbType.DateTimeOffset, null),
             "uniqueidentifier" => CreateNull(name, SqlDbType.UniqueIdentifier, null),
-            "hierarchyid" or "geography" or "geometry" => CreateNull(name, SqlDbType.NVarChar, null),
+            "hierarchyid" => CreateUdtNull(name, "HierarchyId"),
+            "geography" => CreateUdtNull(name, "Geography"),
+            "geometry" => CreateUdtNull(name, "Geometry"),
             _ => throw new SqlHarnessSafetyException($"Unsupported SQL parameter type '{type}'."),
         };
     }
 
     private static SqlHarnessParameter CreateNull(string name, SqlDbType type, int? size) =>
         new($"@{name}", type, DBNull.Value, size);
+
+    private static SqlHarnessParameter CreateUdtNull(string name, string udtTypeName) =>
+        new($"@{name}", SqlDbType.Udt, DBNull.Value, null, UdtTypeName: udtTypeName);
 
     private static SqlHarnessParameter CreateUnicodeString(string name, string value, bool max)
     {
@@ -802,13 +811,74 @@ internal static partial class SqlParameterParser
         }
     }
 
-    private static SqlHarnessParameter CreateSpatialOrHierarchy(string name, string value)
+    private static SqlHarnessParameter CreateHierarchyId(string name, string value)
     {
-        // Bind path/WKT as nvarchar; SQL can convert or CAST to the native type.
         if (value.Length == 0)
             throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.");
 
-        return CreateUnicodeString(name, value, max: value.Length > MaximumNVarCharSize);
+        try
+        {
+            var hierarchy = SqlHierarchyId.Parse(value);
+            return new($"@{name}", SqlDbType.Udt, hierarchy, null, UdtTypeName: "HierarchyId");
+        }
+        catch (Exception exception) when (exception is FormatException or ArgumentException or ArgumentNullException)
+        {
+            throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.", exception);
+        }
+    }
+
+    private static SqlHarnessParameter CreateGeography(string name, string value)
+    {
+        var (srid, wkt) = SplitSridAndWkt(name, value, defaultSrid: 4326);
+        try
+        {
+            var geography = SqlGeography.STGeomFromText(new SqlChars(wkt), srid);
+            if (geography.IsNull)
+                throw new FormatException("Geography value is null.");
+            return new($"@{name}", SqlDbType.Udt, geography, null, UdtTypeName: "Geography");
+        }
+        catch (Exception exception) when (exception is FormatException or ArgumentException or ArgumentNullException)
+        {
+            throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.", exception);
+        }
+    }
+
+    private static SqlHarnessParameter CreateGeometry(string name, string value)
+    {
+        var (srid, wkt) = SplitSridAndWkt(name, value, defaultSrid: 0);
+        try
+        {
+            var geometry = SqlGeometry.STGeomFromText(new SqlChars(wkt), srid);
+            if (geometry.IsNull)
+                throw new FormatException("Geometry value is null.");
+            return new($"@{name}", SqlDbType.Udt, geometry, null, UdtTypeName: "Geometry");
+        }
+        catch (Exception exception) when (exception is FormatException or ArgumentException or ArgumentNullException)
+        {
+            throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.", exception);
+        }
+    }
+
+    private static (int Srid, string Wkt) SplitSridAndWkt(string name, string value, int defaultSrid)
+    {
+        if (value.Length == 0)
+            throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.");
+
+        // Optional "srid;WKT" form, e.g. 4326;POINT(-122.3 47.6). Bare WKT uses the type default.
+        var separator = value.IndexOf(';');
+        if (separator <= 0)
+            return (defaultSrid, value);
+
+        var sridText = value[..separator];
+        var wkt = value[(separator + 1)..];
+        if (wkt.Length == 0
+            || !int.TryParse(sridText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var srid)
+            || srid < 0)
+        {
+            throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.");
+        }
+
+        return (srid, wkt);
     }
 
     private static SqlHarnessParameter CreateDecimal(string name, string value, byte? precision, byte? scale)

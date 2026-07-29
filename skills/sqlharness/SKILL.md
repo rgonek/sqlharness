@@ -24,7 +24,7 @@ sqlharness schema prod-eu --var tenant=acme --var env=uat --json
 
 Prefer `--json` for agent consumption. Pass SQL through `--file` or stdin exactly as the command requires, and use repeatable `--param name[:type]=value` parameters instead of interpolating values into SQL.
 
-Supported types: `nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`, `nchar`, `int`, `bigint`, `smallint`, `tinyint`, `bit`, `decimal`, `decimal(p,s)`, `numeric`, `numeric(p,s)`, `float`, `real`, `money`, `smallmoney`, `date`, `time`, `datetime`, `datetime2`, `smalldatetime`, `datetimeoffset`, `uniqueidentifier`, `varbinary`, `varbinary(max)`, `hierarchyid`, `geography`, `geometry`. Parsing is culture-invariant; date/time values use ISO 8601. GUIDs accept any standard format; `varbinary` is Base64; `hierarchyid`/`geography`/`geometry` bind path/WKT as `nvarchar`; nulls are `name:null` or `name:type:null`.
+Supported types: `nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`, `nchar`, `int`, `bigint`, `smallint`, `tinyint`, `bit`, `decimal`, `decimal(p,s)`, `numeric`, `numeric(p,s)`, `float`, `real`, `money`, `smallmoney`, `date`, `time`, `datetime`, `datetime2`, `smalldatetime`, `datetimeoffset`, `uniqueidentifier`, `varbinary`, `varbinary(max)`, `hierarchyid`, `geography`, `geometry`. Parsing is culture-invariant; date/time values use ISO 8601. GUIDs accept any standard format; `varbinary` is Base64; `hierarchyid`/`geography`/`geometry` bind as true SQL UDTs (`path`, WKT, optional `srid;WKT`); nulls are `name:null` or `name:type:null`.
 
 ```powershell
 --param customerId:int=42
@@ -32,6 +32,8 @@ Supported types: `nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`,
 --param amount:decimal(19,4)=1234.5600
 --param when:time=14:30:00
 --param id:uniqueidentifier=0f8fad5bd9cb469fa16570867728950e
+--param path:hierarchyid=/1/2/
+--param loc:geography=4326;POINT(-122.34900 47.65100)
 ```
 
 ## Safe workflow
