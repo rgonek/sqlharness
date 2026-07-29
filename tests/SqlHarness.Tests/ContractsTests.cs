@@ -1,9 +1,13 @@
+using System.Text.Json;
+
 using SqlHarness.Core;
 
 namespace SqlHarness.Tests;
 
 public class ContractsTests
 {
+    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
+
     [Fact]
     public void Exit_codes_are_stable()
     {
@@ -51,4 +55,59 @@ public class ContractsTests
         Assert.Equal(30, operation.TimeoutSeconds);
         Assert.Equal(5, operation.Repeat);
     }
+
+    [Fact]
+    public void Compare_report_json_projects_results_equivalent_and_equivalence_for_ordered_default()
+    {
+        var report = new SqlHarnessCompareReport(
+            new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "profile"),
+            5,
+            10,
+            true,
+            Variant("baseline"),
+            Variant("candidate"),
+            null);
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(report, WebJson));
+        var root = document.RootElement;
+
+        Assert.True(root.GetProperty("resultsEquivalent").GetBoolean());
+        var equivalence = root.GetProperty("equivalence");
+        Assert.Equal((int)ResultComparisonMode.Ordered, equivalence.GetProperty("mode").GetInt32());
+        Assert.True(equivalence.GetProperty("equivalent").GetBoolean());
+        Assert.Equal(0, equivalence.GetProperty("differingPositions").GetInt64());
+        Assert.Equal(0, equivalence.GetProperty("baselineOnlyCount").GetInt64());
+        Assert.Equal(0, equivalence.GetProperty("candidateOnlyCount").GetInt64());
+        Assert.Equal(report.ResultsEquivalent, report.Equivalence.Equivalent);
+    }
+
+    [Fact]
+    public void Compare_report_json_nulls_equivalence_fields_for_off_mode()
+    {
+        var report = new SqlHarnessCompareReport(
+            new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "profile"),
+            5,
+            10,
+            null,
+            Variant("baseline"),
+            Variant("candidate"),
+            null)
+        {
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Off, null, null, null, null),
+        };
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(report, WebJson));
+        var root = document.RootElement;
+
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("resultsEquivalent").ValueKind);
+        var equivalence = root.GetProperty("equivalence");
+        Assert.Equal((int)ResultComparisonMode.Off, equivalence.GetProperty("mode").GetInt32());
+        Assert.Equal(JsonValueKind.Null, equivalence.GetProperty("equivalent").ValueKind);
+        Assert.Equal(JsonValueKind.Null, equivalence.GetProperty("differingPositions").ValueKind);
+        Assert.Equal(JsonValueKind.Null, equivalence.GetProperty("baselineOnlyCount").ValueKind);
+        Assert.Equal(JsonValueKind.Null, equivalence.GetProperty("candidateOnlyCount").ValueKind);
+    }
+
+    private static CompareVariantReport Variant(string name) =>
+        new(name, new(1, 2, 3), new(1, 2, 3), new(1, 2, 3), new Dictionary<string, long>(), [], []);
 }

@@ -23,9 +23,17 @@ public sealed record CompareVariantReport(
     IReadOnlyList<string> Warnings);
 
 public sealed record SqlHarnessCompareReport(
-    SqlHarnessTargetIdentityReport Target, int Repetitions, int MeasuredRunCount,
-    bool ResultsEquivalent, CompareVariantReport Baseline, CompareVariantReport Candidate,
-    string? ArtifactDirectory);
+    SqlHarnessTargetIdentityReport Target,
+    int Repetitions,
+    int MeasuredRunCount,
+    bool? ResultsEquivalent,
+    CompareVariantReport Baseline,
+    CompareVariantReport Candidate,
+    string? ArtifactDirectory)
+{
+    public ResultEquivalenceReport Equivalence { get; init; } =
+        new(ResultComparisonMode.Ordered, ResultsEquivalent, 0, 0, 0);
+}
 
 public sealed record SqlHarnessMeasureReport(
     SqlHarnessTargetIdentityReport Target, int Repetitions, int MeasuredRunCount,

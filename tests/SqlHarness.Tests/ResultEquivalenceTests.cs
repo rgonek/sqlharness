@@ -119,4 +119,132 @@ public class ResultEquivalenceTests
     {
         Assert.Equal(1_000_000, CanonicalComparisonAccumulator.MaximumComparedRows);
     }
+
+    [Theory]
+    [InlineData(ResultComparisonMode.Ordered, false)]
+    [InlineData(ResultComparisonMode.Multiset, true)]
+    [InlineData(ResultComparisonMode.Set, true)]
+    public void Modes_apply_order_and_duplicate_semantics(ResultComparisonMode mode, bool expected)
+    {
+        var report = ResultComparer.Compare(mode, [Capture("A", "A", "B")], [Capture("B", "A", "A")]);
+        Assert.Equal(expected, report.Equivalent);
+    }
+
+    [Theory]
+    [InlineData(ResultComparisonMode.Multiset, false)]
+    [InlineData(ResultComparisonMode.Set, true)]
+    public void Modes_apply_duplicate_multiplicity_semantics(ResultComparisonMode mode, bool expected)
+    {
+        var report = ResultComparer.Compare(mode, [Capture("A", "A", "B")], [Capture("A", "B")]);
+        Assert.Equal(expected, report.Equivalent);
+    }
+
+    [Fact]
+    public void Ordered_order_only_change_reports_positions_with_zero_directional_counts()
+    {
+        var report = ResultComparer.Compare(
+            ResultComparisonMode.Ordered,
+            [Capture("A", "A", "B")],
+            [Capture("B", "A", "A")]);
+
+        Assert.False(report.Equivalent);
+        Assert.True(report.DifferingPositions > 0);
+        Assert.Equal(0, report.BaselineOnlyCount);
+        Assert.Equal(0, report.CandidateOnlyCount);
+    }
+
+    [Fact]
+    public void Multiset_missing_duplicate_reports_baseline_only_count()
+    {
+        var report = ResultComparer.Compare(
+            ResultComparisonMode.Multiset,
+            [Capture("A", "A", "B")],
+            [Capture("A", "B")]);
+
+        Assert.False(report.Equivalent);
+        Assert.Equal(1, report.BaselineOnlyCount);
+        Assert.Equal(0, report.CandidateOnlyCount);
+        Assert.Null(report.DifferingPositions);
+    }
+
+    [Fact]
+    public void Schema_mismatch_is_not_equivalent()
+    {
+        var baseline = new CanonicalComparisonResult("schema-a", ["A"]);
+        var candidate = new CanonicalComparisonResult("schema-b", ["A"]);
+
+        var ordered = ResultComparer.Compare(ResultComparisonMode.Ordered, [baseline], [candidate]);
+        var multiset = ResultComparer.Compare(ResultComparisonMode.Multiset, [baseline], [candidate]);
+        var set = ResultComparer.Compare(ResultComparisonMode.Set, [baseline], [candidate]);
+
+        Assert.False(ordered.Equivalent);
+        Assert.False(multiset.Equivalent);
+        Assert.False(set.Equivalent);
+    }
+
+    [Fact]
+    public void Multiple_repetitions_require_every_run_to_match_first_baseline()
+    {
+        var stable = Capture("A", "A", "B");
+        var changed = Capture("A", "B", "B");
+
+        var report = ResultComparer.Compare(
+            ResultComparisonMode.Ordered,
+            [stable, stable, changed],
+            [stable, stable]);
+
+        Assert.False(report.Equivalent);
+        Assert.Equal(ResultComparisonMode.Ordered, report.Mode);
+    }
+
+    [Fact]
+    public void Multiple_repetitions_report_maximum_observed_pair_counts()
+    {
+        var match = Capture("A", "A", "B");
+        var reordered = Capture("B", "A", "A");
+        var missingDuplicate = Capture("A", "B");
+
+        var report = ResultComparer.Compare(
+            ResultComparisonMode.Ordered,
+            [match, match],
+            [reordered, missingDuplicate]);
+
+        Assert.False(report.Equivalent);
+        // reordered pair: positions differ, directional 0; missing-duplicate pair: directional baseline-only 1
+        Assert.True(report.DifferingPositions >= 2);
+        Assert.Equal(1, report.BaselineOnlyCount);
+        Assert.Equal(0, report.CandidateOnlyCount);
+    }
+
+    [Fact]
+    public void Off_mode_nulls_all_result_fields_except_mode()
+    {
+        var report = ResultComparer.Compare(
+            ResultComparisonMode.Off,
+            [Capture("A")],
+            [Capture("B")]);
+
+        Assert.Equal(ResultComparisonMode.Off, report.Mode);
+        Assert.Null(report.Equivalent);
+        Assert.Null(report.DifferingPositions);
+        Assert.Null(report.BaselineOnlyCount);
+        Assert.Null(report.CandidateOnlyCount);
+    }
+
+    [Fact]
+    public void Set_mode_reports_unique_directional_counts()
+    {
+        var report = ResultComparer.Compare(
+            ResultComparisonMode.Set,
+            [Capture("A", "A", "B")],
+            [Capture("B", "C")]);
+
+        Assert.False(report.Equivalent);
+        Assert.Equal(1, report.BaselineOnlyCount); // unique A
+        Assert.Equal(1, report.CandidateOnlyCount); // unique C
+        Assert.Null(report.DifferingPositions);
+    }
+
+    private static CanonicalComparisonResult Capture(params string[] rows) =>
+        new("schema", rows);
 }

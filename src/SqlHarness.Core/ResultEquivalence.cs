@@ -11,7 +11,175 @@ public enum ResultComparisonMode
     Off,
 }
 
+public sealed record ResultEquivalenceReport(
+    ResultComparisonMode Mode,
+    bool? Equivalent,
+    long? DifferingPositions,
+    long? BaselineOnlyCount,
+    long? CandidateOnlyCount);
+
 internal sealed record CanonicalComparisonResult(string SchemaHash, IReadOnlyList<string> OrderedRows);
+
+internal static class ResultComparer
+{
+    public static ResultEquivalenceReport Compare(
+        ResultComparisonMode mode,
+        IReadOnlyList<CanonicalComparisonResult> baseline,
+        IReadOnlyList<CanonicalComparisonResult> candidate)
+    {
+        ArgumentNullException.ThrowIfNull(baseline);
+        ArgumentNullException.ThrowIfNull(candidate);
+
+        if (mode == ResultComparisonMode.Off)
+            return new ResultEquivalenceReport(ResultComparisonMode.Off, null, null, null, null);
+
+        if (baseline.Count == 0)
+            throw new ArgumentException("At least one baseline measured result is required.", nameof(baseline));
+
+        var reference = baseline[0];
+        var equivalent = true;
+        foreach (var run in baseline)
+        {
+            if (!IsEquivalent(mode, reference, run))
+                equivalent = false;
+        }
+
+        foreach (var run in candidate)
+        {
+            if (!IsEquivalent(mode, reference, run))
+                equivalent = false;
+        }
+
+        long? maxDifferingPositions = mode == ResultComparisonMode.Ordered ? 0 : null;
+        long maxBaselineOnly = 0;
+        long maxCandidateOnly = 0;
+
+        foreach (var left in baseline)
+        {
+            foreach (var right in candidate)
+            {
+                var counts = CountPair(mode, left, right);
+                if (maxDifferingPositions is not null)
+                    maxDifferingPositions = Math.Max(maxDifferingPositions.Value, counts.DifferingPositions);
+                maxBaselineOnly = Math.Max(maxBaselineOnly, counts.BaselineOnly);
+                maxCandidateOnly = Math.Max(maxCandidateOnly, counts.CandidateOnly);
+            }
+        }
+
+        return new ResultEquivalenceReport(
+            mode,
+            equivalent,
+            maxDifferingPositions,
+            maxBaselineOnly,
+            maxCandidateOnly);
+    }
+
+    private static bool IsEquivalent(
+        ResultComparisonMode mode,
+        CanonicalComparisonResult left,
+        CanonicalComparisonResult right)
+    {
+        if (!string.Equals(left.SchemaHash, right.SchemaHash, StringComparison.Ordinal))
+            return false;
+
+        return mode switch
+        {
+            ResultComparisonMode.Ordered => left.OrderedRows.SequenceEqual(right.OrderedRows, StringComparer.Ordinal),
+            ResultComparisonMode.Multiset => MultisetEqual(left.OrderedRows, right.OrderedRows),
+            ResultComparisonMode.Set => SetEqual(left.OrderedRows, right.OrderedRows),
+            _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported result comparison mode."),
+        };
+    }
+
+    private static (long DifferingPositions, long BaselineOnly, long CandidateOnly) CountPair(
+        ResultComparisonMode mode,
+        CanonicalComparisonResult left,
+        CanonicalComparisonResult right)
+    {
+        // Directional multiset counts are always available for diagnostics under ordered/multiset/set.
+        // Ordered additionally reports positional differences. Schema mismatch does not zero row-level counts.
+        var (baselineOnly, candidateOnly) = mode == ResultComparisonMode.Set
+            ? SetDirectionalCounts(left.OrderedRows, right.OrderedRows)
+            : MultisetDirectionalCounts(left.OrderedRows, right.OrderedRows);
+
+        var differingPositions = mode == ResultComparisonMode.Ordered
+            ? CountDifferingPositions(left.OrderedRows, right.OrderedRows)
+            : 0;
+
+        return (differingPositions, baselineOnly, candidateOnly);
+    }
+
+    private static long CountDifferingPositions(IReadOnlyList<string> left, IReadOnlyList<string> right)
+    {
+        var shared = Math.Min(left.Count, right.Count);
+        long differing = 0;
+        for (var index = 0; index < shared; index++)
+        {
+            if (!string.Equals(left[index], right[index], StringComparison.Ordinal))
+                differing++;
+        }
+
+        differing += Math.Abs(left.Count - right.Count);
+        return differing;
+    }
+
+    private static bool MultisetEqual(IReadOnlyList<string> left, IReadOnlyList<string> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+
+        var (baselineOnly, candidateOnly) = MultisetDirectionalCounts(left, right);
+        return baselineOnly == 0 && candidateOnly == 0;
+    }
+
+    private static (long BaselineOnly, long CandidateOnly) MultisetDirectionalCounts(
+        IReadOnlyList<string> left,
+        IReadOnlyList<string> right)
+    {
+        var frequencies = new Dictionary<string, long>(StringComparer.Ordinal);
+        foreach (var fingerprint in left)
+        {
+            frequencies.TryGetValue(fingerprint, out var count);
+            frequencies[fingerprint] = count + 1;
+        }
+
+        foreach (var fingerprint in right)
+        {
+            frequencies.TryGetValue(fingerprint, out var count);
+            frequencies[fingerprint] = count - 1;
+        }
+
+        long baselineOnly = 0;
+        long candidateOnly = 0;
+        foreach (var count in frequencies.Values)
+        {
+            if (count > 0)
+                baselineOnly += count;
+            else if (count < 0)
+                candidateOnly += -count;
+        }
+
+        return (baselineOnly, candidateOnly);
+    }
+
+    private static bool SetEqual(IReadOnlyList<string> left, IReadOnlyList<string> right)
+    {
+        var leftSet = new HashSet<string>(left, StringComparer.Ordinal);
+        var rightSet = new HashSet<string>(right, StringComparer.Ordinal);
+        return leftSet.SetEquals(rightSet);
+    }
+
+    private static (long BaselineOnly, long CandidateOnly) SetDirectionalCounts(
+        IReadOnlyList<string> left,
+        IReadOnlyList<string> right)
+    {
+        var leftSet = new HashSet<string>(left, StringComparer.Ordinal);
+        var rightSet = new HashSet<string>(right, StringComparer.Ordinal);
+        var baselineOnly = leftSet.Count(fingerprint => !rightSet.Contains(fingerprint));
+        var candidateOnly = rightSet.Count(fingerprint => !leftSet.Contains(fingerprint));
+        return (baselineOnly, candidateOnly);
+    }
+}
 
 internal sealed class CanonicalComparisonAccumulator : IDisposable
 {
