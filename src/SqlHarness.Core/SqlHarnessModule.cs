@@ -119,7 +119,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 query.AllowMutation,
                 query.ConfirmDatabase);
             if (!safety.Allowed)
-                throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.Reason}.");
+                throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
             var parameters = SqlParameterParser.Parse(query.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, query.Sql);
 
@@ -606,7 +606,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     private static void EnsureSafe(SqlSafetyDecision decision, string label)
     {
         if (!decision.Allowed)
-            throw new SqlHarnessSafetyException($"SQL safety rejection for {label}: {decision.Reason}.");
+            throw new SqlHarnessSafetyException($"SQL safety rejection for {label}: {decision.RejectionDescription}");
     }
 
     private static async Task<CollectedQuery> CollectAsync(

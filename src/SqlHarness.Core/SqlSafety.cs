@@ -30,7 +30,15 @@ internal enum SqlSafetyReason
     NonTemporaryWrite,
 }
 
-internal sealed record SqlSafetyDecision(bool Allowed, SqlSafetyReason Reason, bool HasMutation = false);
+internal sealed record SqlSafetyDecision(
+    bool Allowed,
+    SqlSafetyReason Reason,
+    bool HasMutation = false,
+    string? Detail = null)
+{
+    internal string RejectionDescription =>
+        Detail is null ? $"{Reason}." : $"{Reason}. {Detail}";
+}
 
 internal sealed class SqlSafetyClassifier
 {
@@ -48,6 +56,7 @@ internal sealed class SqlSafetyClassifier
         typeof(MultiPartIdentifier),
         typeof(Identifier),
         typeof(IdentifierOrValueExpression),
+        typeof(IdentifierLiteral),
         typeof(ColumnReferenceExpression),
         typeof(IntegerLiteral),
         typeof(NumericLiteral),
@@ -94,6 +103,9 @@ internal sealed class SqlSafetyClassifier
         typeof(ExpressionGroupingSpecification),
         typeof(HavingClause),
         typeof(TopRowFilter),
+        typeof(OverClause),
+        typeof(WindowFrameClause),
+        typeof(WindowDelimiter),
         typeof(BinaryQueryExpression),
         typeof(QueryParenthesisExpression),
         typeof(InsertStatement),
@@ -123,6 +135,13 @@ internal sealed class SqlSafetyClassifier
         typeof(WhereClause),
     ];
 
+    private sealed record UnsupportedSyntax(
+        IReadOnlyList<string> StatementTypes,
+        IReadOnlyList<string> FragmentTypes)
+    {
+        internal bool Any => StatementTypes.Count > 0 || FragmentTypes.Count > 0;
+    }
+
     internal SqlSafetyDecision Classify(
         string sql,
         SqlUsage usage,
@@ -149,9 +168,10 @@ internal sealed class SqlSafetyClassifier
             return Denied(SqlSafetyReason.UnsupportedStatement);
         }
 
-        if (HasUnallowlistedFragment(fragment))
+        var unsupported = CollectUnsupportedSyntax(script);
+        if (unsupported.Any)
         {
-            return Denied(SqlSafetyReason.UnsupportedStatement);
+            return Denied(SqlSafetyReason.UnsupportedStatement, FormatUnsupported(unsupported));
         }
 
         var statements = script.Batches.SelectMany(batch => batch.Statements).ToArray();
@@ -292,11 +312,22 @@ internal sealed class SqlSafetyClassifier
         name.BaseIdentifier.Value.StartsWith('#') &&
         !name.BaseIdentifier.Value.StartsWith("##", StringComparison.Ordinal);
 
-    private static bool HasUnallowlistedFragment(TSqlFragment root)
+    private static UnsupportedSyntax CollectUnsupportedSyntax(TSqlScript script)
     {
+        var topLevelStatements = new HashSet<TSqlFragment>(ReferenceEqualityComparer.Instance);
+        foreach (var batch in script.Batches)
+        {
+            foreach (var statement in batch.Statements)
+            {
+                topLevelStatements.Add(statement);
+            }
+        }
+
+        var statementTypes = new HashSet<string>(StringComparer.Ordinal);
+        var fragmentTypes = new HashSet<string>(StringComparer.Ordinal);
         var pending = new Stack<TSqlFragment>();
         var visited = new HashSet<TSqlFragment>(ReferenceEqualityComparer.Instance);
-        pending.Push(root);
+        pending.Push(script);
 
         while (pending.TryPop(out var fragment))
         {
@@ -305,12 +336,22 @@ internal sealed class SqlSafetyClassifier
                 continue;
             }
 
-            if (!AllowedFragmentTypes.Contains(fragment.GetType()))
+            var type = fragment.GetType();
+            if (!AllowedFragmentTypes.Contains(type))
             {
-                return true;
+                if (topLevelStatements.Contains(fragment))
+                {
+                    statementTypes.Add(type.Name);
+                }
+                else
+                {
+                    fragmentTypes.Add(type.Name);
+                }
+
+                continue;
             }
 
-            foreach (var property in fragment.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public))
+            foreach (var property in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
             {
                 if (!property.CanRead || property.GetIndexParameters().Length != 0)
                 {
@@ -324,7 +365,8 @@ internal sealed class SqlSafetyClassifier
                 }
                 catch (Exception)
                 {
-                    return true;
+                    fragmentTypes.Add(type.Name);
+                    continue;
                 }
 
                 if (value is TSqlFragment child)
@@ -344,13 +386,32 @@ internal sealed class SqlSafetyClassifier
             }
         }
 
-        return false;
+        return new UnsupportedSyntax(
+            statementTypes.Order(StringComparer.Ordinal).ToArray(),
+            fragmentTypes.Order(StringComparer.Ordinal).ToArray());
+    }
+
+    private static string FormatUnsupported(UnsupportedSyntax unsupported)
+    {
+        var parts = new List<string>(2);
+        if (unsupported.StatementTypes.Count > 0)
+        {
+            parts.Add($"Unsupported SQL statement types: {string.Join(", ", unsupported.StatementTypes)}.");
+        }
+
+        if (unsupported.FragmentTypes.Count > 0)
+        {
+            parts.Add($"Unsupported AST fragment types: {string.Join(", ", unsupported.FragmentTypes)}.");
+        }
+
+        return string.Join(" ", parts);
     }
 
     private static SqlSafetyDecision Allowed(bool hasMutation = false) =>
         new(true, SqlSafetyReason.Allowed, hasMutation);
 
-    private static SqlSafetyDecision Denied(SqlSafetyReason reason) => new(false, reason);
+    private static SqlSafetyDecision Denied(SqlSafetyReason reason, string? detail = null) =>
+        new(false, reason, Detail: detail);
 
     private sealed class SafetyInspectionVisitor : TSqlFragmentVisitor
     {

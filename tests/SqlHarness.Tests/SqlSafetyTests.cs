@@ -214,6 +214,23 @@ public class SqlSafetyTests
     public void Multiple_statement_batch_is_denied_if_any_statement_is_unsafe() =>
         Assert.False(ClassifyQuery("SELECT 1; EXEC dbo.DoWork").Allowed);
 
+    [Fact]
+    public void Rejection_names_unsupported_statement_without_echoing_SQL()
+    {
+        const string secret = "SECRET_PROC";
+        var decision = ClassifyQuery($"EXEC dbo.{secret}");
+
+        Assert.False(decision.Allowed);
+        Assert.Contains("ExecuteStatement", decision.RejectionDescription);
+        Assert.DoesNotContain(secret, decision.RejectionDescription);
+    }
+
+    [Theory]
+    [InlineData("SELECT ROW_NUMBER() OVER (ORDER BY Id) FROM dbo.Clients")]
+    [InlineData("SELECT SUM(Amount) OVER (PARTITION BY ClientId ORDER BY Id ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) FROM dbo.Orders")]
+    public void Query_allows_safe_window_syntax(string sql) =>
+        Assert.True(ClassifyQuery(sql).Allowed);
+
     private SqlSafetyDecision ClassifyQuery(string sql) =>
         _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: false, confirmDatabase: null);
 }
