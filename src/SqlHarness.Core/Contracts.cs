@@ -52,6 +52,32 @@ public sealed record SqlHarnessCountsOperation(
     SqlTargetRequest Target, IReadOnlyList<string> Tables, string? Like,
     int Top, bool Exact, int TimeoutSeconds) : SqlHarnessOperation;
 
+public sealed record SqlHarnessSpaceOperation(
+    SqlTargetRequest Target, int Top, string? Object,
+    int TimeoutSeconds) : SqlHarnessOperation;
+
+public sealed record DatabaseFileSpaceReport(
+    string LogicalName, string Type, string? PhysicalName,
+    decimal SizeMb, decimal UsedMb, decimal FreeMb);
+
+public sealed record DatabaseAllocationReport(
+    decimal ReservedMb, decimal UsedMb, decimal DataMb);
+
+public sealed record TableSpaceReport(
+    string Schema, string Name, long Rows,
+    decimal ReservedMb, decimal UsedMb, decimal DataMb);
+
+public sealed record IndexSpaceReport(
+    string Schema, string Table, string Index, string Type,
+    decimal ReservedMb, decimal UsedMb, decimal DataMb, string? Compression);
+
+public sealed record SqlHarnessSpaceReport(
+    SqlHarnessTargetIdentityReport Target,
+    IReadOnlyList<DatabaseFileSpaceReport> Files,
+    DatabaseAllocationReport Allocation,
+    IReadOnlyList<TableSpaceReport> Tables,
+    IReadOnlyList<IndexSpaceReport> Indexes);
+
 public sealed record SqlHarnessPingReport(
     SqlHarnessTargetIdentityReport Target, string Server, string Database,
     string Login, long DurationMilliseconds);
