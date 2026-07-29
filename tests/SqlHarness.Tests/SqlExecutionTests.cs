@@ -194,6 +194,36 @@ public sealed class SqlExecutionTests
     }
 
     [Fact]
+    public void Command_binds_decimal_precision_and_scale_metadata()
+    {
+        using var typedCommand = new SqlCommand();
+        SqlClientSession.BindCommand(
+            typedCommand,
+            new SqlExecutionCommand(
+                "SELECT @amount",
+                SqlParameterParser.Parse(["amount:decimal(19,4)=1234.5600"]),
+                30));
+
+        Assert.Equal((byte)19, typedCommand.Parameters["@amount"].Precision);
+        Assert.Equal((byte)4, typedCommand.Parameters["@amount"].Scale);
+
+        using var plainCommand = new SqlCommand();
+        SqlClientSession.BindCommand(
+            plainCommand,
+            new SqlExecutionCommand(
+                "SELECT @amount",
+                SqlParameterParser.Parse(["amount:decimal=1234.56"]),
+                30));
+
+        using var baseline = new SqlCommand();
+        var baselineParameter = baseline.Parameters.Add("@amount", System.Data.SqlDbType.Decimal);
+        baselineParameter.Value = 1234.56m;
+
+        Assert.Equal(baselineParameter.Precision, plainCommand.Parameters["@amount"].Precision);
+        Assert.Equal(baselineParameter.Scale, plainCommand.Parameters["@amount"].Scale);
+    }
+
+    [Fact]
     public async Task Reader_disposal_always_disposes_command_when_reader_disposal_throws()
     {
         using var command = new SqlCommand();

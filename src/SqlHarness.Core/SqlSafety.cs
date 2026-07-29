@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Data;
+using System.Data.SqlTypes;
 using System.Globalization;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -490,7 +491,13 @@ internal sealed class SqlSafetyClassifier
     }
 }
 
-internal sealed record SqlHarnessParameter(string Name, SqlDbType Type, object Value, int? Size);
+internal sealed record SqlHarnessParameter(
+    string Name,
+    SqlDbType Type,
+    object Value,
+    int? Size,
+    byte? Precision = null,
+    byte? Scale = null);
 
 internal static partial class SqlParameterParser
 {
@@ -515,7 +522,7 @@ internal static partial class SqlParameterParser
         return parameters;
     }
 
-    private static SqlHarnessParameter ParseOne(string input)
+    internal static SqlHarnessParameter ParseOne(string input)
     {
         var equalsIndex = input.IndexOf('=');
         if (equalsIndex < 0)
@@ -543,14 +550,33 @@ internal static partial class SqlParameterParser
 
         try
         {
+            if (type == "decimal")
+            {
+                return CreateDecimal(name, value, precision: null, scale: null);
+            }
+
+            var decimalMatch = DecimalTypePattern().Match(type);
+            if (decimalMatch.Success)
+            {
+                var precision = byte.Parse(decimalMatch.Groups["precision"].Value, CultureInfo.InvariantCulture);
+                var scale = byte.Parse(decimalMatch.Groups["scale"].Value, CultureInfo.InvariantCulture);
+                if (precision is < 1 or > 38 || scale > precision)
+                {
+                    throw new SqlHarnessSafetyException($"Unsupported SQL parameter type '{type}'.");
+                }
+
+                return CreateDecimal(name, value, precision, scale);
+            }
+
             return type switch
             {
                 "int" => new($"@{name}", SqlDbType.Int, int.Parse(value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture), null),
                 "bigint" => new($"@{name}", SqlDbType.BigInt, long.Parse(value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture), null),
-                "decimal" => new($"@{name}", SqlDbType.Decimal, decimal.Parse(value, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture), null),
                 "bit" => new($"@{name}", SqlDbType.Bit, ParseBit(value), null),
                 "date" => new($"@{name}", SqlDbType.Date, DateTime.ParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None), null),
+                "datetime" => CreateDateTime(name, value),
                 "datetime2" => new($"@{name}", SqlDbType.DateTime2, DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind), null),
+                "datetimeoffset" => CreateDateTimeOffset(name, value),
                 "uniqueidentifier" => new($"@{name}", SqlDbType.UniqueIdentifier, Guid.ParseExact(value, "D"), null),
                 _ => throw new SqlHarnessSafetyException($"Unsupported SQL parameter type '{type}'."),
             };
@@ -559,7 +585,7 @@ internal static partial class SqlParameterParser
         {
             throw;
         }
-        catch (Exception exception) when (exception is FormatException or OverflowException)
+        catch (Exception exception) when (exception is FormatException or OverflowException or ArgumentOutOfRangeException)
         {
             throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.", exception);
         }
@@ -581,6 +607,85 @@ internal static partial class SqlParameterParser
         return new SqlHarnessParameter($"@{name}", SqlDbType.NVarChar, value, Math.Max(1, value.Length));
     }
 
+    private static SqlHarnessParameter CreateDecimal(string name, string value, byte? precision, byte? scale)
+    {
+        var parsed = decimal.Parse(value, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture);
+        if (precision is { } p && scale is { } s)
+        {
+            EnsureDecimalFits(name, parsed, p, s);
+            return new($"@{name}", SqlDbType.Decimal, parsed, null, p, s);
+        }
+
+        return new($"@{name}", SqlDbType.Decimal, parsed, null);
+    }
+
+    private static void EnsureDecimalFits(string name, decimal value, byte precision, byte scale)
+    {
+        var absolute = Math.Abs(value);
+        var bits = decimal.GetBits(absolute);
+        var valueScale = (bits[3] >> 16) & 0x7F;
+        if (valueScale > scale)
+        {
+            // Extra fractional digits beyond scale are only allowed when they are trailing zeros.
+            var factor = 1m;
+            for (var i = 0; i < scale; i++)
+                factor *= 10m;
+
+            var shifted = absolute * factor;
+            if (shifted != decimal.Truncate(shifted))
+            {
+                throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.");
+            }
+        }
+
+        var integerPart = decimal.Truncate(absolute);
+        var maxIntegerDigits = precision - scale;
+        if (integerPart == 0m)
+            return;
+
+        var digits = 0;
+        var remaining = integerPart;
+        while (remaining >= 1m)
+        {
+            remaining = decimal.Truncate(remaining / 10m);
+            digits++;
+            if (digits > maxIntegerDigits)
+            {
+                throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.");
+            }
+        }
+    }
+
+    private static SqlHarnessParameter CreateDateTime(string name, string value)
+    {
+        var parsed = DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+        if (parsed < SqlDateTime.MinValue.Value || parsed > SqlDateTime.MaxValue.Value)
+        {
+            throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.");
+        }
+
+        return new($"@{name}", SqlDbType.DateTime, parsed, null);
+    }
+
+    private static SqlHarnessParameter CreateDateTimeOffset(string name, string value)
+    {
+        if (!HasExplicitDateTimeOffset(value))
+        {
+            throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.");
+        }
+
+        var parsed = DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+        return new($"@{name}", SqlDbType.DateTimeOffset, parsed, null);
+    }
+
+    private static bool HasExplicitDateTimeOffset(string value)
+    {
+        if (value.EndsWith('Z') || value.EndsWith('z'))
+            return true;
+
+        return ExplicitOffsetPattern().IsMatch(value);
+    }
+
     private static bool ParseBit(string value) => value switch
     {
         "true" or "1" => true,
@@ -598,6 +703,12 @@ internal static partial class SqlParameterParser
 
     [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant)]
     private static partial Regex NamePattern();
+
+    [GeneratedRegex(@"^decimal\((?<precision>[0-9]{1,2}),(?<scale>[0-9]{1,2})\)$", RegexOptions.CultureInvariant)]
+    private static partial Regex DecimalTypePattern();
+
+    [GeneratedRegex(@"[+-][0-9]{2}:[0-9]{2}$", RegexOptions.CultureInvariant)]
+    private static partial Regex ExplicitOffsetPattern();
 }
 
 internal static class SqlParameterReferenceValidator

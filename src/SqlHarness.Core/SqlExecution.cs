@@ -239,6 +239,10 @@ internal sealed class SqlClientSession(
             var sqlParameter = command.Parameters.Add(parameter.Name, parameter.Type);
             if (parameter.Size is { } size)
                 sqlParameter.Size = size;
+            if (parameter.Precision is { } precision)
+                sqlParameter.Precision = precision;
+            if (parameter.Scale is { } scale)
+                sqlParameter.Scale = scale;
             sqlParameter.Value = parameter.Value;
         }
     }

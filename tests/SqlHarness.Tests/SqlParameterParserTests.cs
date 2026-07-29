@@ -40,6 +40,28 @@ public class SqlParameterParserTests
 
         Assert.Equal(SqlDbType.Decimal, parameter.Type);
         Assert.Equal(1234.56m, parameter.Value);
+        Assert.Null(parameter.Precision);
+        Assert.Null(parameter.Scale);
+    }
+
+    [Fact]
+    public void Parse_binds_explicit_decimal_precision_and_scale()
+    {
+        var parameter = Assert.Single(SqlParameterParser.Parse(["amount:decimal(19,4)=1234.5600"]));
+        Assert.Equal(SqlDbType.Decimal, parameter.Type);
+        Assert.Equal((byte)19, parameter.Precision);
+        Assert.Equal((byte)4, parameter.Scale);
+        Assert.Equal(1234.5600m, parameter.Value);
+    }
+
+    [Theory]
+    [InlineData("at:datetime=2026-07-29T12:00:00", SqlDbType.DateTime)]
+    [InlineData("at:datetime2=2026-07-29T12:00:00.1234567", SqlDbType.DateTime2)]
+    [InlineData("at:datetimeoffset=2026-07-29T12:00:00+02:00", SqlDbType.DateTimeOffset)]
+    public void Parse_binds_supported_temporal_types(string input, SqlDbType expected)
+    {
+        var parameter = Assert.Single(SqlParameterParser.Parse([input]));
+        Assert.Equal(expected, parameter.Type);
     }
 
     [Fact]
@@ -53,6 +75,15 @@ public class SqlParameterParserTests
 
         Assert.Equal(new DateTime(2026, 7, 13), parameters[0].Value);
         Assert.Equal(new DateTime(2026, 7, 13, 14, 15, 16).AddTicks(1_234_567), parameters[1].Value);
+    }
+
+    [Fact]
+    public void Parse_binds_datetimeoffset_with_explicit_zulu()
+    {
+        var parameter = Assert.Single(SqlParameterParser.Parse(["at:datetimeoffset=2026-07-29T12:00:00Z"]));
+
+        Assert.Equal(SqlDbType.DateTimeOffset, parameter.Type);
+        Assert.Equal(new DateTimeOffset(2026, 7, 29, 12, 0, 0, TimeSpan.Zero), parameter.Value);
     }
 
     [Fact]
@@ -98,6 +129,14 @@ public class SqlParameterParserTests
     [InlineData("name:bit=perhaps")]
     [InlineData("name:date=13/07/2026")]
     [InlineData("name:null=value")]
+    [InlineData("amount:decimal(0,0)=0")]
+    [InlineData("amount:decimal(39,0)=1")]
+    [InlineData("amount:decimal(10,11)=1")]
+    [InlineData("amount:decimal(5,2)=12345.67")]
+    [InlineData("at:datetimeoffset=2026-07-29T12:00:00")]
+    [InlineData("at:datetimeoffset=2026-07-29T12:00:00+99:00")]
+    [InlineData("at:datetime=1752-12-31T00:00:00")]
+    [InlineData("at:datetime=10000-01-01T00:00:00")]
     public void Parse_rejects_malformed_or_unsupported_parameters(string input) =>
         Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterParser.Parse([input]));
 
