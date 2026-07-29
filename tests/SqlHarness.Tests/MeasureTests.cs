@@ -289,6 +289,23 @@ public class SqlHarnessMeasureTests
         Assert.NotEqual(callerCancellation.Token, cleanupToken);
     }
 
+    [Fact]
+    public async Task Measure_does_not_apply_comparison_row_limit()
+    {
+        // Inject a comparison cap of 2 while returning 3 rows. Measure never captures fingerprints,
+        // so the comparison limit must not fire (canonical/raw accumulators have no such cap).
+        var session = FakeMeasureSession.Create(resultRowCount: 3);
+
+        var outcome = await Module(session, comparisonMaximumRows: 2).ExecuteAsync(Measure(1));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.IsType<SqlHarnessMeasureReport>(outcome.Report);
+        Assert.DoesNotContain(
+            "Result comparison exceeds",
+            outcome.SafeError ?? string.Empty,
+            StringComparison.Ordinal);
+    }
+
     private static SqlHarnessMeasureOperation Measure(int repeat) =>
         new(Target(), "SELECT Id INTO #ids FROM dbo.Clients", "SELECT Value FROM dbo.Clients", [], 30, repeat);
 
@@ -316,8 +333,12 @@ public class SqlHarnessMeasureTests
         FakeAzureCli? azure = null,
         FakeGainStore? gain = null,
         ICompareArtifactWriter? writer = null,
-        Func<IReadOnlyDictionary<string, TargetProfile>>? loadProfiles = null) =>
-        new(session, gain ?? new FakeGainStore(), writer ?? new CapturingArtifactWriter(), loadProfiles ?? Profiles);
+        Func<IReadOnlyDictionary<string, TargetProfile>>? loadProfiles = null,
+        int? comparisonMaximumRows = null) =>
+        new(session, gain ?? new FakeGainStore(), writer ?? new CapturingArtifactWriter(), loadProfiles ?? Profiles)
+        {
+            ComparisonMaximumRows = comparisonMaximumRows ?? CanonicalComparisonAccumulator.MaximumComparedRows,
+        };
 
     private sealed class FakeAzureCli : IAzureCli
     {
@@ -365,6 +386,7 @@ public class SqlHarnessMeasureTests
         private readonly bool _failSetup;
         private readonly string _ioTable;
         private readonly Func<int, long>? _tableReadsForMeasured;
+        private readonly int _resultRowCount;
         private readonly List<string> _messages = [];
         private int _queryCount;
 
@@ -385,7 +407,8 @@ public class SqlHarnessMeasureTests
             bool emitMessageBeforeQueryFailure,
             bool failSetup,
             string ioTable,
-            Func<int, long>? tableReadsForMeasured)
+            Func<int, long>? tableReadsForMeasured,
+            int resultRowCount)
         {
             _changeLastResult = changeLastResult;
             _includeSetupResult = includeSetupResult;
@@ -396,6 +419,7 @@ public class SqlHarnessMeasureTests
             _failSetup = failSetup;
             _ioTable = ioTable;
             _tableReadsForMeasured = tableReadsForMeasured;
+            _resultRowCount = resultRowCount;
         }
 
         public static FakeMeasureSession Create(
@@ -407,8 +431,9 @@ public class SqlHarnessMeasureTests
             bool emitMessageBeforeQueryFailure = false,
             bool failSetup = false,
             string ioTable = "Clients",
-            Func<int, long>? tableReadsForMeasured = null) =>
-            new(changeLastResult, includeSetupResult, includeExtraMessage, failOnQueryNumber, cancelOnQuery, emitMessageBeforeQueryFailure, failSetup, ioTable, tableReadsForMeasured);
+            Func<int, long>? tableReadsForMeasured = null,
+            int resultRowCount = 1) =>
+            new(changeLastResult, includeSetupResult, includeExtraMessage, failOnQueryNumber, cancelOnQuery, emitMessageBeforeQueryFailure, failSetup, ioTable, tableReadsForMeasured, resultRowCount);
 
         public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
         {
@@ -457,7 +482,10 @@ public class SqlHarnessMeasureTests
             if (_includeExtraMessage)
                 _messages.Add("ordinary diagnostic message");
             var value = _changeLastResult && queryNumber == 4 ? 43 : 42;
-            return Task.FromResult<ISqlReader>(FakeReader.WithPlan(["Value"], [value], Plan));
+            object?[][] rows = Enumerable.Range(0, _resultRowCount)
+                .Select(index => new object?[] { value + index })
+                .ToArray();
+            return Task.FromResult<ISqlReader>(FakeReader.WithPlan(["Value"], rows, Plan));
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -474,7 +502,9 @@ public class SqlHarnessMeasureTests
         public int RecordsAffected => -1;
         public static FakeReader Empty() => new([]);
         public static FakeReader Single(string[] names, object?[] row) => new([new(names, [row])]);
-        public static FakeReader WithPlan(string[] names, object?[] row, string plan) => new([new(names, [row]), new(["Microsoft SQL Server 2005 XML Showplan"], [[plan]])]);
+        public static FakeReader WithPlan(string[] names, object?[] row, string plan) => WithPlan(names, [row], plan);
+        public static FakeReader WithPlan(string[] names, object?[][] rows, string plan) =>
+            new([new(names, rows), new(["Microsoft SQL Server 2005 XML Showplan"], [[plan]])]);
         public string GetName(int ordinal) => Current.Names[ordinal];
         public Type GetFieldType(int ordinal) => Current.Rows[0][ordinal]?.GetType() ?? typeof(object);
         public bool GetAllowNull(int ordinal) => false;

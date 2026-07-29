@@ -77,7 +77,12 @@ public sealed class Renderer
             ResultComparisonMode.Set => "set",
             _ => equivalence.Mode.ToString().ToLowerInvariant(),
         };
-        return $"Technical equivalence ({mode}): {equivalence.Equivalent}; baseline-only: {equivalence.BaselineOnlyCount}; candidate-only: {equivalence.CandidateOnlyCount}; differing positions: {equivalence.DifferingPositions}";
+        var text =
+            $"Technical equivalence ({mode}): {equivalence.Equivalent}; baseline-only: {equivalence.BaselineOnlyCount}; candidate-only: {equivalence.CandidateOnlyCount}";
+        // Differing positions is ordered-only; multiset/set leave it null.
+        if (equivalence.DifferingPositions is not null)
+            text += $"; differing positions: {equivalence.DifferingPositions}";
+        return text;
     }
     private static void WriteGain(string name, SqlHarnessGainSummary s, TextWriter output) => output.WriteLine($"{name}\t{s.Executions}\t{s.Failures}\t{s.SavedEstimatedTokens}\t{s.SavingsPercentage:0.##}");
     private static void RenderPlan(DistilledPlan plan, TextWriter output)

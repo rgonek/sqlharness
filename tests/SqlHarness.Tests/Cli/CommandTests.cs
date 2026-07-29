@@ -277,6 +277,38 @@ public sealed class CommandTests
         Assert.Contains("Technical equivalence: off", offOutput.ToString(), StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(ResultComparisonMode.Multiset, "multiset")]
+    [InlineData(ResultComparisonMode.Set, "set")]
+    public async Task Compare_text_omits_differing_positions_when_null(ResultComparisonMode mode, string modeLabel)
+    {
+        var report = CompareReport() with
+        {
+            ResultsEquivalent = false,
+            Equivalence = new ResultEquivalenceReport(mode, false, null, 3, 1),
+        };
+        var output = new StringWriter();
+        var query = TempFile("select 1");
+        var candidate = TempFile("select 2");
+        try
+        {
+            Assert.Equal(0, await SqlHarnessCli.Create(new FakeModule(Success(report)), output).RunAsync(
+                ["compare", "dev", "--baseline", query, "--candidate", candidate]));
+        }
+        finally
+        {
+            File.Delete(query);
+            File.Delete(candidate);
+        }
+
+        var text = output.ToString();
+        Assert.Contains(
+            $"Technical equivalence ({modeLabel}): False; baseline-only: 3; candidate-only: 1",
+            text,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("differing positions", text, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Compare_rejects_json_and_json_summary_together_before_dispatch()
     {

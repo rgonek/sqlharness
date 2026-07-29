@@ -349,12 +349,48 @@ public class SqlHarnessCompareTests
         Assert.NotEqual(callerCancellation.Token, cleanupToken);
     }
 
+    [Fact]
+    public async Task Compare_ordered_applies_comparison_row_limit()
+    {
+        var session = FakeCompareSession.Create(resultRowCount: 3);
+
+        var outcome = await Module(session, comparisonMaximumRows: 2)
+            .ExecuteAsync(Compare(repeat: 1));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal(
+            "Result comparison exceeds the 1000000-row limit.",
+            outcome.SafeError);
+    }
+
+    [Fact]
+    public async Task Compare_off_does_not_apply_comparison_row_limit()
+    {
+        var session = FakeCompareSession.Create(resultRowCount: 3);
+
+        var outcome = await Module(session, comparisonMaximumRows: 2)
+            .ExecuteAsync(Compare(repeat: 1) with { CompareResults = ResultComparisonMode.Off });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessCompareReport>(outcome.Report);
+        Assert.Equal(ResultComparisonMode.Off, report.Equivalence.Mode);
+        Assert.Null(report.Equivalence.Equivalent);
+        Assert.DoesNotContain(
+            "Result comparison exceeds",
+            outcome.SafeError ?? string.Empty,
+            StringComparison.Ordinal);
+    }
+
     private static SqlHarnessModule Module(
         FakeCompareSession session,
         FakeAzureCli? azure = null,
         FakeGainStore? gain = null,
-        Func<IReadOnlyDictionary<string, TargetProfile>>? loadProfiles = null) =>
-        new(session, gain ?? new FakeGainStore(), new NullArtifactWriter(), loadProfiles ?? Profiles);
+        Func<IReadOnlyDictionary<string, TargetProfile>>? loadProfiles = null,
+        int? comparisonMaximumRows = null) =>
+        new(session, gain ?? new FakeGainStore(), new NullArtifactWriter(), loadProfiles ?? Profiles)
+        {
+            ComparisonMaximumRows = comparisonMaximumRows ?? CanonicalComparisonAccumulator.MaximumComparedRows,
+        };
 
     private static SqlHarnessCompareOperation Compare(int repeat) =>
         new(Target(), "SELECT Id INTO #ids FROM dbo.Clients", "SELECT Value FROM dbo.Clients", "SELECT Value FROM dbo.Clients -- candidate", [], 30, repeat);
@@ -406,6 +442,7 @@ public class SqlHarnessCompareTests
         private readonly Func<int, long>? _tableReadsForMeasured;
         private readonly string? _secondaryIoTable;
         private readonly Func<int, long>? _secondaryTableReadsForMeasured;
+        private readonly int _resultRowCount;
         private int _baseline;
         private int _candidate;
         private readonly List<string> _messages = [];
@@ -430,7 +467,8 @@ public class SqlHarnessCompareTests
             string ioTable,
             Func<int, long>? tableReadsForMeasured,
             string? secondaryIoTable,
-            Func<int, long>? secondaryTableReadsForMeasured)
+            Func<int, long>? secondaryTableReadsForMeasured,
+            int resultRowCount)
         {
             _candidateValue = candidateValue;
             _failStatisticsEnable = failStatisticsEnable;
@@ -444,6 +482,7 @@ public class SqlHarnessCompareTests
             _tableReadsForMeasured = tableReadsForMeasured;
             _secondaryIoTable = secondaryIoTable;
             _secondaryTableReadsForMeasured = secondaryTableReadsForMeasured;
+            _resultRowCount = resultRowCount;
         }
 
         public static FakeCompareSession Create(
@@ -458,8 +497,9 @@ public class SqlHarnessCompareTests
             string ioTable = "Clients",
             Func<int, long>? tableReadsForMeasured = null,
             string? secondaryIoTable = null,
-            Func<int, long>? secondaryTableReadsForMeasured = null) =>
-            new(candidateValue, failStatisticsEnable, cancelOnBenchmark, includeSetupResult, includeSecondPlan, includeExtraMessage, failOnBenchmarkNumber, reorderCandidate, ioTable, tableReadsForMeasured, secondaryIoTable, secondaryTableReadsForMeasured);
+            Func<int, long>? secondaryTableReadsForMeasured = null,
+            int resultRowCount = 1) =>
+            new(candidateValue, failStatisticsEnable, cancelOnBenchmark, includeSetupResult, includeSecondPlan, includeExtraMessage, failOnBenchmarkNumber, reorderCandidate, ioTable, tableReadsForMeasured, secondaryIoTable, secondaryTableReadsForMeasured, resultRowCount);
 
         public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
         {
@@ -524,9 +564,13 @@ public class SqlHarnessCompareTests
                 return Task.FromResult<ISqlReader>(FakeReader.WithPlans(["Value"], rows, plans));
             }
 
+            var baseValue = baseline ? 42 : _candidateValue;
+            object?[][] valueRows = Enumerable.Range(0, _resultRowCount)
+                .Select(index => new object?[] { baseValue + index })
+                .ToArray();
             return Task.FromResult<ISqlReader>(FakeReader.WithPlans(
                 ["Value"],
-                [[baseline ? 42 : _candidateValue]],
+                valueRows,
                 plans));
         }
 
