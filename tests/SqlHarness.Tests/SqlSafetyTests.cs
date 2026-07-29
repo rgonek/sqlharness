@@ -231,6 +231,21 @@ public class SqlSafetyTests
     public void Query_allows_safe_window_syntax(string sql) =>
         Assert.True(ClassifyQuery(sql).Allowed);
 
+    [Theory]
+    [InlineData("CREATE TABLE #Req(Id int NULL)")]
+    [InlineData("CREATE TABLE #Req(Id int NOT NULL PRIMARY KEY)")]
+    [InlineData("CREATE TABLE #Req(Id int NOT NULL, Code int, CONSTRAINT UQ_Req UNIQUE(Code))")]
+    [InlineData("CREATE TABLE #Req(Id int NOT NULL); CREATE UNIQUE INDEX IX_Req ON #Req(Id)")]
+    public void Setup_allows_constraints_and_indexes_on_local_temp_tables(string sql) =>
+        Assert.True(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false).Allowed);
+
+    [Theory]
+    [InlineData("CREATE TABLE ##Req(Id int NOT NULL PRIMARY KEY)")]
+    [InlineData("CREATE TABLE dbo.Req(Id int NOT NULL PRIMARY KEY)")]
+    [InlineData("CREATE UNIQUE INDEX IX_Req ON dbo.Req(Id)")]
+    public void Setup_denies_equivalent_persistent_or_global_temp_work(string sql) =>
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false).Allowed);
+
     private SqlSafetyDecision ClassifyQuery(string sql) =>
         _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: false, confirmDatabase: null);
 }

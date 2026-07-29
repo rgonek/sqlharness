@@ -127,6 +127,8 @@ internal sealed class SqlSafetyClassifier
         typeof(TableDefinition),
         typeof(ColumnDefinition),
         typeof(SqlDataTypeReference),
+        typeof(NullableConstraintDefinition),
+        typeof(UniqueConstraintDefinition),
         typeof(CreateIndexStatement),
         typeof(ColumnWithSortOrder),
         typeof(DropTableStatement),
