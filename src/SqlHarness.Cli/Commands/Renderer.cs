@@ -31,7 +31,7 @@ public sealed class Renderer
         else if (outcome.Report is SqlHarnessMeasureReport measure)
             output.WriteLine($"measure\t{Dist(measure.Query.ElapsedTimeMilliseconds)}\nStable results: {measure.ResultsStable}; artifacts: {measure.ArtifactDirectory ?? "none"}");
         else if (outcome.Report is SqlHarnessCompareReport compare)
-            output.WriteLine($"baseline\t{Dist(compare.Baseline.ElapsedTimeMilliseconds)}\ncandidate\t{Dist(compare.Candidate.ElapsedTimeMilliseconds)}\nEquivalent results: {compare.ResultsEquivalent}; artifacts: {compare.ArtifactDirectory ?? "none"}");
+            output.WriteLine($"baseline\t{Dist(compare.Baseline.ElapsedTimeMilliseconds)}\ncandidate\t{Dist(compare.Candidate.ElapsedTimeMilliseconds)}\n{FormatTechnicalEquivalence(compare.Equivalence)}; artifacts: {compare.ArtifactDirectory ?? "none"}");
         else if (outcome.Report is SqlHarnessGainReport gain)
         {
             output.WriteLine("Scope\tExecutions\tFailures\tSaved tokens\tSavings %");
@@ -57,6 +57,20 @@ public sealed class Renderer
     }
     private static string Value(object? value) => value is null ? "NULL" : Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
     private static string Dist(CompareDistribution d) => $"{d.Min}/{d.Median}/{d.Max}";
+    private static string FormatTechnicalEquivalence(ResultEquivalenceReport equivalence)
+    {
+        if (equivalence.Mode == ResultComparisonMode.Off)
+            return "Technical equivalence: off";
+
+        var mode = equivalence.Mode switch
+        {
+            ResultComparisonMode.Ordered => "ordered",
+            ResultComparisonMode.Multiset => "multiset",
+            ResultComparisonMode.Set => "set",
+            _ => equivalence.Mode.ToString().ToLowerInvariant(),
+        };
+        return $"Technical equivalence ({mode}): {equivalence.Equivalent}; baseline-only: {equivalence.BaselineOnlyCount}; candidate-only: {equivalence.CandidateOnlyCount}; differing positions: {equivalence.DifferingPositions}";
+    }
     private static void WriteGain(string name, SqlHarnessGainSummary s, TextWriter output) => output.WriteLine($"{name}\t{s.Executions}\t{s.Failures}\t{s.SavedEstimatedTokens}\t{s.SavingsPercentage:0.##}");
     private static void RenderPlan(DistilledPlan plan, TextWriter output)
     {

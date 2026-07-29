@@ -38,6 +38,11 @@ public class SqlHarnessCompareTests
 
         var report = Assert.IsType<SqlHarnessCompareReport>(outcome.Report);
         Assert.True(report.ResultsEquivalent);
+        Assert.Equal(ResultComparisonMode.Ordered, report.Equivalence.Mode);
+        Assert.True(report.Equivalence.Equivalent);
+        Assert.Equal(0, report.Equivalence.DifferingPositions);
+        Assert.Equal(0, report.Equivalence.BaselineOnlyCount);
+        Assert.Equal(0, report.Equivalence.CandidateOnlyCount);
         Assert.Equal(new CompareDistribution(10, 20, 30), report.Baseline.CpuTimeMilliseconds);
         Assert.Equal(new CompareDistribution(12, 22, 32), report.Baseline.ElapsedTimeMilliseconds);
         Assert.Equal(new CompareDistribution(5, 10, 15), report.Baseline.LogicalReads);
@@ -55,7 +60,37 @@ public class SqlHarnessCompareTests
 
         var outcome = await Module(session).ExecuteAsync(Compare(repeat: 1));
 
-        Assert.False(Assert.IsType<SqlHarnessCompareReport>(outcome.Report).ResultsEquivalent);
+        var report = Assert.IsType<SqlHarnessCompareReport>(outcome.Report);
+        Assert.False(report.ResultsEquivalent);
+        Assert.Equal(ResultComparisonMode.Ordered, report.Equivalence.Mode);
+        Assert.False(report.Equivalence.Equivalent);
+    }
+
+    [Fact]
+    public async Task Compare_order_only_change_is_false_ordered_true_multiset_and_null_off()
+    {
+        var ordered = await Module(FakeCompareSession.Create(reorderCandidate: true))
+            .ExecuteAsync(Compare(repeat: 1));
+        var multiset = await Module(FakeCompareSession.Create(reorderCandidate: true))
+            .ExecuteAsync(Compare(repeat: 1) with { CompareResults = ResultComparisonMode.Multiset });
+        var off = await Module(FakeCompareSession.Create(reorderCandidate: true))
+            .ExecuteAsync(Compare(repeat: 1) with { CompareResults = ResultComparisonMode.Off });
+
+        var orderedReport = Assert.IsType<SqlHarnessCompareReport>(ordered.Report);
+        Assert.False(orderedReport.ResultsEquivalent);
+        Assert.False(orderedReport.Equivalence.Equivalent);
+        Assert.Equal(ResultComparisonMode.Ordered, orderedReport.Equivalence.Mode);
+        Assert.True(orderedReport.Equivalence.DifferingPositions > 0);
+
+        var multisetReport = Assert.IsType<SqlHarnessCompareReport>(multiset.Report);
+        Assert.True(multisetReport.ResultsEquivalent);
+        Assert.True(multisetReport.Equivalence.Equivalent);
+        Assert.Equal(ResultComparisonMode.Multiset, multisetReport.Equivalence.Mode);
+
+        var offReport = Assert.IsType<SqlHarnessCompareReport>(off.Report);
+        Assert.Null(offReport.ResultsEquivalent);
+        Assert.Null(offReport.Equivalence.Equivalent);
+        Assert.Equal(ResultComparisonMode.Off, offReport.Equivalence.Mode);
     }
 
     [Fact]
@@ -292,6 +327,7 @@ public class SqlHarnessCompareTests
         private readonly bool _includeSecondPlan;
         private readonly bool _includeExtraMessage;
         private readonly int? _failOnBenchmarkNumber;
+        private readonly bool _reorderCandidate;
         private int _baseline;
         private int _candidate;
         private readonly List<string> _messages = [];
@@ -311,7 +347,8 @@ public class SqlHarnessCompareTests
             bool includeSetupResult,
             bool includeSecondPlan,
             bool includeExtraMessage,
-            int? failOnBenchmarkNumber)
+            int? failOnBenchmarkNumber,
+            bool reorderCandidate)
         {
             _candidateValue = candidateValue;
             _failStatisticsEnable = failStatisticsEnable;
@@ -320,6 +357,7 @@ public class SqlHarnessCompareTests
             _includeSecondPlan = includeSecondPlan;
             _includeExtraMessage = includeExtraMessage;
             _failOnBenchmarkNumber = failOnBenchmarkNumber;
+            _reorderCandidate = reorderCandidate;
         }
 
         public static FakeCompareSession Create(
@@ -329,8 +367,9 @@ public class SqlHarnessCompareTests
             bool includeSetupResult = false,
             bool includeSecondPlan = false,
             bool includeExtraMessage = false,
-            int? failOnBenchmarkNumber = null) =>
-            new(candidateValue, failStatisticsEnable, cancelOnBenchmark, includeSetupResult, includeSecondPlan, includeExtraMessage, failOnBenchmarkNumber);
+            int? failOnBenchmarkNumber = null,
+            bool reorderCandidate = false) =>
+            new(candidateValue, failStatisticsEnable, cancelOnBenchmark, includeSetupResult, includeSecondPlan, includeExtraMessage, failOnBenchmarkNumber, reorderCandidate);
 
         public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
         {
@@ -379,10 +418,19 @@ public class SqlHarnessCompareTests
             _messages.Add(StatisticsMessage(reads, cpu, elapsed));
             if (_includeExtraMessage)
                 _messages.Add("ordinary diagnostic message");
+            var plans = _includeSecondPlan ? new[] { PlanA, PlanB } : new[] { baseline ? PlanA : PlanB };
+            if (_reorderCandidate)
+            {
+                object?[][] rows = baseline
+                    ? [[1], [2]]
+                    : [[2], [1]];
+                return Task.FromResult<ISqlReader>(FakeReader.WithPlans(["Value"], rows, plans));
+            }
+
             return Task.FromResult<ISqlReader>(FakeReader.WithPlans(
                 ["Value"],
-                [baseline ? 42 : _candidateValue],
-                _includeSecondPlan ? [PlanA, PlanB] : [baseline ? PlanA : PlanB]));
+                [[baseline ? 42 : _candidateValue]],
+                plans));
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -399,8 +447,8 @@ public class SqlHarnessCompareTests
         public int RecordsAffected => -1;
         public static FakeReader Empty() => new([]);
         public static FakeReader Single(string[] names, object?[] row) => new([new(names, [row])]);
-        public static FakeReader WithPlans(string[] names, object?[] row, IReadOnlyList<string> plans) => new(
-            [new(names, [row]), .. plans.Select(plan => new Result(["Microsoft SQL Server 2005 XML Showplan"], [[plan]]))]);
+        public static FakeReader WithPlans(string[] names, object?[][] rows, IReadOnlyList<string> plans) => new(
+            [new(names, rows), .. plans.Select(plan => new Result(["Microsoft SQL Server 2005 XML Showplan"], [[plan]]))]);
         public string GetName(int ordinal) => Current.Names[ordinal];
         public Type GetFieldType(int ordinal) => Current.Rows[0][ordinal]?.GetType() ?? typeof(object);
         public bool GetAllowNull(int ordinal) => false;

@@ -136,15 +136,47 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
         public string[] Parameters { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;
         [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
+        [CommandOption("--compare-results <MODE>")]
+        [DefaultValue("ordered")]
+        public string CompareResults { get; set; } = "ordered";
     }
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings s, CancellationToken ct)
     {
         if (!s.TryTarget(out var target, out var error)) return Invalid(error);
         if (string.IsNullOrWhiteSpace(s.Baseline) || string.IsNullOrWhiteSpace(s.Candidate)) return Invalid("Both --baseline and --candidate SQL files are required.");
         if (s.Timeout is < 1 or > 300 || s.Repeat is < 1 or > 100) return Invalid("--timeout must be 1..300 and --repeat must be 1..100.");
-        try { return await Dispatch(new SqlHarnessCompareOperation(target, await Read(s.Setup, ct), (await Read(s.Baseline, ct))!, (await Read(s.Candidate, ct))!, s.Parameters, s.Timeout, s.Repeat), s.Json, ct); }
+        if (!TryParseCompareResults(s.CompareResults, out var compareResults))
+            return Invalid("--compare-results must be ordered, multiset, set, or off.");
+        try { return await Dispatch(new SqlHarnessCompareOperation(target, await Read(s.Setup, ct), (await Read(s.Baseline, ct))!, (await Read(s.Candidate, ct))!, s.Parameters, s.Timeout, s.Repeat, compareResults), s.Json, ct); }
         catch (OperationCanceledException) { throw; }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file."); }
+    }
+
+    private static bool TryParseCompareResults(string value, out ResultComparisonMode mode)
+    {
+        if (string.Equals(value, "ordered", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = ResultComparisonMode.Ordered;
+            return true;
+        }
+        if (string.Equals(value, "multiset", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = ResultComparisonMode.Multiset;
+            return true;
+        }
+        if (string.Equals(value, "set", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = ResultComparisonMode.Set;
+            return true;
+        }
+        if (string.Equals(value, "off", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = ResultComparisonMode.Off;
+            return true;
+        }
+
+        mode = default;
+        return false;
     }
 }
 

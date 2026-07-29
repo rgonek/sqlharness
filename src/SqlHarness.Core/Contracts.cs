@@ -23,7 +23,8 @@ public sealed record SqlHarnessCompareOperation(
     string CandidateSql,
     IReadOnlyList<string> Parameters,
     int TimeoutSeconds,
-    int Repeat) : SqlHarnessOperation;
+    int Repeat,
+    ResultComparisonMode CompareResults = ResultComparisonMode.Ordered) : SqlHarnessOperation;
 
 public sealed record SqlHarnessMeasureOperation(
     SqlTargetRequest Target,

@@ -269,15 +269,21 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var baselineRuns = runs.Where(run => run.Variant == "baseline").ToArray();
             var candidateRuns = runs.Where(run => run.Variant == "candidate").ToArray();
             var targetReport = session.Identity;
-            var allHashes = runs.Select(run => run.ResultHash).Distinct(StringComparer.Ordinal).ToArray();
+            var equivalence = ResultComparer.Compare(
+                compare.CompareResults,
+                baselineRuns.Select(run => run.Comparison).ToArray(),
+                candidateRuns.Select(run => run.Comparison).ToArray());
             var report = new SqlHarnessCompareReport(
                 targetReport,
                 compare.Repeat,
                 runs.Count,
-                allHashes.Length == 1,
+                equivalence.Equivalent,
                 CreateVariantReport("baseline", baselineRuns),
                 CreateVariantReport("candidate", candidateRuns),
-                null);
+                null)
+            {
+                Equivalence = equivalence,
+            };
 
             phase = ExecutionPhase.Artifact;
             var publicRuns = runs.Select(run => run.Artifact).ToArray();
@@ -413,7 +419,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 result.Canonical.Hash,
                 result.PlanXmls,
                 messages.Length);
-            return new CollectedCompareRun(artifact, plans);
+            return new CollectedCompareRun(artifact, plans, result.Comparison);
         }
         catch (Exception exception)
         {
@@ -455,6 +461,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         CancellationToken ct)
     {
         using var canonical = new CanonicalResultAccumulator();
+        using var comparison = new CanonicalComparisonAccumulator();
         var planXmls = new List<string>();
         do
         {
@@ -475,6 +482,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 .Select(index => new CanonicalColumn(index, reader.GetName(index), reader.GetFieldType(index).FullName ?? reader.GetFieldType(index).Name, reader.GetAllowNull(index)))
                 .ToArray();
             canonical.BeginResultSet(columns);
+            comparison.BeginResultSet(columns);
             raw.BeginResultSet(columns);
             while (await reader.ReadAsync(ct))
             {
@@ -482,12 +490,14 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     .Select(index => NormalizeValue(reader.GetValue(index)))
                     .ToArray();
                 canonical.AddRow(values);
+                comparison.AddRow(values);
                 raw.AddRow(values);
             }
             canonical.EndResultSet();
+            comparison.EndResultSet();
             raw.EndResultSet();
         } while (await reader.NextResultAsync(ct));
-        return new CollectedCompare(canonical.Complete(), planXmls);
+        return new CollectedCompare(canonical.Complete(), comparison.Complete(), planXmls);
     }
 
     private static async Task ExecuteRawAsync(
@@ -738,11 +748,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
     private sealed record CollectedCompare(
         CanonicalResult Canonical,
+        CanonicalComparisonResult Comparison,
         IReadOnlyList<string> PlanXmls);
 
     private sealed record CollectedCompareRun(
         CompareRunArtifact Artifact,
-        IReadOnlyList<ExecutionPlan> Plans)
+        IReadOnlyList<ExecutionPlan> Plans,
+        CanonicalComparisonResult Comparison)
     {
         public string Variant => Artifact.Variant;
         public string ResultHash => Artifact.ResultHash;

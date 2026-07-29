@@ -178,13 +178,103 @@ public sealed class CommandTests
 
             module.Outcome = Success(CompareReport());
             Assert.Equal(0, await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(["compare", "dev", "--baseline", query, "--candidate", candidate]));
-            Assert.IsType<SqlHarnessCompareOperation>(module.Operations[^1]);
+            var compare = Assert.IsType<SqlHarnessCompareOperation>(module.Operations[^1]);
+            Assert.Equal(ResultComparisonMode.Ordered, compare.CompareResults);
 
             module.Outcome = Success(GainReport());
             Assert.Equal(0, await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(["gain", "--json"]));
             Assert.IsType<SqlHarnessGainOperation>(module.Operations[^1]);
         }
         finally { File.Delete(query); File.Delete(candidate); }
+    }
+
+    [Fact]
+    public async Task Compare_parses_compare_results_multiset()
+    {
+        var query = TempFile("select 1");
+        var candidate = TempFile("select 2");
+        try
+        {
+            var module = new FakeModule(Success(CompareReport()));
+            var exit = await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(
+                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--compare-results", "multiset"]);
+
+            Assert.Equal(0, exit);
+            var operation = Assert.IsType<SqlHarnessCompareOperation>(Assert.Single(module.Operations));
+            Assert.Equal(
+                ResultComparisonMode.Multiset,
+                operation.CompareResults);
+        }
+        finally
+        {
+            File.Delete(query);
+            File.Delete(candidate);
+        }
+    }
+
+    [Theory]
+    [InlineData("bogus")]
+    [InlineData("")]
+    public async Task Compare_rejects_invalid_compare_results_before_dispatch(string mode)
+    {
+        var query = TempFile("select 1");
+        var candidate = TempFile("select 2");
+        try
+        {
+            var module = new FakeModule(Success(CompareReport()));
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(module, output).RunAsync(
+                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--compare-results", mode]);
+
+            Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+            Assert.Empty(module.Operations);
+            Assert.Contains("compare-results", output.ToString(), StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            File.Delete(query);
+            File.Delete(candidate);
+        }
+    }
+
+    [Fact]
+    public async Task Compare_text_renders_technical_equivalence_for_ordered_and_off()
+    {
+        var ordered = CompareReport() with
+        {
+            ResultsEquivalent = false,
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Ordered, false, 2, 0, 0),
+        };
+        var off = CompareReport() with
+        {
+            ResultsEquivalent = null,
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Off, null, null, null, null),
+        };
+
+        var orderedOutput = new StringWriter();
+        var offOutput = new StringWriter();
+        var orderedModule = new FakeModule(Success(ordered));
+        var offModule = new FakeModule(Success(off));
+        var query = TempFile("select 1");
+        var candidate = TempFile("select 2");
+        try
+        {
+            Assert.Equal(0, await SqlHarnessCli.Create(orderedModule, orderedOutput).RunAsync(
+                ["compare", "dev", "--baseline", query, "--candidate", candidate]));
+            Assert.Equal(0, await SqlHarnessCli.Create(offModule, offOutput).RunAsync(
+                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--compare-results", "off"]));
+        }
+        finally
+        {
+            File.Delete(query);
+            File.Delete(candidate);
+        }
+
+        Assert.Contains(
+            "Technical equivalence (ordered): False; baseline-only: 0; candidate-only: 0; differing positions: 2",
+            orderedOutput.ToString(),
+            StringComparison.Ordinal);
+        Assert.Contains("Technical equivalence: off", offOutput.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
