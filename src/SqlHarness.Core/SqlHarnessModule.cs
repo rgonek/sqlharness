@@ -103,6 +103,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         if (operation is SqlHarnessSchemaOperation schema)
             return await ExecuteSchemaAsync(schema, ct);
 
+        if (operation is SqlHarnessPingOperation ping)
+            return await ExecutePingAsync(ping, ct);
+
         if (operation is not SqlHarnessQueryOperation query)
         {
             return new SqlHarnessOutcome(
@@ -859,6 +862,66 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             return WithReceipt(new SqlHarnessOutcome(MapException(exception, phase), null, SecretRedactor.Redact(exception, schema.Filter is null ? [] : [schema.Filter])), stopwatch.ElapsedMilliseconds, raw, "schema");
         }
+    }
+
+    private async Task<SqlHarnessOutcome> ExecutePingAsync(SqlHarnessPingOperation ping, CancellationToken ct)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var phase = ExecutionPhase.Validation;
+        var raw = new OutputFootprint(0, 0);
+        var knownSecrets = CollectTargetSecrets(ping.Target);
+        try
+        {
+            if (ping.TimeoutSeconds is < 1 or > 300)
+                throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
+
+            var target = TargetResolver.Resolve(ping.Target, _loadProfiles());
+            phase = ExecutionPhase.Authentication;
+            await using var session = await _sessionFactory.ConnectAsync(target, ct);
+            phase = ExecutionPhase.Sql;
+            await using var reader = await session.ExecuteReaderAsync(
+                new SqlExecutionCommand(PingQuery.Sql, [], ping.TimeoutSeconds),
+                ct);
+            var probe = await PingQuery.ReadAsync(reader, ct);
+            var report = new SqlHarnessPingReport(
+                session.Identity,
+                probe.Server,
+                probe.Database,
+                probe.Login,
+                stopwatch.ElapsedMilliseconds);
+            return WithReceipt(
+                new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null),
+                stopwatch.ElapsedMilliseconds,
+                raw,
+                "ping");
+        }
+        catch (Exception exception)
+        {
+            return WithReceipt(
+                new SqlHarnessOutcome(
+                    MapException(exception, phase),
+                    null,
+                    SecretRedactor.Redact(exception, knownSecrets)),
+                stopwatch.ElapsedMilliseconds,
+                raw,
+                "ping");
+        }
+    }
+
+    private static IReadOnlyList<string> CollectTargetSecrets(SqlTargetRequest target)
+    {
+        var secrets = new List<string>();
+        foreach (var value in target.Vars.Values)
+        {
+            if (!string.IsNullOrEmpty(value))
+                secrets.Add(value);
+        }
+
+        if (!string.IsNullOrEmpty(target.SqlUser))
+            secrets.Add(target.SqlUser);
+        if (!string.IsNullOrEmpty(target.PasswordEnvVar))
+            secrets.Add(target.PasswordEnvVar);
+        return secrets;
     }
 
     private SqlHarnessOutcome ExecutePlan(SqlHarnessPlanOperation operation)
