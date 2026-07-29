@@ -194,6 +194,73 @@ public sealed class SqlExecutionTests
     }
 
     [Fact]
+    public void Command_binds_decimal_precision_and_scale_metadata()
+    {
+        using var typedCommand = new SqlCommand();
+        SqlClientSession.BindCommand(
+            typedCommand,
+            new SqlExecutionCommand(
+                "SELECT @amount",
+                SqlParameterParser.Parse(["amount:decimal(19,4)=1234.5600"]),
+                30));
+
+        Assert.Equal((byte)19, typedCommand.Parameters["@amount"].Precision);
+        Assert.Equal((byte)4, typedCommand.Parameters["@amount"].Scale);
+
+        using var plainCommand = new SqlCommand();
+        SqlClientSession.BindCommand(
+            plainCommand,
+            new SqlExecutionCommand(
+                "SELECT @amount",
+                SqlParameterParser.Parse(["amount:decimal=1234.56"]),
+                30));
+
+        using var baseline = new SqlCommand();
+        var baselineParameter = baseline.Parameters.Add("@amount", System.Data.SqlDbType.Decimal);
+        baselineParameter.Value = 1234.56m;
+
+        Assert.Equal(baselineParameter.Precision, plainCommand.Parameters["@amount"].Precision);
+        Assert.Equal(baselineParameter.Scale, plainCommand.Parameters["@amount"].Scale);
+    }
+
+    [Fact]
+    public void Command_binds_nvarchar_max_and_typed_null_metadata()
+    {
+        var longText = new string('z', 5000);
+        using var command = new SqlCommand();
+        SqlClientSession.BindCommand(
+            command,
+            new SqlExecutionCommand(
+                "SELECT @note, @count",
+                SqlParameterParser.Parse([$"note:nvarchar(max)={longText}", "count:int:null"]),
+                30));
+
+        Assert.Equal(-1, command.Parameters["@note"].Size);
+        Assert.Equal(longText, command.Parameters["@note"].Value);
+        Assert.Equal(System.Data.SqlDbType.Int, command.Parameters["@count"].SqlDbType);
+        Assert.Equal(DBNull.Value, command.Parameters["@count"].Value);
+    }
+
+    [Fact]
+    public void Command_binds_hierarchyid_and_geography_as_udt()
+    {
+        using var command = new SqlCommand();
+        SqlClientSession.BindCommand(
+            command,
+            new SqlExecutionCommand(
+                "SELECT @path, @loc",
+                SqlParameterParser.Parse([
+                    "path:hierarchyid=/1/2/",
+                    "loc:geography=4326;POINT(-122.34900 47.65100)"]),
+                30));
+
+        Assert.Equal(System.Data.SqlDbType.Udt, command.Parameters["@path"].SqlDbType);
+        Assert.Equal("HierarchyId", command.Parameters["@path"].UdtTypeName);
+        Assert.Equal(System.Data.SqlDbType.Udt, command.Parameters["@loc"].SqlDbType);
+        Assert.Equal("Geography", command.Parameters["@loc"].UdtTypeName);
+    }
+
+    [Fact]
     public async Task Reader_disposal_always_disposes_command_when_reader_disposal_throws()
     {
         using var command = new SqlCommand();

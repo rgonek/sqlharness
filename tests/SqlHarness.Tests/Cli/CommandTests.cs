@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 using SqlHarness.Cli;
 using SqlHarness.Core;
@@ -48,6 +50,33 @@ public sealed class CommandTests
         {
             File.Delete(path);
         }
+    }
+
+    [Fact]
+    public async Task Query_help_lists_supported_parameter_types()
+    {
+        // Spectre help goes to the process console, not the injected command writer.
+        var cliAssembly = Path.Combine(AppContext.BaseDirectory, "sqlharness.dll");
+        using var process = Process.Start(new ProcessStartInfo("dotnet", $"\"{cliAssembly}\" query --help")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        });
+
+        Assert.NotNull(process);
+        var standardOutput = await process.StandardOutput.ReadToEndAsync();
+        var standardError = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        Assert.True(process.ExitCode == 0, standardError);
+        // Spectre wraps long option descriptions; collapse whitespace for a stable type-list check.
+        var normalized = Regex.Replace(standardOutput, @"\s+", " ");
+        Assert.Contains(
+            "nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry",
+            normalized,
+            StringComparison.Ordinal);
+        Assert.Contains("name:null or name:type:null", normalized, StringComparison.Ordinal);
     }
 
     [Fact]

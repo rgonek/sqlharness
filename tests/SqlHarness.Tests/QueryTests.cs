@@ -418,6 +418,22 @@ public class SqlHarnessQueryTests
     }
 
     [Fact]
+    public async Task Query_safety_rejection_names_unsupported_statement_types_without_echoing_SQL()
+    {
+        const string secret = "SECRET_PROC";
+        var sql = $"EXEC dbo.{secret}";
+        var session = FakeSqlSession.WithIdentity("test-server", "testdb-a");
+
+        var outcome = await Module(session).ExecuteAsync(Query(sql));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Contains("Unsupported SQL statement types: ExecuteStatement.", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain(secret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain(sql, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Empty(session.Commands);
+    }
+
+    [Fact]
     public async Task Gain_returns_the_aggregate_without_loading_profiles_or_opening_SQL()
     {
         var session = FakeSqlSession.WithIdentity("test-server", "testdb-a");

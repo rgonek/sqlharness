@@ -24,20 +24,39 @@ sqlharness schema prod-eu --var tenant=acme --var env=uat --json
 
 Prefer `--json` for agent consumption. Pass SQL through `--file` or stdin exactly as the command requires, and use repeatable `--param name[:type]=value` parameters instead of interpolating values into SQL.
 
+Supported types: `nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`, `nchar`, `int`, `bigint`, `smallint`, `tinyint`, `bit`, `decimal`, `decimal(p,s)`, `numeric`, `numeric(p,s)`, `float`, `real`, `money`, `smallmoney`, `date`, `time`, `datetime`, `datetime2`, `smalldatetime`, `datetimeoffset`, `uniqueidentifier`, `varbinary`, `varbinary(max)`, `hierarchyid`, `geography`, `geometry`. Parsing is culture-invariant; date/time values use ISO 8601. GUIDs accept any standard format; `varbinary` is Base64; `hierarchyid`/`geography`/`geometry` bind as true SQL UDTs (`path`, WKT, optional `srid;WKT`); nulls are `name:null` or `name:type:null`.
+
+```powershell
+--param customerId:int=42
+--param asOf:datetime2=2026-07-29T12:00:00
+--param amount:decimal(19,4)=1234.5600
+--param when:time=14:30:00
+--param id:uniqueidentifier=0f8fad5bd9cb469fa16570867728950e
+--param path:hierarchyid=/1/2/
+--param loc:geography=4326;POINT(-122.34900 47.65100)
+```
+
 ## Safe workflow
 
-1. Inspect with `schema` when object shape is unknown.
-2. Use `query` for a bounded read-only result.
-3. Use `measure` for repeated timing, IO, and plan evidence for one query.
-4. Use `compare` for baseline/candidate evidence and result equivalence.
-5. Use `gain --json` to inspect recorded output savings.
+1. Inventory representative cases offline before measuring: row count, cardinality distribution, ordering ties, missing history, boundary dates, and empty results. Keep ticket SQL outside the application repository.
+2. Inspect with `schema` when object shape is unknown.
+3. Use `query` for a bounded read-only result.
+4. Use `measure` for repeated timing, IO, and plan evidence for one query.
+5. Use `compare` for baseline/candidate evidence and result equivalence.
+6. Use `gain --json` to inspect recorded output savings.
 
 ```powershell
 sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --json
-sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\queries\orders.sql --repeat 5 --json
-sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\before.sql --candidate .\queries\after.sql --repeat 5 --json
+sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\queries\orders.sql --setup .\queries\setup.sql --repeat 5 --json
+sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\before.sql --candidate .\queries\after.sql --setup .\queries\setup.sql --repeat 5 --json
 sqlharness gain --json
 ```
+
+### Benchmark session contract
+
+For `measure` and `compare`, setup runs exactly once per connection; warm-up and all measured repetitions reuse that same SQL Server session. Session-local `#temp` tables created in setup are visible to measured SQL. A rejected or failed setup stops the run—do not retry via persistent objects.
+
+Local `#temp` only (name starts with exactly one `#`): setup may create/index/DML/`DROP` session temps with supported constraints without mutation confirmation. Persistent objects, `##temp`, dynamic SQL, external access, cross-database references, and transaction control remain denied.
 
 ## Mutation gate
 
@@ -61,7 +80,7 @@ Do not reuse an approval for changed SQL, a different database, a different prof
 sqlharness plan .\artifacts\orders.sqlplan --json
 ```
 
-.sqlplan artifacts are locally sensitive: they can contain batch text and parameter values. Do not paste or publish them without explicit review.
+`.sqlplan` artifacts, comparison artifacts, and runtime parameters are locally sensitive: they can contain batch text and parameter values. Do not paste or publish them without explicit review.
 
 `schema` uses only internal catalog queries and returns compact tables, views, columns, indexes, and foreign keys:
 

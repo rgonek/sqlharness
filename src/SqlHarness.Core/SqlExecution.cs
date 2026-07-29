@@ -237,8 +237,14 @@ internal sealed class SqlClientSession(
         foreach (var parameter in execution.Parameters)
         {
             var sqlParameter = command.Parameters.Add(parameter.Name, parameter.Type);
+            if (parameter.UdtTypeName is { } udtTypeName)
+                sqlParameter.UdtTypeName = udtTypeName;
             if (parameter.Size is { } size)
                 sqlParameter.Size = size;
+            if (parameter.Precision is { } precision)
+                sqlParameter.Precision = precision;
+            if (parameter.Scale is { } scale)
+                sqlParameter.Scale = scale;
             sqlParameter.Value = parameter.Value;
         }
     }
