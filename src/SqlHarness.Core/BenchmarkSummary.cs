@@ -84,12 +84,10 @@ public static class BenchmarkSummaryProjector
         IReadOnlyList<CompareOperatorReport> baseline,
         IReadOnlyList<CompareOperatorReport> candidate)
     {
-        var baselineByKey = baseline
-            .GroupBy(OperatorKey, OperatorKeyComparer.Instance)
-            .ToDictionary(group => group.Key, group => group.First(), OperatorKeyComparer.Instance);
-        var candidateByKey = candidate
-            .GroupBy(OperatorKey, OperatorKeyComparer.Instance)
-            .ToDictionary(group => group.Key, group => group.First(), OperatorKeyComparer.Instance);
+        // Collapse by (PhysicalOp, Object) per side, OR-ing attention flags within the group so a
+        // later flagged RelOp is not dropped when an earlier clean sibling shares the same key.
+        var baselineByKey = CollapseSide(baseline);
+        var candidateByKey = CollapseSide(candidate);
 
         var selected = new List<NoteworthyOperatorSummary>();
         foreach (var key in baselineByKey.Keys.Union(candidateByKey.Keys, OperatorKeyComparer.Instance))
@@ -124,6 +122,24 @@ public static class BenchmarkSummaryProjector
             .Take(MaximumNoteworthyOperators)
             .ToArray();
     }
+
+    private static Dictionary<(string PhysicalOp, string Object), CompareOperatorReport> CollapseSide(
+        IReadOnlyList<CompareOperatorReport> operators) =>
+        operators
+            .GroupBy(OperatorKey, OperatorKeyComparer.Instance)
+            .ToDictionary(
+                group => group.Key,
+                group =>
+                {
+                    var first = group.First();
+                    return first with
+                    {
+                        HasWarnings = group.Any(op => op.HasWarnings),
+                        HasSpill = group.Any(op => op.HasSpill),
+                        HasImplicitConversion = group.Any(op => op.HasImplicitConversion),
+                    };
+                },
+                OperatorKeyComparer.Instance);
 
     private static IReadOnlyList<NoteworthyOperatorSummary> SelectMeasureNoteworthy(
         IReadOnlyList<CompareOperatorReport> operators) =>

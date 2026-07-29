@@ -161,6 +161,33 @@ public sealed class BenchmarkSummaryTests
     }
 
     [Fact]
+    public void Compare_noteworthy_ors_attention_flags_within_same_physical_op_and_object_key()
+    {
+        // Same key on both sides → not one-side-only. First RelOp is clean; second has HasWarnings.
+        // First()-only collapse would drop the flag and under-qualify the key.
+        var baseline = new[]
+        {
+            new CompareOperatorReport(1, "Index Seek", "dbo.Orders", false, false, false),
+            new CompareOperatorReport(2, "Index Seek", "dbo.Orders", true, false, false),
+        };
+        var candidate = new[]
+        {
+            new CompareOperatorReport(10, "Index Seek", "dbo.Orders", false, false, false),
+            new CompareOperatorReport(11, "Index Seek", "dbo.Orders", false, true, false),
+        };
+
+        var summary = BenchmarkSummaryProjector.Project(MinimalCompare(baseline, candidate));
+
+        var op = Assert.Single(summary.NoteworthyOperators);
+        Assert.Equal("both", op.Side);
+        Assert.Equal("Index Seek", op.PhysicalOp);
+        Assert.Equal("dbo.Orders", op.Object);
+        Assert.True(op.HasWarnings);
+        Assert.True(op.HasSpill);
+        Assert.False(op.HasImplicitConversion);
+    }
+
+    [Fact]
     public void Measure_projection_is_bounded_without_equivalence_fields()
     {
         var operators = Enumerable.Range(1, 30)
