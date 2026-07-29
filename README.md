@@ -171,27 +171,23 @@ Expected: both commands exit `0`; schema identifies `AdventureWorks2022`, and me
 
 #### Opt-in SQL Server integration tests
 
-Integration tests never load `~/.sqlharness/targets.json`. Construct the connection string only in the current process:
+`SQLHARNESS_INTEGRATION_CONNECTION_STRING` must reference an isolated test database. Integration tests never load `~/.sqlharness/targets.json`. Construct the connection string only in the current process:
 
 ```powershell
 $env:SQLHARNESS_INTEGRATION_CONNECTION_STRING = `
     "Server=localhost,14335;Database=AdventureWorks2022;User ID=sa;Password=$($env:SQLHARNESS_PLAYGROUND_PASSWORD);TrustServerCertificate=True"
 
-dotnet test .\tests\SqlHarness.Tests `
-    --filter Category=SqlServerIntegration `
-    --no-restore
+dotnet test tests/SqlHarness.Tests --filter Category=SqlServerIntegration --no-restore
 ```
 
 Clean skip check (variable unset):
 
 ```powershell
 Remove-Item Env:SQLHARNESS_INTEGRATION_CONNECTION_STRING -ErrorAction SilentlyContinue
-dotnet test .\tests\SqlHarness.Tests `
-    --filter Category=SqlServerIntegration `
-    --no-restore
+dotnet test tests/SqlHarness.Tests --filter Category=SqlServerIntegration --no-restore
 ```
 
-Expected: configured tests PASS; unconfigured tests report skipped tests and zero failures.
+Expected: configured tests PASS (including `#temp` setup session-scope proof); unconfigured tests report skipped tests and zero failures.
 
 #### Container lifecycle
 
