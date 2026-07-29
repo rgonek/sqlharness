@@ -24,12 +24,14 @@ sqlharness schema prod-eu --var tenant=acme --var env=uat --json
 
 Prefer `--json` for agent consumption. Pass SQL through `--file` or stdin exactly as the command requires, and use repeatable `--param name[:type]=value` parameters instead of interpolating values into SQL.
 
-Supported types: `nvarchar`, `int`, `bigint`, `decimal`, `decimal(p,s)`, `bit`, `date`, `datetime`, `datetime2`, `datetimeoffset`, `uniqueidentifier`. Parsing is culture-invariant; date/time values use ISO 8601.
+Supported types: `nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`, `nchar`, `int`, `bigint`, `smallint`, `tinyint`, `bit`, `decimal`, `decimal(p,s)`, `numeric`, `numeric(p,s)`, `float`, `real`, `money`, `smallmoney`, `date`, `time`, `datetime`, `datetime2`, `smalldatetime`, `datetimeoffset`, `uniqueidentifier`, `varbinary`, `varbinary(max)`, `hierarchyid`, `geography`, `geometry`. Parsing is culture-invariant; date/time values use ISO 8601. GUIDs accept any standard format; `varbinary` is Base64; `hierarchyid`/`geography`/`geometry` bind path/WKT as `nvarchar`; nulls are `name:null` or `name:type:null`.
 
 ```powershell
 --param customerId:int=42
 --param asOf:datetime2=2026-07-29T12:00:00
 --param amount:decimal(19,4)=1234.5600
+--param when:time=14:30:00
+--param id:uniqueidentifier=0f8fad5bd9cb469fa16570867728950e
 ```
 
 ## Safe workflow

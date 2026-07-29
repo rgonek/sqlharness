@@ -75,7 +75,7 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
     public sealed class Settings : TargetSettings
     {
         [CommandOption("--file <PATH>")] public string? File { get; set; }
-        [Description("Bind name[[:type]]=value. Types: nvarchar, int, bigint, decimal, decimal(p,s), bit, date, datetime, datetime2, datetimeoffset, uniqueidentifier.")]
+        [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
         [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
@@ -107,7 +107,7 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
     {
         [CommandOption("--query <PATH>")] public string? Query { get; set; }
         [CommandOption("--setup <PATH>")] public string? Setup { get; set; }
-        [Description("Bind name[[:type]]=value. Types: nvarchar, int, bigint, decimal, decimal(p,s), bit, date, datetime, datetime2, datetimeoffset, uniqueidentifier.")]
+        [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;
@@ -131,7 +131,7 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
         [CommandOption("--baseline <PATH>")] public string? Baseline { get; set; }
         [CommandOption("--candidate <PATH>")] public string? Candidate { get; set; }
         [CommandOption("--setup <PATH>")] public string? Setup { get; set; }
-        [Description("Bind name[[:type]]=value. Types: nvarchar, int, bigint, decimal, decimal(p,s), bit, date, datetime, datetime2, datetimeoffset, uniqueidentifier.")]
+        [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;

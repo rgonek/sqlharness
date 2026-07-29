@@ -43,7 +43,15 @@ Use `--json` for automation. `query` reads SQL from exactly one source: `--file`
 
 Supported `--param` types (culture-invariant; date/time values use ISO 8601):
 
-`nvarchar`, `int`, `bigint`, `decimal`, `decimal(p,s)`, `bit`, `date`, `datetime`, `datetime2`, `datetimeoffset`, `uniqueidentifier`
+`nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`, `nchar`, `int`, `bigint`, `smallint`, `tinyint`, `bit`, `decimal`, `decimal(p,s)`, `numeric`, `numeric(p,s)`, `float`, `real`, `money`, `smallmoney`, `date`, `time`, `datetime`, `datetime2`, `smalldatetime`, `datetimeoffset`, `uniqueidentifier`, `varbinary`, `varbinary(max)`, `hierarchyid`, `geography`, `geometry`
+
+Notes:
+
+- Untyped `name=value` is `nvarchar`; strings longer than 4000 characters bind as `nvarchar(max)` (`Size = -1`).
+- `uniqueidentifier` accepts any standard GUID format (`D`, `N`, `B`, `P`).
+- `varbinary` values are Base64.
+- `hierarchyid` / `geography` / `geometry` bind the path or WKT as `nvarchar` (cast in SQL when you need the native type).
+- Nulls: `name:null` or typed `name:type:null` (for example `count:int:null`).
 
 ```powershell
 sqlharness measure prod-eu --var tenant=acme --var env=uat `

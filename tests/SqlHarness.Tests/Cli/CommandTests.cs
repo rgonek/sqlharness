@@ -73,9 +73,10 @@ public sealed class CommandTests
         // Spectre wraps long option descriptions; collapse whitespace for a stable type-list check.
         var normalized = Regex.Replace(standardOutput, @"\s+", " ");
         Assert.Contains(
-            "nvarchar, int, bigint, decimal, decimal(p,s), bit, date, datetime, datetime2, datetimeoffset, uniqueidentifier",
+            "nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry",
             normalized,
             StringComparison.Ordinal);
+        Assert.Contains("name:null or name:type:null", normalized, StringComparison.Ordinal);
     }
 
     [Fact]

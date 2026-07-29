@@ -224,6 +224,24 @@ public sealed class SqlExecutionTests
     }
 
     [Fact]
+    public void Command_binds_nvarchar_max_and_typed_null_metadata()
+    {
+        var longText = new string('z', 5000);
+        using var command = new SqlCommand();
+        SqlClientSession.BindCommand(
+            command,
+            new SqlExecutionCommand(
+                "SELECT @note, @count",
+                SqlParameterParser.Parse([$"note:nvarchar(max)={longText}", "count:int:null"]),
+                30));
+
+        Assert.Equal(-1, command.Parameters["@note"].Size);
+        Assert.Equal(longText, command.Parameters["@note"].Value);
+        Assert.Equal(System.Data.SqlDbType.Int, command.Parameters["@count"].SqlDbType);
+        Assert.Equal(DBNull.Value, command.Parameters["@count"].Value);
+    }
+
+    [Fact]
     public async Task Reader_disposal_always_disposes_command_when_reader_disposal_throws()
     {
         using var command = new SqlCommand();

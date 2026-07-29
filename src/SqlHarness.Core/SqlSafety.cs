@@ -502,6 +502,10 @@ internal sealed record SqlHarnessParameter(
 internal static partial class SqlParameterParser
 {
     private const int MaximumNVarCharSize = 4000;
+    private const int MaximumVarCharSize = 8000;
+    private const int SqlMaxSize = -1;
+    private static readonly DateTime SmallDateTimeMin = new(1900, 1, 1);
+    private static readonly DateTime SmallDateTimeMax = new(2079, 6, 6, 23, 59, 0);
 
     internal static IReadOnlyList<SqlHarnessParameter> Parse(IReadOnlyList<string> inputs)
     {
@@ -527,13 +531,7 @@ internal static partial class SqlParameterParser
         var equalsIndex = input.IndexOf('=');
         if (equalsIndex < 0)
         {
-            var nullSeparator = input.IndexOf(':');
-            if (nullSeparator > 0 && input[(nullSeparator + 1)..] == "null")
-            {
-                return CreateNull(input[..nullSeparator]);
-            }
-
-            throw new SqlHarnessSafetyException("SQL parameter must use name=value, name:type=value, or name:null syntax.");
+            return ParseNullDeclaration(input);
         }
 
         var declaration = input[..equalsIndex];
@@ -543,68 +541,274 @@ internal static partial class SqlParameterParser
         var type = typeSeparator < 0 ? null : declaration[(typeSeparator + 1)..];
         ValidateName(name);
 
-        if (type is null || type == "nvarchar")
+        if (type is null)
         {
-            return CreateNVarChar(name, value);
+            return CreateUnicodeString(name, value, max: false);
         }
 
         try
         {
-            if (type == "decimal")
-            {
-                return CreateDecimal(name, value, precision: null, scale: null);
-            }
-
-            var decimalMatch = DecimalTypePattern().Match(type);
-            if (decimalMatch.Success)
-            {
-                var precision = byte.Parse(decimalMatch.Groups["precision"].Value, CultureInfo.InvariantCulture);
-                var scale = byte.Parse(decimalMatch.Groups["scale"].Value, CultureInfo.InvariantCulture);
-                if (precision is < 1 or > 38 || scale > precision)
-                {
-                    throw new SqlHarnessSafetyException($"Unsupported SQL parameter type '{type}'.");
-                }
-
-                return CreateDecimal(name, value, precision, scale);
-            }
-
-            return type switch
-            {
-                "int" => new($"@{name}", SqlDbType.Int, int.Parse(value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture), null),
-                "bigint" => new($"@{name}", SqlDbType.BigInt, long.Parse(value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture), null),
-                "bit" => new($"@{name}", SqlDbType.Bit, ParseBit(value), null),
-                "date" => new($"@{name}", SqlDbType.Date, DateTime.ParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None), null),
-                "datetime" => CreateDateTime(name, value),
-                "datetime2" => new($"@{name}", SqlDbType.DateTime2, DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind), null),
-                "datetimeoffset" => CreateDateTimeOffset(name, value),
-                "uniqueidentifier" => new($"@{name}", SqlDbType.UniqueIdentifier, Guid.ParseExact(value, "D"), null),
-                _ => throw new SqlHarnessSafetyException($"Unsupported SQL parameter type '{type}'."),
-            };
+            return BindTyped(name, type, value);
         }
         catch (SqlHarnessSafetyException)
         {
             throw;
         }
-        catch (Exception exception) when (exception is FormatException or OverflowException or ArgumentOutOfRangeException)
+        catch (Exception exception) when (exception is FormatException or OverflowException or ArgumentOutOfRangeException or ArgumentException)
         {
             throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.", exception);
         }
     }
 
-    private static SqlHarnessParameter CreateNull(string name)
+    private static SqlHarnessParameter ParseNullDeclaration(string input)
     {
-        ValidateName(name);
-        return new SqlHarnessParameter($"@{name}", SqlDbType.NVarChar, DBNull.Value, null);
-    }
-
-    private static SqlHarnessParameter CreateNVarChar(string name, string value)
-    {
-        if (value.Length > MaximumNVarCharSize)
+        var lastColon = input.LastIndexOf(':');
+        if (lastColon <= 0 || input[(lastColon + 1)..] != "null")
         {
-            throw new SqlHarnessSafetyException($"SQL parameter '{name}' exceeds the nvarchar limit.");
+            throw new SqlHarnessSafetyException(
+                "SQL parameter must use name=value, name:type=value, name:null, or name:type:null syntax.");
         }
 
-        return new SqlHarnessParameter($"@{name}", SqlDbType.NVarChar, value, Math.Max(1, value.Length));
+        var left = input[..lastColon];
+        var typeSeparator = left.IndexOf(':');
+        if (typeSeparator < 0)
+        {
+            ValidateName(left);
+            return CreateNull(left, SqlDbType.NVarChar, size: null);
+        }
+
+        var name = left[..typeSeparator];
+        var type = left[(typeSeparator + 1)..];
+        ValidateName(name);
+        try
+        {
+            return CreateTypedNull(name, type);
+        }
+        catch (SqlHarnessSafetyException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is FormatException or OverflowException or ArgumentOutOfRangeException or ArgumentException)
+        {
+            throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.", exception);
+        }
+    }
+
+    private static SqlHarnessParameter BindTyped(string name, string type, string value)
+    {
+        if (type is "decimal" or "numeric")
+        {
+            return CreateDecimal(name, value, precision: null, scale: null);
+        }
+
+        var decimalMatch = DecimalOrNumericTypePattern().Match(type);
+        if (decimalMatch.Success)
+        {
+            var precision = byte.Parse(decimalMatch.Groups["precision"].Value, CultureInfo.InvariantCulture);
+            var scale = byte.Parse(decimalMatch.Groups["scale"].Value, CultureInfo.InvariantCulture);
+            if (precision is < 1 or > 38 || scale > precision)
+            {
+                throw new SqlHarnessSafetyException($"Unsupported SQL parameter type '{type}'.");
+            }
+
+            return CreateDecimal(name, value, precision, scale);
+        }
+
+        var sizedMatch = SizedTypePattern().Match(type);
+        if (sizedMatch.Success)
+        {
+            return CreateSizedType(name, sizedMatch.Groups["base"].Value, sizedMatch.Groups["size"].Value, value);
+        }
+
+        return type switch
+        {
+            "nvarchar" => CreateUnicodeString(name, value, max: false),
+            "varchar" => CreateAnsiString(name, value, SqlDbType.VarChar, max: false),
+            "char" => CreateFixedString(name, value, SqlDbType.Char, MaximumVarCharSize),
+            "nchar" => CreateFixedString(name, value, SqlDbType.NChar, MaximumNVarCharSize),
+            "varbinary" => CreateBinary(name, value, max: false),
+            "int" => new($"@{name}", SqlDbType.Int, int.Parse(value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture), null),
+            "bigint" => new($"@{name}", SqlDbType.BigInt, long.Parse(value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture), null),
+            "smallint" => new($"@{name}", SqlDbType.SmallInt, short.Parse(value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture), null),
+            "tinyint" => new($"@{name}", SqlDbType.TinyInt, byte.Parse(value, NumberStyles.None, CultureInfo.InvariantCulture), null),
+            "bit" => new($"@{name}", SqlDbType.Bit, ParseBit(value), null),
+            "float" => new($"@{name}", SqlDbType.Float, ParseFiniteDouble(value), null),
+            "real" => new($"@{name}", SqlDbType.Real, ParseFiniteSingle(value), null),
+            "money" => new($"@{name}", SqlDbType.Money, ParseMoney(value), null),
+            "smallmoney" => new($"@{name}", SqlDbType.SmallMoney, ParseSmallMoney(value), null),
+            "date" => new($"@{name}", SqlDbType.Date, DateTime.ParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None), null),
+            "time" => new($"@{name}", SqlDbType.Time, ParseTime(value), null),
+            "datetime" => CreateDateTime(name, value),
+            "datetime2" => new($"@{name}", SqlDbType.DateTime2, DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind), null),
+            "smalldatetime" => CreateSmallDateTime(name, value),
+            "datetimeoffset" => CreateDateTimeOffset(name, value),
+            "uniqueidentifier" => new($"@{name}", SqlDbType.UniqueIdentifier, Guid.Parse(value), null),
+            "hierarchyid" or "geography" or "geometry" => CreateSpatialOrHierarchy(name, value),
+            _ => throw new SqlHarnessSafetyException($"Unsupported SQL parameter type '{type}'."),
+        };
+    }
+
+    private static SqlHarnessParameter CreateTypedNull(string name, string type)
+    {
+        if (type is "decimal" or "numeric")
+            return CreateNull(name, SqlDbType.Decimal, null);
+
+        var decimalMatch = DecimalOrNumericTypePattern().Match(type);
+        if (decimalMatch.Success)
+        {
+            var precision = byte.Parse(decimalMatch.Groups["precision"].Value, CultureInfo.InvariantCulture);
+            var scale = byte.Parse(decimalMatch.Groups["scale"].Value, CultureInfo.InvariantCulture);
+            if (precision is < 1 or > 38 || scale > precision)
+                throw new SqlHarnessSafetyException($"Unsupported SQL parameter type '{type}'.");
+            return new($"@{name}", SqlDbType.Decimal, DBNull.Value, null, precision, scale);
+        }
+
+        var sizedMatch = SizedTypePattern().Match(type);
+        if (sizedMatch.Success)
+        {
+            var (sqlType, size) = ResolveSizedTypeMetadata(sizedMatch.Groups["base"].Value, sizedMatch.Groups["size"].Value);
+            return CreateNull(name, sqlType, size);
+        }
+
+        return type switch
+        {
+            "nvarchar" => CreateNull(name, SqlDbType.NVarChar, null),
+            "varchar" => CreateNull(name, SqlDbType.VarChar, null),
+            "char" => CreateNull(name, SqlDbType.Char, null),
+            "nchar" => CreateNull(name, SqlDbType.NChar, null),
+            "varbinary" => CreateNull(name, SqlDbType.VarBinary, null),
+            "int" => CreateNull(name, SqlDbType.Int, null),
+            "bigint" => CreateNull(name, SqlDbType.BigInt, null),
+            "smallint" => CreateNull(name, SqlDbType.SmallInt, null),
+            "tinyint" => CreateNull(name, SqlDbType.TinyInt, null),
+            "bit" => CreateNull(name, SqlDbType.Bit, null),
+            "float" => CreateNull(name, SqlDbType.Float, null),
+            "real" => CreateNull(name, SqlDbType.Real, null),
+            "money" => CreateNull(name, SqlDbType.Money, null),
+            "smallmoney" => CreateNull(name, SqlDbType.SmallMoney, null),
+            "date" => CreateNull(name, SqlDbType.Date, null),
+            "time" => CreateNull(name, SqlDbType.Time, null),
+            "datetime" => CreateNull(name, SqlDbType.DateTime, null),
+            "datetime2" => CreateNull(name, SqlDbType.DateTime2, null),
+            "smalldatetime" => CreateNull(name, SqlDbType.SmallDateTime, null),
+            "datetimeoffset" => CreateNull(name, SqlDbType.DateTimeOffset, null),
+            "uniqueidentifier" => CreateNull(name, SqlDbType.UniqueIdentifier, null),
+            "hierarchyid" or "geography" or "geometry" => CreateNull(name, SqlDbType.NVarChar, null),
+            _ => throw new SqlHarnessSafetyException($"Unsupported SQL parameter type '{type}'."),
+        };
+    }
+
+    private static SqlHarnessParameter CreateNull(string name, SqlDbType type, int? size) =>
+        new($"@{name}", type, DBNull.Value, size);
+
+    private static SqlHarnessParameter CreateUnicodeString(string name, string value, bool max)
+    {
+        if (max || value.Length > MaximumNVarCharSize)
+            return new($"@{name}", SqlDbType.NVarChar, value, SqlMaxSize);
+
+        return new($"@{name}", SqlDbType.NVarChar, value, Math.Max(1, value.Length));
+    }
+
+    private static SqlHarnessParameter CreateAnsiString(string name, string value, SqlDbType type, bool max)
+    {
+        if (max || value.Length > MaximumVarCharSize)
+            return new($"@{name}", type, value, SqlMaxSize);
+
+        return new($"@{name}", type, value, Math.Max(1, value.Length));
+    }
+
+    private static SqlHarnessParameter CreateFixedString(string name, string value, SqlDbType type, int maximum)
+    {
+        if (value.Length is 0 || value.Length > maximum)
+            throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.");
+
+        return new($"@{name}", type, value, value.Length);
+    }
+
+    private static SqlHarnessParameter CreateSizedType(string name, string typeBase, string sizeToken, string value)
+    {
+        var (sqlType, size) = ResolveSizedTypeMetadata(typeBase, sizeToken);
+        if (sqlType is SqlDbType.VarBinary or SqlDbType.Binary)
+        {
+            var bytes = DecodeBase64(name, value);
+            if (size != SqlMaxSize && bytes.Length > size)
+                throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.");
+
+            var bindSize = size == SqlMaxSize
+                ? SqlMaxSize
+                : sqlType == SqlDbType.Binary ? size : Math.Max(bytes.Length, 1);
+            return new($"@{name}", sqlType, bytes, bindSize);
+        }
+
+        if (size == SqlMaxSize)
+        {
+            return sqlType == SqlDbType.NVarChar
+                ? CreateUnicodeString(name, value, max: true)
+                : CreateAnsiString(name, value, sqlType, max: true);
+        }
+
+        if (value.Length > size)
+            throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.");
+
+        return new($"@{name}", sqlType, value, size);
+    }
+
+    private static (SqlDbType Type, int Size) ResolveSizedTypeMetadata(string typeBase, string sizeToken)
+    {
+        var isMax = sizeToken == "max";
+        return typeBase switch
+        {
+            "nvarchar" => (SqlDbType.NVarChar, isMax ? SqlMaxSize : ParseBoundedSize(sizeToken, 1, MaximumNVarCharSize)),
+            "varchar" => (SqlDbType.VarChar, isMax ? SqlMaxSize : ParseBoundedSize(sizeToken, 1, MaximumVarCharSize)),
+            "nchar" => (SqlDbType.NChar, isMax
+                ? throw new SqlHarnessSafetyException($"Unsupported SQL parameter type '{typeBase}({sizeToken})'.")
+                : ParseBoundedSize(sizeToken, 1, MaximumNVarCharSize)),
+            "char" => (SqlDbType.Char, isMax
+                ? throw new SqlHarnessSafetyException($"Unsupported SQL parameter type '{typeBase}({sizeToken})'.")
+                : ParseBoundedSize(sizeToken, 1, MaximumVarCharSize)),
+            "varbinary" => (SqlDbType.VarBinary, isMax ? SqlMaxSize : ParseBoundedSize(sizeToken, 1, MaximumVarCharSize)),
+            "binary" => (SqlDbType.Binary, isMax
+                ? throw new SqlHarnessSafetyException($"Unsupported SQL parameter type '{typeBase}({sizeToken})'.")
+                : ParseBoundedSize(sizeToken, 1, MaximumVarCharSize)),
+            _ => throw new SqlHarnessSafetyException($"Unsupported SQL parameter type '{typeBase}({sizeToken})'."),
+        };
+    }
+
+    private static int ParseBoundedSize(string sizeToken, int min, int max)
+    {
+        if (!int.TryParse(sizeToken, NumberStyles.None, CultureInfo.InvariantCulture, out var size) || size < min || size > max)
+            throw new SqlHarnessSafetyException($"Unsupported SQL parameter type size '{sizeToken}'.");
+        return size;
+    }
+
+    private static SqlHarnessParameter CreateBinary(string name, string value, bool max)
+    {
+        var bytes = DecodeBase64(name, value);
+        if (max || bytes.Length > MaximumVarCharSize)
+            return new($"@{name}", SqlDbType.VarBinary, bytes, SqlMaxSize);
+
+        return new($"@{name}", SqlDbType.VarBinary, bytes, Math.Max(1, bytes.Length));
+    }
+
+    private static byte[] DecodeBase64(string name, string value)
+    {
+        try
+        {
+            return Convert.FromBase64String(value);
+        }
+        catch (FormatException exception)
+        {
+            throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.", exception);
+        }
+    }
+
+    private static SqlHarnessParameter CreateSpatialOrHierarchy(string name, string value)
+    {
+        // Bind path/WKT as nvarchar; SQL can convert or CAST to the native type.
+        if (value.Length == 0)
+            throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.");
+
+        return CreateUnicodeString(name, value, max: value.Length > MaximumNVarCharSize);
     }
 
     private static SqlHarnessParameter CreateDecimal(string name, string value, byte? precision, byte? scale)
@@ -667,6 +871,15 @@ internal static partial class SqlParameterParser
         return new($"@{name}", SqlDbType.DateTime, parsed, null);
     }
 
+    private static SqlHarnessParameter CreateSmallDateTime(string name, string value)
+    {
+        var parsed = DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+        if (parsed < SmallDateTimeMin || parsed > SmallDateTimeMax)
+            throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.");
+
+        return new($"@{name}", SqlDbType.SmallDateTime, parsed, null);
+    }
+
     private static SqlHarnessParameter CreateDateTimeOffset(string name, string value)
     {
         if (!HasExplicitDateTimeOffset(value))
@@ -684,6 +897,51 @@ internal static partial class SqlParameterParser
             return true;
 
         return ExplicitOffsetPattern().IsMatch(value);
+    }
+
+    private static TimeSpan ParseTime(string value)
+    {
+        if (TimeSpan.TryParseExact(
+                value,
+                ["c", @"hh\:mm\:ss", @"hh\:mm\:ss\.FFFFFFF", @"h\:mm\:ss", @"h\:mm\:ss\.FFFFFFF"],
+                CultureInfo.InvariantCulture,
+                out var exact))
+        {
+            return exact;
+        }
+
+        return TimeSpan.Parse(value, CultureInfo.InvariantCulture);
+    }
+
+    private static double ParseFiniteDouble(string value)
+    {
+        var parsed = double.Parse(value, NumberStyles.Float, CultureInfo.InvariantCulture);
+        if (!double.IsFinite(parsed))
+            throw new FormatException("Non-finite float value.");
+        return parsed;
+    }
+
+    private static float ParseFiniteSingle(string value)
+    {
+        var parsed = float.Parse(value, NumberStyles.Float, CultureInfo.InvariantCulture);
+        if (!float.IsFinite(parsed))
+            throw new FormatException("Non-finite real value.");
+        return parsed;
+    }
+
+    private static decimal ParseMoney(string value)
+    {
+        var parsed = decimal.Parse(value, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture);
+        return new SqlMoney(parsed).Value;
+    }
+
+    private static decimal ParseSmallMoney(string value)
+    {
+        var parsed = decimal.Parse(value, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture);
+        // smallmoney: -214,748.3648 to 214,748.3647
+        if (parsed < -214748.3648m || parsed > 214748.3647m)
+            throw new OverflowException("Smallmoney value out of range.");
+        return parsed;
     }
 
     private static bool ParseBit(string value) => value switch
@@ -704,8 +962,11 @@ internal static partial class SqlParameterParser
     [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant)]
     private static partial Regex NamePattern();
 
-    [GeneratedRegex(@"^decimal\((?<precision>[0-9]{1,2}),(?<scale>[0-9]{1,2})\)$", RegexOptions.CultureInvariant)]
-    private static partial Regex DecimalTypePattern();
+    [GeneratedRegex(@"^(decimal|numeric)\((?<precision>[0-9]{1,2}),(?<scale>[0-9]{1,2})\)$", RegexOptions.CultureInvariant)]
+    private static partial Regex DecimalOrNumericTypePattern();
+
+    [GeneratedRegex(@"^(?<base>nvarchar|varchar|nchar|char|varbinary|binary)\((?<size>max|[0-9]{1,5})\)$", RegexOptions.CultureInvariant)]
+    private static partial Regex SizedTypePattern();
 
     [GeneratedRegex(@"[+-][0-9]{2}:[0-9]{2}$", RegexOptions.CultureInvariant)]
     private static partial Regex ExplicitOffsetPattern();

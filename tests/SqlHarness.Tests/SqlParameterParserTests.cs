@@ -100,6 +100,110 @@ public class SqlParameterParserTests
         Assert.Equal(5, parameters[1].Size);
     }
 
+    [Theory]
+    [InlineData("D")]
+    [InlineData("N")]
+    [InlineData("B")]
+    [InlineData("P")]
+    public void Parse_binds_uniqueidentifier_in_any_guid_format(string format)
+    {
+        var id = Guid.Parse("0f8fad5b-d9cb-469f-a165-70867728950e");
+        var formatted = id.ToString(format);
+
+        var parameter = Assert.Single(SqlParameterParser.Parse([$"id:uniqueidentifier={formatted}"]));
+
+        Assert.Equal(id, parameter.Value);
+        Assert.Equal(SqlDbType.UniqueIdentifier, parameter.Type);
+    }
+
+    [Theory]
+    [InlineData("status:smallint=32000", SqlDbType.SmallInt, (short)32000)]
+    [InlineData("flag:tinyint=255", SqlDbType.TinyInt, (byte)255)]
+    public void Parse_binds_small_integral_types(string input, SqlDbType type, object expected)
+    {
+        var parameter = Assert.Single(SqlParameterParser.Parse([input]));
+        Assert.Equal(type, parameter.Type);
+        Assert.Equal(expected, parameter.Value);
+    }
+
+    [Fact]
+    public void Parse_binds_float_real_money_and_time()
+    {
+        var parameters = SqlParameterParser.Parse([
+            "ratio:float=1.5",
+            "approx:real=2.5",
+            "price:money=19.99",
+            "fee:smallmoney=1.25",
+            "at:time=14:30:00.1234567",
+            "when:smalldatetime=2026-07-29T12:00:00"]);
+
+        Assert.Equal(SqlDbType.Float, parameters[0].Type);
+        Assert.Equal(1.5d, parameters[0].Value);
+        Assert.Equal(SqlDbType.Real, parameters[1].Type);
+        Assert.Equal(2.5f, parameters[1].Value);
+        Assert.Equal(SqlDbType.Money, parameters[2].Type);
+        Assert.Equal(19.99m, parameters[2].Value);
+        Assert.Equal(SqlDbType.SmallMoney, parameters[3].Type);
+        Assert.Equal(1.25m, parameters[3].Value);
+        Assert.Equal(SqlDbType.Time, parameters[4].Type);
+        Assert.Equal(TimeSpan.Parse("14:30:00.1234567", CultureInfo.InvariantCulture), parameters[4].Value);
+        Assert.Equal(SqlDbType.SmallDateTime, parameters[5].Type);
+        Assert.Equal(new DateTime(2026, 7, 29, 12, 0, 0), parameters[5].Value);
+    }
+
+    [Fact]
+    public void Parse_binds_numeric_alias_and_string_variants()
+    {
+        var longText = new string('x', 4001);
+        var parameters = SqlParameterParser.Parse([
+            "amount:numeric(10,2)=12.34",
+            "plain:numeric=9.5",
+            "ascii:varchar=hello",
+            "wide:nvarchar(max)=" + longText,
+            "fixed:char(5)=abc",
+            "path:hierarchyid=/1/2/",
+            "shape:geometry=POINT(1 2)"]);
+
+        Assert.Equal(SqlDbType.Decimal, parameters[0].Type);
+        Assert.Equal((byte)10, parameters[0].Precision);
+        Assert.Equal((byte)2, parameters[0].Scale);
+        Assert.Equal(12.34m, parameters[0].Value);
+        Assert.Equal(SqlDbType.Decimal, parameters[1].Type);
+        Assert.Equal(SqlDbType.VarChar, parameters[2].Type);
+        Assert.Equal(5, parameters[2].Size);
+        Assert.Equal(SqlDbType.NVarChar, parameters[3].Type);
+        Assert.Equal(-1, parameters[3].Size);
+        Assert.Equal(longText, parameters[3].Value);
+        Assert.Equal(SqlDbType.Char, parameters[4].Type);
+        Assert.Equal(5, parameters[4].Size);
+        Assert.Equal(SqlDbType.NVarChar, parameters[5].Type);
+        Assert.Equal("/1/2/", parameters[5].Value);
+        Assert.Equal(SqlDbType.NVarChar, parameters[6].Type);
+    }
+
+    [Fact]
+    public void Parse_binds_varbinary_from_base64()
+    {
+        var bytes = new byte[] { 1, 2, 3, 4 };
+        var parameter = Assert.Single(SqlParameterParser.Parse([
+            $"blob:varbinary={Convert.ToBase64String(bytes)}"]));
+
+        Assert.Equal(SqlDbType.VarBinary, parameter.Type);
+        Assert.Equal(bytes, parameter.Value);
+        Assert.Equal(4, parameter.Size);
+    }
+
+    [Fact]
+    public void Parse_promotes_long_untyped_string_to_nvarchar_max()
+    {
+        var longText = new string('y', 5000);
+        var parameter = Assert.Single(SqlParameterParser.Parse([$"note={longText}"]));
+
+        Assert.Equal(SqlDbType.NVarChar, parameter.Type);
+        Assert.Equal(-1, parameter.Size);
+        Assert.Equal(longText, parameter.Value);
+    }
+
     [Fact]
     public void Parse_binds_documented_null_as_DBNull()
     {
@@ -109,6 +213,16 @@ public class SqlParameterParserTests
         Assert.Equal(SqlDbType.NVarChar, parameter.Type);
         Assert.Same(DBNull.Value, parameter.Value);
         Assert.Null(parameter.Size);
+    }
+
+    [Fact]
+    public void Parse_binds_typed_null()
+    {
+        var parameter = Assert.Single(SqlParameterParser.Parse(["count:int:null"]));
+
+        Assert.Equal("@count", parameter.Name);
+        Assert.Equal(SqlDbType.Int, parameter.Type);
+        Assert.Same(DBNull.Value, parameter.Value);
     }
 
     [Fact]
@@ -137,6 +251,14 @@ public class SqlParameterParserTests
     [InlineData("at:datetimeoffset=2026-07-29T12:00:00+99:00")]
     [InlineData("at:datetime=1752-12-31T00:00:00")]
     [InlineData("at:datetime=10000-01-01T00:00:00")]
+    [InlineData("flag:tinyint=256")]
+    [InlineData("status:smallint=40000")]
+    [InlineData("ratio:float=NaN")]
+    [InlineData("fee:smallmoney=300000")]
+    [InlineData("when:smalldatetime=1899-12-31T00:00:00")]
+    [InlineData("blob:varbinary=not-base64!!")]
+    [InlineData("fixed:char(2)=abc")]
+    [InlineData("path:hierarchyid=")]
     public void Parse_rejects_malformed_or_unsupported_parameters(string input) =>
         Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterParser.Parse([input]));
 
