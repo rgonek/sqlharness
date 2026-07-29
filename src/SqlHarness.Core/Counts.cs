@@ -1,5 +1,6 @@
 using System.Data;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -187,6 +188,102 @@ END
         }
 
         return result;
+    }
+
+    internal static async Task<IReadOnlyList<long>> ExecuteExactAsync(
+        ISqlSession session,
+        IReadOnlyList<ResolvedCountObject> objects,
+        int timeoutSeconds,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(objects);
+
+        if (objects.Count == 0)
+            return Array.Empty<long>();
+
+        var sql = BuildExactSql(objects);
+        await using var reader = await session.ExecuteReaderAsync(
+            new SqlExecutionCommand(sql, [], timeoutSeconds),
+            ct);
+
+        var counts = new long[objects.Count];
+        var seen = new bool[objects.Count];
+
+        await ReadExactRowAsync(reader, counts, seen, ct);
+        for (var i = 1; i < objects.Count; i++)
+        {
+            if (!await reader.NextResultAsync(ct))
+                throw new InvalidOperationException("Exact counts result set is missing.");
+            await ReadExactRowAsync(reader, counts, seen, ct);
+        }
+
+        while (await reader.NextResultAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+            }
+        }
+
+        for (var ordinal = 0; ordinal < seen.Length; ordinal++)
+        {
+            if (!seen[ordinal])
+                throw new InvalidOperationException($"Exact count missing for ordinal {ordinal}.");
+        }
+
+        return counts;
+    }
+
+    internal static string BuildExactSql(IReadOnlyList<ResolvedCountObject> objects)
+    {
+        ArgumentNullException.ThrowIfNull(objects);
+        var builder = new StringBuilder();
+        for (var ordinal = 0; ordinal < objects.Count; ordinal++)
+        {
+            var item = objects[ordinal];
+            if (ordinal > 0)
+                builder.AppendLine();
+            builder.Append(CultureInfo.InvariantCulture,
+                $"SELECT CAST({ordinal} AS int) AS Ordinal, COUNT_BIG(*) AS Rows FROM {Quote(item.Schema)}.{Quote(item.Name)};");
+        }
+
+        return builder.ToString();
+    }
+
+    internal static string Quote(string identifier)
+    {
+        ArgumentNullException.ThrowIfNull(identifier);
+        return $"[{identifier.Replace("]", "]]", StringComparison.Ordinal)}]";
+    }
+
+    private static async Task ReadExactRowAsync(
+        ISqlReader reader,
+        long[] counts,
+        bool[] seen,
+        CancellationToken ct)
+    {
+        if (reader.FieldCount < 2)
+            throw new InvalidOperationException("Exact counts result set has unexpected columns.");
+
+        int? ordinal = null;
+        long? rows = null;
+        while (await reader.ReadAsync(ct))
+        {
+            if (ordinal is not null)
+                throw new InvalidOperationException("Exact counts result set returned extra rows.");
+            ordinal = Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture);
+            rows = Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture);
+        }
+
+        if (ordinal is null || rows is null)
+            throw new InvalidOperationException("Exact counts result set is empty.");
+        if (ordinal.Value < 0 || ordinal.Value >= counts.Length)
+            throw new InvalidOperationException("Exact counts ordinal is out of range.");
+        if (seen[ordinal.Value])
+            throw new InvalidOperationException("Exact counts ordinal was returned more than once.");
+
+        counts[ordinal.Value] = rows.Value;
+        seen[ordinal.Value] = true;
     }
 
     private static string MissingMessage(string requestedName) =>

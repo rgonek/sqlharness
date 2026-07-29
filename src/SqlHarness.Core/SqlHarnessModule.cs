@@ -106,6 +106,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         if (operation is SqlHarnessPingOperation ping)
             return await ExecutePingAsync(ping, ct);
 
+        if (operation is SqlHarnessCountsOperation counts)
+            return await ExecuteCountsAsync(counts, ct);
+
         if (operation is not SqlHarnessQueryOperation query)
         {
             return new SqlHarnessOutcome(
@@ -905,6 +908,86 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 stopwatch.ElapsedMilliseconds,
                 raw,
                 "ping");
+        }
+    }
+
+    private async Task<SqlHarnessOutcome> ExecuteCountsAsync(SqlHarnessCountsOperation counts, CancellationToken ct)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var phase = ExecutionPhase.Validation;
+        var raw = new OutputFootprint(0, 0);
+        var knownSecrets = new List<string>(CollectTargetSecrets(counts.Target));
+        if (counts.Like is not null)
+            knownSecrets.Add(counts.Like);
+
+        try
+        {
+            if (counts.TimeoutSeconds is < 1 or > 300)
+                throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
+            if (counts.Top is < 1 or > 500)
+                throw new SqlHarnessSafetyException("Counts top limit must be between 1 and 500.");
+            ArgumentNullException.ThrowIfNull(counts.Tables);
+
+            var target = TargetResolver.Resolve(counts.Target, _loadProfiles());
+            phase = ExecutionPhase.Authentication;
+            await using var session = await _sessionFactory.ConnectAsync(target, ct);
+            phase = ExecutionPhase.Sql;
+
+            ResolvedCountSelection selection;
+            await using (var catalogReader = await session.ExecuteReaderAsync(
+                new SqlExecutionCommand(
+                    CountsQuery.CatalogSql,
+                    CountsQuery.CatalogParameters(counts.Tables, counts.Like, counts.Top),
+                    counts.TimeoutSeconds),
+                ct))
+            {
+                selection = await CountsQuery.ReadCatalogAsync(catalogReader, counts.Tables, ct);
+            }
+
+            IReadOnlyList<SqlHarnessCountReport> tables;
+            if (counts.Exact)
+            {
+                var exactRows = await CountsQuery.ExecuteExactAsync(
+                    session,
+                    selection.Objects,
+                    counts.TimeoutSeconds,
+                    ct);
+                tables = selection.Objects
+                    .Select((item, index) => new SqlHarnessCountReport(
+                        item.Schema,
+                        item.Name,
+                        exactRows[index],
+                        "exact"))
+                    .ToArray();
+            }
+            else
+            {
+                tables = selection.Objects
+                    .Select(item => new SqlHarnessCountReport(
+                        item.Schema,
+                        item.Name,
+                        item.ApproxRows,
+                        "approx"))
+                    .ToArray();
+            }
+
+            var report = new SqlHarnessCountsReport(session.Identity, tables, selection.Omitted);
+            return WithReceipt(
+                new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null),
+                stopwatch.ElapsedMilliseconds,
+                raw,
+                "counts");
+        }
+        catch (Exception exception)
+        {
+            return WithReceipt(
+                new SqlHarnessOutcome(
+                    MapException(exception, phase),
+                    null,
+                    SecretRedactor.Redact(exception, knownSecrets)),
+                stopwatch.ElapsedMilliseconds,
+                raw,
+                "counts");
         }
     }
 
