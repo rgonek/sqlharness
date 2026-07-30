@@ -25,7 +25,7 @@ public class QueryResultCollectorTests
 
         var result = await QueryResultCollector.CollectAsync(
             session, new SqlExecutionCommand("select", [], 30), maxRows: 2,
-            knownSecrets: ["secret"], raw, CancellationToken.None);
+            knownSecrets: ["secret"], () => raw, CancellationToken.None);
 
         Assert.Equal(2, result.ResultSets.Count);
         Assert.Equal(3, result.ResultSets[0].RowCount);
@@ -61,7 +61,7 @@ public class QueryResultCollectorTests
 
         var result = await QueryResultCollector.CollectAsync(
             session, new SqlExecutionCommand("select", [], 30), maxRows: 50,
-            knownSecrets: [], raw, CancellationToken.None);
+            knownSecrets: [], () => raw, CancellationToken.None);
 
         Assert.Single(result.ResultSets);
         Assert.Equal(1, result.ResultSets[0].RowCount);
@@ -82,7 +82,7 @@ public class QueryResultCollectorTests
 
         var result = await QueryResultCollector.CollectAsync(
             session, new SqlExecutionCommand("select", [], 30), maxRows: 50,
-            knownSecrets: [], raw, CancellationToken.None);
+            knownSecrets: [], () => raw, CancellationToken.None);
 
         Assert.Equal(3, result.ResultSets.Count);
         Assert.Equal([1], result.ResultSets[0].Rows[0]);
@@ -104,7 +104,7 @@ public class QueryResultCollectorTests
 
         var result = await QueryResultCollector.CollectAsync(
             session, new SqlExecutionCommand("select", [], 30), maxRows: 2,
-            knownSecrets: [], raw, CancellationToken.None);
+            knownSecrets: [], () => raw, CancellationToken.None);
 
         Assert.Equal(2, result.ResultSets[0].Rows.Count);
         Assert.Equal(1, result.ResultSets[0].OmittedRowCount);
@@ -130,7 +130,7 @@ public class QueryResultCollectorTests
         var ex = await Assert.ThrowsAsync<NotSupportedException>(() =>
             QueryResultCollector.CollectAsync(
                 session, new SqlExecutionCommand("select", [], 30), maxRows: 50,
-                knownSecrets: [], raw, CancellationToken.None));
+                knownSecrets: [], () => raw, CancellationToken.None));
 
         Assert.Contains("Non-finite", ex.Message, StringComparison.Ordinal);
         // Failure path ends the open raw result set then appends safe messages.
@@ -157,7 +157,7 @@ public class QueryResultCollectorTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             QueryResultCollector.CollectAsync(
                 session, new SqlExecutionCommand("select", [], 30), maxRows: 50,
-                knownSecrets: [], raw, cts.Token));
+                knownSecrets: [], () => raw, cts.Token));
 
         Assert.True(raw.SnapshotFootprint().Bytes > 0);
     }
@@ -174,7 +174,7 @@ public class QueryResultCollectorTests
 
         var result = await QueryResultCollector.CollectAsync(
             session, new SqlExecutionCommand("select", [], 30), maxRows: 50,
-            knownSecrets: ["secret"], raw, CancellationToken.None);
+            knownSecrets: ["secret"], () => raw, CancellationToken.None);
 
         Assert.Equal(["late message with [REDACTED]"], result.Messages);
         Assert.DoesNotContain("secret", string.Join('\n', result.Messages), StringComparison.Ordinal);
@@ -194,7 +194,7 @@ public class QueryResultCollectorTests
 
         var result = await QueryResultCollector.CollectAsync(
             session, new SqlExecutionCommand("select", [], 30), maxRows: 50,
-            knownSecrets: [], raw, CancellationToken.None);
+            knownSecrets: [], () => raw, CancellationToken.None);
 
         Assert.Equal([message], result.Messages);
         using var expected = new CanonicalResultAccumulator();
@@ -218,9 +218,30 @@ public class QueryResultCollectorTests
 
         var result = await QueryResultCollector.CollectAsync(
             session, new SqlExecutionCommand("select", [], 30), maxRows: 50,
-            knownSecrets: [], raw, CancellationToken.None);
+            knownSecrets: [], () => raw, CancellationToken.None);
 
         Assert.Equal(7, result.RecordsAffected);
+    }
+
+    [Fact]
+    public async Task Open_failure_does_not_invoke_createRaw()
+    {
+        var session = FakeCollectorSession.FailOpen(new TimeoutException("open failed"));
+        var createRawCalls = 0;
+
+        await Assert.ThrowsAsync<TimeoutException>(() =>
+            QueryResultCollector.CollectAsync(
+                session, new SqlExecutionCommand("select", [], 30), maxRows: 50,
+                knownSecrets: [],
+                () =>
+                {
+                    createRawCalls++;
+                    return new CanonicalResultAccumulator();
+                },
+                CancellationToken.None));
+
+        Assert.Equal(0, createRawCalls);
+        Assert.Equal("select", Assert.Single(session.Commands).Sql);
     }
 
     private sealed record ResultSet(string[] Names, params object?[][] Rows)
@@ -228,9 +249,25 @@ public class QueryResultCollectorTests
         public static ResultSet ZeroColumn() => new([], Array.Empty<object?[]>());
     }
 
-    private sealed class FakeCollectorSession(ISqlReader reader, IReadOnlyList<string>? messages = null) : ISqlSession
+    private sealed class FakeCollectorSession : ISqlSession
     {
-        private readonly IReadOnlyList<string> _messages = messages ?? [];
+        private readonly ISqlReader? _reader;
+        private readonly Exception? _openFailure;
+        private readonly IReadOnlyList<string> _messages;
+
+        public FakeCollectorSession(ISqlReader reader, IReadOnlyList<string>? messages = null)
+        {
+            _reader = reader;
+            _messages = messages ?? [];
+        }
+
+        private FakeCollectorSession(Exception openFailure)
+        {
+            _openFailure = openFailure;
+            _messages = [];
+        }
+
+        public static FakeCollectorSession FailOpen(Exception failure) => new(failure);
 
         public List<SqlExecutionCommand> Commands { get; } = [];
         public IReadOnlyList<string> Messages =>
@@ -241,7 +278,9 @@ public class QueryResultCollectorTests
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
         {
             Commands.Add(command);
-            return Task.FromResult(reader);
+            if (_openFailure is not null)
+                return Task.FromException<ISqlReader>(_openFailure);
+            return Task.FromResult(_reader!);
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;

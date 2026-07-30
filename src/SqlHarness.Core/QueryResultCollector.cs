@@ -8,22 +8,28 @@ internal sealed record CollectedQueryResult(
 
 internal static class QueryResultCollector
 {
+    /// <summary>
+    /// Opens the reader, then invokes <paramref name="createRaw"/> so open failures leave
+    /// the caller's raw accumulator unset (footprint remains (0, 0)).
+    /// </summary>
     internal static async Task<CollectedQueryResult> CollectAsync(
         ISqlSession session,
         SqlExecutionCommand command,
         int maxRows,
         IReadOnlyCollection<string> knownSecrets,
-        CanonicalResultAccumulator raw,
+        Func<CanonicalResultAccumulator> createRaw,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(knownSecrets);
-        ArgumentNullException.ThrowIfNull(raw);
+        ArgumentNullException.ThrowIfNull(createRaw);
 
         var secrets = knownSecrets as IReadOnlyList<string> ?? knownSecrets.ToArray();
         var messageStart = session.Messages.Count;
+        // Open first so ExecuteReaderAsync failures never construct raw framing bytes.
         await using var reader = await session.ExecuteReaderAsync(command, ct);
+        var raw = createRaw() ?? throw new InvalidOperationException("createRaw returned null.");
 
         var retained = 0;
         var reports = new List<SqlHarnessResultSetReport>();

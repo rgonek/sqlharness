@@ -162,6 +162,25 @@ public class SqlHarnessQueryTests
     }
 
     [Fact]
+    public async Task ExecuteReader_open_failure_keeps_zero_raw_footprint()
+    {
+        var gain = new FakeGainStore();
+        var session = FakeSqlSession.WithIdentity(
+            "test-server",
+            "testdb-a",
+            failure: new TimeoutException("open failed"));
+
+        var outcome = await Module(session, gain: gain).ExecuteAsync(Query("SELECT 1"));
+        await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
+            .CompleteAsync(new OutputFootprint(0, 0));
+
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
+        var record = Assert.Single(gain.Records);
+        Assert.Equal(0, record.RawBytes);
+        Assert.Equal(0, record.RawLines);
+    }
+
+    [Fact]
     public async Task Reader_failure_receipt_preserves_exact_partial_raw_rows_and_messages()
     {
         const string message = "safe diagnostic before reader failure";

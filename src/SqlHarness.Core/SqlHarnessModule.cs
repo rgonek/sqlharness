@@ -153,15 +153,18 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             phase = ExecutionPhase.Sql;
 
             var execution = new SqlExecutionCommand(query.Sql, parameters, query.TimeoutSeconds);
-            raw = new CanonicalResultAccumulator();
             var collected = await QueryResultCollector.CollectAsync(
                 session,
                 execution,
                 query.MaxRows,
                 knownSecrets,
-                raw,
+                () =>
+                {
+                    raw = new CanonicalResultAccumulator();
+                    return raw;
+                },
                 ct);
-            rawFootprint = raw.Complete().Footprint;
+            rawFootprint = raw!.Complete().Footprint;
             var targetReport = session.Identity;
             var report = new SqlHarnessQueryReport(
                 targetReport,
