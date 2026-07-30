@@ -106,13 +106,16 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
 
                 // Deadline is checked before the next delay so a poll that lands on the
                 // deadline still reports and then exits without sleeping past max duration.
-                if (_clock.UtcNow >= deadline)
+                var remaining = deadline - _clock.UtcNow;
+                if (remaining <= TimeSpan.Zero)
                 {
                     exitReason = WatchExitReason.MaxDuration;
                     break;
                 }
 
-                await _clock.DelayAsync(operation.Interval, ct);
+                // Clamp to remaining max-duration so a long --interval cannot overshoot the budget.
+                var delay = operation.Interval < remaining ? operation.Interval : remaining;
+                await _clock.DelayAsync(delay, ct);
             }
 
             rawFootprint = raw is null

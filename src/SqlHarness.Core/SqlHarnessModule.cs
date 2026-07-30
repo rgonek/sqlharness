@@ -224,7 +224,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 _gainStore.Append(new GainRecord(
                     DateTimeOffset.UtcNow,
                     command,
-                    outcome.ExitCode == SqlHarnessExitCode.Success,
+                    IsGainSuccess(outcome.ExitCode),
                     Math.Max(durationMilliseconds, 0),
                     raw.Bytes,
                     raw.Lines,
@@ -866,7 +866,19 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             throw new SqlHarnessSafetyException("Specify exactly one of --until or --until-unchanged.");
         if (watch.UntilUnchanged is < 1)
             throw new SqlHarnessSafetyException("--until-unchanged must be a positive integer.");
+        // --until evaluates the first retained display row; max-rows 0 would always fail after a successful poll.
+        if (hasUntil && watch.MaxRows < 1)
+            throw new SqlHarnessSafetyException("Watch --until requires --max-rows of at least 1.");
     }
+
+    /// <summary>
+    /// Controlled terminal exits (max-duration / intentional snapshot differences) count as gain successes.
+    /// Process exit codes remain non-zero so agents can still branch on them.
+    /// </summary>
+    private static bool IsGainSuccess(SqlHarnessExitCode exitCode) =>
+        exitCode is SqlHarnessExitCode.Success
+            or SqlHarnessExitCode.WatchMaxDuration
+            or SqlHarnessExitCode.SnapshotDifferences;
 
     private async Task<SqlHarnessOutcome> ExecuteSnapshotAsync(SqlHarnessSnapshotOperation snapshot, CancellationToken ct)
     {

@@ -228,6 +228,60 @@ public class WatchTests
     }
 
     [Fact]
+    public async Task Watch_max_duration_gain_receipt_counts_as_success()
+    {
+        var gain = new FakeGainStore();
+        var clock = new FakeWatchClock();
+        var session = FakeSession.WithScalarPolls(1, 2, 3, 4, 5, 6, 7, 8);
+        var outcome = await Module(session, clock, gain: gain).ExecuteAsync(
+            Watch(
+                untilUnchanged: 100,
+                interval: TimeSpan.FromSeconds(30),
+                maxDuration: TimeSpan.FromSeconds(60)));
+
+        Assert.Equal(SqlHarnessExitCode.WatchMaxDuration, outcome.ExitCode);
+        await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
+            .CompleteAsync(new OutputFootprint(5, 1));
+
+        var record = Assert.Single(gain.Records);
+        Assert.Equal("watch", record.Command);
+        Assert.True(record.Success);
+    }
+
+    [Fact]
+    public async Task Watch_rejects_max_rows_zero_with_until_before_authentication()
+    {
+        var azure = new FakeAzureCli(Token);
+        var session = FakeSession.WithScalarPolls(1);
+        var outcome = await Module(session, new FakeWatchClock(), azure: azure).ExecuteAsync(
+            Watch(until: "Value >= 1", maxRows: 0));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Contains("max-rows", outcome.SafeError ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(azure.Calls);
+        Assert.Equal(0, session.ConnectCount);
+    }
+
+    [Fact]
+    public async Task Watch_clamps_delay_to_remaining_max_duration()
+    {
+        var clock = new FakeWatchClock();
+        // Interval 30s, budget 40s: poll@0, delay 30→30, poll@30, delay clamp 10→40, poll@40, exit max-duration.
+        var session = FakeSession.WithScalarPolls(1, 2, 3, 4, 5);
+        var outcome = await Module(session, clock).ExecuteAsync(
+            Watch(
+                untilUnchanged: 100,
+                interval: TimeSpan.FromSeconds(30),
+                maxDuration: TimeSpan.FromSeconds(40)));
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(outcome.Report);
+        Assert.Equal(SqlHarnessExitCode.WatchMaxDuration, outcome.ExitCode);
+        Assert.Equal(WatchExitReason.MaxDuration, report.ExitReason);
+        Assert.Equal(3, report.PollCount);
+        Assert.Equal([TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(10)], clock.Delays);
+    }
+
+    [Fact]
     public async Task Watch_poll_reports_use_clock_elapsed_milliseconds()
     {
         var clock = new FakeWatchClock
@@ -261,13 +315,14 @@ public class WatchTests
         string? until = null,
         int? untilUnchanged = null,
         TimeSpan? interval = null,
-        TimeSpan? maxDuration = null) =>
+        TimeSpan? maxDuration = null,
+        int maxRows = 50) =>
         new(
             Target(),
             sql,
             [],
             TimeoutSeconds: 30,
-            MaxRows: 50,
+            MaxRows: maxRows,
             Interval: interval ?? TimeSpan.FromSeconds(30),
             MaxDuration: maxDuration ?? TimeSpan.FromMinutes(15),
             Until: until,

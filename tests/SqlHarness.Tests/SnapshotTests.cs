@@ -266,6 +266,23 @@ public class SnapshotTests
     }
 
     [Fact]
+    public async Task Snapshot_diff_differences_gain_receipt_counts_as_success()
+    {
+        var gain = new FakeGainStore();
+        var store = new FakeSnapshotStore(SnapshotFixture.Document(rows: [[1]]));
+        var outcome = await Module(FakeSession.WithRows(2), store, gain: gain)
+            .ExecuteAsync(Snapshot(diff: true));
+
+        Assert.Equal(SqlHarnessExitCode.SnapshotDifferences, outcome.ExitCode);
+        await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
+            .CompleteAsync(new OutputFootprint(5, 1));
+
+        var record = Assert.Single(gain.Records);
+        Assert.Equal("snapshot", record.Command);
+        Assert.True(record.Success);
+    }
+
+    [Fact]
     public async Task Snapshot_redacts_secrets_from_errors()
     {
         var store = new FakeSnapshotStore();
