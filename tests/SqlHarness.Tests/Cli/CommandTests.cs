@@ -826,6 +826,216 @@ public sealed class CommandTests
         finally { File.Delete(sql); }
     }
 
+    [Fact]
+    public async Task Watch_text_renders_changed_polls_and_summary_only()
+    {
+        var sql = TempFile("select 1 as Value");
+        try
+        {
+            var report = new SqlHarnessWatchReport(
+                new("s", "d", "s", "d", "profile"),
+                PollCount: 3,
+                ElapsedMilliseconds: 2000,
+                WatchExitReason.Unchanged,
+                [
+                    new SqlHarnessWatchPoll(
+                        1,
+                        0,
+                        "hash-1",
+                        [new SqlHarnessResultSetReport(
+                            [new SqlHarnessColumnReport(0, "Value", "int", false)],
+                            [[1]],
+                            1,
+                            0)]),
+                    new SqlHarnessWatchPoll(
+                        3,
+                        2000,
+                        "hash-3",
+                        [new SqlHarnessResultSetReport(
+                            [new SqlHarnessColumnReport(0, "Value", "int", false)],
+                            [["changed-value"]],
+                            1,
+                            0)]),
+                ]);
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(new FakeModule(Success(report)), output)
+                .RunAsync(["watch", "dev", "--file", sql]);
+
+            Assert.Equal(0, exit);
+            var text = output.ToString();
+            Assert.Contains("Poll 1; elapsed: 0 ms", text, StringComparison.Ordinal);
+            Assert.Contains("Poll 3; elapsed: 2000 ms", text, StringComparison.Ordinal);
+            Assert.Contains("changed-value", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("unchanged-poll-row-value", text, StringComparison.Ordinal);
+            Assert.Contains(
+                "Polls: 3; elapsed: 2000 ms; exit reason: unchanged",
+                text,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain("Password=", text, StringComparison.OrdinalIgnoreCase);
+        }
+        finally { File.Delete(sql); }
+    }
+
+    [Theory]
+    [InlineData(WatchExitReason.ConditionMet, "condition-met")]
+    [InlineData(WatchExitReason.Unchanged, "unchanged")]
+    [InlineData(WatchExitReason.MaxDuration, "max-duration")]
+    public async Task Watch_text_summary_maps_exit_reason_labels(WatchExitReason reason, string label)
+    {
+        var sql = TempFile("select 1");
+        try
+        {
+            var report = WatchReport(reason) with { PollCount = 1, ElapsedMilliseconds = 10 };
+            var exitCode = reason == WatchExitReason.MaxDuration
+                ? SqlHarnessExitCode.WatchMaxDuration
+                : SqlHarnessExitCode.Success;
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(
+                    new FakeModule(new SqlHarnessOutcome(exitCode, report, null)),
+                    output)
+                .RunAsync(["watch", "dev", "--file", sql]);
+
+            Assert.Equal((int)exitCode, exit);
+            Assert.Contains(
+                $"Polls: 1; elapsed: 10 ms; exit reason: {label}",
+                output.ToString(),
+                StringComparison.Ordinal);
+        }
+        finally { File.Delete(sql); }
+    }
+
+    [Fact]
+    public async Task Watch_json_round_trips_typed_report()
+    {
+        var sql = TempFile("select 1 as Value");
+        try
+        {
+            var report = new SqlHarnessWatchReport(
+                new("sql-server", "app-db", "sql-server", "app-db", "profile"),
+                PollCount: 2,
+                ElapsedMilliseconds: 1500,
+                WatchExitReason.ConditionMet,
+                [
+                    new SqlHarnessWatchPoll(
+                        1,
+                        0,
+                        "hash-a",
+                        [new SqlHarnessResultSetReport(
+                            [new SqlHarnessColumnReport(0, "Value", "int", false)],
+                            [[42]],
+                            1,
+                            0)]),
+                ]);
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(new FakeModule(Success(report)), output)
+                .RunAsync(["watch", "dev", "--file", sql, "--json"]);
+
+            Assert.Equal(0, exit);
+            using var json = JsonDocument.Parse(output.ToString());
+            var root = json.RootElement;
+            Assert.Equal(2, root.GetProperty("pollCount").GetInt32());
+            Assert.Equal(1500, root.GetProperty("elapsedMilliseconds").GetInt64());
+            Assert.Equal((int)WatchExitReason.ConditionMet, root.GetProperty("exitReason").GetInt32());
+            Assert.Equal("sql-server", root.GetProperty("target").GetProperty("actualServer").GetString());
+            var poll = Assert.Single(root.GetProperty("emittedPolls").EnumerateArray());
+            Assert.Equal(1, poll.GetProperty("poll").GetInt32());
+            Assert.Equal("hash-a", poll.GetProperty("resultHash").GetString());
+            Assert.Equal(42, poll.GetProperty("resultSets")[0].GetProperty("rows")[0][0].GetInt32());
+            Assert.DoesNotContain("Password=", output.ToString(), StringComparison.OrdinalIgnoreCase);
+        }
+        finally { File.Delete(sql); }
+    }
+
+    [Fact]
+    public async Task Snapshot_text_renders_verdict_and_bounded_locations()
+    {
+        var sql = TempFile("select 1");
+        try
+        {
+            var different = new SqlHarnessSnapshotReport(
+                new("s", "d", "s", "d", "profile"),
+                "before-import",
+                SnapshotVerdict.Different,
+                2,
+                [
+                    new SqlHarnessSnapshotDifference(0, 0, 1, "cell-changed"),
+                    new SqlHarnessSnapshotDifference(0, 1, null, "row-removed"),
+                ]);
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(
+                    new FakeModule(new SqlHarnessOutcome(
+                        SqlHarnessExitCode.SnapshotDifferences, different, null)),
+                    output)
+                .RunAsync(["snapshot", "dev", "--file", sql, "--name", "before-import", "--diff"]);
+
+            Assert.Equal(8, exit);
+            var lines = output.ToString().Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            Assert.Equal("Snapshot before-import: 2 differences", lines[0]);
+            Assert.Equal("0\t0\t1\tcell-changed", lines[1]);
+            Assert.Equal("0\t1\t\trow-removed", lines[2]);
+            Assert.Equal(3, lines.Length);
+            Assert.DoesNotContain("Password=", output.ToString(), StringComparison.OrdinalIgnoreCase);
+        }
+        finally { File.Delete(sql); }
+    }
+
+    [Theory]
+    [InlineData(SnapshotVerdict.Stored, "stored")]
+    [InlineData(SnapshotVerdict.Identical, "identical")]
+    public async Task Snapshot_text_renders_one_line_stored_or_identical(SnapshotVerdict verdict, string label)
+    {
+        var sql = TempFile("select 1");
+        try
+        {
+            var report = SnapshotReport(verdict) with { Name = "baseline" };
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(new FakeModule(Success(report)), output)
+                .RunAsync(["snapshot", "dev", "--file", sql, "--name", "baseline"]);
+
+            Assert.Equal(0, exit);
+            Assert.Equal(
+                $"Snapshot baseline: {label}{Environment.NewLine}",
+                output.ToString());
+        }
+        finally { File.Delete(sql); }
+    }
+
+    [Fact]
+    public async Task Snapshot_json_round_trips_typed_report()
+    {
+        var sql = TempFile("select 1");
+        try
+        {
+            var report = new SqlHarnessSnapshotReport(
+                new("sql-server", "app-db", "sql-server", "app-db", "profile"),
+                "before-import",
+                SnapshotVerdict.Different,
+                1,
+                [new SqlHarnessSnapshotDifference(0, 0, 0, "cell-changed")]);
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(
+                    new FakeModule(new SqlHarnessOutcome(
+                        SqlHarnessExitCode.SnapshotDifferences, report, null)),
+                    output)
+                .RunAsync(["snapshot", "dev", "--file", sql, "--name", "before-import", "--diff", "--json"]);
+
+            Assert.Equal(8, exit);
+            using var json = JsonDocument.Parse(output.ToString());
+            var root = json.RootElement;
+            Assert.Equal("before-import", root.GetProperty("name").GetString());
+            Assert.Equal((int)SnapshotVerdict.Different, root.GetProperty("verdict").GetInt32());
+            Assert.Equal(1, root.GetProperty("differenceCount").GetInt32());
+            var difference = Assert.Single(root.GetProperty("differences").EnumerateArray());
+            Assert.Equal(0, difference.GetProperty("resultSet").GetInt32());
+            Assert.Equal(0, difference.GetProperty("row").GetInt64());
+            Assert.Equal(0, difference.GetProperty("column").GetInt32());
+            Assert.Equal("cell-changed", difference.GetProperty("kind").GetString());
+            Assert.Equal("sql-server", root.GetProperty("target").GetProperty("actualServer").GetString());
+            Assert.DoesNotContain("Password=", output.ToString(), StringComparison.OrdinalIgnoreCase);
+        }
+        finally { File.Delete(sql); }
+    }
+
     private static SqlHarnessOutcome Success(object report) => new(SqlHarnessExitCode.Success, report, null);
     private static SqlHarnessQueryReport QueryReport() => new(new("expected", "db", "expected", "db", "profile"), "read-only", [], [], 0, 1, "hash", new(10, 1));
     private static CompareVariantReport Variant(string name) => new(name, new(1, 2, 3), new(1, 2, 3), new(1, 2, 3), new Dictionary<string, long>(), [], []);

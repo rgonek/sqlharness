@@ -47,6 +47,7 @@ public sealed class Renderer
             WriteGain("compare", gain.Compare, output); WriteGain("measure", gain.Measure, output);
             WriteGain("ping", gain.Ping, output); WriteGain("counts", gain.Counts, output);
             WriteGain("space", gain.Space, output);
+            WriteGain("watch", gain.Watch, output); WriteGain("snapshot", gain.Snapshot, output);
         }
         else if (outcome.Report is DistilledPlan plan)
             RenderPlan(plan, output);
@@ -74,9 +75,59 @@ public sealed class Renderer
         }
         else if (outcome.Report is SqlHarnessSpaceReport space)
             RenderSpace(space, output);
+        else if (outcome.Report is SqlHarnessWatchReport watch)
+            RenderWatch(watch, output);
+        else if (outcome.Report is SqlHarnessSnapshotReport snapshot)
+            RenderSnapshot(snapshot, output);
         else if (!string.IsNullOrWhiteSpace(outcome.SafeError))
             output.WriteLine($"SQLHarness {outcome.ExitCode}: {SecretRedactor.Redact(outcome.SafeError, [])}");
     }
+
+    private static void RenderWatch(SqlHarnessWatchReport watch, TextWriter output)
+    {
+        foreach (var poll in watch.EmittedPolls)
+        {
+            output.WriteLine(
+                $"Poll {poll.Poll.ToString(CultureInfo.InvariantCulture)}; elapsed: {poll.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)} ms");
+            foreach (var set in poll.ResultSets)
+            {
+                output.WriteLine(string.Join("\t", set.Columns.Select(c => c.Name)));
+                foreach (var row in set.Rows) output.WriteLine(string.Join("\t", row.Select(Value)));
+                if (set.OmittedRowCount > 0) output.WriteLine($"Omitted rows: {set.OmittedRowCount}");
+            }
+        }
+
+        output.WriteLine(
+            $"Polls: {watch.PollCount.ToString(CultureInfo.InvariantCulture)}; elapsed: {watch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)} ms; exit reason: {FormatWatchExitReason(watch.ExitReason)}");
+    }
+
+    private static void RenderSnapshot(SqlHarnessSnapshotReport snapshot, TextWriter output)
+    {
+        var verdict = snapshot.Verdict switch
+        {
+            SnapshotVerdict.Stored => "stored",
+            SnapshotVerdict.Identical => "identical",
+            SnapshotVerdict.Different => $"{snapshot.DifferenceCount.ToString(CultureInfo.InvariantCulture)} differences",
+            _ => snapshot.Verdict.ToString().ToLowerInvariant(),
+        };
+        output.WriteLine($"Snapshot {snapshot.Name}: {verdict}");
+        foreach (var difference in snapshot.Differences)
+        {
+            output.WriteLine(string.Join('\t',
+                difference.ResultSet.ToString(CultureInfo.InvariantCulture),
+                difference.Row?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+                difference.Column?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+                difference.Kind));
+        }
+    }
+
+    private static string FormatWatchExitReason(WatchExitReason reason) => reason switch
+    {
+        WatchExitReason.ConditionMet => "condition-met",
+        WatchExitReason.Unchanged => "unchanged",
+        WatchExitReason.MaxDuration => "max-duration",
+        _ => reason.ToString().ToLowerInvariant(),
+    };
 
     private static void RenderSpace(SqlHarnessSpaceReport space, TextWriter output)
     {

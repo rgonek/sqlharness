@@ -51,6 +51,25 @@ public class GainStoreTests
     }
 
     [Fact]
+    public void Watch_and_snapshot_records_increment_command_scopes()
+    {
+        using var temp = new TempDirectory("watch-snapshot-gain");
+        var store = new GainStore(temp.FilePath);
+        store.Append(Record("watch", true, 5, 20, 5, 4, 1, 5, 1, 4));
+        store.Append(Record("snapshot", true, 2, 8, 2, 4, 1, 2, 1, 1));
+
+        var gain = store.Aggregate();
+
+        Assert.Equal(1, gain.Watch.Executions);
+        Assert.Equal(1, gain.Snapshot.Executions);
+        Assert.Equal(2, gain.Total.Executions);
+        Assert.Equal(0, gain.Query.Executions);
+        Assert.Equal(0, gain.Space.Executions);
+        Assert.Equal(0, gain.Ping.Executions);
+        Assert.Equal(0, gain.Counts.Executions);
+    }
+
+    [Fact]
     public void Existing_jsonl_without_ping_or_counts_still_aggregates()
     {
         using var temp = new TempDirectory("legacy-without-helpers");
@@ -66,6 +85,8 @@ public class GainStoreTests
         Assert.Equal(0, gain.Ping.Executions);
         Assert.Equal(0, gain.Counts.Executions);
         Assert.Equal(0, gain.Space.Executions);
+        Assert.Equal(0, gain.Watch.Executions);
+        Assert.Equal(0, gain.Snapshot.Executions);
     }
 
     [Fact]
