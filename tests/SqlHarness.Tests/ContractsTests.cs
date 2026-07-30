@@ -99,6 +99,8 @@ public class ContractsTests
         Assert.Equal(4, (int)SqlHarnessExitCode.TargetMismatch);
         Assert.Equal(5, (int)SqlHarnessExitCode.SqlExecution);
         Assert.Equal(6, (int)SqlHarnessExitCode.LocalStorage);
+        Assert.Equal(7, (int)SqlHarnessExitCode.WatchMaxDuration);
+        Assert.Equal(8, (int)SqlHarnessExitCode.SnapshotDifferences);
     }
 
     [Fact]
@@ -115,6 +117,8 @@ public class ContractsTests
                 typeof(SqlHarnessPingOperation),
                 typeof(SqlHarnessCountsOperation),
                 typeof(SqlHarnessSpaceOperation),
+                typeof(SqlHarnessWatchOperation),
+                typeof(SqlHarnessSnapshotOperation),
             ],
             typeof(SqlHarnessOperation).Assembly.GetTypes()
                 .Where(t => t.BaseType == typeof(SqlHarnessOperation))
@@ -132,6 +136,8 @@ public class ContractsTests
         nameof(SqlHarnessPingOperation) => 6,
         nameof(SqlHarnessCountsOperation) => 7,
         nameof(SqlHarnessSpaceOperation) => 8,
+        nameof(SqlHarnessWatchOperation) => 9,
+        nameof(SqlHarnessSnapshotOperation) => 10,
         _ => int.MaxValue,
     };
 

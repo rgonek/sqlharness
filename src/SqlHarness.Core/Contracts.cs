@@ -56,6 +56,33 @@ public sealed record SqlHarnessSpaceOperation(
     SqlTargetRequest Target, int Top, string? Object,
     int TimeoutSeconds) : SqlHarnessOperation;
 
+public sealed record SqlHarnessWatchOperation(
+    SqlTargetRequest Target, string Sql, IReadOnlyList<string> Parameters,
+    int TimeoutSeconds, int MaxRows, TimeSpan Interval, TimeSpan MaxDuration,
+    string? Until, int? UntilUnchanged) : SqlHarnessOperation;
+
+public sealed record SqlHarnessSnapshotOperation(
+    SqlTargetRequest Target, string Sql, IReadOnlyList<string> Parameters,
+    int TimeoutSeconds, int MaxRows, string Name, bool Diff, bool Force) : SqlHarnessOperation;
+
+public enum WatchExitReason { ConditionMet, Unchanged, MaxDuration }
+public enum SnapshotVerdict { Stored, Identical, Different }
+
+public sealed record SqlHarnessWatchPoll(
+    int Poll, long ElapsedMilliseconds, string ResultHash,
+    IReadOnlyList<SqlHarnessResultSetReport> ResultSets);
+
+public sealed record SqlHarnessWatchReport(
+    SqlHarnessTargetIdentityReport Target, int PollCount, long ElapsedMilliseconds,
+    WatchExitReason ExitReason, IReadOnlyList<SqlHarnessWatchPoll> EmittedPolls);
+
+public sealed record SqlHarnessSnapshotDifference(
+    int ResultSet, long? Row, int? Column, string Kind);
+
+public sealed record SqlHarnessSnapshotReport(
+    SqlHarnessTargetIdentityReport Target, string Name, SnapshotVerdict Verdict,
+    int DifferenceCount, IReadOnlyList<SqlHarnessSnapshotDifference> Differences);
+
 public sealed record DatabaseFileSpaceReport(
     string LogicalName, string Type, string? PhysicalName,
     decimal SizeMb, decimal UsedMb, decimal FreeMb);
@@ -136,4 +163,6 @@ public enum SqlHarnessExitCode
     TargetMismatch = 4,
     SqlExecution = 5,
     LocalStorage = 6,
+    WatchMaxDuration = 7,
+    SnapshotDifferences = 8,
 }

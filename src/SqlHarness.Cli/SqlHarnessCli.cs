@@ -28,6 +28,8 @@ public static class SqlHarnessCli
             c.AddCommand<PingCommand>("ping");
             c.AddCommand<CountsCommand>("counts");
             c.AddCommand<SpaceCommand>("space");
+            c.AddCommand<WatchCommand>("watch");
+            c.AddCommand<SnapshotCommand>("snapshot");
         });
         return new SqlHarnessApp(app);
     }
