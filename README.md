@@ -36,6 +36,9 @@ sqlharness schema prod-eu --var tenant=acme --var env=uat --object dbo.Contracts
 sqlharness schema prod-eu --var tenant=acme --var env=uat --json
 sqlharness space prod-eu --var tenant=acme --var env=uat --top 25 --json
 sqlharness space prod-eu --var tenant=acme --var env=uat --object dbo.Contracts --json
+sqlharness watch prod-eu --var tenant=acme --var env=uat --file .\queries\progress.sql --param target:int=1000 --until "Imported >= 1000" --interval 30 --max-duration 45m --json
+sqlharness snapshot prod-eu --var tenant=acme --var env=uat --file .\queries\coverage.sql --name before-import --json
+sqlharness snapshot prod-eu --var tenant=acme --var env=uat --file .\queries\coverage.sql --name before-import --diff --json
 sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --json
 sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\queries\orders.sql --repeat 5 --json
 sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\before.sql --candidate .\queries\after.sql --repeat 5 --json
@@ -45,6 +48,8 @@ sqlharness gain --json
 ```
 
 Read-only database helpers (`ping`, `counts`, `schema --object`, and `space`) use fixed internal catalog/probe/DMV SQL only: they never accept an arbitrary user SQL batch or mutations. `counts` defaults to approximate row counts from partition statistics; pass `--exact` for `COUNT_BIG(*)`. `space` diagnoses storage only (files, aggregate allocation, top tables by reserved space, optional per-index detail for `--object`); it never performs shrink, recovery-model change, compression change, or index mutation—any mutation still requires a separately approved `query --allow-mutation` batch. Prefer `--json` for machine-readable reports.
+
+`watch` polls a bounded read-only query until a stop condition: exactly one of `--until` (predicate on the first row of the first result set) or `--until-unchanged` (stable hash across consecutive polls; default when neither is supplied is `--until-unchanged 3`). Defaults: `--interval 30` seconds and `--max-duration 15m` (positive integral `s`/`m`/`h`, max 24h). Exit `0` when the condition is met or results stay unchanged; exit `7` when the max duration elapses without a stop condition. `snapshot` stores a named canonical result under `~/.sqlharness/snapshots` (sensitive result data—treat like comparison artifacts). Capture with `--name`; replace an existing name only with `--force`. `--diff` compares the live query against the stored snapshot without printing cell values (locations and kinds only): exit `0` when identical, exit `8` when a valid comparison found differences rather than an execution failure. Both accept the same single SQL source and `--param` pipeline as `query` (mutation classification rejects with exit `2`).
 
 `plan --json` emits a compact, deterministic plan contract: `statements` preserves input order; each statement has optional `sql`, a `root` node, and optional `missingIndexes`. Nodes retain `physicalOp`, optional `logicalOp`, operator metadata and runtime values, warnings (with their Showplan attributes), and child nodes. Persisted `*.plan.json` files from `compare` and `measure` use this same schema, including `sql`. This output is serialization-only; it is not accepted as plan input.
 
@@ -114,6 +119,8 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat `
 | `ping` | Verify connection readiness with a fixed internal probe (no user SQL). |
 | `counts` | Inventory table row counts (partition estimates by default; `--exact` for `COUNT_BIG(*)`). |
 | `space` | Diagnose storage via read-only DMVs (files, allocation, top tables; `--object` for per-index detail). |
+| `watch` | Poll a bounded read-only query until `--until` / `--until-unchanged` or max duration. |
+| `snapshot` | Capture or `--diff` a named canonical result under `~/.sqlharness/snapshots` (`--force` to replace). |
 | `query` | Run one bounded, classified SQL batch. |
 | `measure` | Collect repeated timing, IO, and plan evidence for one query. |
 | `compare` | Compare baseline and candidate queries, including result equivalence. |
@@ -127,14 +134,14 @@ Run `sqlharness <command> --help` for the final option surface.
 
 | Area | Contract |
 | --- | --- |
-| Exit codes | `0` success; `2` validation or safety rejection; `3` authentication failure; `4` target mismatch; `5` SQL execution failure; `6` local storage failure. |
+| Exit codes | `0` success; `2` validation or safety rejection; `3` authentication failure; `4` target mismatch; `5` SQL execution failure; `6` local storage failure; `7` `watch` max duration elapsed without a stop condition; `8` `snapshot --diff` found differences (valid comparison, not an execution failure). |
 | Closed targets | Profiles in `~/.sqlharness/targets.json` define server, database template, variables, and authentication. Missing, extra, or invalid variables are rejected. |
 | Direct targets | `--unsafe-direct` deliberately bypasses the closed-profile guardrail and requires `--server`, `--database`, and `--auth`. Do not mix it with a profile or `--var`. |
 | Mutations | Read-only is the default. Persistent-object mutation requires fresh, single-use approval for the exact batch and exact resolved database, plus `--allow-mutation --confirm-database <exact-resolved-name>`. |
 | Session `#temp` | Local `#temp` setup/DML/indexes are session-only and do not require mutation confirmation; setup runs once per connection and shares that session with warm-up and measured runs. |
 | SQL input | Use exactly one query source (`--file` or stdin) and bound `--param` values. Helpers (`ping`, `counts`, `schema`, `space`) never accept arbitrary user SQL. `space` is read-only DMV diagnosis only—no shrink, recovery-model, compression, or index mutation; mutations need a separately approved `query --allow-mutation` batch. |
 | Secrets | Tokens and passwords remain only in process memory; do not put them in command arguments, configuration output, logs, reports, or artifacts. |
-| Artifacts | Comparison artifacts, `.sqlplan` files, and runtime parameter material are locally sensitive because they can embed SQL text and parameter values. |
+| Artifacts | Comparison artifacts, `.sqlplan` files, named snapshots under `~/.sqlharness/snapshots`, and runtime parameter material are locally sensitive because they can embed SQL text, parameter values, and result data. `snapshot --diff` never prints cell values. |
 
 Never work around a safety rejection. Narrow the operation or obtain explicit approval instead. A rejected setup stops execution.
 
@@ -155,6 +162,7 @@ Every command except `gain` records metadata-only raw and emitted byte counts in
 - Target profiles: `~/.sqlharness/targets.json`
 - Gain records: `~/.sqlharness/data/gain.jsonl`
 - Comparison artifacts: `~/.sqlharness/compare/`
+- Named snapshots: `~/.sqlharness/snapshots/` (sensitive result data; replace only with `snapshot --force`)
 
 Set `SQLHARNESS_HOME` to relocate these paths, for example in an isolated test environment.
 

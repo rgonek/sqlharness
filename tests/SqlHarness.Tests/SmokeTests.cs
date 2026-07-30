@@ -23,6 +23,35 @@ public sealed class SmokeTests
         Assert.Contains("counts", standardOutput, StringComparison.Ordinal);
         Assert.Contains("schema", standardOutput, StringComparison.Ordinal);
         Assert.Contains("space", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("watch", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("snapshot", standardOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Watch_help_lists_stop_and_bound_options()
+    {
+        var (exit, standardOutput, standardError) = await RunCliAsync("watch", "--help");
+
+        Assert.True(exit == 0, standardError);
+        Assert.Contains("--until", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--until-unchanged", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--interval", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--max-duration", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--file", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--json", standardOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Snapshot_help_lists_name_diff_and_force_options()
+    {
+        var (exit, standardOutput, standardError) = await RunCliAsync("snapshot", "--help");
+
+        Assert.True(exit == 0, standardError);
+        Assert.Contains("--name", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--diff", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--force", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--file", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--json", standardOutput, StringComparison.Ordinal);
     }
 
     [Fact]

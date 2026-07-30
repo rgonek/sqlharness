@@ -76,6 +76,66 @@ public class ContractsTests
         Assert.Contains("--object dbo.Contracts", skill, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Documentation_covers_watch_and_snapshot_workflows()
+    {
+        var readme = ReadRepositoryFile("README.md");
+        var agents = ReadRepositoryFile("AGENTS.md");
+        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
+
+        foreach (var doc in new[] { readme, agents, skill })
+        {
+            Assert.Contains("watch", doc, StringComparison.Ordinal);
+            Assert.Contains("snapshot", doc, StringComparison.Ordinal);
+            Assert.Contains("--until-unchanged", doc, StringComparison.Ordinal);
+            Assert.Contains("--diff", doc, StringComparison.Ordinal);
+            Assert.Contains("7", doc, StringComparison.Ordinal);
+            Assert.Contains("8", doc, StringComparison.Ordinal);
+            Assert.True(
+                doc.Contains("snapshots", StringComparison.OrdinalIgnoreCase)
+                && (doc.Contains("sensitive", StringComparison.OrdinalIgnoreCase)
+                    || doc.Contains("locally sensitive", StringComparison.OrdinalIgnoreCase)),
+                "Docs must warn that the snapshots directory holds sensitive result data.");
+            Assert.True(
+                doc.Contains("--force", StringComparison.Ordinal)
+                && (doc.Contains("replace", StringComparison.OrdinalIgnoreCase)
+                    || doc.Contains("overwrite", StringComparison.OrdinalIgnoreCase)),
+                "Docs must state that --force is required to replace a snapshot.");
+            Assert.True(
+                doc.Contains("cell", StringComparison.OrdinalIgnoreCase)
+                || doc.Contains("never prints", StringComparison.OrdinalIgnoreCase)
+                || doc.Contains("does not print", StringComparison.OrdinalIgnoreCase)
+                || doc.Contains("without cell", StringComparison.OrdinalIgnoreCase),
+                "Docs must state that --diff never prints cell values.");
+            Assert.True(
+                doc.Contains("differences", StringComparison.OrdinalIgnoreCase)
+                && (doc.Contains("valid comparison", StringComparison.OrdinalIgnoreCase)
+                    || doc.Contains("not an execution", StringComparison.OrdinalIgnoreCase)
+                    || doc.Contains("rather than", StringComparison.OrdinalIgnoreCase)),
+                "Docs must state exit 8 means a valid comparison found differences.");
+            Assert.Contains("--file", doc, StringComparison.Ordinal);
+        }
+
+        Assert.Contains(
+            "sqlharness watch prod-eu --var tenant=acme --var env=uat --file .\\queries\\progress.sql --param target:int=1000 --until \"Imported >= 1000\" --interval 30 --max-duration 45m --json",
+            readme,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "sqlharness snapshot prod-eu --var tenant=acme --var env=uat --file .\\queries\\coverage.sql --name before-import --json",
+            readme,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "sqlharness snapshot prod-eu --var tenant=acme --var env=uat --file .\\queries\\coverage.sql --name before-import --diff --json",
+            readme,
+            StringComparison.Ordinal);
+        Assert.Contains("sqlharness watch prod-eu", agents, StringComparison.Ordinal);
+        Assert.Contains("sqlharness snapshot prod-eu", agents, StringComparison.Ordinal);
+        Assert.Contains("sqlharness watch prod-eu", skill, StringComparison.Ordinal);
+        Assert.Contains("sqlharness snapshot prod-eu", skill, StringComparison.Ordinal);
+        Assert.Contains("--until-unchanged", skill, StringComparison.Ordinal);
+        Assert.Contains("--diff", skill, StringComparison.Ordinal);
+    }
+
     private static string ReadRepositoryFile(params string[] path)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
