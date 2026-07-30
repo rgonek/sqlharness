@@ -153,14 +153,11 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             phase = ExecutionPhase.Sql;
 
             var execution = new SqlExecutionCommand(query.Sql, parameters, query.TimeoutSeconds);
-            var messageStart = session.Messages.Count;
-            await using var reader = await session.ExecuteReaderAsync(execution, ct);
             raw = new CanonicalResultAccumulator();
-            var collected = await CollectAsync(
-                reader,
+            var collected = await QueryResultCollector.CollectAsync(
+                session,
+                execution,
                 query.MaxRows,
-                () => session.Messages,
-                messageStart,
                 knownSecrets,
                 raw,
                 ct);
@@ -171,7 +168,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 safety.HasMutation ? "mutation" : "read-only",
                 collected.ResultSets,
                 collected.Messages,
-                reader.RecordsAffected,
+                collected.RecordsAffected,
                 stopwatch.ElapsedMilliseconds,
                 collected.Canonical.Hash,
                 rawFootprint);
@@ -702,104 +699,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             throw new SqlHarnessSafetyException($"SQL safety rejection for {label}: {decision.RejectionDescription}");
     }
 
-    private static async Task<CollectedQuery> CollectAsync(
-        ISqlReader reader,
-        int maxRows,
-        Func<IReadOnlyList<string>> messageSnapshot,
-        int messageStart,
-        IReadOnlyList<string> secrets,
-        CanonicalResultAccumulator raw,
-        CancellationToken ct)
-    {
-        var retained = 0;
-        var reports = new List<SqlHarnessResultSetReport>();
-        using var canonical = new CanonicalResultAccumulator();
-        var rawResultSetOpen = false;
-        try
-        {
-            do
-            {
-                if (reader.FieldCount == 0)
-                    continue;
-
-                var canonicalColumns = Enumerable.Range(0, reader.FieldCount)
-                    .Select(index => new CanonicalColumn(
-                        index,
-                        reader.GetName(index),
-                        reader.GetFieldType(index).FullName ?? reader.GetFieldType(index).Name,
-                        reader.GetAllowNull(index)))
-                    .ToArray();
-                var publicColumns = canonicalColumns
-                    .Select(column => new SqlHarnessColumnReport(
-                        column.Ordinal,
-                        column.Name,
-                        column.DataType,
-                        column.AllowNull))
-                    .ToArray();
-                var rows = new List<IReadOnlyList<object?>>();
-                long rowCount = 0;
-                canonical.BeginResultSet(canonicalColumns);
-                raw.BeginResultSet(canonicalColumns);
-                rawResultSetOpen = true;
-                while (await reader.ReadAsync(ct))
-                {
-                    var values = Enumerable.Range(0, reader.FieldCount)
-                        .Select(index => NormalizeValue(reader.GetValue(index)))
-                        .ToArray();
-                    canonical.AddRow(values);
-                    raw.AddRow(values);
-                    rowCount++;
-                    if (retained < maxRows)
-                    {
-                        rows.Add(values);
-                        retained++;
-                    }
-                }
-                canonical.EndResultSet();
-                raw.EndResultSet();
-                rawResultSetOpen = false;
-                reports.Add(new SqlHarnessResultSetReport(
-                    publicColumns,
-                    rows,
-                    rowCount,
-                    rowCount - rows.Count));
-            } while (await reader.NextResultAsync(ct));
-        }
-        catch
-        {
-            if (rawResultSetOpen)
-                raw.EndResultSet();
-            AppendSafeMessages(raw, messageSnapshot(), messageStart, secrets);
-            throw;
-        }
-
-        var safeMessages = SafeMessageSlice(messageSnapshot(), messageStart, secrets);
-        foreach (var message in safeMessages)
-        {
-            canonical.AddMessage("sql", message);
-            raw.AddMessage("sql", message);
-        }
-        return new CollectedQuery(reports, safeMessages, canonical.Complete());
-    }
-
-    private static void AppendSafeMessages(
-        CanonicalResultAccumulator raw,
-        IReadOnlyList<string> messages,
-        int messageStart,
-        IReadOnlyList<string> secrets)
-    {
-        foreach (var message in SafeMessageSlice(messages, messageStart, secrets))
-            raw.AddMessage("sql", message);
-    }
-
-    private static IReadOnlyList<string> SafeMessageSlice(
-        IReadOnlyList<string> messages,
-        int messageStart,
-        IReadOnlyList<string> secrets) =>
-        messages.Skip(messageStart)
-            .Select(message => SecretRedactor.Redact(message, secrets))
-            .ToArray();
-
     private static object? NormalizeValue(object value) => value is DBNull ? null : value;
 
     private static void ValidateBounds(SqlHarnessQueryOperation query)
@@ -823,11 +722,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         _ when phase == ExecutionPhase.Authentication => SqlHarnessExitCode.Authentication,
         _ => SqlHarnessExitCode.SqlExecution,
     };
-
-    private sealed record CollectedQuery(
-        IReadOnlyList<SqlHarnessResultSetReport> ResultSets,
-        IReadOnlyList<string> Messages,
-        CanonicalResult Canonical);
 
     private sealed record CollectedCompare(
         CanonicalResult Canonical,

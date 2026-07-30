@@ -124,6 +124,29 @@ public class SqlHarnessQueryTests
     }
 
     [Fact]
+    public async Task Query_collects_multiple_result_sets_through_shared_collector()
+    {
+        var reader = FakeSqlReader.Sets(
+            (["A"], [[1], [2], [3]]),
+            (["B"], [["x"]]));
+        var session = FakeSqlSession.WithIdentity(
+            "test-server",
+            "testdb-a",
+            reader);
+
+        var outcome = await Module(session).ExecuteAsync(Query("SELECT multi", maxRows: 2));
+
+        var report = Assert.IsType<SqlHarnessQueryReport>(outcome.Report);
+        Assert.Equal(2, report.ResultSets.Count);
+        Assert.Equal(3, report.ResultSets[0].RowCount);
+        Assert.Equal(1, report.ResultSets[0].OmittedRowCount);
+        Assert.Equal(1, report.ResultSets[1].RowCount);
+        Assert.Equal(1, report.ResultSets[1].OmittedRowCount);
+        Assert.Empty(report.ResultSets[1].Rows);
+        Assert.NotEmpty(report.ResultHash);
+    }
+
+    [Fact]
     public async Task Timeout_maps_to_stable_SQL_execution_exit_code()
     {
         var session = FakeSqlSession.WithIdentity(
@@ -591,26 +614,31 @@ public class SqlHarnessQueryTests
     }
 
     private sealed class FakeSqlReader(
-        string[] names,
-        object?[][] rows,
+        (string[] Names, object?[][] Rows)[] sets,
         int? failAfterSuccessfulReads = null,
         Action? onSuccessfulRead = null) : ISqlReader
     {
+        private int _set;
         private int _position = -1;
         public int ReadCalls { get; private set; }
+        private string[] names => sets[_set].Names;
+        private object?[][] rows => sets[_set].Rows;
         public int FieldCount => names.Length;
         public int RecordsAffected => -1;
 
-        public static FakeSqlReader Rows(string[] names, params object?[][] rows) => new(names, rows);
+        public static FakeSqlReader Rows(string[] names, params object?[][] rows) =>
+            new([(names, rows)]);
+        public static FakeSqlReader Sets(params (string[] Names, object?[][] Rows)[] sets) =>
+            new(sets);
         public static FakeSqlReader RowsThenFail(
             string[] names,
             int failAfterRows,
             Action onSuccessfulRead,
-            params object?[][] rows) => new(names, rows, failAfterRows, onSuccessfulRead);
+            params object?[][] rows) => new([(names, rows)], failAfterRows, onSuccessfulRead);
         public static FakeSqlReader RowsWithMessage(
             string[] names,
             Action onSuccessfulRead,
-            params object?[][] rows) => new(names, rows, onSuccessfulRead: onSuccessfulRead);
+            params object?[][] rows) => new([(names, rows)], onSuccessfulRead: onSuccessfulRead);
         public string GetName(int ordinal) => names[ordinal];
         public Type GetFieldType(int ordinal) => rows.FirstOrDefault()?[ordinal]?.GetType() ?? typeof(object);
         public bool GetAllowNull(int ordinal) => rows.Any(row => row[ordinal] is null or DBNull);
@@ -627,7 +655,17 @@ public class SqlHarnessQueryTests
             return Task.FromResult(hasRow);
         }
 
-        public Task<bool> NextResultAsync(CancellationToken ct) => Task.FromResult(false);
+        public Task<bool> NextResultAsync(CancellationToken ct)
+        {
+            if (++_set < sets.Length)
+            {
+                _position = -1;
+                return Task.FromResult(true);
+            }
+
+            return Task.FromResult(false);
+        }
+
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }
