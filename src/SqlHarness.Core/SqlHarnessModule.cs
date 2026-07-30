@@ -39,6 +39,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     private readonly ICompareArtifactWriter _artifactWriter;
     private readonly Func<IReadOnlyDictionary<string, TargetProfile>> _loadProfiles;
     private readonly IWatchClock _watchClock;
+    private readonly ISnapshotStore _snapshotStore;
 
     /// <summary>
     /// Row cap for result-fingerprint retention. Production uses
@@ -56,8 +57,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         ISqlSessionFactory sessionFactory,
         IGainStore gainStore,
         Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
-        IWatchClock? watchClock = null)
-        : this(sessionFactory, gainStore, new CompareArtifactWriter(), loadProfiles, watchClock)
+        IWatchClock? watchClock = null,
+        ISnapshotStore? snapshotStore = null)
+        : this(sessionFactory, gainStore, new CompareArtifactWriter(), loadProfiles, watchClock, snapshotStore)
     {
     }
 
@@ -66,13 +68,15 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         IGainStore gainStore,
         ICompareArtifactWriter artifactWriter,
         Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
-        IWatchClock? watchClock = null)
+        IWatchClock? watchClock = null,
+        ISnapshotStore? snapshotStore = null)
     {
         _sessionFactory = sessionFactory ?? throw new ArgumentNullException(nameof(sessionFactory));
         _gainStore = gainStore ?? throw new ArgumentNullException(nameof(gainStore));
         _artifactWriter = artifactWriter ?? throw new ArgumentNullException(nameof(artifactWriter));
         _loadProfiles = loadProfiles ?? throw new ArgumentNullException(nameof(loadProfiles));
         _watchClock = watchClock ?? new SystemWatchClock();
+        _snapshotStore = snapshotStore ?? new SnapshotStore(SqlHarnessPaths.SnapshotsDir);
     }
 
     public async Task<SqlHarnessOutcome> ExecuteAsync(
@@ -118,6 +122,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
         if (operation is SqlHarnessWatchOperation watch)
             return await ExecuteWatchAsync(watch, ct);
+
+        if (operation is SqlHarnessSnapshotOperation snapshot)
+            return await ExecuteSnapshotAsync(snapshot, ct);
 
         if (operation is not SqlHarnessQueryOperation query)
         {
@@ -859,6 +866,76 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             throw new SqlHarnessSafetyException("Specify exactly one of --until or --until-unchanged.");
         if (watch.UntilUnchanged is < 1)
             throw new SqlHarnessSafetyException("--until-unchanged must be a positive integer.");
+    }
+
+    private async Task<SqlHarnessOutcome> ExecuteSnapshotAsync(SqlHarnessSnapshotOperation snapshot, CancellationToken ct)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var phase = ExecutionPhase.Validation;
+        var rawFootprint = new OutputFootprint(0, 0);
+        var knownSecrets = new List<string> { snapshot.Sql };
+        knownSecrets.AddRange(snapshot.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+
+        try
+        {
+            ValidateSnapshot(snapshot);
+            var target = TargetResolver.Resolve(snapshot.Target, _loadProfiles());
+            var safety = new SqlSafetyClassifier().Classify(
+                snapshot.Sql,
+                SqlUsage.Query,
+                target.Database,
+                allowMutation: false,
+                confirmDatabase: null);
+            if (!safety.Allowed)
+                throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
+            var parameters = SqlParameterParser.Parse(snapshot.Parameters);
+            SqlParameterReferenceValidator.Validate(parameters, snapshot.Sql);
+
+            foreach (var parameter in parameters)
+            {
+                if (parameter.Value is not DBNull)
+                    knownSecrets.Add(Convert.ToString(parameter.Value, CultureInfo.InvariantCulture) ?? string.Empty);
+            }
+
+            phase = ExecutionPhase.Authentication;
+            var runner = new SnapshotRunner(_sessionFactory, _snapshotStore);
+            var (outcome, raw) = await runner.ExecuteAsync(
+                snapshot,
+                target,
+                parameters,
+                knownSecrets,
+                ct);
+            rawFootprint = raw;
+            // Runner already mapped connect/SQL/storage failures; preserve its exit code and report.
+            return WithReceipt(outcome, stopwatch.ElapsedMilliseconds, rawFootprint, "snapshot");
+        }
+        catch (Exception exception)
+        {
+            var exitCode = MapException(exception, phase);
+            var failure = new SqlHarnessOutcome(
+                exitCode,
+                null,
+                SecretRedactor.Redact(exception, knownSecrets));
+            return WithReceipt(failure, stopwatch.ElapsedMilliseconds, rawFootprint, "snapshot");
+        }
+    }
+
+    private static void ValidateSnapshot(SqlHarnessSnapshotOperation snapshot)
+    {
+        if (snapshot.TimeoutSeconds is < 1 or > 300)
+            throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
+        if (snapshot.MaxRows is < 0 or > 500)
+            throw new SqlHarnessSafetyException("Maximum displayed rows must be between 0 and 500.");
+        if (snapshot.Diff && snapshot.Force)
+            throw new SqlHarnessSafetyException("--force cannot be combined with --diff.");
+        if (string.IsNullOrWhiteSpace(snapshot.Name) ||
+            snapshot.Name.Length > 64 ||
+            !char.IsAsciiLetterOrDigit(snapshot.Name[0]) ||
+            snapshot.Name.Any(ch => !(char.IsAsciiLetterOrDigit(ch) || ch is '.' or '_' or '-')))
+        {
+            throw new SqlHarnessSafetyException(
+                "Snapshot name must match ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$.");
+        }
     }
 
     private async Task<SqlHarnessOutcome> ExecutePingAsync(SqlHarnessPingOperation ping, CancellationToken ct)
