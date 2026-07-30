@@ -38,6 +38,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     private readonly IGainStore _gainStore;
     private readonly ICompareArtifactWriter _artifactWriter;
     private readonly Func<IReadOnlyDictionary<string, TargetProfile>> _loadProfiles;
+    private readonly IWatchClock _watchClock;
 
     /// <summary>
     /// Row cap for result-fingerprint retention. Production uses
@@ -54,8 +55,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     internal SqlHarnessModule(
         ISqlSessionFactory sessionFactory,
         IGainStore gainStore,
-        Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles)
-        : this(sessionFactory, gainStore, new CompareArtifactWriter(), loadProfiles)
+        Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
+        IWatchClock? watchClock = null)
+        : this(sessionFactory, gainStore, new CompareArtifactWriter(), loadProfiles, watchClock)
     {
     }
 
@@ -63,12 +65,14 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         ISqlSessionFactory sessionFactory,
         IGainStore gainStore,
         ICompareArtifactWriter artifactWriter,
-        Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles)
+        Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
+        IWatchClock? watchClock = null)
     {
         _sessionFactory = sessionFactory ?? throw new ArgumentNullException(nameof(sessionFactory));
         _gainStore = gainStore ?? throw new ArgumentNullException(nameof(gainStore));
         _artifactWriter = artifactWriter ?? throw new ArgumentNullException(nameof(artifactWriter));
         _loadProfiles = loadProfiles ?? throw new ArgumentNullException(nameof(loadProfiles));
+        _watchClock = watchClock ?? new SystemWatchClock();
     }
 
     public async Task<SqlHarnessOutcome> ExecuteAsync(
@@ -111,6 +115,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
         if (operation is SqlHarnessSpaceOperation space)
             return await ExecuteSpaceAsync(space, ct);
+
+        if (operation is SqlHarnessWatchOperation watch)
+            return await ExecuteWatchAsync(watch, ct);
 
         if (operation is not SqlHarnessQueryOperation query)
         {
@@ -776,6 +783,82 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             return WithReceipt(new SqlHarnessOutcome(MapException(exception, phase), null, SecretRedactor.Redact(exception, knownSecrets)), stopwatch.ElapsedMilliseconds, raw, "schema");
         }
+    }
+
+    private async Task<SqlHarnessOutcome> ExecuteWatchAsync(SqlHarnessWatchOperation watch, CancellationToken ct)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var phase = ExecutionPhase.Validation;
+        var rawFootprint = new OutputFootprint(0, 0);
+        var knownSecrets = new List<string> { watch.Sql };
+        knownSecrets.AddRange(watch.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+        if (watch.Until is not null)
+            knownSecrets.Add(watch.Until);
+
+        try
+        {
+            ValidateWatch(watch);
+            var target = TargetResolver.Resolve(watch.Target, _loadProfiles());
+            var safety = new SqlSafetyClassifier().Classify(
+                watch.Sql,
+                SqlUsage.Query,
+                target.Database,
+                allowMutation: false,
+                confirmDatabase: null);
+            if (!safety.Allowed)
+                throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
+            var parameters = SqlParameterParser.Parse(watch.Parameters);
+            SqlParameterReferenceValidator.Validate(parameters, watch.Sql);
+            // Predicate syntax is validated before authentication so bad --until fails closed.
+            if (watch.Until is not null)
+                _ = WatchCondition.Parse(watch.Until);
+
+            foreach (var parameter in parameters)
+            {
+                if (parameter.Value is not DBNull)
+                    knownSecrets.Add(Convert.ToString(parameter.Value, CultureInfo.InvariantCulture) ?? string.Empty);
+            }
+
+            phase = ExecutionPhase.Authentication;
+            var runner = new WatchRunner(_sessionFactory, _watchClock);
+            var (outcome, raw) = await runner.ExecuteAsync(
+                watch,
+                target,
+                parameters,
+                knownSecrets,
+                ct);
+            rawFootprint = raw;
+            // Runner already mapped connect/SQL failures; preserve its exit code and report.
+            return WithReceipt(outcome, stopwatch.ElapsedMilliseconds, rawFootprint, "watch");
+        }
+        catch (Exception exception)
+        {
+            var exitCode = MapException(exception, phase);
+            var failure = new SqlHarnessOutcome(
+                exitCode,
+                null,
+                SecretRedactor.Redact(exception, knownSecrets));
+            return WithReceipt(failure, stopwatch.ElapsedMilliseconds, rawFootprint, "watch");
+        }
+    }
+
+    private static void ValidateWatch(SqlHarnessWatchOperation watch)
+    {
+        if (watch.TimeoutSeconds is < 1 or > 300)
+            throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
+        if (watch.MaxRows is < 0 or > 500)
+            throw new SqlHarnessSafetyException("Maximum displayed rows must be between 0 and 500.");
+        if (watch.Interval <= TimeSpan.Zero || watch.Interval > TimeSpan.FromHours(24))
+            throw new SqlHarnessSafetyException("Watch interval must be greater than zero and at most 24 hours.");
+        if (watch.MaxDuration <= TimeSpan.Zero || watch.MaxDuration > TimeSpan.FromHours(24))
+            throw new SqlHarnessSafetyException("Watch max duration must be greater than zero and at most 24 hours.");
+
+        var hasUntil = !string.IsNullOrWhiteSpace(watch.Until);
+        var hasUntilUnchanged = watch.UntilUnchanged is not null;
+        if (hasUntil == hasUntilUnchanged)
+            throw new SqlHarnessSafetyException("Specify exactly one of --until or --until-unchanged.");
+        if (watch.UntilUnchanged is < 1)
+            throw new SqlHarnessSafetyException("--until-unchanged must be a positive integer.");
     }
 
     private async Task<SqlHarnessOutcome> ExecutePingAsync(SqlHarnessPingOperation ping, CancellationToken ct)
