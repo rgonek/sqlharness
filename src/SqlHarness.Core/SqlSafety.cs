@@ -1,8 +1,6 @@
-using System.Collections;
 using System.Data;
 using System.Data.SqlTypes;
 using System.Globalization;
-using System.Reflection;
 using System.Text.RegularExpressions;
 
 using Microsoft.SqlServer.TransactSql.ScriptDom;
@@ -46,108 +44,6 @@ internal sealed record SqlSafetyDecision(
 
 internal sealed class SqlSafetyClassifier
 {
-    private static readonly HashSet<Type> AllowedFragmentTypes =
-    [
-        typeof(TSqlScript),
-        typeof(TSqlBatch),
-        typeof(SelectStatement),
-        typeof(QuerySpecification),
-        typeof(SelectScalarExpression),
-        typeof(SelectStarExpression),
-        typeof(FromClause),
-        typeof(NamedTableReference),
-        typeof(SchemaObjectName),
-        typeof(MultiPartIdentifier),
-        typeof(Identifier),
-        typeof(IdentifierOrValueExpression),
-        typeof(IdentifierLiteral),
-        typeof(ColumnReferenceExpression),
-        typeof(IntegerLiteral),
-        typeof(NumericLiteral),
-        typeof(RealLiteral),
-        typeof(MoneyLiteral),
-        typeof(StringLiteral),
-        typeof(BinaryLiteral),
-        typeof(NullLiteral),
-        typeof(VariableReference),
-        typeof(GlobalVariableExpression),
-        typeof(BinaryExpression),
-        typeof(UnaryExpression),
-        typeof(ParenthesisExpression),
-        typeof(BooleanComparisonExpression),
-        typeof(BooleanBinaryExpression),
-        typeof(BooleanNotExpression),
-        typeof(BooleanParenthesisExpression),
-        typeof(BooleanIsNullExpression),
-        typeof(InPredicate),
-        typeof(LikePredicate),
-        typeof(BooleanTernaryExpression),
-        typeof(ExistsPredicate),
-        typeof(ScalarSubquery),
-        typeof(FunctionCall),
-        typeof(CastCall),
-        typeof(ConvertCall),
-        typeof(CoalesceExpression),
-        typeof(NullIfExpression),
-        typeof(SearchedCaseExpression),
-        typeof(SearchedWhenClause),
-        typeof(SimpleCaseExpression),
-        typeof(SimpleWhenClause),
-        typeof(WithCtesAndXmlNamespaces),
-        typeof(CommonTableExpression),
-        typeof(QueryDerivedTable),
-        typeof(InlineDerivedTable),
-        typeof(QualifiedJoin),
-        typeof(UnqualifiedJoin),
-        typeof(JoinParenthesisTableReference),
-        typeof(SchemaObjectFunctionTableReference),
-        typeof(OrderByClause),
-        typeof(ExpressionWithSortOrder),
-        typeof(GroupByClause),
-        typeof(ExpressionGroupingSpecification),
-        typeof(HavingClause),
-        typeof(TopRowFilter),
-        typeof(OverClause),
-        typeof(WindowFrameClause),
-        typeof(WindowDelimiter),
-        typeof(BinaryQueryExpression),
-        typeof(QueryParenthesisExpression),
-        typeof(InsertStatement),
-        typeof(InsertSpecification),
-        typeof(ValuesInsertSource),
-        typeof(SelectInsertSource),
-        typeof(RowValue),
-        typeof(UpdateStatement),
-        typeof(UpdateSpecification),
-        typeof(AssignmentSetClause),
-        typeof(DeleteStatement),
-        typeof(DeleteSpecification),
-        typeof(MergeStatement),
-        typeof(MergeSpecification),
-        typeof(MergeActionClause),
-        typeof(UpdateMergeAction),
-        typeof(OutputIntoClause),
-        typeof(CreateTableStatement),
-        typeof(TableDefinition),
-        typeof(ColumnDefinition),
-        typeof(SqlDataTypeReference),
-        typeof(NullableConstraintDefinition),
-        typeof(UniqueConstraintDefinition),
-        typeof(CreateIndexStatement),
-        typeof(ColumnWithSortOrder),
-        typeof(DropTableStatement),
-        typeof(DeclareVariableStatement),
-        typeof(DeclareVariableElement),
-        typeof(WhereClause),
-    ];
-
-    private sealed record UnsupportedSyntax(
-        IReadOnlyList<string> StatementTypes,
-        IReadOnlyList<string> FragmentTypes)
-    {
-        internal bool Any => StatementTypes.Count > 0 || FragmentTypes.Count > 0;
-    }
-
     internal SqlSafetyDecision Classify(
         string sql,
         SqlUsage usage,
@@ -169,15 +65,12 @@ internal sealed class SqlSafetyClassifier
             return Denied(SqlSafetyReason.CrossDatabaseReference);
         }
 
-        if (inspection.HasExternalAccess || inspection.HasStatefulExpression || inspection.HasExecuteInsertSource)
+        if (inspection.HasExternalAccess ||
+            inspection.HasStatefulExpression ||
+            inspection.HasStatefulTableSource ||
+            inspection.HasExecuteInsertSource)
         {
             return Denied(SqlSafetyReason.UnsupportedStatement);
-        }
-
-        var unsupported = CollectUnsupportedSyntax(script);
-        if (unsupported.Any)
-        {
-            return Denied(SqlSafetyReason.UnsupportedStatement, FormatUnsupported(unsupported));
         }
 
         var statements = script.Batches.SelectMany(batch => batch.Statements).ToArray();
@@ -322,101 +215,6 @@ internal sealed class SqlSafetyClassifier
         name.BaseIdentifier.Value.StartsWith('#') &&
         !name.BaseIdentifier.Value.StartsWith("##", StringComparison.Ordinal);
 
-    private static UnsupportedSyntax CollectUnsupportedSyntax(TSqlScript script)
-    {
-        var topLevelStatements = new HashSet<TSqlFragment>(ReferenceEqualityComparer.Instance);
-        foreach (var batch in script.Batches)
-        {
-            foreach (var statement in batch.Statements)
-            {
-                topLevelStatements.Add(statement);
-            }
-        }
-
-        var statementTypes = new HashSet<string>(StringComparer.Ordinal);
-        var fragmentTypes = new HashSet<string>(StringComparer.Ordinal);
-        var pending = new Stack<TSqlFragment>();
-        var visited = new HashSet<TSqlFragment>(ReferenceEqualityComparer.Instance);
-        pending.Push(script);
-
-        while (pending.TryPop(out var fragment))
-        {
-            if (!visited.Add(fragment))
-            {
-                continue;
-            }
-
-            var type = fragment.GetType();
-            if (!AllowedFragmentTypes.Contains(type))
-            {
-                if (topLevelStatements.Contains(fragment))
-                {
-                    statementTypes.Add(type.Name);
-                }
-                else
-                {
-                    fragmentTypes.Add(type.Name);
-                }
-
-                continue;
-            }
-
-            foreach (var property in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
-            {
-                if (!property.CanRead || property.GetIndexParameters().Length != 0)
-                {
-                    continue;
-                }
-
-                object? value;
-                try
-                {
-                    value = property.GetValue(fragment);
-                }
-                catch (Exception)
-                {
-                    fragmentTypes.Add(type.Name);
-                    continue;
-                }
-
-                if (value is TSqlFragment child)
-                {
-                    pending.Push(child);
-                }
-                else if (value is IEnumerable children and not string)
-                {
-                    foreach (var item in children)
-                    {
-                        if (item is TSqlFragment childItem)
-                        {
-                            pending.Push(childItem);
-                        }
-                    }
-                }
-            }
-        }
-
-        return new UnsupportedSyntax(
-            statementTypes.Order(StringComparer.Ordinal).ToArray(),
-            fragmentTypes.Order(StringComparer.Ordinal).ToArray());
-    }
-
-    private static string FormatUnsupported(UnsupportedSyntax unsupported)
-    {
-        var parts = new List<string>(2);
-        if (unsupported.StatementTypes.Count > 0)
-        {
-            parts.Add($"Unsupported SQL statement types: {string.Join(", ", unsupported.StatementTypes)}.");
-        }
-
-        if (unsupported.FragmentTypes.Count > 0)
-        {
-            parts.Add($"Unsupported AST fragment types: {string.Join(", ", unsupported.FragmentTypes)}.");
-        }
-
-        return string.Join(" ", parts);
-    }
-
     private static SqlSafetyDecision Allowed(bool hasMutation = false, bool hasSessionLocal = false) =>
         new(true, SqlSafetyReason.Allowed, hasMutation) { HasSessionLocalWork = hasSessionLocal };
 
@@ -428,6 +226,7 @@ internal sealed class SqlSafetyClassifier
         internal bool HasCrossDatabaseReference { get; private set; }
         internal bool HasExternalAccess { get; private set; }
         internal bool HasStatefulExpression { get; private set; }
+        internal bool HasStatefulTableSource { get; private set; }
         internal bool HasExecuteInsertSource { get; private set; }
         internal bool HasSelectInto { get; private set; }
         internal bool HasNonLocalSelectInto { get; private set; }
@@ -475,6 +274,12 @@ internal sealed class SqlSafetyClassifier
         public override void ExplicitVisit(BulkOpenRowset node)
         {
             HasExternalAccess = true;
+            base.ExplicitVisit(node);
+        }
+
+        public override void ExplicitVisit(OpenXmlTableReference node)
+        {
+            HasStatefulTableSource = true;
             base.ExplicitVisit(node);
         }
 

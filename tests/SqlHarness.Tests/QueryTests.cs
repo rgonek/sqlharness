@@ -469,7 +469,7 @@ public class SqlHarnessQueryTests
         var outcome = await Module(session).ExecuteAsync(Query(sql));
 
         Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
-        Assert.Contains("Unsupported SQL statement types: ExecuteStatement.", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("SQL safety rejection: UnsupportedStatement.", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.DoesNotContain(secret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.DoesNotContain(sql, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.Empty(session.Commands);

@@ -84,8 +84,14 @@ public class SqlSafetyTests
     }
 
     [Fact]
-    public void Query_denies_unallowlisted_nested_fragment() =>
-        Assert.False(ClassifyQuery("SELECT Id FROM OPENXML(@handle, '/root/item') WITH (Id int '@id')").Allowed);
+    public void Query_denies_stateful_OPENXML_table_source()
+    {
+        var decision = ClassifyQuery(
+            "SELECT Id FROM OPENXML(@handle, '/root/item') WITH (Id int '@id')");
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
 
     [Theory]
     [InlineData("SELECT * FROM otherdb.dbo.Clients")]
@@ -221,7 +227,8 @@ public class SqlSafetyTests
         var decision = ClassifyQuery($"EXEC dbo.{secret}");
 
         Assert.False(decision.Allowed);
-        Assert.Contains("ExecuteStatement", decision.RejectionDescription);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.Contains(nameof(SqlSafetyReason.UnsupportedStatement), decision.RejectionDescription);
         Assert.DoesNotContain(secret, decision.RejectionDescription);
     }
 
@@ -230,6 +237,38 @@ public class SqlSafetyTests
     [InlineData("SELECT SUM(Amount) OVER (PARTITION BY ClientId ORDER BY Id ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) FROM dbo.Orders")]
     public void Query_allows_safe_window_syntax(string sql) =>
         Assert.True(ClassifyQuery(sql).Allowed);
+
+    [Fact]
+    public void Query_allows_complete_read_only_SELECT_syntax_without_fragment_registration()
+    {
+        const string sql = """
+            WITH RecentOrders AS
+            (
+                SELECT o.ClientId, RIGHT(o.Reference, 4) AS ReferenceSuffix
+                FROM dbo.Orders AS o WITH (INDEX(IX_Orders_ClientId), FORCESEEK)
+            )
+            SELECT ClientId, ReferenceSuffix
+            FROM RecentOrders
+            OPTION (RECOMPILE, MAXDOP 1);
+            """;
+
+        var decision = ClassifyQuery(sql);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+    }
+
+    [Theory]
+    [InlineData("SELECT DISTINCT TOP (10) PERCENT WITH TIES Id FROM dbo.Clients ORDER BY Id")]
+    [InlineData("SELECT IIF(Active = 1, 'active', 'inactive') FROM dbo.Clients")]
+    [InlineData("SELECT LAG(Amount, 1, 0) IGNORE NULLS OVER (PARTITION BY ClientId ORDER BY Id) FROM dbo.Orders")]
+    [InlineData("SELECT p.Id FROM dbo.Parent AS p CROSS APPLY (SELECT TOP (1) c.Id FROM dbo.Child AS c WHERE c.ParentId = p.Id ORDER BY c.Id DESC) AS latest")]
+    [InlineData("SELECT Id FROM dbo.Clients TABLESAMPLE (10 PERCENT) OPTION (OPTIMIZE FOR UNKNOWN)")]
+    public void Query_allows_representative_parsed_SELECT_syntax(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+    }
 
     [Theory]
     [InlineData("CREATE TABLE #Req(Id int NULL)")]
