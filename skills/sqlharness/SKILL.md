@@ -84,6 +84,8 @@ Local `#temp` only (name starts with exactly one `#`): setup may create/index/DM
 
 Technical equivalence is not domain/business equivalence. When the ticket needs set semantics, verify with two-direction `EXCEPT`; when duplicates matter, use grouped counts. Inventory ordering ties and missing-history cases offline before treating a run as representative.
 
+Agent-authored SQL may use every ScriptDom-parsable construct inside a top-level `SELECT`, including CTEs, scalar functions, table/index hints, optimizer hints, windowing, and derived/apply syntax. SQLHarness classifies safety by the top-level statement and explicit prohibited behaviors, not by a nested-fragment allowlist. A rejection must not be bypassed, but an unfamiliar safe nested fragment should be reported as a SQLHarness compatibility bug rather than worked around with `sqlcmd`.
+
 ## Mutation gate
 
 The default is read-only. Session-local `#temp` work is classified separately, but persistent-object mutation requires a fresh, single-use user approval for the exact SQL batch and exact resolved database.
