@@ -8,6 +8,17 @@ namespace SqlHarness.Tests.Auth;
 [Collection(SqlHarnessHomeCollection.Name)]
 public sealed class AuthSpecTests
 {
+    [Fact]
+    public void AzureSqlClientExtensionsAssemblyIsAvailableForDefaultAuthentication()
+    {
+        var assembly = System.Reflection.Assembly.Load(
+            "Microsoft.Data.SqlClient.Extensions.Azure");
+
+        Assert.Equal(
+            "Microsoft.Data.SqlClient.Extensions.Azure",
+            assembly.GetName().Name);
+    }
+
     [Theory]
     [InlineData("azure-cli", AuthStrategy.AzureCli)]
     [InlineData("ad-default", AuthStrategy.AdDefault)]
