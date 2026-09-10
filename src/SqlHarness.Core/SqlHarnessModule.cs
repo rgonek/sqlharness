@@ -5,6 +5,8 @@ using System.Text;
 using Microsoft.Data.SqlClient;
 
 using SqlHarness.Core.Auth;
+using SqlHarness.Core.Dialect;
+using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Core;
@@ -49,7 +51,11 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     internal int ComparisonMaximumRows { get; init; } = CanonicalComparisonAccumulator.MaximumComparedRows;
 
     public SqlHarnessModule()
-        : this(new SqlClientSessionFactory(new AzureCli()), new GainStore(), new CompareArtifactWriter(), () => ProfileStore.Load())
+        : this(
+            new EngineSessionFactory(new SqlClientSessionFactory(new AzureCli()), new NpgsqlSessionFactory()),
+            new GainStore(),
+            new CompareArtifactWriter(),
+            () => ProfileStore.Load())
     {
     }
 
@@ -734,6 +740,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         AzureCliException => SqlHarnessExitCode.Authentication,
         SqlException when phase == ExecutionPhase.Authentication => SqlHarnessExitCode.Authentication,
         SqlException => SqlHarnessExitCode.SqlExecution,
+        Npgsql.NpgsqlException when phase == ExecutionPhase.Authentication => SqlHarnessExitCode.Authentication,
+        Npgsql.NpgsqlException => SqlHarnessExitCode.SqlExecution,
         TimeoutException => SqlHarnessExitCode.SqlExecution,
         OperationCanceledException when phase == ExecutionPhase.Sql => SqlHarnessExitCode.SqlExecution,
         _ when phase == ExecutionPhase.Authentication => SqlHarnessExitCode.Authentication,
@@ -965,8 +973,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             phase = ExecutionPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
             phase = ExecutionPhase.Sql;
+            var sql = SqlDialects.For(target.Engine).PingSql;
             await using var reader = await session.ExecuteReaderAsync(
-                new SqlExecutionCommand(PingQuery.Sql, [], ping.TimeoutSeconds),
+                new SqlExecutionCommand(sql, [], ping.TimeoutSeconds),
                 ct);
             var probe = await PingQuery.ReadAsync(reader, ct);
             var report = new SqlHarnessPingReport(

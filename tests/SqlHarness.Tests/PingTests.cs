@@ -2,6 +2,7 @@ using Microsoft.Data.SqlClient;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
+using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Tests;
@@ -28,6 +29,17 @@ public sealed class PingTests
         Assert.Equal(PingQuery.Sql, Assert.Single(session.Commands).Sql);
         Assert.Empty(Assert.Single(session.Commands).Parameters);
         Assert.Equal(5, Assert.Single(session.Commands).TimeoutSeconds);
+    }
+
+    [Fact]
+    public async Task Ping_postgres_profile_runs_postgres_probe()
+    {
+        var session = new FakeSession(Row(1, "db", "server", "login"));
+        var outcome = await Module(session, profiles: PostgresProfiles).ExecuteAsync(
+            new SqlHarnessPingOperation(new SqlTargetRequest("pg", new Dictionary<string, string>()), 5));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(PostgresPing.Sql, Assert.Single(session.Commands).Sql);
     }
 
     [Fact]
@@ -184,8 +196,11 @@ public sealed class PingTests
         Assert.Equal("ping", Assert.Single(gain.Records).Command);
     }
 
-    private static SqlHarnessModule Module(FakeSession session, FakeGain? gain = null) =>
-        new(session, gain ?? new FakeGain(), Profiles);
+    private static SqlHarnessModule Module(
+        FakeSession session,
+        FakeGain? gain = null,
+        Func<IReadOnlyDictionary<string, TargetProfile>>? profiles = null) =>
+        new(session, gain ?? new FakeGain(), profiles ?? Profiles);
 
     private static FakeReader Row(int ok, string database, string server, string login) =>
         new(Set(["Ok", "Db", "Server", "Login"], [ok, database, server, login]));
@@ -203,6 +218,20 @@ public sealed class PingTests
                 "db-{tenant}",
                 new Dictionary<string, string> { ["tenant"] = "^.+$" },
                 "integrated"),
+        };
+
+    private static IReadOnlyDictionary<string, TargetProfile> PostgresProfiles() =>
+        new Dictionary<string, TargetProfile>
+        {
+            ["pg"] = new(
+                "localhost,5432",
+                "appdb",
+                new Dictionary<string, string>(),
+                "sql",
+                SqlUser: "sqlharness",
+                PasswordEnvVar: "SQLHARNESS_PG_PASSWORD",
+                TrustServerCertificate: true,
+                Engine: "postgres"),
         };
 
     private static SqlException FakeSqlException() =>

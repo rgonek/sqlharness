@@ -1,11 +1,13 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace SqlHarness.Core;
 
 public sealed record SqlHarnessTargetIdentityReport(
-    string RequestedServer, string RequestedDatabase, string ActualServer, string ActualDatabase, string Mode);
+    string RequestedServer, string RequestedDatabase, string ActualServer, string ActualDatabase, string Mode,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Engine = null);
 
 public sealed record CompareDistribution(long Min, long Median, long Max);
 
