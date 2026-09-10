@@ -21,6 +21,68 @@ public sealed class TargetResolverTests
         };
 
     [Fact]
+    public void Profile_without_engine_resolves_sqlserver()
+    {
+        var target = TargetResolver.Resolve(
+            new SqlTargetRequest("prod-eu", new Dictionary<string, string>
+            {
+                ["tenant"] = "acme",
+                ["env"] = "uat",
+            }),
+            Profiles);
+        Assert.Equal(SqlEngine.SqlServer, target.Engine);
+    }
+
+    [Fact]
+    public void Postgres_sql_profile_resolves_postgres_engine()
+    {
+        var profiles = new Dictionary<string, TargetProfile>
+        {
+            ["local-pg"] = new(
+                "localhost,5432",
+                "appdb",
+                new Dictionary<string, string>(),
+                "sql",
+                SqlUser: "sqlharness",
+                PasswordEnvVar: "SQLHARNESS_PG_PASSWORD",
+                TrustServerCertificate: true,
+                Engine: "postgres"),
+        };
+        var target = TargetResolver.Resolve(new SqlTargetRequest("local-pg", new Dictionary<string, string>()), profiles);
+        Assert.Equal(SqlEngine.Postgres, target.Engine);
+        Assert.Equal(AuthStrategy.Sql, target.Auth.Strategy);
+    }
+
+    [Theory]
+    [InlineData("ad-default")]
+    [InlineData("azure-cli")]
+    [InlineData("integrated")]
+    public void Postgres_rejects_non_sql_auth(string auth)
+    {
+        var profiles = new Dictionary<string, TargetProfile>
+        {
+            ["pg"] = new("localhost,5432", "appdb", new Dictionary<string, string>(), auth, Engine: "postgres"),
+        };
+        var error = Assert.Throws<SqlHarnessSafetyException>(
+            () => TargetResolver.Resolve(new SqlTargetRequest("pg", new Dictionary<string, string>()), profiles));
+        Assert.Contains("sql", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Direct_postgres_requires_engine_postgres()
+    {
+        var target = TargetResolver.Resolve(
+            new SqlTargetRequest(
+                null, new Dictionary<string, string>(),
+                Server: "localhost,5432", Database: "appdb", Auth: "sql",
+                UnsafeDirect: true, SqlUser: "u", PasswordEnvVar: "P",
+                TrustServerCertificate: true, Engine: "postgres"),
+            new Dictionary<string, TargetProfile>());
+        Assert.Equal(SqlEngine.Postgres, target.Engine);
+        Assert.Equal("direct", target.Mode);
+    }
+
+    [Fact]
     public void Resolves_profile_template_with_validated_vars()
     {
         var request = new SqlTargetRequest("prod-eu", new Dictionary<string, string>

@@ -4,7 +4,7 @@ using SqlHarness.Core.Auth;
 
 namespace SqlHarness.Core.Targets;
 
-public sealed record ResolvedTarget(string Server, string Database, AuthSpec Auth, string Mode);
+public sealed record ResolvedTarget(string Server, string Database, AuthSpec Auth, string Mode, SqlEngine Engine = SqlEngine.SqlServer);
 
 public static class TargetResolver
 {
@@ -113,7 +113,11 @@ public static class TargetResolver
             throw new SqlHarnessSafetyException("The profile authentication settings are invalid.");
         }
 
-        return new ResolvedTarget(profile.Server, database, auth, "profile");
+        var engine = SqlEngineNames.Parse(profile.Engine);
+        if (engine == SqlEngine.Postgres && auth.Strategy != AuthStrategy.Sql)
+            throw new SqlHarnessSafetyException("Postgres targets require sql authentication.");
+
+        return new ResolvedTarget(profile.Server, database, auth, "profile", engine);
     }
 
     private static ResolvedTarget ResolveDirect(SqlTargetRequest request)
@@ -127,14 +131,20 @@ public static class TargetResolver
         if (string.IsNullOrWhiteSpace(request.Auth))
             throw new SqlHarnessSafetyException("Direct mode requires --auth.");
 
+        var engine = SqlEngineNames.Parse(request.Engine);
+        var auth = AuthSpec.Parse(
+            request.Auth,
+            request.SqlUser,
+            request.PasswordEnvVar,
+            request.TrustServerCertificate);
+        if (engine == SqlEngine.Postgres && auth.Strategy != AuthStrategy.Sql)
+            throw new SqlHarnessSafetyException("Postgres targets require sql authentication.");
+
         return new ResolvedTarget(
             request.Server,
             request.Database,
-            AuthSpec.Parse(
-                request.Auth,
-                request.SqlUser,
-                request.PasswordEnvVar,
-                request.TrustServerCertificate),
-            "direct");
+            auth,
+            "direct",
+            engine);
     }
 }

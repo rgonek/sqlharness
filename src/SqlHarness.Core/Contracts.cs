@@ -125,7 +125,8 @@ public sealed record SqlTargetRequest(
     bool UnsafeDirect = false,
     string? SqlUser = null,
     string? PasswordEnvVar = null,
-    bool TrustServerCertificate = false);
+    bool TrustServerCertificate = false,
+    string? Engine = null);
 
 public sealed record SqlHarnessOutcome(
     SqlHarnessExitCode ExitCode,

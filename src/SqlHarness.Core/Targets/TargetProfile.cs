@@ -7,4 +7,5 @@ public sealed record TargetProfile(
     string Auth,
     string? SqlUser = null,
     string? PasswordEnvVar = null,
-    bool TrustServerCertificate = false);
+    bool TrustServerCertificate = false,
+    string? Engine = null);

@@ -40,6 +40,18 @@ public static class ProfileStore
                 {
                     throw new JsonException("A profile variable rule is invalid.");
                 }
+
+                if (!string.IsNullOrWhiteSpace(profile.Engine))
+                {
+                    try
+                    {
+                        SqlEngineNames.Parse(profile.Engine);
+                    }
+                    catch (SqlHarnessSafetyException)
+                    {
+                        throw new JsonException("A profile engine is invalid.");
+                    }
+                }
             }
 
             return profiles;
