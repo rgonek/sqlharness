@@ -38,6 +38,25 @@ public sealed class PostgresBenchmarkTests
     }
 
     [Fact]
+    public void Validate_accepts_values() =>
+        PostgresBenchmark.ValidateMeasuredBatch("VALUES (1)");
+
+    [Fact]
+    public void Validate_accepts_with_select() =>
+        PostgresBenchmark.ValidateMeasuredBatch("WITH x AS (SELECT 1 AS n) SELECT n FROM x");
+
+    [Fact]
+    public void Validate_rejects_writable_cte()
+    {
+        const string sql = "WITH t AS (INSERT INTO foo SELECT 1 RETURNING *) SELECT * FROM t";
+        var error = Assert.Throws<SqlHarnessSafetyException>(
+            () => PostgresBenchmark.ValidateMeasuredBatch(sql));
+        Assert.DoesNotContain("INSERT", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("foo", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(sql, error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Measure_uses_explain_wrap_without_statistics_or_sidecar()
     {
         var session = FakeSession.Create();
@@ -69,8 +88,10 @@ public sealed class PostgresBenchmarkTests
         var outcome = await Module(session, writer).ExecuteAsync(Compare("SELECT 1", "SELECT 1", repeat: 1));
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
-        Assert.Equal("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)\nSELECT 1", session.Commands[0].Sql);
-        Assert.Equal("SELECT 1", session.Commands[1].Sql);
+        const string explain = "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)\nSELECT 1";
+        Assert.Equal(
+            [explain, explain, explain, "SELECT 1", explain, "SELECT 1"],
+            session.Commands.Select(command => command.Sql));
         Assert.All(session.Commands, command =>
             Assert.DoesNotContain("SET STATISTICS IO ON", command.Sql, StringComparison.Ordinal));
         using var expected = new CanonicalResultAccumulator();

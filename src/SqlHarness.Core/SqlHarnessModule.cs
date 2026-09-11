@@ -301,9 +301,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 await ExecuteRawAsync(session, new SqlExecutionCommand(compare.SetupSql, parameters, compare.TimeoutSeconds), raw, ct);
 
             // Fingerprints only for modes that run ResultComparer; off skips equivalence work entirely.
+            // Warmup is EXPLAIN/STATISTICS only; sidecar follows measured repetitions.
             var captureComparison = compare.CompareResults != ResultComparisonMode.Off;
-            await ExecuteBenchmarkRunAsync(dialect, session, compare.BaselineSql, parameters, compare.TimeoutSeconds, 0, "baseline", raw, captureComparison, ct);
-            await ExecuteBenchmarkRunAsync(dialect, session, compare.CandidateSql, parameters, compare.TimeoutSeconds, 0, "candidate", raw, captureComparison, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, compare.BaselineSql, parameters, compare.TimeoutSeconds, 0, "baseline", raw, captureComparison: false, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, compare.CandidateSql, parameters, compare.TimeoutSeconds, 0, "candidate", raw, captureComparison: false, ct);
 
             var runs = new List<CollectedCompareRun>(compare.Repeat * 2);
             for (var repetition = 1; repetition <= compare.Repeat; repetition++)
