@@ -190,19 +190,28 @@ END
         return result;
     }
 
+    internal static Task<IReadOnlyList<long>> ExecuteExactAsync(
+        ISqlSession session,
+        IReadOnlyList<ResolvedCountObject> objects,
+        int timeoutSeconds,
+        CancellationToken ct) =>
+        ExecuteExactAsync(session, objects, timeoutSeconds, ct, BuildExactSql);
+
     internal static async Task<IReadOnlyList<long>> ExecuteExactAsync(
         ISqlSession session,
         IReadOnlyList<ResolvedCountObject> objects,
         int timeoutSeconds,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<IReadOnlyList<ResolvedCountObject>, string> buildExactSql)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(objects);
+        ArgumentNullException.ThrowIfNull(buildExactSql);
 
         if (objects.Count == 0)
             return Array.Empty<long>();
 
-        var sql = BuildExactSql(objects);
+        var sql = buildExactSql(objects);
         await using var reader = await session.ExecuteReaderAsync(
             new SqlExecutionCommand(sql, [], timeoutSeconds),
             ct);

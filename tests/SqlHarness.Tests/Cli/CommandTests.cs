@@ -166,6 +166,40 @@ public sealed class CommandTests
     }
 
     [Fact]
+    public async Task Query_rejects_engine_combined_with_profile()
+    {
+        var sqlFile = TempFile("select 1");
+        try
+        {
+            var module = new FakeModule(Success(QueryReport()));
+            var exit = await SqlHarnessCli.Create(module, new StringWriter())
+                .RunAsync(["query", "dev", "--engine", "postgres", "--file", sqlFile]);
+            Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+            Assert.Empty(module.Operations);
+        }
+        finally { File.Delete(sqlFile); }
+    }
+
+    [Fact]
+    public async Task Query_unsafe_direct_carries_engine()
+    {
+        var sqlFile = TempFile("select 1");
+        try
+        {
+            var module = new FakeModule(Success(QueryReport()));
+            var app = SqlHarnessCli.Create(module, new StringWriter());
+            var exit = await app.RunAsync([
+                "query", "--unsafe-direct", "--engine", "postgres",
+                "--server", "localhost,5432", "--database", "appdb",
+                "--auth", "sql", "--sql-user", "u", "--password-env-var", "P",
+                "--file", sqlFile]);
+            Assert.Equal(0, exit);
+            Assert.Equal("postgres", Assert.IsType<SqlHarnessQueryOperation>(Assert.Single(module.Operations)).Target.Engine);
+        }
+        finally { File.Delete(sqlFile); }
+    }
+
+    [Fact]
     public async Task Measure_compare_and_gain_dispatch_from_real_parser()
     {
         var query = TempFile("select 1");

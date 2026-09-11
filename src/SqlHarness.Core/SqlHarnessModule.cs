@@ -5,6 +5,8 @@ using System.Text;
 using Microsoft.Data.SqlClient;
 
 using SqlHarness.Core.Auth;
+using SqlHarness.Core.Dialect;
+using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Core;
@@ -29,10 +31,8 @@ public sealed record SqlHarnessQueryReport(
 
 public sealed class SqlHarnessModule : ISqlHarnessModule
 {
-    private static readonly TimeSpan StatisticsCleanupTimeout = TimeSpan.FromSeconds(5);
-
-    private static readonly CanonicalComparisonResult EmptyComparison =
-        new(string.Empty, Array.Empty<string>());
+    private static readonly IReadOnlySet<string> NoSessionTemps =
+        new HashSet<string>(StringComparer.Ordinal);
 
     private readonly ISqlSessionFactory _sessionFactory;
     private readonly IGainStore _gainStore;
@@ -49,7 +49,11 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     internal int ComparisonMaximumRows { get; init; } = CanonicalComparisonAccumulator.MaximumComparedRows;
 
     public SqlHarnessModule()
-        : this(new SqlClientSessionFactory(new AzureCli()), new GainStore(), new CompareArtifactWriter(), () => ProfileStore.Load())
+        : this(
+            new EngineSessionFactory(new SqlClientSessionFactory(new AzureCli()), new NpgsqlSessionFactory()),
+            new GainStore(),
+            new CompareArtifactWriter(),
+            () => ProfileStore.Load())
     {
     }
 
@@ -145,15 +149,17 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             ValidateBounds(query);
             var target = TargetResolver.Resolve(query.Target, _loadProfiles());
-            var safety = new SqlSafetyClassifier().Classify(
+            var dialect = SqlDialects.For(target.Engine);
+            var safety = dialect.Classify(
                 query.Sql,
                 SqlUsage.Query,
                 target.Database,
                 query.AllowMutation,
-                query.ConfirmDatabase);
+                query.ConfirmDatabase,
+                NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
-            var parameters = SqlParameterParser.Parse(query.Parameters);
+            var parameters = dialect.ParseParameters(query.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, query.Sql);
 
             foreach (var parameter in parameters)
@@ -182,7 +188,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var targetReport = session.Identity;
             var report = new SqlHarnessQueryReport(
                 targetReport,
-                safety.HasMutation ? "mutation" : "read-only",
+                ClassificationLabel(safety),
                 collected.ResultSets,
                 collected.Messages,
                 collected.RecordsAffected,
@@ -258,19 +264,27 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             ValidateCompare(compare);
             var target = TargetResolver.Resolve(compare.Target, _loadProfiles());
-            var classifier = new SqlSafetyClassifier();
-            var baselineSafety = classifier.Classify(compare.BaselineSql, SqlUsage.Query, target.Database, false);
-            EnsureSafe(baselineSafety, "baseline");
-            var candidateSafety = classifier.Classify(compare.CandidateSql, SqlUsage.Query, target.Database, false);
-            EnsureSafe(candidateSafety, "candidate");
+            var dialect = SqlDialects.For(target.Engine);
             SqlSafetyDecision? setupSafety = null;
+            IReadOnlySet<string> setupTemps = NoSessionTemps;
             if (!string.IsNullOrWhiteSpace(compare.SetupSql))
             {
-                setupSafety = classifier.Classify(compare.SetupSql, SqlUsage.CompareSetup, target.Database, false);
+                setupSafety = dialect.Classify(
+                    compare.SetupSql, SqlUsage.CompareSetup, target.Database, false, null, NoSessionTemps);
                 EnsureSafe(setupSafety, "setup");
+                setupTemps = setupSafety.SessionTempTables;
             }
-            var parameters = SqlParameterParser.Parse(compare.Parameters);
+
+            var baselineSafety = dialect.Classify(
+                compare.BaselineSql, SqlUsage.Query, target.Database, false, null, setupTemps);
+            EnsureSafe(baselineSafety, "baseline");
+            var candidateSafety = dialect.Classify(
+                compare.CandidateSql, SqlUsage.Query, target.Database, false, null, setupTemps);
+            EnsureSafe(candidateSafety, "candidate");
+            var parameters = dialect.ParseParameters(compare.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, compare.SetupSql, compare.BaselineSql, compare.CandidateSql);
+            dialect.ValidateMeasuredBatch(compare.BaselineSql);
+            dialect.ValidateMeasuredBatch(compare.CandidateSql);
 
             foreach (var parameter in parameters)
             {
@@ -287,22 +301,23 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 await ExecuteRawAsync(session, new SqlExecutionCommand(compare.SetupSql, parameters, compare.TimeoutSeconds), raw, ct);
 
             // Fingerprints only for modes that run ResultComparer; off skips equivalence work entirely.
+            // Warmup is EXPLAIN/STATISTICS only; sidecar follows measured repetitions.
             var captureComparison = compare.CompareResults != ResultComparisonMode.Off;
-            await ExecuteBenchmarkRunAsync(session, compare.BaselineSql, parameters, compare.TimeoutSeconds, 0, "baseline", raw, captureComparison, ct);
-            await ExecuteBenchmarkRunAsync(session, compare.CandidateSql, parameters, compare.TimeoutSeconds, 0, "candidate", raw, captureComparison, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, compare.BaselineSql, parameters, compare.TimeoutSeconds, 0, "baseline", raw, captureComparison: false, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, compare.CandidateSql, parameters, compare.TimeoutSeconds, 0, "candidate", raw, captureComparison: false, ct);
 
             var runs = new List<CollectedCompareRun>(compare.Repeat * 2);
             for (var repetition = 1; repetition <= compare.Repeat; repetition++)
             {
                 if (repetition % 2 == 1)
                 {
-                    runs.Add(await ExecuteBenchmarkRunAsync(session, compare.BaselineSql, parameters, compare.TimeoutSeconds, repetition, "baseline", raw, captureComparison, ct));
-                    runs.Add(await ExecuteBenchmarkRunAsync(session, compare.CandidateSql, parameters, compare.TimeoutSeconds, repetition, "candidate", raw, captureComparison, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, compare.BaselineSql, parameters, compare.TimeoutSeconds, repetition, "baseline", raw, captureComparison, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, compare.CandidateSql, parameters, compare.TimeoutSeconds, repetition, "candidate", raw, captureComparison, ct));
                 }
                 else
                 {
-                    runs.Add(await ExecuteBenchmarkRunAsync(session, compare.CandidateSql, parameters, compare.TimeoutSeconds, repetition, "candidate", raw, captureComparison, ct));
-                    runs.Add(await ExecuteBenchmarkRunAsync(session, compare.BaselineSql, parameters, compare.TimeoutSeconds, repetition, "baseline", raw, captureComparison, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, compare.CandidateSql, parameters, compare.TimeoutSeconds, repetition, "candidate", raw, captureComparison, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, compare.BaselineSql, parameters, compare.TimeoutSeconds, repetition, "baseline", raw, captureComparison, ct));
                 }
             }
 
@@ -369,17 +384,23 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             ValidateMeasure(measure);
             var target = TargetResolver.Resolve(measure.Target, _loadProfiles());
-            var classifier = new SqlSafetyClassifier();
-            var querySafety = classifier.Classify(measure.QuerySql, SqlUsage.Query, target.Database, false);
-            EnsureSafe(querySafety, "query");
+            var dialect = SqlDialects.For(target.Engine);
             SqlSafetyDecision? setupSafety = null;
+            IReadOnlySet<string> setupTemps = NoSessionTemps;
             if (!string.IsNullOrWhiteSpace(measure.SetupSql))
             {
-                setupSafety = classifier.Classify(measure.SetupSql, SqlUsage.CompareSetup, target.Database, false);
+                setupSafety = dialect.Classify(
+                    measure.SetupSql, SqlUsage.CompareSetup, target.Database, false, null, NoSessionTemps);
                 EnsureSafe(setupSafety, "setup");
+                setupTemps = setupSafety.SessionTempTables;
             }
-            var parameters = SqlParameterParser.Parse(measure.Parameters);
+
+            var querySafety = dialect.Classify(
+                measure.QuerySql, SqlUsage.Query, target.Database, false, null, setupTemps);
+            EnsureSafe(querySafety, "query");
+            var parameters = dialect.ParseParameters(measure.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, measure.SetupSql, measure.QuerySql);
+            dialect.ValidateMeasuredBatch(measure.QuerySql);
 
             foreach (var parameter in parameters)
             {
@@ -396,10 +417,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 await ExecuteRawAsync(session, new SqlExecutionCommand(measure.SetupSql, parameters, measure.TimeoutSeconds), raw, ct);
 
             // Measure never runs ResultComparer; skip fingerprint retention and the 1M row comparison cap.
-            await ExecuteBenchmarkRunAsync(session, measure.QuerySql, parameters, measure.TimeoutSeconds, 0, "measure", raw, captureComparison: false, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, 0, "measure", raw, captureComparison: false, ct);
             var runs = new List<CollectedCompareRun>(measure.Repeat);
             for (var repetition = 1; repetition <= measure.Repeat; repetition++)
-                runs.Add(await ExecuteBenchmarkRunAsync(session, measure.QuerySql, parameters, measure.TimeoutSeconds, repetition, "measure", raw, captureComparison: false, ct));
+                runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, repetition, "measure", raw, captureComparison: false, ct));
 
             rawFootprint = raw.Complete().Footprint;
             var targetReport = session.Identity;
@@ -439,7 +460,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         }
     }
 
-    private async Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
+    private Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
+        ISqlDialect dialect,
         ISqlSession session,
         string sql,
         IReadOnlyList<SqlHarnessParameter> parameters,
@@ -448,122 +470,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         string variant,
         CanonicalResultAccumulator raw,
         bool captureComparison,
-        CancellationToken ct)
-    {
-        const string enable = "SET STATISTICS IO ON; SET STATISTICS TIME ON; SET STATISTICS XML ON;";
-        const string disable = "SET STATISTICS XML OFF; SET STATISTICS TIME OFF; SET STATISTICS IO OFF;";
-        Exception? primaryException = null;
-        var messageStart = -1;
-        var messagesCaptured = false;
-        try
-        {
-            await ExecuteAndDrainAsync(session, new SqlExecutionCommand(enable, [], timeoutSeconds), ct);
-            messageStart = session.Messages.Count;
-            await using var reader = await session.ExecuteReaderAsync(new SqlExecutionCommand(sql, parameters, timeoutSeconds), ct);
-            var result = await CollectCompareAsync(reader, raw, captureComparison, ct);
-            var messages = session.Messages.Skip(messageStart).ToArray();
-            foreach (var message in messages)
-                raw.AddMessage("sql", message);
-            messagesCaptured = true;
-            var io = StatisticsIoParser.Parse(string.Join(Environment.NewLine, messages));
-            var time = StatisticsTimeParser.Parse(string.Join(Environment.NewLine, messages));
-            var plans = result.PlanXmls.Select(ExecutionPlanParser.Parse).ToArray();
-            var artifact = new CompareRunArtifact(
-                variant,
-                repetition,
-                time.CpuTimeMs,
-                time.ElapsedTimeMs,
-                io.LogicalReads,
-                io.Tables,
-                result.Canonical.Hash,
-                result.PlanXmls,
-                messages.Length);
-            return new CollectedCompareRun(artifact, plans, result.Comparison);
-        }
-        catch (Exception exception)
-        {
-            primaryException = exception;
-            if (messageStart >= 0 && !messagesCaptured)
-            {
-                try
-                {
-                    AppendMessages(session, messageStart, raw);
-                }
-                catch
-                {
-                    // Preserve the primary benchmark failure if message snapshotting also fails.
-                }
-            }
-            throw;
-        }
-        finally
-        {
-            using var cleanupCts = new CancellationTokenSource(StatisticsCleanupTimeout);
-            try
-            {
-                await ExecuteAndDrainAsync(
-                        session,
-                        new SqlExecutionCommand(disable, [], timeoutSeconds),
-                        cleanupCts.Token)
-                    .WaitAsync(StatisticsCleanupTimeout, CancellationToken.None);
-            }
-            catch when (primaryException is not null)
-            {
-                // Preserve the benchmark failure while still bounding the best-effort cleanup.
-            }
-        }
-    }
-
-    private async Task<CollectedCompare> CollectCompareAsync(
-        ISqlReader reader,
-        CanonicalResultAccumulator raw,
-        bool captureComparison,
-        CancellationToken ct)
-    {
-        using var canonical = new CanonicalResultAccumulator();
-        using var comparison = captureComparison
-            ? new CanonicalComparisonAccumulator(ComparisonMaximumRows)
-            : null;
-        var planXmls = new List<string>();
-        do
-        {
-            if (reader.FieldCount == 0)
-                continue;
-            if (reader.FieldCount == 1 && reader.GetName(0).Contains("XML Showplan", StringComparison.OrdinalIgnoreCase))
-            {
-                while (await reader.ReadAsync(ct))
-                {
-                    var planXml = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty;
-                    planXmls.Add(planXml);
-                    raw.AddMessage("planXml", planXml);
-                }
-                continue;
-            }
-
-            var columns = Enumerable.Range(0, reader.FieldCount)
-                .Select(index => new CanonicalColumn(index, reader.GetName(index), reader.GetFieldType(index).FullName ?? reader.GetFieldType(index).Name, reader.GetAllowNull(index)))
-                .ToArray();
-            canonical.BeginResultSet(columns);
-            comparison?.BeginResultSet(columns);
-            raw.BeginResultSet(columns);
-            while (await reader.ReadAsync(ct))
-            {
-                var values = Enumerable.Range(0, reader.FieldCount)
-                    .Select(index => NormalizeValue(reader.GetValue(index)))
-                    .ToArray();
-                canonical.AddRow(values);
-                comparison?.AddRow(values);
-                raw.AddRow(values);
-            }
-            canonical.EndResultSet();
-            comparison?.EndResultSet();
-            raw.EndResultSet();
-        } while (await reader.NextResultAsync(ct));
-        return new CollectedCompare(
-            canonical.Complete(),
-            comparison?.Complete() ?? EmptyComparison,
-            planXmls);
-    }
+        CancellationToken ct) =>
+        dialect.ExecuteBenchmarkRunAsync(
+            session, sql, parameters, timeoutSeconds, repetition, variant, raw, captureComparison, ComparisonMaximumRows, ct);
 
     private static async Task ExecuteRawAsync(
         ISqlSession session,
@@ -591,7 +500,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 while (await reader.ReadAsync(ct))
                 {
                     raw.AddRow(Enumerable.Range(0, reader.FieldCount)
-                        .Select(index => NormalizeValue(reader.GetValue(index)))
+                        .Select(index => BenchmarkCollector.NormalizeValue(reader.GetValue(index)))
                         .ToArray());
                 }
                 raw.EndResultSet();
@@ -606,33 +515,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             try
             {
-                AppendMessages(session, messageStart, raw);
+                BenchmarkCollector.AppendMessages(session, messageStart, raw);
             }
             catch when (primaryException is not null)
             {
                 // Preserve the primary setup failure if message snapshotting also fails.
             }
         }
-    }
-
-    private static void AppendMessages(ISqlSession session, int messageStart, CanonicalResultAccumulator raw)
-    {
-        foreach (var message in session.Messages.Skip(messageStart))
-            raw.AddMessage("sql", message);
-    }
-
-    private static async Task ExecuteAndDrainAsync(
-        ISqlSession session,
-        SqlExecutionCommand command,
-        CancellationToken ct)
-    {
-        await using var reader = await session.ExecuteReaderAsync(command, ct);
-        do
-        {
-            while (await reader.ReadAsync(ct))
-            {
-            }
-        } while (await reader.NextResultAsync(ct));
     }
 
     private static CompareVariantReport CreateVariantReport(string name, IReadOnlyList<CollectedCompareRun> runs)
@@ -716,8 +605,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             throw new SqlHarnessSafetyException($"SQL safety rejection for {label}: {decision.RejectionDescription}");
     }
 
-    private static object? NormalizeValue(object value) => value is DBNull ? null : value;
-
     private static void ValidateBounds(SqlHarnessQueryOperation query)
     {
         if (query.TimeoutSeconds is < 1 or > 300)
@@ -734,25 +621,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         AzureCliException => SqlHarnessExitCode.Authentication,
         SqlException when phase == ExecutionPhase.Authentication => SqlHarnessExitCode.Authentication,
         SqlException => SqlHarnessExitCode.SqlExecution,
+        Npgsql.NpgsqlException when phase == ExecutionPhase.Authentication => SqlHarnessExitCode.Authentication,
+        Npgsql.NpgsqlException => SqlHarnessExitCode.SqlExecution,
         TimeoutException => SqlHarnessExitCode.SqlExecution,
         OperationCanceledException when phase == ExecutionPhase.Sql => SqlHarnessExitCode.SqlExecution,
         _ when phase == ExecutionPhase.Authentication => SqlHarnessExitCode.Authentication,
         _ => SqlHarnessExitCode.SqlExecution,
     };
-
-    private sealed record CollectedCompare(
-        CanonicalResult Canonical,
-        CanonicalComparisonResult Comparison,
-        IReadOnlyList<string> PlanXmls);
-
-    private sealed record CollectedCompareRun(
-        CompareRunArtifact Artifact,
-        IReadOnlyList<ExecutionPlan> Plans,
-        CanonicalComparisonResult Comparison)
-    {
-        public string Variant => Artifact.Variant;
-        public string ResultHash => Artifact.ResultHash;
-    }
 
     private enum ExecutionPhase
     {
@@ -773,15 +648,20 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             if (schema.TimeoutSeconds is < 1 or > 300) throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
             if (schema.MaxObjects is < 1 or > 500) throw new SqlHarnessSafetyException("Schema object limit must be between 1 and 500.");
             var selection = SchemaReader.ParseObjectSelection(schema.Object);
-            var target = TargetResolver.Resolve(schema.Target, _loadProfiles()); phase = ExecutionPhase.Authentication;
+            var target = TargetResolver.Resolve(schema.Target, _loadProfiles());
+            var dialect = SqlDialects.For(target.Engine);
+            phase = ExecutionPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct); phase = ExecutionPhase.Sql;
             await using var reader = await session.ExecuteReaderAsync(
                 new SqlExecutionCommand(
-                    SchemaReader.Sql,
+                    dialect.SchemaSql,
                     SchemaReader.Parameters(schema.Filter, schema.MaxObjects, selection.Schema, selection.Name),
                     schema.TimeoutSeconds),
                 ct);
-            var result = await SchemaReader.ReadAsync(reader, ct); raw = result.Raw;
+            var result = target.Engine == SqlEngine.Postgres
+                ? await PostgresSchema.ReadAsync(reader, ct)
+                : await SchemaReader.ReadAsync(reader, ct);
+            raw = result.Raw;
             if (selection.IsObjectMode && (result.Objects.Count != 1 || result.Omitted != 0))
                 throw new SqlHarnessSafetyException(SchemaReader.MissingOrAmbiguousMessage);
             return WithReceipt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, new SqlHarnessSchemaReport(session.Identity, result.Objects, result.Omitted), null), stopwatch.ElapsedMilliseconds, raw, "schema");
@@ -806,15 +686,17 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             ValidateWatch(watch);
             var target = TargetResolver.Resolve(watch.Target, _loadProfiles());
-            var safety = new SqlSafetyClassifier().Classify(
+            var dialect = SqlDialects.For(target.Engine);
+            var safety = dialect.Classify(
                 watch.Sql,
                 SqlUsage.Query,
                 target.Database,
                 allowMutation: false,
-                confirmDatabase: null);
+                confirmDatabase: null,
+                NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
-            var parameters = SqlParameterParser.Parse(watch.Parameters);
+            var parameters = dialect.ParseParameters(watch.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, watch.Sql);
             // Predicate syntax is validated before authentication so bad --until fails closed.
             if (watch.Until is not null)
@@ -892,15 +774,17 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             ValidateSnapshot(snapshot);
             var target = TargetResolver.Resolve(snapshot.Target, _loadProfiles());
-            var safety = new SqlSafetyClassifier().Classify(
+            var dialect = SqlDialects.For(target.Engine);
+            var safety = dialect.Classify(
                 snapshot.Sql,
                 SqlUsage.Query,
                 target.Database,
                 allowMutation: false,
-                confirmDatabase: null);
+                confirmDatabase: null,
+                NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
-            var parameters = SqlParameterParser.Parse(snapshot.Parameters);
+            var parameters = dialect.ParseParameters(snapshot.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, snapshot.Sql);
 
             foreach (var parameter in parameters)
@@ -965,8 +849,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             phase = ExecutionPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
             phase = ExecutionPhase.Sql;
+            var sql = SqlDialects.For(target.Engine).PingSql;
             await using var reader = await session.ExecuteReaderAsync(
-                new SqlExecutionCommand(PingQuery.Sql, [], ping.TimeoutSeconds),
+                new SqlExecutionCommand(sql, [], ping.TimeoutSeconds),
                 ct);
             var probe = await PingQuery.ReadAsync(reader, ct);
             var report = new SqlHarnessPingReport(
@@ -1012,6 +897,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             ArgumentNullException.ThrowIfNull(counts.Tables);
 
             var target = TargetResolver.Resolve(counts.Target, _loadProfiles());
+            var dialect = SqlDialects.For(target.Engine);
             phase = ExecutionPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
             phase = ExecutionPhase.Sql;
@@ -1019,7 +905,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             ResolvedCountSelection selection;
             await using (var catalogReader = await session.ExecuteReaderAsync(
                 new SqlExecutionCommand(
-                    CountsQuery.CatalogSql,
+                    dialect.CountsCatalogSql,
                     CountsQuery.CatalogParameters(counts.Tables, counts.Like, counts.Top),
                     counts.TimeoutSeconds),
                 ct))
@@ -1034,7 +920,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     session,
                     selection.Objects,
                     counts.TimeoutSeconds,
-                    ct);
+                    ct,
+                    dialect.BuildCountsExactSql);
                 tables = selection.Objects
                     .Select((item, index) => new SqlHarnessCountReport(
                         item.Schema,
@@ -1093,16 +980,19 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             // Parse object before target resolution: name, schema.name, or null (no object).
             var (objectSchema, objectName) = ParseSpaceObject(space.Object);
             var target = TargetResolver.Resolve(space.Target, _loadProfiles());
+            var dialect = SqlDialects.For(target.Engine);
             phase = ExecutionPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
             phase = ExecutionPhase.Sql;
             await using var reader = await session.ExecuteReaderAsync(
                 new SqlExecutionCommand(
-                    SpaceQuery.Sql,
+                    dialect.SpaceSql,
                     SpaceQuery.Parameters(space.Top, objectSchema, objectName),
                     space.TimeoutSeconds),
                 ct);
-            var collected = await SpaceQuery.ReadAsync(reader, objectRequested: objectName is not null, ct);
+            var collected = target.Engine == SqlEngine.Postgres
+                ? await PostgresSpace.ReadAsync(reader, objectRequested: objectName is not null, ct)
+                : await SpaceQuery.ReadAsync(reader, objectRequested: objectName is not null, ct);
             raw = collected.Raw;
             var report = new SqlHarnessSpaceReport(
                 session.Identity,
@@ -1173,13 +1063,16 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         return (schema, name);
     }
 
+    private const string InvalidPlanEitherMessage =
+        "The execution plan is not a valid SQL Server Showplan document or Postgres EXPLAIN JSON document.";
+
     private SqlHarnessOutcome ExecutePlan(SqlHarnessPlanOperation operation)
     {
         var stopwatch = Stopwatch.StartNew();
         var raw = operation.RawFootprint;
         try
         {
-            var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, PlanDistiller.Distill(operation.ShowplanXml), null);
+            var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, DistillPlanDocument(operation.ShowplanXml), null);
             return WithReceipt(outcome, stopwatch.ElapsedMilliseconds, raw, "plan");
         }
         catch (Exception exception)
@@ -1188,4 +1081,114 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             return WithReceipt(outcome, stopwatch.ElapsedMilliseconds, raw, "plan");
         }
     }
+
+    private static DistilledPlan DistillPlanDocument(string document)
+    {
+        var trimmed = document.AsSpan().TrimStart();
+        if (trimmed.IsEmpty)
+            throw new SqlHarnessSafetyException(InvalidPlanEitherMessage);
+
+        return trimmed[0] switch
+        {
+            '<' => PlanDistiller.Distill(document),
+            '{' or '[' => PostgresPlanDistiller.Distill(document),
+            _ => throw new SqlHarnessSafetyException(InvalidPlanEitherMessage),
+        };
+    }
+}
+
+internal sealed record CollectedCompare(
+    CanonicalResult Canonical,
+    CanonicalComparisonResult Comparison,
+    IReadOnlyList<string> PlanXmls);
+
+internal sealed record CollectedCompareRun(
+    CompareRunArtifact Artifact,
+    IReadOnlyList<ExecutionPlan> Plans,
+    CanonicalComparisonResult Comparison)
+{
+    public string Variant => Artifact.Variant;
+    public string ResultHash => Artifact.ResultHash;
+}
+
+internal static class BenchmarkCollector
+{
+    internal static readonly TimeSpan StatisticsCleanupTimeout = TimeSpan.FromSeconds(5);
+
+    internal static readonly CanonicalComparisonResult EmptyComparison =
+        new(string.Empty, Array.Empty<string>());
+
+    internal static async Task<CollectedCompare> CollectCompareAsync(
+        ISqlReader reader,
+        CanonicalResultAccumulator raw,
+        bool captureComparison,
+        int comparisonMaximumRows,
+        CancellationToken ct)
+    {
+        using var canonical = new CanonicalResultAccumulator();
+        using var comparison = captureComparison
+            ? new CanonicalComparisonAccumulator(comparisonMaximumRows)
+            : null;
+        var planXmls = new List<string>();
+        do
+        {
+            if (reader.FieldCount == 0)
+                continue;
+            if (reader.FieldCount == 1 && reader.GetName(0).Contains("XML Showplan", StringComparison.OrdinalIgnoreCase))
+            {
+                while (await reader.ReadAsync(ct))
+                {
+                    var planXml = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty;
+                    planXmls.Add(planXml);
+                    raw.AddMessage("planXml", planXml);
+                }
+                continue;
+            }
+
+            var columns = Enumerable.Range(0, reader.FieldCount)
+                .Select(index => new CanonicalColumn(index, reader.GetName(index), reader.GetFieldType(index).FullName ?? reader.GetFieldType(index).Name, reader.GetAllowNull(index)))
+                .ToArray();
+            canonical.BeginResultSet(columns);
+            comparison?.BeginResultSet(columns);
+            raw.BeginResultSet(columns);
+            while (await reader.ReadAsync(ct))
+            {
+                var values = Enumerable.Range(0, reader.FieldCount)
+                    .Select(index => NormalizeValue(reader.GetValue(index)))
+                    .ToArray();
+                canonical.AddRow(values);
+                comparison?.AddRow(values);
+                raw.AddRow(values);
+            }
+            canonical.EndResultSet();
+            comparison?.EndResultSet();
+            raw.EndResultSet();
+        } while (await reader.NextResultAsync(ct));
+        return new CollectedCompare(
+            canonical.Complete(),
+            comparison?.Complete() ?? EmptyComparison,
+            planXmls);
+    }
+
+    internal static void AppendMessages(ISqlSession session, int messageStart, CanonicalResultAccumulator raw)
+    {
+        foreach (var message in session.Messages.Skip(messageStart))
+            raw.AddMessage("sql", message);
+    }
+
+    internal static async Task ExecuteAndDrainAsync(
+        ISqlSession session,
+        SqlExecutionCommand command,
+        CancellationToken ct)
+    {
+        await using var reader = await session.ExecuteReaderAsync(command, ct);
+        do
+        {
+            while (await reader.ReadAsync(ct))
+            {
+            }
+        } while (await reader.NextResultAsync(ct));
+    }
+
+    internal static object? NormalizeValue(object value) => value is DBNull ? null : value;
 }

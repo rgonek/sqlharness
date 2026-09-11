@@ -43,6 +43,27 @@ public class ArtifactWriterTests
     }
 
     [Fact]
+    public void Writer_uses_explain_json_extension_for_json_plan_documents()
+    {
+        using var temp = new TempDirectory();
+        var json = """[{"Plan":{"Node Type":"Seq Scan","Relation Name":"foo"}}]""";
+        var report = new SqlHarnessMeasureReport(
+            new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile"),
+            1, 1, true, Variant("measure"), null);
+        var run = new CompareRunArtifact("measure", 1, 0, 15, 3,
+            new Dictionary<string, long> { ["foo"] = 3 }, "HASH", [json], 0);
+
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(report, [run], "wind");
+
+        var planPath = Assert.Single(Directory.GetFiles(Path.Combine(directory, "plans"), "*.explain.json"));
+        Assert.Equal(json, File.ReadAllText(planPath));
+        Assert.Empty(Directory.GetFiles(Path.Combine(directory, "plans"), "*.sqlplan"));
+        Assert.Single(Directory.GetFiles(Path.Combine(directory, "plans"), "*.plan.json"));
+        Assert.Contains(".explain.json", File.ReadAllText(Path.Combine(directory, "runs.jsonl")), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Writer_persists_measure_report_and_rejects_other_reports()
     {
         using var temp = new TempDirectory();

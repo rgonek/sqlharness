@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
@@ -95,6 +96,10 @@ internal static class ExecutionPlanParser
 {
     internal static ExecutionPlan Parse(string xml)
     {
+        var trimmed = xml.TrimStart();
+        if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
+            return ParseJson(xml);
+
         var document = XDocument.Parse(xml);
         var operators = document
             .Descendants()
@@ -103,6 +108,36 @@ internal static class ExecutionPlanParser
             .ToArray();
 
         return new ExecutionPlan(operators);
+    }
+
+    private static ExecutionPlan ParseJson(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement.ValueKind == JsonValueKind.Array && document.RootElement.GetArrayLength() > 0
+            ? document.RootElement[0]
+            : document.RootElement;
+        var operators = new List<PlanOperator>();
+        if (root.TryGetProperty("Plan", out var plan))
+            WalkJson(plan, operators);
+        return new ExecutionPlan(operators);
+    }
+
+    private static void WalkJson(JsonElement node, List<PlanOperator> operators)
+    {
+        var physicalOp = node.TryGetProperty("Node Type", out var nodeType) && nodeType.ValueKind == JsonValueKind.String
+            ? nodeType.GetString() ?? string.Empty
+            : string.Empty;
+        var relation = node.TryGetProperty("Relation Name", out var relationName) && relationName.ValueKind == JsonValueKind.String
+            ? relationName.GetString()
+            : null;
+        var hasWarnings = node.TryGetProperty("Warnings", out _)
+            || (node.TryGetProperty("Never Executed", out var neverExecuted) && neverExecuted.ValueKind == JsonValueKind.True);
+        operators.Add(new PlanOperator(operators.Count + 1, physicalOp, relation, hasWarnings, false, false));
+        if (node.TryGetProperty("Plans", out var plans) && plans.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var child in plans.EnumerateArray())
+                WalkJson(child, operators);
+        }
     }
 
     private static PlanOperator ParseOperator(XElement relOp)

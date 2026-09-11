@@ -1,11 +1,11 @@
 ---
 name: sqlharness
-description: Use when a coding agent needs safe, repeatable SQL Server or Azure SQL query evidence, performance comparison, execution-plan distillation, compact schema inspection, readiness probes, row-count inventory, read-only database storage (space) diagnosis, bounded progress polling (watch), or named result snapshots.
+description: Use when a coding agent needs safe, repeatable SQL Server, Azure SQL, or PostgreSQL query evidence, performance comparison, execution-plan distillation, compact schema inspection, readiness probes, row-count inventory, read-only database storage (space) diagnosis, bounded progress polling (watch), or named result snapshots.
 ---
 
 # SQLHarness
 
-SQLHarness is a repeatable SQL Server optimization harness: it measures, compares, and proves SQL changes while keeping target resolution and SQL execution guarded.
+SQLHarness is a repeatable SQL Server and PostgreSQL optimization harness: it measures, compares, and proves SQL changes while keeping target resolution and SQL execution guarded. Engine lives on the locked profile (`"engine": "postgres"` or omitted for SQL Server); `--engine` is valid only with `--unsafe-direct`.
 
 ## Readiness and scope
 
@@ -72,11 +72,21 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\
 sqlharness gain --json
 ```
 
+### PostgreSQL engine notes
+
+- Prefer a closed `engine: postgres` profile (example name `local-pg`). Do not pass `--engine` with a profile.
+- Auth is `sql` only; `trustServerCertificate: true` → `SslMode=Disable`, `false` → `SslMode=Require`.
+- Use native `CREATE TEMP TABLE` / `TEMPORARY` in setup — there is no `#temp` translation.
+- Rejected params: `money`, `smallmoney`, `smalldatetime`, `hierarchyid`, `geography`, `geometry`.
+- Measure/compare: single statement timed via `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`; equivalence via unmeasured sidecar. `CpuTimeMs` is 0; `logicalReads` are buffer hits+reads; `missingIndexes` empty.
+- Catalog/`--like`/`--object` matching is case-sensitive as stored. `space` uses `pg_database_size` / relation sizes (Files DATA row; Allocation Reserved may exceed Used/Data; index Type = AM, Compression null).
+- Playground: `scripts/setup-local-postgres.ps1` + `SQLHARNESS_PG_PLAYGROUND_PASSWORD` → `sqlharness-pg` / port `5433` / `pagila`. Never writes `targets.json`. Live opt-in: `SQLHARNESS_PG_INTEGRATION_CONNECTION_STRING`.
+
 ### Benchmark session contract
 
-For `measure` and `compare`, setup runs exactly once per connection; warm-up and all measured repetitions reuse that same SQL Server session. Session-local `#temp` tables created in setup are visible to measured SQL. A rejected or failed setup stops the run—do not retry via persistent objects.
+For `measure` and `compare`, setup runs exactly once per connection; warm-up and all measured repetitions reuse that same session. Session-local `#temp` (SQL Server) or `TEMP` (Postgres) tables created in setup are visible to measured SQL. A rejected or failed setup stops the run—do not retry via persistent objects.
 
-Local `#temp` only (name starts with exactly one `#`): setup may create/index/DML/`DROP` session temps with supported constraints without mutation confirmation. Persistent objects, `##temp`, dynamic SQL, external access, cross-database references, and transaction control remain denied.
+SQL Server local `#temp` only (name starts with exactly one `#`): setup may create/index/DML/`DROP` session temps with supported constraints without mutation confirmation. Postgres uses native `TEMP` / `TEMPORARY` only. Persistent objects, `##temp`, dynamic SQL, external access, cross-database references, and transaction control remain denied.
 
 ### Technical vs domain equivalence
 
@@ -98,7 +108,7 @@ sqlharness query prod-eu --var tenant=acme --var env=uat --file .\batches\approv
 
 Do not reuse an approval for changed SQL, a different database, a different profile, or different variables. Never work around a safety rejection; report the safe error and request a narrower or explicitly approved operation.
 
-`--unsafe-direct` bypasses the closed-profile guardrail. Use it only when the user explicitly requests direct/ad-hoc access and supplies the complete target and authentication strategy; never combine it with a profile or `--var`.
+`--unsafe-direct` bypasses the closed-profile guardrail. Use it only when the user explicitly requests direct/ad-hoc access and supplies the complete target and authentication strategy; never combine it with a profile or `--var`. Optional `--engine` is allowed only on that direct path.
 
 ## Offline plans and schema
 

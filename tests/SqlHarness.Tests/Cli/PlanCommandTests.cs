@@ -39,6 +39,42 @@ public sealed class PlanCommandTests
     }
 
     [Fact]
+    public async Task Plan_explain_json_fixture_distills_with_json_output()
+    {
+        var fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "seq-scan.explain.json");
+        var output = new StringWriter();
+        var module = new SqlHarnessModule(new NeverSessionFactory(), new CapturingGainStore(), () => throw new InvalidOperationException("profiles must not load"));
+
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["plan", fixture, "--json"]);
+
+        Assert.Equal(0, exit);
+        using var json = JsonDocument.Parse(output.ToString());
+        Assert.Equal(
+            "Hash Join",
+            json.RootElement.GetProperty("statements")[0].GetProperty("root").GetProperty("physicalOp").GetString());
+    }
+
+    [Fact]
+    public async Task Plan_garbage_input_returns_safety_without_echoing()
+    {
+        var path = Path.GetTempFileName();
+        await File.WriteAllTextAsync(path, "not-a-plan");
+        var output = new StringWriter();
+        var module = new SqlHarnessModule(new NeverSessionFactory(), new CapturingGainStore(), () => throw new InvalidOperationException("profiles must not load"));
+        try
+        {
+            var exit = await SqlHarnessCli.Create(module, output).RunAsync(["plan", path]);
+
+            Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+            Assert.DoesNotContain("not-a-plan", output.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public async Task Plan_missing_file_returns_safety_without_dispatch()
     {
         var module = new DistillingModule();

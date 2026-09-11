@@ -83,6 +83,38 @@ public sealed class ProfileStoreTests
     }
 
     [Fact]
+    public void Loads_postgres_engine_and_defaults_omitted_engine_to_null()
+    {
+        var path = WriteTemp("""
+            {
+              "pg": {
+                "engine": "postgres",
+                "server": "localhost,5432",
+                "database": "appdb",
+                "vars": {},
+                "auth": "sql",
+                "sqlUser": "sqlharness",
+                "passwordEnvVar": "SQLHARNESS_PG_PASSWORD",
+                "trustServerCertificate": true
+              },
+              "mssql": {
+                "server": "s",
+                "database": "d",
+                "vars": {},
+                "auth": "integrated"
+              }
+            }
+            """);
+        try
+        {
+            var profiles = ProfileStore.Load(path);
+            Assert.Equal("postgres", profiles["pg"].Engine);
+            Assert.Null(profiles["mssql"].Engine);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public void Null_regex_value_is_rejected_as_safety_error()
     {
         var path = WriteTemp("""

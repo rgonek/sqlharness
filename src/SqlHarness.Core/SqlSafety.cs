@@ -36,7 +36,12 @@ internal sealed record SqlSafetyDecision(
     bool HasMutation = false,
     string? Detail = null)
 {
+    private static readonly IReadOnlySet<string> NoSessionTempTables =
+        new HashSet<string>(StringComparer.Ordinal);
+
     internal bool HasSessionLocalWork { get; init; }
+
+    internal IReadOnlySet<string> SessionTempTables { get; init; } = NoSessionTempTables;
 
     internal string RejectionDescription =>
         Detail is null ? $"{Reason}." : $"{Reason}. {Detail}";

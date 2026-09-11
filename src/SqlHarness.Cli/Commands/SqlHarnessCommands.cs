@@ -27,12 +27,13 @@ public abstract class TargetSettings : CommandSettings
     [CommandOption("--sql-user <USER>")] public string? SqlUser { get; set; }
     [CommandOption("--password-env-var <NAME>")] public string? PasswordEnvVar { get; set; }
     [CommandOption("--trust-server-certificate")] public bool TrustServerCertificate { get; set; }
+    [CommandOption("--engine <NAME>")] public string? Engine { get; set; }
     [CommandOption("--json")] public bool Json { get; set; }
 
     public bool TryTarget(out SqlTargetRequest target, out string error)
     {
         target = default!; error = string.Empty;
-        var directValues = new object?[] { Server, Database, Auth, SqlUser, PasswordEnvVar }.Any(v => v is string s && !string.IsNullOrWhiteSpace(s)) || TrustServerCertificate;
+        var directValues = new object?[] { Server, Database, Auth, SqlUser, PasswordEnvVar, Engine }.Any(v => v is string s && !string.IsNullOrWhiteSpace(s)) || TrustServerCertificate;
         if (UnsafeDirect)
         {
             if (!string.IsNullOrWhiteSpace(Profile)) { error = "Choose either a profile or --unsafe-direct, not both."; return false; }
@@ -59,7 +60,7 @@ public abstract class TargetSettings : CommandSettings
                 return false;
             }
         }
-        target = new(Profile, vars, Server, Database, Auth, UnsafeDirect, SqlUser, PasswordEnvVar, TrustServerCertificate);
+        target = new(Profile, vars, Server, Database, Auth, UnsafeDirect, SqlUser, PasswordEnvVar, TrustServerCertificate, Engine);
         return true;
     }
 }

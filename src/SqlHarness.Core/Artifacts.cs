@@ -1,11 +1,13 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace SqlHarness.Core;
 
 public sealed record SqlHarnessTargetIdentityReport(
-    string RequestedServer, string RequestedDatabase, string ActualServer, string ActualDatabase, string Mode);
+    string RequestedServer, string RequestedDatabase, string ActualServer, string ActualDatabase, string Mode,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Engine = null);
 
 public sealed record CompareDistribution(long Min, long Median, long Max);
 
@@ -107,7 +109,7 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
         ArgumentNullException.ThrowIfNull(report);
         ArgumentNullException.ThrowIfNull(runs);
         var preparedPlans = runs.Select(run => run.PlanXmls.Select(xml => new PreparedPlan(
-            xml, JsonSerializer.Serialize(PlanDistiller.Distill(xml), JsonOptions))).ToArray()).ToArray();
+            xml, DistillForArtifact(xml))).ToArray()).ToArray();
         var persistedReport = WithArtifactDirectory(report, null);
         var safeTarget = UnsafePathCharacter().Replace(target, "-").Trim('-');
         if (string.IsNullOrEmpty(safeTarget)) safeTarget = "target";
@@ -150,7 +152,7 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
                     run.LogicalReadsByTable,
                     run.ResultHash,
                     run.MessageCount,
-                    PlanFiles = run.PlanXmls.Select((_, planIndex) => PlanFileName(run, index, planIndex)).ToArray(),
+                    PlanFiles = run.PlanXmls.Select((xml, planIndex) => PlanFileName(run, index, planIndex, xml)).ToArray(),
                     PlanJsonFiles = run.PlanXmls.Select((_, planIndex) => PlanJsonFileName(run, index, planIndex)).ToArray(),
                 }, JsonLineOptions));
             }
@@ -167,7 +169,7 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
 
     private void WritePair(string directory, CompareRunArtifact run, int runIndex, int planIndex, PreparedPlan plan)
     {
-        var xmlPath = Path.Combine(directory, PlanFileName(run, runIndex, planIndex));
+        var xmlPath = Path.Combine(directory, PlanFileName(run, runIndex, planIndex, plan.Xml));
         var jsonPath = Path.Combine(directory, PlanJsonFileName(run, runIndex, planIndex));
         var xmlTemp = xmlPath + ".tmp";
         var jsonTemp = jsonPath + ".tmp";
@@ -208,8 +210,24 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
         _ => throw new ArgumentOutOfRangeException(nameof(report), report.GetType(), "Unsupported benchmark report type."),
     };
 
-    private static string PlanFileName(CompareRunArtifact run, int runIndex, int planIndex) =>
-        $"{run.Variant}-{run.Repetition:D3}-{runIndex:D3}-{planIndex:D3}.sqlplan";
+    private static string DistillForArtifact(string document) =>
+        JsonSerializer.Serialize(
+            IsJsonPlan(document)
+                ? Postgres.PostgresPlanDistiller.Distill(document)
+                : PlanDistiller.Distill(document),
+            JsonOptions);
+
+    private static string PlanFileName(CompareRunArtifact run, int runIndex, int planIndex, string document)
+    {
+        var extension = IsJsonPlan(document) ? ".explain.json" : ".sqlplan";
+        return $"{run.Variant}-{run.Repetition:D3}-{runIndex:D3}-{planIndex:D3}{extension}";
+    }
+
+    private static bool IsJsonPlan(string document)
+    {
+        var trimmed = document.AsSpan().TrimStart();
+        return trimmed.Length > 0 && trimmed[0] is '{' or '[';
+    }
 
     private static string PlanJsonFileName(CompareRunArtifact run, int runIndex, int planIndex) =>
         $"{run.Variant}-{run.Repetition:D3}-{runIndex:D3}-{planIndex:D3}.plan.json";
