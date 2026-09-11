@@ -25,11 +25,7 @@ WHERE @objectName IS NOT NULL
 SELECT
     current_database() AS "LogicalName",
     'DATA' AS "Type",
-    CASE
-        WHEN EXISTS (SELECT 1 FROM pg_settings WHERE name = 'data_directory')
-            THEN current_setting('data_directory')
-        ELSE NULL
-    END AS "PhysicalName",
+    (SELECT setting FROM pg_settings WHERE name = 'data_directory') AS "PhysicalName",
     ROUND(pg_database_size(current_database())::numeric / (1024 * 1024), 2) AS "SizeMb",
     ROUND(pg_database_size(current_database())::numeric / (1024 * 1024), 2) AS "UsedMb",
     CAST(0 AS numeric) AS "FreeMb";

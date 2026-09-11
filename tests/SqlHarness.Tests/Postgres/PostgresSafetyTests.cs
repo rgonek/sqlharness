@@ -98,10 +98,26 @@ public sealed class PostgresSafetyTests
     [InlineData("SELECT * FROM dblink('dbname=other','select 1')")]
     [InlineData("SELECT * FROM pg_ls_dir('.')")]
     [InlineData("SELECT * FROM pg_catalog.pg_ls_dir('.')")]
+    [InlineData("SELECT pg_read_binary_file('/etc/passwd')")]
+    [InlineData("SELECT * FROM pg_ls_logdir()")]
+    [InlineData("SELECT lo_export(123::oid, '/tmp/out')")]
     public void Denied_constructs(string sql)
     {
         var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
         Assert.False(decision.Allowed);
+    }
+
+    [Theory]
+    [InlineData("SELECT pg_read_binary_file('/secret-token-path')")]
+    [InlineData("SELECT * FROM pg_ls_logdir()")]
+    [InlineData("SELECT lo_export(123::oid, '/secret-token-path')")]
+    public void File_access_prefix_denials_do_not_echo_sql(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.DoesNotContain("secret-token-path", decision.RejectionDescription);
+        Assert.DoesNotContain(sql, decision.RejectionDescription);
     }
 
     [Fact]

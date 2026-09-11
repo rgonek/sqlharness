@@ -20,7 +20,9 @@ public sealed class PostgresSpaceTests
         Assert.Contains("pg_namespace", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("pg_index", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("reltuples", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("current_setting('data_directory')", sql, StringComparison.Ordinal);
+        Assert.Contains("(SELECT setting FROM pg_settings WHERE name = 'data_directory')", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("current_setting('data_directory')", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("current_setting(\"data_directory\")", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("'DATA'", sql, StringComparison.Ordinal);
         Assert.Contains("LIMIT @top", sql, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("sys.database_files", sql, StringComparison.OrdinalIgnoreCase);

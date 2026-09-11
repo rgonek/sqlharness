@@ -494,7 +494,10 @@ internal sealed class PostgresSafetyClassifier
             if (DeniedExactFunctions.Contains(functionName))
                 return true;
 
-            return functionName.StartsWith("dblink", StringComparison.OrdinalIgnoreCase);
+            return functionName.StartsWith("dblink", StringComparison.OrdinalIgnoreCase)
+                || functionName.StartsWith("pg_read_", StringComparison.OrdinalIgnoreCase)
+                || functionName.StartsWith("pg_ls_", StringComparison.OrdinalIgnoreCase)
+                || functionName.StartsWith("lo_", StringComparison.OrdinalIgnoreCase);
         }
     }
 }
