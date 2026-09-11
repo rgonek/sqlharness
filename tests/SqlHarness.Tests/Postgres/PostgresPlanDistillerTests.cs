@@ -34,4 +34,21 @@ public sealed class PostgresPlanDistillerTests
         Assert.DoesNotContain("Seq Scan", error.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("statements", error.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Rejects_too_deep_nested_plans_without_echoing_payload()
+    {
+        const string secret = "deep-plan-secret";
+        var inner = $$"""{"Node Type":"Seq Scan","Relation Name":"{{secret}}"}""";
+        for (var i = 0; i < 6; i++)
+            inner = $$"""{"Node Type":"Nested Loop","Plans":[{{inner}}]}""";
+        var json = $$"""[{"Plan":{{inner}}}]""";
+
+        var error = Assert.Throws<SqlHarnessSafetyException>(() =>
+            PostgresPlanDistiller.Distill(json, new PlanDistillerLimits(1_000_000, 100_000, MaximumDepth: 5)));
+
+        Assert.DoesNotContain(secret, error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Nested Loop", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(json, error.Message, StringComparison.Ordinal);
+    }
 }
