@@ -37,4 +37,6 @@ internal interface ISqlDialect
     string CountsCatalogSql { get; }
 
     string BuildCountsExactSql(IReadOnlyList<ResolvedCountObject> objects);
+
+    string SchemaSql { get; }
 }

@@ -50,6 +50,8 @@ internal sealed class PostgresDialect : ISqlDialect
     public string BuildCountsExactSql(IReadOnlyList<ResolvedCountObject> objects) =>
         PostgresCounts.BuildExactSql(objects);
 
+    public string SchemaSql => PostgresSchema.Sql;
+
     public Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
         ISqlSession session,
         string sql,

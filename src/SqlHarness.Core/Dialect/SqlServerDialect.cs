@@ -37,6 +37,8 @@ internal sealed class SqlServerDialect : ISqlDialect
     public string BuildCountsExactSql(IReadOnlyList<ResolvedCountObject> objects) =>
         CountsQuery.BuildExactSql(objects);
 
+    public string SchemaSql => SchemaReader.Sql;
+
     public async Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
         ISqlSession session,
         string sql,

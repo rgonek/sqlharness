@@ -648,15 +648,20 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             if (schema.TimeoutSeconds is < 1 or > 300) throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
             if (schema.MaxObjects is < 1 or > 500) throw new SqlHarnessSafetyException("Schema object limit must be between 1 and 500.");
             var selection = SchemaReader.ParseObjectSelection(schema.Object);
-            var target = TargetResolver.Resolve(schema.Target, _loadProfiles()); phase = ExecutionPhase.Authentication;
+            var target = TargetResolver.Resolve(schema.Target, _loadProfiles());
+            var dialect = SqlDialects.For(target.Engine);
+            phase = ExecutionPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct); phase = ExecutionPhase.Sql;
             await using var reader = await session.ExecuteReaderAsync(
                 new SqlExecutionCommand(
-                    SchemaReader.Sql,
+                    dialect.SchemaSql,
                     SchemaReader.Parameters(schema.Filter, schema.MaxObjects, selection.Schema, selection.Name),
                     schema.TimeoutSeconds),
                 ct);
-            var result = await SchemaReader.ReadAsync(reader, ct); raw = result.Raw;
+            var result = target.Engine == SqlEngine.Postgres
+                ? await PostgresSchema.ReadAsync(reader, ct)
+                : await SchemaReader.ReadAsync(reader, ct);
+            raw = result.Raw;
             if (selection.IsObjectMode && (result.Objects.Count != 1 || result.Omitted != 0))
                 throw new SqlHarnessSafetyException(SchemaReader.MissingOrAmbiguousMessage);
             return WithReceipt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, new SqlHarnessSchemaReport(session.Identity, result.Objects, result.Omitted), null), stopwatch.ElapsedMilliseconds, raw, "schema");
