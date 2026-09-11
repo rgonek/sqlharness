@@ -273,11 +273,19 @@ function Test-DatabaseExists {
     return ($line -eq '1')
 }
 
+function Remove-IncompletePagilaDatabase {
+    # Fail-closed cleanup so a partial CREATE+dump failure does not sticky-skip on the next run.
+    Write-SetupInfo "Dropping incomplete database '$databaseName' so the next run can retry restore."
+    Invoke-PsqlInContainer -Database 'postgres' -Command "DROP DATABASE IF EXISTS $databaseName WITH (FORCE)" -AllowFailure | Out-Null
+}
+
 function Restore-Pagila {
     $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName())
     New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
     $localSchema = Join-Path $tempDir 'pagila-schema.sql'
     $localData = Join-Path $tempDir 'pagila-data.sql'
+    $databaseCreated = $false
+    $restoreCompleted = $false
 
     try {
         Write-SetupInfo 'Downloading Pagila schema and data dumps...'
@@ -286,6 +294,7 @@ function Restore-Pagila {
 
         Write-SetupInfo "Creating database '$databaseName'..."
         Invoke-PsqlInContainer -Database 'postgres' -Command "CREATE DATABASE $databaseName" | Out-Null
+        $databaseCreated = $true
 
         Write-SetupInfo 'Copying dumps into container...'
         Invoke-Docker -DockerArgs @(
@@ -311,8 +320,13 @@ function Restore-Pagila {
             'exec', $containerName
             'rm', '-rf', $containerSqlDir
         ) -AllowFailure | Out-Null
+
+        $restoreCompleted = $true
     }
     finally {
+        if ($databaseCreated -and -not $restoreCompleted) {
+            Remove-IncompletePagilaDatabase
+        }
         if (Test-Path $tempDir) {
             Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
         }

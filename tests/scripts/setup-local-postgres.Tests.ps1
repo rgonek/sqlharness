@@ -87,14 +87,16 @@ exit /b 0
 :cmd_exec
 findstr /C:"pg_isready" "%LAST%" >nul
 if not errorlevel 1 goto exec_ready
+findstr /C:"DROP DATABASE" "%LAST%" >nul
+if not errorlevel 1 goto exec_drop_db
 findstr /C:"pg_database" "%LAST%" >nul
 if not errorlevel 1 goto exec_db
 findstr /C:"CREATE DATABASE" "%LAST%" >nul
 if not errorlevel 1 goto exec_create_db
 findstr /C:"pagila-schema.sql" "%LAST%" >nul
-if not errorlevel 1 goto exec_restore
+if not errorlevel 1 goto exec_dump
 findstr /C:"pagila-data.sql" "%LAST%" >nul
-if not errorlevel 1 goto exec_restore
+if not errorlevel 1 goto exec_dump
 exit /b 0
 :exec_ready
 if exist "%ST%\ready.fail" (echo accepting connections failed& exit /b 1)
@@ -110,7 +112,11 @@ exit /b 0
 :exec_create_db
 type nul > "%ST%\db.exists"
 exit /b 0
-:exec_restore
+:exec_drop_db
+if exist "%ST%\db.exists" del "%ST%\db.exists"
+exit /b 0
+:exec_dump
+if exist "%ST%\restore.fail" (echo ERROR: fake dump restore failed& exit /b 1)
 type nul > "%ST%\db.exists"
 exit /b 0
 '@
@@ -133,6 +139,7 @@ function Set-FakeDockerState {
     $dbExists = [bool]$State.dbExists
     $ready = if ($State.ContainsKey('ready')) { [bool]$State.ready } else { $true }
     $infoOk = if ($State.ContainsKey('infoOk')) { [bool]$State.infoOk } else { $true }
+    $restoreOk = if ($State.ContainsKey('restoreOk')) { [bool]$State.restoreOk } else { $true }
     $hostPort = if ($State.hostPort) { [string]$State.hostPort } else { '5433' }
     $volumeName = if ($State.volumeName) { [string]$State.volumeName } else { 'sqlharness-pg-data' }
 
@@ -145,6 +152,7 @@ function Set-FakeDockerState {
     if ($dbExists) { New-Item -ItemType File -Path (Join-Path $st 'db.exists') -Force | Out-Null }
     if (-not $ready) { New-Item -ItemType File -Path (Join-Path $st 'ready.fail') -Force | Out-Null }
     if (-not $infoOk) { New-Item -ItemType File -Path (Join-Path $st 'info.fail') -Force | Out-Null }
+    if (-not $restoreOk) { New-Item -ItemType File -Path (Join-Path $st 'restore.fail') -Force | Out-Null }
 }
 
 function Get-DockerCallLog {
@@ -434,6 +442,37 @@ Describe 'setup-local-postgres.ps1' {
         $callText | Should Match 'pagila-data.sql'
         $callText | Should Match '(^|\s)cp\s+'
         $result.State.dbExists | Should Be $true
+    }
+
+    It 'drops incomplete pagila when dump restore fails after CREATE DATABASE' {
+        $state = @{
+            containerExists = $true
+            running         = $true
+            hostPort        = '5433'
+            volumeName      = 'sqlharness-pg-data'
+            volumeExists    = $true
+            dbExists        = $false
+            ready           = $true
+            infoOk          = $true
+            restoreOk       = $false
+        }
+        $result = Invoke-SetupScript -FakeRoot $fakeRoot -State $state
+        $result.ExitCode | Should Not Be 0
+
+        $callText = ($result.Calls -join "`n")
+        $callText | Should Match 'CREATE DATABASE'
+        $callText | Should Match 'pagila-schema.sql'
+        $callText | Should Match 'DROP DATABASE'
+        $result.State.dbExists | Should Be $false
+        $result.Output.Contains($script:FixturePassword) | Should Be $false
+    }
+
+    It 'script text contains DROP DATABASE cleanup for failed restore' {
+        $text = Get-Content -Raw -Path $script:SetupScript
+        $text | Should Match 'DROP DATABASE IF EXISTS'
+        $text | Should Match 'Remove-IncompletePagilaDatabase'
+        $text | Should Match '\$databaseCreated'
+        $text | Should Match '\$restoreCompleted'
     }
 
     It 'stops on a conflicting port mapping' {

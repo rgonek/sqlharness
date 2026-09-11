@@ -409,7 +409,7 @@ Opt-in local Docker, parallel to AdventureWorks:
 - **does not** write `~/.sqlharness/targets.json`.
 
 Sample database: **Pagila**. Manual profile merge (documented, not applied by
-the script): `local-pg-playground`, `engine: postgres`,
+the script): `local-pg`, `engine: postgres`,
 `trustServerCertificate: true`.
 
 Runtime support floor: PostgreSQL **14+**. Playground is 16.

@@ -46,6 +46,20 @@ public sealed class SetupLocalPostgresScriptTests
             script);
     }
 
+    [Fact]
+    public void Setup_script_drops_incomplete_pagila_database_after_failed_restore()
+    {
+        var script = File.ReadAllText(FindRepositoryFile("scripts", "setup-local-postgres.ps1"));
+
+        Assert.Contains("DROP DATABASE IF EXISTS", script, StringComparison.Ordinal);
+        Assert.Contains("Remove-IncompletePagilaDatabase", script, StringComparison.Ordinal);
+        Assert.Contains("$databaseCreated", script, StringComparison.Ordinal);
+        Assert.Contains("$restoreCompleted", script, StringComparison.Ordinal);
+        Assert.Matches(
+            @"(?s)\$databaseCreated\s*=\s*\$true.*?\$restoreCompleted\s*=\s*\$true.*?if\s*\(\s*\$databaseCreated\s*-and\s*-not\s*\$restoreCompleted\s*\)",
+            script);
+    }
+
     private static string FindRepositoryFile(params string[] path)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
