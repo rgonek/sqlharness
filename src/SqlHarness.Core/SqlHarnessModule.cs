@@ -31,13 +31,8 @@ public sealed record SqlHarnessQueryReport(
 
 public sealed class SqlHarnessModule : ISqlHarnessModule
 {
-    private static readonly TimeSpan StatisticsCleanupTimeout = TimeSpan.FromSeconds(5);
-
     private static readonly IReadOnlySet<string> NoSessionTemps =
         new HashSet<string>(StringComparer.Ordinal);
-
-    private static readonly CanonicalComparisonResult EmptyComparison =
-        new(string.Empty, Array.Empty<string>());
 
     private readonly ISqlSessionFactory _sessionFactory;
     private readonly IGainStore _gainStore;
@@ -288,6 +283,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             EnsureSafe(candidateSafety, "candidate");
             var parameters = dialect.ParseParameters(compare.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, compare.SetupSql, compare.BaselineSql, compare.CandidateSql);
+            dialect.ValidateMeasuredBatch(compare.BaselineSql);
+            dialect.ValidateMeasuredBatch(compare.CandidateSql);
 
             foreach (var parameter in parameters)
             {
@@ -305,21 +302,21 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
             // Fingerprints only for modes that run ResultComparer; off skips equivalence work entirely.
             var captureComparison = compare.CompareResults != ResultComparisonMode.Off;
-            await ExecuteBenchmarkRunAsync(session, compare.BaselineSql, parameters, compare.TimeoutSeconds, 0, "baseline", raw, captureComparison, ct);
-            await ExecuteBenchmarkRunAsync(session, compare.CandidateSql, parameters, compare.TimeoutSeconds, 0, "candidate", raw, captureComparison, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, compare.BaselineSql, parameters, compare.TimeoutSeconds, 0, "baseline", raw, captureComparison, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, compare.CandidateSql, parameters, compare.TimeoutSeconds, 0, "candidate", raw, captureComparison, ct);
 
             var runs = new List<CollectedCompareRun>(compare.Repeat * 2);
             for (var repetition = 1; repetition <= compare.Repeat; repetition++)
             {
                 if (repetition % 2 == 1)
                 {
-                    runs.Add(await ExecuteBenchmarkRunAsync(session, compare.BaselineSql, parameters, compare.TimeoutSeconds, repetition, "baseline", raw, captureComparison, ct));
-                    runs.Add(await ExecuteBenchmarkRunAsync(session, compare.CandidateSql, parameters, compare.TimeoutSeconds, repetition, "candidate", raw, captureComparison, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, compare.BaselineSql, parameters, compare.TimeoutSeconds, repetition, "baseline", raw, captureComparison, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, compare.CandidateSql, parameters, compare.TimeoutSeconds, repetition, "candidate", raw, captureComparison, ct));
                 }
                 else
                 {
-                    runs.Add(await ExecuteBenchmarkRunAsync(session, compare.CandidateSql, parameters, compare.TimeoutSeconds, repetition, "candidate", raw, captureComparison, ct));
-                    runs.Add(await ExecuteBenchmarkRunAsync(session, compare.BaselineSql, parameters, compare.TimeoutSeconds, repetition, "baseline", raw, captureComparison, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, compare.CandidateSql, parameters, compare.TimeoutSeconds, repetition, "candidate", raw, captureComparison, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, compare.BaselineSql, parameters, compare.TimeoutSeconds, repetition, "baseline", raw, captureComparison, ct));
                 }
             }
 
@@ -402,6 +399,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             EnsureSafe(querySafety, "query");
             var parameters = dialect.ParseParameters(measure.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, measure.SetupSql, measure.QuerySql);
+            dialect.ValidateMeasuredBatch(measure.QuerySql);
 
             foreach (var parameter in parameters)
             {
@@ -418,10 +416,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 await ExecuteRawAsync(session, new SqlExecutionCommand(measure.SetupSql, parameters, measure.TimeoutSeconds), raw, ct);
 
             // Measure never runs ResultComparer; skip fingerprint retention and the 1M row comparison cap.
-            await ExecuteBenchmarkRunAsync(session, measure.QuerySql, parameters, measure.TimeoutSeconds, 0, "measure", raw, captureComparison: false, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, 0, "measure", raw, captureComparison: false, ct);
             var runs = new List<CollectedCompareRun>(measure.Repeat);
             for (var repetition = 1; repetition <= measure.Repeat; repetition++)
-                runs.Add(await ExecuteBenchmarkRunAsync(session, measure.QuerySql, parameters, measure.TimeoutSeconds, repetition, "measure", raw, captureComparison: false, ct));
+                runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, repetition, "measure", raw, captureComparison: false, ct));
 
             rawFootprint = raw.Complete().Footprint;
             var targetReport = session.Identity;
@@ -461,7 +459,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         }
     }
 
-    private async Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
+    private Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
+        ISqlDialect dialect,
         ISqlSession session,
         string sql,
         IReadOnlyList<SqlHarnessParameter> parameters,
@@ -470,122 +469,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         string variant,
         CanonicalResultAccumulator raw,
         bool captureComparison,
-        CancellationToken ct)
-    {
-        const string enable = "SET STATISTICS IO ON; SET STATISTICS TIME ON; SET STATISTICS XML ON;";
-        const string disable = "SET STATISTICS XML OFF; SET STATISTICS TIME OFF; SET STATISTICS IO OFF;";
-        Exception? primaryException = null;
-        var messageStart = -1;
-        var messagesCaptured = false;
-        try
-        {
-            await ExecuteAndDrainAsync(session, new SqlExecutionCommand(enable, [], timeoutSeconds), ct);
-            messageStart = session.Messages.Count;
-            await using var reader = await session.ExecuteReaderAsync(new SqlExecutionCommand(sql, parameters, timeoutSeconds), ct);
-            var result = await CollectCompareAsync(reader, raw, captureComparison, ct);
-            var messages = session.Messages.Skip(messageStart).ToArray();
-            foreach (var message in messages)
-                raw.AddMessage("sql", message);
-            messagesCaptured = true;
-            var io = StatisticsIoParser.Parse(string.Join(Environment.NewLine, messages));
-            var time = StatisticsTimeParser.Parse(string.Join(Environment.NewLine, messages));
-            var plans = result.PlanXmls.Select(ExecutionPlanParser.Parse).ToArray();
-            var artifact = new CompareRunArtifact(
-                variant,
-                repetition,
-                time.CpuTimeMs,
-                time.ElapsedTimeMs,
-                io.LogicalReads,
-                io.Tables,
-                result.Canonical.Hash,
-                result.PlanXmls,
-                messages.Length);
-            return new CollectedCompareRun(artifact, plans, result.Comparison);
-        }
-        catch (Exception exception)
-        {
-            primaryException = exception;
-            if (messageStart >= 0 && !messagesCaptured)
-            {
-                try
-                {
-                    AppendMessages(session, messageStart, raw);
-                }
-                catch
-                {
-                    // Preserve the primary benchmark failure if message snapshotting also fails.
-                }
-            }
-            throw;
-        }
-        finally
-        {
-            using var cleanupCts = new CancellationTokenSource(StatisticsCleanupTimeout);
-            try
-            {
-                await ExecuteAndDrainAsync(
-                        session,
-                        new SqlExecutionCommand(disable, [], timeoutSeconds),
-                        cleanupCts.Token)
-                    .WaitAsync(StatisticsCleanupTimeout, CancellationToken.None);
-            }
-            catch when (primaryException is not null)
-            {
-                // Preserve the benchmark failure while still bounding the best-effort cleanup.
-            }
-        }
-    }
-
-    private async Task<CollectedCompare> CollectCompareAsync(
-        ISqlReader reader,
-        CanonicalResultAccumulator raw,
-        bool captureComparison,
-        CancellationToken ct)
-    {
-        using var canonical = new CanonicalResultAccumulator();
-        using var comparison = captureComparison
-            ? new CanonicalComparisonAccumulator(ComparisonMaximumRows)
-            : null;
-        var planXmls = new List<string>();
-        do
-        {
-            if (reader.FieldCount == 0)
-                continue;
-            if (reader.FieldCount == 1 && reader.GetName(0).Contains("XML Showplan", StringComparison.OrdinalIgnoreCase))
-            {
-                while (await reader.ReadAsync(ct))
-                {
-                    var planXml = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty;
-                    planXmls.Add(planXml);
-                    raw.AddMessage("planXml", planXml);
-                }
-                continue;
-            }
-
-            var columns = Enumerable.Range(0, reader.FieldCount)
-                .Select(index => new CanonicalColumn(index, reader.GetName(index), reader.GetFieldType(index).FullName ?? reader.GetFieldType(index).Name, reader.GetAllowNull(index)))
-                .ToArray();
-            canonical.BeginResultSet(columns);
-            comparison?.BeginResultSet(columns);
-            raw.BeginResultSet(columns);
-            while (await reader.ReadAsync(ct))
-            {
-                var values = Enumerable.Range(0, reader.FieldCount)
-                    .Select(index => NormalizeValue(reader.GetValue(index)))
-                    .ToArray();
-                canonical.AddRow(values);
-                comparison?.AddRow(values);
-                raw.AddRow(values);
-            }
-            canonical.EndResultSet();
-            comparison?.EndResultSet();
-            raw.EndResultSet();
-        } while (await reader.NextResultAsync(ct));
-        return new CollectedCompare(
-            canonical.Complete(),
-            comparison?.Complete() ?? EmptyComparison,
-            planXmls);
-    }
+        CancellationToken ct) =>
+        dialect.ExecuteBenchmarkRunAsync(
+            session, sql, parameters, timeoutSeconds, repetition, variant, raw, captureComparison, ComparisonMaximumRows, ct);
 
     private static async Task ExecuteRawAsync(
         ISqlSession session,
@@ -613,7 +499,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 while (await reader.ReadAsync(ct))
                 {
                     raw.AddRow(Enumerable.Range(0, reader.FieldCount)
-                        .Select(index => NormalizeValue(reader.GetValue(index)))
+                        .Select(index => BenchmarkCollector.NormalizeValue(reader.GetValue(index)))
                         .ToArray());
                 }
                 raw.EndResultSet();
@@ -628,33 +514,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             try
             {
-                AppendMessages(session, messageStart, raw);
+                BenchmarkCollector.AppendMessages(session, messageStart, raw);
             }
             catch when (primaryException is not null)
             {
                 // Preserve the primary setup failure if message snapshotting also fails.
             }
         }
-    }
-
-    private static void AppendMessages(ISqlSession session, int messageStart, CanonicalResultAccumulator raw)
-    {
-        foreach (var message in session.Messages.Skip(messageStart))
-            raw.AddMessage("sql", message);
-    }
-
-    private static async Task ExecuteAndDrainAsync(
-        ISqlSession session,
-        SqlExecutionCommand command,
-        CancellationToken ct)
-    {
-        await using var reader = await session.ExecuteReaderAsync(command, ct);
-        do
-        {
-            while (await reader.ReadAsync(ct))
-            {
-            }
-        } while (await reader.NextResultAsync(ct));
     }
 
     private static CompareVariantReport CreateVariantReport(string name, IReadOnlyList<CollectedCompareRun> runs)
@@ -738,8 +604,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             throw new SqlHarnessSafetyException($"SQL safety rejection for {label}: {decision.RejectionDescription}");
     }
 
-    private static object? NormalizeValue(object value) => value is DBNull ? null : value;
-
     private static void ValidateBounds(SqlHarnessQueryOperation query)
     {
         if (query.TimeoutSeconds is < 1 or > 300)
@@ -763,20 +627,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         _ when phase == ExecutionPhase.Authentication => SqlHarnessExitCode.Authentication,
         _ => SqlHarnessExitCode.SqlExecution,
     };
-
-    private sealed record CollectedCompare(
-        CanonicalResult Canonical,
-        CanonicalComparisonResult Comparison,
-        IReadOnlyList<string> PlanXmls);
-
-    private sealed record CollectedCompareRun(
-        CompareRunArtifact Artifact,
-        IReadOnlyList<ExecutionPlan> Plans,
-        CanonicalComparisonResult Comparison)
-    {
-        public string Variant => Artifact.Variant;
-        public string ResultHash => Artifact.ResultHash;
-    }
 
     private enum ExecutionPhase
     {
@@ -1217,4 +1067,100 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             return WithReceipt(outcome, stopwatch.ElapsedMilliseconds, raw, "plan");
         }
     }
+}
+
+internal sealed record CollectedCompare(
+    CanonicalResult Canonical,
+    CanonicalComparisonResult Comparison,
+    IReadOnlyList<string> PlanXmls);
+
+internal sealed record CollectedCompareRun(
+    CompareRunArtifact Artifact,
+    IReadOnlyList<ExecutionPlan> Plans,
+    CanonicalComparisonResult Comparison)
+{
+    public string Variant => Artifact.Variant;
+    public string ResultHash => Artifact.ResultHash;
+}
+
+internal static class BenchmarkCollector
+{
+    internal static readonly TimeSpan StatisticsCleanupTimeout = TimeSpan.FromSeconds(5);
+
+    internal static readonly CanonicalComparisonResult EmptyComparison =
+        new(string.Empty, Array.Empty<string>());
+
+    internal static async Task<CollectedCompare> CollectCompareAsync(
+        ISqlReader reader,
+        CanonicalResultAccumulator raw,
+        bool captureComparison,
+        int comparisonMaximumRows,
+        CancellationToken ct)
+    {
+        using var canonical = new CanonicalResultAccumulator();
+        using var comparison = captureComparison
+            ? new CanonicalComparisonAccumulator(comparisonMaximumRows)
+            : null;
+        var planXmls = new List<string>();
+        do
+        {
+            if (reader.FieldCount == 0)
+                continue;
+            if (reader.FieldCount == 1 && reader.GetName(0).Contains("XML Showplan", StringComparison.OrdinalIgnoreCase))
+            {
+                while (await reader.ReadAsync(ct))
+                {
+                    var planXml = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty;
+                    planXmls.Add(planXml);
+                    raw.AddMessage("planXml", planXml);
+                }
+                continue;
+            }
+
+            var columns = Enumerable.Range(0, reader.FieldCount)
+                .Select(index => new CanonicalColumn(index, reader.GetName(index), reader.GetFieldType(index).FullName ?? reader.GetFieldType(index).Name, reader.GetAllowNull(index)))
+                .ToArray();
+            canonical.BeginResultSet(columns);
+            comparison?.BeginResultSet(columns);
+            raw.BeginResultSet(columns);
+            while (await reader.ReadAsync(ct))
+            {
+                var values = Enumerable.Range(0, reader.FieldCount)
+                    .Select(index => NormalizeValue(reader.GetValue(index)))
+                    .ToArray();
+                canonical.AddRow(values);
+                comparison?.AddRow(values);
+                raw.AddRow(values);
+            }
+            canonical.EndResultSet();
+            comparison?.EndResultSet();
+            raw.EndResultSet();
+        } while (await reader.NextResultAsync(ct));
+        return new CollectedCompare(
+            canonical.Complete(),
+            comparison?.Complete() ?? EmptyComparison,
+            planXmls);
+    }
+
+    internal static void AppendMessages(ISqlSession session, int messageStart, CanonicalResultAccumulator raw)
+    {
+        foreach (var message in session.Messages.Skip(messageStart))
+            raw.AddMessage("sql", message);
+    }
+
+    internal static async Task ExecuteAndDrainAsync(
+        ISqlSession session,
+        SqlExecutionCommand command,
+        CancellationToken ct)
+    {
+        await using var reader = await session.ExecuteReaderAsync(command, ct);
+        do
+        {
+            while (await reader.ReadAsync(ct))
+            {
+            }
+        } while (await reader.NextResultAsync(ct));
+    }
+
+    internal static object? NormalizeValue(object value) => value is DBNull ? null : value;
 }

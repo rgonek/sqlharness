@@ -40,4 +40,20 @@ internal sealed class PostgresDialect : ISqlDialect
         PostgresParameters.Validate(parsed);
         return parsed;
     }
+
+    public void ValidateMeasuredBatch(string sql) => PostgresBenchmark.ValidateMeasuredBatch(sql);
+
+    public Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
+        ISqlSession session,
+        string sql,
+        IReadOnlyList<SqlHarnessParameter> parameters,
+        int timeoutSeconds,
+        int repetition,
+        string variant,
+        CanonicalResultAccumulator raw,
+        bool captureComparison,
+        int comparisonMaximumRows,
+        CancellationToken ct) =>
+        PostgresBenchmark.ExecuteBenchmarkRunAsync(
+            session, sql, parameters, timeoutSeconds, repetition, variant, raw, captureComparison, comparisonMaximumRows, ct);
 }

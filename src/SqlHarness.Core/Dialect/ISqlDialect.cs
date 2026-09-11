@@ -17,4 +17,18 @@ internal interface ISqlDialect
     IReadOnlySet<string> CollectSessionTempTables(string sql);
 
     IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs);
+
+    void ValidateMeasuredBatch(string sql);
+
+    Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
+        ISqlSession session,
+        string sql,
+        IReadOnlyList<SqlHarnessParameter> parameters,
+        int timeoutSeconds,
+        int repetition,
+        string variant,
+        CanonicalResultAccumulator raw,
+        bool captureComparison,
+        int comparisonMaximumRows,
+        CancellationToken ct);
 }
