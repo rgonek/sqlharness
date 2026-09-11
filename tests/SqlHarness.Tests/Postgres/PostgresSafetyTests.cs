@@ -95,6 +95,9 @@ public sealed class PostgresSafetyTests
     [InlineData("PREPARE x AS SELECT 1")]
     [InlineData("SELECT nextval('s')")]
     [InlineData("SELECT dblink('dbname=other','select 1')")]
+    [InlineData("SELECT * FROM dblink('dbname=other','select 1')")]
+    [InlineData("SELECT * FROM pg_ls_dir('.')")]
+    [InlineData("SELECT * FROM pg_catalog.pg_ls_dir('.')")]
     public void Denied_constructs(string sql)
     {
         var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);

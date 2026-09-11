@@ -458,32 +458,43 @@ internal sealed class PostgresSafetyClassifier
 
         public override ControlFlow PreVisitExpression(Expression expression)
         {
-            if (expression is Expression.Function function)
+            if (expression is Expression.Function function && IsDeniedObjectName(function.Name))
             {
-                var name = FunctionName(function.Name);
-                if (IsDeniedFunction(name))
-                {
-                    HasProhibitedFunction = true;
-                    return ControlFlow.Break;
-                }
+                HasProhibitedFunction = true;
+                return ControlFlow.Break;
             }
 
             return ControlFlow.Continue;
         }
 
-        private static string FunctionName(ObjectName name)
+        public override ControlFlow PreVisitTableFactor(TableFactor tableFactor)
         {
-            if (name.Values.Count == 0)
-                return string.Empty;
-            return name.Values[^1].Value;
+            switch (tableFactor)
+            {
+                case TableFactor.Table table when table.Args is not null && IsDeniedObjectName(table.Name):
+                case TableFactor.Function function when IsDeniedObjectName(function.Name):
+                    HasProhibitedFunction = true;
+                    return ControlFlow.Break;
+                case TableFactor.TableFunction tableFunction
+                    when tableFunction.Expression is Expression.Function exprFunction
+                         && IsDeniedObjectName(exprFunction.Name):
+                    HasProhibitedFunction = true;
+                    return ControlFlow.Break;
+            }
+
+            return ControlFlow.Continue;
         }
 
-        private static bool IsDeniedFunction(string name)
+        private static bool IsDeniedObjectName(ObjectName name)
         {
-            if (DeniedExactFunctions.Contains(name))
+            if (name.Values.Count == 0)
+                return false;
+
+            var functionName = name.Values[^1].Value;
+            if (DeniedExactFunctions.Contains(functionName))
                 return true;
 
-            return name.StartsWith("dblink", StringComparison.OrdinalIgnoreCase);
+            return functionName.StartsWith("dblink", StringComparison.OrdinalIgnoreCase);
         }
     }
 }
