@@ -33,6 +33,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 {
     private static readonly TimeSpan StatisticsCleanupTimeout = TimeSpan.FromSeconds(5);
 
+    private static readonly IReadOnlySet<string> NoSessionTemps =
+        new HashSet<string>(StringComparer.Ordinal);
+
     private static readonly CanonicalComparisonResult EmptyComparison =
         new(string.Empty, Array.Empty<string>());
 
@@ -151,12 +154,14 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             ValidateBounds(query);
             var target = TargetResolver.Resolve(query.Target, _loadProfiles());
-            var safety = new SqlSafetyClassifier().Classify(
+            var dialect = SqlDialects.For(target.Engine);
+            var safety = dialect.Classify(
                 query.Sql,
                 SqlUsage.Query,
                 target.Database,
                 query.AllowMutation,
-                query.ConfirmDatabase);
+                query.ConfirmDatabase,
+                NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
             var parameters = SqlParameterParser.Parse(query.Parameters);
@@ -188,7 +193,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var targetReport = session.Identity;
             var report = new SqlHarnessQueryReport(
                 targetReport,
-                safety.HasMutation ? "mutation" : "read-only",
+                ClassificationLabel(safety),
                 collected.ResultSets,
                 collected.Messages,
                 collected.RecordsAffected,
@@ -264,17 +269,23 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             ValidateCompare(compare);
             var target = TargetResolver.Resolve(compare.Target, _loadProfiles());
-            var classifier = new SqlSafetyClassifier();
-            var baselineSafety = classifier.Classify(compare.BaselineSql, SqlUsage.Query, target.Database, false);
-            EnsureSafe(baselineSafety, "baseline");
-            var candidateSafety = classifier.Classify(compare.CandidateSql, SqlUsage.Query, target.Database, false);
-            EnsureSafe(candidateSafety, "candidate");
+            var dialect = SqlDialects.For(target.Engine);
             SqlSafetyDecision? setupSafety = null;
+            IReadOnlySet<string> setupTemps = NoSessionTemps;
             if (!string.IsNullOrWhiteSpace(compare.SetupSql))
             {
-                setupSafety = classifier.Classify(compare.SetupSql, SqlUsage.CompareSetup, target.Database, false);
+                setupSafety = dialect.Classify(
+                    compare.SetupSql, SqlUsage.CompareSetup, target.Database, false, null, NoSessionTemps);
                 EnsureSafe(setupSafety, "setup");
+                setupTemps = setupSafety.SessionTempTables;
             }
+
+            var baselineSafety = dialect.Classify(
+                compare.BaselineSql, SqlUsage.Query, target.Database, false, null, setupTemps);
+            EnsureSafe(baselineSafety, "baseline");
+            var candidateSafety = dialect.Classify(
+                compare.CandidateSql, SqlUsage.Query, target.Database, false, null, setupTemps);
+            EnsureSafe(candidateSafety, "candidate");
             var parameters = SqlParameterParser.Parse(compare.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, compare.SetupSql, compare.BaselineSql, compare.CandidateSql);
 
@@ -375,15 +386,20 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             ValidateMeasure(measure);
             var target = TargetResolver.Resolve(measure.Target, _loadProfiles());
-            var classifier = new SqlSafetyClassifier();
-            var querySafety = classifier.Classify(measure.QuerySql, SqlUsage.Query, target.Database, false);
-            EnsureSafe(querySafety, "query");
+            var dialect = SqlDialects.For(target.Engine);
             SqlSafetyDecision? setupSafety = null;
+            IReadOnlySet<string> setupTemps = NoSessionTemps;
             if (!string.IsNullOrWhiteSpace(measure.SetupSql))
             {
-                setupSafety = classifier.Classify(measure.SetupSql, SqlUsage.CompareSetup, target.Database, false);
+                setupSafety = dialect.Classify(
+                    measure.SetupSql, SqlUsage.CompareSetup, target.Database, false, null, NoSessionTemps);
                 EnsureSafe(setupSafety, "setup");
+                setupTemps = setupSafety.SessionTempTables;
             }
+
+            var querySafety = dialect.Classify(
+                measure.QuerySql, SqlUsage.Query, target.Database, false, null, setupTemps);
+            EnsureSafe(querySafety, "query");
             var parameters = SqlParameterParser.Parse(measure.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, measure.SetupSql, measure.QuerySql);
 
@@ -814,12 +830,14 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             ValidateWatch(watch);
             var target = TargetResolver.Resolve(watch.Target, _loadProfiles());
-            var safety = new SqlSafetyClassifier().Classify(
+            var dialect = SqlDialects.For(target.Engine);
+            var safety = dialect.Classify(
                 watch.Sql,
                 SqlUsage.Query,
                 target.Database,
                 allowMutation: false,
-                confirmDatabase: null);
+                confirmDatabase: null,
+                NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
             var parameters = SqlParameterParser.Parse(watch.Parameters);
@@ -900,12 +918,14 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             ValidateSnapshot(snapshot);
             var target = TargetResolver.Resolve(snapshot.Target, _loadProfiles());
-            var safety = new SqlSafetyClassifier().Classify(
+            var dialect = SqlDialects.For(target.Engine);
+            var safety = dialect.Classify(
                 snapshot.Sql,
                 SqlUsage.Query,
                 target.Database,
                 allowMutation: false,
-                confirmDatabase: null);
+                confirmDatabase: null,
+                NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
             var parameters = SqlParameterParser.Parse(snapshot.Parameters);

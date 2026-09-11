@@ -16,6 +16,7 @@
     <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" />
     <PackageReference Include="Microsoft.SqlServer.Types" />
     <PackageReference Include="Npgsql" />
+    <PackageReference Include="SqlParserCS" />
   </ItemGroup>
 
 </Project>
