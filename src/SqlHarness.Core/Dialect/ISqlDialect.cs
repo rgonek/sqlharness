@@ -15,4 +15,6 @@ internal interface ISqlDialect
         IReadOnlySet<string> sessionTempTables);
 
     IReadOnlySet<string> CollectSessionTempTables(string sql);
+
+    IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs);
 }

@@ -33,4 +33,11 @@ internal sealed class PostgresDialect : ISqlDialect
             NoSessionTemps);
         return decision.Allowed ? decision.SessionTempTables : NoSessionTemps;
     }
+
+    public IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs)
+    {
+        var parsed = SqlParameterParser.Parse(inputs);
+        PostgresParameters.Validate(parsed);
+        return parsed;
+    }
 }

@@ -22,4 +22,7 @@ internal sealed class SqlServerDialect : ISqlDialect
         _classifier.Classify(sql, usage, database, allowMutation, confirmDatabase);
 
     public IReadOnlySet<string> CollectSessionTempTables(string sql) => NoSessionTemps;
+
+    public IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs) =>
+        SqlParameterParser.Parse(inputs);
 }

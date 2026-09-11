@@ -95,9 +95,7 @@ internal sealed class NpgsqlSession(
         var transferred = false;
         try
         {
-            command.CommandText = execution.Sql;
-            command.CommandType = CommandType.Text;
-            command.CommandTimeout = execution.TimeoutSeconds;
+            BindCommand(command, execution);
             var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, ct);
             transferred = true;
             return new NpgsqlSessionReader(command, reader);
@@ -107,6 +105,14 @@ internal sealed class NpgsqlSession(
             if (!transferred)
                 await command.DisposeAsync();
         }
+    }
+
+    internal static void BindCommand(NpgsqlCommand command, SqlExecutionCommand execution)
+    {
+        command.CommandText = execution.Sql;
+        command.CommandType = CommandType.Text;
+        command.CommandTimeout = execution.TimeoutSeconds;
+        PostgresParameters.Bind(command, execution.Parameters);
     }
 
     public async ValueTask DisposeAsync()

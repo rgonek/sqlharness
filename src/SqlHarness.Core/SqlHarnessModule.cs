@@ -164,7 +164,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
-            var parameters = SqlParameterParser.Parse(query.Parameters);
+            var parameters = dialect.ParseParameters(query.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, query.Sql);
 
             foreach (var parameter in parameters)
@@ -286,7 +286,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var candidateSafety = dialect.Classify(
                 compare.CandidateSql, SqlUsage.Query, target.Database, false, null, setupTemps);
             EnsureSafe(candidateSafety, "candidate");
-            var parameters = SqlParameterParser.Parse(compare.Parameters);
+            var parameters = dialect.ParseParameters(compare.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, compare.SetupSql, compare.BaselineSql, compare.CandidateSql);
 
             foreach (var parameter in parameters)
@@ -400,7 +400,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var querySafety = dialect.Classify(
                 measure.QuerySql, SqlUsage.Query, target.Database, false, null, setupTemps);
             EnsureSafe(querySafety, "query");
-            var parameters = SqlParameterParser.Parse(measure.Parameters);
+            var parameters = dialect.ParseParameters(measure.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, measure.SetupSql, measure.QuerySql);
 
             foreach (var parameter in parameters)
@@ -840,7 +840,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
-            var parameters = SqlParameterParser.Parse(watch.Parameters);
+            var parameters = dialect.ParseParameters(watch.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, watch.Sql);
             // Predicate syntax is validated before authentication so bad --until fails closed.
             if (watch.Until is not null)
@@ -928,7 +928,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
-            var parameters = SqlParameterParser.Parse(snapshot.Parameters);
+            var parameters = dialect.ParseParameters(snapshot.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, snapshot.Sql);
 
             foreach (var parameter in parameters)
