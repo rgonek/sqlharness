@@ -20,6 +20,8 @@ internal interface ISqlDialect
 
     void ValidateMeasuredBatch(string sql);
 
+    DistilledPlan DistillPlan(string document);
+
     Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
         ISqlSession session,
         string sql,

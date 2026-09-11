@@ -212,7 +212,9 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
 
     private static string DistillForArtifact(string document) =>
         JsonSerializer.Serialize(
-            IsJsonPlan(document) ? new DistilledPlan([]) : PlanDistiller.Distill(document),
+            IsJsonPlan(document)
+                ? Postgres.PostgresPlanDistiller.Distill(document)
+                : PlanDistiller.Distill(document),
             JsonOptions);
 
     private static string PlanFileName(CompareRunArtifact run, int runIndex, int planIndex, string document)

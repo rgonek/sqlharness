@@ -43,6 +43,8 @@ internal sealed class PostgresDialect : ISqlDialect
 
     public void ValidateMeasuredBatch(string sql) => PostgresBenchmark.ValidateMeasuredBatch(sql);
 
+    public DistilledPlan DistillPlan(string document) => PostgresPlanDistiller.Distill(document);
+
     public Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
         ISqlSession session,
         string sql,

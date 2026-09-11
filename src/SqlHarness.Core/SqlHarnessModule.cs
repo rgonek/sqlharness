@@ -1053,13 +1053,16 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         return (schema, name);
     }
 
+    private const string InvalidPlanEitherMessage =
+        "The execution plan is not a valid SQL Server Showplan document or Postgres EXPLAIN JSON document.";
+
     private SqlHarnessOutcome ExecutePlan(SqlHarnessPlanOperation operation)
     {
         var stopwatch = Stopwatch.StartNew();
         var raw = operation.RawFootprint;
         try
         {
-            var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, PlanDistiller.Distill(operation.ShowplanXml), null);
+            var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, DistillPlanDocument(operation.ShowplanXml), null);
             return WithReceipt(outcome, stopwatch.ElapsedMilliseconds, raw, "plan");
         }
         catch (Exception exception)
@@ -1067,6 +1070,20 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, SecretRedactor.Redact(exception, [operation.ShowplanXml]));
             return WithReceipt(outcome, stopwatch.ElapsedMilliseconds, raw, "plan");
         }
+    }
+
+    private static DistilledPlan DistillPlanDocument(string document)
+    {
+        var trimmed = document.AsSpan().TrimStart();
+        if (trimmed.IsEmpty)
+            throw new SqlHarnessSafetyException(InvalidPlanEitherMessage);
+
+        return trimmed[0] switch
+        {
+            '<' => PlanDistiller.Distill(document),
+            '{' or '[' => PostgresPlanDistiller.Distill(document),
+            _ => throw new SqlHarnessSafetyException(InvalidPlanEitherMessage),
+        };
     }
 }
 

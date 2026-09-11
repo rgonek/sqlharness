@@ -13,7 +13,7 @@ public sealed class PlanCommand(ISqlHarnessModule module, OutputContext output, 
     public sealed class Settings : CommandSettings
     {
         [CommandArgument(0, "[file]")]
-        [Description("Showplan XML file, or -/omitted for stdin.")]
+        [Description("SQL Server Showplan XML or Postgres EXPLAIN JSON file, or -/omitted for stdin.")]
         public string? File { get; set; }
 
         [CommandOption("--json")]
