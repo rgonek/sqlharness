@@ -1,6 +1,6 @@
 # SQLHarness agent contract
 
-SQLHarness is a repeatable SQL Server optimization harness for coding agents. It provides bounded query execution, measurements, baseline/candidate comparison with equivalence checks, compact plan distillation, schema inspection, and gain reporting.
+SQLHarness is a repeatable SQL Server and PostgreSQL optimization harness for coding agents. It provides bounded query execution, measurements, baseline/candidate comparison with equivalence checks, compact plan distillation, schema inspection, and gain reporting. Engine is a property of the locked profile (`engine: postgres` or omitted/`sqlserver`); `--engine` is valid only with `--unsafe-direct`.
 
 ## Start safely
 
@@ -39,11 +39,22 @@ sqlharness gain --json
 
 For agent-authored SQL, every ScriptDom-parsable construct inside a top-level `SELECT` is accepted without per-fragment registration. This includes CTEs, scalar functions, table/index hints, optimizer hints, windowing, and derived/apply syntax. Independent safety checks still reject unsupported top-level statements, cross-database access, external or stateful sources, dynamic SQL, and writes outside the approved local-`#temp` or mutation contracts. Do not fall back to `sqlcmd` merely because a safe nested `SELECT` construct is unfamiliar to the parser AST.
 
+## PostgreSQL engine notes
+
+- Profiles may set `"engine": "postgres"`; omitted means SQL Server. Prefer closed named profiles (for example `local-pg`). `--engine` only with `--unsafe-direct` (never with a profile or `--var`).
+- Postgres auth is `sql` only (`sqlUser` + `passwordEnvVar`). `trustServerCertificate: true` → Npgsql `SslMode=Disable`; `false` → `SslMode=Require`.
+- Session temps are native `CREATE TEMP TABLE` / `TEMPORARY` — no `#temp` translation. Persistent DML still needs `--allow-mutation --confirm-database`; persistent DDL stays denied.
+- Rejected `--param` types on Postgres: `money`, `smallmoney`, `smalldatetime`, `hierarchyid`, `geography`, `geometry`.
+- `measure` / `compare` time one EXPLAIN-able statement with `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`; result equivalence uses an unmeasured sidecar. `CpuTimeMs` is `0`; `logicalReads` are buffer hits+reads; `missingIndexes` is empty.
+- `counts` / `schema` / `space` / `--like` / `--filter` / `--object` match identifiers case-sensitively as stored (`Contracts` ≠ `contracts`).
+- `space` analogs: Files = one `DATA` row (`pg_database_size`); Allocation Reserved vs Used/Data need not sum; Tables by `pg_total_relation_size` + `reltuples`; index `Type` = access method, `Compression` = null.
+- Optional playground: `.\scripts\setup-local-postgres.ps1` with `SQLHARNESS_PG_PLAYGROUND_PASSWORD` → container `sqlharness-pg`, port `5433`, volume `sqlharness-pg-data`, image `postgres:16`, database `pagila`. Never writes `targets.json`. Opt-in live tests use `SQLHARNESS_PG_INTEGRATION_CONNECTION_STRING` (not the SQL Server integration variable).
+
 ## Benchmark setup contract
 
-- `measure` / `compare`: setup runs exactly once per connection; warm-up and all measured repetitions reuse that same session (so session-local `#temp` from setup is visible).
+- `measure` / `compare`: setup runs exactly once per connection; warm-up and all measured repetitions reuse that same session (so session-local `#temp` / Postgres `TEMP` from setup is visible).
 - A rejected or failed setup stops the run; never work around safety by creating persistent objects.
-- Local `#temp` only (unqualified name starts with exactly one `#`): allowed for setup/DML/indexes/supported constraints without mutation confirmation. Persistent objects, `##temp`, dynamic SQL, external access, cross-database references, and transaction control remain denied.
+- SQL Server: local `#temp` only (unqualified name starts with exactly one `#`): allowed for setup/DML/indexes/supported constraints without mutation confirmation. Postgres: native `TEMP` / `TEMPORARY` only — no `#temp` rewrite. Persistent objects, `##temp`, dynamic SQL, external access, cross-database references, and transaction control remain denied.
 - Before measuring, inventory representative cases offline: row count, cardinality distribution, ordering ties, missing history, boundary dates, and empty results.
 - Keep ticket-specific benchmark SQL outside the application repository. Treat plans, artifacts, and runtime parameters as locally sensitive.
 
@@ -57,6 +68,6 @@ For agent-authored SQL, every ScriptDom-parsable construct inside a top-level `S
 
 - Read-only is the default. A persistent mutation requires fresh, single-use user approval for the exact batch and resolved database, then both `--allow-mutation` and `--confirm-database <exact-resolved-name>`.
 - Never work around a safety rejection. Report it and ask for an explicit, narrower request or approval.
-- `--unsafe-direct` bypasses closed profiles. Use it only with an explicit request and complete `--server`, `--database`, and `--auth`; do not combine it with a profile or `--var`.
+- `--unsafe-direct` bypasses closed profiles. Use it only with an explicit request and complete `--server`, `--database`, and `--auth`; do not combine it with a profile or `--var`. Optional `--engine` is allowed only on that direct path.
 - Treat `.sqlplan`, comparison artifacts, named snapshots under `~/.sqlharness/snapshots` (sensitive result data; replace only with `--force`), and runtime parameters as locally sensitive. `snapshot --diff` never prints cell values. Secrets, passwords, and tokens stay only in process memory.
 - Exit codes: `0` success; `2` validation/safety; `3` authentication; `4` target mismatch; `5` SQL execution; `6` local storage; `7` `watch` max duration without a stop condition; `8` `snapshot --diff` found differences (valid comparison, not an execution failure).

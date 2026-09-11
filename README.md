@@ -2,7 +2,7 @@
 
 Measure, compare, and prove SQL changes.
 
-SQLHarness is a command-line optimization harness for SQL Server and Azure SQL. It gives coding agents and engineers bounded query execution, repeated measurements, baseline/candidate equivalence checks, compact execution-plan distillation, schema inspection, and locally recorded output-savings evidence.
+SQLHarness is a command-line optimization harness for SQL Server, Azure SQL, and PostgreSQL. It gives coding agents and engineers bounded query execution, repeated measurements, baseline/candidate equivalence checks, compact execution-plan distillation, schema inspection, and locally recorded output-savings evidence. The engine is a property of the locked target profile (omit `engine` for SQL Server; set `"engine": "postgres"` for Postgres).
 
 ## Install a release binary
 
@@ -68,6 +68,7 @@ Notes:
 - `geography` / `geometry` bind WKT as native UDTs (via `Microsoft.SqlServer.Types`). Optional form: `srid;WKT` (defaults: geography `4326`, geometry `0`), for example `4326;POINT(-122.3 47.6)`.
 - Spatial types need the package's native `SqlServerSpatial*` runtime on supported Windows RIDs; Linux/macOS spatial UDT binding is not guaranteed.
 - Nulls: `name:null` or typed `name:type:null` (for example `count:int:null`).
+- On Postgres, reject `money`, `smallmoney`, `smalldatetime`, `hierarchyid`, `geography`, and `geometry` parameters (exit 2). Prefer `decimal` / `numeric`, `datetime` / `datetime2`, and text/binary types.
 
 ```powershell
 sqlharness measure prod-eu --var tenant=acme --var env=uat `
@@ -75,6 +76,30 @@ sqlharness measure prod-eu --var tenant=acme --var env=uat `
   --param asOf:datetime2=2026-07-29T12:00:00 `
   --param amount:decimal(19,4)=1234.5600 `
   --repeat 5 --json
+```
+
+### PostgreSQL engine notes
+
+- Profiles may set `"engine": "postgres"`. Omitted `engine` means SQL Server. Use `--engine postgres` only with `--unsafe-direct`.
+- Postgres auth is `sql` only (`sqlUser` + `passwordEnvVar`). `ad-default` / `azure-cli` / `integrated` are rejected (exit 2).
+- `trustServerCertificate: true` maps to Npgsql `SslMode=Disable` (local Docker); `false` maps to `SslMode=Require`. There is no separate `sslMode` profile field.
+- `measure` / `compare` time a single EXPLAIN-able statement via `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`. Result equivalence uses an unmeasured sidecar SELECT. `CpuTimeMs` is `0`; `logicalReads` are shared/local buffer hits+reads; `missingIndexes` is empty.
+- Catalog helpers (`counts`, `schema`, `space`) use fixed `pg_catalog` SQL. Unquoted identifiers and `--like` / `--filter` patterns are case-sensitive as stored (`Contracts` does not match `contracts`).
+- `space` field analogs: Files = one `DATA` row from `pg_database_size` / `data_directory`; Allocation `ReservedMb` = database size while `UsedMb`/`DataMb` sum user relation sizes (they need not equal Reserved); Tables = top N by `pg_total_relation_size` with `Rows` from `reltuples`; `--object` indexes use access-method `Type` and null `Compression`.
+
+```json
+{
+  "local-pg": {
+    "engine": "postgres",
+    "server": "localhost,5433",
+    "database": "pagila",
+    "vars": {},
+    "auth": "sql",
+    "sqlUser": "postgres",
+    "passwordEnvVar": "SQLHARNESS_PG_PLAYGROUND_PASSWORD",
+    "trustServerCertificate": true
+  }
+}
 ```
 
 ## Benchmark setup contract
@@ -135,10 +160,10 @@ Run `sqlharness <command> --help` for the final option surface.
 | Area | Contract |
 | --- | --- |
 | Exit codes | `0` success; `2` validation or safety rejection; `3` authentication failure; `4` target mismatch; `5` SQL execution failure; `6` local storage failure; `7` `watch` max duration elapsed without a stop condition; `8` `snapshot --diff` found differences (valid comparison, not an execution failure). |
-| Closed targets | Profiles in `~/.sqlharness/targets.json` define server, database template, variables, and authentication. Missing, extra, or invalid variables are rejected. |
-| Direct targets | `--unsafe-direct` deliberately bypasses the closed-profile guardrail and requires `--server`, `--database`, and `--auth`. Do not mix it with a profile or `--var`. |
+| Closed targets | Profiles in `~/.sqlharness/targets.json` define server, database template, variables, authentication, and optional `engine` (`sqlserver` default, or `postgres`). Missing, extra, or invalid variables are rejected. |
+| Direct targets | `--unsafe-direct` deliberately bypasses the closed-profile guardrail and requires `--server`, `--database`, and `--auth`. Do not mix it with a profile or `--var`. `--engine` is valid only with `--unsafe-direct` (never with a named profile). |
 | Mutations | Read-only is the default. Persistent-object mutation requires fresh, single-use approval for the exact batch and exact resolved database, plus `--allow-mutation --confirm-database <exact-resolved-name>`. |
-| Session `#temp` | Local `#temp` setup/DML/indexes are session-only and do not require mutation confirmation; setup runs once per connection and shares that session with warm-up and measured runs. |
+| Session `#temp` / `TEMP` | SQL Server: local `#temp` setup/DML/indexes are session-only and do not require mutation confirmation. Postgres: use native `CREATE TEMP TABLE` / `TEMPORARY` (no `#temp` translation). Setup runs once per connection and shares that session with warm-up and measured runs. |
 | SQL input | Use exactly one query source (`--file` or stdin) and bound `--param` values. Parsed syntax inside a top-level `SELECT` is accepted without a fragment allowlist; independent safety checks still reject cross-database access, external or stateful sources, dynamic SQL, and writes outside the approved local-`#temp` or mutation contracts. Helpers (`ping`, `counts`, `schema`, `space`) never accept arbitrary user SQL. `space` is read-only DMV diagnosis only—no shrink, recovery-model, compression, or index mutation; mutations need a separately approved `query --allow-mutation` batch. |
 | Secrets | Tokens and passwords remain only in process memory; do not put them in command arguments, configuration output, logs, reports, or artifacts. |
 | Artifacts | Comparison artifacts, `.sqlplan` files, named snapshots under `~/.sqlharness/snapshots`, and runtime parameter material are locally sensitive because they can embed SQL text, parameter values, and result data. `snapshot --diff` never prints cell values. |
@@ -278,3 +303,36 @@ docker restart sqlharness-sql
 ```
 
 Deleting the container or volume destroys local playground state and must be a separate, explicit user action. Automated removal is intentionally not part of the setup path.
+
+### Optional local Postgres (Pagila) playground
+
+Parallel to AdventureWorks, an optional Postgres playground uses fixed Docker resources and never edits `~/.sqlharness/targets.json`.
+
+```powershell
+$env:SQLHARNESS_PG_PLAYGROUND_PASSWORD = Read-Host 'Local Postgres playground password'
+.\scripts\setup-local-postgres.ps1
+```
+
+The script creates or reuses `sqlharness-pg` on host port `5433` (volume `sqlharness-pg-data`, image `postgres:16`) and restores Pagila into database `pagila` when absent. It prints a `local-pg` profile JSON block for manual merge and never prints the password.
+
+Keep `SQLHARNESS_PG_PLAYGROUND_PASSWORD` set when running against `local-pg`.
+
+#### Opt-in Postgres integration tests
+
+`SQLHARNESS_PG_INTEGRATION_CONNECTION_STRING` is separate from the SQL Server integration variable. Construct it only in the current process:
+
+```powershell
+$env:SQLHARNESS_PG_INTEGRATION_CONNECTION_STRING = `
+    "Host=localhost;Port=5433;Database=pagila;Username=postgres;Password=$($env:SQLHARNESS_PG_PLAYGROUND_PASSWORD);SSL Mode=Disable"
+
+dotnet test tests/SqlHarness.Tests --filter Category=PostgresIntegration --no-restore
+```
+
+Clean skip check (variable unset):
+
+```powershell
+Remove-Item Env:SQLHARNESS_PG_INTEGRATION_CONNECTION_STRING -ErrorAction SilentlyContinue
+dotnet test tests/SqlHarness.Tests --filter Category=PostgresIntegration --no-restore
+```
+
+Expected: configured tests PASS; unconfigured tests are skipped with zero failures and zero live connections.

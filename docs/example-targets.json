@@ -7,5 +7,15 @@
       "env": "^(dev|test|uat)$"
     },
     "auth": "ad-default"
+  },
+  "local-pg": {
+    "engine": "postgres",
+    "server": "localhost,5433",
+    "database": "pagila",
+    "vars": {},
+    "auth": "sql",
+    "sqlUser": "postgres",
+    "passwordEnvVar": "SQLHARNESS_PG_PLAYGROUND_PASSWORD",
+    "trustServerCertificate": true
   }
 }
