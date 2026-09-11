@@ -33,4 +33,8 @@ internal interface ISqlDialect
         bool captureComparison,
         int comparisonMaximumRows,
         CancellationToken ct);
+
+    string CountsCatalogSql { get; }
+
+    string BuildCountsExactSql(IReadOnlyList<ResolvedCountObject> objects);
 }

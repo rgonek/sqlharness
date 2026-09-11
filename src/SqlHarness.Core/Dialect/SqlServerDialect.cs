@@ -32,6 +32,11 @@ internal sealed class SqlServerDialect : ISqlDialect
 
     public DistilledPlan DistillPlan(string document) => PlanDistiller.Distill(document);
 
+    public string CountsCatalogSql => CountsQuery.CatalogSql;
+
+    public string BuildCountsExactSql(IReadOnlyList<ResolvedCountObject> objects) =>
+        CountsQuery.BuildExactSql(objects);
+
     public async Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
         ISqlSession session,
         string sql,

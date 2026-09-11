@@ -892,6 +892,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             ArgumentNullException.ThrowIfNull(counts.Tables);
 
             var target = TargetResolver.Resolve(counts.Target, _loadProfiles());
+            var dialect = SqlDialects.For(target.Engine);
             phase = ExecutionPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
             phase = ExecutionPhase.Sql;
@@ -899,7 +900,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             ResolvedCountSelection selection;
             await using (var catalogReader = await session.ExecuteReaderAsync(
                 new SqlExecutionCommand(
-                    CountsQuery.CatalogSql,
+                    dialect.CountsCatalogSql,
                     CountsQuery.CatalogParameters(counts.Tables, counts.Like, counts.Top),
                     counts.TimeoutSeconds),
                 ct))
@@ -914,7 +915,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     session,
                     selection.Objects,
                     counts.TimeoutSeconds,
-                    ct);
+                    ct,
+                    dialect.BuildCountsExactSql);
                 tables = selection.Objects
                     .Select((item, index) => new SqlHarnessCountReport(
                         item.Schema,

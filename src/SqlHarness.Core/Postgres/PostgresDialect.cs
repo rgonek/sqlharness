@@ -45,6 +45,11 @@ internal sealed class PostgresDialect : ISqlDialect
 
     public DistilledPlan DistillPlan(string document) => PostgresPlanDistiller.Distill(document);
 
+    public string CountsCatalogSql => PostgresCounts.CatalogSql;
+
+    public string BuildCountsExactSql(IReadOnlyList<ResolvedCountObject> objects) =>
+        PostgresCounts.BuildExactSql(objects);
+
     public Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
         ISqlSession session,
         string sql,
