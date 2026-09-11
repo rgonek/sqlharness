@@ -39,6 +39,8 @@ internal sealed class SqlServerDialect : ISqlDialect
 
     public string SchemaSql => SchemaReader.Sql;
 
+    public string SpaceSql => SpaceQuery.Sql;
+
     public async Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
         ISqlSession session,
         string sql,

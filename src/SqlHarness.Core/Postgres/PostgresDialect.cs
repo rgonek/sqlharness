@@ -52,6 +52,8 @@ internal sealed class PostgresDialect : ISqlDialect
 
     public string SchemaSql => PostgresSchema.Sql;
 
+    public string SpaceSql => PostgresSpace.Sql;
+
     public Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
         ISqlSession session,
         string sql,

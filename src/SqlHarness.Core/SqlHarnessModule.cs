@@ -980,16 +980,19 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             // Parse object before target resolution: name, schema.name, or null (no object).
             var (objectSchema, objectName) = ParseSpaceObject(space.Object);
             var target = TargetResolver.Resolve(space.Target, _loadProfiles());
+            var dialect = SqlDialects.For(target.Engine);
             phase = ExecutionPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
             phase = ExecutionPhase.Sql;
             await using var reader = await session.ExecuteReaderAsync(
                 new SqlExecutionCommand(
-                    SpaceQuery.Sql,
+                    dialect.SpaceSql,
                     SpaceQuery.Parameters(space.Top, objectSchema, objectName),
                     space.TimeoutSeconds),
                 ct);
-            var collected = await SpaceQuery.ReadAsync(reader, objectRequested: objectName is not null, ct);
+            var collected = target.Engine == SqlEngine.Postgres
+                ? await PostgresSpace.ReadAsync(reader, objectRequested: objectName is not null, ct)
+                : await SpaceQuery.ReadAsync(reader, objectRequested: objectName is not null, ct);
             raw = collected.Raw;
             var report = new SqlHarnessSpaceReport(
                 session.Identity,
