@@ -192,6 +192,25 @@ public class CompareMatrixTests
     }
 
     [Fact]
+    public async Task Matrix_failure_redacts_a_longer_value_that_starts_with_an_earlier_value()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory(failSqlAt: 2);
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix("BatchSize:int=1,20,100"));
+
+        Assert.Equal(5, (int)outcome.ExitCode);
+        Assert.Null(outcome.Report);
+        var error = outcome.SafeError ?? string.Empty;
+        Assert.Contains("cell 2", error, StringComparison.Ordinal);
+        Assert.Contains("@BatchSize", error, StringComparison.Ordinal);
+        Assert.Contains("measured-run-failed", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("100", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("00", error, StringComparison.Ordinal);
+        Assert.Equal([100], factory.Sessions[2].BatchSizes);
+    }
+
+    [Fact]
     public async Task Matrix_applies_the_row_cap_and_does_not_open_a_later_cell()
     {
         using var artifacts = new DirectoryArtifactWriter();

@@ -500,10 +500,17 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     private static string FormatMatrixCellError(CompareMatrixCellFailedException failed, IReadOnlyList<string> knownSecrets)
     {
         var original = failed.InnerException ?? failed;
-        // Prefix after redaction so a matrix value of "1" cannot erase the cell index.
-        var detail = SecretRedactor.Redact(original, knownSecrets);
+        // Longer secrets first, so "1" cannot split "100" into "[REDACTED]00".
+        // Prefix the cell label after redaction so a value of "1" cannot erase the index.
+        var detail = SecretRedactor.Redact(original, LongestFirst(knownSecrets));
         return $"Comparison matrix cell {failed.Index} for SQL parameter '{failed.ParameterName}' failed. {detail}";
     }
+
+    private static IReadOnlyList<string> LongestFirst(IReadOnlyList<string> secrets) =>
+        secrets
+            .Where(secret => !string.IsNullOrEmpty(secret))
+            .OrderByDescending(secret => secret.Length)
+            .ToArray();
 
     private async Task<SqlHarnessOutcome> ExecuteMeasureAsync(SqlHarnessMeasureOperation measure, CancellationToken ct)
     {
