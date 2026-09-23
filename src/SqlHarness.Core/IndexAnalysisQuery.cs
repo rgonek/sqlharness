@@ -1,4 +1,7 @@
 using System.Data;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace SqlHarness.Core;
 
@@ -227,4 +230,476 @@ ORDER BY
         new("@objectSchema", SqlDbType.NVarChar, schema is null ? DBNull.Value : schema, 128),
         new("@objectName", SqlDbType.NVarChar, table is null ? DBNull.Value : table, 128),
     ];
+
+    /// <summary>
+    /// Reads the six index-analysis result sets.
+    /// <paramref name="reader"/> must be positioned on the observation set.
+    /// Filter text stays on <see cref="SensitiveExistingIndex"/> and in the raw footprint.
+    /// </summary>
+    internal static async Task<CollectedIndexAnalysis> ReadAsync(
+        ISqlReader reader,
+        bool objectRequested,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        using var raw = new CanonicalResultAccumulator();
+
+        var observations = new List<object?[]>();
+        await ReadSet(reader, raw, ObservationColumnCount, observations.Add, ct);
+        if (observations.Count != 1)
+            throw Malformed();
+
+        var observation = observations[0];
+        var since = RequiredTimestamp(observation[0]);
+        var observedAt = RequiredTimestamp(observation[1]);
+        var matchCount = RequiredInt64(observation[2]);
+        if (objectRequested)
+        {
+            if (matchCount != 1)
+                throw new SqlHarnessSafetyException(ObjectNotFoundMessage);
+        }
+        else if (matchCount < 0)
+        {
+            throw Malformed();
+        }
+
+        if (!await reader.NextResultAsync(ct))
+            throw Malformed();
+
+        var candidates = new List<RawCandidate>();
+        await ReadSet(reader, raw, CandidateColumnCount, row => candidates.Add(ReadCandidate(row)), ct);
+
+        if (!await reader.NextResultAsync(ct))
+            throw Malformed();
+
+        var catalog = new Dictionary<(string Schema, string Table), List<string>>(TableKeyComparer.Instance);
+        await ReadSet(reader, raw, CatalogColumnCount, row => AddCatalog(catalog, row), ct);
+
+        if (!await reader.NextResultAsync(ct))
+            throw Malformed();
+
+        var indexes = new List<IndexBuilder>();
+        var indexLookup = new Dictionary<IndexKey, IndexBuilder>(IndexKeyComparer.Instance);
+        await ReadSet(reader, raw, IndexHeaderColumnCount, row => AddIndex(indexes, indexLookup, row), ct);
+
+        if (!await reader.NextResultAsync(ct))
+            throw Malformed();
+
+        await ReadSet(reader, raw, IndexColumnColumnCount, row => AddIndexColumn(indexLookup, row), ct);
+
+        if (!await reader.NextResultAsync(ct))
+            throw Malformed();
+
+        await ReadSet(reader, raw, CompressionColumnCount, row => AddCompression(indexLookup, row), ct);
+
+        while (await reader.NextResultAsync(ct))
+        {
+            if (await reader.ReadAsync(ct))
+                throw Malformed();
+        }
+
+        var resolved = new List<IndexCandidate>(candidates.Count);
+        foreach (var candidate in candidates)
+            resolved.Add(ResolveCandidate(candidate, catalog));
+
+        var existing = new List<ExistingIndex>(indexes.Count);
+        var sensitive = new List<SensitiveExistingIndex>(indexes.Count);
+        foreach (var index in indexes)
+        {
+            existing.Add(index.ToExisting());
+            sensitive.Add(index.ToSensitive());
+        }
+
+        return new CollectedIndexAnalysis(
+            resolved,
+            existing,
+            sensitive,
+            since,
+            observedAt,
+            raw.Complete().Footprint);
+    }
+
+    private static async Task ReadSet(
+        ISqlReader reader,
+        CanonicalResultAccumulator raw,
+        int minimumColumns,
+        Action<object?[]> add,
+        CancellationToken ct)
+    {
+        if (reader.FieldCount < minimumColumns)
+            throw Malformed();
+
+        var columns = Enumerable.Range(0, reader.FieldCount)
+            .Select(i => new CanonicalColumn(
+                i,
+                reader.GetName(i),
+                reader.GetFieldType(i).FullName ?? "object",
+                reader.GetAllowNull(i)))
+            .ToArray();
+        raw.BeginResultSet(columns);
+        while (await reader.ReadAsync(ct))
+        {
+            var row = Enumerable.Range(0, reader.FieldCount).Select(i =>
+            {
+                // SequentialAccess allows each ordinal only once per row.
+                var value = reader.GetValue(i);
+                return value is DBNull ? null : value;
+            }).ToArray();
+            raw.AddRow(row);
+            if (row.Length < minimumColumns)
+                throw Malformed();
+
+            add(row);
+        }
+
+        raw.EndResultSet();
+    }
+
+    private static RawCandidate ReadCandidate(object?[] row) =>
+        new(
+            RequiredInt64(row[0]),
+            RequiredText(row[1]),
+            RequiredText(row[2]),
+            OptionalText(row[3]),
+            OptionalText(row[4]),
+            OptionalText(row[5]),
+            RequiredInt64(row[6]),
+            RequiredInt64(row[7]),
+            RequiredDecimal(row[8]),
+            RequiredDecimal(row[9]),
+            // The batch already returns this score in column 10. Do not recompute it.
+            RequiredDecimal(row[10]),
+            OptionalTimestamp(row[11]),
+            OptionalTimestamp(row[12]));
+
+    private static void AddCatalog(
+        Dictionary<(string Schema, string Table), List<string>> catalog,
+        object?[] row)
+    {
+        var key = (RequiredText(row[0]), RequiredText(row[1]));
+        if (!catalog.TryGetValue(key, out var columns))
+        {
+            columns = [];
+            catalog.Add(key, columns);
+        }
+
+        columns.Add(RequiredText(row[2]));
+    }
+
+    private static IndexCandidate ResolveCandidate(
+        RawCandidate candidate,
+        Dictionary<(string Schema, string Table), List<string>> catalog)
+    {
+        if (!catalog.TryGetValue((candidate.Schema, candidate.Table), out var columns))
+            columns = [];
+
+        return new IndexCandidate(
+            candidate.CandidateId,
+            candidate.Schema,
+            candidate.Table,
+            BracketedIdentifierListParser.ParseAndResolve(candidate.EqualityColumns, columns),
+            BracketedIdentifierListParser.ParseAndResolve(candidate.InequalityColumns, columns),
+            BracketedIdentifierListParser.ParseAndResolve(candidate.IncludeColumns, columns),
+            candidate.UserSeeks,
+            candidate.UserScans,
+            candidate.AverageTotalUserCost,
+            candidate.AverageUserImpactPercent,
+            candidate.CumulativeImpactScore,
+            candidate.LastUserSeek,
+            candidate.LastUserScan);
+    }
+
+    private static void AddIndex(
+        List<IndexBuilder> indexes,
+        Dictionary<IndexKey, IndexBuilder> lookup,
+        object?[] row)
+    {
+        var builder = new IndexBuilder(
+            RequiredText(row[0]),
+            RequiredText(row[1]),
+            RequiredInt32(row[2]),
+            IndexName(row[3]),
+            RequiredText(row[4]),
+            RequiredBool(row[5]),
+            RequiredBool(row[6]),
+            RequiredBool(row[7]),
+            RequiredBool(row[8]),
+            OptionalText(row[9]));
+        if (!lookup.TryAdd(new IndexKey(builder.Schema, builder.Table, builder.IndexId), builder))
+            throw Malformed();
+
+        indexes.Add(builder);
+    }
+
+    private static void AddIndexColumn(Dictionary<IndexKey, IndexBuilder> lookup, object?[] row)
+    {
+        var key = new IndexKey(RequiredText(row[0]), RequiredText(row[1]), RequiredInt32(row[2]));
+        if (!lookup.TryGetValue(key, out var builder))
+            throw Malformed();
+
+        var piece = new IndexColumnPiece(
+            RequiredText(row[3]),
+            RequiredInt32(row[4]),
+            RequiredBool(row[6]),
+            RequiredInt32(row[7]));
+        if (RequiredBool(row[5]))
+            builder.Includes.Add(piece);
+        else
+            builder.Keys.Add(piece);
+    }
+
+    private static void AddCompression(Dictionary<IndexKey, IndexBuilder> lookup, object?[] row)
+    {
+        var key = new IndexKey(RequiredText(row[0]), RequiredText(row[1]), RequiredInt32(row[2]));
+        if (!lookup.TryGetValue(key, out var builder))
+            throw Malformed();
+
+        builder.CompressionDescriptions.Add(RequiredText(row[3]));
+    }
+
+    private static long RequiredInt64(object? value) =>
+        RequiredNumber(value, static number => Convert.ToInt64(number, CultureInfo.InvariantCulture));
+
+    private static int RequiredInt32(object? value) =>
+        RequiredNumber(value, static number => Convert.ToInt32(number, CultureInfo.InvariantCulture));
+
+    private static decimal RequiredDecimal(object? value) =>
+        RequiredNumber(value, static number => Convert.ToDecimal(number, CultureInfo.InvariantCulture));
+
+    private static bool RequiredBool(object? value) =>
+        RequiredNumber(value, static number => Convert.ToBoolean(number, CultureInfo.InvariantCulture));
+
+    private static T RequiredNumber<T>(object? value, Func<object, T> convert)
+    {
+        if (value is null or DBNull)
+            throw Malformed();
+
+        try
+        {
+            return convert(value);
+        }
+        catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException)
+        {
+            throw Malformed();
+        }
+    }
+
+    private static string RequiredText(object? value)
+    {
+        if (value is null or DBNull)
+            throw Malformed();
+
+        return value as string ?? Convert.ToString(value, CultureInfo.InvariantCulture)
+            ?? throw Malformed();
+    }
+
+    private static string? OptionalText(object? value)
+    {
+        if (value is null or DBNull)
+            return null;
+
+        return value as string ?? Convert.ToString(value, CultureInfo.InvariantCulture);
+    }
+
+    private static string IndexName(object? value)
+    {
+        if (value is null or DBNull)
+            return "";
+
+        return value as string ?? Convert.ToString(value, CultureInfo.InvariantCulture) ?? "";
+    }
+
+    private static DateTimeOffset? OptionalTimestamp(object? value) =>
+        value is null or DBNull ? null : RequiredTimestamp(value);
+
+    private static DateTimeOffset RequiredTimestamp(object? value)
+    {
+        if (value is null or DBNull)
+            throw Malformed();
+
+        return value switch
+        {
+            DateTimeOffset timestamp => timestamp.ToUniversalTime(),
+            // Unspecified and Utc clock times are already UTC. Local is converted.
+            DateTime timestamp when timestamp.Kind == DateTimeKind.Local => new DateTimeOffset(timestamp).ToUniversalTime(),
+            DateTime timestamp => new DateTimeOffset(DateTime.SpecifyKind(timestamp, DateTimeKind.Utc)),
+            _ => throw Malformed(),
+        };
+    }
+
+    private static string HashFilter(string filter) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(filter)));
+
+    private static InvalidOperationException Malformed() => new(MalformedMessage);
+
+    private const int ObservationColumnCount = 3;
+    private const int CandidateColumnCount = 13;
+    private const int CatalogColumnCount = 3;
+    private const int IndexHeaderColumnCount = 10;
+    private const int IndexColumnColumnCount = 8;
+    private const int CompressionColumnCount = 4;
+    private const string MalformedMessage = "Index analysis result is malformed.";
+    private const string ObjectNotFoundMessage = "indexes object was not found or was ambiguous.";
+    private const string MixedCompression = "MIXED";
+
+    private sealed record RawCandidate(
+        long CandidateId,
+        string Schema,
+        string Table,
+        string? EqualityColumns,
+        string? InequalityColumns,
+        string? IncludeColumns,
+        long UserSeeks,
+        long UserScans,
+        decimal AverageTotalUserCost,
+        decimal AverageUserImpactPercent,
+        decimal CumulativeImpactScore,
+        DateTimeOffset? LastUserSeek,
+        DateTimeOffset? LastUserScan);
+
+    private readonly record struct IndexColumnPiece(
+        string Name,
+        int KeyOrdinal,
+        bool Descending,
+        int IndexColumnId);
+
+    private readonly record struct IndexKey(string Schema, string Table, int IndexId);
+
+    private sealed class TableKeyComparer : IEqualityComparer<(string Schema, string Table)>
+    {
+        public static TableKeyComparer Instance { get; } = new();
+
+        public bool Equals((string Schema, string Table) x, (string Schema, string Table) y) =>
+            StringComparer.OrdinalIgnoreCase.Equals(x.Schema, y.Schema)
+            && StringComparer.OrdinalIgnoreCase.Equals(x.Table, y.Table);
+
+        public int GetHashCode((string Schema, string Table) obj) =>
+            HashCode.Combine(
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Schema),
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Table));
+    }
+
+    private sealed class IndexKeyComparer : IEqualityComparer<IndexKey>
+    {
+        public static IndexKeyComparer Instance { get; } = new();
+
+        public bool Equals(IndexKey x, IndexKey y) =>
+            x.IndexId == y.IndexId
+            && StringComparer.OrdinalIgnoreCase.Equals(x.Schema, y.Schema)
+            && StringComparer.OrdinalIgnoreCase.Equals(x.Table, y.Table);
+
+        public int GetHashCode(IndexKey obj) =>
+            HashCode.Combine(
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Schema),
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Table),
+                obj.IndexId);
+    }
+
+    private sealed class IndexBuilder(
+        string schema,
+        string table,
+        int indexId,
+        string name,
+        string type,
+        bool unique,
+        bool primaryKey,
+        bool uniqueConstraint,
+        bool disabled,
+        string? filterDefinition)
+    {
+        public string Schema => schema;
+        public string Table => table;
+        public int IndexId => indexId;
+        public string Name => name;
+        public string Type => type;
+        public bool Unique => unique;
+        public bool PrimaryKey => primaryKey;
+        public bool UniqueConstraint => uniqueConstraint;
+        public bool Disabled => disabled;
+        public string? FilterDefinition => filterDefinition;
+        public List<IndexColumnPiece> Keys { get; } = [];
+        public List<IndexColumnPiece> Includes { get; } = [];
+        public List<string> CompressionDescriptions { get; } = [];
+
+        public ExistingIndex ToExisting()
+        {
+            var keys = Keys
+                .OrderBy(static column => column.KeyOrdinal)
+                .ThenBy(static column => column.IndexColumnId)
+                .ToArray();
+            var includes = Includes
+                .OrderBy(static column => column.IndexColumnId)
+                .Select(static column => column.Name)
+                .ToArray();
+            var filter = FilterDefinition;
+            string? filterHash = null;
+            if (filter is not null)
+                filterHash = HashFilter(filter);
+
+            return new ExistingIndex(
+                Schema,
+                Table,
+                IndexId,
+                Name,
+                Type,
+                keys.Select(static column => column.Name).ToArray(),
+                keys.Select(static column => column.Descending).ToArray(),
+                includes,
+                Unique,
+                PrimaryKey,
+                UniqueConstraint,
+                Disabled,
+                filter is not null,
+                filterHash,
+                CollapseCompression());
+        }
+
+        public SensitiveExistingIndex ToSensitive() =>
+            new(Schema, Table, IndexId, Name, FilterDefinition);
+
+        private string CollapseCompression()
+        {
+            if (CompressionDescriptions.Count == 0)
+                return "";
+
+            var first = CompressionDescriptions[0];
+            for (var index = 1; index < CompressionDescriptions.Count; index++)
+            {
+                if (!StringComparer.OrdinalIgnoreCase.Equals(first, CompressionDescriptions[index]))
+                    return MixedCompression;
+            }
+
+            return first;
+        }
+    }
 }
+
+internal sealed record IndexCandidate(
+    long CandidateId, string Schema, string Table,
+    IReadOnlyList<string> EqualityColumns,
+    IReadOnlyList<string> InequalityColumns,
+    IReadOnlyList<string> IncludeColumns,
+    long UserSeeks, long UserScans,
+    decimal AverageTotalUserCost, decimal AverageUserImpactPercent,
+    decimal CumulativeImpactScore,
+    DateTimeOffset? LastUserSeek, DateTimeOffset? LastUserScan);
+
+internal sealed record ExistingIndex(
+    string Schema, string Table, int IndexId, string Name, string Type,
+    IReadOnlyList<string> KeyColumns, IReadOnlyList<bool> KeyDescending,
+    IReadOnlyList<string> IncludeColumns,
+    bool Unique, bool PrimaryKey, bool UniqueConstraint,
+    bool Disabled, bool HasFilter, string? FilterHash, string Compression);
+
+/// <summary>Exact filter text. It is not a field of <see cref="ExistingIndex"/>.</summary>
+internal sealed record SensitiveExistingIndex(
+    string Schema, string Table, int IndexId, string Name,
+    string? FilterDefinition);
+
+internal sealed record CollectedIndexAnalysis(
+    IReadOnlyList<IndexCandidate> Candidates,
+    IReadOnlyList<ExistingIndex> ExistingIndexes,
+    IReadOnlyList<SensitiveExistingIndex> SensitiveIndexes,
+    DateTimeOffset ObservationSince,
+    DateTimeOffset ObservedAt,
+    OutputFootprint RawFootprint);
