@@ -158,6 +158,7 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
         [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
+        [Description("One matrix dimension only; at least two typed values; sequential user-supplied order. A new connection and one setup per value. The first failure stops the run. Completed cell artifacts remain. Ticket SQL stays outside the application repository.")]
         [CommandOption("--matrix <NAME:TYPE=VALUES>")]
         public string[] Matrix { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;

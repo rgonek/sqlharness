@@ -19,7 +19,7 @@ public sealed class BenchmarkSessionIntegrationTests
         Assert.False(string.IsNullOrWhiteSpace(builder.InitialCatalog));
 
         using var temp = new TempDirectory();
-        var factory = new IntegrationSessionFactory(connectionString);
+        await using var factory = new IntegrationSessionFactory(connectionString);
         var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
         {
             ["integration"] = new(
@@ -67,7 +67,7 @@ public sealed class BenchmarkSessionIntegrationTests
         Assert.False(string.IsNullOrWhiteSpace(builder.InitialCatalog));
 
         using var temp = new TempDirectory();
-        var factory = new IntegrationSessionFactory(connectionString);
+        await using var factory = new IntegrationSessionFactory(connectionString);
         var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
         {
             ["integration"] = new(
@@ -111,16 +111,17 @@ public sealed class BenchmarkSessionIntegrationTests
         Assert.Equal(2, factory.ServerProcessIds.Distinct().Count());
     }
 
-    private sealed class IntegrationSessionFactory : ISqlSessionFactory
+    private sealed class IntegrationSessionFactory : ISqlSessionFactory, IAsyncDisposable
     {
         private readonly string _connectionString;
         private readonly List<int> _serverProcessIds = [];
+        private readonly List<SqlClientSession> _heldSessions = [];
 
         public IntegrationSessionFactory(string connectionString)
         {
             var builder = new SqlConnectionStringBuilder(connectionString)
             {
-                // Pooling reuses the physical session after dispose, so distinct SPIDs flake.
+                // Pooling would hand the next cell the same physical session.
                 Pooling = false,
             };
             _connectionString = builder.ConnectionString;
@@ -152,13 +153,38 @@ public sealed class BenchmarkSessionIntegrationTests
                         connection.Database,
                         target.Mode),
                 };
-                return session;
+                _heldSessions.Add(session);
+                return new HeldSession(session);
             }
             finally
             {
                 if (!opened)
                     await connection.DisposeAsync();
             }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            foreach (var session in _heldSessions)
+                await session.DisposeAsync();
+            _heldSessions.Clear();
+        }
+
+        private sealed class HeldSession(SqlClientSession inner) : ISqlSession
+        {
+            public IReadOnlyList<string> Messages => inner.Messages;
+
+            public SqlHarnessTargetIdentityReport Identity
+            {
+                get => inner.Identity;
+                set => inner.Identity = value;
+            }
+
+            public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct) =>
+                inner.ExecuteReaderAsync(command, ct);
+
+            // The runner disposes between cells. Closing here lets SQL Server reissue this SPID.
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         }
     }
 
