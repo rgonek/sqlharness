@@ -43,6 +43,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     private readonly Func<IReadOnlyDictionary<string, TargetProfile>> _loadProfiles;
     private readonly IWatchClock _watchClock;
     private readonly ISnapshotStore _snapshotStore;
+    private readonly IQueryStoreArtifactWriter _queryStoreArtifacts;
 
     /// <summary>
     /// Row cap for result-fingerprint retention. Production uses
@@ -56,7 +57,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             new EngineSessionFactory(new SqlClientSessionFactory(new AzureCli()), new NpgsqlSessionFactory()),
             new GainStore(),
             new CompareArtifactWriter(),
-            () => ProfileStore.Load())
+            () => ProfileStore.Load(),
+            queryStoreArtifacts: new QueryStoreArtifactWriter())
     {
     }
 
@@ -65,8 +67,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         IGainStore gainStore,
         Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
         IWatchClock? watchClock = null,
-        ISnapshotStore? snapshotStore = null)
-        : this(sessionFactory, gainStore, new CompareArtifactWriter(), loadProfiles, watchClock, snapshotStore)
+        ISnapshotStore? snapshotStore = null,
+        IQueryStoreArtifactWriter? queryStoreArtifacts = null)
+        : this(sessionFactory, gainStore, new CompareArtifactWriter(), loadProfiles, watchClock, snapshotStore, queryStoreArtifacts)
     {
     }
 
@@ -76,7 +79,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         ICompareArtifactWriter artifactWriter,
         Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
         IWatchClock? watchClock = null,
-        ISnapshotStore? snapshotStore = null)
+        ISnapshotStore? snapshotStore = null,
+        IQueryStoreArtifactWriter? queryStoreArtifacts = null)
     {
         _sessionFactory = sessionFactory ?? throw new ArgumentNullException(nameof(sessionFactory));
         _gainStore = gainStore ?? throw new ArgumentNullException(nameof(gainStore));
@@ -86,6 +90,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         _loadProfiles = loadProfiles ?? throw new ArgumentNullException(nameof(loadProfiles));
         _watchClock = watchClock ?? new SystemWatchClock();
         _snapshotStore = snapshotStore ?? new SnapshotStore(SqlHarnessPaths.SnapshotsDir);
+        _queryStoreArtifacts = queryStoreArtifacts ?? new QueryStoreArtifactWriter();
     }
 
     public async Task<SqlHarnessOutcome> ExecuteAsync(
@@ -137,6 +142,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
         if (operation is SqlHarnessSnapshotOperation snapshot)
             return await ExecuteSnapshotAsync(snapshot, ct);
+
+        if (operation is SqlHarnessQueryStoreTopOperation qstop)
+            return await ExecuteQueryStoreTopAsync(qstop, ct);
 
         if (operation is not SqlHarnessQueryOperation query)
         {
@@ -1159,6 +1167,80 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 stopwatch.ElapsedMilliseconds,
                 raw,
                 "space");
+        }
+    }
+
+    private async Task<SqlHarnessOutcome> ExecuteQueryStoreTopAsync(
+        SqlHarnessQueryStoreTopOperation operation,
+        CancellationToken ct)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var phase = ExecutionPhase.Validation;
+        var rawFootprint = new OutputFootprint(0, 0);
+        var knownSecrets = new List<string>(CollectTargetSecrets(operation.Target))
+        {
+            QueryStoreTopQuery.Sql,
+        };
+
+        try
+        {
+            if (operation.Top is < 1 or > 500)
+                throw new SqlHarnessSafetyException("Query Store top limit must be between 1 and 500.");
+            if (operation.TimeoutSeconds is < 1 or > 300)
+                throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
+            if (operation.WindowMinutes is < 1 or > 44640)
+                throw new SqlHarnessSafetyException("Query Store window must be between 1 and 44640 minutes.");
+
+            var target = TargetResolver.Resolve(operation.Target, _loadProfiles());
+            phase = ExecutionPhase.Authentication;
+            await using var session = await _sessionFactory.ConnectAsync(target, ct);
+            phase = ExecutionPhase.Sql;
+            // Query Store exists only on SQL Server. Do not send the batch to Postgres.
+            if (target.Engine == SqlEngine.Postgres)
+                throw new InvalidOperationException("Query Store is available only on SQL Server.");
+
+            await using var reader = await session.ExecuteReaderAsync(
+                new SqlExecutionCommand(
+                    QueryStoreTopQuery.Sql,
+                    QueryStoreTopQuery.Parameters(operation.WindowMinutes, operation.Top),
+                    operation.TimeoutSeconds),
+                ct);
+            var collected = await QueryStoreTopQuery.ReadAsync(reader, ct);
+            rawFootprint = collected.RawFootprint;
+            foreach (var text in collected.SensitiveTexts)
+            {
+                if (!string.IsNullOrEmpty(text.QuerySqlText))
+                    knownSecrets.Add(text.QuerySqlText);
+            }
+
+            var report = new SqlHarnessQueryStoreTopReport(
+                session.Identity,
+                operation.WindowMinutes,
+                operation.Top,
+                collected.Queries,
+                ArtifactDirectory: null);
+            phase = ExecutionPhase.Artifact;
+            var directory = _queryStoreArtifacts.Write(report, collected.SensitiveTexts, target.Database);
+            report = report with { ArtifactDirectory = directory };
+            return WithReceipt(
+                new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null),
+                stopwatch.ElapsedMilliseconds,
+                rawFootprint,
+                "qstop");
+        }
+        catch (Exception exception)
+        {
+            var exitCode = phase == ExecutionPhase.Artifact
+                ? SqlHarnessExitCode.LocalStorage
+                : MapException(exception, phase);
+            return WithReceipt(
+                new SqlHarnessOutcome(
+                    exitCode,
+                    null,
+                    SecretRedactor.Redact(exception, LongestFirst(knownSecrets))),
+                stopwatch.ElapsedMilliseconds,
+                rawFootprint,
+                "qstop");
         }
     }
 
