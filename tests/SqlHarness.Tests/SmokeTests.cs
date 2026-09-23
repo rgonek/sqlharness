@@ -25,6 +25,20 @@ public sealed class SmokeTests
         Assert.Contains("space", standardOutput, StringComparison.Ordinal);
         Assert.Contains("watch", standardOutput, StringComparison.Ordinal);
         Assert.Contains("snapshot", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("qstop", standardOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Qstop_help_lists_bounds_without_mutation()
+    {
+        var (exit, standardOutput, standardError) = await RunCliAsync("qstop", "--help");
+
+        Assert.True(exit == 0, standardError);
+        Assert.Contains("--top", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--window", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--timeout", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--json", standardOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("--allow-mutation", standardOutput, StringComparison.Ordinal);
     }
 
     [Fact]

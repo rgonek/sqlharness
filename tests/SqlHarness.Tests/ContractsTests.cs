@@ -136,6 +136,63 @@ public class ContractsTests
         Assert.Contains("--diff", skill, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Documentation_covers_query_store_top_consumers()
+    {
+        var readme = ReadRepositoryFile("README.md");
+        var agents = ReadRepositoryFile("AGENTS.md");
+        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
+        const string example =
+            "sqlharness qstop prod-eu --var tenant=acme --var env=uat --top 20 --window 24h --json";
+
+        foreach (var doc in new[] { readme, agents, skill })
+        {
+            Assert.Contains("qstop", doc, StringComparison.Ordinal);
+            Assert.Contains("24h", doc, StringComparison.Ordinal);
+            Assert.Contains("query_id", doc, StringComparison.Ordinal);
+            Assert.Contains("queries.jsonl", doc, StringComparison.Ordinal);
+            Assert.Contains("measure", doc, StringComparison.Ordinal);
+            Assert.Contains("compare", doc, StringComparison.Ordinal);
+            Assert.Contains("plan", doc, StringComparison.Ordinal);
+            Assert.Contains(example, doc, StringComparison.Ordinal);
+            Assert.True(
+                doc.Contains("total duration", StringComparison.OrdinalIgnoreCase)
+                || doc.Contains("total-duration", StringComparison.OrdinalIgnoreCase),
+                "Docs must describe total-duration ranking.");
+            Assert.Contains("rank", doc, StringComparison.OrdinalIgnoreCase);
+            Assert.True(
+                doc.Contains("aggregat", StringComparison.OrdinalIgnoreCase)
+                && doc.Contains("plans", StringComparison.OrdinalIgnoreCase)
+                && doc.Contains("intervals", StringComparison.OrdinalIgnoreCase),
+                "Docs must aggregate plans and intervals into one query_id.");
+            Assert.True(
+                doc.Contains("empty", StringComparison.OrdinalIgnoreCase)
+                && (doc.Contains("unavailable", StringComparison.OrdinalIgnoreCase)
+                    || doc.Contains("OFF", StringComparison.Ordinal)),
+                "Docs must distinguish an empty result from unavailable Query Store.");
+            Assert.True(
+                doc.Contains("stdout", StringComparison.OrdinalIgnoreCase)
+                && doc.Contains("no SQL text", StringComparison.OrdinalIgnoreCase),
+                "Docs must state that stdout has no SQL text.");
+            Assert.True(
+                doc.Contains("sensitive", StringComparison.OrdinalIgnoreCase)
+                && doc.Contains("pasted", StringComparison.OrdinalIgnoreCase)
+                && doc.Contains("published", StringComparison.OrdinalIgnoreCase)
+                && doc.Contains("explicit review", StringComparison.OrdinalIgnoreCase),
+                "Docs must treat the artifact as locally sensitive and forbid paste or publish without explicit review.");
+            Assert.True(
+                doc.Contains("high rank", StringComparison.OrdinalIgnoreCase)
+                && doc.Contains("lead", StringComparison.OrdinalIgnoreCase)
+                && doc.Contains("defective", StringComparison.OrdinalIgnoreCase),
+                "Docs must say a high rank is a lead to measure, not proof the query is defective.");
+        }
+
+        Assert.Contains(
+            "`qstop` reads SQL Server Query Store only and returns exit 5 on Postgres.",
+            agents,
+            StringComparison.Ordinal);
+    }
+
     private static string ReadRepositoryFile(params string[] path)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
