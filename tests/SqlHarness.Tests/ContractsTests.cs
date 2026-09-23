@@ -238,6 +238,7 @@ public class ContractsTests
                 typeof(SqlHarnessWatchOperation),
                 typeof(SqlHarnessSnapshotOperation),
                 typeof(SqlHarnessQueryStoreTopOperation),
+                typeof(SqlHarnessIndexesOperation),
             ],
             typeof(SqlHarnessOperation).Assembly.GetTypes()
                 .Where(t => t.BaseType == typeof(SqlHarnessOperation))
@@ -259,6 +260,7 @@ public class ContractsTests
         nameof(SqlHarnessWatchOperation) => 10,
         nameof(SqlHarnessSnapshotOperation) => 11,
         nameof(SqlHarnessQueryStoreTopOperation) => 12,
+        nameof(SqlHarnessIndexesOperation) => 13,
         _ => int.MaxValue,
     };
 

@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -199,68 +198,38 @@ public sealed record SqlHarnessQueryStoreTopReport(
     IReadOnlyList<QueryStoreTopItemReport> Queries,
     string? ArtifactDirectory);
 
-// net8.0 inbox System.Text.Json has no JsonStringEnumMemberName and no generic converter.
-[JsonConverter(typeof(JsonStringEnumConverter<IndexOverlapClassification>))]
+[JsonConverter(typeof(IndexOverlapClassificationConverter))]
 public enum IndexOverlapClassification
 {
-    [JsonStringEnumMemberName("covered")]
-    Covered,
-
-    [JsonStringEnumMemberName("include-gap")]
-    IncludeGap,
-
-    [JsonStringEnumMemberName("partial-key")]
-    PartialKey,
-
-    [JsonStringEnumMemberName("new-shape")]
-    NewShape,
+    Covered, IncludeGap, PartialKey, NewShape
 }
 
-[AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
-public sealed class JsonStringEnumMemberNameAttribute(string name) : Attribute
+public sealed class IndexOverlapClassificationConverter : JsonConverter<IndexOverlapClassification>
 {
-    public string Name { get; } = name;
-}
-
-public sealed class JsonStringEnumConverter<TEnum> : JsonConverter<TEnum> where TEnum : struct, Enum
-{
-    private static readonly Dictionary<TEnum, string> Names = CreateNames();
-    private static readonly Dictionary<string, TEnum> Values = Names.ToDictionary(
-        pair => pair.Value, pair => pair.Key, StringComparer.Ordinal);
-
-    public override TEnum Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    public override IndexOverlapClassification Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        if (reader.TokenType != JsonTokenType.String
-            || reader.GetString() is not string text
-            || !Values.TryGetValue(text, out var value))
-            throw new JsonException($"Unknown {typeof(TEnum).Name} value.");
+        if (reader.TokenType != JsonTokenType.String)
+            throw new JsonException("Unknown index overlap classification.");
 
-        return value;
-    }
-
-    public override void Write(Utf8JsonWriter writer, TEnum value, JsonSerializerOptions options)
-    {
-        if (!Names.TryGetValue(value, out var name))
-            throw new JsonException($"Unknown {typeof(TEnum).Name} value.");
-
-        writer.WriteStringValue(name);
-    }
-
-    private static Dictionary<TEnum, string> CreateNames()
-    {
-        var names = new Dictionary<TEnum, string>();
-        foreach (var field in typeof(TEnum).GetFields(BindingFlags.Public | BindingFlags.Static))
+        return reader.GetString() switch
         {
-            var attribute = field.GetCustomAttribute<JsonStringEnumMemberNameAttribute>();
-            if (attribute is null)
-                throw new InvalidOperationException(
-                    $"{typeof(TEnum).Name}.{field.Name} requires {nameof(JsonStringEnumMemberNameAttribute)}.");
-
-            names.Add((TEnum)field.GetValue(null)!, attribute.Name);
-        }
-
-        return names;
+            "covered" => IndexOverlapClassification.Covered,
+            "include-gap" => IndexOverlapClassification.IncludeGap,
+            "partial-key" => IndexOverlapClassification.PartialKey,
+            "new-shape" => IndexOverlapClassification.NewShape,
+            _ => throw new JsonException("Unknown index overlap classification."),
+        };
     }
+
+    public override void Write(Utf8JsonWriter writer, IndexOverlapClassification value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(value switch
+        {
+            IndexOverlapClassification.Covered => "covered",
+            IndexOverlapClassification.IncludeGap => "include-gap",
+            IndexOverlapClassification.PartialKey => "partial-key",
+            IndexOverlapClassification.NewShape => "new-shape",
+            _ => throw new JsonException("Unknown index overlap classification."),
+        });
 }
 
 public sealed record IndexCandidateReport(

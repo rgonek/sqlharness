@@ -181,6 +181,11 @@ public sealed class IndexesCommandTests
         Assert.Equal("\"include-gap\"", JsonSerializer.Serialize(IndexOverlapClassification.IncludeGap, options));
         Assert.Equal("\"partial-key\"", JsonSerializer.Serialize(IndexOverlapClassification.PartialKey, options));
         Assert.Equal("\"new-shape\"", JsonSerializer.Serialize(IndexOverlapClassification.NewShape, options));
+        Assert.Equal(IndexOverlapClassification.Covered, JsonSerializer.Deserialize<IndexOverlapClassification>("\"covered\"", options));
+        Assert.Equal(IndexOverlapClassification.IncludeGap, JsonSerializer.Deserialize<IndexOverlapClassification>("\"include-gap\"", options));
+        Assert.Equal(IndexOverlapClassification.PartialKey, JsonSerializer.Deserialize<IndexOverlapClassification>("\"partial-key\"", options));
+        Assert.Equal(IndexOverlapClassification.NewShape, JsonSerializer.Deserialize<IndexOverlapClassification>("\"new-shape\"", options));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<IndexOverlapClassification>("\"Covered\"", options));
     }
 
     private sealed class FakeModule : ISqlHarnessModule
