@@ -33,6 +33,7 @@ public static class SqlHarnessCli
             c.AddCommand<WatchCommand>("watch");
             c.AddCommand<SnapshotCommand>("snapshot");
             c.AddCommand<QueryStoreTopCommand>("qstop");
+            c.AddCommand<IndexesCommand>("indexes");
         });
         return new SqlHarnessApp(app);
     }
