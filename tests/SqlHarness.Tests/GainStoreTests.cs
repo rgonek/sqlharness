@@ -87,6 +87,55 @@ public class GainStoreTests
         Assert.Equal(0, gain.Space.Executions);
         Assert.Equal(0, gain.Watch.Executions);
         Assert.Equal(0, gain.Snapshot.Executions);
+        Assert.Equal(0, gain.QueryStoreTop.Executions);
+    }
+
+    [Fact]
+    public void Qstop_records_increment_query_store_top_and_total()
+    {
+        using var temp = new TempDirectory("qstop-gain");
+        var store = new GainStore(temp.FilePath);
+        var consistent = Record("query", true, 1, 4, 1, 0, 0, 1, 0, 1);
+        store.Append(consistent with { Command = "qstop" });
+
+        var gain = store.Aggregate();
+
+        Assert.Equal(1, gain.QueryStoreTop.Executions);
+        Assert.Equal(1, gain.Total.Executions);
+        Assert.Equal(0, gain.Query.Executions);
+        Assert.Equal(0, gain.Compare.Executions);
+        Assert.Equal(0, gain.Measure.Executions);
+        Assert.Equal(0, gain.Ping.Executions);
+        Assert.Equal(0, gain.Counts.Executions);
+        Assert.Equal(0, gain.Space.Executions);
+        Assert.Equal(0, gain.Watch.Executions);
+        Assert.Equal(0, gain.Snapshot.Executions);
+    }
+
+    [Fact]
+    public void Existing_jsonl_without_qstop_still_aggregates()
+    {
+        using var temp = new TempDirectory("legacy-without-qstop");
+        var commands = new[]
+        {
+            "query", "compare", "measure", "plan", "schema", "ping", "counts", "space", "watch", "snapshot",
+        };
+        File.WriteAllText(
+            temp.FilePath,
+            string.Join('\n', commands.Select(LegacyLine)) + "\n");
+
+        var gain = new GainStore(temp.FilePath).Aggregate();
+
+        Assert.Equal(commands.Length, gain.Total.Executions);
+        Assert.Equal(1, gain.Query.Executions);
+        Assert.Equal(1, gain.Compare.Executions);
+        Assert.Equal(1, gain.Measure.Executions);
+        Assert.Equal(1, gain.Ping.Executions);
+        Assert.Equal(1, gain.Counts.Executions);
+        Assert.Equal(1, gain.Space.Executions);
+        Assert.Equal(1, gain.Watch.Executions);
+        Assert.Equal(1, gain.Snapshot.Executions);
+        Assert.Equal(0, gain.QueryStoreTop.Executions);
     }
 
     [Fact]
@@ -158,6 +207,10 @@ public class GainStoreTests
         Assert.Equal(100, File.ReadAllLines(temp.FilePath).Length);
         Assert.Equal(100, stores[0].Aggregate().Compare.Executions);
     }
+
+    private static string LegacyLine(string command) =>
+        "{\"timestamp\":\"2026-07-13T10:20:30.0000000+00:00\",\"command\":\"" + command
+        + "\",\"success\":true,\"durationMilliseconds\":1,\"rawBytes\":4,\"rawLines\":1,\"emittedBytes\":0,\"emittedLines\":0,\"rawEstimatedTokens\":1,\"emittedEstimatedTokens\":0,\"savedEstimatedTokens\":1}";
 
     private static GainRecord Record(
         string command, bool success, long duration, long rawBytes, long rawLines,

@@ -51,6 +51,7 @@ public sealed class Renderer
             WriteGain("ping", gain.Ping, output); WriteGain("counts", gain.Counts, output);
             WriteGain("space", gain.Space, output);
             WriteGain("watch", gain.Watch, output); WriteGain("snapshot", gain.Snapshot, output);
+            WriteGain("qstop", gain.QueryStoreTop, output);
         }
         else if (outcome.Report is DistilledPlan plan)
             RenderPlan(plan, output);
@@ -82,6 +83,8 @@ public sealed class Renderer
             RenderWatch(watch, output);
         else if (outcome.Report is SqlHarnessSnapshotReport snapshot)
             RenderSnapshot(snapshot, output);
+        else if (outcome.Report is SqlHarnessQueryStoreTopReport queryStoreTop)
+            RenderQueryStoreTop(queryStoreTop, output);
         else if (!string.IsNullOrWhiteSpace(outcome.SafeError))
             output.WriteLine($"SQLHarness {outcome.ExitCode}: {SecretRedactor.Redact(outcome.SafeError, [])}");
     }
@@ -145,6 +148,45 @@ public sealed class Renderer
         _ => reason.ToString().ToLowerInvariant(),
     };
 
+    private static void RenderQueryStoreTop(SqlHarnessQueryStoreTopReport report, TextWriter output)
+    {
+        var minutes = report.WindowMinutes.ToString(CultureInfo.InvariantCulture);
+        output.WriteLine($"Target: {report.Target.ActualServer}/{report.Target.ActualDatabase} ({report.Target.Mode})");
+        output.WriteLine($"Window: {minutes} minutes");
+        output.WriteLine($"Artifacts: {report.ArtifactDirectory ?? "none"}");
+        if (report.Queries.Count == 0)
+        {
+            output.WriteLine($"No Query Store runtime data in the selected {minutes}-minute window.");
+            return;
+        }
+
+        output.WriteLine(string.Join('\t',
+            "QueryId", "Hash", "Object", "Executions", "Plans",
+            "TotalDuration", "AverageDuration", "MaximumDuration",
+            "TotalCpu", "AverageCpu", "MaximumCpu",
+            "TotalLogicalReads", "AverageLogicalReads", "MaximumLogicalReads",
+            "LastExecution"));
+        foreach (var query in report.Queries)
+        {
+            output.WriteLine(string.Join('\t',
+                query.QueryId.ToString(CultureInfo.InvariantCulture),
+                query.QueryHash,
+                query.ObjectName ?? string.Empty,
+                query.ExecutionCount.ToString(CultureInfo.InvariantCulture),
+                query.PlanCount.ToString(CultureInfo.InvariantCulture),
+                DecimalText(query.TotalDurationMilliseconds),
+                DecimalText(query.AverageDurationMilliseconds),
+                DecimalText(query.MaximumDurationMilliseconds),
+                DecimalText(query.TotalCpuMilliseconds),
+                DecimalText(query.AverageCpuMilliseconds),
+                DecimalText(query.MaximumCpuMilliseconds),
+                DecimalText(query.TotalLogicalReads),
+                DecimalText(query.AverageLogicalReads),
+                DecimalText(query.MaximumLogicalReads),
+                query.LastExecutionAt.ToString("O", CultureInfo.InvariantCulture)));
+        }
+    }
+
     private static void RenderSpace(SqlHarnessSpaceReport space, TextWriter output)
     {
         output.WriteLine("Files");
@@ -196,6 +238,7 @@ public sealed class Renderer
     }
 
     private static string Mb(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+    private static string DecimalText(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
     private static string Value(object? value) => value is null ? "NULL" : Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
     private static string Dist(CompareDistribution d) => $"{d.Min}/{d.Median}/{d.Max}";
     private static string FormatTechnicalEquivalence(ResultEquivalenceReport equivalence)
