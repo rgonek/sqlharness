@@ -28,6 +28,28 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\
 sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\before.sql --candidate .\queries\after.sql --compare-results multiset --repeat 5 --json-summary
 ```
 
+`compare` accepts one `--matrix` dimension:
+
+```powershell
+sqlharness compare prod-eu `
+  --var tenant=acme --var env=uat `
+  --baseline .\before.sql `
+  --candidate .\after.sql `
+  --matrix BatchSize:int=1,20,100 `
+  --param AsOfDate:datetime2=2026-07-29T12:00:00 `
+  --repeat 7 `
+  --compare-results ordered `
+  --json-summary
+```
+
+- one matrix dimension only;
+- at least two typed values;
+- sequential user-supplied order;
+- a new connection and one setup per value;
+- first failure stops the run;
+- completed cell artifacts remain;
+- ticket SQL stays outside the application repository.
+
 Use parameters instead of SQL interpolation. Supported types: `nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`, `nchar`, `int`, `bigint`, `smallint`, `tinyint`, `bit`, `decimal`, `decimal(p,s)`, `numeric`, `numeric(p,s)`, `float`, `real`, `money`, `smallmoney`, `date`, `time`, `datetime`, `datetime2`, `smalldatetime`, `datetimeoffset`, `uniqueidentifier`, `varbinary`, `varbinary(max)`, `hierarchyid`, `geography`, `geometry`. Values are culture-invariant; date/time use ISO 8601 (for example `--param asOf:datetime2=2026-07-29T12:00:00` and `--param amount:decimal(19,4)=1234.5600`). GUIDs accept any standard format; `varbinary` is Base64; long strings and `nvarchar(max)` use `Size = -1`; `hierarchyid`/`geography`/`geometry` bind as true SQL UDTs (`Microsoft.SqlServer.Types`; spatial WKT may use `srid;WKT`); nulls are `name:null` or `name:type:null`.
 
 `query` accepts exactly one SQL source: `--file` or redirected stdin. `schema` is read-only catalog inspection (`--object` selects exactly one table or view). `ping` and `counts` are fixed internal probes with no user SQL: `counts` defaults to partition estimates and uses `--exact` for `COUNT_BIG(*)`. `space` is read-only DMV storage diagnosis (`--top` default 25; `--object` for one exact table with per-index detail): files, aggregate allocation, and top tables by reserved space. It diagnoses storage only and never performs shrink, recovery-model change, compression change, or index mutation; any mutation still requires a separately approved `query --allow-mutation` batch. None of `ping`, `counts`, `schema`, or `space` accepts arbitrary SQL or mutations. `watch` polls a bounded read-only query (same SQL/`--param` pipeline as `query`; mutations reject with exit `2`) until exactly one of `--until` (predicate on the first row of the first result set) or `--until-unchanged` (default when neither is supplied: `--until-unchanged 3`). Defaults: `--interval 30`, `--max-duration 15m`. Exit `0` for condition-met/unchanged; exit `7` when max duration elapses without a stop condition. `snapshot` stores a named canonical result under `~/.sqlharness/snapshots` (sensitive result data—treat as locally sensitive). Capture with `--name`; `--force` is required to replace an existing name. `--diff` compares live results to the stored snapshot and never prints cell values (locations/kinds only): exit `0` when identical, exit `8` when a valid comparison found differences rather than an execution failure. `plan` is offline, needs no target or scope lock, and accepts a showplan XML file or stdin:
@@ -53,6 +75,7 @@ For agent-authored SQL, every ScriptDom-parsable construct inside a top-level `S
 ## Benchmark setup contract
 
 - `measure` / `compare`: setup runs exactly once per connection; warm-up and all measured repetitions reuse that same session (so session-local `#temp` / Postgres `TEMP` from setup is visible).
+- `compare --matrix` replaces that single invocation connection with a new connection and one setup per value (one dimension, at least two typed values, sequential user-supplied order). The first failure stops the run; completed cell artifacts remain. Ticket SQL stays outside the application repository.
 - A rejected or failed setup stops the run; never work around safety by creating persistent objects.
 - SQL Server: local `#temp` only (unqualified name starts with exactly one `#`): allowed for setup/DML/indexes/supported constraints without mutation confirmation. Postgres: native `TEMP` / `TEMPORARY` only — no `#temp` rewrite. Persistent objects, `##temp`, dynamic SQL, external access, cross-database references, and transaction control remain denied.
 - Before measuring, inventory representative cases offline: row count, cardinality distribution, ordering ties, missing history, boundary dates, and empty results.

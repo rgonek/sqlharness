@@ -72,6 +72,28 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\
 sqlharness gain --json
 ```
 
+`compare` accepts one `--matrix` dimension:
+
+```powershell
+sqlharness compare prod-eu `
+  --var tenant=acme --var env=uat `
+  --baseline .\before.sql `
+  --candidate .\after.sql `
+  --matrix BatchSize:int=1,20,100 `
+  --param AsOfDate:datetime2=2026-07-29T12:00:00 `
+  --repeat 7 `
+  --compare-results ordered `
+  --json-summary
+```
+
+- one matrix dimension only;
+- at least two typed values;
+- sequential user-supplied order;
+- a new connection and one setup per value;
+- first failure stops the run;
+- completed cell artifacts remain;
+- ticket SQL stays outside the application repository.
+
 ### PostgreSQL engine notes
 
 - Prefer a closed `engine: postgres` profile (example name `local-pg`). Do not pass `--engine` with a profile.
@@ -84,7 +106,7 @@ sqlharness gain --json
 
 ### Benchmark session contract
 
-For `measure` and `compare`, setup runs exactly once per connection; warm-up and all measured repetitions reuse that same session. Session-local `#temp` (SQL Server) or `TEMP` (Postgres) tables created in setup are visible to measured SQL. A rejected or failed setup stops the run—do not retry via persistent objects.
+For `measure` and for `compare` without `--matrix`, setup runs exactly once per connection; warm-up and all measured repetitions reuse that same session. Session-local `#temp` (SQL Server) or `TEMP` (Postgres) tables created in setup are visible to measured SQL. A rejected or failed setup stops the run—do not retry via persistent objects. `compare --matrix` opens a new connection and runs setup once per value, in sequential user-supplied order; the first failure stops the run and completed cell artifacts remain.
 
 SQL Server local `#temp` only (name starts with exactly one `#`): setup may create/index/DML/`DROP` session temps with supported constraints without mutation confirmation. Postgres uses native `TEMP` / `TEMPORARY` only. Persistent objects, `##temp`, dynamic SQL, external access, cross-database references, and transaction control remain denied.
 

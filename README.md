@@ -47,6 +47,28 @@ sqlharness plan .\artifacts\orders.sqlplan --json
 sqlharness gain --json
 ```
 
+`compare` accepts one `--matrix` dimension:
+
+```powershell
+sqlharness compare prod-eu `
+  --var tenant=acme --var env=uat `
+  --baseline .\before.sql `
+  --candidate .\after.sql `
+  --matrix BatchSize:int=1,20,100 `
+  --param AsOfDate:datetime2=2026-07-29T12:00:00 `
+  --repeat 7 `
+  --compare-results ordered `
+  --json-summary
+```
+
+- one matrix dimension only;
+- at least two typed values;
+- sequential user-supplied order;
+- a new connection and one setup per value;
+- first failure stops the run;
+- completed cell artifacts remain;
+- ticket SQL stays outside the application repository.
+
 Read-only database helpers (`ping`, `counts`, `schema --object`, and `space`) use fixed internal catalog/probe/DMV SQL only: they never accept an arbitrary user SQL batch or mutations. `counts` defaults to approximate row counts from partition statistics; pass `--exact` for `COUNT_BIG(*)`. `space` diagnoses storage only (files, aggregate allocation, top tables by reserved space, optional per-index detail for `--object`); it never performs shrink, recovery-model change, compression change, or index mutation—any mutation still requires a separately approved `query --allow-mutation` batch. Prefer `--json` for machine-readable reports.
 
 `watch` polls a bounded read-only query until a stop condition: exactly one of `--until` (predicate on the first row of the first result set) or `--until-unchanged` (stable hash across consecutive polls; default when neither is supplied is `--until-unchanged 3`). Defaults: `--interval 30` seconds and `--max-duration 15m` (positive integral `s`/`m`/`h`, max 24h). Exit `0` when the condition is met or results stay unchanged; exit `7` when the max duration elapses without a stop condition. `snapshot` stores a named canonical result under `~/.sqlharness/snapshots` (sensitive result data—treat like comparison artifacts). Capture with `--name`; replace an existing name only with `--force`. `--diff` compares the live query against the stored snapshot without printing cell values (locations and kinds only): exit `0` when identical, exit `8` when a valid comparison found differences rather than an execution failure. Both accept the same single SQL source and `--param` pipeline as `query` (mutation classification rejects with exit `2`).
@@ -104,13 +126,13 @@ sqlharness measure prod-eu --var tenant=acme --var env=uat `
 
 ## Benchmark setup contract
 
-For `measure` and `compare`, SQLHarness opens one connection per invocation:
+For `measure` and for `compare` without `--matrix`, SQLHarness opens one connection per invocation:
 
 1. Runs optional `--setup` SQL **exactly once** on that connection.
 2. Runs warm-up(s) on the same connection.
 3. Runs all measured repetitions on the same connection.
 
-Session-local `#temp` objects created in setup remain visible to warm-up and measured SQL. A rejected or failed setup stops the benchmark; SQLHarness does not retry by creating persistent objects or weakening safety.
+Session-local `#temp` objects created in setup remain visible to warm-up and measured SQL. A rejected or failed setup stops the benchmark; SQLHarness does not retry by creating persistent objects or weakening safety. `compare --matrix` does not reuse that single connection across values: each value opens a new connection and runs setup once, in the contract next to the quick-start matrix command.
 
 Local temporary objects whose unqualified name starts with exactly one `#` may use session-only work without mutation confirmation: `CREATE TABLE #t` / `SELECT INTO #t`, `#temp` DML, `#temp` indexes and supported constraints (`NULL`/`NOT NULL`, `PRIMARY KEY`, `UNIQUE`), and `DROP TABLE #t`. Persistent objects, `##temp`, dynamic SQL, external access, cross-database references, and transaction control remain denied.
 
