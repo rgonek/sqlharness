@@ -158,6 +158,8 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
         [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
+        [CommandOption("--matrix <NAME:TYPE=VALUES>")]
+        public string[] Matrix { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;
         [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
         [CommandOption("--compare-results <MODE>")]
@@ -169,16 +171,21 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
     {
         if (!s.TryTarget(out var target, out var error)) return Invalid(error);
         if (s.Json && s.JsonSummary) return Invalid("Choose only one of --json or --json-summary.");
+        var matrix = s.Matrix ?? [];
+        if (matrix.Length > 1) return Invalid("Version 1 accepts exactly one --matrix option.");
         if (string.IsNullOrWhiteSpace(s.Baseline) || string.IsNullOrWhiteSpace(s.Candidate)) return Invalid("Both --baseline and --candidate SQL files are required.");
         if (s.Timeout is < 1 or > 300 || s.Repeat is < 1 or > 100) return Invalid("--timeout must be 1..300 and --repeat must be 1..100.");
         if (!TryParseCompareResults(s.CompareResults, out var compareResults))
             return Invalid("--compare-results must be ordered, multiset, set, or off.");
         try
         {
-            return await Dispatch(
-                new SqlHarnessCompareOperation(target, await Read(s.Setup, ct), (await Read(s.Baseline, ct))!, (await Read(s.Candidate, ct))!, s.Parameters, s.Timeout, s.Repeat, compareResults),
-                ResolveOutputMode(s.Json, s.JsonSummary),
-                ct);
+            var setup = await Read(s.Setup, ct);
+            var baseline = (await Read(s.Baseline, ct))!;
+            var candidate = (await Read(s.Candidate, ct))!;
+            SqlHarnessOperation operation = matrix.Length == 1
+                ? new SqlHarnessCompareMatrixOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, matrix[0], compareResults)
+                : new SqlHarnessCompareOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, compareResults);
+            return await Dispatch(operation, ResolveOutputMode(s.Json, s.JsonSummary), ct);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file."); }

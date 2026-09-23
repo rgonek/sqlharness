@@ -472,6 +472,216 @@ public sealed class CommandTests
     }
 
     [Fact]
+    public async Task Compare_without_matrix_dispatches_compare_operation()
+    {
+        var baseline = TempFile("select baseline");
+        var candidate = TempFile("select candidate");
+        try
+        {
+            var module = new FakeModule(Success(CompareReport()));
+            var exit = await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(
+                ["compare", "dev", "--baseline", baseline, "--candidate", candidate]);
+
+            Assert.Equal(0, exit);
+            Assert.IsType<SqlHarnessCompareOperation>(Assert.Single(module.Operations));
+        }
+        finally
+        {
+            File.Delete(baseline);
+            File.Delete(candidate);
+        }
+    }
+
+    [Fact]
+    public async Task Compare_with_one_matrix_dispatches_matrix_operation()
+    {
+        var baseline = TempFile("select sentinel_matrix_sql_text");
+        var candidate = TempFile("select candidate");
+        try
+        {
+            var module = new FakeModule(Success(CompareReport()));
+            var exit = await SqlHarnessCli.Create(module, new StringWriter()).RunAsync([
+                "compare", "dev",
+                "--baseline", baseline,
+                "--candidate", candidate,
+                "--matrix", "BatchSize:int=1,20,100",
+                "--param", "CustomerId:int=424242",
+                "--repeat", "7",
+                "--compare-results", "multiset",
+                "--json-summary"]);
+
+            Assert.Equal(0, exit);
+            var operation = Assert.IsType<SqlHarnessCompareMatrixOperation>(Assert.Single(module.Operations));
+            Assert.Equal("BatchSize:int=1,20,100", operation.Matrix);
+            Assert.Equal(["CustomerId:int=424242"], operation.Parameters);
+            Assert.Equal(7, operation.Repeat);
+            Assert.Equal(ResultComparisonMode.Multiset, operation.CompareResults);
+            Assert.Equal("select sentinel_matrix_sql_text", operation.BaselineSql);
+            Assert.Equal("select candidate", operation.CandidateSql);
+        }
+        finally
+        {
+            File.Delete(baseline);
+            File.Delete(candidate);
+        }
+    }
+
+    [Fact]
+    public async Task Compare_rejects_repeated_matrix_before_dispatch()
+    {
+        var baseline = TempFile("select baseline");
+        var candidate = TempFile("select candidate");
+        try
+        {
+            var module = new FakeModule(Success(CompareReport()));
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(module, output).RunAsync([
+                "compare", "dev",
+                "--baseline", baseline,
+                "--candidate", candidate,
+                "--matrix", "BatchSize:int=1,20,100",
+                "--matrix", "Tenant:int=1,2"]);
+
+            Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+            Assert.Empty(module.Operations);
+            Assert.Equal(
+                $"Version 1 accepts exactly one --matrix option.{Environment.NewLine}",
+                output.ToString());
+        }
+        finally
+        {
+            File.Delete(baseline);
+            File.Delete(candidate);
+        }
+    }
+
+    [Theory]
+    [InlineData("measure")]
+    [InlineData("query")]
+    public async Task Measure_and_query_reject_matrix_as_unknown_option(string command)
+    {
+        var sql = TempFile("select 1");
+        try
+        {
+            var module = new FakeModule(Success(command == "measure" ? MeasureReport() : QueryReport()));
+            var output = new StringWriter();
+            string[] args = command == "measure"
+                ? ["measure", "dev", "--query", sql, "--matrix", "BatchSize:int=1,20"]
+                : ["query", "dev", "--file", sql, "--matrix", "BatchSize:int=1,20"];
+
+            var exit = await SqlHarnessCli.Create(module, output).RunAsync(args);
+
+            // Spectre owns unknown options and returns -1 before command execution.
+            Assert.Equal(-1, exit);
+            Assert.Empty(module.Operations);
+            Assert.Equal(string.Empty, output.ToString());
+        }
+        finally
+        {
+            File.Delete(sql);
+        }
+    }
+
+    [Fact]
+    public async Task Compare_matrix_text_is_one_tab_separated_row_per_cell_in_input_order()
+    {
+        var report = new SqlHarnessCompareMatrixReport("@BatchSize", "int",
+        [
+            MatrixCell(0, "100", 5, 21, @"C:\artifacts\cell-100", new ResultEquivalenceReport(ResultComparisonMode.Ordered, true, 0, 0, 0)),
+            MatrixCell(1, "20", 8, 9, @"C:\artifacts\cell-20", new ResultEquivalenceReport(ResultComparisonMode.Multiset, false, null, 3, 1)),
+            MatrixCell(2, "1", 1, 2, null, new ResultEquivalenceReport(ResultComparisonMode.Off, null, null, null, null)),
+        ]);
+        var baseline = TempFile("select baseline");
+        var candidate = TempFile("select candidate");
+        try
+        {
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(new FakeModule(Success(report)), output).RunAsync([
+                "compare", "dev",
+                "--baseline", baseline,
+                "--candidate", candidate,
+                "--matrix", "BatchSize:int=100,20,1"]);
+
+            Assert.Equal(0, exit);
+            Assert.Equal(
+                string.Join(Environment.NewLine, [
+                    "100\tTechnical equivalence (ordered): True; baseline-only: 0; candidate-only: 0; differing positions: 0\t5\t21\tC:\\artifacts\\cell-100",
+                    "20\tTechnical equivalence (multiset): False; baseline-only: 3; candidate-only: 1\t8\t9\tC:\\artifacts\\cell-20",
+                    "1\tTechnical equivalence: off\t1\t2\tnone",
+                    string.Empty,
+                ]),
+                output.ToString());
+        }
+        finally
+        {
+            File.Delete(baseline);
+            File.Delete(candidate);
+        }
+    }
+
+    [Fact]
+    public async Task Compare_matrix_json_summary_is_bounded_and_full_json_keeps_cell_reports()
+    {
+        var operators = Enumerable.Range(1, 15)
+            .Select(i => new CompareOperatorReport(i, $"Op{i:D2}", $"dbo.T{i:D2}", true, false, false))
+            .ToArray();
+        var report = new SqlHarnessCompareMatrixReport("@BatchSize", "int",
+        [
+            MatrixCell(0, "100", 5, 21, @"C:\artifacts\cell-100", new ResultEquivalenceReport(ResultComparisonMode.Ordered, true, 0, 0, 0), operators),
+            MatrixCell(1, "20", 8, 9, @"C:\artifacts\cell-20", new ResultEquivalenceReport(ResultComparisonMode.Multiset, false, null, 3, 1), operators),
+        ]);
+        var baseline = TempFile("select sentinel_matrix_sql_text");
+        var candidate = TempFile("select candidate");
+        try
+        {
+            var module = new FakeModule(Success(report));
+            var summaryOutput = new StringWriter();
+            var fullOutput = new StringWriter();
+            Assert.Equal(0, await SqlHarnessCli.Create(module, summaryOutput).RunAsync([
+                "compare", "dev",
+                "--baseline", baseline,
+                "--candidate", candidate,
+                "--matrix", "BatchSize:int=100,20",
+                "--param", "CustomerId:int=424242",
+                "--json-summary"]));
+            Assert.Equal(0, await SqlHarnessCli.Create(module, fullOutput).RunAsync([
+                "compare", "dev",
+                "--baseline", baseline,
+                "--candidate", candidate,
+                "--matrix", "BatchSize:int=100,20",
+                "--param", "CustomerId:int=424242",
+                "--json"]));
+
+            using var summary = JsonDocument.Parse(summaryOutput.ToString());
+            using var full = JsonDocument.Parse(fullOutput.ToString());
+            var summaryCells = summary.RootElement.GetProperty("cells");
+            var fullCells = full.RootElement.GetProperty("cells");
+            Assert.Equal(2, summaryCells.GetArrayLength());
+            Assert.Equal("100", summaryCells[0].GetProperty("parameterValue").GetString());
+            Assert.Equal("20", summaryCells[1].GetProperty("parameterValue").GetString());
+            var noteworthy = summaryCells[0].GetProperty("compare").GetProperty("noteworthyOperators");
+            Assert.True(noteworthy.GetArrayLength() <= 10);
+            Assert.False(summaryCells[0].GetProperty("compare").GetProperty("baseline").TryGetProperty("operators", out _));
+            Assert.False(summaryCells[0].GetProperty("compare").GetProperty("candidate").TryGetProperty("operators", out _));
+            Assert.Equal(15, fullCells[0].GetProperty("compare").GetProperty("baseline").GetProperty("operators").GetArrayLength());
+            Assert.Equal("100", fullCells[0].GetProperty("parameterValue").GetString());
+            Assert.DoesNotContain("sentinel_matrix_sql_text", summaryOutput.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("sentinel_matrix_sql_text", fullOutput.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("424242", summaryOutput.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("424242", fullOutput.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("\"operators\"", summaryOutput.ToString(), StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("runs", summaryOutput.ToString(), StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("PlanXmls", summaryOutput.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("ResultHash", summaryOutput.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(baseline);
+            File.Delete(candidate);
+        }
+    }
+
+    [Fact]
     public async Task Module_safe_error_is_redacted_again_before_emission_and_exit_code_is_preserved()
     {
         var module = new FakeModule(new(SqlHarnessExitCode.Authentication, null, "Password=hunter2; access_token=abc"));
@@ -1075,6 +1285,30 @@ public sealed class CommandTests
     private static CompareVariantReport Variant(string name) => new(name, new(1, 2, 3), new(1, 2, 3), new(1, 2, 3), new Dictionary<string, long>(), [], []);
     private static SqlHarnessMeasureReport MeasureReport() => new(new("s", "d", "s", "d", "profile"), 5, 5, true, Variant("measure"), null);
     private static SqlHarnessCompareReport CompareReport() => new(new("s", "d", "s", "d", "profile"), 5, 10, true, Variant("baseline"), Variant("candidate"), null);
+
+    private static CompareMatrixCellReport MatrixCell(
+        int index,
+        string value,
+        long baselineMedian,
+        long candidateMedian,
+        string? artifact,
+        ResultEquivalenceReport equivalence,
+        IReadOnlyList<CompareOperatorReport>? operators = null)
+    {
+        operators ??= [];
+        var baseline = new CompareVariantReport(
+            "baseline", new(1, 2, 3), new(baselineMedian, baselineMedian, baselineMedian), new(1, 2, 3),
+            new Dictionary<string, long>(), operators, []);
+        var candidate = new CompareVariantReport(
+            "candidate", new(4, 5, 6), new(candidateMedian, candidateMedian, candidateMedian), new(7, 8, 9),
+            new Dictionary<string, long>(), operators, []);
+        var compare = new SqlHarnessCompareReport(
+            new("s", "d", "s", "d", "profile"), 5, 10, equivalence.Equivalent, baseline, candidate, artifact)
+        {
+            Equivalence = equivalence,
+        };
+        return new CompareMatrixCellReport(index, value, compare);
+    }
     private static SqlHarnessGainReport GainReport() { var s = new SqlHarnessGainSummary(0, 0, 0, 0, 0, 0, 0, 0, 0, 0); return new(s, s, s); }
     private static SqlHarnessWatchReport WatchReport(WatchExitReason reason = WatchExitReason.ConditionMet) =>
         new(new("s", "d", "s", "d", "profile"), 1, 0, reason, []);

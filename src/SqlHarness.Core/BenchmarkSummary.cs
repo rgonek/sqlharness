@@ -37,6 +37,16 @@ public sealed record MeasureBenchmarkSummary(
     IReadOnlyList<NoteworthyOperatorSummary> NoteworthyOperators,
     string? ArtifactDirectory);
 
+public sealed record CompareMatrixCellSummary(
+    int Index,
+    string ParameterValue,
+    CompareBenchmarkSummary Compare);
+
+public sealed record CompareMatrixBenchmarkSummary(
+    string ParameterName,
+    string ParameterType,
+    IReadOnlyList<CompareMatrixCellSummary> Cells);
+
 public static class BenchmarkSummaryProjector
 {
     private const int MaximumNoteworthyOperators = 10;
@@ -70,6 +80,19 @@ public static class BenchmarkSummaryProjector
             ProjectVariant(report.Query),
             SelectMeasureNoteworthy(report.Query.Operators),
             report.ArtifactDirectory);
+    }
+
+    public static CompareMatrixBenchmarkSummary Project(SqlHarnessCompareMatrixReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+
+        return new CompareMatrixBenchmarkSummary(
+            report.ParameterName,
+            report.ParameterType,
+            report.Cells.Select(cell => new CompareMatrixCellSummary(
+                cell.Index,
+                cell.ParameterValue,
+                Project(cell.Compare))).ToArray());
     }
 
     private static BenchmarkVariantSummary ProjectVariant(CompareVariantReport variant) =>

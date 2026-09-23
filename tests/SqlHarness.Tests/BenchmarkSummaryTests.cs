@@ -251,6 +251,137 @@ public sealed class BenchmarkSummaryTests
             op => Assert.True(op.HasWarnings || op.HasSpill || op.HasImplicitConversion));
     }
 
+    [Fact]
+    public void Matrix_projection_keeps_input_order_and_omits_full_run_and_operator_arrays()
+    {
+        var wideOperators = Enumerable.Range(0, 12)
+            .Select(i => new CompareOperatorReport(i, $"Op{i:D2}", $"dbo.Wide{i:D2}", true, false, false))
+            .Prepend(new CompareOperatorReport(100, "BConvert", "dbo.Lines", false, false, true))
+            .Prepend(new CompareOperatorReport(101, "ASpill", "dbo.Orders", false, true, false))
+            .ToArray();
+        var report = new SqlHarnessCompareMatrixReport("@BatchSize", "int",
+        [
+            MatrixSummaryCell(0, "100", wideOperators, new ResultEquivalenceReport(ResultComparisonMode.Ordered, true, 0, 0, 0), @"C:\artifacts\cell-100"),
+            MatrixSummaryCell(1, "20", [new CompareOperatorReport(2, "Hash Match", "dbo.Lines", true, true, false)], new ResultEquivalenceReport(ResultComparisonMode.Multiset, false, null, 3, 1), @"C:\artifacts\cell-20"),
+            MatrixSummaryCell(2, "1", [], new ResultEquivalenceReport(ResultComparisonMode.Off, null, null, null, null), null),
+        ]);
+
+        CompareMatrixBenchmarkSummary summary = BenchmarkSummaryProjector.Project(report);
+        var json = JsonSerializer.Serialize(summary, summary.GetType(), WebJson);
+
+        Assert.Equal("@BatchSize", summary.ParameterName);
+        Assert.Equal("int", summary.ParameterType);
+        Assert.Equal(["100", "20", "1"], summary.Cells.Select(cell => cell.ParameterValue).ToArray());
+        Assert.Equal([0, 1, 2], summary.Cells.Select(cell => cell.Index).ToArray());
+
+        var first = summary.Cells[0].Compare;
+        var source = report.Cells[0].Compare;
+        Assert.Equal(source.Equivalence, first.Equivalence);
+        Assert.Equal(source.Baseline.CpuTimeMilliseconds, first.Baseline.CpuTimeMilliseconds);
+        Assert.Equal(source.Baseline.ElapsedTimeMilliseconds, first.Baseline.ElapsedTimeMilliseconds);
+        Assert.Equal(source.Baseline.LogicalReads, first.Baseline.LogicalReads);
+        Assert.Equal(source.Baseline.LogicalReadsByTable, first.Baseline.LogicalReadsByTable);
+        Assert.Equal(source.Baseline.Warnings, first.Baseline.Warnings);
+        Assert.Equal(source.Candidate.CpuTimeMilliseconds, first.Candidate.CpuTimeMilliseconds);
+        Assert.Equal(source.Candidate.ElapsedTimeMilliseconds, first.Candidate.ElapsedTimeMilliseconds);
+        Assert.Equal(source.Candidate.LogicalReads, first.Candidate.LogicalReads);
+        Assert.Equal(source.Candidate.LogicalReadsByTable, first.Candidate.LogicalReadsByTable);
+        Assert.Equal(source.Candidate.Warnings, first.Candidate.Warnings);
+        Assert.Equal(source.ArtifactDirectory, first.ArtifactDirectory);
+        Assert.Equal(10, first.NoteworthyOperators.Count);
+        Assert.Contains(first.NoteworthyOperators, op => op.HasWarnings);
+        Assert.Contains(first.NoteworthyOperators, op => op.HasSpill);
+        Assert.Contains(first.NoteworthyOperators, op => op.HasImplicitConversion);
+
+        var second = summary.Cells[1].Compare;
+        Assert.Equal(report.Cells[1].Compare.Equivalence, second.Equivalence);
+        Assert.Equal(report.Cells[1].Compare.Baseline.CpuTimeMilliseconds, second.Baseline.CpuTimeMilliseconds);
+        Assert.Equal(report.Cells[1].Compare.Baseline.ElapsedTimeMilliseconds, second.Baseline.ElapsedTimeMilliseconds);
+        Assert.Equal(report.Cells[1].Compare.Baseline.LogicalReads, second.Baseline.LogicalReads);
+        Assert.Equal(report.Cells[1].Compare.Baseline.LogicalReadsByTable, second.Baseline.LogicalReadsByTable);
+        Assert.Equal(report.Cells[1].Compare.Candidate.CpuTimeMilliseconds, second.Candidate.CpuTimeMilliseconds);
+        Assert.Equal(report.Cells[1].Compare.Candidate.ElapsedTimeMilliseconds, second.Candidate.ElapsedTimeMilliseconds);
+        Assert.Equal(report.Cells[1].Compare.Candidate.LogicalReads, second.Candidate.LogicalReads);
+        Assert.Equal(report.Cells[1].Compare.Candidate.LogicalReadsByTable, second.Candidate.LogicalReadsByTable);
+        Assert.Equal(report.Cells[1].Compare.Candidate.Warnings, second.Candidate.Warnings);
+        Assert.Equal(report.Cells[1].Compare.ArtifactDirectory, second.ArtifactDirectory);
+        Assert.Contains(second.NoteworthyOperators, op => op.HasWarnings && op.HasSpill);
+
+        var third = summary.Cells[2].Compare;
+        Assert.Equal(ResultComparisonMode.Off, third.Equivalence.Mode);
+        Assert.Null(third.Equivalence.Equivalent);
+        Assert.Null(third.ArtifactDirectory);
+        Assert.Empty(third.NoteworthyOperators);
+
+        Assert.DoesNotContain("\"operators\"", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("runs", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("PlanXmls", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("ResultHash", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("TotalLogicalReadsByTable", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("424242", json, StringComparison.Ordinal);
+        using var document = JsonDocument.Parse(json);
+        var values = document.RootElement.GetProperty("cells").EnumerateArray()
+            .Select(cell => cell.GetProperty("parameterValue").GetString()!)
+            .ToArray();
+        Assert.Equal(["100", "20", "1"], values);
+        Assert.False(document.RootElement.GetProperty("cells")[0].GetProperty("compare").GetProperty("baseline").TryGetProperty("operators", out _));
+        Assert.True(document.RootElement.GetProperty("cells")[0].GetProperty("compare").GetProperty("noteworthyOperators").GetArrayLength() <= 10);
+    }
+
+    private static CompareMatrixCellReport MatrixSummaryCell(
+        int index,
+        string value,
+        IReadOnlyList<CompareOperatorReport> operators,
+        ResultEquivalenceReport equivalence,
+        string? artifact)
+    {
+        var shift = index * 10;
+        var baseline = new CompareVariantReport(
+            "baseline",
+            new CompareDistribution(1 + shift, 2 + shift, 3 + shift),
+            new CompareDistribution(4 + shift, 5 + shift, 6 + shift),
+            new CompareDistribution(7 + shift, 8 + shift, 9 + shift),
+            new Dictionary<string, long>(StringComparer.Ordinal) { ["dbo.Orders"] = 30 },
+            operators,
+            ["ImplicitConversion", "PlanWarning", "SpillToTempDb"])
+        {
+            LogicalReadsByTable = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
+            {
+                ["dbo.Orders"] = new(1, 5, 9),
+                ["dbo.Lines"] = new(2, 4, 6),
+            },
+        };
+        var candidate = new CompareVariantReport(
+            "candidate",
+            new CompareDistribution(10 + shift, 20 + shift, 30 + shift),
+            new CompareDistribution(40 + shift, 50 + shift, 60 + shift),
+            new CompareDistribution(70 + shift, 80 + shift, 90 + shift),
+            new Dictionary<string, long>(StringComparer.Ordinal) { ["dbo.Lines"] = 40 },
+            operators.Select(op => op with { NodeId = op.NodeId + 200 }).ToArray(),
+            ["PlanWarning", "SpillToTempDb"])
+        {
+            LogicalReadsByTable = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
+            {
+                ["dbo.Orders"] = new(0, 1, 2),
+                ["dbo.Lines"] = new(3, 5, 7),
+            },
+        };
+        var compare = new SqlHarnessCompareReport(
+            new SqlHarnessTargetIdentityReport("req-s", "req-d", "act-s", "act-d", "profile"),
+            5,
+            10,
+            equivalence.Equivalent,
+            baseline,
+            candidate,
+            artifact)
+        {
+            Equivalence = equivalence,
+            Classification = new CompareClassificationReport("session-local", "read-only", "read-only"),
+            Parameters = [new BenchmarkParameterReport("@CustomerId", "int", null, null, null)],
+        };
+        return new CompareMatrixCellReport(index, value, compare);
+    }
+
     private static SqlHarnessCompareReport MinimalCompare(
         IReadOnlyList<CompareOperatorReport> baseline,
         IReadOnlyList<CompareOperatorReport> candidate) =>

@@ -17,6 +17,7 @@ public sealed class Renderer
                 ? outcome.Report switch
                 {
                     SqlHarnessCompareReport compare => (object)BenchmarkSummaryProjector.Project(compare),
+                    SqlHarnessCompareMatrixReport matrix => BenchmarkSummaryProjector.Project(matrix),
                     SqlHarnessMeasureReport measure => BenchmarkSummaryProjector.Project(measure),
                     _ => outcome.Report,
                 }
@@ -40,6 +41,8 @@ public sealed class Renderer
             output.WriteLine($"measure\t{Dist(measure.Query.ElapsedTimeMilliseconds)}\nStable results: {measure.ResultsStable}; artifacts: {measure.ArtifactDirectory ?? "none"}");
         else if (outcome.Report is SqlHarnessCompareReport compare)
             output.WriteLine($"baseline\t{Dist(compare.Baseline.ElapsedTimeMilliseconds)}\ncandidate\t{Dist(compare.Candidate.ElapsedTimeMilliseconds)}\n{FormatTechnicalEquivalence(compare.Equivalence)}; artifacts: {compare.ArtifactDirectory ?? "none"}");
+        else if (outcome.Report is SqlHarnessCompareMatrixReport matrix)
+            RenderMatrix(matrix, output);
         else if (outcome.Report is SqlHarnessGainReport gain)
         {
             output.WriteLine("Scope\tExecutions\tFailures\tSaved tokens\tSavings %");
@@ -81,6 +84,19 @@ public sealed class Renderer
             RenderSnapshot(snapshot, output);
         else if (!string.IsNullOrWhiteSpace(outcome.SafeError))
             output.WriteLine($"SQLHarness {outcome.ExitCode}: {SecretRedactor.Redact(outcome.SafeError, [])}");
+    }
+
+    private static void RenderMatrix(SqlHarnessCompareMatrixReport matrix, TextWriter output)
+    {
+        foreach (var cell in matrix.Cells)
+        {
+            output.WriteLine(string.Join('\t',
+                cell.ParameterValue,
+                FormatTechnicalEquivalence(cell.Compare.Equivalence),
+                cell.Compare.Baseline.ElapsedTimeMilliseconds.Median.ToString(CultureInfo.InvariantCulture),
+                cell.Compare.Candidate.ElapsedTimeMilliseconds.Median.ToString(CultureInfo.InvariantCulture),
+                cell.Compare.ArtifactDirectory ?? "none"));
+        }
     }
 
     private static void RenderWatch(SqlHarnessWatchReport watch, TextWriter output)

@@ -21,6 +21,8 @@ public static class SqlHarnessCli
         {
             c.SetApplicationName("sqlharness");
             c.SetApplicationVersion(Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0");
+            // Relaxed parsing would ignore --matrix on measure and query instead of rejecting it.
+            c.UseStrictParsing();
             c.AddCommand<QueryCommand>("query"); c.AddCommand<MeasureCommand>("measure");
             c.AddCommand<CompareCommand>("compare"); c.AddCommand<GainCommand>("gain");
             c.AddCommand<PlanCommand>("plan");
