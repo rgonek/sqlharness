@@ -1,6 +1,9 @@
 using System.Data;
+using System.Data.SqlTypes;
 using System.Globalization;
 using System.Text.RegularExpressions;
+
+using Microsoft.SqlServer.Types;
 
 namespace SqlHarness.Core;
 
@@ -99,6 +102,7 @@ internal static partial class SqlParameterMatrixParser
     private static partial Regex NamePattern();
 
     // SqlDbType, precision, scale, size, and the invariant typed value. Not the raw display text.
+    // "o" keeps fractional seconds. Spatial WKT alone omits SRID, so the key includes both.
     private readonly record struct MatrixValueKey(SqlDbType Type, byte? Precision, byte? Scale, int? Size, string InvariantValue)
     {
         public static MatrixValueKey From(SqlHarnessParameter parameter) =>
@@ -109,9 +113,20 @@ internal static partial class SqlParameterMatrixParser
             DBNull => "null",
             byte[] bytes => Convert.ToBase64String(bytes),
             decimal number => CanonicalDecimal(number),
+            DateTime dateTime => dateTime.ToString("o", CultureInfo.InvariantCulture),
+            DateTimeOffset dateTimeOffset => dateTimeOffset.ToString("o", CultureInfo.InvariantCulture),
+            SqlGeography geography => geography.IsNull ? "null" : SpatialText(geography.STSrid, geography.STAsText()),
+            SqlGeometry geometry => geometry.IsNull ? "null" : SpatialText(geometry.STSrid, geometry.STAsText()),
             IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture) ?? "",
             _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? "",
         };
+
+        private static string SpatialText(SqlInt32 srid, SqlChars wkt)
+        {
+            var sridText = srid.IsNull ? "null" : srid.Value.ToString(CultureInfo.InvariantCulture);
+            var wktText = wkt is { IsNull: false } ? new string(wkt.Value) : "";
+            return sridText + ";" + wktText;
+        }
 
         // Parameter scale is already part of the key. Collapse numeric scale so 1.50 and 1.5 match.
         private static string CanonicalDecimal(decimal number)

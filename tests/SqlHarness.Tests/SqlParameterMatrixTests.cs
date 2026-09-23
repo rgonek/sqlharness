@@ -1,6 +1,8 @@
 using System.Data;
 using System.Globalization;
 
+using Microsoft.SqlServer.Types;
+
 using SqlHarness.Core;
 
 namespace SqlHarness.Tests;
@@ -153,6 +155,42 @@ public class SqlParameterMatrixTests
             $"The --matrix option for SQL parameter '{parameterName}' contains a duplicate value.",
             exception.Message);
         AssertDoesNotEcho(exception, input, displayValue);
+    }
+
+    [Fact]
+    public void Parse_keeps_datetime2_values_that_differ_by_a_fractional_second()
+    {
+        var matrix = SqlParameterMatrixParser.Parse(
+            "At:datetime2=2026-07-29T12:00:00.0000001,2026-07-29T12:00:00.0000002",
+            []);
+
+        Assert.Equal("@At", matrix.Name);
+        Assert.Equal(
+            ["2026-07-29T12:00:00.0000001", "2026-07-29T12:00:00.0000002"],
+            matrix.DisplayValues);
+        Assert.Equal(
+            [
+                new DateTime(2026, 7, 29, 12, 0, 0).AddTicks(1),
+                new DateTime(2026, 7, 29, 12, 0, 0).AddTicks(2),
+            ],
+            matrix.Values.Select(value => (DateTime)value.Value).ToArray());
+    }
+
+    [Fact]
+    public void Parse_keeps_geography_values_that_differ_by_srid()
+    {
+        var matrix = SqlParameterMatrixParser.Parse(
+            "Loc:geography=4326;POINT(-122.3 47.6),4269;POINT(-122.3 47.6)",
+            []);
+
+        Assert.Equal("@Loc", matrix.Name);
+        Assert.Equal(
+            ["4326;POINT(-122.3 47.6)", "4269;POINT(-122.3 47.6)"],
+            matrix.DisplayValues);
+        var first = Assert.IsType<SqlGeography>(matrix.Values[0].Value);
+        var second = Assert.IsType<SqlGeography>(matrix.Values[1].Value);
+        Assert.Equal(4326, first.STSrid.Value);
+        Assert.Equal(4269, second.STSrid.Value);
     }
 
     [Fact]
