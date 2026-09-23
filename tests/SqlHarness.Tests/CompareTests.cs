@@ -17,8 +17,9 @@ public class SqlHarnessCompareTests
     public async Task Compare_alternates_variants_after_one_excluded_warmup_pair_on_one_session()
     {
         var session = FakeCompareSession.Create();
+        var artifacts = new CapturingArtifactWriter();
 
-        var outcome = await Module(session).ExecuteAsync(Compare(repeat: 5));
+        var outcome = await Module(session, artifacts: artifacts).ExecuteAsync(Compare(repeat: 5));
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
         Assert.Equal(
@@ -26,7 +27,59 @@ public class SqlHarnessCompareTests
             session.Labels);
         Assert.Equal(1, session.FactoryOpenCount);
         Assert.All(session.Commands, command => Assert.DoesNotContain("DBCC", command.Sql, StringComparison.OrdinalIgnoreCase));
-        Assert.Equal(10, Assert.IsType<SqlHarnessCompareReport>(outcome.Report).MeasuredRunCount);
+        var report = Assert.IsType<SqlHarnessCompareReport>(outcome.Report);
+        Assert.Equal(10, report.MeasuredRunCount);
+        Assert.True(report.ResultsEquivalent);
+        Assert.Equal(ResultComparisonMode.Ordered, report.Equivalence.Mode);
+        Assert.True(report.Equivalence.Equivalent);
+        Assert.Equal("session-local", report.Classification.Setup);
+        Assert.Equal("read-only", report.Classification.Baseline);
+        Assert.Equal("read-only", report.Classification.Candidate);
+        Assert.Equal("cell-artifacts", report.ArtifactDirectory);
+        var written = Assert.IsType<SqlHarnessCompareReport>(artifacts.Report);
+        Assert.Null(written.ArtifactDirectory);
+        Assert.True(written.Equivalence.Equivalent);
+        Assert.Equal(ResultComparisonMode.Ordered, written.Equivalence.Mode);
+        Assert.Equal(report.Classification, written.Classification);
+        Assert.Equal(report.Parameters, written.Parameters);
+        Assert.Equal("testdb-a", artifacts.Target);
+        Assert.Equal(
+            ["baseline", "candidate", "candidate", "baseline", "baseline", "candidate", "candidate", "baseline", "baseline", "candidate"],
+            artifacts.Runs.Select(run => run.Variant));
+    }
+
+    [Fact]
+    public async Task CompareCellRunner_repeat_two_uses_one_session_and_returns_equivalence_and_artifacts()
+    {
+        var session = FakeCompareSession.Create();
+        var artifacts = new CapturingArtifactWriter();
+        var runner = new CompareCellRunner(session, artifacts);
+
+        var cell = await runner.RunAsync(
+            new CompareCellRequest(
+                new ResolvedTarget("test-server", "testdb-a", new AuthSpec(AuthStrategy.Integrated), "profile"),
+                "SELECT Id INTO #ids FROM dbo.Clients",
+                "SELECT Value FROM dbo.Clients",
+                "SELECT Value FROM dbo.Clients -- candidate",
+                [],
+                30,
+                2,
+                ResultComparisonMode.Ordered),
+            CancellationToken.None);
+
+        Assert.Equal(
+            ["setup", "warmup-A", "warmup-B", "A", "B", "B", "A"],
+            session.Labels);
+        Assert.Equal(1, session.FactoryOpenCount);
+        Assert.True(cell.Report.ResultsEquivalent);
+        Assert.True(cell.Report.Equivalence.Equivalent);
+        Assert.Equal(ResultComparisonMode.Ordered, cell.Report.Equivalence.Mode);
+        Assert.Equal("cell-artifacts", cell.Report.ArtifactDirectory);
+        Assert.Equal("testdb-a", artifacts.Target);
+        Assert.Equal(4, cell.Runs.Count);
+        Assert.Equal(
+            ["baseline", "candidate", "candidate", "baseline"],
+            cell.Runs.Select(run => run.Variant));
     }
 
     [Fact]
@@ -386,8 +439,9 @@ public class SqlHarnessCompareTests
         FakeAzureCli? azure = null,
         FakeGainStore? gain = null,
         Func<IReadOnlyDictionary<string, TargetProfile>>? loadProfiles = null,
-        int? comparisonMaximumRows = null) =>
-        new(session, gain ?? new FakeGainStore(), new NullArtifactWriter(), loadProfiles ?? Profiles)
+        int? comparisonMaximumRows = null,
+        ICompareArtifactWriter? artifacts = null) =>
+        new(session, gain ?? new FakeGainStore(), artifacts ?? new NullArtifactWriter(), loadProfiles ?? Profiles)
         {
             ComparisonMaximumRows = comparisonMaximumRows ?? CanonicalComparisonAccumulator.MaximumComparedRows,
         };
@@ -426,6 +480,21 @@ public class SqlHarnessCompareTests
     private sealed class NullArtifactWriter : ICompareArtifactWriter
     {
         public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target) => "ignored";
+    }
+
+    private sealed class CapturingArtifactWriter : ICompareArtifactWriter
+    {
+        public object? Report { get; private set; }
+        public IReadOnlyList<CompareRunArtifact> Runs { get; private set; } = [];
+        public string? Target { get; private set; }
+
+        public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target)
+        {
+            Report = report;
+            Runs = runs.ToArray();
+            Target = target;
+            return "cell-artifacts";
+        }
     }
 
     private sealed class FakeCompareSession : ISqlSessionFactory, ISqlSession
