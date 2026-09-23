@@ -271,6 +271,13 @@ ORDER BY
         IReadOnlyList<QueryStoreTopItemReport> queries,
         IReadOnlyList<SensitiveQueryStoreText> texts)
     {
+        var metricIds = new HashSet<long>();
+        foreach (var query in queries)
+        {
+            if (!metricIds.Add(query.QueryId))
+                throw new InvalidOperationException("Query Store metric result set contains a duplicate query.");
+        }
+
         var byId = new Dictionary<long, string>(texts.Count);
         foreach (var text in texts)
         {

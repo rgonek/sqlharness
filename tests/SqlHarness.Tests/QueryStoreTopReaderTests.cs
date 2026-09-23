@@ -231,6 +231,21 @@ public sealed class QueryStoreTopReaderTests
     }
 
     [Fact]
+    public async Task Reader_duplicate_metric_ids_are_invalid()
+    {
+        var ex = await AssertInvalid(Fixture.Of(
+            Fixture.StateSet("READ_WRITE"),
+            Fixture.MetricSet(
+                Fixture.Metric(queryId: 1, queryHash: "AA"),
+                Fixture.Metric(queryId: 1, queryHash: "AA")),
+            Fixture.TextSet(
+                Fixture.Text(queryId: 1, queryHash: "AA", sql: "SELECT 1"),
+                Fixture.Text(queryId: 2, queryHash: "BB", sql: Secret))));
+
+        Assert.Equal("Query Store metric result set contains a duplicate query.", ex.Message);
+    }
+
+    [Fact]
     public async Task Reader_duplicate_text_ids_are_invalid()
     {
         var ex = await AssertInvalid(Fixture.Of(
