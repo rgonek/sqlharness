@@ -67,19 +67,11 @@ public static class SqlHarnessCli
 
 public sealed class SqlHarnessApp(CommandApp app)
 {
-    public async Task<int> RunAsync(IEnumerable<string> args)
+    public Task<int> RunAsync(IEnumerable<string> args)
     {
         var normalized = args.ToArray();
         if (normalized.Length >= 2 && string.Equals(normalized[0], "plan", StringComparison.OrdinalIgnoreCase) && normalized[1] == "-")
             normalized = [normalized[0], .. normalized.Skip(2)];
-        var exit = await app.RunAsync(normalized);
-        // Spectre rejects unknown options with -1 before the command runs.
-        // qstop accepts no user SQL or mutation flags, so that rejection is exit 2.
-        if (exit == -1 && IsQueryStoreTop(normalized))
-            return (int)SqlHarnessExitCode.Safety;
-        return exit;
+        return app.RunAsync(normalized);
     }
-
-    private static bool IsQueryStoreTop(string[] args) =>
-        args.Length > 0 && string.Equals(args[0], "qstop", StringComparison.OrdinalIgnoreCase);
 }

@@ -141,10 +141,13 @@ public sealed class QueryStoreTopCommandTests
         })
         {
             var module = new FakeModule();
-            var exit = await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(args);
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(module, output).RunAsync(args);
 
-            Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+            // Spectre owns unknown options and returns -1 before command execution.
+            Assert.Equal(-1, exit);
             Assert.Empty(module.Operations);
+            Assert.Equal(string.Empty, output.ToString());
         }
     }
 
