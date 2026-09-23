@@ -26,6 +26,27 @@ public sealed record SqlHarnessCompareOperation(
     int Repeat,
     ResultComparisonMode CompareResults = ResultComparisonMode.Ordered) : SqlHarnessOperation;
 
+public sealed record SqlHarnessCompareMatrixOperation(
+    SqlTargetRequest Target,
+    string? SetupSql,
+    string BaselineSql,
+    string CandidateSql,
+    IReadOnlyList<string> Parameters,
+    int TimeoutSeconds,
+    int Repeat,
+    string Matrix,
+    ResultComparisonMode CompareResults = ResultComparisonMode.Ordered) : SqlHarnessOperation;
+
+public sealed record CompareMatrixCellReport(
+    int Index,
+    string ParameterValue,
+    SqlHarnessCompareReport Compare);
+
+public sealed record SqlHarnessCompareMatrixReport(
+    string ParameterName,
+    string ParameterType,
+    IReadOnlyList<CompareMatrixCellReport> Cells);
+
 public sealed record SqlHarnessMeasureOperation(
     SqlTargetRequest Target,
     string? SetupSql,

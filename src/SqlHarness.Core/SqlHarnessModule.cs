@@ -39,6 +39,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     private readonly IGainStore _gainStore;
     private readonly ICompareArtifactWriter _artifactWriter;
     private readonly CompareCellRunner _cellRunner;
+    private readonly CompareMatrixRunner _matrixRunner;
     private readonly Func<IReadOnlyDictionary<string, TargetProfile>> _loadProfiles;
     private readonly IWatchClock _watchClock;
     private readonly ISnapshotStore _snapshotStore;
@@ -81,6 +82,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         _gainStore = gainStore ?? throw new ArgumentNullException(nameof(gainStore));
         _artifactWriter = artifactWriter ?? throw new ArgumentNullException(nameof(artifactWriter));
         _cellRunner = new CompareCellRunner(_sessionFactory, _artifactWriter);
+        _matrixRunner = new CompareMatrixRunner(_cellRunner);
         _loadProfiles = loadProfiles ?? throw new ArgumentNullException(nameof(loadProfiles));
         _watchClock = watchClock ?? new SystemWatchClock();
         _snapshotStore = snapshotStore ?? new SnapshotStore(SqlHarnessPaths.SnapshotsDir);
@@ -111,6 +113,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
         if (operation is SqlHarnessCompareOperation compare)
             return await ExecuteCompareAsync(compare, ct);
+
+        if (operation is SqlHarnessCompareMatrixOperation matrix)
+            return await ExecuteCompareMatrixAsync(matrix, ct);
 
         if (operation is SqlHarnessMeasureOperation measure)
             return await ExecuteMeasureAsync(measure, ct);
@@ -344,6 +349,160 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, knownSecrets));
             return WithReceipt(failure, stopwatch.ElapsedMilliseconds, rawFootprint, "compare");
         }
+    }
+
+    private async Task<SqlHarnessOutcome> ExecuteCompareMatrixAsync(
+        SqlHarnessCompareMatrixOperation operation,
+        CancellationToken ct)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var phase = ExecutionPhase.Validation;
+        var rawFootprint = new OutputFootprint(0, 0);
+        var knownSecrets = new List<string> { operation.BaselineSql, operation.CandidateSql, operation.Matrix };
+        if (!string.IsNullOrWhiteSpace(operation.SetupSql))
+            knownSecrets.Add(operation.SetupSql);
+        knownSecrets.AddRange(operation.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+
+        try
+        {
+            if (operation.TimeoutSeconds is < 1 or > 300)
+                throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
+            if (operation.Repeat is < 1 or > 100)
+                throw new SqlHarnessSafetyException("Compare repetitions must be between 1 and 100.");
+
+            var target = TargetResolver.Resolve(operation.Target, _loadProfiles());
+            var dialect = SqlDialects.For(target.Engine);
+            SqlSafetyDecision? setupSafety = null;
+            IReadOnlySet<string> setupTemps = NoSessionTemps;
+            if (!string.IsNullOrWhiteSpace(operation.SetupSql))
+            {
+                setupSafety = dialect.Classify(
+                    operation.SetupSql, SqlUsage.CompareSetup, target.Database, false, null, NoSessionTemps);
+                EnsureSafe(setupSafety, "setup");
+                setupTemps = setupSafety.SessionTempTables;
+            }
+
+            var baselineSafety = dialect.Classify(
+                operation.BaselineSql, SqlUsage.Query, target.Database, false, null, setupTemps);
+            EnsureSafe(baselineSafety, "baseline");
+            var candidateSafety = dialect.Classify(
+                operation.CandidateSql, SqlUsage.Query, target.Database, false, null, setupTemps);
+            EnsureSafe(candidateSafety, "candidate");
+            dialect.ValidateMeasuredBatch(operation.BaselineSql);
+            dialect.ValidateMeasuredBatch(operation.CandidateSql);
+
+            var matrix = SqlParameterMatrixParser.Parse(operation.Matrix, operation.Parameters);
+            foreach (var displayValue in matrix.DisplayValues)
+            {
+                if (!string.IsNullOrEmpty(displayValue))
+                    knownSecrets.Add(displayValue);
+            }
+
+            var fixedParameters = dialect.ParseParameters(operation.Parameters);
+            foreach (var parameter in fixedParameters)
+                AddTypedSecret(knownSecrets, parameter);
+
+            var declaration = MatrixDeclaration(matrix);
+            var matrixParameters = new List<SqlHarnessParameter>(matrix.DisplayValues.Count);
+            foreach (var displayValue in matrix.DisplayValues)
+            {
+                var bound = dialect.ParseParameters([$"{declaration}={displayValue}"]);
+                if (bound.Count != 1)
+                    throw new SqlHarnessSafetyException($"The --matrix option for SQL parameter '{matrix.Name}' is invalid.");
+                matrixParameters.Add(bound[0]);
+                AddTypedSecret(knownSecrets, bound[0]);
+            }
+
+            for (var index = 0; index < matrixParameters.Count; index++)
+            {
+                SqlParameterReferenceValidator.Validate(
+                    [.. fixedParameters, matrixParameters[index]],
+                    operation.SetupSql,
+                    operation.BaselineSql,
+                    operation.CandidateSql);
+            }
+
+            var template = new CompareCellRequest(
+                target,
+                operation.SetupSql,
+                operation.BaselineSql,
+                operation.CandidateSql,
+                fixedParameters,
+                operation.TimeoutSeconds,
+                operation.Repeat,
+                operation.CompareResults)
+            {
+                Classification = new CompareClassificationReport(
+                    ClassificationLabel(setupSafety),
+                    ClassificationLabel(baselineSafety),
+                    ClassificationLabel(candidateSafety)),
+            };
+            _matrixRunner.ComparisonMaximumRows = ComparisonMaximumRows;
+            CompareMatrixResult result;
+            try
+            {
+                result = await _matrixRunner.RunAsync(
+                    new CompareMatrixRun(
+                        template,
+                        fixedParameters,
+                        matrixParameters,
+                        matrix.DisplayValues,
+                        matrix.Name,
+                        matrix.Type),
+                    ct);
+            }
+            catch (CompareMatrixCellFailedException failed)
+            {
+                phase = failed.Phase switch
+                {
+                    CompareCellPhase.Authentication => ExecutionPhase.Authentication,
+                    CompareCellPhase.Artifact => ExecutionPhase.Artifact,
+                    _ => ExecutionPhase.Sql,
+                };
+                rawFootprint = failed.RawFootprint;
+                var exitCode = phase == ExecutionPhase.Artifact
+                    ? SqlHarnessExitCode.LocalStorage
+                    : MapException(failed.InnerException ?? failed, phase);
+                return WithReceipt(
+                    new SqlHarnessOutcome(exitCode, null, FormatMatrixCellError(failed, knownSecrets)),
+                    stopwatch.ElapsedMilliseconds,
+                    rawFootprint,
+                    "compare");
+            }
+
+            rawFootprint = result.RawFootprint;
+            var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, result.Report, null);
+            return WithReceipt(success, stopwatch.ElapsedMilliseconds, rawFootprint, "compare");
+        }
+        catch (Exception exception)
+        {
+            var exitCode = phase == ExecutionPhase.Artifact
+                ? SqlHarnessExitCode.LocalStorage
+                : MapException(exception, phase);
+            var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, knownSecrets));
+            return WithReceipt(failure, stopwatch.ElapsedMilliseconds, rawFootprint, "compare");
+        }
+    }
+
+    private static void AddTypedSecret(List<string> knownSecrets, SqlHarnessParameter parameter)
+    {
+        if (parameter.Value is not DBNull)
+            knownSecrets.Add(Convert.ToString(parameter.Value, CultureInfo.InvariantCulture) ?? string.Empty);
+    }
+
+    private static string MatrixDeclaration(ParsedParameterMatrix matrix)
+    {
+        if (matrix.Name.Length < 2 || matrix.Name[0] != '@')
+            throw new SqlHarnessSafetyException("The --matrix option is invalid.");
+        return $"{matrix.Name[1..]}:{matrix.Type}";
+    }
+
+    private static string FormatMatrixCellError(CompareMatrixCellFailedException failed, IReadOnlyList<string> knownSecrets)
+    {
+        var original = failed.InnerException ?? failed;
+        // Prefix after redaction so a matrix value of "1" cannot erase the cell index.
+        var detail = SecretRedactor.Redact(original, knownSecrets);
+        return $"Comparison matrix cell {failed.Index} for SQL parameter '{failed.ParameterName}' failed. {detail}";
     }
 
     private async Task<SqlHarnessOutcome> ExecuteMeasureAsync(SqlHarnessMeasureOperation measure, CancellationToken ct)

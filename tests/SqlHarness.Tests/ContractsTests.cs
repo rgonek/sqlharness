@@ -170,6 +170,7 @@ public class ContractsTests
             [
                 typeof(SqlHarnessQueryOperation),
                 typeof(SqlHarnessCompareOperation),
+                typeof(SqlHarnessCompareMatrixOperation),
                 typeof(SqlHarnessMeasureOperation),
                 typeof(SqlHarnessGainOperation),
                 typeof(SqlHarnessPlanOperation),
@@ -189,15 +190,16 @@ public class ContractsTests
     {
         nameof(SqlHarnessQueryOperation) => 0,
         nameof(SqlHarnessCompareOperation) => 1,
-        nameof(SqlHarnessMeasureOperation) => 2,
-        nameof(SqlHarnessGainOperation) => 3,
-        nameof(SqlHarnessPlanOperation) => 4,
-        nameof(SqlHarnessSchemaOperation) => 5,
-        nameof(SqlHarnessPingOperation) => 6,
-        nameof(SqlHarnessCountsOperation) => 7,
-        nameof(SqlHarnessSpaceOperation) => 8,
-        nameof(SqlHarnessWatchOperation) => 9,
-        nameof(SqlHarnessSnapshotOperation) => 10,
+        nameof(SqlHarnessCompareMatrixOperation) => 2,
+        nameof(SqlHarnessMeasureOperation) => 3,
+        nameof(SqlHarnessGainOperation) => 4,
+        nameof(SqlHarnessPlanOperation) => 5,
+        nameof(SqlHarnessSchemaOperation) => 6,
+        nameof(SqlHarnessPingOperation) => 7,
+        nameof(SqlHarnessCountsOperation) => 8,
+        nameof(SqlHarnessSpaceOperation) => 9,
+        nameof(SqlHarnessWatchOperation) => 10,
+        nameof(SqlHarnessSnapshotOperation) => 11,
         _ => int.MaxValue,
     };
 
