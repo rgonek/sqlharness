@@ -227,7 +227,7 @@ ORDER BY
 
         var text = value as string ?? Convert.ToString(value, CultureInfo.InvariantCulture);
         var token = text?.Trim().ToUpperInvariant();
-        if (token is "READ_WRITE" or "READ_ONLY")
+        if (token is "READ_WRITE" or "READ_ONLY" or "READ_CAPTURE_SECONDARY")
             return;
 
         throw new QueryStoreUnavailableException(text);

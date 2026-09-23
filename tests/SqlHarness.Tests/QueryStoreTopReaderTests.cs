@@ -45,6 +45,8 @@ public sealed class QueryStoreTopReaderTests
     [InlineData("READ_ONLY")]
     [InlineData(" read_only ")]
     [InlineData("Read_Write")]
+    [InlineData("READ_CAPTURE_SECONDARY")]
+    [InlineData(" read_capture_secondary ")]
     public async Task Reader_accepts_readable_states(string state)
     {
         var collected = await QueryStoreTopQuery.ReadAsync(
