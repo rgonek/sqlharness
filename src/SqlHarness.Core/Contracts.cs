@@ -77,6 +77,10 @@ public sealed record SqlHarnessSpaceOperation(
     SqlTargetRequest Target, int Top, string? Object,
     int TimeoutSeconds) : SqlHarnessOperation;
 
+public sealed record SqlHarnessQueryStoreTopOperation(
+    SqlTargetRequest Target, int Top, int WindowMinutes,
+    int TimeoutSeconds) : SqlHarnessOperation;
+
 public sealed record SqlHarnessWatchOperation(
     SqlTargetRequest Target, string Sql, IReadOnlyList<string> Parameters,
     int TimeoutSeconds, int MaxRows, TimeSpan Interval, TimeSpan MaxDuration,
@@ -125,6 +129,30 @@ public sealed record SqlHarnessSpaceReport(
     DatabaseAllocationReport Allocation,
     IReadOnlyList<TableSpaceReport> Tables,
     IReadOnlyList<IndexSpaceReport> Indexes);
+
+public sealed record QueryStoreTopItemReport(
+    long QueryId,
+    string QueryHash,
+    string? ObjectName,
+    long ExecutionCount,
+    int PlanCount,
+    decimal TotalDurationMilliseconds,
+    decimal AverageDurationMilliseconds,
+    decimal MaximumDurationMilliseconds,
+    decimal TotalCpuMilliseconds,
+    decimal AverageCpuMilliseconds,
+    decimal MaximumCpuMilliseconds,
+    decimal TotalLogicalReads,
+    decimal AverageLogicalReads,
+    decimal MaximumLogicalReads,
+    DateTimeOffset LastExecutionAt);
+
+public sealed record SqlHarnessQueryStoreTopReport(
+    SqlHarnessTargetIdentityReport Target,
+    int WindowMinutes,
+    int Top,
+    IReadOnlyList<QueryStoreTopItemReport> Queries,
+    string? ArtifactDirectory);
 
 public sealed record SqlHarnessPingReport(
     SqlHarnessTargetIdentityReport Target, string Server, string Database,

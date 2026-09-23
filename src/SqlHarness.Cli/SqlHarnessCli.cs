@@ -32,6 +32,7 @@ public static class SqlHarnessCli
             c.AddCommand<SpaceCommand>("space");
             c.AddCommand<WatchCommand>("watch");
             c.AddCommand<SnapshotCommand>("snapshot");
+            c.AddCommand<QueryStoreTopCommand>("qstop");
         });
         return new SqlHarnessApp(app);
     }
@@ -66,11 +67,19 @@ public static class SqlHarnessCli
 
 public sealed class SqlHarnessApp(CommandApp app)
 {
-    public Task<int> RunAsync(IEnumerable<string> args)
+    public async Task<int> RunAsync(IEnumerable<string> args)
     {
         var normalized = args.ToArray();
         if (normalized.Length >= 2 && string.Equals(normalized[0], "plan", StringComparison.OrdinalIgnoreCase) && normalized[1] == "-")
             normalized = [normalized[0], .. normalized.Skip(2)];
-        return app.RunAsync(normalized);
+        var exit = await app.RunAsync(normalized);
+        // Spectre rejects unknown options with -1 before the command runs.
+        // qstop accepts no user SQL or mutation flags, so that rejection is exit 2.
+        if (exit == -1 && IsQueryStoreTop(normalized))
+            return (int)SqlHarnessExitCode.Safety;
+        return exit;
     }
+
+    private static bool IsQueryStoreTop(string[] args) =>
+        args.Length > 0 && string.Equals(args[0], "qstop", StringComparison.OrdinalIgnoreCase);
 }
