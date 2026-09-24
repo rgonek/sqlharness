@@ -28,6 +28,7 @@ public sealed record SqlHarnessGainReport(
     public SqlHarnessGainSummary Watch { get; init; } = Empty;
     public SqlHarnessGainSummary Snapshot { get; init; } = Empty;
     public SqlHarnessGainSummary QueryStoreTop { get; init; } = Empty;
+    public SqlHarnessGainSummary Indexes { get; init; } = Empty;
     private static SqlHarnessGainSummary Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 }
 
@@ -89,8 +90,9 @@ internal sealed class GainStore : IGainStore
             var watch = new SummaryAccumulator();
             var snapshot = new SummaryAccumulator();
             var queryStoreTop = new SummaryAccumulator();
+            var indexes = new SummaryAccumulator();
             if (!File.Exists(_path))
-                return CreateReport(total, query, compare, measure, ping, counts, space, watch, snapshot, queryStoreTop);
+                return CreateReport(total, query, compare, measure, ping, counts, space, watch, snapshot, queryStoreTop, indexes);
 
             foreach (var line in File.ReadLines(_path))
             {
@@ -98,9 +100,9 @@ internal sealed class GainStore : IGainStore
                     continue;
                 var record = ReadRecord(line);
                 total.Add(record);
-                GetAccumulator(record.Command, query, compare, measure, ping, counts, space, watch, snapshot, queryStoreTop)?.Add(record);
+                GetAccumulator(record.Command, query, compare, measure, ping, counts, space, watch, snapshot, queryStoreTop, indexes)?.Add(record);
             }
-            return CreateReport(total, query, compare, measure, ping, counts, space, watch, snapshot, queryStoreTop);
+            return CreateReport(total, query, compare, measure, ping, counts, space, watch, snapshot, queryStoreTop, indexes);
         }
     }
 
@@ -108,7 +110,7 @@ internal sealed class GainStore : IGainStore
         SummaryAccumulator total, SummaryAccumulator query,
         SummaryAccumulator compare, SummaryAccumulator measure,
         SummaryAccumulator ping, SummaryAccumulator counts, SummaryAccumulator space,
-        SummaryAccumulator watch, SummaryAccumulator snapshot, SummaryAccumulator queryStoreTop) =>
+        SummaryAccumulator watch, SummaryAccumulator snapshot, SummaryAccumulator queryStoreTop, SummaryAccumulator indexes) =>
         new(total.ToSummary(), query.ToSummary(), compare.ToSummary())
         {
             Measure = measure.ToSummary(),
@@ -118,12 +120,13 @@ internal sealed class GainStore : IGainStore
             Watch = watch.ToSummary(),
             Snapshot = snapshot.ToSummary(),
             QueryStoreTop = queryStoreTop.ToSummary(),
+            Indexes = indexes.ToSummary(),
         };
 
     private static SummaryAccumulator? GetAccumulator(
         string command, SummaryAccumulator query, SummaryAccumulator compare, SummaryAccumulator measure,
         SummaryAccumulator ping, SummaryAccumulator counts, SummaryAccumulator space,
-        SummaryAccumulator watch, SummaryAccumulator snapshot, SummaryAccumulator queryStoreTop) =>
+        SummaryAccumulator watch, SummaryAccumulator snapshot, SummaryAccumulator queryStoreTop, SummaryAccumulator indexes) =>
         command switch
         {
             "query" => query,
@@ -135,9 +138,10 @@ internal sealed class GainStore : IGainStore
             "watch" => watch,
             "snapshot" => snapshot,
             "qstop" => queryStoreTop,
+            "indexes" => indexes,
             "plan" or "schema" => null,
             _ => throw new ArgumentException(
-                "Gain command must be query, compare, measure, plan, schema, ping, counts, space, watch, snapshot, or qstop.", nameof(command)),
+                "Gain command must be query, compare, measure, plan, schema, ping, counts, space, watch, snapshot, qstop, or indexes.", nameof(command)),
         };
 
     private static GainRecord ReadRecord(string line)
@@ -160,9 +164,9 @@ internal sealed class GainStore : IGainStore
 
     private static void Validate(GainRecord record)
     {
-        if (record.Command is not ("query" or "compare" or "measure" or "plan" or "schema" or "ping" or "counts" or "space" or "watch" or "snapshot" or "qstop"))
+        if (record.Command is not ("query" or "compare" or "measure" or "plan" or "schema" or "ping" or "counts" or "space" or "watch" or "snapshot" or "qstop" or "indexes"))
             throw new ArgumentException(
-                "Gain command must be query, compare, measure, plan, schema, ping, counts, space, watch, snapshot, or qstop.", nameof(record));
+                "Gain command must be query, compare, measure, plan, schema, ping, counts, space, watch, snapshot, qstop, or indexes.", nameof(record));
 
         ArgumentOutOfRangeException.ThrowIfNegative(record.DurationMilliseconds);
         ArgumentOutOfRangeException.ThrowIfNegative(record.RawBytes);

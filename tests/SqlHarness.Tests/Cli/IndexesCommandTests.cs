@@ -1,6 +1,9 @@
+using System.Globalization;
 using System.Text.Json;
 
 using SqlHarness.Cli;
+using SqlHarness.Cli.Commands;
+using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 
 namespace SqlHarness.Tests.Cli;
@@ -186,6 +189,174 @@ public sealed class IndexesCommandTests
         Assert.Equal(IndexOverlapClassification.PartialKey, JsonSerializer.Deserialize<IndexOverlapClassification>("\"partial-key\"", options));
         Assert.Equal(IndexOverlapClassification.NewShape, JsonSerializer.Deserialize<IndexOverlapClassification>("\"new-shape\"", options));
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<IndexOverlapClassification>("\"Covered\"", options));
+    }
+
+    [Fact]
+    public async Task Indexes_text_renders_target_top_object_artifact_and_columns()
+    {
+        const string secretFilter = "SecretFilterPredicate=1";
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("pl-PL");
+            var report = Report(30, "dbo.Contracts", @"C:\artifacts\indexes-run",
+            [
+                Candidate(11, "dbo", "Contracts", IndexOverlapClassification.Covered,
+                    ["TenantId"], [], ["Name", "Status"], 120, 3, 2.5m, 75.5m, 180.75m,
+                    "IX_Contracts_Tenant", 1, 1, [], true, false, "9F2CAAF1B0",
+                    new DateTimeOffset(2026, 7, 29, 12, 34, 56, TimeSpan.FromHours(2)),
+                    new DateTimeOffset(2026, 7, 29, 12, 0, 0, TimeSpan.Zero)),
+                Candidate(12, "dbo", "Orders", IndexOverlapClassification.NewShape,
+                    ["CustomerId"], ["PlacedAt"], [], 8, 0, 1.25m, 40m, 12.5m,
+                    null, 0, 2, [], null, null, null, null, null),
+            ]);
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(new FakeReportModule(report), output).RunAsync(["indexes", "dev"]);
+
+            Assert.Equal(0, exit);
+            var text = output.ToString();
+            var lines = text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            Assert.Equal("Target: sql-server/app-db (profile)", lines[0]);
+            Assert.Equal("Top: 30", lines[1]);
+            Assert.Equal("Object: dbo.Contracts", lines[2]);
+            Assert.Equal(@"Artifacts: C:\artifacts\indexes-run", lines[3]);
+            Assert.Equal(
+                "CandidateId\tTable\tClassification\tEquality\tInequality\tInclude\tSeeks\tScans\tAverageCost\tAverageImpact\tScore\tBestIndex\tMatchedKeys\tCandidateKeys\tMissingInclude\tDisabled\tFiltered\tFilterHash\tLastSeek\tLastScan",
+                lines[4]);
+            Assert.Equal(
+                "11\tdbo.Contracts\tcovered\tTenantId\t\tName,Status\t120\t3\t2.5\t75.5\t180.75\tIX_Contracts_Tenant\t1\t1\t\ttrue\tfalse\t9F2CAAF1B0\t2026-07-29T12:34:56.0000000+02:00\t2026-07-29T12:00:00.0000000+00:00",
+                lines[5]);
+            Assert.Equal(
+                "12\tdbo.Orders\tnew-shape\tCustomerId\tPlacedAt\t\t8\t0\t1.25\t40\t12.5\t\t0\t2\t\t\t\t\t\t",
+                lines[6]);
+            Assert.Equal(7, lines.Length);
+            Assert.DoesNotContain("requested-host", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("2,5", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("No missing-index candidates", text, StringComparison.Ordinal);
+            Assert.DoesNotContain(secretFilter, text, StringComparison.Ordinal);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    [Fact]
+    public async Task Indexes_text_renders_warning_and_empty_object_message()
+    {
+        var report = Report(20, "dbo.Contracts", @"C:\artifacts\indexes-empty", [], [EvidenceWarning]);
+        var output = new StringWriter();
+        var exit = await SqlHarnessCli.Create(new FakeReportModule(report), output).RunAsync(["indexes", "dev"]);
+
+        Assert.Equal(0, exit);
+        var text = output.ToString();
+        var lines = text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(
+        [
+            "Target: sql-server/app-db (profile)",
+            "Top: 20",
+            "Object: dbo.Contracts",
+            @"Artifacts: C:\artifacts\indexes-empty",
+            "Warning: " + EvidenceWarning,
+            "No missing-index candidates for dbo.Contracts in the current DMV evidence.",
+        ],
+        lines);
+        Assert.DoesNotContain("CandidateId", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Gain_text_and_json_include_indexes_scope()
+    {
+        var indexes = new SqlHarnessGainSummary(1, 0, 4, 16, 1, 4, 1, 4, 1, 3);
+        var empty = new SqlHarnessGainSummary(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        var report = new SqlHarnessGainReport(indexes, empty, empty) { Indexes = indexes };
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
+
+        var text = new StringWriter();
+        new Renderer().Render(outcome, OutputMode.Text, new OutputCaptureWriter(text));
+        Assert.Contains("indexes\t1\t0\t3\t75", text.ToString(), StringComparison.Ordinal);
+        Assert.Contains("total\t1\t0\t3\t75", text.ToString(), StringComparison.Ordinal);
+
+        var json = new StringWriter();
+        new Renderer().Render(outcome, OutputMode.Json, new OutputCaptureWriter(json));
+        using var document = JsonDocument.Parse(json.ToString());
+        Assert.Equal(1, document.RootElement.GetProperty("indexes").GetProperty("executions").GetInt64());
+        Assert.Equal(1, document.RootElement.GetProperty("total").GetProperty("executions").GetInt64());
+    }
+
+    private const string EvidenceWarning =
+        "Missing-index evidence is cumulative since SQL Server start and can be shortened or reset by restart, failover, index DDL, or a DMV clear.";
+
+    private static SqlHarnessIndexesReport Report(
+        int top,
+        string? objectFilter,
+        string artifactDirectory,
+        IReadOnlyList<IndexCandidateReport> candidates,
+        IReadOnlyList<string>? warnings = null) =>
+        new(
+            new SqlHarnessTargetIdentityReport("requested-host", "requested-db", "sql-server", "app-db", "profile"),
+            new DateTimeOffset(2026, 7, 29, 1, 2, 3, TimeSpan.Zero),
+            new DateTimeOffset(2026, 7, 29, 10, 0, 0, TimeSpan.Zero),
+            top,
+            objectFilter,
+            warnings ?? [],
+            candidates,
+            artifactDirectory);
+
+    private static IndexCandidateReport Candidate(
+        long candidateId,
+        string schema,
+        string table,
+        IndexOverlapClassification classification,
+        IReadOnlyList<string> equality,
+        IReadOnlyList<string> inequality,
+        IReadOnlyList<string> include,
+        long seeks,
+        long scans,
+        decimal averageCost,
+        decimal averageImpact,
+        decimal score,
+        string? bestIndex,
+        int matchedKeys,
+        int candidateKeys,
+        IReadOnlyList<string> missingInclude,
+        bool? disabled,
+        bool? filtered,
+        string? filterHash,
+        DateTimeOffset? lastSeek,
+        DateTimeOffset? lastScan) =>
+        new(
+            candidateId,
+            schema,
+            table,
+            equality,
+            inequality,
+            include,
+            seeks,
+            scans,
+            averageCost,
+            averageImpact,
+            score,
+            lastSeek,
+            lastScan,
+            classification,
+            bestIndex,
+            matchedKeys,
+            candidateKeys,
+            missingInclude,
+            disabled,
+            filtered,
+            filterHash);
+
+    private sealed class FakeReportModule(SqlHarnessIndexesReport report) : ISqlHarnessModule
+    {
+        public List<SqlHarnessOperation> Operations { get; } = [];
+
+        public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default)
+        {
+            Operations.Add(operation);
+            return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null));
+        }
     }
 
     private sealed class FakeModule : ISqlHarnessModule

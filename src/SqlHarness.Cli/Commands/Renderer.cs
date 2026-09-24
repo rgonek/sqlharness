@@ -52,6 +52,7 @@ public sealed class Renderer
             WriteGain("space", gain.Space, output);
             WriteGain("watch", gain.Watch, output); WriteGain("snapshot", gain.Snapshot, output);
             WriteGain("qstop", gain.QueryStoreTop, output);
+            WriteGain("indexes", gain.Indexes, output);
         }
         else if (outcome.Report is DistilledPlan plan)
             RenderPlan(plan, output);
@@ -85,6 +86,8 @@ public sealed class Renderer
             RenderSnapshot(snapshot, output);
         else if (outcome.Report is SqlHarnessQueryStoreTopReport queryStoreTop)
             RenderQueryStoreTop(queryStoreTop, output);
+        else if (outcome.Report is SqlHarnessIndexesReport indexes)
+            RenderIndexes(indexes, output);
         else if (!string.IsNullOrWhiteSpace(outcome.SafeError))
             output.WriteLine($"SQLHarness {outcome.ExitCode}: {SecretRedactor.Redact(outcome.SafeError, [])}");
     }
@@ -186,6 +189,64 @@ public sealed class Renderer
                 query.LastExecutionAt.ToString("O", CultureInfo.InvariantCulture)));
         }
     }
+
+    private static void RenderIndexes(SqlHarnessIndexesReport report, TextWriter output)
+    {
+        output.WriteLine($"Target: {report.Target.ActualServer}/{report.Target.ActualDatabase} ({report.Target.Mode})");
+        output.WriteLine($"Top: {report.Top.ToString(CultureInfo.InvariantCulture)}");
+        output.WriteLine($"Object: {report.ObjectFilter ?? "all"}");
+        output.WriteLine($"Artifacts: {report.ArtifactDirectory ?? "none"}");
+        foreach (var warning in report.Warnings)
+            output.WriteLine($"Warning: {warning}");
+        if (report.Candidates.Count == 0)
+        {
+            output.WriteLine(report.ObjectFilter is null
+                ? "No missing-index candidates in the current DMV evidence."
+                : $"No missing-index candidates for {report.ObjectFilter} in the current DMV evidence.");
+            return;
+        }
+
+        output.WriteLine(string.Join('\t',
+            "CandidateId", "Table", "Classification", "Equality", "Inequality", "Include",
+            "Seeks", "Scans", "AverageCost", "AverageImpact", "Score",
+            "BestIndex", "MatchedKeys", "CandidateKeys", "MissingInclude",
+            "Disabled", "Filtered", "FilterHash", "LastSeek", "LastScan"));
+        foreach (var candidate in report.Candidates)
+        {
+            output.WriteLine(string.Join('\t',
+                candidate.CandidateId.ToString(CultureInfo.InvariantCulture),
+                candidate.Schema + "." + candidate.Table,
+                ClassificationText(candidate.Classification),
+                string.Join(',', candidate.EqualityColumns),
+                string.Join(',', candidate.InequalityColumns),
+                string.Join(',', candidate.IncludeColumns),
+                candidate.UserSeeks.ToString(CultureInfo.InvariantCulture),
+                candidate.UserScans.ToString(CultureInfo.InvariantCulture),
+                DecimalText(candidate.AverageTotalUserCost),
+                DecimalText(candidate.AverageUserImpactPercent),
+                DecimalText(candidate.CumulativeImpactScore),
+                candidate.BestExistingIndex ?? string.Empty,
+                candidate.MatchedKeyColumnCount.ToString(CultureInfo.InvariantCulture),
+                candidate.CandidateKeyColumnCount.ToString(CultureInfo.InvariantCulture),
+                string.Join(',', candidate.MissingIncludeColumns),
+                BoolText(candidate.ExistingIndexDisabled),
+                BoolText(candidate.ExistingIndexHasFilter),
+                candidate.ExistingIndexFilterHash ?? string.Empty,
+                candidate.LastUserSeek?.ToString("O", CultureInfo.InvariantCulture) ?? string.Empty,
+                candidate.LastUserScan?.ToString("O", CultureInfo.InvariantCulture) ?? string.Empty));
+        }
+    }
+
+    private static string ClassificationText(IndexOverlapClassification classification) => classification switch
+    {
+        IndexOverlapClassification.Covered => "covered",
+        IndexOverlapClassification.IncludeGap => "include-gap",
+        IndexOverlapClassification.PartialKey => "partial-key",
+        IndexOverlapClassification.NewShape => "new-shape",
+        _ => classification.ToString().ToLowerInvariant(),
+    };
+
+    private static string BoolText(bool? value) => value is null ? string.Empty : value.Value ? "true" : "false";
 
     private static void RenderSpace(SqlHarnessSpaceReport space, TextWriter output)
     {

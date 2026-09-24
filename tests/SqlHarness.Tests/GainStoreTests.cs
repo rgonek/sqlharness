@@ -88,6 +88,7 @@ public class GainStoreTests
         Assert.Equal(0, gain.Watch.Executions);
         Assert.Equal(0, gain.Snapshot.Executions);
         Assert.Equal(0, gain.QueryStoreTop.Executions);
+        Assert.Equal(0, gain.Indexes.Executions);
     }
 
     [Fact]
@@ -101,6 +102,7 @@ public class GainStoreTests
         var gain = store.Aggregate();
 
         Assert.Equal(1, gain.QueryStoreTop.Executions);
+        Assert.Equal(0, gain.Indexes.Executions);
         Assert.Equal(1, gain.Total.Executions);
         Assert.Equal(0, gain.Query.Executions);
         Assert.Equal(0, gain.Compare.Executions);
@@ -110,6 +112,29 @@ public class GainStoreTests
         Assert.Equal(0, gain.Space.Executions);
         Assert.Equal(0, gain.Watch.Executions);
         Assert.Equal(0, gain.Snapshot.Executions);
+    }
+
+    [Fact]
+    public void Indexes_records_increment_indexes_and_total()
+    {
+        using var temp = new TempDirectory("indexes-gain");
+        var store = new GainStore(temp.FilePath);
+        var consistent = Record("query", true, 1, 4, 1, 0, 0, 1, 0, 1);
+        store.Append(consistent with { Command = "indexes" });
+
+        var gain = store.Aggregate();
+
+        Assert.Equal(1, gain.Indexes.Executions);
+        Assert.Equal(1, gain.Total.Executions);
+        Assert.Equal(0, gain.Query.Executions);
+        Assert.Equal(0, gain.Compare.Executions);
+        Assert.Equal(0, gain.Measure.Executions);
+        Assert.Equal(0, gain.Ping.Executions);
+        Assert.Equal(0, gain.Counts.Executions);
+        Assert.Equal(0, gain.Space.Executions);
+        Assert.Equal(0, gain.Watch.Executions);
+        Assert.Equal(0, gain.Snapshot.Executions);
+        Assert.Equal(0, gain.QueryStoreTop.Executions);
     }
 
     [Fact]
@@ -136,6 +161,7 @@ public class GainStoreTests
         Assert.Equal(1, gain.Watch.Executions);
         Assert.Equal(1, gain.Snapshot.Executions);
         Assert.Equal(0, gain.QueryStoreTop.Executions);
+        Assert.Equal(0, gain.Indexes.Executions);
     }
 
     [Fact]
