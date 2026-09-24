@@ -11,4 +11,5 @@ public static class SqlHarnessPaths
     public static string CompareDir => Path.Combine(Home, "compare");
     public static string SnapshotsDir => Path.Combine(Home, "snapshots");
     public static string QueryStoreDir => Path.Combine(Home, "query-store");
+    public static string IndexAnalysisDir => Path.Combine(Home, "index-analysis");
 }

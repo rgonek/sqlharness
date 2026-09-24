@@ -44,6 +44,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     private readonly IWatchClock _watchClock;
     private readonly ISnapshotStore _snapshotStore;
     private readonly IQueryStoreArtifactWriter _queryStoreArtifacts;
+    private readonly IIndexAnalysisArtifactWriter _indexAnalysisArtifacts;
+
+    private const string IndexEvidenceWarning =
+        "Missing-index evidence is cumulative since SQL Server start and can be shortened or reset by restart, failover, index DDL, or a DMV clear.";
 
     /// <summary>
     /// Row cap for result-fingerprint retention. Production uses
@@ -58,7 +62,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             new GainStore(),
             new CompareArtifactWriter(),
             () => ProfileStore.Load(),
-            queryStoreArtifacts: new QueryStoreArtifactWriter())
+            queryStoreArtifacts: new QueryStoreArtifactWriter(),
+            indexAnalysisArtifacts: new IndexAnalysisArtifactWriter())
     {
     }
 
@@ -68,8 +73,17 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
         IWatchClock? watchClock = null,
         ISnapshotStore? snapshotStore = null,
-        IQueryStoreArtifactWriter? queryStoreArtifacts = null)
-        : this(sessionFactory, gainStore, new CompareArtifactWriter(), loadProfiles, watchClock, snapshotStore, queryStoreArtifacts)
+        IQueryStoreArtifactWriter? queryStoreArtifacts = null,
+        IIndexAnalysisArtifactWriter? indexAnalysisArtifacts = null)
+        : this(
+            sessionFactory,
+            gainStore,
+            new CompareArtifactWriter(),
+            loadProfiles,
+            watchClock,
+            snapshotStore,
+            queryStoreArtifacts,
+            indexAnalysisArtifacts)
     {
     }
 
@@ -80,7 +94,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
         IWatchClock? watchClock = null,
         ISnapshotStore? snapshotStore = null,
-        IQueryStoreArtifactWriter? queryStoreArtifacts = null)
+        IQueryStoreArtifactWriter? queryStoreArtifacts = null,
+        IIndexAnalysisArtifactWriter? indexAnalysisArtifacts = null)
     {
         _sessionFactory = sessionFactory ?? throw new ArgumentNullException(nameof(sessionFactory));
         _gainStore = gainStore ?? throw new ArgumentNullException(nameof(gainStore));
@@ -91,6 +106,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         _watchClock = watchClock ?? new SystemWatchClock();
         _snapshotStore = snapshotStore ?? new SnapshotStore(SqlHarnessPaths.SnapshotsDir);
         _queryStoreArtifacts = queryStoreArtifacts ?? new QueryStoreArtifactWriter();
+        _indexAnalysisArtifacts = indexAnalysisArtifacts ?? new IndexAnalysisArtifactWriter();
     }
 
     public async Task<SqlHarnessOutcome> ExecuteAsync(
@@ -145,6 +161,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
         if (operation is SqlHarnessQueryStoreTopOperation qstop)
             return await ExecuteQueryStoreTopAsync(qstop, ct);
+
+        if (operation is SqlHarnessIndexesOperation indexes)
+            return await ExecuteIndexesAsync(indexes, ct);
 
         if (operation is not SqlHarnessQueryOperation query)
         {
@@ -1241,6 +1260,133 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 stopwatch.ElapsedMilliseconds,
                 rawFootprint,
                 "qstop");
+        }
+    }
+
+    private async Task<SqlHarnessOutcome> ExecuteIndexesAsync(
+        SqlHarnessIndexesOperation operation,
+        CancellationToken ct)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var phase = ExecutionPhase.Validation;
+        var rawFootprint = new OutputFootprint(0, 0);
+        var knownSecrets = new List<string>(CollectTargetSecrets(operation.Target))
+        {
+            IndexAnalysisQuery.Sql,
+        };
+
+        try
+        {
+            if (operation.Top is < 1 or > 500)
+                throw new SqlHarnessSafetyException("Index analysis top limit must be between 1 and 500.");
+            if (operation.TimeoutSeconds is < 1 or > 300)
+                throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
+            if (!IndexObjectSyntax.TryParse(operation.Object, out var objectSchema, out var objectName, out var objectError))
+                throw new SqlHarnessSafetyException(objectError);
+
+            var target = TargetResolver.Resolve(operation.Target, _loadProfiles());
+            phase = ExecutionPhase.Authentication;
+            await using var session = await _sessionFactory.ConnectAsync(target, ct);
+            phase = ExecutionPhase.Sql;
+            // Missing-index DMVs exist only on SQL Server. Do not send the batch to Postgres.
+            if (target.Engine == SqlEngine.Postgres)
+                throw new InvalidOperationException("Index overlap analysis is available only on SQL Server.");
+
+            await using var reader = await session.ExecuteReaderAsync(
+                new SqlExecutionCommand(
+                    IndexAnalysisQuery.Sql,
+                    IndexAnalysisQuery.Parameters(operation.Top, objectSchema, objectName),
+                    operation.TimeoutSeconds),
+                ct);
+            var collected = await IndexAnalysisQuery.ReadAsync(reader, operation.Object is not null, ct);
+            rawFootprint = collected.RawFootprint;
+            foreach (var sensitive in collected.SensitiveIndexes)
+            {
+                if (sensitive.FilterDefinition is not null)
+                    knownSecrets.Add(sensitive.FilterDefinition);
+            }
+
+            var candidateReports = new List<IndexCandidateReport>(collected.Candidates.Count);
+            foreach (var candidate in collected.Candidates)
+            {
+                var match = IndexOverlapClassifier.FindBest(candidate, collected.ExistingIndexes);
+                var best = match.BestIndex;
+                string? bestName = null;
+                if (best is { Name.Length: > 0 })
+                    bestName = best.Name;
+
+                candidateReports.Add(new IndexCandidateReport(
+                    candidate.CandidateId,
+                    candidate.Schema,
+                    candidate.Table,
+                    candidate.EqualityColumns,
+                    candidate.InequalityColumns,
+                    candidate.IncludeColumns,
+                    candidate.UserSeeks,
+                    candidate.UserScans,
+                    candidate.AverageTotalUserCost,
+                    candidate.AverageUserImpactPercent,
+                    candidate.CumulativeImpactScore,
+                    candidate.LastUserSeek,
+                    candidate.LastUserScan,
+                    match.Classification,
+                    bestName,
+                    match.MatchedKeyColumnCount,
+                    match.CandidateKeyColumnCount,
+                    match.MissingIncludeColumns,
+                    best?.Disabled,
+                    best?.HasFilter,
+                    best?.FilterHash));
+            }
+
+            string? objectFilter = null;
+            if (operation.Object is not null)
+            {
+                if (collected.Candidates.Count == 0)
+                    objectFilter = operation.Object;
+                else
+                {
+                    var first = collected.Candidates[0];
+                    objectFilter = first.Schema + "." + first.Table;
+                }
+            }
+
+            var report = new SqlHarnessIndexesReport(
+                session.Identity,
+                collected.ObservationSince,
+                collected.ObservedAt,
+                operation.Top,
+                objectFilter,
+                [IndexEvidenceWarning],
+                candidateReports,
+                ArtifactDirectory: null);
+            phase = ExecutionPhase.Artifact;
+            var directory = _indexAnalysisArtifacts.Write(
+                report,
+                collected.Candidates,
+                collected.ExistingIndexes,
+                collected.SensitiveIndexes,
+                target.Database);
+            report = report with { ArtifactDirectory = directory };
+            return WithReceipt(
+                new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null),
+                stopwatch.ElapsedMilliseconds,
+                rawFootprint,
+                "indexes");
+        }
+        catch (Exception exception)
+        {
+            var exitCode = phase == ExecutionPhase.Artifact
+                ? SqlHarnessExitCode.LocalStorage
+                : MapException(exception, phase);
+            return WithReceipt(
+                new SqlHarnessOutcome(
+                    exitCode,
+                    null,
+                    SecretRedactor.Redact(exception, LongestFirst(knownSecrets))),
+                stopwatch.ElapsedMilliseconds,
+                rawFootprint,
+                "indexes");
         }
     }
 
