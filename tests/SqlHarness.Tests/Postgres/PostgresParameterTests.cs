@@ -1,6 +1,7 @@
 using System.Data;
 
 using Npgsql;
+
 using NpgsqlTypes;
 
 using SqlHarness.Core;

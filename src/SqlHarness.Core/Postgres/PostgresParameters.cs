@@ -2,6 +2,7 @@ using System.Data;
 using System.Globalization;
 
 using Npgsql;
+
 using NpgsqlTypes;
 
 namespace SqlHarness.Core.Postgres;

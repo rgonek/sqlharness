@@ -149,76 +149,76 @@ internal sealed class PostgresSafetyClassifier
                 return ClassifyWriteTarget(insert.InsertOperation.Name, knownTemps);
 
             case Statement.Update update:
-            {
-                if (GetRelationName(update.Table.Relation) is not { } name)
-                    return StatementOutcome.Unsupported;
-                return ClassifyWriteTarget(name, knownTemps);
-            }
+                {
+                    if (GetRelationName(update.Table.Relation) is not { } name)
+                        return StatementOutcome.Unsupported;
+                    return ClassifyWriteTarget(name, knownTemps);
+                }
 
             case Statement.Delete delete:
-            {
-                if (GetDeleteTarget(delete.DeleteOperation) is not { } name)
-                    return StatementOutcome.Unsupported;
-                return ClassifyWriteTarget(name, knownTemps);
-            }
+                {
+                    if (GetDeleteTarget(delete.DeleteOperation) is not { } name)
+                        return StatementOutcome.Unsupported;
+                    return ClassifyWriteTarget(name, knownTemps);
+                }
 
             case Statement.Merge merge:
-            {
-                if (GetRelationName(merge.Table) is not { } name)
-                    return StatementOutcome.Unsupported;
-                return ClassifyWriteTarget(name, knownTemps);
-            }
+                {
+                    if (GetRelationName(merge.Table) is not { } name)
+                        return StatementOutcome.Unsupported;
+                    return ClassifyWriteTarget(name, knownTemps);
+                }
 
             case Statement.CreateTable create:
-            {
-                if (!create.Element.Temporary)
-                    return StatementOutcome.Unsupported;
+                {
+                    if (!create.Element.Temporary)
+                        return StatementOutcome.Unsupported;
 
-                var key = ObjectKey(create.Element.Name);
-                if (key is null)
-                    return StatementOutcome.Unsupported;
+                    var key = ObjectKey(create.Element.Name);
+                    if (key is null)
+                        return StatementOutcome.Unsupported;
 
-                knownTemps.Add(key);
-                return StatementOutcome.SessionLocal;
-            }
+                    knownTemps.Add(key);
+                    return StatementOutcome.SessionLocal;
+                }
 
             case Statement.CreateIndex createIndex:
-            {
-                if (createIndex.Element.TableName is null)
-                    return StatementOutcome.Unsupported;
-                if (!IsSessionLocal(createIndex.Element.TableName, knownTemps))
-                    return StatementOutcome.Unsupported;
-                return StatementOutcome.SessionLocal;
-            }
+                {
+                    if (createIndex.Element.TableName is null)
+                        return StatementOutcome.Unsupported;
+                    if (!IsSessionLocal(createIndex.Element.TableName, knownTemps))
+                        return StatementOutcome.Unsupported;
+                    return StatementOutcome.SessionLocal;
+                }
 
             case Statement.Drop drop:
-            {
-                if (drop.ObjectType == ObjectType.Table)
                 {
-                    if (drop.Names.Count == 0)
-                        return StatementOutcome.Unsupported;
-                    if (!drop.Names.All(name => IsSessionLocal(name, knownTemps)))
-                        return StatementOutcome.Unsupported;
-                    foreach (var name in drop.Names)
+                    if (drop.ObjectType == ObjectType.Table)
                     {
-                        var key = ObjectKey(name);
-                        if (key is not null)
-                            knownTemps.Remove(key);
+                        if (drop.Names.Count == 0)
+                            return StatementOutcome.Unsupported;
+                        if (!drop.Names.All(name => IsSessionLocal(name, knownTemps)))
+                            return StatementOutcome.Unsupported;
+                        foreach (var name in drop.Names)
+                        {
+                            var key = ObjectKey(name);
+                            if (key is not null)
+                                knownTemps.Remove(key);
+                        }
+
+                        return StatementOutcome.SessionLocal;
                     }
 
-                    return StatementOutcome.SessionLocal;
-                }
+                    if (drop.ObjectType == ObjectType.Index)
+                    {
+                        // Index drops do not name the table; Temporary is the only session-local signal.
+                        if (!drop.Temporary)
+                            return StatementOutcome.Unsupported;
+                        return StatementOutcome.SessionLocal;
+                    }
 
-                if (drop.ObjectType == ObjectType.Index)
-                {
-                    // Index drops do not name the table; Temporary is the only session-local signal.
-                    if (!drop.Temporary)
-                        return StatementOutcome.Unsupported;
-                    return StatementOutcome.SessionLocal;
+                    return StatementOutcome.Unsupported;
                 }
-
-                return StatementOutcome.Unsupported;
-            }
 
             case Statement.StartTransaction:
             case Statement.Commit:
