@@ -489,3 +489,147 @@ internal sealed class MeasureParameterSetRunner
                 ct);
     }
 }
+
+internal static class MeasureParameterSetReportProjector
+{
+    internal const string MeasuredOrderRule =
+        "In one-based round r, measured execution starts at index r modulo setCount and wraps in user-supplied order.";
+
+    internal const string PlanCacheWarning =
+        "Parameter-set measurements use the observed server plan-cache state; SQLHarness did not clear or isolate the plan cache.";
+
+    internal static SqlHarnessMeasureSetReport Project(
+        SqlHarnessTargetIdentityReport target,
+        int repeat,
+        MeasureParameterSetExecution execution,
+        IReadOnlyList<PreparedMeasureParameterSet> sets)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(execution);
+        ArgumentNullException.ThrowIfNull(execution.Runs);
+        ArgumentNullException.ThrowIfNull(execution.WarmupOrder);
+        ArgumentNullException.ThrowIfNull(sets);
+        if (sets.Count == 0)
+            throw new ArgumentException("At least one parameter set is required.", nameof(sets));
+
+        var setReports = new MeasureParameterSetReport[sets.Count];
+        for (var index = 0; index < sets.Count; index++)
+            setReports[index] = ProjectSet(sets[index], repeat, execution.Runs);
+
+        return new SqlHarnessMeasureSetReport(
+            target,
+            repeat,
+            repeat * sets.Count,
+            execution.SetupExecutionCount,
+            execution.WarmupOrder,
+            MeasuredOrderRule,
+            PlanCacheWarning,
+            setReports,
+            Summarize(setReports),
+            ArtifactDirectory: null);
+    }
+
+    private static MeasureParameterSetReport ProjectSet(
+        PreparedMeasureParameterSet set,
+        int repeat,
+        IReadOnlyList<CollectedBenchmarkRun> measuredRuns)
+    {
+        // Runs are measured executions only. Warm-ups are not in this list.
+        var runs = new List<CollectedBenchmarkRun>(measuredRuns.Count);
+        foreach (var run in measuredRuns)
+        {
+            if (string.Equals(run.Artifact.ParameterSet, set.Name, StringComparison.Ordinal))
+                runs.Add(run);
+        }
+
+        if (runs.Count == 0)
+            throw new InvalidOperationException($"Parameter set '{set.Name}' has no measured runs.");
+
+        string? resultHash = runs[0].ResultHash;
+        var stable = true;
+        for (var index = 1; index < runs.Count; index++)
+        {
+            if (!string.Equals(resultHash, runs[index].ResultHash, StringComparison.Ordinal))
+            {
+                stable = false;
+                resultHash = null;
+                break;
+            }
+        }
+
+        return new MeasureParameterSetReport(
+            set.Name,
+            set.Metadata,
+            set.ValueHash,
+            repeat,
+            stable,
+            stable ? resultHash : null,
+            SqlHarnessModule.CreateVariantReport(set.Name, runs),
+            DistinctPlanHashes(runs));
+    }
+
+    private static string[] DistinctPlanHashes(IReadOnlyList<CollectedBenchmarkRun> runs)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var hashes = new List<string>();
+        foreach (var run in runs)
+        {
+            foreach (var hash in run.PlanHashes)
+            {
+                if (seen.Add(hash))
+                    hashes.Add(hash);
+            }
+        }
+
+        return hashes.ToArray();
+    }
+
+    private static MeasureCrossSetSummary Summarize(IReadOnlyList<MeasureParameterSetReport> sets)
+    {
+        var elapsed = Extrema(sets, set => set.Metrics.ElapsedTimeMilliseconds.Median);
+        var cpu = Extrema(sets, set => set.Metrics.CpuTimeMilliseconds.Median);
+        var reads = Extrema(sets, set => set.Metrics.LogicalReads.Median);
+        return new MeasureCrossSetSummary(
+            elapsed.MinimumSet,
+            elapsed.Minimum,
+            elapsed.MaximumSet,
+            elapsed.Maximum,
+            cpu.MinimumSet,
+            cpu.Minimum,
+            cpu.MaximumSet,
+            cpu.Maximum,
+            reads.MinimumSet,
+            reads.Minimum,
+            reads.MaximumSet,
+            reads.Maximum);
+    }
+
+    private readonly record struct MedianExtrema(string MinimumSet, long Minimum, string MaximumSet, long Maximum);
+
+    private static MedianExtrema Extrema(
+        IReadOnlyList<MeasureParameterSetReport> sets,
+        Func<MeasureParameterSetReport, long> median)
+    {
+        var minimumSet = sets[0];
+        var maximumSet = sets[0];
+        var minimum = median(minimumSet);
+        var maximum = median(maximumSet);
+        for (var index = 1; index < sets.Count; index++)
+        {
+            var value = median(sets[index]);
+            if (value < minimum)
+            {
+                minimumSet = sets[index];
+                minimum = value;
+            }
+
+            if (value > maximum)
+            {
+                maximumSet = sets[index];
+                maximum = value;
+            }
+        }
+
+        return new MedianExtrema(minimumSet.Name, minimum, maximumSet.Name, maximum);
+    }
+}

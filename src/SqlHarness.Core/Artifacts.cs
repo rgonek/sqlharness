@@ -62,6 +62,42 @@ public sealed record SqlHarnessMeasureReport(
     public IReadOnlyList<BenchmarkParameterReport> Parameters { get; init; } = [];
 }
 
+public sealed record MeasureParameterSetReport(
+    string Name,
+    IReadOnlyList<MeasureParameterMetadata> Parameters,
+    string ValueHash,
+    int Repetitions,
+    bool ResultsStable,
+    string? ResultHash,
+    CompareVariantReport Metrics,
+    IReadOnlyList<string> PlanHashes);
+
+public sealed record MeasureCrossSetSummary(
+    string MinimumMedianElapsedSet,
+    long MinimumMedianElapsedMilliseconds,
+    string MaximumMedianElapsedSet,
+    long MaximumMedianElapsedMilliseconds,
+    string MinimumMedianCpuSet,
+    long MinimumMedianCpuMilliseconds,
+    string MaximumMedianCpuSet,
+    long MaximumMedianCpuMilliseconds,
+    string MinimumMedianReadsSet,
+    long MinimumMedianLogicalReads,
+    string MaximumMedianReadsSet,
+    long MaximumMedianLogicalReads);
+
+public sealed record SqlHarnessMeasureSetReport(
+    SqlHarnessTargetIdentityReport Target,
+    int Repeat,
+    int MeasuredRunCount,
+    int SetupExecutionCount,
+    IReadOnlyList<string> WarmupOrder,
+    string MeasuredOrderRule,
+    string PlanCacheWarning,
+    IReadOnlyList<MeasureParameterSetReport> Sets,
+    MeasureCrossSetSummary CrossSetSummary,
+    string? ArtifactDirectory);
+
 internal sealed record CompareRunArtifact(
     string Variant, int Repetition, long CpuTimeMilliseconds, long ElapsedTimeMilliseconds,
     long LogicalReads, IReadOnlyDictionary<string, long> LogicalReadsByTable,

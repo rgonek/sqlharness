@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using SqlHarness.Core;
 using SqlHarness.Core.Dialect;
 using SqlHarness.Core.Targets;
@@ -9,7 +11,10 @@ public sealed class MeasureParameterSetExecutionTests
     private const string SetupSql = "SELECT Id INTO #ids FROM dbo.Clients WHERE Id = @id";
     private const string QuerySql = "SELECT Value FROM dbo.Clients WHERE Id = @id";
     private const string Plan = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></BatchSequence></ShowPlanXML>";
-    private const string ReportingMessage = "Measure parameter-set reporting is not implemented.";
+    private const string MeasuredOrderRule =
+        "In one-based round r, measured execution starts at index r modulo setCount and wraps in user-supplied order.";
+    private const string PlanCacheWarning =
+        "Parameter-set measurements use the observed server plan-cache state; SQLHarness did not clear or isolate the plan cache.";
 
     [Fact]
     public async Task Three_sets_warm_in_input_order_and_rotate_each_round()
@@ -236,7 +241,7 @@ public sealed class MeasureParameterSetExecutionTests
     }
 
     [Fact]
-    public async Task Module_rotates_on_one_session_then_rejects_reporting()
+    public async Task Module_rotates_on_one_session_and_returns_set_report()
     {
         const string tenant = "acme-secret-884422";
         var session = RecordingSession.Create(
@@ -245,6 +250,7 @@ public sealed class MeasureParameterSetExecutionTests
             setupSql: "SELECT Id INTO #ids FROM dbo.Clients WHERE Id = @id AND Tenant = @tenant",
             querySql: "SELECT Value FROM dbo.Clients WHERE Id = @id AND Tenant = @tenant");
         var writer = new CapturingWriter();
+        var gain = new FakeGainStore();
         var operation = new SqlHarnessMeasureOperation(
             Target(),
             session.SetupSql,
@@ -254,12 +260,10 @@ public sealed class MeasureParameterSetExecutionTests
             2,
             Inputs("A", "B"));
 
-        var outcome = await Module(session, writer: writer, comparisonMaximumRows: 2).ExecuteAsync(operation);
+        var outcome = await Module(session, writer: writer, comparisonMaximumRows: 2, gain: gain).ExecuteAsync(operation);
 
-        Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
-        Assert.Equal(5, (int)outcome.ExitCode);
-        Assert.Null(outcome.Report);
-        Assert.Equal(ReportingMessage, outcome.SafeError);
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Null(outcome.SafeError);
         Assert.Equal(0, writer.Writes);
         Assert.Equal(1, session.ConnectionCount);
         Assert.Equal(1, session.SetupCount);
@@ -271,7 +275,72 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.Equal(11, setup.Parameters[1].Value);
         Assert.All(session.Commands, command => Assert.Equal(17, command.TimeoutSeconds));
         AssertNoCacheControl(session.Commands);
-        Assert.DoesNotContain(tenant, outcome.SafeError, StringComparison.Ordinal);
+
+        var report = Assert.IsType<SqlHarnessMeasureSetReport>(outcome.Report);
+        Assert.Null(report.ArtifactDirectory);
+        Assert.Equal(session.Identity, report.Target);
+        Assert.Equal(2, report.Repeat);
+        Assert.Equal(4, report.MeasuredRunCount);
+        Assert.Equal(1, report.SetupExecutionCount);
+        Assert.Equal(["A", "B"], report.WarmupOrder);
+        Assert.Equal(MeasuredOrderRule, report.MeasuredOrderRule);
+        Assert.Equal(PlanCacheWarning, report.PlanCacheWarning);
+        Assert.Equal(["A", "B"], report.Sets.Select(set => set.Name));
+        Assert.Equal("A", report.CrossSetSummary.MinimumMedianElapsedSet);
+        Assert.Equal("A", report.CrossSetSummary.MaximumMedianElapsedSet);
+        Assert.Equal(12, report.CrossSetSummary.MinimumMedianElapsedMilliseconds);
+        Assert.Equal(12, report.CrossSetSummary.MaximumMedianElapsedMilliseconds);
+        Assert.Equal("A", report.CrossSetSummary.MinimumMedianCpuSet);
+        Assert.Equal("A", report.CrossSetSummary.MaximumMedianCpuSet);
+        Assert.Equal(10, report.CrossSetSummary.MinimumMedianCpuMilliseconds);
+        Assert.Equal(10, report.CrossSetSummary.MaximumMedianCpuMilliseconds);
+        Assert.Equal("A", report.CrossSetSummary.MinimumMedianReadsSet);
+        Assert.Equal("A", report.CrossSetSummary.MaximumMedianReadsSet);
+        Assert.Equal(5, report.CrossSetSummary.MinimumMedianLogicalReads);
+        Assert.Equal(5, report.CrossSetSummary.MaximumMedianLogicalReads);
+
+        var setA = report.Sets[0];
+        var setB = report.Sets[1];
+        Assert.Equal(2, setA.Repetitions);
+        Assert.Equal(2, setB.Repetitions);
+        Assert.True(setA.ResultsStable);
+        Assert.True(setB.ResultsStable);
+        Assert.NotNull(setA.ResultHash);
+        Assert.Equal(setA.ResultHash, setB.ResultHash);
+        Assert.Equal(setA.PlanHashes, setB.PlanHashes);
+        Assert.Single(setA.PlanHashes);
+        Assert.Equal(
+            [new MeasureParameterMetadata("@id", "int"), new MeasureParameterMetadata("@tenant", "nvarchar")],
+            setA.Parameters);
+        Assert.Equal(setA.Parameters, setB.Parameters);
+        Assert.Equal(TypedParameterHasher.Hash(SqlParameterParser.Parse(["id:int=11", $"tenant:nvarchar={tenant}"])), setA.ValueHash);
+        Assert.Equal(TypedParameterHasher.Hash(SqlParameterParser.Parse(["id:int=22", $"tenant:nvarchar={tenant}"])), setB.ValueHash);
+        Assert.NotEqual(setA.ValueHash, setB.ValueHash);
+        Assert.Equal(new CompareDistribution(10, 10, 10), setA.Metrics.CpuTimeMilliseconds);
+        Assert.Equal(new CompareDistribution(12, 12, 12), setA.Metrics.ElapsedTimeMilliseconds);
+        Assert.Equal(new CompareDistribution(5, 5, 5), setA.Metrics.LogicalReads);
+        Assert.Equal(10, setA.Metrics.TotalLogicalReadsByTable["Clients"]);
+        Assert.Equal(new CompareDistribution(5, 5, 5), setA.Metrics.LogicalReadsByTable["Clients"]);
+
+        var json = JsonSerializer.Serialize(report, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.DoesNotContain(tenant, json, StringComparison.Ordinal);
+        Assert.DoesNotContain($"tenant:nvarchar={tenant}", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("id:int=11", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("id:int=22", json, StringComparison.Ordinal);
+        Assert.DoesNotContain(session.QuerySql, json, StringComparison.Ordinal);
+        Assert.DoesNotContain(session.SetupSql, json, StringComparison.Ordinal);
+        Assert.Contains(setA.ValueHash, json, StringComparison.Ordinal);
+        Assert.Contains(setB.ValueHash, json, StringComparison.Ordinal);
+
+        Assert.Empty(gain.Records);
+        Assert.Equal(
+            SqlHarnessExitCode.Success,
+            await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt).CompleteAsync(new OutputFootprint(4, 1)));
+        var gainRecord = Assert.Single(gain.Records);
+        Assert.Equal("measure", gainRecord.Command);
+        Assert.True(gainRecord.Success);
+        Assert.True(gainRecord.RawBytes > 0);
+        Assert.DoesNotContain(tenant, gainRecord.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -433,8 +502,9 @@ public sealed class MeasureParameterSetExecutionTests
         RecordingSession session,
         Func<IReadOnlyDictionary<string, TargetProfile>>? profiles = null,
         CapturingWriter? writer = null,
-        int? comparisonMaximumRows = null) =>
-        new(session, new FakeGainStore(), writer ?? new CapturingWriter(), profiles ?? Profiles)
+        int? comparisonMaximumRows = null,
+        FakeGainStore? gain = null) =>
+        new(session, gain ?? new FakeGainStore(), writer ?? new CapturingWriter(), profiles ?? Profiles)
         {
             ComparisonMaximumRows = comparisonMaximumRows ?? CanonicalComparisonAccumulator.MaximumComparedRows,
         };
@@ -536,9 +606,9 @@ public sealed class MeasureParameterSetExecutionTests
 
     private sealed class FakeGainStore : IGainStore
     {
-        public void Append(GainRecord record)
-        {
-        }
+        public List<GainRecord> Records { get; } = [];
+
+        public void Append(GainRecord record) => Records.Add(record);
 
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }

@@ -597,14 +597,20 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 phase = ExecutionPhase.Sql;
 
                 raw = new CanonicalResultAccumulator();
-                await new MeasureParameterSetRunner(dialect, ComparisonMaximumRows).ExecuteAsync(
+                var execution = await new MeasureParameterSetRunner(dialect, ComparisonMaximumRows).ExecuteAsync(
                     multiSession,
                     measure,
                     boundSets,
                     raw,
                     ct);
-                // Reporting lands in a later task; this seam must not return a measure report.
-                throw new NotSupportedException("Measure parameter-set reporting is not implemented.");
+                rawFootprint = raw.Complete().Footprint;
+                var setReport = MeasureParameterSetReportProjector.Project(
+                    multiSession.Identity,
+                    measure.Repeat,
+                    execution,
+                    boundSets);
+                var setSuccess = new SqlHarnessOutcome(SqlHarnessExitCode.Success, setReport, null);
+                return WithReceipt(setSuccess, stopwatch.ElapsedMilliseconds, rawFootprint, "measure");
             }
 
             phase = ExecutionPhase.Authentication;
