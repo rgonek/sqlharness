@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
+using System.Security.Cryptography;
 using System.Text;
 
 using Microsoft.Data.SqlClient;
@@ -588,7 +589,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
             // Measure never runs ResultComparer; skip fingerprint retention and the 1M row comparison cap.
             await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, 0, "measure", raw, captureComparison: false, ct);
-            var runs = new List<CollectedCompareRun>(measure.Repeat);
+            var runs = new List<CollectedBenchmarkRun>(measure.Repeat);
             for (var repetition = 1; repetition <= measure.Repeat; repetition++)
                 runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, repetition, "measure", raw, captureComparison: false, ct));
 
@@ -630,7 +631,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         }
     }
 
-    private Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
+    private Task<CollectedBenchmarkRun> ExecuteBenchmarkRunAsync(
         ISqlDialect dialect,
         ISqlSession session,
         string sql,
@@ -641,8 +642,19 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         CanonicalResultAccumulator raw,
         bool captureComparison,
         CancellationToken ct) =>
-        dialect.ExecuteBenchmarkRunAsync(
-            session, sql, parameters, timeoutSeconds, repetition, variant, raw, captureComparison, ComparisonMaximumRows, ct);
+        BenchmarkRunner.ExecuteAsync(
+            dialect,
+            session,
+            sql,
+            parameters,
+            timeoutSeconds,
+            repetition,
+            variant,
+            parameterSet: null,
+            raw,
+            captureComparison,
+            ComparisonMaximumRows,
+            ct);
 
     internal static async Task ExecuteRawAsync(
         ISqlSession session,
@@ -694,7 +706,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         }
     }
 
-    internal static CompareVariantReport CreateVariantReport(string name, IReadOnlyList<CollectedCompareRun> runs)
+    internal static CompareVariantReport CreateVariantReport(string name, IReadOnlyList<CollectedBenchmarkRun> runs)
     {
         var operators = runs
             .SelectMany(run => run.Plans)
@@ -1480,6 +1492,56 @@ internal sealed record CollectedCompareRun(
 {
     public string Variant => Artifact.Variant;
     public string ResultHash => Artifact.ResultHash;
+}
+
+internal sealed record CollectedBenchmarkRun(
+    CompareRunArtifact Artifact,
+    IReadOnlyList<ExecutionPlan> Plans,
+    IReadOnlyList<string> PlanHashes)
+{
+    // Compare equivalence still reads the dialect fingerprint. Measure does not.
+    public CanonicalComparisonResult Comparison { get; init; } = BenchmarkCollector.EmptyComparison;
+
+    public string Variant => Artifact.Variant;
+    public string ResultHash => Artifact.ResultHash;
+}
+
+internal static class BenchmarkRunner
+{
+    internal static async Task<CollectedBenchmarkRun> ExecuteAsync(
+        ISqlDialect dialect,
+        ISqlSession session,
+        string sql,
+        IReadOnlyList<SqlHarnessParameter> parameters,
+        int timeoutSeconds,
+        int repetition,
+        string variant,
+        string? parameterSet,
+        CanonicalResultAccumulator raw,
+        bool captureComparison,
+        int comparisonMaximumRows,
+        CancellationToken ct)
+    {
+        var collected = await dialect.ExecuteBenchmarkRunAsync(
+            session,
+            sql,
+            parameters,
+            timeoutSeconds,
+            repetition,
+            variant,
+            raw,
+            captureComparison,
+            comparisonMaximumRows,
+            ct);
+        var artifact = collected.Artifact with { ParameterSet = parameterSet };
+        return new CollectedBenchmarkRun(artifact, collected.Plans, artifact.PlanXmls.Select(HashPlan).ToArray())
+        {
+            Comparison = collected.Comparison,
+        };
+    }
+
+    private static string HashPlan(string document) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(document)));
 }
 
 internal static class BenchmarkCollector

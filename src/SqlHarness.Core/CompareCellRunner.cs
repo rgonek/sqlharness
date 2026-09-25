@@ -78,7 +78,7 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
             await ExecuteBenchmarkRunAsync(dialect, session, request.BaselineSql, request.Parameters, request.TimeoutSeconds, 0, "baseline", raw, captureComparison: false, ct);
             await ExecuteBenchmarkRunAsync(dialect, session, request.CandidateSql, request.Parameters, request.TimeoutSeconds, 0, "candidate", raw, captureComparison: false, ct);
 
-            var runs = new List<CollectedCompareRun>(request.Repeat * 2);
+            var runs = new List<CollectedBenchmarkRun>(request.Repeat * 2);
             for (var repetition = 1; repetition <= request.Repeat; repetition++)
             {
                 if (repetition % 2 == 1)
@@ -131,7 +131,7 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
         }
     }
 
-    private Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
+    private Task<CollectedBenchmarkRun> ExecuteBenchmarkRunAsync(
         ISqlDialect dialect,
         ISqlSession session,
         string sql,
@@ -142,13 +142,15 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
         CanonicalResultAccumulator raw,
         bool captureComparison,
         CancellationToken ct) =>
-        dialect.ExecuteBenchmarkRunAsync(
+        BenchmarkRunner.ExecuteAsync(
+            dialect,
             session,
             sql,
             parameters,
             timeoutSeconds,
             repetition,
             variant,
+            parameterSet: null,
             raw,
             captureComparison,
             ComparisonMaximumRows,

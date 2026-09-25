@@ -65,7 +65,8 @@ public sealed record SqlHarnessMeasureReport(
 internal sealed record CompareRunArtifact(
     string Variant, int Repetition, long CpuTimeMilliseconds, long ElapsedTimeMilliseconds,
     long LogicalReads, IReadOnlyDictionary<string, long> LogicalReadsByTable,
-    string ResultHash, IReadOnlyList<string> PlanXmls, int MessageCount);
+    string ResultHash, IReadOnlyList<string> PlanXmls, int MessageCount,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParameterSet = null);
 
 internal interface ICompareArtifactWriter
 {
