@@ -199,6 +199,30 @@ public sealed class MeasureParameterSetArtifactTests
     }
 
     [Fact]
+    public void Trailing_newline_is_not_a_safe_set_label()
+    {
+        using var temp = new TempDirectory();
+        var run = new CompareRunArtifact(
+            "measure", 1, 1, 1, 1, new Dictionary<string, long>(), "HASH", [FixturePlan()], 0, "ab\n");
+
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(Report(), [run], "testdb");
+
+        var plansDirectory = Path.Combine(directory, "plans");
+        var files = Directory.GetFiles(plansDirectory).Select(path => Path.GetFileName(path)!).ToArray();
+        Assert.Contains("ab-measure-001-000-000.sqlplan", files);
+        Assert.Contains("ab-measure-001-000-000.plan.json", files);
+        Assert.All(files, name =>
+        {
+            Assert.DoesNotContain("\n", name, StringComparison.Ordinal);
+            Assert.DoesNotContain("\r", name, StringComparison.Ordinal);
+        });
+        var runs = File.ReadAllText(Path.Combine(directory, "runs.jsonl"));
+        Assert.Contains("\"parameterSet\":\"ab\"", runs, StringComparison.Ordinal);
+        Assert.DoesNotContain("\\n", runs, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Measure_set_staging_failure_rolls_back_report_plans_and_directory()
     {
         using var temp = new TempDirectory();

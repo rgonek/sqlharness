@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -70,33 +71,86 @@ public sealed class BenchmarkRunTests
     }
 
     [Fact]
-    public async Task Plan_hashes_are_uppercase_sha256_of_exact_plan_documents()
+    public async Task Plan_hashes_identify_the_operator_tree_not_runtime_values()
     {
-        var same = "<ShowPlanXML>same</ShowPlanXML>";
-        var distinct = "<ShowPlanXML>other α</ShowPlanXML>";
-        var untrimmed = same + " ";
-        var documents = new[] { "", same, same, distinct, untrimmed };
-        var dialect = Dialect(Artifact(documents));
+        var seek = Showplan(planHash: null, physicalOp: "Index Seek", runtimeValue: "1", actualRows: "3");
+        var seekNoisy = Showplan(planHash: null, physicalOp: "Index Seek", runtimeValue: "secret-value", actualRows: "400");
+        var scan = Showplan(planHash: null, physicalOp: "Table Scan", runtimeValue: "1", actualRows: "3");
+        var pretty = seek.Replace("><", ">\n<", StringComparison.Ordinal);
+        var hashed = Showplan(planHash: "0xAA", physicalOp: "Index Seek", runtimeValue: "1", actualRows: "3");
+        var hashedNoisy = Showplan(planHash: "0xAA", physicalOp: "Table Scan", runtimeValue: "secret-value", actualRows: "400");
+        var otherHash = Showplan(planHash: "0xBB", physicalOp: "Index Seek", runtimeValue: "1", actualRows: "3");
+        var bothHashes = TwoPlanHashes("0xAA", "0xBB");
+        var repeatedHash = TwoPlanHashes("0xAA", "0xAA");
+        var postgres = PostgresPlan("Seq Scan", "secret-value");
+        var postgresNoisy = PostgresPlan("Seq Scan", "other-secret", actualRows: 50, buffers: 9, planningTime: 80);
+        var postgresReordered = PostgresPlan("Seq Scan", "secret-value", reorder: true);
+        var postgresTree = PostgresPlan("Index Scan", "secret-value");
+        var fixture = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "distiller-sample.sqlplan"));
+        var fixtureRows = fixture.Replace("ActualRows=\"3\"", "ActualRows=\"30\"", StringComparison.Ordinal)
+            .Replace("ActualRows=\"4\"", "ActualRows=\"40\"", StringComparison.Ordinal);
+        var fixtureTree = fixture.Replace("PhysicalOp=\"Index Seek\"", "PhysicalOp=\"Clustered Index Scan\"", StringComparison.Ordinal);
+        var explain = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "seq-scan.explain.json"));
+        var explainNoisy = explain.Replace("\"Actual Rows\":100", "\"Actual Rows\":1", StringComparison.Ordinal)
+            .Replace("\"Actual Rows\":10", "\"Actual Rows\":999", StringComparison.Ordinal)
+            .Replace("\"Shared Hit Blocks\":2", "\"Shared Hit Blocks\":50", StringComparison.Ordinal)
+            .Replace("\"Planning Time\":10.4", "\"Planning Time\":1", StringComparison.Ordinal)
+            .Replace("\"Execution Time\":4.6", "\"Execution Time\":80", StringComparison.Ordinal);
+        var explainTree = explain.Replace("\"Node Type\":\"Seq Scan\"", "\"Node Type\":\"Index Scan\"", StringComparison.Ordinal);
+        var documents = new[]
+        {
+            "",
+            seek,
+            seekNoisy,
+            pretty + " \n",
+            scan,
+            hashed,
+            hashedNoisy,
+            otherHash,
+            bothHashes,
+            repeatedHash,
+            postgres,
+            postgresNoisy,
+            postgresReordered,
+            postgresTree,
+            fixture,
+            fixtureRows,
+            fixtureTree,
+            explain,
+            explainNoisy,
+            explainTree,
+            "not-a-plan α",
+        };
         using var raw = new CanonicalResultAccumulator();
 
-        var run = await Run(dialect, new IdleSession(), raw, parameterSet: "wide");
+        var run = await Run(Dialect(Artifact(documents)), new IdleSession(), raw, parameterSet: "wide");
 
-        var expected = documents.Select(HashPlan).ToArray();
-        Assert.Equal(expected, run.PlanHashes);
+        Assert.Equal(documents.Select(PlanIdentity.Hash), run.PlanHashes);
         Assert.Equal(EmptyPlanHash, run.PlanHashes[0]);
         Assert.Equal(run.PlanHashes[1], run.PlanHashes[2]);
-        Assert.NotEqual(run.PlanHashes[1], run.PlanHashes[3]);
+        Assert.Equal(run.PlanHashes[1], run.PlanHashes[3]);
         Assert.NotEqual(run.PlanHashes[1], run.PlanHashes[4]);
+        Assert.Equal(Sha256("0xAA"), run.PlanHashes[5]);
+        Assert.Equal(run.PlanHashes[5], run.PlanHashes[6]);
+        Assert.NotEqual(run.PlanHashes[5], run.PlanHashes[7]);
+        Assert.Equal(Sha256("0xAA\n0xBB"), run.PlanHashes[8]);
+        Assert.NotEqual(run.PlanHashes[8], run.PlanHashes[9]);
+        Assert.Equal(run.PlanHashes[10], run.PlanHashes[11]);
+        Assert.Equal(run.PlanHashes[10], run.PlanHashes[12]);
+        Assert.NotEqual(run.PlanHashes[10], run.PlanHashes[13]);
+        Assert.Equal(run.PlanHashes[14], run.PlanHashes[15]);
+        Assert.NotEqual(run.PlanHashes[14], run.PlanHashes[16]);
+        Assert.Equal(run.PlanHashes[17], run.PlanHashes[18]);
+        Assert.NotEqual(run.PlanHashes[17], run.PlanHashes[19]);
+        Assert.Equal(Sha256("not-a-plan α"), run.PlanHashes[20]);
         Assert.All(run.PlanHashes, hash =>
         {
             Assert.Equal(64, hash.Length);
             Assert.Matches("^[0-9A-F]{64}$", hash);
             Assert.DoesNotContain("0x", hash, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("secret-value", hash, StringComparison.Ordinal);
+            Assert.DoesNotContain("other-secret", hash, StringComparison.Ordinal);
         });
-
-        using var againRaw = new CanonicalResultAccumulator();
-        var again = await Run(Dialect(Artifact(same)), new IdleSession(), againRaw);
-        Assert.Equal(run.PlanHashes[1], Assert.Single(again.PlanHashes));
     }
 
     [Fact]
@@ -199,8 +253,34 @@ public sealed class BenchmarkRunTests
     private static CompareRunArtifact Artifact(params string[] plans) =>
         new("measure", 2, 10, 12, 5, new Dictionary<string, long> { ["Clients"] = 5 }, "RESULT-HASH", plans, 3);
 
-    private static string HashPlan(string document) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(document)));
+    private static string Sha256(string text) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+
+    private static string Showplan(string? planHash, string physicalOp, string runtimeValue, string actualRows)
+    {
+        var hashAttribute = planHash is null ? string.Empty : $" QueryPlanHash=\"{planHash}\"";
+        return $"""
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"><BatchSequence><Batch><Statements><StmtSimple StatementText="SELECT @id"><QueryPlan{hashAttribute}><ParameterList><ColumnReference Column="@id" ParameterCompiledValue="(1)" ParameterRuntimeValue="({runtimeValue})" /></ParameterList><QueryTimeStats CpuTime="{actualRows}" ElapsedTime="{runtimeValue.Length}" /><RelOp NodeId="0" PhysicalOp="{physicalOp}" EstimateRows="1" ActualRows="{actualRows}" ActualElapsedms="{actualRows}" ActualCPUms="4"><RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualRows="{actualRows}" ActualElapsedms="9" ActualCPUms="4" /></RunTimeInformation><IndexScan><Object Table="[dbo].[Orders]" /><ColumnReference Column="@id" ParameterRuntimeValue="({runtimeValue})" /></IndexScan></RelOp></QueryPlan></StmtSimple></Statements></Batch></BatchSequence></ShowPlanXML>
+            """;
+    }
+
+    private static string TwoPlanHashes(string first, string second) =>
+        $"""<ShowPlanXML><QueryPlan QueryPlanHash="{first}" /><QueryPlan QueryPlanHash="{second}"><RelOp PhysicalOp="Nested Loops" /></QueryPlan></ShowPlanXML>""";
+
+    private static string PostgresPlan(
+        string nodeType,
+        string secret,
+        int actualRows = 1,
+        int buffers = 2,
+        double planningTime = 1.25,
+        bool reorder = false)
+    {
+        var fields = reorder
+            ? $"\"Shared Hit Blocks\":{buffers},\"Plan Rows\":10,\"Actual Rows\":{actualRows},\"Relation Name\":\"foo\",\"Node Type\":\"{nodeType}\",\"Actual Total Time\":3.5,\"Filter\":\"(id = 7)\""
+            : $"\"Node Type\":\"{nodeType}\",\"Relation Name\":\"foo\",\"Plan Rows\":10,\"Actual Rows\":{actualRows},\"Actual Total Time\":3.5,\"Shared Hit Blocks\":{buffers},\"Filter\":\"(id = 7)\",\"Actual Label\":\"{secret}\"";
+        return "[{\"Planning Time\":" + planningTime.ToString(CultureInfo.InvariantCulture)
+            + ",\"Execution Time\":9.5,\"Plan\":{" + fields + "}}]";
+    }
 
     private static CompareVariantReport Variant(string name) => new(
         name,

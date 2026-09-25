@@ -1,8 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
-using System.Security.Cryptography;
-using System.Text;
 
 using Microsoft.Data.SqlClient;
 
@@ -514,8 +512,17 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
     private static void AddTypedSecret(List<string> knownSecrets, SqlHarnessParameter parameter)
     {
-        if (parameter.Value is not DBNull)
-            knownSecrets.Add(Convert.ToString(parameter.Value, CultureInfo.InvariantCulture) ?? string.Empty);
+        if (parameter.Value is DBNull)
+            return;
+
+        // Convert.ToString(byte[]) is "System.Byte[]", which does not match a server-quoted Base64 value.
+        if (parameter.Value is byte[] bytes)
+        {
+            knownSecrets.Add(Convert.ToBase64String(bytes));
+            return;
+        }
+
+        knownSecrets.Add(Convert.ToString(parameter.Value, CultureInfo.InvariantCulture) ?? string.Empty);
     }
 
     private static string MatrixDeclaration(ParsedParameterMatrix matrix)
@@ -663,7 +670,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var exitCode = phase == ExecutionPhase.Artifact
                 ? SqlHarnessExitCode.LocalStorage
                 : MapException(exception, phase);
-            var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, knownSecrets));
+            var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, LongestFirst(knownSecrets)));
             return WithReceipt(failure, stopwatch.ElapsedMilliseconds, rawFootprint, "measure");
         }
         finally
@@ -1604,14 +1611,11 @@ internal static class BenchmarkRunner
             comparisonMaximumRows,
             ct);
         var artifact = collected.Artifact with { ParameterSet = parameterSet };
-        return new CollectedBenchmarkRun(artifact, collected.Plans, artifact.PlanXmls.Select(HashPlan).ToArray())
+        return new CollectedBenchmarkRun(artifact, collected.Plans, artifact.PlanXmls.Select(PlanIdentity.Hash).ToArray())
         {
             Comparison = collected.Comparison,
         };
     }
-
-    private static string HashPlan(string document) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(document)));
 }
 
 internal static class BenchmarkCollector

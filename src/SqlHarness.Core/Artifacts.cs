@@ -301,7 +301,9 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
     // Accepted labels are already one path segment. Anything else is reduced so it cannot escape.
     private static string SanitizeSetLabel(string label)
     {
-        if (label.Length is > 0 and <= 64 && SafeSetLabel().IsMatch(label))
+        // '$' matches before a trailing newline; the label must be the entire string.
+        var match = SafeSetLabel().Match(label);
+        if (label.Length is > 0 and <= 64 && match.Success && match.Length == label.Length)
             return label;
 
         var sanitized = UnsafePathCharacter().Replace(label, "-").Trim('-');

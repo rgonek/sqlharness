@@ -89,12 +89,17 @@ internal static class PostgresBenchmark
 
         CanonicalResult canonical;
         CanonicalComparisonResult comparison;
-        if (captureComparison)
+        // EXPLAIN returns no rows. Measured measure still hashes the canonical result.
+        // captureComparison false does not retain the comparison fingerprint.
+        // Warm-up (repetition 0) and compare-results off stay EXPLAIN-only.
+        var hashRows = captureComparison
+            || (repetition > 0 && string.Equals(variant, "measure", StringComparison.Ordinal));
+        if (hashRows)
         {
             await using var sidecar = await session.ExecuteReaderAsync(
                 new SqlExecutionCommand(sql, parameters, timeoutSeconds), ct);
             var collected = await BenchmarkCollector.CollectCompareAsync(
-                sidecar, raw, captureComparison: true, comparisonMaximumRows, ct);
+                sidecar, raw, captureComparison, comparisonMaximumRows, ct);
             canonical = collected.Canonical;
             comparison = collected.Comparison;
         }

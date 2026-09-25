@@ -409,6 +409,41 @@ public sealed class MeasureParameterSetExecutionTests
     }
 
     [Fact]
+    public async Task Module_failure_redacts_longer_prefix_and_varbinary_base64()
+    {
+        var bytes = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF };
+        var base64 = Convert.ToBase64String(bytes);
+        const string setupSql = "SELECT Id INTO #ids FROM dbo.Clients WHERE Id = @n AND Payload = @blob";
+        const string querySql = "SELECT Value FROM dbo.Clients WHERE Id = @n AND Payload = @blob";
+        var session = RecordingSession.Create(
+            setupSql: setupSql,
+            querySql: querySql,
+            failSetup: true,
+            failure: new TimeoutException($"failed 1 and 100 and {base64}"));
+        var operation = new SqlHarnessMeasureOperation(
+            Target(),
+            setupSql,
+            querySql,
+            [],
+            30,
+            1,
+            [
+                new("A", ["n:int=1", $"blob:varbinary={base64}"]),
+                new("B", ["n:int=100", $"blob:varbinary={base64}"]),
+            ]);
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
+        Assert.Null(outcome.Report);
+        Assert.DoesNotContain("100", outcome.SafeError, StringComparison.Ordinal);
+        Assert.DoesNotContain("[REDACTED]00", outcome.SafeError, StringComparison.Ordinal);
+        Assert.DoesNotContain(base64, outcome.SafeError, StringComparison.Ordinal);
+        Assert.DoesNotContain("System.Byte[]", outcome.SafeError, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", outcome.SafeError, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Module_measured_failure_does_not_return_success()
     {
         var session = RecordingSession.Create(

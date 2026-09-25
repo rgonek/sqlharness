@@ -57,7 +57,7 @@ public sealed class PostgresBenchmarkTests
     }
 
     [Fact]
-    public async Task Measure_uses_explain_wrap_without_statistics_or_sidecar()
+    public async Task Measure_hashes_canonical_rows_without_statistics_or_comparison_cap()
     {
         var session = FakeSession.Create();
         var writer = new CapturingArtifactWriter();
@@ -65,11 +65,15 @@ public sealed class PostgresBenchmarkTests
         var outcome = await Module(session, writer).ExecuteAsync(Measure("SELECT 1", repeat: 1));
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
-        Assert.Equal(2, session.Commands.Count);
-        Assert.All(session.Commands, command =>
-            Assert.Equal("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)\nSELECT 1", command.Sql));
+        const string explain = "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)\nSELECT 1";
+        Assert.Equal([explain, explain, "SELECT 1"], session.Commands.Select(command => command.Sql));
         Assert.All(session.Commands, command =>
             Assert.DoesNotContain("SET STATISTICS IO ON", command.Sql, StringComparison.Ordinal));
+        using var expected = new CanonicalResultAccumulator();
+        expected.BeginResultSet([new CanonicalColumn(0, "n", "System.Int32", false)]);
+        expected.AddRow([1]);
+        expected.EndResultSet();
+        Assert.Equal(expected.Complete().Hash, Assert.Single(writer.Runs).ResultHash);
         var report = Assert.IsType<SqlHarnessMeasureReport>(outcome.Report);
         Assert.Equal(new CompareDistribution(0, 0, 0), report.Query.CpuTimeMilliseconds);
         Assert.Equal(new CompareDistribution(15, 15, 15), report.Query.ElapsedTimeMilliseconds);
@@ -77,6 +81,58 @@ public sealed class PostgresBenchmarkTests
         Assert.Equal(3, report.Query.TotalLogicalReadsByTable["foo"]);
         Assert.Contains(report.Query.Operators, op => op is { NodeId: 1, PhysicalOp: "Seq Scan", Object: "foo" });
         Assert.All(writer.Runs, run => Assert.Equal(ExplainFixture, Assert.Single(run.PlanXmls)));
+    }
+
+    [Fact]
+    public async Task Parameter_sets_hash_rows_per_set_without_the_comparison_fingerprint()
+    {
+        var session = new VaryingRowSession();
+        var writer = new CapturingArtifactWriter();
+        var module = new SqlHarnessModule(session, new FakeGain(), writer, Profiles)
+        {
+            ComparisonMaximumRows = 1,
+        };
+        var operation = new SqlHarnessMeasureOperation(
+            Target(),
+            null,
+            "SELECT @id AS n",
+            [],
+            30,
+            2,
+            [
+                new("stable", ["id:int=1"]),
+                new("drifting", ["id:int=2"]),
+            ]);
+
+        var outcome = await module.ExecuteAsync(operation);
+
+        Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
+        Assert.Equal(4, session.Commands.Count(command => command.Sql == "SELECT @id AS n"));
+        Assert.Equal(6, session.Commands.Count(command => command.Sql.StartsWith("EXPLAIN ", StringComparison.Ordinal)));
+        Assert.DoesNotContain(session.Commands, command => command.Sql.Contains("SET STATISTICS", StringComparison.Ordinal));
+        using var expected = new CanonicalResultAccumulator();
+        expected.BeginResultSet([new CanonicalColumn(0, "n", "System.Int32", false)]);
+        expected.AddRow([7]);
+        expected.AddRow([8]);
+        expected.EndResultSet();
+        var stableHash = expected.Complete().Hash;
+        using var empty = new CanonicalResultAccumulator();
+        Assert.NotEqual(empty.Complete().Hash, stableHash);
+
+        var stableRuns = writer.Runs.Where(run => run.ParameterSet == "stable").ToArray();
+        var driftingRuns = writer.Runs.Where(run => run.ParameterSet == "drifting").ToArray();
+        Assert.Equal(2, stableRuns.Length);
+        Assert.Equal(2, driftingRuns.Length);
+        Assert.All(stableRuns, run => Assert.Equal(stableHash, run.ResultHash));
+        Assert.NotEqual(driftingRuns[0].ResultHash, driftingRuns[1].ResultHash);
+
+        var report = Assert.IsType<SqlHarnessMeasureSetReport>(outcome.Report);
+        var stable = Assert.Single(report.Sets, set => set.Name == "stable");
+        var drifting = Assert.Single(report.Sets, set => set.Name == "drifting");
+        Assert.True(stable.ResultsStable);
+        Assert.Equal(stableHash, stable.ResultHash);
+        Assert.False(drifting.ResultsStable);
+        Assert.Null(drifting.ResultHash);
     }
 
     [Fact]
@@ -175,6 +231,35 @@ public sealed class PostgresBenchmarkTests
             Runs = runs.ToArray();
             return "pg-artifacts";
         }
+    }
+
+    private sealed class VaryingRowSession : ISqlSessionFactory, ISqlSession
+    {
+        private int _driftingRows;
+
+        public List<SqlExecutionCommand> Commands { get; } = [];
+        public IReadOnlyList<string> Messages => [];
+        public SqlHarnessTargetIdentityReport Identity { get; set; } =
+            new("localhost", "appdb", "localhost", "appdb", "profile", Engine: "postgres");
+
+        public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct) =>
+            Task.FromResult<ISqlSession>(this);
+
+        public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
+        {
+            Commands.Add(command);
+            if (command.Sql.StartsWith("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)", StringComparison.Ordinal))
+                return Task.FromResult<ISqlReader>(FakeReader.Rows(["QUERY PLAN"], [ExplainFixture]));
+
+            var id = Assert.IsType<int>(Assert.Single(command.Parameters, parameter => parameter.Name == "@id").Value);
+            if (id == 1)
+                return Task.FromResult<ISqlReader>(FakeReader.Rows(["n"], [7], [8]));
+
+            _driftingRows++;
+            return Task.FromResult<ISqlReader>(FakeReader.Rows(["n"], [_driftingRows == 1 ? 1 : 2]));
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class FakeSession : ISqlSessionFactory, ISqlSession

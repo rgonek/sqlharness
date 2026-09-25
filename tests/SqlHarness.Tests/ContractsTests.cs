@@ -222,6 +222,11 @@ public class ContractsTests
             Assert.Contains("locally sensitive", doc, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("one session", doc, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("setup once", doc, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(
+                "Setup runs once and binds the first parameter set's merged parameters.",
+                doc,
+                StringComparison.Ordinal);
+            Assert.Contains("Later sets do not re-run setup.", doc, StringComparison.Ordinal);
             Assert.Contains("per-set", doc, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("fixed", doc, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("stability", doc, StringComparison.OrdinalIgnoreCase);
