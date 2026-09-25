@@ -50,13 +50,18 @@ public sealed record SqlHarnessCompareMatrixReport(
     string ParameterType,
     IReadOnlyList<CompareMatrixCellReport> Cells);
 
+public sealed record SqlHarnessParameterSetInput(
+    string Name, IReadOnlyList<string> Parameters);
+
 public sealed record SqlHarnessMeasureOperation(
     SqlTargetRequest Target,
     string? SetupSql,
     string QuerySql,
     IReadOnlyList<string> Parameters,
     int TimeoutSeconds,
-    int Repeat) : SqlHarnessOperation;
+    int Repeat,
+    IReadOnlyList<SqlHarnessParameterSetInput>? ParameterSets = null)
+    : SqlHarnessOperation;
 
 public sealed record SqlHarnessGainOperation : SqlHarnessOperation;
 

@@ -126,6 +126,9 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
+        [Description("Strict JSON file of one named parameter set. Repeat for at least two sets; use --param for a single set.")]
+        [CommandOption("--param-set <PATH>")]
+        public string[] ParameterSets { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;
         [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
         [CommandOption("--json-summary")] public bool JsonSummary { get; set; }
@@ -136,15 +139,43 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         if (s.Json && s.JsonSummary) return Invalid("Choose only one of --json or --json-summary.");
         if (string.IsNullOrWhiteSpace(s.Query)) return Invalid("--query SQL file is required.");
         if (s.Timeout is < 1 or > 300 || s.Repeat is < 1 or > 100) return Invalid("--timeout must be 1..300 and --repeat must be 1..100.");
+        var setPaths = s.ParameterSets ?? [];
+        if (setPaths.Length == 1)
+            return Invalid("Exactly one --param-set is invalid. Use --param for one set.");
         try
         {
+            var parameterSets = setPaths.Length == 0 ? null : await ReadParameterSetsAsync(setPaths, ct);
             return await Dispatch(
-                new SqlHarnessMeasureOperation(target, await Read(s.Setup, ct), (await Read(s.Query, ct))!, s.Parameters, s.Timeout, s.Repeat),
+                new SqlHarnessMeasureOperation(target, await Read(s.Setup, ct), (await Read(s.Query, ct))!, s.Parameters, s.Timeout, s.Repeat, parameterSets),
                 ResolveOutputMode(s.Json, s.JsonSummary),
                 ct);
         }
         catch (OperationCanceledException) { throw; }
+        catch (ParameterSetFileException exception) { return Invalid(exception.Message); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file."); }
+    }
+
+    // Read every set before returning so a later failure is not skipped.
+    private static async Task<IReadOnlyList<SqlHarnessParameterSetInput>> ReadParameterSetsAsync(
+        IReadOnlyList<string> paths, CancellationToken ct)
+    {
+        var sets = new List<SqlHarnessParameterSetInput>(paths.Count);
+        ParameterSetFileException? failure = null;
+        foreach (var path in paths)
+        {
+            try
+            {
+                sets.Add(await ParameterSetFileReader.ReadAsync(path, ct));
+            }
+            catch (ParameterSetFileException exception)
+            {
+                failure ??= exception;
+            }
+        }
+
+        if (failure is not null)
+            throw failure;
+        return sets;
     }
 }
 
