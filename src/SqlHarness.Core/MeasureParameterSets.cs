@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.SqlTypes;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -27,13 +28,13 @@ internal static class MeasureParameterSetValidator
         ArgumentNullException.ThrowIfNull(parameterSets);
         ArgumentNullException.ThrowIfNull(querySql);
 
-        var fixedParsed = Parse(fixedParameters, setName: null);
+        var fixedParsed = ParseShaped(fixedParameters, setName: null);
         var fixedNames = new HashSet<string>(
             fixedParsed.Select(parameter => parameter.Name),
             StringComparer.OrdinalIgnoreCase);
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var prepared = new List<PreparedMeasureParameterSet>(parameterSets.Count);
-        IReadOnlyList<SqlHarnessParameter>? baseline = null;
+        IReadOnlyList<ShapedParameter>? baseline = null;
         string? baselineName = null;
 
         foreach (var set in parameterSets)
@@ -44,7 +45,7 @@ internal static class MeasureParameterSetValidator
             if (!seenNames.Add(set.Name))
                 throw new SqlHarnessSafetyException($"Duplicate parameter set '{set.Name}'.");
 
-            var parsed = Parse(set.Parameters, set.Name);
+            var parsed = ParseShaped(set.Parameters, set.Name);
             foreach (var parameter in parsed)
             {
                 if (fixedNames.Contains(parameter.Name))
@@ -65,12 +66,13 @@ internal static class MeasureParameterSetValidator
                 EnsureSameShape(baselineName, baseline, set.Name, ordered);
             }
 
-            SqlParameterReferenceValidator.Validate(ordered, setupSql, querySql);
+            var parameters = ordered.Select(parameter => parameter.Parameter).ToArray();
+            SqlParameterReferenceValidator.Validate(parameters, setupSql, querySql);
             prepared.Add(new PreparedMeasureParameterSet(
                 set.Name,
-                ordered,
-                ToMetadata(ordered),
-                TypedParameterHasher.Hash(ordered)));
+                parameters,
+                ToMetadata(parameters),
+                TypedParameterHasher.Hash(parameters)));
         }
 
         return prepared;
@@ -92,7 +94,37 @@ internal static class MeasureParameterSetValidator
         }
     }
 
-    private static SqlHarnessParameter[] Order(IEnumerable<SqlHarnessParameter> parameters) =>
+    private static IReadOnlyList<ShapedParameter> ParseShaped(IReadOnlyList<string> inputs, string? setName)
+    {
+        var parsed = Parse(inputs, setName);
+        var shaped = new ShapedParameter[parsed.Count];
+        for (var i = 0; i < parsed.Count; i++)
+            shaped[i] = new ShapedParameter(parsed[i], DeclaredShape.From(TypeToken(inputs[i])));
+
+        return shaped;
+    }
+
+    // The text between ':' and '=' (or the type in name:type:null). Untyped values are nvarchar.
+    private static string? TypeToken(string input)
+    {
+        var equals = input.IndexOf('=');
+        if (equals >= 0)
+        {
+            var declaration = input[..equals];
+            var colon = declaration.IndexOf(':');
+            return colon < 0 ? null : declaration[(colon + 1)..];
+        }
+
+        var lastColon = input.LastIndexOf(':');
+        if (lastColon <= 0)
+            return null;
+
+        var left = input[..lastColon];
+        var typeColon = left.IndexOf(':');
+        return typeColon < 0 ? null : left[(typeColon + 1)..];
+    }
+
+    private static ShapedParameter[] Order(IEnumerable<ShapedParameter> parameters) =>
         parameters
             .OrderBy(parameter => parameter.Name.ToLowerInvariant(), StringComparer.Ordinal)
             .ToArray();
@@ -104,9 +136,9 @@ internal static class MeasureParameterSetValidator
 
     private static void EnsureSameShape(
         string baselineName,
-        IReadOnlyList<SqlHarnessParameter> baseline,
+        IReadOnlyList<ShapedParameter> baseline,
         string candidateName,
-        IReadOnlyList<SqlHarnessParameter> candidate)
+        IReadOnlyList<ShapedParameter> candidate)
     {
         var baselineByName = Index(baseline);
         var candidateByName = Index(candidate);
@@ -133,25 +165,27 @@ internal static class MeasureParameterSetValidator
         {
             var other = candidateByName[parameter.Name];
             var name = parameter.Name;
-            if (!SameType(parameter, other))
+            var left = parameter.Shape;
+            var right = other.Shape;
+            if (!string.Equals(left.Type, right.Type, StringComparison.Ordinal))
             {
                 throw new SqlHarnessSafetyException(
                     $"Parameter set '{candidateName}' SQL parameter '{name}' has a different type than parameter set '{baselineName}'.");
             }
 
-            if (parameter.Size != other.Size)
+            if (left.Size != right.Size)
             {
                 throw new SqlHarnessSafetyException(
                     $"Parameter set '{candidateName}' SQL parameter '{name}' has a different size than parameter set '{baselineName}'.");
             }
 
-            if (parameter.Precision != other.Precision)
+            if (left.Precision != right.Precision)
             {
                 throw new SqlHarnessSafetyException(
                     $"Parameter set '{candidateName}' SQL parameter '{name}' has a different precision than parameter set '{baselineName}'.");
             }
 
-            if (parameter.Scale != other.Scale)
+            if (left.Scale != right.Scale)
             {
                 throw new SqlHarnessSafetyException(
                     $"Parameter set '{candidateName}' SQL parameter '{name}' has a different scale than parameter set '{baselineName}'.");
@@ -159,12 +193,55 @@ internal static class MeasureParameterSetValidator
         }
     }
 
-    private static Dictionary<string, SqlHarnessParameter> Index(IReadOnlyList<SqlHarnessParameter> parameters) =>
+    private static Dictionary<string, ShapedParameter> Index(IReadOnlyList<ShapedParameter> parameters) =>
         parameters.ToDictionary(parameter => parameter.Name, StringComparer.OrdinalIgnoreCase);
 
-    private static bool SameType(SqlHarnessParameter left, SqlHarnessParameter right) =>
-        left.Type == right.Type
-        && string.Equals(left.UdtTypeName, right.UdtTypeName, StringComparison.OrdinalIgnoreCase);
+    private sealed record ShapedParameter(SqlHarnessParameter Parameter, DeclaredShape Shape)
+    {
+        public string Name => Parameter.Name;
+    }
+
+    // Declared type only. Size is null when the token has no length, and -1 for (max).
+    // numeric is the decimal alias. Bind size on SqlHarnessParameter is not part of this shape.
+    private readonly record struct DeclaredShape(string Type, int? Size, byte? Precision, byte? Scale)
+    {
+        public static DeclaredShape From(string? token)
+        {
+            if (string.IsNullOrEmpty(token))
+                return new("nvarchar", null, null, null);
+
+            token = token.ToLowerInvariant();
+            var open = token.IndexOf('(');
+            if (open < 0)
+                return new(token is "numeric" ? "decimal" : token, null, null, null);
+
+            if (!token.EndsWith(')') || open == 0)
+                throw new SqlHarnessSafetyException("SQL parameter shape is invalid.");
+
+            var head = token[..open];
+            var body = token[(open + 1)..^1];
+            if (head is "decimal" or "numeric")
+            {
+                var comma = body.IndexOf(',');
+                if (comma <= 0
+                    || !byte.TryParse(body[..comma], NumberStyles.None, CultureInfo.InvariantCulture, out var precision)
+                    || !byte.TryParse(body[(comma + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var scale))
+                {
+                    throw new SqlHarnessSafetyException("SQL parameter shape is invalid.");
+                }
+
+                return new("decimal", null, precision, scale);
+            }
+
+            if (body == "max")
+                return new(head, -1, null, null);
+
+            if (!int.TryParse(body, NumberStyles.None, CultureInfo.InvariantCulture, out var size))
+                throw new SqlHarnessSafetyException("SQL parameter shape is invalid.");
+
+            return new(head, size, null, null);
+        }
+    }
 }
 
 internal static class TypedParameterHasher

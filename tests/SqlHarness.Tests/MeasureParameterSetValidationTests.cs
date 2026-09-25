@@ -164,19 +164,77 @@ public sealed class MeasureParameterSetValidationTests
         AssertSafe(exception, Secret, "nvarchar(20)", "nvarchar(40)", "label:nvarchar(20)=", "label:nvarchar(40)=");
     }
 
-    [Fact]
-    public void Prepare_rejects_unsized_strings_whose_lengths_change_the_bound_size()
+    [Theory]
+    [InlineData("name:nvarchar=a", "name:nvarchar=abcd", "nvarchar")]
+    [InlineData("name:nvarchar:null", "name:nvarchar=abcd", "nvarchar")]
+    [InlineData("name:varchar=a", "name:varchar=abcd", "varchar")]
+    [InlineData("name:varchar:null", "name:varchar=abcd", "varchar")]
+    [InlineData("name:varbinary=QQ==", "name:varbinary=AQID", "varbinary")]
+    [InlineData("name:varbinary:null", "name:varbinary=AQID", "varbinary")]
+    [InlineData("name:varbinary(8)=QQ==", "name:varbinary(8)=AQID", "varbinary")]
+    [InlineData("name:char=a", "name:char=abcd", "char")]
+    [InlineData("name:char:null", "name:char=abcd", "char")]
+    [InlineData("name:nchar=a", "name:nchar=abcd", "nchar")]
+    [InlineData("name:nchar:null", "name:nchar=abcd", "nchar")]
+    [InlineData("name:binary(4)=QQ==", "name:binary(4)=AQID", "binary")]
+    public void Prepare_accepts_different_values_when_the_declared_type_matches(string left, string right, string type)
     {
-        var exception = Reject(
+        var sets = MeasureParameterSetValidator.Prepare(
             [],
-            [new("small", ["label:nvarchar=alpha"]), new("large", ["label:nvarchar=alphabet"])],
+            [new("small", [left]), new("large", [right])],
             null,
-            "select @label");
+            "select @name");
 
-        Assert.Equal(
-            "Parameter set 'large' SQL parameter '@label' has a different size than parameter set 'small'.",
-            exception.Message);
-        AssertSafe(exception, "alpha", "alphabet", "label:nvarchar=");
+        Assert.Equal([new MeasureParameterMetadata("@name", type)], sets[0].Metadata);
+        Assert.Equal(sets[0].Metadata, sets[1].Metadata);
+        Assert.NotEqual(sets[0].ValueHash, sets[1].ValueHash);
+        var safe = JsonSerializer.Serialize(sets.Select(set => new { set.Name, set.Metadata, set.ValueHash }));
+        Assert.DoesNotContain(left, safe, StringComparison.Ordinal);
+        Assert.DoesNotContain(right, safe, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Prepare_keeps_bound_size_in_the_hash_for_unsized_nvarchar()
+    {
+        var sets = MeasureParameterSetValidator.Prepare(
+            [],
+            [new("small", ["name:nvarchar=a"]), new("large", ["name:nvarchar=abcd"])],
+            null,
+            "select @name");
+
+        Assert.Equal(1, sets[0].Parameters.Single().Size);
+        Assert.Equal(4, sets[1].Parameters.Single().Size);
+        Assert.Equal("a", sets[0].Parameters.Single().Value);
+        Assert.Equal("abcd", sets[1].Parameters.Single().Value);
+        Assert.NotEqual(sets[0].ValueHash, sets[1].ValueHash);
+    }
+
+    [Theory]
+    [InlineData("label:nvarchar(max)=secret-aa", "label:nvarchar=secret-bb", "select @label", "size")]
+    [InlineData("label:nvarchar(max)=secret-aa", "label:nvarchar(10)=secret-bb", "select @label", "size")]
+    [InlineData("label:nvarchar(10)=secret-aa", "label:nvarchar(20)=secret-bb", "select @label", "size")]
+    [InlineData("amount:decimal(19,4)=12345.6700", "amount:decimal(10,2)=12345.67", "select @amount", "precision")]
+    public void Prepare_rejects_different_declared_sizes_and_decimal_precision(
+        string left, string right, string query, string field)
+    {
+        var exception = Reject([], [new("small", [left]), new("large", [right])], null, query);
+
+        Assert.Contains($"has a different {field} than", exception.Message, StringComparison.Ordinal);
+        AssertSafe(exception, left, right, "secret-aa", "secret-bb", "12345.6700", "12345.67");
+    }
+
+    [Fact]
+    public void Prepare_treats_bare_decimal_and_numeric_as_the_same_type()
+    {
+        var sets = MeasureParameterSetValidator.Prepare(
+            [],
+            [new("small", ["amount:decimal=1.50"]), new("large", ["amount:numeric=2.5"])],
+            null,
+            "select @amount");
+
+        Assert.Equal([new MeasureParameterMetadata("@amount", "decimal")], sets[0].Metadata);
+        Assert.Equal(sets[0].Metadata, sets[1].Metadata);
+        Assert.NotEqual(sets[0].ValueHash, sets[1].ValueHash);
     }
 
     [Fact]
