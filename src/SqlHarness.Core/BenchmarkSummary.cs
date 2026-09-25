@@ -37,6 +37,24 @@ public sealed record MeasureBenchmarkSummary(
     IReadOnlyList<NoteworthyOperatorSummary> NoteworthyOperators,
     string? ArtifactDirectory);
 
+public sealed record MeasureParameterSetSummary(
+    string Name,
+    IReadOnlyList<MeasureParameterMetadata> Parameters,
+    string ValueHash,
+    bool ResultsStable,
+    long MedianElapsedMilliseconds,
+    long MedianCpuMilliseconds,
+    long MedianLogicalReads,
+    IReadOnlyList<NoteworthyOperatorSummary> NoteworthyOperators);
+
+public sealed record MeasureSetBenchmarkSummary(
+    SqlHarnessTargetIdentityReport Target,
+    string MeasuredOrderRule,
+    string PlanCacheWarning,
+    IReadOnlyList<MeasureParameterSetSummary> Sets,
+    MeasureCrossSetSummary CrossSetSummary,
+    string? ArtifactDirectory);
+
 public sealed record CompareMatrixCellSummary(
     int Index,
     string ParameterValue,
@@ -79,6 +97,28 @@ public static class BenchmarkSummaryProjector
             report.Parameters,
             ProjectVariant(report.Query),
             SelectMeasureNoteworthy(report.Query.Operators),
+            report.ArtifactDirectory);
+    }
+
+    public static MeasureSetBenchmarkSummary Project(SqlHarnessMeasureSetReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        ArgumentNullException.ThrowIfNull(report.Sets);
+
+        return new MeasureSetBenchmarkSummary(
+            report.Target,
+            report.MeasuredOrderRule,
+            report.PlanCacheWarning,
+            report.Sets.Select(set => new MeasureParameterSetSummary(
+                set.Name,
+                set.Parameters,
+                set.ValueHash,
+                set.ResultsStable,
+                set.Metrics.ElapsedTimeMilliseconds.Median,
+                set.Metrics.CpuTimeMilliseconds.Median,
+                set.Metrics.LogicalReads.Median,
+                SelectMeasureNoteworthy(set.Metrics.Operators))).ToArray(),
+            report.CrossSetSummary,
             report.ArtifactDirectory);
     }
 

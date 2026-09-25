@@ -19,6 +19,7 @@ public sealed class Renderer
                     SqlHarnessCompareReport compare => (object)BenchmarkSummaryProjector.Project(compare),
                     SqlHarnessCompareMatrixReport matrix => BenchmarkSummaryProjector.Project(matrix),
                     SqlHarnessMeasureReport measure => BenchmarkSummaryProjector.Project(measure),
+                    SqlHarnessMeasureSetReport measureSet => BenchmarkSummaryProjector.Project(measureSet),
                     _ => outcome.Report,
                 }
                 : outcome.Report;
@@ -39,6 +40,8 @@ public sealed class Renderer
         }
         else if (outcome.Report is SqlHarnessMeasureReport measure)
             output.WriteLine($"measure\t{Dist(measure.Query.ElapsedTimeMilliseconds)}\nStable results: {measure.ResultsStable}; artifacts: {measure.ArtifactDirectory ?? "none"}");
+        else if (outcome.Report is SqlHarnessMeasureSetReport measureSet)
+            RenderMeasureSet(measureSet, output);
         else if (outcome.Report is SqlHarnessCompareReport compare)
             output.WriteLine($"baseline\t{Dist(compare.Baseline.ElapsedTimeMilliseconds)}\ncandidate\t{Dist(compare.Candidate.ElapsedTimeMilliseconds)}\n{FormatTechnicalEquivalence(compare.Equivalence)}; artifacts: {compare.ArtifactDirectory ?? "none"}");
         else if (outcome.Report is SqlHarnessCompareMatrixReport matrix)
@@ -91,6 +94,35 @@ public sealed class Renderer
         else if (!string.IsNullOrWhiteSpace(outcome.SafeError))
             output.WriteLine($"SQLHarness {outcome.ExitCode}: {SecretRedactor.Redact(outcome.SafeError, [])}");
     }
+
+    private static void RenderMeasureSet(SqlHarnessMeasureSetReport report, TextWriter output)
+    {
+        output.WriteLine(report.PlanCacheWarning);
+        var warmup = report.WarmupOrder.Count == 0 ? "none" : string.Join(", ", report.WarmupOrder);
+        output.WriteLine("Warm-up: " + warmup);
+        output.WriteLine(report.MeasuredOrderRule);
+        output.WriteLine("Setup executions: " + report.SetupExecutionCount.ToString(CultureInfo.InvariantCulture));
+        foreach (var set in report.Sets)
+        {
+            var plans = set.PlanHashes.Count == 0 ? "none" : string.Join(',', set.PlanHashes);
+            output.WriteLine(string.Join('\t',
+                set.Name,
+                "stable=" + (set.ResultsStable ? "true" : "false"),
+                "elapsed=" + Dist(set.Metrics.ElapsedTimeMilliseconds),
+                "cpu=" + Dist(set.Metrics.CpuTimeMilliseconds),
+                "reads=" + Dist(set.Metrics.LogicalReads),
+                "plans=" + plans));
+        }
+
+        var cross = report.CrossSetSummary;
+        output.WriteLine(CrossSetLine("elapsed", cross.MinimumMedianElapsedSet, cross.MinimumMedianElapsedMilliseconds, cross.MaximumMedianElapsedSet, cross.MaximumMedianElapsedMilliseconds));
+        output.WriteLine(CrossSetLine("cpu", cross.MinimumMedianCpuSet, cross.MinimumMedianCpuMilliseconds, cross.MaximumMedianCpuSet, cross.MaximumMedianCpuMilliseconds));
+        output.WriteLine(CrossSetLine("reads", cross.MinimumMedianReadsSet, cross.MinimumMedianLogicalReads, cross.MaximumMedianReadsSet, cross.MaximumMedianLogicalReads));
+        output.WriteLine("artifacts: " + (report.ArtifactDirectory ?? "none"));
+    }
+
+    private static string CrossSetLine(string metric, string minimumSet, long minimum, string maximumSet, long maximum) =>
+        $"Cross-set {metric}: {minimumSet} {minimum.ToString(CultureInfo.InvariantCulture)} .. {maximumSet} {maximum.ToString(CultureInfo.InvariantCulture)}";
 
     private static void RenderMatrix(SqlHarnessCompareMatrixReport matrix, TextWriter output)
     {

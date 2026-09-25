@@ -126,7 +126,7 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
-        [Description("Strict JSON file of one named parameter set. Repeat for at least two sets; use --param for a single set.")]
+        [Description("Strict JSON file containing only name and parameters (64 KiB; no BOM, comments, or trailing commas). Repeat for at least two sets. Fixed --param values are shared by every set; use --param for a single set. Unlike compare --matrix (one parameter, two query variants, a fresh connection per value), this measures one query on one session with setup once.")]
         [CommandOption("--param-set <PATH>")]
         public string[] ParameterSets { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;

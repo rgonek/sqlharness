@@ -328,6 +328,86 @@ public sealed class BenchmarkSummaryTests
         Assert.True(document.RootElement.GetProperty("cells")[0].GetProperty("compare").GetProperty("noteworthyOperators").GetArrayLength() <= 10);
     }
 
+    [Fact]
+    public void Measure_set_projection_keeps_medians_labels_and_caps_noteworthy_operators()
+    {
+        var operators = Enumerable.Range(0, 12)
+            .Select(index => new CompareOperatorReport(index, $"Op{index:D2}", $"dbo.T{index:D2}", true, false, false))
+            .Append(new CompareOperatorReport(99, "CleanSeek", "dbo.Clean", false, false, false))
+            .ToArray();
+        var report = new SqlHarnessMeasureSetReport(
+            new SqlHarnessTargetIdentityReport("s", "d", "act-s", "act-d", "profile"),
+            5,
+            10,
+            1,
+            ["small", "large"],
+            "order-rule",
+            "cache-warning",
+            [
+                new MeasureParameterSetReport(
+                    "small",
+                    [new MeasureParameterMetadata("@id", "int")],
+                    "hash-small",
+                    5,
+                    true,
+                    "result-secret-should-stay-out",
+                    SetVariant("small", new CompareDistribution(1, 2, 3), new CompareDistribution(10, 20, 40), new CompareDistribution(100, 200, 300), operators),
+                    ["plan-hash-should-stay-out"]),
+                new MeasureParameterSetReport(
+                    "large",
+                    [new MeasureParameterMetadata("@id", "int")],
+                    "hash-large",
+                    5,
+                    false,
+                    null,
+                    SetVariant("large", new CompareDistribution(4, 5, 6), new CompareDistribution(50, 80, 90), new CompareDistribution(7, 8, 9), []),
+                    []),
+            ],
+            new MeasureCrossSetSummary("small", 20, "large", 80, "small", 2, "large", 5, "large", 8, "small", 200),
+            @"D:\artifacts\sets");
+
+        var summary = BenchmarkSummaryProjector.Project(report);
+        var json = JsonSerializer.Serialize(summary, summary.GetType(), WebJson);
+
+        Assert.Equal("cache-warning", summary.PlanCacheWarning);
+        Assert.Equal("order-rule", summary.MeasuredOrderRule);
+        Assert.Equal("act-d", summary.Target.ActualDatabase);
+        Assert.Equal(["small", "large"], summary.Sets.Select(set => set.Name).ToArray());
+        Assert.Equal(20, summary.Sets[0].MedianElapsedMilliseconds);
+        Assert.Equal(2, summary.Sets[0].MedianCpuMilliseconds);
+        Assert.Equal(200, summary.Sets[0].MedianLogicalReads);
+        Assert.Equal(80, summary.Sets[1].MedianElapsedMilliseconds);
+        Assert.Equal("hash-small", summary.Sets[0].ValueHash);
+        Assert.Equal([new MeasureParameterMetadata("@id", "int")], summary.Sets[0].Parameters);
+        Assert.True(summary.Sets[0].ResultsStable);
+        Assert.False(summary.Sets[1].ResultsStable);
+        Assert.Equal(10, summary.Sets[0].NoteworthyOperators.Count);
+        Assert.All(summary.Sets[0].NoteworthyOperators, op => Assert.True(op.HasWarnings || op.HasSpill || op.HasImplicitConversion));
+        Assert.DoesNotContain(summary.Sets[0].NoteworthyOperators, op => op.PhysicalOp == "CleanSeek");
+        Assert.Equal("small", summary.CrossSetSummary.MinimumMedianElapsedSet);
+        Assert.Equal("large", summary.CrossSetSummary.MaximumMedianElapsedSet);
+        Assert.Equal("large", summary.CrossSetSummary.MinimumMedianReadsSet);
+        Assert.Equal(@"D:\artifacts\sets", summary.ArtifactDirectory);
+        Assert.DoesNotContain("plan-hash-should-stay-out", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("result-secret-should-stay-out", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"operators\"", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("PlanXml", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Measure_set_projection_rejects_null_report()
+    {
+        Assert.Throws<ArgumentNullException>(() => BenchmarkSummaryProjector.Project((SqlHarnessMeasureSetReport)null!));
+    }
+
+    private static CompareVariantReport SetVariant(
+        string name,
+        CompareDistribution cpu,
+        CompareDistribution elapsed,
+        CompareDistribution reads,
+        IReadOnlyList<CompareOperatorReport> operators) =>
+        new(name, cpu, elapsed, reads, new Dictionary<string, long>(), operators, []);
+
     private static CompareMatrixCellReport MatrixSummaryCell(
         int index,
         string value,

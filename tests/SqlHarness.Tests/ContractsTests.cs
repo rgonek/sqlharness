@@ -193,6 +193,55 @@ public class ContractsTests
             StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Documentation_covers_measure_parameter_sets()
+    {
+        var readme = ReadRepositoryFile("README.md");
+        var agents = ReadRepositoryFile("AGENTS.md");
+        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
+        const string example =
+            "sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\\queries\\orders.sql --param tenant:nvarchar=acme --param-set .\\sets\\small.sqljson --param-set .\\sets\\large.sqljson --repeat 5 --json";
+        const string cacheWarning =
+            "Parameter-set measurements use the observed server plan-cache state; SQLHarness did not clear or isolate the plan cache.";
+        const string orderRule =
+            "In one-based round r, measured execution starts at index r modulo setCount and wraps in user-supplied order.";
+
+        foreach (var doc in new[] { readme, agents, skill })
+        {
+            Assert.Contains(example, doc, StringComparison.Ordinal);
+            Assert.Contains(cacheWarning, doc, StringComparison.Ordinal);
+            Assert.Contains(orderRule, doc, StringComparison.Ordinal);
+            Assert.Contains("--param-set", doc, StringComparison.Ordinal);
+            Assert.Contains("--param", doc, StringComparison.Ordinal);
+            Assert.Contains("compare --matrix", doc, StringComparison.Ordinal);
+            Assert.Contains("64 KiB", doc, StringComparison.Ordinal);
+            Assert.Contains("BOM", doc, StringComparison.Ordinal);
+            Assert.Contains("comments", doc, StringComparison.Ordinal);
+            Assert.Contains("trailing commas", doc, StringComparison.Ordinal);
+            Assert.Contains("only `name` and `parameters`", doc, StringComparison.Ordinal);
+            Assert.Contains("locally sensitive", doc, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("one session", doc, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("setup once", doc, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("per-set", doc, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("fixed", doc, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("stability", doc, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(".sqlplan", doc, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("fresh connection", doc, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("two query variants", doc, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("one parameter", doc, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("order-dependent", doc, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("does not copy parameter values", doc, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("does not claim cross-set", doc, StringComparison.OrdinalIgnoreCase);
+        }
+
+        Assert.DoesNotContain(
+            "Parameter-sniffing checks in `measure` across multiple parameter sets.",
+            readme,
+            StringComparison.Ordinal);
+        Assert.Contains("Missing-index overlap analysis against existing indexes.", readme, StringComparison.Ordinal);
+        Assert.Contains("A thin MCP facade over `SqlHarness.Core`.", readme, StringComparison.Ordinal);
+    }
+
     private static string ReadRepositoryFile(params string[] path)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)

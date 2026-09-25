@@ -141,6 +141,22 @@ Local temporary objects whose unqualified name starts with exactly one `#` may u
 
 Before measuring, inventory a representative parameter range offline: row count, cardinality distribution (small/median/large/exceptional), ordering ties, missing history, boundary dates, and empty results. Keep ticket-specific benchmark SQL outside the application repository (ticket workspace or isolated temp directory). Treat plans, comparison artifacts, and runtime parameters as locally sensitive.
 
+## Measure parameter sets
+
+`measure --param-set` measures one query across at least two named parameter sets. Fixed `--param` values are shared by every set; per-set parameters come from each file and must not reuse a fixed name. A single scenario stays on `--param` alone.
+
+```powershell
+sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\queries\orders.sql --param tenant:nvarchar=acme --param-set .\sets\small.sqljson --param-set .\sets\large.sqljson --repeat 5 --json
+```
+
+Each `--param-set` file is strict JSON containing only `name` and `parameters`, at most 64 KiB, with no BOM, comments, or trailing commas. Those files are locally sensitive and remain the only SQLHarness input that contains those values. SQLHarness does not copy parameter values or source paths into reports. `.sqlplan` artifacts stay locally sensitive because server plan XML may still embed parameter values; do not publish them without review.
+
+Multi-set measure uses one session and setup once. Each set is warmed once in user-supplied order, then measured rounds rotate on that same session. In one-based round r, measured execution starts at index r modulo setCount and wraps in user-supplied order. Per-set stability is the only stability result; SQLHarness does not claim cross-set result equivalence. Parameter-set measurements use the observed server plan-cache state; SQLHarness did not clear or isolate the plan cache. Timings are order-dependent because of that shared cache.
+
+This is not `compare --matrix`. Matrix mode varies one parameter across two query variants and opens a fresh connection per value. `--param-set` measures one query on one connection.
+
+`--json-summary` for a multi-set measure is a bounded projection: the cache warning, the rotation rule, each set name, parameter type metadata, the value hash, per-set stability, median elapsed/CPU/reads, cross-set labels, and the artifact directory. It omits parameter values, plan XML, and full run arrays. Noteworthy operators, when included, stay capped at ten.
+
 ## Result equivalence and compact output
 
 `compare` reports **technical equivalence** under `--compare-results` (default `ordered`):
@@ -221,7 +237,6 @@ Set `SQLHARNESS_HOME` to relocate these paths, for example in an isolated test e
 ## Roadmap after v1
 
 - Missing-index overlap analysis against existing indexes.
-- Parameter-sniffing checks in `measure` across multiple parameter sets.
 - A thin MCP facade over `SqlHarness.Core`.
 
 ## Development
