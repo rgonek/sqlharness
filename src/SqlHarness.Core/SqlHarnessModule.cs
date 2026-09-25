@@ -553,6 +553,16 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
         try
         {
+            if (measure.ParameterSets is { Count: > 0 })
+            {
+                foreach (var set in measure.ParameterSets)
+                {
+                    if (set?.Parameters is null)
+                        continue;
+                    knownSecrets.AddRange(set.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+                }
+            }
+
             ValidateMeasure(measure);
             var target = TargetResolver.Resolve(measure.Target, _loadProfiles());
             var dialect = SqlDialects.For(target.Engine);
@@ -577,6 +587,24 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             {
                 if (parameter.Value is not DBNull)
                     knownSecrets.Add(Convert.ToString(parameter.Value, CultureInfo.InvariantCulture) ?? string.Empty);
+            }
+
+            if (measure.ParameterSets is { Count: > 0 } parameterSets)
+            {
+                var boundSets = BindMeasureParameterSets(dialect, measure, parameterSets, knownSecrets);
+                phase = ExecutionPhase.Authentication;
+                await using var multiSession = await _sessionFactory.ConnectAsync(target, ct);
+                phase = ExecutionPhase.Sql;
+
+                raw = new CanonicalResultAccumulator();
+                await new MeasureParameterSetRunner(dialect, ComparisonMaximumRows).ExecuteAsync(
+                    multiSession,
+                    measure,
+                    boundSets,
+                    raw,
+                    ct);
+                // Reporting lands in a later task; this seam must not return a measure report.
+                throw new NotSupportedException("Measure parameter-set reporting is not implemented.");
             }
 
             phase = ExecutionPhase.Authentication;
@@ -629,6 +657,35 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             raw?.Dispose();
         }
+    }
+
+    private static IReadOnlyList<PreparedMeasureParameterSet> BindMeasureParameterSets(
+        ISqlDialect dialect,
+        SqlHarnessMeasureOperation measure,
+        IReadOnlyList<SqlHarnessParameterSetInput> parameterSets,
+        List<string> knownSecrets)
+    {
+        var prepared = MeasureParameterSetValidator.Prepare(
+            measure.Parameters,
+            parameterSets,
+            measure.SetupSql,
+            measure.QuerySql);
+        var bound = new PreparedMeasureParameterSet[prepared.Count];
+        for (var index = 0; index < prepared.Count; index++)
+        {
+            foreach (var parameter in prepared[index].Parameters)
+                AddTypedSecret(knownSecrets, parameter);
+
+            var merged = new List<string>(measure.Parameters.Count + parameterSets[index].Parameters.Count);
+            merged.AddRange(measure.Parameters);
+            merged.AddRange(parameterSets[index].Parameters);
+            var parsed = dialect.ParseParameters(merged);
+            foreach (var parameter in parsed)
+                AddTypedSecret(knownSecrets, parameter);
+            bound[index] = prepared[index] with { Parameters = parsed };
+        }
+
+        return bound;
     }
 
     private Task<CollectedBenchmarkRun> ExecuteBenchmarkRunAsync(

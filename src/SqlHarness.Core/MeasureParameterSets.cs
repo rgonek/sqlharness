@@ -6,6 +6,8 @@ using System.Text;
 
 using Microsoft.SqlServer.Types;
 
+using SqlHarness.Core.Dialect;
+
 namespace SqlHarness.Core;
 
 public sealed record MeasureParameterMetadata(string Name, string Type);
@@ -409,4 +411,81 @@ file static class MeasureParameterTyping
         parameter.Type == SqlDbType.Udt && !string.IsNullOrEmpty(parameter.UdtTypeName)
             ? parameter.UdtTypeName.ToLowerInvariant()
             : parameter.Type.ToString().ToLowerInvariant();
+}
+
+internal sealed record MeasureParameterSetExecution(
+    int SetupExecutionCount,
+    IReadOnlyList<string> WarmupOrder,
+    IReadOnlyList<CollectedBenchmarkRun> Runs);
+
+internal sealed class MeasureParameterSetRunner
+{
+    private readonly ISqlDialect _dialect;
+    private readonly int _comparisonMaximumRows;
+
+    internal MeasureParameterSetRunner(ISqlDialect dialect, int comparisonMaximumRows)
+    {
+        _dialect = dialect ?? throw new ArgumentNullException(nameof(dialect));
+        ArgumentOutOfRangeException.ThrowIfNegative(comparisonMaximumRows);
+        _comparisonMaximumRows = comparisonMaximumRows;
+    }
+
+    internal async Task<MeasureParameterSetExecution> ExecuteAsync(
+        ISqlSession session,
+        SqlHarnessMeasureOperation operation,
+        IReadOnlyList<PreparedMeasureParameterSet> sets,
+        CanonicalResultAccumulator raw,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(operation);
+        ArgumentNullException.ThrowIfNull(sets);
+        ArgumentNullException.ThrowIfNull(raw);
+
+        var setupExecutionCount = 0;
+        if (!string.IsNullOrWhiteSpace(operation.SetupSql))
+        {
+            await SqlHarnessModule.ExecuteRawAsync(
+                session,
+                new SqlExecutionCommand(operation.SetupSql, sets[0].Parameters, operation.TimeoutSeconds),
+                raw,
+                ct);
+            setupExecutionCount = 1;
+        }
+
+        var warmupOrder = new List<string>(sets.Count);
+        foreach (var set in sets)
+        {
+            await ExecuteSetAsync(set, repetition: 0);
+            warmupOrder.Add(set.Name);
+        }
+
+        var runs = new List<CollectedBenchmarkRun>(operation.Repeat * sets.Count);
+        for (var round = 1; round <= operation.Repeat; round++)
+        {
+            var start = round % sets.Count;
+            for (var offset = 0; offset < sets.Count; offset++)
+            {
+                var set = sets[(start + offset) % sets.Count];
+                runs.Add(await ExecuteSetAsync(set, repetition: round));
+            }
+        }
+
+        return new MeasureParameterSetExecution(setupExecutionCount, warmupOrder, runs);
+
+        Task<CollectedBenchmarkRun> ExecuteSetAsync(PreparedMeasureParameterSet set, int repetition) =>
+            BenchmarkRunner.ExecuteAsync(
+                _dialect,
+                session,
+                operation.QuerySql,
+                set.Parameters,
+                operation.TimeoutSeconds,
+                repetition,
+                "measure",
+                set.Name,
+                raw,
+                captureComparison: false,
+                _comparisonMaximumRows,
+                ct);
+    }
 }
