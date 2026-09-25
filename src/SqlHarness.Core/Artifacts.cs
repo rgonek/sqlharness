@@ -179,9 +179,10 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
             for (var index = 0; index < runs.Count; index++)
             {
                 var run = runs[index];
-                lines.AppendLine(JsonSerializer.Serialize(new
-                {
+                // A null set is omitted so legacy measure and compare runs.jsonl bytes stay the same.
+                lines.AppendLine(JsonSerializer.Serialize(new RunMetadata(
                     run.Variant,
+                    run.ParameterSet is null ? null : SanitizeSetLabel(run.ParameterSet),
                     run.Repetition,
                     run.CpuTimeMilliseconds,
                     run.ElapsedTimeMilliseconds,
@@ -189,9 +190,8 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
                     run.LogicalReadsByTable,
                     run.ResultHash,
                     run.MessageCount,
-                    PlanFiles = run.PlanXmls.Select((xml, planIndex) => PlanFileName(run, index, planIndex, xml)).ToArray(),
-                    PlanJsonFiles = run.PlanXmls.Select((_, planIndex) => PlanJsonFileName(run, index, planIndex)).ToArray(),
-                }, JsonLineOptions));
+                    run.PlanXmls.Select((xml, planIndex) => PlanFileName(run, index, planIndex, xml)).ToArray(),
+                    run.PlanXmls.Select((_, planIndex) => PlanJsonFileName(run, index, planIndex)).ToArray()), JsonLineOptions));
             }
             _writeText(Path.Combine(staging, "runs.jsonl"), lines.ToString(), new UTF8Encoding(false));
             Directory.Move(staging, directory);
@@ -206,14 +206,28 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
 
     private void WritePair(string directory, CompareRunArtifact run, int runIndex, int planIndex, PreparedPlan plan)
     {
-        var xmlPath = Path.Combine(directory, PlanFileName(run, runIndex, planIndex, plan.Xml));
-        var jsonPath = Path.Combine(directory, PlanJsonFileName(run, runIndex, planIndex));
+        var xmlPath = CombineChild(directory, PlanFileName(run, runIndex, planIndex, plan.Xml));
+        var jsonPath = CombineChild(directory, PlanJsonFileName(run, runIndex, planIndex));
         var xmlTemp = xmlPath + ".tmp";
         var jsonTemp = jsonPath + ".tmp";
         _writeText(xmlTemp, plan.Xml, new UTF8Encoding(false));
         _writeText(jsonTemp, plan.Json, new UTF8Encoding(false));
         File.Move(xmlTemp, xmlPath);
         File.Move(jsonTemp, jsonPath);
+    }
+
+    private static string CombineChild(string directory, string name)
+    {
+        if (!string.Equals(name, Path.GetFileName(name), StringComparison.Ordinal))
+            throw new IOException("Plan filename escaped the artifact directory.");
+
+        var path = Path.Combine(directory, name);
+        var fullDirectory = Path.GetFullPath(directory);
+        var fullPath = Path.GetFullPath(path);
+        if (!string.Equals(Path.GetDirectoryName(fullPath), fullDirectory, StringComparison.OrdinalIgnoreCase))
+            throw new IOException("Plan filename escaped the artifact directory.");
+
+        return path;
     }
 
     private void Cleanup(string directory)
@@ -240,10 +254,25 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
 
     private sealed record PreparedPlan(string Xml, string Json);
 
+    // ParameterSet stays null for measure and compare, and is left out of the JSON line.
+    private sealed record RunMetadata(
+        string Variant,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParameterSet,
+        int Repetition,
+        long CpuTimeMilliseconds,
+        long ElapsedTimeMilliseconds,
+        long LogicalReads,
+        IReadOnlyDictionary<string, long> LogicalReadsByTable,
+        string ResultHash,
+        int MessageCount,
+        IReadOnlyList<string> PlanFiles,
+        IReadOnlyList<string> PlanJsonFiles);
+
     private static object WithArtifactDirectory(object report, string? directory) => report switch
     {
         SqlHarnessCompareReport compare => compare with { ArtifactDirectory = directory },
         SqlHarnessMeasureReport measure => measure with { ArtifactDirectory = directory },
+        SqlHarnessMeasureSetReport measureSet => measureSet with { ArtifactDirectory = directory },
         _ => throw new ArgumentOutOfRangeException(nameof(report), report.GetType(), "Unsupported benchmark report type."),
     };
 
@@ -257,7 +286,31 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
     private static string PlanFileName(CompareRunArtifact run, int runIndex, int planIndex, string document)
     {
         var extension = IsJsonPlan(document) ? ".explain.json" : ".sqlplan";
-        return $"{run.Variant}-{run.Repetition:D3}-{runIndex:D3}-{planIndex:D3}{extension}";
+        return PlanStem(run, runIndex, planIndex) + extension;
+    }
+
+    private static string PlanStem(CompareRunArtifact run, int runIndex, int planIndex)
+    {
+        var stem = $"{run.Variant}-{run.Repetition:D3}-{runIndex:D3}-{planIndex:D3}";
+        if (run.ParameterSet is null)
+            return stem;
+
+        return SanitizeSetLabel(run.ParameterSet) + "-" + stem;
+    }
+
+    // Accepted labels are already one path segment. Anything else is reduced so it cannot escape.
+    private static string SanitizeSetLabel(string label)
+    {
+        if (label.Length is > 0 and <= 64 && SafeSetLabel().IsMatch(label))
+            return label;
+
+        var sanitized = UnsafePathCharacter().Replace(label, "-").Trim('-');
+        if (sanitized.Length > 64)
+            sanitized = sanitized[..64].Trim('-');
+        if (sanitized.Length == 0)
+            return "set";
+
+        return sanitized;
     }
 
     private static bool IsJsonPlan(string document)
@@ -267,8 +320,11 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
     }
 
     private static string PlanJsonFileName(CompareRunArtifact run, int runIndex, int planIndex) =>
-        $"{run.Variant}-{run.Repetition:D3}-{runIndex:D3}-{planIndex:D3}.plan.json";
+        PlanStem(run, runIndex, planIndex) + ".plan.json";
 
     [GeneratedRegex("[^A-Za-z0-9_-]+", RegexOptions.CultureInvariant)]
     private static partial Regex UnsafePathCharacter();
+
+    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", RegexOptions.CultureInvariant)]
+    private static partial Regex SafeSetLabel();
 }

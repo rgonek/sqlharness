@@ -609,6 +609,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     measure.Repeat,
                     execution,
                     boundSets);
+
+                phase = ExecutionPhase.Artifact;
+                var setDirectory = _artifactWriter.Write(
+                    setReport,
+                    execution.Runs.Select(run => run.Artifact).ToArray(),
+                    target.Database);
+                setReport = setReport with { ArtifactDirectory = setDirectory };
                 var setSuccess = new SqlHarnessOutcome(SqlHarnessExitCode.Success, setReport, null);
                 return WithReceipt(setSuccess, stopwatch.ElapsedMilliseconds, rawFootprint, "measure");
             }

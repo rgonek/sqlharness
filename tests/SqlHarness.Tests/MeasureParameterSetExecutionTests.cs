@@ -264,7 +264,11 @@ public sealed class MeasureParameterSetExecutionTests
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
         Assert.Null(outcome.SafeError);
-        Assert.Equal(0, writer.Writes);
+        Assert.Equal(1, writer.Writes);
+        Assert.Equal("testdb-a", writer.Target);
+        Assert.Equal(["B", "A", "A", "B"], writer.Runs.Select(run => run.ParameterSet));
+        Assert.Equal([1, 1, 2, 2], writer.Runs.Select(run => run.Repetition));
+        Assert.DoesNotContain(writer.Runs, run => run.Repetition == 0);
         Assert.Equal(1, session.ConnectionCount);
         Assert.Equal(1, session.SetupCount);
         Assert.Equal(["A", "B"], session.WarmupSetNames);
@@ -277,7 +281,17 @@ public sealed class MeasureParameterSetExecutionTests
         AssertNoCacheControl(session.Commands);
 
         var report = Assert.IsType<SqlHarnessMeasureSetReport>(outcome.Report);
-        Assert.Null(report.ArtifactDirectory);
+        var passed = Assert.IsType<SqlHarnessMeasureSetReport>(writer.Report);
+        Assert.Null(passed.ArtifactDirectory);
+        Assert.Equal(passed with { ArtifactDirectory = "measure-artifacts" }, report);
+        Assert.Equal("measure-artifacts", report.ArtifactDirectory);
+        var captured = JsonSerializer.Serialize(passed) + JsonSerializer.Serialize(writer.Runs) + writer.Target;
+        Assert.DoesNotContain(tenant, captured, StringComparison.Ordinal);
+        Assert.DoesNotContain($"tenant:nvarchar={tenant}", captured, StringComparison.Ordinal);
+        Assert.DoesNotContain("id:int=11", captured, StringComparison.Ordinal);
+        Assert.DoesNotContain("id:int=22", captured, StringComparison.Ordinal);
+        Assert.DoesNotContain(session.QuerySql, captured, StringComparison.Ordinal);
+        Assert.DoesNotContain(session.SetupSql, captured, StringComparison.Ordinal);
         Assert.Equal(session.Identity, report.Target);
         Assert.Equal(2, report.Repeat);
         Assert.Equal(4, report.MeasuredRunCount);
@@ -341,6 +355,21 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.True(gainRecord.Success);
         Assert.True(gainRecord.RawBytes > 0);
         Assert.DoesNotContain(tenant, gainRecord.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Module_maps_artifact_failure_to_local_storage_without_a_report()
+    {
+        var session = RecordingSession.Create(setCount: 2);
+
+        var outcome = await Module(session, writer: new ThrowingWriter()).ExecuteAsync(MeasureSets(1, Inputs("A", "B")));
+
+        Assert.Equal(SqlHarnessExitCode.LocalStorage, outcome.ExitCode);
+        Assert.Null(outcome.Report);
+        Assert.Contains("disk unavailable", outcome.SafeError, StringComparison.Ordinal);
+        Assert.Equal(1, session.ConnectionCount);
+        Assert.Equal(["A", "B"], session.WarmupSetNames);
+        Assert.Equal(["B", "A"], session.MeasuredSetNames);
     }
 
     [Fact]
@@ -501,7 +530,7 @@ public sealed class MeasureParameterSetExecutionTests
     private static SqlHarnessModule Module(
         RecordingSession session,
         Func<IReadOnlyDictionary<string, TargetProfile>>? profiles = null,
-        CapturingWriter? writer = null,
+        ICompareArtifactWriter? writer = null,
         int? comparisonMaximumRows = null,
         FakeGainStore? gain = null) =>
         new(session, gain ?? new FakeGainStore(), writer ?? new CapturingWriter(), profiles ?? Profiles)
@@ -616,12 +645,24 @@ public sealed class MeasureParameterSetExecutionTests
     private sealed class CapturingWriter : ICompareArtifactWriter
     {
         public int Writes { get; private set; }
+        public object? Report { get; private set; }
+        public IReadOnlyList<CompareRunArtifact> Runs { get; private set; } = [];
+        public string? Target { get; private set; }
 
         public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target)
         {
             Writes++;
+            Report = report;
+            Runs = runs.ToArray();
+            Target = target;
             return "measure-artifacts";
         }
+    }
+
+    private sealed class ThrowingWriter : ICompareArtifactWriter
+    {
+        public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target) =>
+            throw new IOException("disk unavailable");
     }
 
     private sealed class RecordingSession : ISqlSessionFactory, ISqlSession

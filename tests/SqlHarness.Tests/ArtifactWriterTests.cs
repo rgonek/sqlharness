@@ -99,7 +99,39 @@ public class ArtifactWriterTests
             .Order(StringComparer.Ordinal).ToArray();
         Assert.Equal(2, files.Length);
         Assert.Equal(plans, files.Select(File.ReadAllText));
-        Assert.Equal(2, files.Select(Path.GetFileName).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(
+            ["baseline-001-000-000.sqlplan", "baseline-001-000-001.sqlplan"],
+            files.Select(path => Path.GetFileName(path)!).ToArray());
+        var jsonFiles = Directory.GetFiles(Path.Combine(directory, "plans"), "*.plan.json")
+            .Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(
+            ["baseline-001-000-000.plan.json", "baseline-001-000-001.plan.json"],
+            jsonFiles.Select(path => Path.GetFileName(path)!).ToArray());
+    }
+
+    [Fact]
+    public void Null_parameter_set_keeps_legacy_run_metadata_and_plan_filenames()
+    {
+        using var temp = new TempDirectory();
+        var plan = FixturePlan();
+        var run = new CompareRunArtifact(
+            "measure", 1, 1, 2, 3, new Dictionary<string, long> { ["Clients"] = 3 }, "HASH", [plan], 2, null);
+        var writer = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch);
+        var measure = new SqlHarnessMeasureReport(
+            new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile"),
+            1, 1, true, Variant("measure"), null);
+        var compare = new SqlHarnessCompareReport(
+            new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile"),
+            1, 1, true, Variant("baseline"), Variant("candidate"), null);
+
+        var measureDirectory = writer.Write(measure, [run], "wind");
+        var compareDirectory = writer.Write(compare, [run], "wind");
+
+        AssertLegacyRun(measureDirectory, plan);
+        AssertLegacyRun(compareDirectory, plan);
+        Assert.Equal(
+            File.ReadAllText(Path.Combine(measureDirectory, "runs.jsonl")),
+            File.ReadAllText(Path.Combine(compareDirectory, "runs.jsonl")));
     }
 
     [Fact]
@@ -195,6 +227,23 @@ public class ArtifactWriterTests
         Assert.Contains(deletes, path => path.EndsWith("report.json", StringComparison.Ordinal));
         Assert.Contains(deletes, path => path.EndsWith(".sqlplan.tmp", StringComparison.Ordinal));
         Assert.DoesNotContain(Directory.GetDirectories(temp.Path), path => !Path.GetFileName(path).Contains(".staging-", StringComparison.Ordinal));
+    }
+
+    private static void AssertLegacyRun(string directory, string plan)
+    {
+        const string line =
+            """{"variant":"measure","repetition":1,"cpuTimeMilliseconds":1,"elapsedTimeMilliseconds":2,"logicalReads":3,"logicalReadsByTable":{"Clients":3},"resultHash":"HASH","messageCount":2,"planFiles":["measure-001-000-000.sqlplan"],"planJsonFiles":["measure-001-000-000.plan.json"]}""";
+
+        var planPath = Assert.Single(Directory.GetFiles(Path.Combine(directory, "plans"), "*.sqlplan"));
+        Assert.Equal("measure-001-000-000.sqlplan", Path.GetFileName(planPath));
+        Assert.Equal(plan, File.ReadAllText(planPath));
+        var jsonPath = Assert.Single(Directory.GetFiles(Path.Combine(directory, "plans"), "*.plan.json"));
+        Assert.Equal("measure-001-000-000.plan.json", Path.GetFileName(jsonPath));
+        Assert.Equal(line, Assert.Single(File.ReadAllLines(Path.Combine(directory, "runs.jsonl"))));
+        var report = File.ReadAllText(Path.Combine(directory, "report.json"));
+        Assert.DoesNotContain("parameterSet", report, StringComparison.OrdinalIgnoreCase);
+        using var document = JsonDocument.Parse(report);
+        Assert.Equal(directory, document.RootElement.GetProperty("artifactDirectory").GetString());
     }
 
     private static CompareVariantReport Variant(string name) => new(
