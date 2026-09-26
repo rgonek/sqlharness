@@ -1,5 +1,7 @@
 ﻿using System.Text.Json;
 
+using SqlHarness.Cli.Commands;
+using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
 using SqlHarness.Core.Targets;
@@ -310,6 +312,117 @@ public class SqlHarnessMeasureTests
             "Result comparison exceeds",
             outcome.SafeError ?? string.Empty,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Measure_invalid_parameter_value_is_redacted_before_connect()
+    {
+        var session = FakeMeasureSession.Create();
+        var azure = new FakeAzureCli();
+        var writer = new CapturingArtifactWriter();
+
+        var outcome = await Module(session, azure, writer: writer).ExecuteAsync(Measure(1) with
+        {
+            SetupSql = null,
+            QuerySql = "SELECT @n AS Value",
+            Parameters = ["n:int=private-audit-value"],
+        });
+
+        Assert.Equal(0, session.FactoryOpenCount);
+        Assert.Empty(azure.Calls);
+        Assert.Empty(writer.Runs);
+        AssertParameterError(
+            outcome,
+            "Invalid value for SQL parameter 'n' of type 'int'.",
+            "private-audit-value",
+            "n:int=private-audit-value");
+    }
+
+    [Fact]
+    public async Task Measure_parameter_set_invalid_value_keeps_name_and_type()
+    {
+        var session = FakeMeasureSession.Create();
+        var writer = new CapturingArtifactWriter();
+
+        var outcome = await Module(session, writer: writer).ExecuteAsync(Measure(1) with
+        {
+            SetupSql = null,
+            QuerySql = "SELECT @ok AS Ok, @n AS Value",
+            Parameters = ["ok:int=1"],
+            ParameterSets =
+            [
+                new SqlHarnessParameterSetInput("small", ["n:int=7"]),
+                new SqlHarnessParameterSetInput("large", ["n:int=private-audit-value"]),
+            ],
+        });
+
+        Assert.Equal(0, session.FactoryOpenCount);
+        Assert.Empty(writer.Runs);
+        AssertParameterError(
+            outcome,
+            "Parameter set 'large' is invalid: Invalid value for SQL parameter 'n' of type 'int'.",
+            "private-audit-value",
+            "n:int=private-audit-value",
+            "ok:int=1");
+    }
+
+    [Fact]
+    public async Task Measure_parameter_set_overlapping_value_keeps_the_parameter_name()
+    {
+        var session = FakeMeasureSession.Create();
+        var writer = new CapturingArtifactWriter();
+
+        var outcome = await Module(session, writer: writer).ExecuteAsync(Measure(1) with
+        {
+            SetupSql = null,
+            QuerySql = "SELECT @privateaudit AS Value",
+            ParameterSets =
+            [
+                new SqlHarnessParameterSetInput("small", ["privateaudit:int=1"]),
+                new SqlHarnessParameterSetInput("large", ["privateaudit:int=private"]),
+            ],
+        });
+
+        Assert.Equal(0, session.FactoryOpenCount);
+        Assert.Empty(writer.Runs);
+        AssertParameterError(
+            outcome,
+            "Parameter set 'large' is invalid: Invalid value for SQL parameter 'privateaudit' of type 'int'.",
+            "privateaudit:int=private",
+            "'private'");
+    }
+
+    private static void AssertParameterError(SqlHarnessOutcome outcome, string expected, params string[] forbidden)
+    {
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Null(outcome.Report);
+        Assert.Equal(expected, outcome.SafeError);
+        Assert.DoesNotContain(" | ", outcome.SafeError, StringComparison.Ordinal);
+        foreach (var secret in forbidden)
+            Assert.DoesNotContain(secret, outcome.SafeError, StringComparison.Ordinal);
+
+        var stdout = new StringWriter();
+        new Renderer().Render(outcome, OutputMode.Text, new OutputCaptureWriter(stdout));
+        var rendered = stdout.ToString();
+        Assert.Contains(expected, rendered, StringComparison.Ordinal);
+        foreach (var secret in forbidden)
+            Assert.DoesNotContain(secret, rendered, StringComparison.Ordinal);
+
+        var directory = Path.Combine(Path.GetTempPath(), "sqlharness-audit-error-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var report = Path.Combine(directory, "error.txt");
+            File.WriteAllText(report, rendered);
+            var saved = File.ReadAllText(report);
+            Assert.Contains(expected, saved, StringComparison.Ordinal);
+            foreach (var secret in forbidden)
+                Assert.DoesNotContain(secret, saved, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     private static SqlHarnessMeasureOperation Measure(int repeat) =>

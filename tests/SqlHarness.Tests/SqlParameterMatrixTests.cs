@@ -212,7 +212,7 @@ public class SqlParameterMatrixTests
     [InlineData("BatchSize=1,2", "The --matrix option for SQL parameter '@BatchSize' requires a type.")]
     [InlineData("BatchSize:=1,2", "The --matrix option for SQL parameter '@BatchSize' requires a type.")]
     [InlineData("BatchSize:xml=1,2", "The --matrix option for SQL parameter '@BatchSize' is invalid.")]
-    [InlineData("BatchSize:int=nope,2", "The --matrix option for SQL parameter '@BatchSize' is invalid.")]
+    [InlineData("BatchSize:int=nope,2", "The --matrix option for SQL parameter '@BatchSize' of type 'int' is invalid.")]
     [InlineData(":int=1,2", "The --matrix option is invalid.")]
     public void Parse_rejects_malformed_name_type_or_value(string input, string expected)
     {

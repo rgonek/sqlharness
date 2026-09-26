@@ -302,7 +302,7 @@ public sealed class MeasureParameterSetValidationTests
             null,
             "select @id");
 
-        Assert.Equal("Parameter set 'large' is invalid: Invalid value for SQL parameter 'id'.", exception.Message);
+        Assert.Equal("Parameter set 'large' is invalid: Invalid value for SQL parameter 'id' of type 'int'.", exception.Message);
         AssertSafe(exception, "not-a-number-secret", "id:int=not-a-number-secret");
     }
 

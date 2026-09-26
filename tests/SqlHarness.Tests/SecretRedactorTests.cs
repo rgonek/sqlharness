@@ -39,4 +39,33 @@ public sealed class SecretRedactorTests
         Assert.Contains("First safe failure", safe, StringComparison.Ordinal);
         Assert.Contains("Nested safe failure", safe, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Redact_does_not_publish_a_validation_inner_exception()
+    {
+        var exception = new SqlHarnessSafetyException(
+            "Invalid value for SQL parameter 'n' of type 'int'.",
+            new FormatException("The input string 'private-audit-value' was not in a correct format."));
+
+        var safe = SecretRedactor.Redact(exception, []);
+
+        Assert.Equal("Invalid value for SQL parameter 'n' of type 'int'.", safe);
+        Assert.DoesNotContain("private-audit-value", safe, StringComparison.Ordinal);
+        Assert.DoesNotContain("input string", safe, StringComparison.Ordinal);
+        Assert.DoesNotContain("n:int=private-audit-value", safe, StringComparison.Ordinal);
+        Assert.Contains("'n'", safe, StringComparison.Ordinal);
+        Assert.Contains("int", safe, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Redact_removes_overlapping_values_longest_first()
+    {
+        var safe = SecretRedactor.Redact(
+            "rejected private-audit-value and private-audit",
+            ["private-audit", "private-audit-value"]);
+
+        Assert.Equal("rejected [REDACTED] and [REDACTED]", safe);
+        Assert.DoesNotContain("private-audit", safe, StringComparison.Ordinal);
+        Assert.DoesNotContain("-value", safe, StringComparison.Ordinal);
+    }
 }

@@ -60,6 +60,12 @@ internal static partial class SqlParameterMatrixParser
             {
                 parsed = SqlParameterParser.ParseOne($"{declaration}={displayValue}");
             }
+            catch (SqlHarnessSafetyException exception) when (exception.IsParameterValue)
+            {
+                var label = parameterName ?? "@" + exception.ParameterName;
+                throw exception.WithParameterValue(
+                    MatrixError(label, $"of type '{exception.ExpectedType}' is invalid."));
+            }
             catch (SqlHarnessSafetyException)
             {
                 throw new SqlHarnessSafetyException(MatrixError(parameterName, "is invalid."));

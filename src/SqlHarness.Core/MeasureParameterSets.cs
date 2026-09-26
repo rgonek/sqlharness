@@ -86,9 +86,16 @@ internal static class MeasureParameterSetValidator
         {
             return SqlParameterParser.Parse(inputs);
         }
+        catch (SqlHarnessSafetyException exception) when (exception.IsParameterValue)
+        {
+            // Keep name and type on the public exception. Do not reattach Diagnostic as InnerException.
+            var message = setName is null
+                ? exception.Message
+                : $"Parameter set '{setName}' is invalid: {exception.Message}";
+            throw exception.WithParameterValue(message);
+        }
         catch (SqlHarnessSafetyException exception)
         {
-            // Drop the parser's inner exception so a rejected value cannot surface through ToString().
             var message = setName is null
                 ? exception.Message
                 : $"Parameter set '{setName}' is invalid: {exception.Message}";

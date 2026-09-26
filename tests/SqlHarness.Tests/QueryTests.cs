@@ -1,6 +1,8 @@
 ﻿using System.Data;
 using System.Text.Json;
 
+using SqlHarness.Cli.Commands;
+using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
 using SqlHarness.Core.Targets;
@@ -543,6 +545,121 @@ public class SqlHarnessQueryTests
         Assert.DoesNotContain(secret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.Contains("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
+
+    [Theory]
+    [InlineData("SELECT @n AS Value", "n:int=private-audit-value", "Invalid value for SQL parameter 'n' of type 'int'.", "private-audit-value", "n:int=private-audit-value")]
+    [InlineData("SELECT @amount AS Value", "amount:decimal(19,4)=private-audit-value", "Invalid value for SQL parameter 'amount' of type 'decimal(19,4)'.", "private-audit-value", "amount:decimal(19,4)=private-audit-value")]
+    [InlineData("SELECT @day AS Value", "day:date=private-audit-value", "Invalid value for SQL parameter 'day' of type 'date'.", "private-audit-value", "day:date=private-audit-value")]
+    [InlineData("SELECT @id AS Value", "id:uniqueidentifier=private-audit-value", "Invalid value for SQL parameter 'id' of type 'uniqueidentifier'.", "private-audit-value", "id:uniqueidentifier=private-audit-value")]
+    [InlineData("SELECT @blob AS Value", "blob:varbinary=private-audit-value", "Invalid value for SQL parameter 'blob' of type 'varbinary'.", "private-audit-value", "blob:varbinary=private-audit-value")]
+    [InlineData("SELECT @n AS Value", "n:int=zażółć-私-audit", "Invalid value for SQL parameter 'n' of type 'int'.", "zażółć-私-audit", "n:int=zażółć-私-audit")]
+    [InlineData("SELECT @privateaudit AS Value", "privateaudit:int=private", "Invalid value for SQL parameter 'privateaudit' of type 'int'.", "privateaudit:int=private", "'private'")]
+    [InlineData("SELECT @count AS Value", "count:int=int", "Invalid value for SQL parameter 'count' of type 'int'.", "count:int=int", "input string")]
+    public async Task Query_invalid_parameter_value_is_redacted_before_connect(
+        string sql,
+        string declaration,
+        string expected,
+        string forbidden,
+        string forbiddenDeclaration)
+    {
+        var session = FakeSqlSession.WithIdentity("test-server", "testdb-a");
+        var azure = new FakeAzureCli(Token);
+
+        var outcome = await Module(session, azure: azure).ExecuteAsync(Query(sql) with { Parameters = [declaration] });
+
+        AssertParameterError(outcome, expected, forbidden, forbiddenDeclaration);
+        Assert.Empty(azure.Calls);
+        Assert.Empty(session.Commands);
+    }
+
+    [Fact]
+    public async Task Query_invalid_second_parameter_does_not_echo_the_valid_first()
+    {
+        var session = FakeSqlSession.WithIdentity("test-server", "testdb-a");
+
+        var outcome = await Module(session).ExecuteAsync(Query("SELECT @ok AS Ok, @n AS Value") with
+        {
+            Parameters = ["ok:int=1", "n:int=private-audit-value"],
+        });
+
+        AssertParameterError(
+            outcome,
+            "Invalid value for SQL parameter 'n' of type 'int'.",
+            "private-audit-value",
+            "n:int=private-audit-value",
+            "ok:int=1");
+        Assert.Empty(session.Commands);
+    }
+
+    [Fact]
+    public async Task Postgres_query_invalid_parameter_value_is_redacted_before_connect()
+    {
+        var session = FakeSqlSession.WithIdentity("localhost", "appdb");
+
+        var outcome = await Module(session, loadProfiles: PostgresProfiles).ExecuteAsync(
+            new SqlHarnessQueryOperation(
+                new SqlTargetRequest("local-pg", new Dictionary<string, string>()),
+                "SELECT @n AS Value",
+                ["n:int=private-audit-value"],
+                30,
+                50,
+                false,
+                null));
+
+        AssertParameterError(
+            outcome,
+            "Invalid value for SQL parameter 'n' of type 'int'.",
+            "private-audit-value",
+            "n:int=private-audit-value");
+        Assert.Empty(session.Commands);
+    }
+
+    private static void AssertParameterError(SqlHarnessOutcome outcome, string expected, params string[] forbidden)
+    {
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Null(outcome.Report);
+        Assert.Equal(expected, outcome.SafeError);
+        Assert.DoesNotContain(" | ", outcome.SafeError, StringComparison.Ordinal);
+        foreach (var secret in forbidden)
+            Assert.DoesNotContain(secret, outcome.SafeError, StringComparison.Ordinal);
+
+        var stdout = new StringWriter();
+        new Renderer().Render(outcome, OutputMode.Text, new OutputCaptureWriter(stdout));
+        var rendered = stdout.ToString();
+        Assert.Contains(expected, rendered, StringComparison.Ordinal);
+        foreach (var secret in forbidden)
+            Assert.DoesNotContain(secret, rendered, StringComparison.Ordinal);
+
+        var directory = Path.Combine(Path.GetTempPath(), "sqlharness-audit-error-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var report = Path.Combine(directory, "error.txt");
+        try
+        {
+            File.WriteAllText(report, rendered);
+            var saved = File.ReadAllText(report);
+            Assert.Contains(expected, saved, StringComparison.Ordinal);
+            foreach (var secret in forbidden)
+                Assert.DoesNotContain(secret, saved, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static IReadOnlyDictionary<string, TargetProfile> PostgresProfiles() =>
+        new Dictionary<string, TargetProfile>
+        {
+            ["local-pg"] = new(
+                "localhost",
+                "appdb",
+                new Dictionary<string, string>(),
+                "sql",
+                SqlUser: "sqlharness",
+                PasswordEnvVar: "SQLHARNESS_PG_PASSWORD",
+                TrustServerCertificate: true,
+                Engine: "postgres"),
+        };
 
     private static SqlHarnessModule Module(
         FakeSqlSession session,

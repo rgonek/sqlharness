@@ -193,6 +193,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
+            SqlParameterSecrets.AddValues(knownSecrets, query.Parameters);
             var parameters = dialect.ParseParameters(query.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, query.Sql);
 
@@ -314,6 +315,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var candidateSafety = dialect.Classify(
                 compare.CandidateSql, SqlUsage.Query, target.Database, false, null, setupTemps);
             EnsureSafe(candidateSafety, "candidate");
+            SqlParameterSecrets.AddValues(knownSecrets, compare.Parameters);
             var parameters = dialect.ParseParameters(compare.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, compare.SetupSql, compare.BaselineSql, compare.CandidateSql);
             dialect.ValidateMeasuredBatch(compare.BaselineSql);
@@ -416,6 +418,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             EnsureSafe(candidateSafety, "candidate");
             dialect.ValidateMeasuredBatch(operation.BaselineSql);
             dialect.ValidateMeasuredBatch(operation.CandidateSql);
+            SqlParameterSecrets.AddValues(knownSecrets, operation.Parameters);
+            SqlParameterSecrets.AddMatrixValues(knownSecrets, operation.Matrix);
 
             var matrix = SqlParameterMatrixParser.Parse(operation.Matrix, operation.Parameters);
             foreach (var displayValue in matrix.DisplayValues)
@@ -586,6 +590,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var querySafety = dialect.Classify(
                 measure.QuerySql, SqlUsage.Query, target.Database, false, null, setupTemps);
             EnsureSafe(querySafety, "query");
+            SqlParameterSecrets.AddValues(knownSecrets, measure.Parameters);
+            if (measure.ParameterSets is { Count: > 0 } rawSets)
+            {
+                foreach (var set in rawSets)
+                    SqlParameterSecrets.AddValues(knownSecrets, set?.Parameters);
+            }
+
             var parameters = dialect.ParseParameters(measure.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, measure.SetupSql, measure.QuerySql);
             dialect.ValidateMeasuredBatch(measure.QuerySql);
@@ -955,6 +966,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
+            SqlParameterSecrets.AddValues(knownSecrets, watch.Parameters);
             var parameters = dialect.ParseParameters(watch.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, watch.Sql);
             // Predicate syntax is validated before authentication so bad --until fails closed.
@@ -1043,6 +1055,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
+            SqlParameterSecrets.AddValues(knownSecrets, snapshot.Parameters);
             var parameters = dialect.ParseParameters(snapshot.Parameters);
             SqlParameterReferenceValidator.Validate(parameters, snapshot.Sql);
 

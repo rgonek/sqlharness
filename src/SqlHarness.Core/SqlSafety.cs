@@ -9,7 +9,88 @@ using Microsoft.SqlServer.Types;
 namespace SqlHarness.Core;
 
 
-internal sealed class SqlHarnessSafetyException(string message, Exception? innerException = null) : Exception(message, innerException);
+// ParameterName marks a value-validation failure. Diagnostic is not InnerException, so ToString cannot inherit the rejected value.
+internal sealed class SqlHarnessSafetyException(string message, Exception? innerException = null) : Exception(message, innerException)
+{
+    internal string? ParameterName { get; init; }
+
+    internal string? ExpectedType { get; init; }
+
+    internal Exception? Diagnostic { get; init; }
+
+    internal bool IsParameterValue => ParameterName is not null && ExpectedType is not null;
+
+    internal static SqlHarnessSafetyException InvalidParameter(string name, string type, Exception? diagnostic = null) =>
+        new($"Invalid value for SQL parameter '{name}' of type '{type}'.")
+        {
+            ParameterName = name,
+            ExpectedType = type,
+            Diagnostic = diagnostic,
+        };
+
+    internal SqlHarnessSafetyException WithParameterValue(string? message = null) =>
+        new(message ?? Message)
+        {
+            ParameterName = ParameterName,
+            ExpectedType = ExpectedType,
+            Diagnostic = Diagnostic,
+        };
+
+    internal IReadOnlyList<string> PreservedTokens()
+    {
+        var tokens = new List<string>(8);
+        Add(tokens, ParameterName);
+        Add(tokens, ExpectedType);
+        if (!string.IsNullOrEmpty(ParameterName) && !ParameterName.StartsWith('@'))
+            Add(tokens, "@" + ParameterName);
+        return tokens;
+    }
+
+    private static void Add(List<string> tokens, string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return;
+        tokens.Add(value);
+        tokens.Add("'" + value + "'");
+    }
+}
+
+internal static class SqlParameterSecrets
+{
+    internal static void AddValues(ICollection<string> knownSecrets, IEnumerable<string>? declarations)
+    {
+        if (declarations is null)
+            return;
+        foreach (var declaration in declarations)
+            AddValue(knownSecrets, declaration);
+    }
+
+    internal static void AddMatrixValues(ICollection<string> knownSecrets, string? matrix)
+    {
+        if (string.IsNullOrEmpty(matrix))
+            return;
+        var equals = matrix.IndexOf('=');
+        if (equals < 0 || equals >= matrix.Length - 1)
+            return;
+        foreach (var value in matrix[(equals + 1)..].Split(','))
+        {
+            if (!string.IsNullOrEmpty(value))
+                knownSecrets.Add(value);
+        }
+    }
+
+    private static void AddValue(ICollection<string> knownSecrets, string declaration)
+    {
+        if (string.IsNullOrEmpty(declaration))
+            return;
+        var equals = declaration.IndexOf('=');
+        if (equals < 0 || equals >= declaration.Length - 1)
+            return;
+        var value = declaration[(equals + 1)..];
+        if (!string.IsNullOrEmpty(value))
+            knownSecrets.Add(value);
+    }
+}
 
 internal enum SqlUsage
 {
@@ -563,13 +644,17 @@ internal static partial class SqlParameterParser
         {
             return BindTyped(name, type, value);
         }
-        catch (SqlHarnessSafetyException)
+        catch (SqlHarnessSafetyException exception) when (exception.IsParameterValue)
         {
             throw;
         }
+        catch (SqlHarnessSafetyException exception) when (IsInvalidParameterValue(exception))
+        {
+            throw SqlHarnessSafetyException.InvalidParameter(name, type, exception.InnerException ?? exception.Diagnostic);
+        }
         catch (Exception exception) when (exception is FormatException or OverflowException or ArgumentOutOfRangeException or ArgumentException)
         {
-            throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.", exception);
+            throw SqlHarnessSafetyException.InvalidParameter(name, type, exception);
         }
     }
 
@@ -597,15 +682,23 @@ internal static partial class SqlParameterParser
         {
             return CreateTypedNull(name, type);
         }
-        catch (SqlHarnessSafetyException)
+        catch (SqlHarnessSafetyException exception) when (exception.IsParameterValue)
         {
             throw;
         }
+        catch (SqlHarnessSafetyException exception) when (IsInvalidParameterValue(exception))
+        {
+            throw SqlHarnessSafetyException.InvalidParameter(name, type, exception.InnerException ?? exception.Diagnostic);
+        }
         catch (Exception exception) when (exception is FormatException or OverflowException or ArgumentOutOfRangeException or ArgumentException)
         {
-            throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.", exception);
+            throw SqlHarnessSafetyException.InvalidParameter(name, type, exception);
         }
     }
+
+    private static bool IsInvalidParameterValue(SqlHarnessSafetyException exception) =>
+        !exception.IsParameterValue
+        && exception.Message.StartsWith("Invalid value for SQL parameter '", StringComparison.Ordinal);
 
     private static SqlHarnessParameter BindTyped(string name, string type, string value)
     {

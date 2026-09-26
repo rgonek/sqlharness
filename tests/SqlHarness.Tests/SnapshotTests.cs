@@ -1,5 +1,7 @@
 using System.Text.Json;
 
+using SqlHarness.Cli.Commands;
+using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
 using SqlHarness.Core.Targets;
@@ -292,6 +294,63 @@ public class SnapshotTests
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
         Assert.DoesNotContain(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Snapshot_invalid_parameter_value_is_redacted_before_connect()
+    {
+        var store = new FakeSnapshotStore();
+        var session = FakeSession.WithRows(1);
+        var azure = new FakeAzureCli(Token);
+
+        var outcome = await Module(session, store, azure: azure).ExecuteAsync(
+            Snapshot(sql: "SELECT @n AS Value") with
+            {
+                Parameters = ["n:int=private-audit-value"],
+            });
+
+        Assert.Equal(0, session.ConnectCount);
+        Assert.Empty(azure.Calls);
+        Assert.Empty(store.Saves);
+        Assert.Equal(0, store.LoadCalls);
+        AssertParameterError(
+            outcome,
+            "Invalid value for SQL parameter 'n' of type 'int'.",
+            "private-audit-value",
+            "n:int=private-audit-value");
+    }
+
+    private static void AssertParameterError(SqlHarnessOutcome outcome, string expected, params string[] forbidden)
+    {
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Null(outcome.Report);
+        Assert.Equal(expected, outcome.SafeError);
+        Assert.DoesNotContain(" | ", outcome.SafeError, StringComparison.Ordinal);
+        foreach (var secret in forbidden)
+            Assert.DoesNotContain(secret, outcome.SafeError, StringComparison.Ordinal);
+
+        var stdout = new StringWriter();
+        new Renderer().Render(outcome, OutputMode.Text, new OutputCaptureWriter(stdout));
+        var rendered = stdout.ToString();
+        Assert.Contains(expected, rendered, StringComparison.Ordinal);
+        foreach (var secret in forbidden)
+            Assert.DoesNotContain(secret, rendered, StringComparison.Ordinal);
+
+        var directory = Path.Combine(Path.GetTempPath(), "sqlharness-audit-error-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var report = Path.Combine(directory, "error.txt");
+            File.WriteAllText(report, rendered);
+            var saved = File.ReadAllText(report);
+            Assert.Contains(expected, saved, StringComparison.Ordinal);
+            foreach (var secret in forbidden)
+                Assert.DoesNotContain(secret, saved, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     private static SqlHarnessModule Module(

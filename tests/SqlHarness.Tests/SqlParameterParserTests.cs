@@ -290,6 +290,66 @@ public class SqlParameterParserTests
     public void Parse_rejects_duplicate_names_ordinal_ignore_case() =>
         Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterParser.Parse(["ClientId=1", "clientid=2"]));
 
+    [Theory]
+    [InlineData("n:int=private-audit-value", "n", "int", "private-audit-value")]
+    [InlineData("amount:decimal(19,4)=private-audit-value", "amount", "decimal(19,4)", "private-audit-value")]
+    [InlineData("day:date=private-audit-value", "day", "date", "private-audit-value")]
+    [InlineData("id:uniqueidentifier=private-audit-value", "id", "uniqueidentifier", "private-audit-value")]
+    [InlineData("blob:varbinary=private-audit-value", "blob", "varbinary", "private-audit-value")]
+    [InlineData("n:int=zażółć-私-audit", "n", "int", "zażółć-私-audit")]
+    [InlineData("privateaudit:int=private", "privateaudit", "int", "private")]
+    [InlineData("count:int=int", "count", "int", "int")]
+    public void Parse_invalid_value_keeps_name_and_type_out_of_the_public_exception(
+        string input,
+        string name,
+        string type,
+        string value)
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterParser.Parse([input]));
+        var expected = $"Invalid value for SQL parameter '{name}' of type '{type}'.";
+
+        Assert.Null(exception.InnerException);
+        Assert.Equal(expected, exception.Message);
+        Assert.DoesNotContain(input, exception.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("input string", exception.ToString(), StringComparison.OrdinalIgnoreCase);
+        if (!expected.Contains(value, StringComparison.Ordinal))
+            Assert.DoesNotContain(value, exception.ToString(), StringComparison.Ordinal);
+
+        var redacted = SecretRedactor.Redact(exception, [value, input]);
+        Assert.Equal(expected, redacted);
+    }
+
+    [Fact]
+    public void Raw_values_are_collected_before_conversion()
+    {
+        var secrets = new List<string>();
+        SqlParameterSecrets.AddValues(secrets, ["n:int=private-audit-value", "ok:int=1", "day:date:null"]);
+        SqlParameterSecrets.AddMatrixValues(secrets, "amount:decimal(19,4)=private-audit-value,1.00");
+
+        Assert.Contains("private-audit-value", secrets);
+        Assert.Contains("1", secrets);
+        Assert.Contains("1.00", secrets);
+        Assert.DoesNotContain("n:int=private-audit-value", secrets);
+        Assert.DoesNotContain("null", secrets);
+        Assert.DoesNotContain("amount:decimal(19,4)=private-audit-value,1.00", secrets);
+    }
+
+    [Fact]
+    public void Parse_reports_the_second_parameter_without_either_declaration()
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterParser.Parse([
+            "ok:int=1",
+            "n:int=private-audit-value",
+        ]));
+
+        Assert.Null(exception.InnerException);
+        Assert.Equal("Invalid value for SQL parameter 'n' of type 'int'.", exception.Message);
+        Assert.DoesNotContain("private-audit-value", exception.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("n:int=private-audit-value", exception.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("ok:int=1", exception.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("input string", exception.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed class TemporaryCulture : IDisposable
     {
         private readonly CultureInfo _originalCulture = CultureInfo.CurrentCulture;
