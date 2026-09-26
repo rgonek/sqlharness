@@ -22,15 +22,7 @@ public static class TargetResolver
             throw new SqlHarnessSafetyException("Target vars cannot be null.");
 
         var hasProfile = !string.IsNullOrWhiteSpace(request.Profile);
-        var hasDirectFields = request.Server is not null ||
-                              request.Database is not null ||
-                              request.Auth is not null;
-
-        var hasDirectAuthSettings = request.SqlUser is not null ||
-                                    request.PasswordEnvVar is not null ||
-                                    request.TrustServerCertificate;
-
-        if (hasProfile && (request.UnsafeDirect || hasDirectFields || hasDirectAuthSettings))
+        if (hasProfile && (request.UnsafeDirect || request.HasSuppliedDirectOption))
             throw new SqlHarnessSafetyException("A profile cannot be combined with direct target options.");
 
         if (hasProfile)
@@ -38,7 +30,7 @@ public static class TargetResolver
 
         if (!request.UnsafeDirect)
         {
-            if (hasDirectFields)
+            if (request.HasSuppliedDirectOption)
                 throw new SqlHarnessSafetyException("Direct target options require --unsafe-direct.");
             throw new SqlHarnessSafetyException("A target profile or an --unsafe-direct target is required.");
         }

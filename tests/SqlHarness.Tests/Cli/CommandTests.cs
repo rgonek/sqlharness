@@ -128,7 +128,10 @@ public sealed class CommandTests
         new[] { "query", "dev", "--server", "sql", "--database", "db", "--auth", "azure-cli" },
         new[] { "query", "dev", "--unsafe-direct", "--server", "sql", "--database", "db", "--auth", "azure-cli" },
         new[] { "query", "--unsafe-direct", "--server", "sql", "--database", "db" },
+        new[] { "query", "--unsafe-direct", "--engine", "postgres" },
+        new[] { "query", "--unsafe-direct", "--var", "tenant=acme", "--server", "sql", "--database", "db", "--auth", "integrated" },
         new[] { "query", "dev", "--sql-user", "sa" },
+        new[] { "query", "--engine", "postgres" },
     };
 
     [Theory]
@@ -165,17 +168,40 @@ public sealed class CommandTests
         Assert.True(target.UnsafeDirect);
     }
 
-    [Fact]
-    public async Task Query_rejects_engine_combined_with_profile()
+    [Theory]
+    [InlineData("postgres")]
+    [InlineData("not-an-engine")]
+    [InlineData(" ")]
+    public async Task Query_rejects_engine_combined_with_profile(string engine)
     {
         var sqlFile = TempFile("select 1");
         try
         {
             var module = new FakeModule(Success(QueryReport()));
             var exit = await SqlHarnessCli.Create(module, new StringWriter())
-                .RunAsync(["query", "dev", "--engine", "postgres", "--file", sqlFile]);
+                .RunAsync(["query", "dev", "--engine", engine, "--file", sqlFile]);
             Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
             Assert.Empty(module.Operations);
+        }
+        finally { File.Delete(sqlFile); }
+    }
+
+    [Fact]
+    public async Task Query_forwards_unknown_engine_for_core_resolution()
+    {
+        var sqlFile = TempFile("select 1");
+        try
+        {
+            var module = new FakeModule(Success(QueryReport()));
+            var exit = await SqlHarnessCli.Create(module, new StringWriter())
+                .RunAsync([
+                    "query", "--unsafe-direct", "--engine", "not-an-engine",
+                    "--server", "localhost", "--database", "appdb", "--auth", "integrated",
+                    "--file", sqlFile]);
+            Assert.Equal(0, exit);
+            Assert.Equal(
+                "not-an-engine",
+                Assert.IsType<SqlHarnessQueryOperation>(Assert.Single(module.Operations)).Target.Engine);
         }
         finally { File.Delete(sqlFile); }
     }

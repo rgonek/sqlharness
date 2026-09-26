@@ -265,6 +265,25 @@ public sealed class TargetResolverTests
     [InlineData(null, null, true)]
     [InlineData("", null, false)]
     [InlineData(null, "", false)]
+    public void Supplied_direct_auth_without_profile_or_unsafe_direct_requires_unsafe_direct(
+        string? user, string? passwordVariable, bool trust)
+    {
+        var request = new SqlTargetRequest(
+            null, EmptyVars(),
+            SqlUser: user,
+            PasswordEnvVar: passwordVariable,
+            TrustServerCertificate: trust);
+
+        var error = Assert.Throws<SqlHarnessSafetyException>(() => TargetResolver.Resolve(request, Profiles));
+        Assert.Equal("Direct target options require --unsafe-direct.", error.Message);
+    }
+
+    [Theory]
+    [InlineData("agent", null, false)]
+    [InlineData(null, "PASSWORD", false)]
+    [InlineData(null, null, true)]
+    [InlineData("", null, false)]
+    [InlineData(null, "", false)]
     public void Rejects_direct_auth_fields_in_profile_mode(string? user, string? passwordVariable, bool trust)
     {
         var request = new SqlTargetRequest(
@@ -293,6 +312,91 @@ public sealed class TargetResolverTests
     [Fact]
     public void Rejects_profile_combined_with_server() =>
         AssertSafety(new SqlTargetRequest("prod-eu", EmptyVars(), "server"), "profile");
+
+    [Theory]
+    [InlineData("postgres")]
+    [InlineData("sqlserver")]
+    [InlineData("not-an-engine")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Rejects_profile_combined_with_supplied_engine(string engine)
+    {
+        var request = new SqlTargetRequest(
+            "prod-eu",
+            new Dictionary<string, string> { ["tenant"] = "acme", ["env"] = "uat" },
+            Engine: engine);
+
+        var error = Assert.Throws<SqlHarnessSafetyException>(() => TargetResolver.Resolve(request, Profiles));
+
+        Assert.Equal("A profile cannot be combined with direct target options.", error.Message);
+        if (!string.IsNullOrWhiteSpace(engine))
+            Assert.DoesNotContain(engine, error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("postgres")]
+    [InlineData("not-an-engine")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Supplied_engine_without_unsafe_direct_requires_unsafe_direct(string engine)
+    {
+        var request = new SqlTargetRequest(null, EmptyVars(), Engine: engine);
+
+        var error = Assert.Throws<SqlHarnessSafetyException>(() => TargetResolver.Resolve(request, Profiles));
+
+        Assert.Equal("Direct target options require --unsafe-direct.", error.Message);
+        if (!string.IsNullOrWhiteSpace(engine))
+            Assert.DoesNotContain(engine, error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Unsafe_direct_with_only_an_engine_is_an_incomplete_target() =>
+        AssertSafety(new SqlTargetRequest(null, EmptyVars(), UnsafeDirect: true, Engine: "postgres"), "--server");
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("sqlserver")]
+    public void Blank_or_omitted_direct_engine_resolves_sqlserver(string? engine)
+    {
+        var request = new SqlTargetRequest(
+            null, EmptyVars(), "server", "database", "integrated", true, Engine: engine);
+
+        Assert.Equal(SqlEngine.SqlServer, TargetResolver.Resolve(request, Profiles).Engine);
+    }
+
+    [Fact]
+    public void Unknown_direct_engine_is_rejected_without_echoing_the_value()
+    {
+        const string secret = "engine-secret-never-emit";
+        var request = new SqlTargetRequest(
+            null, EmptyVars(), "server", "database", "integrated", true, Engine: secret);
+
+        var error = Assert.Throws<SqlHarnessSafetyException>(() => TargetResolver.Resolve(request, Profiles));
+
+        Assert.Equal("Unknown engine.", error.Message);
+        Assert.DoesNotContain(secret, error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Profile_plus_unknown_engine_is_rejected_before_connect()
+    {
+        const string secret = "engine-secret-never-emit";
+        var factory = new CountingSessionFactory();
+        var module = new SqlHarnessModule(factory, new UnusedGainStore(), () => Profiles);
+        var request = new SqlTargetRequest(
+            "prod-eu",
+            new Dictionary<string, string> { ["tenant"] = "acme", ["env"] = "uat" },
+            Engine: secret);
+
+        var outcome = await module.ExecuteAsync(
+            new SqlHarnessQueryOperation(request, "SELECT 1", [], 30, 50, false, null));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal(0, factory.Connects);
+        Assert.DoesNotContain(secret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+    }
 
     [Theory]
     [InlineData("server", "")]
@@ -378,6 +482,24 @@ public sealed class TargetResolverTests
     }
 
     private static IReadOnlyDictionary<string, string> EmptyVars() => new Dictionary<string, string>();
+
+    private sealed class CountingSessionFactory : ISqlSessionFactory
+    {
+        public int Connects { get; private set; }
+
+        public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
+        {
+            Connects++;
+            throw new InvalidOperationException("ConnectAsync must not run.");
+        }
+    }
+
+    private sealed class UnusedGainStore : IGainStore
+    {
+        public void Append(GainRecord record) { }
+
+        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
+    }
 
     private static void AssertSafety(
         SqlTargetRequest request,

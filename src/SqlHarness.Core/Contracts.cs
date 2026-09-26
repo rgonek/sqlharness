@@ -281,7 +281,28 @@ public sealed record SqlTargetRequest(
     string? SqlUser = null,
     string? PasswordEnvVar = null,
     bool TrustServerCertificate = false,
-    string? Engine = null);
+    string? Engine = null)
+{
+    public bool HasSuppliedDirectOption =>
+        SuppliesDirectOption(Server, Database, Auth, SqlUser, PasswordEnvVar, TrustServerCertificate, Engine);
+
+    // Null means omitted. Empty and unknown values still count as supplied.
+    public static bool SuppliesDirectOption(
+        string? server,
+        string? database,
+        string? auth,
+        string? sqlUser,
+        string? passwordEnvVar,
+        bool trustServerCertificate,
+        string? engine) =>
+        server is not null ||
+        database is not null ||
+        auth is not null ||
+        sqlUser is not null ||
+        passwordEnvVar is not null ||
+        trustServerCertificate ||
+        engine is not null;
+}
 
 public sealed record SqlHarnessOutcome(
     SqlHarnessExitCode ExitCode,

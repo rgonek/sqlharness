@@ -33,7 +33,8 @@ public abstract class TargetSettings : CommandSettings
     public bool TryTarget(out SqlTargetRequest target, out string error)
     {
         target = default!; error = string.Empty;
-        var directValues = new object?[] { Server, Database, Auth, SqlUser, PasswordEnvVar, Engine }.Any(v => v is string s && !string.IsNullOrWhiteSpace(s)) || TrustServerCertificate;
+        var directValues = SqlTargetRequest.SuppliesDirectOption(
+            Server, Database, Auth, SqlUser, PasswordEnvVar, TrustServerCertificate, Engine);
         if (UnsafeDirect)
         {
             if (!string.IsNullOrWhiteSpace(Profile)) { error = "Choose either a profile or --unsafe-direct, not both."; return false; }
