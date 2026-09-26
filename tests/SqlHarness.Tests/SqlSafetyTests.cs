@@ -330,6 +330,182 @@ public class SqlSafetyTests
     }
 
     [Theory]
+    [InlineData("""
+        INSERT INTO #t(id)
+        SELECT id FROM (
+          UPDATE dbo.items SET flag = 1
+          OUTPUT inserted.id
+        ) AS src
+        """)]
+    [InlineData("""
+        INSERT INTO #t(id)
+        SELECT id FROM (
+          DELETE FROM dbo.items
+          OUTPUT deleted.id
+        ) AS src
+        """)]
+    [InlineData("""
+        INSERT INTO #t(id)
+        SELECT id FROM (
+          INSERT INTO dbo.items(id)
+          OUTPUT inserted.id
+          VALUES (1)
+        ) AS src
+        """)]
+    [InlineData("""
+        INSERT INTO #t(id)
+        SELECT id FROM (
+          MERGE dbo.items AS target
+          USING (SELECT 1 AS id) AS source
+          ON target.id = source.id
+          WHEN MATCHED THEN UPDATE SET target.flag = 1
+          OUTPUT inserted.id
+        ) AS src
+        """)]
+    [InlineData("""
+        INSERT INTO #t(id)
+        SELECT id FROM (
+          UPDATE #items SET flag = 1
+          OUTPUT inserted.id INTO dbo.audit
+        ) AS src
+        """)]
+    public void Nested_dml_in_insert_source_is_a_persistent_write(string sql)
+    {
+        var denied = ClassifyQuery(sql);
+        Assert.False(denied.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, denied.Reason);
+        Assert.False(denied.HasMutation);
+
+        var allowed = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.True(allowed.Allowed, allowed.RejectionDescription);
+        Assert.True(allowed.HasMutation);
+        Assert.True(allowed.HasSessionLocalWork);
+
+        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null);
+        Assert.False(setup.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, setup.Reason);
+    }
+
+    [Theory]
+    [InlineData("""
+        INSERT INTO #t(id)
+        SELECT id FROM (
+          UPDATE #items SET flag = 1
+          OUTPUT inserted.id
+        ) AS src
+        """)]
+    [InlineData("""
+        INSERT INTO #t(id)
+        SELECT id FROM (
+          DELETE FROM #items
+          OUTPUT deleted.id INTO #audit
+        ) AS src
+        """)]
+    public void Nested_temp_dml_in_insert_source_stays_session_local(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.True(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Fact]
+    public void Nested_three_part_update_in_insert_source_stays_cross_database()
+    {
+        const string sql = """
+            INSERT INTO #t(id)
+            SELECT id FROM (
+              UPDATE otherdb.dbo.items SET flag = 1
+              OUTPUT inserted.id
+            ) AS src
+            """;
+
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.CrossDatabaseReference, decision.Reason);
+        Assert.Equal(
+            SqlSafetyReason.CrossDatabaseReference,
+            _classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Reason);
+    }
+
+    [Theory]
+    [InlineData("""
+        UPDATE #t SET id = 42
+        FROM dbo.items AS #t
+        PIVOT (COUNT(id) FOR id IN ([1])) AS p
+        """)]
+    [InlineData("""
+        UPDATE #t SET id = 42
+        FROM dbo.items AS #t
+        UNPIVOT (val FOR col IN (id)) AS p
+        """)]
+    [InlineData("""
+        DELETE #t
+        FROM dbo.items AS #t
+        PIVOT (COUNT(id) FOR id IN ([1])) AS p
+        """)]
+    public void Pivot_inner_hash_alias_of_persistent_table_requires_approval(string sql)
+    {
+        var denied = ClassifyQuery(sql);
+        Assert.False(denied.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, denied.Reason);
+        Assert.False(denied.HasSessionLocalWork);
+
+        var allowed = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.True(allowed.Allowed, allowed.RejectionDescription);
+        Assert.True(allowed.HasMutation);
+        Assert.False(allowed.HasSessionLocalWork);
+
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
+    [InlineData("""
+        UPDATE #t SET id = 42
+        FROM (SELECT 1 AS id) AS #t
+        PIVOT (COUNT(id) FOR id IN ([1])) AS p
+        """)]
+    [InlineData("""
+        UPDATE #t SET id = 42
+        FROM (SELECT 1 AS id) AS #t
+        UNPIVOT (val FOR col IN (id)) AS p
+        """)]
+    [InlineData("""
+        UPDATE #t SET id = 42
+        FROM dbo.items AS src
+        PIVOT (COUNT(id) FOR id IN ([1])) AS #t
+        """)]
+    public void Unprovable_pivot_alias_does_not_fall_through_to_the_target_token(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.False(decision.HasSessionLocalWork);
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Fact]
+    public void Pivot_inner_alias_of_actual_temp_remains_local()
+    {
+        const string sql = """
+            UPDATE #t SET id = 42
+            FROM #real AS #t
+            PIVOT (COUNT(id) FOR id IN ([1])) AS p
+            """;
+
+        var decision = ClassifyQuery(sql);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.True(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
     [InlineData("EXEC dbo.DoWork")]
     [InlineData("USE otherdb")]
     [InlineData("SELECT * FROM otherdb.dbo.Clients")]

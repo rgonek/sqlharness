@@ -291,22 +291,26 @@ internal sealed class SqlSafetyClassifier
             case InsertStatement insert:
                 return ClassifyDmlWrites(
                     ResolveDirectTarget(insert.InsertSpecification.Target),
-                    insert.InsertSpecification.OutputIntoClause);
+                    insert.InsertSpecification.OutputIntoClause,
+                    insert);
 
             case UpdateStatement update:
                 return ClassifyDmlWrites(
                     ResolveTarget(update.UpdateSpecification.Target, update.UpdateSpecification.FromClause),
-                    update.UpdateSpecification.OutputIntoClause);
+                    update.UpdateSpecification.OutputIntoClause,
+                    update);
 
             case DeleteStatement delete:
                 return ClassifyDmlWrites(
                     ResolveTarget(delete.DeleteSpecification.Target, delete.DeleteSpecification.FromClause),
-                    delete.DeleteSpecification.OutputIntoClause);
+                    delete.DeleteSpecification.OutputIntoClause,
+                    delete);
 
             case MergeStatement merge:
                 return ClassifyDmlWrites(
                     ResolveDirectTarget(merge.MergeSpecification.Target),
-                    merge.MergeSpecification.OutputIntoClause);
+                    merge.MergeSpecification.OutputIntoClause,
+                    merge);
 
             default:
                 return IsDirectMutation(statement)
@@ -317,7 +321,8 @@ internal sealed class SqlSafetyClassifier
 
     private static StatementClassification ClassifyDmlWrites(
         TargetResolution primary,
-        OutputIntoClause? outputInto)
+        OutputIntoClause? outputInto,
+        TSqlFragment statement)
     {
         if (primary.Kind == TargetResolutionKind.Ambiguous ||
             primary.Kind == TargetResolutionKind.Unsupported)
@@ -339,6 +344,10 @@ internal sealed class SqlSafetyClassifier
             targets.Add(outputTarget.Name);
         }
 
+        // INSERT ... SELECT (UPDATE/DELETE/INSERT/MERGE ... OUTPUT) hides writes that are not the statement target.
+        if (!TryAppendNestedWriteTargets(statement, targets))
+            return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+
         var hasSessionLocal = false;
         var hasPersistent = false;
         foreach (var target in targets)
@@ -350,6 +359,17 @@ internal sealed class SqlSafetyClassifier
         }
 
         return new StatementClassification(null, hasSessionLocal, hasPersistent);
+    }
+
+    private static bool TryAppendNestedWriteTargets(TSqlFragment statement, List<SchemaObjectName?> targets)
+    {
+        var visitor = new NestedDmlWriteVisitor();
+        statement.Accept(visitor);
+        if (visitor.Unsupported)
+            return false;
+
+        targets.AddRange(visitor.Targets);
+        return true;
     }
 
     private static TargetResolution ResolveTarget(TableReference? target, FromClause? fromClause)
@@ -398,8 +418,21 @@ internal sealed class SqlSafetyClassifier
                 CollectCorrelationBindings(paren.Join, bindings),
             OdbcQualifiedJoinTableReference odbc =>
                 CollectCorrelationBindings(odbc.TableReference, bindings),
+            PivotedTableReference pivoted =>
+                CollectPivotBindings(pivoted.TableReference, pivoted, bindings),
+            UnpivotedTableReference unpivoted =>
+                CollectPivotBindings(unpivoted.TableReference, unpivoted, bindings),
             _ => AddNonNamedBinding(tableReference, bindings),
         };
+
+    // The pivot alias names the result, not a base table. An unproven inner must not fall through to the DML token.
+    private static bool CollectPivotBindings(
+        TableReference? inner,
+        TableReference pivot,
+        IDictionary<string, List<SchemaObjectName?>> bindings) =>
+        inner is not null &&
+        CollectCorrelationBindings(inner, bindings) &&
+        AddNonNamedBinding(pivot, bindings);
 
     private static bool AddNamedBinding(
         NamedTableReference named,
@@ -501,6 +534,53 @@ internal sealed class SqlSafetyClassifier
 
     private static SqlSafetyDecision Denied(SqlSafetyReason reason, string? detail = null) =>
         new(false, reason, Detail: detail);
+
+    private sealed class NestedDmlWriteVisitor : TSqlFragmentVisitor
+    {
+        internal bool Unsupported { get; private set; }
+
+        internal List<SchemaObjectName?> Targets { get; } = [];
+
+        public override void ExplicitVisit(DataModificationTableReference node)
+        {
+            var spec = node.DataModificationSpecification;
+            if (spec is null)
+            {
+                Unsupported = true;
+                return;
+            }
+
+            var resolution = spec switch
+            {
+                UpdateSpecification update => ResolveTarget(update.Target, update.FromClause),
+                DeleteSpecification delete => ResolveTarget(delete.Target, delete.FromClause),
+                InsertSpecification or MergeSpecification => ResolveDirectTarget(spec.Target),
+                _ => TargetResolution.Unsupported,
+            };
+
+            if (resolution.Kind != TargetResolutionKind.Resolved || resolution.Name is null)
+            {
+                Unsupported = true;
+                return;
+            }
+
+            Targets.Add(resolution.Name);
+
+            if (spec.OutputIntoClause is { } outputInto)
+            {
+                var outputTarget = ResolveDirectTarget(outputInto.IntoTable);
+                if (outputTarget.Kind != TargetResolutionKind.Resolved || outputTarget.Name is null)
+                {
+                    Unsupported = true;
+                    return;
+                }
+
+                Targets.Add(outputTarget.Name);
+            }
+
+            base.ExplicitVisit(node);
+        }
+    }
 
     private sealed class SafetyInspectionVisitor : TSqlFragmentVisitor
     {

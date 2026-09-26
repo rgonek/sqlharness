@@ -172,6 +172,28 @@ public sealed class PostgresSafetyTests
     }
 
     [Theory]
+    [InlineData("Query", "SELECT coalesce(set_config('search_path', 'public', false), 'x')")]
+    [InlineData("CompareSetup", "SELECT coalesce(set_config('search_path', 'public', false), 'x')")]
+    [InlineData("Query", "SELECT * FROM public.items WHERE length(set_config('search_path', 'public', false)) > 0")]
+    [InlineData("CompareSetup", "SELECT * FROM public.items WHERE length(set_config('search_path', 'public', false)) > 0")]
+    [InlineData("Query", "CREATE TEMP TABLE t (note text DEFAULT lower(set_config('search_path', 'public', false)))")]
+    [InlineData("CompareSetup", "CREATE TEMP TABLE t (note text DEFAULT lower(set_config('search_path', 'public', false)))")]
+    [InlineData("Query", "SELECT coalesce(nextval('s'), 0)")]
+    [InlineData("CompareSetup", "SELECT length(setval('s', 1)::text)")]
+    [InlineData("Query", "SELECT * FROM public.items WHERE length(pg_cancel_backend(1)::text) > 0")]
+    [InlineData("CompareSetup", "SELECT coalesce(pg_advisory_lock(1), 1)")]
+    [InlineData("Query", "SELECT coalesce(pg_try_advisory_lock(1), false)")]
+    public void Denied_calls_nested_in_other_calls_are_rejected(string usage, string sql)
+    {
+        var decision = _classifier.Classify(sql, ParseUsage(usage), "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.Equal("UnsupportedStatement.", decision.RejectionDescription);
+        Assert.DoesNotContain("search_path", decision.RejectionDescription, StringComparison.Ordinal);
+        Assert.DoesNotContain(sql, decision.RejectionDescription, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("Query", """CREATE TEMP TABLE t (note text DEFAULT set_config('search_path', 'public', false)); INSERT INTO t DEFAULT VALUES""")]
     [InlineData("CompareSetup", """CREATE TEMP TABLE t (note text DEFAULT pg_catalog.set_config('search_path', 'public', false)); INSERT INTO t DEFAULT VALUES""")]
     [InlineData("Query", """CREATE TEMP TABLE t (id int DEFAULT nextval('s')); INSERT INTO t DEFAULT VALUES""")]
@@ -254,6 +276,8 @@ public sealed class PostgresSafetyTests
     [InlineData("SELECT lastval()")]
     [InlineData("SELECT 'set_config'")]
     [InlineData("SELECT count(*) FROM public.items")]
+    [InlineData("SELECT coalesce(lower('X'), 'x')")]
+    [InlineData("SELECT * FROM public.items WHERE length(name) > 0")]
     public void Unresolved_calls_views_and_operators_stay_allowed_and_are_not_a_guarantee(string sql)
     {
         var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);

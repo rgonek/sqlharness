@@ -517,13 +517,19 @@ internal sealed class PostgresSafetyClassifier
 
         public override ControlFlow PreVisitExpression(Expression expression)
         {
-            if (expression is Expression.Function function && IsDeniedObjectName(function.Name))
+            if (expression is not Expression.Function function)
+                return ControlFlow.Continue;
+
+            if (IsDeniedObjectName(function.Name))
             {
                 HasProhibitedFunction = true;
                 return ControlFlow.Break;
             }
 
-            return ControlFlow.Continue;
+            // Args live on FunctionArgumentList, which is not IElement, so the library walk never enters them.
+            VisitFunctionArguments(function.Args);
+            VisitFunctionArguments(function.Parameters);
+            return HasProhibitedFunction ? ControlFlow.Break : ControlFlow.Continue;
         }
 
         public override ControlFlow PreVisitTableFactor(TableFactor tableFactor)
@@ -535,17 +541,70 @@ internal sealed class PostgresSafetyClassifier
             switch (tableFactor)
             {
                 case TableFactor.Table table when table.Args is not null && IsDeniedObjectName(table.Name):
-                case TableFactor.Function function when IsDeniedObjectName(function.Name):
                     HasProhibitedFunction = true;
                     return ControlFlow.Break;
-                case TableFactor.TableFunction tableFunction
-                    when tableFunction.Expression is Expression.Function exprFunction
-                         && IsDeniedObjectName(exprFunction.Name):
-                    HasProhibitedFunction = true;
-                    return ControlFlow.Break;
+                case TableFactor.Function function:
+                    if (IsDeniedObjectName(function.Name))
+                    {
+                        HasProhibitedFunction = true;
+                        return ControlFlow.Break;
+                    }
+
+                    VisitFunctionArgs(function.Args);
+                    return HasProhibitedFunction ? ControlFlow.Break : ControlFlow.Continue;
+                case TableFactor.TableFunction tableFunction:
+                    ((IElement)tableFunction.Expression).Visit(this);
+                    return HasProhibitedFunction ? ControlFlow.Break : ControlFlow.Continue;
             }
 
             return ControlFlow.Continue;
+        }
+
+        private void VisitFunctionArguments(FunctionArguments? arguments)
+        {
+            if (HasProhibitedFunction || arguments is not FunctionArguments.List { ArgumentList: { } list })
+                return;
+
+            VisitFunctionArgs(list.Args);
+            if (list.Clauses is null)
+                return;
+
+            foreach (var clause in list.Clauses)
+            {
+                VisitArgumentClause(clause);
+                if (HasProhibitedFunction)
+                    return;
+            }
+        }
+
+        private void VisitFunctionArgs(IEnumerable<FunctionArg>? args)
+        {
+            if (args is null || HasProhibitedFunction)
+                return;
+
+            foreach (var arg in args)
+            {
+                ((IElement)arg).Visit(this);
+                if (HasProhibitedFunction)
+                    return;
+            }
+        }
+
+        private void VisitArgumentClause(FunctionArgumentClause clause)
+        {
+            switch (clause)
+            {
+                case FunctionArgumentClause.OrderBy orderBy:
+                    foreach (var item in orderBy.OrderByExpressions)
+                        ((IElement)item).Visit(this);
+                    break;
+                case FunctionArgumentClause.Limit limit:
+                    ((IElement)limit.LimitExpression).Visit(this);
+                    break;
+                case FunctionArgumentClause.Having having:
+                    ((IElement)having.Bound.Expression).Visit(this);
+                    break;
+            }
         }
 
         private void VisitQuery(Query query)
