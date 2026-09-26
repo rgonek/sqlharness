@@ -108,26 +108,12 @@ internal sealed class SqlSafetyClassifier
         var hasSessionLocal = false;
         foreach (var statement in statements)
         {
-            if (statement is SelectStatement select)
-            {
-                if (IsSessionOnlyWork(select))
-                    hasSessionLocal = true;
-                continue;
-            }
+            var classification = ClassifyStatement(statement);
+            if (classification.DenyReason is { } deny)
+                return Denied(deny);
 
-            if (IsSessionOnlyWork(statement))
-            {
-                hasSessionLocal = true;
-                continue;
-            }
-
-            if (IsDirectMutation(statement))
-            {
-                hasMutation = true;
-                continue;
-            }
-
-            return Denied(SqlSafetyReason.UnsupportedStatement);
+            hasMutation |= classification.HasPersistentWrite;
+            hasSessionLocal |= classification.HasSessionLocalWrite;
         }
 
         if (!hasMutation)
@@ -153,19 +139,6 @@ internal sealed class SqlSafetyClassifier
         return Allowed(hasMutation: true, hasSessionLocal: hasSessionLocal);
     }
 
-    private static bool IsSessionOnlyWork(TSqlStatement statement) => statement switch
-    {
-        SelectStatement select => select.Into is not null && IsLocalTemp(select.Into),
-        CreateTableStatement create => IsLocalTemp(create.SchemaObjectName),
-        InsertStatement insert => IsLocalTemp(GetName(insert.InsertSpecification.Target)),
-        UpdateStatement update => IsLocalTemp(GetName(update.UpdateSpecification.Target)),
-        DeleteStatement delete => IsLocalTemp(GetName(delete.DeleteSpecification.Target)),
-        MergeStatement merge => IsLocalTemp(GetName(merge.MergeSpecification.Target)),
-        CreateIndexStatement createIndex => IsLocalTemp(createIndex.OnName),
-        DropTableStatement drop => drop.Objects.Count > 0 && drop.Objects.All(IsLocalTemp),
-        _ => false,
-    };
-
     private static SqlSafetyDecision ClassifyCompareSetup(
         IReadOnlyList<TSqlStatement> statements,
         SafetyInspectionVisitor inspection)
@@ -175,31 +148,226 @@ internal sealed class SqlSafetyClassifier
             return Denied(SqlSafetyReason.NonTemporaryWrite);
         }
 
+        var hasSessionLocal = false;
         foreach (var statement in statements)
         {
-            var allowed = statement switch
-            {
-                SelectStatement => true,
-                DeclareVariableStatement => true,
-                CreateTableStatement create => IsLocalTemp(create.SchemaObjectName),
-                InsertStatement insert => IsLocalTemp(GetName(insert.InsertSpecification.Target)),
-                UpdateStatement update => IsLocalTemp(GetName(update.UpdateSpecification.Target)),
-                DeleteStatement delete => IsLocalTemp(GetName(delete.DeleteSpecification.Target)),
-                CreateIndexStatement createIndex => IsLocalTemp(createIndex.OnName),
-                DropTableStatement drop => drop.Objects.Count > 0 && drop.Objects.All(IsLocalTemp),
-                _ => false,
-            };
+            if (statement is DeclareVariableStatement)
+                continue;
 
-            if (!allowed)
+            var classification = ClassifyStatement(statement);
+            if (classification.DenyReason is { } deny)
+            {
+                // Setup never takes the mutation-approval path; any write outside local temps is NonTemporaryWrite.
+                if (deny is SqlSafetyReason.MutationNotAllowed ||
+                    (deny is SqlSafetyReason.UnsupportedStatement && IsWrite(statement)))
+                {
+                    return Denied(SqlSafetyReason.NonTemporaryWrite);
+                }
+
+                return Denied(deny);
+            }
+
+            if (classification.HasPersistentWrite)
+                return Denied(SqlSafetyReason.NonTemporaryWrite);
+
+            if (!classification.HasSessionLocalWrite && statement is not SelectStatement)
             {
                 return Denied(IsWrite(statement)
                     ? SqlSafetyReason.NonTemporaryWrite
                     : SqlSafetyReason.UnsupportedStatement);
             }
+
+            hasSessionLocal |= classification.HasSessionLocalWrite;
         }
 
-        return Allowed(hasSessionLocal: statements.Any(IsSessionOnlyWork));
+        return Allowed(hasSessionLocal: hasSessionLocal);
     }
+
+    private static StatementClassification ClassifyStatement(TSqlStatement statement)
+    {
+        switch (statement)
+        {
+            case SelectStatement select:
+                if (select.Into is null)
+                    return StatementClassification.ReadOnly;
+                return IsLocalTemp(select.Into)
+                    ? StatementClassification.SessionLocal
+                    : StatementClassification.Denied(SqlSafetyReason.SelectIntoNotAllowed);
+
+            case CreateTableStatement create:
+                return IsLocalTemp(create.SchemaObjectName)
+                    ? StatementClassification.SessionLocal
+                    : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+
+            case CreateIndexStatement createIndex:
+                return IsLocalTemp(createIndex.OnName)
+                    ? StatementClassification.SessionLocal
+                    : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+
+            case DropTableStatement drop when drop.Objects.Count > 0 && drop.Objects.All(IsLocalTemp):
+                return StatementClassification.SessionLocal;
+
+            case InsertStatement insert:
+                return ClassifyDmlWrites(
+                    ResolveDirectTarget(insert.InsertSpecification.Target),
+                    insert.InsertSpecification.OutputIntoClause);
+
+            case UpdateStatement update:
+                return ClassifyDmlWrites(
+                    ResolveTarget(update.UpdateSpecification.Target, update.UpdateSpecification.FromClause),
+                    update.UpdateSpecification.OutputIntoClause);
+
+            case DeleteStatement delete:
+                return ClassifyDmlWrites(
+                    ResolveTarget(delete.DeleteSpecification.Target, delete.DeleteSpecification.FromClause),
+                    delete.DeleteSpecification.OutputIntoClause);
+
+            case MergeStatement merge:
+                return ClassifyDmlWrites(
+                    ResolveDirectTarget(merge.MergeSpecification.Target),
+                    merge.MergeSpecification.OutputIntoClause);
+
+            default:
+                return IsDirectMutation(statement)
+                    ? StatementClassification.Persistent
+                    : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+        }
+    }
+
+    private static StatementClassification ClassifyDmlWrites(
+        TargetResolution primary,
+        OutputIntoClause? outputInto)
+    {
+        if (primary.Kind == TargetResolutionKind.Ambiguous ||
+            primary.Kind == TargetResolutionKind.Unsupported)
+        {
+            return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+        }
+
+        var targets = new List<SchemaObjectName?>();
+        if (primary.Kind == TargetResolutionKind.Resolved)
+            targets.Add(primary.Name);
+        else
+            return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+
+        if (outputInto is not null)
+        {
+            var outputTarget = ResolveDirectTarget(outputInto.IntoTable);
+            if (outputTarget.Kind != TargetResolutionKind.Resolved)
+                return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+            targets.Add(outputTarget.Name);
+        }
+
+        var hasSessionLocal = false;
+        var hasPersistent = false;
+        foreach (var target in targets)
+        {
+            if (IsLocalTemp(target))
+                hasSessionLocal = true;
+            else
+                hasPersistent = true;
+        }
+
+        return new StatementClassification(null, hasSessionLocal, hasPersistent);
+    }
+
+    private static TargetResolution ResolveTarget(TableReference? target, FromClause? fromClause)
+    {
+        if (target is not NamedTableReference named)
+            return TargetResolution.Unsupported;
+
+        if (fromClause is null)
+            return TargetResolution.Resolved(named.SchemaObject);
+
+        var bindings = new Dictionary<string, List<SchemaObjectName?>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var tableReference in fromClause.TableReferences)
+        {
+            if (!CollectCorrelationBindings(tableReference, bindings))
+                return TargetResolution.Unsupported;
+        }
+
+        var key = CorrelationKey(named.SchemaObject);
+        if (key is not null && bindings.TryGetValue(key, out var matches))
+        {
+            if (matches.Count != 1)
+                return TargetResolution.Ambiguous;
+            return matches[0] is null
+                ? TargetResolution.Unsupported
+                : TargetResolution.Resolved(matches[0]!);
+        }
+
+        return TargetResolution.Resolved(named.SchemaObject);
+    }
+
+    private static TargetResolution ResolveDirectTarget(TableReference? target) =>
+        target is NamedTableReference named
+            ? TargetResolution.Resolved(named.SchemaObject)
+            : TargetResolution.Unsupported;
+
+    private static bool CollectCorrelationBindings(
+        TableReference tableReference,
+        IDictionary<string, List<SchemaObjectName?>> bindings) =>
+        tableReference switch
+        {
+            NamedTableReference named => AddNamedBinding(named, bindings),
+            JoinTableReference join =>
+                CollectCorrelationBindings(join.FirstTableReference, bindings) &&
+                CollectCorrelationBindings(join.SecondTableReference, bindings),
+            JoinParenthesisTableReference paren =>
+                CollectCorrelationBindings(paren.Join, bindings),
+            OdbcQualifiedJoinTableReference odbc =>
+                CollectCorrelationBindings(odbc.TableReference, bindings),
+            _ => AddNonNamedBinding(tableReference, bindings),
+        };
+
+    private static bool AddNamedBinding(
+        NamedTableReference named,
+        IDictionary<string, List<SchemaObjectName?>> bindings)
+    {
+        var key = named.Alias?.Value ?? CorrelationKey(named.SchemaObject);
+        if (key is null)
+            return false;
+
+        if (!bindings.TryGetValue(key, out var matches))
+        {
+            matches = [];
+            bindings[key] = matches;
+        }
+
+        matches.Add(named.SchemaObject);
+        return true;
+    }
+
+    private static bool AddNonNamedBinding(
+        TableReference tableReference,
+        IDictionary<string, List<SchemaObjectName?>> bindings)
+    {
+        // Aliased derived/TVF sources are not durable named targets we can prove local.
+        var alias = tableReference switch
+        {
+            QueryDerivedTable derived => derived.Alias?.Value,
+            SchemaObjectFunctionTableReference function => function.Alias?.Value,
+            VariableTableReference variable => variable.Alias?.Value,
+            PivotedTableReference pivoted => pivoted.Alias?.Value,
+            UnpivotedTableReference unpivoted => unpivoted.Alias?.Value,
+            _ => null,
+        };
+
+        if (alias is null)
+            return true;
+
+        if (!bindings.TryGetValue(alias, out var matches))
+        {
+            matches = [];
+            bindings[alias] = matches;
+        }
+
+        matches.Add(null);
+        return true;
+    }
+
+    private static string? CorrelationKey(SchemaObjectName name) =>
+        name.Identifiers.Count == 0 ? null : name.BaseIdentifier.Value;
 
     private static bool IsDirectMutation(TSqlStatement statement) =>
         statement is InsertStatement or UpdateStatement or DeleteStatement or MergeStatement;
@@ -219,6 +387,36 @@ internal sealed class SqlSafetyClassifier
         name?.Identifiers.Count == 1 &&
         name.BaseIdentifier.Value.StartsWith('#') &&
         !name.BaseIdentifier.Value.StartsWith("##", StringComparison.Ordinal);
+
+    private readonly record struct StatementClassification(
+        SqlSafetyReason? DenyReason,
+        bool HasSessionLocalWrite,
+        bool HasPersistentWrite)
+    {
+        internal static StatementClassification ReadOnly { get; } = new(null, false, false);
+        internal static StatementClassification SessionLocal { get; } = new(null, true, false);
+        internal static StatementClassification Persistent { get; } = new(null, false, true);
+        internal static StatementClassification Denied(SqlSafetyReason reason) => new(reason, false, false);
+    }
+
+    private enum TargetResolutionKind
+    {
+        Resolved,
+        Ambiguous,
+        Unsupported,
+    }
+
+    private readonly record struct TargetResolution(TargetResolutionKind Kind, SchemaObjectName? Name)
+    {
+        internal static TargetResolution Resolved(SchemaObjectName name) =>
+            new(TargetResolutionKind.Resolved, name);
+
+        internal static TargetResolution Ambiguous { get; } =
+            new(TargetResolutionKind.Ambiguous, null);
+
+        internal static TargetResolution Unsupported { get; } =
+            new(TargetResolutionKind.Unsupported, null);
+    }
 
     private static SqlSafetyDecision Allowed(bool hasMutation = false, bool hasSessionLocal = false) =>
         new(true, SqlSafetyReason.Allowed, hasMutation) { HasSessionLocalWork = hasSessionLocal };

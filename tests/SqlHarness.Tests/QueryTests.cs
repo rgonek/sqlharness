@@ -85,6 +85,44 @@ public class SqlHarnessQueryTests
         Assert.Equal("read-only", Assert.IsType<SqlHarnessQueryReport>(outcome.Report).StatementClassification);
     }
 
+    [Theory]
+    [InlineData("CREATE TABLE #t(id int); INSERT INTO #t OUTPUT inserted.id INTO dbo.audit_sink VALUES (1);")]
+    [InlineData("UPDATE #t SET id = 42 FROM dbo.items AS #t")]
+    public async Task Query_persistent_write_targets_are_rejected_before_connect(string sql)
+    {
+        var azure = new FakeAzureCli(Token);
+        var session = FakeSqlSession.WithIdentity("test-server", "testdb-a");
+
+        var outcome = await Module(session, azure: azure).ExecuteAsync(Query(sql));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Contains("MutationNotAllowed", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Empty(azure.Calls);
+        Assert.Empty(session.Commands);
+        Assert.Null(outcome.Report);
+    }
+
+    [Fact]
+    public async Task Query_persistent_OUTPUT_INTO_allows_only_with_exact_mutation_contract()
+    {
+        const string sql =
+            "CREATE TABLE #t(id int); INSERT INTO #t OUTPUT inserted.id INTO dbo.audit_sink VALUES (1);";
+        var session = FakeSqlSession.WithIdentity(
+            "test-server",
+            "testdb-a",
+            FakeSqlReader.Rows(["id"]));
+
+        var outcome = await Module(session).ExecuteAsync(Query(sql) with
+        {
+            AllowMutation = true,
+            ConfirmDatabase = "testdb-a",
+        });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal("mutation", Assert.IsType<SqlHarnessQueryReport>(outcome.Report).StatementClassification);
+        Assert.Equal(sql, Assert.Single(session.Commands).Sql);
+    }
+
     [Fact]
     public async Task Authentication_uses_exact_Azure_SQL_resource_and_token_is_never_reported()
     {

@@ -231,6 +231,36 @@ public class SqlHarnessCompareTests
         Assert.Equal(0, session.FactoryOpenCount);
     }
 
+    [Theory]
+    [InlineData("INSERT #t(Id) OUTPUT inserted.Id INTO dbo.PersistentAudit VALUES (1)", null, null)]
+    [InlineData("UPDATE #t SET Id = 2 FROM dbo.Clients AS #t", null, null)]
+    [InlineData(null, "INSERT #t(Id) OUTPUT inserted.Id INTO dbo.PersistentAudit VALUES (1)", null)]
+    [InlineData(null, null, "UPDATE #t SET Id = 2 FROM dbo.Clients AS #t")]
+    public async Task Compare_persistent_write_targets_are_rejected_before_connect_without_artifacts(
+        string? setupSql,
+        string? baselineSql,
+        string? candidateSql)
+    {
+        var session = FakeCompareSession.Create();
+        var azure = new FakeAzureCli();
+        var artifacts = new CapturingArtifactWriter();
+        var operation = Compare(repeat: 1);
+        if (setupSql is not null)
+            operation = operation with { SetupSql = setupSql };
+        if (baselineSql is not null)
+            operation = operation with { BaselineSql = baselineSql };
+        if (candidateSql is not null)
+            operation = operation with { CandidateSql = candidateSql };
+
+        var outcome = await Module(session, azure, artifacts: artifacts).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Empty(azure.Calls);
+        Assert.Equal(0, session.FactoryOpenCount);
+        Assert.Empty(artifacts.Runs);
+        Assert.Null(outcome.Report);
+    }
+
     [Fact]
     public async Task Compare_invalid_repeat_uses_compare_wording()
     {

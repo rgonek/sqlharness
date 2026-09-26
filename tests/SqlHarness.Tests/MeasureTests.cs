@@ -141,16 +141,22 @@ public class SqlHarnessMeasureTests
     [Theory]
     [InlineData("DELETE dbo.Clients", "SELECT Value FROM dbo.Clients")]
     [InlineData("SELECT Id INTO #ids FROM dbo.Clients", "UPDATE dbo.Clients SET Value = 1")]
+    [InlineData("INSERT #t(Id) OUTPUT inserted.Id INTO dbo.PersistentAudit VALUES (1)", "SELECT Value FROM dbo.Clients")]
+    [InlineData("UPDATE #t SET Id = 2 FROM dbo.Clients AS #t", "SELECT Value FROM dbo.Clients")]
+    [InlineData("SELECT Id INTO #ids FROM dbo.Clients", "INSERT #t(Id) OUTPUT inserted.Id INTO dbo.PersistentAudit VALUES (1)")]
     public async Task Measure_classifies_all_SQL_before_authentication(string? setup, string query)
     {
         var session = FakeMeasureSession.Create();
         var azure = new FakeAzureCli();
+        var writer = new CapturingArtifactWriter();
 
-        var outcome = await Module(session, azure).ExecuteAsync(Measure(1) with { SetupSql = setup, QuerySql = query });
+        var outcome = await Module(session, azure, writer: writer).ExecuteAsync(Measure(1) with { SetupSql = setup, QuerySql = query });
 
         Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
         Assert.Empty(azure.Calls);
         Assert.Equal(0, session.FactoryOpenCount);
+        Assert.Empty(writer.Runs);
+        Assert.Null(outcome.Report);
     }
 
     [Fact]

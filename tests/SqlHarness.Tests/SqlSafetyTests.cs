@@ -208,6 +208,113 @@ public class SqlSafetyTests
     public void Compare_setup_denies_persistent_OUTPUT_INTO_destinations(string sql) =>
         Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
 
+    [Fact]
+    public void TempInsertWithPersistentOutputRequiresApproval()
+    {
+        const string sql =
+            "CREATE TABLE #t(id int); INSERT INTO #t OUTPUT inserted.id INTO dbo.audit_sink VALUES (1);";
+
+        var denied = ClassifyQuery(sql);
+        Assert.False(denied.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, denied.Reason);
+        Assert.False(denied.HasMutation);
+
+        var allowed = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.True(allowed.Allowed, allowed.RejectionDescription);
+        Assert.True(allowed.HasMutation);
+        Assert.True(allowed.HasSessionLocalWork);
+
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
+    [InlineData("UPDATE #t SET id = 42 FROM dbo.items AS #t")]
+    [InlineData("DELETE #t FROM dbo.items AS #t")]
+    [InlineData("UPDATE [#t] SET id = 42 FROM dbo.items AS [#t]")]
+    [InlineData("DELETE [#t] FROM dbo.items AS [#t]")]
+    public void HashAliasOfPersistentTableRequiresApproval(string sql)
+    {
+        var denied = ClassifyQuery(sql);
+        Assert.False(denied.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, denied.Reason);
+        Assert.False(denied.HasSessionLocalWork);
+
+        var allowed = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.True(allowed.Allowed, allowed.RejectionDescription);
+        Assert.True(allowed.HasMutation);
+        Assert.False(allowed.HasSessionLocalWork);
+
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
+    [InlineData("UPDATE t SET id = 1 FROM #real AS t")]
+    [InlineData("DELETE t FROM #real AS t")]
+    [InlineData("UPDATE #alias SET id = 1 FROM #real AS #alias")]
+    [InlineData("DELETE #alias FROM #real AS #alias")]
+    [InlineData("UPDATE [#alias] SET id = 1 FROM #real AS [#alias]")]
+    public void AliasOfActualTempRemainsLocal(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.True(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Fact]
+    public void Ambiguous_hash_alias_target_is_rejected()
+    {
+        const string sql = "UPDATE #t SET id = 42 FROM dbo.items AS #t, dbo.other AS #t";
+
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    [Theory]
+    [InlineData("INSERT #t(Id) OUTPUT inserted.Id INTO dbo.PersistentAudit VALUES (1)")]
+    [InlineData("UPDATE #t SET Id = 2 OUTPUT inserted.Id INTO dbo.PersistentAudit")]
+    [InlineData("DELETE #t OUTPUT deleted.Id INTO dbo.PersistentAudit WHERE Id = 1")]
+    [InlineData("MERGE #t AS target USING (SELECT 1 AS Id) AS source ON target.Id = source.Id WHEN MATCHED THEN UPDATE SET target.Id = source.Id OUTPUT inserted.Id INTO dbo.PersistentAudit;")]
+    public void Query_persistent_OUTPUT_INTO_requires_approval_for_all_DML_shapes(string sql)
+    {
+        var denied = ClassifyQuery(sql);
+        Assert.False(denied.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, denied.Reason);
+
+        var allowed = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.True(allowed.Allowed, allowed.RejectionDescription);
+        Assert.True(allowed.HasMutation);
+
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Fact]
+    public void Query_local_OUTPUT_INTO_temp_remains_session_local()
+    {
+        const string sql = "INSERT #t(Id) OUTPUT inserted.Id INTO #audit VALUES (1)";
+
+        var decision = ClassifyQuery(sql);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+        Assert.True(decision.HasSessionLocalWork);
+    }
+
+    [Fact]
+    public void Classifier_still_denies_cross_database_OUTPUT_even_with_mutation_approval()
+    {
+        const string sql = "INSERT #t(Id) OUTPUT inserted.Id INTO otherdb.dbo.PersistentAudit VALUES (1)";
+
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.CrossDatabaseReference, decision.Reason);
+    }
+
     [Theory]
     [InlineData("EXEC dbo.DoWork")]
     [InlineData("USE otherdb")]
