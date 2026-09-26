@@ -15,14 +15,21 @@ internal sealed class CompareMatrixCellFailedException : Exception
     internal string ParameterName { get; }
     internal CompareCellPhase Phase { get; }
     internal OutputFootprint RawFootprint { get; }
+    internal SqlHarnessCompareMatrixReport? PartialReport { get; }
 
-    internal CompareMatrixCellFailedException(int index, string parameterName, CompareCellFailedException inner)
+    internal CompareMatrixCellFailedException(int index, string parameterName, string parameterType, CompareCellFailedException inner, IReadOnlyList<CompareMatrixCellReport> completedCells, OutputFootprint rawFootprint)
         : base(null, Unwrap(inner))
     {
         Index = index;
         ParameterName = parameterName ?? throw new ArgumentNullException(nameof(parameterName));
         Phase = inner.Phase;
-        RawFootprint = inner.RawFootprint;
+        RawFootprint = rawFootprint;
+        PartialReport = completedCells.Count == 0
+            ? null
+            : new SqlHarnessCompareMatrixReport(
+                parameterName,
+                parameterType,
+                completedCells.ToArray());
     }
 
     private static Exception Unwrap(CompareCellFailedException inner)
@@ -66,7 +73,15 @@ internal sealed class CompareMatrixRunner(CompareCellRunner cells)
             }
             catch (CompareCellFailedException failed)
             {
-                throw new CompareMatrixCellFailedException(index, run.ParameterName, failed);
+                bytes += failed.RawFootprint.Bytes;
+                lines += failed.RawFootprint.Lines;
+                throw new CompareMatrixCellFailedException(
+                    index,
+                    run.ParameterName,
+                    run.ParameterType,
+                    failed,
+                    reports,
+                    new OutputFootprint(bytes, lines));
             }
         }
 

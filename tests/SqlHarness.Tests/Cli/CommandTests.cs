@@ -426,9 +426,9 @@ public sealed class CommandTests
 
             Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
             Assert.Empty(module.Operations);
-            Assert.Equal(
-                $"Choose only one of --json or --json-summary.{Environment.NewLine}",
-                output.ToString());
+            using var json = JsonDocument.Parse(output.ToString());
+            Assert.Equal("safety_rejected", json.RootElement.GetProperty("error").GetProperty("code").GetString());
+            Assert.Equal("Choose only one of --output, --json, or --json-summary.", json.RootElement.GetProperty("error").GetProperty("message").GetString());
         }
         finally
         {
@@ -450,9 +450,9 @@ public sealed class CommandTests
 
             Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
             Assert.Empty(module.Operations);
-            Assert.Equal(
-                $"Choose only one of --json or --json-summary.{Environment.NewLine}",
-                output.ToString());
+            using var json = JsonDocument.Parse(output.ToString());
+            Assert.Equal("safety_rejected", json.RootElement.GetProperty("error").GetProperty("code").GetString());
+            Assert.Equal("Choose only one of --output, --json, or --json-summary.", json.RootElement.GetProperty("error").GetProperty("message").GetString());
         }
         finally
         {

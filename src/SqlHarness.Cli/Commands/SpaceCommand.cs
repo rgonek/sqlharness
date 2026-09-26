@@ -25,7 +25,7 @@ public sealed class SpaceCommand(ISqlHarnessModule module, OutputContext output,
             return Task.FromResult(Invalid(objectError));
         return Dispatch(
             new SqlHarnessSpaceOperation(target, settings.Top, settings.Object, settings.Timeout),
-            ResolveOutputMode(settings.Json),
+            ResolveOutputMode(settings.Json, output: settings.Output),
             ct);
     }
 

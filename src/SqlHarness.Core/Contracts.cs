@@ -315,7 +315,13 @@ public sealed record SqlHarnessOutcome(
     SqlHarnessExitCode ExitCode,
     object? Report,
     string? SafeError,
-    SqlHarnessEmissionReceipt? EmissionReceipt = null);
+    SqlHarnessEmissionReceipt? EmissionReceipt = null,
+    SqlHarnessError? Error = null)
+{
+    /// <summary>Structured error mapped at outcome construction, before any renderer runs.</summary>
+    public SqlHarnessError? MachineError { get; } = Error ??
+        (string.IsNullOrWhiteSpace(SafeError) ? null : SqlHarnessError.From(ExitCode, SafeError));
+}
 
 public sealed class SqlHarnessEmissionReceipt
 {

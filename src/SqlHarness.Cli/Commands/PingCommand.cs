@@ -18,6 +18,6 @@ public sealed class PingCommand(ISqlHarnessModule module, OutputContext output, 
     {
         if (!settings.TryTarget(out var target, out var error)) return Task.FromResult(Invalid(error));
         if (settings.Timeout is < 1 or > 300) return Task.FromResult(Invalid("--timeout must be 1..300."));
-        return Dispatch(new SqlHarnessPingOperation(target, settings.Timeout), ResolveOutputMode(settings.Json), ct);
+        return Dispatch(new SqlHarnessPingOperation(target, settings.Timeout), ResolveOutputMode(settings.Json, output: settings.Output), ct);
     }
 }

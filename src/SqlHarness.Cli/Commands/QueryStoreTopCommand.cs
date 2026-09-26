@@ -35,7 +35,7 @@ public sealed class QueryStoreTopCommand(ISqlHarnessModule module, OutputContext
 
         return Dispatch(
             new SqlHarnessQueryStoreTopOperation(target, settings.Top, windowMinutes, settings.Timeout),
-            ResolveOutputMode(settings.Json),
+            ResolveOutputMode(settings.Json, output: settings.Output),
             ct);
     }
 }

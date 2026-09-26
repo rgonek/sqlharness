@@ -179,7 +179,9 @@ public class CompareMatrixTests
 
         Assert.Equal(5, (int)outcome.ExitCode);
         Assert.Equal(2, factory.ConnectCount);
-        Assert.Null(outcome.Report);
+        var partialReport = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
+        Assert.Equal([0], partialReport.Cells.Select(cell => cell.Index));
+        Assert.Equal("int", partialReport.ParameterType);
         var error = outcome.SafeError ?? string.Empty;
         Assert.Contains("cell 1", error, StringComparison.Ordinal);
         Assert.Contains("@BatchSize", error, StringComparison.Ordinal);
@@ -200,7 +202,9 @@ public class CompareMatrixTests
         var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix("BatchSize:int=1,20,100"));
 
         Assert.Equal(5, (int)outcome.ExitCode);
-        Assert.Null(outcome.Report);
+        var partialReport = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
+        Assert.Equal([0, 1], partialReport.Cells.Select(cell => cell.Index));
+        Assert.Equal("int", partialReport.ParameterType);
         var error = outcome.SafeError ?? string.Empty;
         Assert.Contains("cell 2", error, StringComparison.Ordinal);
         Assert.Contains("@BatchSize", error, StringComparison.Ordinal);

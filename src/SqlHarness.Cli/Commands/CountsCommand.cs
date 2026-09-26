@@ -27,7 +27,7 @@ public sealed class CountsCommand(ISqlHarnessModule module, OutputContext output
             return Task.FromResult(Invalid("--timeout must be 1..300 and --top must be 1..500."));
         return Dispatch(
             new SqlHarnessCountsOperation(target, settings.Tables, settings.Like, settings.Top, settings.Exact, settings.Timeout),
-            ResolveOutputMode(settings.Json),
+            ResolveOutputMode(settings.Json, output: settings.Output),
             ct);
     }
 }

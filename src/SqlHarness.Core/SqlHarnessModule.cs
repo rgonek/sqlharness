@@ -494,7 +494,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     ? SqlHarnessExitCode.LocalStorage
                     : MapException(failed.InnerException ?? failed, phase);
                 return WithReceipt(
-                    new SqlHarnessOutcome(exitCode, null, FormatMatrixCellError(failed, knownSecrets)),
+                    new SqlHarnessOutcome(exitCode, failed.PartialReport, FormatMatrixCellError(failed, knownSecrets)),
                     stopwatch.ElapsedMilliseconds,
                     rawFootprint,
                     "compare");

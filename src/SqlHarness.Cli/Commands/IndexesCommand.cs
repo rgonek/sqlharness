@@ -25,7 +25,7 @@ public sealed class IndexesCommand(ISqlHarnessModule module, OutputContext outpu
             return Task.FromResult(Invalid(objectError));
         return Dispatch(
             new SqlHarnessIndexesOperation(target, settings.Top, settings.Object, settings.Timeout),
-            ResolveOutputMode(settings.Json),
+            ResolveOutputMode(settings.Json, output: settings.Output),
             ct);
     }
 }

@@ -13,7 +13,8 @@ public static class SqlHarnessCli
     public static SqlHarnessApp Create(ISqlHarnessModule module, TextWriter? output = null, TextReader? stdin = null, bool? stdinRedirected = null, Stream? planStdin = null)
     {
         var registrar = new Registrar();
-        registrar.Add(module); registrar.Add(new OutputContext(output ?? Console.Out)); registrar.Add(new Renderer());
+        var outputContext = new OutputContext(output ?? Console.Out);
+        registrar.Add(module); registrar.Add(outputContext); registrar.Add(new Renderer());
         registrar.Add(new CliInput(stdin ?? Console.In, stdinRedirected ?? Console.IsInputRedirected));
         registrar.Add(new PlanInput(planStdin ?? Console.OpenStandardInput()));
         var app = new CommandApp(registrar);
@@ -21,6 +22,15 @@ public static class SqlHarnessCli
         {
             c.SetApplicationName("sqlharness");
             c.SetApplicationVersion(Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0");
+            c.SetExceptionHandler((exception, _) =>
+            {
+                if (outputContext.Mode == OutputMode.Text)
+                    return -1;
+                const string safeMessage = "Invalid command line arguments.";
+                new Renderer().RenderError(SqlHarnessExitCode.Safety, safeMessage, outputContext.Mode, outputContext.Command, outputContext.Capture);
+                outputContext.Capture.Flush();
+                return (int)SqlHarnessExitCode.Safety;
+            });
             // Relaxed parsing would ignore --matrix on measure and query instead of rejecting it.
             c.UseStrictParsing();
             c.AddCommand<QueryCommand>("query"); c.AddCommand<MeasureCommand>("measure");
@@ -35,7 +45,7 @@ public static class SqlHarnessCli
             c.AddCommand<QueryStoreTopCommand>("qstop");
             c.AddCommand<IndexesCommand>("indexes");
         });
-        return new SqlHarnessApp(app);
+        return new SqlHarnessApp(app, outputContext);
     }
     private sealed class Registrar : ITypeRegistrar
     {
@@ -66,11 +76,12 @@ public static class SqlHarnessCli
     }
 }
 
-public sealed class SqlHarnessApp(CommandApp app)
+public sealed class SqlHarnessApp(CommandApp app, OutputContext output)
 {
     public Task<int> RunAsync(IEnumerable<string> args)
     {
         var normalized = args.ToArray();
+        output.Configure(normalized);
         if (normalized.Length >= 2 && string.Equals(normalized[0], "plan", StringComparison.OrdinalIgnoreCase) && normalized[1] == "-")
             normalized = [normalized[0], .. normalized.Skip(2)];
         return app.RunAsync(normalized);

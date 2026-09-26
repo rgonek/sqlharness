@@ -9,21 +9,26 @@ namespace SqlHarness.Cli.Commands;
 public sealed class Renderer
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
-    public void Render(SqlHarnessOutcome outcome, OutputMode mode, OutputCaptureWriter output)
+    private static readonly JsonSerializerOptions CompactJson = new(JsonSerializerDefaults.Web);
+    public void Render(SqlHarnessOutcome outcome, OutputMode mode, OutputCaptureWriter output, string command = "unknown")
     {
+        if (mode == OutputMode.Agent)
+        {
+            WriteAgent(outcome, command, output);
+            return;
+        }
+        var hasError = outcome.MachineError is not null;
+        if (hasError && mode is OutputMode.Json or OutputMode.JsonSummary)
+        {
+            var error = outcome.MachineError!;
+            var payload = new { result = mode == OutputMode.JsonSummary ? ProjectSummary(outcome.Report) : outcome.Report, error };
+            output.WriteLine(JsonSerializer.Serialize(payload, payload.GetType(), Json));
+            return;
+        }
         if (outcome.Report is not null && mode is OutputMode.Json or OutputMode.JsonSummary)
         {
-            var rendered = mode == OutputMode.JsonSummary
-                ? outcome.Report switch
-                {
-                    SqlHarnessCompareReport compare => (object)BenchmarkSummaryProjector.Project(compare),
-                    SqlHarnessCompareMatrixReport matrix => BenchmarkSummaryProjector.Project(matrix),
-                    SqlHarnessMeasureReport measure => BenchmarkSummaryProjector.Project(measure),
-                    SqlHarnessMeasureSetReport measureSet => BenchmarkSummaryProjector.Project(measureSet),
-                    _ => outcome.Report,
-                }
-                : outcome.Report;
-            output.WriteLine(JsonSerializer.Serialize(rendered, rendered.GetType(), Json));
+            var rendered = mode == OutputMode.JsonSummary ? ProjectSummary(outcome.Report) : outcome.Report;
+            output.WriteLine(JsonSerializer.Serialize(rendered, rendered!.GetType(), Json));
             return;
         }
         if (outcome.Report is SqlHarnessQueryReport query)
@@ -91,9 +96,43 @@ public sealed class Renderer
             RenderQueryStoreTop(queryStoreTop, output);
         else if (outcome.Report is SqlHarnessIndexesReport indexes)
             RenderIndexes(indexes, output);
-        else if (!string.IsNullOrWhiteSpace(outcome.SafeError))
+        if (!string.IsNullOrWhiteSpace(outcome.SafeError))
             output.WriteLine($"SQLHarness {outcome.ExitCode}: {SecretRedactor.Redact(outcome.SafeError, [])}");
     }
+
+    public void RenderError(SqlHarnessExitCode exitCode, string message, OutputMode mode, string command, OutputCaptureWriter output, SqlHarnessError? structuredError = null)
+    {
+        var error = structuredError ?? SqlHarnessError.From(exitCode, message, "validation");
+        if (mode == OutputMode.Agent)
+        {
+            WriteAgent(new SqlHarnessOutcome(exitCode, null, message, Error: error), command, output);
+            return;
+        }
+        if (mode is OutputMode.Json or OutputMode.JsonSummary)
+        {
+            var payload = new { result = (object?)null, error };
+            output.WriteLine(JsonSerializer.Serialize(payload, payload.GetType(), Json));
+            return;
+        }
+        output.WriteLine(message);
+    }
+
+    private static void WriteAgent(SqlHarnessOutcome outcome, string command, TextWriter output)
+    {
+        var error = outcome.MachineError;
+        var status = error is null ? "success" : outcome.Report is null ? "error" : "partial";
+        var envelope = new SqlHarnessAgentEnvelope(1, command, status, (int)outcome.ExitCode, ProjectSummary(outcome.Report), error);
+        output.WriteLine(JsonSerializer.Serialize(envelope, CompactJson));
+    }
+
+    private static object? ProjectSummary(object? report) => report switch
+    {
+        SqlHarnessCompareReport compare => BenchmarkSummaryProjector.Project(compare),
+        SqlHarnessCompareMatrixReport matrix => BenchmarkSummaryProjector.Project(matrix),
+        SqlHarnessMeasureReport measure => BenchmarkSummaryProjector.Project(measure),
+        SqlHarnessMeasureSetReport measureSet => BenchmarkSummaryProjector.Project(measureSet),
+        _ => report,
+    };
 
     private static void RenderMeasureSet(SqlHarnessMeasureSetReport report, TextWriter output)
     {

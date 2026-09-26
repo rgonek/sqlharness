@@ -60,13 +60,13 @@ public sealed class SnapshotCommand(ISqlHarnessModule module, OutputContext outp
                     settings.Name,
                     settings.Diff,
                     settings.Force),
-                ResolveOutputMode(settings.Json),
+                ResolveOutputMode(settings.Json, output: settings.Output),
                 ct);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return Invalid("Unable to read SQL input file.");
+            return Invalid("Unable to read SQL input file.", new SqlHarnessError("input_file_unavailable", "input", "Unable to read SQL input file."));
         }
     }
 }

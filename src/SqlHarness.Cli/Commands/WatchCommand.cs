@@ -85,7 +85,7 @@ public sealed class WatchCommand(ISqlHarnessModule module, OutputContext output,
                     maxDuration,
                     until,
                     untilUnchanged),
-                ResolveOutputMode(settings.Json),
+                ResolveOutputMode(settings.Json, output: settings.Output),
                 ct);
         }
         catch (OperationCanceledException) { throw; }

@@ -14,6 +14,7 @@ public enum OutputMode
     Text,
     Json,
     JsonSummary,
+    Agent,
 }
 
 public abstract class TargetSettings : CommandSettings
@@ -31,6 +32,7 @@ public abstract class TargetSettings : CommandSettings
     [CommandOption("--ssl-mode <MODE>")] public string? SslMode { get; set; }
     [CommandOption("--root-certificate <PATH>")] public string? RootCertificate { get; set; }
     [CommandOption("--json")] public bool Json { get; set; }
+    [CommandOption("--output <MODE>")] public string? Output { get; set; }
 
     public bool TryTarget(out SqlTargetRequest target, out string error)
     {
@@ -70,18 +72,31 @@ public abstract class TargetSettings : CommandSettings
 
 public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, OutputContext output, Renderer renderer) : AsyncCommand<TSettings> where TSettings : CommandSettings
 {
-    protected int Invalid(string error) { output.Capture.WriteLine(SecretRedactor.Redact(error, [])); return (int)SqlHarnessExitCode.Safety; }
+    protected int Invalid(string error, SqlHarnessError? structuredError = null)
+    {
+        var code = SqlHarnessExitCode.Safety;
+        var safe = SecretRedactor.Redact(error, []);
+        if (output.Mode is OutputMode.Agent or OutputMode.Json or OutputMode.JsonSummary)
+            renderer.RenderError(code, safe, output.Mode, output.Command, output.Capture, structuredError);
+        else
+            output.Capture.WriteLine(safe);
+        return (int)code;
+    }
     protected async Task<int> Dispatch(SqlHarnessOperation operation, OutputMode mode, CancellationToken ct)
     {
         var mark = output.Begin();
         var outcome = await module.ExecuteAsync(operation, ct);
-        renderer.Render(outcome, mode, output.Capture);
+        renderer.Render(outcome, mode, output.Capture, output.Command);
         output.Capture.Flush();
         return await output.CompleteAsync(outcome, mark, ct);
     }
-    protected static OutputMode ResolveOutputMode(bool json, bool jsonSummary = false)
+    protected static OutputMode ResolveOutputMode(bool json, bool jsonSummary = false, string? output = null)
     {
-        if (json && jsonSummary) throw new InvalidOperationException("Choose only one of --json or --json-summary.");
+        if (json && jsonSummary || output is not null && (json || jsonSummary)) throw new InvalidOperationException("Choose only one of --output, --json, or --json-summary.");
+        if (output is not null)
+            return string.Equals(output, "agent", StringComparison.OrdinalIgnoreCase)
+                ? OutputMode.Agent
+                : throw new InvalidOperationException("--output must be agent.");
         if (jsonSummary) return OutputMode.JsonSummary;
         if (json) return OutputMode.Json;
         return OutputMode.Text;
@@ -113,10 +128,10 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
         try
         {
             var sql = hasFile ? await File.ReadAllTextAsync(settings.File!, ct) : await input.Stdin.ReadToEndAsync(ct);
-            return await Dispatch(new SqlHarnessQueryOperation(target, sql, settings.Parameters, settings.Timeout, settings.MaxRows, settings.AllowMutation, settings.ConfirmDatabase), ResolveOutputMode(settings.Json), ct);
+            return await Dispatch(new SqlHarnessQueryOperation(target, sql, settings.Parameters, settings.Timeout, settings.MaxRows, settings.AllowMutation, settings.ConfirmDatabase), ResolveOutputMode(settings.Json, output: settings.Output), ct);
         }
         catch (OperationCanceledException) { throw; }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file."); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file.", new SqlHarnessError("input_file_unavailable", "input", "Unable to read SQL input file.")); }
     }
 }
 
@@ -139,7 +154,7 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings s, CancellationToken ct)
     {
         if (!s.TryTarget(out var target, out var error)) return Invalid(error);
-        if (s.Json && s.JsonSummary) return Invalid("Choose only one of --json or --json-summary.");
+        if (s.Json && s.JsonSummary || s.Output is not null && (s.Json || s.JsonSummary)) return Invalid("Choose only one of --output, --json, or --json-summary.");
         if (string.IsNullOrWhiteSpace(s.Query)) return Invalid("--query SQL file is required.");
         if (s.Timeout is < 1 or > 300 || s.Repeat is < 1 or > 100) return Invalid("--timeout must be 1..300 and --repeat must be 1..100.");
         var setPaths = s.ParameterSets ?? [];
@@ -150,12 +165,12 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
             var parameterSets = setPaths.Length == 0 ? null : await ReadParameterSetsAsync(setPaths, ct);
             return await Dispatch(
                 new SqlHarnessMeasureOperation(target, await Read(s.Setup, ct), (await Read(s.Query, ct))!, s.Parameters, s.Timeout, s.Repeat, parameterSets),
-                ResolveOutputMode(s.Json, s.JsonSummary),
+                ResolveOutputMode(s.Json, s.JsonSummary, s.Output),
                 ct);
         }
         catch (OperationCanceledException) { throw; }
         catch (ParameterSetFileException exception) { return Invalid(exception.Message); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file."); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file.", new SqlHarnessError("input_file_unavailable", "input", "Unable to read SQL input file.")); }
     }
 
     // Read every set before returning so a later failure is not skipped.
@@ -205,7 +220,7 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings s, CancellationToken ct)
     {
         if (!s.TryTarget(out var target, out var error)) return Invalid(error);
-        if (s.Json && s.JsonSummary) return Invalid("Choose only one of --json or --json-summary.");
+        if (s.Json && s.JsonSummary || s.Output is not null && (s.Json || s.JsonSummary)) return Invalid("Choose only one of --output, --json, or --json-summary.");
         var matrix = s.Matrix ?? [];
         if (matrix.Length > 1) return Invalid("Version 1 accepts exactly one --matrix option.");
         if (string.IsNullOrWhiteSpace(s.Baseline) || string.IsNullOrWhiteSpace(s.Candidate)) return Invalid("Both --baseline and --candidate SQL files are required.");
@@ -220,10 +235,10 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
             SqlHarnessOperation operation = matrix.Length == 1
                 ? new SqlHarnessCompareMatrixOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, matrix[0], compareResults)
                 : new SqlHarnessCompareOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, compareResults);
-            return await Dispatch(operation, ResolveOutputMode(s.Json, s.JsonSummary), ct);
+            return await Dispatch(operation, ResolveOutputMode(s.Json, s.JsonSummary, s.Output), ct);
         }
         catch (OperationCanceledException) { throw; }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file."); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file.", new SqlHarnessError("input_file_unavailable", "input", "Unable to read SQL input file.")); }
     }
 
     private static bool TryParseCompareResults(string value, out ResultComparisonMode mode)
@@ -256,9 +271,9 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
 
 public sealed class GainCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer) : SqlHarnessCommand<GainCommand.Settings>(module, output, renderer)
 {
-    public sealed class Settings : CommandSettings { [CommandOption("--json")] public bool Json { get; set; } }
+    public sealed class Settings : CommandSettings { [CommandOption("--json")] public bool Json { get; set; } [CommandOption("--output <MODE>")] public string? Output { get; set; } }
     protected override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken ct) =>
-        Dispatch(new SqlHarnessGainOperation(), ResolveOutputMode(settings.Json), ct);
+        Dispatch(new SqlHarnessGainOperation(), ResolveOutputMode(settings.Json, output: settings.Output), ct);
 }
 
 public sealed record CliInput(TextReader Stdin, bool StdinRedirected);

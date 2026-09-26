@@ -18,6 +18,8 @@ public sealed class PlanCommand(ISqlHarnessModule module, OutputContext output, 
 
         [CommandOption("--json")]
         public bool Json { get; set; }
+        [CommandOption("--output <MODE>")]
+        public string? Output { get; set; }
     }
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken ct)
@@ -28,13 +30,14 @@ public sealed class PlanCommand(ISqlHarnessModule module, OutputContext output, 
                 ? null
                 : new FileStream(settings.File, FileMode.Open, FileAccess.Read, FileShare.Read, 8192, FileOptions.Asynchronous | FileOptions.SequentialScan);
             var bounded = await BoundedPlanInputReader.ReadAsync(file ?? input.Stream, ct);
-            return await Dispatch(new SqlHarnessPlanOperation(bounded.Text, bounded.Footprint), ResolveOutputMode(settings.Json), ct);
+            if (settings.Json && settings.Output is not null) return Invalid("Choose only one of --output and --json.");
+            return await Dispatch(new SqlHarnessPlanOperation(bounded.Text, bounded.Footprint), ResolveOutputMode(settings.Json, output: settings.Output), ct);
         }
         catch (OperationCanceledException) { throw; }
         catch (PlanInputSafetyException exception) { return Invalid(exception.Message); }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            return Invalid("Unable to read execution plan input.");
+            return Invalid("Unable to read execution plan input.", new SqlHarnessError("input_file_unavailable", "input", "Unable to read execution plan input."));
         }
     }
 }
