@@ -16,7 +16,7 @@ The envelope has these fields:
 |---|---|
 | `schemaVersion` | Integer contract version, currently `1`. |
 | `command` | Invoked SQLHarness command in lowercase. |
-| `status` | `success`, `error`, or `partial`. Partial means a report and an error are both present. |
+| `status` | `success`, `error`, or `partial`. `partial` means a compare matrix stopped after one or more completed cells; the report contains those cells and `error` identifies the failed next cell. A terminal outcome such as watch max duration or snapshot differences uses `error` status while retaining its complete report. |
 | `exitCode` | Existing numeric process exit code. |
 | `result` | Command report, or `null` when no report exists. |
 | `error` | `null` on success; otherwise the safe error object below. |

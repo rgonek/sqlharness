@@ -17,7 +17,7 @@ public sealed class Renderer
             WriteAgent(outcome, command, output);
             return;
         }
-        var hasError = outcome.MachineError is not null;
+        var hasError = outcome.Error is not null || !string.IsNullOrWhiteSpace(outcome.SafeError);
         if (hasError && mode is OutputMode.Json or OutputMode.JsonSummary)
         {
             var error = outcome.MachineError!;
@@ -120,7 +120,11 @@ public sealed class Renderer
     private static void WriteAgent(SqlHarnessOutcome outcome, string command, TextWriter output)
     {
         var error = outcome.MachineError;
-        var status = error is null ? "success" : outcome.Report is null ? "error" : "partial";
+        var status = error is null
+            ? "success"
+            : outcome.Report is SqlHarnessCompareMatrixReport
+                ? "partial"
+                : "error";
         var envelope = new SqlHarnessAgentEnvelope(1, command, status, (int)outcome.ExitCode, ProjectSummary(outcome.Report), error);
         output.WriteLine(JsonSerializer.Serialize(envelope, CompactJson));
     }

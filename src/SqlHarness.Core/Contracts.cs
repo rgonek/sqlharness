@@ -319,8 +319,26 @@ public sealed record SqlHarnessOutcome(
     SqlHarnessError? Error = null)
 {
     /// <summary>Structured error mapped at outcome construction, before any renderer runs.</summary>
-    public SqlHarnessError? MachineError { get; } = Error ??
-        (string.IsNullOrWhiteSpace(SafeError) ? null : SqlHarnessError.From(ExitCode, SafeError));
+    public SqlHarnessError? MachineError { get; } = MapMachineError(ExitCode, SafeError, Error);
+
+    private static SqlHarnessError? MapMachineError(
+        SqlHarnessExitCode exitCode,
+        string? safeError,
+        SqlHarnessError? error) =>
+        error ?? (string.IsNullOrWhiteSpace(safeError)
+            ? exitCode switch
+            {
+                SqlHarnessExitCode.WatchMaxDuration => new SqlHarnessError(
+                    "watch_max_duration",
+                    "watch",
+                    "Watch reached its maximum duration before a stop condition was met."),
+                SqlHarnessExitCode.SnapshotDifferences => new SqlHarnessError(
+                    "snapshot_differences",
+                    "comparison",
+                    "Snapshot comparison found differences."),
+                _ => null,
+            }
+            : SqlHarnessError.From(exitCode, safeError));
 }
 
 public sealed class SqlHarnessEmissionReceipt

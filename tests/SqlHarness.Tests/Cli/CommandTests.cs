@@ -1010,10 +1010,15 @@ public sealed class CommandTests
         {
             var module = new FakeModule(new SqlHarnessOutcome(
                 SqlHarnessExitCode.WatchMaxDuration, WatchReport(WatchExitReason.MaxDuration), null));
-            var exit = await SqlHarnessCli.Create(module, new StringWriter())
-                .RunAsync(["watch", "dev", "--file", sql]);
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(module, output)
+                .RunAsync(["watch", "dev", "--file", sql, "--output", "agent"]);
             Assert.Equal(7, exit);
             Assert.Equal((int)SqlHarnessExitCode.WatchMaxDuration, exit);
+            using var json = JsonDocument.Parse(output.ToString());
+            Assert.Equal("error", json.RootElement.GetProperty("status").GetString());
+            Assert.Equal("watch_max_duration", json.RootElement.GetProperty("error").GetProperty("code").GetString());
+            Assert.Equal((int)WatchExitReason.MaxDuration, json.RootElement.GetProperty("result").GetProperty("exitReason").GetInt32());
         }
         finally { File.Delete(sql); }
     }
@@ -1154,10 +1159,15 @@ public sealed class CommandTests
         {
             var module = new FakeModule(new SqlHarnessOutcome(
                 SqlHarnessExitCode.SnapshotDifferences, SnapshotReport(SnapshotVerdict.Different), null));
-            var exit = await SqlHarnessCli.Create(module, new StringWriter())
-                .RunAsync(["snapshot", "dev", "--file", sql, "--name", "before", "--diff"]);
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(module, output)
+                .RunAsync(["snapshot", "dev", "--file", sql, "--name", "before", "--diff", "--output", "agent"]);
             Assert.Equal(8, exit);
             Assert.Equal((int)SqlHarnessExitCode.SnapshotDifferences, exit);
+            using var json = JsonDocument.Parse(output.ToString());
+            Assert.Equal("error", json.RootElement.GetProperty("status").GetString());
+            Assert.Equal("snapshot_differences", json.RootElement.GetProperty("error").GetProperty("code").GetString());
+            Assert.Equal("before", json.RootElement.GetProperty("result").GetProperty("name").GetString());
         }
         finally { File.Delete(sql); }
     }

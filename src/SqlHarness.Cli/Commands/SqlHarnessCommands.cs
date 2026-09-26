@@ -8,7 +8,7 @@ using SqlHarness.Core;
 
 namespace SqlHarness.Cli.Commands;
 
-// Public so public CLI command/renderer APIs can accept it; only Text/Json/JsonSummary.
+// Public so public CLI command/renderer APIs can accept text, legacy JSON, summaries, and agent envelopes.
 public enum OutputMode
 {
     Text,
