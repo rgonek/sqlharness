@@ -342,28 +342,25 @@ internal sealed class SqlSafetyClassifier
         TableReference tableReference,
         IDictionary<string, List<SchemaObjectName?>> bindings)
     {
-        // Aliased derived/TVF sources are not durable named targets we can prove local.
-        var alias = tableReference switch
+        // Any aliased non-named source is unprovable as a real #temp object.
+        if (tableReference is TableReferenceWithAlias withAlias)
         {
-            QueryDerivedTable derived => derived.Alias?.Value,
-            SchemaObjectFunctionTableReference function => function.Alias?.Value,
-            VariableTableReference variable => variable.Alias?.Value,
-            PivotedTableReference pivoted => pivoted.Alias?.Value,
-            UnpivotedTableReference unpivoted => unpivoted.Alias?.Value,
-            _ => null,
-        };
+            var alias = withAlias.Alias?.Value;
+            if (alias is null)
+                return true;
 
-        if (alias is null)
+            if (!bindings.TryGetValue(alias, out var matches))
+            {
+                matches = [];
+                bindings[alias] = matches;
+            }
+
+            matches.Add(null);
             return true;
-
-        if (!bindings.TryGetValue(alias, out var matches))
-        {
-            matches = [];
-            bindings[alias] = matches;
         }
 
-        matches.Add(null);
-        return true;
+        // Unknown FROM shape: fail closed rather than treating the target token as local.
+        return false;
     }
 
     private static string? CorrelationKey(SchemaObjectName name) =>

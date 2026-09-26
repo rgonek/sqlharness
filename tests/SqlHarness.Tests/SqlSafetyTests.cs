@@ -275,6 +275,20 @@ public class SqlSafetyTests
     }
 
     [Theory]
+    [InlineData("UPDATE #t SET id = 1 FROM OPENJSON(@j) WITH (id int) AS #t")]
+    [InlineData("DELETE #t FROM OPENJSON(@j) WITH (id int) AS #t")]
+    [InlineData("UPDATE #t SET id = 1 FROM (SELECT 1 AS id) AS #t")]
+    [InlineData("UPDATE #t SET id = 1 FROM dbo.SomeTvf() AS #t")]
+    public void Unprovable_non_named_FROM_alias_is_rejected(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.False(decision.HasSessionLocalWork);
+    }
+
+    [Theory]
     [InlineData("INSERT #t(Id) OUTPUT inserted.Id INTO dbo.PersistentAudit VALUES (1)")]
     [InlineData("UPDATE #t SET Id = 2 OUTPUT inserted.Id INTO dbo.PersistentAudit")]
     [InlineData("DELETE #t OUTPUT deleted.Id INTO dbo.PersistentAudit WHERE Id = 1")]
