@@ -134,13 +134,12 @@ sqlharness measure prod-eu --var tenant=acme --var env=uat `
     "sqlUser": "sqlharness",
     "passwordEnvVar": "SQLHARNESS_PG_PASSWORD",
     "trustServerCertificate": false,
-    "sslMode": "verify-full",
-    "rootCertificate": "ca/sqlharness-ca.pem"
+    "sslMode": "verify-full"
   }
 }
 ```
 
-`local-pg` leaves the new fields absent, so it stays on the legacy `Disable` mapping. `remote-pg` is the shape for a new remote connection: replace the host, database, and `rootCertificate` path before use. The certificate file must be readable when the profile is loaded.
+`local-pg` leaves the new fields absent, so it stays on the legacy `Disable` mapping. `remote-pg` uses `verify-full` and omits `rootCertificate`, so the example file loads without a certificate on disk and Npgsql uses its default trust store. Add `rootCertificate` only when that file exists; a missing path rejects the whole profile file.
 
 ## Benchmark setup contract
 

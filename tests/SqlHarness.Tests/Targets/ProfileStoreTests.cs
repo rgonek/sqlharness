@@ -266,6 +266,33 @@ public sealed class ProfileStoreTests
         }
     }
 
+    [Fact]
+    public void Example_targets_file_loads_and_remote_pg_omits_the_root()
+    {
+        var path = FindRepositoryFile("docs", "example-targets.json");
+        var profiles = ProfileStore.Load(path);
+
+        Assert.Contains("prod-eu", profiles.Keys);
+        Assert.Contains("local-pg", profiles.Keys);
+        var remote = profiles["remote-pg"];
+        Assert.Equal("postgres", remote.Engine);
+        Assert.Equal("verify-full", remote.SslMode);
+        Assert.Null(remote.RootCertificate);
+        Assert.False(remote.TrustServerCertificate);
+    }
+
+    private static string FindRepositoryFile(params string[] path)
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            var candidate = Path.Combine([directory.FullName, .. path]);
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        throw new FileNotFoundException($"Could not locate repository file: {string.Join('/', path)}");
+    }
+
     private static string WriteTemp(string content)
     {
         var path = Path.Combine(Path.GetTempPath(), $"targets-{Guid.NewGuid():N}.json");

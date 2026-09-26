@@ -27,7 +27,6 @@
     "sqlUser": "sqlharness",
     "passwordEnvVar": "SQLHARNESS_PG_PASSWORD",
     "trustServerCertificate": false,
-    "sslMode": "verify-full",
-    "rootCertificate": "ca/sqlharness-ca.pem"
+    "sslMode": "verify-full"
   }
 }
