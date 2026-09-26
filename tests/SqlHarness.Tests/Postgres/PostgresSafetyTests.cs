@@ -172,6 +172,45 @@ public sealed class PostgresSafetyTests
     }
 
     [Theory]
+    [InlineData("Query", """CREATE TEMP TABLE t (note text DEFAULT set_config('search_path', 'public', false)); INSERT INTO t DEFAULT VALUES""")]
+    [InlineData("CompareSetup", """CREATE TEMP TABLE t (note text DEFAULT pg_catalog.set_config('search_path', 'public', false)); INSERT INTO t DEFAULT VALUES""")]
+    [InlineData("Query", """CREATE TEMP TABLE t (id int DEFAULT nextval('s')); INSERT INTO t DEFAULT VALUES""")]
+    [InlineData("CompareSetup", """CREATE TEMP TABLE t (id int DEFAULT nextval('s')); INSERT INTO t DEFAULT VALUES""")]
+    [InlineData("Query", """CREATE TEMP TABLE t (id int DEFAULT "setval"('s', 1)); INSERT INTO t DEFAULT VALUES""")]
+    [InlineData("CompareSetup", """CREATE TEMPORARY TABLE t (id int DEFAULT "setval"('s', 1)); INSERT INTO t DEFAULT VALUES""")]
+    [InlineData("Query", """CREATE TEMP TABLE t (id int CHECK (set_config('search_path', 'public', false) IS NOT NULL))""")]
+    [InlineData("CompareSetup", """CREATE TEMP TABLE t (id int, CONSTRAINT c CHECK (set_config('search_path', 'public', false) IS NOT NULL))""")]
+    [InlineData("Query", """CREATE TEMP TABLE t (id int GENERATED ALWAYS AS (set_config('search_path', 'public', false)::int) STORED)""")]
+    [InlineData("CompareSetup", """CREATE TEMP TABLE t (id int GENERATED ALWAYS AS (set_config('search_path', 'public', false)::int) STORED)""")]
+    [InlineData("Query", """CREATE TEMP TABLE t (id int); CREATE INDEX i ON t (id) WHERE set_config('search_path', 'public', false) IS NOT NULL""")]
+    [InlineData("CompareSetup", """CREATE TEMP TABLE t (id int); CREATE INDEX i ON t ((set_config('search_path', 'public', false)))""")]
+    public void Temp_ddl_expressions_cannot_hide_matrix_calls(string usage, string sql)
+    {
+        var decision = _classifier.Classify(sql, ParseUsage(usage), "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.Equal("UnsupportedStatement.", decision.RejectionDescription);
+        Assert.DoesNotContain("search_path", decision.RejectionDescription, StringComparison.Ordinal);
+        Assert.DoesNotContain(sql, decision.RejectionDescription, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Query")]
+    [InlineData("CompareSetup")]
+    public void Ordinary_temp_default_and_index_stay_session_local(string usage)
+    {
+        var decision = _classifier.Classify("""
+            CREATE TEMP TABLE t (id int DEFAULT 1);
+            INSERT INTO t DEFAULT VALUES;
+            CREATE INDEX i ON t (id);
+            """, ParseUsage(usage), "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+        Assert.Contains("t", decision.SessionTempTables);
+    }
+
+    [Theory]
     [InlineData("SELECT app.write_something()")]
     [InlineData("SELECT * FROM app.hidden_view")]
     [InlineData("SELECT a + b FROM public.items")]
@@ -359,6 +398,13 @@ public sealed class PostgresSafetyTests
             Environment.SetEnvironmentVariable("SQLHARNESS_PG_PASSWORD", null);
         }
     }
+
+    private static SqlUsage ParseUsage(string usage) => usage switch
+    {
+        "Query" => SqlUsage.Query,
+        "CompareSetup" => SqlUsage.CompareSetup,
+        _ => throw new ArgumentOutOfRangeException(nameof(usage), usage, "Expected Query or CompareSetup."),
+    };
 
     private static readonly IReadOnlySet<string> Empty = new HashSet<string>(StringComparer.Ordinal);
 }

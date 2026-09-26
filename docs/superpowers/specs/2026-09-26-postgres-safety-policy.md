@@ -83,7 +83,7 @@ Rozwiązanie przeciążeń po katalogu nie wchodzi do tej zmiany. Bez zaufanego 
 `Classify(sql, usage, database, allowMutation, confirmDatabase, sessionTempTables)`:
 
 1. Parsuje cały batch. Wyjątek parsera daje `ParseError`. Pusty batch daje `UnsupportedStatement`. Inne użycie niż `Query` i `CompareSetup` daje `UnsupportedStatement`.
-2. Przechodzi każde zdanie. Przejście biblioteki nie wchodzi w `TableFactor.Derived`, w zapytanie `CREATE TABLE AS` ani w filtr `DELETE`. Klasyfikator wchodzi tam sam, rekurencyjnie, oraz w miejsca, które biblioteka już odwiedza (lista `SELECT`, CTE, źródło `INSERT`, `IN` i skalarny podselekt, gdy biblioteka je odwiedza).
+2. Przechodzi każde zdanie. Przejście biblioteki nie wchodzi w `TableFactor.Derived`, w zapytanie `CREATE TABLE AS`, w filtr `DELETE`, w element `CREATE TABLE` ani w wyrażenia `CREATE INDEX`. Element `CREATE TABLE` nie jest `IElement`, więc sam `Visit` nie widzi wartości domyślnej kolumny, wyrażenia `GENERATED`, `CHECK` kolumny i tabeli ani innych wyrażeń tego elementu. Predykat `WHERE` i wyrażenie klucza indeksu też zostają poza tym przejściem. Klasyfikator wchodzi w te miejsca sam, tym samym filtrem nazw, rekurencyjnie, oraz w miejsca, które biblioteka już odwiedza (lista `SELECT`, CTE, źródło `INSERT`, `IN` i skalarny podselekt, gdy biblioteka je odwiedza). Widoczne wywołanie w `CREATE TEMP` odrzuca cały batch, także gdy dalej jest `INSERT … DEFAULT VALUES`.
 3. Widoczne wywołanie z macierzy odrzuca cały batch jako `UnsupportedStatement`, także przy `allowMutation=true` i także w `CompareSetup`.
 4. Potem klasyfikuje zdania po kolei. Nazwy `TEMP` utworzone w tym batchu dopisuje do zbioru zanim oceni cele zapisu tego zdania, żeby późniejsze zdanie widziało tabelę z wcześniejszego `CREATE TEMP`.
 

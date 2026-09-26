@@ -404,19 +404,69 @@ internal sealed class PostgresSafetyClassifier
                 visitor._targets);
         }
 
-        // Library Visit does not enter CREATE TABLE AS queries or DELETE filters.
+        // Ast.CreateTable is not an IElement, so Visit never enters column defaults,
+        // GENERATED, CHECK, or CREATE INDEX key and WHERE expressions.
         private void VisitSkippedChildren(Statement statement)
         {
-            if (statement is Statement.CreateTable { Element.Query: { } query })
+            switch (statement)
+            {
+                case Statement.CreateTable create:
+                    VisitCreateTable(create.Element);
+                    break;
+                case Statement.CreateIndex index:
+                    VisitCreateIndex(index.Element);
+                    break;
+                case Statement.Delete delete:
+                    if (delete.DeleteOperation.Selection is { } selection)
+                        ((IElement)selection).Visit(this);
+                    if (delete.DeleteOperation.Using is { } usingFactor)
+                        ((IElement)usingFactor).Visit(this);
+                    break;
+            }
+        }
+
+        private void VisitCreateTable(CreateTable table)
+        {
+            if (table.Query is { } query)
                 VisitQuery(query);
 
-            if (statement is not Statement.Delete delete)
-                return;
+            if (table.Columns is not null)
+            {
+                foreach (var column in table.Columns)
+                    ((IElement)column).Visit(this);
+            }
 
-            if (delete.DeleteOperation.Selection is { } selection)
-                ((IElement)selection).Visit(this);
-            if (delete.DeleteOperation.Using is { } usingFactor)
-                ((IElement)usingFactor).Visit(this);
+            if (table.Constraints is not null)
+            {
+                foreach (var constraint in table.Constraints)
+                    ((IElement)constraint).Visit(this);
+            }
+
+            if (table.PartitionBy is { } partitionBy)
+                ((IElement)partitionBy).Visit(this);
+            if (table.PrimaryKey is { } primaryKey)
+                ((IElement)primaryKey).Visit(this);
+        }
+
+        private void VisitCreateIndex(CreateIndex index)
+        {
+            if (index.Columns is not null)
+            {
+                foreach (var column in index.Columns)
+                    ((IElement)column).Visit(this);
+            }
+
+            if (index.Include is not null)
+            {
+                foreach (var include in index.Include)
+                {
+                    if (include is IElement element)
+                        element.Visit(this);
+                }
+            }
+
+            if (index.Predicate is { } predicate)
+                ((IElement)predicate).Visit(this);
         }
 
         public override ControlFlow PreVisitStatement(Statement statement)
