@@ -39,6 +39,32 @@ public sealed class PlanCommandTests
     }
 
     [Fact]
+    public async Task Plan_agent_uses_non_default_output_budget_and_cell_limit()
+    {
+        var plan = new DistilledPlan(
+        [
+            new PlanStatement(new string('q', 1000),
+                new PlanNode("RootOperator", "RootLogical", null, null, 1, 1, 1, 0, null, [],
+                    Enumerable.Range(0, 200)
+                        .Select(index => new PlanNode($"Operator{index}", "Scan", new string('x', 200), null, 1, 1, 1, 0, null, [], []))
+                        .ToArray()),
+                []),
+        ]);
+        var output = new StringWriter();
+        var module = new FixedPlanModule(plan);
+
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync([
+            "plan", Fixture, "--output", "agent", "--max-output-bytes", "4096", "--max-cell-chars", "0"]);
+
+        Assert.Equal(0, exit);
+        Assert.InRange(Encoding.UTF8.GetByteCount(output.ToString()), 1, 4096);
+        using var json = JsonDocument.Parse(output.ToString());
+        Assert.Equal(0, json.RootElement.GetProperty("truncation").GetProperty("maxCellChars").GetInt32());
+        Assert.True(json.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+        Assert.IsType<SqlHarnessPlanOperation>(Assert.Single(module.Operations));
+    }
+
+    [Fact]
     public async Task Plan_explain_json_fixture_distills_with_json_output()
     {
         var fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "seq-scan.explain.json");
@@ -221,6 +247,16 @@ public sealed class PlanCommandTests
             Operations.Add(operation);
             var plan = Assert.IsType<SqlHarnessPlanOperation>(operation);
             return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, PlanDistiller.Distill(plan.ShowplanXml), null));
+        }
+    }
+
+    private sealed class FixedPlanModule(DistilledPlan report) : ISqlHarnessModule
+    {
+        public List<SqlHarnessOperation> Operations { get; } = [];
+        public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default)
+        {
+            Operations.Add(operation);
+            return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null));
         }
     }
 

@@ -54,8 +54,7 @@ public sealed class Renderer
             RenderMatrix(matrix, output);
         else if (outcome.Report is SqlHarnessGainReport gain)
         {
-            output.WriteLine($"Estimated tokens: {gain.Total.EstimationMethod} (ceil UTF-8 bytes / 4)");
-            output.WriteLine("Scope\tExecutions\tFailures\tSaved estimated tokens\tNet estimated tokens\tSavings %");
+            output.WriteLine("Scope\tExecutions\tFailures\tSaved tokens\tSavings %");
             WriteGain("total", gain.Total, output); WriteGain("query", gain.Query, output);
             WriteGain("compare", gain.Compare, output); WriteGain("measure", gain.Measure, output);
             WriteGain("ping", gain.Ping, output); WriteGain("counts", gain.Counts, output);
@@ -63,6 +62,16 @@ public sealed class Renderer
             WriteGain("watch", gain.Watch, output); WriteGain("snapshot", gain.Snapshot, output);
             WriteGain("qstop", gain.QueryStoreTop, output);
             WriteGain("indexes", gain.Indexes, output);
+            output.WriteLine("Net estimated tokens by scope");
+            output.WriteLine("Scope\tNet estimated tokens");
+            WriteNetGain("total", gain.Total, output); WriteNetGain("query", gain.Query, output);
+            WriteNetGain("compare", gain.Compare, output); WriteNetGain("measure", gain.Measure, output);
+            WriteNetGain("ping", gain.Ping, output); WriteNetGain("counts", gain.Counts, output);
+            WriteNetGain("space", gain.Space, output);
+            WriteNetGain("watch", gain.Watch, output); WriteNetGain("snapshot", gain.Snapshot, output);
+            WriteNetGain("qstop", gain.QueryStoreTop, output);
+            WriteNetGain("indexes", gain.Indexes, output);
+            output.WriteLine($"Token estimates: {gain.Total.EstimationMethod} (ceil UTF-8 bytes / 4); savings percentage uses net (raw minus emitted).");
         }
         else if (outcome.Report is DistilledPlan plan)
             RenderPlan(plan, output);
@@ -519,7 +528,8 @@ public sealed class Renderer
             text += $"; differing positions: {equivalence.DifferingPositions}";
         return text;
     }
-    private static void WriteGain(string name, SqlHarnessGainSummary s, TextWriter output) => output.WriteLine($"{name}\t{s.Executions}\t{s.Failures}\t{s.SavedEstimatedTokens}\t{s.NetEstimatedTokens}\t{s.SavingsPercentage:0.##}");
+    private static void WriteGain(string name, SqlHarnessGainSummary s, TextWriter output) => output.WriteLine($"{name}\t{s.Executions}\t{s.Failures}\t{s.SavedEstimatedTokens}\t{s.SavingsPercentage:0.##}");
+    private static void WriteNetGain(string name, SqlHarnessGainSummary s, TextWriter output) => output.WriteLine($"{name}\t{s.NetEstimatedTokens}");
     private static void RenderPlan(DistilledPlan plan, TextWriter output)
     {
         foreach (var statement in plan.Statements)

@@ -112,8 +112,9 @@ public sealed class AgentWorkflowTests
         var exit = await SqlHarnessCli.Create(new WorkflowModule(), output).RunAsync(["gain"]);
 
         Assert.Equal(0, exit);
-        Assert.Contains("Estimated tokens: utf8-bytes-div-4 (ceil UTF-8 bytes / 4)", output.ToString(), StringComparison.Ordinal);
-        Assert.Contains("Saved estimated tokens\tNet estimated tokens", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Token estimates: utf8-bytes-div-4 (ceil UTF-8 bytes / 4)", output.ToString(), StringComparison.Ordinal);
+        Assert.StartsWith("Scope\tExecutions\tFailures\tSaved tokens\tSavings %", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Net estimated tokens by scope\nScope\tNet estimated tokens", output.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]

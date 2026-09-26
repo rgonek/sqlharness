@@ -274,6 +274,7 @@ public sealed class IndexesCommandTests
 
         var text = new StringWriter();
         new Renderer().Render(outcome, OutputMode.Text, new OutputCaptureWriter(text));
+        Assert.StartsWith("Scope\tExecutions\tFailures\tSaved tokens\tSavings %", text.ToString(), StringComparison.Ordinal);
         Assert.Contains("indexes\t1\t0\t3\t75", text.ToString(), StringComparison.Ordinal);
         Assert.Contains("total\t1\t0\t3\t75", text.ToString(), StringComparison.Ordinal);
 

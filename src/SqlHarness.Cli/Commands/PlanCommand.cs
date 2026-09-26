@@ -33,7 +33,11 @@ public sealed class PlanCommand(ISqlHarnessModule module, OutputContext output, 
                 : new FileStream(settings.File, FileMode.Open, FileAccess.Read, FileShare.Read, 8192, FileOptions.Asynchronous | FileOptions.SequentialScan);
             var bounded = await BoundedPlanInputReader.ReadAsync(file ?? input.Stream, ct);
             if (settings.Json && settings.Output is not null) return Invalid("Choose only one of --output and --json.");
-            return await Dispatch(new SqlHarnessPlanOperation(bounded.Text, bounded.Footprint), ResolveOutputMode(settings.Json, output: settings.Output), ct);
+            return await Dispatch(
+                new SqlHarnessPlanOperation(bounded.Text, bounded.Footprint),
+                ResolveOutputMode(settings.Json, output: settings.Output),
+                ct,
+                new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
         }
         catch (OperationCanceledException) { throw; }
         catch (PlanInputSafetyException exception) { return Invalid(exception.Message); }
