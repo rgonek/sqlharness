@@ -8,4 +8,6 @@ public sealed record TargetProfile(
     string? SqlUser = null,
     string? PasswordEnvVar = null,
     bool TrustServerCertificate = false,
-    string? Engine = null);
+    string? Engine = null,
+    string? SslMode = null,
+    string? RootCertificate = null);

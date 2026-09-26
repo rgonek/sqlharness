@@ -3,6 +3,12 @@
 **Date:** 2026-09-10
 **Status:** Approved
 
+> **Transport policy superseded (2026-09-26).** The SSL mapping and the Postgres
+> server-identity comparison below are the historical v1 contract. That contract
+> had no `sslMode` field. Current rules are in
+> [2026-09-26-postgres-transport-policy.md](2026-09-26-postgres-transport-policy.md).
+> This document is not rewritten to pretend `sslMode` was always present.
+
 ## Purpose
 
 SQLHarness is a SQL Server and Azure SQL optimization harness. This design adds
@@ -111,7 +117,7 @@ Postgres v1 accepts only `auth: sql` (`sqlUser` + `passwordEnvVar`).
 `ad-default` and any token auth on a Postgres target fail with exit 2 and a
 message that does not echo secrets.
 
-SSL mapping (v1, no `sslMode` field):
+SSL mapping (v1, no `sslMode` field; superseded by the 2026-09-26 transport policy, not reinterpreted here):
 
 - `trustServerCertificate: true` → Npgsql `SslMode=Disable` (local Docker);
 - `trustServerCertificate: false` → `SslMode=Require`.
@@ -125,6 +131,8 @@ Commands, closed-profile locking (one profile and one variable set per
 invocation), and `--var` validation do not change.
 
 ## Identity and ping
+
+The Postgres server comparison in this section is the historical v1 rule and is superseded by the 2026-09-26 transport policy. The text below is unchanged.
 
 After connect, the dialect runs an identity query. Database identity is
 authoritative: `current_database()` must equal the resolved database with

@@ -1,10 +1,27 @@
 using System.Text.RegularExpressions;
 
 using SqlHarness.Core.Auth;
+using SqlHarness.Core.Postgres;
 
 namespace SqlHarness.Core.Targets;
 
-public sealed record ResolvedTarget(string Server, string Database, AuthSpec Auth, string Mode, SqlEngine Engine = SqlEngine.SqlServer);
+public enum PostgresSslMode
+{
+    VerifyFull,
+    VerifyCa,
+    Require,
+    Disable,
+}
+
+public sealed record PostgresTransport(PostgresSslMode Mode, string? RootCertificate);
+
+public sealed record ResolvedTarget(
+    string Server,
+    string Database,
+    AuthSpec Auth,
+    string Mode,
+    SqlEngine Engine = SqlEngine.SqlServer,
+    PostgresTransport? Transport = null);
 
 public static class TargetResolver
 {
@@ -109,7 +126,9 @@ public static class TargetResolver
         if (engine == SqlEngine.Postgres && auth.Strategy != AuthStrategy.Sql)
             throw new SqlHarnessSafetyException("Postgres targets require sql authentication.");
 
-        return new ResolvedTarget(profile.Server, database, auth, "profile", engine);
+        var transport = PostgresTransportPolicy.Resolve(
+            engine, profile.TrustServerCertificate, profile.SslMode, profile.RootCertificate);
+        return new ResolvedTarget(profile.Server, database, auth, "profile", engine, transport);
     }
 
     private static ResolvedTarget ResolveDirect(SqlTargetRequest request)
@@ -132,11 +151,14 @@ public static class TargetResolver
         if (engine == SqlEngine.Postgres && auth.Strategy != AuthStrategy.Sql)
             throw new SqlHarnessSafetyException("Postgres targets require sql authentication.");
 
+        var transport = PostgresTransportPolicy.Resolve(
+            engine, request.TrustServerCertificate, request.SslMode, request.RootCertificate);
         return new ResolvedTarget(
             request.Server,
             request.Database,
             auth,
             "direct",
-            engine);
+            engine,
+            transport);
     }
 }

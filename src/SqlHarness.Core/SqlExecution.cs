@@ -48,6 +48,7 @@ internal static class SqlExecution
 
     internal static bool TargetMatches(ResolvedTarget expected, string server, string database)
     {
+        // SQL Server only. Postgres uses PostgresEndpointIdentity and does not compare inet_server_addr() text.
         // Database identity is always authoritative: Initial Catalog / current_database() must match.
         if (!string.Equals(expected.Database, database, StringComparison.Ordinal))
             return false;

@@ -17,5 +17,17 @@
     "sqlUser": "postgres",
     "passwordEnvVar": "SQLHARNESS_PG_PLAYGROUND_PASSWORD",
     "trustServerCertificate": true
+  },
+  "remote-pg": {
+    "engine": "postgres",
+    "server": "db.example.test,5432",
+    "database": "appdb",
+    "vars": {},
+    "auth": "sql",
+    "sqlUser": "sqlharness",
+    "passwordEnvVar": "SQLHARNESS_PG_PASSWORD",
+    "trustServerCertificate": false,
+    "sslMode": "verify-full",
+    "rootCertificate": "ca/sqlharness-ca.pem"
   }
 }

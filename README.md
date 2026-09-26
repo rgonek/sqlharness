@@ -106,8 +106,9 @@ sqlharness measure prod-eu --var tenant=acme --var env=uat `
 ### PostgreSQL engine notes
 
 - Profiles may set `"engine": "postgres"`. Omitted `engine` means SQL Server. Use `--engine postgres` only with `--unsafe-direct`.
-- Postgres auth is `sql` only (`sqlUser` + `passwordEnvVar`). `ad-default` / `azure-cli` / `integrated` are rejected (exit 2).
-- `trustServerCertificate: true` maps to Npgsql `SslMode=Disable` (local Docker); `false` maps to `SslMode=Require`. There is no separate `sslMode` profile field.
+- Postgres auth is `sql` only (`sqlUser` + `passwordEnvVar`). `ad-default` / `azure-cli` / `integrated` are rejected (exit 2). Password values stay in the environment variable.
+- Omitted `sslMode` and `rootCertificate` keep the historical mapping, and a successful report sets `target.transportPolicy` to `legacy`: `trustServerCertificate: true` → Npgsql `SslMode=Disable`, `false` → `SslMode=Require`. An explicit `sslMode` of `verify-full`, `verify-ca`, `require`, or `disable` is authoritative. A mode that contradicts `trustServerCertificate` is rejected (`true` agrees only with `disable`; `false` agrees with `require` and the verifying modes). `rootCertificate` is accepted only with `verify-full` or `verify-ca` and must be a readable certificate file. SQL Server profiles that set either field are rejected. `--ssl-mode` and `--root-certificate` are direct options (`--unsafe-direct` only). New remote examples use `verify-full`. Details: `docs/superpowers/specs/2026-09-26-postgres-transport-policy.md`.
+- Postgres always checks `current_database()`. Endpoint identity is the connection that was established, not a text comparison of a DNS name with `inet_server_addr()`. Loopback checks the database only. Non-loopback `verify-full` and `verify-ca` also require the authenticated host and a connected address returned for that name. `require` and `disable` do not authenticate a DNS name. DNS by itself is not authentication.
 - `measure` / `compare` time a single EXPLAIN-able statement via `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`. Result equivalence uses an unmeasured sidecar SELECT. `CpuTimeMs` is `0`; `logicalReads` are shared/local buffer hits+reads; `missingIndexes` is empty.
 - Catalog helpers (`counts`, `schema`, `space`) use fixed `pg_catalog` SQL. Unquoted identifiers and `--like` / `--filter` patterns are case-sensitive as stored (`Contracts` does not match `contracts`).
 - `space` field analogs: Files = one `DATA` row from `pg_database_size` / `data_directory`; Allocation `ReservedMb` = database size while `UsedMb`/`DataMb` sum user relation sizes (they need not equal Reserved); Tables = top N by `pg_total_relation_size` with `Rows` from `reltuples`; `--object` indexes use access-method `Type` and null `Compression`.
@@ -123,9 +124,23 @@ sqlharness measure prod-eu --var tenant=acme --var env=uat `
     "sqlUser": "postgres",
     "passwordEnvVar": "SQLHARNESS_PG_PLAYGROUND_PASSWORD",
     "trustServerCertificate": true
+  },
+  "remote-pg": {
+    "engine": "postgres",
+    "server": "db.example.test,5432",
+    "database": "appdb",
+    "vars": {},
+    "auth": "sql",
+    "sqlUser": "sqlharness",
+    "passwordEnvVar": "SQLHARNESS_PG_PASSWORD",
+    "trustServerCertificate": false,
+    "sslMode": "verify-full",
+    "rootCertificate": "ca/sqlharness-ca.pem"
   }
 }
 ```
+
+`local-pg` leaves the new fields absent, so it stays on the legacy `Disable` mapping. `remote-pg` is the shape for a new remote connection: replace the host, database, and `rootCertificate` path before use. The certificate file must be readable when the profile is loaded.
 
 ## Benchmark setup contract
 

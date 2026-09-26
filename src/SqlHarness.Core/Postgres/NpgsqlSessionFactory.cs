@@ -27,14 +27,15 @@ internal sealed class NpgsqlSessionFactory : ISqlSessionFactory
         ISqlSession? session = null;
         try
         {
-            session = await ConnectNpgsqlAsync(connectionString, ct);
+            var opened = await ConnectNpgsqlAsync(connectionString, ct);
+            session = opened.Session;
             var identity = await ReadIdentityAsync(session, _connectTimeoutSeconds, ct);
-            if (!SqlExecution.TargetMatches(target, identity.Server, identity.Database))
+            var observation = PostgresEndpointIdentity.WithVerifyFullFallback(target, opened.Observation);
+            // The established connection is the endpoint. inet_server_addr() stays on the report only.
+            if (!PostgresEndpointIdentity.Matches(target, identity.Database, observation, SystemPostgresHostResolver.Instance))
                 throw new SqlTargetMismatchException("Connected SQL target identity does not match the resolved target.");
 
-            session.Identity = new SqlHarnessTargetIdentityReport(
-                target.Server, target.Database, identity.Server, identity.Database, target.Mode,
-                Engine: SqlEngineNames.Postgres);
+            session.Identity = PostgresEndpointIdentity.CreateReport(target, identity.Server, identity.Database);
             return session;
         }
         catch
@@ -60,7 +61,8 @@ internal sealed class NpgsqlSessionFactory : ISqlSessionFactory
         return (server, database);
     }
 
-    private static async Task<ISqlSession> ConnectNpgsqlAsync(string connectionString, CancellationToken ct)
+    private static async Task<(ISqlSession Session, PostgresEndpointObservation Observation)> ConnectNpgsqlAsync(
+        string connectionString, CancellationToken ct)
     {
         var connection = new NpgsqlConnection(connectionString);
         var opened = false;
@@ -71,7 +73,7 @@ internal sealed class NpgsqlSessionFactory : ISqlSessionFactory
             connection.Notice += handler;
             await connection.OpenAsync(ct);
             opened = true;
-            return new NpgsqlSession(connection, messages, handler);
+            return (new NpgsqlSession(connection, messages, handler), NpgsqlEndpointObservation.Read(connection));
         }
         finally
         {

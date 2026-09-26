@@ -1,6 +1,10 @@
+using System.Text.Json;
+
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
+using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
+using SqlHarness.Tests.Postgres;
 
 namespace SqlHarness.Tests.Targets;
 
@@ -126,6 +130,140 @@ public sealed class ProfileStoreTests
             Assert.Contains(path, error.Message);
         }
         finally { File.Delete(path); }
+    }
+
+    [Theory]
+    [InlineData("sslMode", "verify-full")]
+    [InlineData("rootCertificate", "ca.pem")]
+    public void Sql_server_profile_rejects_postgres_transport_fields(string field, string value)
+    {
+        var path = WriteTemp($$"""
+            { "prod": { "server": "s", "database": "d", "vars": {}, "auth": "integrated", "{{field}}": {{JsonSerializer.Serialize(value)}} } }
+            """);
+        try
+        {
+            var error = Assert.Throws<SqlHarnessSafetyException>(() => ProfileStore.Load(path));
+            Assert.Equal(PostgresTransportPolicy.SqlServerFields, error.Message);
+            Assert.DoesNotContain(value, error.ToString(), StringComparison.Ordinal);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Postgres_profile_rejects_a_mode_that_contradicts_trust()
+    {
+        var path = WriteTemp("""
+            {
+              "pg": {
+                "engine": "postgres", "server": "db.example.test", "database": "appdb", "vars": {},
+                "auth": "sql", "sqlUser": "u", "passwordEnvVar": "P",
+                "trustServerCertificate": true, "sslMode": "verify-full"
+              }
+            }
+            """);
+        try
+        {
+            var error = Assert.Throws<SqlHarnessSafetyException>(() => ProfileStore.Load(path));
+            Assert.Equal(PostgresTransportPolicy.ContradictsTrust, error.Message);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Theory]
+    [InlineData(" verify-full")]
+    [InlineData("Verify-Full")]
+    [InlineData("")]
+    public void Postgres_profile_rejects_ssl_mode_that_is_not_an_exact_token(string sslMode)
+    {
+        var path = WriteTemp($$"""
+            {
+              "pg": {
+                "engine": "postgres", "server": "db.example.test", "database": "appdb", "vars": {},
+                "auth": "sql", "sqlUser": "u", "passwordEnvVar": "P",
+                "sslMode": {{JsonSerializer.Serialize(sslMode)}}
+              }
+            }
+            """);
+        try
+        {
+            var error = Assert.Throws<SqlHarnessSafetyException>(() => ProfileStore.Load(path));
+            Assert.Equal(PostgresTransportPolicy.InvalidSslMode, error.Message);
+            if (sslMode.Length > 0)
+                Assert.DoesNotContain(sslMode, error.ToString(), StringComparison.Ordinal);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Postgres_profile_rejects_an_unknown_ssl_mode_without_echoing_it()
+    {
+        const string secret = "ssl-mode-must-not-leak";
+        var path = WriteTemp($$"""
+            {
+              "pg": {
+                "engine": "postgres", "server": "db.example.test", "database": "appdb", "vars": {},
+                "auth": "sql", "sqlUser": "u", "passwordEnvVar": "P",
+                "sslMode": {{JsonSerializer.Serialize(secret)}}
+              }
+            }
+            """);
+        try
+        {
+            var error = Assert.Throws<SqlHarnessSafetyException>(() => ProfileStore.Load(path));
+            Assert.Equal(PostgresTransportPolicy.InvalidSslMode, error.Message);
+            Assert.DoesNotContain(secret, error.ToString(), StringComparison.Ordinal);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Postgres_profile_rejects_a_root_without_a_verifying_mode()
+    {
+        const string secret = "root-path-must-not-leak";
+        var path = WriteTemp($$"""
+            {
+              "pg": {
+                "engine": "postgres", "server": "db.example.test", "database": "appdb", "vars": {},
+                "auth": "sql", "sqlUser": "u", "passwordEnvVar": "P",
+                "rootCertificate": {{JsonSerializer.Serialize(secret)}}
+              }
+            }
+            """);
+        try
+        {
+            var error = Assert.Throws<SqlHarnessSafetyException>(() => ProfileStore.Load(path));
+            Assert.Equal(PostgresTransportPolicy.RootRequiresVerifying, error.Message);
+            Assert.DoesNotContain(secret, error.ToString(), StringComparison.Ordinal);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Postgres_profile_loads_verify_full_and_a_readable_root()
+    {
+        var pem = TestCertificates.WritePem();
+        var path = WriteTemp($$"""
+            {
+              "pg": {
+                "engine": "postgres", "server": "db.example.test", "database": "appdb", "vars": {},
+                "auth": "sql", "sqlUser": "u", "passwordEnvVar": "P",
+                "trustServerCertificate": false,
+                "sslMode": "verify-full",
+                "rootCertificate": {{JsonSerializer.Serialize(pem)}}
+              }
+            }
+            """);
+        try
+        {
+            var profile = ProfileStore.Load(path)["pg"];
+            Assert.Equal("verify-full", profile.SslMode);
+            Assert.Equal(pem, profile.RootCertificate);
+        }
+        finally
+        {
+            File.Delete(path);
+            File.Delete(pem);
+        }
     }
 
     private static string WriteTemp(string content)

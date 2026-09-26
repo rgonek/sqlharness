@@ -281,10 +281,13 @@ public sealed record SqlTargetRequest(
     string? SqlUser = null,
     string? PasswordEnvVar = null,
     bool TrustServerCertificate = false,
-    string? Engine = null)
+    string? Engine = null,
+    string? SslMode = null,
+    string? RootCertificate = null)
 {
     public bool HasSuppliedDirectOption =>
-        SuppliesDirectOption(Server, Database, Auth, SqlUser, PasswordEnvVar, TrustServerCertificate, Engine);
+        SuppliesDirectOption(
+            Server, Database, Auth, SqlUser, PasswordEnvVar, TrustServerCertificate, Engine, SslMode, RootCertificate);
 
     // Null means omitted. Empty and unknown values still count as supplied.
     public static bool SuppliesDirectOption(
@@ -294,14 +297,18 @@ public sealed record SqlTargetRequest(
         string? sqlUser,
         string? passwordEnvVar,
         bool trustServerCertificate,
-        string? engine) =>
+        string? engine,
+        string? sslMode = null,
+        string? rootCertificate = null) =>
         server is not null ||
         database is not null ||
         auth is not null ||
         sqlUser is not null ||
         passwordEnvVar is not null ||
         trustServerCertificate ||
-        engine is not null;
+        engine is not null ||
+        sslMode is not null ||
+        rootCertificate is not null;
 }
 
 public sealed record SqlHarnessOutcome(

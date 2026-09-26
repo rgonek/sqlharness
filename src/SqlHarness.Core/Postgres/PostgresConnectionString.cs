@@ -12,6 +12,10 @@ internal static class PostgresConnectionString
     {
         ArgumentNullException.ThrowIfNull(target);
         var (host, port) = ParseEndpoint(target.Server);
+        // Cert and mode are checked before the password is read so a rejection cannot echo it.
+        // Legacy trustServerCertificate stays a Disable/Require switch; it is not Npgsql TrustServerCertificate.
+        PostgresTransportPolicy.EnsureAccepted(target);
+        var mode = PostgresTransportPolicy.EffectiveMode(target);
         var passwordEnvVar = target.Auth.PasswordEnvVar;
         if (string.IsNullOrWhiteSpace(passwordEnvVar) || string.IsNullOrWhiteSpace(target.Auth.SqlUser))
         {
@@ -34,10 +38,21 @@ internal static class PostgresConnectionString
             Username = target.Auth.SqlUser,
             Password = password,
             Timeout = connectTimeoutSeconds,
-            SslMode = target.Auth.TrustServerCertificate ? SslMode.Disable : SslMode.Require,
+            SslMode = ToNpgsqlSslMode(mode),
         };
+        if (target.Transport?.RootCertificate is { } rootCertificate)
+            builder.RootCertificate = rootCertificate;
         return builder.ConnectionString;
     }
+
+    private static SslMode ToNpgsqlSslMode(PostgresSslMode mode) => mode switch
+    {
+        PostgresSslMode.VerifyFull => SslMode.VerifyFull,
+        PostgresSslMode.VerifyCa => SslMode.VerifyCA,
+        PostgresSslMode.Require => SslMode.Require,
+        PostgresSslMode.Disable => SslMode.Disable,
+        _ => throw new SqlHarnessSafetyException(PostgresTransportPolicy.InvalidSslMode),
+    };
 
     private static (string Host, int Port) ParseEndpoint(string server)
     {

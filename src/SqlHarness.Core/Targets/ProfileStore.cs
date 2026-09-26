@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using SqlHarness.Core.Postgres;
+
 namespace SqlHarness.Core.Targets;
 
 public static class ProfileStore
@@ -52,6 +54,12 @@ public static class ProfileStore
                         throw new JsonException("A profile engine is invalid.");
                     }
                 }
+
+                PostgresTransportPolicy.Resolve(
+                    SqlEngineNames.Parse(profile.Engine),
+                    profile.TrustServerCertificate,
+                    profile.SslMode,
+                    profile.RootCertificate);
             }
 
             return profiles;

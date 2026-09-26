@@ -85,14 +85,16 @@ For agent-authored SQL, every ScriptDom-parsable construct inside a top-level `S
 ## PostgreSQL engine notes
 
 - Profiles may set `"engine": "postgres"`; omitted means SQL Server. Prefer closed named profiles (for example `local-pg`). `--engine` only with `--unsafe-direct` (never with a profile or `--var`).
-- Postgres auth is `sql` only (`sqlUser` + `passwordEnvVar`). `trustServerCertificate: true` → Npgsql `SslMode=Disable`; `false` → `SslMode=Require`.
+- Postgres auth is `sql` only (`sqlUser` + `passwordEnvVar`). Password values stay in that environment variable. Error text must not contain the password; a missing-password error may still name the variable.
+- Omitted `sslMode` and `rootCertificate` keep today's mapping and the outcome's `target.transportPolicy` is `legacy` (`trustServerCertificate: true` → `SslMode=Disable`, `false` → `SslMode=Require`). Explicit `sslMode` (`verify-full`, `verify-ca`, `require`, `disable`) is authoritative. A combination that contradicts `trustServerCertificate` is rejected. `rootCertificate` is accepted only with `verify-full` or `verify-ca`. SQL Server profiles that contain the Postgres fields are rejected. New remote examples use `verify-full`. `--ssl-mode` and `--root-certificate` exist only on `--unsafe-direct`. This is not the plan 03 agent envelope.
+- Postgres endpoint identity always checks the database. It is the connection that was established and, for `verify-full` / `verify-ca`, authenticated — not text equality between a DNS name and `inet_server_addr()`. Loopback still checks only the database. `require` and `disable` do not authenticate a DNS name. A proxy address the name does not resolve to fails. DNS by itself is not authentication. Policy: `docs/superpowers/specs/2026-09-26-postgres-transport-policy.md`.
 - Session temps are native `CREATE TEMP TABLE` / `TEMPORARY` — no `#temp` translation. Persistent DML still needs `--allow-mutation --confirm-database`; persistent DDL stays denied.
 - Rejected `--param` types on Postgres: `money`, `smallmoney`, `smalldatetime`, `hierarchyid`, `geography`, `geometry`.
 - `measure` / `compare` time one EXPLAIN-able statement with `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`; result equivalence uses an unmeasured sidecar. `CpuTimeMs` is `0`; `logicalReads` are buffer hits+reads; `missingIndexes` is empty.
 - `counts` / `schema` / `space` / `--like` / `--filter` / `--object` match identifiers case-sensitively as stored (`Contracts` ≠ `contracts`).
 - `space` analogs: Files = one `DATA` row (`pg_database_size`); Allocation Reserved vs Used/Data need not sum; Tables by `pg_total_relation_size` + `reltuples`; index `Type` = access method, `Compression` = null.
 - `qstop` reads SQL Server Query Store only and returns exit 5 on Postgres.
-- Optional playground: `.\scripts\setup-local-postgres.ps1` with `SQLHARNESS_PG_PLAYGROUND_PASSWORD` → container `sqlharness-pg`, port `5433`, volume `sqlharness-pg-data`, image `postgres:16`, database `pagila`. Never writes `targets.json`. Opt-in live tests use `SQLHARNESS_PG_INTEGRATION_CONNECTION_STRING` (not the SQL Server integration variable).
+- Optional playground: `.\scripts\setup-local-postgres.ps1` with `SQLHARNESS_PG_PLAYGROUND_PASSWORD` → container `sqlharness-pg`, port `5433`, volume `sqlharness-pg-data`, image `postgres:16`, database `pagila`. Never writes `targets.json`. Opt-in live tests use `SQLHARNESS_PG_INTEGRATION_CONNECTION_STRING` (not the SQL Server integration variable). The TLS proof uses `SQLHARNESS_PG_TLS_PROOF` only and does not read user profiles, `~/.sqlharness/targets.json`, or `CIVICLENS_POSTGRES_PASSWORD`.
 
 ## Benchmark setup contract
 

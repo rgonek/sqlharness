@@ -1,6 +1,8 @@
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
+using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
+using SqlHarness.Tests.Postgres;
 
 namespace SqlHarness.Tests.Targets;
 
@@ -480,6 +482,131 @@ public sealed class TargetResolverTests
 
         AssertSafety(request, "tenant");
     }
+
+    [Fact]
+    public void Legacy_postgres_profile_has_no_transport_member()
+    {
+        var profiles = PostgresProfile(trust: true, sslMode: null, root: null);
+        var target = TargetResolver.Resolve(new SqlTargetRequest("pg", new Dictionary<string, string>()), profiles);
+        Assert.Null(target.Transport);
+        Assert.Equal(PostgresTransportPolicy.Legacy, PostgresTransportPolicy.Label(target));
+    }
+
+    [Fact]
+    public void Explicit_verify_full_profile_maps_onto_resolved_transport()
+    {
+        var pem = TestCertificates.WritePem();
+        try
+        {
+            var target = TargetResolver.Resolve(
+                new SqlTargetRequest("pg", new Dictionary<string, string>()),
+                PostgresProfile(trust: false, sslMode: "verify-full", root: pem));
+            Assert.NotNull(target.Transport);
+            Assert.Equal(PostgresSslMode.VerifyFull, target.Transport.Mode);
+            Assert.Equal(pem, target.Transport.RootCertificate);
+            Assert.Equal(PostgresTransportPolicy.Explicit, PostgresTransportPolicy.Label(target));
+        }
+        finally { File.Delete(pem); }
+    }
+
+    [Fact]
+    public void Profile_ssl_mode_that_contradicts_trust_is_rejected()
+    {
+        var error = Assert.Throws<SqlHarnessSafetyException>(() => TargetResolver.Resolve(
+            new SqlTargetRequest("pg", new Dictionary<string, string>()),
+            PostgresProfile(trust: false, sslMode: "disable", root: null)));
+        Assert.Equal(PostgresTransportPolicy.ContradictsTrust, error.Message);
+    }
+
+    [Fact]
+    public void Direct_postgres_without_ssl_fields_stays_legacy()
+    {
+        var target = TargetResolver.Resolve(
+            new SqlTargetRequest(
+                null, EmptyVars(), "db.example.test", "appdb", "sql", true,
+                SqlUser: "u", PasswordEnvVar: "P", Engine: "postgres"),
+            new Dictionary<string, TargetProfile>());
+        Assert.Null(target.Transport);
+        Assert.Equal("direct", target.Mode);
+    }
+
+    [Fact]
+    public void Direct_postgres_maps_ssl_mode_and_root_certificate()
+    {
+        var pem = TestCertificates.WritePem();
+        try
+        {
+            var target = TargetResolver.Resolve(
+                new SqlTargetRequest(
+                    null, EmptyVars(), "db.example.test", "appdb", "sql", true,
+                    SqlUser: "u", PasswordEnvVar: "P", TrustServerCertificate: false,
+                    Engine: "postgres", SslMode: "verify-ca", RootCertificate: pem),
+                new Dictionary<string, TargetProfile>());
+            Assert.Equal(PostgresSslMode.VerifyCa, target.Transport!.Mode);
+            Assert.Equal(pem, target.Transport.RootCertificate);
+        }
+        finally { File.Delete(pem); }
+    }
+
+    [Fact]
+    public void Direct_disable_requires_trust_server_certificate()
+    {
+        var accepted = TargetResolver.Resolve(
+            new SqlTargetRequest(
+                null, EmptyVars(), "192.0.2.10", "appdb", "sql", true,
+                SqlUser: "u", PasswordEnvVar: "P", TrustServerCertificate: true,
+                Engine: "postgres", SslMode: "disable"),
+            new Dictionary<string, TargetProfile>());
+        Assert.Equal(PostgresSslMode.Disable, accepted.Transport!.Mode);
+
+        var error = Assert.Throws<SqlHarnessSafetyException>(() => TargetResolver.Resolve(
+            new SqlTargetRequest(
+                null, EmptyVars(), "192.0.2.10", "appdb", "sql", true,
+                SqlUser: "u", PasswordEnvVar: "P",
+                Engine: "postgres", SslMode: "disable"),
+            new Dictionary<string, TargetProfile>()));
+        Assert.Equal(PostgresTransportPolicy.ContradictsTrust, error.Message);
+    }
+
+    [Fact]
+    public void Direct_sql_server_rejects_postgres_transport_fields_without_echoing_them()
+    {
+        const string secret = "ssl-mode-must-not-leak";
+        var error = Assert.Throws<SqlHarnessSafetyException>(() => TargetResolver.Resolve(
+            new SqlTargetRequest(
+                null, EmptyVars(), "server", "database", "integrated", true, SslMode: secret),
+            new Dictionary<string, TargetProfile>()));
+        Assert.Equal(PostgresTransportPolicy.SqlServerFields, error.Message);
+        Assert.DoesNotContain(secret, error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Ssl_mode_combined_with_a_profile_is_a_direct_option()
+    {
+        var error = Assert.Throws<SqlHarnessSafetyException>(() => TargetResolver.Resolve(
+            new SqlTargetRequest(
+                "prod-eu",
+                new Dictionary<string, string> { ["tenant"] = "acme", ["env"] = "uat" },
+                SslMode: "require"),
+            Profiles));
+        Assert.Equal("A profile cannot be combined with direct target options.", error.Message);
+    }
+
+    private static Dictionary<string, TargetProfile> PostgresProfile(bool trust, string? sslMode, string? root) =>
+        new()
+        {
+            ["pg"] = new(
+                "db.example.test",
+                "appdb",
+                new Dictionary<string, string>(),
+                "sql",
+                SqlUser: "u",
+                PasswordEnvVar: "P",
+                TrustServerCertificate: trust,
+                Engine: "postgres",
+                SslMode: sslMode,
+                RootCertificate: root),
+        };
 
     private static IReadOnlyDictionary<string, string> EmptyVars() => new Dictionary<string, string>();
 

@@ -226,6 +226,43 @@ public sealed class CommandTests
     }
 
     [Fact]
+    public async Task Query_unsafe_direct_carries_postgres_transport_fields()
+    {
+        var sqlFile = TempFile("select 1");
+        try
+        {
+            var module = new FakeModule(Success(QueryReport()));
+            var exit = await SqlHarnessCli.Create(module, new StringWriter())
+                .RunAsync([
+                    "query", "--unsafe-direct", "--engine", "postgres",
+                    "--server", "db.example.test", "--database", "appdb",
+                    "--auth", "sql", "--sql-user", "u", "--password-env-var", "P",
+                    "--ssl-mode", "verify-full", "--root-certificate", "ca.pem",
+                    "--file", sqlFile]);
+            Assert.Equal(0, exit);
+            var target = Assert.IsType<SqlHarnessQueryOperation>(Assert.Single(module.Operations)).Target;
+            Assert.Equal("verify-full", target.SslMode);
+            Assert.Equal("ca.pem", target.RootCertificate);
+        }
+        finally { File.Delete(sqlFile); }
+    }
+
+    [Fact]
+    public async Task Query_rejects_ssl_mode_combined_with_a_profile()
+    {
+        var sqlFile = TempFile("select 1");
+        try
+        {
+            var module = new FakeModule(Success(QueryReport()));
+            var exit = await SqlHarnessCli.Create(module, new StringWriter())
+                .RunAsync(["query", "dev", "--ssl-mode", "require", "--file", sqlFile]);
+            Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+            Assert.Empty(module.Operations);
+        }
+        finally { File.Delete(sqlFile); }
+    }
+
+    [Fact]
     public async Task Measure_compare_and_gain_dispatch_from_real_parser()
     {
         var query = TempFile("select 1");
