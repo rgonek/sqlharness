@@ -182,6 +182,31 @@ public sealed class AgentOutputTests
     }
 
     [Fact]
+    public void Agent_projection_summarizes_huge_binary_cells_before_json_serialization()
+    {
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        var bytes = new byte[8 * 1024 * 1024];
+        var set = new SqlHarnessResultSetReport([new SqlHarnessColumnReport(0, "payload", "bytea", true)], [[bytes]], 1, 0);
+        var report = new SqlHarnessQueryReport(target, "read-only", [set], [], 0, 1, "binary-hash", new OutputFootprint(bytes.Length, 1));
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "query",
+            new OutputCaptureWriter(output), new AgentOutputOptions(4096, 64));
+
+        var emittedBytes = System.Text.Encoding.UTF8.GetByteCount(output.ToString());
+        _testOutput.WriteLine($"8 MiB binary cell projection: {emittedBytes} UTF-8 bytes including newline (budget 4096)");
+        Assert.InRange(emittedBytes, 1, 4096);
+        using var json = JsonDocument.Parse(output.ToString());
+        var result = json.RootElement.GetProperty("result");
+        Assert.Equal("binary-hash", result.GetProperty("resultHash").GetString());
+        var projectedCell = result.GetProperty("resultSets")[0].GetProperty("rows")[0][0];
+        Assert.Equal(bytes.LongLength, projectedCell.GetProperty("byteLength").GetInt64());
+        Assert.True(projectedCell.GetProperty("truncated").GetBoolean());
+        Assert.True(projectedCell.GetProperty("base64Prefix").GetString()!.Length <= 64);
+        Assert.True(json.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+    }
+
+    [Fact]
     public void Agent_projection_bounds_matrix_cells_long_warnings_and_artifact_paths()
     {
         var matrix = new SqlHarnessCompareMatrixReport("batch", "int",

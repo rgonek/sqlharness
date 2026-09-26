@@ -53,3 +53,23 @@ Passed! - Failed: 0, Passed: 28, Skipped: 0, Total: 28
 ```
 
 The latest measured responses, including newline, were 378 bytes for the 1000-table fixture, 1461 bytes for the large matrix fixture, and 1002 bytes for the Unicode cell fixture, each with a 4096-byte budget. Added tests also cover large plan trees, long validation errors under a custom budget, and surrogate pairs split across writes. `git diff --check` passed. The full suite was not rerun for this review follow-up; the original full-suite run and its unrelated timeout are recorded above.
+
+## Binary-cell review follow-up
+
+A re-review found that projected result cells clipped strings but left `byte[]` cells intact. JSON serialization would therefore base64-encode a potentially multi-megabyte SQL Server `varbinary` or PostgreSQL `bytea` cell before the response-budget retry. The projection now measures the encoded length using `long` arithmetic and encodes only a bounded prefix when the value exceeds `--max-cell-chars`. The output retains the original byte length and marks the prefix as truncated. Other result-cell types are fixed-size SQL scalar values; variable-length string and binary cells are now both clipped before serialization.
+
+Added a regression test with an 8 MiB binary cell and a 4 KiB whole-response budget. It verifies that the response is valid JSON, retains the result hash and original byte length, marks the binary value truncated, and stays within the byte budget.
+
+Focused verification:
+
+```text
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter 'FullyQualifiedName~Cli.AgentOutputTests|FullyQualifiedName~BenchmarkSummaryTests' --logger 'console;verbosity=detailed'
+Test Run Successful.
+Total tests: 29
+     Passed: 29
+     Failed: 0
+     Skipped: 0
+8 MiB binary cell projection: 746 UTF-8 bytes including newline (budget 4096)
+```
+
+`git diff --check` passed. No live database or user profile was accessed.

@@ -1,6 +1,7 @@
 namespace SqlHarness.Core;
 
 public sealed record AgentBoundedOutput(string ReportType, int OmittedItems);
+public sealed record AgentBinaryValue(long ByteLength, string Base64Prefix, bool Truncated);
 
 /// <summary>Presentation-only bounds for the opt-in agent response.</summary>
 public sealed record AgentOutputOptions(int MaximumBytes = 16 * 1024, int MaximumCellCharacters = 512);
@@ -29,6 +30,22 @@ public static class AgentOutputProjection
             if (length > 0 && char.IsHighSurrogate(value[length - 1])) length--;
             return value[..length];
         }
+        object? ProjectCell(object? value) => value switch
+        {
+            string text => Clip(text),
+            byte[] bytes => ProjectBinary(bytes),
+            _ => value,
+        };
+        object ProjectBinary(byte[] bytes)
+        {
+            var fullBase64Length = ((long)bytes.Length + 2) / 3 * 4;
+            if (fullBase64Length <= maximumCellCharacters)
+                return Convert.ToBase64String(bytes);
+            clippedItems++;
+            var prefixLength = Math.Min(bytes.Length, maximumCellCharacters / 4 * 3);
+            var prefix = Convert.ToBase64String(bytes.AsSpan(0, prefixLength));
+            return new AgentBinaryValue(bytes.LongLength, prefix, Truncated: true);
+        }
         IReadOnlyList<T> Take<T>(IReadOnlyList<T> values)
         {
             var selected = values.Take(detailLimit).ToArray();
@@ -41,7 +58,7 @@ public static class AgentOutputProjection
             return selectedSets.Select(set =>
             {
                 var columns = Take(set.Columns);
-                var rows = Take(set.Rows).Select(row => Take(row).Select(value => value is string text ? Clip(text) : value).ToArray()).ToArray();
+                var rows = Take(set.Rows).Select(row => Take(row).Select(ProjectCell).ToArray()).ToArray();
                 return new SqlHarnessResultSetReport(columns, rows, set.RowCount, set.OmittedRowCount + Math.Max(0, set.Rows.Count - rows.Length));
             }).ToArray();
         }
