@@ -1,14 +1,25 @@
 namespace SqlHarness.Core;
 
+public sealed record AgentBoundedOutput(string ReportType, int OmittedItems);
+
 /// <summary>Presentation-only bounds for the opt-in agent response.</summary>
 public sealed record AgentOutputOptions(int MaximumBytes = 16 * 1024, int MaximumCellCharacters = 512);
 
 /// <summary>Creates bounded, lower-priority-detail projections without changing source reports.</summary>
 public static class AgentOutputProjection
 {
-    public static object? Project(object? report, int maximumCellCharacters, int detailLimit, out int omittedItems)
+    public static int CalculateDetailLimit(int maximumBytes, int maximumCellCharacters)
+    {
+        var perItemEstimate = Math.Max(128L, (long)Math.Max(1, maximumCellCharacters) * 16);
+        perItemEstimate = Math.Max(perItemEstimate, 128L);
+        var estimate = Math.Max(1d, maximumBytes / (double)perItemEstimate);
+        return Math.Clamp((int)Math.Pow(estimate, 0.2), 1, 128);
+    }
+
+    public static object? Project(object? report, int maximumCellCharacters, int detailLimit, out int omittedItems, int maximumBytes = 16 * 1024)
     {
         omittedItems = 0;
+        var omissions = 0;
         var clippedItems = 0;
         string? Clip(string? value)
         {
@@ -18,99 +29,238 @@ public static class AgentOutputProjection
             if (length > 0 && char.IsHighSurrogate(value[length - 1])) length--;
             return value[..length];
         }
+        IReadOnlyList<T> Take<T>(IReadOnlyList<T> values)
+        {
+            var selected = values.Take(detailLimit).ToArray();
+            omissions += Math.Max(0, values.Count - selected.Length);
+            return selected;
+        }
+        IReadOnlyList<SqlHarnessResultSetReport> ProjectResultSets(IReadOnlyList<SqlHarnessResultSetReport> resultSets)
+        {
+            var selectedSets = Take(resultSets);
+            return selectedSets.Select(set =>
+            {
+                var columns = Take(set.Columns);
+                var rows = Take(set.Rows).Select(row => Take(row).Select(value => value is string text ? Clip(text) : value).ToArray()).ToArray();
+                return new SqlHarnessResultSetReport(columns, rows, set.RowCount, set.OmittedRowCount + Math.Max(0, set.Rows.Count - rows.Length));
+            }).ToArray();
+        }
+        try
+        {
         switch (report)
         {
             case SqlHarnessQueryReport query:
-                var sets = query.ResultSets.Take(detailLimit).Select(set => new
-                {
-                    columns = set.Columns.Take(detailLimit).ToArray(),
-                    rows = set.Rows.Take(detailLimit).Select(row => row.Select(value => value is string text ? Clip(text) : value).ToArray()).ToArray(),
-                    rowCount = set.RowCount,
-                    omittedRowCount = set.OmittedRowCount + Math.Max(0, set.Rows.Count - detailLimit),
-                }).ToArray();
-                var messages = query.Messages.Take(detailLimit).Select(Clip).ToArray();
-                omittedItems += Math.Max(0, query.ResultSets.Count - sets.Length);
-                omittedItems += query.ResultSets.Take(detailLimit).Sum(set => Math.Max(0, set.Columns.Count - detailLimit));
-                omittedItems += query.ResultSets.Sum(set => Math.Max(0, set.Rows.Count - detailLimit));
-                omittedItems += clippedItems;
+                var sets = ProjectResultSets(query.ResultSets);
+                var messages = Take(query.Messages).Select(Clip).ToArray();
+                omissions += clippedItems;
                 return new { target = query.Target, statementClassification = query.StatementClassification, resultSets = sets, messages, query.RecordsAffected, query.DurationMilliseconds, query.ResultHash, query.RawFootprint };
             case SqlHarnessCountsReport counts:
-                var tables = counts.Tables.Take(detailLimit).ToArray();
-                omittedItems += Math.Max(0, counts.Tables.Count - tables.Length);
-                omittedItems += clippedItems;
-                return new { counts.Target, tables, omitted = counts.Omitted + omittedItems };
+                var tables = Take(counts.Tables).Select(table => table with { Schema = Clip(table.Schema)!, Name = Clip(table.Name)! }).ToArray();
+                omissions += clippedItems;
+                return new { counts.Target, tables, omitted = counts.Omitted + omissions };
             case SqlHarnessSchemaReport schema:
-                var objects = schema.Objects.Take(detailLimit).Select(value => new
+                var selectedObjects = Take(schema.Objects);
+                var omittedObjects = schema.OmittedObjects + schema.Objects.Count - selectedObjects.Count;
+                var objects = selectedObjects.Select(value => new
                 {
-                    value.Schema, value.Name, value.Kind,
-                    columns = value.Columns.Take(detailLimit).ToArray(),
-                    indexes = value.Indexes.Take(detailLimit).Select(i => new { i.Name, i.Unique, keys = i.Keys.Take(detailLimit), includes = i.Includes.Take(detailLimit), filter = Clip(i.Filter) }).ToArray(),
-                    foreignKeys = value.ForeignKeys.Take(detailLimit).ToArray(),
+                    schema = Clip(value.Schema), name = Clip(value.Name), kind = Clip(value.Kind),
+                    columns = Take(value.Columns).Select(column => column with { Name = Clip(column.Name)!, Type = Clip(column.Type)! }).ToArray(),
+                    indexes = Take(value.Indexes).Select(i => new { name = Clip(i.Name), i.Unique, keys = Take(i.Keys).Select(Clip), includes = Take(i.Includes).Select(Clip), filter = Clip(i.Filter) }).ToArray(),
+                    foreignKeys = Take(value.ForeignKeys).Select(fk => fk with { Name = Clip(fk.Name)!, Columns = Clip(fk.Columns)!, ReferencedTable = Clip(fk.ReferencedTable)!, ReferencedColumns = Clip(fk.ReferencedColumns)! }).ToArray(),
                 }).ToArray();
-                omittedItems += Math.Max(0, schema.Objects.Count - objects.Length);
-                omittedItems += schema.Objects.Take(detailLimit).Sum(value => Math.Max(0, value.Columns.Count - detailLimit) + Math.Max(0, value.Indexes.Count - detailLimit) + Math.Max(0, value.ForeignKeys.Count - detailLimit));
-                omittedItems += clippedItems;
-                return new { schema.Target, objects, omittedObjects = schema.OmittedObjects + omittedItems };
+                omissions += clippedItems;
+                return new { schema.Target, objects, omittedObjects, omittedItems = omissions };
             case SqlHarnessMeasureSetReport setReport:
-                var selectedSets = setReport.Sets.Take(detailLimit).Select(set => new MeasureParameterSetSummary(
+                var selectedSets = Take(setReport.Sets).Select(set => new MeasureParameterSetSummary(
                     Clip(set.Name)!, set.Parameters, set.ValueHash, set.ResultsStable,
                     set.Metrics.ElapsedTimeMilliseconds.Median, set.Metrics.CpuTimeMilliseconds.Median,
                     set.Metrics.LogicalReads.Median,
-                    set.Metrics.Operators.Where(op => op.HasWarnings || op.HasSpill || op.HasImplicitConversion)
-                        .OrderByDescending(op => op.HasWarnings || op.HasSpill || op.HasImplicitConversion)
-                        .Take(10).Select(op => new NoteworthyOperatorSummary("query", op.NodeId, Clip(op.PhysicalOp)!, Clip(op.Object), op.HasWarnings, op.HasSpill, op.HasImplicitConversion)).ToArray())
+                    ProjectSetOperators(set.Metrics.Operators)
+                        .Select(op => new NoteworthyOperatorSummary("query", op.NodeId, Clip(op.PhysicalOp)!, Clip(op.Object), op.HasWarnings, op.HasSpill, op.HasImplicitConversion)).ToArray())
                 {
                     MetricReport = set.Metrics.MetricReport,
                 }).ToArray();
-                omittedItems += Math.Max(0, setReport.Sets.Count - selectedSets.Length);
                 var planCacheWarning = Clip(setReport.PlanCacheWarning)!;
                 var artifactDirectory = Clip(setReport.ArtifactDirectory);
-                omittedItems += clippedItems;
+                omissions += clippedItems;
                 return new MeasureSetBenchmarkSummary(setReport.Target, setReport.MeasuredOrderRule, planCacheWarning, selectedSets, setReport.CrossSetSummary, artifactDirectory);
             case SqlHarnessCompareMatrixReport matrix:
                 var nestedOmitted = 0;
-                var cells = matrix.Cells.Take(detailLimit).Select(cell =>
+                var cells = Take(matrix.Cells).Select(cell =>
                 {
-                    var projected = Project(cell.Compare, maximumCellCharacters, detailLimit, out var cellOmitted);
+                    var cellBudget = Math.Max(4096, maximumBytes / Math.Max(1, detailLimit));
+                    var cellDetailLimit = CalculateDetailLimit(cellBudget, maximumCellCharacters);
+                    var projected = Project(cell.Compare, maximumCellCharacters, cellDetailLimit, out var cellOmitted, cellBudget);
                     nestedOmitted += cellOmitted;
                     return new CompareMatrixCellSummary(cell.Index, Clip(cell.ParameterValue)!, (CompareBenchmarkSummary)projected!);
                 }).ToArray();
-                omittedItems += Math.Max(0, matrix.Cells.Count - cells.Length);
-                omittedItems += nestedOmitted;
+                omissions += nestedOmitted;
                 var parameterName = Clip(matrix.ParameterName)!;
                 var parameterType = Clip(matrix.ParameterType)!;
-                omittedItems += clippedItems;
+                omissions += clippedItems;
                 return new CompareMatrixBenchmarkSummary(parameterName, parameterType, cells);
             case SqlHarnessCompareReport compare:
-                return Project(BenchmarkSummaryProjector.Project(compare), maximumCellCharacters, detailLimit, out omittedItems);
+            {
+                var nestedProjection = Project(BenchmarkSummaryProjector.Project(compare), maximumCellCharacters, detailLimit, out var compareSummaryOmitted, maximumBytes);
+                omissions += compareSummaryOmitted;
+                return nestedProjection;
+            }
             case SqlHarnessMeasureReport measure:
-                return Project(BenchmarkSummaryProjector.Project(measure), maximumCellCharacters, detailLimit, out omittedItems);
+            {
+                var nestedProjection = Project(BenchmarkSummaryProjector.Project(measure), maximumCellCharacters, detailLimit, out var measureSummaryOmitted, maximumBytes);
+                omissions += measureSummaryOmitted;
+                return nestedProjection;
+            }
             case CompareBenchmarkSummary summary:
                 var compareProjection = summary with
                 {
                     Baseline = ClipVariant(summary.Baseline), Candidate = ClipVariant(summary.Candidate),
-                    NoteworthyOperators = summary.NoteworthyOperators.Take(10).Select(op => op with { PhysicalOp = Clip(op.PhysicalOp)!, Object = Clip(op.Object) }).ToArray(),
+                    NoteworthyOperators = Take(summary.NoteworthyOperators.Take(10).ToArray()).Select(op => op with { PhysicalOp = Clip(op.PhysicalOp)!, Object = Clip(op.Object) }).ToArray(),
                     ArtifactDirectory = Clip(summary.ArtifactDirectory),
                 };
-                omittedItems += clippedItems;
+                omissions += clippedItems;
                 return compareProjection;
             case MeasureBenchmarkSummary summary:
                 var measureProjection = summary with
                 {
                     Query = ClipVariant(summary.Query),
-                    NoteworthyOperators = summary.NoteworthyOperators.Take(10).Select(op => op with { PhysicalOp = Clip(op.PhysicalOp)!, Object = Clip(op.Object) }).ToArray(),
+                    NoteworthyOperators = Take(summary.NoteworthyOperators.Take(10).ToArray()).Select(op => op with { PhysicalOp = Clip(op.PhysicalOp)!, Object = Clip(op.Object) }).ToArray(),
                     ArtifactDirectory = Clip(summary.ArtifactDirectory),
                 };
-                omittedItems += clippedItems;
+                omissions += clippedItems;
                 return measureProjection;
+            case DistilledPlan plan:
+                var nodeCostEstimate = Math.Max(1024L, (long)Math.Max(1, maximumCellCharacters) * 36);
+                var planProjection = ProjectPlan(plan, detailLimit, Clip, Take, Math.Max(1, (int)(maximumBytes / nodeCostEstimate)));
+                omissions += planProjection.OmittedItems;
+                omissions += clippedItems;
+                return planProjection.Report;
+            case SqlHarnessPingReport ping:
+                var pingProjection = ping with { Server = Clip(ping.Server)!, Database = Clip(ping.Database)!, Login = Clip(ping.Login)! };
+                omissions += clippedItems;
+                return pingProjection;
+            case SqlHarnessSpaceReport space:
+                var files = Take(space.Files).Select(file => file with { LogicalName = Clip(file.LogicalName)!, Type = Clip(file.Type)!, PhysicalName = Clip(file.PhysicalName) }).ToArray();
+                var spaceTables = Take(space.Tables).Select(table => table with { Schema = Clip(table.Schema)!, Name = Clip(table.Name)! }).ToArray();
+                var indexes = Take(space.Indexes).Select(index => index with { Schema = Clip(index.Schema)!, Table = Clip(index.Table)!, Index = Clip(index.Index)!, Type = Clip(index.Type)!, Compression = Clip(index.Compression) }).ToArray();
+                omissions += clippedItems;
+                return new SqlHarnessSpaceReport(space.Target, files, space.Allocation, spaceTables, indexes);
+            case SqlHarnessWatchReport watch:
+                var polls = Take(watch.EmittedPolls).Select(poll => new SqlHarnessWatchPoll(poll.Poll, poll.ElapsedMilliseconds, poll.ResultHash, ProjectResultSets(poll.ResultSets))).ToArray();
+                omissions += clippedItems;
+                return watch with { EmittedPolls = polls };
+            case SqlHarnessSnapshotReport snapshot:
+                var snapshotName = Clip(snapshot.Name)!;
+                var differences = Take(snapshot.Differences);
+                omissions += clippedItems;
+                return snapshot with { Name = snapshotName, Differences = differences };
+            case SqlHarnessQueryStoreTopReport queryStore:
+                var queryItems = Take(queryStore.Queries).Select(item => item with { ObjectName = Clip(item.ObjectName) }).ToArray();
+                var queryArtifacts = Clip(queryStore.ArtifactDirectory);
+                omissions += clippedItems;
+                return queryStore with { Queries = queryItems, ArtifactDirectory = queryArtifacts };
+            case SqlHarnessIndexesReport indexesReport:
+                var candidates = Take(indexesReport.Candidates).Select(candidate => candidate with
+                {
+                    Schema = Clip(candidate.Schema)!, Table = Clip(candidate.Table)!,
+                    EqualityColumns = Take(candidate.EqualityColumns).Select(value => Clip(value)!).ToArray(),
+                    InequalityColumns = Take(candidate.InequalityColumns).Select(value => Clip(value)!).ToArray(),
+                    IncludeColumns = Take(candidate.IncludeColumns).Select(value => Clip(value)!).ToArray(),
+                    BestExistingIndex = Clip(candidate.BestExistingIndex),
+                    MissingIncludeColumns = Take(candidate.MissingIncludeColumns).Select(value => Clip(value)!).ToArray(),
+                }).ToArray();
+                var indexWarnings = Take(indexesReport.Warnings).Select(value => Clip(value)!).ToArray();
+                var indexArtifact = Clip(indexesReport.ArtifactDirectory);
+                var objectFilter = Clip(indexesReport.ObjectFilter);
+                omissions += clippedItems;
+                return indexesReport with { Candidates = candidates, Warnings = indexWarnings, ArtifactDirectory = indexArtifact, ObjectFilter = objectFilter };
+            case SqlHarnessGainReport gain:
+                return gain;
             default:
-                return report;
+                if (report is null) return null;
+                if (report.GetType().IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), inherit: false))
+                {
+                    var fields = new Dictionary<string, object?>(StringComparer.Ordinal);
+                    var properties = report.GetType().GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+                    foreach (var property in properties.Take(detailLimit))
+                    {
+                        object? value;
+                        try { value = property.GetValue(report); }
+                        catch (System.Reflection.TargetInvocationException) { omissions++; continue; }
+                        if (value is string text) fields[property.Name] = Clip(text);
+                        else if (IsScalar(value)) fields[property.Name] = value;
+                        else omissions++;
+                    }
+                    omissions += Math.Max(0, properties.Length - detailLimit);
+                    omissions += clippedItems;
+                    return fields;
+                }
+                omissions++;
+                return new AgentBoundedOutput(report.GetType().Name, 1);
+        }
+        }
+        finally
+        {
+            omittedItems = omissions;
         }
 
-        BenchmarkVariantSummary ClipVariant(BenchmarkVariantSummary variant) => variant with
+        BenchmarkVariantSummary ClipVariant(BenchmarkVariantSummary variant)
         {
-            LogicalReadsByTable = variant.LogicalReadsByTable.Take(detailLimit).ToDictionary(p => Clip(p.Key)!, p => p.Value, StringComparer.Ordinal),
-            Warnings = variant.Warnings.Take(detailLimit).Select(w => Clip(w)!).ToArray(),
-        };
+            var reads = Take(variant.LogicalReadsByTable.ToArray()).ToDictionary(p => Clip(p.Key)!, p => p.Value, StringComparer.Ordinal);
+            var warnings = Take(variant.Warnings).Select(w => Clip(w)!).ToArray();
+            return variant with { LogicalReadsByTable = reads, Warnings = warnings };
+        }
+
+        IReadOnlyList<CompareOperatorReport> ProjectSetOperators(IReadOnlyList<CompareOperatorReport> source)
+        {
+            var selected = source.Where(op => op.HasWarnings || op.HasSpill || op.HasImplicitConversion)
+                .OrderByDescending(op => op.HasWarnings || op.HasSpill || op.HasImplicitConversion)
+                .Take(10).ToArray();
+            return Take(selected);
+        }
+
+        static bool IsScalar(object? value) => value is null || value is bool or byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal or char or DateTime or DateTimeOffset or Guid or Enum;
+
+    }
+
+    private static (DistilledPlan Report, int OmittedItems) ProjectPlan(DistilledPlan plan, int detailLimit, Func<string?, string?> clip, Func<IReadOnlyList<PlanNode>, IReadOnlyList<PlanNode>> takeNodes, int maximumNodes)
+    {
+        var omitted = 0;
+        var nodesRemaining = maximumNodes;
+        var statements = plan.Statements.Take(detailLimit).Select(statement => statement with
+        {
+            StatementText = clip(statement.StatementText),
+            MissingIndexes = statement.MissingIndexes.Take(detailLimit).Select(index => index with
+            {
+                Table = clip(index.Table)!,
+                EqualityColumns = index.EqualityColumns.Take(detailLimit).Select(value => clip(value)!).ToArray(),
+                InequalityColumns = index.InequalityColumns.Take(detailLimit).Select(value => clip(value)!).ToArray(),
+                IncludeColumns = index.IncludeColumns.Take(detailLimit).Select(value => clip(value)!).ToArray(),
+            }).ToArray(),
+            Root = ProjectNode(statement.Root, 0),
+        }).ToArray();
+        omitted += Math.Max(0, plan.Statements.Count - statements.Length);
+        omitted += plan.Statements.Take(detailLimit).Sum(statement => Math.Max(0, statement.MissingIndexes.Count - detailLimit));
+        return (new DistilledPlan(statements), omitted);
+
+        PlanNode ProjectNode(PlanNode node, int depth)
+        {
+            if (nodesRemaining <= 0)
+            {
+                omitted += 1;
+                return node with { PhysicalOp = clip(node.PhysicalOp)!, LogicalOp = clip(node.LogicalOp), ObjectName = clip(node.ObjectName), IndexName = clip(node.IndexName), Predicate = clip(node.Predicate), Warnings = [], Children = [] };
+            }
+            nodesRemaining--;
+            if (depth >= 6)
+            {
+                omitted += node.Children.Count;
+                omitted += node.Warnings.Count;
+                return node with { PhysicalOp = clip(node.PhysicalOp)!, LogicalOp = clip(node.LogicalOp), ObjectName = clip(node.ObjectName), IndexName = clip(node.IndexName), Predicate = clip(node.Predicate), Warnings = [], Children = [] };
+            }
+            omitted += Math.Max(0, node.Warnings.Count - detailLimit);
+            var children = takeNodes(node.Children).Select(child => ProjectNode(child, depth + 1)).ToArray();
+            return node with { PhysicalOp = clip(node.PhysicalOp)!, LogicalOp = clip(node.LogicalOp), ObjectName = clip(node.ObjectName), IndexName = clip(node.IndexName), Predicate = clip(node.Predicate), Warnings = node.Warnings.Take(detailLimit).Select(value => clip(value)!).ToArray(), Children = children };
+        }
+
     }
 }

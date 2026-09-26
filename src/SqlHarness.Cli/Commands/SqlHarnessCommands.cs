@@ -79,7 +79,7 @@ public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, Out
         var code = SqlHarnessExitCode.Safety;
         var safe = SecretRedactor.Redact(error, []);
         if (output.Mode is OutputMode.Agent or OutputMode.Json or OutputMode.JsonSummary)
-            renderer.RenderError(code, safe, output.Mode, output.Command, output.Capture, structuredError);
+            renderer.RenderError(code, safe, output.Mode, output.Command, output.Capture, structuredError, output.AgentOptions);
         else
             output.Capture.WriteLine(safe);
         return (int)code;
@@ -89,7 +89,7 @@ public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, Out
         agentOptions ??= output.AgentOptions;
         if (mode == OutputMode.Agent && (agentOptions.MaximumBytes is < 4096 or > 1048576 || agentOptions.MaximumCellCharacters is < 0 or > 4096))
         {
-            renderer.RenderError(SqlHarnessExitCode.Safety, "Agent output limits must be --max-output-bytes 4096..1048576 and --max-cell-chars 0..4096.", mode, output.Command, output.Capture);
+            renderer.RenderError(SqlHarnessExitCode.Safety, "Agent output limits must be --max-output-bytes 4096..1048576 and --max-cell-chars 0..4096.", mode, output.Command, output.Capture, agentOptions: agentOptions);
             output.Capture.Flush();
             return (int)SqlHarnessExitCode.Safety;
         }

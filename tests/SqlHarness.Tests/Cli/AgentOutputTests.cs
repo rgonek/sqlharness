@@ -215,6 +215,41 @@ public sealed class AgentOutputTests
     }
 
     [Fact]
+    public async Task Agent_validation_errors_respect_configured_budget_and_cell_limit()
+    {
+        var output = new StringWriter();
+        var module = new FakeModule(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null));
+        var largeKey = new string('a', 10000);
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync([
+            "schema", "prod", "--var", $"{largeKey}=one", "--var", $"{largeKey}=two",
+            "--output", "agent", "--max-output-bytes", "4096", "--max-cell-chars", "128"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+        Assert.Empty(module.Operations);
+        Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(output.ToString()), 1, 4096);
+        using var json = JsonDocument.Parse(output.ToString());
+        Assert.True(json.RootElement.GetProperty("error").GetProperty("message").GetString()!.Length <= 128);
+        Assert.True(json.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+    }
+
+    [Fact]
+    public void Agent_plan_projection_bounds_operator_trees_before_serialization()
+    {
+        var root = new PlanNode("Nested Loops", "Join", null, null, 100, 10, 1, 0.5, null, [],
+            Enumerable.Range(0, 10000).Select(i => new PlanNode($"Operator{i}", null, new string('x', 10000), null, 1, 1, 1, 0, null, [], [])).ToArray());
+        var plan = new DistilledPlan([new PlanStatement(new string('q', 10000), root, [])]);
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, plan, null), "plan",
+            new OutputCaptureWriter(output), new AgentOutputOptions(4096, 64));
+
+        Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(output.ToString()), 1, 4096);
+        using var json = JsonDocument.Parse(output.ToString());
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("error").ValueKind);
+        Assert.True(json.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+    }
+
+    [Fact]
     public void Output_footprint_counts_utf8_bytes_and_lines_incrementally()
     {
         var writer = new OutputCaptureWriter(new StringWriter());
@@ -225,6 +260,17 @@ public sealed class AgentOutputTests
 
         Assert.Equal(System.Text.Encoding.UTF8.GetByteCount("語😀\nlast"), footprint.Bytes);
         Assert.Equal(2, footprint.Lines);
+    }
+
+    [Fact]
+    public void Output_footprint_counts_surrogate_pairs_split_across_writes()
+    {
+        var writer = new OutputCaptureWriter(new StringWriter());
+        var mark = writer.Mark();
+        writer.Write('\ud83d');
+        writer.Write('\ude00');
+
+        Assert.Equal(4, writer.GetAnsiFreeFootprint(mark).Bytes);
     }
 
     private sealed class FakeModule(SqlHarnessOutcome outcome) : ISqlHarnessModule

@@ -27,7 +27,7 @@ public static class SqlHarnessCli
                 if (outputContext.Mode == OutputMode.Text)
                     return -1;
                 const string safeMessage = "Invalid command line arguments.";
-                new Renderer().RenderError(SqlHarnessExitCode.Safety, safeMessage, outputContext.Mode, outputContext.Command, outputContext.Capture);
+                new Renderer().RenderError(SqlHarnessExitCode.Safety, safeMessage, outputContext.Mode, outputContext.Command, outputContext.Capture, agentOptions: outputContext.AgentOptions);
                 outputContext.Capture.Flush();
                 return (int)SqlHarnessExitCode.Safety;
             });

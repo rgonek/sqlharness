@@ -105,12 +105,12 @@ public sealed class Renderer
             output.WriteLine($"SQLHarness {outcome.ExitCode}: {SecretRedactor.Redact(outcome.SafeError, [])}");
     }
 
-    public void RenderError(SqlHarnessExitCode exitCode, string message, OutputMode mode, string command, OutputCaptureWriter output, SqlHarnessError? structuredError = null)
+    public void RenderError(SqlHarnessExitCode exitCode, string message, OutputMode mode, string command, OutputCaptureWriter output, SqlHarnessError? structuredError = null, AgentOutputOptions? agentOptions = null)
     {
         var error = structuredError ?? SqlHarnessError.From(exitCode, message, "validation");
         if (mode == OutputMode.Agent)
         {
-            WriteAgent(new SqlHarnessOutcome(exitCode, null, message, Error: error), command, output, new AgentOutputOptions());
+            WriteAgent(new SqlHarnessOutcome(exitCode, null, message, Error: error), command, output, agentOptions ?? new AgentOutputOptions());
             return;
         }
         if (mode is OutputMode.Json or OutputMode.JsonSummary)
@@ -127,20 +127,44 @@ public sealed class Renderer
 
     private static void WriteAgent(SqlHarnessOutcome outcome, string command, TextWriter output, AgentOutputOptions options)
     {
+        var requestedBytes = options.MaximumBytes is >= 4096 and <= 1048576 ? options.MaximumBytes : 16 * 1024;
+        var requestedCellChars = options.MaximumCellCharacters is >= 0 and <= 4096 ? options.MaximumCellCharacters : 512;
         var error = outcome.MachineError;
+        var errorOmitted = 0;
+        string Clip(string value)
+        {
+            if (value.Length <= requestedCellChars) return value;
+            errorOmitted++;
+            var length = requestedCellChars;
+            if (length > 0 && char.IsHighSurrogate(value[length - 1])) length--;
+            return value[..length];
+        }
+        if (error is not null)
+            error = error with { Message = Clip(error.Message), Hint = error.Hint is null ? null : Clip(error.Hint), Location = error.Location is null ? null : error.Location with { Path = error.Location.Path is null ? null : Clip(error.Location.Path) } };
+        var boundedCommand = Clip(command);
         var status = error is null
             ? "success"
             : outcome.Report is SqlHarnessCompareMatrixReport
                 ? "partial"
                 : "error";
-        foreach (var detailLimit in new[] { 128, 32, 8, 2, 0 })
+        var level = AgentOutputProjection.CalculateDetailLimit(requestedBytes, requestedCellChars);
+        var levels = new List<int>();
+        while (level > 0)
         {
-            var result = AgentOutputProjection.Project(outcome.Report, options.MaximumCellCharacters, detailLimit, out var omitted);
-            var truncated = detailLimit < 128 || omitted > 0;
-            var envelope = new SqlHarnessAgentEnvelope(1, command, status, (int)outcome.ExitCode, result, error,
-                truncated ? new { omittedItems = omitted, detailLimit, maxCellChars = options.MaximumCellCharacters } : null);
+            levels.Add(level);
+            if (level == 1) break;
+            level = Math.Max(1, level / 2);
+        }
+        levels.Add(0);
+        foreach (var detailLimit in levels.Distinct())
+        {
+            var result = AgentOutputProjection.Project(outcome.Report, requestedCellChars, detailLimit, out var omitted, requestedBytes);
+            omitted += errorOmitted;
+            var truncated = omitted > 0;
+            var envelope = new SqlHarnessAgentEnvelope(1, boundedCommand, status, (int)outcome.ExitCode, result, error,
+                truncated ? new { omittedItems = omitted, detailLimit, maxCellChars = requestedCellChars } : null);
             var bytes = JsonSerializer.SerializeToUtf8Bytes(envelope, CompactJson);
-            if (bytes.Length + 1 <= options.MaximumBytes)
+            if (bytes.Length + 1 <= requestedBytes)
             {
                 output.Write(Encoding.UTF8.GetString(bytes));
                 output.WriteLine();
@@ -148,11 +172,11 @@ public sealed class Renderer
             }
         }
 
-        var minimal = new SqlHarnessAgentEnvelope(1, command, "error", (int)SqlHarnessExitCode.Safety, null,
+        var minimal = new SqlHarnessAgentEnvelope(1, boundedCommand, "error", (int)SqlHarnessExitCode.Safety, null,
             new SqlHarnessError("output_budget_too_small", "render", "The minimum agent response does not fit the configured byte budget."),
-            new { omittedItems = 1, maxOutputBytes = options.MaximumBytes });
+            new { omittedItems = 1, maxOutputBytes = requestedBytes });
         var minimalBytes = JsonSerializer.SerializeToUtf8Bytes(minimal, CompactJson);
-        if (minimalBytes.Length + 1 <= options.MaximumBytes)
+        if (minimalBytes.Length + 1 <= requestedBytes)
         {
             output.Write(Encoding.UTF8.GetString(minimalBytes));
             output.WriteLine();

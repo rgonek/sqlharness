@@ -36,3 +36,20 @@ These are byte counts, not token estimates.
 - Existing `BenchmarkSummaryProjector` already caps noteworthy operators at ten and sorts warning/spill/conversion cases first, so that behavior remains in use.
 - Existing T2 capability limits already matched the new option ranges and defaults, so no capability shape change was needed.
 - Full-suite status includes one known unrelated process test timeout; the full suite was run once as requested.
+
+## Follow-up review fixes
+
+The task review found three gaps. Fixed them in follow-up commit `ae7b74c`:
+
+- Added bounded projections for plans, space, watch, snapshots, Query Store, indexes, ping, and gain. Unknown future report types now produce a small typed omission result; they no longer fail solely because the full report exceeds the response budget. Schema `omittedObjects` now counts objects only, with nested omissions reported separately.
+- Passed configured limits into validation and parser error rendering. Long error text, hints, paths, and command names are clipped and counted.
+- Set a conservative detail allowance from the configured byte and cell limits before serialization; plan nodes also have a separate node cap. This keeps the first candidate projection bounded at the 4 KiB minimum. The output counter now joins UTF-16 surrogate pairs split across writer calls.
+
+Focused command and output after the fixes:
+
+```text
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter 'FullyQualifiedName~Cli.AgentOutputTests|FullyQualifiedName~BenchmarkSummaryTests'
+Passed! - Failed: 0, Passed: 28, Skipped: 0, Total: 28
+```
+
+The latest measured responses, including newline, were 378 bytes for the 1000-table fixture, 1461 bytes for the large matrix fixture, and 1002 bytes for the Unicode cell fixture, each with a 4096-byte budget. Added tests also cover large plan trees, long validation errors under a custom budget, and surrogate pairs split across writes. `git diff --check` passed. The full suite was not rerun for this review follow-up; the original full-suite run and its unrelated timeout are recorded above.

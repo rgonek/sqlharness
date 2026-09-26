@@ -21,3 +21,4 @@ Task 1: complete (commits 10c44f8..bd1d72d, review clean)
 Task 2: fix round 1/5 (1 important and 2 minor addressed, 0 open; commits c798c1a..0d67946)
 Task 2: complete (commits bd1d72d..0d67946, review clean)
 Task 3: complete with one unrelated full-suite process-tree timeout; see task-3-report.md
+Task 3 review follow-up: implemented bounded projections, bounded validation errors, and focused regression coverage; see task-3-report.md
