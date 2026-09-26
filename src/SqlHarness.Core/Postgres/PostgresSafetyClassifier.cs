@@ -405,7 +405,8 @@ internal sealed class PostgresSafetyClassifier
         }
 
         // Ast.CreateTable is not an IElement, so Visit never enters column defaults,
-        // GENERATED, CHECK, or CREATE INDEX key and WHERE expressions.
+        // GENERATED, CHECK, WITH/OPTIONS/TBLPROPERTIES, ORDER BY, or CREATE INDEX
+        // key, WHERE, and WITH expressions.
         private void VisitSkippedChildren(Statement statement)
         {
             switch (statement)
@@ -446,6 +447,10 @@ internal sealed class PostgresSafetyClassifier
                 ((IElement)partitionBy).Visit(this);
             if (table.PrimaryKey is { } primaryKey)
                 ((IElement)primaryKey).Visit(this);
+            VisitElement(table.WithOptions);
+            VisitElement(table.Options);
+            VisitElement(table.TableProperties);
+            VisitOrderBy(table.OrderBy);
         }
 
         private void VisitCreateIndex(CreateIndex index)
@@ -467,6 +472,22 @@ internal sealed class PostgresSafetyClassifier
 
             if (index.Predicate is { } predicate)
                 ((IElement)predicate).Visit(this);
+            VisitElement(index.With);
+        }
+
+        private void VisitElement(IElement? element) => element?.Visit(this);
+
+        private void VisitOrderBy(OneOrManyWithParens<Expression>? orderBy)
+        {
+            switch (orderBy)
+            {
+                case OneOrManyWithParens<Expression>.One one:
+                    ((IElement)one.Value).Visit(this);
+                    break;
+                case OneOrManyWithParens<Expression>.Many many:
+                    VisitElement(many.Values);
+                    break;
+            }
         }
 
         public override ControlFlow PreVisitStatement(Statement statement)

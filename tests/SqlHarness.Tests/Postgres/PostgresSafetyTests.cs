@@ -211,6 +211,42 @@ public sealed class PostgresSafetyTests
     }
 
     [Theory]
+    [InlineData("Query", """CREATE TEMP TABLE t (id int) WITH (fillfactor = set_config('search_path', 'public', false))""")]
+    [InlineData("CompareSetup", """CREATE TEMP TABLE t (id int) WITH (fillfactor = set_config('search_path', 'public', false))""")]
+    [InlineData("Query", """CREATE TEMP TABLE t (id int) OPTIONS (fillfactor = set_config('search_path', 'public', false))""")]
+    [InlineData("CompareSetup", """CREATE TEMP TABLE t (id int) OPTIONS (fillfactor = set_config('search_path', 'public', false))""")]
+    [InlineData("Query", """CREATE TEMP TABLE t (id int) TBLPROPERTIES (x = set_config('search_path', 'public', false))""")]
+    [InlineData("CompareSetup", """CREATE TEMP TABLE t (id int) TBLPROPERTIES (x = set_config('search_path', 'public', false))""")]
+    [InlineData("Query", """CREATE TEMP TABLE t (id int) ORDER BY set_config('search_path', 'public', false)""")]
+    [InlineData("CompareSetup", """CREATE TEMP TABLE t (id int) ORDER BY set_config('search_path', 'public', false)""")]
+    [InlineData("Query", """CREATE TEMP TABLE t (id int); CREATE INDEX i ON t (id) WITH (set_config('search_path', 'public', false))""")]
+    [InlineData("CompareSetup", """CREATE TEMP TABLE t (id int); CREATE INDEX i ON t (id) WITH (set_config('search_path', 'public', false))""")]
+    public void Temp_option_and_order_expressions_cannot_hide_matrix_calls(string usage, string sql)
+    {
+        var decision = _classifier.Classify(sql, ParseUsage(usage), "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.Equal("UnsupportedStatement.", decision.RejectionDescription);
+        Assert.DoesNotContain("search_path", decision.RejectionDescription, StringComparison.Ordinal);
+        Assert.DoesNotContain(sql, decision.RejectionDescription, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Query")]
+    [InlineData("CompareSetup")]
+    public void Ordinary_temp_with_and_order_by_stay_session_local(string usage)
+    {
+        var decision = _classifier.Classify("""
+            CREATE TEMP TABLE t (id int) WITH (fillfactor=10) ORDER BY id;
+            CREATE INDEX i ON t (id) WITH (fillfactor=10);
+            """, ParseUsage(usage), "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+        Assert.Contains("t", decision.SessionTempTables);
+    }
+
+    [Theory]
     [InlineData("SELECT app.write_something()")]
     [InlineData("SELECT * FROM app.hidden_view")]
     [InlineData("SELECT a + b FROM public.items")]
