@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 
 using SqlHarness.Cli;
+using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 using Xunit.Abstractions;
 
@@ -115,9 +116,30 @@ public sealed class AgentWorkflowTests
         Assert.Contains("Saved estimated tokens\tNet estimated tokens", output.ToString(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Output_capture_uses_the_sink_newline_for_written_lines()
+    {
+        var sink = NewOutput();
+        var capture = new OutputCaptureWriter(sink);
+
+        capture.WriteLine("stable line");
+
+        Assert.Equal("\n", capture.NewLine);
+        Assert.Equal("stable line\n", sink.ToString());
+    }
+
+    [Fact]
+    public void Workflow_byte_measurement_normalizes_platform_line_endings()
+    {
+        Assert.Equal(CountNormalizedUtf8Bytes("one\ntwo\n"), CountNormalizedUtf8Bytes("one\r\ntwo\r\n"));
+    }
+
     private static string Fixture(string name) => Path.Combine(FixtureDirectory, name);
 
     private static StringWriter NewOutput() => new() { NewLine = "\n" };
+
+    private static int CountNormalizedUtf8Bytes(string content) =>
+        Encoding.UTF8.GetByteCount(content.Replace("\r\n", "\n", StringComparison.Ordinal));
 
     private void AssertBytesWithinBudget(string scenario, string content, IReadOnlyCollection<int> exitCodes)
     {
@@ -126,7 +148,7 @@ public sealed class AgentWorkflowTests
         var expectedCalls = budgets.RootElement.GetProperty("calls").GetProperty(scenario).GetInt32();
         var observedBytes = budgets.RootElement.GetProperty("observedUtf8Bytes").GetProperty(scenario).GetInt32();
         var commandCalls = exitCodes.Count;
-        var utf8Bytes = Encoding.UTF8.GetByteCount(content);
+        var utf8Bytes = CountNormalizedUtf8Bytes(content);
         _output.WriteLine($"{scenario}: calls={commandCalls}, utf8Bytes={utf8Bytes}, budget={budget}");
         Assert.Equal(expectedCalls, commandCalls);
         Assert.Equal(observedBytes, utf8Bytes);

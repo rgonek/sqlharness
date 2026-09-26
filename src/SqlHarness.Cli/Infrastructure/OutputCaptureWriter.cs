@@ -5,8 +5,9 @@ using SqlHarness.Core;
 
 namespace SqlHarness.Cli.Infrastructure;
 
-public sealed partial class OutputCaptureWriter(TextWriter inner) : TextWriter
+public sealed partial class OutputCaptureWriter : TextWriter
 {
+    private readonly TextWriter _inner;
     private long _utf8Bytes;
     private long _characters;
     private long _newlines;
@@ -14,7 +15,14 @@ public sealed partial class OutputCaptureWriter(TextWriter inner) : TextWriter
     private long _nextMark;
     private char? _pendingHighSurrogate;
     private readonly Dictionary<long, (long Bytes, long Characters, long Newlines)> _marks = [];
-    public override Encoding Encoding => inner.Encoding;
+
+    public OutputCaptureWriter(TextWriter inner)
+    {
+        _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+        NewLine = inner.NewLine;
+    }
+
+    public override Encoding Encoding => _inner.Encoding;
     public long Mark()
     {
         FlushPendingSurrogate();
@@ -29,10 +37,10 @@ public sealed partial class OutputCaptureWriter(TextWriter inner) : TextWriter
         var hasTail = _characters > Math.Max(start.Characters, _lineStart);
         return new(_utf8Bytes - start.Bytes, _newlines - start.Newlines + (hasTail ? 1 : 0));
     }
-    public override void Write(char value) { Track(value.ToString()); inner.Write(value); }
-    public override void Write(string? value) { Track(value); inner.Write(value); }
-    public override Task WriteAsync(string? value) { Track(value); return inner.WriteAsync(value); }
-    public override void Flush() => inner.Flush();
+    public override void Write(char value) { Track(value.ToString()); _inner.Write(value); }
+    public override void Write(string? value) { Track(value); _inner.Write(value); }
+    public override Task WriteAsync(string? value) { Track(value); return _inner.WriteAsync(value); }
+    public override void Flush() => _inner.Flush();
 
     private void Track(string? value)
     {

@@ -6,9 +6,9 @@
     "compareSummary": 8192
   },
   "observedUtf8Bytes": {
-    "discoveryThenSchema": 4374,
-    "validationCorrection": 874,
-    "compareSummary": 1007
+    "discoveryThenSchema": 4169,
+    "validationCorrection": 834,
+    "compareSummary": 1006
   },
   "calls": {
     "discoveryThenSchema": 2,
