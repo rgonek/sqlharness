@@ -25,6 +25,16 @@ public sealed class DoctorCommandTests
         Assert.DoesNotContain("SQLHARNESS_HOME", output.ToString(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Doctor_without_json_explains_required_output_mode()
+    {
+        var output = new StringWriter();
+        var exitCode = await SqlHarnessCli.Create(new RecordingModule(), output).RunAsync(["doctor"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, exitCode);
+        Assert.Contains("doctor requires --json", output.ToString(), StringComparison.Ordinal);
+    }
+
     private sealed class RecordingModule : ISqlHarnessModule
     {
         public List<SqlHarnessOperation> Operations { get; } = [];

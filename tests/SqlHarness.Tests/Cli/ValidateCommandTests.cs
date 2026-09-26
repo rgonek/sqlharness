@@ -62,6 +62,37 @@ public sealed class ValidateCommandTests
         Assert.False(result.Executed);
     }
 
+    [Fact]
+    public void Postgres_parse_rejection_returns_a_structured_validation_report()
+    {
+        var result = SqlValidation.Validate(
+            new SqlTargetRequest("test", new Dictionary<string, string>()),
+            "SELECT FROM WHERE @id",
+            [],
+            new Dictionary<string, TargetProfile> { ["test"] = Profile("postgres") });
+
+        Assert.False(result.Allowed);
+        Assert.Equal("sql_parse_error", result.Reason);
+        Assert.Empty(result.RequiredParameters);
+        Assert.Empty(result.MissingParameters);
+        Assert.False(result.Executed);
+    }
+
+    [Fact]
+    public void Rejected_mutation_does_not_claim_supplied_parameters_are_missing()
+    {
+        var result = SqlValidation.Validate(
+            new SqlTargetRequest("test", new Dictionary<string, string>()),
+            "DELETE FROM dbo.PrivateRecords WHERE Id = @id;",
+            ["id:int=42"],
+            new Dictionary<string, TargetProfile> { ["test"] = Profile("sqlserver") });
+
+        Assert.False(result.Allowed);
+        Assert.Equal("mutation_not_allowed", result.Reason);
+        Assert.Equal(["id"], result.RequiredParameters);
+        Assert.Empty(result.MissingParameters);
+    }
+
     [Theory]
     [InlineData("sqlserver", "SELECT @id;", "id:int=42", true)]
     [InlineData("postgres", "SELECT @id::int LIMIT 1;", "id:int=42", true)]

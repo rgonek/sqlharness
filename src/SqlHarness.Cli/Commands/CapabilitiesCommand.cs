@@ -20,7 +20,11 @@ public sealed class CapabilitiesCommand(OutputContext output) : AsyncCommand<Cap
     protected override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         if (!settings.Json)
+        {
+            output.Capture.WriteLine("capabilities requires --json.");
+            output.Capture.Flush();
             return Task.FromResult((int)SqlHarnessExitCode.Safety);
+        }
         output.Capture.WriteLine(System.Text.Json.JsonSerializer.Serialize(SqlHarnessCapabilitiesProvider.Get(), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web) { WriteIndented = true }));
         output.Capture.Flush();
         return Task.FromResult((int)SqlHarnessExitCode.Success);

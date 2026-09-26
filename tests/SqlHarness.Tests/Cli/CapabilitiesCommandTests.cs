@@ -28,6 +28,16 @@ public sealed class CapabilitiesCommandTests
         Assert.Contains("agentOutputBytes", root.GetProperty("limits").EnumerateObject().Select(property => property.Name));
     }
 
+    [Fact]
+    public async Task Capabilities_without_json_explains_required_output_mode()
+    {
+        var output = new StringWriter();
+        var exitCode = await SqlHarnessCli.Create(new RecordingModule(), output).RunAsync(["capabilities"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, exitCode);
+        Assert.Contains("capabilities requires --json", output.ToString(), StringComparison.Ordinal);
+    }
+
     private sealed class RecordingModule : ISqlHarnessModule
     {
         public List<SqlHarnessOperation> Operations { get; } = [];

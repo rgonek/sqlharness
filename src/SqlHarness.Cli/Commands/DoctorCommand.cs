@@ -22,7 +22,11 @@ public sealed class DoctorCommand(OutputContext output) : AsyncCommand<DoctorCom
     protected override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         if (!settings.Json)
+        {
+            output.Capture.WriteLine("doctor requires --json.");
+            output.Capture.Flush();
             return Task.FromResult((int)SqlHarnessExitCode.Safety);
+        }
 
         var assembly = typeof(DoctorCommand).Assembly;
         var report = new

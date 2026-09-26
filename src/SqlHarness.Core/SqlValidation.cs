@@ -38,13 +38,17 @@ public static class SqlValidation
         var target = TargetResolver.Resolve(targetRequest, profiles);
         var dialect = SqlDialects.For(target.Engine);
         var decision = dialect.Classify(sql, SqlUsage.Query, target.Database, allowMutation: false, confirmDatabase: null, new HashSet<string>(StringComparer.Ordinal));
-        var requiredNames = SqlParameterReferences.Collect(target.Engine, sql)
-            .Select(CanonicalName)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Order(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        var astLocations = SqlParameterReferences.Locations(target.Engine, sql);
+        var parsed = decision.Reason != SqlSafetyReason.ParseError;
+        var requiredNames = parsed
+            ? SqlParameterReferences.Collect(target.Engine, sql)
+                .Select(CanonicalName)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+            : [];
+        var astLocations = parsed ? SqlParameterReferences.Locations(target.Engine, sql) : [];
         IReadOnlyList<SqlHarnessParameter> parsedParameters = [];
+        var parameterValidationCompleted = false;
         string? reason = decision.Allowed ? null : SafeReason(decision.Reason);
         if (decision.Allowed)
         {
@@ -52,6 +56,7 @@ public static class SqlValidation
             {
                 parsedParameters = dialect.ParseParameters(parameterDeclarations);
                 dialect.ValidateParameterReferences(parsedParameters, sql);
+                parameterValidationCompleted = true;
             }
             catch (SqlHarnessSafetyException)
             {
@@ -59,7 +64,9 @@ public static class SqlValidation
             }
         }
         var suppliedNames = parsedParameters.Select(parameter => CanonicalName(parameter.Name)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var missingNames = requiredNames.Where(name => !suppliedNames.Contains(name)).ToArray();
+        var missingNames = parameterValidationCompleted
+            ? requiredNames.Where(name => !suppliedNames.Contains(name)).ToArray()
+            : [];
         if (reason is null && missingNames.Length > 0)
             reason = "missing_parameters";
         var allowed = decision.Allowed && reason is null;
