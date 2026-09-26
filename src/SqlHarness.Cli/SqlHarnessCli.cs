@@ -33,17 +33,22 @@ public static class SqlHarnessCli
             });
             // Relaxed parsing would ignore --matrix on measure and query instead of rejecting it.
             c.UseStrictParsing();
-            c.AddCommand<QueryCommand>("query"); c.AddCommand<MeasureCommand>("measure");
-            c.AddCommand<CompareCommand>("compare"); c.AddCommand<GainCommand>("gain");
-            c.AddCommand<PlanCommand>("plan");
-            c.AddCommand<SchemaCommand>("schema");
-            c.AddCommand<PingCommand>("ping");
-            c.AddCommand<CountsCommand>("counts");
-            c.AddCommand<SpaceCommand>("space");
-            c.AddCommand<WatchCommand>("watch");
-            c.AddCommand<SnapshotCommand>("snapshot");
-            c.AddCommand<QueryStoreTopCommand>("qstop");
-            c.AddCommand<IndexesCommand>("indexes");
+            c.AddCommand<QueryCommand>("query").WithDescription("Run a bounded SQL query.");
+            c.AddCommand<MeasureCommand>("measure").WithDescription("Measure query performance across repeated runs.");
+            c.AddCommand<CompareCommand>("compare").WithDescription("Compare baseline and candidate performance and results.");
+            c.AddCommand<GainCommand>("gain").WithDescription("Report local output savings estimates.");
+            c.AddCommand<PlanCommand>("plan").WithDescription("Distill a saved execution plan offline.");
+            c.AddCommand<SchemaCommand>("schema").WithDescription("Inspect database tables, columns, and relations.");
+            c.AddCommand<PingCommand>("ping").WithDescription("Check a database connection and target identity.");
+            c.AddCommand<CountsCommand>("counts").WithDescription("Inspect row counts for database tables.");
+            c.AddCommand<SpaceCommand>("space").WithDescription("Inspect database file and table storage.");
+            c.AddCommand<WatchCommand>("watch").WithDescription("Poll a bounded read-only query until a condition is met.");
+            c.AddCommand<SnapshotCommand>("snapshot").WithDescription("Capture or compare a named query result.");
+            c.AddCommand<QueryStoreTopCommand>("qstop").WithDescription("Rank SQL Server Query Store consumers.");
+            c.AddCommand<IndexesCommand>("indexes").WithDescription("Inspect SQL Server missing-index evidence.");
+            c.AddCommand<CapabilitiesCommand>("capabilities").WithDescription("Describe local commands, engines, limits, and output modes.");
+            c.AddCommand<DoctorCommand>("doctor").WithDescription("Check local installation and profile-file availability without connecting.");
+            c.AddCommand<ValidateCommand>("validate").WithDescription("Classify SQL offline using a closed profile; never connects.");
         });
         return new SqlHarnessApp(app, outputContext);
     }

@@ -8,6 +8,15 @@ namespace SqlHarness.Core.Postgres;
 
 internal static class PostgresParameterReferenceValidator
 {
+    internal static IReadOnlyList<string> CollectReferences(string batch)
+    {
+        var dialect = new PostgreSqlDialect();
+        Parse(batch, dialect);
+        var references = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        Collect(batch, dialect, references);
+        return references.Order(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
     internal static void Validate(
         IReadOnlyList<SqlHarnessParameter> parameters,
         params string?[] batches)

@@ -9,6 +9,14 @@ Get-Command sqlharness
 sqlharness --help
 ```
 
+For an offline agent startup path, use `sqlharness capabilities --json` and
+`sqlharness doctor --json`, then classify a SQL file with
+`sqlharness validate <profile> --file .\query.sql --json`. Add `--var` and
+`--param` values only when the closed profile and SQL require them. Validation
+never connects or executes SQL, reports object existence and database
+permissions as unknown, and does not authorize a later mutation. See [the agent output contract](docs/superpowers/specs/2026-09-26-agent-output-contract.md)
+and [audit roadmap](docs/superpowers/plans/2026-09-26-audit-roadmap.md).
+
 Prefer `--json` for full reports, or `--json-summary` on `measure`/`compare` for a bounded agent-sized projection (mutually exclusive with `--json`). For a database request, lock one profile and one variable set per invocation; a different profile or variables needs a new explicit user request. Prefer closed named profiles to direct targets.
 
 ```powershell

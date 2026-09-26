@@ -4,6 +4,18 @@ Measure, compare, and prove SQL changes.
 
 SQLHarness is a command-line optimization harness for SQL Server, Azure SQL, and PostgreSQL. It gives coding agents and engineers bounded query execution, repeated measurements, baseline/candidate equivalence checks, compact execution-plan distillation, schema inspection, and locally recorded output-savings evidence. The engine is a property of the locked target profile (omit `engine` for SQL Server; set `"engine": "postgres"` for Postgres).
 
+## Agent startup
+
+Use `sqlharness capabilities --json` to inspect commands and engine support,
+then `sqlharness doctor --json` to check the local installation. Both commands
+are offline and omit profile names, accounts, and environment values. Before
+running a SQL file, `sqlharness validate <profile> --file query.sql --param id:int=1 --json`
+classifies it with the selected closed profile and reports required parameters;
+it does not connect or execute the SQL. Database permissions and referenced
+object existence remain unknown, and its result does not authorize a later
+mutation. See [the agent output contract](docs/superpowers/specs/2026-09-26-agent-output-contract.md)
+and [the audit roadmap](docs/superpowers/plans/2026-09-26-audit-roadmap.md).
+
 ## Install a release binary
 
 SQLHarness is distributed only as self-contained, single-file, untrimmed GitHub Release binaries. Download the archive matching your platform (`win-x64`, `linux-x64`, or `osx-arm64`) and the accompanying `SHA256SUMS` from the [GitHub Releases page](https://github.com/rgonek/sqlharness/releases). Verify the archive before extracting it, then put `sqlharness.exe` on `PATH` for Windows or `sqlharness` on `PATH` for Linux/macOS.
