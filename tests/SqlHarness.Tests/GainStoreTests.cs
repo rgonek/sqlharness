@@ -193,7 +193,39 @@ public class GainStoreTests
         Assert.Equal(1, report.Query.Executions);
         Assert.Equal(1, report.Compare.Executions);
         Assert.Equal(1, report.Measure.Executions);
-        Assert.Equal(21d / 29d * 100d, report.Total.SavingsPercentage, 10);
+        Assert.Equal(20d / 29d * 100d, report.Total.SavingsPercentage, 10);
+    }
+
+    [Fact]
+    public void Negative_net_estimate_is_aggregated_while_legacy_saved_estimate_stays_gross()
+    {
+        using var temp = new TempDirectory("negative-net-gain");
+        var store = new GainStore(temp.FilePath);
+
+        store.Append(Record("query", true, 1, 400, 1, 800, 1, 100, 200, 0));
+
+        var total = store.Aggregate().Total;
+        Assert.Equal(100, total.RawEstimatedTokens);
+        Assert.Equal(200, total.EmittedEstimatedTokens);
+        Assert.Equal(0, total.SavedEstimatedTokens);
+        Assert.Equal(-100, total.NetEstimatedTokens);
+        Assert.Equal("utf8-bytes-div-4", total.EstimationMethod);
+        Assert.Equal(-100d, total.SavingsPercentage);
+    }
+
+    [Fact]
+    public void Legacy_records_are_read_without_rewriting_and_get_signed_net_estimate()
+    {
+        using var temp = new TempDirectory("legacy-net-gain");
+        var original = LegacyLine("query");
+        File.WriteAllText(temp.FilePath, original + "\n");
+
+        var total = new GainStore(temp.FilePath).Aggregate().Total;
+
+        Assert.Equal(1, total.SavedEstimatedTokens);
+        Assert.Equal(1, total.NetEstimatedTokens);
+        Assert.Equal("utf8-bytes-div-4", total.EstimationMethod);
+        Assert.Equal(original + "\n", File.ReadAllText(temp.FilePath));
     }
 
     [Fact]

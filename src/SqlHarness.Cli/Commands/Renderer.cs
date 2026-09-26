@@ -54,7 +54,7 @@ public sealed class Renderer
             RenderMatrix(matrix, output);
         else if (outcome.Report is SqlHarnessGainReport gain)
         {
-            output.WriteLine("Scope\tExecutions\tFailures\tSaved tokens\tSavings %");
+            output.WriteLine("Scope\tExecutions\tFailures\tSaved tokens\tNet tokens\tSavings %");
             WriteGain("total", gain.Total, output); WriteGain("query", gain.Query, output);
             WriteGain("compare", gain.Compare, output); WriteGain("measure", gain.Measure, output);
             WriteGain("ping", gain.Ping, output); WriteGain("counts", gain.Counts, output);
@@ -518,7 +518,7 @@ public sealed class Renderer
             text += $"; differing positions: {equivalence.DifferingPositions}";
         return text;
     }
-    private static void WriteGain(string name, SqlHarnessGainSummary s, TextWriter output) => output.WriteLine($"{name}\t{s.Executions}\t{s.Failures}\t{s.SavedEstimatedTokens}\t{s.SavingsPercentage:0.##}");
+    private static void WriteGain(string name, SqlHarnessGainSummary s, TextWriter output) => output.WriteLine($"{name}\t{s.Executions}\t{s.Failures}\t{s.SavedEstimatedTokens}\t{s.NetEstimatedTokens}\t{s.SavingsPercentage:0.##}");
     private static void RenderPlan(DistilledPlan plan, TextWriter output)
     {
         foreach (var statement in plan.Statements)

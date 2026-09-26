@@ -240,11 +240,11 @@ Never work around a safety rejection. Narrow the operation or obtain explicit ap
 
 ## Gain accounting
 
-Every command except `gain` records metadata-only raw and emitted byte counts in `~/.sqlharness/data/gain.jsonl`; SQL text, result values, plans, messages, and secrets are not recorded there. The `gain` command derives estimated tokens as `bytes / 4` (integer byte/4 accounting). This is a model-independent heuristic for comparing output sizes, not a tokenizer measurement or a guarantee of model cost.
+Every command except `gain` records metadata-only raw and emitted byte counts in `~/.sqlharness/data/gain.jsonl`; SQL text, result values, plans, messages, and secrets are not recorded there. The `gain` command estimates tokens as `ceil(UTF-8 bytes / 4)` using the `utf8-bytes-div-4` heuristic. `savedEstimatedTokens` remains the historical nonnegative gross field; `netEstimatedTokens` is the signed raw-minus-emitted delta, and savings percentage uses that signed net. Raw means SQLHarness's canonical internal representation, not the response from an alternative tool. This is a model-independent output-size estimate, not a tokenizer measurement or a claim about LLM cost.
 
 ### Results to fill from real runs before publishing
 
-| Scenario | Raw bytes | Emitted bytes | Estimated token savings | Evidence |
+| Scenario | Raw bytes | Emitted bytes | Net estimated token delta | Evidence |
 | --- | ---: | ---: | ---: | --- |
 | Public sample: `compare` | TBD | TBD | TBD | Add a reproducible run and artifact-free summary. |
 | Public sample: `plan` | TBD | TBD | TBD | Add a reproducible run and source plan provenance. |

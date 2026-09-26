@@ -79,6 +79,13 @@ public class CanonicalResultsTests
     }
 
     [Fact]
+    public void Footprint_token_estimate_identifies_its_byte_heuristic()
+    {
+        Assert.Equal("utf8-bytes-div-4", OutputFootprint.EstimationMethod);
+        Assert.Equal(2, OutputFootprint.EstimateTokens(5));
+    }
+
+    [Fact]
     public void Unsupported_scalar_rejection_leaves_the_accumulator_clean_and_usable()
     {
         const string expected = "{\"events\":[{\"kind\":\"resultSetStart\",\"columns\":[{\"ordinal\":0,\"name\":\"Value\",\"dataType\":\"unsupported\",\"allowNull\":false}]},{\"kind\":\"row\",\"values\":[{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":1}]},{\"kind\":\"resultSetEnd\",\"rowCount\":1}]}";

@@ -12,8 +12,10 @@ public sealed record SqlHarnessGainSummary(
     long RawBytes, long RawLines, long EmittedBytes, long EmittedLines,
     long RawEstimatedTokens, long EmittedEstimatedTokens, long SavedEstimatedTokens)
 {
+    public long NetEstimatedTokens => RawEstimatedTokens - EmittedEstimatedTokens;
+    public string EstimationMethod => OutputFootprint.EstimationMethod;
     public double SavingsPercentage =>
-        RawEstimatedTokens == 0 ? 0 : (double)SavedEstimatedTokens / RawEstimatedTokens * 100;
+        RawEstimatedTokens == 0 ? 0 : (double)NetEstimatedTokens / RawEstimatedTokens * 100;
 }
 
 public sealed record SqlHarnessGainReport(

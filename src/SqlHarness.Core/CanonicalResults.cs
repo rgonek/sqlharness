@@ -7,6 +7,8 @@ namespace SqlHarness.Core;
 
 public sealed record OutputFootprint(long Bytes, long Lines)
 {
+    public const string EstimationMethod = "utf8-bytes-div-4";
+
     public long Bytes { get; init; } = Bytes >= 0
         ? Bytes
         : throw new ArgumentOutOfRangeException(nameof(Bytes));

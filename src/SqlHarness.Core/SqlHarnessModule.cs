@@ -262,6 +262,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             {
                 var rawTokens = raw.EstimatedTokenCount;
                 var emittedTokens = emitted.EstimatedTokenCount;
+                // savedEstimatedTokens is the historical nonnegative gross field; reports derive signed net from both estimates.
                 _gainStore.Append(new GainRecord(
                     DateTimeOffset.UtcNow,
                     command,
