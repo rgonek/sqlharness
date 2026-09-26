@@ -625,6 +625,9 @@ public sealed class MeasureParameterSetExecutionTests
         public IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs) =>
             inner.ParseParameters(inputs);
 
+        public void ValidateParameterReferences(IReadOnlyList<SqlHarnessParameter> parameters, params string?[] batches) =>
+            inner.ValidateParameterReferences(parameters, batches);
+
         public void ValidateMeasuredBatch(string sql) => inner.ValidateMeasuredBatch(sql);
 
         public DistilledPlan DistillPlan(string document) => inner.DistillPlan(document);

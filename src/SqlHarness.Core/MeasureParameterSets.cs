@@ -24,11 +24,13 @@ internal static class MeasureParameterSetValidator
         IReadOnlyList<string> fixedParameters,
         IReadOnlyList<SqlHarnessParameterSetInput> parameterSets,
         string? setupSql,
-        string querySql)
+        string querySql,
+        ISqlDialect? dialect = null)
     {
         ArgumentNullException.ThrowIfNull(fixedParameters);
         ArgumentNullException.ThrowIfNull(parameterSets);
         ArgumentNullException.ThrowIfNull(querySql);
+        dialect ??= SqlDialects.For(SqlEngine.SqlServer);
 
         var fixedParsed = ParseShaped(fixedParameters, setName: null);
         var fixedNames = new HashSet<string>(
@@ -69,7 +71,7 @@ internal static class MeasureParameterSetValidator
             }
 
             var parameters = ordered.Select(parameter => parameter.Parameter).ToArray();
-            SqlParameterReferenceValidator.Validate(parameters, setupSql, querySql);
+            dialect.ValidateParameterReferences(parameters, setupSql, querySql);
             prepared.Add(new PreparedMeasureParameterSet(
                 set.Name,
                 parameters,

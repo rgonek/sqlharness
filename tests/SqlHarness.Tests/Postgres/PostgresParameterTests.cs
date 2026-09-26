@@ -6,6 +6,7 @@ using NpgsqlTypes;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
+using SqlHarness.Core.Dialect;
 using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
 
@@ -121,6 +122,191 @@ public sealed class PostgresParameterTests
         Assert.Equal(1, parameter.Value);
     }
 
+    [Theory]
+    [InlineData("SELECT @n::int")]
+    [InlineData("SELECT @n LIMIT 1")]
+    [InlineData("SELECT @doc->'a'")]
+    [InlineData("SELECT @doc ->> 'key'")]
+    [InlineData("SELECT @doc @> '{\"a\":1}'")]
+    [InlineData("SELECT @n, $$hello$$")]
+    public async Task Query_accepts_postgres_placeholders_the_tsql_parser_rejects(string sql)
+    {
+        var session = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["value"], [1]));
+        var module = new SqlHarnessModule(session, new FakeGain(), Profiles);
+        var parameter = sql.Contains("@doc", StringComparison.Ordinal) ? "doc:int=1" : "n:int=1";
+
+        var outcome = await module.ExecuteAsync(new SqlHarnessQueryOperation(
+            new SqlTargetRequest("local-pg", new Dictionary<string, string>()),
+            sql,
+            [parameter],
+            30,
+            50,
+            false,
+            null));
+
+        Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
+        Assert.Equal(sql, Assert.Single(session.Commands).Sql);
+    }
+
+    [Theory]
+    [InlineData("SELECT @n::int")]
+    [InlineData("SELECT @n LIMIT 1")]
+    [InlineData("SELECT @doc->'a'")]
+    [InlineData("SELECT @doc ->> 'key'")]
+    [InlineData("SELECT @doc @> '{\"a\":1}'")]
+    [InlineData("SELECT @doc ? 'a'")]
+    [InlineData("SELECT @n, $$hello$$")]
+    [InlineData("SELECT @n::int, @n, @N")]
+    [InlineData("SELECT :n::int")]
+    [InlineData("SELECT @n$extra")]
+    public void Dialect_accepts_postgres_placeholder_syntax(string sql)
+    {
+        var parameter = sql.Contains("@doc", StringComparison.Ordinal) ? "doc:int=1" : "n:int=1";
+        Accept(sql, parameter);
+    }
+
+    [Fact]
+    public void Dialect_matches_a_name_without_regard_to_case()
+    {
+        Accept("SELECT @ID LIMIT 1", "id:int=1");
+    }
+
+    [Fact]
+    public void Dialect_accepts_a_parameter_used_only_in_setup_or_one_variant()
+    {
+        AcceptAcross("seed:int=1", "id:int=2", "SELECT @seed", "SELECT @id::int");
+        AcceptAcross("only:int=1", "shared:int=2", "SELECT @only::int, @shared", "SELECT @shared LIMIT 1");
+    }
+
+    [Fact]
+    public void Dialect_ignores_placeholders_inside_comments_strings_and_dollar_quotes()
+    {
+        const string sql = """
+            SELECT @n::int -- @unused
+            /* @unused */
+            , '@unused'
+            , $$ @unused $$
+            , $tag$ @unused $tag$
+            , "@unused"
+            , E'@unused'
+            """;
+
+        Accept(sql, "n:int=1");
+        var exception = Reject(sql, "n:int=1", "unused:int=2");
+        Assert.Contains("@unused", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("not referenced", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Dialect_does_not_treat_abs_or_a_dotted_name_as_a_shorter_placeholder()
+    {
+        var spaced = Reject("SELECT @ n", "n:int=1");
+        Assert.Contains("@n", spaced.Message, StringComparison.Ordinal);
+
+        var dotted = Reject("SELECT @a.b", "a:int=1");
+        Assert.Contains("@a", dotted.Message, StringComparison.Ordinal);
+
+        var positional = Reject("SELECT $1", "n:int=1");
+        Assert.Contains("@n", positional.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Dialect_rejects_an_unreferenced_parameter_and_unparsed_sql()
+    {
+        var unused = Reject("SELECT @n LIMIT 1", "n:int=1", "extra:int=2");
+        Assert.Contains("@extra", unused.Message, StringComparison.Ordinal);
+
+        var syntax = Reject("SELECT @n FROM (", "n:int=1");
+        Assert.Equal("SQL parameter references could not be parsed.", syntax.Message);
+    }
+
+    [Fact]
+    public void Dialect_does_not_parse_sql_that_has_no_parameters()
+    {
+        SqlDialects.For(SqlEngine.Postgres).ValidateParameterReferences([], "SELECT * FROM (");
+    }
+
+    [Fact]
+    public async Task Compare_and_measure_use_the_postgres_reference_scan()
+    {
+        const string sql = "SELECT @n::int; SELECT @n";
+        var compare = await Execute(new SqlHarnessCompareOperation(
+            Target(),
+            null,
+            sql,
+            sql,
+            ["n:int=1"],
+            30,
+            1));
+        Assert.Contains("Measured SQL must be a single SELECT", compare.SafeError, StringComparison.Ordinal);
+
+        var measure = await Execute(new SqlHarnessMeasureOperation(
+            Target(),
+            null,
+            sql,
+            ["n:int=1"],
+            30,
+            1));
+        Assert.Contains("Measured SQL must be a single SELECT", measure.SafeError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Matrix_measure_sets_watch_and_snapshot_use_the_postgres_reference_scan()
+    {
+        var matrixSession = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["value"], [1]));
+        var matrix = await Execute(new SqlHarnessCompareMatrixOperation(
+            Target(),
+            null,
+            "SELECT @n::int",
+            "SELECT @n::int",
+            [],
+            30,
+            1,
+            "n:int=1,2"), matrixSession);
+        Assert.NotEmpty(matrixSession.Commands);
+        Assert.DoesNotContain("could not be parsed", matrix.SafeError ?? string.Empty, StringComparison.Ordinal);
+
+        var setSession = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["value"], [1]));
+        var sets = await Execute(new SqlHarnessMeasureOperation(
+            Target(),
+            "SELECT @seed",
+            "SELECT @id::int",
+            ["seed:int=1"],
+            30,
+            1,
+            [new("small", ["id:int=1"]), new("large", ["id:int=2"])]), setSession);
+        Assert.NotEmpty(setSession.Commands);
+        Assert.DoesNotContain("could not be parsed", sets.SafeError ?? string.Empty, StringComparison.Ordinal);
+
+        var watch = await Execute(new SqlHarnessWatchOperation(
+            Target(),
+            "SELECT @n::int",
+            ["n:int=1"],
+            30,
+            1,
+            TimeSpan.FromSeconds(30),
+            TimeSpan.FromMinutes(1),
+            "not a predicate",
+            null));
+        Assert.Contains("Watch condition predicate is invalid.", watch.SafeError, StringComparison.Ordinal);
+
+        var snapshots = new RecordingSnapshotStore();
+        var snapshotSession = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["value"], [1]));
+        var snapshot = await new SqlHarnessModule(snapshotSession, new FakeGain(), Profiles, snapshotStore: snapshots)
+            .ExecuteAsync(new SqlHarnessSnapshotOperation(
+                Target(),
+                "SELECT @n LIMIT 1",
+                ["n:int=1"],
+                30,
+                1,
+                "before",
+                false,
+                false));
+        Assert.True(snapshot.ExitCode == SqlHarnessExitCode.Success, snapshot.SafeError);
+        Assert.Equal(1, snapshots.Saves);
+        Assert.Equal("SELECT @n LIMIT 1", Assert.Single(snapshotSession.Commands).Sql);
+    }
+
     [Fact]
     public async Task Query_rejects_money_parameter_on_postgres_before_execution()
     {
@@ -142,6 +328,25 @@ public sealed class PostgresParameterTests
         Assert.DoesNotContain("1.23", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
+    private static SqlTargetRequest Target() =>
+        new("local-pg", new Dictionary<string, string>());
+
+    private static void Accept(string sql, params string[] parameters) =>
+        SqlDialects.For(SqlEngine.Postgres).ValidateParameterReferences(SqlParameterParser.Parse(parameters), sql);
+
+    private static void AcceptAcross(string left, string right, params string?[] batches) =>
+        SqlDialects.For(SqlEngine.Postgres).ValidateParameterReferences(
+            SqlParameterParser.Parse([left, right]),
+            batches);
+
+    private static SqlHarnessSafetyException Reject(string sql, params string[] parameters) =>
+        Assert.Throws<SqlHarnessSafetyException>(() =>
+            SqlDialects.For(SqlEngine.Postgres).ValidateParameterReferences(SqlParameterParser.Parse(parameters), sql));
+
+    private static Task<SqlHarnessOutcome> Execute(SqlHarnessOperation operation, FakeSession? session = null) =>
+        new SqlHarnessModule(session ?? FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["value"], [1])), new FakeGain(), Profiles)
+            .ExecuteAsync(operation);
+
     private static IReadOnlyDictionary<string, TargetProfile> Profiles() =>
         new Dictionary<string, TargetProfile>
         {
@@ -155,6 +360,15 @@ public sealed class PostgresParameterTests
                 TrustServerCertificate: true,
                 Engine: "postgres"),
         };
+
+    private sealed class RecordingSnapshotStore : ISnapshotStore
+    {
+        public int Saves { get; private set; }
+
+        public void Save(string name, SnapshotDocument document, bool force) => Saves++;
+
+        public SnapshotDocument Load(string name) => throw new NotSupportedException();
+    }
 
     private sealed class FakeGain : IGainStore
     {

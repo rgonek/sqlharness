@@ -336,6 +336,7 @@ public sealed class BenchmarkRunTests
         public SqlSafetyDecision Classify(string sql, SqlUsage usage, string? database, bool allowMutation, string? confirmDatabase, IReadOnlySet<string> sessionTempTables) => throw Unused();
         public IReadOnlySet<string> CollectSessionTempTables(string sql) => throw Unused();
         public IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs) => throw Unused();
+        public void ValidateParameterReferences(IReadOnlyList<SqlHarnessParameter> parameters, params string?[] batches) => throw Unused();
         public void ValidateMeasuredBatch(string sql) => throw Unused();
         public DistilledPlan DistillPlan(string document) => throw Unused();
         public string BuildCountsExactSql(IReadOnlyList<ResolvedCountObject> objects) => throw Unused();

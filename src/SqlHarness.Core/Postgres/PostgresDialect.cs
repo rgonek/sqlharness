@@ -41,6 +41,9 @@ internal sealed class PostgresDialect : ISqlDialect
         return parsed;
     }
 
+    public void ValidateParameterReferences(IReadOnlyList<SqlHarnessParameter> parameters, params string?[] batches) =>
+        PostgresParameterReferenceValidator.Validate(parameters, batches);
+
     public void ValidateMeasuredBatch(string sql) => PostgresBenchmark.ValidateMeasuredBatch(sql);
 
     public DistilledPlan DistillPlan(string document) => PostgresPlanDistiller.Distill(document);

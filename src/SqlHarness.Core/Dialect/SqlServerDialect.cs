@@ -26,6 +26,9 @@ internal sealed class SqlServerDialect : ISqlDialect
     public IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs) =>
         SqlParameterParser.Parse(inputs);
 
+    public void ValidateParameterReferences(IReadOnlyList<SqlHarnessParameter> parameters, params string?[] batches) =>
+        SqlParameterReferenceValidator.Validate(parameters, batches);
+
     public void ValidateMeasuredBatch(string sql)
     {
     }

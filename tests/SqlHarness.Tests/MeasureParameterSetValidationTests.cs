@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 
 using SqlHarness.Core;
+using SqlHarness.Core.Dialect;
 
 namespace SqlHarness.Tests;
 
@@ -422,6 +423,68 @@ public sealed class MeasureParameterSetValidationTests
             if (value.Any(character => !char.IsAsciiLetterOrDigit(character) && character is not '_' and not '@'))
                 Assert.DoesNotContain(value, safe, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void Prepare_on_postgres_accepts_setup_only_parameters_for_every_set()
+    {
+        var sets = MeasureParameterSetValidator.Prepare(
+            ["seed:int=1"],
+            [new("small", ["id:int=1"]), new("large", ["id:int=9"])],
+            "SELECT @seed -- @id stays in the query",
+            """
+            SELECT @id::int, @id
+            -- @seed is setup-only
+            , '@missing'
+            , $$ @missing $$
+            """,
+            SqlDialects.For(SqlEngine.Postgres));
+
+        Assert.Equal(["small", "large"], sets.Select(set => set.Name));
+        Assert.Equal(1, sets[0].Parameters.Single(parameter => parameter.Name == "@id").Value);
+        Assert.Equal(9, sets[1].Parameters.Single(parameter => parameter.Name == "@id").Value);
+    }
+
+    [Fact]
+    public void Prepare_on_postgres_rejects_a_parameter_that_no_batch_references()
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            MeasureParameterSetValidator.Prepare(
+                ["seed:int=1"],
+                [new("small", ["id:int=1", "extra:int=2"]), new("large", ["id:int=9", "extra:int=3"])],
+                "SELECT @seed",
+                "SELECT @id, '@extra' LIMIT 1",
+                SqlDialects.For(SqlEngine.Postgres)));
+
+        Assert.Contains("@extra", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("not referenced", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Prepare_on_postgres_rejects_sql_whose_parameter_references_cannot_be_parsed()
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            MeasureParameterSetValidator.Prepare(
+                [],
+                [new("small", ["id:int=1"]), new("large", ["id:int=2"])],
+                null,
+                "SELECT @id FROM (",
+                SqlDialects.For(SqlEngine.Postgres)));
+
+        Assert.Equal("SQL parameter references could not be parsed.", exception.Message);
+    }
+
+    [Fact]
+    public void Prepare_without_a_dialect_keeps_the_sql_server_reference_scan()
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            MeasureParameterSetValidator.Prepare(
+                [],
+                [new("small", ["id:int=1"]), new("large", ["id:int=2"])],
+                null,
+                "SELECT @id::int"));
+
+        Assert.Equal("SQL parameter references could not be parsed.", exception.Message);
     }
 
     private static string HashUnder(string culture, string[] fixedParameters, string[] setParameters)

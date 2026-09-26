@@ -18,6 +18,8 @@ internal interface ISqlDialect
 
     IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs);
 
+    void ValidateParameterReferences(IReadOnlyList<SqlHarnessParameter> parameters, params string?[] batches);
+
     void ValidateMeasuredBatch(string sql);
 
     DistilledPlan DistillPlan(string document);

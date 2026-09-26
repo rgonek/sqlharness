@@ -1,4 +1,5 @@
 using SqlHarness.Core;
+using SqlHarness.Core.Dialect;
 
 namespace SqlHarness.Tests;
 
@@ -35,6 +36,28 @@ public class SqlParameterReferenceValidatorTests
 
         var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
             SqlParameterReferenceValidator.Validate(parameters, "SELECT * FROM [unterminated WHERE Id = @customerId"));
+
+        Assert.Equal("SQL parameter references could not be parsed.", exception.Message);
+    }
+
+    [Fact]
+    public void Sql_server_dialect_delegates_case_insensitive_references()
+    {
+        var parameters = SqlParameterParser.Parse(["customerId:int=42", "active:bit=true"]);
+
+        SqlDialects.For(SqlEngine.SqlServer).ValidateParameterReferences(
+            parameters,
+            "SELECT * FROM dbo.Customers WHERE Id = @CUSTOMERID",
+            "SELECT * FROM dbo.Customers WHERE Active = @active");
+    }
+
+    [Fact]
+    public void Sql_server_dialect_still_rejects_postgres_only_syntax()
+    {
+        var parameters = SqlParameterParser.Parse(["n:int=1"]);
+
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            SqlDialects.For(SqlEngine.SqlServer).ValidateParameterReferences(parameters, "SELECT @n::int"));
 
         Assert.Equal("SQL parameter references could not be parsed.", exception.Message);
     }
