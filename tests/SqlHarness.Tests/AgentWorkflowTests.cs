@@ -19,12 +19,12 @@ public sealed class AgentWorkflowTests
     public async Task Capability_discovery_then_schema_uses_two_bounded_calls_without_database_access()
     {
         var module = new WorkflowModule();
-        var capabilityOutput = new StringWriter();
+        var capabilityOutput = NewOutput();
         var exitCodes = new List<int>
         {
             await SqlHarnessCli.Create(module, capabilityOutput).RunAsync(["capabilities", "--json"]),
         };
-        var schemaOutput = new StringWriter();
+        var schemaOutput = NewOutput();
         exitCodes.Add(await SqlHarnessCli.Create(module, schemaOutput).RunAsync(["schema", "local", "--object", "dbo.Orders", "--json"]));
 
         Assert.All(exitCodes, code => Assert.Equal(0, code));
@@ -45,13 +45,13 @@ public sealed class AgentWorkflowTests
             await File.WriteAllTextAsync(Path.Combine(home, "targets.json"),
                 "{\"local\":{\"server\":\"offline.invalid\",\"database\":\"unused\",\"vars\":{},\"auth\":\"sql\",\"sqlUser\":\"unused\",\"passwordEnvVar\":\"UNUSED_SQLHARNESS_PASSWORD\"}}");
             var module = new WorkflowModule();
-            var deniedOutput = new StringWriter();
+            var deniedOutput = NewOutput();
             var exitCodes = new List<int>
             {
                 await SqlHarnessCli.Create(module, deniedOutput).RunAsync([
                     "validate", "local", "--file", Fixture("validate-denied.sql"), "--json"]),
             };
-            var correctedOutput = new StringWriter();
+            var correctedOutput = NewOutput();
             exitCodes.Add(await SqlHarnessCli.Create(module, correctedOutput).RunAsync([
                 "validate", "local", "--file", Fixture("validate-corrected.sql"), "--json"]));
 
@@ -82,7 +82,7 @@ public sealed class AgentWorkflowTests
             await File.WriteAllTextAsync(Path.Combine(artifactDirectory, "baseline.sqlplan"), "<ShowPlanXML />");
             await File.WriteAllTextAsync(Path.Combine(artifactDirectory, "candidate.sqlplan"), "<ShowPlanXML />");
             var module = new WorkflowModule(artifactDirectory);
-            var output = new StringWriter();
+            var output = NewOutput();
             var exitCodes = new List<int>
             {
                 await SqlHarnessCli.Create(module, output).RunAsync([
@@ -104,7 +104,20 @@ public sealed class AgentWorkflowTests
         }
     }
 
+    [Fact]
+    public async Task Gain_text_names_estimates_and_the_heuristic()
+    {
+        var output = NewOutput();
+        var exit = await SqlHarnessCli.Create(new WorkflowModule(), output).RunAsync(["gain"]);
+
+        Assert.Equal(0, exit);
+        Assert.Contains("Estimated tokens: utf8-bytes-div-4 (ceil UTF-8 bytes / 4)", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Saved estimated tokens\tNet estimated tokens", output.ToString(), StringComparison.Ordinal);
+    }
+
     private static string Fixture(string name) => Path.Combine(FixtureDirectory, name);
+
+    private static StringWriter NewOutput() => new() { NewLine = "\n" };
 
     private void AssertBytesWithinBudget(string scenario, string content, IReadOnlyCollection<int> exitCodes)
     {
@@ -114,10 +127,10 @@ public sealed class AgentWorkflowTests
         var observedBytes = budgets.RootElement.GetProperty("observedUtf8Bytes").GetProperty(scenario).GetInt32();
         var commandCalls = exitCodes.Count;
         var utf8Bytes = Encoding.UTF8.GetByteCount(content);
+        _output.WriteLine($"{scenario}: calls={commandCalls}, utf8Bytes={utf8Bytes}, budget={budget}");
         Assert.Equal(expectedCalls, commandCalls);
         Assert.Equal(observedBytes, utf8Bytes);
         Assert.InRange(utf8Bytes, 1, budget);
-        _output.WriteLine($"{scenario}: calls={commandCalls}, utf8Bytes={utf8Bytes}, budget={budget}");
     }
 
     private sealed class WorkflowModule(string? artifactDirectory = null) : ISqlHarnessModule
@@ -133,6 +146,7 @@ public sealed class AgentWorkflowTests
                     new("offline.invalid", "unused", "offline.invalid", "unused", "profile"),
                     [new SchemaObjectReport("dbo", "Orders", "table", [], [], [])], 0),
                 SqlHarnessCompareOperation => CompareReport(artifactDirectory!),
+                SqlHarnessGainOperation => new SqlHarnessGainReport(Summary(100, 200), Summary(0, 0), Summary(0, 0)),
                 _ => throw new InvalidOperationException($"Unexpected workflow operation: {operation.GetType().Name}"),
             };
             return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null));
@@ -150,5 +164,9 @@ public sealed class AgentWorkflowTests
         private static CompareVariantReport Variant(string name) => new(
             name, new(1, 1, 1), new(1, 1, 1), new(0, 0, 0),
             new Dictionary<string, long>(), [], []);
+
+        private static SqlHarnessGainSummary Summary(long rawTokens, long emittedTokens) => new(
+            0, 0, 0, rawTokens * 4, 0, emittedTokens * 4, 0,
+            rawTokens, emittedTokens, Math.Max(rawTokens - emittedTokens, 0));
     }
 }

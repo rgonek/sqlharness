@@ -54,7 +54,8 @@ public sealed class Renderer
             RenderMatrix(matrix, output);
         else if (outcome.Report is SqlHarnessGainReport gain)
         {
-            output.WriteLine("Scope\tExecutions\tFailures\tSaved tokens\tNet tokens\tSavings %");
+            output.WriteLine($"Estimated tokens: {gain.Total.EstimationMethod} (ceil UTF-8 bytes / 4)");
+            output.WriteLine("Scope\tExecutions\tFailures\tSaved estimated tokens\tNet estimated tokens\tSavings %");
             WriteGain("total", gain.Total, output); WriteGain("query", gain.Query, output);
             WriteGain("compare", gain.Compare, output); WriteGain("measure", gain.Measure, output);
             WriteGain("ping", gain.Ping, output); WriteGain("counts", gain.Counts, output);
