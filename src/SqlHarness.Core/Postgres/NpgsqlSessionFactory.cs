@@ -81,6 +81,19 @@ internal sealed class NpgsqlSessionFactory : ISqlSessionFactory
     }
 }
 
+internal static class PostgresSessionScope
+{
+    // Query and CompareSetup both run already-classified text.
+    // No transaction wrapper, role change, privilege change, or search_path edit.
+    internal static void BindClassifiedCommand(NpgsqlCommand command, SqlExecutionCommand execution)
+    {
+        command.CommandText = execution.Sql;
+        command.CommandType = CommandType.Text;
+        command.CommandTimeout = execution.TimeoutSeconds;
+        PostgresParameters.Bind(command, execution.Parameters);
+    }
+}
+
 internal sealed class NpgsqlSession(
     NpgsqlConnection connection,
     List<string> messages,
@@ -107,13 +120,8 @@ internal sealed class NpgsqlSession(
         }
     }
 
-    internal static void BindCommand(NpgsqlCommand command, SqlExecutionCommand execution)
-    {
-        command.CommandText = execution.Sql;
-        command.CommandType = CommandType.Text;
-        command.CommandTimeout = execution.TimeoutSeconds;
-        PostgresParameters.Bind(command, execution.Parameters);
-    }
+    internal static void BindCommand(NpgsqlCommand command, SqlExecutionCommand execution) =>
+        PostgresSessionScope.BindClassifiedCommand(command, execution);
 
     public async ValueTask DisposeAsync()
     {

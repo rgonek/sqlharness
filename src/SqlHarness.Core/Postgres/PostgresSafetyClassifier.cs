@@ -17,6 +17,9 @@ internal sealed class PostgresSafetyClassifier
         "pg_read_file",
         "pg_ls_dir",
         "lo_import",
+        "set_config",
+        "pg_cancel_backend",
+        "pg_terminate_backend",
     };
 
     internal SqlSafetyDecision Classify(
@@ -44,24 +47,26 @@ internal sealed class PostgresSafetyClassifier
         if (statements.Count == 0)
             return Denied(SqlSafetyReason.UnsupportedStatement);
 
-        var inspection = new ProhibitedConstructVisitor();
+        var parsed = new List<(Statement Statement, StatementEffect Effect)>(statements.Count);
         foreach (var statement in statements)
-            ((IElement)statement).Visit(inspection);
-
-        if (inspection.HasProhibitedFunction)
-            return Denied(SqlSafetyReason.UnsupportedStatement);
+        {
+            var effect = StatementEffectVisitor.Inspect(statement);
+            if (effect.HasProhibitedFunction)
+                return Denied(SqlSafetyReason.UnsupportedStatement);
+            parsed.Add((statement, effect));
+        }
 
         var knownTemps = new HashSet<string>(sessionTempTables, StringComparer.Ordinal);
         return usage switch
         {
-            SqlUsage.Query => ClassifyQuery(statements, database, allowMutation, confirmDatabase, knownTemps),
-            SqlUsage.CompareSetup => ClassifyCompareSetup(statements, knownTemps),
+            SqlUsage.Query => ClassifyQuery(parsed, database, allowMutation, confirmDatabase, knownTemps),
+            SqlUsage.CompareSetup => ClassifyCompareSetup(parsed, knownTemps),
             _ => Denied(SqlSafetyReason.UnsupportedStatement),
         };
     }
 
     private static SqlSafetyDecision ClassifyQuery(
-        Sequence<Statement> statements,
+        List<(Statement Statement, StatementEffect Effect)> statements,
         string? database,
         bool allowMutation,
         string? confirmDatabase,
@@ -70,9 +75,9 @@ internal sealed class PostgresSafetyClassifier
         var hasMutation = false;
         var hasSessionLocal = false;
 
-        foreach (var statement in statements)
+        foreach (var (statement, effect) in statements)
         {
-            var outcome = ClassifyStatement(statement, knownTemps);
+            var outcome = ClassifyStatement(statement, effect, knownTemps);
             switch (outcome.Kind)
             {
                 case StatementKind.ReadOnly:
@@ -110,13 +115,13 @@ internal sealed class PostgresSafetyClassifier
     }
 
     private static SqlSafetyDecision ClassifyCompareSetup(
-        Sequence<Statement> statements,
+        List<(Statement Statement, StatementEffect Effect)> statements,
         HashSet<string> knownTemps)
     {
         var hasSessionLocal = false;
-        foreach (var statement in statements)
+        foreach (var (statement, effect) in statements)
         {
-            var outcome = ClassifyStatement(statement, knownTemps);
+            var outcome = ClassifyStatement(statement, effect, knownTemps);
             switch (outcome.Kind)
             {
                 case StatementKind.ReadOnly:
@@ -138,36 +143,26 @@ internal sealed class PostgresSafetyClassifier
 
     private static StatementOutcome ClassifyStatement(
         Statement statement,
+        StatementEffect effect,
         HashSet<string> knownTemps)
     {
+        if (effect.HasSelectInto)
+            return StatementOutcome.SelectInto;
+        if (effect.UnresolvedWrite)
+            return StatementOutcome.Unsupported;
+
         switch (statement)
         {
-            case Statement.Select select:
-                return ClassifyQueryNode(select.Query, knownTemps);
+            case Statement.Select:
+                return FromWrites(effect.Targets, knownTemps);
 
-            case Statement.Insert insert:
-                return ClassifyWriteTarget(insert.InsertOperation.Name, knownTemps);
-
-            case Statement.Update update:
-                {
-                    if (GetRelationName(update.Table.Relation) is not { } name)
-                        return StatementOutcome.Unsupported;
-                    return ClassifyWriteTarget(name, knownTemps);
-                }
-
-            case Statement.Delete delete:
-                {
-                    if (GetDeleteTarget(delete.DeleteOperation) is not { } name)
-                        return StatementOutcome.Unsupported;
-                    return ClassifyWriteTarget(name, knownTemps);
-                }
-
-            case Statement.Merge merge:
-                {
-                    if (GetRelationName(merge.Table) is not { } name)
-                        return StatementOutcome.Unsupported;
-                    return ClassifyWriteTarget(name, knownTemps);
-                }
+            case Statement.Insert:
+            case Statement.Update:
+            case Statement.Delete:
+            case Statement.Merge:
+                if (effect.Targets.Count == 0)
+                    return StatementOutcome.Unsupported;
+                return FromWrites(effect.Targets, knownTemps);
 
             case Statement.CreateTable create:
                 {
@@ -179,7 +174,7 @@ internal sealed class PostgresSafetyClassifier
                         return StatementOutcome.Unsupported;
 
                     knownTemps.Add(key);
-                    return StatementOutcome.SessionLocal;
+                    return FromWrites(effect.Targets, knownTemps, emptyIsSessionLocal: true);
                 }
 
             case Statement.CreateIndex createIndex:
@@ -263,90 +258,21 @@ internal sealed class PostgresSafetyClassifier
         }
     }
 
-    private static StatementOutcome ClassifyQueryNode(Query query, HashSet<string> knownTemps)
+    private static StatementOutcome FromWrites(
+        IReadOnlyList<ObjectName> targets,
+        IReadOnlySet<string> knownTemps,
+        bool emptyIsSessionLocal = false)
     {
-        if (HasSelectInto(query))
-            return StatementOutcome.SelectInto;
+        if (targets.Count == 0)
+            return emptyIsSessionLocal ? StatementOutcome.SessionLocal : StatementOutcome.ReadOnly;
 
-        var writeTargets = new List<ObjectName>();
-        CollectWriteTargets(query, writeTargets);
-
-        if (writeTargets.Count == 0)
-            return StatementOutcome.ReadOnly;
-
-        var allSessionLocal = true;
-        foreach (var target in writeTargets)
+        foreach (var target in targets)
         {
             if (!IsSessionLocal(target, knownTemps))
-                allSessionLocal = false;
+                return StatementOutcome.Mutation;
         }
 
-        return allSessionLocal ? StatementOutcome.SessionLocal : StatementOutcome.Mutation;
-    }
-
-    private static StatementOutcome ClassifyWriteTarget(ObjectName target, HashSet<string> knownTemps) =>
-        IsSessionLocal(target, knownTemps) ? StatementOutcome.SessionLocal : StatementOutcome.Mutation;
-
-    private static void CollectWriteTargets(Query query, List<ObjectName> targets)
-    {
-        if (query.With is { } with)
-        {
-            foreach (var cte in with.CteTables)
-                CollectWriteTargets(cte.Query, targets);
-        }
-
-        CollectWriteTargets(query.Body, targets);
-    }
-
-    private static void CollectWriteTargets(SetExpression body, List<ObjectName> targets)
-    {
-        switch (body)
-        {
-            case SetExpression.Insert insertBody:
-                if (insertBody.Statement is Statement.Insert insert)
-                    targets.Add(insert.InsertOperation.Name);
-                else
-                    CollectNestedStatementWrites(insertBody.Statement, targets);
-                break;
-
-            case SetExpression.SelectExpression:
-                break;
-
-            case SetExpression.QueryExpression queryExpression:
-                CollectWriteTargets(queryExpression.Query, targets);
-                break;
-
-            case SetExpression.SetOperation setOperation:
-                CollectWriteTargets(setOperation.Left, targets);
-                CollectWriteTargets(setOperation.Right, targets);
-                break;
-
-            case SetExpression.ValuesExpression:
-            case SetExpression.TableExpression:
-                break;
-        }
-    }
-
-    private static void CollectNestedStatementWrites(Statement statement, List<ObjectName> targets)
-    {
-        switch (statement)
-        {
-            case Statement.Insert insert:
-                targets.Add(insert.InsertOperation.Name);
-                break;
-            case Statement.Update update when GetRelationName(update.Table.Relation) is { } name:
-                targets.Add(name);
-                break;
-            case Statement.Delete delete when GetDeleteTarget(delete.DeleteOperation) is { } name:
-                targets.Add(name);
-                break;
-            case Statement.Merge merge when GetRelationName(merge.Table) is { } name:
-                targets.Add(name);
-                break;
-            case Statement.Select select:
-                CollectWriteTargets(select.Query, targets);
-                break;
-        }
+        return StatementOutcome.SessionLocal;
     }
 
     private static bool HasSelectInto(Query query)
@@ -452,9 +378,71 @@ internal sealed class PostgresSafetyClassifier
         public static StatementOutcome NonTemporaryWrite { get; } = new(StatementKind.NonTemporaryWrite);
     }
 
-    private sealed class ProhibitedConstructVisitor : Visitor
+    private readonly record struct StatementEffect(
+        bool HasProhibitedFunction,
+        bool HasSelectInto,
+        bool UnresolvedWrite,
+        IReadOnlyList<ObjectName> Targets);
+
+    private sealed class StatementEffectVisitor : Visitor
     {
+        private readonly List<ObjectName> _targets = [];
+        private bool _selectInto;
+
         internal bool HasProhibitedFunction { get; private set; }
+        internal bool UnresolvedWrite { get; private set; }
+
+        internal static StatementEffect Inspect(Statement statement)
+        {
+            var visitor = new StatementEffectVisitor();
+            ((IElement)statement).Visit(visitor);
+            visitor.VisitSkippedChildren(statement);
+            return new StatementEffect(
+                visitor.HasProhibitedFunction,
+                visitor._selectInto,
+                visitor.UnresolvedWrite,
+                visitor._targets);
+        }
+
+        // Library Visit does not enter CREATE TABLE AS queries or DELETE filters.
+        private void VisitSkippedChildren(Statement statement)
+        {
+            if (statement is Statement.CreateTable { Element.Query: { } query })
+                VisitQuery(query);
+
+            if (statement is not Statement.Delete delete)
+                return;
+
+            if (delete.DeleteOperation.Selection is { } selection)
+                ((IElement)selection).Visit(this);
+            if (delete.DeleteOperation.Using is { } usingFactor)
+                ((IElement)usingFactor).Visit(this);
+        }
+
+        public override ControlFlow PreVisitStatement(Statement statement)
+        {
+            switch (statement)
+            {
+                case Statement.Select select:
+                    if (HasSelectInto(select.Query))
+                        _selectInto = true;
+                    break;
+                case Statement.Insert insert:
+                    _targets.Add(insert.InsertOperation.Name);
+                    break;
+                case Statement.Update update:
+                    AddRelation(GetRelationName(update.Table.Relation));
+                    break;
+                case Statement.Delete delete:
+                    AddRelation(GetDeleteTarget(delete.DeleteOperation));
+                    break;
+                case Statement.Merge merge:
+                    AddRelation(GetRelationName(merge.Table));
+                    break;
+            }
+
+            return ControlFlow.Continue;
+        }
 
         public override ControlFlow PreVisitExpression(Expression expression)
         {
@@ -469,6 +457,10 @@ internal sealed class PostgresSafetyClassifier
 
         public override ControlFlow PreVisitTableFactor(TableFactor tableFactor)
         {
+            // Library Visit reports a derived factor and does not enter its subquery.
+            if (tableFactor is TableFactor.Derived derived)
+                VisitQuery(derived.SubQuery);
+
             switch (tableFactor)
             {
                 case TableFactor.Table table when table.Args is not null && IsDeniedObjectName(table.Name):
@@ -485,6 +477,21 @@ internal sealed class PostgresSafetyClassifier
             return ControlFlow.Continue;
         }
 
+        private void VisitQuery(Query query)
+        {
+            if (HasSelectInto(query))
+                _selectInto = true;
+            ((IElement)query).Visit(this);
+        }
+
+        private void AddRelation(ObjectName? name)
+        {
+            if (name is null)
+                UnresolvedWrite = true;
+            else
+                _targets.Add(name);
+        }
+
         private static bool IsDeniedObjectName(ObjectName name)
         {
             if (name.Values.Count == 0)
@@ -497,7 +504,9 @@ internal sealed class PostgresSafetyClassifier
             return functionName.StartsWith("dblink", StringComparison.OrdinalIgnoreCase)
                 || functionName.StartsWith("pg_read_", StringComparison.OrdinalIgnoreCase)
                 || functionName.StartsWith("pg_ls_", StringComparison.OrdinalIgnoreCase)
-                || functionName.StartsWith("lo_", StringComparison.OrdinalIgnoreCase);
+                || functionName.StartsWith("lo_", StringComparison.OrdinalIgnoreCase)
+                || functionName.StartsWith("pg_advisory_", StringComparison.OrdinalIgnoreCase)
+                || functionName.StartsWith("pg_try_advisory_", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

@@ -1,5 +1,11 @@
+using System.Data;
+
+using Npgsql;
+
 using SqlHarness.Core;
+using SqlHarness.Core.Auth;
 using SqlHarness.Core.Postgres;
+using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Tests.Postgres;
 
@@ -136,6 +142,222 @@ public sealed class PostgresSafetyTests
             "SELECT * FROM other.contracts",
             SqlUsage.Query, "appdb", false, null, Empty);
         Assert.True(decision.Allowed);
+    }
+
+    [Theory]
+    [InlineData("SELECT set_config('search_path', 'public', false)")]
+    [InlineData("SELECT pg_catalog.set_config('search_path', 'public', false)")]
+    [InlineData("""SELECT "set_config"('search_path', 'public', false)""")]
+    [InlineData("SELECT pg_cancel_backend(12345)")]
+    [InlineData("SELECT pg_terminate_backend(12345)")]
+    [InlineData("SELECT pg_advisory_lock(42)")]
+    [InlineData("SELECT pg_advisory_xact_lock(1, 2)")]
+    [InlineData("SELECT pg_try_advisory_lock(42)")]
+    [InlineData("SELECT PG_ADVISORY_LOCK(1)")]
+    [InlineData("SELECT pg_catalog.pg_advisory_lock(42)")]
+    [InlineData("SELECT setval('s', 1)")]
+    [InlineData("SELECT lo_custom_readonly()")]
+    [InlineData("SELECT * FROM (SELECT set_config('search_path', 'public', false)) s")]
+    [InlineData("SELECT * FROM t JOIN (SELECT pg_cancel_backend(1)) s ON true")]
+    [InlineData("CREATE TEMP TABLE x AS SELECT set_config('search_path', 'public', false)")]
+    [InlineData("DELETE FROM t WHERE id IN (SELECT set_config('search_path', 'public', false))")]
+    public void Visible_admin_and_lo_calls_are_denied_without_echoing_sql(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.Equal("UnsupportedStatement.", decision.RejectionDescription);
+        Assert.DoesNotContain("search_path", decision.RejectionDescription, StringComparison.Ordinal);
+        Assert.DoesNotContain(sql, decision.RejectionDescription, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("SELECT app.write_something()")]
+    [InlineData("SELECT * FROM app.hidden_view")]
+    [InlineData("SELECT a + b FROM public.items")]
+    [InlineData("SELECT currval('s')")]
+    [InlineData("SELECT lastval()")]
+    [InlineData("SELECT 'set_config'")]
+    [InlineData("SELECT count(*) FROM public.items")]
+    public void Unresolved_calls_views_and_operators_stay_allowed_and_are_not_a_guarantee(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+        Assert.False(decision.HasSessionLocalWork);
+    }
+
+    [Theory]
+    [InlineData("UPDATE public.items SET id = 1")]
+    [InlineData("DELETE FROM public.items WHERE id = 1")]
+    [InlineData("MERGE INTO public.items AS t USING (SELECT 1 AS id) AS s ON t.id = s.id WHEN MATCHED THEN UPDATE SET id = s.id")]
+    public void Persistent_dml_still_requires_mutation_approval(string sql)
+    {
+        var denied = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(denied.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, denied.Reason);
+
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.True(approved.Allowed, approved.RejectionDescription);
+        Assert.True(approved.HasMutation);
+    }
+
+    [Fact]
+    public void Server_valid_top_level_modifying_cte_is_a_persistent_write()
+    {
+        var denied = _classifier.Classify(
+            "WITH changed AS (INSERT INTO public.items VALUES (1) RETURNING id) SELECT id FROM changed",
+            SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(denied.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, denied.Reason);
+
+        var approved = _classifier.Classify(
+            "WITH changed AS (INSERT INTO public.items VALUES (1) RETURNING id) SELECT id FROM changed",
+            SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.True(approved.Allowed, approved.RejectionDescription);
+        Assert.True(approved.HasMutation);
+    }
+
+    [Fact]
+    public void Library_accepted_insert_source_cte_is_denied_and_is_not_a_server_exploit()
+    {
+        // SqlParserCS accepts WITH between INSERT and its source. PostgreSQL attaches
+        // a data-modifying WITH only to the top-level statement. This is not a server exploit.
+        var decision = _classifier.Classify("""
+            CREATE TEMP TABLE x (id int);
+            INSERT INTO x WITH changed AS (INSERT INTO public.items VALUES (1) RETURNING id)
+            SELECT id FROM changed
+            """, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, decision.Reason);
+    }
+
+    [Fact]
+    public void Library_accepted_ctas_modifying_cte_is_denied_and_is_not_a_server_exploit()
+    {
+        // CREATE TABLE AS is not a top-level statement that PostgreSQL documents as
+        // the attachment point of a data-modifying WITH. Library acceptance is not execution.
+        var decision = _classifier.Classify(
+            "CREATE TEMP TABLE x AS WITH changed AS (INSERT INTO public.items VALUES (1) RETURNING *) SELECT * FROM changed",
+            SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, decision.Reason);
+    }
+
+    [Fact]
+    public void Library_rejected_ctas_delete_cte_is_a_parse_error_not_a_server_exploit()
+    {
+        var decision = _classifier.Classify(
+            "CREATE TEMP TABLE x AS WITH changed AS (DELETE FROM public.items RETURNING *) SELECT * FROM changed",
+            SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.Equal(SqlSafetyReason.ParseError, decision.Reason);
+        Assert.DoesNotContain("public.items", decision.RejectionDescription, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Derived_subquery_write_is_not_hidden_by_a_temp_insert()
+    {
+        var decision = _classifier.Classify("""
+            CREATE TEMP TABLE x (id int);
+            INSERT INTO x SELECT id FROM (
+                WITH changed AS (INSERT INTO public.items VALUES (1) RETURNING id)
+                SELECT id FROM changed) s
+            """, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, decision.Reason);
+    }
+
+    [Fact]
+    public void Update_from_library_accepted_cte_is_denied_and_is_not_a_server_exploit()
+    {
+        var decision = _classifier.Classify("""
+            CREATE TEMP TABLE t (id int);
+            UPDATE t SET id = 1 FROM (
+                WITH c AS (INSERT INTO public.items VALUES (1) RETURNING id)
+                SELECT id FROM c) s
+            """, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, decision.Reason);
+    }
+
+    [Fact]
+    public void Temp_only_modifying_cte_stays_session_local()
+    {
+        var decision = _classifier.Classify("""
+            CREATE TEMP TABLE x (id int);
+            WITH changed AS (INSERT INTO x VALUES (1) RETURNING id)
+            SELECT id FROM changed
+            """, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+        Assert.Contains("x", decision.SessionTempTables);
+    }
+
+    [Fact]
+    public void Plain_ctas_stays_session_local()
+    {
+        var decision = _classifier.Classify(
+            "CREATE TEMP TABLE x AS SELECT * FROM public.items",
+            SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+        Assert.Contains("x", decision.SessionTempTables);
+    }
+
+    [Fact]
+    public void Compare_setup_rejects_visible_persistent_write_inside_temp_ctas()
+    {
+        var decision = _classifier.Classify(
+            "CREATE TEMP TABLE x AS WITH changed AS (INSERT INTO public.items VALUES (1) RETURNING *) SELECT * FROM changed",
+            SqlUsage.CompareSetup, "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, decision.Reason);
+    }
+
+    [Fact]
+    public void Compare_setup_still_allows_temp_ddl_and_denies_set_config()
+    {
+        var temp = _classifier.Classify(
+            "CREATE TEMP TABLE t (id int); INSERT INTO t VALUES (1)",
+            SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(temp.Allowed, temp.RejectionDescription);
+        Assert.True(temp.HasSessionLocalWork);
+        Assert.Contains("t", temp.SessionTempTables);
+
+        var config = _classifier.Classify(
+            "SELECT set_config('search_path', 'public', false)",
+            SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, config.Reason);
+        Assert.Equal("UnsupportedStatement.", config.RejectionDescription);
+        Assert.DoesNotContain("search_path", config.RejectionDescription, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Session_scope_does_not_wrap_sql_or_change_role_or_transaction_mode()
+    {
+        using var command = new NpgsqlCommand();
+        const string sql = "CREATE TEMP TABLE t (id int)";
+        NpgsqlSession.BindCommand(command, new SqlExecutionCommand(sql, [], 30));
+        Assert.Equal(sql, command.CommandText);
+        Assert.Equal(CommandType.Text, command.CommandType);
+        Assert.Null(command.Transaction);
+
+        Environment.SetEnvironmentVariable("SQLHARNESS_PG_PASSWORD", "secret");
+        try
+        {
+            var target = new ResolvedTarget(
+                "localhost,5432", "appdb",
+                AuthSpec.Parse("sql", "sqlharness", "SQLHARNESS_PG_PASSWORD", true),
+                "profile", SqlEngine.Postgres);
+            var connectionString = PostgresConnectionString.Build(target, 15);
+            Assert.DoesNotContain("default_transaction_read_only", connectionString, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("search_path", connectionString, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Options=", connectionString, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SQLHARNESS_PG_PASSWORD", null);
+        }
     }
 
     private static readonly IReadOnlySet<string> Empty = new HashSet<string>(StringComparer.Ordinal);
