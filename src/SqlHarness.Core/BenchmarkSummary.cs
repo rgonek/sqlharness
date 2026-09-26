@@ -5,7 +5,11 @@ public sealed record BenchmarkVariantSummary(
     CompareDistribution ElapsedTimeMilliseconds,
     CompareDistribution LogicalReads,
     IReadOnlyDictionary<string, CompareDistribution> LogicalReadsByTable,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public BenchmarkMetricReport? MetricReport { get; init; }
+}
 
 public sealed record NoteworthyOperatorSummary(
     string Side,
@@ -45,7 +49,11 @@ public sealed record MeasureParameterSetSummary(
     long MedianElapsedMilliseconds,
     long MedianCpuMilliseconds,
     long MedianLogicalReads,
-    IReadOnlyList<NoteworthyOperatorSummary> NoteworthyOperators);
+    IReadOnlyList<NoteworthyOperatorSummary> NoteworthyOperators)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public BenchmarkMetricReport? MetricReport { get; init; }
+}
 
 public sealed record MeasureSetBenchmarkSummary(
     SqlHarnessTargetIdentityReport Target,
@@ -117,7 +125,10 @@ public static class BenchmarkSummaryProjector
                 set.Metrics.ElapsedTimeMilliseconds.Median,
                 set.Metrics.CpuTimeMilliseconds.Median,
                 set.Metrics.LogicalReads.Median,
-                SelectMeasureNoteworthy(set.Metrics.Operators))).ToArray(),
+                SelectMeasureNoteworthy(set.Metrics.Operators))
+            {
+                MetricReport = set.Metrics.MetricReport,
+            }).ToArray(),
             report.CrossSetSummary,
             report.ArtifactDirectory);
     }
@@ -141,7 +152,10 @@ public static class BenchmarkSummaryProjector
             variant.ElapsedTimeMilliseconds,
             variant.LogicalReads,
             variant.LogicalReadsByTable,
-            variant.Warnings);
+            variant.Warnings)
+        {
+            MetricReport = variant.MetricReport,
+        };
 
     private static IReadOnlyList<NoteworthyOperatorSummary> SelectCompareNoteworthy(
         IReadOnlyList<CompareOperatorReport> baseline,

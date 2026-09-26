@@ -1,3 +1,7 @@
+using System.Text.Json;
+
+using SqlHarness.Cli.Commands;
+using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
@@ -23,9 +27,165 @@ public sealed class PostgresBenchmarkTests
     {
         var stats = PostgresBenchmark.ParseStats(ExplainFixture);
         Assert.Equal(0, stats.CpuTimeMs);
+        Assert.Equal(BenchmarkMetricReport.Unavailable, stats.Metrics.CpuTimeAvailability);
+        Assert.Contains(BenchmarkMetricText.PostgresCpuUnavailable, stats.Metrics.Warnings);
         Assert.Equal(15, stats.ElapsedTimeMs); // 10.4 + 4.6 → 15
+        Assert.Equal(15m, stats.Metrics.ElapsedTimeMillisecondsExact);
+        Assert.Equal(10.4m, stats.Metrics.PlanningTimeMilliseconds);
+        Assert.Equal(4.6m, stats.Metrics.ExecutionTimeMilliseconds);
+        Assert.True(stats.Metrics.ElapsedWholeMillisecondsAreExact);
         Assert.Equal(3, stats.LogicalReads);
+        Assert.Equal(BenchmarkMetricReport.Measured, stats.Metrics.LogicalReadsAvailability);
         Assert.Equal(3, stats.Tables["foo"]);
+        Assert.False(stats.Metrics.RelationBuffersAreAdditive);
+        Assert.Contains("not additive", stats.Metrics.RelationBufferSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Parse_uses_root_buffers_when_a_child_reports_the_same_blocks()
+    {
+        const string wrapped = """
+            [{"Plan":{"Node Type":"Aggregate","Shared Hit Blocks":10,"Shared Read Blocks":0,"Local Hit Blocks":0,"Local Read Blocks":0,"Plans":[{"Node Type":"Aggregate","Shared Hit Blocks":10,"Shared Read Blocks":0,"Local Hit Blocks":0,"Local Read Blocks":0,"Plans":[{"Node Type":"Seq Scan","Schema":"public","Relation Name":"foo","Shared Hit Blocks":10,"Shared Read Blocks":0,"Local Hit Blocks":0,"Local Read Blocks":0}]}]},"Planning Time":1,"Execution Time":1}]
+            """;
+        const string scan = """
+            [{"Plan":{"Node Type":"Seq Scan","Schema":"public","Relation Name":"foo","Shared Hit Blocks":10,"Shared Read Blocks":0,"Local Hit Blocks":0,"Local Read Blocks":0},"Planning Time":1,"Execution Time":1}]
+            """;
+
+        var wrappedStats = PostgresBenchmark.ParseStats(wrapped);
+        var scanStats = PostgresBenchmark.ParseStats(scan);
+
+        Assert.Equal(10, wrappedStats.LogicalReads);
+        Assert.Equal(10, scanStats.LogicalReads);
+        Assert.Equal(10, wrappedStats.Tables["public.foo"]);
+        Assert.Equal(10, scanStats.Tables["public.foo"]);
+    }
+
+    [Fact]
+    public void Parse_counts_local_buffers_once_and_keeps_schema_qualified_relations()
+    {
+        const string json = """
+            [{"Plan":{"Node Type":"Nested Loop","Shared Hit Blocks":1,"Shared Read Blocks":2,"Local Hit Blocks":3,"Local Read Blocks":4,"Plans":[{"Node Type":"Seq Scan","Schema":"pg_temp","Relation Name":"stage","Shared Hit Blocks":0,"Shared Read Blocks":0,"Local Hit Blocks":3,"Local Read Blocks":4},{"Node Type":"Index Scan","Schema":"public","Relation Name":"foo","Shared Hit Blocks":1,"Shared Read Blocks":2,"Local Hit Blocks":0,"Local Read Blocks":0}]},"Planning Time":2,"Execution Time":2}]
+            """;
+
+        var stats = PostgresBenchmark.ParseStats(json);
+
+        Assert.Equal(10, stats.LogicalReads);
+        Assert.Equal(7, stats.Tables["pg_temp.stage"]);
+        Assert.Equal(3, stats.Tables["public.foo"]);
+        Assert.Equal(2, stats.Tables.Count);
+        Assert.Contains("not additive", stats.Metrics.RelationBufferSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Parse_does_not_add_parallel_workers_a_second_time()
+    {
+        const string json = """
+            [{"Plan":{"Node Type":"Gather","Shared Hit Blocks":10,"Shared Read Blocks":0,"Local Hit Blocks":1,"Local Read Blocks":0,"Workers":[{"Worker Number":0,"Shared Hit Blocks":50},{"Worker Number":1,"Shared Hit Blocks":50}],"Plans":[{"Node Type":"Seq Scan","Schema":"public","Relation Name":"foo","Shared Hit Blocks":8,"Shared Read Blocks":0,"Local Hit Blocks":1,"Local Read Blocks":0,"Workers":[{"Worker Number":0,"Shared Hit Blocks":4,"Local Hit Blocks":1},{"Worker Number":1,"Shared Hit Blocks":4}],"Plans":[{"Node Type":"Seq Scan","Schema":"public","Relation Name":"foo","Shared Hit Blocks":2,"Shared Read Blocks":0,"Local Hit Blocks":0,"Local Read Blocks":0}]}]},"Planning Time":1.0,"Execution Time":1.0}]
+            """;
+
+        var stats = PostgresBenchmark.ParseStats(json);
+
+        Assert.Equal(11, stats.LogicalReads);
+        Assert.Equal(9, stats.Tables["public.foo"]);
+    }
+
+    [Fact]
+    public void Parse_missing_root_buffers_are_unavailable_not_a_measured_zero()
+    {
+        const string json = """
+            [{"Plan":{"Node Type":"Aggregate","Plans":[{"Node Type":"Seq Scan","Relation Name":"foo","Shared Hit Blocks":5}]},"Planning Time":1,"Execution Time":1}]
+            """;
+
+        var stats = PostgresBenchmark.ParseStats(json);
+
+        Assert.Equal(0, stats.LogicalReads);
+        Assert.Equal(BenchmarkMetricReport.Unavailable, stats.Metrics.LogicalReadsAvailability);
+        Assert.Contains(BenchmarkMetricText.PostgresBuffersMissing, stats.Metrics.Warnings);
+        Assert.Equal(5, stats.Tables["foo"]);
+    }
+
+    [Fact]
+    public void Parse_keeps_sub_millisecond_elapsed_out_of_an_exact_zero()
+    {
+        const string json = """
+            [{"Plan":{"Node Type":"Result","Shared Hit Blocks":1},"Planning Time":0.1,"Execution Time":0.2}]
+            """;
+
+        var stats = PostgresBenchmark.ParseStats(json);
+
+        Assert.Equal(0, stats.ElapsedTimeMs);
+        Assert.Equal(0.3m, stats.Metrics.ElapsedTimeMillisecondsExact);
+        Assert.Equal(0.1m, stats.Metrics.PlanningTimeMilliseconds);
+        Assert.Equal(0.2m, stats.Metrics.ExecutionTimeMilliseconds);
+        Assert.False(stats.Metrics.ElapsedWholeMillisecondsAreExact);
+        Assert.Equal(BenchmarkMetricReport.Measured, stats.Metrics.ElapsedTimeAvailability);
+        Assert.Contains(BenchmarkMetricText.PostgresSubMillisecond, stats.Metrics.Warnings);
+    }
+
+    [Fact]
+    public async Task Missing_timing_is_unavailable_in_text_and_both_json_projections()
+    {
+        const string plan = """[{"Plan":{"Node Type":"Result","Shared Hit Blocks":2}}]""";
+        var outcome = await Module(FakeSession.Create(explain: plan)).ExecuteAsync(Measure("SELECT 1", repeat: 1));
+
+        var text = Render(outcome, OutputMode.Text);
+        Assert.Contains("measure\tunavailable", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("measure\t0/0/0", text, StringComparison.Ordinal);
+        foreach (var json in new[] { Render(outcome, OutputMode.Json), Render(outcome, OutputMode.JsonSummary) })
+        {
+            using var document = JsonDocument.Parse(json);
+            var metric = document.RootElement.GetProperty("query").GetProperty("metricReport");
+            Assert.Equal(BenchmarkMetricReport.Unavailable, metric.GetProperty("elapsedTimeAvailability").GetString());
+            Assert.False(metric.GetProperty("elapsedWholeMillisecondsAreExact").GetBoolean());
+            Assert.False(metric.TryGetProperty("elapsedTimeMillisecondsExact", out _));
+            Assert.Contains(
+                BenchmarkMetricText.PostgresTimingMissing,
+                metric.GetProperty("warnings").EnumerateArray().Select(item => item.GetString()));
+            Assert.Equal(
+                BenchmarkMetricReport.Measured,
+                metric.GetProperty("logicalReadsAvailability").GetString());
+        }
+    }
+
+    [Fact]
+    public async Task Sub_millisecond_measure_is_not_an_exact_zero_in_text_or_either_json_projection()
+    {
+        const string plan = """
+            [{"Plan":{"Node Type":"Aggregate","Shared Hit Blocks":10,"Plans":[{"Node Type":"Seq Scan","Schema":"public","Relation Name":"foo","Shared Hit Blocks":10}]},"Planning Time":0.1,"Execution Time":0.2}]
+            """;
+        var session = FakeSession.Create(explain: plan);
+        var outcome = await Module(session).ExecuteAsync(Measure("SELECT 1", repeat: 1));
+        var report = Assert.IsType<SqlHarnessMeasureReport>(outcome.Report);
+        var metric = report.Query.MetricReport;
+        Assert.NotNull(metric);
+        Assert.Equal(0, report.Query.ElapsedTimeMilliseconds.Median);
+        Assert.Equal(0.3m, metric!.ElapsedTimeMillisecondsExact!.Median);
+        Assert.False(metric.ElapsedWholeMillisecondsAreExact);
+        Assert.Equal(BenchmarkMetricReport.Unavailable, metric.CpuTimeAvailability);
+        Assert.Equal(10, report.Query.LogicalReads.Median);
+        Assert.Equal(10, report.Query.TotalLogicalReadsByTable["public.foo"]);
+        Assert.Contains(report.Query.Operators, op => op.Object == "public.foo");
+        Assert.Equal(BenchmarkMetricReport.ResultUnmeasuredSidecar, metric.ResultRowSource);
+        Assert.Equal(BenchmarkMetricText.SidecarRows, metric.ResultRowSourceDescription);
+        Assert.Equal(0.1m, metric.PlanningTimeMilliseconds!.Median);
+        Assert.Equal(0.2m, metric.ExecutionTimeMilliseconds!.Median);
+
+        var text = Render(outcome, OutputMode.Text);
+        var json = Render(outcome, OutputMode.Json);
+        var summary = Render(outcome, OutputMode.JsonSummary);
+        Assert.Contains("0.3", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("measure\t0/0/0", text, StringComparison.Ordinal);
+        AssertSameAvailability(json, summary);
+        using var full = JsonDocument.Parse(json);
+        using var projected = JsonDocument.Parse(summary);
+        var fullMetric = full.RootElement.GetProperty("query").GetProperty("metricReport");
+        var summaryMetric = projected.RootElement.GetProperty("query").GetProperty("metricReport");
+        Assert.Equal(fullMetric.GetRawText(), summaryMetric.GetRawText());
+        Assert.Equal(0.3m, fullMetric.GetProperty("elapsedTimeMillisecondsExact").GetProperty("median").GetDecimal());
+        Assert.False(fullMetric.GetProperty("elapsedWholeMillisecondsAreExact").GetBoolean());
+        Assert.Equal("unavailable", fullMetric.GetProperty("cpuTimeAvailability").GetString());
+        Assert.Equal("unmeasured-sidecar", fullMetric.GetProperty("resultRowSource").GetString());
+        Assert.Contains("not additive", fullMetric.GetProperty("relationBufferSource").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -133,6 +293,13 @@ public sealed class PostgresBenchmarkTests
         Assert.Equal(stableHash, stable.ResultHash);
         Assert.False(drifting.ResultsStable);
         Assert.Null(drifting.ResultHash);
+        Assert.Equal(BenchmarkMetricReport.Unavailable, report.CrossSetSummary.CpuTimeAvailability);
+        Assert.Null(report.CrossSetSummary.MinimumMedianCpuSet);
+        Assert.Null(report.CrossSetSummary.MaximumMedianCpuSet);
+        var text = Render(outcome, OutputMode.Text);
+        Assert.Contains("Cross-set cpu: unavailable", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Cross-set cpu: stable", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Cross-set cpu: drifting", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -161,6 +328,9 @@ public sealed class PostgresBenchmarkTests
         Assert.Equal(ResultComparisonMode.Ordered, report.Equivalence.Mode);
         Assert.Equal(new CompareDistribution(0, 0, 0), report.Baseline.CpuTimeMilliseconds);
         Assert.Equal(new CompareDistribution(15, 15, 15), report.Baseline.ElapsedTimeMilliseconds);
+        Assert.Equal(BenchmarkMetricReport.Unavailable, report.Baseline.MetricReport!.CpuTimeAvailability);
+        Assert.Equal(BenchmarkMetricReport.ResultUnmeasuredSidecar, report.Baseline.MetricReport.ResultRowSource);
+        Assert.Equal(BenchmarkMetricText.SidecarRows, report.Baseline.MetricReport.ResultRowSourceDescription);
     }
 
     [Fact]
@@ -175,6 +345,9 @@ public sealed class PostgresBenchmarkTests
         Assert.All(session.Commands, command =>
             Assert.Equal("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)\nSELECT 1", command.Sql));
         Assert.DoesNotContain(session.Commands, command => command.Sql == "SELECT 1");
+        var report = Assert.IsType<SqlHarnessCompareReport>(outcome.Report);
+        Assert.Equal(BenchmarkMetricReport.ResultNotCaptured, report.Baseline.MetricReport!.ResultRowSource);
+        Assert.Equal(BenchmarkMetricText.RowsNotCaptured, report.Baseline.MetricReport.ResultRowSourceDescription);
     }
 
     [Fact]
@@ -192,6 +365,25 @@ public sealed class PostgresBenchmarkTests
 
     private static SqlHarnessModule Module(FakeSession session, ICompareArtifactWriter? writer = null) =>
         new(session, new FakeGain(), writer ?? new CapturingArtifactWriter(), Profiles);
+
+    private static string Render(SqlHarnessOutcome outcome, OutputMode mode)
+    {
+        var writer = new StringWriter();
+        new Renderer().Render(outcome, mode, new OutputCaptureWriter(writer));
+        return writer.ToString();
+    }
+
+    private static void AssertSameAvailability(string fullJson, string summaryJson)
+    {
+        using var full = JsonDocument.Parse(fullJson);
+        using var summary = JsonDocument.Parse(summaryJson);
+        Assert.Equal(
+            full.RootElement.GetProperty("query").GetProperty("metricReport").GetProperty("cpuTimeAvailability").GetString(),
+            summary.RootElement.GetProperty("query").GetProperty("metricReport").GetProperty("cpuTimeAvailability").GetString());
+        Assert.Equal(
+            full.RootElement.GetProperty("query").GetProperty("metricReport").GetProperty("elapsedWholeMillisecondsAreExact").GetBoolean(),
+            summary.RootElement.GetProperty("query").GetProperty("metricReport").GetProperty("elapsedWholeMillisecondsAreExact").GetBoolean());
+    }
 
     private static SqlHarnessMeasureOperation Measure(string sql, int repeat) =>
         new(Target(), null, sql, [], 30, repeat);
@@ -265,8 +457,13 @@ public sealed class PostgresBenchmarkTests
     private sealed class FakeSession : ISqlSessionFactory, ISqlSession
     {
         private readonly int _sidecarValue;
+        private readonly string _explain;
 
-        private FakeSession(int sidecarValue) => _sidecarValue = sidecarValue;
+        private FakeSession(int sidecarValue, string explain)
+        {
+            _sidecarValue = sidecarValue;
+            _explain = explain;
+        }
 
         public List<SqlExecutionCommand> Commands { get; } = [];
         public int FactoryOpenCount { get; private set; }
@@ -274,7 +471,7 @@ public sealed class PostgresBenchmarkTests
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("localhost", "appdb", "localhost", "appdb", "profile", Engine: "postgres");
 
-        public static FakeSession Create(int sidecarValue = 1) => new(sidecarValue);
+        public static FakeSession Create(int sidecarValue = 1, string? explain = null) => new(sidecarValue, explain ?? ExplainFixture);
 
         public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
         {
@@ -286,7 +483,7 @@ public sealed class PostgresBenchmarkTests
         {
             Commands.Add(command);
             if (command.Sql.StartsWith("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)", StringComparison.Ordinal))
-                return Task.FromResult<ISqlReader>(FakeReader.Rows(["QUERY PLAN"], [ExplainFixture]));
+                return Task.FromResult<ISqlReader>(FakeReader.Rows(["QUERY PLAN"], [_explain]));
             return Task.FromResult<ISqlReader>(FakeReader.Rows(["n"], [_sidecarValue]));
         }
 

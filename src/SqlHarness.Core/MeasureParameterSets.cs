@@ -595,9 +595,21 @@ internal static class MeasureParameterSetReportProjector
 
     private static MeasureCrossSetSummary Summarize(IReadOnlyList<MeasureParameterSetReport> sets)
     {
-        var elapsed = Extrema(sets, set => set.Metrics.ElapsedTimeMilliseconds.Median);
-        var cpu = Extrema(sets, set => set.Metrics.CpuTimeMilliseconds.Median);
-        var reads = Extrema(sets, set => set.Metrics.LogicalReads.Median);
+        // Placeholder zeros are not a ranking. Unavailable CPU, elapsed, or reads name no winner.
+        var elapsedUnavailable = sets.Any(set => set.Metrics.MetricReport?.ElapsedTimeAvailability == BenchmarkMetricReport.Unavailable);
+        var cpuUnavailable = sets.Any(set => set.Metrics.MetricReport?.CpuTimeAvailability == BenchmarkMetricReport.Unavailable);
+        var readsUnavailable = sets.Any(set => set.Metrics.MetricReport?.LogicalReadsAvailability == BenchmarkMetricReport.Unavailable);
+        var elapsed = elapsedUnavailable
+            ? new MedianExtrema(null, 0, null, 0)
+            : ExtremaElapsed(sets);
+        var cpu = cpuUnavailable
+            ? new MedianExtrema(null, 0, null, 0)
+            : Extrema(sets, set => set.Metrics.CpuTimeMilliseconds.Median);
+        var reads = readsUnavailable
+            ? new MedianExtrema(null, 0, null, 0)
+            : Extrema(sets, set => set.Metrics.LogicalReads.Median);
+        var wholeMilliseconds = !elapsedUnavailable
+            && sets.All(set => set.Metrics.MetricReport is not { ElapsedWholeMillisecondsAreExact: false });
         return new MeasureCrossSetSummary(
             elapsed.MinimumSet,
             elapsed.Minimum,
@@ -610,10 +622,61 @@ internal static class MeasureParameterSetReportProjector
             reads.MinimumSet,
             reads.Minimum,
             reads.MaximumSet,
-            reads.Maximum);
+            reads.Maximum)
+        {
+            CpuTimeAvailability = cpuUnavailable ? BenchmarkMetricReport.Unavailable : BenchmarkMetricReport.Measured,
+            ElapsedTimeAvailability = elapsedUnavailable ? BenchmarkMetricReport.Unavailable : BenchmarkMetricReport.Measured,
+            LogicalReadsAvailability = readsUnavailable ? BenchmarkMetricReport.Unavailable : BenchmarkMetricReport.Measured,
+            ElapsedWholeMillisecondsAreExact = wholeMilliseconds,
+            MinimumMedianElapsedMillisecondsExact = elapsed.MinimumExact,
+            MaximumMedianElapsedMillisecondsExact = elapsed.MaximumExact,
+        };
     }
 
-    private readonly record struct MedianExtrema(string MinimumSet, long Minimum, string MaximumSet, long Maximum);
+    private readonly record struct MedianExtrema(
+        string? MinimumSet,
+        long Minimum,
+        string? MaximumSet,
+        long Maximum,
+        decimal? MinimumExact = null,
+        decimal? MaximumExact = null);
+
+    private static MedianExtrema ExtremaElapsed(IReadOnlyList<MeasureParameterSetReport> sets)
+    {
+        if (sets.Any(set => set.Metrics.MetricReport?.ElapsedTimeMillisecondsExact is null))
+            return Extrema(sets, set => set.Metrics.ElapsedTimeMilliseconds.Median);
+
+        var minimumSet = sets[0];
+        var maximumSet = sets[0];
+        var minimum = ExactMedian(minimumSet);
+        var maximum = ExactMedian(maximumSet);
+        for (var index = 1; index < sets.Count; index++)
+        {
+            var value = ExactMedian(sets[index]);
+            if (value < minimum)
+            {
+                minimumSet = sets[index];
+                minimum = value;
+            }
+
+            if (value > maximum)
+            {
+                maximumSet = sets[index];
+                maximum = value;
+            }
+        }
+
+        return new MedianExtrema(
+            minimumSet.Name,
+            minimumSet.Metrics.ElapsedTimeMilliseconds.Median,
+            maximumSet.Name,
+            maximumSet.Metrics.ElapsedTimeMilliseconds.Median,
+            minimum,
+            maximum);
+    }
+
+    private static decimal ExactMedian(MeasureParameterSetReport set) =>
+        set.Metrics.MetricReport!.ElapsedTimeMillisecondsExact!.Median;
 
     private static MedianExtrema Extrema(
         IReadOnlyList<MeasureParameterSetReport> sets,

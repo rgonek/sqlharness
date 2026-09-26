@@ -117,7 +117,7 @@ public static class PostgresPlanDistiller
         return new PlanNode(
             physicalOp,
             OptionalString(node, "Join Type"),
-            OptionalString(node, "Relation Name"),
+            QualifiedRelationName(OptionalString(node, "Schema"), OptionalString(node, "Relation Name")),
             OptionalString(node, "Index Name"),
             Number(node, "Plan Rows"),
             Long(node, "Actual Rows"),
@@ -197,6 +197,15 @@ public static class PostgresPlanDistiller
         if (!node.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.String)
             throw SafetyFailure();
         return value.GetString() ?? throw SafetyFailure();
+    }
+
+    internal static string? QualifiedRelationName(string? schema, string? relation)
+    {
+        if (string.IsNullOrEmpty(relation))
+            return null;
+        if (string.IsNullOrEmpty(schema))
+            return relation;
+        return schema + "." + relation;
     }
 
     private static string? OptionalString(JsonElement node, string name)

@@ -127,9 +127,9 @@ internal static class ExecutionPlanParser
         var physicalOp = node.TryGetProperty("Node Type", out var nodeType) && nodeType.ValueKind == JsonValueKind.String
             ? nodeType.GetString() ?? string.Empty
             : string.Empty;
-        var relation = node.TryGetProperty("Relation Name", out var relationName) && relationName.ValueKind == JsonValueKind.String
-            ? relationName.GetString()
-            : null;
+        var relation = Postgres.PostgresPlanDistiller.QualifiedRelationName(
+            JsonString(node, "Schema"),
+            JsonString(node, "Relation Name"));
         var hasWarnings = node.TryGetProperty("Warnings", out _)
             || (node.TryGetProperty("Never Executed", out var neverExecuted) && neverExecuted.ValueKind == JsonValueKind.True);
         operators.Add(new PlanOperator(operators.Count + 1, physicalOp, relation, hasWarnings, false, false));
@@ -139,6 +139,11 @@ internal static class ExecutionPlanParser
                 WalkJson(child, operators);
         }
     }
+
+    private static string? JsonString(JsonElement node, string name) =>
+        node.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     private static PlanOperator ParseOperator(XElement relOp)
     {

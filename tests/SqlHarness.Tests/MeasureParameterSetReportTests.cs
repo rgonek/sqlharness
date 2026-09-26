@@ -1,5 +1,7 @@
 using System.Text.Json;
 
+using SqlHarness.Cli.Commands;
+using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 
 namespace SqlHarness.Tests;
@@ -150,6 +152,82 @@ public sealed class MeasureParameterSetReportTests
     }
 
     [Fact]
+    public void Unavailable_cpu_does_not_name_a_cross_set_winner_and_sub_millisecond_elapsed_stays_exact()
+    {
+        var slow = PostgresMetrics(0.8m, buffers: true);
+        var fast = PostgresMetrics(0.3m, buffers: true);
+        var runs = new[]
+        {
+            Run("slow", 1, 0, 1, 9, "SLOW", ["P"], metrics: slow),
+            Run("fast", 1, 0, 0, 4, "FAST", ["P"], metrics: fast),
+        };
+        var sets = Prepare(("fast", ["id:int=1"]), ("slow", ["id:int=2"]));
+        var report = MeasureParameterSetReportProjector.Project(
+            Target(),
+            1,
+            new MeasureParameterSetExecution(0, ["fast", "slow"], runs),
+            sets);
+
+        Assert.Equal("fast", report.CrossSetSummary.MinimumMedianElapsedSet);
+        Assert.Equal("slow", report.CrossSetSummary.MaximumMedianElapsedSet);
+        Assert.Equal(0.3m, report.CrossSetSummary.MinimumMedianElapsedMillisecondsExact);
+        Assert.Equal(0.8m, report.CrossSetSummary.MaximumMedianElapsedMillisecondsExact);
+        Assert.False(report.CrossSetSummary.ElapsedWholeMillisecondsAreExact);
+        Assert.Equal(BenchmarkMetricReport.Unavailable, report.CrossSetSummary.CpuTimeAvailability);
+        Assert.Null(report.CrossSetSummary.MinimumMedianCpuSet);
+        Assert.Null(report.CrossSetSummary.MaximumMedianCpuSet);
+        Assert.Equal(0, report.CrossSetSummary.MinimumMedianCpuMilliseconds);
+        Assert.Equal(0, report.CrossSetSummary.MaximumMedianCpuMilliseconds);
+
+        var summary = BenchmarkSummaryProjector.Project(report);
+        var fullJson = JsonSerializer.Serialize(report, WebJson);
+        var summaryJson = JsonSerializer.Serialize(summary, WebJson);
+        using var full = JsonDocument.Parse(fullJson);
+        using var projected = JsonDocument.Parse(summaryJson);
+        Assert.Equal(
+            full.RootElement.GetProperty("sets")[0].GetProperty("metrics").GetProperty("metricReport").GetRawText(),
+            projected.RootElement.GetProperty("sets")[0].GetProperty("metricReport").GetRawText());
+        Assert.Equal(
+            full.RootElement.GetProperty("crossSetSummary").GetRawText(),
+            projected.RootElement.GetProperty("crossSetSummary").GetRawText());
+        Assert.Equal(0.3m, full.RootElement.GetProperty("crossSetSummary").GetProperty("minimumMedianElapsedMillisecondsExact").GetDecimal());
+        Assert.Equal(JsonValueKind.Null, full.RootElement.GetProperty("crossSetSummary").GetProperty("minimumMedianCpuSet").ValueKind);
+        Assert.Equal("unavailable", projected.RootElement.GetProperty("crossSetSummary").GetProperty("cpuTimeAvailability").GetString());
+        Assert.Equal("unavailable", projected.RootElement.GetProperty("sets")[0].GetProperty("metricReport").GetProperty("cpuTimeAvailability").GetString());
+
+        var writer = new StringWriter();
+        new Renderer().Render(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), OutputMode.Text, new OutputCaptureWriter(writer));
+        var text = writer.ToString();
+        Assert.Contains("Cross-set elapsed: fast 0.3 .. slow 0.8", text, StringComparison.Ordinal);
+        Assert.Contains("Cross-set cpu: unavailable", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Cross-set cpu: fast", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Cross-set cpu: slow", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("elapsed=0/0/0", text, StringComparison.Ordinal);
+        Assert.Contains("elapsed=0.3/0.3/0.3", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Unavailable_reads_do_not_name_a_cross_set_winner()
+    {
+        var runs = new[]
+        {
+            Run("beta", 1, 2, 5, 0, "B", ["P"], metrics: PostgresMetrics(5m, buffers: false)),
+            Run("alpha", 1, 2, 4, 0, "A", ["P"], metrics: PostgresMetrics(4m, buffers: false)),
+        };
+        var report = MeasureParameterSetReportProjector.Project(
+            Target(),
+            1,
+            new MeasureParameterSetExecution(0, ["alpha", "beta"], runs),
+            Prepare(("alpha", ["id:int=1"]), ("beta", ["id:int=2"])));
+
+        Assert.Equal(BenchmarkMetricReport.Unavailable, report.CrossSetSummary.LogicalReadsAvailability);
+        Assert.Null(report.CrossSetSummary.MinimumMedianReadsSet);
+        Assert.Null(report.CrossSetSummary.MaximumMedianReadsSet);
+        Assert.Equal(BenchmarkMetricReport.Unavailable, report.CrossSetSummary.CpuTimeAvailability);
+        Assert.Null(report.CrossSetSummary.MinimumMedianCpuSet);
+    }
+
+    [Fact]
     public void Serialized_report_keeps_names_types_hashes_and_metrics_without_values_or_paths()
     {
         const string secret = "acme-secret-884422";
@@ -239,8 +317,18 @@ public sealed class MeasureParameterSetReportTests
                 "maximumMedianCpuSet", "maximumMedianCpuMilliseconds",
                 "minimumMedianReadsSet", "minimumMedianLogicalReads",
                 "maximumMedianReadsSet", "maximumMedianLogicalReads",
+                "cpuTimeAvailability",
+                "elapsedTimeAvailability",
+                "logicalReadsAvailability",
+                "elapsedWholeMillisecondsAreExact",
+                "minimumMedianElapsedMillisecondsExact",
+                "maximumMedianElapsedMillisecondsExact",
             ],
             summary.EnumerateObject().Select(property => property.Name).ToArray());
+        Assert.Equal(BenchmarkMetricReport.Measured, summary.GetProperty("cpuTimeAvailability").GetString());
+        Assert.True(summary.GetProperty("elapsedWholeMillisecondsAreExact").GetBoolean());
+        Assert.Equal(4242m, summary.GetProperty("minimumMedianElapsedMillisecondsExact").GetDecimal());
+        Assert.Equal(8686m, summary.GetProperty("maximumMedianElapsedMillisecondsExact").GetDecimal());
         Assert.Equal("narrow", summary.GetProperty("minimumMedianElapsedSet").GetString());
         Assert.DoesNotContain("equivalence", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("regression", json, StringComparison.OrdinalIgnoreCase);
@@ -270,6 +358,7 @@ public sealed class MeasureParameterSetReportTests
         Assert.Equal(expected.LogicalReads, actual.LogicalReads);
         Assert.Equal(expected.Operators, actual.Operators);
         Assert.Equal(expected.Warnings, actual.Warnings);
+        Assert.Equal(expected.MetricReport, actual.MetricReport);
         Assert.Equal(Ordered(expected.TotalLogicalReadsByTable), Ordered(actual.TotalLogicalReadsByTable));
         Assert.Equal(Ordered(expected.LogicalReadsByTable), Ordered(actual.LogicalReadsByTable));
     }
@@ -290,6 +379,22 @@ public sealed class MeasureParameterSetReportTests
 
     private static SqlHarnessTargetIdentityReport Target() =>
         new("server", "db", "actual-server", "actual-db", "profile");
+
+    private static BenchmarkRunMetrics PostgresMetrics(decimal elapsed, bool buffers) =>
+        new(
+            BenchmarkMetricReport.Unavailable,
+            BenchmarkMetricReport.Measured,
+            elapsed,
+            false,
+            elapsed / 2m,
+            elapsed / 2m,
+            buffers ? BenchmarkMetricReport.Measured : BenchmarkMetricReport.Unavailable,
+            BenchmarkMetricText.PostgresLogicalReadsSource,
+            BenchmarkMetricText.PostgresRelationBufferSource,
+            false,
+            BenchmarkMetricReport.ResultUnmeasuredSidecar,
+            BenchmarkMetricText.SidecarRows,
+            [BenchmarkMetricText.PostgresCpuUnavailable, BenchmarkMetricText.PostgresSubMillisecond]);
 
     private static Dictionary<string, long> Table(params (string Name, long Reads)[] tables) =>
         tables.ToDictionary(table => table.Name, table => table.Reads, StringComparer.Ordinal);
@@ -312,7 +417,8 @@ public sealed class MeasureParameterSetReportTests
         string resultHash,
         IReadOnlyList<string> planHashes,
         IReadOnlyDictionary<string, long>? tables = null,
-        IReadOnlyList<PlanOperator>? operators = null)
+        IReadOnlyList<PlanOperator>? operators = null,
+        BenchmarkRunMetrics? metrics = null)
     {
         operators ??= [Op(1, "Index Seek", "Clients", false, false, false)];
         return new CollectedBenchmarkRun(
@@ -326,7 +432,8 @@ public sealed class MeasureParameterSetReportTests
                 resultHash,
                 [PlanXmlSentinel],
                 1,
-                set),
+                set,
+                metrics),
             [new ExecutionPlan(operators)],
             planHashes);
     }

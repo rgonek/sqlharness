@@ -395,6 +395,66 @@ public sealed class BenchmarkSummaryTests
     }
 
     [Fact]
+    public void Summary_repeats_metric_availability_for_compare_and_measure()
+    {
+        var metric = new BenchmarkMetricReport(
+            BenchmarkMetricReport.Unavailable,
+            BenchmarkMetricReport.Measured,
+            new FractionalMilliseconds(0.3m, 0.3m, 0.3m),
+            false,
+            new FractionalMilliseconds(0.1m, 0.1m, 0.1m),
+            new FractionalMilliseconds(0.2m, 0.2m, 0.2m),
+            BenchmarkMetricReport.Measured,
+            BenchmarkMetricText.PostgresLogicalReadsSource,
+            BenchmarkMetricText.PostgresRelationBufferSource,
+            false,
+            BenchmarkMetricReport.ResultUnmeasuredSidecar,
+            BenchmarkMetricText.SidecarRows,
+            [BenchmarkMetricText.PostgresCpuUnavailable, BenchmarkMetricText.PostgresSubMillisecond]);
+        var variant = new CompareVariantReport(
+            "measure",
+            new CompareDistribution(0, 0, 0),
+            new CompareDistribution(0, 0, 0),
+            new CompareDistribution(10, 10, 10),
+            new Dictionary<string, long>(StringComparer.Ordinal) { ["public.foo"] = 10 },
+            [new CompareOperatorReport(1, "Seq Scan", "public.foo", false, false, false)],
+            [])
+        {
+            MetricReport = metric,
+        };
+        var measure = new SqlHarnessMeasureReport(
+            new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "profile", Engine: "postgres"),
+            1,
+            1,
+            true,
+            variant,
+            @"C:\tmp\pg");
+        var compare = new SqlHarnessCompareReport(
+            measure.Target,
+            1,
+            2,
+            true,
+            variant with { Name = "baseline" },
+            variant with { Name = "candidate" },
+            @"C:\tmp\pg");
+
+        var measureSummary = BenchmarkSummaryProjector.Project(measure);
+        var compareSummary = BenchmarkSummaryProjector.Project(compare);
+        Assert.Equal(metric, measureSummary.Query.MetricReport);
+        Assert.Equal(metric, compareSummary.Baseline.MetricReport);
+        Assert.Equal(metric, compareSummary.Candidate.MetricReport);
+        Assert.False(measureSummary.Query.MetricReport!.RelationBuffersAreAdditive);
+        Assert.Contains("Workers", measureSummary.Query.MetricReport.LogicalReadsSource, StringComparison.Ordinal);
+
+        var json = JsonSerializer.Serialize(measureSummary, measureSummary.GetType(), WebJson);
+        Assert.Contains("0.3", json, StringComparison.Ordinal);
+        Assert.Contains("\"elapsedWholeMillisecondsAreExact\": false", json, StringComparison.Ordinal);
+        Assert.Contains("\"cpuTimeAvailability\": \"unavailable\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"elapsedTimeMillisecondsExact\": {\r\n      \"min\": 0,\r\n      \"median\": 0,\r\n      \"max\": 0", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"elapsedTimeMillisecondsExact\": {\n      \"min\": 0,\n      \"median\": 0,\n      \"max\": 0", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Measure_set_projection_rejects_null_report()
     {
         Assert.Throws<ArgumentNullException>(() => BenchmarkSummaryProjector.Project((SqlHarnessMeasureSetReport)null!));

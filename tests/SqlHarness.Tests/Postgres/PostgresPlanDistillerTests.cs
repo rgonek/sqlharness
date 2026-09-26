@@ -19,6 +19,20 @@ public sealed class PostgresPlanDistillerTests
     }
 
     [Fact]
+    public void Distills_schema_qualified_relation_names()
+    {
+        const string json = """
+            [{"Plan":{"Node Type":"Seq Scan","Schema":"public","Relation Name":"foo","Index Name":"foo_pkey"}}]
+            """;
+
+        var plan = PostgresPlanDistiller.Distill(json);
+        var root = Assert.Single(plan.Statements).Root;
+
+        Assert.Equal("public.foo", root.ObjectName);
+        Assert.Equal("foo_pkey", root.IndexName);
+    }
+
+    [Fact]
     public void Invalid_json_throws_without_echoing_payload()
     {
         const string secret = "explain-secret";

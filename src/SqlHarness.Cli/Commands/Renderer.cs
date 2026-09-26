@@ -39,11 +39,11 @@ public sealed class Renderer
             foreach (var message in query.Messages) output.WriteLine(message);
         }
         else if (outcome.Report is SqlHarnessMeasureReport measure)
-            output.WriteLine($"measure\t{Dist(measure.Query.ElapsedTimeMilliseconds)}\nStable results: {measure.ResultsStable}; artifacts: {measure.ArtifactDirectory ?? "none"}");
+            output.WriteLine($"measure\t{ElapsedText(measure.Query)}\nStable results: {measure.ResultsStable}; artifacts: {measure.ArtifactDirectory ?? "none"}");
         else if (outcome.Report is SqlHarnessMeasureSetReport measureSet)
             RenderMeasureSet(measureSet, output);
         else if (outcome.Report is SqlHarnessCompareReport compare)
-            output.WriteLine($"baseline\t{Dist(compare.Baseline.ElapsedTimeMilliseconds)}\ncandidate\t{Dist(compare.Candidate.ElapsedTimeMilliseconds)}\n{FormatTechnicalEquivalence(compare.Equivalence)}; artifacts: {compare.ArtifactDirectory ?? "none"}");
+            output.WriteLine($"baseline\t{ElapsedText(compare.Baseline)}\ncandidate\t{ElapsedText(compare.Candidate)}\n{FormatTechnicalEquivalence(compare.Equivalence)}; artifacts: {compare.ArtifactDirectory ?? "none"}");
         else if (outcome.Report is SqlHarnessCompareMatrixReport matrix)
             RenderMatrix(matrix, output);
         else if (outcome.Report is SqlHarnessGainReport gain)
@@ -108,17 +108,42 @@ public sealed class Renderer
             output.WriteLine(string.Join('\t',
                 set.Name,
                 "stable=" + (set.ResultsStable ? "true" : "false"),
-                "elapsed=" + Dist(set.Metrics.ElapsedTimeMilliseconds),
-                "cpu=" + Dist(set.Metrics.CpuTimeMilliseconds),
-                "reads=" + Dist(set.Metrics.LogicalReads),
+                "elapsed=" + ElapsedText(set.Metrics),
+                "cpu=" + CpuText(set.Metrics),
+                "reads=" + ReadsText(set.Metrics),
                 "plans=" + plans));
         }
 
-        var cross = report.CrossSetSummary;
-        output.WriteLine(CrossSetLine("elapsed", cross.MinimumMedianElapsedSet, cross.MinimumMedianElapsedMilliseconds, cross.MaximumMedianElapsedSet, cross.MaximumMedianElapsedMilliseconds));
-        output.WriteLine(CrossSetLine("cpu", cross.MinimumMedianCpuSet, cross.MinimumMedianCpuMilliseconds, cross.MaximumMedianCpuSet, cross.MaximumMedianCpuMilliseconds));
-        output.WriteLine(CrossSetLine("reads", cross.MinimumMedianReadsSet, cross.MinimumMedianLogicalReads, cross.MaximumMedianReadsSet, cross.MaximumMedianLogicalReads));
+        WriteCrossSet(report.CrossSetSummary, output);
         output.WriteLine("artifacts: " + (report.ArtifactDirectory ?? "none"));
+    }
+
+    private static void WriteCrossSet(MeasureCrossSetSummary cross, TextWriter output)
+    {
+        var elapsedMinimum = cross.MinimumMedianElapsedSet;
+        var elapsedMaximum = cross.MaximumMedianElapsedSet;
+        if (cross.ElapsedTimeAvailability == BenchmarkMetricReport.Unavailable || elapsedMinimum is null || elapsedMaximum is null)
+            output.WriteLine("Cross-set elapsed: unavailable");
+        else if (!cross.ElapsedWholeMillisecondsAreExact
+            && cross.MinimumMedianElapsedMillisecondsExact is decimal minimumExact
+            && cross.MaximumMedianElapsedMillisecondsExact is decimal maximumExact)
+            output.WriteLine($"Cross-set elapsed: {elapsedMinimum} {FormatDecimal(minimumExact)} .. {elapsedMaximum} {FormatDecimal(maximumExact)}");
+        else
+            output.WriteLine(CrossSetLine("elapsed", elapsedMinimum, cross.MinimumMedianElapsedMilliseconds, elapsedMaximum, cross.MaximumMedianElapsedMilliseconds));
+
+        var cpuMinimum = cross.MinimumMedianCpuSet;
+        var cpuMaximum = cross.MaximumMedianCpuSet;
+        if (cross.CpuTimeAvailability == BenchmarkMetricReport.Unavailable || cpuMinimum is null || cpuMaximum is null)
+            output.WriteLine("Cross-set cpu: unavailable");
+        else
+            output.WriteLine(CrossSetLine("cpu", cpuMinimum, cross.MinimumMedianCpuMilliseconds, cpuMaximum, cross.MaximumMedianCpuMilliseconds));
+
+        var readsMinimum = cross.MinimumMedianReadsSet;
+        var readsMaximum = cross.MaximumMedianReadsSet;
+        if (cross.LogicalReadsAvailability == BenchmarkMetricReport.Unavailable || readsMinimum is null || readsMaximum is null)
+            output.WriteLine("Cross-set reads: unavailable");
+        else
+            output.WriteLine(CrossSetLine("reads", readsMinimum, cross.MinimumMedianLogicalReads, readsMaximum, cross.MaximumMedianLogicalReads));
     }
 
     private static string CrossSetLine(string metric, string minimumSet, long minimum, string maximumSet, long maximum) =>
@@ -131,8 +156,8 @@ public sealed class Renderer
             output.WriteLine(string.Join('\t',
                 cell.ParameterValue,
                 FormatTechnicalEquivalence(cell.Compare.Equivalence),
-                cell.Compare.Baseline.ElapsedTimeMilliseconds.Median.ToString(CultureInfo.InvariantCulture),
-                cell.Compare.Candidate.ElapsedTimeMilliseconds.Median.ToString(CultureInfo.InvariantCulture),
+                MedianElapsed(cell.Compare.Baseline),
+                MedianElapsed(cell.Compare.Candidate),
                 cell.Compare.ArtifactDirectory ?? "none"));
         }
     }
@@ -334,6 +359,44 @@ public sealed class Renderer
     private static string DecimalText(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
     private static string Value(object? value) => value is null ? "NULL" : Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
     private static string Dist(CompareDistribution d) => $"{d.Min}/{d.Median}/{d.Max}";
+
+    private static string ElapsedText(CompareVariantReport variant)
+    {
+        var metric = variant.MetricReport;
+        if (metric is null)
+            return Dist(variant.ElapsedTimeMilliseconds);
+        if (metric.ElapsedTimeAvailability == BenchmarkMetricReport.Unavailable || metric.ElapsedTimeMillisecondsExact is null)
+            return "unavailable";
+        if (!metric.ElapsedWholeMillisecondsAreExact)
+            return FormatFractional(metric.ElapsedTimeMillisecondsExact);
+        return Dist(variant.ElapsedTimeMilliseconds);
+    }
+
+    private static string MedianElapsed(CompareVariantReport variant)
+    {
+        var metric = variant.MetricReport;
+        if (metric is { ElapsedTimeAvailability: BenchmarkMetricReport.Unavailable })
+            return "unavailable";
+        if (metric is { ElapsedWholeMillisecondsAreExact: false, ElapsedTimeMillisecondsExact: { } exact })
+            return FormatDecimal(exact.Median);
+        return variant.ElapsedTimeMilliseconds.Median.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private static string CpuText(CompareVariantReport variant) =>
+        variant.MetricReport?.CpuTimeAvailability == BenchmarkMetricReport.Unavailable
+            ? "unavailable"
+            : Dist(variant.CpuTimeMilliseconds);
+
+    private static string ReadsText(CompareVariantReport variant) =>
+        variant.MetricReport?.LogicalReadsAvailability == BenchmarkMetricReport.Unavailable
+            ? "unavailable"
+            : Dist(variant.LogicalReads);
+
+    private static string FormatFractional(FractionalMilliseconds value) =>
+        $"{FormatDecimal(value.Min)}/{FormatDecimal(value.Median)}/{FormatDecimal(value.Max)}";
+
+    private static string FormatDecimal(decimal value) =>
+        value.ToString("0.############################", CultureInfo.InvariantCulture);
     private static string FormatTechnicalEquivalence(ResultEquivalenceReport equivalence)
     {
         if (equivalence.Mode == ResultComparisonMode.Off)

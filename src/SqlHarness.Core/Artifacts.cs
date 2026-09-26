@@ -12,6 +12,190 @@ public sealed record SqlHarnessTargetIdentityReport(
 
 public sealed record CompareDistribution(long Min, long Median, long Max);
 
+public sealed record FractionalMilliseconds(decimal Min, decimal Median, decimal Max);
+
+public static class BenchmarkMetricText
+{
+    public const string PostgresLogicalReadsSource =
+        "logicalReads is the root plan node's Shared Hit Blocks + Shared Read Blocks + Local Hit Blocks + Local Read Blocks. Child plans and the Workers array are not added.";
+
+    public const string PostgresRelationBufferSource =
+        "Per-relation counts are that node's shared and local hit and read blocks minus its child plans. Workers are not added. The name is schema-qualified when the plan has a schema. These counts are not additive with logicalReads.";
+
+    public const string PostgresCpuUnavailable =
+        "PostgreSQL CPU time is unavailable. cpuTimeMilliseconds 0 is not a measured zero.";
+
+    public const string PostgresBuffersMissing =
+        "Root plan buffer counters are missing. logicalReads 0 is not a measured zero.";
+
+    public const string PostgresTimingMissing =
+        "Planning Time or Execution Time is missing. Whole-millisecond elapsed fields are not an exact measurement.";
+
+    public const string PostgresSubMillisecond =
+        "A positive elapsed time is below one millisecond. Whole-millisecond elapsed fields are rounded and are not an exact 0.";
+
+    public const string PostgresRelationBuffersMissing =
+        "A relation node is missing buffer counters, so it was left out of the per-relation diagnostics.";
+
+    public const string PostgresRelationChildBuffersMissing =
+        "A relation node's child plan is missing buffer counters, so that relation was left out of the per-relation diagnostics.";
+
+    public const string PostgresRelationBuffersExceedParent =
+        "A child plan reported more shared and local hit and read blocks than its parent. The negative remainder was not added.";
+
+    public const string SidecarRows =
+        "Result rows come from the unmeasured statement sidecar. EXPLAIN does not return those rows.";
+
+    public const string StatementRows =
+        "Result rows come from the measured statement.";
+
+    public const string RowsNotCaptured =
+        "Statement rows were not read. EXPLAIN does not return result rows.";
+}
+
+public sealed record BenchmarkMetricReport(
+    string CpuTimeAvailability,
+    string ElapsedTimeAvailability,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] FractionalMilliseconds? ElapsedTimeMillisecondsExact,
+    bool ElapsedWholeMillisecondsAreExact,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] FractionalMilliseconds? PlanningTimeMilliseconds,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] FractionalMilliseconds? ExecutionTimeMilliseconds,
+    string LogicalReadsAvailability,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LogicalReadsSource,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RelationBufferSource,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? RelationBuffersAreAdditive,
+    string ResultRowSource,
+    string ResultRowSourceDescription,
+    IReadOnlyList<string> Warnings)
+{
+    public const string Measured = "measured";
+    public const string Unavailable = "unavailable";
+    public const string ResultStatement = "statement";
+    public const string ResultUnmeasuredSidecar = "unmeasured-sidecar";
+    public const string ResultNotCaptured = "not-captured";
+
+    internal static BenchmarkMetricReport FromArtifacts(IReadOnlyList<CompareRunArtifact> runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        if (runs.Count == 0)
+            throw new ArgumentException("At least one run is required.", nameof(runs));
+
+        if (runs.All(run => run.Metrics is null))
+            return FromWholeMilliseconds(runs);
+
+        return FromRunMetrics(runs.Select(run => run.Metrics ?? WholeMillisecondRun(run)).ToArray());
+    }
+
+    // Legacy STATISTICS TIME values are already whole milliseconds. Mirror that distribution,
+    // including its truncated even-count median, so the exact field does not disagree with it.
+    private static BenchmarkMetricReport FromWholeMilliseconds(IReadOnlyList<CompareRunArtifact> runs)
+    {
+        var elapsed = Distribution.From(runs.Select(run => run.ElapsedTimeMilliseconds));
+        return new BenchmarkMetricReport(
+            Measured,
+            Measured,
+            new FractionalMilliseconds(elapsed.Min, elapsed.Median, elapsed.Max),
+            true,
+            null,
+            null,
+            Measured,
+            null,
+            null,
+            null,
+            ResultStatement,
+            BenchmarkMetricText.StatementRows,
+            []);
+    }
+
+    private static BenchmarkRunMetrics WholeMillisecondRun(CompareRunArtifact run) =>
+        new(
+            Measured,
+            Measured,
+            run.ElapsedTimeMilliseconds,
+            true,
+            null,
+            null,
+            Measured,
+            null,
+            null,
+            null,
+            ResultStatement,
+            BenchmarkMetricText.StatementRows,
+            []);
+
+    private static BenchmarkMetricReport FromRunMetrics(IReadOnlyList<BenchmarkRunMetrics> metrics)
+    {
+        var elapsedUnavailable = metrics.Any(metric => metric.ElapsedTimeAvailability == Unavailable);
+        var exact = elapsedUnavailable
+            ? null
+            : Fractional(metrics.Select(metric => metric.ElapsedTimeMillisecondsExact).ToArray());
+        var source = metrics.Select(metric => metric.ResultRowSource).Distinct(StringComparer.Ordinal).ToArray();
+        var resultSource = source.Length == 1
+            ? source[0]
+            : source.Contains(ResultUnmeasuredSidecar, StringComparer.Ordinal) ? ResultUnmeasuredSidecar
+            : source.Contains(ResultStatement, StringComparer.Ordinal) ? ResultStatement
+            : ResultNotCaptured;
+        bool? additive = null;
+        foreach (var metric in metrics)
+        {
+            if (metric.RelationBuffersAreAdditive is false)
+                additive = false;
+            else if (metric.RelationBuffersAreAdditive is true && additive is null)
+                additive = true;
+        }
+
+        return new BenchmarkMetricReport(
+            metrics.Any(metric => metric.CpuTimeAvailability == Unavailable) ? Unavailable : Measured,
+            elapsedUnavailable ? Unavailable : Measured,
+            exact,
+            !elapsedUnavailable && metrics.All(metric => metric.ElapsedWholeMillisecondsAreExact),
+            Fractional(metrics.Select(metric => metric.PlanningTimeMilliseconds).ToArray()),
+            Fractional(metrics.Select(metric => metric.ExecutionTimeMilliseconds).ToArray()),
+            metrics.Any(metric => metric.LogicalReadsAvailability == Unavailable) ? Unavailable : Measured,
+            metrics.Select(metric => metric.LogicalReadsSource).FirstOrDefault(value => value is not null),
+            metrics.Select(metric => metric.RelationBufferSource).FirstOrDefault(value => value is not null),
+            additive,
+            resultSource,
+            DescribeRows(resultSource),
+            metrics.SelectMany(metric => metric.Warnings).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
+    }
+
+    private static string DescribeRows(string source) => source switch
+    {
+        ResultUnmeasuredSidecar => BenchmarkMetricText.SidecarRows,
+        ResultNotCaptured => BenchmarkMetricText.RowsNotCaptured,
+        _ => BenchmarkMetricText.StatementRows,
+    };
+
+    private static FractionalMilliseconds? Fractional(IReadOnlyList<decimal?> samples)
+    {
+        if (samples.Count == 0 || samples.Any(sample => sample is null))
+            return null;
+
+        var ordered = samples.Select(sample => sample!.Value).OrderBy(value => value).ToArray();
+        var middle = ordered.Length / 2;
+        var median = ordered.Length % 2 == 0
+            ? (ordered[middle - 1] + ordered[middle]) / 2m
+            : ordered[middle];
+        return new FractionalMilliseconds(ordered[0], median, ordered[^1]);
+    }
+}
+
+internal sealed record BenchmarkRunMetrics(
+    string CpuTimeAvailability,
+    string ElapsedTimeAvailability,
+    decimal? ElapsedTimeMillisecondsExact,
+    bool ElapsedWholeMillisecondsAreExact,
+    decimal? PlanningTimeMilliseconds,
+    decimal? ExecutionTimeMilliseconds,
+    string LogicalReadsAvailability,
+    string? LogicalReadsSource,
+    string? RelationBufferSource,
+    bool? RelationBuffersAreAdditive,
+    string ResultRowSource,
+    string ResultRowSourceDescription,
+    IReadOnlyList<string> Warnings);
+
 public sealed record CompareOperatorReport(
     int NodeId, string PhysicalOp, string? Object,
     bool HasWarnings, bool HasSpill, bool HasImplicitConversion);
@@ -27,6 +211,9 @@ public sealed record CompareVariantReport(
 {
     public IReadOnlyDictionary<string, CompareDistribution> LogicalReadsByTable { get; init; }
         = new Dictionary<string, CompareDistribution>();
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BenchmarkMetricReport? MetricReport { get; init; }
 }
 
 public sealed record BenchmarkClassificationReport(string Setup, string Query);
@@ -74,18 +261,33 @@ public sealed record MeasureParameterSetReport(
     IReadOnlyList<string> PlanHashes);
 
 public sealed record MeasureCrossSetSummary(
-    string MinimumMedianElapsedSet,
+    string? MinimumMedianElapsedSet,
     long MinimumMedianElapsedMilliseconds,
-    string MaximumMedianElapsedSet,
+    string? MaximumMedianElapsedSet,
     long MaximumMedianElapsedMilliseconds,
-    string MinimumMedianCpuSet,
+    string? MinimumMedianCpuSet,
     long MinimumMedianCpuMilliseconds,
-    string MaximumMedianCpuSet,
+    string? MaximumMedianCpuSet,
     long MaximumMedianCpuMilliseconds,
-    string MinimumMedianReadsSet,
+    string? MinimumMedianReadsSet,
     long MinimumMedianLogicalReads,
-    string MaximumMedianReadsSet,
-    long MaximumMedianLogicalReads);
+    string? MaximumMedianReadsSet,
+    long MaximumMedianLogicalReads)
+{
+    public string CpuTimeAvailability { get; init; } = BenchmarkMetricReport.Measured;
+
+    public string ElapsedTimeAvailability { get; init; } = BenchmarkMetricReport.Measured;
+
+    public string LogicalReadsAvailability { get; init; } = BenchmarkMetricReport.Measured;
+
+    public bool ElapsedWholeMillisecondsAreExact { get; init; } = true;
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? MinimumMedianElapsedMillisecondsExact { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? MaximumMedianElapsedMillisecondsExact { get; init; }
+}
 
 public sealed record SqlHarnessMeasureSetReport(
     SqlHarnessTargetIdentityReport Target,
@@ -103,7 +305,8 @@ internal sealed record CompareRunArtifact(
     string Variant, int Repetition, long CpuTimeMilliseconds, long ElapsedTimeMilliseconds,
     long LogicalReads, IReadOnlyDictionary<string, long> LogicalReadsByTable,
     string ResultHash, IReadOnlyList<string> PlanXmls, int MessageCount,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParameterSet = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParameterSet = null,
+    BenchmarkRunMetrics? Metrics = null);
 
 internal interface ICompareArtifactWriter
 {

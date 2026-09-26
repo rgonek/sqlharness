@@ -830,6 +830,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             warnings.Order(StringComparer.Ordinal).ToArray())
         {
             LogicalReadsByTable = logicalReadsByTable,
+            MetricReport = BenchmarkMetricReport.FromArtifacts(runs.Select(run => run.Artifact).ToArray()),
         };
     }
 
