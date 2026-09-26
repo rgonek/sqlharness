@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 
 using SqlHarness.Cli.Infrastructure;
@@ -14,7 +15,7 @@ public sealed class Renderer
     {
         if (mode == OutputMode.Agent)
         {
-            WriteAgent(outcome, command, output);
+            WriteAgent(outcome, command, output, new AgentOutputOptions());
             return;
         }
         var hasError = outcome.Error is not null || !string.IsNullOrWhiteSpace(outcome.SafeError);
@@ -109,7 +110,7 @@ public sealed class Renderer
         var error = structuredError ?? SqlHarnessError.From(exitCode, message, "validation");
         if (mode == OutputMode.Agent)
         {
-            WriteAgent(new SqlHarnessOutcome(exitCode, null, message, Error: error), command, output);
+            WriteAgent(new SqlHarnessOutcome(exitCode, null, message, Error: error), command, output, new AgentOutputOptions());
             return;
         }
         if (mode is OutputMode.Json or OutputMode.JsonSummary)
@@ -121,7 +122,10 @@ public sealed class Renderer
         output.WriteLine(message);
     }
 
-    private static void WriteAgent(SqlHarnessOutcome outcome, string command, TextWriter output)
+    public void RenderAgent(SqlHarnessOutcome outcome, string command, OutputCaptureWriter output, AgentOutputOptions options) =>
+        WriteAgent(outcome, command, output, options);
+
+    private static void WriteAgent(SqlHarnessOutcome outcome, string command, TextWriter output, AgentOutputOptions options)
     {
         var error = outcome.MachineError;
         var status = error is null
@@ -129,8 +133,35 @@ public sealed class Renderer
             : outcome.Report is SqlHarnessCompareMatrixReport
                 ? "partial"
                 : "error";
-        var envelope = new SqlHarnessAgentEnvelope(1, command, status, (int)outcome.ExitCode, ProjectSummary(outcome.Report), error);
-        output.WriteLine(JsonSerializer.Serialize(envelope, CompactJson));
+        foreach (var detailLimit in new[] { 128, 32, 8, 2, 0 })
+        {
+            var result = AgentOutputProjection.Project(outcome.Report, options.MaximumCellCharacters, detailLimit, out var omitted);
+            var truncated = detailLimit < 128 || omitted > 0;
+            var envelope = new SqlHarnessAgentEnvelope(1, command, status, (int)outcome.ExitCode, result, error,
+                truncated ? new { omittedItems = omitted, detailLimit, maxCellChars = options.MaximumCellCharacters } : null);
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(envelope, CompactJson);
+            if (bytes.Length + 1 <= options.MaximumBytes)
+            {
+                output.Write(Encoding.UTF8.GetString(bytes));
+                output.WriteLine();
+                return;
+            }
+        }
+
+        var minimal = new SqlHarnessAgentEnvelope(1, command, "error", (int)SqlHarnessExitCode.Safety, null,
+            new SqlHarnessError("output_budget_too_small", "render", "The minimum agent response does not fit the configured byte budget."),
+            new { omittedItems = 1, maxOutputBytes = options.MaximumBytes });
+        var minimalBytes = JsonSerializer.SerializeToUtf8Bytes(minimal, CompactJson);
+        if (minimalBytes.Length + 1 <= options.MaximumBytes)
+        {
+            output.Write(Encoding.UTF8.GetString(minimalBytes));
+            output.WriteLine();
+        }
+        else
+        {
+            // Minimum accepted budget is 4096 bytes, so this is defensive only.
+            output.WriteLine("{\"schemaVersion\":1,\"command\":\"unknown\",\"status\":\"error\",\"exitCode\":2,\"result\":null,\"error\":{\"code\":\"output_budget_too_small\",\"phase\":\"render\",\"message\":\"Agent output unavailable.\"},\"truncation\":null}");
+        }
     }
 
     private static object? ProjectSummary(object? report) => report switch

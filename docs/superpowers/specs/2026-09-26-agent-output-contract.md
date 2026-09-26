@@ -36,4 +36,8 @@ When a compare matrix stops at its first failed cell, completed cells stay in `r
 
 ## Projection and truncation
 
-Task 1 does not impose a byte or cell limit. Task 3 defines bounded projections and truncation behavior; until then `truncation` is `null` and agent output serializes the current report compactly.
+Agent output defaults to a 16 KiB UTF-8 budget for the complete envelope, including its final newline. `--max-output-bytes` accepts 4096..1048576 and `--max-cell-chars` accepts 0..4096 (default 512). These switches apply to `--output agent`; existing `--json` and `--json-summary` output remains unchanged.
+
+When the response must be reduced, projection keeps fields in this order: status and error; result correctness and equivalence; metric availability; primary metrics; paths for artifacts that were actually written and omission counts; then detailed rows, cells, warnings, sets, and matrix entries. The projection does not alter raw result hashes, equivalence inputs, or snapshot completeness. It does not create a query result artifact. If query result rows are omitted from the response, the report retains `resultHash` and row omission counts, and makes no claim that a full result file exists.
+
+Large detail lists are bounded before JSON serialization, and string cells/warnings/paths are clipped to the requested cell limit. The envelope includes `truncation.omittedItems` and the applied detail and cell limits when projection removes content. Noteworthy operators remain capped at ten with the existing warning/spill/conversion priority. If even the minimum structural envelope cannot fit, SQLHarness emits a small structured `output_budget_too_small` error instead of cutting JSON bytes. The minimum configured budget is 4096 bytes.

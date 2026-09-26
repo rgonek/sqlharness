@@ -33,6 +33,8 @@ public abstract class TargetSettings : CommandSettings
     [CommandOption("--root-certificate <PATH>")] public string? RootCertificate { get; set; }
     [CommandOption("--json")] public bool Json { get; set; }
     [CommandOption("--output <MODE>")] public string? Output { get; set; }
+    [CommandOption("--max-output-bytes <BYTES>")][DefaultValue(16384)] public int MaxOutputBytes { get; set; } = 16384;
+    [CommandOption("--max-cell-chars <CHARS>")][DefaultValue(512)] public int MaxCellChars { get; set; } = 512;
 
     public bool TryTarget(out SqlTargetRequest target, out string error)
     {
@@ -82,11 +84,21 @@ public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, Out
             output.Capture.WriteLine(safe);
         return (int)code;
     }
-    protected async Task<int> Dispatch(SqlHarnessOperation operation, OutputMode mode, CancellationToken ct)
+    protected async Task<int> Dispatch(SqlHarnessOperation operation, OutputMode mode, CancellationToken ct, AgentOutputOptions? agentOptions = null)
     {
+        agentOptions ??= output.AgentOptions;
+        if (mode == OutputMode.Agent && (agentOptions.MaximumBytes is < 4096 or > 1048576 || agentOptions.MaximumCellCharacters is < 0 or > 4096))
+        {
+            renderer.RenderError(SqlHarnessExitCode.Safety, "Agent output limits must be --max-output-bytes 4096..1048576 and --max-cell-chars 0..4096.", mode, output.Command, output.Capture);
+            output.Capture.Flush();
+            return (int)SqlHarnessExitCode.Safety;
+        }
         var mark = output.Begin();
         var outcome = await module.ExecuteAsync(operation, ct);
-        renderer.Render(outcome, mode, output.Capture, output.Command);
+        if (mode == OutputMode.Agent)
+            renderer.RenderAgent(outcome, output.Command, output.Capture, agentOptions);
+        else
+            renderer.Render(outcome, mode, output.Capture, output.Command);
         output.Capture.Flush();
         return await output.CompleteAsync(outcome, mark, ct);
     }
@@ -128,7 +140,7 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
         try
         {
             var sql = hasFile ? await File.ReadAllTextAsync(settings.File!, ct) : await input.Stdin.ReadToEndAsync(ct);
-            return await Dispatch(new SqlHarnessQueryOperation(target, sql, settings.Parameters, settings.Timeout, settings.MaxRows, settings.AllowMutation, settings.ConfirmDatabase), ResolveOutputMode(settings.Json, output: settings.Output), ct);
+            return await Dispatch(new SqlHarnessQueryOperation(target, sql, settings.Parameters, settings.Timeout, settings.MaxRows, settings.AllowMutation, settings.ConfirmDatabase), ResolveOutputMode(settings.Json, output: settings.Output), ct, new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file.", new SqlHarnessError("input_file_unavailable", "input", "Unable to read SQL input file.")); }
@@ -166,7 +178,8 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
             return await Dispatch(
                 new SqlHarnessMeasureOperation(target, await Read(s.Setup, ct), (await Read(s.Query, ct))!, s.Parameters, s.Timeout, s.Repeat, parameterSets),
                 ResolveOutputMode(s.Json, s.JsonSummary, s.Output),
-                ct);
+                ct,
+                new AgentOutputOptions(s.MaxOutputBytes, s.MaxCellChars));
         }
         catch (OperationCanceledException) { throw; }
         catch (ParameterSetFileException exception) { return Invalid(exception.Message); }
@@ -235,7 +248,7 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
             SqlHarnessOperation operation = matrix.Length == 1
                 ? new SqlHarnessCompareMatrixOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, matrix[0], compareResults)
                 : new SqlHarnessCompareOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, compareResults);
-            return await Dispatch(operation, ResolveOutputMode(s.Json, s.JsonSummary, s.Output), ct);
+            return await Dispatch(operation, ResolveOutputMode(s.Json, s.JsonSummary, s.Output), ct, new AgentOutputOptions(s.MaxOutputBytes, s.MaxCellChars));
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file.", new SqlHarnessError("input_file_unavailable", "input", "Unable to read SQL input file.")); }
@@ -271,9 +284,9 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
 
 public sealed class GainCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer) : SqlHarnessCommand<GainCommand.Settings>(module, output, renderer)
 {
-    public sealed class Settings : CommandSettings { [CommandOption("--json")] public bool Json { get; set; } [CommandOption("--output <MODE>")] public string? Output { get; set; } }
+    public sealed class Settings : CommandSettings { [CommandOption("--json")] public bool Json { get; set; } [CommandOption("--output <MODE>")] public string? Output { get; set; } [CommandOption("--max-output-bytes <BYTES>")][DefaultValue(16384)] public int MaxOutputBytes { get; set; } = 16384; [CommandOption("--max-cell-chars <CHARS>")][DefaultValue(512)] public int MaxCellChars { get; set; } = 512; }
     protected override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken ct) =>
-        Dispatch(new SqlHarnessGainOperation(), ResolveOutputMode(settings.Json, output: settings.Output), ct);
+        Dispatch(new SqlHarnessGainOperation(), ResolveOutputMode(settings.Json, output: settings.Output), ct, new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
 }
 
 public sealed record CliInput(TextReader Stdin, bool StdinRedirected);
