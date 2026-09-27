@@ -1,7 +1,12 @@
+using System.Globalization;
+
 namespace SqlHarness.Core.Dialect;
 
 internal sealed class SqlServerDialect : ISqlDialect
 {
+    private const string StatisticsTruncatedWarning =
+        "SQL Server informational messages exceeded the per-command limit and {0} messages were omitted. CPU time, elapsed time and logicalReads parsed from STATISTICS output are unavailable; logicalReads 0 is not a measured zero.";
+
     private static readonly IReadOnlySet<string> NoSessionTemps =
         new HashSet<string>(StringComparer.Ordinal);
 
@@ -64,10 +69,16 @@ internal sealed class SqlServerDialect : ISqlDialect
         try
         {
             await BenchmarkCollector.ExecuteAndDrainAsync(session, new SqlExecutionCommand(enable, [], timeoutSeconds), ct);
+            // The control command carries no measured data: discard its diagnostics so
+            // the measured window below owns the omitted-message attribution.
+            _ = session.ConsumeMessages(0);
             messageStart = session.Messages.Count;
             await using var reader = await session.ExecuteReaderAsync(new SqlExecutionCommand(sql, parameters, timeoutSeconds), ct);
             var result = await BenchmarkCollector.CollectCompareAsync(reader, raw, captureComparison, comparisonMaximumRows, ct);
-            var messages = session.Messages.Skip(messageStart).ToArray();
+            // Per-command consumption: the session releases this run's messages instead
+            // of retaining every repetition's notices for the whole session.
+            var consumed = session.ConsumeMessages(messageStart);
+            var messages = consumed.Messages.ToArray();
             foreach (var message in messages)
                 raw.AddMessage("sql", message);
             messagesCaptured = true;
@@ -83,7 +94,8 @@ internal sealed class SqlServerDialect : ISqlDialect
                 io.Tables,
                 result.Canonical.Hash,
                 result.PlanXmls,
-                messages.Length);
+                messages.Length,
+                Metrics: TruncatedMetricsOrNull(consumed.OmittedMessageCount));
             return new CollectedCompareRun(artifact, plans, result.Comparison);
         }
         catch (Exception exception)
@@ -117,6 +129,42 @@ internal sealed class SqlServerDialect : ISqlDialect
             {
                 // Preserve the benchmark failure while still bounding the best-effort cleanup.
             }
+
+            try
+            {
+                // Release the control command's diagnostics; never mask the run outcome.
+                _ = session.ConsumeMessages(0);
+            }
+            catch
+            {
+            }
         }
     }
+
+    /// <summary>
+    /// Explicit incomplete metrics after the per-command message bound dropped
+    /// arrivals: STATISTICS IO/TIME text may be partial, so parsed zeros are
+    /// reported as unavailable instead of silently measured zeros.
+    /// </summary>
+    private static BenchmarkRunMetrics? TruncatedMetricsOrNull(int omittedMessageCount) =>
+        omittedMessageCount <= 0
+            ? null
+            : new BenchmarkRunMetrics(
+                BenchmarkMetricReport.Unavailable,
+                BenchmarkMetricReport.Unavailable,
+                null,
+                false,
+                null,
+                null,
+                BenchmarkMetricReport.Unavailable,
+                null,
+                null,
+                null,
+                BenchmarkMetricReport.ResultStatement,
+                BenchmarkMetricText.StatementRows,
+                [string.Format(
+                    CultureInfo.InvariantCulture,
+                    StatisticsTruncatedWarning,
+                    omittedMessageCount)]);
+
 }
