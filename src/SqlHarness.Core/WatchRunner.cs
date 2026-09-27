@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using System.Diagnostics;
 
 using SqlHarness.Core.Auth;
 using SqlHarness.Core.Targets;
@@ -9,6 +10,18 @@ internal interface IWatchClock
 {
     DateTimeOffset UtcNow { get; }
     Task DelayAsync(TimeSpan delay, CancellationToken ct);
+    IWatchBudget StartBudget(TimeSpan budget, CancellationToken ct);
+}
+
+/// <summary>
+/// Monotonic budget for one watch operation: the remaining time plus a token
+/// linked to the caller's token that cancels when the budget elapses.
+/// </summary>
+internal interface IWatchBudget : IDisposable
+{
+    TimeSpan Remaining { get; }
+    bool IsExpired { get; }
+    CancellationToken Token { get; }
 }
 
 internal sealed class SystemWatchClock : IWatchClock
@@ -16,6 +29,38 @@ internal sealed class SystemWatchClock : IWatchClock
     public DateTimeOffset UtcNow => DateTimeOffset.UtcNow;
 
     public Task DelayAsync(TimeSpan delay, CancellationToken ct) => Task.Delay(delay, ct);
+
+    public IWatchBudget StartBudget(TimeSpan budget, CancellationToken ct) =>
+        new SystemWatchBudget(budget, ct);
+}
+
+internal sealed class SystemWatchBudget : IWatchBudget
+{
+    private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
+    private readonly TimeSpan _budget;
+    private readonly CancellationTokenSource _linked;
+
+    internal SystemWatchBudget(TimeSpan budget, CancellationToken ct)
+    {
+        _budget = budget;
+        _linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _linked.CancelAfter(budget);
+    }
+
+    public TimeSpan Remaining
+    {
+        get
+        {
+            var remaining = _budget - _stopwatch.Elapsed;
+            return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
+        }
+    }
+
+    public bool IsExpired => _stopwatch.Elapsed > _budget;
+
+    public CancellationToken Token => _linked.Token;
+
+    public void Dispose() => _linked.Dispose();
 }
 
 internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock)
@@ -39,11 +84,25 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
         var rawFootprint = new OutputFootprint(0, 0);
         CanonicalResultAccumulator? raw = null;
         var start = _clock.UtcNow;
-        var deadline = start + operation.MaxDuration;
+        // One monotonic budget covers connect, every poll and every delay. Only the
+        // linked token below is passed to I/O; the caller's token stays distinguishable
+        // (see the OperationCanceledException filters).
+        using var budget = _clock.StartBudget(operation.MaxDuration, ct);
 
         try
         {
-            await using var session = await _sessions.ConnectAsync(target, ct);
+            ISqlSession connected;
+            try
+            {
+                connected = await _sessions.ConnectAsync(target, budget.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                // Deadline elapsed during connect: no session identity exists, so there
+                // is no report to attach - the exit code still reports the deadline.
+                return (new SqlHarnessOutcome(SqlHarnessExitCode.WatchMaxDuration, null, null), rawFootprint);
+            }
+            await using var session = connected;
             phase = WatchPhase.Sql;
 
             WatchCondition? condition = operation.Until is null
@@ -57,22 +116,55 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
             string? previousHash = null;
             var poll = 0;
             WatchExitReason exitReason;
-            var execution = new SqlExecutionCommand(operation.Sql, parameters, operation.TimeoutSeconds);
 
             while (true)
             {
+                // Never start a new command after the budget is exhausted: a delay that
+                // ends exactly at the deadline exits here instead of polling again.
+                if (budget.Remaining <= TimeSpan.Zero)
+                {
+                    exitReason = WatchExitReason.MaxDuration;
+                    break;
+                }
+
                 poll++;
-                var collected = await QueryResultCollector.CollectAsync(
-                    session,
-                    execution,
-                    operation.MaxRows,
-                    knownSecrets,
-                    () =>
-                    {
-                        raw ??= new CanonicalResultAccumulator();
-                        return raw;
-                    },
-                    ct);
+                // CommandTimeout is whole seconds, so clamp it down to the remaining
+                // budget and let the linked token enforce sub-second precision.
+                var execution = new SqlExecutionCommand(
+                    operation.Sql,
+                    parameters,
+                    ClampCommandTimeout(operation.TimeoutSeconds, budget.Remaining));
+
+                CollectedQueryResult collected;
+                try
+                {
+                    collected = await QueryResultCollector.CollectAsync(
+                        session,
+                        execution,
+                        operation.MaxRows,
+                        knownSecrets,
+                        () =>
+                        {
+                            raw ??= new CanonicalResultAccumulator();
+                            return raw;
+                        },
+                        budget.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    // Deadline cancelled an in-flight poll: keep the last complete state.
+                    exitReason = WatchExitReason.MaxDuration;
+                    break;
+                }
+
+                // Tie rule: only a result completed within budget may satisfy the stop
+                // condition. A read that overruns the deadline is dropped; the report
+                // keeps the last complete in-budget state.
+                if (budget.IsExpired)
+                {
+                    exitReason = WatchExitReason.MaxDuration;
+                    break;
+                }
 
                 var hash = collected.Canonical.Hash;
                 var elapsed = ElapsedMilliseconds(start);
@@ -104,18 +196,23 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
                     break;
                 }
 
-                // Deadline is checked before the next delay so a poll that lands on the
-                // deadline still reports and then exits without sleeping past max duration.
-                var remaining = deadline - _clock.UtcNow;
-                if (remaining <= TimeSpan.Zero)
+                if (budget.Remaining <= TimeSpan.Zero)
                 {
                     exitReason = WatchExitReason.MaxDuration;
                     break;
                 }
 
-                // Clamp to remaining max-duration so a long --interval cannot overshoot the budget.
-                var delay = operation.Interval < remaining ? operation.Interval : remaining;
-                await _clock.DelayAsync(delay, ct);
+                // Clamp to the remaining budget so a long --interval cannot overshoot it.
+                var delay = operation.Interval < budget.Remaining ? operation.Interval : budget.Remaining;
+                try
+                {
+                    await _clock.DelayAsync(delay, budget.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    exitReason = WatchExitReason.MaxDuration;
+                    break;
+                }
             }
 
             rawFootprint = raw is null
@@ -150,6 +247,9 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
             raw?.Dispose();
         }
     }
+
+    private static int ClampCommandTimeout(int timeoutSeconds, TimeSpan remaining) =>
+        Math.Min(timeoutSeconds, Math.Max(1, (int)remaining.TotalSeconds));
 
     private long ElapsedMilliseconds(DateTimeOffset start)
     {
