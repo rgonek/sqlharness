@@ -49,7 +49,7 @@ public sealed class SnapshotCommand(ISqlHarnessModule module, OutputContext outp
 
         try
         {
-            var sql = hasFile ? await File.ReadAllTextAsync(settings.File!, ct) : await input.Stdin.ReadToEndAsync(ct);
+            var sql = hasFile ? await SqlInputReader.ReadFileAsync(settings.File!, ct) : await SqlInputReader.ReadStdinAsync(input.Stdin, ct);
             return await Dispatch(
                 new SqlHarnessSnapshotOperation(
                     target,
@@ -64,6 +64,7 @@ public sealed class SnapshotCommand(ISqlHarnessModule module, OutputContext outp
                 ct);
         }
         catch (OperationCanceledException) { throw; }
+        catch (SqlInputTooLargeException) { return InvalidInputTooLarge(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return Invalid("Unable to read SQL input file.", new SqlHarnessError("input_file_unavailable", "input", "Unable to read SQL input file."));

@@ -301,6 +301,13 @@ public sealed record SqlHarnessMeasureSetReport(
     MeasureCrossSetSummary CrossSetSummary,
     string? ArtifactDirectory);
 
+/// <summary>
+/// The per-run metric fields (CpuTimeMilliseconds, ElapsedTimeMilliseconds,
+/// LogicalReads) are authoritative only when the corresponding
+/// <see cref="BenchmarkRunMetrics"/> availability is "measured". When
+/// "unavailable", the stored numbers are preserved parsed diagnostics (for
+/// example trailing STATISTICS output), not measurements.
+/// </summary>
 internal sealed record CompareRunArtifact(
     string Variant, int Repetition, long CpuTimeMilliseconds, long ElapsedTimeMilliseconds,
     long LogicalReads, IReadOnlyDictionary<string, long> LogicalReadsByTable,

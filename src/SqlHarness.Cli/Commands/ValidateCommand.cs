@@ -49,9 +49,10 @@ public sealed class ValidateCommand(OutputContext output, Renderer renderer) : A
         string sql;
         try
         {
-            sql = await System.IO.File.ReadAllTextAsync(settings.File, ct);
+            sql = await SqlInputReader.ReadFileAsync(settings.File, ct);
         }
         catch (OperationCanceledException) { throw; }
+        catch (SqlInputTooLargeException) { return Invalid(SqlInputReader.TooLargeMessage, new SqlHarnessError("input_too_large", "input", SqlInputReader.TooLargeMessage, "Provide a SQL file up to 16 MiB UTF-8 via --file.")); }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             return Invalid("Unable to read SQL input file.", new SqlHarnessError("input_file_unavailable", "input", "Unable to read SQL input file."));

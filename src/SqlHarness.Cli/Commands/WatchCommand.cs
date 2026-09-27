@@ -78,7 +78,7 @@ public sealed class WatchCommand(ISqlHarnessModule module, OutputContext output,
 
         try
         {
-            var sql = hasFile ? await File.ReadAllTextAsync(settings.File!, ct) : await input.Stdin.ReadToEndAsync(ct);
+            var sql = hasFile ? await SqlInputReader.ReadFileAsync(settings.File!, ct) : await SqlInputReader.ReadStdinAsync(input.Stdin, ct);
             return await Dispatch(
                 new SqlHarnessWatchOperation(
                     target,
@@ -95,6 +95,7 @@ public sealed class WatchCommand(ISqlHarnessModule module, OutputContext output,
                 ct);
         }
         catch (OperationCanceledException) { throw; }
+        catch (SqlInputTooLargeException) { return InvalidInputTooLarge(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return Invalid("Unable to read SQL input file.");

@@ -1,6 +1,7 @@
 using System.Text.Json;
 
 using SqlHarness.Cli;
+using SqlHarness.Cli.Commands;
 using SqlHarness.Core;
 using SqlHarness.Core.Dialect;
 using SqlHarness.Core.Targets;
@@ -128,6 +129,45 @@ public sealed class ValidateCommandTests
         Assert.Empty(module.Operations);
         using var document = JsonDocument.Parse(output.ToString());
         Assert.Equal("input_file_unavailable", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Validate_file_over_sql_input_limit_returns_input_too_large_without_validation()
+    {
+        var path = Path.GetTempFileName();
+        File.WriteAllText(path, new string('x', (int)SqlInputReader.MaxSqlInputUtf8Bytes + 1));
+        try
+        {
+            var module = new RecordingModule();
+            var output = new StringWriter();
+            var exitCode = await SqlHarnessCli.Create(module, output).RunAsync(["validate", "test", "--file", path, "--json"]);
+
+            Assert.Equal((int)SqlHarnessExitCode.Safety, exitCode);
+            Assert.Empty(module.Operations);
+            using var document = JsonDocument.Parse(output.ToString());
+            Assert.Equal("input_too_large", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public async Task Validate_file_at_exact_sql_input_limit_passes_the_bound_to_validation()
+    {
+        var path = Path.GetTempFileName();
+        File.WriteAllText(path, new string('x', (int)SqlInputReader.MaxSqlInputUtf8Bytes));
+        try
+        {
+            var module = new RecordingModule();
+            var output = new StringWriter();
+            var exitCode = await SqlHarnessCli.Create(module, output).RunAsync(["validate", "test", "--file", path, "--json"]);
+
+            // The bound let the input through: validation ran and reported on the
+            // content, not on the size.
+            Assert.Equal((int)SqlHarnessExitCode.Safety, exitCode);
+            using var document = JsonDocument.Parse(output.ToString());
+            Assert.NotEqual("input_too_large", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+        }
+        finally { File.Delete(path); }
     }
 
     private static TargetProfile Profile(string engine) => new(
