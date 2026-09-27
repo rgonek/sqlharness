@@ -77,10 +77,11 @@ public class WatchTests
         var report = Assert.IsType<SqlHarnessWatchReport>(outcome.Report);
         Assert.Equal(SqlHarnessExitCode.WatchMaxDuration, outcome.ExitCode);
         Assert.Equal(WatchExitReason.MaxDuration, report.ExitReason);
-        // T0 poll1, delay→T30 poll2, delay→T60 poll3, then deadline before next delay.
-        Assert.Equal(3, report.PollCount);
-        Assert.Equal([1, 2, 3], report.EmittedPolls.Select(p => p.Poll));
+        // T0 poll1, delay to T30 poll2, delay to T60, then deadline: no further poll.
+        Assert.Equal(2, report.PollCount);
+        Assert.Equal([1, 2], report.EmittedPolls.Select(p => p.Poll));
         Assert.Equal(2, clock.Delays.Count);
+        Assert.Equal(2, session.Commands.Count);
     }
 
     [Fact]
@@ -268,7 +269,7 @@ public class WatchTests
     public async Task Watch_clamps_delay_to_remaining_max_duration()
     {
         var clock = new FakeWatchClock();
-        // Interval 30s, budget 40s: poll@0, delay 30→30, poll@30, delay clamp 10→40, poll@40, exit max-duration.
+        // Interval 30s, budget 40s: poll at 0, delay 30 to 30, poll at 30, delay clamp 10 to 40, exit max-duration without another poll.
         var session = FakeSession.WithScalarPolls(1, 2, 3, 4, 5);
         var outcome = await Module(session, clock).ExecuteAsync(
             Watch(
@@ -279,8 +280,143 @@ public class WatchTests
         var report = Assert.IsType<SqlHarnessWatchReport>(outcome.Report);
         Assert.Equal(SqlHarnessExitCode.WatchMaxDuration, outcome.ExitCode);
         Assert.Equal(WatchExitReason.MaxDuration, report.ExitReason);
-        Assert.Equal(3, report.PollCount);
+        Assert.Equal(2, report.PollCount);
         Assert.Equal([TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(10)], clock.Delays);
+        Assert.Equal(2, session.Commands.Count);
+    }
+
+    [Fact]
+    public async Task Watch_condition_met_exactly_at_deadline()
+    {
+        var clock = new FakeWatchClock();
+        var session = FakeSession.WithScalarPolls(2);
+        // The read completes exactly at the deadline: still in budget.
+        session.BeforeResult = () => clock.Advance(TimeSpan.FromSeconds(60));
+        var outcome = await Module(session, clock).ExecuteAsync(
+            Watch(until: "Value >= 2", maxDuration: TimeSpan.FromSeconds(60)));
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(outcome.Report);
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(WatchExitReason.ConditionMet, report.ExitReason);
+        Assert.Equal(1, report.PollCount);
+        Assert.Equal([1], report.EmittedPolls.Select(p => p.Poll));
+    }
+
+    [Fact]
+    public async Task Watch_result_completed_after_deadline_exits_max_duration()
+    {
+        var clock = new FakeWatchClock();
+        var session = FakeSession.WithScalarPolls(2);
+        // The read overruns the deadline: the matching late result is dropped and
+        // the report keeps the last complete in-budget state (here: none yet).
+        session.BeforeResult = () => clock.Advance(TimeSpan.FromSeconds(60).Add(TimeSpan.FromMilliseconds(1)));
+        var outcome = await Module(session, clock).ExecuteAsync(
+            Watch(until: "Value >= 2", maxDuration: TimeSpan.FromSeconds(60)));
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(outcome.Report);
+        Assert.Equal(SqlHarnessExitCode.WatchMaxDuration, outcome.ExitCode);
+        Assert.Equal(WatchExitReason.MaxDuration, report.ExitReason);
+        Assert.Equal(1, report.PollCount);
+        Assert.Empty(report.EmittedPolls);
+    }
+
+    [Fact]
+    public async Task Watch_command_timeout_clamped_to_remaining_budget()
+    {
+        var clock = new FakeWatchClock();
+        var session = FakeSession.WithScalarPolls(1, 2, 3);
+        var outcome = await Module(session, clock).ExecuteAsync(
+            Watch(
+                untilUnchanged: 100,
+                interval: TimeSpan.FromSeconds(30),
+                maxDuration: TimeSpan.FromSeconds(40)) with { TimeoutSeconds = 300 });
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(outcome.Report);
+        Assert.Equal(SqlHarnessExitCode.WatchMaxDuration, outcome.ExitCode);
+        Assert.Equal(WatchExitReason.MaxDuration, report.ExitReason);
+        Assert.Equal(2, session.Commands.Count);
+        Assert.Equal(40, session.Commands[0].TimeoutSeconds);
+        Assert.Equal(10, session.Commands[1].TimeoutSeconds);
+        var scope = Assert.Single(clock.Budgets);
+        Assert.Equal(scope.Token, session.CapturedTokens[0]);
+        Assert.Equal(scope.Token, session.CapturedTokens[1]);
+    }
+
+    [Fact]
+    public async Task Watch_subsecond_remainder_uses_unit_timeout_and_linked_token()
+    {
+        var clock = new FakeWatchClock { Elapsed = TimeSpan.FromSeconds(39.5) };
+        var session = FakeSession.WithScalarPolls(1, 2);
+        var outcome = await Module(session, clock).ExecuteAsync(
+            Watch(
+                untilUnchanged: 100,
+                interval: TimeSpan.FromSeconds(30),
+                maxDuration: TimeSpan.FromSeconds(40)) with { TimeoutSeconds = 300 });
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(outcome.Report);
+        Assert.Equal(SqlHarnessExitCode.WatchMaxDuration, outcome.ExitCode);
+        Assert.Equal(WatchExitReason.MaxDuration, report.ExitReason);
+        Assert.Single(session.Commands);
+        // 0.5 s of budget left: whole-second CommandTimeout floors to 1 s and the
+        // linked token (not the timeout) enforces the exact deadline.
+        Assert.Equal(1, session.Commands[0].TimeoutSeconds);
+        Assert.Equal([TimeSpan.FromSeconds(0.5)], clock.Delays);
+        var scope = Assert.Single(clock.Budgets);
+        Assert.Equal(scope.Token, session.CapturedTokens[0]);
+    }
+
+    [Fact]
+    public async Task Watch_blocking_connect_receives_budget_cancellation()
+    {
+        var clock = new FakeWatchClock();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var factory = new BlockingConnectFactory(entered);
+        using var userCts = new CancellationTokenSource();
+        var module = new SqlHarnessModule(factory, new FakeGainStore(), Profiles, clock);
+
+        var task = module.ExecuteAsync(Watch(untilUnchanged: 100), userCts.Token);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        clock.Budgets.Single().Cancel();
+        var outcome = await task;
+
+        Assert.Equal(SqlHarnessExitCode.WatchMaxDuration, outcome.ExitCode);
+        Assert.Null(outcome.Report);
+        Assert.True(factory.CapturedToken.IsCancellationRequested);
+        Assert.False(userCts.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task Watch_blocking_poll_receives_budget_cancellation()
+    {
+        var clock = new FakeWatchClock();
+        var session = FakeSession.WithScalarPolls(1);
+        var enteredSecondPoll = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        var capturedPollToken = CancellationToken.None;
+        session.ExecuteHandler = async (command, token) =>
+        {
+            if (Interlocked.Increment(ref calls) == 1)
+                return FakeScalarReader.Create(1);
+            capturedPollToken = token;
+            enteredSecondPoll.TrySetResult();
+            await Task.Delay(Timeout.Infinite, token);
+            throw new InvalidOperationException("Unreachable.");
+        };
+        using var userCts = new CancellationTokenSource();
+        var task = Module(session, clock).ExecuteAsync(
+            Watch(untilUnchanged: 100, interval: TimeSpan.FromSeconds(30)), userCts.Token);
+        await enteredSecondPoll.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        clock.Budgets.Single().Cancel();
+        var outcome = await task;
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(outcome.Report);
+        Assert.Equal(SqlHarnessExitCode.WatchMaxDuration, outcome.ExitCode);
+        Assert.Equal(WatchExitReason.MaxDuration, report.ExitReason);
+        Assert.Equal(2, report.PollCount);
+        Assert.Equal([1], report.EmittedPolls.Select(p => p.Poll));
+        Assert.Equal(2, session.Commands.Count);
+        Assert.True(capturedPollToken.IsCancellationRequested);
+        Assert.False(userCts.IsCancellationRequested);
     }
 
     [Fact]
@@ -366,6 +502,61 @@ public class WatchTests
             gain ?? new FakeGainStore(),
             loadProfiles ?? Profiles,
             clock);
+
+    [Fact]
+    public async Task Watch_bounds_history_to_history_limit_with_counters_and_last_result()
+    {
+        var clock = new FakeWatchClock();
+        var values = Enumerable.Range(1, 10000).Cast<object>().ToArray();
+        var session = FakeSession.WithScalarPolls(values);
+        var outcome = await Module(session, clock).ExecuteAsync(
+            Watch(until: "Value >= 10000", interval: TimeSpan.FromMilliseconds(1)) with { HistoryLimit = 100 });
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(outcome.Report);
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(WatchExitReason.ConditionMet, report.ExitReason);
+        Assert.Equal(10000, report.PollCount);
+        Assert.Equal(10000, report.TotalChangedPolls);
+        Assert.Equal(9900, report.OmittedPolls);
+        Assert.Equal(100, report.EmittedPolls.Count);
+        Assert.Equal(9901, report.EmittedPolls[0].Poll);
+        Assert.Equal(10000, report.EmittedPolls[^1].Poll);
+        Assert.Equal(10000, Assert.Single(report.EmittedPolls[^1].ResultSets[0].Rows[0]));
+    }
+
+    [Fact]
+    public async Task Watch_unchanged_criterion_ignores_history_retention()
+    {
+        var clock = new FakeWatchClock();
+        var session = FakeSession.WithScalarPolls(1, 2, 2, 2);
+        var outcome = await Module(session, clock).ExecuteAsync(
+            Watch(untilUnchanged: 2, interval: TimeSpan.FromMilliseconds(1)) with { HistoryLimit = 1 });
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(outcome.Report);
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(WatchExitReason.Unchanged, report.ExitReason);
+        Assert.Equal(4, report.PollCount);
+        Assert.Equal(2, report.TotalChangedPolls);
+        Assert.Equal(1, report.OmittedPolls);
+        Assert.Equal([2], report.EmittedPolls.Select(p => p.Poll));
+    }
+
+    [Fact]
+    public async Task Watch_rejects_history_limit_outside_range_before_authentication()
+    {
+        foreach (var historyLimit in new[] { 0, 10001 })
+        {
+            var azure = new FakeAzureCli(Token);
+            var session = FakeSession.WithScalarPolls(1);
+            var outcome = await Module(session, new FakeWatchClock(), azure: azure).ExecuteAsync(
+                Watch(untilUnchanged: 1) with { HistoryLimit = historyLimit });
+
+            Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+            Assert.Contains("--history-limit", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+            Assert.Empty(azure.Calls);
+            Assert.Equal(0, session.ConnectCount);
+        }
+    }
 
     private static SqlHarnessWatchOperation Watch(
         string sql = "SELECT 1 AS Value",
@@ -453,6 +644,9 @@ public class WatchTests
         public string? FactoryAccessToken { get; set; }
         public Exception? ExecuteFailure { get; set; }
         public List<SqlExecutionCommand> Commands { get; } = [];
+        public List<CancellationToken> CapturedTokens { get; } = [];
+        public Action? BeforeResult { get; set; }
+        public Func<SqlExecutionCommand, CancellationToken, Task<ISqlReader>>? ExecuteHandler { get; set; }
         public IReadOnlyList<string> Messages => [];
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("test-server", "testdb-a", "test-server", "testdb-a", "profile");
@@ -470,6 +664,10 @@ public class WatchTests
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
         {
             Commands.Add(command);
+            CapturedTokens.Add(ct);
+            BeforeResult?.Invoke();
+            if (ExecuteHandler is not null)
+                return ExecuteHandler(command, ct);
             if (ExecuteFailure is not null)
                 return Task.FromException<ISqlReader>(ExecuteFailure);
             if (_results.Count == 0)
@@ -514,9 +712,18 @@ public class WatchTests
         public DateTimeOffset UtcNow { get; set; } =
             new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
+        public TimeSpan Elapsed { get; set; } = TimeSpan.Zero;
+
         public bool BlockDelay { get; set; }
         public Action? OnDelay { get; set; }
         public List<TimeSpan> Delays { get; } = [];
+        public List<FakeWatchBudget> Budgets { get; } = [];
+
+        public void Advance(TimeSpan delta)
+        {
+            UtcNow += delta;
+            Elapsed += delta;
+        }
 
         public Task DelayAsync(TimeSpan delay, CancellationToken ct)
         {
@@ -524,8 +731,61 @@ public class WatchTests
             OnDelay?.Invoke();
             ct.ThrowIfCancellationRequested();
             if (!BlockDelay)
-                UtcNow += delay;
+                Advance(delay);
             return Task.CompletedTask;
+        }
+
+        public IWatchBudget StartBudget(TimeSpan budget, CancellationToken ct)
+        {
+            var scope = new FakeWatchBudget(this, budget, ct);
+            Budgets.Add(scope);
+            return scope;
+        }
+    }
+
+    private sealed class FakeWatchBudget : IWatchBudget
+    {
+        private readonly FakeWatchClock _clock;
+        private readonly TimeSpan _budget;
+        private readonly CancellationTokenSource _cts;
+        private readonly CancellationToken _token;
+
+        public FakeWatchBudget(FakeWatchClock clock, TimeSpan budget, CancellationToken ct)
+        {
+            _clock = clock;
+            _budget = budget;
+            _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            _token = _cts.Token;
+        }
+
+        public TimeSpan Remaining
+        {
+            get
+            {
+                var remaining = _budget - _clock.Elapsed;
+                return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
+            }
+        }
+
+        public bool IsExpired => _clock.Elapsed > _budget;
+
+        public CancellationToken Token => _token;
+
+        public void Cancel() => _cts.Cancel();
+
+        public void Dispose() => _cts.Dispose();
+    }
+
+    private sealed class BlockingConnectFactory(TaskCompletionSource entered) : ISqlSessionFactory
+    {
+        public CancellationToken CapturedToken;
+
+        public async Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
+        {
+            CapturedToken = ct;
+            entered.TrySetResult();
+            await Task.Delay(Timeout.Infinite, ct);
+            throw new InvalidOperationException("Unreachable.");
         }
     }
 }

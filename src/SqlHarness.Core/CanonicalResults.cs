@@ -184,6 +184,149 @@ internal static class CanonicalScalarCodec
     private static int Utf8Length(string value) => Encoding.UTF8.GetByteCount(value);
 }
 
+/// <summary>
+/// Carved-out streaming stage for single large text/binary cells
+/// (varchar(max), nvarchar(max), varbinary(max)).
+///
+/// LIMITATION: production collection still calls <c>ISqlReader.GetValue</c>,
+/// which fully materializes each cell before hashing, so this stage is not yet
+/// wired into the read path and constant-memory reads are not claimed. When a
+/// future reader yields bounded chunks, hashing those chunks here produces a
+/// byte-identical digest to the one-shot codec below, so canonical hashes and
+/// result equivalence stay complete while presentation caps
+/// (--max-rows, agent cell budgets) only ever limit display.
+/// </summary>
+internal static class ChunkedCanonicalCellHash
+{
+    /// <summary>
+    /// Hashes a text cell fed as sequential chunks. The digest equals SHA-256
+    /// over the exact canonical scalar bytes the one-shot codec emits for the
+    /// concatenated text, for every chunking (including mid-surrogate splits).
+    /// </summary>
+    public static byte[] HashString(IReadOnlyList<string> chunks)
+    {
+        ArgumentNullException.ThrowIfNull(chunks);
+        // Pass 1: total UTF-8 length for the scalar header, using the same
+        // pair-aware scan as pass 2. (An incremental Encoder.GetByteCount
+        // across chunks is not used: it drops a chunk-trailing high surrogate
+        // instead of carrying it, undercounting a split pair 3 vs 4.)
+        long totalUtf8Length = 0;
+        char? countCarry = null;
+        for (var scan = 0; scan < chunks.Count; scan++)
+        {
+            ArgumentNullException.ThrowIfNull(chunks[scan]);
+            var piece = countCarry is char held ? held + chunks[scan] : chunks[scan];
+            countCarry = null;
+            if (scan < chunks.Count - 1 && piece.Length > 0 && char.IsHighSurrogate(piece[^1]))
+            {
+                countCarry = piece[^1];
+                piece = piece[..^1];
+            }
+            totalUtf8Length += Encoding.UTF8.GetByteCount(piece);
+        }
+
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        AppendAscii(hash, "{\"type\":\"string\",\"isNull\":false,\"length\":");
+        AppendAscii(hash, totalUtf8Length.ToString(CultureInfo.InvariantCulture));
+        AppendAscii(hash, ",\"value\":\"");
+
+        // Pass 2: escaped value bytes. A high surrogate trailing a chunk is held
+        // for the next chunk, so every piece handed to the escaper contains whole
+        // pairs or true lone surrogates — identical context to the one-shot write.
+        char? carry = null;
+        for (var index = 0; index < chunks.Count; index++)
+        {
+            var piece = carry is char held ? held + chunks[index] : chunks[index];
+            carry = null;
+            if (index < chunks.Count - 1 && piece.Length > 0 && char.IsHighSurrogate(piece[^1]))
+            {
+                carry = piece[^1];
+                piece = piece[..^1];
+            }
+            if (piece.Length > 0)
+                AppendEscaped(hash, piece);
+        }
+
+        AppendAscii(hash, "\"}");
+        return hash.GetHashAndReset();
+    }
+
+    /// <summary>
+    /// Hashes a binary cell fed as sequential chunks. The digest equals SHA-256
+    /// over the exact canonical scalar bytes the one-shot codec emits for the
+    /// concatenated bytes, for every chunking.
+    /// </summary>
+    public static byte[] HashBytes(IReadOnlyList<byte[]> chunks)
+    {
+        ArgumentNullException.ThrowIfNull(chunks);
+        long totalLength = 0;
+        foreach (var chunk in chunks)
+        {
+            ArgumentNullException.ThrowIfNull(chunk);
+            totalLength += chunk.Length;
+        }
+
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        AppendAscii(hash, "{\"type\":\"bytes\",\"isNull\":false,\"length\":");
+        AppendAscii(hash, totalLength.ToString(CultureInfo.InvariantCulture));
+        AppendAscii(hash, ",\"value\":\"");
+
+        // Base64 encodes 3-byte groups; hold at most 2 bytes across chunk edges.
+        // The base64 text still passes through the JSON escaper (the default
+        // encoder escapes '+' as \u002B), split arbitrarily: escaping is per
+        // character, so piece boundaries never change the bytes.
+        var carry = new byte[3];
+        var carryCount = 0;
+        foreach (var chunk in chunks)
+        {
+            var offset = 0;
+            if (carryCount > 0)
+            {
+                var take = Math.Min(3 - carryCount, chunk.Length);
+                Buffer.BlockCopy(chunk, 0, carry, carryCount, take);
+                carryCount += take;
+                offset = take;
+                if (carryCount == 3)
+                {
+                    AppendEscaped(hash, Convert.ToBase64String(carry));
+                    carryCount = 0;
+                }
+            }
+            var fullGroups = (chunk.Length - offset) / 3;
+            if (fullGroups > 0)
+            {
+                AppendEscaped(hash, Convert.ToBase64String(chunk, offset, fullGroups * 3));
+                offset += fullGroups * 3;
+            }
+            var rest = chunk.Length - offset;
+            if (rest > 0)
+            {
+                Buffer.BlockCopy(chunk, offset, carry, 0, rest);
+                carryCount = rest;
+            }
+        }
+        if (carryCount > 0)
+            AppendEscaped(hash, Convert.ToBase64String(carry, 0, carryCount));
+
+        AppendAscii(hash, "\"}");
+        return hash.GetHashAndReset();
+    }
+
+    private static void AppendAscii(IncrementalHash hash, string text) =>
+        hash.AppendData(Encoding.ASCII.GetBytes(text));
+
+    private static void AppendEscaped(IncrementalHash hash, string piece)
+    {
+        // Escape through the real JSON writer per piece and strip the surrounding
+        // quotes, so interior escaping matches the one-shot write by construction.
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = false }))
+            writer.WriteStringValue(piece);
+        var bytes = stream.ToArray();
+        hash.AppendData(bytes.AsSpan(1, bytes.Length - 2));
+    }
+}
+
 internal sealed class CanonicalResultAccumulator : IDisposable
 {
     private readonly HashingWriteStream _stream = new();

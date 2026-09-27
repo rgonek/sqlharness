@@ -68,7 +68,7 @@ internal sealed class NpgsqlSessionFactory : ISqlSessionFactory
         var opened = false;
         try
         {
-            var messages = new List<string>();
+            var messages = new SessionMessageBuffer();
             NoticeEventHandler handler = (_, args) => messages.Add(args.Notice.MessageText);
             connection.Notice += handler;
             await connection.OpenAsync(ct);
@@ -98,11 +98,13 @@ internal static class PostgresSessionScope
 
 internal sealed class NpgsqlSession(
     NpgsqlConnection connection,
-    List<string> messages,
+    SessionMessageBuffer messages,
     NoticeEventHandler noticeHandler) : ISqlSession
 {
-    public IReadOnlyList<string> Messages => messages;
+    public IReadOnlyList<string> Messages => messages.Snapshot();
     public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
+
+    public ConsumedSessionMessages ConsumeMessages(int startIndex) => messages.Consume(startIndex);
 
     public async Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand execution, CancellationToken ct)
     {

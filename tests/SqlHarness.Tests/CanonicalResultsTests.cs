@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 using SqlHarness.Core;
 
@@ -180,6 +181,71 @@ public class CanonicalResultsTests
 
         Assert.True(partial.Bytes > 0);
         Assert.Equal(expected, afterSnapshot);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(5)]
+    [InlineData(7)]
+    [InlineData(16)]
+    [InlineData(64)]
+    public void Chunked_string_cell_hash_matches_one_shot_for_every_split(int chunkSize)
+    {
+        // Size 1 splits at every boundary, including inside the surrogate pair
+        // and around both lone surrogates.
+        const string text = "plain \"quoted\" \\ slash \b\f\n\r\t \0\x1f <tag> & \u2028\u2029 Zażółć \U0001F600 lone-high \ud83d! lone-low \ude00! end";
+        var chunks = Split(text, chunkSize).ToList();
+
+        Assert.Equal(OneShotScalarHash(text), ChunkedCanonicalCellHash.HashString(chunks));
+    }
+
+    [Fact]
+    public void Chunked_string_cell_hash_matches_for_empty_and_uneven_chunks()
+    {
+        Assert.Equal(OneShotScalarHash(string.Empty), ChunkedCanonicalCellHash.HashString([]));
+        Assert.Equal(OneShotScalarHash(string.Empty), ChunkedCanonicalCellHash.HashString(["", ""]));
+
+        const string text = "a\x1b[31m-colored-\U0001F336-string\nwith\tescapes\"";
+        var chunks = new[] { "a\x1b", "[31m-colo", "red-\ud83c", "\udf36-string\nwith\tesc", "apes\"" };
+
+        Assert.Equal(OneShotScalarHash(text), ChunkedCanonicalCellHash.HashString(chunks));
+    }
+
+    [Fact]
+    public void Chunked_bytes_cell_hash_matches_one_shot_for_every_split()
+    {
+        var bytes = Enumerable.Range(0, 300).Select(index => (byte)(index * 37 + 11)).ToArray();
+        foreach (var length in new[] { 0, 1, 2, 3, 4, 5, 57, 256, 300 })
+        {
+            var data = bytes[..length];
+            foreach (var chunkSize in new[] { 1, 2, 3, 5, 64 })
+            {
+                var chunks = SplitBytes(data, chunkSize).ToList();
+                Assert.Equal(OneShotScalarHash(data), ChunkedCanonicalCellHash.HashBytes(chunks));
+            }
+        }
+    }
+
+    private static byte[] OneShotScalarHash(object? value)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = false }))
+            CanonicalScalarCodec.Write(writer, CanonicalScalarCodec.Prepare(value));
+        return SHA256.HashData(stream.ToArray());
+    }
+
+    private static IEnumerable<string> Split(string text, int size)
+    {
+        for (var index = 0; index < text.Length; index += size)
+            yield return text.Substring(index, Math.Min(size, text.Length - index));
+    }
+
+    private static IEnumerable<byte[]> SplitBytes(byte[] data, int size)
+    {
+        for (var index = 0; index < data.Length; index += size)
+            yield return data[index..Math.Min(index + size, data.Length)];
     }
 
     private static CanonicalResult CanonicalizeCultureSensitiveScalars(string cultureName)

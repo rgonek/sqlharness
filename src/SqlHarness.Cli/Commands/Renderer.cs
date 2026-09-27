@@ -289,7 +289,7 @@ public sealed class Renderer
         }
 
         output.WriteLine(
-            $"Polls: {watch.PollCount.ToString(CultureInfo.InvariantCulture)}; elapsed: {watch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)} ms; exit reason: {FormatWatchExitReason(watch.ExitReason)}");
+            $"Polls: {watch.PollCount.ToString(CultureInfo.InvariantCulture)}; elapsed: {watch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)} ms; exit reason: {FormatWatchExitReason(watch.ExitReason)}; changed polls: {watch.TotalChangedPolls.ToString(CultureInfo.InvariantCulture)}; omitted polls: {watch.OmittedPolls.ToString(CultureInfo.InvariantCulture)}");
     }
 
     private static void RenderSnapshot(SqlHarnessSnapshotReport snapshot, TextWriter output)

@@ -13,6 +13,7 @@ public sealed class WatchCommand(ISqlHarnessModule module, OutputContext output,
 {
     private const int DefaultTimeoutSeconds = 30;
     private const int DefaultMaxRows = 50;
+    private const int DefaultHistoryLimit = 100;
     private static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan DefaultMaxDuration = TimeSpan.FromMinutes(15);
     private const int DefaultUntilUnchanged = 3;
@@ -29,6 +30,7 @@ public sealed class WatchCommand(ISqlHarnessModule module, OutputContext output,
         [CommandOption("--max-duration <DURATION>")] public string? MaxDuration { get; set; }
         [CommandOption("--until <PREDICATE>")] public string? Until { get; set; }
         [CommandOption("--until-unchanged <COUNT>")] public int? UntilUnchanged { get; set; }
+        [CommandOption("--history-limit <COUNT>")][DefaultValue(DefaultHistoryLimit)] public int HistoryLimit { get; set; } = DefaultHistoryLimit;
     }
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken ct)
@@ -39,6 +41,9 @@ public sealed class WatchCommand(ISqlHarnessModule module, OutputContext output,
         var hasUntilUnchanged = settings.UntilUnchanged is not null;
         if (hasUntil && hasUntilUnchanged)
             return Invalid("Specify exactly one of --until or --until-unchanged.");
+
+        if (settings.HistoryLimit is < 1 or > 10000)
+            return Invalid("--history-limit must be between 1 and 10000.");
 
         string? until = null;
         int? untilUnchanged = null;
@@ -73,7 +78,7 @@ public sealed class WatchCommand(ISqlHarnessModule module, OutputContext output,
 
         try
         {
-            var sql = hasFile ? await File.ReadAllTextAsync(settings.File!, ct) : await input.Stdin.ReadToEndAsync(ct);
+            var sql = hasFile ? await SqlInputReader.ReadFileAsync(settings.File!, ct) : await SqlInputReader.ReadStdinAsync(input.Stdin, ct);
             return await Dispatch(
                 new SqlHarnessWatchOperation(
                     target,
@@ -84,11 +89,13 @@ public sealed class WatchCommand(ISqlHarnessModule module, OutputContext output,
                     interval,
                     maxDuration,
                     until,
-                    untilUnchanged),
+                    untilUnchanged,
+                    settings.HistoryLimit),
                 ResolveOutputMode(settings.Json, output: settings.Output),
                 ct);
         }
         catch (OperationCanceledException) { throw; }
+        catch (SqlInputTooLargeException) { return InvalidInputTooLarge(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return Invalid("Unable to read SQL input file.");

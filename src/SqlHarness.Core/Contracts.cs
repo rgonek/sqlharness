@@ -133,7 +133,7 @@ public static class IndexObjectSyntax
 public sealed record SqlHarnessWatchOperation(
     SqlTargetRequest Target, string Sql, IReadOnlyList<string> Parameters,
     int TimeoutSeconds, int MaxRows, TimeSpan Interval, TimeSpan MaxDuration,
-    string? Until, int? UntilUnchanged) : SqlHarnessOperation;
+    string? Until, int? UntilUnchanged, int HistoryLimit = 100) : SqlHarnessOperation;
 
 public sealed record SqlHarnessSnapshotOperation(
     SqlTargetRequest Target, string Sql, IReadOnlyList<string> Parameters,
@@ -148,7 +148,8 @@ public sealed record SqlHarnessWatchPoll(
 
 public sealed record SqlHarnessWatchReport(
     SqlHarnessTargetIdentityReport Target, int PollCount, long ElapsedMilliseconds,
-    WatchExitReason ExitReason, IReadOnlyList<SqlHarnessWatchPoll> EmittedPolls);
+    WatchExitReason ExitReason, IReadOnlyList<SqlHarnessWatchPoll> EmittedPolls,
+    int TotalChangedPolls = 0, int OmittedPolls = 0);
 
 public sealed record SqlHarnessSnapshotDifference(
     int ResultSet, long? Row, int? Column, string Kind);

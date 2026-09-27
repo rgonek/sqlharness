@@ -14,7 +14,15 @@ public sealed partial class OutputCaptureWriter : TextWriter
     private long _lineStart;
     private long _nextMark;
     private char? _pendingHighSurrogate;
+    private string? _pendingAnsiPrefix;
     private readonly Dictionary<long, (long Bytes, long Characters, long Newlines)> _marks = [];
+
+    /// <summary>
+    /// Maximum retained tail of a possibly incomplete ANSI escape sequence.
+    /// A longer ESC tail is counted as visible text immediately, so a single
+    /// Write never pins more than this many characters past observation.
+    /// </summary>
+    internal const int MaxPendingAnsiPrefixChars = 1024;
 
     public OutputCaptureWriter(TextWriter inner)
     {
@@ -25,14 +33,14 @@ public sealed partial class OutputCaptureWriter : TextWriter
     public override Encoding Encoding => _inner.Encoding;
     public long Mark()
     {
-        FlushPendingSurrogate();
+        FlushPending();
         var mark = ++_nextMark;
         _marks.Add(mark, (_utf8Bytes, _characters, _newlines));
         return mark;
     }
     public OutputFootprint GetAnsiFreeFootprint(long mark)
     {
-        FlushPendingSurrogate();
+        FlushPending();
         if (!_marks.Remove(mark, out var start)) throw new ArgumentOutOfRangeException(nameof(mark));
         var hasTail = _characters > Math.Max(start.Characters, _lineStart);
         return new(_utf8Bytes - start.Bytes, _newlines - start.Newlines + (hasTail ? 1 : 0));
@@ -42,10 +50,28 @@ public sealed partial class OutputCaptureWriter : TextWriter
     public override Task WriteAsync(string? value) { Track(value); return _inner.WriteAsync(value); }
     public override void Flush() => _inner.Flush();
 
+    // Differential counters only: no copy of the printed text is retained.
+    // A trailing ESC tail may be an escape sequence split across Write calls,
+    // so it is held for the next Write and stripped only when complete.
     private void Track(string? value)
     {
-        if (string.IsNullOrEmpty(value)) return;
-        var visible = Ansi().Replace(value, string.Empty);
+        var combined = _pendingAnsiPrefix is null
+            ? value
+            : _pendingAnsiPrefix + (value ?? string.Empty);
+        _pendingAnsiPrefix = null;
+        if (string.IsNullOrEmpty(combined)) return;
+        var visible = Ansi().Replace(combined, string.Empty);
+        var escape = visible.LastIndexOf('\x1B');
+        if (escape >= 0 && visible.Length - escape <= MaxPendingAnsiPrefixChars)
+        {
+            _pendingAnsiPrefix = visible[escape..];
+            visible = visible[..escape];
+        }
+        CountVisible(visible);
+    }
+
+    private void CountVisible(string visible)
+    {
         if (_pendingHighSurrogate is char pending)
         {
             visible = pending + visible;
@@ -68,8 +94,16 @@ public sealed partial class OutputCaptureWriter : TextWriter
         }
     }
 
-    private void FlushPendingSurrogate()
+    private void FlushPending()
     {
+        // An uncompleted tail never becomes a sequence: count it as visible so
+        // every observation point sees the full stream exactly once.
+        if (_pendingAnsiPrefix is not null)
+        {
+            var tail = _pendingAnsiPrefix;
+            _pendingAnsiPrefix = null;
+            CountVisible(tail);
+        }
         if (_pendingHighSurrogate is not char pending) return;
         _utf8Bytes += Encoding.UTF8.GetByteCount([pending]);
         _characters++;

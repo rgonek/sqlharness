@@ -27,7 +27,8 @@ public sealed record SqlHarnessQueryReport(
     int RecordsAffected,
     long DurationMilliseconds,
     string ResultHash,
-    OutputFootprint RawFootprint);
+    OutputFootprint RawFootprint,
+    int OmittedMessages = 0);
 
 public sealed class SqlHarnessModule : ISqlHarnessModule
 {
@@ -229,7 +230,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 collected.RecordsAffected,
                 stopwatch.ElapsedMilliseconds,
                 collected.Canonical.Hash,
-                rawFootprint);
+                rawFootprint,
+                collected.OmittedMessageCount);
             var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
             return WithReceipt(success, stopwatch.ElapsedMilliseconds, rawFootprint);
         }
@@ -1011,6 +1013,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
         if (watch.MaxRows is < 0 or > 500)
             throw new SqlHarnessSafetyException("Maximum displayed rows must be between 0 and 500.");
+        if (watch.HistoryLimit is < 1 or > 10000)
+            throw new SqlHarnessSafetyException("--history-limit must be between 1 and 10000.");
         if (watch.Interval <= TimeSpan.Zero || watch.Interval > TimeSpan.FromHours(24))
             throw new SqlHarnessSafetyException("Watch interval must be greater than zero and at most 24 hours.");
         if (watch.MaxDuration <= TimeSpan.Zero || watch.MaxDuration > TimeSpan.FromHours(24))

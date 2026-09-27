@@ -17,6 +17,9 @@ internal sealed record PostgresBenchmarkStats(
 internal static class PostgresBenchmark
 {
     internal const string ExplainPrefix = "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)\n";
+
+    private const string NoticesTruncatedWarning =
+        "PostgreSQL notices exceeded the per-command limit and {0} messages were omitted from diagnostics. Benchmark metrics come from EXPLAIN and are unaffected.";
     private const string MeasuredBatchMessage =
         "Measured SQL must be a single SELECT, VALUES, or WITH … SELECT statement.";
 
@@ -122,10 +125,14 @@ internal static class PostgresBenchmark
             planJson = await ReadExplainJsonAsync(reader, ct);
         }
 
-        var messages = session.Messages.Skip(messageStart).ToArray();
+        // Per-command consumption: the session releases this run's notices instead
+        // of retaining every repetition's notices for the whole session.
+        var consumed = session.ConsumeMessages(messageStart);
+        var messages = consumed.Messages.ToArray();
         foreach (var message in messages)
             raw.AddMessage("sql", message);
         raw.AddMessage("planXml", planJson);
+        var omittedMessageCount = consumed.OmittedMessageCount;
 
         var stats = ParseStats(planJson);
         var plans = new[] { ExecutionPlanParser.Parse(planJson) };
@@ -148,10 +155,15 @@ internal static class PostgresBenchmark
         };
         if (hashRows)
         {
+            var sidecarStart = session.Messages.Count;
             await using var sidecar = await session.ExecuteReaderAsync(
                 new SqlExecutionCommand(sql, parameters, timeoutSeconds), ct);
             var collected = await BenchmarkCollector.CollectCompareAsync(
                 sidecar, raw, captureComparison, comparisonMaximumRows, ct);
+            var sidecarConsumed = session.ConsumeMessages(sidecarStart);
+            foreach (var message in sidecarConsumed.Messages)
+                raw.AddMessage("sql", message);
+            omittedMessageCount += sidecarConsumed.OmittedMessageCount;
             canonical = collected.Canonical;
             comparison = collected.Comparison;
         }
@@ -161,6 +173,22 @@ internal static class PostgresBenchmark
             canonical = empty.Complete();
             comparison = BenchmarkCollector.EmptyComparison;
         }
+
+        // Diagnostics truncation is explicit and covers both windows: omitted
+        // notices never silently vanish. Metrics are unaffected because they
+        // come from EXPLAIN, not from messages.
+        if (omittedMessageCount > 0)
+            metrics = metrics with
+            {
+                Warnings =
+                [
+                    .. metrics.Warnings,
+                    string.Format(
+                        CultureInfo.InvariantCulture,
+                        NoticesTruncatedWarning,
+                        omittedMessageCount),
+                ],
+            };
 
         var artifact = new CompareRunArtifact(
             variant,

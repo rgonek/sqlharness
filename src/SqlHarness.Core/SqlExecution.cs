@@ -31,6 +31,103 @@ internal interface ISqlSession : IAsyncDisposable
     IReadOnlyList<string> Messages { get; }
     SqlHarnessTargetIdentityReport Identity { get; set; }
     Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct);
+
+    /// <summary>
+    /// Per-command message consumption: returns the messages queued at or after
+    /// <paramref name="startIndex"/> so a session never retains notices from all
+    /// previous repetitions. Production sessions additionally release the consumed
+    /// buffer memory; the default keeps the legacy slice without releasing.
+    /// </summary>
+    ConsumedSessionMessages ConsumeMessages(int startIndex) =>
+        new ConsumedSessionMessages(Messages.Skip(Math.Max(0, startIndex)).ToArray(), 0);
+}
+
+/// <summary>
+/// One command's share of session messages. Diagnostics beyond the per-command
+/// memory bound are truncated; <see cref="OmittedMessageCount"/> reports how many
+/// arrivals were dropped since the previous consumption.
+/// </summary>
+internal sealed record ConsumedSessionMessages(
+    IReadOnlyList<string> Messages,
+    int OmittedMessageCount);
+
+/// <summary>
+/// Bounded server-message store for one session (InfoMessage / NOTICE).
+/// Holds at most <see cref="MaxMessagesPerCommand"/> messages and
+/// <see cref="MaxCharactersPerCommand"/> characters as a sliding window: the
+/// newest arrivals (including a command's trailing STATISTICS lines) always win
+/// and older arrivals are evicted with a counter. Consumers additionally drain
+/// the buffer once per command, so repetitions reuse the same bounded memory
+/// instead of accumulating the whole session.
+/// </summary>
+internal sealed class SessionMessageBuffer
+{
+    /// <summary>Retained server messages per command window (diagnostics cap).</summary>
+    internal const int MaxMessagesPerCommand = 1000;
+
+    /// <summary>Retained server-message characters per command window (256 KiB).</summary>
+    internal const int MaxCharactersPerCommand = 256 * 1024;
+
+    private readonly object _sync = new();
+    private readonly List<string> _messages = new();
+    private long _retainedChars;
+    private int _droppedSinceConsume;
+
+    public int Count
+    {
+        get
+        {
+            lock (_sync)
+                return _messages.Count;
+        }
+    }
+
+    public void Add(string message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        lock (_sync)
+        {
+            _messages.Add(message);
+            _retainedChars += message.Length;
+            while ((_messages.Count > MaxMessagesPerCommand ||
+                _retainedChars > MaxCharactersPerCommand) &&
+                _messages.Count > 0)
+            {
+                // Evict oldest first. A single arrival larger than the whole
+                // budget is dropped outright, so the bound always holds.
+                string oldest = _messages[0];
+                _messages.RemoveAt(0);
+                _retainedChars -= oldest.Length;
+                _droppedSinceConsume++;
+            }
+        }
+    }
+
+    public IReadOnlyList<string> Snapshot()
+    {
+        lock (_sync)
+            return _messages.ToArray();
+    }
+
+    /// <summary>
+    /// Returns messages at or after <paramref name="startIndex"/> and releases all
+    /// retained memory. The omitted count covers drops since the previous
+    /// consumption, which is the current command's window when every command is
+    /// consumed exactly once.
+    /// </summary>
+    public ConsumedSessionMessages Consume(int startIndex)
+    {
+        lock (_sync)
+        {
+            int start = Math.Clamp(startIndex, 0, _messages.Count);
+            IReadOnlyList<string> slice = _messages.Skip(start).ToArray();
+            int omitted = _droppedSinceConsume;
+            _messages.Clear();
+            _retainedChars = 0;
+            _droppedSinceConsume = 0;
+            return new ConsumedSessionMessages(slice, omitted);
+        }
+    }
 }
 
 internal interface ISqlSessionFactory
@@ -192,7 +289,7 @@ internal sealed class SqlClientSessionFactory : ISqlSessionFactory
         var opened = false;
         try
         {
-            var messages = new List<string>();
+            var messages = new SessionMessageBuffer();
             SqlInfoMessageEventHandler handler = (_, args) => messages.Add(args.Message);
             connection.InfoMessage += handler;
             if (accessToken is not null)
@@ -211,11 +308,13 @@ internal sealed class SqlClientSessionFactory : ISqlSessionFactory
 
 internal sealed class SqlClientSession(
     SqlConnection connection,
-    List<string> messages,
+    SessionMessageBuffer messages,
     SqlInfoMessageEventHandler infoMessageHandler) : ISqlSession
 {
-    public IReadOnlyList<string> Messages => messages;
+    public IReadOnlyList<string> Messages => messages.Snapshot();
     public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
+
+    public ConsumedSessionMessages ConsumeMessages(int startIndex) => messages.Consume(startIndex);
 
     public async Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand execution, CancellationToken ct)
     {

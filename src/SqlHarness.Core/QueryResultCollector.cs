@@ -1,17 +1,32 @@
-namespace SqlHarness.Core;
+﻿namespace SqlHarness.Core;
 
 internal sealed record CollectedQueryResult(
     IReadOnlyList<SqlHarnessResultSetReport> ResultSets,
     IReadOnlyList<string> Messages,
     int RecordsAffected,
-    CanonicalResult Canonical);
+    CanonicalResult Canonical,
+    int OmittedMessageCount = 0);
 
 internal static class QueryResultCollector
 {
     /// <summary>
     /// Opens the reader, then invokes <paramref name="createRaw"/> so open failures leave
     /// the caller's raw accumulator unset (footprint remains (0, 0)).
+    /// Reads every row of every result set on this execution's reader.
+    /// <paramref name="maxRows"/> is a presentation-only retention cap (global across
+    /// result sets): all rows are still read and hashed into the canonical and raw
+    /// accumulators, so canonical hashes and result equivalence cover the complete
+    /// result while only the first <paramref name="maxRows"/> rows are retained for
+    /// display. No TOP/LIMIT is injected and reading never stops early.
     /// </summary>
+    /// <remarks>
+    /// Single-cell memory: each cell arrives via <c>ISqlReader.GetValue</c>, which
+    /// fully materializes the value (a varchar(max)/varbinary(max) cell can hold
+    /// megabytes) before hashing. The carved-out <see cref="ChunkedCanonicalCellHash"/>
+    /// stage hashes such cells from bounded chunks with a byte-identical digest and
+    /// is the designated path for any future chunked reader; constant-memory reads
+    /// are not claimed until that wiring exists.
+    /// </remarks>
     internal static async Task<CollectedQueryResult> CollectAsync(
         ISqlSession session,
         SqlExecutionCommand command,
@@ -89,11 +104,14 @@ internal static class QueryResultCollector
         {
             if (rawResultSetOpen)
                 raw.EndResultSet();
-            AppendSafeMessages(raw, session.Messages, messageStart, secrets);
+            AppendSafeMessages(raw, session.ConsumeMessages(messageStart), secrets);
             throw;
         }
 
-        var safeMessages = SafeMessageSlice(session.Messages, messageStart, secrets);
+        // Per-command consumption: only this execution's messages are published and
+        // the session releases them, so repetitions never accumulate whole history.
+        var consumed = session.ConsumeMessages(messageStart);
+        var safeMessages = RedactMessages(consumed.Messages, secrets);
         foreach (var message in safeMessages)
         {
             canonical.AddMessage("sql", message);
@@ -104,25 +122,23 @@ internal static class QueryResultCollector
             reports,
             safeMessages,
             reader.RecordsAffected,
-            canonical.Complete());
+            canonical.Complete(),
+            consumed.OmittedMessageCount);
     }
 
     private static void AppendSafeMessages(
         CanonicalResultAccumulator raw,
-        IReadOnlyList<string> messages,
-        int messageStart,
+        ConsumedSessionMessages consumed,
         IReadOnlyList<string> secrets)
     {
-        foreach (var message in SafeMessageSlice(messages, messageStart, secrets))
+        foreach (var message in RedactMessages(consumed.Messages, secrets))
             raw.AddMessage("sql", message);
     }
 
-    private static IReadOnlyList<string> SafeMessageSlice(
+    private static IReadOnlyList<string> RedactMessages(
         IReadOnlyList<string> messages,
-        int messageStart,
         IReadOnlyList<string> secrets) =>
-        messages.Skip(messageStart)
-            .Select(message => SecretRedactor.Redact(message, secrets))
+        messages.Select(message => SecretRedactor.Redact(message, secrets))
             .ToArray();
 
     private static object? NormalizeValue(object value) => value is DBNull ? null : value;

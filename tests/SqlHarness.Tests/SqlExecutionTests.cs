@@ -538,4 +538,85 @@ public sealed class SqlExecutionTests
         public Task<bool> NextResultAsync(CancellationToken ct) => Task.FromResult(false);
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
+
+    public sealed class SessionMessageBufferTests
+    {
+        [Fact]
+        public void Keeps_newest_arrivals_and_reports_dropped_count()
+        {
+            var buffer = new SessionMessageBuffer();
+            for (var index = 0; index < SessionMessageBuffer.MaxMessagesPerCommand + 500; index++)
+                buffer.Add($"message {index}");
+
+            // Sliding window: a command's trailing arrivals (such as STATISTICS
+            // lines) survive while older diagnostics are evicted with a counter.
+            Assert.Equal(SessionMessageBuffer.MaxMessagesPerCommand, buffer.Count);
+            var consumed = buffer.Consume(0);
+            Assert.Equal(SessionMessageBuffer.MaxMessagesPerCommand, consumed.Messages.Count);
+            Assert.Equal("message 500", consumed.Messages[0]);
+            Assert.Equal($"message {SessionMessageBuffer.MaxMessagesPerCommand + 499}", consumed.Messages[^1]);
+            Assert.Equal(500, consumed.OmittedMessageCount);
+            Assert.Equal(0, buffer.Count);
+        }
+
+        [Fact]
+        public void Character_budget_evicts_oldest_with_counter()
+        {
+            var buffer = new SessionMessageBuffer();
+            buffer.Add(new string('a', SessionMessageBuffer.MaxCharactersPerCommand - 100));
+            buffer.Add(new string('b', 100));
+            buffer.Add("over the character budget");
+
+            // The oldest (largest) arrival is evicted; the two newest fit.
+            Assert.Equal(2, buffer.Count);
+            var consumed = buffer.Consume(0);
+            Assert.Equal(new string('b', 100), consumed.Messages[0]);
+            Assert.Equal("over the character budget", consumed.Messages[1]);
+            Assert.Equal(1, consumed.OmittedMessageCount);
+        }
+
+        [Fact]
+        public void Single_arrival_larger_than_the_whole_budget_is_dropped()
+        {
+            var buffer = new SessionMessageBuffer();
+            buffer.Add(new string('x', SessionMessageBuffer.MaxCharactersPerCommand + 1));
+
+            Assert.Equal(0, buffer.Count);
+            var consumed = buffer.Consume(0);
+            Assert.Empty(consumed.Messages);
+            Assert.Equal(1, consumed.OmittedMessageCount);
+        }
+
+        [Fact]
+        public void Consume_releases_memory_between_commands_so_repetitions_stay_bounded()
+        {
+            var buffer = new SessionMessageBuffer();
+            for (var repetition = 0; repetition < 5; repetition++)
+            {
+                for (var index = 0; index < 10; index++)
+                    buffer.Add($"run {repetition} notice {index}");
+                var consumed = buffer.Consume(0);
+                Assert.Equal(10, consumed.Messages.Count);
+                Assert.Equal(0, consumed.OmittedMessageCount);
+                Assert.Equal(0, buffer.Count);
+            }
+        }
+
+        [Fact]
+        public void Consume_returns_only_the_window_and_clamps_out_of_range_start()
+        {
+            var buffer = new SessionMessageBuffer();
+            buffer.Add("one");
+            buffer.Add("two");
+
+            var tail = buffer.Consume(1);
+            Assert.Equal(["two"], tail.Messages);
+            Assert.Equal(0, tail.OmittedMessageCount);
+            Assert.Equal(0, buffer.Count);
+
+            buffer.Add("three");
+            Assert.Equal(["three"], buffer.Consume(-5).Messages);
+            Assert.Empty(buffer.Consume(99).Messages);
+        }
+    }
 }

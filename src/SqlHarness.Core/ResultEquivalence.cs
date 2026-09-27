@@ -183,6 +183,11 @@ internal static class ResultComparer
 
 internal sealed class CanonicalComparisonAccumulator : IDisposable
 {
+    /// <summary>
+    /// Fails closed: exceeding this bound throws instead of truncating, so snapshots
+    /// keep rejecting incomplete data and equivalence still covers required results.
+    /// Presentation caps (--max-rows, agent budgets) never feed this path.
+    /// </summary>
     internal const int MaximumComparedRows = 1_000_000;
     private const string RowLimitMessage = "Result comparison exceeds the 1000000-row limit.";
 

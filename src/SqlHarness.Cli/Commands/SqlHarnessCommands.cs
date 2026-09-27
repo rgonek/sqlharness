@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text;
 
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -72,6 +73,82 @@ public abstract class TargetSettings : CommandSettings
     }
 }
 
+/// <summary>SQL input larger than <see cref="SqlInputReader.MaxSqlInputUtf8Bytes"/> UTF-8 bytes.</summary>
+public sealed class SqlInputTooLargeException(string message) : Exception(message);
+
+/// <summary>
+/// Bounded SQL ingress for --file and redirected stdin (16 MiB UTF-8).
+/// Rejection happens before parsing and before any connection is opened, so an
+/// oversized batch never reaches the safety classifier or the server. Canonical
+/// hashes and equivalence are unaffected: only inputs at or under the bound are
+/// admitted, and admitted inputs are never truncated.
+/// </summary>
+public static class SqlInputReader
+{
+    /// <summary>Maximum admitted SQL input size in UTF-8 bytes (16 MiB).</summary>
+    public const long MaxSqlInputUtf8Bytes = 16L * 1024 * 1024;
+
+    public const string TooLargeMessage = "SQL input exceeds the 16 MiB UTF-8 limit.";
+
+    public static async Task<string> ReadFileAsync(string path, CancellationToken ct)
+    {
+        // Fast path: reject by on-disk size before allocating the string.
+        // The post-read UTF-8 count below still covers encoding growth and races.
+        if (new FileInfo(path).Length > MaxSqlInputUtf8Bytes)
+            throw new SqlInputTooLargeException(TooLargeMessage);
+        var text = await File.ReadAllTextAsync(path, ct);
+        if (Encoding.UTF8.GetByteCount(text) > MaxSqlInputUtf8Bytes)
+            throw new SqlInputTooLargeException(TooLargeMessage);
+        return text;
+    }
+
+    public static async Task<string> ReadStdinAsync(TextReader stdin, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(stdin);
+        // Incremental UTF-8 accounting: an over-limit stream is rejected without
+        // ever holding more than the bound plus one buffer. A trailing high
+        // surrogate is held for the next buffer, so the count stays exact.
+        char? carry = null;
+        var builder = new StringBuilder();
+        var buffer = new char[8192];
+        long bytes = 0;
+        int read;
+        while ((read = await stdin.ReadAsync(buffer.AsMemory(), ct)) > 0)
+        {
+            var span = buffer.AsSpan(0, read);
+            var start = 0;
+            if (carry is char held)
+            {
+                carry = null;
+                if (span.Length > 0 && char.IsLowSurrogate(span[0]))
+                {
+                    bytes += 4;
+                    start = 1;
+                }
+                else
+                {
+                    bytes += 3;
+                }
+            }
+            var end = span.Length;
+            if (end > start && char.IsHighSurrogate(span[end - 1]))
+            {
+                carry = span[end - 1];
+                end--;
+            }
+            bytes += Encoding.UTF8.GetByteCount(span[start..end]);
+            if (bytes > MaxSqlInputUtf8Bytes)
+                throw new SqlInputTooLargeException(TooLargeMessage);
+            builder.Append(buffer, 0, read);
+        }
+        if (carry is not null)
+            bytes += 3;
+        if (bytes > MaxSqlInputUtf8Bytes)
+            throw new SqlInputTooLargeException(TooLargeMessage);
+        return builder.ToString();
+    }
+}
+
 public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, OutputContext output, Renderer renderer) : AsyncCommand<TSettings> where TSettings : CommandSettings
 {
     protected int Invalid(string error, SqlHarnessError? structuredError = null)
@@ -113,7 +190,14 @@ public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, Out
         if (json) return OutputMode.Json;
         return OutputMode.Text;
     }
-    protected static async Task<string?> Read(string? path, CancellationToken ct) => string.IsNullOrWhiteSpace(path) ? null : await File.ReadAllTextAsync(path, ct);
+    protected static async Task<string?> Read(string? path, CancellationToken ct) => string.IsNullOrWhiteSpace(path) ? null : await SqlInputReader.ReadFileAsync(path, ct);
+    protected int InvalidInputTooLarge() => Invalid(
+        SqlInputReader.TooLargeMessage,
+        new SqlHarnessError(
+            "input_too_large",
+            "input",
+            SqlInputReader.TooLargeMessage,
+            "Provide SQL input up to 16 MiB UTF-8 via --file or redirected stdin."));
 }
 
 public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer, CliInput input) : SqlHarnessCommand<QueryCommand.Settings>(module, output, renderer)
@@ -125,6 +209,7 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
         [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
+        [Description("Presentation-only row cap (0..500). The server still computes the full result; canonical hashes and equivalence cover all rows.")]
         [CommandOption("--max-rows <COUNT>")][DefaultValue(50)] public int MaxRows { get; set; } = 50;
         [CommandOption("--allow-mutation")] public bool AllowMutation { get; set; }
         [CommandOption("--confirm-database <DATABASE>")] public string? ConfirmDatabase { get; set; }
@@ -139,10 +224,11 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
             return Invalid("Provide exactly one SQL source: --file or redirected stdin.");
         try
         {
-            var sql = hasFile ? await File.ReadAllTextAsync(settings.File!, ct) : await input.Stdin.ReadToEndAsync(ct);
+            var sql = hasFile ? await SqlInputReader.ReadFileAsync(settings.File!, ct) : await SqlInputReader.ReadStdinAsync(input.Stdin, ct);
             return await Dispatch(new SqlHarnessQueryOperation(target, sql, settings.Parameters, settings.Timeout, settings.MaxRows, settings.AllowMutation, settings.ConfirmDatabase), ResolveOutputMode(settings.Json, output: settings.Output), ct, new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
         }
         catch (OperationCanceledException) { throw; }
+        catch (SqlInputTooLargeException) { return InvalidInputTooLarge(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file.", new SqlHarnessError("input_file_unavailable", "input", "Unable to read SQL input file.")); }
     }
 }
@@ -183,6 +269,7 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         }
         catch (OperationCanceledException) { throw; }
         catch (ParameterSetFileException exception) { return Invalid(exception.Message); }
+        catch (SqlInputTooLargeException) { return InvalidInputTooLarge(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file.", new SqlHarnessError("input_file_unavailable", "input", "Unable to read SQL input file.")); }
     }
 
@@ -251,6 +338,7 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
             return await Dispatch(operation, ResolveOutputMode(s.Json, s.JsonSummary, s.Output), ct, new AgentOutputOptions(s.MaxOutputBytes, s.MaxCellChars));
         }
         catch (OperationCanceledException) { throw; }
+        catch (SqlInputTooLargeException) { return InvalidInputTooLarge(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Invalid("Unable to read SQL input file.", new SqlHarnessError("input_file_unavailable", "input", "Unable to read SQL input file.")); }
     }
 

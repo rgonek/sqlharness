@@ -138,7 +138,7 @@ public sealed class BenchmarkSessionIntegrationTests
             var opened = false;
             try
             {
-                var messages = new List<string>();
+                var messages = new SessionMessageBuffer();
                 SqlInfoMessageEventHandler handler = (_, args) => messages.Add(args.Message);
                 connection.InfoMessage += handler;
                 await connection.OpenAsync(ct);
