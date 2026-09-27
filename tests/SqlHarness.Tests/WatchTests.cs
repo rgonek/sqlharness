@@ -503,6 +503,61 @@ public class WatchTests
             loadProfiles ?? Profiles,
             clock);
 
+    [Fact]
+    public async Task Watch_bounds_history_to_history_limit_with_counters_and_last_result()
+    {
+        var clock = new FakeWatchClock();
+        var values = Enumerable.Range(1, 10000).Cast<object>().ToArray();
+        var session = FakeSession.WithScalarPolls(values);
+        var outcome = await Module(session, clock).ExecuteAsync(
+            Watch(until: "Value >= 10000", interval: TimeSpan.FromMilliseconds(1)) with { HistoryLimit = 100 });
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(outcome.Report);
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(WatchExitReason.ConditionMet, report.ExitReason);
+        Assert.Equal(10000, report.PollCount);
+        Assert.Equal(10000, report.TotalChangedPolls);
+        Assert.Equal(9900, report.OmittedPolls);
+        Assert.Equal(100, report.EmittedPolls.Count);
+        Assert.Equal(9901, report.EmittedPolls[0].Poll);
+        Assert.Equal(10000, report.EmittedPolls[^1].Poll);
+        Assert.Equal(10000, Assert.Single(report.EmittedPolls[^1].ResultSets[0].Rows[0]));
+    }
+
+    [Fact]
+    public async Task Watch_unchanged_criterion_ignores_history_retention()
+    {
+        var clock = new FakeWatchClock();
+        var session = FakeSession.WithScalarPolls(1, 2, 2, 2);
+        var outcome = await Module(session, clock).ExecuteAsync(
+            Watch(untilUnchanged: 2, interval: TimeSpan.FromMilliseconds(1)) with { HistoryLimit = 1 });
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(outcome.Report);
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(WatchExitReason.Unchanged, report.ExitReason);
+        Assert.Equal(4, report.PollCount);
+        Assert.Equal(2, report.TotalChangedPolls);
+        Assert.Equal(1, report.OmittedPolls);
+        Assert.Equal([2], report.EmittedPolls.Select(p => p.Poll));
+    }
+
+    [Fact]
+    public async Task Watch_rejects_history_limit_outside_range_before_authentication()
+    {
+        foreach (var historyLimit in new[] { 0, 10001 })
+        {
+            var azure = new FakeAzureCli(Token);
+            var session = FakeSession.WithScalarPolls(1);
+            var outcome = await Module(session, new FakeWatchClock(), azure: azure).ExecuteAsync(
+                Watch(untilUnchanged: 1) with { HistoryLimit = historyLimit });
+
+            Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+            Assert.Contains("--history-limit", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+            Assert.Empty(azure.Calls);
+            Assert.Equal(0, session.ConnectCount);
+        }
+    }
+
     private static SqlHarnessWatchOperation Watch(
         string sql = "SELECT 1 AS Value",
         string? until = null,

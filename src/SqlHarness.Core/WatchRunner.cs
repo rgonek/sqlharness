@@ -112,9 +112,13 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
                 ? new WatchUnchangedTracker(required)
                 : null;
 
+            // Bounded history: at most HistoryLimit changed reports stay in memory.
+            // Change detection (previousHash) and the unchanged tracker observe every
+            // poll, so the stop criteria never depend on retention.
             var emitted = new List<SqlHarnessWatchPoll>();
             string? previousHash = null;
             var poll = 0;
+            var totalChangedPolls = 0;
             WatchExitReason exitReason;
 
             while (true)
@@ -170,12 +174,16 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
                 var elapsed = ElapsedMilliseconds(start);
                 if (previousHash is null || !string.Equals(previousHash, hash, StringComparison.Ordinal))
                 {
+                    totalChangedPolls++;
                     emitted.Add(new SqlHarnessWatchPoll(
                         poll,
                         elapsed,
                         hash,
                         collected.ResultSets));
                     previousHash = hash;
+                    // Evict the oldest report but always keep the latest full result.
+                    if (emitted.Count > operation.HistoryLimit)
+                        emitted.RemoveAt(0);
                 }
 
                 if (condition is not null)
@@ -224,7 +232,9 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
                 poll,
                 ElapsedMilliseconds(start),
                 exitReason,
-                emitted);
+                emitted,
+                totalChangedPolls,
+                totalChangedPolls - emitted.Count);
             var exitCode = exitReason == WatchExitReason.MaxDuration
                 ? SqlHarnessExitCode.WatchMaxDuration
                 : SqlHarnessExitCode.Success;

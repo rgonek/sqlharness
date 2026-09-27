@@ -244,6 +244,114 @@ public class QueryResultCollectorTests
         Assert.Equal("select", Assert.Single(session.Commands).Sql);
     }
 
+    [Fact]
+    public async Task Message_avalanche_is_truncated_with_counter_and_redaction()
+    {
+        const string secret = "avalanche-secret-value";
+        var messages = Enumerable.Range(0, 2500)
+            .Select(index => $"notice {index} carries {secret}")
+            .ToList();
+        var reader = FakeCollectorReader.FromSets(
+            [new ResultSet(["Value"], [1])]);
+        var session = new TruncatingSession(reader, messages, retain: 1000);
+        using var raw = new CanonicalResultAccumulator();
+
+        var result = await QueryResultCollector.CollectAsync(
+            session, new SqlExecutionCommand("select", [], 30), maxRows: 50,
+            knownSecrets: [secret], () => raw, CancellationToken.None);
+
+        Assert.Equal(1000, result.Messages.Count);
+        Assert.Equal(1500, result.OmittedMessageCount);
+        // The newest arrivals survive, mirroring trailing STATISTICS lines.
+        Assert.Equal("notice 2499 carries [REDACTED]", result.Messages[^1]);
+        Assert.All(result.Messages, message => Assert.Contains("[REDACTED]", message, StringComparison.Ordinal));
+        Assert.DoesNotContain(secret, string.Join('\n', result.Messages), StringComparison.Ordinal);
+        Assert.NotEmpty(result.Canonical.Hash);
+    }
+
+    [Fact]
+    public async Task Sequential_commands_consume_only_their_own_messages_and_release_memory()
+    {
+        var session = new DrainingSession();
+        session.Enqueue(
+            FakeCollectorReader.FromSets([new ResultSet(["Value"], [1])]),
+            "first-a", "first-b");
+        session.Enqueue(
+            FakeCollectorReader.FromSets([new ResultSet(["Value"], [2])]),
+            "second-a");
+
+        using var raw1 = new CanonicalResultAccumulator();
+        var first = await QueryResultCollector.CollectAsync(
+            session, new SqlExecutionCommand("one", [], 30), maxRows: 50,
+            knownSecrets: [], () => raw1, CancellationToken.None);
+
+        Assert.Equal(["first-a", "first-b"], first.Messages);
+        Assert.Equal(0, first.OmittedMessageCount);
+        Assert.Equal(0, session.BufferedMessageCount);
+
+        using var raw2 = new CanonicalResultAccumulator();
+        var second = await QueryResultCollector.CollectAsync(
+            session, new SqlExecutionCommand("two", [], 30), maxRows: 50,
+            knownSecrets: [], () => raw2, CancellationToken.None);
+
+        Assert.Equal(["second-a"], second.Messages);
+        Assert.Equal(0, second.OmittedMessageCount);
+        Assert.Equal(0, session.BufferedMessageCount);
+    }
+
+    private sealed class TruncatingSession(ISqlReader reader, List<string> messages, int retain) : ISqlSession
+    {
+        private readonly List<string> _live = new();
+
+        public IReadOnlyList<string> Messages => _live.ToArray();
+        public SqlHarnessTargetIdentityReport Identity { get; set; } =
+            new("server", "db", "server", "db", "profile");
+
+        public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
+        {
+            // The avalanche arrives during the command, after messageStart.
+            _live.AddRange(messages);
+            return Task.FromResult(reader);
+        }
+
+        // Mimics a production session whose per-command bound evicted arrivals.
+        public ConsumedSessionMessages ConsumeMessages(int startIndex)
+        {
+            var window = _live.Skip(Math.Max(0, startIndex)).ToArray();
+            var retained = window.TakeLast(retain).ToArray();
+            return new ConsumedSessionMessages(retained, window.Length - retained.Length);
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class DrainingSession : ISqlSession
+    {
+        private readonly SessionMessageBuffer _buffer = new();
+        private readonly Queue<(ISqlReader Reader, string[] Messages)> _queued = new();
+
+        public void Enqueue(ISqlReader reader, params string[] messages) =>
+            _queued.Enqueue((reader, messages));
+
+        public int BufferedMessageCount => _buffer.Count;
+        public IReadOnlyList<string> Messages => _buffer.Snapshot();
+        public SqlHarnessTargetIdentityReport Identity { get; set; } =
+            new("server", "db", "server", "db", "profile");
+
+        // Production-like per-command consumption: each consume drains the buffer.
+        public ConsumedSessionMessages ConsumeMessages(int startIndex) => _buffer.Consume(startIndex);
+
+        public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
+        {
+            var (reader, messages) = _queued.Dequeue();
+            foreach (var message in messages)
+                _buffer.Add(message);
+            return Task.FromResult(reader);
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     private sealed record ResultSet(string[] Names, params object?[][] Rows)
     {
         public static ResultSet ZeroColumn() => new([], Array.Empty<object?[]>());

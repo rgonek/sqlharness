@@ -4,7 +4,8 @@ internal sealed record CollectedQueryResult(
     IReadOnlyList<SqlHarnessResultSetReport> ResultSets,
     IReadOnlyList<string> Messages,
     int RecordsAffected,
-    CanonicalResult Canonical);
+    CanonicalResult Canonical,
+    int OmittedMessageCount = 0);
 
 internal static class QueryResultCollector
 {
@@ -89,11 +90,14 @@ internal static class QueryResultCollector
         {
             if (rawResultSetOpen)
                 raw.EndResultSet();
-            AppendSafeMessages(raw, session.Messages, messageStart, secrets);
+            AppendSafeMessages(raw, session.ConsumeMessages(messageStart), secrets);
             throw;
         }
 
-        var safeMessages = SafeMessageSlice(session.Messages, messageStart, secrets);
+        // Per-command consumption: only this execution's messages are published and
+        // the session releases them, so repetitions never accumulate whole history.
+        var consumed = session.ConsumeMessages(messageStart);
+        var safeMessages = RedactMessages(consumed.Messages, secrets);
         foreach (var message in safeMessages)
         {
             canonical.AddMessage("sql", message);
@@ -104,25 +108,23 @@ internal static class QueryResultCollector
             reports,
             safeMessages,
             reader.RecordsAffected,
-            canonical.Complete());
+            canonical.Complete(),
+            consumed.OmittedMessageCount);
     }
 
     private static void AppendSafeMessages(
         CanonicalResultAccumulator raw,
-        IReadOnlyList<string> messages,
-        int messageStart,
+        ConsumedSessionMessages consumed,
         IReadOnlyList<string> secrets)
     {
-        foreach (var message in SafeMessageSlice(messages, messageStart, secrets))
+        foreach (var message in RedactMessages(consumed.Messages, secrets))
             raw.AddMessage("sql", message);
     }
 
-    private static IReadOnlyList<string> SafeMessageSlice(
+    private static IReadOnlyList<string> RedactMessages(
         IReadOnlyList<string> messages,
-        int messageStart,
         IReadOnlyList<string> secrets) =>
-        messages.Skip(messageStart)
-            .Select(message => SecretRedactor.Redact(message, secrets))
+        messages.Select(message => SecretRedactor.Redact(message, secrets))
             .ToArray();
 
     private static object? NormalizeValue(object value) => value is DBNull ? null : value;
