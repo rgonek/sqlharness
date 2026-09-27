@@ -1,9 +1,10 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
 using SqlHarness.Cli;
+using SqlHarness.Cli.Commands;
 using SqlHarness.Core;
 
 namespace SqlHarness.Tests.Cli;
@@ -91,6 +92,83 @@ public sealed class CommandTests
         Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
         Assert.Empty(module.Operations);
         Assert.Contains("exactly one SQL source", output.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Query_rejects_file_over_sql_input_limit_before_dispatch()
+    {
+        var path = TempFile(new string('x', (int)SqlInputReader.MaxSqlInputUtf8Bytes + 1));
+        try
+        {
+            var module = new FakeModule(Success(QueryReport()));
+            var output = new StringWriter();
+            var app = SqlHarnessCli.Create(module, output, new StringReader("select 1"), stdinRedirected: true);
+
+            var exit = await app.RunAsync(["query", "dev", "--file", path]);
+
+            Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+            Assert.Empty(module.Operations);
+            Assert.Contains("16 MiB", output.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Query_rejects_stdin_over_sql_input_limit_before_dispatch()
+    {
+        var module = new FakeModule(Success(QueryReport()));
+        var output = new StringWriter();
+        var app = SqlHarnessCli.Create(
+            module, output, new StringReader(new string('x', (int)SqlInputReader.MaxSqlInputUtf8Bytes + 1)), stdinRedirected: true);
+
+        var exit = await app.RunAsync(["query", "dev"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+        Assert.Empty(module.Operations);
+        Assert.Contains("16 MiB", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Query_accepts_file_at_exact_sql_input_limit()
+    {
+        var path = TempFile(new string('x', (int)SqlInputReader.MaxSqlInputUtf8Bytes));
+        try
+        {
+            var module = new FakeModule(Success(QueryReport()));
+            var app = SqlHarnessCli.Create(module, new StringWriter(), new StringReader(""), stdinRedirected: true);
+
+            var exit = await app.RunAsync(["query", "dev", "--file", path]);
+
+            Assert.Equal(0, exit);
+            var operation = Assert.IsType<SqlHarnessQueryOperation>(Assert.Single(module.Operations));
+            Assert.Equal((int)SqlInputReader.MaxSqlInputUtf8Bytes, operation.Sql.Length);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Query_accepts_multibyte_stdin_at_exact_utf8_limit_with_split_pair()
+    {
+        // 8191 ASCII chars push a surrogate pair across the 8 KiB read buffer edge;
+        // exact counting must still admit exactly 16 MiB of UTF-8.
+        const long limit = SqlInputReader.MaxSqlInputUtf8Bytes;
+        var restLength = (int)(limit - 8191 - 4);
+        var stdin = new StringReader(new string('a', 8191) + "\U0001F600" + new string('b', restLength));
+
+        var module = new FakeModule(Success(QueryReport()));
+        var app = SqlHarnessCli.Create(module, new StringWriter(), stdin, stdinRedirected: true);
+
+        var exit = await app.RunAsync(["query", "dev"]);
+
+        Assert.Equal(0, exit);
+        var operation = Assert.IsType<SqlHarnessQueryOperation>(Assert.Single(module.Operations));
+        Assert.Equal(limit, Encoding.UTF8.GetByteCount(operation.Sql));
     }
 
     [Fact]

@@ -1,4 +1,4 @@
-namespace SqlHarness.Core;
+﻿namespace SqlHarness.Core;
 
 internal sealed record CollectedQueryResult(
     IReadOnlyList<SqlHarnessResultSetReport> ResultSets,
@@ -12,7 +12,21 @@ internal static class QueryResultCollector
     /// <summary>
     /// Opens the reader, then invokes <paramref name="createRaw"/> so open failures leave
     /// the caller's raw accumulator unset (footprint remains (0, 0)).
+    /// Reads every row of every result set on this execution's reader.
+    /// <paramref name="maxRows"/> is a presentation-only retention cap (global across
+    /// result sets): all rows are still read and hashed into the canonical and raw
+    /// accumulators, so canonical hashes and result equivalence cover the complete
+    /// result while only the first <paramref name="maxRows"/> rows are retained for
+    /// display. No TOP/LIMIT is injected and reading never stops early.
     /// </summary>
+    /// <remarks>
+    /// Single-cell memory: each cell arrives via <c>ISqlReader.GetValue</c>, which
+    /// fully materializes the value (a varchar(max)/varbinary(max) cell can hold
+    /// megabytes) before hashing. The carved-out <see cref="ChunkedCanonicalCellHash"/>
+    /// stage hashes such cells from bounded chunks with a byte-identical digest and
+    /// is the designated path for any future chunked reader; constant-memory reads
+    /// are not claimed until that wiring exists.
+    /// </remarks>
     internal static async Task<CollectedQueryResult> CollectAsync(
         ISqlSession session,
         SqlExecutionCommand command,

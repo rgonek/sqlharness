@@ -1,4 +1,7 @@
-using System.Data;
+﻿using System.Data;
+using System.Text;
+
+using Xunit.Abstractions;
 
 using SqlHarness.Core;
 
@@ -6,6 +9,94 @@ namespace SqlHarness.Tests;
 
 public class QueryResultCollectorTests
 {
+    private readonly ITestOutputHelper _output;
+
+    public QueryResultCollectorTests(ITestOutputHelper output) => _output = output;
+
+    [Fact]
+    public async Task Lob_cell_is_fully_hashed_while_presentation_retention_stays_capped()
+    {
+        var lob = new string('ż', 100_000);
+        var rows = Enumerable.Range(0, 200)
+            .Select(index => new object?[] { index, $"row-{index}" })
+            .Append(new object?[] { 200, lob })
+            .ToArray();
+        var reader = FakeCollectorReader.FromSets([new ResultSet(["Id", "Payload"], rows)]);
+        var session = new FakeCollectorSession(reader);
+        using var raw = new CanonicalResultAccumulator();
+
+        var result = await QueryResultCollector.CollectAsync(
+            session, new SqlExecutionCommand("select", [], 30), maxRows: 50,
+            knownSecrets: [], () => raw, CancellationToken.None);
+
+        // --max-rows is presentation-only: every row is read and hashed.
+        Assert.Equal(201, result.ResultSets[0].RowCount);
+        Assert.Equal(50, result.ResultSets[0].Rows.Count);
+        Assert.Equal(151, result.ResultSets[0].OmittedRowCount);
+
+        using var expected = new CanonicalResultAccumulator();
+        expected.BeginResultSet([
+            new CanonicalColumn(0, "Id", "System.Int32", false),
+            new CanonicalColumn(1, "Payload", "System.String", false)]);
+        foreach (var row in rows)
+            expected.AddRow(row);
+        expected.EndResultSet();
+        Assert.Equal(expected.Complete().Hash, result.Canonical.Hash);
+    }
+
+    [Fact]
+    public async Task Synthetic_retention_measurement_keeps_presentation_bounded_and_hash_complete()
+    {
+        const int rowCount = 5000;
+        var lob = new string('ę', 1024 * 1024);
+        var rows = Enumerable.Range(0, rowCount)
+            .Select(index => new object?[] { index, $"row-{index}", index * 1.5 })
+            .Append(new object?[] { rowCount, lob, 0.0 })
+            .ToArray();
+        var columns = new[]
+        {
+            new CanonicalColumn(0, "Id", "System.Int32", false),
+            new CanonicalColumn(1, "Payload", "System.String", false),
+            new CanonicalColumn(2, "Score", "System.Double", false),
+        };
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var reader = FakeCollectorReader.FromSets([new ResultSet(["Id", "Payload", "Score"], rows)]);
+        var session = new FakeCollectorSession(reader);
+        using var raw = new CanonicalResultAccumulator();
+        var result = await QueryResultCollector.CollectAsync(
+            session, new SqlExecutionCommand("select", [], 30), maxRows: 50,
+            knownSecrets: [], () => raw, CancellationToken.None);
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        using var expected = new CanonicalResultAccumulator();
+        expected.BeginResultSet(columns);
+        foreach (var row in rows)
+            expected.AddRow(row);
+        expected.EndResultSet();
+        var expectedResult = expected.Complete();
+
+        _output.WriteLine(
+            $"synthetic rows={rows.Length} cols=3 lobUtf8Bytes={Encoding.UTF8.GetByteCount(lob)} " +
+            $"allocatedBytes={allocatedBytes} retainedRows={result.ResultSets[0].Rows.Count} " +
+            $"canonicalBytes={result.Canonical.Footprint.Bytes}");
+
+        Assert.Equal(rows.Length, result.ResultSets[0].RowCount);
+        Assert.Equal(50, result.ResultSets[0].Rows.Count);
+        Assert.Equal(rows.Length - 50, result.ResultSets[0].OmittedRowCount);
+        Assert.Equal(expectedResult.Hash, result.Canonical.Hash);
+        Assert.Equal(expectedResult.Footprint, result.Canonical.Footprint);
+        // Presentation retention is guarded by the row-count assertions above
+        // (retained rows hold references, so a count cap is the retention cap).
+        // This allocation bound is only a gross-duplication tripwire: hashing
+        // streams through the accumulators, with peak buffers sized by the
+        // largest single row per accumulator, not by total input.
+        Assert.True(allocatedBytes < 128L * 1024 * 1024, $"allocated {allocatedBytes} bytes.");
+    }
+
     [Fact]
     public async Task Collects_multiple_result_sets_with_truncation_redaction_and_canonical_hash()
     {
