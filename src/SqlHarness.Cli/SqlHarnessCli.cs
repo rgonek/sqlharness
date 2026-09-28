@@ -10,9 +10,10 @@ namespace SqlHarness.Cli;
 
 public static class SqlHarnessCli
 {
-    public static SqlHarnessApp Create(ISqlHarnessModule module, TextWriter? output = null, TextReader? stdin = null, bool? stdinRedirected = null, Stream? planStdin = null)
+    public static SqlHarnessApp Create(ISqlHarnessModule module, TextWriter? output = null, TextReader? stdin = null, bool? stdinRedirected = null, Stream? planStdin = null, TextWriter? mcpError = null)
     {
         var registrar = new Registrar();
+        registrar.Add(new McpHostConsole(mcpError ?? Console.Error));
         var outputContext = new OutputContext(output ?? Console.Out);
         registrar.Add(module); registrar.Add(outputContext); registrar.Add(new Renderer());
         registrar.Add(new CliInput(stdin ?? Console.In, stdinRedirected ?? Console.IsInputRedirected));
@@ -24,6 +25,13 @@ public static class SqlHarnessCli
             c.SetApplicationVersion(Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0");
             c.SetExceptionHandler((exception, _) =>
             {
+                if (string.Equals(outputContext.Command, "mcp", StringComparison.Ordinal))
+                {
+                    // The MCP server owns process stdout for protocol frames only,
+                    // so branch parse errors go to stderr with the CLI contract code.
+                    (mcpError ?? Console.Error).WriteLine("sqlharness-mcp: Invalid command line arguments.");
+                    return (int)SqlHarnessExitCode.Safety;
+                }
                 if (outputContext.Mode == OutputMode.Text)
                     return -1;
                 const string safeMessage = "Invalid command line arguments.";
@@ -50,6 +58,11 @@ public static class SqlHarnessCli
             c.AddCommand<CapabilitiesCommand>("capabilities").WithDescription("Describe local commands, engines, limits, and output modes.");
             c.AddCommand<DoctorCommand>("doctor").WithDescription("Check local installation and profile-file availability without connecting.");
             c.AddCommand<ValidateCommand>("validate").WithDescription("Classify SQL offline using a closed profile; never connects.");
+            c.AddBranch("mcp", mcp =>
+            {
+                mcp.SetDescription("Model Context Protocol adapter.");
+                mcp.AddCommand<McpServeCommand>("serve").WithDescription("Serve a profile-scoped MCP server over stdio.");
+            });
         });
         return new SqlHarnessApp(app, outputContext);
     }

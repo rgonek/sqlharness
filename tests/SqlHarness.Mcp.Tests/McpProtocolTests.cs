@@ -18,7 +18,7 @@ public sealed class McpProtocolTests
         var clientToServer = new Pipe();
         var serverToClient = new Pipe();
 
-        var serverOptions = new McpServerOptions
+        var serverOptions = new ModelContextProtocol.Server.McpServerOptions
         {
             ServerInfo = new Implementation { Name = "sqlharness-mcp", Version = "1.0.0" },
             ProtocolVersion = PinnedProtocolVersion,

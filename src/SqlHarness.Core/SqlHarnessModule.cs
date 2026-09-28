@@ -55,11 +55,22 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     internal int ComparisonMaximumRows { get; init; } = CanonicalComparisonAccumulator.MaximumComparedRows;
 
     public SqlHarnessModule()
+        : this(() => ProfileStore.Load())
+    {
+    }
+
+    /// <summary>
+    /// Scoped composition root: the same session factories and session
+    /// policy as the default module, but profile reads come from the
+    /// supplied provider (for example an MCP frozen scope) instead of the
+    /// global store. Construction opens no connection and performs no auth.
+    /// </summary>
+    public SqlHarnessModule(Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles)
         : this(
             new EngineSessionFactory(new SqlClientSessionFactory(new AzureCli()), new NpgsqlSessionFactory()),
             new GainStore(),
             new CompareArtifactWriter(),
-            () => ProfileStore.Load(),
+            loadProfiles,
             queryStoreArtifacts: new QueryStoreArtifactWriter(),
             indexAnalysisArtifacts: new IndexAnalysisArtifactWriter())
     {
