@@ -191,15 +191,15 @@ public static class McpResultAdapter
             // bounded placeholder while bytes remain.
             if (projected is AgentBoundedOutput && sanitized is not null &&
                 TryEnvelopeBytes(boundedCommand, status, exitCode, sanitized, error, null, out var rawBytes) &&
-                rawBytes.Length <= maximumBytes)
-                return Build(rawBytes, isError);
+                TryBuildWithinBudget(rawBytes, isError, maximumBytes, out var rawResult))
+                return rawResult;
 
             var truncation = totalOmitted > 0
                 ? new McpTruncationInfo(totalOmitted, detailLimit, maximumCellCharacters)
                 : null;
             if (TryEnvelopeBytes(boundedCommand, status, exitCode, projected, error, truncation, out var envelopeBytes) &&
-                envelopeBytes.Length <= maximumBytes)
-                return Build(envelopeBytes, isError);
+                TryBuildWithinBudget(envelopeBytes, isError, maximumBytes, out var built))
+                return built;
         }
 
         var minimal = new SqlHarnessAgentEnvelope(
@@ -214,8 +214,8 @@ public static class McpResultAdapter
                 "The minimum agent response does not fit the configured byte budget."),
             new McpTruncationInfo(1, 0, maximumCellCharacters));
         var minimalBytes = JsonSerializer.SerializeToUtf8Bytes(minimal, Json);
-        if (minimalBytes.Length <= maximumBytes)
-            return Build(minimalBytes, isError: true);
+        if (TryBuildWithinBudget(minimalBytes, isError: true, maximumBytes, out var minimalResult))
+            return minimalResult;
 
         // Defensive only: the minimum budget (4096) always fits the envelope
         // above, so reaching here means misconfiguration, not content size.
@@ -389,6 +389,19 @@ public static class McpResultAdapter
         var envelope = new SqlHarnessAgentEnvelope(SchemaVersion, command, status, exitCode, result, error, truncation);
         bytes = JsonSerializer.SerializeToUtf8Bytes(envelope, Json);
         return true;
+    }
+
+    /// Builds a result from envelope bytes and accepts it only when the real
+    /// wire cost (both representations, JSON escaping, SDK metadata) fits the
+    /// budget. The envelope alone is roughly half the wire cost, so accepting
+    /// on envelope bytes would admit over-budget responses; callers keep
+    /// descending detail levels (down to the minimum envelope) until the wire
+    /// fits.
+    private static bool TryBuildWithinBudget(
+        byte[] envelopeUtf8, bool isError, int maximumBytes, out CallToolResult result)
+    {
+        result = Build(envelopeUtf8, isError);
+        return MeasureBytes(result) <= maximumBytes;
     }
 
     private static CallToolResult Build(byte[] envelopeUtf8, bool isError)

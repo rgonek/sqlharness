@@ -213,4 +213,56 @@ public sealed class McpTokenBudgetTests
         await cts.CancelAsync();
         await serverTask;
     }
+
+    [Fact]
+    public void Raw_path_descends_when_envelope_fits_but_wire_exceeds()
+    {
+        // Review probe for I1: a named record the shared projection does not
+        // know, carrying ~12 KiB. The raw envelope (~12.5 KiB) fits the
+        // default 16 KiB budget, but the wire (both representations plus SDK
+        // metadata) is ~2x — an envelope-only check admits it over budget.
+        var payload = new string('p', 12 * 1024);
+        var outcome = new SqlHarnessOutcome(
+            SqlHarnessExitCode.Success,
+            new UnprojectedProbeReport("probe", payload),
+            null);
+
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_inspect");
+
+        WireBytes(result, (int)McpLimits.CallToolResultBudgetBytes);
+        var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+        Assert.DoesNotContain(payload, text, StringComparison.Ordinal);
+        using var document = JsonDocument.Parse(text);
+        Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
+        Assert.Equal(
+            "UnprojectedProbeReport",
+            document.RootElement.GetProperty("result").GetProperty("reportType").GetString());
+        Assert.True(document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+    }
+
+    [Fact]
+    public void Main_loop_descends_past_first_fit_level_when_wire_exceeds()
+    {
+        // Boundary shape for I1: at budget 8192 with 4096-char cells the
+        // first-fit projected envelope (~6 KiB) fits, but the wire does not,
+        // so the adapter must descend to level 0 instead of emitting it.
+        const int budget = 8192;
+        var cell = new string('c', 4000);
+        var message = new string('m', 2000);
+        var set = new SqlHarnessResultSetReport([new SqlHarnessColumnReport(0, "value", "text", true)], [[cell]], 1, 0);
+        var report = new SqlHarnessQueryReport(Target, "read-only", [set], [message], 0, 1, "raw-hash", new OutputFootprint(100000, 1));
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
+
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_query", new McpResultBudget(budget, 4096));
+
+        WireBytes(result, budget);
+        var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+        using var document = JsonDocument.Parse(text);
+        Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
+        var resultSets = document.RootElement.GetProperty("result").GetProperty("resultSets");
+        Assert.Equal(0, resultSets.GetArrayLength());
+        Assert.True(document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+    }
+
+    private sealed record UnprojectedProbeReport(string Name, string Payload);
 }
