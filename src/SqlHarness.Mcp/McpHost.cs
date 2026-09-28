@@ -9,8 +9,8 @@ namespace SqlHarness.Mcp;
 /// Local stdio host for one profile-scoped MCP server process (spec
 /// section 2): stdout carries only protocol frames, all logging goes to
 /// stderr without arguments, SQL, parameter values, or secrets. T2 starts
-/// the transport with a frozen scope and clean shutdown; no database tools
-/// are registered yet (tool catalog lands in T3).
+/// the transport with a frozen scope and clean shutdown; the explicit T3
+/// tool catalog registers exactly 11 tools on the frozen scope.
 /// </summary>
 public static class McpHost
 {
@@ -69,8 +69,9 @@ public static class McpHost
         }
 
         // Eager shared composition over the frozen provider. This opens no
-        // database connection and performs no auth; T3 tools execute on it.
-        _ = scope.CreateModule();
+        // database connection and performs no auth; the explicit T3 tool
+        // catalog executes on it.
+        var module = scope.CreateModule();
 
         var loggerFactory = new McpStderrLoggerFactory(log);
         var serverOptions = new ModelContextProtocol.Server.McpServerOptions
@@ -82,10 +83,11 @@ public static class McpHost
             },
             ProtocolVersion = PinnedProtocolVersion,
         };
+        Tools.McpToolCatalog.Wire(serverOptions, scope, module);
 
         try
         {
-            // T2 registers no tools: transport, frozen scope, and shutdown only.
+            // Tools come only from the explicit catalog wired above.
             await using var server = ModelContextProtocol.Server.McpServer.Create(
                 new ModelContextProtocol.Server.StreamServerTransport(input, output, ServerName, loggerFactory),
                 serverOptions,
@@ -126,7 +128,7 @@ public static class McpHost
                 Exception? exception,
                 Func<TState, Exception?, string> formatter)
             {
-                // SDK-side diagnostics only. In T2 no tools are registered, so
+                // SDK-side diagnostics only. Tool results never flow through logging, so
                 // no SQL, parameters, or connection details can reach this
                 // logger; only the rendered message template is written.
                 writer.WriteLine($"sqlharness-mcp[{category}]: {formatter(state, exception)}");

@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json;
 
-using SqlHarness.Cli.Infrastructure;
+using SqlHarness.Core;
 
 namespace SqlHarness.Tests;
 

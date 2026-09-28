@@ -2,9 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-using SqlHarness.Core;
-
-namespace SqlHarness.Cli.Infrastructure;
+namespace SqlHarness.Core;
 
 public sealed class ParameterSetFileException(string message) : Exception(message);
 
@@ -92,7 +90,30 @@ public static partial class ParameterSetFileReader
         return buffer[..total];
     }
 
-    private static SqlHarnessParameterSetInput Parse(byte[] bytes)
+    /// <summary>
+    /// Strictly parses already-read parameter-set bytes: at most 64 KiB, no BOM,
+    /// comments, or trailing commas, with only name and parameters members. Shared
+    /// by the CLI file reader and the MCP bounded input reader so both enforce
+    /// the same contract without a second parser. Only
+    /// <see cref="ParameterSetFileException"/> escapes this method.
+    /// </summary>
+    public static SqlHarnessParameterSetInput Parse(byte[] bytes)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        if (bytes.Length > MaximumBytes)
+            throw new ParameterSetFileException(TooLargeMessage);
+
+        try
+        {
+            return ParseCore(bytes);
+        }
+        catch (Exception exception) when (exception is JsonException or DecoderFallbackException)
+        {
+            throw new ParameterSetFileException(InvalidFileMessage);
+        }
+    }
+
+    private static SqlHarnessParameterSetInput ParseCore(byte[] bytes)
     {
         var text = StrictUtf8.GetString(bytes);
         if (text.Length > 0 && text[0] == '\uFEFF')

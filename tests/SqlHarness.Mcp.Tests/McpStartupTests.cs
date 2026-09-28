@@ -8,6 +8,7 @@ using ModelContextProtocol.Server;
 
 using SqlHarness.Cli;
 using SqlHarness.Core;
+using SqlHarness.Mcp.Tools;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Mcp.Tests;
@@ -83,10 +84,13 @@ public sealed class McpStartupTests
         Assert.Equal(PinnedProtocolVersion, client.NegotiatedProtocolVersion);
         Assert.Equal(McpHost.ServerName, client.ServerInfo.Name);
 
-        // T2 registers no tools, so the server does not even implement the
-        // tools/list method: no reload/switch-target surface can exist.
-        var toolsError = await Assert.ThrowsAsync<McpProtocolException>(async () => await client.ListToolsAsync());
-        Assert.Contains("tools/list", toolsError.Message, StringComparison.Ordinal);
+        // T3 wires the explicit 11-tool catalog on the frozen scope: tools/list
+        // serves exactly those tools and nothing else (no assembly scanning,
+        // so no reload/switch-target surface can exist either).
+        var served = await client.ListToolsAsync(cancellationToken: cts.Token);
+        Assert.Equal(
+            McpToolCatalog.ToolNames.Order(StringComparer.Ordinal),
+            served.Select(tool => tool.Name).Order(StringComparer.Ordinal).ToArray());
 
         // The frozen snapshot is read exactly once, at startup.
         Assert.Equal(1, reads);

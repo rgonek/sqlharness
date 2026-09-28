@@ -1,0 +1,503 @@
+using System.Text.Json;
+
+using SqlHarness.Core;
+using SqlHarness.Core.Targets;
+using SqlHarness.Mcp.Tools;
+
+namespace SqlHarness.Mcp.Tests;
+
+/// <summary>
+/// T3 mapping contract: MCP arguments become the same Core operations the CLI
+/// builds, parameters travel as Core declaration strings (null, decimal,
+/// Unicode, '=' preserved; duplicates and unknown types left to Core), PG
+/// gates fire before any connection, Core safety stays authoritative offline,
+/// and plan results lose statement text and literal predicates. Only synthetic
+/// HOME directories and an unreachable profile target are used; no test opens
+/// a real database connection.
+/// </summary>
+[Collection("McpScopeHome")]
+public sealed class McpMappingTests : IDisposable
+{
+    private const string ProfileName = "mcp-t3-map";
+    private const string PgProfileName = "mcp-t3-map-pg";
+    private const string CrossDatabaseSql = "SELECT * FROM [otherdb].dbo.T";
+    private const string UnicodeValue = "zażółć gęślą jaźń €";
+    private const string SecretValue = "t0p-s3cret-value";
+
+    private readonly string _home;
+    private readonly string? _savedHome;
+    private readonly string _targetsFile;
+
+    public McpMappingTests()
+    {
+        _savedHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
+        _home = Path.Combine(Path.GetTempPath(), "sqlharness-mcp-t3-map-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_home);
+        Environment.SetEnvironmentVariable("SQLHARNESS_HOME", _home);
+        _targetsFile = Path.Combine(_home, "targets.json");
+        File.WriteAllText(
+            _targetsFile,
+            "{\""
+            + ProfileName
+            + "\": {\"server\": \"mcp-unreachable.invalid\", \"database\": \"reportdb\", "
+            + "\"vars\": {\"tenant\": \"^frozen$\"}, \"auth\": \"integrated\"}, \""
+            + PgProfileName
+            + "\": {\"server\": \"mcp-unreachable.invalid\", \"database\": \"pgdb\", "
+            + "\"vars\": {\"tenant\": \"^frozen$\"}, \"auth\": \"sql\", "
+            + "\"sqlUser\": \"mcp\", \"passwordEnvVar\": \"SQLHARNESS_MCP_TEST_PW\", \"engine\": \"postgres\"}}");
+    }
+
+    public void Dispose()
+    {
+        Environment.SetEnvironmentVariable("SQLHARNESS_HOME", _savedHome);
+        try
+        {
+            Directory.Delete(_home, recursive: true);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private McpScope Scope(string? profile = null) => McpScope.Create(
+        new McpServerOptions
+        {
+            Profile = profile ?? ProfileName,
+            Vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["tenant"] = "frozen" },
+        },
+        ProfileStore.Load(_targetsFile));
+
+    private sealed class RecordingModule : ISqlHarnessModule
+    {
+        public List<SqlHarnessOperation> Operations { get; } = [];
+
+        public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default)
+        {
+            Operations.Add(operation);
+            return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null));
+        }
+    }
+
+    private static McpParameterArgument P(string name, string? type = null, string? value = null) =>
+        new() { Name = name, Type = type, Value = value };
+
+    private static void AssertQueryOperation(
+        SqlHarnessQueryOperation actual,
+        SqlTargetRequest target,
+        string sql,
+        string[] parameters,
+        int timeout,
+        int maxRows)
+    {
+        Assert.Same(target, actual.Target);
+        Assert.Equal(sql, actual.Sql);
+        Assert.Equal(parameters, actual.Parameters.ToArray());
+        Assert.Equal(timeout, actual.TimeoutSeconds);
+        Assert.Equal(maxRows, actual.MaxRows);
+        Assert.False(actual.AllowMutation);
+        Assert.Null(actual.ConfirmDatabase);
+    }
+
+    [Fact]
+    public async Task Query_mapping_matches_cli_operation_and_never_mutates()
+    {
+        var scope = Scope();
+        var operation = await McpOperationMapper.MapQueryAsync(
+            scope, "SELECT 1", null, [P("customerId", "int", "42")], 30, 50, CancellationToken.None);
+        AssertQueryOperation(
+            operation, scope.TargetRequest, "SELECT 1", ["customerId:int=42"], 30, 50);
+    }
+
+    [Fact]
+    public async Task Query_handler_records_the_same_operation_on_a_recording_module()
+    {
+        var scope = Scope();
+        var recording = new RecordingModule();
+        var handlers = new McpToolHandlers(scope, recording);
+        var result = await handlers.QueryAsync(null!, "SELECT 1", null, [P("customerId", "int", "42")], 30, 50);
+        Assert.False(result.IsError == true);
+        var operation = Assert.IsType<SqlHarnessQueryOperation>(Assert.Single(recording.Operations));
+        AssertQueryOperation(
+            operation, scope.TargetRequest, "SELECT 1", ["customerId:int=42"], 30, 50);
+    }
+
+    [Fact]
+    public void Inspect_mapping_matches_cli_operations_per_kind()
+    {
+        var scope = Scope();
+        Assert.Equal(
+            new SqlHarnessPingOperation(scope.TargetRequest, 5),
+            McpOperationMapper.MapInspect(scope, "ping", null, null, null, null, null, false, null, null));
+        Assert.Equal(
+            new SqlHarnessSchemaOperation(scope.TargetRequest, null, 30, 50, "dbo.Contracts"),
+            McpOperationMapper.MapInspect(scope, "schema", "dbo.Contracts", null, null, null, null, false, null, null));
+        var counts = Assert.IsType<SqlHarnessCountsOperation>(
+            McpOperationMapper.MapInspect(scope, "counts", null, null, ["dbo.A"], null, 10, true, null, 30));
+        Assert.Equal(["dbo.A"], counts.Tables.ToArray());
+        Assert.Equal(10, counts.Top);
+        Assert.True(counts.Exact);
+        var space = Assert.IsType<SqlHarnessSpaceOperation>(
+            McpOperationMapper.MapInspect(scope, "space", "dbo.A", null, null, null, null, false, null, null));
+        Assert.Equal("dbo.A", space.Object);
+        Assert.Equal(25, space.Top);
+        var qstop = Assert.IsType<SqlHarnessQueryStoreTopOperation>(
+            McpOperationMapper.MapInspect(scope, "qstop", null, null, null, null, null, false, "24h", null));
+        Assert.Equal(1440, qstop.WindowMinutes);
+        Assert.Equal(20, qstop.Top);
+        var indexes = Assert.IsType<SqlHarnessIndexesOperation>(
+            McpOperationMapper.MapInspect(scope, "indexes", null, null, null, null, 7, false, null, null));
+        Assert.Equal(7, indexes.Top);
+    }
+
+    [Fact]
+    public void Inspect_rejects_misplaced_fields_and_bad_combinations()
+    {
+        var scope = Scope();
+        Assert.Throws<McpMappingException>(() =>
+            McpOperationMapper.MapInspect(scope, "ping", null, null, null, null, 5, false, null, null));
+        Assert.Throws<McpMappingException>(() =>
+            McpOperationMapper.MapInspect(scope, "bogus", null, null, null, null, null, false, null, null));
+        Assert.Throws<McpMappingException>(() =>
+            McpOperationMapper.MapInspect(scope, "schema", "dbo.A", "dbo.%", null, null, null, false, null, null));
+        Assert.Throws<McpMappingException>(() =>
+            McpOperationMapper.MapInspect(scope, "counts", null, null, ["dbo.A"], "%A%", null, false, null, null));
+        Assert.Throws<McpMappingException>(() =>
+            McpOperationMapper.MapInspect(scope, "space", "a.b.c", null, null, null, null, false, null, null));
+        Assert.Throws<McpMappingException>(() =>
+            McpOperationMapper.MapInspect(scope, "qstop", null, null, null, null, null, false, "never", null));
+    }
+
+    [Fact]
+    public async Task Measure_mapping_matches_cli_operation_with_setup_and_param_sets()
+    {
+        var scope = Scope();
+        var root = Path.Combine(_home, "inputs");
+        Directory.CreateDirectory(root);
+        var queryFile = Path.Combine(root, "q.sql");
+        var setupFile = Path.Combine(root, "s.sql");
+        File.WriteAllText(queryFile, "SELECT @id;");
+        File.WriteAllText(setupFile, "SELECT 1;");
+        var setA = Path.Combine(root, "a.sqljson");
+        var setB = Path.Combine(root, "b.sqljson");
+        File.WriteAllText(setA, "{\"name\":\"a\",\"parameters\":[\"id:int=1\"]}");
+        File.WriteAllText(setB, "{\"name\":\"b\",\"parameters\":[\"id:int=2\"]}");
+        var rooted = McpScope.Create(
+            new McpServerOptions
+            {
+                Profile = ProfileName,
+                Vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["tenant"] = "frozen" },
+                InputRoots = [root],
+            },
+            ProfileStore.Load(_targetsFile));
+        var operation = await McpOperationMapper.MapMeasureAsync(
+            rooted,
+            new McpSqlSourceArgument { File = queryFile },
+            new McpSqlSourceArgument { File = setupFile },
+            [P("tenant", "nvarchar", "frozen")],
+            [setA, setB],
+            5,
+            null,
+            CancellationToken.None);
+        Assert.Same(rooted.TargetRequest, operation.Target);
+        Assert.Equal("SELECT @id;", operation.QuerySql);
+        Assert.Equal("SELECT 1;", operation.SetupSql);
+        Assert.Equal(["tenant:nvarchar=frozen"], operation.Parameters.ToArray());
+        Assert.Equal(5, operation.Repeat);
+        Assert.Equal(30, operation.TimeoutSeconds);
+        Assert.NotNull(operation.ParameterSets);
+        Assert.Equal(["a", "b"], operation.ParameterSets.Select(set => set.Name).ToArray());
+    }
+
+    [Fact]
+    public async Task Compare_mapping_builds_plain_and_matrix_variants_like_cli()
+    {
+        var scope = Scope();
+        var plain = await McpOperationMapper.MapCompareAsync(
+            scope,
+            new McpSqlSourceArgument { Sql = "SELECT 1" },
+            new McpSqlSourceArgument { Sql = "SELECT 2" },
+            null, null, 5, 30, "multiset", null, CancellationToken.None);
+        var compare = Assert.IsType<SqlHarnessCompareOperation>(plain);
+        Assert.Equal("SELECT 1", compare.BaselineSql);
+        Assert.Equal("SELECT 2", compare.CandidateSql);
+        Assert.Equal(ResultComparisonMode.Multiset, compare.CompareResults);
+
+        var matrix = await McpOperationMapper.MapCompareAsync(
+            scope,
+            new McpSqlSourceArgument { Sql = "SELECT @n" },
+            new McpSqlSourceArgument { Sql = "SELECT @n" },
+            null, null, 5, 30, "ordered",
+            new McpMatrixArgument { Name = "BatchSize", Type = "int", Values = ["1", "20", "100"] },
+            CancellationToken.None);
+        var matrixOperation = Assert.IsType<SqlHarnessCompareMatrixOperation>(matrix);
+        Assert.Equal("BatchSize:int=1,20,100", matrixOperation.Matrix);
+
+        await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapCompareAsync(
+            scope,
+            new McpSqlSourceArgument { Sql = "SELECT @n" },
+            new McpSqlSourceArgument { Sql = "SELECT @n" },
+            null, null, 5, 30, "ordered",
+            new McpMatrixArgument { Name = "BatchSize", Type = "int", Values = ["1,2", "3"] },
+            CancellationToken.None));
+        await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapCompareAsync(
+            scope,
+            new McpSqlSourceArgument { Sql = "SELECT @n" },
+            new McpSqlSourceArgument { Sql = "SELECT @n" },
+            null, null, 5, 30, "bogus", null, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Watch_mapping_applies_cli_defaults_and_exclusive_stop()
+    {
+        var scope = Scope();
+        var operation = await McpOperationMapper.MapWatchAsync(
+            scope, "SELECT 1", null, null, 30, 50, null, null, null, null, CancellationToken.None);
+        Assert.Null(operation.Until);
+        Assert.Equal(3, operation.UntilUnchanged);
+        Assert.Equal(TimeSpan.FromSeconds(30), operation.Interval);
+        Assert.Equal(TimeSpan.FromMinutes(15), operation.MaxDuration);
+
+        var until = await McpOperationMapper.MapWatchAsync(
+            scope, "SELECT 1", null, null, 30, 50, "Imported >= 1000", null, "10s", "5m", CancellationToken.None);
+        Assert.Equal("Imported >= 1000", until.Until);
+        Assert.Null(until.UntilUnchanged);
+
+        await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapWatchAsync(
+            scope, "SELECT 1", null, null, 30, 50, "x > 1", 2, null, null, CancellationToken.None));
+        await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapWatchAsync(
+            scope, "SELECT 1", null, null, 30, 50, null, null, "25h", null, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Snapshot_mapping_never_sets_force()
+    {
+        var scope = Scope();
+        var capture = await McpOperationMapper.MapSnapshotAsync(
+            scope, "capture", "before-import", "SELECT 1", null, null, 30, 50, CancellationToken.None);
+        Assert.False(capture.Diff);
+        Assert.False(capture.Force);
+        Assert.Equal("before-import", capture.Name);
+        var diff = await McpOperationMapper.MapSnapshotAsync(
+            scope, "diff", "before-import", "SELECT 1", null, null, 30, 50, CancellationToken.None);
+        Assert.True(diff.Diff);
+        Assert.False(diff.Force);
+        await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapSnapshotAsync(
+            scope, "capture", "not a name!", "SELECT 1", null, null, 30, 50, CancellationToken.None));
+        await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapSnapshotAsync(
+            scope, "overwrite", "before-import", "SELECT 1", null, null, 30, 50, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Plan_mapping_carries_text_and_footprint()
+    {
+        var scope = Scope();
+        var operation = await McpOperationMapper.MapPlanAsync(scope, "<a/>", null, CancellationToken.None);
+        Assert.Equal("<a/>", operation.ShowplanXml);
+        Assert.Equal(System.Text.Encoding.UTF8.GetByteCount("<a/>"), operation.RawFootprint.Bytes);
+        Assert.Equal(1, operation.RawFootprint.Lines);
+    }
+
+    [Fact]
+    public void Parameter_formatting_preserves_null_decimal_unicode_and_equals()
+    {
+        Assert.Equal(["a:null"], McpOperationMapper.FormatParameters([P("a")]).ToArray());
+        Assert.Equal(["a:int:null"], McpOperationMapper.FormatParameters([P("a", "int")]).ToArray());
+        Assert.Equal(
+            ["amount:decimal(19,4)=1234.5600"],
+            McpOperationMapper.FormatParameters([P("amount", "decimal(19,4)", "1234.5600")]).ToArray());
+        Assert.Equal(
+            ["note:nvarchar=" + UnicodeValue],
+            McpOperationMapper.FormatParameters([P("note", "nvarchar", UnicodeValue)]).ToArray());
+        Assert.Equal(
+            ["note:nvarchar=a=b"],
+            McpOperationMapper.FormatParameters([P("note", "nvarchar", "a=b")]).ToArray());
+        Assert.Throws<McpMappingException>(() => McpOperationMapper.FormatParameters([P("  ")]));
+    }
+
+    [Theory]
+    [InlineData("query")]
+    [InlineData("setup")]
+    [InlineData("benchmark")]
+    [InlineData("QUERY")]
+    public async Task Validate_accepts_every_usage_offline_through_core(string usage)
+    {
+        var scope = Scope();
+        var report = await McpOperationMapper.MapValidateAsync(
+            scope, "SELECT @id;", null, usage, [P("id", "int", "42")], CancellationToken.None);
+        Assert.True(report.Allowed);
+        Assert.False(report.Executed);
+    }
+
+    [Fact]
+    public async Task Validate_reports_core_rejections_offline_without_echo()
+    {
+        var scope = Scope();
+        var report = await McpOperationMapper.MapValidateAsync(
+            scope, "DELETE FROM dbo.T WHERE Id = @id;", null, "query", [P("id", "int",  "42")], CancellationToken.None);
+        Assert.False(report.Allowed);
+        Assert.False(report.Executed);
+        await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapValidateAsync(
+            scope, "SELECT 1", null, "execute", null, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Validate_proves_equals_value_survives_core_binding()
+    {
+        var scope = Scope();
+        var report = await McpOperationMapper.MapValidateAsync(
+            scope, "SELECT @note;", null, "query", [P("note", "nvarchar", "a=b")], CancellationToken.None);
+        Assert.True(report.Allowed, JsonSerializer.Serialize(report));
+        Assert.DoesNotContain("a=b", JsonSerializer.Serialize(report), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Validate_proves_decimal_unicode_and_null_shapes()
+    {
+        var scope = Scope();
+        var decimalReport = await McpOperationMapper.MapValidateAsync(
+            scope, "SELECT @amount;", null, "query", [P("amount", "decimal(19,4)", "1234.5600")], CancellationToken.None);
+        Assert.True(decimalReport.Allowed, JsonSerializer.Serialize(decimalReport));
+        var unicodeReport = await McpOperationMapper.MapValidateAsync(
+            scope, "SELECT @note;", null, "query", [P("note", "nvarchar", UnicodeValue)], CancellationToken.None);
+        Assert.True(unicodeReport.Allowed, JsonSerializer.Serialize(unicodeReport));
+        Assert.DoesNotContain(UnicodeValue, JsonSerializer.Serialize(unicodeReport), StringComparison.Ordinal);
+        var nullReport = await McpOperationMapper.MapValidateAsync(
+            scope, "SELECT @note;", null, "query", [P("note", "nvarchar", null)], CancellationToken.None);
+        Assert.True(nullReport.Allowed, JsonSerializer.Serialize(nullReport));
+    }
+
+    [Fact]
+    public async Task Duplicate_and_unknown_type_parameters_fail_in_core_without_value_echo()
+    {
+        var scope = Scope();
+        var module = scope.CreateModule();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+        var duplicate = await McpOperationMapper.MapQueryAsync(
+            scope, "SELECT @a;", null, [P("a", "int", "1"), P("a", "int", "2")], 30, 50, CancellationToken.None);
+        Assert.Equal(["a:int=1", "a:int=2"], duplicate.Parameters.ToArray());
+        var duplicateOutcome = await module.ExecuteAsync(duplicate, cts.Token);
+        Assert.Equal(SqlHarnessExitCode.Safety, duplicateOutcome.ExitCode);
+
+        var unknown = await McpOperationMapper.MapQueryAsync(
+            scope, "SELECT @a;", null, [P("a", "frobnicate", SecretValue)], 30, 50, CancellationToken.None);
+        var unknownOutcome = await module.ExecuteAsync(unknown, cts.Token);
+        Assert.Equal(SqlHarnessExitCode.Safety, unknownOutcome.ExitCode);
+        Assert.DoesNotContain(SecretValue, unknownOutcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Disallowed_sql_never_opens_a_session()
+    {
+        var scope = Scope();
+        var operation = await McpOperationMapper.MapQueryAsync(
+            scope, CrossDatabaseSql, null, null, 5, 50, CancellationToken.None);
+        Assert.Equal(CrossDatabaseSql, operation.Sql);
+        var outcome = await scope.CreateModule().ExecuteAsync(
+            operation, new CancellationTokenSource(TimeSpan.FromSeconds(30)).Token);
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Contains("safety rejection", outcome.SafeError, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Invalid_matrix_values_fail_in_core_without_value_echo()
+    {
+        var scope = Scope();
+        var operation = await McpOperationMapper.MapCompareAsync(
+            scope,
+            new McpSqlSourceArgument { Sql = "SELECT @n" },
+            new McpSqlSourceArgument { Sql = "SELECT @n" },
+            null, null, 5, 30, "ordered",
+            new McpMatrixArgument { Name = "n", Type = "int", Values = ["1", SecretValue] },
+            CancellationToken.None);
+        var outcome = await scope.CreateModule().ExecuteAsync(
+            operation, new CancellationTokenSource(TimeSpan.FromSeconds(30)).Token);
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.DoesNotContain(SecretValue, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Postgres_gates_fire_before_any_connection()
+    {
+        var pg = Scope(PgProfileName);
+        Assert.Equal(SqlEngine.Postgres, pg.ResolvedTarget.Engine);
+        var qstop = Assert.Throws<McpMappingException>(() =>
+            McpOperationMapper.MapInspect(pg, "qstop", null, null, null, null, null, false, null, null));
+        Assert.Contains("SQL Server", qstop.Message, StringComparison.Ordinal);
+        var indexes = Assert.Throws<McpMappingException>(() =>
+            McpOperationMapper.MapInspect(pg, "indexes", null, null, null, null, null, false, null, null));
+        Assert.Contains("SQL Server", indexes.Message, StringComparison.Ordinal);
+
+        var capabilities = McpOperationMapper.BuildCapabilities(pg, includeDiagnostics: false);
+        Assert.Equal("postgres", capabilities.Engine);
+        Assert.False(capabilities.QueryStoreAvailable);
+        Assert.False(capabilities.IndexesAvailable);
+
+        var sqlserver = McpOperationMapper.BuildCapabilities(Scope(), includeDiagnostics: false);
+        Assert.Equal("sqlserver", sqlserver.Engine);
+        Assert.True(sqlserver.QueryStoreAvailable);
+        Assert.True(sqlserver.IndexesAvailable);
+        Assert.Equal(McpToolCatalog.ToolNames, sqlserver.Tools);
+    }
+
+    [Fact]
+    public async Task Postgres_rejected_parameter_types_stay_core_owned()
+    {
+        var pg = Scope(PgProfileName);
+        var report = await McpOperationMapper.MapValidateAsync(
+            pg, "SELECT @amount;", null, "query", [P("amount", "money", "5")], CancellationToken.None);
+        Assert.False(report.Allowed);
+        var sqlserver = Scope();
+        var allowed = await McpOperationMapper.MapValidateAsync(
+            sqlserver, "SELECT @amount;", null, "query", [P("amount", "money", "5")], CancellationToken.None);
+        Assert.True(allowed.Allowed, JsonSerializer.Serialize(allowed));
+    }
+
+    [Fact]
+    public void Sanitizer_strips_statement_text_and_literal_predicates()
+    {
+        var child = new PlanNode("Index Seek", "Index Seek", "dbo.T", "IX_T", 1, 1, 1, 0.1, "[Id]=@id", [], []);
+        var root = new PlanNode("Nested Loops", "Inner Join", null, null, 2, 2, 1, 0.9, "OuterRefs", [], [child]);
+        var plan = new DistilledPlan([new PlanStatement("SELECT * FROM dbo.T WHERE Id = 1", root, [])]);
+        var sanitized = Assert.IsType<DistilledPlan>(McpResultSanitizer.Sanitize(plan));
+        Assert.Null(sanitized.Statements[0].StatementText);
+        Assert.Null(sanitized.Statements[0].Root.Predicate);
+        Assert.Null(sanitized.Statements[0].Root.Children[0].Predicate);
+        Assert.Equal("Index Seek", sanitized.Statements[0].Root.Children[0].PhysicalOp);
+        Assert.Equal("dbo.T", sanitized.Statements[0].Root.Children[0].ObjectName);
+        Assert.Null(McpResultSanitizer.Sanitize(null));
+        var passthrough = new object();
+        Assert.Same(passthrough, McpResultSanitizer.Sanitize(passthrough));
+    }
+
+    [Fact]
+    public async Task Snapshot_handler_records_no_force_and_rejects_before_execution()
+    {
+        var scope = Scope();
+        var recording = new RecordingModule();
+        var handlers = new McpToolHandlers(scope, recording);
+        var capture = await handlers.SnapshotAsync(null!, "capture", "n1", "SELECT 1");
+        Assert.False(capture.IsError == true);
+        var operation = Assert.IsType<SqlHarnessSnapshotOperation>(Assert.Single(recording.Operations));
+        Assert.False(operation.Force);
+        Assert.False(operation.Diff);
+
+        var rejected = await handlers.SnapshotAsync(null!, "capture", "bad name!");
+        Assert.True(rejected.IsError == true);
+        Assert.Single(recording.Operations);
+    }
+
+    [Fact]
+    public async Task Artifact_handler_rejects_unsafe_sections_before_any_read()
+    {
+        var scope = Scope();
+        var recording = new RecordingModule();
+        var handlers = new McpToolHandlers(scope, recording);
+        var result = await handlers.ArtifactAsync(null!, "anything", "raw");
+        Assert.True(result.IsError == true);
+        Assert.Empty(recording.Operations);
+    }
+}
