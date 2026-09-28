@@ -85,17 +85,24 @@ public static class McpHost
             },
             ProtocolVersion = PinnedProtocolVersion,
         };
-        Tools.McpToolCatalog.Wire(serverOptions, scope, module, gate, hostShutdown: ct);
+        // Explicit EOF binding (T5 fix R1): the SDK does not propagate stdin
+        // EOF to in-flight handler tokens, so the host watches the
+        // transport's own reads and folds EOF into the shutdown token every
+        // handler already observes. No thread, no polling.
+        using var eofShutdown = new CancellationTokenSource();
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct, eofShutdown.Token);
+        using var eofInput = new EofShutdownInput(input, eofShutdown);
+        Tools.McpToolCatalog.Wire(serverOptions, scope, module, gate, hostShutdown: lifetime.Token);
 
         try
         {
             // Tools come only from the explicit catalog wired above.
             await using var server = ModelContextProtocol.Server.McpServer.Create(
-                new ModelContextProtocol.Server.StreamServerTransport(input, output, ServerName, loggerFactory),
+                new ModelContextProtocol.Server.StreamServerTransport(eofInput, output, ServerName, loggerFactory),
                 serverOptions,
                 loggerFactory,
                 serviceProvider: null);
-            await server.RunAsync(ct);
+            await server.RunAsync(lifetime.Token);
             return (int)SqlHarnessExitCode.Success;
         }
         catch (OperationCanceledException)

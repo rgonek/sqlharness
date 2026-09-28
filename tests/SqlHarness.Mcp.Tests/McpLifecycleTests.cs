@@ -19,7 +19,9 @@ namespace SqlHarness.Mcp.Tests;
 /// concurrent database call gets a stable BUSY rejection without a queue),
 /// local tools run in parallel with a held gate, matrix/param-set batches
 /// count as one operation, calls share no request state, EOF shuts the host
-/// down cleanly, shutdown cancels an in-flight call so no watch hangs, MCP
+/// down cleanly, EOF during a call cancels it through the explicit binding
+/// (the SDK alone does not propagate EOF), shutdown cancels an in-flight
+/// call so no watch hangs, MCP
 /// watch never touches the NDJSON path or stdout, progress fires only for a
 /// client token at most once per second without SQL, and annotations stay
 /// conservative. All data is synthetic; no database is opened. Every wait has
@@ -318,6 +320,88 @@ public sealed class McpLifecycleTests
         // cancellation tests.)
         Assert.True(gate.TryEnterDb());
         gate.ExitDb();
+    }
+
+    [Fact]
+    public async Task Eof_during_inflight_cancels_the_call_and_releases_the_gate()
+    {
+        var gate = new McpExecutionGate();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var moduleCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var moduleExited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var module = new RecordingModule
+        {
+            Behavior = async (_, ct) =>
+            {
+                using var reg = ct.Register(() => moduleCancelled.TrySetResult());
+                entered.TrySetResult();
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, ct);
+                }
+                finally
+                {
+                    moduleExited.TrySetResult();
+                }
+                throw new InvalidOperationException("A cancelled wait never completes.");
+            },
+        };
+        using var guard = new CancellationTokenSource(Budget);
+        // The external host token stays live: only stdin EOF may cancel here.
+        using var externalShutdown = new CancellationTokenSource();
+        using var eofShutdown = new CancellationTokenSource();
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(externalShutdown.Token, eofShutdown.Token);
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+        var serverOptions = new ModelContextProtocol.Server.McpServerOptions
+        {
+            ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "t5-test" },
+            ProtocolVersion = McpHost.PinnedProtocolVersion,
+        };
+        // Same composition as McpHost.RunAsync: one process gate, one
+        // EOF-bound shutdown token, the real stream transport.
+        McpToolCatalog.Wire(serverOptions, TestScope(), module, gate, hostShutdown: lifetime.Token);
+        using var eofInput = new EofShutdownInput(clientToServer.Reader.AsStream(), eofShutdown);
+        await using var server = McpServer.Create(
+            new StreamServerTransport(
+                eofInput, serverToClient.Writer.AsStream(), "t5-test-server", NullLoggerFactory.Instance),
+            serverOptions, NullLoggerFactory.Instance, serviceProvider: null);
+        var serverTask = server.RunAsync(lifetime.Token);
+        await using var client = await McpClient.CreateAsync(
+            new StreamClientTransport(
+                clientToServer.Writer.AsStream(), serverToClient.Reader.AsStream(), NullLoggerFactory.Instance),
+            new McpClientOptions
+            {
+                ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
+                ProtocolVersion = McpHost.PinnedProtocolVersion,
+            },
+            NullLoggerFactory.Instance, guard.Token);
+
+        var inflight = client.CallToolAsync(
+            "sqlharness_watch",
+            new Dictionary<string, object?> { ["sql"] = "SELECT 1" },
+            cancellationToken: guard.Token);
+        await entered.Task.WaitAsync(Budget, guard.Token);
+
+        // EOF on stdin with a live host token. The SDK alone does not
+        // propagate this (T5 fix R1 probe: handler token stayed live, server
+        // loop parked); the explicit binding must cancel the in-flight watch.
+        // The module observes cancellation, so the call can never complete as
+        // a natural watch exit 7; the server loop then ends and the gate slot
+        // is released.
+        await clientToServer.Writer.CompleteAsync();
+        await moduleCancelled.Task.WaitAsync(Budget, guard.Token);
+        await moduleExited.Task.WaitAsync(Budget, guard.Token);
+        try
+        {
+            await serverTask.WaitAsync(Budget, guard.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        Assert.True(gate.TryEnterDb());
+        gate.ExitDb();
+        _ = inflight;
     }
 
     [Fact]

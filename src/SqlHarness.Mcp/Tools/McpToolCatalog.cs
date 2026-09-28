@@ -31,7 +31,8 @@ namespace SqlHarness.Mcp.Tools;
 /// deadline exit 7. Long calls send throttled stage progress only when the
 /// client supplied a progress token, without SQL, parameters, or rows. The
 /// host shutdown token is linked into every execution, so closing the process
-/// (EOF/SIGTERM) cancels an in-flight Core call even if the client never
+/// (Ctrl+C/SIGTERM via the host token, stdin EOF via the host's explicit EOF
+/// binding -- the SDK alone does not propagate EOF) cancels an in-flight
 /// sends a protocol cancellation: no hanging watch, sessions disposed by
 /// Core, and the gate released for the next call.
 /// </summary>
