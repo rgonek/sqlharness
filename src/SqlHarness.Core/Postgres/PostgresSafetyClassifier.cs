@@ -76,6 +76,10 @@ internal sealed class PostgresSafetyClassifier
                 case StatementKind.Mutation:
                     hasMutation = true;
                     break;
+                case StatementKind.SessionLocalMutation:
+                    hasMutation = true;
+                    hasSessionLocal = true;
+                    break;
                 case StatementKind.SelectInto:
                     return Denied(SqlSafetyReason.SelectIntoNotAllowed);
                 case StatementKind.Unsupported:
@@ -118,6 +122,7 @@ internal sealed class PostgresSafetyClassifier
                     hasSessionLocal = true;
                     break;
                 case StatementKind.Mutation:
+                case StatementKind.SessionLocalMutation:
                 case StatementKind.NonTemporaryWrite:
                 case StatementKind.SelectInto:
                     return Denied(SqlSafetyReason.NonTemporaryWrite);
@@ -134,15 +139,15 @@ internal sealed class PostgresSafetyClassifier
         StatementEffect effect,
         HashSet<string> knownTemps)
     {
-        if (effect.HasSelectInto)
+        if (effect.HasSelectInto && statement is not Statement.Select)
             return StatementOutcome.SelectInto;
         if (effect.UnresolvedWrite)
             return StatementOutcome.Unsupported;
 
         switch (statement)
         {
-            case Statement.Select:
-                return FromWrites(effect.Targets, knownTemps);
+            case Statement.Select select:
+                return ClassifySelect(select, effect, knownTemps);
 
             case Statement.Explain explain:
                 return ClassifyExplain(explain, knownTemps);
@@ -247,6 +252,28 @@ internal sealed class PostgresSafetyClassifier
             default:
                 return StatementOutcome.Unsupported;
         }
+    }
+
+    private static StatementOutcome ClassifySelect(
+        Statement.Select select,
+        StatementEffect effect,
+        HashSet<string> knownTemps)
+    {
+        var into = PostgresQueryShape.TopLevelSelectInto(select.Query);
+        if (into is null)
+            return effect.HasSelectInto ? StatementOutcome.SelectInto : FromWrites(effect.Targets, knownTemps);
+        // Unambiguous session locality only: TEMP with a single-part name and no
+        // other INTO in the batch. Writes inside (for example a data-modifying
+        // CTE) still count through the normal target analysis.
+        if (!into.Temporary || into.Name.Values.Count != 1 || effect.SelectIntoCount != 1)
+            return StatementOutcome.SelectInto;
+        var key = ObjectKey(into.Name);
+        if (key is null)
+            return StatementOutcome.Unsupported;
+        knownTemps.Add(key);
+        if (FromWrites(effect.Targets, knownTemps).Kind == StatementKind.Mutation)
+            return StatementOutcome.SessionLocalMutation;
+        return StatementOutcome.SessionLocal;
     }
 
     private static StatementOutcome ClassifyExplain(Statement.Explain explain, HashSet<string> knownTemps)
@@ -370,6 +397,7 @@ internal sealed class PostgresSafetyClassifier
         ReadOnly,
         SessionLocal,
         Mutation,
+        SessionLocalMutation,
         SelectInto,
         Unsupported,
         NonTemporaryWrite,
@@ -380,6 +408,7 @@ internal sealed class PostgresSafetyClassifier
         public static StatementOutcome ReadOnly { get; } = new(StatementKind.ReadOnly);
         public static StatementOutcome SessionLocal { get; } = new(StatementKind.SessionLocal);
         public static StatementOutcome Mutation { get; } = new(StatementKind.Mutation);
+        public static StatementOutcome SessionLocalMutation { get; } = new(StatementKind.SessionLocalMutation);
         public static StatementOutcome SelectInto { get; } = new(StatementKind.SelectInto);
         public static StatementOutcome Unsupported { get; } = new(StatementKind.Unsupported);
         public static StatementOutcome NonTemporaryWrite { get; } = new(StatementKind.NonTemporaryWrite);
@@ -388,13 +417,14 @@ internal sealed class PostgresSafetyClassifier
     private readonly record struct StatementEffect(
         bool HasProhibitedFunction,
         bool HasSelectInto,
+        int SelectIntoCount,
         bool UnresolvedWrite,
         IReadOnlyList<ObjectName> Targets);
 
     private sealed class StatementEffectVisitor : Visitor
     {
         private readonly List<ObjectName> _targets = [];
-        private bool _selectInto;
+        private int _selectIntoCount;
 
         internal bool HasProhibitedFunction { get; private set; }
         internal bool UnresolvedWrite { get; private set; }
@@ -406,7 +436,8 @@ internal sealed class PostgresSafetyClassifier
             visitor.VisitSkippedChildren(statement);
             return new StatementEffect(
                 visitor.HasProhibitedFunction,
-                visitor._selectInto,
+                visitor._selectIntoCount > 0,
+                visitor._selectIntoCount,
                 visitor.UnresolvedWrite,
                 visitor._targets);
         }
@@ -503,7 +534,7 @@ internal sealed class PostgresSafetyClassifier
             {
                 case Statement.Select select:
                     if (PostgresQueryShape.HasSelectInto(select.Query))
-                        _selectInto = true;
+                        _selectIntoCount++;
                     break;
                 case Statement.Insert insert:
                     _targets.Add(insert.InsertOperation.Name);
@@ -617,7 +648,7 @@ internal sealed class PostgresSafetyClassifier
         private void VisitQuery(Query query)
         {
             if (PostgresQueryShape.HasSelectInto(query))
-                _selectInto = true;
+                _selectIntoCount++;
             ((IElement)query).Visit(this);
         }
 

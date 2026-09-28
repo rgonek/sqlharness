@@ -32,6 +32,9 @@ internal static class PostgresDocument
 /// </summary>
 internal static class PostgresQueryShape
 {
+    internal static SelectInto? TopLevelSelectInto(Query query) =>
+        query.Body is SetExpression.SelectExpression selectExpression ? selectExpression.Select.Into : null;
+
     internal static bool HasSelectInto(Query query)
     {
         if (query.With is { } with)

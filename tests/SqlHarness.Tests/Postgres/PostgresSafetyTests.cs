@@ -515,6 +515,63 @@ public sealed class PostgresSafetyTests
     }
 
     [Fact]
+    public void Select_into_temp_registers_session_locality()
+    {
+        var decision = _classifier.Classify(
+            "SELECT a INTO TEMP TABLE t FROM s",
+            SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+        Assert.Contains("t", decision.SessionTempTables);
+    }
+
+    [Fact]
+    public void Select_into_temp_chain_stays_session_local_in_setup()
+    {
+        var setup = _classifier.Classify(
+            "SELECT a INTO TEMP TABLE t FROM s",
+            SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        var query = _classifier.Classify(
+            "INSERT INTO t SELECT 1; SELECT * FROM t",
+            SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.True(query.Allowed, query.RejectionDescription);
+        Assert.False(query.HasMutation);
+    }
+
+    [Theory]
+    [InlineData("SELECT 1 INTO persistent_copy")]
+    [InlineData("SELECT 1 INTO TEMP TABLE public.t")]
+    public void Select_into_without_unambiguous_temp_locality_stays_denied(string sql)
+    {
+        var query = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.False(query.Allowed);
+        Assert.Equal(SqlSafetyReason.SelectIntoNotAllowed, query.Reason);
+
+        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.False(setup.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, setup.Reason);
+    }
+
+    [Fact]
+    public void Select_into_temp_with_persistent_modifying_cte_needs_approval()
+    {
+        const string sql = """
+            WITH changed AS (INSERT INTO public.items VALUES (1) RETURNING id)
+            SELECT id INTO TEMP TABLE t FROM changed
+            """;
+        var denied = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(denied.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, denied.Reason);
+
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.True(approved.Allowed, approved.RejectionDescription);
+        Assert.True(approved.HasMutation);
+        Assert.True(approved.HasSessionLocalWork);
+    }
+
+    [Fact]
     public void Canonical_analyze_is_a_parse_error_until_the_parser_supports_it()
     {
         // SqlParserCS 0.6.5 only accepts the Hive-style ANALYZE TABLE form and
