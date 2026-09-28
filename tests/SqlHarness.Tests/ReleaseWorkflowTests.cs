@@ -30,6 +30,36 @@ public sealed class ReleaseWorkflowTests
         Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertReleaseJobContract(releaseJob));
     }
 
+    [Fact]
+    public void Build_matrix_publishes_every_supported_rid_on_its_native_runner()
+    {
+        var workflow = File.ReadAllText(FindRepositoryFile(".github", "workflows", "release.yml"));
+
+        AssertBuildPair(workflow, "windows-latest", "win-x64");
+        AssertBuildPair(workflow, "ubuntu-latest", "linux-x64");
+        AssertBuildPair(workflow, "macos-14", "osx-arm64");
+    }
+
+    [Fact]
+    public void Publish_step_is_self_contained_single_file_untrimmed_for_the_cli()
+    {
+        var workflow = File.ReadAllText(FindRepositoryFile(".github", "workflows", "release.yml"));
+
+        Assert.Contains("src/SqlHarness.Cli", workflow, StringComparison.Ordinal);
+        Assert.Contains("--self-contained true", workflow, StringComparison.Ordinal);
+        Assert.Contains("PublishSingleFile=true", workflow, StringComparison.Ordinal);
+        Assert.Contains("PublishTrimmed=false", workflow, StringComparison.Ordinal);
+    }
+
+    private static void AssertBuildPair(string workflow, string os, string rid)
+    {
+        var pair = Regex.Match(
+            workflow,
+            @"(?ms)os:\s*" + Regex.Escape(os) + @"\r?\n\s*rid:\s*" + Regex.Escape(rid) + @"\b");
+
+        Assert.True(pair.Success, $"The build matrix must publish {rid} on its native runner {os}.");
+    }
+
     private static void AssertReleaseJobContract(string releaseJob)
     {
         Assert.DoesNotMatch(@"(?m)^\s*(?:-\s*)?uses:\s*actions/checkout@", releaseJob);
