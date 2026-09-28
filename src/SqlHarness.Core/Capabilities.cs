@@ -64,6 +64,17 @@ public static class SqlHarnessCapabilitiesProvider
                 ["indexesTop"] = new { min = 1, max = 500 },
                 ["agentOutputBytes"] = new { min = 4096, max = 1048576, defaultValue = 16384 },
                 ["agentCellChars"] = new { min = 0, max = 4096, defaultValue = 512 },
+                ["sessionTempStatements"] = new Dictionary<string, string[]>(StringComparer.Ordinal)
+                {
+                    ["sqlserver"] = [
+                        "DECLARE scalar variables with analyzed initializers",
+                        "TRUNCATE TABLE #temp (unambiguous local temp only)",
+                        "ALTER TABLE #temp ADD/DROP COLUMN and local CHECK/DEFAULT/NULL/UNIQUE constraints"],
+                    ["postgres"] = [
+                        "EXPLAIN over a safe SELECT (plan-only, read-only)",
+                        "EXPLAIN ANALYZE with full inner-statement effect analysis",
+                        "SELECT INTO TEMP TABLE with unambiguous single-part name"],
+                },
             },
             ["text", "json", "json-summary", "agent"]);
     }

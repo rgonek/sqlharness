@@ -45,7 +45,7 @@ public class DialectAnalysisConsistencyTests
         new("WITH c AS (SELECT 1 AS x) SELECT x FROM c", true, SqlSafetyReason.Allowed, true, SqlSafetyReason.Allowed, true),
         new("SELECT 1; SELECT 2", true, SqlSafetyReason.Allowed, true, SqlSafetyReason.Allowed, false),
         new("CREATE TEMP TABLE t (a int); INSERT INTO t (a) VALUES (1); SELECT a FROM t", true, SqlSafetyReason.Allowed, true, SqlSafetyReason.Allowed, false),
-        new("SELECT a INTO TEMP TABLE t FROM s", false, SqlSafetyReason.SelectIntoNotAllowed, false, SqlSafetyReason.NonTemporaryWrite, false),
+        new("SELECT a INTO TEMP TABLE t FROM s", true, SqlSafetyReason.Allowed, true, SqlSafetyReason.Allowed, false),
         new("INSERT INTO t (a) VALUES (1)", false, SqlSafetyReason.MutationNotAllowed, false, SqlSafetyReason.NonTemporaryWrite, false),
         new("SELECT pg_sleep(1)", false, SqlSafetyReason.UnsupportedStatement, false, SqlSafetyReason.UnsupportedStatement, true),
     ];
