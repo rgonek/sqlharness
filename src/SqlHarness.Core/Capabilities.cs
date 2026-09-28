@@ -47,6 +47,7 @@ public static class SqlHarnessCapabilitiesProvider
                 new("indexes", "Inspect SQL Server missing-index evidence."),
                 new("plan", "Distill a saved execution plan offline."),
                 new("gain", "Report saved-output estimates."),
+                new("artifact", "Read safe sections of a saved benchmark artifact offline."),
             ],
             [
                 new("sqlserver", true, true, [
@@ -75,6 +76,7 @@ public static class SqlHarnessCapabilitiesProvider
                         "EXPLAIN ANALYZE with full inner-statement effect analysis",
                         "SELECT INTO TEMP TABLE with unambiguous single-part name"],
                 },
+                ["artifactRead"] = new { sections = ArtifactReader.SupportedSections, manifestVersion = ArtifactReader.CurrentManifestVersion, maxReportBytes = ArtifactReader.MaxReportBytes },
             },
             ["text", "json", "json-summary", "agent"]);
     }

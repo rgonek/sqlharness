@@ -191,6 +191,28 @@ public static class AgentOutputProjection
                 var objectFilter = Clip(indexesReport.ObjectFilter);
                 omissions += clippedItems;
                 return indexesReport with { Candidates = candidates, Warnings = indexWarnings, ArtifactDirectory = indexArtifact, ObjectFilter = objectFilter };
+            case ArtifactMetricsSection metrics:
+            {
+                var variants = Take(metrics.Variants).Select(variant => variant with
+                {
+                    Name = Clip(variant.Name)!,
+                    LogicalReadsByTable = Take(variant.LogicalReadsByTable.ToArray()).ToDictionary(
+                        pair => Clip(pair.Key)!, pair => pair.Value, StringComparer.Ordinal),
+                    Warnings = Take(variant.Warnings).Select(warning => Clip(warning)!).ToArray(),
+                }).ToArray();
+                omissions += clippedItems;
+                return metrics with { Variants = variants };
+            }
+            case ArtifactOperatorsSection operators:
+            {
+                var selected = Take(operators.Operators).Select(op => op with
+                {
+                    PhysicalOp = Clip(op.PhysicalOp)!,
+                    Object = Clip(op.Object),
+                }).ToArray();
+                omissions += clippedItems;
+                return operators with { Operators = selected };
+            }
             case SqlHarnessGainReport gain:
                 return gain;
             default:

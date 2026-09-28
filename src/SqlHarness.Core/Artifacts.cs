@@ -361,6 +361,8 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
             Directory.CreateDirectory(plansDirectory);
             _publisher.WriteText(Path.Combine(staging, "report.json"),
                 JsonSerializer.Serialize(persistedReport, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
+            _publisher.WriteText(Path.Combine(staging, "manifest.json"),
+                JsonSerializer.Serialize(ArtifactManifest.ForReport(persistedReport), ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
             for (var index = 0; index < runs.Count; index++)
             {
                 var run = runs[index];

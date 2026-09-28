@@ -38,6 +38,7 @@ public static class SqlHarnessCli
             c.AddCommand<CompareCommand>("compare").WithDescription("Compare baseline and candidate performance and results.");
             c.AddCommand<GainCommand>("gain").WithDescription("Report local output savings estimates.");
             c.AddCommand<PlanCommand>("plan").WithDescription("Distill a saved execution plan offline.");
+            c.AddCommand<ArtifactCommand>("artifact").WithDescription("Read safe sections of a saved benchmark artifact.");
             c.AddCommand<SchemaCommand>("schema").WithDescription("Inspect database tables, columns, and relations.");
             c.AddCommand<PingCommand>("ping").WithDescription("Check a database connection and target identity.");
             c.AddCommand<CountsCommand>("counts").WithDescription("Inspect row counts for database tables.");
