@@ -269,6 +269,16 @@ internal sealed class SqlSafetyClassifier
     {
         switch (statement)
         {
+            case DeclareVariableStatement declare:
+                // Scalar variables only; initializers are covered by the global
+                // inspection (cross-database, external, stateful, EXEC sources).
+                // Table variables parse as DeclareTableVariableStatement and stay denied.
+                return declare.Declarations.All(d =>
+                        d is DeclareVariableElement element &&
+                        element.DataType is SqlDataTypeReference or UserDataTypeReference)
+                    ? StatementClassification.ReadOnly
+                    : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+
             case SelectStatement select:
                 if (select.Into is null)
                     return StatementClassification.ReadOnly;

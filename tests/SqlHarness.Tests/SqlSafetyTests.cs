@@ -582,6 +582,37 @@ public class SqlSafetyTests
     public void Setup_denies_equivalent_persistent_or_global_temp_work(string sql) =>
         Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false).Allowed);
 
+    [Theory]
+    [InlineData("DECLARE @id int = 1; SELECT @id")]
+    [InlineData("DECLARE @id int; SELECT @id")]
+    [InlineData("DECLARE @a int = 1, @b nvarchar(10) = N'x'; SELECT @a, @b")]
+    [InlineData("DECLARE @top int = (SELECT MAX(Id) FROM dbo.Clients); SELECT TOP (@top) Id FROM dbo.Clients")]
+    public void Query_allows_scalar_declare_with_analyzed_initializer(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Fact]
+    public void Query_denies_declare_table_variable()
+    {
+        var decision = ClassifyQuery("DECLARE @t TABLE (Id int); SELECT Id FROM @t");
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    [Fact]
+    public void Query_denies_declare_with_stateful_initializer()
+    {
+        var decision = ClassifyQuery("DECLARE @id int = NEXT VALUE FOR dbo.Seq; SELECT @id");
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
     private SqlSafetyDecision ClassifyQuery(string sql) =>
         _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: false, confirmDatabase: null);
 }
