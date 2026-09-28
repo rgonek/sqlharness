@@ -86,12 +86,26 @@ public sealed class McpLifecycleTests
                 Values.Add(value);
         }
 
-        public IReadOnlyList<ProgressNotificationValue> Snapshot()
+    public IReadOnlyList<ProgressNotificationValue> Snapshot()
         {
             lock (_sync)
                 return Values.ToArray();
         }
     }
+
+    private static async Task<IReadOnlyList<ProgressNotificationValue>> WaitForProgressCountAsync(
+            ProgressCollector collector, int expected, CancellationToken ct)
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
+            while (true)
+            {
+                var snapshot = collector.Snapshot();
+                if (snapshot.Count >= expected)
+                    return snapshot;
+                await Task.Delay(TimeSpan.FromMilliseconds(25), linked.Token);
+            }
+        }
 
     private static string Text(CallToolResult result) =>
         Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
@@ -509,10 +523,12 @@ public sealed class McpLifecycleTests
 
             // With a token: exactly one stage notification (the finish lands
             // on the same controlled instant and is throttled away).
+            // Notifications are dispatched asynchronously by the client, so wait
+            // for delivery: under parallel-suite load the result can win the race.
             var first = await query.CallAsync(
                 arguments, collector, null, cts.Token);
             Assert.False(first.IsError == true, string.Concat(first.Content.OfType<TextContentBlock>().Select(block => block.Text)));
-            var seen = collector.Snapshot();
+            var seen = await WaitForProgressCountAsync(collector, 1, cts.Token);
             var single = Assert.Single(seen);
             Assert.Equal("sqlharness_query started", single.Message);
             Assert.Equal(0, single.Progress);
@@ -526,7 +542,7 @@ public sealed class McpLifecycleTests
             var second = await query.CallAsync(
                 arguments, collector, null, cts.Token);
             Assert.False(second.IsError == true);
-            Assert.Equal(2, collector.Snapshot().Count);
+            Assert.Equal(2, (await WaitForProgressCountAsync(collector, 2, cts.Token)).Count);
 
             // Without a token the channel stays silent.
             var silent = await query.CallAsync(
