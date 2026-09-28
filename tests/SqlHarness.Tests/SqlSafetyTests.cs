@@ -636,6 +636,32 @@ public class SqlSafetyTests
         Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
     }
 
+    [Theory]
+    [InlineData("ALTER TABLE #ids ADD Marker int NULL")]
+    [InlineData("ALTER TABLE #ids DROP COLUMN Marker")]
+    [InlineData("ALTER TABLE #ids ADD CONSTRAINT CK_Marker CHECK (Marker > 0)")]
+    [InlineData("ALTER TABLE #ids DROP CONSTRAINT CK_Marker")]
+    public void Query_and_setup_allow_supported_alter_on_local_temp(string sql)
+    {
+        var query = ClassifyQuery(sql);
+
+        Assert.True(query.Allowed, query.RejectionDescription);
+        Assert.False(query.HasMutation);
+        Assert.True(query.HasSessionLocalWork);
+        Assert.True(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
+    [InlineData("ALTER TABLE #ids ALTER COLUMN Marker bigint NOT NULL")]
+    [InlineData("ALTER TABLE #ids ADD CONSTRAINT FK_Other FOREIGN KEY (Id) REFERENCES dbo.Clients(Id)")]
+    [InlineData("ALTER TABLE dbo.Clients ADD Marker int NULL")]
+    [InlineData("ALTER TABLE ##ids ADD Marker int NULL")]
+    public void Alter_outside_add_drop_column_or_local_constraint_stays_denied(string sql)
+    {
+        Assert.False(_classifier.Classify(sql, SqlUsage.Query, "db", true, "db").Allowed);
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
     private SqlSafetyDecision ClassifyQuery(string sql) =>
         _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: false, confirmDatabase: null);
 }

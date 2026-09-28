@@ -284,6 +284,18 @@ internal sealed class SqlSafetyClassifier
                     ? StatementClassification.SessionLocal
                     : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
 
+            case AlterTableAddTableElementStatement addElement:
+                return IsSupportedLocalTempAlter(addElement.SchemaObjectName, addElement.Definition)
+                    ? StatementClassification.SessionLocal
+                    : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+
+            case AlterTableDropTableElementStatement dropElement:
+                return IsLocalTemp(dropElement.SchemaObjectName) &&
+                    dropElement.AlterTableDropTableElements.All(e =>
+                        e.TableElementType is TableElementType.Column or TableElementType.Constraint)
+                    ? StatementClassification.SessionLocal
+                    : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+
             case SelectStatement select:
                 if (select.Into is null)
                     return StatementClassification.ReadOnly;
@@ -509,6 +521,18 @@ internal sealed class SqlSafetyClassifier
         NamedTableReference named => named.SchemaObject,
         _ => null,
     };
+
+    private static bool IsSupportedLocalTempAlter(SchemaObjectName? name, TableDefinition? definition) =>
+        IsLocalTemp(name) &&
+        definition is not null &&
+        definition.Indexes.Count == 0 &&
+        definition.SystemTimePeriod is null &&
+        definition.ColumnDefinitions.Count + definition.TableConstraints.Count > 0 &&
+        definition.TableConstraints.All(c =>
+            c is CheckConstraintDefinition ||
+            c is DefaultConstraintDefinition ||
+            c is NullableConstraintDefinition ||
+            c is UniqueConstraintDefinition);
 
     private static bool IsLocalTemp(SchemaObjectName? name) =>
         name?.Identifiers.Count == 1 &&
