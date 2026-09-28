@@ -7,6 +7,9 @@ using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
+using SqlHarness.Core;
+using SqlHarness.Core.Targets;
+using SqlHarness.Mcp;
 using SqlHarness.Mcp.Tools;
 
 namespace SqlHarness.Mcp.Tests;
@@ -185,6 +188,27 @@ internal static class McpStdioProcessHarness
     internal static JsonElement Envelope(CallToolResult result) =>
         JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text).RootElement;
 
+    /// <summary>
+    /// Mutation-gate oracle for MCP v1: the refusal must be the gate itself
+    /// (error status with the Safety exit code and a validation-phase
+    /// <c>safety_rejected</c> naming <c>MutationNotAllowed</c>), never a bare
+    /// <c>IsError</c> that a missing object or a dead connection would also
+    /// satisfy.
+    /// </summary>
+    internal static void AssertMutationGateRefusal(JsonElement envelope)
+    {
+        Assert.Equal("error", envelope.GetProperty("status").GetString());
+        Assert.Equal((int)SqlHarnessExitCode.Safety, envelope.GetProperty("exitCode").GetInt32());
+        var error = envelope.GetProperty("error");
+        Assert.Equal(JsonValueKind.Object, error.ValueKind);
+        Assert.Equal("safety_rejected", error.GetProperty("code").GetString());
+        Assert.Equal("validation", error.GetProperty("phase").GetString());
+        Assert.Contains(
+            "MutationNotAllowed",
+            error.GetProperty("message").GetString() ?? string.Empty,
+            StringComparison.Ordinal);
+    }
+
     internal static void AssertStdoutIsPureProtocol(byte[] recorded)
     {
         var text = Encoding.UTF8.GetString(recorded);
@@ -218,6 +242,36 @@ internal sealed class RecordingStream(Stream inner) : Stream
         {
             lock (_record)
                 return _record.ToArray();
+        }
+    }
+
+    /// <summary>
+    /// Copies bytes the SDK client never read (for example server output
+    /// from the shutdown phase after the last client read) into the
+    /// recording. Call only after the child has exited, so EOF is
+    /// guaranteed; the budget only bounds a stuck pipe.
+    /// </summary>
+    public async Task DrainRemainingAsync(TimeSpan budget, CancellationToken ct)
+    {
+        using var budgetCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budgetCts.CancelAfter(budget);
+        var buffer = new byte[16 * 1024];
+        while (true)
+        {
+            int read;
+            try
+            {
+                read = await inner.ReadAsync(buffer.AsMemory(), budgetCts.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                break;
+            }
+
+            if (read <= 0)
+                break;
+            lock (_record)
+                _record.Write(buffer, 0, read);
         }
     }
 
@@ -370,6 +424,10 @@ public sealed class McpStdioProcessTests
             Assert.True(child.Process.WaitForExit(30_000), "The published server did not exit after stdin EOF.");
             Assert.Equal(0, child.Process.ExitCode);
 
+            // Drain what the SDK client never read (shutdown-phase bytes)
+            // before judging purity: the child has exited, so EOF is
+            // guaranteed and the budget only bounds a stuck pipe.
+            await child.StdoutTee.DrainRemainingAsync(TimeSpan.FromSeconds(10), ct);
             McpStdioProcessHarness.AssertStdoutIsPureProtocol(child.StdoutTee.Recorded);
 
             var stderr = await child.Stderr.WaitAsync(TimeSpan.FromSeconds(10), ct);
@@ -507,7 +565,22 @@ public sealed class McpStdioLiveTests
                 new Dictionary<string, object?> { ["sql"] = "DELETE FROM dbo.McpLiveProbe" },
                 cancellationToken: ct);
             Assert.True(mutation.IsError == true, "MCP must refuse the persistent mutation.");
+            McpStdioProcessHarness.AssertMutationGateRefusal(McpStdioProcessHarness.Envelope(mutation));
             Assert.False(child.Process.HasExited, "The server died while refusing the mutation.");
+
+            // Contrast on the same probe table: a read-only SELECT must not
+            // take the mutation-gate path (a missing object and live rows
+            // both differ from safety_rejected), so the refusal above cannot
+            // pass for the wrong reason.
+            var probeRead = await client.CallToolAsync(
+                "sqlharness_query",
+                new Dictionary<string, object?> { ["sql"] = "SELECT * FROM dbo.McpLiveProbe" },
+                cancellationToken: ct);
+            var probeEnvelope = McpStdioProcessHarness.Envelope(probeRead);
+            var probeCode = probeEnvelope.GetProperty("error").ValueKind == JsonValueKind.Object
+                ? probeEnvelope.GetProperty("error").GetProperty("code").GetString()
+                : null;
+            Assert.NotEqual("safety_rejected", probeCode);
 
             // Cancel a long watch, then prove cleanup: the gate is free, the
             // next call succeeds, and EOF still shuts the process down.
@@ -556,6 +629,64 @@ public sealed class McpStdioLiveTests
             child?.Process.Dispose();
             McpStdioProcessHarness.DeleteHome(home);
         }
+    }
+}
+
+/// <summary>
+/// Offline proof for the I-2 oracle (FIX R1): the shared
+/// <c>AssertMutationGateRefusal</c> helper passes on a genuine MCP v1
+/// mutation-gate refusal produced end to end (the mapper pins
+/// <c>AllowMutation: false</c>, the real Core module refuses before any
+/// connection, the real adapter builds the envelope) over an unreachable
+/// synthetic profile, so no database is needed; a missing-object style
+/// envelope fails the same helper. The live drive inherits the helper.
+/// </summary>
+[Collection("McpStdioProcess")]
+public sealed class McpMutationGateOracleTests
+{
+    private const string ProfileName = "mcp-gate-oracle";
+
+    [Fact]
+    public async Task Genuine_mutation_gate_refusal_passes_the_oracle_without_a_database()
+    {
+        var home = McpStdioProcessHarness.CreateSyntheticHome(
+            ProfileName,
+            """{"mcp-gate-oracle": {"server": "mcp-unreachable.invalid", "database": "mcp-gate-oracle-db", "vars": {"tenant": "^frozen$"}, "auth": "integrated"}}""");
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            var profiles = ProfileStore.Load(Path.Combine(home, "targets.json"));
+            var scope = McpScope.Create(
+                new McpServerOptions
+                {
+                    Profile = ProfileName,
+                    Vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["tenant"] = "frozen" },
+                },
+                profiles);
+            var handlers = new McpToolHandlers(scope, scope.CreateModule());
+            var mutation = await handlers.QueryAsync(null!, "DELETE FROM dbo.McpLiveProbe", ct: cts.Token);
+            Assert.True(mutation.IsError == true, McpStdioProcessHarness.Envelope(mutation).ToString());
+            McpStdioProcessHarness.AssertMutationGateRefusal(McpStdioProcessHarness.Envelope(mutation));
+        }
+        finally
+        {
+            McpStdioProcessHarness.DeleteHome(home);
+        }
+    }
+
+    [Fact]
+    public void Missing_object_style_envelope_fails_the_oracle()
+    {
+        var outcome = new SqlHarnessOutcome(
+            SqlHarnessExitCode.SqlExecution,
+            null,
+            "Invalid object name 'dbo.McpLiveProbe'.");
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_query");
+        Assert.True(result.IsError == true);
+        var envelope = McpStdioProcessHarness.Envelope(result);
+        Assert.Equal("sql_execution_failed", envelope.GetProperty("error").GetProperty("code").GetString());
+        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() =>
+            McpStdioProcessHarness.AssertMutationGateRefusal(envelope));
     }
 }
 
