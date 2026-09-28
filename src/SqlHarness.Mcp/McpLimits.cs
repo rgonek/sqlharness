@@ -29,6 +29,26 @@ public static class McpLimits
     /// <summary>Budget for the whole tools/list catalog (schemas and descriptions) in UTF-8 bytes.</summary>
     public const long ToolsListBudgetBytes = 32L * 1024;
 
+    /// <summary>
+    /// Smallest accepted CallToolResult budget in UTF-8 bytes (4096). The
+    /// minimum valid error envelope always fits inside this budget and JSON
+    /// is never truncated to meet it.
+    /// </summary>
+    public const int MinCallToolResultBudgetBytes = 4096;
+
+    /// <summary>
+    /// Largest CallToolResult budget a process operator may configure
+    /// (1048576). A single tool call may only lower the process maximum,
+    /// never raise it.
+    /// </summary>
+    public const int MaxCallToolResultBudgetBytes = 1048576;
+
+    /// <summary>Default per-cell character limit for result content.</summary>
+    public const int DefaultMaximumCellCharacters = 512;
+
+    /// <summary>Largest per-cell character limit an operator may configure (4096).</summary>
+    public const int MaxCellCharactersLimit = 4096;
+
     /// <summary>Budget for one serialized CallToolResult in UTF-8 bytes (enforced in T4).</summary>
     public const long CallToolResultBudgetBytes = 16L * 1024;
 }

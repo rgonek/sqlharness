@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using System.Text.Json;
 
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -18,23 +17,22 @@ namespace SqlHarness.Mcp.Tools;
 /// carries the raw argument keys so unknown properties are rejected here even
 /// when the SDK binder only enforces them for scalar-only signatures.
 /// Argument faults surface as failed results with constant, value-free text;
-/// unexpected failures surface as a generic failed result. Success carries the
-/// Core report (sanitized for plans) as compact JSON; the agent envelope and
-/// result budgets are a T4 concern.
+/// unexpected failures surface as a generic failed result. Every result goes
+/// through <see cref="McpResultAdapter"/>, so success, controlled outcomes,
+/// and failures all share the small budgeted agent envelope as both
+/// structured content and JSON text.
 /// </summary>
 public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-
     public Task<CallToolResult> CapabilitiesAsync(
         RequestContext<CallToolRequestParams> ctx,
         [Description("Include local counts and existence flags. Never secrets, paths, or profile lists.")]
         bool includeDiagnostics = false,
         CancellationToken ct = default) =>
-        RunAsync(_ =>
+        RunAsync("sqlharness_capabilities", _ =>
         {
             ThrowIfUnknown(ctx, ["includeDiagnostics"]);
-            return Task.FromResult(Ok(McpOperationMapper.BuildCapabilities(scope, includeDiagnostics)));
+            return Task.FromResult(Ok(McpOperationMapper.BuildCapabilities(scope, includeDiagnostics), "sqlharness_capabilities"));
         }, ct);
 
     public Task<CallToolResult> InspectAsync(
@@ -59,12 +57,12 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         [Description("SQL timeout 1..300 seconds. Defaults per kind (ping 5, others 30).")]
         int? timeout = null,
         CancellationToken ct = default) =>
-        RunAsync(async token =>
+        RunAsync("sqlharness_inspect", async token =>
         {
             ThrowIfUnknown(ctx, ["kind", "object", "filter", "tables", "like", "top", "exact", "window", "timeout"]);
             return OutcomeResult(await module.ExecuteAsync(
                 McpOperationMapper.MapInspect(scope, kind, @object, filter, tables, like, top, exact, window, timeout),
-                token));
+                token), "sqlharness_inspect");
         }, ct);
 
     public Task<CallToolResult> ValidateAsync(
@@ -79,10 +77,10 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         [Description("Parameters as {name, type, value}; value is a culture-invariant string or JSON null.")]
         McpParameterArgument[]? parameters = null,
         CancellationToken ct = default) =>
-        RunAsync(async token =>
+        RunAsync("sqlharness_validate", async token =>
         {
             ThrowIfUnknown(ctx, ["usage", "sql", "file", "parameters"]);
-            return Ok(await McpOperationMapper.MapValidateAsync(scope, sql, file, usage, parameters, token));
+            return Ok(await McpOperationMapper.MapValidateAsync(scope, sql, file, usage, parameters, token), "sqlharness_validate");
         }, ct);
 
     public Task<CallToolResult> QueryAsync(
@@ -98,12 +96,12 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         [Description("Presentation row cap 0..500.")]
         int maxRows = 50,
         CancellationToken ct = default) =>
-        RunAsync(async token =>
+        RunAsync("sqlharness_query", async token =>
         {
             ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows"]);
             return OutcomeResult(await module.ExecuteAsync(
                 await McpOperationMapper.MapQueryAsync(scope, sql, file, parameters, timeout, maxRows, token),
-                token));
+                token), "sqlharness_query");
         }, ct);
 
     public Task<CallToolResult> MeasureAsync(
@@ -121,12 +119,12 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         [Description("SQL timeout 1..300 seconds.")]
         int? timeout = null,
         CancellationToken ct = default) =>
-        RunAsync(async token =>
+        RunAsync("sqlharness_measure", async token =>
         {
             ThrowIfUnknown(ctx, ["query", "setup", "parameters", "paramSetFiles", "repeat", "timeout"]);
             return OutcomeResult(await module.ExecuteAsync(
                 await McpOperationMapper.MapMeasureAsync(scope, query, setup, parameters, paramSetFiles, repeat, timeout, token),
-                token));
+                token), "sqlharness_measure");
         }, ct);
 
     public Task<CallToolResult> CompareAsync(
@@ -149,12 +147,12 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         [Description("Optional single matrix dimension {name, type, values}: at least two values, no commas.")]
         McpMatrixArgument? matrix = null,
         CancellationToken ct = default) =>
-        RunAsync(async token =>
+        RunAsync("sqlharness_compare", async token =>
         {
             ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "repeat", "timeout", "compareResults", "matrix"]);
             return OutcomeResult(await module.ExecuteAsync(
                 await McpOperationMapper.MapCompareAsync(scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token),
-                token));
+                token), "sqlharness_compare");
         }, ct);
 
     public Task<CallToolResult> WatchAsync(
@@ -178,12 +176,12 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         [Description("Maximum watch time like 15m (s/m/h suffix, at most 24h). Default 15m.")]
         string? maxDuration = null,
         CancellationToken ct = default) =>
-        RunAsync(async token =>
+        RunAsync("sqlharness_watch", async token =>
         {
             ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "until", "untilUnchanged", "interval", "maxDuration"]);
             return OutcomeResult(await module.ExecuteAsync(
                 await McpOperationMapper.MapWatchAsync(scope, sql, file, parameters, timeout, maxRows, until, untilUnchanged, interval, maxDuration, token),
-                token));
+                token), "sqlharness_watch");
         }, ct);
 
     public Task<CallToolResult> SnapshotAsync(
@@ -204,12 +202,12 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         [Description("Presentation row cap 0..500.")]
         int maxRows = 50,
         CancellationToken ct = default) =>
-        RunAsync(async token =>
+        RunAsync("sqlharness_snapshot", async token =>
         {
             ThrowIfUnknown(ctx, ["action", "name", "sql", "file", "parameters", "timeout", "maxRows"]);
             return OutcomeResult(await module.ExecuteAsync(
                 await McpOperationMapper.MapSnapshotAsync(scope, action, name, sql, file, parameters, timeout, maxRows, token),
-                token));
+                token), "sqlharness_snapshot");
         }, ct);
 
     public Task<CallToolResult> PlanAsync(
@@ -219,13 +217,13 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         [Description("Plan file under an operator input root. Exactly one of content or file.")]
         string? file = null,
         CancellationToken ct = default) =>
-        RunAsync(async token =>
+        RunAsync("sqlharness_plan", async token =>
         {
             ThrowIfUnknown(ctx, ["content", "file"]);
             var outcome = await module.ExecuteAsync(await McpOperationMapper.MapPlanAsync(scope, content, file, token), token);
             return outcome.ExitCode == SqlHarnessExitCode.Success
-                ? Ok(McpResultSanitizer.Sanitize(outcome.Report))
-                : OutcomeResult(outcome);
+                ? Ok(McpResultSanitizer.Sanitize(outcome.Report), "sqlharness_plan")
+                : OutcomeResult(outcome, "sqlharness_plan");
         }, ct);
 
     public Task<CallToolResult> ArtifactAsync(
@@ -236,19 +234,19 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         [AllowedValues("summary", "metrics", "operators")]
         string section,
         CancellationToken ct = default) =>
-        RunAsync(_ =>
+        RunAsync("sqlharness_artifact", _ =>
         {
             ThrowIfUnknown(ctx, ["id", "section"]);
-            return Task.FromResult(Ok(McpOperationMapper.ReadArtifactSection(scope, id, section)));
+            return Task.FromResult(Ok(McpOperationMapper.ReadArtifactSection(scope, id, section), "sqlharness_artifact"));
         }, ct);
 
     public Task<CallToolResult> GainAsync(
         RequestContext<CallToolRequestParams> ctx,
         CancellationToken ct = default) =>
-        RunAsync(async token =>
+        RunAsync("sqlharness_gain", async token =>
         {
             ThrowIfUnknown(ctx, []);
-            return OutcomeResult(await module.ExecuteAsync(new SqlHarnessGainOperation(), token));
+            return OutcomeResult(await module.ExecuteAsync(new SqlHarnessGainOperation(), token), "sqlharness_gain");
         }, ct);
 
     /// <summary>
@@ -278,7 +276,7 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         }
     }
 
-    private async Task<CallToolResult> RunAsync(Func<CancellationToken, Task<CallToolResult>> run, CancellationToken ct)
+    private async Task<CallToolResult> RunAsync(string command, Func<CancellationToken, Task<CallToolResult>> run, CancellationToken ct)
     {
         try
         {
@@ -286,45 +284,40 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         }
         catch (Exception exception) when (exception is McpMappingException
             or McpInputException
-            or ParameterSetFileException
-            or ArtifactReadException)
+            or ParameterSetFileException)
         {
             // Contract rejections carry constant, value-free messages.
-            return Fail(exception.Message);
+            return Fail(SqlHarnessExitCode.Safety, exception.Message, command);
+        }
+        catch (ArtifactReadException exception)
+        {
+            return Fail(SqlHarnessExitCode.LocalStorage, exception.Message, command);
         }
         catch (Exception)
         {
-            return Fail(null);
+            return Fail(SqlHarnessExitCode.SqlExecution, null, command);
         }
     }
 
-    private static CallToolResult OutcomeResult(SqlHarnessOutcome outcome)
+    private static CallToolResult OutcomeResult(SqlHarnessOutcome outcome, string command)
     {
         // Controlled outcomes (watch max duration, snapshot diff) are valid
-        // results, not transport failures.
-        if (outcome.ExitCode is SqlHarnessExitCode.Success
-            or SqlHarnessExitCode.WatchMaxDuration
-            or SqlHarnessExitCode.SnapshotDifferences)
-            return Ok(outcome.Report);
-        return Fail(outcome.SafeError);
+        // results, not transport failures; the adapter maps only real
+        // failures to IsError and keeps the Core exit code in the envelope.
+        ArgumentNullException.ThrowIfNull(outcome);
+        return McpResultAdapter.Adapt(outcome, command);
     }
 
-    private static CallToolResult Ok(object? report) => new()
-    {
-        Content = [new TextContentBlock
-        {
-            Text = JsonSerializer.Serialize(report, report?.GetType() ?? typeof(object), Json),
-        }],
-    };
+    private static CallToolResult Ok(object? report, string command) =>
+        McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), command);
 
-    private static CallToolResult Fail(string? message) => new()
-    {
-        Content = [new TextContentBlock
-        {
-            Text = string.IsNullOrWhiteSpace(message) ? "The tool failed without a safe error." : message,
-        }],
-        IsError = true,
-    };
+    private static CallToolResult Fail(SqlHarnessExitCode exitCode, string? message, string command) =>
+        McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(
+                exitCode,
+                null,
+                string.IsNullOrWhiteSpace(message) ? "The tool failed without a safe error." : message),
+            command);
 }
 
 /// <summary>
