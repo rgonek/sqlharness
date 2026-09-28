@@ -102,3 +102,9 @@ dotnet list SqlHarness.sln package --vulnerable --include-transitive
 ```
 
 Przy samym zapisie tych dokumentów sprawdzić ścieżki, kompletność mapowania i diff; nie uruchamiać ponownie zestawu testów aplikacji.
+
+## Status specyfikacji 06/T4–T5 (dokumenty, nie wdrożenia)
+
+- 06/T4: `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md` — kontrakt decyzji regresji (pass/fail/inconclusive), implementacja poza zakresem.
+- 06/T5: `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md` — kontrakt diagnostyki `pg_stat_statements` (PG14+, read-only, bez `CREATE EXTENSION`, bez obietnicy okna, snapshot/delta z unieważnieniem po resecie); SQL Server `qstop` bez zmian.
+- Obie specyfikacje nie zmieniają kodu, stubów, exit codes ani capabilities: mapowanie w capabilities dopiero po rzeczywistym wdrożeniu.
