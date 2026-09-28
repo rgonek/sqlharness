@@ -386,6 +386,106 @@ public class ContractsTests
         Assert.Equal(JsonValueKind.Null, equivalence.GetProperty("candidateOnlyCount").ValueKind);
     }
 
+    [Fact]
+    public void Report_contract_covers_the_closed_operation_family()
+    {
+        var operations = typeof(SqlHarnessOperation).Assembly.GetTypes()
+            .Where(t => t.BaseType == typeof(SqlHarnessOperation))
+            .Select(t => t.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            operations,
+            OperationReportContract.KnownOperations
+                .Select(t => t.Name)
+                .Order(StringComparer.Ordinal)
+                .ToArray());
+    }
+
+    [Fact]
+    public void Null_report_is_compatible_with_every_operation()
+    {
+        foreach (var operation in Operations())
+            OperationReportContract.AssertCompatible(operation, null);
+    }
+
+    [Fact]
+    public void Every_operation_accepts_only_its_own_report_types()
+    {
+        var cases = OperationReportCases();
+        Assert.Equal(14, cases.Select(c => c.Operation.GetType()).Distinct().Count());
+        foreach (var (operation, report, compatible) in cases)
+        {
+            var exception = Record.Exception(() =>
+                OperationReportContract.AssertCompatible(operation, report));
+            Assert.True(
+                compatible == (exception is null),
+                $"operation={operation.GetType().Name} report={report.GetType().Name} " +
+                $"expectedCompatible={compatible} error={exception?.Message}");
+        }
+    }
+
+    private static IReadOnlyList<SqlHarnessOperation> Operations() =>
+    [
+        new SqlHarnessQueryOperation(Target(), "SELECT 1", [], 30, 100, false, null),
+        new SqlHarnessCompareOperation(Target(), null, "SELECT 1", "SELECT 2", [], 30, 1),
+        new SqlHarnessCompareMatrixOperation(Target(), null, "SELECT 1", "SELECT 2", [], 30, 1, "BatchSize:int=1,2"),
+        new SqlHarnessMeasureOperation(Target(), null, "SELECT 1", [], 30, 1),
+        new SqlHarnessGainOperation(),
+        new SqlHarnessPlanOperation("<ShowPlanXML/>", new OutputFootprint(0, 0)),
+        new SqlHarnessSchemaOperation(Target(), null, 30),
+        new SqlHarnessPingOperation(Target(), 30),
+        new SqlHarnessCountsOperation(Target(), [], null, 25, false, 30),
+        new SqlHarnessSpaceOperation(Target(), 25, null, 30),
+        new SqlHarnessWatchOperation(Target(), "SELECT 1", [], 30, 100, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(15), null, 3),
+        new SqlHarnessSnapshotOperation(Target(), "SELECT 1", [], 30, 100, "before", false, false),
+        new SqlHarnessQueryStoreTopOperation(Target(), 20, 1440, 30),
+        new SqlHarnessIndexesOperation(Target(), 10, null, 30),
+    ];
+
+    private static IReadOnlyList<object> Reports() =>
+    [
+        new SqlHarnessQueryReport(Identity(), "read-only", [], [], -1, 0, "hash", new OutputFootprint(0, 0)),
+        new SqlHarnessCompareReport(Identity(), 1, 2, true, Variant("baseline"), Variant("candidate"), null),
+        new SqlHarnessCompareMatrixReport("@BatchSize", "int", []),
+        new SqlHarnessMeasureReport(Identity(), 1, 2, true, Variant("measure"), null),
+        new SqlHarnessMeasureSetReport(
+            Identity(), 1, 2, 1, [], "rule", "warning", [],
+            new MeasureCrossSetSummary(null, 0, null, 0, null, 0, null, 0, null, 0, null, 0), null),
+        new SqlHarnessGainReport(new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0), new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0), new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
+        new DistilledPlan([]),
+        new SqlHarnessSchemaReport(Identity(), [], 0),
+        new SqlHarnessPingReport(Identity(), "s", "d", "login", 5),
+        new SqlHarnessCountsReport(Identity(), [], 0),
+        new SqlHarnessSpaceReport(Identity(), [], new(0, 0, 0), [], []),
+        new SqlHarnessWatchReport(Identity(), 1, 10, WatchExitReason.ConditionMet, []),
+        new SqlHarnessSnapshotReport(Identity(), "before", SnapshotVerdict.Stored, 0, []),
+        new SqlHarnessQueryStoreTopReport(Identity(), 1440, 20, [], null),
+        new SqlHarnessIndexesReport(Identity(), DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, 10, null, [], [], null),
+    ];
+
+    private static IReadOnlyList<(SqlHarnessOperation Operation, object Report, bool Compatible)> OperationReportCases()
+    {
+        var operations = Operations();
+        var reports = Reports();
+        var compatible = new HashSet<(int Operation, int Report)>
+        {
+            (0, 0), (1, 1), (2, 2), (3, 3), (3, 4), (4, 5), (5, 6), (6, 7),
+            (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 13), (13, 14),
+        };
+        var cases = new List<(SqlHarnessOperation, object, bool)>();
+        for (var o = 0; o < operations.Count; o++)
+            for (var r = 0; r < reports.Count; r++)
+                cases.Add((operations[o], reports[r], compatible.Contains((o, r))));
+        return cases;
+    }
+
+    private static SqlTargetRequest Target() =>
+        new("test", new Dictionary<string, string> { ["env"] = "a" });
+
+    private static SqlHarnessTargetIdentityReport Identity() =>
+        new("s", "d", "s", "d", "profile");
+
     private static CompareVariantReport Variant(string name) =>
         new(name, new(1, 2, 3), new(1, 2, 3), new(1, 2, 3), new Dictionary<string, long>(), [], []);
 }

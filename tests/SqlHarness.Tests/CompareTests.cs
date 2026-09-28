@@ -574,6 +574,113 @@ public class SqlHarnessCompareTests
         }
     }
 
+    [Fact]
+    public async Task Compare_runs_setup_exactly_once_across_repetitions()
+    {
+        var session = FakeCompareSession.Create();
+
+        var outcome = await Module(session).ExecuteAsync(Compare(repeat: 5));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(1, session.Commands.Count(command =>
+            command.Sql.Contains("INTO #ids", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task Compare_never_reassigns_session_identity_after_connect()
+    {
+        var factory = new IdentityAssigningFactory(FakeCompareSession.Create());
+        var module = new SqlHarnessModule(factory, new FakeGainStore(), new NullArtifactWriter(), Profiles);
+
+        var outcome = await module.ExecuteAsync(Compare(repeat: 1));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessCompareReport>(outcome.Report);
+        Assert.Same(factory.AssignedIdentity, report.Target);
+        Assert.Equal(1, factory.IdentitySets);
+    }
+
+    [Fact]
+    public async Task Compare_failure_still_carries_a_completion_receipt()
+    {
+        var gain = new FakeGainStore();
+        var session = FakeCompareSession.Create();
+        var operation = Compare(repeat: 1) with
+        {
+            BaselineSql = "DELETE dbo.Clients",
+        };
+
+        var outcome = await Module(session, gain: gain).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Null(outcome.Report);
+        Assert.NotNull(outcome.EmissionReceipt);
+        Assert.Equal(
+            SqlHarnessExitCode.Safety,
+            await outcome.EmissionReceipt.CompleteAsync(new OutputFootprint(0, 0)));
+        Assert.Single(gain.Records);
+    }
+
+    [Fact]
+    public async Task Compare_receipt_reports_local_storage_when_gain_store_fails()
+    {
+        var module = new SqlHarnessModule(
+            FakeCompareSession.Create(), new ThrowingGainStore(), new NullArtifactWriter(), Profiles);
+
+        var outcome = await module.ExecuteAsync(Compare(repeat: 1));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.NotNull(outcome.EmissionReceipt);
+        Assert.Equal(
+            SqlHarnessExitCode.LocalStorage,
+            await outcome.EmissionReceipt.CompleteAsync(new OutputFootprint(0, 0)));
+    }
+
+    private sealed class ThrowingGainStore : IGainStore
+    {
+        public void Append(GainRecord record) => throw new IOException("gain store unavailable");
+        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
+    }
+
+    private sealed class IdentityAssigningFactory(FakeCompareSession inner) : ISqlSessionFactory
+    {
+        public SqlHarnessTargetIdentityReport AssignedIdentity { get; } =
+            new("test-server", "testdb-a", "test-server", "testdb-a", "profile");
+
+        public CountingIdentitySession? CreatedSession { get; private set; }
+
+        public int IdentitySets => CreatedSession?.Sets ?? 0;
+
+        public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
+        {
+            // The factory assigns identity once before handing the session out,
+            // mirroring production session factories; runners must only read it.
+            var session = new CountingIdentitySession(inner) { Identity = AssignedIdentity };
+            CreatedSession = session;
+            return Task.FromResult<ISqlSession>(session);
+        }
+
+        public sealed class CountingIdentitySession(FakeCompareSession inner) : ISqlSession
+        {
+            public int Sets { get; private set; }
+            public IReadOnlyList<string> Messages => inner.Messages;
+            public SqlHarnessTargetIdentityReport Identity
+            {
+                get => inner.Identity;
+                set
+                {
+                    Sets++;
+                    inner.Identity = value;
+                }
+            }
+
+            public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct) =>
+                inner.ExecuteReaderAsync(command, ct);
+
+            public ValueTask DisposeAsync() => inner.DisposeAsync();
+        }
+    }
+
     private static SqlHarnessModule Module(
         FakeCompareSession session,
         FakeAzureCli? azure = null,

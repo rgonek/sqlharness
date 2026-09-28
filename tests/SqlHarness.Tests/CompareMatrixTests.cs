@@ -248,6 +248,30 @@ public class CompareMatrixTests
         Assert.DoesNotContain("20", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Matrix_failure_keeps_partial_cells_and_never_starts_later_values()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory(failSqlAt: 1);
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix("BatchSize:int=1,20,100"));
+
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
+        Assert.Equal(2, factory.ConnectCount);
+        Assert.Equal(2, factory.Sessions.Count);
+        var partialReport = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
+        var cell = Assert.Single(partialReport.Cells);
+        Assert.Equal(0, cell.Index);
+        Assert.Equal("1", cell.ParameterValue);
+        Assert.True(cell.Compare.ResultsEquivalent);
+        var kept = Assert.Single(artifacts.Directories);
+        Assert.Equal(kept, cell.Compare.ArtifactDirectory);
+        Assert.NotNull(outcome.EmissionReceipt);
+        Assert.Equal(
+            SqlHarnessExitCode.SqlExecution,
+            await outcome.EmissionReceipt.CompleteAsync(new OutputFootprint(0, 0)));
+    }
+
     private static SqlHarnessModule Module(
         MatrixSessionFactory sessions,
         ICompareArtifactWriter artifacts,

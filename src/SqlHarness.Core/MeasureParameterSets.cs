@@ -454,7 +454,7 @@ internal sealed class MeasureParameterSetRunner
         var setupExecutionCount = 0;
         if (!string.IsNullOrWhiteSpace(operation.SetupSql))
         {
-            await SqlHarnessModule.ExecuteRawAsync(
+            await BenchmarkRunner.ExecuteRawAsync(
                 session,
                 new SqlExecutionCommand(operation.SetupSql, sets[0].Parameters, operation.TimeoutSeconds),
                 raw,
@@ -573,7 +573,7 @@ internal static class MeasureParameterSetReportProjector
             repeat,
             stable,
             stable ? resultHash : null,
-            SqlHarnessModule.CreateVariantReport(set.Name, runs),
+            BenchmarkReports.CreateVariantReport(set.Name, runs),
             DistinctPlanHashes(runs));
     }
 

@@ -82,8 +82,8 @@ public sealed class MeasureParameterSetReportTests
         Assert.Equal(new CompareDistribution(500, 500, 500), wide.Metrics.LogicalReads);
         Assert.DoesNotContain(wide.Metrics.Operators, op => op.PhysicalOp == "Index Seek");
 
-        AssertSameMetrics(SqlHarnessModule.CreateVariantReport("narrow", RunsFor(runs, "narrow")), narrow.Metrics);
-        AssertSameMetrics(SqlHarnessModule.CreateVariantReport("wide", RunsFor(runs, "wide")), wide.Metrics);
+        AssertSameMetrics(BenchmarkReports.CreateVariantReport("narrow", RunsFor(runs, "narrow")), narrow.Metrics);
+        AssertSameMetrics(BenchmarkReports.CreateVariantReport("wide", RunsFor(runs, "wide")), wide.Metrics);
     }
 
     [Fact]

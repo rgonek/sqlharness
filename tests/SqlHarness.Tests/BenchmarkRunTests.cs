@@ -199,6 +199,86 @@ public sealed class BenchmarkRunTests
         await AssertPropagates(new TimeoutException("measured run failed"), CancellationToken.None);
     }
 
+    [Fact]
+    public async Task ExecuteRawAsync_preserves_the_primary_failure_when_cleanup_fails()
+    {
+        var primary = new TimeoutException("setup failed");
+        var session = new FlakyMessagesSession(primary);
+        using var raw = new CanonicalResultAccumulator();
+
+        var exception = await Assert.ThrowsAsync<TimeoutException>(() =>
+            BenchmarkRunner.ExecuteRawAsync(
+                session,
+                new SqlExecutionCommand("SELECT 1", [], 30),
+                raw,
+                CancellationToken.None));
+
+        Assert.Same(primary, exception);
+    }
+
+    [Fact]
+    public async Task ExecuteRawAsync_propagates_cleanup_failure_without_a_primary_failure()
+    {
+        var cleanup = new InvalidOperationException("cleanup messages failed");
+        var session = new MessagesFailingSession(cleanup);
+        using var raw = new CanonicalResultAccumulator();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            BenchmarkRunner.ExecuteRawAsync(
+                session,
+                new SqlExecutionCommand("SELECT 1", [], 30),
+                raw,
+                CancellationToken.None));
+
+        Assert.Same(cleanup, exception);
+    }
+
+    private sealed class FlakyMessagesSession(Exception primary) : ISqlSession
+    {
+        private bool _failed;
+        public IReadOnlyList<string> Messages => _failed
+            ? throw new InvalidOperationException("cleanup messages failed")
+            : Array.Empty<string>();
+        public SqlHarnessTargetIdentityReport Identity { get; set; } =
+            new("s", "d", "s", "d", "profile");
+
+        public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
+        {
+            _failed = true;
+            return Task.FromException<ISqlReader>(primary);
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class MessagesFailingSession(Exception cleanup) : ISqlSession
+    {
+        private int _reads;
+        public IReadOnlyList<string> Messages => ++_reads == 1
+            ? Array.Empty<string>()
+            : throw cleanup;
+        public SqlHarnessTargetIdentityReport Identity { get; set; } =
+            new("s", "d", "s", "d", "profile");
+
+        public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct) =>
+            Task.FromResult<ISqlReader>(new EmptyReader());
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class EmptyReader : ISqlReader
+    {
+        public int FieldCount => 0;
+        public int RecordsAffected => -1;
+        public string GetName(int ordinal) => throw new NotSupportedException();
+        public Type GetFieldType(int ordinal) => throw new NotSupportedException();
+        public bool GetAllowNull(int ordinal) => throw new NotSupportedException();
+        public object GetValue(int ordinal) => throw new NotSupportedException();
+        public Task<bool> ReadAsync(CancellationToken ct) => Task.FromResult(false);
+        public Task<bool> NextResultAsync(CancellationToken ct) => Task.FromResult(false);
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     private static async Task AssertPropagates(Exception failure, CancellationToken cancellationToken)
     {
         var dialect = new RecordingDialect

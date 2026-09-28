@@ -3,6 +3,104 @@ using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Core;
 
+/// <summary>
+/// Shared preparation for the compare family (single compare and compare
+/// matrix): bounds, target resolution, safety classification of setup /
+/// baseline / candidate, fixed-parameter parsing and measured-batch
+/// validation. Matrix-only concerns (matrix parsing, per-value binding, fresh
+/// connection per value) stay with the matrix dispatch.
+/// </summary>
+internal sealed record PreparedCompareFamily(
+    ResolvedTarget Target,
+    ISqlDialect Dialect,
+    IReadOnlyList<SqlHarnessParameter> FixedParameters,
+    CompareClassificationReport Classification,
+    IReadOnlySet<string> SetupTempTables);
+
+internal static class CompareOperationPreparer
+{
+    private static readonly IReadOnlySet<string> NoSessionTemps =
+        new HashSet<string>(StringComparer.Ordinal);
+
+    internal static void EnsureSafe(SqlSafetyDecision decision, string label)
+    {
+        if (!decision.Allowed)
+            throw new SqlHarnessSafetyException($"SQL safety rejection for {label}: {decision.RejectionDescription}");
+    }
+
+    internal static PreparedCompareFamily PrepareFixed(
+        SqlTargetRequest targetRequest,
+        IReadOnlyDictionary<string, TargetProfile> profiles,
+        string? setupSql,
+        string baselineSql,
+        string candidateSql,
+        IReadOnlyList<string> parameterInputs,
+        int timeoutSeconds,
+        int repeat,
+        List<string> knownSecrets)
+    {
+        ArgumentNullException.ThrowIfNull(targetRequest);
+        ArgumentNullException.ThrowIfNull(profiles);
+        ArgumentNullException.ThrowIfNull(baselineSql);
+        ArgumentNullException.ThrowIfNull(candidateSql);
+        ArgumentNullException.ThrowIfNull(parameterInputs);
+        ArgumentNullException.ThrowIfNull(knownSecrets);
+
+        if (timeoutSeconds is < 1 or > 300)
+            throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
+        if (repeat is < 1 or > 100)
+            throw new SqlHarnessSafetyException("Compare repetitions must be between 1 and 100.");
+
+        var target = TargetResolver.Resolve(targetRequest, profiles);
+        var dialect = SqlDialects.For(target.Engine);
+
+        SqlSafetyDecision? setupSafety = null;
+        IReadOnlySet<string> setupTemps = NoSessionTemps;
+        if (!string.IsNullOrWhiteSpace(setupSql))
+        {
+            setupSafety = dialect.Classify(
+                setupSql, SqlUsage.CompareSetup, target.Database, false, null, NoSessionTemps);
+            EnsureSafe(setupSafety, "setup");
+            setupTemps = setupSafety.SessionTempTables;
+        }
+
+        var baselineSafety = dialect.Classify(
+            baselineSql, SqlUsage.Query, target.Database, false, null, setupTemps);
+        EnsureSafe(baselineSafety, "baseline");
+        var candidateSafety = dialect.Classify(
+            candidateSql, SqlUsage.Query, target.Database, false, null, setupTemps);
+        EnsureSafe(candidateSafety, "candidate");
+
+        SqlParameterSecrets.AddValues(knownSecrets, parameterInputs);
+        var parameters = dialect.ParseParameters(parameterInputs);
+
+        return new PreparedCompareFamily(
+            target,
+            dialect,
+            parameters,
+            new CompareClassificationReport(
+                BenchmarkReports.ClassificationLabel(setupSafety),
+                BenchmarkReports.ClassificationLabel(baselineSafety),
+                BenchmarkReports.ClassificationLabel(candidateSafety)),
+            setupTemps);
+    }
+
+    internal static void ValidateVariants(
+        PreparedCompareFamily prepared,
+        string? setupSql,
+        string baselineSql,
+        string candidateSql,
+        IReadOnlyList<IReadOnlyList<SqlHarnessParameter>> variants)
+    {
+        ArgumentNullException.ThrowIfNull(prepared);
+        ArgumentNullException.ThrowIfNull(variants);
+        foreach (var variant in variants)
+            prepared.Dialect.ValidateParameterReferences(variant, setupSql, baselineSql, candidateSql);
+        prepared.Dialect.ValidateMeasuredBatch(baselineSql);
+        prepared.Dialect.ValidateMeasuredBatch(candidateSql);
+    }
+}
+
 internal sealed record CompareCellRequest(
     ResolvedTarget Target,
     string? SetupSql,
@@ -65,7 +163,7 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
             raw = new CanonicalResultAccumulator();
             if (!string.IsNullOrWhiteSpace(request.SetupSql))
             {
-                await SqlHarnessModule.ExecuteRawAsync(
+                await BenchmarkRunner.ExecuteRawAsync(
                     session,
                     new SqlExecutionCommand(request.SetupSql, request.Parameters, request.TimeoutSeconds),
                     raw,
@@ -105,13 +203,13 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
                 request.Repeat,
                 runs.Count,
                 equivalence.Equivalent,
-                SqlHarnessModule.CreateVariantReport("baseline", baselineRuns),
-                SqlHarnessModule.CreateVariantReport("candidate", candidateRuns),
+                BenchmarkReports.CreateVariantReport("baseline", baselineRuns),
+                BenchmarkReports.CreateVariantReport("candidate", candidateRuns),
                 null)
             {
                 Equivalence = equivalence,
                 Classification = request.Classification,
-                Parameters = SqlHarnessModule.ToParameterReports(request.Parameters),
+                Parameters = BenchmarkReports.ToParameterReports(request.Parameters),
             };
 
             phase = CompareCellPhase.Artifact;

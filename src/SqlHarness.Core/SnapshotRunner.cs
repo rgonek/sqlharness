@@ -1,6 +1,3 @@
-using Microsoft.Data.SqlClient;
-
-using SqlHarness.Core.Auth;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Core;
@@ -46,14 +43,14 @@ internal sealed class SnapshotRunner(ISqlSessionFactory sessions, ISnapshotStore
             }
         }
 
-        var phase = SnapshotPhase.Authentication;
+        var phase = OperationPhase.Authentication;
         var rawFootprint = new OutputFootprint(0, 0);
         CanonicalResultAccumulator? raw = null;
 
         try
         {
             await using var session = await _sessions.ConnectAsync(target, ct);
-            phase = SnapshotPhase.Sql;
+            phase = OperationPhase.Sql;
 
             var execution = new SqlExecutionCommand(operation.Sql, parameters, operation.TimeoutSeconds);
             var collected = await QueryResultCollector.CollectAsync(
@@ -141,24 +138,8 @@ internal sealed class SnapshotRunner(ISqlSessionFactory sessions, ISnapshotStore
             or IOException
             or UnauthorizedAccessException;
 
-    private static SqlHarnessExitCode MapException(Exception exception, SnapshotPhase phase) => exception switch
-    {
-        SqlTargetMismatchException => SqlHarnessExitCode.TargetMismatch,
-        SqlHarnessSafetyException => SqlHarnessExitCode.Safety,
-        FileNotFoundException or InvalidDataException or IOException or UnauthorizedAccessException =>
-            SqlHarnessExitCode.LocalStorage,
-        AzureCliException => SqlHarnessExitCode.Authentication,
-        SqlException when phase == SnapshotPhase.Authentication => SqlHarnessExitCode.Authentication,
-        SqlException => SqlHarnessExitCode.SqlExecution,
-        TimeoutException => SqlHarnessExitCode.SqlExecution,
-        OperationCanceledException when phase == SnapshotPhase.Sql => SqlHarnessExitCode.SqlExecution,
-        _ when phase == SnapshotPhase.Authentication => SqlHarnessExitCode.Authentication,
-        _ => SqlHarnessExitCode.SqlExecution,
-    };
-
-    private enum SnapshotPhase
-    {
-        Authentication,
-        Sql,
-    }
+    private static SqlHarnessExitCode MapException(Exception exception, OperationPhase phase) =>
+        IsLocalStorage(exception)
+            ? SqlHarnessExitCode.LocalStorage
+            : OperationFailureMapper.Map(exception, phase);
 }

@@ -1,7 +1,5 @@
-using Microsoft.Data.SqlClient;
 using System.Diagnostics;
 
-using SqlHarness.Core.Auth;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Core;
@@ -80,7 +78,7 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(knownSecrets);
 
-        var phase = WatchPhase.Authentication;
+        var phase = OperationPhase.Authentication;
         var rawFootprint = new OutputFootprint(0, 0);
         CanonicalResultAccumulator? raw = null;
         var start = _clock.UtcNow;
@@ -103,7 +101,7 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
                 return (new SqlHarnessOutcome(SqlHarnessExitCode.WatchMaxDuration, null, null), rawFootprint);
             }
             await using var session = connected;
-            phase = WatchPhase.Sql;
+            phase = OperationPhase.Sql;
 
             WatchCondition? condition = operation.Until is null
                 ? null
@@ -247,7 +245,7 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
             var secrets = knownSecrets as IReadOnlyList<string> ?? knownSecrets.ToArray();
             return (
                 new SqlHarnessOutcome(
-                    MapException(exception, phase),
+                    OperationFailureMapper.Map(exception, phase),
                     null,
                     SecretRedactor.Redact(exception, secrets)),
                 rawFootprint);
@@ -265,24 +263,5 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
     {
         var elapsed = _clock.UtcNow - start;
         return elapsed < TimeSpan.Zero ? 0 : (long)elapsed.TotalMilliseconds;
-    }
-
-    private static SqlHarnessExitCode MapException(Exception exception, WatchPhase phase) => exception switch
-    {
-        SqlTargetMismatchException => SqlHarnessExitCode.TargetMismatch,
-        SqlHarnessSafetyException => SqlHarnessExitCode.Safety,
-        AzureCliException => SqlHarnessExitCode.Authentication,
-        SqlException when phase == WatchPhase.Authentication => SqlHarnessExitCode.Authentication,
-        SqlException => SqlHarnessExitCode.SqlExecution,
-        TimeoutException => SqlHarnessExitCode.SqlExecution,
-        OperationCanceledException when phase == WatchPhase.Sql => SqlHarnessExitCode.SqlExecution,
-        _ when phase == WatchPhase.Authentication => SqlHarnessExitCode.Authentication,
-        _ => SqlHarnessExitCode.SqlExecution,
-    };
-
-    private enum WatchPhase
-    {
-        Authentication,
-        Sql,
     }
 }
