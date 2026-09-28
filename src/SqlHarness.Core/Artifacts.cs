@@ -322,13 +322,7 @@ internal interface ICompareArtifactWriter
 
 internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
-    private static readonly JsonSerializerOptions JsonLineOptions = new(JsonSerializerDefaults.Web);
-    private readonly string _root;
-    private readonly Func<DateTimeOffset> _utcNow;
-    private readonly Action<string, string, Encoding> _writeText;
-    private readonly Action<string> _deleteFile;
-    private readonly Action<string, bool> _deleteDirectory;
+    private readonly ArtifactDirectoryPublisher _publisher;
 
     internal CompareArtifactWriter() : this(SqlHarnessPaths.CompareDir, () => DateTimeOffset.UtcNow) { }
 
@@ -343,13 +337,12 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
         Func<DateTimeOffset> utcNow,
         Action<string, string, Encoding> writeText,
         Action<string> deleteFile,
-        Action<string, bool> deleteDirectory)
+        Action<string, bool> deleteDirectory,
+        Action<string, string>? moveDirectory = null,
+        Action<string, string>? moveFile = null)
     {
-        _root = Path.GetFullPath(root);
-        _utcNow = utcNow;
-        _writeText = writeText;
-        _deleteFile = deleteFile;
-        _deleteDirectory = deleteDirectory;
+        _publisher = new ArtifactDirectoryPublisher(
+            root, utcNow, writeText, moveDirectory, moveFile, deleteFile, deleteDirectory);
     }
 
     public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target)
@@ -358,27 +351,16 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
         ArgumentNullException.ThrowIfNull(runs);
         var preparedPlans = runs.Select(run => run.PlanXmls.Select(xml => new PreparedPlan(
             xml, DistillForArtifact(xml))).ToArray()).ToArray();
+        // Rejects unsupported report types before any directory is reserved.
         var persistedReport = WithArtifactDirectory(report, null);
-        var safeTarget = UnsafePathCharacter().Replace(target, "-").Trim('-');
-        if (string.IsNullOrEmpty(safeTarget)) safeTarget = "target";
 
-        Directory.CreateDirectory(_root);
-        string directory;
-        do
+        return _publisher.Publish(target, (staging, directory) =>
         {
-            directory = Path.Combine(_root, $"{_utcNow():yyyyMMddTHHmmssfffZ}-{safeTarget}-{Guid.NewGuid():N}");
-        } while (Directory.Exists(directory));
-
-        var staging = directory + ".staging-" + Guid.NewGuid().ToString("N");
-        persistedReport = WithArtifactDirectory(persistedReport, directory);
-
-        try
-        {
-            Directory.CreateDirectory(staging);
+            persistedReport = WithArtifactDirectory(persistedReport, directory);
             var plansDirectory = Path.Combine(staging, "plans");
             Directory.CreateDirectory(plansDirectory);
-            _writeText(Path.Combine(staging, "report.json"),
-                JsonSerializer.Serialize(persistedReport, JsonOptions), new UTF8Encoding(false));
+            _publisher.WriteText(Path.Combine(staging, "report.json"),
+                JsonSerializer.Serialize(persistedReport, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
             for (var index = 0; index < runs.Count; index++)
             {
                 var run = runs[index];
@@ -402,17 +384,10 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
                     run.ResultHash,
                     run.MessageCount,
                     run.PlanXmls.Select((xml, planIndex) => PlanFileName(run, index, planIndex, xml)).ToArray(),
-                    run.PlanXmls.Select((_, planIndex) => PlanJsonFileName(run, index, planIndex)).ToArray()), JsonLineOptions));
+                    run.PlanXmls.Select((_, planIndex) => PlanJsonFileName(run, index, planIndex)).ToArray()), ArtifactDirectoryPublisher.JsonLineOptions));
             }
-            _writeText(Path.Combine(staging, "runs.jsonl"), lines.ToString(), new UTF8Encoding(false));
-            Directory.Move(staging, directory);
-        }
-        catch
-        {
-            Cleanup(staging);
-            throw;
-        }
-        return directory;
+            _publisher.WriteText(Path.Combine(staging, "runs.jsonl"), lines.ToString(), new UTF8Encoding(false));
+        });
     }
 
     private void WritePair(string directory, CompareRunArtifact run, int runIndex, int planIndex, PreparedPlan plan)
@@ -421,10 +396,10 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
         var jsonPath = CombineChild(directory, PlanJsonFileName(run, runIndex, planIndex));
         var xmlTemp = xmlPath + ".tmp";
         var jsonTemp = jsonPath + ".tmp";
-        _writeText(xmlTemp, plan.Xml, new UTF8Encoding(false));
-        _writeText(jsonTemp, plan.Json, new UTF8Encoding(false));
-        File.Move(xmlTemp, xmlPath);
-        File.Move(jsonTemp, jsonPath);
+        _publisher.WriteText(xmlTemp, plan.Xml, new UTF8Encoding(false));
+        _publisher.WriteText(jsonTemp, plan.Json, new UTF8Encoding(false));
+        _publisher.MoveFile(xmlTemp, xmlPath);
+        _publisher.MoveFile(jsonTemp, jsonPath);
     }
 
     private static string CombineChild(string directory, string name)
@@ -439,28 +414,6 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
             throw new IOException("Plan filename escaped the artifact directory.");
 
         return path;
-    }
-
-    private void Cleanup(string directory)
-    {
-        if (!Directory.Exists(directory)) return;
-        string[] files;
-        try { files = Directory.GetFiles(directory, "*", SearchOption.AllDirectories); }
-        catch { files = []; }
-        foreach (var file in files) Try(() => _deleteFile(file));
-
-        string[] directories;
-        try { directories = Directory.GetDirectories(directory, "*", SearchOption.AllDirectories); }
-        catch { directories = []; }
-        foreach (var child in directories.OrderByDescending(path => path.Length))
-            Try(() => _deleteDirectory(child, false));
-        Try(() => _deleteDirectory(directory, false));
-    }
-
-    private static void Try(Action action)
-    {
-        try { action(); }
-        catch { }
     }
 
     private sealed record PreparedPlan(string Xml, string Json);
@@ -492,7 +445,7 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
             IsJsonPlan(document)
                 ? Postgres.PostgresPlanDistiller.Distill(document)
                 : PlanDistiller.Distill(document),
-            JsonOptions);
+            ArtifactDirectoryPublisher.JsonOptions);
 
     private static string PlanFileName(CompareRunArtifact run, int runIndex, int planIndex, string document)
     {
@@ -517,7 +470,7 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
         if (label.Length is > 0 and <= 64 && match.Success && match.Length == label.Length)
             return label;
 
-        var sanitized = UnsafePathCharacter().Replace(label, "-").Trim('-');
+        var sanitized = ArtifactDirectoryPublisher.SanitizePathSegment(label);
         if (sanitized.Length > 64)
             sanitized = sanitized[..64].Trim('-');
         if (sanitized.Length == 0)
@@ -534,9 +487,6 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
 
     private static string PlanJsonFileName(CompareRunArtifact run, int runIndex, int planIndex) =>
         PlanStem(run, runIndex, planIndex) + ".plan.json";
-
-    [GeneratedRegex("[^A-Za-z0-9_-]+", RegexOptions.CultureInvariant)]
-    private static partial Regex UnsafePathCharacter();
 
     [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", RegexOptions.CultureInvariant)]
     private static partial Regex SafeSetLabel();

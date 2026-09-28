@@ -30,8 +30,6 @@ internal sealed class PostgresDialect : ISqlDialect
 
     public void ValidateMeasuredBatch(string sql) => PostgresBenchmark.ValidateMeasuredBatch(sql);
 
-    public DistilledPlan DistillPlan(string document) => PostgresPlanDistiller.Distill(document);
-
     public string CountsCatalogSql => PostgresCounts.CatalogSql;
 
     public string BuildCountsExactSql(IReadOnlyList<ResolvedCountObject> objects) =>

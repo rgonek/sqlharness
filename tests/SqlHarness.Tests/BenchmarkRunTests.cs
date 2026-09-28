@@ -416,7 +416,6 @@ public sealed class BenchmarkRunTests
         public IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs) => throw Unused();
         public void ValidateParameterReferences(IReadOnlyList<SqlHarnessParameter> parameters, params string?[] batches) => throw Unused();
         public void ValidateMeasuredBatch(string sql) => throw Unused();
-        public DistilledPlan DistillPlan(string document) => throw Unused();
         public string BuildCountsExactSql(IReadOnlyList<ResolvedCountObject> objects) => throw Unused();
 
         private static NotSupportedException Unused() =>

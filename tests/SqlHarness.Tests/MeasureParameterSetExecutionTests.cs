@@ -627,8 +627,6 @@ public sealed class MeasureParameterSetExecutionTests
 
         public void ValidateMeasuredBatch(string sql) => inner.ValidateMeasuredBatch(sql);
 
-        public DistilledPlan DistillPlan(string document) => inner.DistillPlan(document);
-
         public string BuildCountsExactSql(IReadOnlyList<ResolvedCountObject> objects) =>
             inner.BuildCountsExactSql(objects);
 

@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace SqlHarness.Core;
 
@@ -14,18 +13,11 @@ internal interface IIndexAnalysisArtifactWriter
         string target);
 }
 
-internal sealed partial class IndexAnalysisArtifactWriter : IIndexAnalysisArtifactWriter
+internal sealed class IndexAnalysisArtifactWriter : IIndexAnalysisArtifactWriter
 {
     private const string IndexMismatch = "Index analysis artifacts do not match the existing indexes.";
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
-    private static readonly JsonSerializerOptions JsonLineOptions = new(JsonSerializerDefaults.Web);
-    private readonly string _root;
-    private readonly Func<DateTimeOffset> _utcNow;
-    private readonly Action<string, string, Encoding> _writeText;
-    private readonly Action<string, string> _moveDirectory;
-    private readonly Action<string> _deleteFile;
-    private readonly Action<string, bool> _deleteDirectory;
+    private readonly ArtifactDirectoryPublisher _publisher;
 
     internal IndexAnalysisArtifactWriter()
         : this(SqlHarnessPaths.IndexAnalysisDir, () => DateTimeOffset.UtcNow)
@@ -40,13 +32,8 @@ internal sealed partial class IndexAnalysisArtifactWriter : IIndexAnalysisArtifa
         Action<string>? deleteFile = null,
         Action<string, bool>? deleteDirectory = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(root);
-        _root = Path.GetFullPath(root);
-        _utcNow = utcNow ?? throw new ArgumentNullException(nameof(utcNow));
-        _writeText = writeText ?? File.WriteAllText;
-        _moveDirectory = moveDirectory ?? ((source, destination) => Directory.Move(source, destination));
-        _deleteFile = deleteFile ?? File.Delete;
-        _deleteDirectory = deleteDirectory ?? Directory.Delete;
+        _publisher = new ArtifactDirectoryPublisher(
+            root, utcNow, writeText, moveDirectory, null, deleteFile, deleteDirectory);
     }
 
     public string Write(
@@ -63,53 +50,22 @@ internal sealed partial class IndexAnalysisArtifactWriter : IIndexAnalysisArtifa
         ArgumentNullException.ThrowIfNull(target);
         var filters = RequireMatchingIndexes(indexes, sensitiveIndexes);
 
-        var safeTarget = UnsafePathCharacter().Replace(target, "-").Trim('-');
-        if (string.IsNullOrEmpty(safeTarget))
-            safeTarget = "target";
-
-        Directory.CreateDirectory(_root);
-        string directory;
-        do
+        return _publisher.Publish(target, (staging, directory) =>
         {
-            directory = Path.Combine(_root, $"{_utcNow():yyyyMMddTHHmmssfffZ}-{safeTarget}-{Guid.NewGuid():N}");
-        }
-        while (Directory.Exists(directory));
-
-        var staging = directory + ".staging-" + Guid.NewGuid().ToString("N");
-        var persisted = report with { ArtifactDirectory = directory };
-        try
-        {
-            Directory.CreateDirectory(staging);
-            _writeText(
+            var persisted = report with { ArtifactDirectory = directory };
+            _publisher.WriteText(
                 Path.Combine(staging, "report.json"),
-                JsonSerializer.Serialize(persisted, JsonOptions),
+                JsonSerializer.Serialize(persisted, ArtifactDirectoryPublisher.JsonOptions),
                 new UTF8Encoding(false));
-            _writeText(
+            _publisher.WriteText(
                 Path.Combine(staging, "candidates.jsonl"),
                 JsonLines(candidates),
                 new UTF8Encoding(false));
-            _writeText(
+            _publisher.WriteText(
                 Path.Combine(staging, "existing-indexes.jsonl"),
                 JsonLines(indexes.Select(index => ToArtifact(index, filters))),
                 new UTF8Encoding(false));
-            _moveDirectory(staging, directory);
-        }
-        catch
-        {
-            try
-            {
-                Cleanup(staging);
-                Cleanup(directory);
-            }
-            catch
-            {
-                // Keep the original publish failure even when cleanup throws.
-            }
-
-            throw;
-        }
-
-        return directory;
+        });
     }
 
     private static Dictionary<IndexKey, string?> RequireMatchingIndexes(
@@ -142,7 +98,7 @@ internal sealed partial class IndexAnalysisArtifactWriter : IIndexAnalysisArtifa
         var lines = new StringBuilder();
         foreach (var row in rows)
         {
-            lines.AppendLine(JsonSerializer.Serialize(row, JsonLineOptions));
+            lines.AppendLine(JsonSerializer.Serialize(row, ArtifactDirectoryPublisher.JsonLineOptions));
         }
 
         return lines.ToString();
@@ -168,31 +124,6 @@ internal sealed partial class IndexAnalysisArtifactWriter : IIndexAnalysisArtifa
             filters[Key(index.Schema, index.Table, index.IndexId)]);
 
     private static IndexKey Key(string schema, string table, int indexId) => new(schema, table, indexId);
-
-    private void Cleanup(string directory)
-    {
-        if (!Directory.Exists(directory))
-            return;
-
-        string[] files;
-        try { files = Directory.GetFiles(directory, "*", SearchOption.AllDirectories); }
-        catch { files = []; }
-        foreach (var file in files)
-            Try(() => _deleteFile(file));
-
-        string[] directories;
-        try { directories = Directory.GetDirectories(directory, "*", SearchOption.AllDirectories); }
-        catch { directories = []; }
-        foreach (var child in directories.OrderByDescending(path => path.Length))
-            Try(() => _deleteDirectory(child, false));
-        Try(() => _deleteDirectory(directory, false));
-    }
-
-    private static void Try(Action action)
-    {
-        try { action(); }
-        catch { }
-    }
 
     private readonly record struct IndexKey(string Schema, string Table, int IndexId);
 
@@ -230,6 +161,4 @@ internal sealed partial class IndexAnalysisArtifactWriter : IIndexAnalysisArtifa
         string Compression,
         string? FilterDefinition);
 
-    [GeneratedRegex("[^A-Za-z0-9_-]+", RegexOptions.CultureInvariant)]
-    private static partial Regex UnsafePathCharacter();
 }
