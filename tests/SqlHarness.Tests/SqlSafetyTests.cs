@@ -613,6 +613,29 @@ public class SqlSafetyTests
         Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
     }
 
+    [Theory]
+    [InlineData("TRUNCATE TABLE #ids")]
+    [InlineData("CREATE TABLE #ids (Id int); TRUNCATE TABLE #ids; SELECT Id FROM #ids")]
+    public void Query_and_setup_allow_truncate_of_unambiguous_local_temp(string sql)
+    {
+        var query = ClassifyQuery(sql);
+
+        Assert.True(query.Allowed, query.RejectionDescription);
+        Assert.False(query.HasMutation);
+        Assert.True(query.HasSessionLocalWork);
+        Assert.True(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
+    [InlineData("TRUNCATE TABLE ##ids")]
+    [InlineData("TRUNCATE TABLE dbo.Clients")]
+    [InlineData("TRUNCATE TABLE otherdb.dbo.Clients")]
+    public void Truncate_outside_unambiguous_local_temp_stays_denied(string sql)
+    {
+        Assert.False(_classifier.Classify(sql, SqlUsage.Query, "db", true, "db").Allowed);
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
     private SqlSafetyDecision ClassifyQuery(string sql) =>
         _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: false, confirmDatabase: null);
 }

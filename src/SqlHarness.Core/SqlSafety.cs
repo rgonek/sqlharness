@@ -279,6 +279,11 @@ internal sealed class SqlSafetyClassifier
                     ? StatementClassification.ReadOnly
                     : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
 
+            case TruncateTableStatement truncate:
+                return IsLocalTemp(truncate.TableName)
+                    ? StatementClassification.SessionLocal
+                    : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+
             case SelectStatement select:
                 if (select.Into is null)
                     return StatementClassification.ReadOnly;
