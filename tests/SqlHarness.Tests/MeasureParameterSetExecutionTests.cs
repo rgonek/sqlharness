@@ -605,7 +605,6 @@ public sealed class MeasureParameterSetExecutionTests
         public List<BenchmarkObservation> Calls { get; } = [];
 
         public SqlEngine Engine => inner.Engine;
-        public string IdentitySql => inner.IdentitySql;
         public string PingSql => inner.PingSql;
         public string CountsCatalogSql => inner.CountsCatalogSql;
         public string SchemaSql => inner.SchemaSql;
@@ -619,8 +618,6 @@ public sealed class MeasureParameterSetExecutionTests
             string? confirmDatabase,
             IReadOnlySet<string> sessionTempTables) =>
             inner.Classify(sql, usage, database, allowMutation, confirmDatabase, sessionTempTables);
-
-        public IReadOnlySet<string> CollectSessionTempTables(string sql) => inner.CollectSessionTempTables(sql);
 
         public IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs) =>
             inner.ParseParameters(inputs);

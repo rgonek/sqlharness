@@ -110,12 +110,11 @@ internal static class SqlParameterReferences
         if (engine == SqlEngine.Postgres)
             return Postgres.PostgresParameterReferenceValidator.CollectReferences(sql);
 
-        var parser = new TSql170Parser(initialQuotedIdentifiers: true);
-        var fragment = parser.Parse(new StringReader(sql), out var errors);
-        if (errors.Count > 0)
+        var document = SqlServerDocument.Parse(sql);
+        if (document.HasErrors)
             return [];
         var collector = new SqlServerReferenceCollector();
-        fragment.Accept(collector);
+        document.Fragment.Accept(collector);
         collector.Names.ExceptWith(collector.LocalNames);
         return collector.Names.Order(StringComparer.OrdinalIgnoreCase).ToArray();
     }
@@ -124,9 +123,8 @@ internal static class SqlParameterReferences
     {
         if (engine == SqlEngine.Postgres)
             return [];
-        var parser = new TSql170Parser(initialQuotedIdentifiers: true);
-        var fragment = parser.Parse(new StringReader(sql), out var errors);
-        if (errors.Count > 0 || fragment is not TSqlScript script)
+        var document = SqlServerDocument.Parse(sql);
+        if (document.HasErrors || document.Fragment is not TSqlScript script)
             return [];
         return script.Batches.SelectMany(batch => batch.Statements)
             .Select(statement => new SqlValidationLocation(statement.StartOffset, statement.StartLine, statement.StartColumn, statement.GetType().Name))

@@ -10,8 +10,8 @@ internal static class PostgresParameterReferenceValidator
 {
     internal static IReadOnlyList<string> CollectReferences(string batch)
     {
+        Parse(batch);
         var dialect = new PostgreSqlDialect();
-        Parse(batch, dialect);
         var references = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         Collect(batch, dialect, references);
         return references.Order(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -34,8 +34,8 @@ internal static class PostgresParameterReferenceValidator
             // folds a bare @name into the prefix absolute-value operator, so the
             // placeholder is the token pair, not that unary expression. The lexer
             // already keeps the name out of comments, strings, and dollar quotes.
+            Parse(batch);
             var dialect = new PostgreSqlDialect();
-            Parse(batch, dialect);
             Collect(batch, dialect, references);
         }
 
@@ -49,22 +49,10 @@ internal static class PostgresParameterReferenceValidator
         }
     }
 
-    private static void Parse(string batch, PostgreSqlDialect dialect)
+    private static void Parse(string batch)
     {
-        try
-        {
-            var statements = new SqlQueryParser().Parse(batch.AsSpan(), dialect);
-            if (statements.Count == 0)
-                throw new SqlHarnessSafetyException("SQL parameter references could not be parsed.");
-        }
-        catch (SqlHarnessSafetyException)
-        {
-            throw;
-        }
-        catch (Exception)
-        {
+        if (!PostgresDocument.TryParse(batch, out var statements) || statements is null || statements.Count == 0)
             throw new SqlHarnessSafetyException("SQL parameter references could not be parsed.");
-        }
     }
 
     private static void Collect(string batch, PostgreSqlDialect dialect, HashSet<string> references)

@@ -6,6 +6,8 @@ using System.Text.RegularExpressions;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 using Microsoft.SqlServer.Types;
 
+using SqlHarness.Core.Dialect;
+
 namespace SqlHarness.Core;
 
 
@@ -137,15 +139,14 @@ internal sealed class SqlSafetyClassifier
         bool allowMutation,
         string? confirmDatabase = null)
     {
-        var parser = new TSql170Parser(initialQuotedIdentifiers: true);
-        var fragment = parser.Parse(new StringReader(sql), out var errors);
-        if (errors.Count > 0 || fragment is not TSqlScript script)
+        var document = SqlServerDocument.Parse(sql);
+        if (document.HasErrors || document.Fragment is not TSqlScript script)
         {
             return Denied(SqlSafetyReason.ParseError);
         }
 
         var inspection = new SafetyInspectionVisitor();
-        fragment.Accept(inspection);
+        document.Fragment.Accept(inspection);
         if (inspection.HasCrossDatabaseReference)
         {
             return Denied(SqlSafetyReason.CrossDatabaseReference);
@@ -1238,12 +1239,11 @@ internal static class SqlParameterReferenceValidator
         var references = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var batch in batches.Where(batch => !string.IsNullOrWhiteSpace(batch)))
         {
-            var parser = new TSql170Parser(initialQuotedIdentifiers: true);
-            var fragment = parser.Parse(new StringReader(batch!), out var errors);
-            if (errors.Count > 0)
+            var document = SqlServerDocument.Parse(batch!);
+            if (document.HasErrors)
                 throw new SqlHarnessSafetyException("SQL parameter references could not be parsed.");
             var visitor = new ParameterReferenceVisitor(references);
-            fragment.Accept(visitor);
+            document.Fragment.Accept(visitor);
         }
 
         foreach (var parameter in parameters)

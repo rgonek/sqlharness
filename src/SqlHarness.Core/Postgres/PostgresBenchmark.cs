@@ -1,9 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 
-using SqlParser;
 using SqlParser.Ast;
-using SqlParser.Dialects;
 
 namespace SqlHarness.Core.Postgres;
 
@@ -89,17 +87,11 @@ internal static class PostgresBenchmark
 
     internal static void ValidateMeasuredBatch(string sql)
     {
-        Sequence<Statement> statements;
-        try
-        {
-            statements = new SqlQueryParser().Parse(sql.AsSpan(), new PostgreSqlDialect());
-        }
-        catch (Exception)
-        {
-            throw new SqlHarnessSafetyException(MeasuredBatchMessage);
-        }
-
-        if (statements.Count != 1 || statements[0] is not Statement.Select select || !IsExplainableSelect(select.Query))
+        if (!PostgresDocument.TryParse(sql, out var statements)
+            || statements is null
+            || statements.Count != 1
+            || statements[0] is not Statement.Select select
+            || !IsExplainableSelect(select.Query))
             throw new SqlHarnessSafetyException(MeasuredBatchMessage);
     }
 
@@ -235,53 +227,7 @@ internal static class PostgresBenchmark
     };
 
     private static bool IsExplainableSelect(Query query) =>
-        !HasSelectInto(query) && !HasWrite(query);
-
-    private static bool HasSelectInto(Query query)
-    {
-        if (query.With is { } with)
-        {
-            foreach (var cte in with.CteTables)
-            {
-                if (HasSelectInto(cte.Query))
-                    return true;
-            }
-        }
-
-        return HasSelectInto(query.Body);
-    }
-
-    private static bool HasSelectInto(SetExpression body) => body switch
-    {
-        SetExpression.SelectExpression select => select.Select.Into is not null,
-        SetExpression.QueryExpression nested => HasSelectInto(nested.Query),
-        SetExpression.SetOperation op => HasSelectInto(op.Left) || HasSelectInto(op.Right),
-        _ => false,
-    };
-
-    private static bool HasWrite(Query query)
-    {
-        if (query.With is { } with)
-        {
-            foreach (var cte in with.CteTables)
-            {
-                if (HasWrite(cte.Query))
-                    return true;
-            }
-        }
-
-        return HasWrite(query.Body);
-    }
-
-    private static bool HasWrite(SetExpression body) => body switch
-    {
-        SetExpression.SelectExpression => false,
-        SetExpression.ValuesExpression => false,
-        SetExpression.TableExpression => false,
-        SetExpression.QueryExpression nested => HasWrite(nested.Query),
-        SetExpression.SetOperation op => HasWrite(op.Left) || HasWrite(op.Right),
-        _ => true,
-    };
+        !PostgresQueryShape.HasSelectInto(query) && !PostgresQueryShape.HasWrite(query);
 
     private static JsonElement ExplainObject(JsonElement root) =>
         root.ValueKind == JsonValueKind.Array && root.GetArrayLength() > 0 ? root[0] : root;

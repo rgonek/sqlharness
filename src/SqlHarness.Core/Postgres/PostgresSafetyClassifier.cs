@@ -1,6 +1,5 @@
 using SqlParser;
 using SqlParser.Ast;
-using SqlParser.Dialects;
 
 namespace SqlHarness.Core.Postgres;
 
@@ -30,19 +29,8 @@ internal sealed class PostgresSafetyClassifier
         string? confirmDatabase,
         IReadOnlySet<string> sessionTempTables)
     {
-        Sequence<Statement> statements;
-        try
-        {
-            statements = new SqlQueryParser().Parse(sql.AsSpan(), new PostgreSqlDialect());
-        }
-        catch (ParserException)
-        {
+        if (!PostgresDocument.TryParse(sql, out var statements) || statements is null)
             return Denied(SqlSafetyReason.ParseError);
-        }
-        catch (Exception)
-        {
-            return Denied(SqlSafetyReason.ParseError);
-        }
 
         if (statements.Count == 0)
             return Denied(SqlSafetyReason.UnsupportedStatement);
@@ -275,31 +263,6 @@ internal sealed class PostgresSafetyClassifier
         return StatementOutcome.SessionLocal;
     }
 
-    private static bool HasSelectInto(Query query)
-    {
-        if (query.With is { } with)
-        {
-            foreach (var cte in with.CteTables)
-            {
-                if (HasSelectInto(cte.Query))
-                    return true;
-            }
-        }
-
-        return HasSelectInto(query.Body);
-    }
-
-    private static bool HasSelectInto(SetExpression body) => body switch
-    {
-        SetExpression.SelectExpression selectExpression => selectExpression.Select.Into is not null,
-        SetExpression.QueryExpression queryExpression => HasSelectInto(queryExpression.Query),
-        SetExpression.SetOperation setOperation =>
-            HasSelectInto(setOperation.Left) || HasSelectInto(setOperation.Right),
-        SetExpression.Insert insertBody when insertBody.Statement is Statement.Select select =>
-            HasSelectInto(select.Query),
-        _ => false,
-    };
-
     private static bool IsSessionLocal(ObjectName name, IReadOnlySet<string> knownTemps)
     {
         if (name.Values.Count == 0)
@@ -495,7 +458,7 @@ internal sealed class PostgresSafetyClassifier
             switch (statement)
             {
                 case Statement.Select select:
-                    if (HasSelectInto(select.Query))
+                    if (PostgresQueryShape.HasSelectInto(select.Query))
                         _selectInto = true;
                     break;
                 case Statement.Insert insert:
@@ -609,7 +572,7 @@ internal sealed class PostgresSafetyClassifier
 
         private void VisitQuery(Query query)
         {
-            if (HasSelectInto(query))
+            if (PostgresQueryShape.HasSelectInto(query))
                 _selectInto = true;
             ((IElement)query).Visit(this);
         }

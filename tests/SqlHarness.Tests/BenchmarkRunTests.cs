@@ -328,13 +328,11 @@ public sealed class BenchmarkRunTests
         }
 
         public SqlEngine Engine => throw Unused();
-        public string IdentitySql => throw Unused();
         public string PingSql => throw Unused();
         public string CountsCatalogSql => throw Unused();
         public string SchemaSql => throw Unused();
         public string SpaceSql => throw Unused();
         public SqlSafetyDecision Classify(string sql, SqlUsage usage, string? database, bool allowMutation, string? confirmDatabase, IReadOnlySet<string> sessionTempTables) => throw Unused();
-        public IReadOnlySet<string> CollectSessionTempTables(string sql) => throw Unused();
         public IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs) => throw Unused();
         public void ValidateParameterReferences(IReadOnlyList<SqlHarnessParameter> parameters, params string?[] batches) => throw Unused();
         public void ValidateMeasuredBatch(string sql) => throw Unused();

@@ -7,13 +7,9 @@ internal sealed class SqlServerDialect : ISqlDialect
     private const string StatisticsTruncatedWarning =
         "SQL Server informational messages exceeded the per-command limit and {0} messages were omitted. CPU time, elapsed time and logicalReads parsed from STATISTICS output are unavailable; logicalReads 0 is not a measured zero.";
 
-    private static readonly IReadOnlySet<string> NoSessionTemps =
-        new HashSet<string>(StringComparer.Ordinal);
-
     private readonly SqlSafetyClassifier _classifier = new();
 
     public SqlEngine Engine => SqlEngine.SqlServer;
-    public string IdentitySql => SqlExecution.IdentitySql;
     public string PingSql => PingQuery.Sql;
 
     public SqlSafetyDecision Classify(
@@ -25,8 +21,6 @@ internal sealed class SqlServerDialect : ISqlDialect
         IReadOnlySet<string> sessionTempTables) =>
         // Local #temp is syntactic on SQL Server; sessionTempTables is ignored.
         _classifier.Classify(sql, usage, database, allowMutation, confirmDatabase);
-
-    public IReadOnlySet<string> CollectSessionTempTables(string sql) => NoSessionTemps;
 
     public IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs) =>
         SqlParameterParser.Parse(inputs);
