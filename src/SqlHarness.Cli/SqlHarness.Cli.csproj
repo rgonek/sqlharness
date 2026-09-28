@@ -15,6 +15,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\SqlHarness.Mcp\SqlHarness.Mcp.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Spectre.Console.Cli" />
   </ItemGroup>
 

@@ -85,6 +85,21 @@ Annotations muszą uwzględniać skutki lokalne: benchmark zapisuje artefakty, s
 
 Bez automatycznej instalacji/edycji konfiguracji klienta. Dostarczyć neutralny przykład command/args/env oraz procedurę testu z oficjalnym SDK klienta. Weryfikacja procesu stdio na win-x64, linux-x64 i osx-arm64 po publish single-file; bez bazy dla initialize/tools/list/validate/plan. Scenariusze live wyłącznie na autoryzowanych jednorazowych bazach obu silników.
 
+## Implementation bindings (T1)
+
+Rzeczywiste sygnatury i przypięcia ustalone w T1, przed T2:
+
+| Element | Sygnatura / wartość | Plik:linia |
+|---|---|---|
+| Interfejs Core | `Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default)` | `src/SqlHarness.Core/Contracts.cs:6` |
+| Implementacja | `public sealed class SqlHarnessModule : ISqlHarnessModule`, `ExecuteAsync` w `:110`; opcjonalny następca `ExecuteWatchNdjsonAsync(SqlHarnessWatchOperation, TextWriter, CancellationToken)` (domyślnie odmawia, `SqlHarnessModule` implementuje) | `src/SqlHarness.Core/SqlHarnessModule.cs:31` |
+| Projekcja agentowa | `AgentOutputProjection.Project(report, maximumCellCharacters, detailLimit, out omittedItems, maximumBytes = 16 * 1024)`; `AgentOutputOptions(MaximumBytes = 16 * 1024, MaximumCellCharacters = 512)` | `src/SqlHarness.Core/AgentOutputProjection.cs:20` |
+| SDK MCP | `ModelContextProtocol` **2.2.0** (stabilna, arkusze `net8.0`), przypięta w `Directory.Packages.props`; zależności: `ModelContextProtocol.Core` 2.2.0, `Microsoft.Extensions.Hosting.Abstractions` / `Caching.Abstractions` 10.0.10 | `Directory.Packages.props:12` |
+| Rewizja protokołu | Negocjowana i testowana **`2025-11-25`** (jawny `initialize` handshake; klient i serwer przypięci przez `ProtocolVersion`). SDK wspiera też `2024-11-05`, `2025-03-26`, `2025-06-18` oraz domyślną `2026-07-28` (metadane per-request, bez handshake `initialize`) — MCP v1 deklaruje tylko przetestowaną `2025-11-25`. | `tests/SqlHarness.Mcp.Tests/McpProtocolTests.cs` |
+| Wiring | `CLI→MCP→Core` (`SqlHarness.Cli` referencjonuje `SqlHarness.Mcp`, ten referencjonuje `SqlHarness.Core`); `SqlHarness.Mcp.Tests` referencjonuje tylko `SqlHarness.Mcp`. Core nie zna SDK MCP ani Spectre; w T1 zero nowych metod w Core (`McpHost.cs` dopiero w T2). | `SqlHarness.sln`, `src/SqlHarness.Mcp/SqlHarness.Mcp.csproj` |
+| Testy T1 | `McpDependencyTests` (granica assembly: Core bez MCP/SDK/Spectre; wiring MCP w output bez shella) i `McpProtocolTests` (minimalny `initialize` przez in-memory transport SDK: `System.IO.Pipelines.Pipe` + `StreamServerTransport`/`StreamClientTransport`, bez DB i profili użytkownika). | `tests/SqlHarness.Mcp.Tests/` |
+| Dependency audit | `dotnet list SqlHarness.sln package --vulnerable` (2026-09-28): żaden z 5 projektów nie ma podatnych pakietów. | — |
+
 ## Źródła techniczne
 
 Sprawdzone przy planowaniu 2026-09-26; ponownie zweryfikować przy implementacji, przypiąć wersję SDK/protokołu i zapisać decyzję:
