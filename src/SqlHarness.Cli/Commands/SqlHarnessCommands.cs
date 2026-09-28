@@ -9,13 +9,14 @@ using SqlHarness.Core;
 
 namespace SqlHarness.Cli.Commands;
 
-// Public so public CLI command/renderer APIs can accept text, legacy JSON, summaries, and agent envelopes.
+// Public so public CLI command/renderer APIs can accept text, legacy JSON, summaries, agent envelopes, and watch NDJSON streams.
 public enum OutputMode
 {
     Text,
     Json,
     JsonSummary,
     Agent,
+    Ndjson,
 }
 
 public abstract class TargetSettings : CommandSettings
@@ -176,6 +177,21 @@ public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, Out
             renderer.RenderAgent(outcome, output.Command, output.Capture, agentOptions);
         else
             renderer.Render(outcome, mode, output.Capture, output.Command);
+        output.Capture.Flush();
+        return await output.CompleteAsync(outcome, mark, ct);
+    }
+
+    /// <summary>
+    /// Separate NDJSON output path (watch only): the module streams
+    /// started/changed plus exactly one terminal record to the capture writer
+    /// while polling, then the usual begin/complete footprint lets gain count
+    /// the whole stream. Lives on the base class because derived commands
+    /// cannot capture the base primary-constructor parameters directly.
+    /// </summary>
+    protected async Task<int> DispatchNdjson(SqlHarnessWatchOperation operation, CancellationToken ct)
+    {
+        var mark = output.Begin();
+        var outcome = await module.ExecuteWatchNdjsonAsync(operation, output.Capture, ct);
         output.Capture.Flush();
         return await output.CompleteAsync(outcome, mark, ct);
     }

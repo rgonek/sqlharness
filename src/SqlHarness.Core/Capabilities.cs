@@ -77,6 +77,7 @@ public static class SqlHarnessCapabilitiesProvider
                         "SELECT INTO TEMP TABLE with unambiguous single-part name"],
                 },
                 ["artifactRead"] = new { sections = ArtifactReader.SupportedSections, manifestVersion = ArtifactReader.CurrentManifestVersion, maxReportBytes = ArtifactReader.MaxReportBytes },
+                ["watchNdjson"] = new { events = new[] { "started", "changed", "completed", "failed" }, schemaVersion = WatchNdjsonWriter.SchemaVersion, sequence = "strictly increasing from started; exactly one terminal record", history = "no retention: every change is emitted immediately" },
             },
             ["text", "json", "json-summary", "agent"]);
     }

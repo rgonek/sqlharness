@@ -839,6 +839,106 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         }
     }
 
+    /// <summary>
+    /// NDJSON twin of <see cref="ExecuteWatchAsync"/> for
+    /// <c>watch --output ndjson</c>. Same validation, safety and parameter
+    /// pipeline; failures before the run emit a best-effort <c>failed</c>
+    /// record (without <c>started</c>, which needs the session identity).
+    /// The returned outcome carries no report â€” the stream is the output â€”
+    /// but keeps the exit code and gain receipt, so gain counts the whole
+    /// stream as emitted output.
+    /// </summary>
+    public async Task<SqlHarnessOutcome> ExecuteWatchNdjsonAsync(
+        SqlHarnessWatchOperation watch,
+        TextWriter writer,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(watch);
+        ArgumentNullException.ThrowIfNull(writer);
+
+        var stopwatch = Stopwatch.StartNew();
+        var phase = OperationPhase.Validation;
+        var rawFootprint = new OutputFootprint(0, 0);
+        var knownSecrets = new List<string> { watch.Sql };
+        knownSecrets.AddRange(watch.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+        if (watch.Until is not null)
+            knownSecrets.Add(watch.Until);
+
+        try
+        {
+            ValidateWatch(watch);
+            var target = TargetResolver.Resolve(watch.Target, _loadProfiles());
+            var dialect = SqlDialects.For(target.Engine);
+            var safety = dialect.Classify(
+                watch.Sql,
+                SqlUsage.Query,
+                target.Database,
+                allowMutation: false,
+                confirmDatabase: null,
+                NoSessionTemps);
+            if (!safety.Allowed)
+                throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
+            SqlParameterSecrets.AddValues(knownSecrets, watch.Parameters);
+            var parameters = dialect.ParseParameters(watch.Parameters);
+            dialect.ValidateParameterReferences(parameters, watch.Sql);
+            // Predicate syntax is validated before authentication so bad --until fails closed.
+            if (watch.Until is not null)
+                _ = WatchCondition.Parse(watch.Until);
+
+            foreach (var parameter in parameters)
+            {
+                if (parameter.Value is not DBNull)
+                    knownSecrets.Add(Convert.ToString(parameter.Value, CultureInfo.InvariantCulture) ?? string.Empty);
+            }
+
+            phase = OperationPhase.Authentication;
+            var stream = new WatchNdjsonWriter(writer);
+            var runner = new WatchRunner(_sessionFactory, _watchClock);
+            var (outcome, raw) = await runner.ExecuteNdjsonAsync(
+                watch,
+                target,
+                parameters,
+                knownSecrets,
+                stream,
+                ct);
+            rawFootprint = raw;
+            // Runner already mapped connect/SQL failures; preserve its exit code.
+            return Checked(watch, WithReceipt(outcome, stopwatch.ElapsedMilliseconds, rawFootprint, "watch"));
+        }
+        catch (Exception exception)
+        {
+            var exitCode = OperationFailureMapper.Map(exception, phase);
+            var message = SecretRedactor.Redact(exception, knownSecrets);
+            EmitWatchNdjsonFailed(writer, exitCode, SqlHarnessError.From(exitCode, message, "validation"), knownSecrets);
+            var failure = new SqlHarnessOutcome(exitCode, null, message);
+            return Checked(watch, WithReceipt(failure, stopwatch.ElapsedMilliseconds, rawFootprint, "watch"));
+        }
+    }
+
+    private static void EmitWatchNdjsonFailed(
+        TextWriter writer,
+        SqlHarnessExitCode exitCode,
+        SqlHarnessError error,
+        IReadOnlyCollection<string> knownSecrets)
+    {
+        // Best effort: a dead transport cannot take a terminal record, but the
+        // returned outcome still reports the failure (never a success).
+        try
+        {
+            var secrets = knownSecrets as IReadOnlyList<string> ?? knownSecrets.ToArray();
+            new WatchNdjsonWriter(writer).WriteFailed(
+                new
+                {
+                    exitCode = (int)exitCode,
+                    error = error with { Message = SecretRedactor.Redact(error.Message, secrets) },
+                },
+                0);
+        }
+        catch
+        {
+            // Swallowed: the outcome carries the failure.
+        }
+    }
     private static void ValidateWatch(SqlHarnessWatchOperation watch)
     {
         if (watch.TimeoutSeconds is < 1 or > 300)

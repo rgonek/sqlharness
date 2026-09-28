@@ -18,10 +18,25 @@ public sealed class OutputContext(TextWriter writer)
             ReadIntegerOption(values, "--max-output-bytes", 16 * 1024),
             ReadIntegerOption(values, "--max-cell-chars", 512));
         Command = values.FirstOrDefault(value => !value.StartsWith("-", StringComparison.Ordinal))?.ToLowerInvariant() ?? "unknown";
-        if (values.Any(value => value.Equals("--output", StringComparison.OrdinalIgnoreCase) || value.StartsWith("--output=", StringComparison.OrdinalIgnoreCase)))
+        if (HasOutputValue(values, "ndjson"))
+            Mode = OutputMode.Ndjson;
+        else if (values.Any(value => value.Equals("--output", StringComparison.OrdinalIgnoreCase) || value.StartsWith("--output=", StringComparison.OrdinalIgnoreCase)))
             Mode = OutputMode.Agent;
         else if (values.Contains("--json-summary", StringComparer.OrdinalIgnoreCase)) Mode = OutputMode.JsonSummary;
         else if (values.Contains("--json", StringComparer.OrdinalIgnoreCase)) Mode = OutputMode.Json;
+    }
+
+    private static bool HasOutputValue(IReadOnlyList<string> values, string mode)
+    {
+        for (var index = 0; index < values.Count; index++)
+        {
+            var value = values[index];
+            if (value.StartsWith("--output=", StringComparison.OrdinalIgnoreCase))
+                return string.Equals(value["--output=".Length..], mode, StringComparison.OrdinalIgnoreCase);
+            if (value.Equals("--output", StringComparison.OrdinalIgnoreCase) && index + 1 < values.Count)
+                return string.Equals(values[index + 1], mode, StringComparison.OrdinalIgnoreCase);
+        }
+        return false;
     }
 
     private static int ReadIntegerOption(IReadOnlyList<string> values, string name, int fallback)

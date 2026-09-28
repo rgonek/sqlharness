@@ -6,6 +6,21 @@ namespace SqlHarness.Core;
 public interface ISqlHarnessModule
 {
     Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default);
+
+    /// <summary>
+    /// Optional NDJSON stream for <c>watch --output ndjson</c>: writes
+    /// <c>started</c>/<c>changed</c> records plus exactly one terminal
+    /// (<c>completed</c>/<c>failed</c>) record to <paramref name="writer"/>
+    /// while polling, flushing after every record. The returned outcome
+    /// carries no report (the stream is the output) but keeps the usual exit
+    /// code and gain receipt, so the whole stream counts as emitted output.
+    /// The default refuses; <see cref="SqlHarnessModule"/> implements it.
+    /// </summary>
+    Task<SqlHarnessOutcome> ExecuteWatchNdjsonAsync(
+        SqlHarnessWatchOperation operation,
+        TextWriter writer,
+        CancellationToken ct = default) =>
+        throw new NotSupportedException("This module does not support watch NDJSON streaming.");
 }
 
 public abstract record SqlHarnessOperation;

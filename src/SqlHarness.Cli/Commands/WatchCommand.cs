@@ -79,18 +79,26 @@ public sealed class WatchCommand(ISqlHarnessModule module, OutputContext output,
         try
         {
             var sql = hasFile ? await SqlInputReader.ReadFileAsync(settings.File!, ct) : await SqlInputReader.ReadStdinAsync(input.Stdin, ct);
+            var operation = new SqlHarnessWatchOperation(
+                target,
+                sql,
+                settings.Parameters,
+                settings.Timeout,
+                settings.MaxRows,
+                interval,
+                maxDuration,
+                until,
+                untilUnchanged,
+                settings.HistoryLimit);
+            // Separate NDJSON output path: the existing final JSON below is untouched.
+            if (string.Equals(settings.Output, "ndjson", StringComparison.OrdinalIgnoreCase))
+            {
+                if (settings.Json)
+                    return Invalid("Choose only one of --output, --json, or --json-summary.");
+                return await DispatchNdjson(operation, ct);
+            }
             return await Dispatch(
-                new SqlHarnessWatchOperation(
-                    target,
-                    sql,
-                    settings.Parameters,
-                    settings.Timeout,
-                    settings.MaxRows,
-                    interval,
-                    maxDuration,
-                    until,
-                    untilUnchanged,
-                    settings.HistoryLimit),
+                operation,
                 ResolveOutputMode(settings.Json, output: settings.Output),
                 ct);
         }

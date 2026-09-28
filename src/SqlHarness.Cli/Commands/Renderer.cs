@@ -13,6 +13,14 @@ public sealed class Renderer
     private static readonly JsonSerializerOptions CompactJson = new(JsonSerializerDefaults.Web);
     public void Render(SqlHarnessOutcome outcome, OutputMode mode, OutputCaptureWriter output, string command = "unknown")
     {
+        if (mode == OutputMode.Ndjson)
+        {
+            // The NDJSON watch stream owns its output; a stray report is never
+            // re-rendered. Only a transport-level message may remain.
+            if (!string.IsNullOrWhiteSpace(outcome.SafeError))
+                output.WriteLine(SecretRedactor.Redact(outcome.SafeError, []));
+            return;
+        }
         if (mode == OutputMode.Agent)
         {
             WriteAgent(outcome, command, output, new AgentOutputOptions());
@@ -118,6 +126,12 @@ public sealed class Renderer
     public void RenderError(SqlHarnessExitCode exitCode, string message, OutputMode mode, string command, OutputCaptureWriter output, SqlHarnessError? structuredError = null, AgentOutputOptions? agentOptions = null)
     {
         var error = structuredError ?? SqlHarnessError.From(exitCode, message, "validation");
+        if (mode == OutputMode.Ndjson)
+        {
+            // Pre-run NDJSON failures are plain lines: no stream started.
+            output.WriteLine(message);
+            return;
+        }
         if (mode == OutputMode.Agent)
         {
             WriteAgent(new SqlHarnessOutcome(exitCode, null, message, Error: error), command, output, agentOptions ?? new AgentOutputOptions());
