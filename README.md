@@ -263,7 +263,8 @@ Set `SQLHARNESS_HOME` to relocate these paths, for example in an isolated test e
 ## Roadmap after v1
 
 - Missing-index overlap analysis against existing indexes.
-- A thin MCP facade over `SqlHarness.Core`.
+
+The local MCP server over stdio is implemented: see [docs/mcp.md](docs/mcp.md).
 
 ## Development
 

@@ -14,7 +14,7 @@
 | [04 — Zasoby i watch](2026-09-26-audit-04-runtime-bounds.md) | deadline, historia, wiadomości, pamięć, niestabilny test | kontrakt prezentacji z 03; deadline niezależny |
 | [05 — Architektura](2026-09-26-audit-05-architecture.md) | odpowiedzialności, wspólne mechanizmy, zbędne interfejsy | po naprawach 01/02 i ustaleniu kontraktów 03/04 |
 | [06 — Rozszerzenia](2026-09-26-audit-06-extensions.md) | bezpieczna składnia, artefakty, NDJSON, CI, pg_stat_statements | po właściwych fundamentach; część zadań kończy się specyfikacją |
-| [07 — MCP](2026-09-26-audit-07-mcp.md) | lokalny adapter stdio nad Core, niezmienny scope, narzędzia i budżety | **po zakończeniu 01–06**, zgodnie z decyzją użytkownika |
+| [07 — MCP](2026-09-26-audit-07-mcp.md) | lokalny adapter stdio nad Core, niezmienny scope, narzędzia i budżety | **po zakończeniu 01–06**, zgodnie z decyzją użytkownika; wdrożony i udokumentowany w `docs/mcp.md` (T7) |
 | [08 — Windows tray i zgody](2026-09-26-audit-08-windows-approval-tray.md) | lokalny broker jednorazowych zgód na DML wyłącznie naszego MCP | **po 07**; Windows first, Unix w późniejszym osobnym wdrożeniu |
 
 Nie wykonywać planów równocześnie w jednym katalogu: wspólne pliki to `SqlHarnessModule.cs`, `Contracts.cs`, `ISqlDialect.cs`, `Renderer.cs`. Każdy etap powinien kończyć się spójnym, testowalnym stanem. W razie zlecenia implementacji realizować małe zadania i osobne lokalne commity; push nie jest częścią tych planów. Plan 07 ma osobną [specyfikację MCP](../specs/2026-09-26-mcp-adapter-design.md) i nie rozpoczyna się przed zamknięciem poprzedników.

@@ -244,7 +244,57 @@ public class ContractsTests
             readme,
             StringComparison.Ordinal);
         Assert.Contains("Missing-index overlap analysis against existing indexes.", readme, StringComparison.Ordinal);
-        Assert.Contains("A thin MCP facade over `SqlHarness.Core`.", readme, StringComparison.Ordinal);
+        Assert.DoesNotContain("A thin MCP facade over `SqlHarness.Core`.", readme, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Documentation_covers_deployed_mcp_server()
+    {
+        var readme = ReadRepositoryFile("README.md");
+        var agents = ReadRepositoryFile("AGENTS.md");
+        var mcp = ReadRepositoryFile("docs", "mcp.md");
+
+        Assert.Contains("docs/mcp.md", readme, StringComparison.Ordinal);
+        Assert.Contains("The local MCP server over stdio is implemented", readme, StringComparison.Ordinal);
+
+        Assert.Contains("mcp serve", agents, StringComparison.Ordinal);
+        Assert.Contains("docs/mcp.md", agents, StringComparison.Ordinal);
+        Assert.Contains("AllowMutation: false", agents, StringComparison.Ordinal);
+        Assert.Contains("2025-11-25", agents, StringComparison.Ordinal);
+
+        foreach (var tool in new[]
+        {
+            "sqlharness_capabilities",
+            "sqlharness_inspect",
+            "sqlharness_validate",
+            "sqlharness_query",
+            "sqlharness_measure",
+            "sqlharness_compare",
+            "sqlharness_watch",
+            "sqlharness_snapshot",
+            "sqlharness_plan",
+            "sqlharness_artifact",
+            "sqlharness_gain",
+        })
+        {
+            Assert.Contains(tool, mcp, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("sqlharness mcp serve <profile> --var key=value", mcp, StringComparison.Ordinal);
+        Assert.Contains("--unsafe-direct", mcp, StringComparison.Ordinal);
+        Assert.Contains("ModelContextProtocol", mcp, StringComparison.Ordinal);
+        Assert.Contains("2.2.0", mcp, StringComparison.Ordinal);
+        Assert.Contains("2025-11-25", mcp, StringComparison.Ordinal);
+        Assert.Contains("16384", mcp, StringComparison.Ordinal);
+        Assert.Contains("4096..1048576", mcp, StringComparison.Ordinal);
+        Assert.Contains("32768", mcp, StringComparison.Ordinal);
+        Assert.Contains("AllowMutation: false", mcp, StringComparison.Ordinal);
+        Assert.Contains("busy", mcp, StringComparison.Ordinal);
+        Assert.Contains("watch_max_duration", mcp, StringComparison.Ordinal);
+        Assert.Contains("snapshot_differences", mcp, StringComparison.Ordinal);
+        Assert.Contains("Byte counts are not token counts", mcp, StringComparison.Ordinal);
+        Assert.Contains("Zakres dowodów", mcp, StringComparison.Ordinal);
+        Assert.Contains("Not executed", mcp, StringComparison.Ordinal);
     }
 
     private static string ReadRepositoryFile(params string[] path)
