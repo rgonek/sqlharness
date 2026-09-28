@@ -1,4 +1,4 @@
-using SqlParser;
+﻿using SqlParser;
 using SqlParser.Ast;
 
 namespace SqlHarness.Core.Postgres;
@@ -144,6 +144,9 @@ internal sealed class PostgresSafetyClassifier
             case Statement.Select:
                 return FromWrites(effect.Targets, knownTemps);
 
+            case Statement.Explain explain:
+                return ClassifyExplain(explain, knownTemps);
+
             case Statement.Insert:
             case Statement.Update:
             case Statement.Delete:
@@ -244,6 +247,47 @@ internal sealed class PostgresSafetyClassifier
             default:
                 return StatementOutcome.Unsupported;
         }
+    }
+
+    private static StatementOutcome ClassifyExplain(Statement.Explain explain, HashSet<string> knownTemps)
+    {
+        var innerEffect = StatementEffectVisitor.Inspect(explain.Statement);
+        if (innerEffect.HasProhibitedFunction)
+            return StatementOutcome.Unsupported;
+        if (!IsExplainAnalyze(explain))
+        {
+            // A plan-only EXPLAIN never executes: allow it only over a safe SELECT
+            // with no writes and no result-into of its own. A throwaway temp set
+            // keeps the pure plan from registering session objects it never creates.
+            if (explain.Statement is not Statement.Select innerSelect ||
+                PostgresQueryShape.HasSelectInto(innerSelect.Query) ||
+                PostgresQueryShape.HasWrite(innerSelect.Query))
+                return StatementOutcome.Unsupported;
+            var inner = ClassifyStatement(
+                explain.Statement, innerEffect, new HashSet<string>(knownTemps, StringComparer.Ordinal));
+            return inner.Kind is StatementKind.ReadOnly or StatementKind.SessionLocal
+                ? StatementOutcome.ReadOnly
+                : StatementOutcome.Unsupported;
+        }
+        // EXPLAIN ANALYZE executes the inner statement: full effect analysis, never auto-read.
+        return ClassifyStatement(explain.Statement, innerEffect, knownTemps);
+    }
+
+    private static bool IsExplainAnalyze(Statement.Explain explain)
+    {
+        if (explain.Analyze)
+            return true;
+        foreach (var option in explain.Options ?? Enumerable.Empty<UtilityOption>())
+        {
+            if (!option.Name.Value.Equals("ANALYZE", StringComparison.OrdinalIgnoreCase))
+                continue;
+            // A bare ANALYZE option means TRUE in PostgreSQL; only an explicit
+            // FALSE keeps the plan-only path.
+            if (option.Arg is Expression.LiteralValue { Value: Value.Boolean { Value: false } })
+                continue;
+            return true;
+        }
+        return false;
     }
 
     private static StatementOutcome FromWrites(

@@ -459,6 +459,71 @@ public sealed class PostgresSafetyTests
         }
     }
 
+    [Theory]
+    [InlineData("EXPLAIN SELECT * FROM public.items")]
+    [InlineData("EXPLAIN (COSTS FALSE) SELECT 1")]
+    [InlineData("EXPLAIN (ANALYZE FALSE) SELECT * FROM public.items")]
+    public void Plan_only_explain_over_safe_select_is_read_only(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+        Assert.False(decision.HasSessionLocalWork);
+    }
+
+    [Theory]
+    [InlineData("EXPLAIN ANALYZE SELECT * FROM public.items")]
+    [InlineData("EXPLAIN (ANALYZE) SELECT * FROM public.items")]
+    [InlineData("EXPLAIN (ANALYZE TRUE) SELECT * FROM public.items")]
+    public void Explain_analyze_over_pure_reads_executes_without_mutation(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Fact]
+    public void Explain_analyze_over_persistent_write_needs_mutation_approval()
+    {
+        const string sql = "EXPLAIN ANALYZE INSERT INTO public.items SELECT 1";
+        var denied = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(denied.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, denied.Reason);
+
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.True(approved.Allowed, approved.RejectionDescription);
+        Assert.True(approved.HasMutation);
+    }
+
+    [Theory]
+    [InlineData("EXPLAIN INSERT INTO public.items SELECT 1")]
+    [InlineData("EXPLAIN SELECT pg_sleep(1)")]
+    public void Explain_without_analyze_stays_denied_outside_safe_select(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    [Fact]
+    public void Explain_over_persistent_select_into_reports_select_into()
+    {
+        var decision = _classifier.Classify(
+            "EXPLAIN SELECT 1 INTO persistent_copy", SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.SelectIntoNotAllowed, decision.Reason);
+    }
+
+    [Fact]
+    public void Canonical_analyze_is_a_parse_error_until_the_parser_supports_it()
+    {
+        // SqlParserCS 0.6.5 only accepts the Hive-style ANALYZE TABLE form and
+        // rejects canonical PostgreSQL ANALYZE [VERBOSE] tbl: fail closed, no regex.
+        var decision = _classifier.Classify("ANALYZE t", SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.ParseError, decision.Reason);
+    }
+
     private static SqlUsage ParseUsage(string usage) => usage switch
     {
         "Query" => SqlUsage.Query,
