@@ -25,7 +25,7 @@ Decisions here are a reviewable contract for a future implementation task.
 | Baseline median elapsed, per-variant measured runs | artifact `metrics` section | yes |
 | Candidate median elapsed, per-variant measured runs | artifact `metrics` section | yes |
 | Baseline/candidate logical reads | artifact `metrics` section | yes |
-| CPU time | artifact `metrics` section, SQL Server only | no (see R4) |
+| CPU time | artifact `metrics` section, SQL Server only | no (see R3) |
 | Equivalence outcome (`ordered`/`multiset`/`set`) | compare report | yes, unless mode `off` (see R6) |
 | Stability verdict / run spread | artifact `summary` section | yes |
 | Policy version | threshold file (section 6) | yes, `regressionPolicyVersion: 1` |
@@ -43,29 +43,35 @@ A metric regresses only when **both** gates fire (relative AND absolute):
 |---|---|---|---|
 | Median elapsed | candidate ≥ baseline × 1.10 (+10%) | candidate − baseline ≥ 5 ms | primary signal |
 | Logical reads (median) | candidate ≥ baseline × 1.10 (+10%) | candidate − baseline ≥ 100 pages/buffers | secondary signal |
-| CPU time (median, SQL Server only) | candidate ≥ baseline × 1.15 (+15%) | candidate − baseline ≥ 5 ms | advisory; never decides alone |
+| CPU time (median, SQL Server only) | candidate ≥ baseline × 1.15 (+15%) | candidate − baseline ≥ 5 ms | corroborating; never sufficient without an elapsed regression |
 
-Overall: `fail` iff elapsed regresses AND reads do not improve beyond noise
-(reads candidate ≤ baseline × 1.10, i.e. reads are neutral or worse). CPU is
-never sufficient for `fail`; it is reported as supporting evidence only.
-Any single gate firing alone (relative without absolute, or absolute without
-relative) is noise → does not regress (see cases N1, N2).
+Overall: `fail` requires an elapsed regression (both gates, R8) **plus**
+corroboration from at least one cost signal: logical reads regressing (both
+gates), or — SQL Server only — CPU time regressing (both gates). On
+PostgreSQL the CPU dimension does not exist, so corroboration can only come
+from reads. CPU is therefore corroborating but never sufficient: without an
+elapsed regression the verdict can never be `fail`, with or without CPU.
+A metric firing only one of its two gates is noise and never counts as a
+regression signal (see cases N2, P3).
 
 ## 4. Decision matrix
 
-Rules apply top-down; the first matching rule decides.
+Rules R1–R2 and R4–R9 are terminal: the first matching rule decides. R3 is
+a modifier, not a terminal rule: on PostgreSQL it drops the CPU dimension and
+evaluation continues at R4. A PG `unstable` sample therefore reaches R4 and
+is `inconclusive`, not decided by R3.
 
 | Rule | Condition | Verdict |
 |---|---|---|
 | R1 zero/zero | baseline median == 0 and candidate median == 0 (elapsed) | `pass` |
 | R2 zero baseline | baseline median == 0, candidate median > 0 | `pass` iff candidate ≤ absolute floor (5 ms), else `inconclusive` (relative gate undefined; never `fail` from a zero baseline) |
-| R3 PG CPU | engine `postgres`: CPU dimension ignored entirely (`CpuTimeMs` is constant `0`); a policy config referencing CPU on PG marks the CPU dimension `unavailable`, never a decision input | decide from elapsed + reads |
+| R3 (modifier) PG CPU | engine `postgres`: CPU dimension ignored entirely (`CpuTimeMs` is constant `0`); a policy config referencing CPU on PG marks the CPU dimension `unavailable`, never a decision input | — (no verdict; continue at R4, corroboration from reads only) |
 | R4 unstable sample | stability verdict != stable, or (max − min)/median > 25% on either variant's measured runs | `inconclusive` |
 | R5 incomplete measurement | fewer than 5 measured runs per variant, missing `metrics`/`summary` sections, or legacy artifact without manifest | `inconclusive` |
 | R6 equivalence off/unknown | `--compare-results off`, or equivalence outcome missing | `inconclusive` |
 | R7 non-equivalence | equivalence outcome is mismatch under the selected mode | `inconclusive` (never `fail`: a different result is not a slower same result) |
-| R8 regression | R1–R7 do not fire; elapsed regresses (both gates) and reads not improved beyond noise | `fail` |
-| R9 otherwise | R1–R8 do not fire | `pass` |
+| R8 regression | R1–R2, R4–R7 do not fire; elapsed regresses (both gates) AND at least one corroborating signal regresses (reads both gates; or CPU both gates on SQL Server) | `fail` |
+| R9 otherwise | R1–R2, R4–R8 do not fire | `pass` |
 
 `missingIndexes` (always empty on PG) and noteworthy operators (≤10, capped)
 are diagnostic context only; they never change the verdict.
@@ -79,10 +85,11 @@ spread > 25%; minimum 5 measured runs; equivalence mode `ordered` unless noted.
 |---|---|---|---|---|
 | P1 | 100 ms / 1000 | 102 ms / 990 | stable, equivalent | `pass` (within noise) |
 | P2 | 100 ms / 1000 | 105 ms / 1010 | stable, equivalent | `pass` (relative under 10%) |
-| F1 | 100 ms / 1000 | 120 ms / 1150 | stable, equivalent | `fail` (both gates, both signals) |
-| F2 | 200 ms / 5000 | 230 ms / 4900 | stable, equivalent; CPU +40% (SQL Server) | `fail` (elapsed+reads; CPU advisory only, same outcome without it) |
-| N1 | 100 ms / 1000 | 112 ms / 1005 | stable, equivalent | `pass` (relative fires, absolute +12 ms… see note) |
-| N2 | 4 ms / 50 | 9 ms / 55 | stable, equivalent | `pass` (absolute fires, relative on tiny base is noise-guarded by reads gate: reads +10% needs +100 buffers) |
+| P3 | 500 ms / 10000 | 510 ms / 10050 | stable, equivalent | `pass` (absolute-only moves, +10 ms / +50 buffers, but neither relative gate fires → noise, no signal) |
+| F1 | 100 ms / 1000 | 120 ms / 1150 | stable, equivalent | `fail` (elapsed both gates + reads corroboration, +15% / +150 buffers) |
+| F2 | 200 ms / 5000 (CPU 50 ms) | 230 ms / 4900 (CPU 70 ms) | stable, equivalent (SQL Server) | `fail` (elapsed both gates + CPU corroboration, +40% / +20 ms; reads improved, which blocks nothing) |
+| N1 | 100 ms / 1000 (CPU 20 ms) | 112 ms / 1005 (CPU 20 ms) | stable, equivalent (SQL Server) | `pass` (elapsed regresses but no corroboration: reads neutral, CPU flat → R9) |
+| N2 | 4 ms / 50 | 8 ms / 55 | stable, equivalent | `pass` (relative-only moves: elapsed +100% but +4 ms under the floor; reads +10% but +5 buffers under the floor → noise, no signal) |
 | Z1 | 0 ms / 0 | 0 ms / 0 | stable, equivalent | `pass` (R1) |
 | Z2 | 0 ms / 0 | 30 ms / 200 | stable, equivalent | `inconclusive` (R2; never `fail` from zero baseline) |
 | Z3 | 0 ms / 0 | 3 ms / 10 | stable, equivalent | `pass` (R2, under absolute floor) |
@@ -94,9 +101,11 @@ spread > 25%; minimum 5 measured runs; equivalence mode `ordered` unless noted.
 | E2 | 100 ms / 1000 | 120 ms / 1150 | `ordered` mismatch (row order differs) | `inconclusive` (R7; a different result is not a regression) |
 | E3 | 100 ms / 1000 | 120 ms / 1150 | `multiset` equivalent (same rows, order differs) | `fail` (equivalent under selected mode → R8) |
 
-Note on N1: elapsed +12% and +12 ms fires both elapsed gates, but reads +0.5%
-do not regress, so R8's reads condition blocks `fail` → `pass`. If reads had
-also fired both gates, the verdict would be `fail`.
+Note on F2 vs N1: both pairs show an elapsed regression with neutral-or-better
+reads, and only the corroborating signal separates them — F2 fails because CPU
+corroborates (+40% / +20 ms), N1 passes with CPU flat and reads neutral.
+Elapsed alone never fails (P3: absolute-only moves are noise); a single firing
+gate never counts as a signal (N2: relative-only; P3: absolute-only).
 
 ## 6. Noise policy, repeat counts, threshold versioning
 
@@ -125,8 +134,9 @@ before implementation:
 - Option B (recommended): `regress <artifact-id> --policy v1 --json`, offline
   like `artifact` (no target, no connection, no rebenchmark). It reads the
   saved artifact's `summary`/`metrics` sections, applies this policy, and
-  prints `{ "verdict": "pass|fail|inconclusive", "rule": "R1..R9",
+  prints `{ "verdict": "pass|fail|inconclusive", "rule": "R1,R2,R4..R9",
   "regressionPolicyVersion": 1, ... }` with process exit `0` on success.
+  R3 never appears as `rule`: it is a modifier, not a verdict.
   SQL/execution failures surface as exits `2/5/6` per the existing contract;
   a domain `fail` never changes the exit code — CI gates on the `verdict`
   field, not on process exit.
@@ -150,7 +160,8 @@ before implementation:
 3. `src/SqlHarness.Cli/Commands/RegressCommand.cs` — offline `regress`
    command (option B); CLI registration alongside `artifact`.
 4. `tests/SqlHarness.Tests/RegressionDeciderTests.cs` — one test per row of
-   the section 5 table (P1–E3) plus version-pinning tests.
+   the section 5 table (P1–E3, now including P3) plus version-pinning tests.
+   Fixtures carry CPU medians wherever the verdict depends on them (F2, N1).
 5. `tests/SqlHarness.Tests/Cli/RegressCommandTests.cs` — offline tests:
    unknown id/section, legacy artifact, exit codes unchanged, verdict field
    present with exit `0` on `fail`.
@@ -158,4 +169,4 @@ before implementation:
    `regress` only after real implementation lands (same rule as 06/T5).
 
 Review focus for the implementer: unstable sample / unavailable metric paths
-(R3–R5) must stay `inconclusive`, never `pass` or `fail`.
+(R3 modifier, R4–R5) must stay `inconclusive`, never `pass` or `fail`.
