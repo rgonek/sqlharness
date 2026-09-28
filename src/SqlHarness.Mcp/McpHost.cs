@@ -70,8 +70,10 @@ public static class McpHost
 
         // Eager shared composition over the frozen provider. This opens no
         // database connection and performs no auth; the explicit T3 tool
-        // catalog executes on it.
+        // catalog executes on it. The T5 execution gate is process-wide: one
+        // active database operation, shared by every tool call in process.
         var module = scope.CreateModule();
+        var gate = new McpExecutionGate();
 
         var loggerFactory = new McpStderrLoggerFactory(log);
         var serverOptions = new ModelContextProtocol.Server.McpServerOptions
@@ -83,7 +85,7 @@ public static class McpHost
             },
             ProtocolVersion = PinnedProtocolVersion,
         };
-        Tools.McpToolCatalog.Wire(serverOptions, scope, module);
+        Tools.McpToolCatalog.Wire(serverOptions, scope, module, gate, hostShutdown: ct);
 
         try
         {

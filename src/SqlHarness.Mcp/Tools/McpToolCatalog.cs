@@ -21,9 +21,31 @@ namespace SqlHarness.Mcp.Tools;
 /// through <see cref="McpResultAdapter"/>, so success, controlled outcomes,
 /// and failures all share the small budgeted agent envelope as both
 /// structured content and JSON text.
+///
+/// Database tools (query, measure, compare, watch, snapshot) run under the
+/// process <see cref="McpExecutionGate"/>: one active database operation at a
+/// time, a second concurrent call gets a stable BUSY rejection, and a
+/// per-call time budget (the process maximum only lowered) reaches Core as a
+/// linked deadline. Cancellation propagates to Core on every path; a
+/// cancelled call reports a stable cancelled result, never the natural watch
+/// deadline exit 7. Long calls send throttled stage progress only when the
+/// client supplied a progress token, without SQL, parameters, or rows. The
+/// host shutdown token is linked into every execution, so closing the process
+/// (EOF/SIGTERM) cancels an in-flight Core call even if the client never
+/// sends a protocol cancellation: no hanging watch, sessions disposed by
+/// Core, and the gate released for the next call.
 /// </summary>
-public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
+public sealed class McpToolHandlers(
+    McpScope scope,
+    ISqlHarnessModule module,
+    McpExecutionGate? gate = null,
+    IMcpClock? clock = null,
+    CancellationToken hostShutdown = default)
 {
+    private readonly McpExecutionGate _gate = gate ?? new McpExecutionGate();
+    private readonly IMcpClock _clock = clock ?? SystemMcpClock.Instance;
+    private readonly CancellationToken _hostShutdown = hostShutdown;
+
     public Task<CallToolResult> CapabilitiesAsync(
         RequestContext<CallToolRequestParams> ctx,
         [Description("Include local counts and existence flags. Never secrets, paths, or profile lists.")]
@@ -32,7 +54,10 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         RunAsync("sqlharness_capabilities", _ =>
         {
             ThrowIfUnknown(ctx, ["includeDiagnostics"]);
-            return Task.FromResult(Ok(McpOperationMapper.BuildCapabilities(scope, includeDiagnostics), "sqlharness_capabilities"));
+            return Task.FromResult(new SqlHarnessOutcome(
+                SqlHarnessExitCode.Success,
+                McpOperationMapper.BuildCapabilities(scope, includeDiagnostics),
+                null));
         }, ct);
 
     public Task<CallToolResult> InspectAsync(
@@ -60,9 +85,9 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         RunAsync("sqlharness_inspect", async token =>
         {
             ThrowIfUnknown(ctx, ["kind", "object", "filter", "tables", "like", "top", "exact", "window", "timeout"]);
-            return OutcomeResult(await module.ExecuteAsync(
+            return await module.ExecuteAsync(
                 McpOperationMapper.MapInspect(scope, kind, @object, filter, tables, like, top, exact, window, timeout),
-                token), "sqlharness_inspect");
+                token);
         }, ct);
 
     public Task<CallToolResult> ValidateAsync(
@@ -80,7 +105,10 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         RunAsync("sqlharness_validate", async token =>
         {
             ThrowIfUnknown(ctx, ["usage", "sql", "file", "parameters"]);
-            return Ok(await McpOperationMapper.MapValidateAsync(scope, sql, file, usage, parameters, token), "sqlharness_validate");
+            return new SqlHarnessOutcome(
+                SqlHarnessExitCode.Success,
+                await McpOperationMapper.MapValidateAsync(scope, sql, file, usage, parameters, token),
+                null);
         }, ct);
 
     public Task<CallToolResult> QueryAsync(
@@ -95,13 +123,17 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         int timeout = 30,
         [Description("Presentation row cap 0..500.")]
         int maxRows = 50,
+        [Description("Response cap 4096..1048576 bytes; only lowers the process maximum.")]
+        int? maxResultBytes = null,
+        [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
+        int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
-        RunAsync("sqlharness_query", async token =>
+        RunDbAsync("sqlharness_query", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows"]);
-            return OutcomeResult(await module.ExecuteAsync(
+            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxOperationSeconds"]);
+            return await module.ExecuteAsync(
                 await McpOperationMapper.MapQueryAsync(scope, sql, file, parameters, timeout, maxRows, token),
-                token), "sqlharness_query");
+                token);
         }, ct);
 
     public Task<CallToolResult> MeasureAsync(
@@ -118,13 +150,17 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         int repeat = 5,
         [Description("SQL timeout 1..300 seconds.")]
         int? timeout = null,
+        [Description("Response cap 4096..1048576 bytes; only lowers the process maximum.")]
+        int? maxResultBytes = null,
+        [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
+        int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
-        RunAsync("sqlharness_measure", async token =>
+        RunDbAsync("sqlharness_measure", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["query", "setup", "parameters", "paramSetFiles", "repeat", "timeout"]);
-            return OutcomeResult(await module.ExecuteAsync(
+            ThrowIfUnknown(ctx, ["query", "setup", "parameters", "paramSetFiles", "repeat", "timeout", "maxResultBytes", "maxOperationSeconds"]);
+            return await module.ExecuteAsync(
                 await McpOperationMapper.MapMeasureAsync(scope, query, setup, parameters, paramSetFiles, repeat, timeout, token),
-                token), "sqlharness_measure");
+                token);
         }, ct);
 
     public Task<CallToolResult> CompareAsync(
@@ -146,13 +182,17 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         string compareResults = "ordered",
         [Description("Optional single matrix dimension {name, type, values}: at least two values, no commas.")]
         McpMatrixArgument? matrix = null,
+        [Description("Response cap 4096..1048576 bytes; only lowers the process maximum.")]
+        int? maxResultBytes = null,
+        [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
+        int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
-        RunAsync("sqlharness_compare", async token =>
+        RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "repeat", "timeout", "compareResults", "matrix"]);
-            return OutcomeResult(await module.ExecuteAsync(
+            ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "repeat", "timeout", "compareResults", "matrix", "maxResultBytes", "maxOperationSeconds"]);
+            return await module.ExecuteAsync(
                 await McpOperationMapper.MapCompareAsync(scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token),
-                token), "sqlharness_compare");
+                token);
         }, ct);
 
     public Task<CallToolResult> WatchAsync(
@@ -175,13 +215,20 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         string? interval = null,
         [Description("Maximum watch time like 15m (s/m/h suffix, at most 24h). Default 15m.")]
         string? maxDuration = null,
+        [Description("Response cap 4096..1048576 bytes; only lowers the process maximum.")]
+        int? maxResultBytes = null,
+        [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
+        int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
-        RunAsync("sqlharness_watch", async token =>
+        RunDbAsync("sqlharness_watch", ctx, maxResultBytes, maxOperationSeconds, async (token, remaining) =>
         {
-            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "until", "untilUnchanged", "interval", "maxDuration"]);
-            return OutcomeResult(await module.ExecuteAsync(
-                await McpOperationMapper.MapWatchAsync(scope, sql, file, parameters, timeout, maxRows, until, untilUnchanged, interval, maxDuration, token),
-                token), "sqlharness_watch");
+            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "until", "untilUnchanged", "interval", "maxDuration", "maxResultBytes", "maxOperationSeconds"]);
+            var operation = await McpOperationMapper.MapWatchAsync(scope, sql, file, parameters, timeout, maxRows, until, untilUnchanged, interval, maxDuration, token);
+            // The watch deadline is bounded by the remaining request budget, so
+            // a natural max-duration stop stays a controlled exit 7 inside it.
+            if (operation.MaxDuration > remaining)
+                operation = operation with { MaxDuration = remaining };
+            return await module.ExecuteAsync(operation, token);
         }, ct);
 
     public Task<CallToolResult> SnapshotAsync(
@@ -201,13 +248,17 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         int timeout = 30,
         [Description("Presentation row cap 0..500.")]
         int maxRows = 50,
+        [Description("Response cap 4096..1048576 bytes; only lowers the process maximum.")]
+        int? maxResultBytes = null,
+        [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
+        int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
-        RunAsync("sqlharness_snapshot", async token =>
+        RunDbAsync("sqlharness_snapshot", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["action", "name", "sql", "file", "parameters", "timeout", "maxRows"]);
-            return OutcomeResult(await module.ExecuteAsync(
+            ThrowIfUnknown(ctx, ["action", "name", "sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxOperationSeconds"]);
+            return await module.ExecuteAsync(
                 await McpOperationMapper.MapSnapshotAsync(scope, action, name, sql, file, parameters, timeout, maxRows, token),
-                token), "sqlharness_snapshot");
+                token);
         }, ct);
 
     public Task<CallToolResult> PlanAsync(
@@ -222,8 +273,8 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
             ThrowIfUnknown(ctx, ["content", "file"]);
             var outcome = await module.ExecuteAsync(await McpOperationMapper.MapPlanAsync(scope, content, file, token), token);
             return outcome.ExitCode == SqlHarnessExitCode.Success
-                ? Ok(McpResultSanitizer.Sanitize(outcome.Report), "sqlharness_plan")
-                : OutcomeResult(outcome, "sqlharness_plan");
+                ? outcome with { Report = McpResultSanitizer.Sanitize(outcome.Report) }
+                : outcome;
         }, ct);
 
     public Task<CallToolResult> ArtifactAsync(
@@ -237,7 +288,10 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         RunAsync("sqlharness_artifact", _ =>
         {
             ThrowIfUnknown(ctx, ["id", "section"]);
-            return Task.FromResult(Ok(McpOperationMapper.ReadArtifactSection(scope, id, section), "sqlharness_artifact"));
+            return Task.FromResult(new SqlHarnessOutcome(
+                SqlHarnessExitCode.Success,
+                McpOperationMapper.ReadArtifactSection(scope, id, section),
+                null));
         }, ct);
 
     public Task<CallToolResult> GainAsync(
@@ -246,7 +300,7 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         RunAsync("sqlharness_gain", async token =>
         {
             ThrowIfUnknown(ctx, []);
-            return OutcomeResult(await module.ExecuteAsync(new SqlHarnessGainOperation(), token), "sqlharness_gain");
+            return await module.ExecuteAsync(new SqlHarnessGainOperation(), token);
         }, ct);
 
     /// <summary>
@@ -276,54 +330,125 @@ public sealed class McpToolHandlers(McpScope scope, ISqlHarnessModule module)
         }
     }
 
-    private async Task<CallToolResult> RunAsync(string command, Func<CancellationToken, Task<CallToolResult>> run, CancellationToken ct)
+    private async Task<CallToolResult> RunAsync(string command, Func<CancellationToken, Task<SqlHarnessOutcome>> run, CancellationToken ct)
     {
+        var budget = new McpResultBudget(scope.MaxResultBytes);
         try
         {
-            return await run(ct);
+            // Discovery and local tools share no gate, but every execution is
+            // still bounded by the process time budget through this token.
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _hostShutdown);
+            linked.CancelAfter(TimeSpan.FromSeconds(scope.MaxOperationSeconds));
+            return McpResultAdapter.Adapt(await run(linked.Token), command, budget);
+        }
+        catch (OperationCanceledException)
+        {
+            return McpExecutionGate.CancelledResult(command, budget);
         }
         catch (Exception exception) when (exception is McpMappingException
             or McpInputException
             or ParameterSetFileException)
         {
             // Contract rejections carry constant, value-free messages.
-            return Fail(SqlHarnessExitCode.Safety, exception.Message, command);
+            return Fail(SqlHarnessExitCode.Safety, exception.Message, command, budget);
         }
         catch (ArtifactReadException exception)
         {
-            return Fail(SqlHarnessExitCode.LocalStorage, exception.Message, command);
+            return Fail(SqlHarnessExitCode.LocalStorage, exception.Message, command, budget);
         }
         catch (Exception)
         {
-            return Fail(SqlHarnessExitCode.SqlExecution, null, command);
+            return Fail(SqlHarnessExitCode.SqlExecution, null, command, budget);
         }
     }
 
-    private static CallToolResult OutcomeResult(SqlHarnessOutcome outcome, string command)
+    /// <summary>
+    /// Executes one database call under the process gate with the resolved
+    /// budgets. The gate is released on every path, so a cancelled or failed
+    /// call never blocks the next one. A concurrent second database call gets
+    /// the stable BUSY rejection without executing.
+    /// </summary>
+    private async Task<CallToolResult> RunDbAsync(
+        string command,
+        RequestContext<CallToolRequestParams>? context,
+        int? maxResultBytes,
+        int? maxOperationSeconds,
+        Func<CancellationToken, TimeSpan, Task<SqlHarnessOutcome>> run,
+        CancellationToken ct)
     {
-        // Controlled outcomes (watch max duration, snapshot diff) are valid
-        // results, not transport failures; the adapter maps only real
-        // failures to IsError and keeps the Core exit code in the envelope.
-        ArgumentNullException.ThrowIfNull(outcome);
-        return McpResultAdapter.Adapt(outcome, command);
+        McpResultBudget budget;
+        TimeSpan callBudget;
+        try
+        {
+            budget = McpResultBudget.Resolve(scope.MaxResultBytes, maxResultBytes);
+            callBudget = TimeSpan.FromSeconds(
+                McpLimits.ResolveOperationSeconds(scope.MaxOperationSeconds, maxOperationSeconds));
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return Fail(SqlHarnessExitCode.Safety, "The requested budget is invalid.", command);
+        }
+
+        if (!_gate.TryEnterDb())
+            return McpExecutionGate.BusyResult(command, budget);
+
+        try
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _hostShutdown);
+            linked.CancelAfter(callBudget);
+            var progress = new McpProgressReporter(_clock);
+            await progress.ReportAsync(context, command, McpProgressReporter.Started, linked.Token);
+            SqlHarnessOutcome outcome;
+            try
+            {
+                outcome = await run(linked.Token, callBudget);
+            }
+            catch (Exception exception) when (exception is McpMappingException
+                or McpInputException
+                or ParameterSetFileException)
+            {
+                // Contract rejections carry constant, value-free messages.
+                return Fail(SqlHarnessExitCode.Safety, exception.Message, command, budget);
+            }
+            catch (ArtifactReadException exception)
+            {
+                return Fail(SqlHarnessExitCode.LocalStorage, exception.Message, command, budget);
+            }
+
+            await progress.ReportAsync(context, command, McpProgressReporter.Finished, linked.Token);
+            return McpResultAdapter.Adapt(outcome, command, budget);
+        }
+        catch (OperationCanceledException)
+        {
+            return McpExecutionGate.CancelledResult(command, budget);
+        }
+        catch (Exception)
+        {
+            return Fail(SqlHarnessExitCode.SqlExecution, null, command, budget);
+        }
+        finally
+        {
+            _gate.ExitDb();
+        }
     }
 
-    private static CallToolResult Ok(object? report, string command) =>
-        McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), command);
-
-    private static CallToolResult Fail(SqlHarnessExitCode exitCode, string? message, string command) =>
+    private CallToolResult Fail(SqlHarnessExitCode exitCode, string? message, string command, McpResultBudget? budget = null) =>
         McpResultAdapter.Adapt(
             new SqlHarnessOutcome(
                 exitCode,
                 null,
                 string.IsNullOrWhiteSpace(message) ? "The tool failed without a safe error." : message),
-            command);
+            command,
+            budget ?? new McpResultBudget(scope.MaxResultBytes));
 }
 
 /// <summary>
 /// Explicit tool catalog: exactly the 11 MCP v1 tools, registered one by one
 /// by name. No assembly scanning (WithToolsFromAssembly) is used anywhere on
 /// this path, so adding a public method can never silently widen the surface.
+/// Annotations are conservative local-effect hints only: benchmark and
+/// snapshot capture write data and gain accounting may write to disk, so they
+/// never claim readOnly; hints never replace policy enforcement.
 /// </summary>
 public static class McpToolCatalog
 {
@@ -342,41 +467,67 @@ public static class McpToolCatalog
         "sqlharness_gain",
     ];
 
-    public static IReadOnlyList<McpServerTool> CreateTools(McpScope scope, ISqlHarnessModule module)
+    public static IReadOnlyList<McpServerTool> CreateTools(
+        McpScope scope,
+        ISqlHarnessModule module,
+        McpExecutionGate? gate = null,
+        IMcpClock? clock = null,
+        CancellationToken hostShutdown = default)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(module);
-        var handlers = new McpToolHandlers(scope, module);
+        var handlers = new McpToolHandlers(scope, module, gate, clock, hostShutdown);
         var type = typeof(McpToolHandlers);
-        McpServerTool Tool(string name, string method, string description) =>
+        McpServerTool Tool(
+            string name,
+            string method,
+            string description,
+            bool? readOnly,
+            bool? destructive,
+            bool? idempotent,
+            bool? openWorld) =>
             McpServerTool.Create(
                 type.GetMethod(method) ?? throw new InvalidOperationException($"Unknown MCP tool method '{method}'."),
                 handlers,
-                new McpServerToolCreateOptions { Name = name, Description = description });
+                new McpServerToolCreateOptions
+                {
+                    Name = name,
+                    Description = description,
+                    ReadOnly = readOnly,
+                    Destructive = destructive,
+                    Idempotent = idempotent,
+                    OpenWorld = openWorld,
+                });
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
-            Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), "Describe server versions, scope engine, tools, and limits. Optional local diagnostics; no secrets or profile lists."),
-            Tool(ToolNames[1], nameof(McpToolHandlers.InspectAsync), "Run one read-only catalog inspection: ping, schema, counts, space, qstop, or indexes. qstop/indexes are SQL Server only. No SQL input."),
-            Tool(ToolNames[2], nameof(McpToolHandlers.ValidateAsync), "Classify SQL offline with Core safety; never connects. Exactly one of inline sql (at most 1 MiB) or a file under an input root."),
-            Tool(ToolNames[3], nameof(McpToolHandlers.QueryAsync), "Run a bounded read-only query. Persistent mutation is always off. Exactly one of inline sql (at most 1 MiB) or a file under an input root."),
-            Tool(ToolNames[4], nameof(McpToolHandlers.MeasureAsync), "Measure one query across repeats, optionally with .sqljson parameter-set files. Setup runs once per session."),
-            Tool(ToolNames[5], nameof(McpToolHandlers.CompareAsync), "Compare baseline vs candidate with the CLI sessions and equivalence rules. Optional single matrix dimension."),
-            Tool(ToolNames[6], nameof(McpToolHandlers.WatchAsync), "Poll a bounded read-only query until until/untilUnchanged, within interval/maxDuration bounds."),
-            Tool(ToolNames[7], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it. No force flag."),
-            Tool(ToolNames[8], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. Sanitized projection only: no statement text or literal predicates."),
-            Tool(ToolNames[9], nameof(McpToolHandlers.ArtifactAsync), "Read one safe section (summary, metrics, operators) of a saved benchmark artifact."),
-            Tool(ToolNames[10], nameof(McpToolHandlers.GainAsync), "Report the local output-savings aggregate."),
+            Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), "Describe server versions, scope engine, tools, and limits. Optional local diagnostics; no secrets or profile lists.", true, false, true, false),
+            Tool(ToolNames[1], nameof(McpToolHandlers.InspectAsync), "Run one read-only catalog inspection: ping, schema, counts, space, qstop, or indexes. qstop/indexes are SQL Server only. No SQL input.", true, false, null, true),
+            Tool(ToolNames[2], nameof(McpToolHandlers.ValidateAsync), "Classify SQL offline with Core safety; never connects. Exactly one of inline sql (at most 1 MiB) or a file under an input root.", true, false, true, false),
+            Tool(ToolNames[3], nameof(McpToolHandlers.QueryAsync), "Run a bounded read-only query. Persistent mutation is always off. Exactly one of inline sql (at most 1 MiB) or a file under an input root.", true, false, null, true),
+            Tool(ToolNames[4], nameof(McpToolHandlers.MeasureAsync), "Measure one query across repeats, optionally with .sqljson parameter-set files. Setup runs once per session.", null, false, null, true),
+            Tool(ToolNames[5], nameof(McpToolHandlers.CompareAsync), "Compare baseline vs candidate with the CLI sessions and equivalence rules. Optional single matrix dimension.", null, false, null, true),
+            Tool(ToolNames[6], nameof(McpToolHandlers.WatchAsync), "Poll a bounded read-only query until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
+            Tool(ToolNames[7], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it. No force flag.", null, false, null, true),
+            Tool(ToolNames[8], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. Sanitized projection only: no statement text or literal predicates.", true, false, true, false),
+            Tool(ToolNames[9], nameof(McpToolHandlers.ArtifactAsync), "Read one safe section (summary, metrics, operators) of a saved benchmark artifact.", true, false, true, false),
+            Tool(ToolNames[10], nameof(McpToolHandlers.GainAsync), "Report the local output-savings aggregate.", null, false, null, false),
         };
         if (tools.Count != McpLimits.MaxTools)
             throw new InvalidOperationException($"The MCP catalog must serve exactly {McpLimits.MaxTools} tools.");
         return tools;
     }
 
-    public static void Wire(ModelContextProtocol.Server.McpServerOptions options, McpScope scope, ISqlHarnessModule module)
+    public static void Wire(
+        ModelContextProtocol.Server.McpServerOptions options,
+        McpScope scope,
+        ISqlHarnessModule module,
+        McpExecutionGate? gate = null,
+        IMcpClock? clock = null,
+        CancellationToken hostShutdown = default)
     {
         ArgumentNullException.ThrowIfNull(options);
         var collection = new McpServerPrimitiveCollection<McpServerTool>();
-        foreach (var tool in CreateTools(scope, module))
+        foreach (var tool in CreateTools(scope, module, gate, clock, hostShutdown))
             collection.Add(tool);
         options.ToolCollection = collection;
     }

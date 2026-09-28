@@ -22,12 +22,16 @@ public sealed class McpScope
         SqlTargetRequest targetRequest,
         ResolvedTarget resolvedTarget,
         IReadOnlyList<string> inputRoots,
-        IReadOnlyDictionary<string, TargetProfile> profiles)
+        IReadOnlyDictionary<string, TargetProfile> profiles,
+        int maxResultBytes,
+        int maxOperationSeconds)
     {
         TargetRequest = targetRequest;
         ResolvedTarget = resolvedTarget;
         InputRoots = inputRoots;
         Profiles = profiles;
+        MaxResultBytes = maxResultBytes;
+        MaxOperationSeconds = maxOperationSeconds;
     }
 
     /// <summary>Target request as approved at startup.</summary>
@@ -38,6 +42,19 @@ public sealed class McpScope
 
     /// <summary>Normalized absolute input roots (empty means no file inputs).</summary>
     public IReadOnlyList<string> InputRoots { get; }
+
+    /// <summary>
+    /// Frozen process-wide cap for one serialized tool response in UTF-8
+    /// bytes. Tool calls resolve their effective budget against it and may
+    /// only lower it.
+    /// </summary>
+    public int MaxResultBytes { get; }
+
+    /// <summary>
+    /// Frozen process-wide time budget for one database call in seconds.
+    /// Tool calls may only lower it; the linked deadline always reaches Core.
+    /// </summary>
+    public int MaxOperationSeconds { get; }
 
     /// <summary>Frozen profile snapshot shared by every call in this process.</summary>
     public IReadOnlyDictionary<string, TargetProfile> Profiles { get; }
@@ -95,6 +112,13 @@ public sealed class McpScope
 
         var roots = ValidateInputRoots(options.InputRoots);
 
+        if (options.MaxResultBytes < McpLimits.MinCallToolResultBudgetBytes ||
+            options.MaxResultBytes > McpLimits.MaxCallToolResultBudgetBytes)
+            throw new McpStartupException("The MCP result budget is invalid.");
+        if (options.MaxOperationSeconds < McpLimits.MinOperationSeconds ||
+            options.MaxOperationSeconds > McpLimits.MaxOperationSeconds)
+            throw new McpStartupException("The MCP operation budget is invalid.");
+
         var vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (options.Vars is not null)
         {
@@ -117,7 +141,7 @@ public sealed class McpScope
             throw new McpStartupException("The MCP profile or variables are invalid.", exception);
         }
 
-        return new McpScope(request, resolved, roots, snapshot);
+        return new McpScope(request, resolved, roots, snapshot, options.MaxResultBytes, options.MaxOperationSeconds);
     }
 
     private static IReadOnlyList<string> ValidateInputRoots(IReadOnlyList<string>? roots)

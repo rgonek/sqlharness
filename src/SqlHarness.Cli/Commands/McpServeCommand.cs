@@ -38,6 +38,14 @@ public sealed class McpServeCommand(McpHostConsole console) : AsyncCommand<McpSe
         [Description("Absolute directory allowing file inputs. Repeatable; empty by default (no file inputs).")]
         public string[] InputRoots { get; set; } = [];
 
+        [CommandOption("--max-result-bytes <BYTES>")]
+        [Description("Process response cap 4096..1048576 bytes. Default 16384; a call may only lower it.")]
+        public int MaxResultBytes { get; set; } = 16384;
+
+        [CommandOption("--max-operation-seconds <SECONDS>")]
+        [Description("Process DB time budget 1..86400 seconds. Default 900; a call may only lower it.")]
+        public int MaxOperationSeconds { get; set; } = 900;
+
         [CommandOption("--unsafe-direct")]
         [Description("Blocked for mcp serve; MCP v1 has no unsafe-direct.")]
         public bool UnsafeDirect { get; set; }
@@ -74,6 +82,8 @@ public sealed class McpServeCommand(McpHostConsole console) : AsyncCommand<McpSe
             Profile = settings.Profile,
             Vars = vars,
             InputRoots = settings.InputRoots,
+            MaxResultBytes = settings.MaxResultBytes,
+            MaxOperationSeconds = settings.MaxOperationSeconds,
         };
         return SqlHarness.Mcp.McpHost.RunAsync(
             options,

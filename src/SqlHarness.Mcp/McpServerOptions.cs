@@ -19,4 +19,16 @@ public sealed class McpServerOptions
     /// means no file inputs are admitted (spec section 5).
     /// </summary>
     public IReadOnlyList<string> InputRoots { get; init; } = [];
+
+    /// <summary>
+    /// Process-wide cap for one serialized tool response in UTF-8 bytes
+    /// (4096..1048576, default 16384). A single tool call may only lower it.
+    /// </summary>
+    public int MaxResultBytes { get; init; } = (int)McpLimits.CallToolResultBudgetBytes;
+
+    /// <summary>
+    /// Process-wide time budget for one database call in seconds (1..86400,
+    /// default 900). A single tool call may only lower it.
+    /// </summary>
+    public int MaxOperationSeconds { get; init; } = McpLimits.DefaultMaxOperationSeconds;
 }

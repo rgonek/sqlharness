@@ -114,6 +114,8 @@ public static partial class McpOperationMapper
                 ["maxRepeat"] = 100,
                 ["maxTop"] = 500,
                 ["maxRows"] = 500,
+                ["callToolResultBudgetBytes"] = scope.MaxResultBytes,
+                ["maxOperationSeconds"] = scope.MaxOperationSeconds,
             },
             QueryStoreAvailable: !pg,
             IndexesAvailable: !pg,

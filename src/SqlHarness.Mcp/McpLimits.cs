@@ -51,4 +51,37 @@ public static class McpLimits
 
     /// <summary>Budget for one serialized CallToolResult in UTF-8 bytes (enforced in T4).</summary>
     public const long CallToolResultBudgetBytes = 16L * 1024;
+
+    /// <summary>Default process-wide DB time budget in seconds (15 minutes, spec section 7).</summary>
+    public const int DefaultMaxOperationSeconds = 900;
+
+    /// <summary>Smallest process-wide DB time budget in seconds.</summary>
+    public const int MinOperationSeconds = 1;
+
+    /// <summary>Largest process-wide DB time budget in seconds (24 hours).</summary>
+    public const int MaxOperationSeconds = 86400;
+
+    /// <summary>
+    /// Resolves the effective per-call time budget from the process-operator
+    /// maximum and an optional per-call request. A call may only lower the
+    /// process maximum; a request above it is clamped down to it. Both inputs
+    /// must sit inside 1..86400 seconds.
+    /// </summary>
+    public static int ResolveOperationSeconds(int processMaximumSeconds, int? callMaximumSeconds)
+    {
+        if (processMaximumSeconds < MinOperationSeconds || processMaximumSeconds > MaxOperationSeconds)
+            throw new ArgumentOutOfRangeException(
+                nameof(processMaximumSeconds),
+                processMaximumSeconds,
+                $"Operation budget must be {MinOperationSeconds}..{MaxOperationSeconds} seconds.");
+        var effective = callMaximumSeconds.HasValue
+            ? Math.Min(callMaximumSeconds.Value, processMaximumSeconds)
+            : processMaximumSeconds;
+        if (effective < MinOperationSeconds || effective > MaxOperationSeconds)
+            throw new ArgumentOutOfRangeException(
+                nameof(callMaximumSeconds),
+                callMaximumSeconds,
+                $"Operation budget must be {MinOperationSeconds}..{MaxOperationSeconds} seconds.");
+        return effective;
+    }
 }
