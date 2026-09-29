@@ -127,7 +127,7 @@ public sealed class McpLifecycleTests
     }
 
     [Fact]
-    public void Db_tool_classification_covers_exactly_the_five_gated_tools()
+    public void Db_tool_classification_covers_exactly_the_six_gated_tools()
     {
         Assert.True(McpExecutionGate.IsDbTool("sqlharness_query"));
         Assert.True(McpExecutionGate.IsDbTool("sqlharness_measure"));
@@ -135,7 +135,7 @@ public sealed class McpLifecycleTests
         Assert.True(McpExecutionGate.IsDbTool("sqlharness_watch"));
         Assert.True(McpExecutionGate.IsDbTool("sqlharness_snapshot"));
         Assert.False(McpExecutionGate.IsDbTool("sqlharness_capabilities"));
-        Assert.False(McpExecutionGate.IsDbTool("sqlharness_inspect"));
+        Assert.True(McpExecutionGate.IsDbTool("sqlharness_inspect"));
         Assert.False(McpExecutionGate.IsDbTool("sqlharness_validate"));
         Assert.False(McpExecutionGate.IsDbTool("sqlharness_plan"));
         Assert.False(McpExecutionGate.IsDbTool("sqlharness_artifact"));
@@ -211,6 +211,117 @@ public sealed class McpLifecycleTests
         release.TrySetResult();
         Assert.False((await blocked).IsError == true);
         Assert.Single(module.Operations);
+    }
+
+    [Fact]
+    public async Task Active_query_blocks_inspect_with_stable_busy()
+    {
+        var gate = new McpExecutionGate();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int calls = 0;
+        var module = new RecordingModule
+        {
+            Behavior = async (_, ct) =>
+            {
+                // Only the first (gate-holding) call parks: a concurrent
+                // second execution on old code returns at once, so RED is a
+                // clean busy assertion failure instead of a deadlock.
+                if (Interlocked.Increment(ref calls) == 1)
+                {
+                    entered.TrySetResult();
+                    await release.Task.WaitAsync(ct);
+                }
+                return new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null);
+            },
+        };
+        var handlers = new McpToolHandlers(TestScope(), module, gate);
+        using var cts = new CancellationTokenSource(Budget);
+
+        var blockedQuery = handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
+        await entered.Task.WaitAsync(Budget, cts.Token);
+
+        var busy = await handlers.InspectAsync(null!, "ping", timeout: 5, ct: cts.Token);
+        AssertBusy(busy, "sqlharness_inspect");
+
+        release.TrySetResult();
+        Assert.False((await blockedQuery).IsError == true);
+        Assert.Single(module.Operations);
+    }
+
+    [Fact]
+    public async Task Active_inspect_blocks_query_and_second_inspect()
+    {
+        var gate = new McpExecutionGate();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int calls = 0;
+        var module = new RecordingModule
+        {
+            Behavior = async (_, ct) =>
+            {
+                // Only the first (gate-holding) call parks: concurrent
+                // executions on old code return at once, so RED is a clean
+                // busy assertion failure instead of a deadlock.
+                if (Interlocked.Increment(ref calls) == 1)
+                {
+                    entered.TrySetResult();
+                    await release.Task.WaitAsync(ct);
+                }
+                return new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null);
+            },
+        };
+        var handlers = new McpToolHandlers(TestScope(), module, gate);
+        using var cts = new CancellationTokenSource(Budget);
+
+        var holder = handlers.InspectAsync(null!, "ping", timeout: 5, ct: cts.Token);
+        await entered.Task.WaitAsync(Budget, cts.Token);
+
+        // Both a different database tool and a second inspect get the same
+        // stable BUSY rejection without executing.
+        var busyQuery = await handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
+        AssertBusy(busyQuery, "sqlharness_query");
+        var busyInspect = await handlers.InspectAsync(null!, "ping", timeout: 5, ct: cts.Token);
+        AssertBusy(busyInspect, "sqlharness_inspect");
+        var queryError = Envelope(busyQuery).GetProperty("error").GetRawText();
+        var inspectError = Envelope(busyInspect).GetProperty("error").GetRawText();
+        Assert.Equal(queryError, inspectError);
+
+        release.TrySetResult();
+        Assert.False((await holder).IsError == true);
+        Assert.Single(module.Operations);
+    }
+
+    [Fact]
+    public async Task Local_capabilities_and_validate_run_while_the_gate_is_held()
+    {
+        var heldEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var heldRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var localModule = new RecordingModule
+        {
+            Behavior = async (_, ct) =>
+            {
+                heldEntered.TrySetResult();
+                await heldRelease.Task.WaitAsync(ct);
+                return new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null);
+            },
+        };
+        var localHandlers = new McpToolHandlers(TestScope(), localModule, new McpExecutionGate());
+        using var localCts = new CancellationTokenSource(Budget);
+
+        var held = localHandlers.QueryAsync(null!, "SELECT 1", ct: localCts.Token);
+        await heldEntered.Task.WaitAsync(Budget, localCts.Token);
+
+        // Offline local tools share no gate and stay available while a
+        // database call holds it.
+        var capabilities = await localHandlers.CapabilitiesAsync(null!, false, localCts.Token);
+        Assert.False(capabilities.IsError == true, Text(capabilities));
+        var validate = await localHandlers.ValidateAsync(null!, "query", sql: "SELECT 1", ct: localCts.Token);
+        Assert.False(validate.IsError == true, Text(validate));
+
+        heldRelease.TrySetResult();
+        Assert.False((await held).IsError == true);
+        Assert.Single(localModule.Operations);
     }
 
     [Fact]
