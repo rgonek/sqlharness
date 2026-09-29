@@ -247,6 +247,63 @@ public class SnapshotStoreTests
         Assert.False(File.Exists(observedTemp));
     }
 
+    // 003/T2: snapshot scope metadata. The store is the existing offline
+    // reader/writer: legacy v1 documents (with or without owner) must keep
+    // loading, while owner survival across load/save fails until T4 persists
+    // the scope owner ({profile, vars, engine, server, database}) in Core.
+
+    private const string SnapshotOwnerProfile = "snapshot-owner-9c4e-synthetic";
+
+    private static string SnapshotOwnerJson() =>
+        "{\"profile\": \"" + SnapshotOwnerProfile + "\", \"vars\": {\"tenant\": \"acme\"}, \"engine\": \"sqlserver\", \"server\": \"snap-server\", \"database\": \"snapdb\"}";
+
+    private static void WriteRawSnapshot(string root, string name, bool withOwner)
+    {
+        var json = "{\"version\": 1, \"createdAt\": \"2026-07-29T12:00:00+00:00\", \"resultSets\": [], \"resultHash\": \"H\""
+            + (withOwner ? ", \"owner\": " + SnapshotOwnerJson() : string.Empty) + "}";
+        File.WriteAllText(Path.Combine(root, name + ".json"), json);
+    }
+
+    [Fact]
+    public void Legacy_snapshot_without_owner_loads_via_store()
+    {
+        using var temp = new TempDirectory();
+        WriteRawSnapshot(temp.Path, "legacy-snap", withOwner: false);
+        var store = new SnapshotStore(temp.Path);
+
+        var loaded = store.Load("legacy-snap");
+
+        Assert.Equal(1, loaded.Version);
+        Assert.Equal("H", loaded.ResultHash);
+    }
+
+    [Fact]
+    public void Snapshot_with_owner_metadata_loads_via_store()
+    {
+        using var temp = new TempDirectory();
+        WriteRawSnapshot(temp.Path, "owned-snap", withOwner: true);
+        var store = new SnapshotStore(temp.Path);
+
+        var loaded = store.Load("owned-snap");
+
+        Assert.Equal(1, loaded.Version);
+        Assert.Equal("H", loaded.ResultHash);
+    }
+
+    [Fact]
+    public void Store_preserves_owner_metadata_across_load_and_save()
+    {
+        using var temp = new TempDirectory();
+        WriteRawSnapshot(temp.Path, "owned-snap", withOwner: true);
+        var store = new SnapshotStore(temp.Path);
+
+        store.Save("owned-copy", store.Load("owned-snap"), force: false);
+
+        var copied = File.ReadAllText(Path.Combine(temp.Path, "owned-copy.json"));
+        Assert.Contains("\"owner\"", copied, StringComparison.Ordinal);
+        Assert.Contains(SnapshotOwnerProfile, copied, StringComparison.Ordinal);
+    }
+
     private static void AssertDocumentsEqual(SnapshotDocument expected, SnapshotDocument actual)
     {
         Assert.Equal(expected.Version, actual.Version);

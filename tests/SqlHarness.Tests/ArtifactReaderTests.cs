@@ -341,6 +341,66 @@ public class ArtifactReaderTests
         Assert.DoesNotContain(Secret, thrown.Message, StringComparison.Ordinal);
     }
 
+    // 003/T2: CLI-compat guards. The offline reader takes no owner (opt-in
+    // enforcement lives on the MCP path per plans/003-scope-contract.md), so
+    // owner metadata — present, foreign, or absent — never changes CLI reads.
+
+    [Fact]
+    public void ManifestWithOwnerMetadata_RemainsReadableByCli()
+    {
+        using var temp = new TempDirectory();
+        var id = WriteOwnedCliArtifact(temp.Path, """{"profile": "cli-owner", "vars": {"tenant": "acme"}, "engine": "sqlserver", "server": "safe-server", "database": "safe-db"}""");
+
+        Assert.NotNull(ArtifactReader.ReadSection(temp.Path, id, "summary"));
+        var metrics = Assert.IsType<ArtifactMetricsSection>(ArtifactReader.ReadSection(temp.Path, id, "metrics"));
+        Assert.Equal(["baseline", "candidate"], metrics.Variants.Select(variant => variant.Name).ToArray());
+        Assert.NotNull(ArtifactReader.ReadSection(temp.Path, id, "operators"));
+    }
+
+    [Fact]
+    public void ManifestWithForeignOwner_RemainsReadableByCli()
+    {
+        using var temp = new TempDirectory();
+        var id = WriteOwnedCliArtifact(temp.Path, """{"profile": "other-profile", "vars": {"tenant": "other"}, "engine": "sqlserver", "server": "other-server", "database": "other-db"}""");
+
+        Assert.NotNull(ArtifactReader.ReadSection(temp.Path, id, "summary"));
+        Assert.NotNull(ArtifactReader.ReadSection(temp.Path, id, "metrics"));
+    }
+
+    [Fact]
+    public void ManifestV1WithoutOwner_RemainsReadableByCli()
+    {
+        using var temp = new TempDirectory();
+        var id = WriteOwnedCliArtifact(temp.Path, ownerJson: null);
+
+        Assert.NotNull(ArtifactReader.ReadSection(temp.Path, id, "summary"));
+        Assert.NotNull(ArtifactReader.ReadSection(temp.Path, id, "metrics"));
+        Assert.NotNull(ArtifactReader.ReadSection(temp.Path, id, "operators"));
+    }
+
+    private static string WriteOwnedCliArtifact(string root, string? ownerJson)
+    {
+        var report = CompareReport();
+        var runs = new[]
+        {
+            new CompareRunArtifact("baseline", 1, 1, 2, 3,
+                new Dictionary<string, long> { ["Clients"] = 3 }, "HASH", [FixturePlan()], 0),
+            new CompareRunArtifact("candidate", 1, 4, 5, 6,
+                new Dictionary<string, long> { ["Clients"] = 6 }, "HASH", [FixturePlan()], 0),
+        };
+        var directory = new CompareArtifactWriter(root, () => DateTimeOffset.UnixEpoch)
+            .Write(report, runs, "wind");
+        if (ownerJson is not null)
+        {
+            var manifestPath = Path.Combine(directory, "manifest.json");
+            var trimmed = File.ReadAllText(manifestPath).TrimEnd();
+            Assert.EndsWith("}", trimmed);
+            File.WriteAllText(manifestPath, trimmed[..^1] + ",\"owner\": " + ownerJson + "}");
+        }
+
+        return Path.GetFileName(directory);
+    }
+
     private static string WriteRawArtifact(string root, string id, string manifest, string report)
     {
         var directory = Path.Combine(root, id);
