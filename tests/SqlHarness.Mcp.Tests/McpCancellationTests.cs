@@ -239,10 +239,11 @@ public sealed class McpCancellationTests
     }
 
     [Fact]
-    public async Task Midflight_cancel_of_a_local_call_reports_cancelled()
+    public async Task Midflight_cancel_of_inspect_reports_cancelled_and_releases_the_gate()
     {
+        var gate = new McpExecutionGate();
         var module = new CancellingModule();
-        var handlers = new McpToolHandlers(TestScope(), module, new McpExecutionGate());
+        var handlers = new McpToolHandlers(TestScope(), module, gate);
         using var cts = new CancellationTokenSource(Budget);
 
         var inflight = handlers.InspectAsync(null!, "ping", ct: cts.Token);
@@ -250,5 +251,40 @@ public sealed class McpCancellationTests
 
         await cts.CancelAsync();
         AssertCancelled(await inflight.WaitAsync(Budget), "sqlharness_inspect");
+
+        // The linked token reached the module instead of hanging.
+        await module.CancelObserved.Task.WaitAsync(Budget, CancellationToken.None);
+
+        // Cleanup ran: the gate slot is free and the next call on a fresh
+        // token executes normally.
+        Assert.True(gate.TryEnterDb());
+        gate.ExitDb();
+        module.BlockCall = _ => false;
+        using var fresh = new CancellationTokenSource(Budget);
+        var next = await handlers.InspectAsync(null!, "ping", ct: fresh.Token);
+        Assert.False(next.IsError == true, Text(next));
+        Assert.Equal(2, module.Operations.Count);
+    }
+
+    [Fact]
+    public async Task Inspect_deadline_releases_the_gate()
+    {
+        var gate = new McpExecutionGate();
+        var scope = TestScope(new McpServerOptions { Profile = "mcp-t5", MaxOperationSeconds = 1 });
+        var module = new CancellingModule();
+        var handlers = new McpToolHandlers(scope, module, gate);
+        using var cts = new CancellationTokenSource(Budget);
+
+        var result = await handlers.InspectAsync(null!, "ping", ct: cts.Token);
+
+        AssertCancelled(result, "sqlharness_inspect");
+        await module.CancelObserved.Task.WaitAsync(Budget, CancellationToken.None);
+
+        // Cleanup ran: the next call on a fresh token executes normally.
+        module.BlockCall = _ => false;
+        using var fresh = new CancellationTokenSource(Budget);
+        var next = await handlers.QueryAsync(null!, "SELECT 1", ct: fresh.Token);
+        Assert.False(next.IsError == true, Text(next));
+        Assert.Equal(2, module.Operations.Count);
     }
 }

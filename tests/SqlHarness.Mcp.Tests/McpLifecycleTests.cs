@@ -293,6 +293,96 @@ public sealed class McpLifecycleTests
     }
 
     [Fact]
+    public async Task Inspect_mapping_rejection_releases_the_gate()
+    {
+        var gate = new McpExecutionGate();
+        var module = new RecordingModule();
+        var handlers = new McpToolHandlers(TestScope(), module, gate);
+        using var cts = new CancellationTokenSource(Budget);
+
+        // An unknown kind never reaches the module: a stable exit-2
+        // contract rejection, and the gate slot is not held.
+        var rejected = await handlers.InspectAsync(null!, "bogus", ct: cts.Token);
+        Assert.True(rejected.IsError == true, Text(rejected));
+        var rejectedEnvelope = Envelope(rejected);
+        Assert.Equal("error", rejectedEnvelope.GetProperty("status").GetString());
+        Assert.Equal((int)SqlHarnessExitCode.Safety, rejectedEnvelope.GetProperty("exitCode").GetInt32());
+        Assert.Equal("sqlharness_inspect", rejectedEnvelope.GetProperty("command").GetString());
+        Assert.Empty(McpResultAdapter.ValidateEnvelope(rejectedEnvelope));
+        Assert.Empty(module.Operations);
+
+        // The slot is free: the next inspect and query both execute.
+        var nextInspect = await handlers.InspectAsync(null!, "ping", timeout: 5, ct: cts.Token);
+        Assert.False(nextInspect.IsError == true, Text(nextInspect));
+        var nextQuery = await handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
+        Assert.False(nextQuery.IsError == true, Text(nextQuery));
+        Assert.Equal(2, module.Operations.Count);
+    }
+
+    [Fact]
+    public async Task Inspect_core_failure_releases_the_gate()
+    {
+        var gate = new McpExecutionGate();
+        var module = new RecordingModule
+        {
+            Behavior = (_, _) => throw new InvalidOperationException("boom"),
+        };
+        var handlers = new McpToolHandlers(TestScope(), module, gate);
+        using var cts = new CancellationTokenSource(Budget);
+
+        var failed = await handlers.InspectAsync(null!, "ping", timeout: 5, ct: cts.Token);
+        Assert.True(failed.IsError == true, Text(failed));
+        var failedEnvelope = Envelope(failed);
+        Assert.Equal("error", failedEnvelope.GetProperty("status").GetString());
+        Assert.Equal((int)SqlHarnessExitCode.SqlExecution, failedEnvelope.GetProperty("exitCode").GetInt32());
+        Assert.Equal("sqlharness_inspect", failedEnvelope.GetProperty("command").GetString());
+        Assert.Empty(McpResultAdapter.ValidateEnvelope(failedEnvelope));
+        Assert.Single(module.Operations);
+
+        // The slot is free: the next query executes on the module.
+        module.Behavior = null;
+        var next = await handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
+        Assert.False(next.IsError == true, Text(next));
+        Assert.Equal(2, module.Operations.Count);
+    }
+
+    [Fact]
+    public async Task Host_shutdown_cancels_an_inflight_inspect_and_releases_the_gate()
+    {
+        var gate = new McpExecutionGate();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var module = new RecordingModule
+        {
+            Behavior = async (_, ct) =>
+            {
+                entered.TrySetResult();
+                // Honor the token exactly like Core: the linked host token
+                // reaches the module, so shutdown cancels the wait.
+                await Task.Delay(Timeout.Infinite, ct);
+                throw new InvalidOperationException("A cancelled wait never completes.");
+            },
+        };
+        using var hostCts = new CancellationTokenSource();
+        using var guard = new CancellationTokenSource(Budget);
+        var handlers = new McpToolHandlers(TestScope(), module, gate, hostShutdown: hostCts.Token);
+
+        var inflight = handlers.InspectAsync(null!, "ping", timeout: 5, ct: guard.Token);
+        await entered.Task.WaitAsync(Budget, guard.Token);
+
+        // Process close: the linked token reaches the module, the inspect
+        // reports cancelled, and the gate slot is released.
+        await hostCts.CancelAsync();
+        var cancelled = await inflight.WaitAsync(Budget, guard.Token);
+        Assert.True(cancelled.IsError == true, Text(cancelled));
+        var cancelledEnvelope = Envelope(cancelled);
+        Assert.Equal((int)SqlHarnessExitCode.SqlExecution, cancelledEnvelope.GetProperty("exitCode").GetInt32());
+        Assert.Equal(McpExecutionGate.CancelledCode, cancelledEnvelope.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(McpExecutionGate.CancelledMessage, cancelledEnvelope.GetProperty("error").GetProperty("message").GetString());
+        Assert.True(gate.TryEnterDb());
+        gate.ExitDb();
+    }
+
+    [Fact]
     public async Task Local_capabilities_and_validate_run_while_the_gate_is_held()
     {
         var heldEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
