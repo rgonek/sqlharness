@@ -52,7 +52,7 @@ Exactly 11 tools are registered explicitly by name. No assembly scanning is used
 | Tool | Behavior |
 |---|---|
 | `sqlharness_capabilities` | Server versions and build, scope engine, tool list, and limits; optional local diagnostics with counts and existence flags only, never secrets, paths, or profile lists. |
-| `sqlharness_inspect` | One read-only catalog inspection: `ping`, `schema`, `counts`, `space`, `qstop`, or `indexes`. No SQL input. `qstop` and `indexes` are SQL Server only and are rejected before connecting on Postgres. |
+| `sqlharness_inspect` | One read-only catalog inspection: `ping`, `schema`, `counts`, `space`, `qstop`, or `indexes`. No SQL input. `qstop` and `indexes` are SQL Server only and are rejected before connecting on Postgres. It runs under the process gate like the other database tools. |
 | `sqlharness_validate` | Offline SQL classification for usage `query`, `setup`, or `benchmark`. One Core offline classifier serves every usage; it never connects. |
 | `sqlharness_query` | Bounded read-only query with timeout and row cap. Persistent mutation is always off. |
 | `sqlharness_measure` | Measure one query across repeats, with optional setup and `.sqljson` parameter-set files. Same sessions and rules as the CLI. |
@@ -76,11 +76,11 @@ Every tool returns a versioned agent envelope (`schemaVersion`, `command`, `stat
 - Statuses: `success`, `partial` (failed matrix-cell batch), `error`, `watch_max_duration` (exit 7), and `snapshot_differences` (exit 8). The two controlled outcomes are valid results with `isError=false`; only failures set `isError=true`.
 - Budgets are enforced on the whole serialized `CallToolResult` in UTF-8 bytes, including both representations, JSON escaping, and SDK metadata: default 16384 B, accepted range 4096..1048576. The tools/list catalog budget is 32768 B for at most 11 tools. The per-cell character limit defaults to 512 and an operator may configure at most 4096.
 - JSON is never truncated to fit: detail levels descend until the wire cost fits, ending in a minimum valid error envelope that always fits the smallest budget.
-- One database operation runs per process. A second concurrent database call is rejected immediately with a stable BUSY result (`busy` code, exit 2, `isError=true`): no queue, no retry hint. Discovery and safe local tools may run in parallel because every call builds its own operation records with no shared mutable state.
+- One database operation runs per process. A second concurrent database call is rejected immediately with a stable BUSY result (`busy` code, exit 2, `isError=true`): no queue, no retry hint. Safe local tools (`capabilities`, `validate`, `plan`, `artifact`, `gain`) may run in parallel because every call builds its own operation records with no shared mutable state.
 
 ## Concurrency, deadline, cancellation, and progress
 
-`query`, `measure`, `compare`, `watch`, and `snapshot` run under the process gate; a matrix or parameter-set batch travels inside its single call and counts as one operation. Every execution is bounded by the process time budget (default 900 s, range 1..86400 s) through a linked deadline that always reaches Core.
+`query`, `measure`, `compare`, `watch`, `snapshot`, and `inspect` run under the process gate; a matrix or parameter-set batch travels inside its single call and counts as one operation. Every execution is bounded by the process time budget (default 900 s, range 1..86400 s) through a linked deadline that always reaches Core.
 
 Cancellation propagates to connection, execution, reads, delays, and artifact writes. Closing the process (host shutdown) or stdin EOF cancels an in-flight call, which reports a stable cancelled result (`isError=true`), never the natural watch-deadline exit 7. The gate is released on every path, so a cancelled or failed call never blocks the next one.
 
