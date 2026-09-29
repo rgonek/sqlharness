@@ -158,7 +158,10 @@ public sealed class McpScope
                 throw new McpStartupException("The MCP input roots are invalid.");
             }
 
-            normalized.Add(Path.GetFullPath(root));
+            var normalizedRoot = McpInputRoots.NormalizeRoot(root);
+            if (McpInputRoots.IsFilesystemRoot(normalizedRoot))
+                throw new McpStartupException("The MCP input roots are invalid.");
+            normalized.Add(normalizedRoot);
         }
 
         return normalized;

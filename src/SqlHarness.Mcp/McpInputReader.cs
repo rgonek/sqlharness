@@ -152,7 +152,7 @@ public static class McpInputReader
         // The drive-letter colon lives in the directory portion, never here.
         if (Path.GetFileName(full).Contains(':', StringComparison.Ordinal))
             throw new McpInputException("The input path is invalid.");
-        if (!IsUnderAnyRoot(full, roots))
+        if (!McpInputRoots.IsUnderAnyRoot(full, roots))
             throw new McpInputException("The input path is invalid.");
         if (IsLinkOrReparseChain(full))
             throw new McpInputException("The input path is invalid.");
@@ -182,7 +182,7 @@ public static class McpInputReader
             var bytes = await ReadBoundedAsync(stream, maxBytes, ct, kind);
             afterOpen?.Invoke();
             var after = Snapshot(full);
-            if (!before.Equals(after) || !IsUnderAnyRoot(full, roots) || IsLinkOrReparseChain(full))
+            if (!before.Equals(after) || !McpInputRoots.IsUnderAnyRoot(full, roots) || IsLinkOrReparseChain(full))
                 throw new McpInputException("The input file changed while it was read.");
             try
             {
@@ -231,18 +231,6 @@ public static class McpInputReader
         _ => "The input file exceeds the read limit.",
     };
 
-
-    private static bool IsUnderAnyRoot(string full, IReadOnlyList<string> roots)
-    {
-        foreach (var root in roots)
-        {
-            if (string.Equals(full, root, StringComparison.OrdinalIgnoreCase) ||
-                full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-
-        return false;
-    }
 
     /// <summary>
     /// Fails closed on the file itself and on every parent directory up to the

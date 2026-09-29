@@ -272,7 +272,7 @@ public sealed class McpInputReaderTests : IDisposable
     // creation-throw of any startup/input exception type OR successful
     // creation followed by reader rejection of a file under the filesystem
     // root. Fail-closed is the documented choice, not a locked type or phase.
-    // Must FAIL until T2 fixes src (old code admits the root AND reads).
+    // Old code passes via the reader leg for the wrong reason (the double-separator defect rejects everything); the true T2 RED would be a trim without explicit filesystem-root rejection.
     [Fact]
     public async Task Filesystem_root_is_rejected_at_scope_creation()
     {
