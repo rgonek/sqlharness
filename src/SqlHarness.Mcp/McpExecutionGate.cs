@@ -31,11 +31,11 @@ public sealed class SystemMcpClock : IMcpClock
 /// <summary>
 /// Concurrency gate for one MCP server process (spec section 7): at most one
 /// active database operation at a time. The database tools are query,
-/// measure, compare, watch, and snapshot; a matrix or a parameter-set batch
+/// measure, compare, watch, snapshot, and inspect; a matrix or a parameter-set batch
 /// travels inside its single compare/measure call, so it counts as one
 /// operation. A second concurrent database call is rejected immediately with
 /// a stable BUSY result: no queue, no retry-after, the client decides.
-/// Discovery (inspect) and safe local tools (capabilities, validate, plan,
+/// Safe local tools (capabilities, validate, plan,
 /// artifact, gain) run in parallel as long as they share no mutable request
 /// state: every call builds its own Core operation records, so there is no
 /// shared reader, temp, or parameter state between calls.
@@ -61,6 +61,7 @@ public sealed class McpExecutionGate
         "sqlharness_compare",
         "sqlharness_watch",
         "sqlharness_snapshot",
+        "sqlharness_inspect",
     };
 
     private readonly SemaphoreSlim _database = new(1, 1);

@@ -22,7 +22,7 @@ namespace SqlHarness.Mcp.Tools;
 /// and failures all share the small budgeted agent envelope as both
 /// structured content and JSON text.
 ///
-/// Database tools (query, measure, compare, watch, snapshot) run under the
+/// Database tools (query, measure, compare, watch, snapshot, inspect) run under the
 /// process <see cref="McpExecutionGate"/>: one active database operation at a
 /// time, a second concurrent call gets a stable BUSY rejection, and a
 /// per-call time budget (the process maximum only lowered) reaches Core as a
@@ -83,7 +83,7 @@ public sealed class McpToolHandlers(
         [Description("SQL timeout 1..300 seconds. Defaults per kind (ping 5, others 30).")]
         int? timeout = null,
         CancellationToken ct = default) =>
-        RunAsync("sqlharness_inspect", async token =>
+        RunDbAsync("sqlharness_inspect", ctx, null, null, async (token, _) =>
         {
             ThrowIfUnknown(ctx, ["kind", "object", "filter", "tables", "like", "top", "exact", "window", "timeout"]);
             return await module.ExecuteAsync(
