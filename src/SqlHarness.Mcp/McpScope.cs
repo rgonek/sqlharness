@@ -21,6 +21,7 @@ public sealed class McpScope
     private McpScope(
         SqlTargetRequest targetRequest,
         ResolvedTarget resolvedTarget,
+        ArtifactOwner owner,
         IReadOnlyList<string> inputRoots,
         IReadOnlyDictionary<string, TargetProfile> profiles,
         int maxResultBytes,
@@ -28,6 +29,7 @@ public sealed class McpScope
     {
         TargetRequest = targetRequest;
         ResolvedTarget = resolvedTarget;
+        Owner = owner;
         InputRoots = inputRoots;
         Profiles = profiles;
         MaxResultBytes = maxResultBytes;
@@ -39,6 +41,9 @@ public sealed class McpScope
 
     /// <summary>Target resolved once at startup and never re-resolved.</summary>
     public ResolvedTarget ResolvedTarget { get; }
+
+    /// <summary>Artifact owner stamped by live publishes and enforced on MCP artifact reads.</summary>
+    public ArtifactOwner Owner { get; }
 
     /// <summary>Normalized absolute input roots (empty means no file inputs).</summary>
     public IReadOnlyList<string> InputRoots { get; }
@@ -141,7 +146,7 @@ public sealed class McpScope
             throw new McpStartupException("The MCP profile or variables are invalid.", exception);
         }
 
-        return new McpScope(request, resolved, roots, snapshot, options.MaxResultBytes, options.MaxOperationSeconds);
+        return new McpScope(request, resolved, ArtifactOwner.From(request, resolved), roots, snapshot, options.MaxResultBytes, options.MaxOperationSeconds);
     }
 
     private static IReadOnlyList<string> ValidateInputRoots(IReadOnlyList<string>? roots)

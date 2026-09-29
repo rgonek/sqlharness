@@ -462,7 +462,7 @@ public static partial class McpOperationMapper
         // The shared manifest reader pins ids to single directory names under
         // the artifact root and serves only the three safe sections: no raw
         // plans, queries.jsonl, SQL, or snapshot cells can leave through it.
-        return ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id ?? string.Empty, section);
+        return ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id ?? string.Empty, section, scope.Owner);
     }
 
     /// <summary>

@@ -355,7 +355,7 @@ public sealed class McpToolHandlers(
         }
         catch (ArtifactReadException exception)
         {
-            return Fail(SqlHarnessExitCode.LocalStorage, exception.Message, command, budget);
+            return Fail(exception.ExitCode, exception.Message, command, budget);
         }
         catch (Exception)
         {
@@ -413,7 +413,7 @@ public sealed class McpToolHandlers(
             }
             catch (ArtifactReadException exception)
             {
-                return Fail(SqlHarnessExitCode.LocalStorage, exception.Message, command, budget);
+                return Fail(exception.ExitCode, exception.Message, command, budget);
             }
 
             await progress.ReportAsync(context, command, McpProgressReporter.Finished, linked.Token);
