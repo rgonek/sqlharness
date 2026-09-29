@@ -435,10 +435,13 @@ public static partial class McpOperationMapper
         var sqlText = await McpInputReader.ReadSqlAsync(sql, file, scope, ct);
         // Capture never overwrites: force stays false and the Core store
         // rejects an existing name. There is no force argument at all.
+        // The frozen scope owner travels on the operation so Core stamps
+        // scoped captures and refuses foreign baselines before data.
         return new SqlHarnessSnapshotOperation(
             scope.TargetRequest, sqlText, FormatParameters(parameters),
             RequireTimeout(timeout), RequireMaxRows(maxRows), name,
-            Diff: string.Equals(action, "diff", StringComparison.OrdinalIgnoreCase), Force: false);
+            Diff: string.Equals(action, "diff", StringComparison.OrdinalIgnoreCase), Force: false,
+            Owner: scope.Owner);
     }
 
     public static async Task<SqlHarnessPlanOperation> MapPlanAsync(

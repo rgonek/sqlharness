@@ -7,6 +7,9 @@ internal sealed class SnapshotRunner(ISqlSessionFactory sessions, ISnapshotStore
     private const string OmittedRowsMessage =
         "Snapshot result exceeded --max-rows; raise the explicit bound or narrow the query.";
 
+    private const string ScopeRefusalMessage =
+        "The snapshot is not available in the current scope.";
+
     private readonly ISqlSessionFactory _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
     private readonly ISnapshotStore _store = store ?? throw new ArgumentNullException(nameof(store));
     private readonly Func<DateTimeOffset> _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
@@ -44,6 +47,27 @@ internal sealed class SnapshotRunner(ISqlSessionFactory sessions, ISnapshotStore
         }
 
         var phase = OperationPhase.Authentication;
+        // Scoped (MCP) calls carry the frozen scope owner: a foreign or
+        // ownerless baseline is refused before any connection or SQL runs,
+        // with a constant message that carries no cell values. Unscoped
+        // (CLI) calls pass no owner and keep working by name.
+        if (operation.Diff && operation.Owner is not null && !operation.Owner.Matches(baseline!.Owner))
+        {
+            return (
+                new SqlHarnessOutcome(
+                    SqlHarnessExitCode.Safety,
+                    null,
+                    ScopeRefusalMessage),
+                new OutputFootprint(0, 0));
+        }
+
+        if (!operation.Diff && operation.Owner is not null)
+        {
+            var scopeGate = RequireCaptureScope(operation.Name, operation.Owner, knownSecrets);
+            if (scopeGate is not null)
+                return (scopeGate, new OutputFootprint(0, 0));
+        }
+
         var rawFootprint = new OutputFootprint(0, 0);
         CanonicalResultAccumulator? raw = null;
 
@@ -74,6 +98,9 @@ internal sealed class SnapshotRunner(ISqlSessionFactory sessions, ISnapshotStore
                 _utcNow(),
                 collected.ResultSets,
                 collected.Canonical.Hash);
+
+            if (operation.Owner is not null)
+                document = document with { Owner = operation.Owner };
 
             if (operation.Diff)
             {
@@ -130,6 +157,45 @@ internal sealed class SnapshotRunner(ISqlSessionFactory sessions, ISnapshotStore
         {
             raw?.Dispose();
         }
+    }
+
+    // Scoped capture never overwrites and never self-grants: an existing
+    // name owned by another scope (or with no owner at all) is refused
+    // before any connection or SQL runs. A missing name returns null so
+    // capture proceeds; other storage failures surface as local storage,
+    // mirroring the diff baseline path.
+    private SqlHarnessOutcome? RequireCaptureScope(
+        string name,
+        ArtifactOwner owner,
+        IReadOnlyCollection<string> knownSecrets)
+    {
+        SnapshotDocument existing;
+        try
+        {
+            existing = _store.Load(name);
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+        catch (Exception exception) when (IsLocalStorage(exception))
+        {
+            var secrets = knownSecrets as IReadOnlyList<string> ?? knownSecrets.ToArray();
+            return new SqlHarnessOutcome(
+                SqlHarnessExitCode.LocalStorage,
+                null,
+                SecretRedactor.Redact(exception, secrets));
+        }
+
+        if (!owner.Matches(existing.Owner))
+        {
+            return new SqlHarnessOutcome(
+                SqlHarnessExitCode.Safety,
+                null,
+                ScopeRefusalMessage);
+        }
+
+        return null;
     }
 
     private static bool IsLocalStorage(Exception exception) =>
