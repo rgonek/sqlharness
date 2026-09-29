@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO.Pipelines;
 using System.Text;
 using System.Text.Json;
 
@@ -344,6 +345,15 @@ internal sealed class RecordingStream(Stream inner) : Stream
 public sealed class McpStdioProcessTests
 {
     private static readonly TimeSpan SmokeBudget = TimeSpan.FromMinutes(6);
+    private static readonly TimeSpan SeamBudget = TimeSpan.FromSeconds(30);
+
+    private static IReadOnlyDictionary<string, TargetProfile> SeamProfiles() =>
+        new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+        {
+            ["mcp-t3"] = new TargetProfile(
+                "mcp-unreachable.invalid", "reportdb",
+                new Dictionary<string, string>(), "integrated"),
+        };
 
     [Fact]
     public async Task Published_single_file_server_passes_the_stdio_smoke_on_this_rid() =>
@@ -454,6 +464,109 @@ public sealed class McpStdioProcessTests
             child?.Process.Dispose();
             McpStdioProcessHarness.DeleteHome(home);
         }
+    }
+
+    /// <summary>
+    /// 001/T3 stdout boundary over the host seam: a full handshake plus an
+    /// offline validate call emits only JSON-RPC frames on stdout (every
+    /// recorded byte parses as a frame), and stdin EOF then exits 0.
+    /// No database is opened; the profile is synthetic and unreachable.
+    /// </summary>
+    [Fact]
+    public async Task Inprocess_session_keeps_stdout_pure_protocol_and_exits_zero_on_eof()
+    {
+        using var cts = new CancellationTokenSource(SeamBudget);
+        var ct = cts.Token;
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+        var recording = new RecordingStream(serverToClient.Reader.AsStream());
+        var log = new StringWriter();
+
+        Task<int> hostTask = McpHost.RunAsync(
+            new McpServerOptions { Profile = "mcp-t3" },
+            clientToServer.Reader.AsStream(),
+            serverToClient.Writer.AsStream(),
+            log,
+            SeamProfiles,
+            ct);
+
+        await using (var client = await McpClient.CreateAsync(
+            new StreamClientTransport(
+                clientToServer.Writer.AsStream(),
+                recording,
+                NullLoggerFactory.Instance),
+            new McpClientOptions
+            {
+                ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
+                ProtocolVersion = McpStdioProcessHarness.PinnedProtocolVersion,
+            },
+            NullLoggerFactory.Instance,
+            ct))
+        {
+            Assert.Equal(McpStdioProcessHarness.PinnedProtocolVersion, client.NegotiatedProtocolVersion);
+            var validate = await client.CallToolAsync(
+                "sqlharness_validate",
+                new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+                cancellationToken: ct);
+            AssertValidateSuccess(validate, "sqlharness_validate");
+        }
+
+        await clientToServer.Writer.CompleteAsync();
+        Assert.Equal((int)SqlHarnessExitCode.Success, await hostTask.WaitAsync(SeamBudget, ct));
+
+        // Drain shutdown-phase bytes the client never read before judging
+        // purity; every emitted byte must still be a protocol frame.
+        await recording.DrainRemainingAsync(TimeSpan.FromSeconds(10), ct);
+        McpStdioProcessHarness.AssertStdoutIsPureProtocol(recording.Recorded);
+    }
+
+    /// <summary>
+    /// 001/T3 normal EOF: immediate stdin EOF (no handshake, no frames)
+    /// exits 0 and writes zero stdout bytes — there are no lifecycle lines
+    /// on stdout; start/end diagnostics go to stderr only.
+    /// </summary>
+    [Fact]
+    public async Task Inprocess_host_returns_zero_on_immediate_eof_without_stdout_bytes()
+    {
+        using var cts = new CancellationTokenSource(SeamBudget);
+        var ct = cts.Token;
+        using var output = new MemoryStream();
+        var log = new StringWriter();
+
+        Task<int> hostTask = McpHost.RunAsync(
+            new McpServerOptions { Profile = "mcp-t3" },
+            new MemoryStream(),
+            output,
+            log,
+            SeamProfiles,
+            ct);
+
+        Assert.Equal((int)SqlHarnessExitCode.Success, await hostTask.WaitAsync(SeamBudget, ct));
+        Assert.Equal(0, output.Length);
+    }
+
+    /// <summary>
+    /// 001/T3 cancellation: an already-cancelled host token exits 0 without
+    /// writing stdout bytes and without throwing out of the host.
+    /// </summary>
+    [Fact]
+    public async Task Inprocess_host_returns_zero_on_precancelled_token_without_stdout_bytes()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        using var output = new MemoryStream();
+        var log = new StringWriter();
+
+        Task<int> hostTask = McpHost.RunAsync(
+            new McpServerOptions { Profile = "mcp-t3" },
+            new MemoryStream(),
+            output,
+            log,
+            SeamProfiles,
+            cts.Token);
+
+        Assert.Equal((int)SqlHarnessExitCode.Success, await hostTask.WaitAsync(SeamBudget));
+        Assert.Equal(0, output.Length);
     }
 
     private static void AssertValidateSuccess(CallToolResult result, string command)

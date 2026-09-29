@@ -125,4 +125,48 @@ public sealed class McpSecretRedactionTests
         Assert.DoesNotContain(FictionalSecret, log.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain("acme", log.ToString(), StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// 001/T3 transport failure: a broken stdin mid-loop exits 1 with
+    /// generic stderr text, without the exception content (which may hold
+    /// request data), and writes zero stdout bytes — failure diagnostics
+    /// never belong on the protocol stream.
+    /// </summary>
+    [Fact]
+    public async Task Transport_failure_logs_generic_text_without_exception_content()
+    {
+        const string marker = "t3-marker-transport-5c19";
+        var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+        {
+            ["mcp-t3"] = new TargetProfile(
+                "mcp-unreachable.invalid", "reportdb",
+                new Dictionary<string, string>(), "integrated"),
+        };
+        using var output = new MemoryStream();
+        var log = new StringWriter();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+        Task<int> hostTask = McpHost.RunAsync(
+            new McpServerOptions { Profile = "mcp-t3" },
+            new FailingReadStream(new IOException("t3-boom-" + marker)),
+            output,
+            log,
+            () => profiles,
+            cts.Token);
+
+        Assert.Equal(1, await hostTask.WaitAsync(TimeSpan.FromSeconds(30), cts.Token));
+        var text = log.ToString();
+        Assert.Contains("sqlharness-mcp", text, StringComparison.Ordinal);
+        Assert.DoesNotContain(marker, text, StringComparison.Ordinal);
+        Assert.Equal(0, output.Length);
+    }
+
+    private sealed class FailingReadStream(Exception failure) : MemoryStream
+    {
+        public override int Read(byte[] buffer, int offset, int count) => throw failure;
+        public override int Read(Span<byte> buffer) => throw failure;
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) => throw failure;
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => throw failure;
+        public override int ReadByte() => throw failure;
+    }
 }
