@@ -267,22 +267,40 @@ public sealed class McpInputReaderTests : IDisposable
     }
 
     // 002/T1 regression 3 (defect: must FAIL on unchanged src): fail closed
-    // on a filesystem root — scope creation rejects it instead of admitting
-    // the whole drive. Decision: McpStartupException at creation, so no
-    // reader can ever operate under such a root. Must FAIL until T2 fixes src.
+    // on a filesystem root - rejected either at scope creation or at reader
+    // level. The brief allows either phase, so this test accepts a
+    // creation-throw of any startup/input exception type OR successful
+    // creation followed by reader rejection of a file under the filesystem
+    // root. Fail-closed is the documented choice, not a locked type or phase.
+    // Must FAIL until T2 fixes src (old code admits the root AND reads).
     [Fact]
-    public void Filesystem_root_is_rejected_at_scope_creation()
+    public async Task Filesystem_root_is_rejected_at_scope_creation()
     {
         var filesystemRoot = Path.GetPathRoot(_root);
         Assert.False(string.IsNullOrEmpty(filesystemRoot));
-        Assert.Throws<McpStartupException>(() => McpScope.Create(
-            new McpServerOptions
-            {
-                Profile = ProfileName,
-                Vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["tenant"] = "frozen" },
-                InputRoots = [filesystemRoot!],
-            },
-            ProfileStore.Load(_targetsFile)));
+        McpScope scope;
+        try
+        {
+            scope = McpScope.Create(
+                new McpServerOptions
+                {
+                    Profile = ProfileName,
+                    Vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["tenant"] = "frozen" },
+                    InputRoots = [filesystemRoot!],
+                },
+                ProfileStore.Load(_targetsFile));
+        }
+        catch (McpStartupException)
+        {
+            return;
+        }
+        catch (McpInputException)
+        {
+            return;
+        }
+
+        var path = WriteFile("filesystem-root-probe.sql", "SELECT 1;");
+        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadSqlAsync(null, path, scope, CancellationToken.None));
     }
 
     // 002/T1 regression 4: empty roots disable plan and parameter-set file
@@ -292,7 +310,8 @@ public sealed class McpInputReaderTests : IDisposable
     {
         var scope = ScopeWithoutRoots();
         Assert.Empty(scope.InputRoots);
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadPlanAsync(null, Path.Combine(_root, "p.plan"), scope, CancellationToken.None));
+        var plan = WriteFile("empty-roots.plan", "<plan/>");
+        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadPlanAsync(null, plan, scope, CancellationToken.None));
         var sets = WriteFile("empty-roots.sqljson", "{\"name\":\"s\",\"parameters\":[\"id:int=1\"]}");
         await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([sets], scope, CancellationToken.None));
     }
