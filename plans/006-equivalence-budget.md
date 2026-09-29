@@ -1,8 +1,8 @@
 # Plan 006: Ogranicz pamięć i czas porównywania wyników
 
-Status: **TODO**  
-Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.  
-Priorytet: P1; nakład: L; ryzyko zmiany: HIGH.  
+Status: **TODO**
+Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+Priorytet: P1; nakład: L; ryzyko zmiany: HIGH.
 Pokrycie: **R2**. Zależności: **005**.
 
 ## Kontekst i instrukcja wykonania
@@ -96,4 +96,3 @@ Jeśli dokładnych maksymalnych liczników nie da się zachować proponowaną op
 Jeśli krok wymaga rzeczywistego celu DB, sekretów lub wyjścia poza autoryzację, zatrzymaj ten krok i zapisz brak. Dokończ niezależne zadania. Nie oznaczaj całości DONE bez wszystkich wymaganych wyników.
 
 Reviewer sprawdza bezpieczeństwo negatywnych przypadków, kompatybilność i prawdziwość dowodów. Po zmianie parsera/SDK/operacji wróć do tych testów. Małe commity typu fix/test/docs, bez push. Wymagane testy charakterystyczne muszą poprzedzać refaktoryzację.
-

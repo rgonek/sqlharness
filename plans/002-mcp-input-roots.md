@@ -1,8 +1,8 @@
 # Plan 002: Napraw zakres i normalizację ścieżek wejściowych
 
-Status: **TODO**  
-Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.  
-Priorytet: P1; nakład: M; ryzyko zmiany: MED.  
+Status: **TODO**
+Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+Priorytet: P1; nakład: M; ryzyko zmiany: MED.
 Pokrycie: **S3, A1; badanie tożsamości pliku**. Zależności: **—**.
 
 ## Kontekst i instrukcja wykonania
@@ -79,4 +79,3 @@ Nie dopuszczać linków jako obejścia platformy. Jeśli pełna tożsamość wym
 Jeśli krok wymaga rzeczywistego celu DB, sekretów lub wyjścia poza autoryzację, zatrzymaj ten krok i zapisz brak. Dokończ niezależne zadania. Nie oznaczaj całości DONE bez wszystkich wymaganych wyników.
 
 Reviewer sprawdza bezpieczeństwo negatywnych przypadków, kompatybilność i prawdziwość dowodów. Po zmianie parsera/SDK/operacji wróć do tych testów. Małe commity typu fix/test/docs, bez push. Wymagane testy charakterystyczne muszą poprzedzać refaktoryzację.
-

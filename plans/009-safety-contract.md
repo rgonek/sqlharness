@@ -1,8 +1,8 @@
 # Plan 009: Uczyń granicę statycznego safety widoczną dla klientów
 
-Status: **TODO**  
-Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.  
-Priorytet: P2; nakład: M; ryzyko zmiany: LOW.  
+Status: **TODO**
+Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+Priorytet: P2; nakład: M; ryzyko zmiany: LOW.
 Pokrycie: **A4; świadome ograniczenia funkcji PG**. Zależności: **007, 008**.
 
 ## Kontekst i instrukcja wykonania
@@ -92,4 +92,3 @@ Nie zwężaj prefiksów lo_/dblink/pg_advisory_ bez nowego dowodu tożsamości f
 Jeśli krok wymaga rzeczywistego celu DB, sekretów lub wyjścia poza autoryzację, zatrzymaj ten krok i zapisz brak. Dokończ niezależne zadania. Nie oznaczaj całości DONE bez wszystkich wymaganych wyników.
 
 Reviewer sprawdza bezpieczeństwo negatywnych przypadków, kompatybilność i prawdziwość dowodów. Po zmianie parsera/SDK/operacji wróć do tych testów. Małe commity typu fix/test/docs, bez push. Wymagane testy charakterystyczne muszą poprzedzać refaktoryzację.
-

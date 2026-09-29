@@ -1,8 +1,8 @@
 # Plan 004: Obejmij inspect wspólną blokadą operacji DB
 
-Status: **TODO**  
-Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.  
-Priorytet: P1; nakład: S; ryzyko zmiany: MED.  
+Status: **TODO**
+Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+Priorytet: P1; nakład: S; ryzyko zmiany: MED.
 Pokrycie: **R1**. Zależności: **001**.
 
 ## Kontekst i instrukcja wykonania
@@ -80,4 +80,3 @@ Nie zastępuj busy kolejką i nie serializuj bez potrzeby operacji offline.
 Jeśli krok wymaga rzeczywistego celu DB, sekretów lub wyjścia poza autoryzację, zatrzymaj ten krok i zapisz brak. Dokończ niezależne zadania. Nie oznaczaj całości DONE bez wszystkich wymaganych wyników.
 
 Reviewer sprawdza bezpieczeństwo negatywnych przypadków, kompatybilność i prawdziwość dowodów. Po zmianie parsera/SDK/operacji wróć do tych testów. Małe commity typu fix/test/docs, bez push. Wymagane testy charakterystyczne muszą poprzedzać refaktoryzację.
-

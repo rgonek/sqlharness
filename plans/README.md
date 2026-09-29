@@ -71,4 +71,3 @@ Przy zapisie sprawdzono dokumenty i ścieżki. Historyczny wynik audytu nie jest
 | Plan | Commit | Komendy i wyniki / dokument wynikowy | Braki |
 |---|---|---|---|
 | — | — | Wszystkie plany oczekują wykonania | Brak live DB |
-

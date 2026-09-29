@@ -1,8 +1,8 @@
 # Plan 011: Zaplanuj i dodaj wąskie rozszerzenia bezpiecznej składni
 
-Status: **TODO**  
-Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.  
-Priorytet: P2; nakład: L; ryzyko zmiany: HIGH.  
+Status: **TODO**
+Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+Priorytet: P2; nakład: L; ryzyko zmiany: HIGH.
 Pokrycie: **nadmiarowe blokady SET, table variables, PG TEMP TRUNCATE i ANALYZE**. Zależności: **007, 009**.
 
 ## Kontekst i instrukcja wykonania
@@ -102,4 +102,3 @@ Jeżeli parser nie reprezentuje efektów potrzebnych do rozstrzygnięcia, zachow
 Jeśli krok wymaga rzeczywistego celu DB, sekretów lub wyjścia poza autoryzację, zatrzymaj ten krok i zapisz brak. Dokończ niezależne zadania. Nie oznaczaj całości DONE bez wszystkich wymaganych wyników.
 
 Reviewer sprawdza bezpieczeństwo negatywnych przypadków, kompatybilność i prawdziwość dowodów. Po zmianie parsera/SDK/operacji wróć do tych testów. Małe commity typu fix/test/docs, bez push. Wymagane testy charakterystyczne muszą poprzedzać refaktoryzację.
-

@@ -1,8 +1,8 @@
 # Plan 010: Usuń powielone pętle watch i czyste reguły adapterów
 
-Status: **TODO**  
-Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.  
-Priorytet: P3; nakład: L; ryzyko zmiany: MED.  
+Status: **TODO**
+Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+Priorytet: P3; nakład: L; ryzyko zmiany: MED.
 Pokrycie: **D1; ocena interfejsów**. Zależności: **004, 007, 008, 009**.
 
 ## Kontekst i instrukcja wykonania
@@ -90,4 +90,3 @@ Nie ujednolicaj reguł, które mają świadomie odmienne jednostki/defaulty. Nie
 Jeśli krok wymaga rzeczywistego celu DB, sekretów lub wyjścia poza autoryzację, zatrzymaj ten krok i zapisz brak. Dokończ niezależne zadania. Nie oznaczaj całości DONE bez wszystkich wymaganych wyników.
 
 Reviewer sprawdza bezpieczeństwo negatywnych przypadków, kompatybilność i prawdziwość dowodów. Po zmianie parsera/SDK/operacji wróć do tych testów. Małe commity typu fix/test/docs, bez push. Wymagane testy charakterystyczne muszą poprzedzać refaktoryzację.
-
