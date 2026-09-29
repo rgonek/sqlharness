@@ -13,6 +13,14 @@ internal sealed record SnapshotDocument(
 {
     internal const int CurrentVersion = 1;
 
+    /// <summary>
+    /// Scope owner stamped by a scoped (MCP) capture, consistent with the
+    /// T3 ArtifactOwner shape. Null for legacy documents and CLI captures;
+    /// omitted from JSON when null so legacy bytes are unchanged.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ArtifactOwner? Owner { get; init; }
+
     public static SnapshotDocument Create(
         DateTimeOffset createdAt,
         IReadOnlyList<SqlHarnessResultSetReport> resultSets,

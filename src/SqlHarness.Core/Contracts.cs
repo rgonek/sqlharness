@@ -152,9 +152,16 @@ public sealed record SqlHarnessWatchOperation(
     int TimeoutSeconds, int MaxRows, TimeSpan Interval, TimeSpan MaxDuration,
     string? Until, int? UntilUnchanged, int HistoryLimit = 100) : SqlHarnessOperation;
 
+/// <summary>
+/// Optional scope owner for snapshot capture/diff (003): the MCP mapper sets
+/// it from the frozen scope, the CLI leaves it null and keeps working by name.
+/// The runner stamps captures with it and refuses foreign or ownerless
+/// baselines before touching data; null means no scope enforcement.
+/// </summary>
 public sealed record SqlHarnessSnapshotOperation(
     SqlTargetRequest Target, string Sql, IReadOnlyList<string> Parameters,
-    int TimeoutSeconds, int MaxRows, string Name, bool Diff, bool Force) : SqlHarnessOperation;
+    int TimeoutSeconds, int MaxRows, string Name, bool Diff, bool Force,
+    ArtifactOwner? Owner = null) : SqlHarnessOperation;
 
 public enum WatchExitReason { ConditionMet, Unchanged, MaxDuration }
 public enum SnapshotVerdict { Stored, Identical, Different }
