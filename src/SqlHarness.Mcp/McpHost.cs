@@ -128,6 +128,9 @@ public static class McpHost
         {
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
+            // Always enabled: the level gate is not the protection. Safety
+            // comes from Log never rendering state, exception, or formatter
+            // output, so any enabled event is content-free by construction.
             public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
 
             public void Log<TState>(
@@ -137,10 +140,14 @@ public static class McpHost
                 Exception? exception,
                 Func<TState, Exception?, string> formatter)
             {
-                // SDK-side diagnostics only. Tool results never flow through logging, so
-                // no SQL, parameters, or connection details can reach this
-                // logger; only the rendered message template is written.
-                writer.WriteLine($"sqlharness-mcp[{category}]: {formatter(state, exception)}");
+                // SDK-side diagnostics only. This logger emits
+                // only safe primitives, so no SQL, parameters, or connection details
+                // can reach stderr through it: category, level, numeric event id. Never call
+                // formatter(state, exception) and never ToString state or
+                // exception: the SDK renders tool-call arguments, file paths,
+                // and binder exception content into log state, which leaked
+                // request content to stderr (001/T1 oracle).
+                writer.WriteLine($"sqlharness-mcp[{category}]: {logLevel} (event {eventId.Id})");
             }
         }
     }
