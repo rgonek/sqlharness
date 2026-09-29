@@ -113,6 +113,8 @@ internal sealed record CompareCellRequest(
 {
     internal CompareClassificationReport Classification { get; init; } =
         new("none", "read-only", "read-only");
+
+    internal ArtifactOwner? Owner { get; init; }
 }
 
 internal sealed record CompareCellResult(
@@ -214,7 +216,7 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
 
             phase = CompareCellPhase.Artifact;
             var publicRuns = runs.Select(run => run.Artifact).ToArray();
-            var directory = _artifacts.Write(report, publicRuns, request.Target.Database);
+            var directory = _artifacts.Write(report, publicRuns, request.Target.Database, request.Owner);
             report = report with { ArtifactDirectory = directory };
             return new CompareCellResult(report, publicRuns, rawFootprint);
         }

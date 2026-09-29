@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using SqlHarness.Core.Targets;
+
 namespace SqlHarness.Core;
 
 public interface ISqlHarnessModule
@@ -325,6 +327,81 @@ public sealed record SqlTargetRequest(
         engine is not null ||
         sslMode is not null ||
         rootCertificate is not null;
+}
+
+/// <summary>
+/// Frozen scope identity stamped onto every benchmark artifact manifest at
+/// publish time (003): profile name, canonical var values, engine label, and
+/// resolved server/database. No auth material or secrets ever land here: vars
+/// hold the validated values, never passwords. Comparison is exact — profile,
+/// engine, server, and database ordinal; var keys case-insensitive with exact
+/// values — so any drift fails closed. A missing manifest owner never matches.
+/// </summary>
+public sealed record ArtifactOwner(
+    string? Profile,
+    IReadOnlyDictionary<string, string> Vars,
+    string Engine,
+    string Server,
+    string Database)
+{
+    /// <summary>
+    /// Builds the owner from the operation target request and the resolved
+    /// target. Vars are stored case-insensitively with deterministic
+    /// (ordinal-sorted) insertion order, so manifests serialize stably.
+    /// </summary>
+    public static ArtifactOwner From(SqlTargetRequest request, ResolvedTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(target);
+        var vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (request.Vars is not null)
+        {
+            foreach (var pair in request.Vars.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                vars[pair.Key] = pair.Value;
+        }
+
+        return new ArtifactOwner(
+            request.Profile, vars, SqlEngineNames.Format(target.Engine), target.Server, target.Database);
+    }
+
+    /// <summary>
+    /// Exact scope match: every field must agree, including the full var set.
+    /// Never throws: malformed candidate metadata simply does not match.
+    /// </summary>
+    public bool Matches(ArtifactOwner? actual)
+    {
+        if (actual is null || actual.Vars is null || Vars is null)
+            return false;
+        if (!string.Equals(Profile, actual.Profile, StringComparison.Ordinal))
+            return false;
+        if (!string.Equals(Engine, actual.Engine, StringComparison.Ordinal))
+            return false;
+        if (!string.Equals(Server, actual.Server, StringComparison.Ordinal))
+            return false;
+        if (!string.Equals(Database, actual.Database, StringComparison.Ordinal))
+            return false;
+        if (Vars.Count != actual.Vars.Count)
+            return false;
+        foreach (var (key, value) in Vars)
+        {
+            var matched = false;
+            foreach (var (actualKey, actualValue) in actual.Vars)
+            {
+                if (string.Equals(key, actualKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!string.Equals(value, actualValue, StringComparison.Ordinal))
+                        return false;
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (!matched)
+                return false;
+        }
+
+        return true;
+    }
 }
 
 public sealed record SqlHarnessOutcome(

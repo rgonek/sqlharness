@@ -354,6 +354,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 compare.CompareResults)
             {
                 Classification = prepared.Classification,
+                Owner = ArtifactOwner.From(compare.Target, prepared.Target),
             };
             _cellRunner.ComparisonMaximumRows = ComparisonMaximumRows;
 
@@ -460,6 +461,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 operation.CompareResults)
             {
                 Classification = prepared.Classification,
+                Owner = ArtifactOwner.From(operation.Target, prepared.Target),
             };
             _matrixRunner.ComparisonMaximumRows = ComparisonMaximumRows;
             CompareMatrixResult result;
@@ -626,7 +628,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 var setDirectory = _artifactWriter.Write(
                     setReport,
                     execution.Runs.Select(run => run.Artifact).ToArray(),
-                    target.Database);
+                    target.Database,
+                    ArtifactOwner.From(measure.Target, target));
                 setReport = setReport with { ArtifactDirectory = setDirectory };
                 var setSuccess = new SqlHarnessOutcome(SqlHarnessExitCode.Success, setReport, null);
                 return WithReceipt(setSuccess, stopwatch.ElapsedMilliseconds, rawFootprint, "measure");
@@ -663,7 +666,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             };
 
             phase = OperationPhase.Artifact;
-            var directory = _artifactWriter.Write(report, runs.Select(run => run.Artifact).ToArray(), target.Database);
+            var directory = _artifactWriter.Write(report, runs.Select(run => run.Artifact).ToArray(), target.Database, ArtifactOwner.From(measure.Target, target));
             report = report with { ArtifactDirectory = directory };
             var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
             return WithReceipt(success, stopwatch.ElapsedMilliseconds, rawFootprint, "measure");

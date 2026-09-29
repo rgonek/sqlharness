@@ -318,6 +318,12 @@ internal sealed record CompareRunArtifact(
 internal interface ICompareArtifactWriter
 {
     string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target);
+
+    // Owner-aware publish. The default keeps existing fakes compiling
+    // with their behavior unchanged; the production writer overrides it
+    // to stamp the manifest. Callers always use this overload.
+    string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target, ArtifactOwner? owner) =>
+        Write(report, runs, target);
 }
 
 internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
@@ -345,7 +351,10 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
             root, utcNow, writeText, moveDirectory, moveFile, deleteFile, deleteDirectory);
     }
 
-    public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target)
+    public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target) =>
+        Write(report, runs, target, owner: null);
+
+    public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target, ArtifactOwner? owner)
     {
         ArgumentNullException.ThrowIfNull(report);
         ArgumentNullException.ThrowIfNull(runs);
@@ -362,7 +371,7 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
             _publisher.WriteText(Path.Combine(staging, "report.json"),
                 JsonSerializer.Serialize(persistedReport, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
             _publisher.WriteText(Path.Combine(staging, "manifest.json"),
-                JsonSerializer.Serialize(ArtifactManifest.ForReport(persistedReport), ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
+                JsonSerializer.Serialize(ArtifactManifest.ForReport(persistedReport, owner), ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
             for (var index = 0; index < runs.Count; index++)
             {
                 var run = runs[index];

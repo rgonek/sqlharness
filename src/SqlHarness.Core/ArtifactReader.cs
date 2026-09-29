@@ -17,7 +17,10 @@ public sealed record ArtifactManifest(
     string ReportFile,
     IReadOnlyList<string> Sections)
 {
-    internal static ArtifactManifest ForReport(object report) => report switch
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ArtifactOwner? Owner { get; init; }
+
+    internal static ArtifactManifest ForReport(object report, ArtifactOwner? owner = null) => (report switch
     {
         SqlHarnessCompareReport => new ArtifactManifest(
             ArtifactReader.CurrentManifestVersion, ArtifactReader.CompareKind,
@@ -30,7 +33,7 @@ public sealed record ArtifactManifest(
             ArtifactReader.ReportFileName, ArtifactReader.SupportedSections),
         _ => throw new ArgumentOutOfRangeException(
             nameof(report), report.GetType(), "Unsupported benchmark report type."),
-    };
+    }) with { Owner = owner };
 }
 
 /// <summary>One named variant (baseline/candidate/query/set) with its measured metrics.</summary>
@@ -104,9 +107,11 @@ public static partial class ArtifactReader
     /// <see cref="ArtifactReadException"/> with a content-free message on any
     /// refusal: unknown id, traversal or link escape, legacy artifact without
     /// a manifest, corrupt manifest or report, oversized file, or a section
-    /// outside the manifest mapping.
+    /// outside the manifest mapping, or a scope-owner mismatch when an
+    /// owner is supplied (MCP always supplies the frozen scope owner;
+    /// the offline CLI passes none and keeps reading by name).
     /// </summary>
-    public static object ReadSection(string root, string artifactId, string section)
+    public static object ReadSection(string root, string artifactId, string section, ArtifactOwner? owner = null)
     {
         if (!SupportedSections.Contains(section, StringComparer.Ordinal))
             throw new ArtifactReadException(
@@ -115,6 +120,10 @@ public static partial class ArtifactReader
 
         var directory = ResolveDirectory(root, artifactId);
         var manifest = ReadManifest(directory, artifactId);
+        if (owner is not null && !owner.Matches(manifest.Owner))
+            throw new ArtifactReadException(
+                "The artifact is not available in the current scope.",
+                SqlHarnessExitCode.Safety);
         if (!manifest.Sections.Contains(section, StringComparer.Ordinal))
             throw new ArtifactReadException(
                 $"Artifact section '{section}' is not available for this artifact.",
