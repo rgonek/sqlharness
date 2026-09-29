@@ -126,7 +126,7 @@ public class ResultEquivalenceTests
     [InlineData(ResultComparisonMode.Set, true)]
     public void Modes_apply_order_and_duplicate_semantics(ResultComparisonMode mode, bool expected)
     {
-        var report = ResultComparer.Compare(mode, [Capture("A", "A", "B")], [Capture("B", "A", "A")]);
+        var report = AssertOracleAgrees(mode, [Capture("A", "A", "B")], [Capture("B", "A", "A")]);
         Assert.Equal(expected, report.Equivalent);
     }
 
@@ -135,14 +135,14 @@ public class ResultEquivalenceTests
     [InlineData(ResultComparisonMode.Set, true)]
     public void Modes_apply_duplicate_multiplicity_semantics(ResultComparisonMode mode, bool expected)
     {
-        var report = ResultComparer.Compare(mode, [Capture("A", "A", "B")], [Capture("A", "B")]);
+        var report = AssertOracleAgrees(mode, [Capture("A", "A", "B")], [Capture("A", "B")]);
         Assert.Equal(expected, report.Equivalent);
     }
 
     [Fact]
     public void Ordered_order_only_change_reports_positions_with_zero_directional_counts()
     {
-        var report = ResultComparer.Compare(
+        var report = AssertOracleAgrees(
             ResultComparisonMode.Ordered,
             [Capture("A", "A", "B")],
             [Capture("B", "A", "A")]);
@@ -156,7 +156,7 @@ public class ResultEquivalenceTests
     [Fact]
     public void Multiset_missing_duplicate_reports_baseline_only_count()
     {
-        var report = ResultComparer.Compare(
+        var report = AssertOracleAgrees(
             ResultComparisonMode.Multiset,
             [Capture("A", "A", "B")],
             [Capture("A", "B")]);
@@ -173,9 +173,9 @@ public class ResultEquivalenceTests
         var baseline = new CanonicalComparisonResult("schema-a", ["A"]);
         var candidate = new CanonicalComparisonResult("schema-b", ["A"]);
 
-        var ordered = ResultComparer.Compare(ResultComparisonMode.Ordered, [baseline], [candidate]);
-        var multiset = ResultComparer.Compare(ResultComparisonMode.Multiset, [baseline], [candidate]);
-        var set = ResultComparer.Compare(ResultComparisonMode.Set, [baseline], [candidate]);
+        var ordered = AssertOracleAgrees(ResultComparisonMode.Ordered, [baseline], [candidate]);
+        var multiset = AssertOracleAgrees(ResultComparisonMode.Multiset, [baseline], [candidate]);
+        var set = AssertOracleAgrees(ResultComparisonMode.Set, [baseline], [candidate]);
 
         Assert.False(ordered.Equivalent);
         Assert.False(multiset.Equivalent);
@@ -188,7 +188,7 @@ public class ResultEquivalenceTests
         var stable = Capture("A", "A", "B");
         var changed = Capture("A", "B", "B");
 
-        var report = ResultComparer.Compare(
+        var report = AssertOracleAgrees(
             ResultComparisonMode.Ordered,
             [stable, stable, changed],
             [stable, stable]);
@@ -204,7 +204,7 @@ public class ResultEquivalenceTests
         var reordered = Capture("B", "A", "A");
         var missingDuplicate = Capture("A", "B");
 
-        var report = ResultComparer.Compare(
+        var report = AssertOracleAgrees(
             ResultComparisonMode.Ordered,
             [match, match],
             [reordered, missingDuplicate]);
@@ -219,7 +219,7 @@ public class ResultEquivalenceTests
     [Fact]
     public void Off_mode_nulls_all_result_fields_except_mode()
     {
-        var report = ResultComparer.Compare(
+        var report = AssertOracleAgrees(
             ResultComparisonMode.Off,
             [Capture("A")],
             [Capture("B")]);
@@ -234,7 +234,7 @@ public class ResultEquivalenceTests
     [Fact]
     public void Set_mode_reports_unique_directional_counts()
     {
-        var report = ResultComparer.Compare(
+        var report = AssertOracleAgrees(
             ResultComparisonMode.Set,
             [Capture("A", "A", "B")],
             [Capture("B", "C")]);
@@ -243,6 +243,149 @@ public class ResultEquivalenceTests
         Assert.Equal(1, report.BaselineOnlyCount); // unique A
         Assert.Equal(1, report.CandidateOnlyCount); // unique C
         Assert.Null(report.DifferingPositions);
+    }
+
+    private static ResultEquivalenceReport AssertOracleAgrees(
+        ResultComparisonMode mode,
+        IReadOnlyList<CanonicalComparisonResult> baseline,
+        IReadOnlyList<CanonicalComparisonResult> candidate)
+    {
+        var actual = ResultComparer.Compare(mode, baseline, candidate);
+        Assert.Equal(ReferenceCompare(mode, baseline, candidate), actual);
+        return actual;
+    }
+
+    private static ResultEquivalenceReport ReferenceCompare(
+        ResultComparisonMode mode,
+        IReadOnlyList<CanonicalComparisonResult> baseline,
+        IReadOnlyList<CanonicalComparisonResult> candidate)
+    {
+        if (mode == ResultComparisonMode.Off)
+            return new ResultEquivalenceReport(ResultComparisonMode.Off, null, null, null, null);
+
+        var reference = baseline[0];
+        var equivalent = true;
+        foreach (var run in baseline)
+        {
+            if (!ReferenceEquivalent(mode, reference, run))
+                equivalent = false;
+        }
+
+        foreach (var run in candidate)
+        {
+            if (!ReferenceEquivalent(mode, reference, run))
+                equivalent = false;
+        }
+
+        long? maxDifferingPositions = mode == ResultComparisonMode.Ordered ? 0 : null;
+        long maxBaselineOnly = 0;
+        long maxCandidateOnly = 0;
+        foreach (var left in baseline)
+        {
+            foreach (var right in candidate)
+            {
+                if (maxDifferingPositions is not null)
+                    maxDifferingPositions = Math.Max(
+                        maxDifferingPositions.Value,
+                        ReferenceDifferingPositions(left.OrderedRows, right.OrderedRows));
+                var (baselineOnly, candidateOnly) = mode == ResultComparisonMode.Set
+                    ? ReferenceSetCounts(left.OrderedRows, right.OrderedRows)
+                    : ReferenceMultisetCounts(left.OrderedRows, right.OrderedRows);
+                maxBaselineOnly = Math.Max(maxBaselineOnly, baselineOnly);
+                maxCandidateOnly = Math.Max(maxCandidateOnly, candidateOnly);
+            }
+        }
+
+        return new ResultEquivalenceReport(mode, equivalent, maxDifferingPositions, maxBaselineOnly, maxCandidateOnly);
+    }
+
+    private static bool ReferenceEquivalent(
+        ResultComparisonMode mode,
+        CanonicalComparisonResult left,
+        CanonicalComparisonResult right)
+    {
+        if (!string.Equals(left.SchemaHash, right.SchemaHash, StringComparison.Ordinal))
+            return false;
+
+        if (mode == ResultComparisonMode.Ordered)
+            return ReferenceOrderedEqual(left.OrderedRows, right.OrderedRows);
+        if (mode == ResultComparisonMode.Multiset)
+        {
+            var (baselineOnly, candidateOnly) = ReferenceMultisetCounts(left.OrderedRows, right.OrderedRows);
+            return baselineOnly == 0 && candidateOnly == 0;
+        }
+
+        if (mode == ResultComparisonMode.Set)
+        {
+            var (baselineOnly, candidateOnly) = ReferenceSetCounts(left.OrderedRows, right.OrderedRows);
+            return baselineOnly == 0 && candidateOnly == 0;
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported result comparison mode.");
+    }
+
+    private static bool ReferenceOrderedEqual(IReadOnlyList<string> left, IReadOnlyList<string> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+        for (var index = 0; index < left.Count; index++)
+        {
+            if (!string.Equals(left[index], right[index], StringComparison.Ordinal))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static long ReferenceDifferingPositions(IReadOnlyList<string> left, IReadOnlyList<string> right)
+    {
+        var shared = Math.Min(left.Count, right.Count);
+        long differing = Math.Abs(left.Count - right.Count);
+        for (var index = 0; index < shared; index++)
+        {
+            if (!string.Equals(left[index], right[index], StringComparison.Ordinal))
+                differing++;
+        }
+
+        return differing;
+    }
+
+    private static (long BaselineOnly, long CandidateOnly) ReferenceMultisetCounts(
+        IReadOnlyList<string> left,
+        IReadOnlyList<string> right)
+    {
+        var unmatched = new List<string>(right);
+        long baselineOnly = 0;
+        foreach (var fingerprint in left)
+        {
+            if (!unmatched.Remove(fingerprint))
+                baselineOnly++;
+        }
+
+        return (baselineOnly, unmatched.Count);
+    }
+
+    private static (long BaselineOnly, long CandidateOnly) ReferenceSetCounts(
+        IReadOnlyList<string> left,
+        IReadOnlyList<string> right)
+    {
+        var leftSet = new HashSet<string>(left, StringComparer.Ordinal);
+        var rightSet = new HashSet<string>(right, StringComparer.Ordinal);
+        long baselineOnly = 0;
+        foreach (var fingerprint in leftSet)
+        {
+            if (!rightSet.Contains(fingerprint))
+                baselineOnly++;
+        }
+
+        long candidateOnly = 0;
+        foreach (var fingerprint in rightSet)
+        {
+            if (!leftSet.Contains(fingerprint))
+                candidateOnly++;
+        }
+
+        return (baselineOnly, candidateOnly);
     }
 
     private static CanonicalComparisonResult Capture(params string[] rows) =>
