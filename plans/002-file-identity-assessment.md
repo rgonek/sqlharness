@@ -110,7 +110,7 @@ Do not advertise race protection without such a proof.
     shared tick would make the test pass the reader while failing the
     assertion — a timing-flaky test by definition. Excluded per the brief's
     no-flaky-tests rule.
-  - *Parent-directory swap mid-read*: needslink-creation privilege (not
+  - *Parent-directory swap mid-read*: needs link-creation privilege (not
     available deterministically on all Windows machines) or relies on
     uncontracted rename semantics; the string-level re-check cannot observe a
     handle-preserving swap anyway. No deterministic assertion exists.
