@@ -232,4 +232,124 @@ public sealed class McpInputReaderTests : IDisposable
         Assert.Throws<ParameterSetFileException>(() =>
             ParameterSetFileReader.Parse(new byte[McpLimits.MaxParameterSetBytes + 1]));
     }
+
+    // 002/T1 regression 1 (defect: must FAIL on unchanged src on Windows):
+    // a root with a trailing separator still admits legal files inside it.
+    [Fact]
+    public async Task Root_with_trailing_separator_still_reads_files_inside()
+    {
+        var scope = McpScope.Create(
+            new McpServerOptions
+            {
+                Profile = ProfileName,
+                Vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["tenant"] = "frozen" },
+                InputRoots = [_root + Path.DirectorySeparatorChar],
+            },
+            ProfileStore.Load(_targetsFile));
+        var path = WriteFile("trailing-root.sql", "SELECT 1;");
+        Assert.Equal("SELECT 1;", await McpInputReader.ReadSqlAsync(null, path, scope, CancellationToken.None));
+    }
+
+    // 002/T1 regression 2: explicit boundary — a file directly in the root
+    // reads, while root + "suffix" stays outside (via ReadPlanAsync, a method
+    // the existing sibling-prefix test does not exercise).
+    [Fact]
+    public async Task Root_boundary_admits_direct_files_and_rejects_extended_prefix_sibling()
+    {
+        Assert.Equal(
+            "<plan/>",
+            await McpInputReader.ReadPlanAsync(null, WriteFile("boundary.plan", "<plan/>"), _scope, CancellationToken.None));
+        var sibling = _root + "suffix";
+        Directory.CreateDirectory(sibling);
+        var siblingFile = Path.Combine(sibling, "b.plan");
+        File.WriteAllText(siblingFile, "<plan/>");
+        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadPlanAsync(null, siblingFile, _scope, CancellationToken.None));
+    }
+
+    // 002/T1 regression 3 (defect: must FAIL on unchanged src): fail closed
+    // on a filesystem root — scope creation rejects it instead of admitting
+    // the whole drive. Decision: McpStartupException at creation, so no
+    // reader can ever operate under such a root. Must FAIL until T2 fixes src.
+    [Fact]
+    public void Filesystem_root_is_rejected_at_scope_creation()
+    {
+        var filesystemRoot = Path.GetPathRoot(_root);
+        Assert.False(string.IsNullOrEmpty(filesystemRoot));
+        Assert.Throws<McpStartupException>(() => McpScope.Create(
+            new McpServerOptions
+            {
+                Profile = ProfileName,
+                Vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["tenant"] = "frozen" },
+                InputRoots = [filesystemRoot!],
+            },
+            ProfileStore.Load(_targetsFile)));
+    }
+
+    // 002/T1 regression 4: empty roots disable plan and parameter-set file
+    // inputs too (the existing test covers SQL and one parameter-set path).
+    [Fact]
+    public async Task Empty_roots_reject_plan_and_parameter_set_file_inputs()
+    {
+        var scope = ScopeWithoutRoots();
+        Assert.Empty(scope.InputRoots);
+        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadPlanAsync(null, Path.Combine(_root, "p.plan"), scope, CancellationToken.None));
+        var sets = WriteFile("empty-roots.sqljson", "{\"name\":\"s\",\"parameters\":[\"id:int=1\"]}");
+        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([sets], scope, CancellationToken.None));
+    }
+
+    // 002/T1 regression 5: ADS/UNC variants on the Read* methods the existing
+    // test does not exercise (plan and parameter-set inputs).
+    [Fact]
+    public async Task Ads_and_unc_are_rejected_on_plan_and_parameter_set_inputs()
+    {
+        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadPlanAsync(null, Path.Combine(_root, "p.plan:stream"), _scope, CancellationToken.None));
+        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadPlanAsync(null, @"\\mcp-unreachable.invalid\share\q.plan", _scope, CancellationToken.None));
+        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadPlanAsync(null, "//mcp-unreachable.invalid/share/q.plan", _scope, CancellationToken.None));
+        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([Path.Combine(_root, "s.sqljson:stream")], _scope, CancellationToken.None));
+        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([@"\\mcp-unreachable.invalid\share\s.sqljson"], _scope, CancellationToken.None));
+    }
+
+    // 002/T1 regression 6: gap beyond the covered top-level absolute links —
+    // a relative symlink nested in a root subdirectory must not escape.
+    // Trivial pass when the platform denies link creation (same convention
+    // as the existing symlink test).
+    [Fact]
+    public async Task Nested_relative_symlink_inside_root_is_rejected()
+    {
+        var outside = Path.Combine(_home, "nested-secret.sql");
+        File.WriteAllText(outside, "SELECT 1;");
+        var sub = Path.Combine(_root, "sub");
+        Directory.CreateDirectory(sub);
+        var link = Path.Combine(sub, "rel.sql");
+        try
+        {
+            File.CreateSymbolicLink(link, Path.GetRelativePath(sub, outside));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadSqlAsync(null, link, _scope, CancellationToken.None));
+    }
+
+    // 002/T1 regression 7: case-sensitivity proof exists ONLY on a
+    // case-sensitive filesystem. On case-insensitive NTFS this test proves
+    // nothing and intentionally passes trivially; the missing evidence is
+    // recorded in the T1 report instead of faked. xUnit v2 has no dynamic
+    // skip, hence the early return (same convention as the symlink tests).
+    [Fact]
+    public async Task Case_only_sibling_is_rejected_on_case_sensitive_filesystems()
+    {
+        var probe = Path.Combine(_home, "caseprobe-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(probe);
+        if (Directory.Exists(probe.ToUpperInvariant()))
+            return; // Case-insensitive FS: no proof possible here. See T1 report.
+
+        var sibling = _root.ToUpperInvariant();
+        Directory.CreateDirectory(sibling);
+        var siblingFile = Path.Combine(sibling, "q.sql");
+        File.WriteAllText(siblingFile, "SELECT 1;");
+        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadSqlAsync(null, siblingFile, _scope, CancellationToken.None));
+    }
 }
