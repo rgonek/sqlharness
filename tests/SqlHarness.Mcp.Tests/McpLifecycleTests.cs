@@ -108,6 +108,23 @@ public sealed class McpLifecycleTests
             }
         }
 
+    private static async Task AssertNoProgressGrowthAsync(
+            ProgressCollector collector, int expected, TimeSpan settle, CancellationToken ct)
+        {
+            // Negative silence assertion: poll until the settle window elapses
+            // and fail loudly on any growth, so a lagging/spurious notification
+            // arriving after the token-less call cannot pass on a too-early
+            // snapshot. The 30 s Budget on the caller's token is the backstop.
+            var deadline = DateTime.UtcNow + settle;
+            while (true)
+            {
+                Assert.Equal(expected, collector.Snapshot().Count);
+                if (DateTime.UtcNow >= deadline)
+                    return;
+                await Task.Delay(TimeSpan.FromMilliseconds(25), ct);
+            }
+        }
+
     private static ProgressNotificationValue? TryParseProgress(JsonNode? paramsNode)
     {
         try
@@ -782,11 +799,12 @@ public sealed class McpLifecycleTests
             Assert.False(second.IsError == true);
             Assert.Equal(2, (await WaitForProgressCountAsync(collector, 2, cts.Token)).Count);
 
-            // Without a token the channel stays silent.
+            // Without a token the channel stays silent: assert no growth
+            // over a short settle window instead of an immediate snapshot.
             var silent = await query.CallAsync(
                 arguments, null, null, cts.Token);
             Assert.False(silent.IsError == true);
-            Assert.Equal(2, collector.Snapshot().Count);
+            await AssertNoProgressGrowthAsync(collector, 2, TimeSpan.FromMilliseconds(300), cts.Token);
         }
         finally
         {
