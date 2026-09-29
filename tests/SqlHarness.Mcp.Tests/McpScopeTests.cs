@@ -2,6 +2,7 @@ using System.Reflection;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Targets;
+using System.Text.Json;
 
 namespace SqlHarness.Mcp.Tests;
 
@@ -203,5 +204,160 @@ public sealed class McpScopeTests : IDisposable
         Assert.DoesNotContain("t2-marker-secret-77aa", failure.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("no-such-profile", failure.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(FrozenDatabase, failure.Message, StringComparison.Ordinal);
+    }
+
+    // 003/T2 RED: artifact scope enforcement. Fixtures below carry an additive
+    // v1 manifest "owner" ({profile, vars, engine, server, database} per
+    // plans/003-scope-contract.md); the old mapper ignores it and serves
+    // foreign artifacts, so refusal tests fail until T3 enforces the owner
+    // in Core before projecting the report.
+
+    private const string ScopeProfileA = "scope-a";
+    private const string ScopeProfileB = "scope-b";
+    private const string ScopeProfileSameDb = "scope-samedb";
+    private const string ScopeProfileOtherVars = "scope-othervars";
+    private const string ScopeServerA = "scope-a.invalid";
+    private const string ScopeServerB = "scope-b.invalid";
+    private const string ScopeServerOther = "scope-other.invalid";
+    private const string SharedDatabase = "sharedb";
+    private const string ScopeMarker = "scope-marker-7f3a-synthetic";
+
+    private void WriteScopeTargetsFile() => File.WriteAllText(
+        _targetsFile,
+        "{\""
+        + ScopeProfileA + "\": {\"server\": \"" + ScopeServerA + "\", \"database\": \"" + SharedDatabase + "\", \"vars\": {\"tenant\": \"^frozen$\"}, \"auth\": \"integrated\"}, \""
+        + ScopeProfileB + "\": {\"server\": \"" + ScopeServerB + "\", \"database\": \"otherdb\", \"vars\": {\"tenant\": \"^frozen$\"}, \"auth\": \"integrated\"}, \""
+        + ScopeProfileSameDb + "\": {\"server\": \"" + ScopeServerOther + "\", \"database\": \"" + SharedDatabase + "\", \"vars\": {\"tenant\": \"^frozen$\"}, \"auth\": \"integrated\"}, \""
+        + ScopeProfileOtherVars + "\": {\"server\": \"" + ScopeServerA + "\", \"database\": \"" + SharedDatabase + "\", \"vars\": {\"tenant\": \"^other$\"}, \"auth\": \"integrated\"}}");
+
+    private McpScope ScopeFor(string profile, string tenant) => McpScope.Create(
+        new McpServerOptions
+        {
+            Profile = profile,
+            Vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["tenant"] = tenant },
+        },
+        ProfileStore.Load(_targetsFile));
+
+    private static string ScopeOwnerJson(McpScope scope) =>
+        "{\"profile\": " + JsonSerializer.Serialize(scope.TargetRequest.Profile)
+        + ", \"vars\": {" + string.Join(",", scope.TargetRequest.Vars.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => JsonSerializer.Serialize(pair.Key) + ": " + JsonSerializer.Serialize(pair.Value))) + "}"
+        + ", \"engine\": " + JsonSerializer.Serialize(scope.ResolvedTarget.Engine == SqlEngine.Postgres ? "postgres" : "sqlserver")
+        + ", \"server\": " + JsonSerializer.Serialize(scope.ResolvedTarget.Server)
+        + ", \"database\": " + JsonSerializer.Serialize(scope.ResolvedTarget.Database) + "}";
+
+    private static SqlHarnessCompareReport ScopeFixtureReport() => new(
+        new SqlHarnessTargetIdentityReport(ScopeServerA, SharedDatabase, ScopeServerA, SharedDatabase, "profile"),
+        5, 10, true,
+        new CompareVariantReport(
+            "baseline",
+            new CompareDistribution(1, 2, 3),
+            new CompareDistribution(10, 20, 30),
+            new CompareDistribution(3, 4, 5),
+            new Dictionary<string, long>(),
+            [new CompareOperatorReport(1, "Index Seek", "Clients", false, false, false)],
+            [ScopeMarker]),
+        new CompareVariantReport(
+            "candidate",
+            new CompareDistribution(1, 2, 3),
+            new CompareDistribution(4, 5, 6),
+            new CompareDistribution(3, 4, 5),
+            new Dictionary<string, long>(),
+            [new CompareOperatorReport(1, "Index Seek", "Clients", false, false, false)],
+            []),
+        null);
+
+    private static string WriteScopedArtifact(string id, string? ownerJson)
+    {
+        var root = SqlHarnessPaths.CompareDir;
+        Directory.CreateDirectory(root);
+        var directory = Path.Combine(root, id);
+        Directory.CreateDirectory(directory);
+        var manifest = "{\"manifestVersion\": 1, \"artifactKind\": \"compare\", \"reportFile\": \"report.json\", \"sections\": [\"summary\", \"metrics\", \"operators\"]"
+            + (ownerJson is null ? string.Empty : ", \"owner\": " + ownerJson) + "}";
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), manifest);
+        File.WriteAllText(
+            Path.Combine(directory, "report.json"),
+            JsonSerializer.Serialize(ScopeFixtureReport(), new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        return id;
+    }
+
+    private static Exception AssertRefusedBeforeProjection(Func<object> read)
+    {
+        var refused = Assert.ThrowsAny<Exception>(read);
+        Assert.DoesNotContain(ScopeMarker, refused.Message, StringComparison.Ordinal);
+        return refused;
+    }
+
+    [Fact]
+    public void Own_scope_reads_own_artifact()
+    {
+        WriteScopeTargetsFile();
+        var scope = ScopeFor(ScopeProfileA, "frozen");
+        var id = WriteScopedArtifact("own-scope-artifact", ScopeOwnerJson(scope));
+
+        Assert.NotNull(McpOperationMapper.ReadArtifactSection(scope, id, "summary"));
+        Assert.NotNull(McpOperationMapper.ReadArtifactSection(scope, id, "metrics"));
+    }
+
+    [Fact]
+    public void Foreign_scope_is_refused_before_projection()
+    {
+        WriteScopeTargetsFile();
+        var owner = ScopeFor(ScopeProfileA, "frozen");
+        var foreign = ScopeFor(ScopeProfileB, "frozen");
+        var id = WriteScopedArtifact("foreign-scope-artifact", ScopeOwnerJson(owner));
+
+        AssertRefusedBeforeProjection(() => McpOperationMapper.ReadArtifactSection(foreign, id, "summary"));
+    }
+
+    [Fact]
+    public void Same_database_name_on_another_server_is_refused()
+    {
+        WriteScopeTargetsFile();
+        var owner = ScopeFor(ScopeProfileA, "frozen");
+        var sameDb = ScopeFor(ScopeProfileSameDb, "frozen");
+        Assert.Equal(SharedDatabase, sameDb.ResolvedTarget.Database);
+        Assert.NotEqual(owner.ResolvedTarget.Server, sameDb.ResolvedTarget.Server);
+        var id = WriteScopedArtifact("same-db-other-server", ScopeOwnerJson(owner));
+
+        AssertRefusedBeforeProjection(() => McpOperationMapper.ReadArtifactSection(sameDb, id, "metrics"));
+    }
+
+    [Fact]
+    public void Different_vars_are_refused()
+    {
+        WriteScopeTargetsFile();
+        var owner = ScopeFor(ScopeProfileA, "frozen");
+        var otherVars = ScopeFor(ScopeProfileOtherVars, "other");
+        Assert.Equal(owner.ResolvedTarget.Server, otherVars.ResolvedTarget.Server);
+        Assert.Equal(owner.ResolvedTarget.Database, otherVars.ResolvedTarget.Database);
+        var id = WriteScopedArtifact("other-vars-artifact", ScopeOwnerJson(owner));
+
+        AssertRefusedBeforeProjection(() => McpOperationMapper.ReadArtifactSection(otherVars, id, "summary"));
+    }
+
+    [Fact]
+    public void Legacy_artifact_without_owner_is_refused_by_mapper_but_readable_via_cli()
+    {
+        WriteScopeTargetsFile();
+        var scope = ScopeFor(ScopeProfileA, "frozen");
+        var id = WriteScopedArtifact("legacy-no-owner", ownerJson: null);
+
+        AssertRefusedBeforeProjection(() => McpOperationMapper.ReadArtifactSection(scope, id, "summary"));
+        Assert.NotNull(ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id, "summary"));
+    }
+
+    [Fact]
+    public void Mapper_does_not_self_grant_access_by_name()
+    {
+        WriteScopeTargetsFile();
+        var scope = ScopeFor(ScopeProfileA, "frozen");
+        // The report itself names the scope database and the id is known, yet
+        // without owner metadata the mapper must still refuse: names and ids
+        // are not authority.
+        var id = WriteScopedArtifact("named-legacy-artifact", ownerJson: null);
+
+        AssertRefusedBeforeProjection(() => McpOperationMapper.ReadArtifactSection(scope, id, "operators"));
+        Assert.NotNull(ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id, "operators"));
     }
 }

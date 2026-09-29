@@ -500,4 +500,110 @@ public sealed class McpMappingTests : IDisposable
         Assert.True(result.IsError == true);
         Assert.Empty(recording.Operations);
     }
+
+    // 003/T2 RED: the artifact tool envelope must refuse foreign and legacy
+    // artifacts with isError=true before any projection. The old path serves
+    // them with isError=false, so refusal tests fail until T3 enforces the
+    // manifest owner from the frozen scope in Core.
+
+    private const string ArtifactScopeProfile = "mcp-artifact-own";
+    private const string ArtifactForeignProfile = "mcp-artifact-foreign";
+
+    private void WriteArtifactTargetsFile() => File.WriteAllText(
+        _targetsFile,
+        "{\""
+        + ArtifactScopeProfile + "\": {\"server\": \"artifact-own.invalid\", \"database\": \"artifactdb\", \"vars\": {\"tenant\": \"^frozen$\"}, \"auth\": \"integrated\"}, \""
+        + ArtifactForeignProfile + "\": {\"server\": \"artifact-foreign.invalid\", \"database\": \"artifactdb\", \"vars\": {\"tenant\": \"^frozen$\"}, \"auth\": \"integrated\"}}");
+
+    private McpScope ArtifactScope(string profile) => McpScope.Create(
+        new McpServerOptions
+        {
+            Profile = profile,
+            Vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["tenant"] = "frozen" },
+        },
+        ProfileStore.Load(_targetsFile));
+
+    private static string ArtifactOwnerJson(McpScope scope) =>
+        "{\"profile\": " + JsonSerializer.Serialize(scope.TargetRequest.Profile)
+        + ", \"vars\": {\"tenant\": \"frozen\"}"
+        + ", \"engine\": \"sqlserver\""
+        + ", \"server\": " + JsonSerializer.Serialize(scope.ResolvedTarget.Server)
+        + ", \"database\": " + JsonSerializer.Serialize(scope.ResolvedTarget.Database) + "}";
+
+    private static string WriteMappingArtifact(string id, string? ownerJson)
+    {
+        var root = SqlHarnessPaths.CompareDir;
+        Directory.CreateDirectory(root);
+        var directory = Path.Combine(root, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(
+            Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\": 1, \"artifactKind\": \"compare\", \"reportFile\": \"report.json\", \"sections\": [\"summary\", \"metrics\", \"operators\"]"
+            + (ownerJson is null ? string.Empty : ", \"owner\": " + ownerJson) + "}");
+        var report = new SqlHarnessCompareReport(
+            new SqlHarnessTargetIdentityReport("artifact-own.invalid", "artifactdb", "artifact-own.invalid", "artifactdb", "profile"),
+            5, 10, true,
+            new CompareVariantReport(
+                "baseline",
+                new CompareDistribution(1, 2, 3),
+                new CompareDistribution(10, 20, 30),
+                new CompareDistribution(3, 4, 5),
+                new Dictionary<string, long>(),
+                [new CompareOperatorReport(1, "Index Seek", "Clients", false, false, false)],
+                []),
+            new CompareVariantReport(
+                "candidate",
+                new CompareDistribution(1, 2, 3),
+                new CompareDistribution(4, 5, 6),
+                new CompareDistribution(3, 4, 5),
+                new Dictionary<string, long>(),
+                [new CompareOperatorReport(1, "Index Seek", "Clients", false, false, false)],
+                []),
+            null);
+        File.WriteAllText(
+            Path.Combine(directory, "report.json"),
+            JsonSerializer.Serialize(report, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        return id;
+    }
+
+    [Fact]
+    public async Task Artifact_handler_returns_projection_for_own_scope()
+    {
+        WriteArtifactTargetsFile();
+        var scope = ArtifactScope(ArtifactScopeProfile);
+        var id = WriteMappingArtifact("handler-own-artifact", ArtifactOwnerJson(scope));
+        var handlers = new McpToolHandlers(scope, new RecordingModule());
+
+        var result = await handlers.ArtifactAsync(null!, id, "summary");
+
+        Assert.False(result.IsError == true);
+    }
+
+    [Fact]
+    public async Task Artifact_handler_reports_error_for_foreign_scope()
+    {
+        WriteArtifactTargetsFile();
+        var owner = ArtifactScope(ArtifactScopeProfile);
+        var foreign = ArtifactScope(ArtifactForeignProfile);
+        var id = WriteMappingArtifact("handler-foreign-artifact", ArtifactOwnerJson(owner));
+        var handlers = new McpToolHandlers(foreign, new RecordingModule());
+
+        var result = await handlers.ArtifactAsync(null!, id, "summary");
+
+        Assert.True(result.IsError == true);
+    }
+
+    [Fact]
+    public async Task Artifact_handler_reports_error_for_legacy_artifact_while_cli_reads_it()
+    {
+        WriteArtifactTargetsFile();
+        var scope = ArtifactScope(ArtifactScopeProfile);
+        var id = WriteMappingArtifact("handler-legacy-artifact", ownerJson: null);
+        var handlers = new McpToolHandlers(scope, new RecordingModule());
+
+        var result = await handlers.ArtifactAsync(null!, id, "metrics");
+
+        Assert.True(result.IsError == true);
+        Assert.NotNull(ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id, "metrics"));
+    }
 }
