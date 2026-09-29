@@ -1,5 +1,6 @@
 using System.IO.Pipelines;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol;
@@ -106,6 +107,26 @@ public sealed class McpLifecycleTests
                 await Task.Delay(TimeSpan.FromMilliseconds(25), linked.Token);
             }
         }
+
+    private static ProgressNotificationValue? TryParseProgress(JsonNode? paramsNode)
+    {
+        try
+        {
+            if (paramsNode is not JsonObject obj
+                || obj["progress"]?.GetValue<float>() is not float progress)
+                return null;
+            return new ProgressNotificationValue
+            {
+                Progress = progress,
+                Total = obj["total"]?.GetValue<float?>(),
+                Message = obj["message"]?.GetValue<string>(),
+            };
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 
     private static string Text(CallToolResult result) =>
         Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
@@ -722,12 +743,28 @@ public sealed class McpLifecycleTests
             var arguments = new Dictionary<string, object?> { ["sql"] = sql };
             var collector = new ProgressCollector();
 
+            // Session-level receiver: the SDK pumps incoming messages fire-and-forget
+            // and disposes the per-call progress registration when the tool result wins
+            // that race, so observing only through the CallAsync progress flakes under
+            // suite load (005/T2: repeated 15 s timeouts on dual full-suite runs). This
+            // registration outlives every call, so a lagging notification is recorded.
+            // The request still carries a client token (via a discard sink); without a
+            // token the server stays silent.
+            var discard = new Progress<ProgressNotificationValue>(_ => { });
+            await using var progressSubscription = client.RegisterNotificationHandler(
+                NotificationMethods.ProgressNotification,
+                (notification, _) =>
+                {
+                    if (TryParseProgress(notification.Params) is { } value)
+                        collector.Report(value);
+                    return ValueTask.CompletedTask;
+                });
+
             // With a token: exactly one stage notification (the finish lands
             // on the same controlled instant and is throttled away).
-            // Notifications are dispatched asynchronously by the client, so wait
-            // for delivery: under parallel-suite load the result can win the race.
+            // Delivery is asynchronous, so wait for it after the result returns.
             var first = await query.CallAsync(
-                arguments, collector, null, cts.Token);
+                arguments, discard, null, cts.Token);
             Assert.False(first.IsError == true, string.Concat(first.Content.OfType<TextContentBlock>().Select(block => block.Text)));
             var seen = await WaitForProgressCountAsync(collector, 1, cts.Token);
             var single = Assert.Single(seen);
@@ -741,7 +778,7 @@ public sealed class McpLifecycleTests
             // reports again, still without any SQL.
             clock.Advance(TimeSpan.FromSeconds(2));
             var second = await query.CallAsync(
-                arguments, collector, null, cts.Token);
+                arguments, discard, null, cts.Token);
             Assert.False(second.IsError == true);
             Assert.Equal(2, (await WaitForProgressCountAsync(collector, 2, cts.Token)).Count);
 
