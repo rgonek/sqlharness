@@ -365,6 +365,7 @@ public class ArtifactReaderTests
 
         Assert.NotNull(ArtifactReader.ReadSection(temp.Path, id, "summary"));
         Assert.NotNull(ArtifactReader.ReadSection(temp.Path, id, "metrics"));
+        Assert.NotNull(ArtifactReader.ReadSection(temp.Path, id, "operators"));
     }
 
     [Fact]

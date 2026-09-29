@@ -1,5 +1,7 @@
 using System.Text.Json;
 
+using ModelContextProtocol.Protocol;
+
 using SqlHarness.Core;
 using SqlHarness.Core.Targets;
 using SqlHarness.Mcp.Tools;
@@ -591,6 +593,8 @@ public sealed class McpMappingTests : IDisposable
         var result = await handlers.ArtifactAsync(null!, id, "summary");
 
         Assert.True(result.IsError == true);
+        var foreignPayload = string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text));
+        Assert.DoesNotContain("Index Seek", foreignPayload, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -604,6 +608,8 @@ public sealed class McpMappingTests : IDisposable
         var result = await handlers.ArtifactAsync(null!, id, "metrics");
 
         Assert.True(result.IsError == true);
+        var legacyPayload = string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text));
+        Assert.DoesNotContain("Index Seek", legacyPayload, StringComparison.Ordinal);
         Assert.NotNull(ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id, "metrics"));
     }
 }

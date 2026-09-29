@@ -216,6 +216,7 @@ public sealed class McpScopeTests : IDisposable
     private const string ScopeProfileB = "scope-b";
     private const string ScopeProfileSameDb = "scope-samedb";
     private const string ScopeProfileOtherVars = "scope-othervars";
+    private const string ScopeProfileSameTarget = "scope-sametarget";
     private const string ScopeServerA = "scope-a.invalid";
     private const string ScopeServerB = "scope-b.invalid";
     private const string ScopeServerOther = "scope-other.invalid";
@@ -228,7 +229,8 @@ public sealed class McpScopeTests : IDisposable
         + ScopeProfileA + "\": {\"server\": \"" + ScopeServerA + "\", \"database\": \"" + SharedDatabase + "\", \"vars\": {\"tenant\": \"^frozen$\"}, \"auth\": \"integrated\"}, \""
         + ScopeProfileB + "\": {\"server\": \"" + ScopeServerB + "\", \"database\": \"otherdb\", \"vars\": {\"tenant\": \"^frozen$\"}, \"auth\": \"integrated\"}, \""
         + ScopeProfileSameDb + "\": {\"server\": \"" + ScopeServerOther + "\", \"database\": \"" + SharedDatabase + "\", \"vars\": {\"tenant\": \"^frozen$\"}, \"auth\": \"integrated\"}, \""
-        + ScopeProfileOtherVars + "\": {\"server\": \"" + ScopeServerA + "\", \"database\": \"" + SharedDatabase + "\", \"vars\": {\"tenant\": \"^other$\"}, \"auth\": \"integrated\"}}");
+        + ScopeProfileOtherVars + "\": {\"server\": \"" + ScopeServerA + "\", \"database\": \"" + SharedDatabase + "\", \"vars\": {\"tenant\": \"^other$\"}, \"auth\": \"integrated\"}, \""
+        + ScopeProfileSameTarget + "\": {\"server\": \"" + ScopeServerA + "\", \"database\": \"" + SharedDatabase + "\", \"vars\": {\"tenant\": \"^frozen$\"}, \"auth\": \"integrated\"}}");
 
     private McpScope ScopeFor(string profile, string tenant) => McpScope.Create(
         new McpServerOptions
@@ -334,6 +336,19 @@ public sealed class McpScopeTests : IDisposable
         var id = WriteScopedArtifact("other-vars-artifact", ScopeOwnerJson(owner));
 
         AssertRefusedBeforeProjection(() => McpOperationMapper.ReadArtifactSection(otherVars, id, "summary"));
+    }
+
+    [Fact]
+    public void Different_profile_name_only_is_refused()
+    {
+        WriteScopeTargetsFile();
+        var owner = ScopeFor(ScopeProfileA, "frozen");
+        var sameTarget = ScopeFor(ScopeProfileSameTarget, "frozen");
+        Assert.Equal(owner.ResolvedTarget.Server, sameTarget.ResolvedTarget.Server);
+        Assert.Equal(owner.ResolvedTarget.Database, sameTarget.ResolvedTarget.Database);
+        var id = WriteScopedArtifact("same-target-other-profile", ScopeOwnerJson(owner));
+
+        AssertRefusedBeforeProjection(() => McpOperationMapper.ReadArtifactSection(sameTarget, id, "summary"));
     }
 
     [Fact]
