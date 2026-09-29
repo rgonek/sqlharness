@@ -245,6 +245,160 @@ public class ResultEquivalenceTests
         Assert.Null(report.DifferingPositions);
     }
 
+    [Fact]
+    public void Ordered_reorder_reports_exact_differing_positions()
+    {
+        var report = AssertOracleAgrees(
+            ResultComparisonMode.Ordered,
+            [new CanonicalComparisonResult("schema", ["A", "B"])],
+            [new CanonicalComparisonResult("schema", ["B", "A"])]);
+
+        Assert.False(report.Equivalent);
+        Assert.Equal(2, report.DifferingPositions);
+        Assert.Equal(0, report.BaselineOnlyCount);
+        Assert.Equal(0, report.CandidateOnlyCount);
+    }
+
+    [Fact]
+    public void Ordered_differing_positions_include_length_difference()
+    {
+        var report = AssertOracleAgrees(
+            ResultComparisonMode.Ordered,
+            [new CanonicalComparisonResult("schema", ["A", "B", "C"])],
+            [new CanonicalComparisonResult("schema", ["A", "X"])]);
+
+        Assert.False(report.Equivalent);
+        Assert.Equal(2, report.DifferingPositions);
+        Assert.Equal(2, report.BaselineOnlyCount);
+        Assert.Equal(1, report.CandidateOnlyCount);
+    }
+
+    [Fact]
+    public void Multiset_duplicate_multiplicity_is_significant()
+    {
+        var report = AssertOracleAgrees(
+            ResultComparisonMode.Multiset,
+            [new CanonicalComparisonResult("schema", ["1", "1", "2"])],
+            [new CanonicalComparisonResult("schema", ["1", "2", "2"])]);
+
+        Assert.False(report.Equivalent);
+        Assert.Equal(1, report.BaselineOnlyCount);
+        Assert.Equal(1, report.CandidateOnlyCount);
+        Assert.Null(report.DifferingPositions);
+    }
+
+    [Fact]
+    public void Set_duplicates_are_ignored()
+    {
+        var report = AssertOracleAgrees(
+            ResultComparisonMode.Set,
+            [new CanonicalComparisonResult("schema", ["1", "1", "2"])],
+            [new CanonicalComparisonResult("schema", ["1", "2"])]);
+
+        Assert.True(report.Equivalent);
+        Assert.Equal(0, report.BaselineOnlyCount);
+        Assert.Equal(0, report.CandidateOnlyCount);
+        Assert.Null(report.DifferingPositions);
+    }
+
+    [Fact]
+    public void Schema_mismatch_still_reports_directional_row_counts()
+    {
+        var baseline = new CanonicalComparisonResult("schema-a", ["A", "B"]);
+        var candidate = new CanonicalComparisonResult("schema-b", ["A", "C"]);
+
+        var ordered = AssertOracleAgrees(ResultComparisonMode.Ordered, [baseline], [candidate]);
+        Assert.False(ordered.Equivalent);
+        Assert.Equal(1, ordered.DifferingPositions);
+        Assert.Equal(1, ordered.BaselineOnlyCount);
+        Assert.Equal(1, ordered.CandidateOnlyCount);
+
+        var multiset = AssertOracleAgrees(ResultComparisonMode.Multiset, [baseline], [candidate]);
+        Assert.False(multiset.Equivalent);
+        Assert.Equal(1, multiset.BaselineOnlyCount);
+        Assert.Equal(1, multiset.CandidateOnlyCount);
+
+        var set = AssertOracleAgrees(ResultComparisonMode.Set, [baseline], [candidate]);
+        Assert.False(set.Equivalent);
+        Assert.Equal(1, set.BaselineOnlyCount);
+        Assert.Equal(1, set.CandidateOnlyCount);
+    }
+
+    [Theory]
+    [InlineData(ResultComparisonMode.Ordered)]
+    [InlineData(ResultComparisonMode.Multiset)]
+    [InlineData(ResultComparisonMode.Set)]
+    public void Empty_results_with_same_schema_are_equivalent(ResultComparisonMode mode)
+    {
+        var report = AssertOracleAgrees(
+            mode,
+            [new CanonicalComparisonResult("schema", [])],
+            [new CanonicalComparisonResult("schema", [])]);
+
+        Assert.True(report.Equivalent);
+        Assert.Equal(0, report.BaselineOnlyCount);
+        Assert.Equal(0, report.CandidateOnlyCount);
+        Assert.Equal(mode == ResultComparisonMode.Ordered ? (long?)0 : null, report.DifferingPositions);
+    }
+
+    [Fact]
+    public void Empty_versus_nonempty_is_not_equivalent()
+    {
+        var empty = new CanonicalComparisonResult("schema", []);
+        var nonempty = new CanonicalComparisonResult("schema", ["A"]);
+
+        var missing = AssertOracleAgrees(ResultComparisonMode.Ordered, [empty], [nonempty]);
+        Assert.False(missing.Equivalent);
+        Assert.Equal(1, missing.DifferingPositions);
+        Assert.Equal(0, missing.BaselineOnlyCount);
+        Assert.Equal(1, missing.CandidateOnlyCount);
+
+        var extra = AssertOracleAgrees(ResultComparisonMode.Ordered, [nonempty], [empty]);
+        Assert.False(extra.Equivalent);
+        Assert.Equal(1, extra.DifferingPositions);
+        Assert.Equal(1, extra.BaselineOnlyCount);
+        Assert.Equal(0, extra.CandidateOnlyCount);
+    }
+
+    [Fact]
+    public void Unstable_baseline_runs_are_not_equivalent()
+    {
+        var run0 = new CanonicalComparisonResult("schema", ["1"]);
+        var run1 = new CanonicalComparisonResult("schema", ["2"]);
+
+        var report = AssertOracleAgrees(ResultComparisonMode.Ordered, [run0, run1], [run0]);
+
+        Assert.False(report.Equivalent);
+        Assert.Equal(1, report.BaselineOnlyCount);
+        Assert.Equal(1, report.CandidateOnlyCount);
+    }
+
+    [Fact]
+    public void Maximum_baseline_only_count_comes_from_all_pairs()
+    {
+        var report = AssertOracleAgrees(
+            ResultComparisonMode.Multiset,
+            [new CanonicalComparisonResult("schema", ["A", "B"])],
+            [new CanonicalComparisonResult("schema", ["C"]), new CanonicalComparisonResult("schema", ["A"])]);
+
+        Assert.False(report.Equivalent);
+        Assert.Equal(2, report.BaselineOnlyCount);
+        Assert.Equal(1, report.CandidateOnlyCount);
+    }
+
+    [Fact]
+    public void Maximum_candidate_only_count_comes_from_all_pairs()
+    {
+        var report = AssertOracleAgrees(
+            ResultComparisonMode.Multiset,
+            [new CanonicalComparisonResult("schema", ["A"])],
+            [new CanonicalComparisonResult("schema", ["B", "C"]), new CanonicalComparisonResult("schema", ["A"])]);
+
+        Assert.False(report.Equivalent);
+        Assert.Equal(1, report.BaselineOnlyCount);
+        Assert.Equal(2, report.CandidateOnlyCount);
+    }
+
     private static ResultEquivalenceReport AssertOracleAgrees(
         ResultComparisonMode mode,
         IReadOnlyList<CanonicalComparisonResult> baseline,
