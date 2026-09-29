@@ -75,8 +75,9 @@ call) + asercja ciszy bez tokena przez okno settle (poll 25 ms / 300 ms,
 ## 5. Czego NIE ustalono
 
 - Publish-stall (`PublishAsync`, budżet 10 min): NIGDY nie odtworzony.
-  Linia bazowa: 16–17 s solo (7/7 runów solo w T1–T3 + Duration 26 s w §1
-  obejmujące świeży publish w tym runie). Reguła: skok >2× ponad 16–17 s
+  Linia bazowa: Duration testu `..._on_this_rid` 16–17 s solo (7/7 runów solo
+  w T1–T3; Duration 26 s w §1 obejmuje restore+build+testy całego wywołania,
+  nie sam publish). Reguła: Duration >2× ponad 16–17 s (próg ~32–34 s)
   w przyszłości to sygnał do reinstrumentacji (`PublishAsync`: rozróżnienie
   restore/publish/launch, logi), nie do zgadywania dziś. Zero zmian kodu —
   (a) stdout/stderr już opróżniane współbieżnie przed `WaitForExitAsync`
