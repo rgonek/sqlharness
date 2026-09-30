@@ -399,6 +399,189 @@ public class ResultEquivalenceTests
         Assert.Equal(2, report.CandidateOnlyCount);
     }
 
+    [Fact]
+    public void Randomized_sweep_agrees_with_oracle_and_budget_seam_preserves_semantics()
+    {
+        var random = new Random(42);
+        string[] alphabet = ["a", "b", "c", "d", "e"];
+        var modes = new[] { ResultComparisonMode.Ordered, ResultComparisonMode.Multiset, ResultComparisonMode.Set };
+
+        for (var kase = 0; kase < 500; kase++)
+        {
+            var mode = modes[random.Next(modes.Length)];
+            // Baseline stays non-empty: an empty baseline throws ArgumentException (T1 behavior).
+            var baseline = RandomRuns(random, alphabet, random.Next(1, 4));
+            var candidate = RandomRuns(random, alphabet, random.Next(0, 4));
+
+            var expected = ReferenceCompare(mode, baseline, candidate);
+            Assert.Equal(expected, ResultComparer.Compare(mode, baseline, candidate));
+            Assert.Equal(
+                expected,
+                ResultComparer.Compare(mode, baseline, candidate, maxUniqueFingerprints: 1_000_000, CancellationToken.None));
+        }
+    }
+
+    [Fact]
+    public void Comparison_budget_rejects_more_unique_fingerprints_than_allowed()
+    {
+        var baseline = new List<CanonicalComparisonResult> { Capture("A", "B") };
+        var candidate = new List<CanonicalComparisonResult> { Capture("A", "B") };
+
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            ResultComparer.Compare(
+                ResultComparisonMode.Ordered, baseline, candidate,
+                maxUniqueFingerprints: 1, CancellationToken.None));
+
+        Assert.Contains("comparison budget", exception.Message, StringComparison.Ordinal);
+
+        // The same data fits a sufficient budget and agrees with the oracle.
+        AssertBudgetSeamAgrees(ResultComparisonMode.Ordered, baseline, candidate, maxUniqueFingerprints: 2);
+    }
+
+    [Fact]
+    public void Comparison_budget_counts_identical_runs_once()
+    {
+        var run = Capture("A", "B");
+        var baseline = new List<CanonicalComparisonResult> { run, run };
+        var candidate = new List<CanonicalComparisonResult> { run, run };
+
+        // Two identical 2-row runs register once: 2 unique fingerprints fit a budget of 2.
+        var report = AssertBudgetSeamAgrees(
+            ResultComparisonMode.Multiset, baseline, candidate, maxUniqueFingerprints: 2);
+
+        Assert.True(report.Equivalent);
+    }
+
+    [Fact]
+    public void Compare_with_cancelled_token_throws_operation_canceled()
+    {
+        using var source = new CancellationTokenSource();
+        source.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            ResultComparer.Compare(ResultComparisonMode.Ordered, [Capture("A")], [Capture("A")], source.Token));
+    }
+
+    [Fact]
+    public async Task Compare_observes_cancellation_started_mid_flight()
+    {
+        // 90 baseline + 2 candidate runs x 20000 rows drawn from 10 distinct fingerprints:
+        // runs differ, so the registry holds ~1.84M row references (~15 MB) while only
+        // 10 unique fingerprints exist, leaving the 2M default budget untouched — only
+        // timing scales, never the budget. Row/run counts (not unique fingerprints) were
+        // calibrated up until a 1 ms CancelAfter is observed reliably. The test asserts
+        // only OperationCanceledException, never timing.
+        var random = new Random(1234);
+        var baseline = RandomWideRuns(random, 90);
+        var candidate = RandomWideRuns(random, 2);
+
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            using var source = new CancellationTokenSource();
+            source.CancelAfter(TimeSpan.FromMilliseconds(1));
+            try
+            {
+                await Task.Run(() => ResultComparer.Compare(
+                    ResultComparisonMode.Multiset, baseline, candidate, source.Token),
+                    CancellationToken.None);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+
+        Assert.Fail("Compare did not observe mid-flight cancellation within 10 attempts.");
+    }
+
+    [Fact]
+    public void Compare_allocates_below_cap_on_bounded_synthetic_set()
+    {
+        // Cap calibration: measured 15_080 bytes allocated on this thread for this
+        // fixed set (10 baseline + 10 candidate runs x 1000 rows, 5 unique fingerprints,
+        // Multiset mode, `dotnet test` Debug on .NET 8 x64); the 1_000_000 cap keeps
+        // ~66x headroom (>=4x required) to catch a return of per-pair allocations
+        // (the pre-dedup code rebuilt histograms per pair, i.e. megabytes here),
+        // not machine noise.
+        const long AllocationCapBytes = 1_000_000;
+        var baseline = RandomRuns(new Random(7), ["a", "b", "c", "d", "e"], 10, 1000);
+        var candidate = RandomRuns(new Random(11), ["a", "b", "c", "d", "e"], 10, 1000);
+
+        ResultComparer.Compare(ResultComparisonMode.Multiset, baseline, candidate);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var report = ResultComparer.Compare(ResultComparisonMode.Multiset, baseline, candidate);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(ReferenceCompare(ResultComparisonMode.Multiset, baseline, candidate), report);
+        Assert.True(
+            allocated < AllocationCapBytes,
+            $"Compare allocated {allocated:N0} bytes, above the {AllocationCapBytes:N0}-byte cap.");
+    }
+
+    [Fact]
+    public void Off_mode_returns_early_with_cancelled_token()
+    {
+        using var source = new CancellationTokenSource();
+        source.Cancel();
+
+        var report = ResultComparer.Compare(
+            ResultComparisonMode.Off, [Capture("A")], [Capture("B")], source.Token);
+
+        Assert.Equal(ResultComparisonMode.Off, report.Mode);
+        Assert.Null(report.Equivalent);
+        Assert.Null(report.DifferingPositions);
+        Assert.Null(report.BaselineOnlyCount);
+        Assert.Null(report.CandidateOnlyCount);
+    }
+
+    private static List<CanonicalComparisonResult> RandomRuns(
+        Random random, string[] alphabet, int runCount, int? fixedLength = null)
+    {
+        var runs = new List<CanonicalComparisonResult>(runCount);
+        for (var index = 0; index < runCount; index++)
+        {
+            var length = fixedLength ?? random.Next(0, 6);
+            var rows = new string[length];
+            for (var row = 0; row < length; row++)
+                rows[row] = alphabet[random.Next(alphabet.Length)];
+            var schema = random.Next(10) == 0 ? "other-schema" : "schema";
+            runs.Add(new CanonicalComparisonResult(schema, rows));
+        }
+
+        return runs;
+    }
+
+    private static List<CanonicalComparisonResult> RandomWideRuns(Random random, int runCount)
+    {
+        const int RowsPerRun = 20000;
+        const int UniqueFingerprints = 10;
+        var runs = new List<CanonicalComparisonResult>(runCount);
+        for (var index = 0; index < runCount; index++)
+        {
+            var rows = new string[RowsPerRun];
+            for (var row = 0; row < RowsPerRun; row++)
+                rows[row] = "fp-" + random.Next(UniqueFingerprints);
+            runs.Add(new CanonicalComparisonResult("schema", rows));
+        }
+
+        return runs;
+    }
+
+    private static ResultEquivalenceReport AssertBudgetSeamAgrees(
+        ResultComparisonMode mode,
+        IReadOnlyList<CanonicalComparisonResult> baseline,
+        IReadOnlyList<CanonicalComparisonResult> candidate,
+        int maxUniqueFingerprints)
+    {
+        var actual = ResultComparer.Compare(mode, baseline, candidate, maxUniqueFingerprints, CancellationToken.None);
+        Assert.Equal(ReferenceCompare(mode, baseline, candidate), actual);
+        return actual;
+    }
+
     private static ResultEquivalenceReport AssertOracleAgrees(
         ResultComparisonMode mode,
         IReadOnlyList<CanonicalComparisonResult> baseline,
