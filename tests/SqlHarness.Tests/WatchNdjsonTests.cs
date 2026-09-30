@@ -412,6 +412,340 @@ public class WatchNdjsonTests
         }
     }
 
+    [Fact]
+    public async Task Parity_condition_met_matches_report_path()
+    {
+        var reportOutcome = await Module(FakeSession.WithScalarPolls(1, 1, 2), new FakeWatchClock())
+            .ExecuteAsync(Watch(until: "Value >= 2"));
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(reportOutcome.Report);
+        Assert.Equal(SqlHarnessExitCode.Success, reportOutcome.ExitCode);
+        Assert.Equal(WatchExitReason.ConditionMet, report.ExitReason);
+
+        var transport = new StringWriter();
+        var ndjsonOutcome = await Module(FakeSession.WithScalarPolls(1, 1, 2), new FakeWatchClock())
+            .ExecuteWatchNdjsonAsync(Watch(until: "Value >= 2"), transport);
+
+        Assert.Equal(reportOutcome.ExitCode, ndjsonOutcome.ExitCode);
+        Assert.Null(ndjsonOutcome.Report);
+
+        var records = Parse(transport);
+        Assert.Equal(["started", "changed", "changed", "completed"], records.Select(r => r.Event));
+        var completed = Assert.Single(records, r => r.Event == "completed");
+        Assert.Equal("condition-met", completed.Data.GetProperty("exitReason").GetString());
+        Assert.Equal(report.PollCount, completed.Data.GetProperty("pollCount").GetInt32());
+        Assert.Equal(report.TotalChangedPolls, completed.Data.GetProperty("totalChangedPolls").GetInt32());
+        Assert.Equal(0, completed.Data.GetProperty("omittedPolls").GetInt32());
+    }
+
+    [Fact]
+    public async Task Parity_unchanged_matches_report_path()
+    {
+        var reportOutcome = await Module(FakeSession.WithScalarPolls(5, 5), new FakeWatchClock())
+            .ExecuteAsync(Watch(untilUnchanged: 1));
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(reportOutcome.Report);
+        Assert.Equal(SqlHarnessExitCode.Success, reportOutcome.ExitCode);
+        Assert.Equal(WatchExitReason.Unchanged, report.ExitReason);
+
+        var transport = new StringWriter();
+        var ndjsonOutcome = await Module(FakeSession.WithScalarPolls(5, 5), new FakeWatchClock())
+            .ExecuteWatchNdjsonAsync(Watch(untilUnchanged: 1), transport);
+
+        Assert.Equal(reportOutcome.ExitCode, ndjsonOutcome.ExitCode);
+        Assert.Null(ndjsonOutcome.Report);
+
+        var records = Parse(transport);
+        Assert.Equal(["started", "changed", "completed"], records.Select(r => r.Event));
+        // No changed record for the unchanged repeat poll.
+        Assert.Equal([1], records.Where(r => r.Event == "changed").Select(r => r.Data.GetProperty("poll").GetInt32()));
+        var completed = Assert.Single(records, r => r.Event == "completed");
+        Assert.Equal("unchanged", completed.Data.GetProperty("exitReason").GetString());
+        Assert.Equal(report.PollCount, completed.Data.GetProperty("pollCount").GetInt32());
+        Assert.Equal(report.TotalChangedPolls, completed.Data.GetProperty("totalChangedPolls").GetInt32());
+        Assert.Equal(0, completed.Data.GetProperty("omittedPolls").GetInt32());
+    }
+
+    [Fact]
+    public async Task Parity_connect_timeout_matches_report_path()
+    {
+        var reportClock = new FakeWatchClock();
+        var reportEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reportFactory = new BlockingConnectFactory(reportEntered);
+        var reportModule = new SqlHarnessModule(reportFactory, new FakeGainStore(), Profiles, reportClock);
+        var reportTask = reportModule.ExecuteAsync(Watch(untilUnchanged: 100));
+        await reportEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        reportClock.Budgets.Single().Cancel();
+        var reportOutcome = await reportTask;
+
+        Assert.Equal(SqlHarnessExitCode.WatchMaxDuration, reportOutcome.ExitCode);
+        Assert.Null(reportOutcome.Report);
+
+        var ndjsonClock = new FakeWatchClock();
+        var ndjsonEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ndjsonFactory = new BlockingConnectFactory(ndjsonEntered);
+        var ndjsonModule = new SqlHarnessModule(ndjsonFactory, new FakeGainStore(), Profiles, ndjsonClock);
+        var transport = new StringWriter();
+        var ndjsonTask = ndjsonModule.ExecuteWatchNdjsonAsync(Watch(untilUnchanged: 100), transport);
+        await ndjsonEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        ndjsonClock.Budgets.Single().Cancel();
+        var ndjsonOutcome = await ndjsonTask;
+
+        Assert.Equal(reportOutcome.ExitCode, ndjsonOutcome.ExitCode);
+        Assert.Null(ndjsonOutcome.Report);
+
+        var records = Parse(transport);
+        var failed = Assert.Single(records);
+        Assert.Equal("failed", failed.Event);
+        Assert.Equal((int)SqlHarnessExitCode.WatchMaxDuration, failed.Data.GetProperty("exitCode").GetInt32());
+        Assert.Equal("watch_max_duration", failed.Data.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Parity_blocking_poll_timeout_matches_report_path()
+    {
+        var reportSession = BlockingSecondPollSession(out var reportEntered);
+        var reportClock = new FakeWatchClock();
+        var reportTask = Module(reportSession, reportClock).ExecuteAsync(
+            Watch(untilUnchanged: 100, interval: TimeSpan.FromSeconds(30)));
+        await reportEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        reportClock.Budgets.Single().Cancel();
+        var reportOutcome = await reportTask;
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(reportOutcome.Report);
+        Assert.Equal(SqlHarnessExitCode.WatchMaxDuration, reportOutcome.ExitCode);
+        Assert.Equal(WatchExitReason.MaxDuration, report.ExitReason);
+
+        var ndjsonSession = BlockingSecondPollSession(out var ndjsonEntered);
+        var ndjsonClock = new FakeWatchClock();
+        var transport = new StringWriter();
+        var ndjsonTask = Module(ndjsonSession, ndjsonClock).ExecuteWatchNdjsonAsync(
+            Watch(untilUnchanged: 100, interval: TimeSpan.FromSeconds(30)), transport);
+        await ndjsonEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        ndjsonClock.Budgets.Single().Cancel();
+        var ndjsonOutcome = await ndjsonTask;
+
+        Assert.Equal(reportOutcome.ExitCode, ndjsonOutcome.ExitCode);
+        Assert.Null(ndjsonOutcome.Report);
+
+        var records = Parse(transport);
+        Assert.Equal(["started", "changed", "completed"], records.Select(r => r.Event));
+        var completed = Assert.Single(records, r => r.Event == "completed");
+        Assert.Equal("max-duration", completed.Data.GetProperty("exitReason").GetString());
+        Assert.Equal(report.PollCount, completed.Data.GetProperty("pollCount").GetInt32());
+        Assert.Equal(report.TotalChangedPolls, completed.Data.GetProperty("totalChangedPolls").GetInt32());
+    }
+
+    [Fact]
+    public async Task Parity_delay_timeout_matches_report_path()
+    {
+        // Always-changing values so only the deadline ends the loop:
+        // poll at T0, delay to T30, poll at T30, delay to T60, then deadline.
+        var reportClock = new FakeWatchClock();
+        var reportOutcome = await Module(FakeSession.WithScalarPolls(1, 2, 3, 4, 5, 6, 7, 8), reportClock)
+            .ExecuteAsync(Watch(
+                untilUnchanged: 100,
+                interval: TimeSpan.FromSeconds(30),
+                maxDuration: TimeSpan.FromSeconds(60)));
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(reportOutcome.Report);
+        Assert.Equal(SqlHarnessExitCode.WatchMaxDuration, reportOutcome.ExitCode);
+        Assert.Equal(WatchExitReason.MaxDuration, report.ExitReason);
+        Assert.Equal(2, report.PollCount);
+
+        var ndjsonClock = new FakeWatchClock();
+        var transport = new StringWriter();
+        var ndjsonOutcome = await Module(FakeSession.WithScalarPolls(1, 2, 3, 4, 5, 6, 7, 8), ndjsonClock)
+            .ExecuteWatchNdjsonAsync(
+                Watch(
+                    untilUnchanged: 100,
+                    interval: TimeSpan.FromSeconds(30),
+                    maxDuration: TimeSpan.FromSeconds(60)),
+                transport);
+
+        Assert.Equal(reportOutcome.ExitCode, ndjsonOutcome.ExitCode);
+        Assert.Null(ndjsonOutcome.Report);
+        Assert.Equal(reportClock.Delays, ndjsonClock.Delays);
+
+        var records = Parse(transport);
+        Assert.Equal(["started", "changed", "changed", "completed"], records.Select(r => r.Event));
+        var completed = Assert.Single(records, r => r.Event == "completed");
+        Assert.Equal("max-duration", completed.Data.GetProperty("exitReason").GetString());
+        Assert.Equal(report.PollCount, completed.Data.GetProperty("pollCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task Parity_late_result_matches_report_path()
+    {
+        // The read overruns the deadline: the matching late result is dropped
+        // and both paths keep the last complete in-budget state (none yet).
+        var reportSession = FakeSession.WithScalarPolls(2);
+        var reportClock = new FakeWatchClock();
+        reportSession.BeforeResult = () => reportClock.Advance(TimeSpan.FromSeconds(60).Add(TimeSpan.FromMilliseconds(1)));
+        var reportOutcome = await Module(reportSession, reportClock)
+            .ExecuteAsync(Watch(until: "Value >= 2", maxDuration: TimeSpan.FromSeconds(60)));
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(reportOutcome.Report);
+        Assert.Equal(SqlHarnessExitCode.WatchMaxDuration, reportOutcome.ExitCode);
+        Assert.Equal(WatchExitReason.MaxDuration, report.ExitReason);
+        Assert.Empty(report.EmittedPolls);
+
+        var ndjsonSession = FakeSession.WithScalarPolls(2);
+        var ndjsonClock = new FakeWatchClock();
+        ndjsonSession.BeforeResult = () => ndjsonClock.Advance(TimeSpan.FromSeconds(60).Add(TimeSpan.FromMilliseconds(1)));
+        var transport = new StringWriter();
+        var ndjsonOutcome = await Module(ndjsonSession, ndjsonClock)
+            .ExecuteWatchNdjsonAsync(Watch(until: "Value >= 2", maxDuration: TimeSpan.FromSeconds(60)), transport);
+
+        Assert.Equal(reportOutcome.ExitCode, ndjsonOutcome.ExitCode);
+        Assert.Null(ndjsonOutcome.Report);
+
+        var records = Parse(transport);
+        Assert.Equal(["started", "completed"], records.Select(r => r.Event));
+        Assert.DoesNotContain(records, r => r.Event == "changed");
+        var completed = Assert.Single(records, r => r.Event == "completed");
+        Assert.Equal("max-duration", completed.Data.GetProperty("exitReason").GetString());
+        Assert.Equal(report.PollCount, completed.Data.GetProperty("pollCount").GetInt32());
+        Assert.Equal(0, completed.Data.GetProperty("totalChangedPolls").GetInt32());
+    }
+
+    [Fact]
+    public async Task Parity_condition_met_exactly_at_deadline_matches_report_path()
+    {
+        // The read completes exactly at the deadline: still in budget on both paths.
+        var reportSession = FakeSession.WithScalarPolls(2);
+        var reportClock = new FakeWatchClock();
+        reportSession.BeforeResult = () => reportClock.Advance(TimeSpan.FromSeconds(60));
+        var reportOutcome = await Module(reportSession, reportClock)
+            .ExecuteAsync(Watch(until: "Value >= 2", maxDuration: TimeSpan.FromSeconds(60)));
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(reportOutcome.Report);
+        Assert.Equal(SqlHarnessExitCode.Success, reportOutcome.ExitCode);
+        Assert.Equal(WatchExitReason.ConditionMet, report.ExitReason);
+
+        var ndjsonSession = FakeSession.WithScalarPolls(2);
+        var ndjsonClock = new FakeWatchClock();
+        ndjsonSession.BeforeResult = () => ndjsonClock.Advance(TimeSpan.FromSeconds(60));
+        var transport = new StringWriter();
+        var ndjsonOutcome = await Module(ndjsonSession, ndjsonClock)
+            .ExecuteWatchNdjsonAsync(Watch(until: "Value >= 2", maxDuration: TimeSpan.FromSeconds(60)), transport);
+
+        Assert.Equal(reportOutcome.ExitCode, ndjsonOutcome.ExitCode);
+        Assert.Null(ndjsonOutcome.Report);
+
+        var records = Parse(transport);
+        Assert.Equal(["started", "changed", "completed"], records.Select(r => r.Event));
+        var completed = Assert.Single(records, r => r.Event == "completed");
+        Assert.Equal("condition-met", completed.Data.GetProperty("exitReason").GetString());
+        Assert.Equal(report.PollCount, completed.Data.GetProperty("pollCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task Parity_caller_cancellation_matches_report_path()
+    {
+        var reportClock = new FakeWatchClock { BlockDelay = true };
+        using var reportCts = new CancellationTokenSource();
+        reportClock.OnDelay = () => reportCts.Cancel();
+        var reportOutcome = await Module(FakeSession.WithScalarPolls(1, 2, 3), reportClock).ExecuteAsync(
+            Watch(untilUnchanged: 100, interval: TimeSpan.FromSeconds(30)),
+            reportCts.Token);
+
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, reportOutcome.ExitCode);
+
+        var ndjsonClock = new FakeWatchClock { BlockDelay = true };
+        using var ndjsonCts = new CancellationTokenSource();
+        ndjsonClock.OnDelay = () => ndjsonCts.Cancel();
+        var transport = new StringWriter();
+        var ndjsonOutcome = await Module(FakeSession.WithScalarPolls(1, 2, 3), ndjsonClock).ExecuteWatchNdjsonAsync(
+            Watch(untilUnchanged: 100, interval: TimeSpan.FromSeconds(30)),
+            transport,
+            ndjsonCts.Token);
+
+        Assert.Equal(reportOutcome.ExitCode, ndjsonOutcome.ExitCode);
+        Assert.Null(ndjsonOutcome.Report);
+
+        var records = Parse(transport);
+        Assert.Equal(["started", "changed", "failed"], records.Select(r => r.Event));
+        var failed = Assert.Single(records, r => r.Event == "failed");
+        Assert.Equal((int)SqlHarnessExitCode.SqlExecution, failed.Data.GetProperty("exitCode").GetInt32());
+    }
+
+    [Fact]
+    public async Task Parity_sql_failure_matches_report_path()
+    {
+        var reportSession = FakeSession.WithScalarPolls(1);
+        reportSession.ExecuteFailure = new TimeoutException($"timeout {Token}");
+        var reportOutcome = await Module(reportSession, new FakeWatchClock())
+            .ExecuteAsync(Watch(untilUnchanged: 1));
+
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, reportOutcome.ExitCode);
+        Assert.DoesNotContain(Token, reportOutcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+
+        var ndjsonSession = FakeSession.WithScalarPolls(1);
+        ndjsonSession.ExecuteFailure = new TimeoutException($"timeout {Token}");
+        var transport = new StringWriter();
+        var ndjsonOutcome = await Module(ndjsonSession, new FakeWatchClock())
+            .ExecuteWatchNdjsonAsync(Watch(untilUnchanged: 1), transport);
+
+        Assert.Equal(reportOutcome.ExitCode, ndjsonOutcome.ExitCode);
+        Assert.DoesNotContain(Token, ndjsonOutcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+
+        var records = Parse(transport);
+        Assert.Equal(["started", "failed"], records.Select(r => r.Event));
+        var failed = Assert.Single(records, r => r.Event == "failed");
+        Assert.Equal((int)SqlHarnessExitCode.SqlExecution, failed.Data.GetProperty("exitCode").GetInt32());
+        Assert.DoesNotContain(Token, failed.Data.GetProperty("error").GetProperty("message").GetString() ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Parity_ndjson_retains_no_history_while_report_bounds_it()
+    {
+        var values = Enumerable.Range(1, 300).Cast<object>().ToArray();
+        var reportOutcome = await Module(FakeSession.WithScalarPolls(values), new FakeWatchClock())
+            .ExecuteAsync(Watch(until: "Value >= 300", interval: TimeSpan.FromMilliseconds(1)) with { HistoryLimit = 100 });
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(reportOutcome.Report);
+        Assert.Equal(SqlHarnessExitCode.Success, reportOutcome.ExitCode);
+        Assert.Equal(300, report.PollCount);
+        Assert.Equal(300, report.TotalChangedPolls);
+        Assert.Equal(200, report.OmittedPolls);
+        Assert.Equal(100, report.EmittedPolls.Count);
+
+        var transport = new StringWriter();
+        var ndjsonOutcome = await Module(FakeSession.WithScalarPolls(values), new FakeWatchClock())
+            .ExecuteWatchNdjsonAsync(
+                Watch(until: "Value >= 300", interval: TimeSpan.FromMilliseconds(1)) with { HistoryLimit = 100 },
+                transport);
+
+        Assert.Equal(reportOutcome.ExitCode, ndjsonOutcome.ExitCode);
+        // The NDJSON outcome retains nothing: the stream is the output.
+        Assert.Null(ndjsonOutcome.Report);
+
+        var records = Parse(transport);
+        Assert.Equal(300, records.Count(r => r.Event == "changed"));
+        var completed = Assert.Single(records, r => r.Event == "completed");
+        Assert.Equal(report.PollCount, completed.Data.GetProperty("pollCount").GetInt32());
+        Assert.Equal(report.TotalChangedPolls, completed.Data.GetProperty("totalChangedPolls").GetInt32());
+        Assert.Equal(0, completed.Data.GetProperty("omittedPolls").GetInt32());
+    }
+
+    private static FakeSession BlockingSecondPollSession(out TaskCompletionSource entered)
+    {
+        var session = FakeSession.WithScalarPolls(1);
+        var enteredSource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        entered = enteredSource;
+        var calls = 0;
+        session.ExecuteHandler = async (command, token) =>
+        {
+            if (Interlocked.Increment(ref calls) == 1)
+                return FakeScalarReader.Create(1);
+            enteredSource.TrySetResult();
+            await Task.Delay(Timeout.Infinite, token);
+            throw new InvalidOperationException("Unreachable.");
+        };
+        return session;
+    }
+
     private sealed record NdjsonRecord(string Event, long Sequence, int SchemaVersion, JsonElement Data);
 
     private static List<NdjsonRecord> Parse(StringWriter transport)
