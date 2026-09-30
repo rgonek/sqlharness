@@ -21,7 +21,7 @@ public sealed class QueryStoreTopCommand(ISqlHarnessModule module, OutputContext
     protected override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken ct)
     {
         if (!settings.TryTarget(out var target, out var error)) return Task.FromResult(Invalid(error));
-        if (settings.Timeout is < 1 or > 300 || settings.Top is < 1 or > 500)
+        if (!OperationLimits.IsQueryTimeoutSeconds(settings.Timeout) || !OperationLimits.IsTop(settings.Top))
             return Task.FromResult(Invalid("--timeout must be 1..300 and --top must be 1..500."));
         int windowMinutes;
         try
@@ -42,8 +42,6 @@ public sealed class QueryStoreTopCommand(ISqlHarnessModule module, OutputContext
 
 public static class QueryStoreWindowParser
 {
-    private const int MinimumMinutes = 1;
-    private const int MaximumMinutes = 44640;
     private const string Error = "--window must be a positive integer with an m, h, or d suffix, totaling 1..44640 minutes.";
 
     private static readonly Regex WindowPattern = new(
@@ -53,29 +51,20 @@ public static class QueryStoreWindowParser
 
     public static int Parse(string text)
     {
-        if (!TryRead(text, out var magnitude, out var factor))
+        // Format policy (lowercase-only units, no surrounding whitespace) stays
+        // here; the pure magnitude-to-minutes conversion and 1..44640 range
+        // live in Core.
+        if (!TryRead(text, out var magnitude, out var unit)
+            || !OperationLimits.TryConvertQueryStoreWindow(magnitude, unit, out var minutes))
             throw new ArgumentException(Error);
 
-        long minutes;
-        try
-        {
-            minutes = checked(magnitude * factor);
-        }
-        catch (OverflowException)
-        {
-            throw new ArgumentException(Error);
-        }
-
-        if (minutes is < MinimumMinutes or > MaximumMinutes)
-            throw new ArgumentException(Error);
-
-        return (int)minutes;
+        return minutes;
     }
 
-    private static bool TryRead(string text, out long magnitude, out long factor)
+    private static bool TryRead(string text, out long magnitude, out char unit)
     {
         magnitude = 0;
-        factor = 0;
+        unit = '\0';
         if (text is null)
             return false;
 
@@ -93,13 +82,7 @@ public static class QueryStoreWindowParser
             || !long.TryParse(match.Groups[1].ValueSpan, NumberStyles.None, CultureInfo.InvariantCulture, out magnitude))
             return false;
 
-        factor = match.Groups[2].ValueSpan[0] switch
-        {
-            'm' => 1L,
-            'h' => 60L,
-            'd' => 1440L,
-            _ => 0L,
-        };
-        return factor != 0;
+        unit = match.Groups[2].ValueSpan[0];
+        return unit is 'm' or 'h' or 'd';
     }
 }

@@ -172,6 +172,64 @@ public sealed class McpMappingTests : IDisposable
             McpOperationMapper.MapInspect(scope, "qstop", null, null, null, null, null, false, "never", null));
     }
 
+
+    [Theory]
+    [InlineData("1m", 1L, 'm', 1)]
+    [InlineData("24h", 24L, 'h', 1440)]
+    [InlineData("31d", 31L, 'd', 44640)]
+    [InlineData("24H", 24L, 'h', 1440)]
+    public void Inspect_window_parsing_matches_shared_core_conversion(
+        string window, long magnitude, char unit, int minutes)
+    {
+        // The MCP adapter keeps its own format policy (case folding, trim);
+        // the pure magnitude-to-minutes conversion and 1..44640 range live in
+        // Core. Both must agree on every shared input.
+        Assert.Equal(minutes, McpOperationMapper.ParseQueryStoreWindow(window));
+        Assert.True(OperationLimits.TryConvertQueryStoreWindow(magnitude, unit, out var converted));
+        Assert.Equal(minutes, converted);
+    }
+
+    [Fact]
+    public void Inspect_window_rejection_keeps_adapter_message()
+    {
+        var exception = Assert.Throws<McpMappingException>(
+            () => McpOperationMapper.ParseQueryStoreWindow("32d"));
+        Assert.Equal(
+            "The inspect window must be a positive integer with an m, h, or d suffix, totaling 1..44640 minutes.",
+            exception.Message);
+    }
+
+    [Theory]
+    [InlineData("10", 10)]
+    [InlineData("90m", 5400)]
+    [InlineData("24h", 86400)]
+    public void Watch_duration_parsing_matches_shared_core_cap(string text, long seconds)
+    {
+        var duration = McpOperationMapper.ParseWatchDuration(text, TimeSpan.FromSeconds(30), "interval");
+        Assert.Equal(TimeSpan.FromSeconds(seconds), duration);
+        Assert.True(OperationLimits.IsWatchDuration(duration));
+    }
+
+    [Fact]
+    public void Watch_duration_default_stays_in_adapter()
+    {
+        var fallback = TimeSpan.FromSeconds(30);
+        Assert.Equal(fallback, McpOperationMapper.ParseWatchDuration(null, fallback, "interval"));
+        Assert.Equal(fallback, McpOperationMapper.ParseWatchDuration("  ", fallback, "maxDuration"));
+    }
+
+    [Theory]
+    [InlineData("25h", "maxDuration", "must not exceed 24 hours")]
+    [InlineData("0", "interval", "positive integral value")]
+    [InlineData("10d", "interval", "positive integral value")]
+    public void Watch_duration_rejections_keep_adapter_messages(string text, string label, string fragment)
+    {
+        var exception = Assert.Throws<McpMappingException>(
+            () => McpOperationMapper.ParseWatchDuration(text, TimeSpan.FromSeconds(30), label));
+        Assert.Contains(fragment, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(label, exception.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Measure_mapping_matches_cli_operation_with_setup_and_param_sets()
     {

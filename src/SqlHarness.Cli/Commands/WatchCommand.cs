@@ -147,23 +147,11 @@ public sealed class WatchCommand(ISqlHarnessModule module, OutputContext output,
             return false;
         }
 
-        try
-        {
-            duration = unit switch
-            {
-                null or 's' => TimeSpan.FromSeconds(value),
-                'm' => TimeSpan.FromMinutes(value),
-                'h' => TimeSpan.FromHours(value),
-                _ => default,
-            };
-        }
-        catch (OverflowException)
-        {
-            error = "Duration must not exceed 24 hours.";
-            return false;
-        }
-
-        if (duration > TimeSpan.FromHours(24))
+        // Pure conversion and the 24-hour cap live in Core; this adapter keeps
+        // its own format validation and messages. The checks above guarantee a
+        // positive value with a supported unit, so failure here is only an
+        // overflowed or over-cap duration.
+        if (!OperationLimits.TryCreateWatchDuration(value, unit, out duration))
         {
             error = "Duration must not exceed 24 hours.";
             return false;

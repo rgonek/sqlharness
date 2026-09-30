@@ -111,10 +111,10 @@ public static partial class McpOperationMapper
                 ["maxInlineBytes"] = McpLimits.MaxInlineBytes,
                 ["maxTools"] = McpLimits.MaxTools,
                 ["toolsListBudgetBytes"] = McpLimits.ToolsListBudgetBytes,
-                ["maxTimeoutSeconds"] = 300,
-                ["maxRepeat"] = 100,
-                ["maxTop"] = 500,
-                ["maxRows"] = 500,
+                ["maxTimeoutSeconds"] = OperationLimits.QueryTimeoutSecondsMax,
+                ["maxRepeat"] = OperationLimits.RepeatMax,
+                ["maxTop"] = OperationLimits.TopMax,
+                ["maxRows"] = OperationLimits.MaxRowsMax,
                 ["callToolResultBudgetBytes"] = scope.MaxResultBytes,
                 ["maxOperationSeconds"] = scope.MaxOperationSeconds,
             },
@@ -556,28 +556,33 @@ public static partial class McpOperationMapper
         return await McpInputReader.ReadParameterSetsAsync(paths, scope, ct);
     }
 
-    private static int RequireTimeout(int? timeout) =>
-        timeout switch
-        {
-            null => DefaultQueryTimeout,
-            < 1 or > 300 => throw new McpMappingException("SQL timeout must be between 1 and 300 seconds."),
-            var value => value.Value,
-        };
+    private static int RequireTimeout(int? timeout)
+    {
+        // Range lives in Core; the default and the MCP message stay here.
+        if (timeout is null)
+            return DefaultQueryTimeout;
+        if (!OperationLimits.IsQueryTimeoutSeconds(timeout.Value))
+            throw new McpMappingException("SQL timeout must be between 1 and 300 seconds.");
+        return timeout.Value;
+    }
 
     private static int RequireRepeat(int repeat) =>
-        repeat is < 1 or > 100
-            ? throw new McpMappingException("Measurement repetitions must be between 1 and 100.")
-            : repeat;
+        // Range lives in Core; the MCP message stays here.
+        OperationLimits.IsRepeat(repeat)
+            ? repeat
+            : throw new McpMappingException("Measurement repetitions must be between 1 and 100.");
 
     private static int RequireMaxRows(int maxRows) =>
-        maxRows is < 0 or > 500
-            ? throw new McpMappingException("Maximum displayed rows must be between 0 and 500.")
-            : maxRows;
+        // Range lives in Core; the MCP message stays here.
+        OperationLimits.IsMaxRows(maxRows)
+            ? maxRows
+            : throw new McpMappingException("Maximum displayed rows must be between 0 and 500.");
 
     private static int RequireTop(int top) =>
-        top is < 1 or > 500
-            ? throw new McpMappingException("The top limit must be between 1 and 500.")
-            : top;
+        // Range lives in Core; the MCP message stays here.
+        OperationLimits.IsTop(top)
+            ? top
+            : throw new McpMappingException("The top limit must be between 1 and 500.");
 
     private static void RequireSpaceObject(string? @object)
     {
@@ -604,19 +609,10 @@ public static partial class McpOperationMapper
             throw new McpMappingException("The inspect window must be a positive integer with an m, h, or d suffix, totaling 1..44640 minutes.");
         if (!long.TryParse(trimmed[..^1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var magnitude) || magnitude <= 0)
             throw new McpMappingException("The inspect window must be a positive integer with an m, h, or d suffix, totaling 1..44640 minutes.");
-        long minutes;
-        try
-        {
-            minutes = checked(magnitude * (char.ToLowerInvariant(unit) switch { 'm' => 1L, 'h' => 60L, _ => 1440L }));
-        }
-        catch (OverflowException)
-        {
+        // Case folding stays here; the pure conversion and 1..44640 range live in Core.
+        if (!OperationLimits.TryConvertQueryStoreWindow(magnitude, char.ToLowerInvariant(unit), out var minutes))
             throw new McpMappingException("The inspect window must be a positive integer with an m, h, or d suffix, totaling 1..44640 minutes.");
-        }
-
-        if (minutes is < 1 or > 44640)
-            throw new McpMappingException("The inspect window must be a positive integer with an m, h, or d suffix, totaling 1..44640 minutes.");
-        return (int)minutes;
+        return minutes;
     }
 
     internal static TimeSpan ParseWatchDuration(string? text, TimeSpan @default, string label)
@@ -635,22 +631,9 @@ public static partial class McpOperationMapper
         if (unit is not (null or 's' or 'm' or 'h') || numberPart.Length == 0 ||
             !long.TryParse(numberPart, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var value) || value <= 0)
             throw new McpMappingException($"The watch {label} must be a positive integral value with optional s, m, or h suffix.");
-        TimeSpan duration;
-        try
-        {
-            duration = unit switch
-            {
-                null or 's' => TimeSpan.FromSeconds(value),
-                'm' => TimeSpan.FromMinutes(value),
-                _ => TimeSpan.FromHours(value),
-            };
-        }
-        catch (OverflowException)
-        {
-            throw new McpMappingException($"The watch {label} must not exceed 24 hours.");
-        }
-
-        if (duration > TimeSpan.FromHours(24))
+        // The checks above guarantee a positive value with a supported unit; the
+        // pure conversion and 24-hour cap live in Core, the message stays here.
+        if (!OperationLimits.TryCreateWatchDuration(value, unit, out var duration))
             throw new McpMappingException($"The watch {label} must not exceed 24 hours.");
         return duration;
     }

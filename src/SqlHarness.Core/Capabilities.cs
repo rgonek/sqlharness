@@ -58,14 +58,14 @@ public static class SqlHarnessCapabilitiesProvider
             ],
             new Dictionary<string, object>(StringComparer.Ordinal)
             {
-                ["queryTimeoutSeconds"] = new { min = 1, max = 300 },
-                ["queryMaxRows"] = new { min = 0, max = 500 },
+                ["queryTimeoutSeconds"] = new { min = OperationLimits.QueryTimeoutSecondsMin, max = OperationLimits.QueryTimeoutSecondsMax },
+                ["queryMaxRows"] = new { min = OperationLimits.MaxRowsMin, max = OperationLimits.MaxRowsMax },
                 ["comparisonRowCapPerRun"] = new { min = 0, max = CanonicalComparisonAccumulator.MaximumComparedRows },
                 ["comparisonUniqueFingerprintBudgetPerCell"] = new { min = 0, max = ComparisonBudget.DefaultMaxUniqueFingerprints },
-                ["repeat"] = new { min = 1, max = 100 },
-                ["qstopTop"] = new { min = 1, max = 500 },
-                ["qstopWindowMinutes"] = new { min = 1, max = 44640 },
-                ["indexesTop"] = new { min = 1, max = 500 },
+                ["repeat"] = new { min = OperationLimits.RepeatMin, max = OperationLimits.RepeatMax },
+                ["qstopTop"] = new { min = OperationLimits.TopMin, max = OperationLimits.TopMax },
+                ["qstopWindowMinutes"] = new { min = OperationLimits.QueryStoreWindowMinutesMin, max = OperationLimits.QueryStoreWindowMinutesMax },
+                ["indexesTop"] = new { min = OperationLimits.TopMin, max = OperationLimits.TopMax },
                 ["agentOutputBytes"] = new { min = 4096, max = 1048576, defaultValue = 16384 },
                 ["agentCellChars"] = new { min = 0, max = 4096, defaultValue = 512 },
                 ["sessionTempStatements"] = new Dictionary<string, string[]>(StringComparer.Ordinal)
