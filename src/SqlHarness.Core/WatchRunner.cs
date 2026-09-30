@@ -103,123 +103,21 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
             await using var session = connected;
             phase = OperationPhase.Sql;
 
-            WatchCondition? condition = operation.Until is null
-                ? null
-                : WatchCondition.Parse(operation.Until);
-            WatchUnchangedTracker? tracker = operation.UntilUnchanged is int required
-                ? new WatchUnchangedTracker(required)
-                : null;
-
-            // Bounded history: at most HistoryLimit changed reports stay in memory.
-            // Change detection (previousHash) and the unchanged tracker observe every
-            // poll, so the stop criteria never depend on retention.
-            var emitted = new List<SqlHarnessWatchPoll>();
-            string? previousHash = null;
-            var poll = 0;
-            var totalChangedPolls = 0;
-            WatchExitReason exitReason;
-
-            while (true)
-            {
-                // Never start a new command after the budget is exhausted: a delay that
-                // ends exactly at the deadline exits here instead of polling again.
-                if (budget.Remaining <= TimeSpan.Zero)
+            var sink = new ReportWatchSink(operation.HistoryLimit);
+            var outcome = await RunPollLoopAsync(
+                session,
+                operation,
+                parameters,
+                knownSecrets,
+                () =>
                 {
-                    exitReason = WatchExitReason.MaxDuration;
-                    break;
-                }
-
-                poll++;
-                // CommandTimeout is whole seconds, so clamp it down to the remaining
-                // budget and let the linked token enforce sub-second precision.
-                var execution = new SqlExecutionCommand(
-                    operation.Sql,
-                    parameters,
-                    ClampCommandTimeout(operation.TimeoutSeconds, budget.Remaining));
-
-                CollectedQueryResult collected;
-                try
-                {
-                    collected = await QueryResultCollector.CollectAsync(
-                        session,
-                        execution,
-                        operation.MaxRows,
-                        knownSecrets,
-                        () =>
-                        {
-                            raw ??= new CanonicalResultAccumulator();
-                            return raw;
-                        },
-                        budget.Token);
-                }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-                {
-                    // Deadline cancelled an in-flight poll: keep the last complete state.
-                    exitReason = WatchExitReason.MaxDuration;
-                    break;
-                }
-
-                // Tie rule: only a result completed within budget may satisfy the stop
-                // condition. A read that overruns the deadline is dropped; the report
-                // keeps the last complete in-budget state.
-                if (budget.IsExpired)
-                {
-                    exitReason = WatchExitReason.MaxDuration;
-                    break;
-                }
-
-                var hash = collected.Canonical.Hash;
-                var elapsed = ElapsedMilliseconds(start);
-                if (previousHash is null || !string.Equals(previousHash, hash, StringComparison.Ordinal))
-                {
-                    totalChangedPolls++;
-                    emitted.Add(new SqlHarnessWatchPoll(
-                        poll,
-                        elapsed,
-                        hash,
-                        collected.ResultSets));
-                    previousHash = hash;
-                    // Evict the oldest report but always keep the latest full result.
-                    if (emitted.Count > operation.HistoryLimit)
-                        emitted.RemoveAt(0);
-                }
-
-                if (condition is not null)
-                {
-                    var firstSet = collected.ResultSets.Count > 0
-                        ? collected.ResultSets[0]
-                        : throw new SqlHarnessSafetyException("Watch condition requires a result set.");
-                    if (condition.IsMet(firstSet))
-                    {
-                        exitReason = WatchExitReason.ConditionMet;
-                        break;
-                    }
-                }
-
-                if (tracker is not null && tracker.Observe(hash))
-                {
-                    exitReason = WatchExitReason.Unchanged;
-                    break;
-                }
-
-                if (budget.Remaining <= TimeSpan.Zero)
-                {
-                    exitReason = WatchExitReason.MaxDuration;
-                    break;
-                }
-
-                // Clamp to the remaining budget so a long --interval cannot overshoot it.
-                var delay = operation.Interval < budget.Remaining ? operation.Interval : budget.Remaining;
-                try
-                {
-                    await _clock.DelayAsync(delay, budget.Token);
-                }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-                {
-                    exitReason = WatchExitReason.MaxDuration;
-                    break;
-                }
-            }
+                    raw ??= new CanonicalResultAccumulator();
+                    return raw;
+                },
+                sink,
+                budget,
+                start,
+                ct);
 
             rawFootprint = raw is null
                 ? new OutputFootprint(0, 0)
@@ -227,13 +125,13 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
 
             var report = new SqlHarnessWatchReport(
                 session.Identity,
-                poll,
+                outcome.PollCount,
                 ElapsedMilliseconds(start),
-                exitReason,
-                emitted,
-                totalChangedPolls,
-                totalChangedPolls - emitted.Count);
-            var exitCode = exitReason == WatchExitReason.MaxDuration
+                outcome.ExitReason,
+                sink.Emitted,
+                outcome.TotalChangedPolls,
+                outcome.TotalChangedPolls - sink.Emitted.Count);
+            var exitCode = outcome.ExitReason == WatchExitReason.MaxDuration
                 ? SqlHarnessExitCode.WatchMaxDuration
                 : SqlHarnessExitCode.Success;
             return (new SqlHarnessOutcome(exitCode, report, null), rawFootprint);
@@ -258,7 +156,7 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
 
     /// <summary>
     /// Streaming twin of <see cref="ExecuteAsync"/> for <c>watch --output ndjson</c>.
-    /// Same poll loop, budgets, tie rule and stop criteria, but every changed
+    /// Same engine, budgets, tie rule and stop criteria as the report path, but every changed
     /// result is emitted to <paramref name="stream"/> immediately (flushed per
     /// record) and no poll history is retained: only counters survive.
     /// The stream always ends with exactly one terminal record
@@ -314,125 +212,28 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
 
             stream.WriteStarted(new { target = session.Identity }, ElapsedMilliseconds(start));
 
-            WatchCondition? condition = operation.Until is null
-                ? null
-                : WatchCondition.Parse(operation.Until);
-            WatchUnchangedTracker? tracker = operation.UntilUnchanged is int required
-                ? new WatchUnchangedTracker(required)
-                : null;
-
-            // No retained history: change detection (previousHash) and the
-            // unchanged tracker observe every poll, counters only.
-            string? previousHash = null;
-            var poll = 0;
-            var totalChangedPolls = 0;
-            WatchExitReason exitReason;
-
-            while (true)
-            {
-                // Never start a new command after the budget is exhausted.
-                if (budget.Remaining <= TimeSpan.Zero)
+            var sink = new NdjsonWatchSink(stream);
+            var outcome = await RunPollLoopAsync(
+                session,
+                operation,
+                parameters,
+                knownSecrets,
+                () =>
                 {
-                    exitReason = WatchExitReason.MaxDuration;
-                    break;
-                }
-
-                poll++;
-                var execution = new SqlExecutionCommand(
-                    operation.Sql,
-                    parameters,
-                    ClampCommandTimeout(operation.TimeoutSeconds, budget.Remaining));
-
-                CollectedQueryResult collected;
-                try
-                {
-                    collected = await QueryResultCollector.CollectAsync(
-                        session,
-                        execution,
-                        operation.MaxRows,
-                        knownSecrets,
-                        () =>
-                        {
-                            raw ??= new CanonicalResultAccumulator();
-                            return raw;
-                        },
-                        budget.Token);
-                }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-                {
-                    // Deadline cancelled an in-flight poll: keep the last complete state.
-                    exitReason = WatchExitReason.MaxDuration;
-                    break;
-                }
-
-                // Tie rule: only a result completed within budget may satisfy
-                // the stop condition; a late read is dropped.
-                if (budget.IsExpired)
-                {
-                    exitReason = WatchExitReason.MaxDuration;
-                    break;
-                }
-
-                var hash = collected.Canonical.Hash;
-                var elapsed = ElapsedMilliseconds(start);
-                // No changed record for an unchanged result: first poll and
-                // hash changes only.
-                if (previousHash is null || !string.Equals(previousHash, hash, StringComparison.Ordinal))
-                {
-                    totalChangedPolls++;
-                    stream.WriteChanged(
-                        new
-                        {
-                            poll,
-                            resultHash = hash,
-                            resultSets = collected.ResultSets,
-                        },
-                        elapsed);
-                    previousHash = hash;
-                }
-
-                if (condition is not null)
-                {
-                    var firstSet = collected.ResultSets.Count > 0
-                        ? collected.ResultSets[0]
-                        : throw new SqlHarnessSafetyException("Watch condition requires a result set.");
-                    if (condition.IsMet(firstSet))
-                    {
-                        exitReason = WatchExitReason.ConditionMet;
-                        break;
-                    }
-                }
-
-                if (tracker is not null && tracker.Observe(hash))
-                {
-                    exitReason = WatchExitReason.Unchanged;
-                    break;
-                }
-
-                if (budget.Remaining <= TimeSpan.Zero)
-                {
-                    exitReason = WatchExitReason.MaxDuration;
-                    break;
-                }
-
-                var delay = operation.Interval < budget.Remaining ? operation.Interval : budget.Remaining;
-                try
-                {
-                    await _clock.DelayAsync(delay, budget.Token);
-                }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-                {
-                    exitReason = WatchExitReason.MaxDuration;
-                    break;
-                }
-            }
+                    raw ??= new CanonicalResultAccumulator();
+                    return raw;
+                },
+                sink,
+                budget,
+                start,
+                ct);
 
             rawFootprint = raw is null
                 ? new OutputFootprint(0, 0)
                 : raw.Complete().Footprint;
 
-            EmitCompleted(stream, start, exitReason, poll, totalChangedPolls);
-            var exitCode = exitReason == WatchExitReason.MaxDuration
+            EmitCompleted(stream, start, outcome.ExitReason, outcome.PollCount, outcome.TotalChangedPolls);
+            var exitCode = outcome.ExitReason == WatchExitReason.MaxDuration
                 ? SqlHarnessExitCode.WatchMaxDuration
                 : SqlHarnessExitCode.Success;
             return (new SqlHarnessOutcome(exitCode, null, null), rawFootprint);
@@ -450,6 +251,164 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
         finally
         {
             raw?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Terminal state of one <see cref="RunPollLoopAsync"/> run.
+    /// </summary>
+    private sealed record WatchPollOutcome(WatchExitReason ExitReason, int PollCount, int TotalChangedPolls);
+
+    /// <summary>
+    /// Receiver for changed poll results emitted by the polling engine. The
+    /// engine owns the budget, the tie rule, change detection and the stop
+    /// criteria; a sink only handles one changed result at a time.
+    /// </summary>
+    private interface IWatchPollSink
+    {
+        void OnChanged(int poll, long elapsedMilliseconds, string resultHash, IReadOnlyList<SqlHarnessResultSetReport> resultSets);
+    }
+
+    /// <summary>
+    /// Report-path sink: retains at most <c>HistoryLimit</c> changed reports
+    /// in memory, always keeping the latest full result. Change detection and
+    /// the unchanged tracker observe every poll in the engine, so the stop
+    /// criteria never depend on retention.
+    /// </summary>
+    private sealed class ReportWatchSink(int historyLimit) : IWatchPollSink
+    {
+        private readonly List<SqlHarnessWatchPoll> _emitted = new();
+
+        public IReadOnlyList<SqlHarnessWatchPoll> Emitted => _emitted;
+
+        public void OnChanged(int poll, long elapsedMilliseconds, string resultHash, IReadOnlyList<SqlHarnessResultSetReport> resultSets)
+        {
+            _emitted.Add(new SqlHarnessWatchPoll(poll, elapsedMilliseconds, resultHash, resultSets));
+            // Evict the oldest report but always keep the latest full result.
+            if (_emitted.Count > historyLimit)
+                _emitted.RemoveAt(0);
+        }
+    }
+
+    /// <summary>
+    /// NDJSON-path sink: every changed result is emitted to the stream
+    /// immediately (flushed per record) and no poll history is retained.
+    /// </summary>
+    private sealed class NdjsonWatchSink(WatchNdjsonWriter stream) : IWatchPollSink
+    {
+        public void OnChanged(int poll, long elapsedMilliseconds, string resultHash, IReadOnlyList<SqlHarnessResultSetReport> resultSets) =>
+            stream.WriteChanged(
+                new
+                {
+                    poll,
+                    resultHash,
+                    resultSets,
+                },
+                elapsedMilliseconds);
+    }
+
+    /// <summary>
+    /// The single watch polling engine behind <see cref="ExecuteAsync"/> and
+    /// <see cref="ExecuteNdjsonAsync"/>, which remain thin adapters. One
+    /// monotonic budget covers the whole operation; the engine owns the
+    /// per-poll read with the sub-second tie rule, change detection and both
+    /// stop criteria, so terminal decisions are identical for the report and
+    /// NDJSON paths by construction.
+    /// </summary>
+    private async Task<WatchPollOutcome> RunPollLoopAsync(
+        ISqlSession session,
+        SqlHarnessWatchOperation operation,
+        IReadOnlyList<SqlHarnessParameter> parameters,
+        IReadOnlyCollection<string> knownSecrets,
+        Func<CanonicalResultAccumulator> getRaw,
+        IWatchPollSink sink,
+        IWatchBudget budget,
+        DateTimeOffset start,
+        CancellationToken ct)
+    {
+        WatchCondition? condition = operation.Until is null
+            ? null
+            : WatchCondition.Parse(operation.Until);
+        WatchUnchangedTracker? tracker = operation.UntilUnchanged is int required
+            ? new WatchUnchangedTracker(required)
+            : null;
+
+        string? previousHash = null;
+        var poll = 0;
+        var totalChangedPolls = 0;
+
+        while (true)
+        {
+            // Never start a new command after the budget is exhausted: a delay that
+            // ends exactly at the deadline exits here instead of polling again.
+            if (budget.Remaining <= TimeSpan.Zero)
+                return new WatchPollOutcome(WatchExitReason.MaxDuration, poll, totalChangedPolls);
+
+            poll++;
+            // CommandTimeout is whole seconds, so clamp it down to the remaining
+            // budget and let the linked token enforce sub-second precision.
+            var execution = new SqlExecutionCommand(
+                operation.Sql,
+                parameters,
+                ClampCommandTimeout(operation.TimeoutSeconds, budget.Remaining));
+
+            CollectedQueryResult collected;
+            try
+            {
+                collected = await QueryResultCollector.CollectAsync(
+                    session,
+                    execution,
+                    operation.MaxRows,
+                    knownSecrets,
+                    getRaw,
+                    budget.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                // Deadline cancelled an in-flight poll: keep the last complete state.
+                return new WatchPollOutcome(WatchExitReason.MaxDuration, poll, totalChangedPolls);
+            }
+
+            // Tie rule: only a result completed within budget may satisfy the stop
+            // condition. A read that overruns the deadline is dropped; both paths
+            // keep the last complete in-budget state.
+            if (budget.IsExpired)
+                return new WatchPollOutcome(WatchExitReason.MaxDuration, poll, totalChangedPolls);
+
+            var hash = collected.Canonical.Hash;
+            var elapsed = ElapsedMilliseconds(start);
+            if (previousHash is null || !string.Equals(previousHash, hash, StringComparison.Ordinal))
+            {
+                totalChangedPolls++;
+                sink.OnChanged(poll, elapsed, hash, collected.ResultSets);
+                previousHash = hash;
+            }
+
+            if (condition is not null)
+            {
+                var firstSet = collected.ResultSets.Count > 0
+                    ? collected.ResultSets[0]
+                    : throw new SqlHarnessSafetyException("Watch condition requires a result set.");
+                if (condition.IsMet(firstSet))
+                    return new WatchPollOutcome(WatchExitReason.ConditionMet, poll, totalChangedPolls);
+            }
+
+            if (tracker is not null && tracker.Observe(hash))
+                return new WatchPollOutcome(WatchExitReason.Unchanged, poll, totalChangedPolls);
+
+            if (budget.Remaining <= TimeSpan.Zero)
+                return new WatchPollOutcome(WatchExitReason.MaxDuration, poll, totalChangedPolls);
+
+            // Clamp to the remaining budget so a long --interval cannot overshoot it.
+            var delay = operation.Interval < budget.Remaining ? operation.Interval : budget.Remaining;
+            try
+            {
+                await _clock.DelayAsync(delay, budget.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                return new WatchPollOutcome(WatchExitReason.MaxDuration, poll, totalChangedPolls);
+            }
         }
     }
 
