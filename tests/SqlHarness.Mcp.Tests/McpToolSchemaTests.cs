@@ -651,6 +651,40 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
+    public void Query_and_validate_descriptions_state_the_static_visible_effects_boundary()
+    {
+        // 009/T2: tool descriptions must match the real control (static
+        // check of effects visible in the text; DB account role prepared
+        // outside SQLHarness) and stay consistent with the T1 safetyAnalysis
+        // fields without duplicating their values. No effect guarantees.
+        var scope = Scope();
+        var tools = McpToolCatalog.CreateTools(scope, scope.CreateModule());
+        var byName = tools.ToDictionary(tool => tool.ProtocolTool.Name, StringComparer.Ordinal);
+        var validate = byName["sqlharness_validate"].ProtocolTool.Description ?? string.Empty;
+        var query = byName["sqlharness_query"].ProtocolTool.Description ?? string.Empty;
+
+        Assert.Contains("static", validate, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("visible", validate, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("safetyAnalysis", validate, StringComparison.Ordinal);
+        Assert.Contains("unknown", validate, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("static", query, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("visible", query, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("role", query, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("outside SQLHarness", query, StringComparison.Ordinal);
+
+        foreach (var text in new[] { validate, query })
+        {
+            Assert.DoesNotContain("guarantee", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("creates", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("verifies", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("no mutation", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("without mutation", text, StringComparison.OrdinalIgnoreCase);
+        }
+
+        Assert.DoesNotContain("read-only query", query, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Handler_and_dto_members_name_no_target_auth_mutation_or_force_field()
     {
         var banned = new[] { "target", "auth", "mutation", "allowmutation", "confirmdatabase", "unsafedirect", "server", "database", "password", "secret", "credential", "engine", "vars", "force" };
