@@ -496,6 +496,94 @@ public sealed class ValidateCommandTests
         Assert.Equal("input_file_unavailable", document.RootElement.GetProperty("error").GetProperty("code").GetString());
     }
 
+    [Fact]
+    public void Validation_report_lists_checked_conditions_for_query_usage()
+    {
+        // 007/T4: the report carries the explicit scope of checked conditions;
+        // catalog/permission checks never run offline.
+        var report = SqlValidation.Validate(
+            new SqlTargetRequest("test", new Dictionary<string, string>()),
+            "SELECT @id;",
+            ["id:int=42"],
+            new Dictionary<string, TargetProfile> { ["test"] = Profile("sqlserver") });
+
+        Assert.True(report.Allowed, JsonSerializer.Serialize(report));
+        Assert.Equal(
+            ["query_safety_classification", "parameter_validation", "missing_parameter_check"],
+            report.CheckedConditions!.ToArray());
+        Assert.Equal("unknown", report.ObjectAndPermissionStatus);
+        Assert.False(report.Executed);
+    }
+
+    [Fact]
+    public void Validation_report_lists_checked_conditions_for_setup_usage_and_ignores_setup_context()
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("sqlserver") };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+        var report = SqlValidation.Validate(
+            request, "SELECT @id;", ["id:int=42"], profiles,
+            new ValidationOptions(ValidationUsage.Setup, SetupSql: "SELECT @setupOnly;"));
+
+        Assert.True(report.Allowed, JsonSerializer.Serialize(report));
+        Assert.Equal(
+            ["setup_classification", "parameter_validation", "missing_parameter_check"],
+            report.CheckedConditions!.ToArray());
+    }
+
+    [Fact]
+    public void Validation_report_lists_setup_context_and_measured_batch_shape_for_benchmark()
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("sqlserver") };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+        var report = SqlValidation.Validate(
+            request, "SELECT @id;", ["id:int=42"], profiles,
+            new ValidationOptions(ValidationUsage.Benchmark, SetupSql: "SELECT @setupOnly;"));
+
+        Assert.True(report.Allowed, JsonSerializer.Serialize(report));
+        Assert.Equal(
+            ["setup_context_classification", "query_safety_classification", "parameter_validation", "missing_parameter_check", "measured_batch_shape"],
+            report.CheckedConditions!.ToArray());
+    }
+
+    [Fact]
+    public void Validation_report_lists_measured_batch_shape_for_postgres_benchmark()
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("postgres") };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+        var report = SqlValidation.Validate(
+            request, "SELECT @id::int;", ["id:int=42"], profiles,
+            new ValidationOptions(ValidationUsage.Benchmark));
+
+        Assert.True(report.Allowed, JsonSerializer.Serialize(report));
+        Assert.Equal(
+            ["query_safety_classification", "parameter_validation", "missing_parameter_check", "measured_batch_shape"],
+            report.CheckedConditions!.ToArray());
+        Assert.False(report.AstLocationsAvailable);
+    }
+
+    [Fact]
+    public async Task Validate_cli_json_reports_checked_conditions_without_sql_echo()
+    {
+        // 007/T4: the CLI surface reports the same scope indicator; reasons
+        // stay safe codes and the JSON carries no SQL or parameter values.
+        using var home = new TempHome();
+        var query = home.WriteSql("q.sql", "SELECT @id;");
+        var module = new RecordingModule();
+        var output = new StringWriter();
+
+        var exitCode = await SqlHarnessCli.Create(module, output)
+            .RunAsync(["validate", TempHome.Profile, "--file", query, "--usage", "benchmark", "--param", "id:int=42", "--json"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Success, exitCode);
+        Assert.Empty(module.Operations);
+        var result = Result(output.ToString());
+        Assert.Equal(
+            ["query_safety_classification", "parameter_validation", "missing_parameter_check", "measured_batch_shape"],
+            result.GetProperty("checkedConditions").EnumerateArray().Select(e => e.GetString() ?? string.Empty).ToArray());
+        Assert.Equal("unknown", result.GetProperty("objectAndPermissionStatus").GetString());
+        Assert.DoesNotContain("SELECT @id;", output.ToString(), StringComparison.Ordinal);
+    }
+
     private static JsonElement Result(string json)
     {
         using var document = JsonDocument.Parse(json);

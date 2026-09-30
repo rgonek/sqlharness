@@ -333,6 +333,43 @@ public sealed class McpMappingTests : IDisposable
         Assert.False(report.Executed);
     }
 
+    [Theory]
+    [InlineData("query", "SELECT @id;", "id:int=42")]
+    [InlineData("setup", "SELECT @id;", "id:int=42")]
+    [InlineData("benchmark", "SELECT @id;", "id:int=42")]
+    [InlineData("benchmark", "SELECT 1; SELECT 2;", null)]
+    public async Task Validate_mcp_and_core_agree_on_decision_for_same_operation(
+        string usage, string sql, string? parameter)
+    {
+        // 007/T4: CLI and MCP share one Core classifier, so the same
+        // SQL+usage+engine must yield the same decision on both surfaces.
+        // The multi-statement benchmark row is allowed on SQL Server (shape
+        // check is a Postgres rule) and rejected on Postgres; both surfaces
+        // must still agree per engine.
+        foreach (var profile in new[] { ProfileName, PgProfileName })
+        {
+            var scope = Scope(profile);
+            var mcp = await McpOperationMapper.MapValidateAsync(
+                scope, sql, null, usage,
+                parameter is null ? null : [P("id", "int", "42")],
+                CancellationToken.None);
+            var core = SqlValidation.Validate(
+                scope.TargetRequest, sql,
+                parameter is null ? [] : [parameter],
+                scope.Profiles,
+                new ValidationOptions(usage.ToLowerInvariant() switch
+                {
+                    "setup" => ValidationUsage.Setup,
+                    "benchmark" => ValidationUsage.Benchmark,
+                    _ => ValidationUsage.Query,
+                }));
+            Assert.Equal(core.Allowed, mcp.Allowed);
+            Assert.Equal(core.Reason, mcp.Reason);
+            Assert.Equal(core.CheckedConditions, mcp.CheckedConditions);
+            Assert.Equal(core.ObjectAndPermissionStatus, mcp.ObjectAndPermissionStatus);
+            Assert.False(mcp.Executed);
+        }
+    }
     [Fact]
     public async Task Validate_reports_core_rejections_offline_without_echo()
     {

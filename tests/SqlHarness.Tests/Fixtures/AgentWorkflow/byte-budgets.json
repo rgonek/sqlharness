@@ -6,8 +6,8 @@
     "compareSummary": 8192
   },
   "observedUtf8Bytes": {
-    "discoveryThenSchema": 5455,
-    "validationCorrection": 834,
+    "discoveryThenSchema": 5488,
+    "validationCorrection": 1080,
     "compareSummary": 1006
   },
   "calls": {
