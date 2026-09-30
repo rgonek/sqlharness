@@ -498,6 +498,11 @@ public static class McpToolCatalog
                     Destructive = destructive,
                     Idempotent = idempotent,
                     OpenWorld = openWorld,
+                    // The SDK only advertises OutputSchema when structured
+                    // content is enabled; every tool result already carries
+                    // the budgeted agent envelope as structured content.
+                    UseStructuredContent = true,
+                    OutputSchema = McpResultAdapter.OutputSchema.RootElement,
                 });
         var tools = new List<McpServerTool>(ToolNames.Count)
         {

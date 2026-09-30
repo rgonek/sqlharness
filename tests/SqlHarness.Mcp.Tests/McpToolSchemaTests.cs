@@ -371,6 +371,61 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
+    public void All_tools_publish_the_envelope_output_schema()
+    {
+        var expected = McpResultAdapter.OutputSchema.RootElement.GetRawText();
+        var tools = McpToolCatalog.CreateTools(Scope(), Scope().CreateModule());
+        Assert.Equal(McpToolCatalog.ToolNames.Count, tools.Count);
+        foreach (var tool in tools)
+        {
+            Assert.True(
+                tool.ProtocolTool.OutputSchema.HasValue,
+                $"{tool.ProtocolTool.Name} publishes no outputSchema.");
+            Assert.Equal(
+                expected,
+                tool.ProtocolTool.OutputSchema!.Value.GetRawText());
+        }
+    }
+
+    [Fact]
+    public async Task Served_tools_publish_the_envelope_output_schema()
+    {
+        await using var served = await ServedCatalog.CreateAsync(Scope());
+        var tools = (await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None)).ToList();
+        Assert.Equal(ExpectedTools.Length, tools.Count);
+        foreach (var tool in tools)
+        {
+            var schema = tool.ProtocolTool.OutputSchema;
+            Assert.True(schema.HasValue, $"{tool.Name} publishes no outputSchema.");
+            Assert.Equal(JsonValueKind.Object, schema!.Value.ValueKind);
+            var properties = schema.Value.GetProperty("properties");
+            foreach (var name in new[] { "schemaVersion", "command", "status", "exitCode", "result", "error", "truncation" })
+                Assert.True(properties.TryGetProperty(name, out _), $"{tool.Name} outputSchema lacks '{name}'.");
+        }
+    }
+
+    [Fact]
+    public async Task Served_capabilities_envelope_conforms_to_the_advertised_output_schema()
+    {
+        await using var served = await ServedCatalog.CreateAsync(Scope());
+        var tools = await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
+        var capabilities = tools.Single(tool => tool.Name == "sqlharness_capabilities");
+        Assert.True(
+            capabilities.ProtocolTool.OutputSchema.HasValue,
+            "sqlharness_capabilities publishes no outputSchema.");
+        var result = await served.Client.CallToolAsync(
+            "sqlharness_capabilities",
+            new Dictionary<string, object?>(),
+            cancellationToken: CancellationToken.None);
+        Assert.False(result.IsError == true);
+        var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+        using var document = JsonDocument.Parse(text);
+        var envelope = document.RootElement;
+        Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
+        Assert.Equal("sqlharness_capabilities", envelope.GetProperty("command").GetString());
+    }
+
+    [Fact]
     public void Handler_and_dto_members_name_no_target_auth_mutation_or_force_field()
     {
         var banned = new[] { "target", "auth", "mutation", "allowmutation", "confirmdatabase", "unsafedirect", "server", "database", "password", "secret", "credential", "engine", "vars", "force" };
