@@ -51,7 +51,7 @@ public static class SqlHarnessCli
             c.AddCommand<PingCommand>("ping").WithDescription("Check a database connection and target identity.");
             c.AddCommand<CountsCommand>("counts").WithDescription("Inspect row counts for database tables.");
             c.AddCommand<SpaceCommand>("space").WithDescription("Inspect database file and table storage.");
-            c.AddCommand<WatchCommand>("watch").WithDescription("Poll a bounded read-only query until a condition is met.");
+            c.AddCommand<WatchCommand>("watch").WithDescription("Poll a bounded query passing the static visible-effects text check until a condition is met.");
             c.AddCommand<SnapshotCommand>("snapshot").WithDescription("Capture or compare a named query result.");
             c.AddCommand<QueryStoreTopCommand>("qstop").WithDescription("Rank SQL Server Query Store consumers.");
             c.AddCommand<IndexesCommand>("indexes").WithDescription("Inspect SQL Server missing-index evidence.");

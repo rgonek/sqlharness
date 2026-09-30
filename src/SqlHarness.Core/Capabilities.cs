@@ -42,7 +42,7 @@ public static class SqlHarnessCapabilitiesProvider
                 new("ping", "Check a database connection."),
                 new("counts", "Inspect table row counts."),
                 new("space", "Inspect database storage."),
-                new("watch", "Poll a bounded read-only query."),
+                new("watch", "Poll a bounded query passing the static visible-effects text check."),
                 new("snapshot", "Capture or compare a named query result."),
                 new("qstop", "Rank SQL Server Query Store consumers."),
                 new("indexes", "Inspect SQL Server missing-index evidence."),
