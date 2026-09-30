@@ -5,6 +5,7 @@ using System.Text.Json;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
+using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -494,6 +495,37 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.Equal(
                 ["detailLimit", "maxCellChars", "omittedItems"],
                 properties.GetProperty("truncation").GetProperty("required").EnumerateArray().Select(item => item.GetString()!).Order(StringComparer.Ordinal).ToArray());
+        }
+    }
+
+    [Fact]
+    public async Task Served_tools_share_the_free_form_envelope_schema_without_per_tool_narrowing()
+    {
+        // 008/T4 decision (DONE without narrowing): per-tool narrowing of
+        // `result` was evaluated against the 32768 B tools/list budget and
+        // rejected. Measured on the wire: catalog 24239 B with 11
+        // byte-identical 973 B envelope schemas (8529 B headroom); a
+        // lower-bound narrowing sketch for the simplest tool (gain, naming
+        // only 3 of its 7 sub-objects) already costs +156 B per tool
+        // (+1716 B across all 11), while an honest schema for the
+        // polymorphic tools (inspect serves 6 report variants, compare 3
+        // shapes, artifact serves disk-shaped JSON, every tool emits null
+        // on failure plus degraded placeholders under budget pressure and
+        // raw passthrough of projection-unknown reports) converges back
+        // to free-form with extra bytes. This test locks the plan minimum:
+        // every served tool advertises the shared envelope with free-form
+        // `result`, so no per-tool divergence can slip in silently.
+        await using var served = await ServedCatalog.CreateAsync(Scope());
+        var tools = (await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None)).ToList();
+        Assert.Equal(ExpectedTools.Length, tools.Count);
+        var expected = JsonSerializer.Serialize(
+            McpResultAdapter.OutputSchema.RootElement, McpJsonUtilities.DefaultOptions);
+        foreach (var tool in tools)
+        {
+            Assert.True(tool.ProtocolTool.OutputSchema.HasValue, $"{tool.Name} publishes no outputSchema.");
+            Assert.Equal(
+                expected,
+                JsonSerializer.Serialize(tool.ProtocolTool.OutputSchema!.Value, McpJsonUtilities.DefaultOptions));
         }
     }
 
