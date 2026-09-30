@@ -742,6 +742,28 @@ public class SqlSafetyTests
     }
 
     [Theory]
+    [InlineData("DECLARE @v int; SET @v += 1; SELECT @v")]
+    [InlineData("DECLARE @v int; SET @v -= 1; SELECT @v")]
+    public void T2_Query_denies_SET_compound_assignment(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    [Fact]
+    public void T2_Query_denies_SET_cursor_assignment()
+    {
+        const string sql = "DECLARE @cur int; SET @cur = CURSOR FOR SELECT Id FROM dbo.Clients; SELECT @cur";
+
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    [Theory]
     [InlineData("SET NOCOUNT ON")]
     [InlineData("SET ANSI_NULLS ON")]
     [InlineData("SET QUOTED_IDENTIFIER ON")]
