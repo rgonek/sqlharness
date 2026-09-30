@@ -656,4 +656,37 @@ public sealed class McpMappingTests : IDisposable
         Assert.DoesNotContain("Index Seek", legacyPayload, StringComparison.Ordinal);
         Assert.NotNull(ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id, "metrics"));
     }
+
+    [Fact]
+    public async Task Validate_usage_benchmark_rejects_pg_multi_statement_batch_while_query_allows()
+    {
+        // 007/T3: MapValidateAsync must carry the validated usage string into
+        // the shared Core model instead of always validating as query.
+        var pg = Scope(PgProfileName);
+
+        var query = await McpOperationMapper.MapValidateAsync(
+            pg, "SELECT 1; SELECT 2;", null, "query", null, CancellationToken.None);
+        var benchmark = await McpOperationMapper.MapValidateAsync(
+            pg, "SELECT 1; SELECT 2;", null, "benchmark", null, CancellationToken.None);
+
+        Assert.True(query.Allowed);
+        Assert.False(query.Executed);
+        Assert.False(benchmark.Allowed);
+        Assert.Equal("benchmark_batch_not_supported", benchmark.Reason);
+        Assert.False(benchmark.Executed);
+    }
+
+    [Theory]
+    [InlineData("BENCHMARK", false)]
+    [InlineData("Setup", true)]
+    public async Task Validate_usage_mapping_is_case_insensitive(string usage, bool expectedAllowed)
+    {
+        var pg = Scope(PgProfileName);
+
+        var report = await McpOperationMapper.MapValidateAsync(
+            pg, "SELECT 1; SELECT 2;", null, usage, null, CancellationToken.None);
+
+        Assert.Equal(expectedAllowed, report.Allowed);
+        Assert.False(report.Executed);
+    }
 }

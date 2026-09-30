@@ -8,6 +8,7 @@ using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Tests.Cli;
 
+[Collection(SqlHarnessHomeCollection.Name)]
 public sealed class ValidateCommandTests
 {
     [Fact]
@@ -358,6 +359,180 @@ public sealed class ValidateCommandTests
         {
             Operations.Add(operation);
             return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null));
+        }
+    }
+
+    [Fact]
+    public async Task Validate_usage_benchmark_rejects_pg_multi_statement_batch_offline()
+    {
+        // 007/T3: --usage reaches the shared Core model through the runner.
+        using var home = new TempHome();
+        var query = home.WriteSql("batch.sql", "SELECT 1; SELECT 2;");
+        var module = new RecordingModule();
+
+        var benchmarkOutput = new StringWriter();
+        var benchmarkExit = await SqlHarnessCli.Create(module, benchmarkOutput)
+            .RunAsync(["validate", TempHome.PgProfile, "--file", query, "--usage", "benchmark", "--json"]);
+
+        var queryOutput = new StringWriter();
+        var queryExit = await SqlHarnessCli.Create(module, queryOutput)
+            .RunAsync(["validate", TempHome.PgProfile, "--file", query, "--usage", "query", "--json"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Success, benchmarkExit);
+        Assert.Equal((int)SqlHarnessExitCode.Success, queryExit);
+        Assert.Empty(module.Operations);
+        Assert.False(Result(benchmarkOutput.ToString()).GetProperty("allowed").GetBoolean());
+        Assert.Equal("benchmark_batch_not_supported", Result(benchmarkOutput.ToString()).GetProperty("reason").GetString());
+        Assert.False(Result(benchmarkOutput.ToString()).GetProperty("executed").GetBoolean());
+        Assert.True(Result(queryOutput.ToString()).GetProperty("allowed").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Validate_default_usage_is_query()
+    {
+        using var home = new TempHome();
+        var query = home.WriteSql("batch.sql", "SELECT 1; SELECT 2;");
+        var module = new RecordingModule();
+        var output = new StringWriter();
+
+        var exitCode = await SqlHarnessCli.Create(module, output)
+            .RunAsync(["validate", TempHome.PgProfile, "--file", query, "--json"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Success, exitCode);
+        Assert.Empty(module.Operations);
+        Assert.True(Result(output.ToString()).GetProperty("allowed").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData("BENCHMARK", false)]
+    [InlineData("Setup", true)]
+    public async Task Validate_usage_is_case_insensitive(string usage, bool expectedAllowed)
+    {
+        using var home = new TempHome();
+        var query = home.WriteSql("batch.sql", "SELECT 1; SELECT 2;");
+        var module = new RecordingModule();
+        var output = new StringWriter();
+
+        var exitCode = await SqlHarnessCli.Create(module, output)
+            .RunAsync(["validate", TempHome.PgProfile, "--file", query, "--usage", usage, "--json"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Success, exitCode);
+        Assert.Empty(module.Operations);
+        Assert.Equal(expectedAllowed, Result(output.ToString()).GetProperty("allowed").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Validate_unknown_usage_is_rejected_without_dispatch()
+    {
+        using var home = new TempHome();
+        var query = home.WriteSql("q.sql", "SELECT 1;");
+        var module = new RecordingModule();
+        var output = new StringWriter();
+
+        // Ledger minor M2 (007): unknown --usage fails like other invalid
+        // inputs with exit 2, never reaching validation.
+        var exitCode = await SqlHarnessCli.Create(module, output)
+            .RunAsync(["validate", TempHome.Profile, "--file", query, "--usage", "execute", "--json"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, exitCode);
+        Assert.Empty(module.Operations);
+    }
+
+    [Fact]
+    public async Task Validate_setup_file_provides_session_temp_context()
+    {
+        using var home = new TempHome();
+        var setup = home.WriteSql("setup.sql", "CREATE TEMP TABLE meas (x int);");
+        var query = home.WriteSql("q.sql", "CREATE INDEX ix ON meas (x);");
+        var module = new RecordingModule();
+
+        var withSetupOutput = new StringWriter();
+        var withSetupExit = await SqlHarnessCli.Create(module, withSetupOutput)
+            .RunAsync(["validate", TempHome.PgProfile, "--file", query, "--setup", setup, "--json"]);
+
+        var withoutSetupOutput = new StringWriter();
+        var withoutSetupExit = await SqlHarnessCli.Create(module, withoutSetupOutput)
+            .RunAsync(["validate", TempHome.PgProfile, "--file", query, "--json"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Success, withSetupExit);
+        Assert.Equal((int)SqlHarnessExitCode.Success, withoutSetupExit);
+        Assert.Empty(module.Operations);
+        Assert.True(Result(withSetupOutput.ToString()).GetProperty("allowed").GetBoolean());
+        Assert.False(Result(withoutSetupOutput.ToString()).GetProperty("allowed").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Validate_setup_usage_classifies_the_batch_as_setup()
+    {
+        using var home = new TempHome();
+        var setup = home.WriteSql("setup.sql", "CREATE TEMP TABLE meas (x int);");
+        var module = new RecordingModule();
+        var output = new StringWriter();
+
+        var exitCode = await SqlHarnessCli.Create(module, output)
+            .RunAsync(["validate", TempHome.PgProfile, "--file", setup, "--usage", "setup", "--json"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Success, exitCode);
+        Assert.Empty(module.Operations);
+        var result = Result(output.ToString());
+        Assert.True(result.GetProperty("allowed").GetBoolean());
+        Assert.Equal("session-local", result.GetProperty("classification").GetString());
+    }
+
+    [Fact]
+    public async Task Validate_missing_setup_file_returns_json_without_dispatch()
+    {
+        using var home = new TempHome();
+        var query = home.WriteSql("q.sql", "SELECT 1;");
+        var module = new RecordingModule();
+        var output = new StringWriter();
+
+        var exitCode = await SqlHarnessCli.Create(module, output)
+            .RunAsync(["validate", TempHome.Profile, "--file", query, "--setup", Path.Combine(home.Path, "no-such-setup.sql"), "--json"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, exitCode);
+        Assert.Empty(module.Operations);
+        using var document = JsonDocument.Parse(output.ToString());
+        Assert.Equal("input_file_unavailable", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    private static JsonElement Result(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
+    }
+
+    private sealed class TempHome : IDisposable
+    {
+        public const string Profile = "t3-cli";
+        public const string PgProfile = "t3-cli-pg";
+
+        private readonly string? _original = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
+        public string Path { get; } = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "sqlharness-validate-t3-" + Guid.NewGuid().ToString("N"));
+
+        public TempHome()
+        {
+            Directory.CreateDirectory(Path);
+            Environment.SetEnvironmentVariable("SQLHARNESS_HOME", Path);
+            File.WriteAllText(
+                System.IO.Path.Combine(Path, "targets.json"),
+                "{\"t3-cli\": {\"server\": \"t3.invalid\", \"database\": \"t3db\", \"vars\": {}, \"auth\": \"integrated\"}, " +
+                "\"t3-cli-pg\": {\"server\": \"t3.invalid\", \"database\": \"t3pgdb\", \"vars\": {}, \"auth\": \"sql\", " +
+                "\"sqlUser\": \"t3\", \"passwordEnvVar\": \"SQLHARNESS_T3_TEST_PW\", \"engine\": \"postgres\"}}");
+        }
+
+        public string WriteSql(string name, string sql)
+        {
+            var path = System.IO.Path.Combine(Path, name);
+            File.WriteAllText(path, sql);
+            return path;
+        }
+
+        public void Dispose()
+        {
+            Environment.SetEnvironmentVariable("SQLHARNESS_HOME", _original);
+            Directory.Delete(Path, true);
         }
     }
 }
