@@ -5,6 +5,34 @@ using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Core;
 
+/// <summary>
+/// Shared static-analysis boundary for every offline safety verdict. The
+/// classifier only sees effects visible in the SQL text
+/// (<c>static-visible-effects</c>); object existence and permissions never
+/// resolve offline (unknown), and hidden effects beyond the AST proof
+/// (functions, views, operators) are not verified. Additive and versioned:
+/// clients detect meaning changes via <see cref="ContractVersion"/>.
+/// Classification labels keep their existing meaning.
+/// </summary>
+public static class SqlSafetyAnalysis
+{
+    public const string AnalysisKind = "static-visible-effects";
+    public const int ContractVersion = 1;
+    public const bool HiddenEffectsVerified = false;
+    public const string ObjectAndPermissionStatus = "unknown";
+}
+
+/// <summary>
+/// Additive, versioned safety-analysis disclosure shared by the
+/// capabilities and validate surfaces. Values mirror
+/// <see cref="SqlSafetyAnalysis"/>.
+/// </summary>
+public sealed record SqlHarnessSafetyAnalysis(
+    string AnalysisKind,
+    int AnalysisContractVersion,
+    bool HiddenEffectsVerified,
+    string ObjectAndPermissionStatus);
+
 public sealed record SqlValidationLocation(int StartOffset, int StartLine, int StartColumn, string Kind);
 
 public sealed record SqlValidationParameter(string Name, string Type);
@@ -15,6 +43,8 @@ public sealed record SqlValidationParameter(string Name, string Type);
 /// program scoped by the caller usage, in evaluation order; evaluation short-circuits on the
 /// first failure named by Reason. Object-existence and permission checks never run offline, so
 /// ObjectAndPermissionStatus stays "unknown" and Executed stays false.
+/// Additive AnalysisKind/AnalysisContractVersion/HiddenEffectsVerified
+/// disclose the static-analysis boundary without changing classification.
 /// </summary>
 public sealed record SqlValidationReport(
     string Engine,
@@ -28,7 +58,10 @@ public sealed record SqlValidationReport(
     bool AstLocationsAvailable,
     string ObjectAndPermissionStatus = "unknown",
     bool Executed = false,
-    IReadOnlyList<string>? CheckedConditions = null);
+    IReadOnlyList<string>? CheckedConditions = null,
+    string AnalysisKind = SqlSafetyAnalysis.AnalysisKind,
+    int AnalysisContractVersion = SqlSafetyAnalysis.ContractVersion,
+    bool HiddenEffectsVerified = SqlSafetyAnalysis.HiddenEffectsVerified);
 
 /// <summary>
 /// Caller intent for offline validation. Query is the default read path;

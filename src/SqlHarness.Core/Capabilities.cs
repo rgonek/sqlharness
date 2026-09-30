@@ -9,7 +9,8 @@ public sealed record SqlHarnessCapabilities(
     IReadOnlyList<SqlHarnessCommandCapability> Commands,
     IReadOnlyList<SqlHarnessEngineCapability> Engines,
     IReadOnlyDictionary<string, object> Limits,
-    IReadOnlyList<string> OutputModes);
+    IReadOnlyList<string> OutputModes,
+    SqlHarnessSafetyAnalysis SafetyAnalysis);
 
 public sealed record SqlHarnessCommandCapability(string Name, string Description);
 
@@ -81,6 +82,11 @@ public static class SqlHarnessCapabilitiesProvider
                 ["artifactRead"] = new { sections = ArtifactReader.SupportedSections, manifestVersion = ArtifactReader.CurrentManifestVersion, maxReportBytes = ArtifactReader.MaxReportBytes },
                 ["watchNdjson"] = new { events = new[] { "started", "changed", "completed", "failed" }, schemaVersion = WatchNdjsonWriter.SchemaVersion, sequence = "strictly increasing from started; exactly one terminal record", history = "no retention: every change is emitted immediately" },
             },
-            ["text", "json", "json-summary", "agent"]);
+            ["text", "json", "json-summary", "agent"],
+            new SqlHarnessSafetyAnalysis(
+                SqlSafetyAnalysis.AnalysisKind,
+                SqlSafetyAnalysis.ContractVersion,
+                SqlSafetyAnalysis.HiddenEffectsVerified,
+                SqlSafetyAnalysis.ObjectAndPermissionStatus));
     }
 }

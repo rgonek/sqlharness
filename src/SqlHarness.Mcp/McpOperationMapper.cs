@@ -10,7 +10,7 @@ namespace SqlHarness.Mcp;
 /// <summary>Safe mapping failure: constant text, never parameter values or SQL.</summary>
 public sealed class McpMappingException(string message) : Exception(message);
 
-/// <summary>Capabilities document for the capabilities tool: versions, scope engine, tools, and limits.</summary>
+/// <summary>Capabilities document for the capabilities tool: versions, scope engine, tools, limits, and the static-analysis boundary.</summary>
 public sealed record McpCapabilitiesDocument(
     string Server,
     string ServerVersion,
@@ -20,7 +20,8 @@ public sealed record McpCapabilitiesDocument(
     IReadOnlyDictionary<string, long> Limits,
     bool QueryStoreAvailable,
     bool IndexesAvailable,
-    IReadOnlyDictionary<string, string>? Diagnostics);
+    IReadOnlyDictionary<string, string>? Diagnostics,
+    SqlHarnessSafetyAnalysis SafetyAnalysis);
 
 /// <summary>
 /// Shared projection sanitizer for plan and artifact results. Distilled plans
@@ -119,7 +120,12 @@ public static partial class McpOperationMapper
             },
             QueryStoreAvailable: !pg,
             IndexesAvailable: !pg,
-            includeDiagnostics ? LocalDiagnostics(scope) : null);
+            includeDiagnostics ? LocalDiagnostics(scope) : null,
+            new SqlHarnessSafetyAnalysis(
+                SqlSafetyAnalysis.AnalysisKind,
+                SqlSafetyAnalysis.ContractVersion,
+                SqlSafetyAnalysis.HiddenEffectsVerified,
+                SqlSafetyAnalysis.ObjectAndPermissionStatus));
     }
 
     private static IReadOnlyDictionary<string, string> LocalDiagnostics(McpScope scope)
