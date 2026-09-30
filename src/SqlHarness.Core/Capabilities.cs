@@ -59,6 +59,8 @@ public static class SqlHarnessCapabilitiesProvider
             {
                 ["queryTimeoutSeconds"] = new { min = 1, max = 300 },
                 ["queryMaxRows"] = new { min = 0, max = 500 },
+                ["comparisonRowCapPerRun"] = new { min = 0, max = CanonicalComparisonAccumulator.MaximumComparedRows },
+                ["comparisonUniqueFingerprintBudgetPerCell"] = new { min = 0, max = ComparisonBudget.DefaultMaxUniqueFingerprints },
                 ["repeat"] = new { min = 1, max = 100 },
                 ["qstopTop"] = new { min = 1, max = 500 },
                 ["qstopWindowMinutes"] = new { min = 1, max = 44640 },
