@@ -171,17 +171,60 @@ public sealed class ValidateCommandTests
     }
 
     [Fact]
-    public void Postgres_multi_statement_batch_is_rejected_for_benchmark()
+    public void Postgres_multi_statement_batch_is_rejected_for_benchmark_but_allowed_for_query()
     {
         var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("postgres") };
         var request = new SqlTargetRequest("test", new Dictionary<string, string>());
 
-        // 007/T1 regression witness: PostgresBenchmark.ValidateMeasuredBatch
-        // rejects multi-statement batches at execution, so benchmark-mode
-        // validation must reject them too (old code always used query mode).
-        var result = SqlValidation.Validate(request, "SELECT 1; SELECT 2;", [], profiles);
+        // 007/T1: PostgresBenchmark.ValidateMeasuredBatch rejects
+        // multi-statement batches at execution, so benchmark-mode validation
+        // must reject them while query mode keeps allowing them.
+        var query = SqlValidation.Validate(request, "SELECT 1; SELECT 2;", [], profiles);
+        var benchmark = SqlValidation.Validate(
+            request, "SELECT 1; SELECT 2;", [], profiles,
+            new ValidationOptions(ValidationUsage.Benchmark));
 
-        Assert.False(result.Allowed);
+        Assert.True(query.Allowed);
+        Assert.False(benchmark.Allowed);
+        Assert.Equal("benchmark_batch_not_supported", benchmark.Reason);
+        Assert.Equal("rejected", benchmark.Classification);
+        Assert.False(benchmark.Executed);
+    }
+
+    [Fact]
+    public void Sql_server_multi_statement_batch_stays_allowed_for_benchmark()
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("sqlserver") };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+
+        // The SQL Server dialect has no measured-batch shape check (its
+        // ValidateMeasuredBatch is a no-op, like the execution path).
+        var benchmark = SqlValidation.Validate(
+            request, "SELECT 1; SELECT 2;", [], profiles,
+            new ValidationOptions(ValidationUsage.Benchmark));
+
+        Assert.True(benchmark.Allowed);
+    }
+
+    [Fact]
+    public void Postgres_setup_temp_tables_flow_into_query_validation()
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("postgres") };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+        const string setup = "CREATE TEMP TABLE meas (x int);";
+        const string query = "CREATE INDEX ix ON meas (x);";
+
+        var setupReport = SqlValidation.Validate(
+            request, setup, [], profiles, new ValidationOptions(ValidationUsage.Setup));
+        var withoutSetup = SqlValidation.Validate(request, query, [], profiles);
+        var withSetup = SqlValidation.Validate(
+            request, query, [], profiles,
+            new ValidationOptions(ValidationUsage.Query, SetupSql: setup));
+
+        Assert.True(setupReport.Allowed);
+        Assert.False(withoutSetup.Allowed);
+        Assert.True(withSetup.Allowed);
+        Assert.Equal("session-local", withSetup.Classification);
     }
 
     private static TargetProfile Profile(string engine) => new(
