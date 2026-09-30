@@ -622,6 +622,35 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
+    public async Task Served_validate_and_capabilities_disclose_the_static_analysis_boundary()
+    {
+        // 009/T1 red witness: MCP clients get the same versioned boundary
+        // through the budgeted envelope results (validate report fields and
+        // the capabilities safetyAnalysis block).
+        await using var served = await ServedCatalog.CreateAsync(Scope());
+        var validate = await served.Client.CallToolAsync(
+            "sqlharness_validate",
+            new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+            cancellationToken: CancellationToken.None);
+        Assert.False(validate.IsError == true);
+        var validateResult = ServedEnvelope(validate, "sqlharness_validate").GetProperty("result");
+        Assert.Equal("static-visible-effects", validateResult.GetProperty("analysisKind").GetString());
+        Assert.Equal(1, validateResult.GetProperty("analysisContractVersion").GetInt32());
+        Assert.False(validateResult.GetProperty("hiddenEffectsVerified").GetBoolean());
+
+        var capabilities = await served.Client.CallToolAsync(
+            "sqlharness_capabilities",
+            new Dictionary<string, object?>(),
+            cancellationToken: CancellationToken.None);
+        Assert.False(capabilities.IsError == true);
+        var safety = ServedEnvelope(capabilities, "sqlharness_capabilities").GetProperty("result").GetProperty("safetyAnalysis");
+        Assert.Equal("static-visible-effects", safety.GetProperty("analysisKind").GetString());
+        Assert.Equal(1, safety.GetProperty("analysisContractVersion").GetInt32());
+        Assert.False(safety.GetProperty("hiddenEffectsVerified").GetBoolean());
+        Assert.Equal("unknown", safety.GetProperty("objectAndPermissionStatus").GetString());
+    }
+
+    [Fact]
     public void Handler_and_dto_members_name_no_target_auth_mutation_or_force_field()
     {
         var banned = new[] { "target", "auth", "mutation", "allowmutation", "confirmdatabase", "unsafedirect", "server", "database", "password", "secret", "credential", "engine", "vars", "force" };

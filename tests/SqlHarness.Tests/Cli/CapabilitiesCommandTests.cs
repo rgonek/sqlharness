@@ -41,6 +41,24 @@ public sealed class CapabilitiesCommandTests
         Assert.Contains("capabilities requires --json", output.ToString(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Capabilities_json_discloses_the_versioned_static_analysis_boundary()
+    {
+        // 009/T1 red witness: capabilities carries the same static-analysis
+        // boundary clients see on validate (kind, contract version, hidden
+        // effects not verified, unknown catalog/permission state).
+        var output = new StringWriter();
+        var exitCode = await SqlHarnessCli.Create(new RecordingModule(), output).RunAsync(["capabilities", "--json"]);
+
+        Assert.Equal(0, exitCode);
+        using var document = JsonDocument.Parse(output.ToString());
+        var safety = document.RootElement.GetProperty("safetyAnalysis");
+        Assert.Equal("static-visible-effects", safety.GetProperty("analysisKind").GetString());
+        Assert.Equal(1, safety.GetProperty("analysisContractVersion").GetInt32());
+        Assert.False(safety.GetProperty("hiddenEffectsVerified").GetBoolean());
+        Assert.Equal("unknown", safety.GetProperty("objectAndPermissionStatus").GetString());
+    }
+
     private sealed class RecordingModule : ISqlHarnessModule
     {
         public List<SqlHarnessOperation> Operations { get; } = [];

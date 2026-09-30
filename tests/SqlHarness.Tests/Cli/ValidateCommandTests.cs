@@ -584,6 +584,50 @@ public sealed class ValidateCommandTests
         Assert.DoesNotContain("SELECT @id;", output.ToString(), StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("sqlserver", "SELECT @id;")]
+    [InlineData("postgres", "SELECT @id::int;")]
+    public void Validation_report_carries_versioned_static_analysis_boundary(string engine, string sql)
+    {
+        // 009/T1 red witness: the offline verdict must disclose its static
+        // boundary (static-visible-effects analysis, unknown
+        // catalog/permission state, hidden effects not verified) without
+        // changing classification or exit codes.
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile(engine) };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+
+        var report = SqlValidation.Validate(request, sql, ["id:int=42"], profiles);
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(report));
+        var root = document.RootElement;
+
+        Assert.True(report.Allowed, JsonSerializer.Serialize(report));
+        Assert.Equal("static-visible-effects", root.GetProperty("AnalysisKind").GetString());
+        Assert.Equal(1, root.GetProperty("AnalysisContractVersion").GetInt32());
+        Assert.False(root.GetProperty("HiddenEffectsVerified").GetBoolean());
+        Assert.Equal("unknown", root.GetProperty("ObjectAndPermissionStatus").GetString());
+    }
+
+    [Fact]
+    public async Task Validate_cli_json_reports_static_analysis_boundary()
+    {
+        // 009/T1 red witness: the CLI JSON surface carries the same additive
+        // boundary fields in camelCase.
+        using var home = new TempHome();
+        var query = home.WriteSql("q.sql", "SELECT @id;");
+        var module = new RecordingModule();
+        var output = new StringWriter();
+
+        var exitCode = await SqlHarnessCli.Create(module, output)
+            .RunAsync(["validate", TempHome.Profile, "--file", query, "--param", "id:int=42", "--json"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Success, exitCode);
+        Assert.Empty(module.Operations);
+        var result = Result(output.ToString());
+        Assert.Equal("static-visible-effects", result.GetProperty("analysisKind").GetString());
+        Assert.Equal(1, result.GetProperty("analysisContractVersion").GetInt32());
+        Assert.False(result.GetProperty("hiddenEffectsVerified").GetBoolean());
+    }
+
     private static JsonElement Result(string json)
     {
         using var document = JsonDocument.Parse(json);
