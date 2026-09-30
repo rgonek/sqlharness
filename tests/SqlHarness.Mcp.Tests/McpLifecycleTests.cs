@@ -29,6 +29,7 @@ namespace SqlHarness.Mcp.Tests;
 /// a 30 s backstop; synchronization uses task completion sources, never
 /// performance-dependent sleeps.
 /// </summary>
+[Collection("McpScopeHome")]
 public sealed class McpLifecycleTests
 {
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);

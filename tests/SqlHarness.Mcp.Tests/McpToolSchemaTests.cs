@@ -230,7 +230,8 @@ public sealed class McpToolSchemaTests : IDisposable
     [Fact]
     public void Catalog_registers_exactly_the_11_spec_tools()
     {
-        var tools = McpToolCatalog.CreateTools(Scope(), Scope().CreateModule());
+        var scope = Scope();
+        var tools = McpToolCatalog.CreateTools(scope, scope.CreateModule());
         Assert.Equal(McpLimits.MaxTools, tools.Count);
         Assert.Equal(ExpectedTools, tools.Select(tool => tool.ProtocolTool.Name));
         Assert.Equal(ExpectedTools, McpToolCatalog.ToolNames);
@@ -417,7 +418,8 @@ public sealed class McpToolSchemaTests : IDisposable
     public void All_tools_publish_the_envelope_output_schema()
     {
         var expected = McpResultAdapter.OutputSchema.RootElement.GetRawText();
-        var tools = McpToolCatalog.CreateTools(Scope(), Scope().CreateModule());
+        var scope = Scope();
+        var tools = McpToolCatalog.CreateTools(scope, scope.CreateModule());
         Assert.Equal(McpToolCatalog.ToolNames.Count, tools.Count);
         foreach (var tool in tools)
         {
@@ -473,6 +475,7 @@ public sealed class McpToolSchemaTests : IDisposable
     {
         await using var served = await ServedCatalog.CreateAsync(Scope());
         var tools = (await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None)).ToList();
+        Assert.Equal(ExpectedTools.Order(StringComparer.Ordinal), tools.Select(tool => tool.Name).Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(ExpectedTools.Length, tools.Count);
         foreach (var tool in tools)
         {

@@ -14,6 +14,7 @@ namespace SqlHarness.Mcp.Tests;
 /// content stays data (preserved verbatim, never interpreted). Only synthetic
 /// fixtures and fictional secrets are used; no database is opened.
 /// </summary>
+[Collection("McpScopeHome")]
 public sealed class McpSecretRedactionTests
 {
     private const string FictionalSecret = "fikcyjna-tajna-wartosc-7263";

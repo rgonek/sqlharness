@@ -18,6 +18,7 @@ namespace SqlHarness.Mcp.Tests;
 /// only protocol frames. Bad profiles/vars fail before the handshake on
 /// stderr without echoing values.
 /// </summary>
+[Collection("McpScopeHome")]
 public sealed class McpStartupTests
 {
     private const string PinnedProtocolVersion = "2025-11-25";
