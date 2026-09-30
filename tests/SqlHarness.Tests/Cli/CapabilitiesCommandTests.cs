@@ -59,6 +59,23 @@ public sealed class CapabilitiesCommandTests
         Assert.Equal("unknown", safety.GetProperty("objectAndPermissionStatus").GetString());
     }
 
+    [Fact]
+    public async Task Capabilities_safety_analysis_matches_the_shared_validate_boundary()
+    {
+        // 009/T3: CLI capabilities and CLI validate disclose one contract —
+        // every value comes from the shared SqlSafetyAnalysis source.
+        var output = new StringWriter();
+        var exitCode = await SqlHarnessCli.Create(new RecordingModule(), output).RunAsync(["capabilities", "--json"]);
+
+        Assert.Equal(0, exitCode);
+        using var document = JsonDocument.Parse(output.ToString());
+        var safety = document.RootElement.GetProperty("safetyAnalysis");
+        Assert.Equal(SqlSafetyAnalysis.AnalysisKind, safety.GetProperty("analysisKind").GetString());
+        Assert.Equal(SqlSafetyAnalysis.ContractVersion, safety.GetProperty("analysisContractVersion").GetInt32());
+        Assert.Equal(SqlSafetyAnalysis.HiddenEffectsVerified, safety.GetProperty("hiddenEffectsVerified").GetBoolean());
+        Assert.Equal(SqlSafetyAnalysis.ObjectAndPermissionStatus, safety.GetProperty("objectAndPermissionStatus").GetString());
+    }
+
     private sealed class RecordingModule : ISqlHarnessModule
     {
         public List<SqlHarnessOperation> Operations { get; } = [];

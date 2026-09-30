@@ -634,6 +634,165 @@ public sealed class ValidateCommandTests
         return document.RootElement.Clone();
     }
 
+    [Theory]
+    [InlineData("sqlserver", "SELECT @id;", "id:int=42")]
+    [InlineData("postgres", "SELECT @id::int;", "id:int=42")]
+    [InlineData("sqlserver", "DELETE FROM dbo.PrivateRecords;", "")]
+    [InlineData("postgres", "DELETE FROM public.private_records;", "")]
+    [InlineData("sqlserver", "SELECT FROM WHERE @id", "")]
+    [InlineData("postgres", "SELECT FROM WHERE @id", "")]
+    public void Validation_boundary_fields_are_stable_across_engines_and_verdicts(string engine, string sql, string parameter)
+    {
+        // 009/T3: the versioned static-analysis boundary is the same
+        // contract for every call — both engines, allowed and rejected
+        // verdicts alike — and the preflight never executes.
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile(engine) };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+
+        var report = SqlValidation.Validate(request, sql, parameter.Length == 0 ? [] : [parameter], profiles);
+
+        Assert.Equal(SqlSafetyAnalysis.AnalysisKind, report.AnalysisKind);
+        Assert.Equal(SqlSafetyAnalysis.ContractVersion, report.AnalysisContractVersion);
+        Assert.Equal(SqlSafetyAnalysis.HiddenEffectsVerified, report.HiddenEffectsVerified);
+        Assert.Equal(SqlSafetyAnalysis.ObjectAndPermissionStatus, report.ObjectAndPermissionStatus);
+        Assert.False(report.Executed);
+    }
+
+    [Theory]
+    [InlineData("postgres", "SELECT set_config('search_path', 'public', false);")]
+    [InlineData("postgres", "SELECT pg_cancel_backend(123);")]
+    [InlineData("postgres", "SELECT pg_terminate_backend(123);")]
+    [InlineData("postgres", "SELECT pg_sleep(1);")]
+    [InlineData("postgres", "SELECT nextval('seq');")]
+    [InlineData("postgres", "SELECT setval('seq', 1);")]
+    [InlineData("postgres", "SELECT lo_import('/tmp/x');")]
+    [InlineData("postgres", "SELECT pg_read_file('pg_hba.conf');")]
+    [InlineData("postgres", "SELECT * FROM pg_ls_dir('.');")]
+    [InlineData("postgres", "SELECT * FROM dblink('c', 'SELECT 1') AS t(x int);")]
+    [InlineData("postgres", "SELECT pg_advisory_lock(1);")]
+    [InlineData("postgres", "SELECT pg_try_advisory_lock(1);")]
+    [InlineData("postgres", "SELECT pg_catalog.setval('s', 1);")]
+    [InlineData("postgres", "SELECT SET_CONFIG('a', 'b', false);")]
+    [InlineData("postgres", "SELECT length(set_config('a', 'b', false));")]
+    [InlineData("sqlserver", "EXEC sp_executesql N'SELECT 1';")]
+    [InlineData("sqlserver", "EXEC xp_cmdshell 'dir';")]
+    [InlineData("sqlserver", "SELECT * FROM OPENROWSET('SQLOLEDB', 's', 'SELECT 1') AS t(x int);")]
+    public void Preflight_rejects_denylisted_functions_without_execution(string engine, string sql)
+    {
+        // 009/T3: the preflight denylist keeps rejecting stateful and
+        // external functions without executing anything — the same verdict
+        // as before T1/T2, with no catalog or permission claims.
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile(engine) };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+
+        var report = SqlValidation.Validate(request, sql, [], profiles);
+
+        Assert.False(report.Allowed, JsonSerializer.Serialize(report));
+        Assert.False(report.Executed);
+        Assert.Equal(SqlSafetyAnalysis.ObjectAndPermissionStatus, report.ObjectAndPermissionStatus);
+        Assert.NotNull(report.Reason);
+    }
+
+    [Fact]
+    public async Task Validate_cli_json_rejects_denylisted_function_without_dispatch_or_echo()
+    {
+        // 009/T3: the CLI preflight path rejects the denylist offline —
+        // exit 0 with allowed=false, no module dispatch, no SQL echo.
+        using var home = new TempHome();
+        const string sql = "SELECT set_config('search_path', 'public', false);";
+        var path = home.WriteSql("denied.sql", sql);
+        var module = new RecordingModule();
+        var output = new StringWriter();
+
+        var exitCode = await SqlHarnessCli.Create(module, output)
+            .RunAsync(["validate", TempHome.PgProfile, "--file", path, "--json"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Success, exitCode);
+        Assert.Empty(module.Operations);
+        var result = Result(output.ToString());
+        Assert.False(result.GetProperty("allowed").GetBoolean());
+        Assert.False(result.GetProperty("executed").GetBoolean());
+        Assert.DoesNotContain(sql, output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Validate_cli_json_carries_object_and_permission_status_for_query_usage()
+    {
+        // 009/T3 closes the T1/T2 deferred minor: query-usage CLI JSON
+        // pins objectAndPermissionStatus like the benchmark surface does.
+        using var home = new TempHome();
+        var query = home.WriteSql("q.sql", "SELECT @id;");
+        var module = new RecordingModule();
+        var output = new StringWriter();
+
+        var exitCode = await SqlHarnessCli.Create(module, output)
+            .RunAsync(["validate", TempHome.Profile, "--file", query, "--param", "id:int=42", "--json"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Success, exitCode);
+        Assert.Empty(module.Operations);
+        Assert.Equal(
+            SqlSafetyAnalysis.ObjectAndPermissionStatus,
+            Result(output.ToString()).GetProperty("objectAndPermissionStatus").GetString());
+    }
+
+    [Fact]
+    public async Task Preflight_succeeds_without_opening_a_connection()
+    {
+        // 009/T3: validate and capabilities never open a DB connection —
+        // the module throws on any dispatch attempt and both profiles
+        // point at an unreachable host, yet every call succeeds offline.
+        using var home = new TempHome();
+        var module = new ThrowingModule();
+
+        var allowedPath = home.WriteSql("ok.sql", "SELECT @id;");
+        var allowedOutput = new StringWriter();
+        var allowedExit = await SqlHarnessCli.Create(module, allowedOutput)
+            .RunAsync(["validate", TempHome.Profile, "--file", allowedPath, "--param", "id:int=42", "--json"]);
+        Assert.Equal((int)SqlHarnessExitCode.Success, allowedExit);
+        Assert.True(Result(allowedOutput.ToString()).GetProperty("allowed").GetBoolean());
+
+        var deniedPath = home.WriteSql("denied.sql", "DELETE FROM dbo.PrivateRecords;");
+        var deniedOutput = new StringWriter();
+        var deniedExit = await SqlHarnessCli.Create(module, deniedOutput)
+            .RunAsync(["validate", TempHome.Profile, "--file", deniedPath, "--json"]);
+        Assert.Equal((int)SqlHarnessExitCode.Success, deniedExit);
+        Assert.False(Result(deniedOutput.ToString()).GetProperty("allowed").GetBoolean());
+        Assert.False(Result(deniedOutput.ToString()).GetProperty("executed").GetBoolean());
+
+        var capabilitiesOutput = new StringWriter();
+        var capabilitiesExit = await SqlHarnessCli.Create(module, capabilitiesOutput)
+            .RunAsync(["capabilities", "--json"]);
+        Assert.Equal(0, capabilitiesExit);
+    }
+
+    [Fact]
+    public async Task Preflight_leaves_no_side_effects()
+    {
+        // 009/T3: running validate/capabilities mutates no state — the
+        // synthetic HOME holds exactly the files the test itself wrote.
+        using var home = new TempHome();
+        var before = OrderedFiles(home.Path);
+        var module = new RecordingModule();
+        var query = home.WriteSql("q.sql", "SELECT @id;");
+
+        await SqlHarnessCli.Create(module, new StringWriter())
+            .RunAsync(["validate", TempHome.Profile, "--file", query, "--param", "id:int=42", "--json"]);
+        await SqlHarnessCli.Create(module, new StringWriter())
+            .RunAsync(["capabilities", "--json"]);
+
+        Assert.Empty(module.Operations);
+        Assert.Equal(before.Concat([query]).Order(StringComparer.Ordinal).ToArray(), OrderedFiles(home.Path));
+    }
+
+    private static string[] OrderedFiles(string home) =>
+        Directory.GetFiles(home, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
+
+    private sealed class ThrowingModule : ISqlHarnessModule
+    {
+        public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default) =>
+            throw new InvalidOperationException("Preflight must never dispatch a database operation.");
+    }
+
     private sealed class TempHome : IDisposable
     {
         public const string Profile = "t3-cli";

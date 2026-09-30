@@ -685,6 +685,126 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
+    public async Task Served_validate_reports_unknown_object_and_permission_status()
+    {
+        // 009/T3 closes the T1/T2 deferred minor: MCP validate pins
+        // objectAndPermissionStatus like CLI validate already does.
+        await using var served = await ServedCatalog.CreateAsync(Scope(), new ThrowingModule());
+        var result = await served.Client.CallToolAsync(
+            "sqlharness_validate",
+            new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+            cancellationToken: CancellationToken.None);
+        Assert.False(result.IsError == true);
+        var validateResult = ServedEnvelope(result, "sqlharness_validate").GetProperty("result");
+        Assert.Equal(SqlSafetyAnalysis.ObjectAndPermissionStatus, validateResult.GetProperty("objectAndPermissionStatus").GetString());
+        Assert.False(validateResult.GetProperty("executed").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Served_validate_and_capabilities_boundaries_match_the_shared_contract()
+    {
+        // 009/T3: MCP surfaces disclose the same versioned boundary as
+        // CLI — one SqlSafetyAnalysis contract on every surface, without
+        // ever dispatching (the throwing module proves no connection).
+        await using var served = await ServedCatalog.CreateAsync(Scope(), new ThrowingModule());
+        var validate = await served.Client.CallToolAsync(
+            "sqlharness_validate",
+            new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+            cancellationToken: CancellationToken.None);
+        Assert.False(validate.IsError == true);
+        var validateResult = ServedEnvelope(validate, "sqlharness_validate").GetProperty("result");
+        Assert.Equal(SqlSafetyAnalysis.AnalysisKind, validateResult.GetProperty("analysisKind").GetString());
+        Assert.Equal(SqlSafetyAnalysis.ContractVersion, validateResult.GetProperty("analysisContractVersion").GetInt32());
+        Assert.Equal(SqlSafetyAnalysis.HiddenEffectsVerified, validateResult.GetProperty("hiddenEffectsVerified").GetBoolean());
+        Assert.Equal(SqlSafetyAnalysis.ObjectAndPermissionStatus, validateResult.GetProperty("objectAndPermissionStatus").GetString());
+
+        var capabilities = await served.Client.CallToolAsync(
+            "sqlharness_capabilities",
+            new Dictionary<string, object?>(),
+            cancellationToken: CancellationToken.None);
+        Assert.False(capabilities.IsError == true);
+        var safety = ServedEnvelope(capabilities, "sqlharness_capabilities").GetProperty("result").GetProperty("safetyAnalysis");
+        Assert.Equal(SqlSafetyAnalysis.AnalysisKind, safety.GetProperty("analysisKind").GetString());
+        Assert.Equal(SqlSafetyAnalysis.ContractVersion, safety.GetProperty("analysisContractVersion").GetInt32());
+        Assert.Equal(SqlSafetyAnalysis.HiddenEffectsVerified, safety.GetProperty("hiddenEffectsVerified").GetBoolean());
+        Assert.Equal(SqlSafetyAnalysis.ObjectAndPermissionStatus, safety.GetProperty("objectAndPermissionStatus").GetString());
+    }
+
+    [Theory]
+    [InlineData("EXEC sp_executesql N'SELECT 1';")]
+    [InlineData("EXEC xp_cmdshell 'dir';")]
+    [InlineData("SELECT * FROM OPENROWSET('SQLOLEDB', 's', 'SELECT 1') AS t(x int);")]
+    public async Task Served_validate_rejects_denylisted_functions_without_dispatch(string sql)
+    {
+        // 009/T3: the MCP preflight rejects the denylist offline — the
+        // throwing module would fail the test on any execution attempt.
+        await using var served = await ServedCatalog.CreateAsync(Scope(), new ThrowingModule());
+        var result = await served.Client.CallToolAsync(
+            "sqlharness_validate",
+            new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = sql },
+            cancellationToken: CancellationToken.None);
+        Assert.False(result.IsError == true);
+        var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+        using var document = JsonDocument.Parse(text);
+        var envelope = document.RootElement;
+        Assert.Equal("success", envelope.GetProperty("status").GetString());
+        Assert.False(envelope.GetProperty("result").GetProperty("allowed").GetBoolean());
+        Assert.False(envelope.GetProperty("result").GetProperty("executed").GetBoolean());
+        Assert.DoesNotContain(sql, text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Served_preflight_leaves_no_side_effects()
+    {
+        // 009/T3: served validate/capabilities mutate no state — the
+        // synthetic HOME holds exactly the files the fixture wrote.
+        await using var served = await ServedCatalog.CreateAsync(Scope(), new ThrowingModule());
+        var before = Directory.GetFiles(_home, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
+        await served.Client.CallToolAsync(
+            "sqlharness_validate",
+            new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+            cancellationToken: CancellationToken.None);
+        await served.Client.CallToolAsync(
+            "sqlharness_capabilities",
+            new Dictionary<string, object?>(),
+            cancellationToken: CancellationToken.None);
+        Assert.Equal(before, Directory.GetFiles(_home, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
+    public void Inspect_and_watch_descriptions_make_no_read_only_claim()
+    {
+        // 009/T3 (closes the T1/T2 deferred minor): inspect/watch must not
+        // claim "read-only" — the preflight only checks effects visible in
+        // the text, the same reason the query description avoids the phrase.
+        var scope = Scope();
+        var tools = McpToolCatalog.CreateTools(scope, scope.CreateModule());
+        var byName = tools.ToDictionary(tool => tool.ProtocolTool.Name, StringComparer.Ordinal);
+        foreach (var name in new[] { "sqlharness_inspect", "sqlharness_watch" })
+        {
+            var description = byName[name].ProtocolTool.Description ?? string.Empty;
+            Assert.DoesNotContain("read-only", description, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("guarantee", description, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("verifies", description, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("no mutation", description, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("without mutation", description, StringComparison.OrdinalIgnoreCase);
+        }
+
+        Assert.Contains("No SQL input", byName["sqlharness_inspect"].ProtocolTool.Description ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("static", byName["sqlharness_watch"].ProtocolTool.Description ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("visible", byName["sqlharness_watch"].ProtocolTool.Description ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed class ThrowingModule : ISqlHarnessModule
+    {
+        public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default) =>
+            throw new InvalidOperationException("Preflight must never dispatch a database operation.");
+        public Task<SqlHarnessOutcome> ExecuteWatchNdjsonAsync(
+            SqlHarnessWatchOperation operation, TextWriter writer, CancellationToken ct = default) =>
+            throw new InvalidOperationException("Preflight must never dispatch a database operation.");
+    }
+
+    [Fact]
     public void Handler_and_dto_members_name_no_target_auth_mutation_or_force_field()
     {
         var banned = new[] { "target", "auth", "mutation", "allowmutation", "confirmdatabase", "unsafedirect", "server", "database", "password", "secret", "credential", "engine", "vars", "force" };
