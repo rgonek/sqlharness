@@ -14,6 +14,8 @@ using SqlHarness.Core;
 using SqlHarness.Core.Targets;
 using SqlHarness.Mcp.Tools;
 
+using Xunit.Abstractions;
+
 namespace SqlHarness.Mcp.Tests;
 
 /// <summary>
@@ -24,9 +26,24 @@ namespace SqlHarness.Mcp.Tests;
 /// bounding content, never by cutting runtime validation or truncating JSON.
 /// All data is synthetic; no database is opened.
 /// </summary>
+// 008/T3 (R5 ctx-inclusion race): this class creates served toolsets through
+// McpToolCatalog.Wire, so it joins the serialized McpScopeHome collection
+// (DisableParallelization = true, defined in McpScopeTests.cs) instead of
+// racing SDK input-schema inference against parallel toolset creation. It
+// touches no SQLHARNESS_HOME fixture, so collection membership only orders
+// execution. Production is unchanged: the host wires one toolset
+// sequentially at startup.
+[Collection("McpScopeHome")]
 public sealed class McpTokenBudgetTests
 {
+    private readonly ITestOutputHelper _output;
+
     private static readonly SqlHarnessTargetIdentityReport Target = new("req-srv", "req-db", "srv", "db", "profile");
+
+    public McpTokenBudgetTests(ITestOutputHelper output)
+    {
+        _output = output;
+    }
 
     private static int WireBytes(CallToolResult result, int budget)
     {
@@ -187,13 +204,20 @@ public sealed class McpTokenBudgetTests
             },
             NullLoggerFactory.Instance, cts.Token);
 
-        var tools = await client.ListToolsAsync(cancellationToken: CancellationToken.None);
+        var tools = (await client.ListToolsAsync(cancellationToken: CancellationToken.None)).ToList();
         var catalogJson = JsonSerializer.Serialize(
             tools.Select(tool => tool.ProtocolTool), McpJsonUtilities.DefaultOptions);
         var bytes = Encoding.UTF8.GetByteCount(catalogJson);
-        Assert.True(tools.Count() <= McpLimits.MaxTools, $"Catalog serves {tools.Count()} tools.");
+        _output.WriteLine($"tools/list wire bytes: {bytes} of {McpLimits.ToolsListBudgetBytes} ({tools.Count} tools; output schemas asserted below).");
+        Assert.Equal(McpLimits.MaxTools, tools.Count);
         Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"tools/list is {bytes} bytes.");
         Assert.DoesNotContain("AGENTS.md", catalogJson, StringComparison.Ordinal);
+        foreach (var tool in tools)
+        {
+            var schema = tool.ProtocolTool.OutputSchema;
+            Assert.True(schema.HasValue, $"{tool.Name} publishes no outputSchema; the budget must hold with all 11 schemas served.");
+            Assert.Equal(JsonValueKind.Object, schema!.Value.ValueKind);
+        }
 
         // The budget holds with runtime validation intact: unknown properties
         // are still rejected instead of being dropped to save bytes.
@@ -212,6 +236,25 @@ public sealed class McpTokenBudgetTests
 
         await cts.CancelAsync();
         await serverTask;
+    }
+
+    [Fact]
+    public void Minimal_success_envelope_reports_wire_bytes_within_default_budget()
+    {
+        // 008/T3 baseline guard: the smallest success envelope (ping) against
+        // the default 16 KiB CallToolResult budget, with the measured bytes
+        // reported for the record.
+        var outcome = new SqlHarnessOutcome(
+            SqlHarnessExitCode.Success,
+            new SqlHarnessPingReport(Target, "srv", "db", "login", 7),
+            null);
+
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_inspect");
+        var bytes = McpResultAdapter.MeasureBytes(result);
+        _output.WriteLine($"minimal success CallToolResult wire bytes: {bytes} of {McpLimits.CallToolResultBudgetBytes}.");
+        Assert.True(bytes <= McpLimits.CallToolResultBudgetBytes, $"Serialized CallToolResult is {bytes} bytes, budget is {McpLimits.CallToolResultBudgetBytes}.");
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
     }
 
     [Fact]
