@@ -76,6 +76,22 @@ public sealed class CapabilitiesCommandTests
         Assert.Equal(SqlSafetyAnalysis.ObjectAndPermissionStatus, safety.GetProperty("objectAndPermissionStatus").GetString());
     }
 
+    [Fact]
+    public void Watch_capability_description_makes_no_read_only_claim()
+    {
+        // 009/final-fix (closes the final-review minor): the capabilities
+        // watch entry must not claim "read-only query" — the preflight only
+        // checks effects visible in the text, the same reason the CLI help
+        // and the MCP sqlharness_watch description avoid the phrase.
+        var watch = SqlHarnessCapabilitiesProvider.Get().Commands.Single(command => command.Name == "watch");
+
+        Assert.Contains("static", watch.Description, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("visible", watch.Description, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("read-only query", watch.Description, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("no mutation", watch.Description, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("without mutation", watch.Description, StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed class RecordingModule : ISqlHarnessModule
     {
         public List<SqlHarnessOperation> Operations { get; } = [];

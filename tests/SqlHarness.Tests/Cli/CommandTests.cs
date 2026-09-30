@@ -81,6 +81,34 @@ public sealed class CommandTests
     }
 
     [Fact]
+    public async Task Watch_help_states_the_static_visible_effects_check()
+    {
+        // 009/final-fix (closes the final-review minor): the CLI watch help
+        // must not claim "read-only query" — it pins the Spectre
+        // WithDescription in SqlHarnessCli to the static visible-effects
+        // wording, matching MCP sqlharness_watch.
+        // Spectre help goes to the process console, not the injected command writer.
+        var cliAssembly = Path.Combine(AppContext.BaseDirectory, "sqlharness.dll");
+        using var process = Process.Start(new ProcessStartInfo("dotnet", $"\"{cliAssembly}\" watch --help")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        });
+
+        Assert.NotNull(process);
+        var standardOutput = await process.StandardOutput.ReadToEndAsync();
+        var standardError = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        Assert.True(process.ExitCode == 0, standardError);
+        // Spectre wraps long descriptions; collapse whitespace for a stable check.
+        var normalized = Regex.Replace(standardOutput, @"\s+", " ");
+        Assert.Contains("static visible-effects", normalized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("read-only query", normalized, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Query_rejects_missing_sql_source_when_stdin_is_not_redirected()
     {
         var module = new FakeModule(Success(QueryReport()));
