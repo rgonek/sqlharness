@@ -170,6 +170,20 @@ public sealed class ValidateCommandTests
         finally { File.Delete(path); }
     }
 
+    [Fact]
+    public void Postgres_multi_statement_batch_is_rejected_for_benchmark()
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("postgres") };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+
+        // 007/T1 regression witness: PostgresBenchmark.ValidateMeasuredBatch
+        // rejects multi-statement batches at execution, so benchmark-mode
+        // validation must reject them too (old code always used query mode).
+        var result = SqlValidation.Validate(request, "SELECT 1; SELECT 2;", [], profiles);
+
+        Assert.False(result.Allowed);
+    }
+
     private static TargetProfile Profile(string engine) => new(
         "server-unused", "database-unused", new Dictionary<string, string>(), "sql", "user-unused", "MUST_NOT_BE_READ", Engine: engine);
 
