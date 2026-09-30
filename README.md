@@ -13,7 +13,19 @@ running a SQL file, `sqlharness validate <profile> --file query.sql --param id:i
 classifies it with the selected closed profile and reports required parameters;
 it does not connect or execute the SQL. Database permissions and referenced
 object existence remain unknown, and its result does not authorize a later
-mutation. See [the agent output contract](docs/superpowers/specs/2026-09-26-agent-output-contract.md)
+mutation.
+
+`validate` accepts a caller intent: `--usage query|setup|benchmark` (default `query`). `query` applies the
+engine query rules; `setup` classifies the batch as session-local preparation; `benchmark` adds the
+measured-batch shape check of the execution path (`benchmark_batch_not_supported`: on Postgres a
+multi-statement batch is rejected, on SQL Server the check is a no-op). `--setup <PATH>` supplies setup-SQL
+session-temp context for `query`/`benchmark` validation and is ignored for `--usage setup`. The JSON report
+carries the decision (`allowed`, safe `reason` codes such as `missing_parameters` or `mutation_not_allowed`,
+statement-level `astLocations` on SQL Server) and the explicit `checkedConditions` scope for the usage. It
+never prints SQL or parameter values; `objectAndPermissionStatus` stays `"unknown"` and `executed` stays
+`false` because offline validation never connects.
+
+See [the agent output contract](docs/superpowers/specs/2026-09-26-agent-output-contract.md)
 and [the audit roadmap](docs/superpowers/plans/2026-09-26-audit-roadmap.md).
 
 ## Install a release binary

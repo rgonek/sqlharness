@@ -53,7 +53,7 @@ Exactly 11 tools are registered explicitly by name. No assembly scanning is used
 |---|---|
 | `sqlharness_capabilities` | Server versions and build, scope engine, tool list, and limits; optional local diagnostics with counts and existence flags only, never secrets, paths, or profile lists. |
 | `sqlharness_inspect` | One read-only catalog inspection: `ping`, `schema`, `counts`, `space`, `qstop`, or `indexes`. No SQL input. `qstop` and `indexes` are SQL Server only and are rejected before connecting on Postgres. It runs under the process gate like the other database tools. |
-| `sqlharness_validate` | Offline SQL classification for usage `query`, `setup`, or `benchmark`. One Core offline classifier serves every usage; it never connects. |
+| `sqlharness_validate` | Offline SQL classification for usage `query`, `setup`, or `benchmark`. One Core offline classifier serves every usage; it never connects. `benchmark` adds the measured-batch shape check. The tool carries no setup-SQL input: a setup-dependent batch validates under engine query rules, as if executed without setup. |
 | `sqlharness_query` | Bounded read-only query with timeout and row cap. Persistent mutation is always off. |
 | `sqlharness_measure` | Measure one query across repeats, with optional setup and `.sqljson` parameter-set files. Same sessions and rules as the CLI. |
 | `sqlharness_compare` | Compare baseline versus candidate with the CLI sessions and equivalence rules, with an optional single matrix dimension. |
@@ -64,6 +64,21 @@ Exactly 11 tools are registered explicitly by name. No assembly scanning is used
 | `sqlharness_gain` | Local output-savings aggregate with an explicit heuristic and net delta. |
 
 Tool annotations are conservative local-effect hints only: benchmarks write artifacts, snapshot capture writes data, and gain accounting may write to disk, so those tools never claim read-only. Hints never replace policy enforcement.
+
+### `sqlharness_validate` usage
+
+The `usage` argument (`query`, `setup`, `benchmark`, case-insensitive) selects the caller intent in the
+shared Core offline classifier — the same classifier the CLI `validate --usage` path uses, so both surfaces
+return the same decision for the same SQL, usage, and engine. `query` applies the engine query rules
+(default); `setup` classifies the batch as session-local preparation; `benchmark` adds the measured-batch
+shape check of the execution path (`benchmark_batch_not_supported`; on Postgres a multi-statement batch is
+rejected, on SQL Server the check is a no-op). The report carries the decision (`allowed`, safe `reason`
+codes, never SQL or values), statement-level AST locations (SQL Server only), and the explicit
+`checkedConditions` scope for the usage; `objectAndPermissionStatus` stays `"unknown"` and `executed`
+stays `false`. Unlike `measure`/`compare` (and unlike CLI `validate --setup`), the validate tool accepts no
+setup-SQL input: query and benchmark pass no setup context, so a setup-dependent batch (for example one
+reading a session temp table) validates under engine query rules here — the same verdict as execution
+without setup. This gap is by contract, not a second classifier.
 
 ## No persistent mutations
 
