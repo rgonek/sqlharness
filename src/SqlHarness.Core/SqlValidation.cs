@@ -9,6 +9,13 @@ public sealed record SqlValidationLocation(int StartOffset, int StartLine, int S
 
 public sealed record SqlValidationParameter(string Name, string Type);
 
+/// <summary>
+/// Offline validation verdict. Reason carries only safe codes (never SQL or parameter values);
+/// AstLocations marks statement starts (SQL Server only). CheckedConditions names the check
+/// program scoped by the caller usage, in evaluation order; evaluation short-circuits on the
+/// first failure named by Reason. Object-existence and permission checks never run offline, so
+/// ObjectAndPermissionStatus stays "unknown" and Executed stays false.
+/// </summary>
 public sealed record SqlValidationReport(
     string Engine,
     string Classification,
@@ -20,7 +27,8 @@ public sealed record SqlValidationReport(
     IReadOnlyList<SqlValidationLocation> AstLocations,
     bool AstLocationsAvailable,
     string ObjectAndPermissionStatus = "unknown",
-    bool Executed = false);
+    bool Executed = false,
+    IReadOnlyList<string>? CheckedConditions = null);
 
 /// <summary>
 /// Caller intent for offline validation. Query is the default read path;
@@ -120,6 +128,19 @@ public static class SqlValidation
                 reason = "benchmark_batch_not_supported";
             }
         }
+        // 007/T4: explicit scope of checked conditions for this usage, in
+        // evaluation order. Evaluation short-circuits on the first failure
+        // named by Reason; the list still names the whole check program so
+        // callers can see what the usage covers. Catalog/permission checks
+        // never run offline (ObjectAndPermissionStatus stays "unknown").
+        var checkedConditions = new List<string>();
+        if (!string.IsNullOrWhiteSpace(setupSql))
+            checkedConditions.Add("setup_context_classification");
+        checkedConditions.Add(usage == ValidationUsage.Setup ? "setup_classification" : "query_safety_classification");
+        checkedConditions.Add("parameter_validation");
+        checkedConditions.Add("missing_parameter_check");
+        if (usage == ValidationUsage.Benchmark)
+            checkedConditions.Add("measured_batch_shape");
         var suppliedNames = parsedParameters.Select(parameter => CanonicalName(parameter.Name)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var missingNames = parameterValidationCompleted
             ? requiredNames.Where(name => !suppliedNames.Contains(name)).ToArray()
@@ -141,7 +162,8 @@ public static class SqlValidation
             supplied,
             astLocations,
             AstLocationsAvailable: target.Engine == SqlEngine.SqlServer,
-            Executed: false);
+            Executed: false,
+            CheckedConditions: checkedConditions);
     }
 
     private static string CanonicalName(string name) => name.TrimStart('@', ':');

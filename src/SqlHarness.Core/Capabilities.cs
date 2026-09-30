@@ -33,7 +33,7 @@ public static class SqlHarnessCapabilitiesProvider
             [
                 new("capabilities", "Describe commands, engines, limits, and output modes."),
                 new("doctor", "Check local SQLHarness installation and profile-file availability."),
-                new("validate", "Classify SQL offline using a closed target profile; never connects."),
+                new("validate", "Classify SQL offline using a closed target profile; never connects. Usages: query, setup, benchmark."),
                 new("query", "Run a bounded SQL query."),
                 new("measure", "Measure a query."),
                 new("compare", "Compare baseline and candidate queries."),

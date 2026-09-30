@@ -93,7 +93,7 @@ public sealed class McpToolHandlers(
 
     public Task<CallToolResult> ValidateAsync(
         RequestContext<CallToolRequestParams> ctx,
-        [Description("Caller intent. Every usage runs the same Core offline classifier.")]
+        [Description("Caller intent: query, setup, or benchmark. Every usage runs the same Core offline classifier; usage selects the mode. The validate tool carries no setup-SQL input.")]
         [AllowedValues("query", "setup", "benchmark")]
         string usage,
         [Description("Inline SQL, at most 1 MiB. Exactly one of sql or file.")]
