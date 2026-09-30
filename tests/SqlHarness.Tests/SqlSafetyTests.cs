@@ -662,6 +662,107 @@ public class SqlSafetyTests
         Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
     }
 
+    [Theory]
+    [InlineData("DECLARE @n int; SET @n = 5; SELECT @n")]
+    [InlineData("DECLARE @label nvarchar(20); SET @label = N'x'; SELECT @label")]
+    [InlineData("DECLARE @a int = 1; DECLARE @b int; SET @b = @a + 2; SELECT @b")]
+    [InlineData("declare @n INT; set @n = 5; select @n")]
+    public void T2_Query_allows_SET_local_scalar_assignment(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Fact]
+    public void T2_Query_allows_SET_assignment_with_subquery_RHS()
+    {
+        const string sql = "DECLARE @m int; SET @m = (SELECT MAX(Id) FROM dbo.Clients); SELECT @m";
+
+        var decision = ClassifyQuery(sql);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Theory]
+    [InlineData("SET @undeclared = 1; SELECT @undeclared")]
+    [InlineData("DECLARE @n int; SET @other = 1; SELECT @n")]
+    public void T2_Query_denies_SET_to_undeclared_variable(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    [Fact]
+    public void T2_Query_denies_SET_to_table_variable_target()
+    {
+        const string sql = "DECLARE @t TABLE (Id int); SET @t = 1; SELECT 1";
+
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    [Fact]
+    public void T2_Query_denies_SET_assignment_with_external_RHS()
+    {
+        const string sql = "DECLARE @n int; SET @n = (SELECT COUNT(*) FROM OPENROWSET('MSOLEDBSQL', 'Server=other;Trusted_Connection=yes;', 'SELECT 1') AS r); SELECT @n";
+
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    [Fact]
+    public void T2_Query_denies_SET_assignment_with_stateful_RHS()
+    {
+        const string sql = "DECLARE @id int; SET @id = NEXT VALUE FOR dbo.Seq; SELECT @id";
+
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    [Fact]
+    public void T2_Query_denies_SET_assignment_with_cross_db_RHS()
+    {
+        const string sql = "DECLARE @m int; SET @m = (SELECT MAX(Id) FROM otherdb.dbo.Clients); SELECT @m";
+
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.CrossDatabaseReference, decision.Reason);
+    }
+
+    [Theory]
+    [InlineData("SET NOCOUNT ON")]
+    [InlineData("SET ANSI_NULLS ON")]
+    [InlineData("SET QUOTED_IDENTIFIER ON")]
+    [InlineData("SET XACT_ABORT ON")]
+    [InlineData("SET DATEFORMAT dmy")]
+    [InlineData("SET DEADLOCK_PRIORITY LOW")]
+    [InlineData("SET LOCK_TIMEOUT 1000")]
+    [InlineData("SET LANGUAGE British")]
+    [InlineData("SET ROWCOUNT 10")]
+    [InlineData("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")]
+    [InlineData("SET IDENTITY_INSERT dbo.Clients ON")]
+    [InlineData("SET STATISTICS IO ON")]
+    [InlineData("SET TEXTSIZE 100")]
+    public void T2_Query_denies_SET_session_and_transaction_options(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
     private SqlSafetyDecision ClassifyQuery(string sql) =>
         _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: false, confirmDatabase: null);
 }

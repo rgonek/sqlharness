@@ -52,6 +52,16 @@ public class SqlParameterReferenceValidatorTests
     }
 
     [Fact]
+    public void T2_Validate_SET_target_is_not_a_required_parameter()
+    {
+        var required = SqlParameterReferences.Collect(
+            SqlEngine.SqlServer,
+            "DECLARE @n int; SET @n = 5; SELECT @n");
+
+        Assert.Empty(required);
+    }
+
+    [Fact]
     public void Sql_server_dialect_still_rejects_postgres_only_syntax()
     {
         var parameters = SqlParameterParser.Parse(["n:int=1"]);
