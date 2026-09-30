@@ -26,6 +26,9 @@ public sealed class CapabilitiesCommandTests
         Assert.True(sqlServer.GetProperty("supportsQstop").GetBoolean());
         Assert.False(postgres.GetProperty("supportsQstop").GetBoolean());
         Assert.Contains("agentOutputBytes", root.GetProperty("limits").EnumerateObject().Select(property => property.Name));
+        var limits = root.GetProperty("limits");
+        Assert.Equal(1000000, limits.GetProperty("comparisonRowCapPerRun").GetProperty("max").GetInt32());
+        Assert.Equal(2000000, limits.GetProperty("comparisonUniqueFingerprintBudgetPerCell").GetProperty("max").GetInt32());
     }
 
     [Fact]

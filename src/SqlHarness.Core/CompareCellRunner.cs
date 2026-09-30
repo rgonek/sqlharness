@@ -199,7 +199,8 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
             var equivalence = ResultComparer.Compare(
                 request.CompareResults,
                 baselineRuns.Select(run => run.Comparison).ToArray(),
-                candidateRuns.Select(run => run.Comparison).ToArray());
+                candidateRuns.Select(run => run.Comparison).ToArray(),
+                ct);
             var report = new SqlHarnessCompareReport(
                 session.Identity,
                 request.Repeat,
