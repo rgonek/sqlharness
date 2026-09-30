@@ -90,7 +90,7 @@ stop qualifying targets (untrusted schema can carry that prefix).
 | 011-T4-D1 | `Statement.Truncate` with any persistent (non-`knownTemps`) target | DENY `NonTemporaryWrite` | `Truncate_persistent_target_is_denied` |
 | 011-T4-D2 | `Statement.Truncate` with mixed temp + persistent list (one bad target poisons the batch) | DENY `NonTemporaryWrite` | `Truncate_mixed_targets_are_denied` |
 | 011-T4-D3 | `Statement.Truncate` with `Cascade == Cascade` (blast radius exceeds named targets) | DENY `UnsupportedStatement` | `Truncate_cascade_is_denied` |
-| 011-T4-D4 | `Statement.Truncate` on `pg_temp_*`-prefixed name with NO `knownTemps` provenance | DENY (prefix is not proof; tightens current `IsSessionLocal`) | `Truncate_pg_temp_prefix_without_provenance_is_denied` |
+| 011-T4-D4 | `Statement.Truncate` on `pg_temp_*`-prefixed name with NO `knownTemps` provenance | DENY (prefix is not proof). Scope: the prefix-tightening applies to the TRUNCATE path only and MUST NOT change the shared `IsSessionLocal` helper (used by the write / create-index / drop paths) — the T4 brief enforces this. | `Truncate_pg_temp_prefix_without_provenance_is_denied` |
 | 011-T4-D5 | `Statement.Truncate` with `OnCluster` set (non-PG cluster routing; session-locality unprovable) | DENY `UnsupportedStatement` | `Truncate_on_cluster_is_denied` |
 
 Ruling R4 (decided HERE, final — T4 must not re-decide): **`RESTART IDENTITY` is DENIED.**
@@ -119,7 +119,7 @@ Real offline parser AST (SqlParserCS 0.6.5, `PostgreSqlDialect`, probe-verified)
 
 | ID | AST node / construct | Verdict | Test (planned) |
 |---|---|---|---|
-| 011-T5-R1 | Canonical `ANALYZE …` → no AST (`ParserException`) → `ParseError` | stays DENIED; T5 writes `plans/011-analyze-parser-spike.md` (parser-change scope + acceptance tests), marks DESIGN COMPLETE, not IMPLEMENTED | anchor stays green; spike acceptance test names defined in the spike doc |
+| 011-T5-R1 | Canonical `ANALYZE …` → no AST (`ParserException`) → `ParseError` | stays DENIED; T5 writes `plans/011-analyze-parser-spike.md`, marks DESIGN COMPLETE, not IMPLEMENTED | (a) green anchor `Canonical_analyze_is_a_parse_error_until_the_parser_supports_it` in `tests/SqlHarness.Tests/Postgres/PostgresSafetyTests.cs` (stays green); (b) spike-doc acceptance tests, intended file `tests/SqlHarness.Tests/Postgres/PostgresSafetyTests.cs`: `Analyze_canonical_form_supported_after_parser_spike`, `Analyze_verbose_form_supported_after_parser_spike` (full definitions land in the spike doc) |
 | 011-T5-R2 | Hive `ANALYZE TABLE …` → `Statement.Analyze` | stays DENIED `UnsupportedStatement` (must not be mistaken for PG `ANALYZE`) | `Analyze_hive_form_stays_unsupported` in `PostgresSafetyTests.cs` |
 
 Constraints carried into T5: no regex bypass around the parser; no dependency bump without
