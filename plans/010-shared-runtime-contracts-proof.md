@@ -1,8 +1,16 @@
 # 010-shared-runtime-contracts-proof — final verification gates (closure)
 
-HEAD: `f64a3da` (`docs(010/T4): record preserved interface boundary decisions`),
+Code tip: `f64a3da` (`docs(010/T4): record preserved interface boundary decisions`),
 branch `fix/plan-010-shared-runtime-contracts`, worktree
 `.worktrees/plan-010-shared-runtime-contracts` (baza worktree: `20a2aaf` = main).
+Wszystkie gate'y (filtr planu 125+50/0, build -warnaserror 0/0, pełny suite
+bez Integration 2074/0/0 + 193/0/4 pre-existing skips, diff --check clean)
+zaobserwowano na code tipie `f64a3da`. Commity po nim (`98e8eb6` closure
+proof + wiersz indeksu; ten fix) są docs-only (`git show --stat`: tylko
+`plans/*.md`) i nie wymagają re-gatingu poza `git diff --check` oraz świeżym
+przebiegiem filtra planu na finalnym drzewie (wyniki niżej). Nagłówek celowo
+nie podaje ruchomego HEAD, żeby nie zdezaktualizować się przy kolejnych
+commitach docs-only.
 Gate runs: 2026-09-30, w worktree. Brak pusha i merge'a (plan zabrania bez zlecenia).
 
 ## Goal
@@ -14,7 +22,7 @@ bounds/duration we wspólnym Core `OperationLimits`; granice interfejsów
 (CLI/MCP, query/measure/compare, param-set/matrix, writery, zegary)
 udokumentowane jako zachowane, nie scalone.
 
-## Commits (20a2aaf..HEAD, 5)
+## Commits (kod: 20a2aaf..f64a3da, 5; potem tylko docs-only)
 
 | Commit | Task | Subject |
 |---|---|---|
@@ -23,6 +31,10 @@ udokumentowane jako zachowane, nie scalone.
 | 8cf5b36 | T3 red | test(010/T3): pin shared operation bounds and adapter parity cases |
 | 7f3687e | T3 | refactor(010/T3): share pure operation bounds and durations via Core OperationLimits |
 | f64a3da | T4 | docs(010/T4): record preserved interface boundary decisions |
+
+Docs-only po code tipie: `98e8eb6` (ten dowód + wiersz indeksu 010
+w `plans/README.md`); ten fix (2 doc nits z final review, tylko ten plik).
+Zakres liczone od bazy `20a2aaf`, nie od ruchomego HEAD.
 
 Każde zadanie reviewed clean (spec ✅ + Approved; zero Critical/Important).
 Final whole-branch review: poniżej w „Final review".
@@ -35,7 +47,7 @@ Incydent: pierwszy dispatch T3 utracony przez infrastrukturę
 (model service unreachable, brak rozpoczęcia pracy); re-dispatch świeżego
 implementera, drzewo nienaruszone.
 
-## Gates (2026-09-30, HEAD f64a3da)
+## Gates (2026-09-30, code tip f64a3da; filtr planu powtórzony na finalnym drzewie)
 
 - Filtr planu
   `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~WatchTests|FullyQualifiedName~WatchNdjsonTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~OperationLimitsTests'`:
@@ -44,8 +56,13 @@ implementera, drzewo nienaruszone.
 - Pełny suite bez Integration: Core/CLI 2074 passed / 0 failed / 0 skipped;
   MCP 193 passed / 0 failed / 4 skipped (2 live opt-in + 2 foreign-RID smoke,
   pre-existing).
-- `git diff --check`: 0. `git status --short`: czysto (10 plików, wszystkie
-  w zakresie planu + dokument wynikowy).
+- `git diff --check`: 0. `git status --short`: czysto. Gałąź (20a2aaf..HEAD)
+  dotyka 12 plików, wszystkie w zakresie planu (§Zakres: kod T1–T3 + T4
+  `plans/010-*.md` + status w indeksie): 6 plików kodu, 3 pliki testów,
+  `plans/010-interface-decisions.md` (T4), ten dowód oraz wiersz indeksu 010
+  w `plans/README.md`.
+- Świeży przebieg filtra planu na finalnym drzewie (delta docs-only):
+  SqlHarness.Tests 125/125, SqlHarness.Mcp.Tests 50/50 → exit 0.
 - Red → green: T1/T3-red to piny charakteryzujące (zielone przed i po —
   uczciwie raportowane jako siatka, nie witness-fail); pętle T2 już zgodne
   (10/10 parity od pierwszego biegu); T4 krok dokumentacyjny (filtr zielony
@@ -66,4 +83,6 @@ implementera, drzewo nienaruszone.
 
 ## Final review
 
-(uzupełnione po finale — patrz ledger.)
+Whole-branch review: 0 Critical / 0 Important, 2 minor doc nits (stale HEAD
+w nagłówku dowodu; nieścisła notka o zakresie/liczbie plików) — oba
+zaadresowane tym fixem, bez zmian kodu i testów.
