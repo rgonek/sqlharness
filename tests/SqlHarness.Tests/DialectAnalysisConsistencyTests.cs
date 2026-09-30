@@ -1,5 +1,6 @@
 using SqlHarness.Core;
 using SqlHarness.Core.Dialect;
+using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Tests;
 
@@ -76,6 +77,55 @@ public class DialectAnalysisConsistencyTests
     {
         AssertParameterAgreement(SqlEngine.SqlServer, "SELECT a FROM t", referenced: false);
         AssertParameterAgreement(SqlEngine.Postgres, "SELECT a FROM t", referenced: false);
+    }
+
+    [Fact]
+    public void Core_benchmark_validation_matches_measured_batch_contract_on_sqlserver()
+    {
+        // SQL Server has no measured-batch shape check, so benchmark usage
+        // agrees with the query classification on every row.
+        AssertCoreBenchmarkAgreement("sqlserver", [
+            ("SELECT 1", [], true, null),
+            ("SELECT 1; SELECT 2", [], true, null),
+            ("SELECT a FROM t WHERE a = @p", ["p:int=1"], true, null),
+            ("DELETE FROM dbo.T;", [], false, "mutation_not_allowed"),
+        ]);
+    }
+
+    [Fact]
+    public void Core_benchmark_validation_matches_measured_batch_contract_on_postgres()
+    {
+        // PostgreSQL measures exactly one EXPLAIN-able statement, so a
+        // multi-statement batch is query-allowed but benchmark-rejected.
+        AssertCoreBenchmarkAgreement("postgres", [
+            ("SELECT 1", [], true, null),
+            ("SELECT a FROM t WHERE a = @p", ["p:int=1"], true, null),
+            ("SELECT 1; SELECT 2", [], false, "benchmark_batch_not_supported"),
+            ("INSERT INTO public.items (a) VALUES (1);", [], false, "mutation_not_allowed"),
+        ]);
+    }
+
+    private static void AssertCoreBenchmarkAgreement(
+        string engine, (string Sql, string[] Declarations, bool Allowed, string? Reason)[] rows)
+    {
+        var profiles = new Dictionary<string, TargetProfile>
+        {
+            ["test"] = new(
+                "server-unused", "database-unused", new Dictionary<string, string>(),
+                "sql", "user-unused", "MUST_NOT_BE_READ", Engine: engine),
+        };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+
+        foreach (var row in rows)
+        {
+            var report = SqlValidation.Validate(
+                request, row.Sql, row.Declarations, profiles,
+                new ValidationOptions(ValidationUsage.Benchmark));
+            Assert.True(
+                report.Allowed == row.Allowed && report.Reason == row.Reason,
+                $"{engine} benchmark for '{row.Sql}': expected ({row.Allowed}, {row.Reason}) but was ({report.Allowed}, {report.Reason}).");
+            Assert.False(report.Executed);
+        }
     }
 
     private static void AssertParameterAgreement(SqlEngine engine, string sql, bool referenced)

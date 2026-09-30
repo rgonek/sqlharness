@@ -346,6 +346,49 @@ public sealed class McpMappingTests : IDisposable
     }
 
     [Fact]
+    public async Task Validate_reports_missing_parameters_offline_without_echo()
+    {
+        var scope = Scope();
+        var report = await McpOperationMapper.MapValidateAsync(
+            scope, "SELECT @id;", null, "query", null, CancellationToken.None);
+        Assert.False(report.Allowed);
+        Assert.Equal("missing_parameters", report.Reason);
+        Assert.Equal(["id"], report.MissingParameters);
+        Assert.False(report.Executed);
+
+        var pg = Scope(PgProfileName);
+        var pgReport = await McpOperationMapper.MapValidateAsync(
+            pg, "SELECT @id::int;", null, "query", null, CancellationToken.None);
+        Assert.False(pgReport.Allowed);
+        Assert.Equal("missing_parameters", pgReport.Reason);
+        Assert.Equal(["id"], pgReport.MissingParameters);
+        Assert.False(pgReport.Executed);
+    }
+
+    [Fact]
+    public async Task Validate_never_authorizes_persistent_mutation_on_postgres()
+    {
+        var pg = Scope(PgProfileName);
+        var report = await McpOperationMapper.MapValidateAsync(
+            pg, "INSERT INTO public.items (a) VALUES (1);", null, "query", null, CancellationToken.None);
+        Assert.False(report.Allowed);
+        Assert.Equal("mutation_not_allowed", report.Reason);
+        Assert.False(report.Executed);
+    }
+
+    [Fact]
+    public async Task Validate_report_json_carries_no_sql_or_values()
+    {
+        var scope = Scope();
+        var report = await McpOperationMapper.MapValidateAsync(
+            scope, "SELECT @note;", null, "query", [P("note", "nvarchar", "synthetic-note-7x9")], CancellationToken.None);
+        Assert.True(report.Allowed, JsonSerializer.Serialize(report));
+        var json = JsonSerializer.Serialize(report);
+        Assert.DoesNotContain("synthetic-note-7x9", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("SELECT @note;", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Validate_proves_equals_value_survives_core_binding()
     {
         var scope = Scope();

@@ -227,6 +227,118 @@ public sealed class ValidateCommandTests
         Assert.Equal("session-local", withSetup.Classification);
     }
 
+    [Fact]
+    public void Sql_server_setup_temp_tables_flow_into_query_validation()
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("sqlserver") };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+        const string setup = "CREATE TABLE #m (x int);";
+        const string query = "SELECT x FROM #m;";
+
+        var setupReport = SqlValidation.Validate(
+            request, setup, [], profiles, new ValidationOptions(ValidationUsage.Setup));
+        var withSetup = SqlValidation.Validate(
+            request, query, [], profiles,
+            new ValidationOptions(ValidationUsage.Query, SetupSql: setup));
+        // Engine rules: SQL Server accepts #temp syntactically, so the same
+        // shape written directly in one query batch is session-local too.
+        var inline = SqlValidation.Validate(
+            request, setup + " " + query, [], profiles);
+
+        Assert.True(setupReport.Allowed, JsonSerializer.Serialize(setupReport));
+        Assert.True(withSetup.Allowed, JsonSerializer.Serialize(withSetup));
+        Assert.True(inline.Allowed, JsonSerializer.Serialize(inline));
+        Assert.False(withSetup.Executed);
+    }
+
+    [Theory]
+    [InlineData("sqlserver", "DELETE FROM dbo.T;")]
+    [InlineData("postgres", "DELETE FROM public.items;")]
+    public void Invalid_setup_context_rejects_query_with_setup_reason(string engine, string setup)
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile(engine) };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+
+        var report = SqlValidation.Validate(
+            request, "SELECT 1;", [], profiles,
+            new ValidationOptions(ValidationUsage.Query, SetupSql: setup));
+
+        Assert.False(report.Allowed);
+        Assert.False(report.Executed);
+        Assert.Equal("rejected", report.Classification);
+        Assert.DoesNotContain("SELECT 1", JsonSerializer.Serialize(report), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("sqlserver", "SELECT @id;")]
+    [InlineData("postgres", "SELECT @id::int;")]
+    public void Missing_parameters_report_names_without_values(string engine, string sql)
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile(engine) };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+
+        var report = SqlValidation.Validate(request, sql, [], profiles);
+
+        Assert.False(report.Allowed);
+        Assert.Equal("missing_parameters", report.Reason);
+        Assert.Equal(["id"], report.RequiredParameters);
+        Assert.Equal(["id"], report.MissingParameters);
+        Assert.False(report.Executed);
+    }
+
+    [Theory]
+    [InlineData("sqlserver", "DELETE FROM dbo.T;")]
+    [InlineData("postgres", "INSERT INTO public.items (a) VALUES (1);")]
+    public void Persistent_mutation_is_never_authorized_by_validation(string engine, string sql)
+    {
+        // Validate takes no allow-mutation input by construction: the default
+        // query path must refuse persistent writes on both engines.
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile(engine) };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+
+        var report = SqlValidation.Validate(request, sql, [], profiles);
+
+        Assert.False(report.Allowed);
+        Assert.Equal("mutation_not_allowed", report.Reason);
+        Assert.Equal("rejected", report.Classification);
+        Assert.False(report.Executed);
+    }
+
+    [Theory]
+    [InlineData("sqlserver", "SELECT @note;", "note:nvarchar=synthetic-note-7x9")]
+    [InlineData("postgres", "SELECT @id::int;", "id:int=42137")]
+    public void Validation_report_json_never_echoes_sql_or_values(string engine, string sql, string declaration)
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile(engine) };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+
+        var report = SqlValidation.Validate(request, sql, [declaration], profiles);
+
+        Assert.True(report.Allowed, JsonSerializer.Serialize(report));
+        var json = JsonSerializer.Serialize(report);
+        Assert.DoesNotContain(sql, json, StringComparison.Ordinal);
+        Assert.DoesNotContain(declaration.Split('=', 2)[1], json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Setup_only_parameter_reference_is_not_reported_as_required_or_missing()
+    {
+        // Ledger M1 (007): Required/MissingParameters are collected from the
+        // main batch only, so a parameter referenced solely inside SetupSql is
+        // reported by neither check. Pinned explicitly instead of faking
+        // full-context coverage.
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("sqlserver") };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+
+        var report = SqlValidation.Validate(
+            request, "SELECT 1;", [], profiles,
+            new ValidationOptions(ValidationUsage.Query, SetupSql: "SELECT @setupOnly;"));
+
+        Assert.True(report.Allowed, JsonSerializer.Serialize(report));
+        Assert.Empty(report.RequiredParameters);
+        Assert.Empty(report.MissingParameters);
+    }
+
     private static TargetProfile Profile(string engine) => new(
         "server-unused", "database-unused", new Dictionary<string, string>(), "sql", "user-unused", "MUST_NOT_BE_READ", Engine: engine);
 
