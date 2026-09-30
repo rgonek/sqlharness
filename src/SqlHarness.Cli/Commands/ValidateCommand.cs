@@ -7,7 +7,7 @@ using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Cli.Commands;
 
-[Description("Classify SQL offline using a closed profile; this command never connects.")]
+[Description("Classify SQL offline using a closed profile; static visible-effects check only, this command never connects.")]
 public sealed class ValidateCommand(OutputContext output, Renderer renderer) : AsyncCommand<ValidateCommand.Settings>
 {
     public sealed class Settings : CommandSettings

@@ -41,7 +41,7 @@ public static class SqlHarnessCli
             });
             // Relaxed parsing would ignore --matrix on measure and query instead of rejecting it.
             c.UseStrictParsing();
-            c.AddCommand<QueryCommand>("query").WithDescription("Run a bounded SQL query.");
+            c.AddCommand<QueryCommand>("query").WithDescription("Run a bounded SQL query passing the static visible-effects check.");
             c.AddCommand<MeasureCommand>("measure").WithDescription("Measure query performance across repeated runs.");
             c.AddCommand<CompareCommand>("compare").WithDescription("Compare baseline and candidate performance and results.");
             c.AddCommand<GainCommand>("gain").WithDescription("Report local output savings estimates.");
@@ -57,7 +57,7 @@ public static class SqlHarnessCli
             c.AddCommand<IndexesCommand>("indexes").WithDescription("Inspect SQL Server missing-index evidence.");
             c.AddCommand<CapabilitiesCommand>("capabilities").WithDescription("Describe local commands, engines, limits, and output modes.");
             c.AddCommand<DoctorCommand>("doctor").WithDescription("Check local installation and profile-file availability without connecting.");
-            c.AddCommand<ValidateCommand>("validate").WithDescription("Classify SQL offline using a closed profile; never connects.");
+            c.AddCommand<ValidateCommand>("validate").WithDescription("Classify SQL offline using a closed profile; static visible-effects check only, never connects.");
             c.AddBranch("mcp", mcp =>
             {
                 mcp.SetDescription("Model Context Protocol adapter.");
