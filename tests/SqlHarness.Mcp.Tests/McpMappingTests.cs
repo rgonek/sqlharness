@@ -384,6 +384,7 @@ public sealed class McpMappingTests : IDisposable
             scope, "SELECT @note;", null, "query", [P("note", "nvarchar", "synthetic-note-7x9")], CancellationToken.None);
         Assert.True(report.Allowed, JsonSerializer.Serialize(report));
         var json = JsonSerializer.Serialize(report);
+        Assert.False(report.Executed);
         Assert.DoesNotContain("synthetic-note-7x9", json, StringComparison.Ordinal);
         Assert.DoesNotContain("SELECT @note;", json, StringComparison.Ordinal);
     }

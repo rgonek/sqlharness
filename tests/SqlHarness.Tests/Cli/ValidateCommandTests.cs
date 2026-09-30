@@ -263,9 +263,17 @@ public sealed class ValidateCommandTests
             request, "SELECT 1;", [], profiles,
             new ValidationOptions(ValidationUsage.Query, SetupSql: setup));
 
+        // Dynamic expectation: the same setup batch classified on its own
+        // (Setup usage) must yield the reason the query report propagates.
+        var setupOnly = SqlValidation.Validate(
+            request, setup, [], profiles, new ValidationOptions(ValidationUsage.Setup));
+
+        Assert.False(setupOnly.Allowed, JsonSerializer.Serialize(setupOnly));
         Assert.False(report.Allowed);
         Assert.False(report.Executed);
         Assert.Equal("rejected", report.Classification);
+        Assert.NotNull(report.Reason);
+        Assert.Equal(setupOnly.Reason, report.Reason);
         Assert.DoesNotContain("SELECT 1", JsonSerializer.Serialize(report), StringComparison.Ordinal);
     }
 
@@ -315,6 +323,7 @@ public sealed class ValidateCommandTests
         var report = SqlValidation.Validate(request, sql, [declaration], profiles);
 
         Assert.True(report.Allowed, JsonSerializer.Serialize(report));
+        Assert.False(report.Executed);
         var json = JsonSerializer.Serialize(report);
         Assert.DoesNotContain(sql, json, StringComparison.Ordinal);
         Assert.DoesNotContain(declaration.Split('=', 2)[1], json, StringComparison.Ordinal);
