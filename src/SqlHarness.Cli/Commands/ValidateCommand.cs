@@ -24,6 +24,14 @@ public sealed class ValidateCommand(OutputContext output, Renderer renderer) : A
         [Description("SQL file to classify without execution.")]
         public string? File { get; set; }
 
+        [CommandOption("--usage <USAGE>")]
+        [Description("Validation intent: query (default), setup, or benchmark. Benchmark adds the measured-batch shape check; setup classifies the batch as session-local preparation.")]
+        public string Usage { get; set; } = "query";
+
+        [CommandOption("--setup <PATH>")]
+        [Description("Setup SQL file providing session-temp context for query or benchmark validation; read like --file. Ignored for --usage setup.")]
+        public string? Setup { get; set; }
+
         [CommandOption("--param <VALUE>")]
         [Description("Parameter declaration name[[:type]]=value; values are never returned.")]
         public string[] Parameters { get; set; } = [];
@@ -46,6 +54,9 @@ public sealed class ValidateCommand(OutputContext output, Renderer renderer) : A
                 return Invalid("Each --var must use a unique key=value declaration.");
         }
 
+        if (!TryParseUsage(settings.Usage, out var usage))
+            return Invalid("Unknown --usage. Supported usages: query, setup, benchmark.");
+
         string sql;
         try
         {
@@ -58,9 +69,24 @@ public sealed class ValidateCommand(OutputContext output, Renderer renderer) : A
             return Invalid("Unable to read SQL input file.", new SqlHarnessError("input_file_unavailable", "input", "Unable to read SQL input file."));
         }
 
+        string? setupSql = null;
+        if (!string.IsNullOrWhiteSpace(settings.Setup))
+        {
+            try
+            {
+                setupSql = await SqlInputReader.ReadFileAsync(settings.Setup, ct);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (SqlInputTooLargeException) { return Invalid(SqlInputReader.TooLargeMessage, new SqlHarnessError("input_too_large", "input", SqlInputReader.TooLargeMessage, "Provide a SQL file up to 16 MiB UTF-8 via --setup.")); }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return Invalid("Unable to read SQL setup file.", new SqlHarnessError("input_file_unavailable", "input", "Unable to read SQL setup file."));
+            }
+        }
+
         try
         {
-            var report = SqlValidation.Validate(new SqlTargetRequest(settings.Profile, vars), sql, settings.Parameters, ProfileStore.Load());
+            var report = SqlValidation.Validate(new SqlTargetRequest(settings.Profile, vars), sql, settings.Parameters, ProfileStore.Load(), new ValidationOptions(usage, setupSql));
             var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
             renderer.Render(outcome, OutputMode.Json, output.Capture, "validate");
             output.Capture.Flush();
@@ -74,6 +100,15 @@ public sealed class ValidateCommand(OutputContext output, Renderer renderer) : A
         {
             return Invalid("SQL or profile validation could not be completed.");
         }
+    }
+
+    private static bool TryParseUsage(string? usage, out ValidationUsage parsed)
+    {
+        if (string.Equals(usage, "query", StringComparison.OrdinalIgnoreCase)) { parsed = ValidationUsage.Query; return true; }
+        if (string.Equals(usage, "setup", StringComparison.OrdinalIgnoreCase)) { parsed = ValidationUsage.Setup; return true; }
+        if (string.Equals(usage, "benchmark", StringComparison.OrdinalIgnoreCase)) { parsed = ValidationUsage.Benchmark; return true; }
+        parsed = ValidationUsage.Query;
+        return false;
     }
 
     private int Invalid(string message, SqlHarnessError? error = null)

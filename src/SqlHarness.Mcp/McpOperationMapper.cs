@@ -292,11 +292,21 @@ public static partial class McpOperationMapper
         ArgumentNullException.ThrowIfNull(scope);
         if (usage is null || !ValidateUsages.Contains(usage))
             throw new McpMappingException("Unknown validate usage. Supported usages: query, setup, benchmark.");
-        // One Core offline classifier serves every usage: usage records caller
-        // intent but never forks SQL validation, so no second validator exists.
+        // One Core offline classifier serves every usage: the already-validated
+        // usage string selects the caller intent (query/setup/benchmark) in the
+        // shared model, so no second validator exists here. The validate tool
+        // has no setup-SQL input, so query and benchmark pass no setup context:
+        // a setup-dependent batch validates under engine query rules here,
+        // the same as execution without setup.
         var sqlText = await McpInputReader.ReadSqlAsync(sql, file, scope, ct);
         var declarations = FormatParameters(parameters);
-        return SqlValidation.Validate(scope.TargetRequest, sqlText, declarations, scope.Profiles);
+        var options = new ValidationOptions(usage!.ToLowerInvariant() switch
+        {
+            "setup" => ValidationUsage.Setup,
+            "benchmark" => ValidationUsage.Benchmark,
+            _ => ValidationUsage.Query,
+        });
+        return SqlValidation.Validate(scope.TargetRequest, sqlText, declarations, scope.Profiles, options);
     }
 
     public static Task<SqlHarnessQueryOperation> MapQueryAsync(
