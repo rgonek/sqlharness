@@ -507,12 +507,12 @@ public static class McpToolCatalog
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
             Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), "Describe server versions, scope engine, tools, and limits. Optional local diagnostics; no secrets or profile lists.", true, false, true, false),
-            Tool(ToolNames[1], nameof(McpToolHandlers.InspectAsync), "Run one read-only catalog inspection: ping, schema, counts, space, qstop, or indexes. qstop/indexes are SQL Server only. No SQL input.", true, false, null, true),
+            Tool(ToolNames[1], nameof(McpToolHandlers.InspectAsync), "Run one catalog inspection with fixed internal probes: ping, schema, counts, space, qstop, or indexes. qstop/indexes are SQL Server only. No SQL input.", true, false, null, true),
             Tool(ToolNames[2], nameof(McpToolHandlers.ValidateAsync), "Static check of SQL effects visible in the text (see safetyAnalysis); never connects, object and permission status stays unknown. Exactly one of inline sql (at most 1 MiB) or a file under an input root.", true, false, true, false),
             Tool(ToolNames[3], nameof(McpToolHandlers.QueryAsync), "Run a bounded query passing the static visible-effects text check; no persistent-mutation flags are offered on this path. Hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. Exactly one of inline sql (at most 1 MiB) or a file under an input root.", true, false, null, true),
             Tool(ToolNames[4], nameof(McpToolHandlers.MeasureAsync), "Measure one query across repeats, optionally with .sqljson parameter-set files. Setup runs once per session.", null, false, null, true),
             Tool(ToolNames[5], nameof(McpToolHandlers.CompareAsync), "Compare baseline vs candidate with the CLI sessions and equivalence rules. Optional single matrix dimension.", null, false, null, true),
-            Tool(ToolNames[6], nameof(McpToolHandlers.WatchAsync), "Poll a bounded read-only query until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
+            Tool(ToolNames[6], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
             Tool(ToolNames[7], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it. No force flag.", null, false, null, true),
             Tool(ToolNames[8], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. Sanitized projection only: no statement text or literal predicates.", true, false, true, false),
             Tool(ToolNames[9], nameof(McpToolHandlers.ArtifactAsync), "Read one safe section (summary, metrics, operators) of a saved benchmark artifact.", true, false, true, false),

@@ -52,12 +52,12 @@ Exactly 11 tools are registered explicitly by name. No assembly scanning is used
 | Tool | Behavior |
 |---|---|
 | `sqlharness_capabilities` | Server versions and build, scope engine, tool list, and limits; optional local diagnostics with counts and existence flags only, never secrets, paths, or profile lists. |
-| `sqlharness_inspect` | One read-only catalog inspection: `ping`, `schema`, `counts`, `space`, `qstop`, or `indexes`. No SQL input. `qstop` and `indexes` are SQL Server only and are rejected before connecting on Postgres. It runs under the process gate like the other database tools. |
+| `sqlharness_inspect` | One catalog inspection with fixed internal probes: `ping`, `schema`, `counts`, `space`, `qstop`, or `indexes`. No SQL input. `qstop` and `indexes` are SQL Server only and are rejected before connecting on Postgres. It runs under the process gate like the other database tools. |
 | `sqlharness_validate` | Static check of SQL effects visible in the text (see `safetyAnalysis`) for usage `query`, `setup`, or `benchmark`. One Core offline classifier serves every usage; it never connects, and object and permission status stays unknown. `benchmark` adds the measured-batch shape check. The tool carries no setup-SQL input: a setup-dependent batch validates under engine query rules, as if executed without setup. |
 | `sqlharness_query` | Bounded query passing the static visible-effects text check, with timeout and row cap. No persistent-mutation flags are offered on this path; hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. |
 | `sqlharness_measure` | Measure one query across repeats, with optional setup and `.sqljson` parameter-set files. Same sessions and rules as the CLI. |
 | `sqlharness_compare` | Compare baseline versus candidate with the CLI sessions and equivalence rules, with an optional single matrix dimension. |
-| `sqlharness_watch` | Poll a bounded read-only query until `until` or `untilUnchanged`, within interval and max-duration bounds. The watch deadline is capped by the remaining request budget. |
+| `sqlharness_watch` | Poll a bounded query passing the static visible-effects text check until `until` or `untilUnchanged`, within interval and max-duration bounds. The watch deadline is capped by the remaining request budget. |
 | `sqlharness_snapshot` | Capture a named result, which never overwrites an existing name, or diff live results against it without printing cell values. There is no force flag. |
 | `sqlharness_plan` | Offline plan-document distillation. Sanitized projection only: no statement text and no literal predicates. |
 | `sqlharness_artifact` | Read one safe section (`summary`, `metrics`, `operators`) of a saved benchmark artifact. |
