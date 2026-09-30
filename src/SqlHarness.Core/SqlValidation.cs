@@ -22,22 +22,67 @@ public sealed record SqlValidationReport(
     string ObjectAndPermissionStatus = "unknown",
     bool Executed = false);
 
+/// <summary>
+/// Caller intent for offline validation. Query is the default read path;
+/// Setup classifies session-local preparation batches; Benchmark adds the
+/// execution-path measured-batch shape check of the resolved dialect.
+/// </summary>
+public enum ValidationUsage
+{
+    Query,
+    Setup,
+    Benchmark,
+}
+
+/// <summary>
+/// Mode-aware validation options. SetupSql is the optional setup-batch
+/// context for Query/Benchmark (classified as setup and its session temps
+/// shared with the main batch, like the compare/measure preflight); it is
+/// ignored for Setup, which classifies the main batch itself as setup.
+/// </summary>
+public sealed record ValidationOptions(
+    ValidationUsage Usage = ValidationUsage.Query,
+    string? SetupSql = null);
+
 public static class SqlValidation
 {
     public static SqlValidationReport Validate(
         SqlTargetRequest targetRequest,
         string sql,
         IReadOnlyList<string> parameterDeclarations,
-        IReadOnlyDictionary<string, TargetProfile> profiles)
+        IReadOnlyDictionary<string, TargetProfile> profiles) =>
+        Validate(targetRequest, sql, parameterDeclarations, profiles, options: null);
+
+    public static SqlValidationReport Validate(
+        SqlTargetRequest targetRequest,
+        string sql,
+        IReadOnlyList<string> parameterDeclarations,
+        IReadOnlyDictionary<string, TargetProfile> profiles,
+        ValidationOptions? options)
     {
         ArgumentNullException.ThrowIfNull(targetRequest);
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameterDeclarations);
         ArgumentNullException.ThrowIfNull(profiles);
 
+        var usage = options?.Usage ?? ValidationUsage.Query;
+        var setupSql = usage == ValidationUsage.Setup ? null : options?.SetupSql;
         var target = TargetResolver.Resolve(targetRequest, profiles);
         var dialect = SqlDialects.For(target.Engine);
-        var decision = dialect.Classify(sql, SqlUsage.Query, target.Database, allowMutation: false, confirmDatabase: null, new HashSet<string>(StringComparer.Ordinal));
+        var noTemps = new HashSet<string>(StringComparer.Ordinal);
+        IReadOnlySet<string> setupTemps = noTemps;
+        string? setupReason = null;
+        if (!string.IsNullOrWhiteSpace(setupSql))
+        {
+            var setupDecision = dialect.Classify(setupSql, SqlUsage.CompareSetup, target.Database, allowMutation: false, confirmDatabase: null, noTemps);
+            if (setupDecision.Allowed)
+                setupTemps = setupDecision.SessionTempTables;
+            else
+                setupReason = SafeReason(setupDecision.Reason);
+        }
+
+        var mainUsage = usage == ValidationUsage.Setup ? SqlUsage.CompareSetup : SqlUsage.Query;
+        var decision = dialect.Classify(sql, mainUsage, target.Database, allowMutation: false, confirmDatabase: null, usage == ValidationUsage.Setup ? noTemps : setupTemps);
         var parsed = decision.Reason != SqlSafetyReason.ParseError;
         var requiredNames = parsed
             ? SqlParameterReferences.Collect(target.Engine, sql)
@@ -49,18 +94,30 @@ public static class SqlValidation
         var astLocations = parsed ? SqlParameterReferences.Locations(target.Engine, sql) : [];
         IReadOnlyList<SqlHarnessParameter> parsedParameters = [];
         var parameterValidationCompleted = false;
-        string? reason = decision.Allowed ? null : SafeReason(decision.Reason);
-        if (decision.Allowed)
+        string? reason = setupReason ?? (decision.Allowed ? null : SafeReason(decision.Reason));
+        if (reason is null)
         {
             try
             {
                 parsedParameters = dialect.ParseParameters(parameterDeclarations);
-                dialect.ValidateParameterReferences(parsedParameters, sql);
+                dialect.ValidateParameterReferences(parsedParameters, setupSql, sql);
                 parameterValidationCompleted = true;
             }
             catch (SqlHarnessSafetyException)
             {
                 reason = "parameter_validation_failed";
+            }
+        }
+
+        if (reason is null && usage == ValidationUsage.Benchmark)
+        {
+            try
+            {
+                dialect.ValidateMeasuredBatch(sql);
+            }
+            catch (SqlHarnessSafetyException)
+            {
+                reason = "benchmark_batch_not_supported";
             }
         }
         var suppliedNames = parsedParameters.Select(parameter => CanonicalName(parameter.Name)).ToHashSet(StringComparer.OrdinalIgnoreCase);
