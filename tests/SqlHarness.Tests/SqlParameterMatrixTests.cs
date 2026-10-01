@@ -254,8 +254,14 @@ public class SqlParameterMatrixTests
         Assert.Equal(expected, exception.Message);
     }
 
+    // 012/final F3: this pins SqlParameterMatrixParser.Parse's own order (the matrix is
+    // fully checked before any fixed declaration is even read, lazily, via Reject below).
+    // That convenience method has no production caller (see its doc comment); production
+    // binds the opposite way -- CompareOperationPreparer.PrepareFixed binds the fixed
+    // parameters first, then SqlHarnessModule.ExecuteCompareMatrixAsync binds the matrix
+    // through SqlParameterMatrixParser.Bind directly. This test does not pin that order.
     [Fact]
-    public void Legacy_matrix_checks_itself_before_the_fixed_parameters()
+    public void Legacy_matrix_Parse_checks_itself_before_reading_any_fixed_declaration()
     {
         var matrixFirst = Reject("BatchSize:int=1,1", "broken");
         var fixedAfter = Reject("BatchSize:int=1,2", "Tenant:int=7", "broken");
