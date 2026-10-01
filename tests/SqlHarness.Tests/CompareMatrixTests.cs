@@ -355,6 +355,51 @@ public class CompareMatrixTests
             System.Text.Json.JsonSerializer.Serialize(new { report.Cells[2].Index, report.Cells[2].ParameterValue }));
     }
 
+    // 012/T4: the Task 2 review carried forward that no MCP-project test can
+    // execute a matrix cell at all (no fake session is visible there), so the
+    // runner invariants -- new session/setup per cell, caller order, first
+    // failure stops the run, earlier artifacts/partial report are kept -- must
+    // be proven here for typed input that carries a comma, an empty string
+    // and a typed NULL among the *completed* cells, not just plain integers
+    // (Matrix_stops_on_sql_failure_and_keeps_the_earlier_artifact_directory,
+    // above) or a single comma cell that fails before any cell completes
+    // (Typed_matrix_failure_redacts_a_value_that_contains_a_comma, below).
+    [Fact]
+    public async Task Typed_matrix_failure_stops_the_run_after_comma_and_empty_cells_and_keeps_only_their_artifacts()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory(failSqlAt: 2);
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(TypedMatrix("se,cret", "", null, "x4", "x5"));
+
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
+        // Cells 0 and 1 (comma, empty string) each connected and ran; cell 2
+        // (typed NULL) connected and failed; cells 3 and 4 never connected.
+        Assert.Equal(3, factory.ConnectCount);
+        Assert.Equal(3, factory.Sessions.Count);
+        Assert.NotSame(factory.Sessions[0], factory.Sessions[1]);
+        Assert.NotSame(factory.Sessions[1], factory.Sessions[2]);
+        Assert.All(factory.Sessions.Take(2), session => Assert.Equal(1, session.SetupCount));
+        Assert.Equal<object>(["se,cret", ""], factory.Sessions.Take(2).Select(session => session.MatrixValue));
+        Assert.All(factory.Sessions.Take(2), session => Assert.Equal([7], session.TenantValues));
+
+        var partialReport = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
+        Assert.Equal([0, 1], partialReport.Cells.Select(cell => cell.Index));
+        Assert.Equal(["se,cret", ""], partialReport.Cells.Select(cell => cell.ParameterValue));
+        Assert.Equal(2, artifacts.Directories.Count);
+        Assert.All(artifacts.Directories, directory => Assert.True(Directory.Exists(directory)));
+        Assert.Equal(
+            [artifacts.Directories[0], artifacts.Directories[1]],
+            partialReport.Cells.Select(cell => cell.Compare.ArtifactDirectory));
+
+        var error = outcome.SafeError ?? string.Empty;
+        Assert.Contains("cell 2", error, StringComparison.Ordinal);
+        Assert.Contains("@BatchSize", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("se,cret", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("x4", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("x5", error, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Typed_matrix_failure_redacts_a_value_that_contains_a_comma()
     {
