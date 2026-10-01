@@ -892,6 +892,53 @@ public sealed class PostgresSafetyTests
         Assert.Equal(SqlSafetyReason.NonTemporaryWrite, query.Reason);
     }
 
+    [Theory]
+    // An ON COMMIT DROP temp is gone once the creating transaction ends, and an
+    // unqualified TRUNCATE of its name would then reach a persistent table.
+    [InlineData("CREATE TEMP TABLE items (id int) ON COMMIT DROP")]
+    [InlineData("CREATE TEMP TABLE items ON COMMIT DROP AS SELECT 1 AS id")]
+    public void T4_Truncate_of_setup_temp_created_on_commit_drop_is_denied(string setupSql)
+    {
+        var setup = _classifier.Classify(setupSql, SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        Assert.Contains("items", setup.SessionTempTables);
+
+        var truncate = _classifier.Classify(
+            "TRUNCATE items", SqlUsage.Query, "appdb", true, "appdb", setup.SessionTempTables);
+        Assert.False(truncate.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, truncate.Reason);
+
+        // Guard: the non-TRUNCATE verdict over the same carried name is unchanged.
+        var insert = _classifier.Classify(
+            "INSERT INTO items VALUES (1)", SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.True(insert.Allowed, insert.RejectionDescription);
+        Assert.False(insert.HasMutation);
+    }
+
+    [Theory]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int) ON COMMIT DROP; TRUNCATE t")]
+    [InlineData("CompareSetup", "CREATE TEMP TABLE t (id int) ON COMMIT DROP; TRUNCATE t")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); DROP TABLE t; CREATE TEMP TABLE t (id int) ON COMMIT DROP; TRUNCATE t")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); CREATE TEMP TABLE IF NOT EXISTS t (id int) ON COMMIT DROP; TRUNCATE t")]
+    public void T4_Truncate_of_on_commit_drop_temp_in_the_same_batch_is_denied(string usage, string sql)
+    {
+        var decision = _classifier.Classify(sql, ParseUsage(usage), "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, decision.Reason);
+    }
+
+    [Theory]
+    // These ON COMMIT actions keep the table itself, so the proof holds.
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DELETE ROWS; TRUNCATE t")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT PRESERVE ROWS; TRUNCATE t")]
+    public void T4_Truncate_of_temp_that_survives_commit_is_session_local(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+    }
+
     private static SqlUsage ParseUsage(string usage) => usage switch
     {
         "Query" => SqlUsage.Query,
