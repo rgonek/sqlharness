@@ -40,6 +40,16 @@ case DeclareVariableStatement declare:
 
 Dodatkowo: nowe pliki nazwane w krokach, dokumenty wynikowe plans/011-*.md oraz status w indeksie. Inne pliki wymagają jawnej korekty zakresu i uzasadnienia przed zmianą.
 
+### Korekty zakresu (scope corrections)
+
+Dopisane w końcowej fali poprawek (2026-10-01). Poniższe pliki leżą poza listą powyżej i zostały zmienione za zgodą kontrolera; żaden nowy plik źródłowy ani testowy nie powstał.
+
+- `README.md` — dwa fragmenty wymieniające instrukcje „session-only" opisywały stan sprzed planu 011. Pozostawienie ich byłoby nieprawdziwą dokumentacją dla użytkownika (T6 runda 1; fala końcowa: pisownia `pg_temp.<name>`, ograniczenie `search_path`, zmienna tablicowa z `--setup`).
+- `docs/superpowers/specs/2026-09-26-postgres-safety-policy.md`, `docs/superpowers/specs/2026-09-10-postgres-engine-design.md`, `docs/superpowers/plans/2026-09-10-postgres-engine.md`, `plans/009-strict-profile-assessment.md` — cztery starsze dokumenty nadal podawały prefiks `pg_temp_` jako dowód celu lokalnego dla sesji. Dwie specyfikacje poprawiono w miejscu z notą „zmienione planem 011", dwa historyczne plany dostały datowaną notę (T6).
+- `tests/SqlHarness.Tests/Fixtures/AgentWorkflow/byte-budgets.json` — dokładny pin bajtów, który czyta `AgentWorkflowTests`. Rośnie razem z tekstem capabilities: 5710 → 6219 → 6887 → 7100 bajtów UTF-8. Sufit 8192 nie został podniesiony. Sam plik `AgentWorkflowTests.cs` nie był zmieniany.
+- `tests/SqlHarness.Tests/Cli/CapabilitiesCommandTests.cs` — testy wiążące każde zdanie `sessionTempStatements` z werdyktem prawdziwego klasyfikatora (T6, fala końcowa).
+- `tests/SqlHarness.Tests/QueryTests.cs`, `tests/SqlHarness.Tests/MeasureTests.cs`, `tests/SqlHarness.Tests/CompareTests.cs`, `tests/SqlHarness.Tests/Postgres/PostgresQueryTests.cs`, `tests/SqlHarness.Tests/Postgres/PostgresBenchmarkTests.cs` — testy end-to-end przez `SqlHarnessModule` (fala końcowa, M1). Dopisane do istniejących klas, bo ich fake session/reader są prywatne dla klasy; nowa infrastruktura testowa nie powstała.
+
 Poza zakresem: live DB, deploy, profile i hasła użytkownika, instalacja, push, globalne wyłączenie walidacji i niepowiązane refaktoryzacje. Zachowaj kody 0/2/3/4/5/6/7/8, legacy JSON i oba silniki. Pola addytywne tylko zgodnie z krokami.
 
 ## Zadania
