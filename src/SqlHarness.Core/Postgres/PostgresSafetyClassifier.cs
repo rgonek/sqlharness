@@ -297,15 +297,33 @@ internal sealed class PostgresSafetyClassifier
     }
 
     // Stricter than IsSessionLocal, and used by TRUNCATE only: the sole proof is
-    // an unqualified name that this session flow recorded from CREATE TEMP /
-    // SELECT INTO TEMP. The pg_temp schema alias does not qualify a TRUNCATE
-    // target, and neither does a name that only a caller-built set supplied.
-    // Both the target and the recorded name must be spelled so that the
-    // server's fold is known offline; see FoldsLikeServer.
-    private static bool IsProvenSessionTemp(ObjectName name, SessionTemps knownTemps) =>
-        name.Values.Count == 1 &&
-        FoldsLikeServer(name.Values[0]) &&
-        knownTemps.TruncateProven.Contains(FoldIdent(name.Values[0]));
+    // a relation name that this session flow recorded from CREATE TEMP /
+    // SELECT INTO TEMP. A name that only a caller-built set supplied proves
+    // nothing. Both the target and the recorded name must be spelled so that
+    // the server's fold is known offline; see FoldsLikeServer.
+    // The target is that name unqualified, or qualified with exactly the
+    // pg_temp alias (011/final I2). The alias is no proof by itself here: it
+    // only pins the proven name to the session's temp schema, so the qualified
+    // spelling does not depend on search_path. No other qualifier and no
+    // three-part name is accepted.
+    private static bool IsProvenSessionTemp(ObjectName name, SessionTemps knownTemps)
+    {
+        Ident relation;
+        if (name.Values.Count == 1)
+            relation = name.Values[0];
+        else if (name.Values.Count == 2 && IsPgTempAlias(name.Values[0]))
+            relation = name.Values[1];
+        else
+            return false;
+
+        return FoldsLikeServer(relation) &&
+            knownTemps.TruncateProven.Contains(FoldIdent(relation));
+    }
+
+    // The server's alias for the current session's temp schema: unquoted in
+    // any ASCII case, or quoted exactly "pg_temp". Never pg_temp_<N>.
+    private static bool IsPgTempAlias(Ident schema) =>
+        FoldIdent(schema) == "pg_temp";
 
     // The server keeps a quoted identifier as written and lower-cases ASCII A-Z
     // in an unquoted one. What it does to a non-ASCII character of an unquoted
@@ -415,7 +433,7 @@ internal sealed class PostgresSafetyClassifier
         // the current session's temp schema. A pg_temp_<N> schema can belong to
         // another session, so that prefix proves nothing.
         if (name.Values.Count == 2)
-            return FoldIdent(name.Values[0]) == "pg_temp";
+            return IsPgTempAlias(name.Values[0]);
 
         // An unqualified name gets no credit for how it is spelled (a persistent
         // table may be called pg_temp_stuff, or pg_temp): it must be proven.
