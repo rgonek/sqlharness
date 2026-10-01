@@ -28,6 +28,19 @@ public sealed class PostgresParameterTests
         Assert.DoesNotContain("1.23", error.Message);
     }
 
+    // 012/T1 review gap: the typed path (no declaration text) must hit the
+    // same rejection through PostgresDialect.BindParameters, Core's one binder
+    // for the dialect, not only through the legacy-text PostgresParameters.Validate call above.
+    [Fact]
+    public void Typed_path_rejects_a_sql_server_only_type_through_bind_parameters()
+    {
+        var error = Assert.Throws<SqlHarnessSafetyException>(() => SqlDialects.For(SqlEngine.Postgres)
+            .BindParameters([new SqlHarnessParameterInput("amount", "money", "1.23")]));
+
+        Assert.Equal("SQL parameter type 'Money' is not supported on Postgres.", error.Message);
+        Assert.DoesNotContain("1.23", error.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Accepts_mapped_types()
     {
