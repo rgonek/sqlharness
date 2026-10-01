@@ -382,6 +382,39 @@ public class SqlParameterMatrixTests
         Assert.Equal(expected, exception.Message);
     }
 
+    // 012/T3: decimal(p,s) on the typed path keeps the comma in the type token
+    // (never a value separator) and still enforces precision/scale.
+    [Fact]
+    public void Model_parameter_decimal_type_token_binds_a_valid_value_and_rejects_an_out_of_range_value()
+    {
+        var parameter = SqlParameterParser.Bind(new SqlHarnessParameterInput("amount", "decimal(10,2)", "12345678.90"));
+
+        Assert.Equal(SqlDbType.Decimal, parameter.Type);
+        Assert.Equal(12345678.90m, parameter.Value);
+        Assert.Equal((byte)10, parameter.Precision);
+        Assert.Equal((byte)2, parameter.Scale);
+
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterParser.Bind(
+            new SqlHarnessParameterInput("amount", "decimal(10,2)", "123456789.00")));
+
+        Assert.Equal("Invalid value for SQL parameter 'amount' of type 'decimal(10,2)'.", exception.Message);
+        Assert.DoesNotContain("123456789", exception.Message, StringComparison.Ordinal);
+    }
+
+    // 012/T3: the duplicate-name check on Bind(IEnumerable<...>) is case-insensitive
+    // on the typed path too, with no declaration text involved.
+    [Fact]
+    public void Model_parameter_bind_rejects_duplicate_names_ignoring_case()
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterParser.Bind(
+        [
+            new SqlHarnessParameterInput("Tenant", "int", "1"),
+            new SqlHarnessParameterInput("TENANT", "int", "2"),
+        ]));
+
+        Assert.Equal("Duplicate SQL parameter '@TENANT'.", exception.Message);
+    }
+
     [Fact]
     public void Model_matrix_keeps_comma_empty_null_and_null_text_as_distinct_values()
     {
