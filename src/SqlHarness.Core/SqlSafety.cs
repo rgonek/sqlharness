@@ -515,6 +515,12 @@ internal sealed class SqlSafetyClassifier
         // operators (+=, ...) stay denied.
         if (set.AssignmentKind != AssignmentKind.Equals || set.Expression is null)
             return false;
+        // The target is the variable itself: a member (@v.Member), a static
+        // member (@v::Member) or a method call (@v.Method(...)) is another shape.
+        if (set.Identifier is not null ||
+            set.SeparatorType != SeparatorType.NotSpecified ||
+            set.FunctionCallExists)
+            return false;
         return scope.IsProvenScalarLocal(set.Variable);
     }
 
