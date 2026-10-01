@@ -109,45 +109,38 @@ internal static class MeasureParameterSetValidator
         }
     }
 
+    // Converted lazily, inside Parse's try/catch below, so a malformed declaration's error still
+    // gets the setName prefix. Reuses SqlParameterParser.ToInput for the type token instead of
+    // re-reading the declaration grammar a second time, and reuses the typed overload's shaping
+    // (012/final F5; TypeToken, the second grammar reader, is gone).
     private static IReadOnlyList<ShapedParameter> ParseShaped(IReadOnlyList<string> inputs, string? setName)
     {
-        var parsed = Parse(inputs.Select(SqlParameterParser.ToInput), setName);
-        var shaped = new ShapedParameter[parsed.Count];
-        for (var i = 0; i < parsed.Count; i++)
-            shaped[i] = new ShapedParameter(parsed[i], DeclaredShape.From(TypeToken(inputs[i])));
-
-        return shaped;
+        var converted = new List<SqlHarnessParameterInput>(inputs.Count);
+        var parsed = Parse(Convert(inputs, converted), setName);
+        return Shape(parsed, converted);
     }
 
     // Typed fixed parameters carry their type token; there is no declaration text to read it from.
-    private static IReadOnlyList<ShapedParameter> ParseShaped(IReadOnlyList<SqlHarnessParameterInput> inputs)
+    private static IReadOnlyList<ShapedParameter> ParseShaped(IReadOnlyList<SqlHarnessParameterInput> inputs, string? setName = null) =>
+        Shape(Parse(inputs, setName), inputs);
+
+    private static IEnumerable<SqlHarnessParameterInput> Convert(IReadOnlyList<string> inputs, List<SqlHarnessParameterInput> converted)
     {
-        var parsed = Parse(inputs, setName: null);
+        foreach (var input in inputs)
+        {
+            var mapped = SqlParameterParser.ToInput(input);
+            converted.Add(mapped);
+            yield return mapped;
+        }
+    }
+
+    private static ShapedParameter[] Shape(IReadOnlyList<SqlHarnessParameter> parsed, IReadOnlyList<SqlHarnessParameterInput> inputs)
+    {
         var shaped = new ShapedParameter[parsed.Count];
         for (var i = 0; i < parsed.Count; i++)
             shaped[i] = new ShapedParameter(parsed[i], DeclaredShape.From(inputs[i].Type));
 
         return shaped;
-    }
-
-    // The text between ':' and '=' (or the type in name:type:null). Untyped values are nvarchar.
-    private static string? TypeToken(string input)
-    {
-        var equals = input.IndexOf('=');
-        if (equals >= 0)
-        {
-            var declaration = input[..equals];
-            var colon = declaration.IndexOf(':');
-            return colon < 0 ? null : declaration[(colon + 1)..];
-        }
-
-        var lastColon = input.LastIndexOf(':');
-        if (lastColon <= 0)
-            return null;
-
-        var left = input[..lastColon];
-        var typeColon = left.IndexOf(':');
-        return typeColon < 0 ? null : left[(typeColon + 1)..];
     }
 
     private static ShapedParameter[] Order(IEnumerable<ShapedParameter> parameters) =>
