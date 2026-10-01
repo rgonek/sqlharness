@@ -23,6 +23,13 @@ internal sealed record ParsedParameterMatrix(
 
 internal static partial class SqlParameterMatrixParser
 {
+    /// <summary>
+    /// Legacy text adapter kept for compatibility and characterization tests only (012/final
+    /// F3): no production call site uses this convenience combination. Production composes
+    /// <see cref="SqlParameterInputs.ResolveMatrix"/> and <see cref="Bind"/> itself (see
+    /// <see cref="SqlHarnessModule"/>'s compare-matrix path), which binds the fixed parameters
+    /// first and only then the matrix -- the opposite order this method characterizes.
+    /// </summary>
     internal static ParsedParameterMatrix Parse(string input, IReadOnlyList<string> fixedParameters)
     {
         ArgumentNullException.ThrowIfNull(input);

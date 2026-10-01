@@ -996,6 +996,12 @@ internal static partial class SqlParameterParser
     private static readonly DateTime SmallDateTimeMin = new(1900, 1, 1);
     private static readonly DateTime SmallDateTimeMax = new(2079, 6, 6, 23, 59, 0);
 
+    /// <summary>
+    /// Legacy text adapter kept for compatibility and characterization tests only (012/final
+    /// F3): no production call site uses it. Production composes
+    /// <see cref="SqlParameterInputs.Resolve"/> and <see cref="Bind(IEnumerable{SqlHarnessParameterInput})"/>
+    /// itself (see <see cref="SqlHarnessModule"/>).
+    /// </summary>
     internal static IReadOnlyList<SqlHarnessParameter> Parse(IReadOnlyList<string> inputs) =>
         // Lazy on purpose: each declaration is read and bound before the next one is read,
         // so the first failing declaration decides the error, whatever kind of failure it is.
