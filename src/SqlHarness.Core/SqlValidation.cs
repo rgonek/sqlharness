@@ -259,5 +259,16 @@ internal static class SqlParameterReferences
                 LocalNames.Add(declaration.VariableName.Value);
             base.ExplicitVisit(node);
         }
+        // 011/T3: table variables are batch locals, and a table-position @name
+        // can never be satisfied by a scalar parameter, so neither is required.
+        public override void ExplicitVisit(DeclareTableVariableBody node)
+        {
+            if (node.VariableName?.Value is { } name)
+                LocalNames.Add(name);
+            base.ExplicitVisit(node);
+        }
+        public override void ExplicitVisit(VariableTableReference node)
+        {
+        }
     }
 }
