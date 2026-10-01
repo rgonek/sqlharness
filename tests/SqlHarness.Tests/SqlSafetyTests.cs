@@ -1075,6 +1075,80 @@ public class SqlSafetyTests
         Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
     }
 
+    // 011/T3b: declaration must textually precede use inside the batch.
+    [Theory]
+    [InlineData("SET @v = 1; DECLARE @v int; SELECT @v")]
+    [InlineData("DECLARE @a int = 1; SET @v = @a; DECLARE @v int")]
+    [InlineData("set @V = 1; declare @v int")]
+    public void T3b_Query_denies_SET_before_its_declaration(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.False(approved.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, approved.Reason);
+
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
+    [InlineData("INSERT @t (Id) VALUES (1); DECLARE @t TABLE (Id int)")]
+    [InlineData("UPDATE @t SET Id = 2; DECLARE @t TABLE (Id int)")]
+    [InlineData("DELETE @t; DECLARE @t TABLE (Id int)")]
+    [InlineData("MERGE @t AS tgt USING (SELECT 1 AS Id) AS src ON tgt.Id = src.Id WHEN NOT MATCHED THEN INSERT (Id) VALUES (src.Id); DECLARE @t TABLE (Id int)")]
+    [InlineData("SELECT Id FROM @t; DECLARE @t TABLE (Id int)")]
+    [InlineData("SELECT Id FROM dbo.Clients WHERE Id IN (SELECT Id FROM @t); DECLARE @t TABLE (Id int)")]
+    [InlineData("DECLARE @n int = (SELECT COUNT(*) FROM @t); DECLARE @t TABLE (Id int)")]
+    [InlineData("DECLARE @log TABLE (Id int); DELETE @log OUTPUT deleted.Id INTO @t (Id); DECLARE @t TABLE (Id int)")]
+    [InlineData("CREATE TABLE #s (Id int); DELETE #s OUTPUT deleted.Id INTO @t (Id); DECLARE @t TABLE (Id int)")]
+    [InlineData("DECLARE @t TABLE (Id int); INSERT @t (Id) SELECT Id FROM @later; DECLARE @later TABLE (Id int)")]
+    [InlineData("INSERT @T (Id) VALUES (1); DECLARE @t TABLE (Id int); SELECT Id FROM @t")]
+    public void T3b_Query_denies_table_variable_use_before_its_declaration(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.False(approved.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, approved.Reason);
+
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
+    [InlineData("UPDATE dbo.Clients SET Active = 0 OUTPUT inserted.Id INTO @t (Id); DECLARE @t TABLE (Id int)")]
+    [InlineData("DELETE dbo.Clients OUTPUT deleted.Id INTO @t (Id); DECLARE @t TABLE (Id int)")]
+    public void T3b_Persistent_write_with_OUTPUT_INTO_a_later_declared_table_variable_is_not_approvable(string sql)
+    {
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.False(approved.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, approved.Reason);
+
+        var denied = ClassifyQuery(sql);
+        Assert.False(denied.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, denied.Reason);
+
+        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null);
+        Assert.False(setup.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, setup.Reason);
+    }
+
+    [Theory]
+    [InlineData("DECLARE @v int; SET @v = 1; SET @v = 2; SELECT @v")]
+    [InlineData("DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (1); DECLARE @u TABLE (Id int); INSERT @u (Id) SELECT Id FROM @t; SELECT Id FROM @u")]
+    public void T3b_Query_still_allows_use_after_declaration(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+    }
+
     private SqlSafetyDecision ClassifyQuery(string sql) =>
         _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: false, confirmDatabase: null);
 }

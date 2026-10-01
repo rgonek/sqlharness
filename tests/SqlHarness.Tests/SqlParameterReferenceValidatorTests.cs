@@ -107,6 +107,37 @@ public class SqlParameterReferenceValidatorTests
         Assert.False(report.Executed);
     }
 
+    // 011/T3b (review Minor 1): a table variable is local to its declaring batch only.
+    [Theory]
+    [InlineData("DECLARE @t TABLE (Id int);\nGO\nSELECT Id FROM dbo.Clients WHERE Id = @t")]
+    [InlineData("SELECT Id FROM dbo.Clients WHERE Id = @t\nGO\nDECLARE @t TABLE (Id int);")]
+    [InlineData("DECLARE @t TABLE (Id int); SELECT Id FROM @t\nGO\nSELECT Id FROM dbo.Clients WHERE Id = @T")]
+    public void T3b_Validate_table_variable_is_not_local_in_another_batch(string sql)
+    {
+        var required = SqlParameterReferences.Collect(SqlEngine.SqlServer, sql);
+
+        Assert.Equal(["@t"], required, StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void T3b_Validation_report_requires_a_parameter_named_like_another_batch_table_variable()
+    {
+        const string sql = "DECLARE @t TABLE (Id int);\nGO\nSELECT Id FROM dbo.Clients WHERE Id = @t";
+
+        var missing = ValidateOffline(sql);
+
+        Assert.False(missing.Allowed);
+        Assert.Equal("missing_parameters", missing.Reason);
+        Assert.Equal(["t"], missing.RequiredParameters);
+        Assert.Equal(["t"], missing.MissingParameters);
+
+        var supplied = ValidateOffline(sql, "t:int=1");
+
+        Assert.True(supplied.Allowed, supplied.Reason);
+        Assert.Equal(["t"], supplied.RequiredParameters);
+        Assert.Empty(supplied.MissingParameters);
+    }
+
     [Fact]
     public void T3_Validate_scalar_reference_next_to_table_variable_is_still_required()
     {
