@@ -733,10 +733,10 @@ public sealed class PostgresSafetyTests
     }
 
     [Theory]
-    // A qualifier is never proof, even when the relation name matches a tracked temp:
-    // only the unqualified name is what the session flow recorded.
+    // A qualifier is never proof, even when the relation name matches a tracked temp.
+    // 011/final (I2): the exact pg_temp alias over a proven temp is the one
+    // exception; see Final_Truncate_of_pg_temp_qualified_proven_temp_is_session_local.
     [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp_3.t")]
-    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.t")]
     [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE public.t")]
     [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE appdb.public.t")]
     public void T4_Truncate_schema_qualified_name_is_denied_even_when_relation_name_is_a_tracked_temp(string sql)
@@ -1586,6 +1586,120 @@ public sealed class PostgresSafetyTests
             SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
         Assert.True(query.Allowed, query.RejectionDescription);
         Assert.False(query.HasMutation);
+    }
+
+    // 011/final (I2): `pg_temp.<name>` always addresses the current session's
+    // temp schema, whatever search_path says. TRUNCATE accepts that spelling
+    // when <name> is a proven temp under the same proof as the unqualified form.
+    [Theory]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.t")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); TRUNCATE TABLE pg_temp.t")]
+    [InlineData("Query", "CREATE TEMPORARY TABLE t (id int); TRUNCATE ONLY pg_temp.t")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); TRUNCATE PG_TEMP.t")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); TRUNCATE \"pg_temp\".t")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.t CONTINUE IDENTITY RESTRICT")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); CREATE TEMP TABLE u (id int); TRUNCATE pg_temp.t, u")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); CREATE TEMP TABLE u (id int); TRUNCATE pg_temp.t, pg_temp.u")]
+    [InlineData("Query", "CREATE TEMP TABLE Items (id int); TRUNCATE pg_temp.ITEMS")]
+    [InlineData("Query", "CREATE TEMP TABLE \"\u00E9\" (id int); TRUNCATE pg_temp.\"\u00E9\"")]
+    [InlineData("Query", "CREATE TEMP TABLE {A63} (id int); TRUNCATE pg_temp.{A63}")]
+    [InlineData("Query", "SELECT 1 AS id INTO TEMP TABLE t; TRUNCATE pg_temp.t")]
+    [InlineData("Query", "CREATE TEMP TABLE pg_temp.t (id int); TRUNCATE pg_temp.t")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int) ON COMMIT DROP; CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.t")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); EXPLAIN ANALYZE TRUNCATE pg_temp.t")]
+    [InlineData("CompareSetup", "CREATE TEMP TABLE t (id int); INSERT INTO t VALUES (1); TRUNCATE pg_temp.t")]
+    [InlineData("CompareSetup", "CREATE TEMP TABLE t (id int); TRUNCATE ONLY pg_temp.t")]
+    public void Final_Truncate_of_pg_temp_qualified_proven_temp_is_session_local(string usage, string sql)
+    {
+        var decision = _classifier.Classify(ExpandNames(sql), ParseUsage(usage), "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Fact]
+    public void Final_Truncate_of_pg_temp_qualified_setup_temp_is_session_local()
+    {
+        var setup = _classifier.Classify(
+            "CREATE TEMP TABLE t (id int)", SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+
+        var query = _classifier.Classify(
+            "TRUNCATE pg_temp.t; INSERT INTO pg_temp.t VALUES (1)",
+            SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.True(query.Allowed, query.RejectionDescription);
+        Assert.True(query.HasSessionLocalWork);
+        Assert.False(query.HasMutation);
+        Assert.Contains("t", query.SessionTempTables);
+    }
+
+    // 011/final (I2): the widening is exactly one spelling. Every case below
+    // was denied before the change and stays denied, with or without approval.
+    [Theory]
+    // pg_temp.<name> where <name> is not a proven temp.
+    [InlineData("TRUNCATE pg_temp.t", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.u", "NonTemporaryWrite")]
+    [InlineData("TRUNCATE pg_temp.t; CREATE TEMP TABLE t (id int)", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; TRUNCATE pg_temp.t", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS t (id int); TRUNCATE pg_temp.t", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); DROP TABLE t; TRUNCATE pg_temp.t", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); DROP TABLE pg_temp.\u00C9; TRUNCATE pg_temp.t", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.\"T\"", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE \"T\" (id int); TRUNCATE pg_temp.T", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); TRUNCATE pg_temp.\u00C9", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int); TRUNCATE pg_temp.\u00C9", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int); TRUNCATE pg_temp.\"\u00C9\"", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); TRUNCATE pg_temp.{A63}x", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE {A63} (id int); TRUNCATE pg_temp.{A63}x", "NonTemporaryWrite")]
+    // Any other qualifier, also over a proven temp of that relation name.
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE public.t", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp_3.t", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE \"pg_temp_3\".\"t\"", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE \"PG_TEMP\".t", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp_.t", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_catalog.t", "NonTemporaryWrite")]
+    // Three-part names, wherever pg_temp sits.
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE appdb.pg_temp.t", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.pg_temp.t", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.t.t", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE appdb.public.t", "NonTemporaryWrite")]
+    // Mixed lists: one unproven target denies the statement.
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.t, items", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE items, pg_temp.t", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.t, public.t", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.t, pg_temp.u", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.t, pg_temp_3.t", "NonTemporaryWrite")]
+    // Options stay closed over the qualified spelling as well.
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.t CASCADE", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.t RESTART IDENTITY", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE ONLY pg_temp.t RESTART IDENTITY CASCADE", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE TABLE pg_temp.t ON CLUSTER c", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE t (id int); EXPLAIN TRUNCATE pg_temp.t", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE t (id int); EXPLAIN ANALYZE TRUNCATE pg_temp.u", "NonTemporaryWrite")]
+    public void Final_Truncate_schema_qualified_denials_are_unchanged(string sql, string expected)
+    {
+        foreach (var usage in new[] { SqlUsage.Query, SqlUsage.CompareSetup })
+        {
+            foreach (var approve in new[] { false, true })
+            {
+                var decision = _classifier.Classify(
+                    ExpandNames(sql), usage, "appdb", approve, approve ? "appdb" : null, Empty);
+                Assert.False(decision.Allowed);
+                Assert.Equal(expected, decision.Reason.ToString());
+            }
+        }
+    }
+
+    [Fact]
+    public void Final_Truncate_of_pg_temp_qualified_name_is_not_proven_by_a_caller_built_set()
+    {
+        var plain = new HashSet<string>(StringComparer.Ordinal) { "t" };
+        foreach (var sql in new[] { "TRUNCATE pg_temp.t", "TRUNCATE ONLY pg_temp.t", "TRUNCATE t, pg_temp.t" })
+        {
+            var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", plain);
+            Assert.False(decision.Allowed);
+            Assert.Equal(SqlSafetyReason.NonTemporaryWrite, decision.Reason);
+        }
     }
 
     // Query usage without approval, then compare setup, where an unproven DML

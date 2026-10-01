@@ -255,6 +255,9 @@ public sealed class CapabilitiesCommandTests
     [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE t")]
     [InlineData("CREATE TEMPORARY TABLE t (id int); TRUNCATE ONLY t")]
     [InlineData("CREATE TEMP TABLE t (id int); CREATE TEMP TABLE u (id int); TRUNCATE TABLE t, u")]
+    // 011/final (I2): the pg_temp-qualified spelling of a proven temp.
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.t")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE ONLY pg_temp.t")]
     public void SessionTempStatements_postgres_TRUNCATE_entry_allows_what_it_claims(string sql)
     {
         Assert.Contains(CapabilityPostgresTruncateEntry, SessionTempStatements()["postgres"]);
@@ -270,7 +273,8 @@ public sealed class CapabilitiesCommandTests
     [InlineData("TRUNCATE items", "NonTemporaryWrite")]
     [InlineData("TRUNCATE ONLY items", "NonTemporaryWrite")]
     [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE t, items", "NonTemporaryWrite")]
-    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.t", "NonTemporaryWrite")]
+    [InlineData("TRUNCATE pg_temp.t", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp_3.t", "NonTemporaryWrite")]
     [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE public.t", "NonTemporaryWrite")]
     [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; TRUNCATE t", "NonTemporaryWrite")]
     // CASCADE and RESTART IDENTITY: denied even over proven temps.
