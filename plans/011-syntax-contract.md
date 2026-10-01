@@ -86,7 +86,7 @@ stop qualifying targets (untrusted schema can carry that prefix).
 
 | ID | AST node / construct | Verdict | Test (planned) |
 |---|---|---|---|
-| 011-T4-A1 | `Statement.Truncate`, every `Names[].Name` in `knownTemps`, `Identity` null or `Continue`, `Cascade` null or `Restrict`, `OnCluster` null | ALLOW session-local (same standing as temp DML: no mutation approval needed; persistent-mutation path never engaged) | `Truncate_all_session_temps_is_session_local` |
+| 011-T4-A1 | `Statement.Truncate`, every `Names[].Name` in `knownTemps`, `Identity` null or `Continue`, `Cascade` null or `Restrict`, `OnCluster` null, `Only` true or false | ALLOW session-local (same standing as temp DML: no mutation approval needed; persistent-mutation path never engaged). `ONLY` decision: `TRUNCATE [TABLE] ONLY <temp>[, ...]` is ALLOWED on the same terms as the form without `ONLY`. `Only` is one flag for the whole statement, it only narrows the statement to the named tables (no descendants), and it does not relax the target proof: `TRUNCATE ONLY <persistent>` stays DENY `NonTemporaryWrite` (011-T4-D1). | `T4_Truncate_all_session_temps_is_session_local` (case `TRUNCATE ONLY t`), `T4_Truncate_persistent_target_is_denied` (case `TRUNCATE ONLY items`) |
 | 011-T4-D1 | `Statement.Truncate` with any persistent (non-`knownTemps`) target | DENY `NonTemporaryWrite` | `Truncate_persistent_target_is_denied` |
 | 011-T4-D2 | `Statement.Truncate` with mixed temp + persistent list (one bad target poisons the batch) | DENY `NonTemporaryWrite` | `Truncate_mixed_targets_are_denied` |
 | 011-T4-D3 | `Statement.Truncate` with `Cascade == Cascade` (blast radius exceeds named targets) | DENY `UnsupportedStatement` | `Truncate_cascade_is_denied` |
