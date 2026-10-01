@@ -432,6 +432,16 @@ public class SqlParameterMatrixTests
         Assert.Equal("The --matrix option for SQL parameter '@BatchSize' requires at least two values.", exception.Message);
     }
 
+    [Fact]
+    public void Model_matrix_without_a_value_list_is_a_safety_rejection()
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterMatrixParser.Bind(
+            new SqlHarnessParameterMatrixInput("BatchSize", "int", null!),
+            []));
+
+        Assert.Equal("The --matrix option for SQL parameter '@BatchSize' requires at least two values.", exception.Message);
+    }
+
     private static SqlHarnessSafetyException Reject(string input, params string[] fixedParameters) =>
         Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterMatrixParser.Parse(input, fixedParameters));
 

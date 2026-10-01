@@ -335,6 +335,44 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.True(Properties(capabilities).TryGetProperty("includeDiagnostics", out _));
     }
 
+    // 012/T2: a matrix value is a string or JSON null (typed NULL); the
+    // served schema and description must say so and no longer forbid commas.
+    [Fact]
+    public async Task Matrix_values_schema_advertises_string_or_null_items_without_a_comma_limit()
+    {
+        var schemas = await ServedSchemasAsync(Scope());
+        var matrix = Properties(schemas["sqlharness_compare"]).GetProperty("matrix");
+        var itemType = Properties(matrix).GetProperty("values").GetProperty("items").GetProperty("type");
+        Assert.Equal(JsonValueKind.Array, itemType.ValueKind);
+        Assert.Equal(["null", "string"], itemType.EnumerateArray().Select(item => item.GetString()!).Order(StringComparer.Ordinal).ToArray());
+        var description = matrix.GetProperty("description").GetString()!;
+        Assert.DoesNotContain("no commas", description, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("null", description, StringComparison.Ordinal);
+    }
+
+    // The fixed-name clash is Core's last matrix check, after every value is
+    // bound: reaching it over the wire proves the JSON null, the empty string
+    // and the comma value went through the Core binder, offline.
+    [Fact]
+    public async Task Served_compare_binds_comma_empty_and_json_null_matrix_values_in_core()
+    {
+        await using var served = await ServedCatalog.CreateAsync(Scope());
+        var result = await served.Client.CallToolAsync(
+            "sqlharness_compare",
+            (Dictionary<string, object?>)JsonSerializer.Deserialize(
+                "{\"baseline\":{\"sql\":\"SELECT @Label\"},\"candidate\":{\"sql\":\"SELECT @Label\"},"
+                + "\"parameters\":[{\"name\":\"label\",\"type\":\"int\",\"value\":\"7\"}],"
+                + "\"matrix\":{\"name\":\"Label\",\"type\":\"nvarchar(20)\",\"values\":[\"a,b\",\"\",null,\"null\"]}}",
+                typeof(Dictionary<string, object?>))!,
+            cancellationToken: CancellationToken.None);
+        var envelope = ServedEnvelope(result, "sqlharness_compare");
+        Assert.True(result.IsError == true);
+        Assert.Equal((int)SqlHarnessExitCode.Safety, envelope.GetProperty("exitCode").GetInt32());
+        Assert.Equal(
+            "The --matrix option for SQL parameter '@Label' duplicates a fixed parameter.",
+            envelope.GetProperty("error").GetProperty("message").GetString());
+    }
+
     [Fact]
     public async Task Inline_frame_cap_is_advertised_on_sql_and_plan_tools()
     {

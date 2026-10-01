@@ -385,6 +385,23 @@ public class CompareMatrixTests
         Assert.Equal(0, factory.ConnectCount);
     }
 
+    [Fact]
+    public async Task Typed_matrix_without_a_value_list_is_a_safety_rejection_before_any_connection()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+        var operation = TypedMatrix("Q1", "Q2") with
+        {
+            TypedMatrix = new SqlHarnessParameterMatrixInput("BatchSize", "nvarchar(20)", null!),
+        };
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal("The --matrix option for SQL parameter '@BatchSize' requires at least two values.", outcome.SafeError);
+        Assert.Equal(0, factory.ConnectCount);
+    }
+
     [Theory]
     [InlineData(true, "SQL parameters must be supplied either as declarations or as typed inputs, not both.")]
     [InlineData(false, "The --matrix option must be supplied either as text or as a typed matrix, not both.")]

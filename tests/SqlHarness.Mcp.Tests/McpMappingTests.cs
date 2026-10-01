@@ -309,6 +309,81 @@ public sealed class McpMappingTests : IDisposable
             null, null, 5, 30, "bogus", null, CancellationToken.None));
     }
 
+    // 012/T2 regression: the old text bridge rejected a comma and an empty
+    // string in the mapper and could not carry a JSON null at all. The values
+    // must now reach Core as structure, in caller order, with no text matrix.
+    [Theory]
+    [InlineData("[\"a,b\",\"c\"]")]
+    [InlineData("[\"\",\"c\"]")]
+    [InlineData("[null,\"c\"]")]
+    [InlineData("[\"a,b\",\"\",null,\"null\"]")]
+    public async Task Matrix_values_with_comma_empty_and_null_reach_core_as_structure(string valuesJson)
+    {
+        var scope = Scope();
+        var recording = new RecordingModule();
+        var handlers = new McpToolHandlers(scope, recording);
+        var matrix = JsonSerializer.Deserialize<McpMatrixArgument>(
+            "{\"name\":\"Label\",\"type\":\"nvarchar(20)\",\"values\":" + valuesJson + "}")!;
+
+        var result = await handlers.CompareAsync(
+            null!,
+            new McpSqlSourceArgument { Sql = "SELECT @Label" },
+            new McpSqlSourceArgument { Sql = "SELECT @Label" },
+            matrix: matrix);
+
+        Assert.False(result.IsError == true);
+        var operation = Assert.IsType<SqlHarnessCompareMatrixOperation>(Assert.Single(recording.Operations));
+        Assert.Equal(string.Empty, operation.Matrix);
+        Assert.NotNull(operation.TypedMatrix);
+        Assert.Equal("Label", operation.TypedMatrix.Name);
+        Assert.Equal("nvarchar(20)", operation.TypedMatrix.Type);
+        Assert.Equal(JsonSerializer.Deserialize<string?[]>(valuesJson), operation.TypedMatrix.Values.ToArray());
+    }
+
+    // The fixed-name clash is the last matrix check in Core and runs only
+    // after every value is bound, so reaching it offline proves the Core
+    // binder accepted the comma, the empty string, the typed NULL and the
+    // text "null" as four distinct values.
+    [Fact]
+    public async Task Matrix_comma_empty_null_and_null_text_bind_in_core_as_distinct_values()
+    {
+        var scope = Scope();
+        var operation = await McpOperationMapper.MapCompareAsync(
+            scope,
+            new McpSqlSourceArgument { Sql = "SELECT @Label" },
+            new McpSqlSourceArgument { Sql = "SELECT @Label" },
+            null, [P("label", "int", "7")], 5, 30, "ordered",
+            JsonSerializer.Deserialize<McpMatrixArgument>(
+                "{\"name\":\"Label\",\"type\":\"nvarchar(20)\",\"values\":[\"a,b\",\"\",null,\"null\"]}"),
+            CancellationToken.None);
+        var outcome = await scope.CreateModule().ExecuteAsync(
+            operation, new CancellationTokenSource(TimeSpan.FromSeconds(30)).Token);
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal("The --matrix option for SQL parameter '@Label' duplicates a fixed parameter.", outcome.SafeError);
+    }
+
+    [Theory]
+    [InlineData("nvarchar(20)", "[null,null]", "The --matrix option for SQL parameter '@Label' contains a duplicate value.")]
+    [InlineData("nvarchar(20)", "[\"\",\"\"]", "The --matrix option for SQL parameter '@Label' contains a duplicate value.")]
+    [InlineData("int", "[\"1\",\"\"]", "The --matrix option for SQL parameter '@Label' of type 'int' is invalid.")]
+    [InlineData("int", "[\"1\",\"2,3\"]", "The --matrix option for SQL parameter '@Label' of type 'int' is invalid.")]
+    public async Task Matrix_value_rejections_come_from_the_core_binder(string type, string valuesJson, string expected)
+    {
+        var scope = Scope();
+        var operation = await McpOperationMapper.MapCompareAsync(
+            scope,
+            new McpSqlSourceArgument { Sql = "SELECT @Label" },
+            new McpSqlSourceArgument { Sql = "SELECT @Label" },
+            null, null, 5, 30, "ordered",
+            JsonSerializer.Deserialize<McpMatrixArgument>(
+                "{\"name\":\"Label\",\"type\":\"" + type + "\",\"values\":" + valuesJson + "}"),
+            CancellationToken.None);
+        var outcome = await scope.CreateModule().ExecuteAsync(
+            operation, new CancellationTokenSource(TimeSpan.FromSeconds(30)).Token);
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal(expected, outcome.SafeError);
+    }
+
     [Fact]
     public async Task Watch_mapping_applies_cli_defaults_and_exclusive_stop()
     {
