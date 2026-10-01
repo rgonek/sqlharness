@@ -143,10 +143,11 @@ internal static partial class SqlParameterMatrixParser
 
     // SqlDbType, precision, scale, size, and the invariant typed value. Not the raw display text.
     // "o" keeps fractional seconds. Spatial WKT alone omits SRID, so the key includes both.
-    private readonly record struct MatrixValueKey(SqlDbType Type, byte? Precision, byte? Scale, int? Size, string InvariantValue)
+    // IsNull keeps a typed NULL apart from the text "null" of the same sized type.
+    private readonly record struct MatrixValueKey(SqlDbType Type, byte? Precision, byte? Scale, int? Size, bool IsNull, string InvariantValue)
     {
         public static MatrixValueKey From(SqlHarnessParameter parameter) =>
-            new(parameter.Type, parameter.Precision, parameter.Scale, parameter.Size, InvariantText(parameter.Value));
+            new(parameter.Type, parameter.Precision, parameter.Scale, parameter.Size, parameter.Value is DBNull, InvariantText(parameter.Value));
 
         private static string InvariantText(object value) => value switch
         {

@@ -320,6 +320,118 @@ public class SqlParameterMatrixTests
         Assert.Equal(expected, exception.Message);
     }
 
+    // 012/T1: the typed model. No comma split, no empty-value rule, explicit null.
+    [Theory]
+    [InlineData("a=x", "a", null, "x")]
+    [InlineData("a=", "a", null, "")]
+    [InlineData("a=null", "a", null, "null")]
+    [InlineData("a:null", "a", null, null)]
+    [InlineData("a:int:null", "a", "int", null)]
+    [InlineData("a:decimal(10,2)=1.5", "a", "decimal(10,2)", "1.5")]
+    [InlineData("a:nvarchar=p:q=r,s", "a", "nvarchar", "p:q=r,s")]
+    [InlineData("a:int:x=1", "a", "int:x", "1")]
+    [InlineData("bad-name=1", "bad-name", null, "1")]
+    public void Declaration_text_maps_to_the_model(string input, string name, string? type, string? value)
+    {
+        Assert.Equal(new SqlHarnessParameterInput(name, type, value), SqlParameterParser.ToInput(input));
+    }
+
+    [Fact]
+    public void Matrix_text_maps_to_the_model()
+    {
+        var model = SqlParameterMatrixParser.ToInput("Amount:decimal(10,2)=1.25,2.50");
+
+        Assert.Equal("Amount", model.Name);
+        Assert.Equal("decimal(10,2)", model.Type);
+        Assert.Equal(["1.25", "2.50"], model.Values);
+    }
+
+    [Fact]
+    public void Model_parameter_value_is_bound_whole_and_null_is_explicit()
+    {
+        var parameters = SqlParameterParser.Bind(
+        [
+            new SqlHarnessParameterInput("a", null, "p:q=r,s"),
+            new SqlHarnessParameterInput("b", "nvarchar(20)", ""),
+            new SqlHarnessParameterInput("c", "int", null),
+            new SqlHarnessParameterInput("d", null, null),
+            new SqlHarnessParameterInput("e", "nvarchar", "null"),
+        ]);
+
+        Assert.Equal(["@a", "@b", "@c", "@d", "@e"], parameters.Select(parameter => parameter.Name));
+        Assert.Equal("p:q=r,s", parameters[0].Value);
+        Assert.Equal("", parameters[1].Value);
+        Assert.Equal((SqlDbType.Int, DBNull.Value), (parameters[2].Type, parameters[2].Value));
+        Assert.Equal((SqlDbType.NVarChar, DBNull.Value), (parameters[3].Type, parameters[3].Value));
+        Assert.Equal("null", parameters[4].Value);
+    }
+
+    [Theory]
+    [InlineData("a:b", "int", "1", "Invalid SQL parameter name.")]
+    [InlineData("a=b", null, "1", "Invalid SQL parameter name.")]
+    [InlineData("@a", "int", "1", "Invalid SQL parameter name.")]
+    [InlineData("a", "", "1", "Unsupported SQL parameter type ''.")]
+    [InlineData("a", "int", "", "Invalid value for SQL parameter 'a' of type 'int'.")]
+    [InlineData("a", "int", "private,audit", "Invalid value for SQL parameter 'a' of type 'int'.")]
+    public void Model_parameter_rejections_are_the_declaration_rejections(string name, string? type, string value, string expected)
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(
+            () => SqlParameterParser.Bind(new SqlHarnessParameterInput(name, type, value)));
+
+        Assert.Equal(expected, exception.Message);
+    }
+
+    [Fact]
+    public void Model_matrix_keeps_comma_empty_null_and_null_text_as_distinct_values()
+    {
+        var matrix = SqlParameterMatrixParser.Bind(
+            new SqlHarnessParameterMatrixInput("Label", "nvarchar(10)", ["a,b", "", null, "null"]),
+            ["@Tenant"]);
+
+        Assert.Equal("@Label", matrix.Name);
+        Assert.Equal("nvarchar(10)", matrix.Type);
+        Assert.Equal(["a,b", "", null, "null"], matrix.DisplayValues);
+        Assert.Equal<object>(["a,b", "", DBNull.Value, "null"], matrix.Values.Select(value => value.Value));
+        Assert.All(matrix.Values, value => Assert.Equal((SqlDbType.NVarChar, 10), (value.Type, value.Size)));
+    }
+
+    [Fact]
+    public void Model_matrix_rejects_two_nulls_as_a_duplicate()
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterMatrixParser.Bind(
+            new SqlHarnessParameterMatrixInput("Label", "nvarchar(10)", [null, "x", null]),
+            []));
+
+        Assert.Equal("The --matrix option for SQL parameter '@Label' contains a duplicate value.", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("BatchSize", "int", "1", "nope", "The --matrix option for SQL parameter '@BatchSize' of type 'int' is invalid.")]
+    [InlineData("BatchSize", "int", "", "2", "The --matrix option for SQL parameter '@BatchSize' of type 'int' is invalid.")]
+    [InlineData("BatchSize", "xml", "1", "2", "The --matrix option for SQL parameter '@BatchSize' is invalid.")]
+    [InlineData("BatchSize", "", "1", "2", "The --matrix option for SQL parameter '@BatchSize' requires a type.")]
+    [InlineData("bad:name", "int", "1", "2", "The --matrix option is invalid.")]
+    [InlineData("BatchSize", "int", "1", "01", "The --matrix option for SQL parameter '@BatchSize' contains a duplicate value.")]
+    [InlineData("Tenant", "int", "1", "2", "The --matrix option for SQL parameter '@Tenant' duplicates a fixed parameter.")]
+    public void Model_matrix_rejections_are_the_text_rejections(string name, string type, string first, string second, string expected)
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterMatrixParser.Bind(
+            new SqlHarnessParameterMatrixInput(name, type, [first, second]),
+            ["@tenant"]));
+
+        Assert.Equal(expected, exception.Message);
+    }
+
+    [Fact]
+    public void Model_matrix_requires_two_values()
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterMatrixParser.Bind(
+            new SqlHarnessParameterMatrixInput("BatchSize", "int", ["1"]),
+            []));
+
+        Assert.Equal("The --matrix option for SQL parameter '@BatchSize' requires at least two values.", exception.Message);
+    }
+
     private static SqlHarnessSafetyException Reject(string input, params string[] fixedParameters) =>
         Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterMatrixParser.Parse(input, fixedParameters));
 
