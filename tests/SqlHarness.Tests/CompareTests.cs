@@ -263,6 +263,66 @@ public class SqlHarnessCompareTests
         Assert.Null(outcome.Report);
     }
 
+    // 011/final (M1): the plan 011 allows through the `compare` entry point.
+    [Fact]
+    public async Task Compare_runs_table_variable_setup_and_SET_in_both_variants_unchanged()
+    {
+        var session = FakeCompareSession.Create();
+        var operation = Compare(repeat: 1) with
+        {
+            SetupSql = "DECLARE @seed TABLE (Id int); INSERT @seed (Id) VALUES (1); SELECT Id INTO #ids FROM @seed",
+            BaselineSql = "DECLARE @n int; SET @n = 1; SELECT Value FROM dbo.Clients WHERE Id = @n",
+            CandidateSql = "DECLARE @n int; SET @n = 1; SELECT Value FROM dbo.Clients WHERE Id = @n -- candidate",
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(1, session.FactoryOpenCount);
+        Assert.Equal("setup", session.Labels[0]);
+        Assert.Single(session.Commands, command => command.Sql == operation.SetupSql);
+        Assert.Contains(session.Commands, command => command.Sql == operation.BaselineSql);
+        Assert.Contains(session.Commands, command => command.Sql == operation.CandidateSql);
+        var report = Assert.IsType<SqlHarnessCompareReport>(outcome.Report);
+        Assert.Equal("session-local", report.Classification.Setup);
+        Assert.Equal("read-only", report.Classification.Baseline);
+        Assert.Equal("read-only", report.Classification.Candidate);
+    }
+
+    [Theory]
+    // SET is denied in setup.
+    [InlineData("DECLARE @n int; SET @n = 1; SELECT Id INTO #ids FROM dbo.Clients WHERE Id = @n", null, null, "setup")]
+    // A table variable declared in setup is not visible to a measured variant.
+    [InlineData("DECLARE @seed TABLE (Id int); INSERT @seed (Id) VALUES (1); SELECT Id INTO #ids FROM @seed", "SELECT Id AS Value FROM @seed", null, "baseline")]
+    [InlineData("DECLARE @seed TABLE (Id int); INSERT @seed (Id) VALUES (1); SELECT Id INTO #ids FROM @seed", null, "SELECT Id AS Value FROM @seed -- candidate", "candidate")]
+    // SET to a local that is not declared in the same batch.
+    [InlineData(null, null, "SET @n = 1; SELECT Value FROM dbo.Clients -- candidate", "candidate")]
+    public async Task Compare_rejects_unproven_SET_and_table_variable_SQL_before_connect(
+        string? setupSql,
+        string? baselineSql,
+        string? candidateSql,
+        string label)
+    {
+        var session = FakeCompareSession.Create();
+        var azure = new FakeAzureCli();
+        var artifacts = new CapturingArtifactWriter();
+        var operation = Compare(repeat: 1);
+        if (setupSql is not null)
+            operation = operation with { SetupSql = setupSql };
+        if (baselineSql is not null)
+            operation = operation with { BaselineSql = baselineSql };
+        if (candidateSql is not null)
+            operation = operation with { CandidateSql = candidateSql };
+
+        var outcome = await Module(session, azure, artifacts: artifacts).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Contains($"SQL safety rejection for {label}:", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Empty(azure.Calls);
+        Assert.Equal(0, session.FactoryOpenCount);
+        Assert.Empty(artifacts.Runs);
+    }
+
     [Fact]
     public async Task Compare_invalid_repeat_uses_compare_wording()
     {

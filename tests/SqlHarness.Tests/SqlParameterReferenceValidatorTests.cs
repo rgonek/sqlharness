@@ -1,5 +1,6 @@
 using SqlHarness.Core;
 using SqlHarness.Core.Dialect;
+using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Tests;
 
@@ -50,6 +51,139 @@ public class SqlParameterReferenceValidatorTests
             "SELECT * FROM dbo.Customers WHERE Id = @CUSTOMERID",
             "SELECT * FROM dbo.Customers WHERE Active = @active");
     }
+
+    [Fact]
+    public void T3_Validate_table_variable_is_local_not_required()
+    {
+        var required = SqlParameterReferences.Collect(
+            SqlEngine.SqlServer,
+            "DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (1); SELECT Id FROM @t");
+
+        Assert.Empty(required);
+    }
+
+    [Theory]
+    [InlineData("INSERT @x (Id) VALUES (1)")]
+    [InlineData("SELECT Id FROM @x")]
+    [InlineData("DECLARE @t TABLE (Id int); DELETE @t OUTPUT deleted.Id INTO @x (Id)")]
+    public void T3_Validate_undeclared_table_target_is_rejected(string sql)
+    {
+        // A table-position @name can never be satisfied by a scalar --param:
+        // it is not offered as a required parameter, and the classifier denies it.
+        var required = SqlParameterReferences.Collect(SqlEngine.SqlServer, sql);
+
+        Assert.DoesNotContain("@x", required, StringComparer.OrdinalIgnoreCase);
+        var decision = new SqlSafetyClassifier().Classify(sql, SqlUsage.Query, "db", allowMutation: false, confirmDatabase: null);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    [Theory]
+    [InlineData("INSERT @x (Id) VALUES (1)")]
+    [InlineData("SELECT Id FROM @x")]
+    [InlineData("DECLARE @t TABLE (Id int); DELETE @t OUTPUT deleted.Id INTO @x (Id)")]
+    public void T3b_Validation_report_denies_undeclared_table_position_name_end_to_end(string sql)
+    {
+        // Ruling R6: "not listed as a required parameter" never means "allowed".
+        var report = ValidateOffline(sql);
+
+        Assert.False(report.Allowed);
+        Assert.Equal("rejected", report.Classification);
+        Assert.Equal("unsupported_statement", report.Reason);
+        Assert.DoesNotContain("x", report.RequiredParameters, StringComparer.OrdinalIgnoreCase);
+        Assert.Empty(report.MissingParameters);
+        Assert.False(report.Executed);
+    }
+
+    [Theory]
+    [InlineData("INSERT @x (Id) VALUES (1)")]
+    [InlineData("SELECT Id FROM @x")]
+    public void T3b_Validation_report_stays_denied_when_a_parameter_with_that_name_is_supplied(string sql)
+    {
+        var report = ValidateOffline(sql, "x:int=1");
+
+        Assert.False(report.Allowed);
+        Assert.Equal("unsupported_statement", report.Reason);
+        Assert.False(report.Executed);
+    }
+
+    // 011/T3b (review Minor 1): a table variable is local to its declaring batch only.
+    [Theory]
+    [InlineData("DECLARE @t TABLE (Id int);\nGO\nSELECT Id FROM dbo.Clients WHERE Id = @t")]
+    [InlineData("SELECT Id FROM dbo.Clients WHERE Id = @t\nGO\nDECLARE @t TABLE (Id int);")]
+    [InlineData("DECLARE @t TABLE (Id int); SELECT Id FROM @t\nGO\nSELECT Id FROM dbo.Clients WHERE Id = @T")]
+    public void T3b_Validate_table_variable_is_not_local_in_another_batch(string sql)
+    {
+        var required = SqlParameterReferences.Collect(SqlEngine.SqlServer, sql);
+
+        Assert.Equal(["@t"], required, StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void T3b_Validation_report_requires_a_parameter_named_like_another_batch_table_variable()
+    {
+        const string sql = "DECLARE @t TABLE (Id int);\nGO\nSELECT Id FROM dbo.Clients WHERE Id = @t";
+
+        var missing = ValidateOffline(sql);
+
+        Assert.False(missing.Allowed);
+        Assert.Equal("missing_parameters", missing.Reason);
+        Assert.Equal(["t"], missing.RequiredParameters);
+        Assert.Equal(["t"], missing.MissingParameters);
+
+        var supplied = ValidateOffline(sql, "t:int=1");
+
+        Assert.True(supplied.Allowed, supplied.Reason);
+        Assert.Equal(["t"], supplied.RequiredParameters);
+        Assert.Empty(supplied.MissingParameters);
+    }
+
+    [Fact]
+    public void T3_Validate_scalar_reference_next_to_table_variable_is_still_required()
+    {
+        var required = SqlParameterReferences.Collect(
+            SqlEngine.SqlServer,
+            "DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (@seed); SELECT Id FROM @t WHERE Id = @seed");
+
+        Assert.Equal(["@seed"], required);
+    }
+
+    [Theory]
+    [InlineData("t:int=1", "@t", "DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (1); SELECT Id FROM @t")]
+    [InlineData("t:int=1", "@t", "DECLARE @t TABLE (Id int); SELECT 1")]
+    [InlineData("x:int=1", "@x", "SELECT Id FROM @x")]
+    [InlineData("x:int=1", "@x", "INSERT @x (Id) VALUES (1)")]
+    public void T3_Validate_rejects_supplied_parameter_used_only_as_table_name(string declaration, string name, string sql)
+    {
+        var parameters = SqlParameterParser.Parse([declaration]);
+
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            SqlParameterReferenceValidator.Validate(parameters, sql));
+
+        Assert.Contains(name, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void T2_Validate_SET_target_is_not_a_required_parameter()
+    {
+        var required = SqlParameterReferences.Collect(
+            SqlEngine.SqlServer,
+            "DECLARE @n int; SET @n = 5; SELECT @n");
+
+        Assert.Empty(required);
+    }
+
+    // Offline only: the profile is never connected to and its password variable is never read.
+    private static SqlValidationReport ValidateOffline(string sql, params string[] parameters) =>
+        SqlValidation.Validate(
+            new SqlTargetRequest("test", new Dictionary<string, string>()),
+            sql,
+            parameters,
+            new Dictionary<string, TargetProfile>
+            {
+                ["test"] = new(
+                    "server-unused", "database-unused", new Dictionary<string, string>(), "sql", "user-unused", "MUST_NOT_BE_READ", Engine: "sqlserver"),
+            });
 
     [Fact]
     public void Sql_server_dialect_still_rejects_postgres_only_syntax()

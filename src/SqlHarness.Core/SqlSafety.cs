@@ -160,22 +160,21 @@ internal sealed class SqlSafetyClassifier
             return Denied(SqlSafetyReason.UnsupportedStatement);
         }
 
-        var statements = script.Batches.SelectMany(batch => batch.Statements).ToArray();
-        if (statements.Length == 0)
+        if (script.Batches.All(batch => batch.Statements.Count == 0))
         {
             return Denied(SqlSafetyReason.UnsupportedStatement);
         }
 
         return usage switch
         {
-            SqlUsage.Query => ClassifyQuery(statements, inspection, database, allowMutation, confirmDatabase),
-            SqlUsage.CompareSetup => ClassifyCompareSetup(statements, inspection),
+            SqlUsage.Query => ClassifyQuery(script.Batches, inspection, database, allowMutation, confirmDatabase),
+            SqlUsage.CompareSetup => ClassifyCompareSetup(script.Batches, inspection),
             _ => Denied(SqlSafetyReason.UnsupportedStatement),
         };
     }
 
     private static SqlSafetyDecision ClassifyQuery(
-        IReadOnlyList<TSqlStatement> statements,
+        IList<TSqlBatch> batches,
         SafetyInspectionVisitor inspection,
         string? database,
         bool allowMutation,
@@ -188,14 +187,20 @@ internal sealed class SqlSafetyClassifier
 
         var hasMutation = false;
         var hasSessionLocal = false;
-        foreach (var statement in statements)
+        foreach (var batch in batches)
         {
-            var classification = ClassifyStatement(statement);
-            if (classification.DenyReason is { } deny)
-                return Denied(deny);
+            // 011/T2, 011/T3: SET targets and table variables are proven
+            // against same-batch declarations (Ruling R3).
+            var scope = inspection.ScopeOf(batch);
+            foreach (var statement in batch.Statements)
+            {
+                var classification = ClassifyStatement(statement, scope);
+                if (classification.DenyReason is { } deny)
+                    return Denied(deny);
 
-            hasMutation |= classification.HasPersistentWrite;
-            hasSessionLocal |= classification.HasSessionLocalWrite;
+                hasMutation |= classification.HasPersistentWrite;
+                hasSessionLocal |= classification.HasSessionLocalWrite;
+            }
         }
 
         if (!hasMutation)
@@ -222,7 +227,7 @@ internal sealed class SqlSafetyClassifier
     }
 
     private static SqlSafetyDecision ClassifyCompareSetup(
-        IReadOnlyList<TSqlStatement> statements,
+        IList<TSqlBatch> batches,
         SafetyInspectionVisitor inspection)
     {
         if (inspection.HasNonLocalSelectInto || inspection.HasNonLocalOutputInto)
@@ -231,51 +236,87 @@ internal sealed class SqlSafetyClassifier
         }
 
         var hasSessionLocal = false;
-        foreach (var statement in statements)
+        foreach (var batch in batches)
         {
-            if (statement is DeclareVariableStatement)
-                continue;
-
-            var classification = ClassifyStatement(statement);
-            if (classification.DenyReason is { } deny)
+            // 011/T3: table variables are proven against same-batch
+            // declarations. A SET never reaches an allow here: it is neither a
+            // SELECT nor session-local work, so setup denies it below.
+            var scope = inspection.ScopeOf(batch);
+            foreach (var statement in batch.Statements)
             {
-                // Setup never takes the mutation-approval path; any write outside local temps is NonTemporaryWrite.
-                if (deny is SqlSafetyReason.MutationNotAllowed ||
-                    (deny is SqlSafetyReason.UnsupportedStatement && IsWrite(statement)))
+                // One walk per statement: a DECLARE is skipped only when it
+                // hides no unproven table-position name.
+                var hasUnprovenUse = HasUnprovenTableVariableUse(statement, scope);
+                if (statement is DeclareVariableStatement && !hasUnprovenUse)
+                    continue;
+
+                var classification = hasUnprovenUse
+                    ? StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement)
+                    : ClassifyProvenStatement(statement, scope);
+                if (classification.DenyReason is { } deny)
                 {
-                    return Denied(SqlSafetyReason.NonTemporaryWrite);
+                    // Setup never takes the mutation-approval path; any write outside local temps is NonTemporaryWrite.
+                    if (deny is SqlSafetyReason.MutationNotAllowed ||
+                        (deny is SqlSafetyReason.UnsupportedStatement && IsWrite(statement)))
+                    {
+                        return Denied(SqlSafetyReason.NonTemporaryWrite);
+                    }
+
+                    return Denied(deny);
                 }
 
-                return Denied(deny);
+                if (classification.HasPersistentWrite)
+                    return Denied(SqlSafetyReason.NonTemporaryWrite);
+
+                if (!classification.HasSessionLocalWrite && statement is not SelectStatement)
+                {
+                    return Denied(IsWrite(statement)
+                        ? SqlSafetyReason.NonTemporaryWrite
+                        : SqlSafetyReason.UnsupportedStatement);
+                }
+
+                hasSessionLocal |= classification.HasSessionLocalWrite;
             }
-
-            if (classification.HasPersistentWrite)
-                return Denied(SqlSafetyReason.NonTemporaryWrite);
-
-            if (!classification.HasSessionLocalWrite && statement is not SelectStatement)
-            {
-                return Denied(IsWrite(statement)
-                    ? SqlSafetyReason.NonTemporaryWrite
-                    : SqlSafetyReason.UnsupportedStatement);
-            }
-
-            hasSessionLocal |= classification.HasSessionLocalWrite;
         }
 
         return Allowed(hasSessionLocal: hasSessionLocal);
     }
 
-    private static StatementClassification ClassifyStatement(TSqlStatement statement)
+    private static StatementClassification ClassifyStatement(TSqlStatement statement, BatchVariableScope scope)
+    {
+        // 011/T3: every table-position @name anywhere in the statement (DML
+        // target, FROM, subquery, OUTPUT INTO) must be a proven same-batch
+        // table variable, and a table variable never appears as a scalar.
+        return HasUnprovenTableVariableUse(statement, scope)
+            ? StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement)
+            : ClassifyProvenStatement(statement, scope);
+    }
+
+    // Callers have already established that the statement holds no unproven table-variable use.
+    private static StatementClassification ClassifyProvenStatement(TSqlStatement statement, BatchVariableScope scope)
     {
         switch (statement)
         {
+            case DeclareTableVariableStatement declareTable:
+                // 011/T3: session-local declaration. Column defaults and
+                // computed columns ride on the global inspection.
+                return declareTable.Body is { VariableName.Value: { Length: > 0 }, Definition: not null }
+                    ? StatementClassification.SessionLocal
+                    : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+
+            case SetVariableStatement setVariable:
+                // 011/T2: plain scalar assignment to a proven same-batch scalar
+                // local only (Ruling R3, fail closed). The RHS rides on the
+                // global inspection (external/stateful/cross-db/EXEC sources).
+                return IsProvenScalarAssignment(setVariable, scope)
+                    ? StatementClassification.ReadOnly
+                    : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+
             case DeclareVariableStatement declare:
                 // Scalar variables only; initializers are covered by the global
                 // inspection (cross-database, external, stateful, EXEC sources).
-                // Table variables parse as DeclareTableVariableStatement and stay denied.
-                return declare.Declarations.All(d =>
-                        d is DeclareVariableElement element &&
-                        element.DataType is SqlDataTypeReference or UserDataTypeReference)
+                // Table variables parse as DeclareTableVariableStatement (011/T3 case above).
+                return IsScalarDeclaration(declare)
                     ? StatementClassification.ReadOnly
                     : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
 
@@ -318,27 +359,31 @@ internal sealed class SqlSafetyClassifier
 
             case InsertStatement insert:
                 return ClassifyDmlWrites(
-                    ResolveDirectTarget(insert.InsertSpecification.Target),
+                    ResolveDirectTarget(insert.InsertSpecification.Target, scope),
                     insert.InsertSpecification.OutputIntoClause,
-                    insert);
+                    insert,
+                    scope);
 
             case UpdateStatement update:
                 return ClassifyDmlWrites(
-                    ResolveTarget(update.UpdateSpecification.Target, update.UpdateSpecification.FromClause),
+                    ResolveTarget(update.UpdateSpecification.Target, update.UpdateSpecification.FromClause, scope),
                     update.UpdateSpecification.OutputIntoClause,
-                    update);
+                    update,
+                    scope);
 
             case DeleteStatement delete:
                 return ClassifyDmlWrites(
-                    ResolveTarget(delete.DeleteSpecification.Target, delete.DeleteSpecification.FromClause),
+                    ResolveTarget(delete.DeleteSpecification.Target, delete.DeleteSpecification.FromClause, scope),
                     delete.DeleteSpecification.OutputIntoClause,
-                    delete);
+                    delete,
+                    scope);
 
             case MergeStatement merge:
                 return ClassifyDmlWrites(
-                    ResolveDirectTarget(merge.MergeSpecification.Target),
+                    ResolveDirectTarget(merge.MergeSpecification.Target, scope),
                     merge.MergeSpecification.OutputIntoClause,
-                    merge);
+                    merge,
+                    scope);
 
             default:
                 return IsDirectMutation(statement)
@@ -347,36 +392,178 @@ internal sealed class SqlSafetyClassifier
         }
     }
 
+    // 011/T2: same-batch proof for SET targets (Ruling R3, fail closed).
+    // A name counts as a scalar local only when a same-batch
+    // DeclareVariableStatement declares it with a scalar-looking type.
+    // Table-variable names (DeclareTableVariableStatement, owned by T3)
+    // never qualify, even if otherwise declared.
+    //
+    // 011/T3: a name is a table variable only when a same-batch top-level
+    // DeclareTableVariableStatement declares it AND no DeclareVariableStatement
+    // of any type (scalar, cursor, user type) reuses the name. Ambiguous
+    // scalar-vs-table names prove nothing and stay denied on both paths.
+    //
+    // 011/T3b: declaration must precede use. ScalarLocals and TableVariables
+    // map a name to the end offset of its first declaring statement; a SET
+    // target or a table-position @name proves nothing unless it starts at or
+    // after that offset. The disqualifying checks (dual declaration, table
+    // name in scalar position) stay whole-batch, so order never widens an allow.
+    //
+    // The collections are read-only views: the shared Empty instance and a
+    // scope handed to several visitors cannot be changed after construction.
+    private sealed class BatchVariableScope(
+        IReadOnlyDictionary<string, int> scalarLocals,
+        IReadOnlyDictionary<string, int> tableVariables,
+        IReadOnlySet<string> nonTableDeclarations)
+    {
+        internal static BatchVariableScope Empty { get; } = new(
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+        internal bool IsTableVariableName(string? name) =>
+            !string.IsNullOrEmpty(name) && tableVariables.ContainsKey(name);
+
+        internal bool IsProvenTableVariable(VariableTableReference? reference) =>
+            reference?.Variable?.Name is { Length: > 0 } name &&
+            IsDeclaredBefore(tableVariables, name, reference) &&
+            !nonTableDeclarations.Contains(name);
+
+        internal bool IsProvenScalarLocal(VariableReference? variable) =>
+            variable?.Name is { Length: > 0 } name &&
+            IsDeclaredBefore(scalarLocals, name, variable) &&
+            !tableVariables.ContainsKey(name);
+
+        private static bool IsDeclaredBefore(IReadOnlyDictionary<string, int> declarations, string name, TSqlFragment use) =>
+            declarations.TryGetValue(name, out var declarationEnd) &&
+            use.StartOffset >= 0 &&
+            use.StartOffset >= declarationEnd;
+    }
+
+    // Unknown fragment positions prove nothing: no use can follow int.MaxValue.
+    private static int DeclarationEnd(TSqlFragment statement) =>
+        statement.StartOffset >= 0 && statement.FragmentLength >= 0
+            ? statement.StartOffset + statement.FragmentLength
+            : int.MaxValue;
+
+    // The one definition of "scalar DECLARE": the statement verdict and the
+    // SET-target scope can never disagree.
+    private static bool IsScalarDeclaration(DeclareVariableStatement declare) =>
+        declare.Declarations.All(d =>
+            d is DeclareVariableElement element &&
+            element.DataType is SqlDataTypeReference or UserDataTypeReference);
+
+    private static BatchVariableScope CollectBatchScope(TSqlBatch batch)
+    {
+        var scalars = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var tables = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var nonTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var statement in batch.Statements)
+        {
+            if (statement is DeclareVariableStatement declare)
+            {
+                var isScalar = IsScalarDeclaration(declare);
+                foreach (var declaration in declare.Declarations)
+                {
+                    if (declaration?.VariableName?.Value is not { } declaredName)
+                        continue;
+
+                    nonTables.Add(declaredName);
+                    if (isScalar)
+                        scalars.TryAdd(declaredName, DeclarationEnd(statement));
+                }
+            }
+            else if (statement is DeclareTableVariableStatement declareTable &&
+                declareTable.Body?.VariableName?.Value is { } tableName)
+            {
+                tables.TryAdd(tableName, DeclarationEnd(statement));
+            }
+        }
+
+        return new BatchVariableScope(scalars, tables, nonTables);
+    }
+
+    private static bool HasUnprovenTableVariableUse(TSqlFragment statement, BatchVariableScope scope)
+    {
+        var visitor = new TableVariableUseVisitor(scope);
+        statement.Accept(visitor);
+        return visitor.HasUnprovenUse;
+    }
+
+    private sealed class TableVariableUseVisitor(BatchVariableScope scope) : TSqlFragmentVisitor
+    {
+        internal bool HasUnprovenUse { get; private set; }
+
+        public override void ExplicitVisit(VariableTableReference node)
+        {
+            // Table position: undeclared, scalar, parameter, other-batch,
+            // not-yet-declared, or dual-declared names are not proven local.
+            // The inner VariableReference is the table name, not a scalar use.
+            if (!scope.IsProvenTableVariable(node))
+                HasUnprovenUse = true;
+        }
+
+        public override void ExplicitVisit(VariableReference node)
+        {
+            // Scalar position: a declared table variable is never a scalar.
+            if (scope.IsTableVariableName(node.Name))
+                HasUnprovenUse = true;
+            base.ExplicitVisit(node);
+        }
+    }
+
+    private static bool IsProvenScalarAssignment(SetVariableStatement set, BatchVariableScope scope)
+    {
+        // Only plain `SET @v = <rhs>`; cursor assignments and compound
+        // operators (+=, ...) stay denied.
+        if (set.AssignmentKind != AssignmentKind.Equals || set.Expression is null)
+            return false;
+        // The target is the variable itself: a member (@v.Member), a static
+        // member (@v::Member) or a method call (@v.Method(...)) is another shape.
+        if (set.Identifier is not null ||
+            set.SeparatorType != SeparatorType.NotSpecified ||
+            set.FunctionCallExists)
+            return false;
+        return scope.IsProvenScalarLocal(set.Variable);
+    }
+
     private static StatementClassification ClassifyDmlWrites(
         TargetResolution primary,
         OutputIntoClause? outputInto,
-        TSqlFragment statement)
+        TSqlFragment statement,
+        BatchVariableScope scope)
     {
-        if (primary.Kind == TargetResolutionKind.Ambiguous ||
-            primary.Kind == TargetResolutionKind.Unsupported)
-        {
-            return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
-        }
-
+        // 011/T3: a proven table-variable write is session-local; it carries
+        // no SchemaObjectName and never enters the #temp name check below.
+        // Any other resolution kind (ambiguous, unsupported) is denied.
+        var hasSessionLocal = false;
         var targets = new List<SchemaObjectName?>();
         if (primary.Kind == TargetResolutionKind.Resolved)
             targets.Add(primary.Name);
+        else if (primary.Kind == TargetResolutionKind.TableVariable)
+            hasSessionLocal = true;
         else
             return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
 
         if (outputInto is not null)
         {
-            var outputTarget = ResolveDirectTarget(outputInto.IntoTable);
-            if (outputTarget.Kind != TargetResolutionKind.Resolved)
+            var outputTarget = ResolveDirectTarget(outputInto.IntoTable, scope);
+            if (outputTarget.Kind == TargetResolutionKind.Resolved)
+                targets.Add(outputTarget.Name);
+            else if (outputTarget.Kind == TargetResolutionKind.TableVariable)
+                hasSessionLocal = true;
+            else
                 return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
-            targets.Add(outputTarget.Name);
         }
 
         // INSERT ... SELECT (UPDATE/DELETE/INSERT/MERGE ... OUTPUT) hides writes that are not the statement target.
-        if (!TryAppendNestedWriteTargets(statement, targets))
+        var nested = new NestedDmlWriteVisitor(scope);
+        statement.Accept(nested);
+        if (nested.Unsupported)
             return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+        targets.AddRange(nested.Targets);
+        hasSessionLocal |= nested.HasTableVariableTarget;
 
-        var hasSessionLocal = false;
         var hasPersistent = false;
         foreach (var target in targets)
         {
@@ -389,19 +576,12 @@ internal sealed class SqlSafetyClassifier
         return new StatementClassification(null, hasSessionLocal, hasPersistent);
     }
 
-    private static bool TryAppendNestedWriteTargets(TSqlFragment statement, List<SchemaObjectName?> targets)
+    private static TargetResolution ResolveTarget(TableReference? target, FromClause? fromClause, BatchVariableScope scope)
     {
-        var visitor = new NestedDmlWriteVisitor();
-        statement.Accept(visitor);
-        if (visitor.Unsupported)
-            return false;
+        // 011/T3: an @name target is the variable itself (never a FROM alias).
+        if (target is VariableTableReference)
+            return ResolveDirectTarget(target, scope);
 
-        targets.AddRange(visitor.Targets);
-        return true;
-    }
-
-    private static TargetResolution ResolveTarget(TableReference? target, FromClause? fromClause)
-    {
         if (target is not NamedTableReference named)
             return TargetResolution.Unsupported;
 
@@ -428,10 +608,15 @@ internal sealed class SqlSafetyClassifier
         return TargetResolution.Resolved(named.SchemaObject);
     }
 
-    private static TargetResolution ResolveDirectTarget(TableReference? target) =>
-        target is NamedTableReference named
-            ? TargetResolution.Resolved(named.SchemaObject)
-            : TargetResolution.Unsupported;
+    private static TargetResolution ResolveDirectTarget(TableReference? target, BatchVariableScope scope) =>
+        target switch
+        {
+            NamedTableReference named => TargetResolution.Resolved(named.SchemaObject),
+            // 011/T3: only a proven same-batch table variable is a local target.
+            VariableTableReference variable when scope.IsProvenTableVariable(variable) =>
+                TargetResolution.TableVariable,
+            _ => TargetResolution.Unsupported,
+        };
 
     private static bool CollectCorrelationBindings(
         TableReference tableReference,
@@ -555,6 +740,7 @@ internal sealed class SqlSafetyClassifier
         Resolved,
         Ambiguous,
         Unsupported,
+        TableVariable,
     }
 
     private readonly record struct TargetResolution(TargetResolutionKind Kind, SchemaObjectName? Name)
@@ -567,6 +753,9 @@ internal sealed class SqlSafetyClassifier
 
         internal static TargetResolution Unsupported { get; } =
             new(TargetResolutionKind.Unsupported, null);
+
+        internal static TargetResolution TableVariable { get; } =
+            new(TargetResolutionKind.TableVariable, null);
     }
 
     private static SqlSafetyDecision Allowed(bool hasMutation = false, bool hasSessionLocal = false) =>
@@ -575,9 +764,11 @@ internal sealed class SqlSafetyClassifier
     private static SqlSafetyDecision Denied(SqlSafetyReason reason, string? detail = null) =>
         new(false, reason, Detail: detail);
 
-    private sealed class NestedDmlWriteVisitor : TSqlFragmentVisitor
+    private sealed class NestedDmlWriteVisitor(BatchVariableScope scope) : TSqlFragmentVisitor
     {
         internal bool Unsupported { get; private set; }
+
+        internal bool HasTableVariableTarget { get; private set; }
 
         internal List<SchemaObjectName?> Targets { get; } = [];
 
@@ -592,38 +783,49 @@ internal sealed class SqlSafetyClassifier
 
             var resolution = spec switch
             {
-                UpdateSpecification update => ResolveTarget(update.Target, update.FromClause),
-                DeleteSpecification delete => ResolveTarget(delete.Target, delete.FromClause),
-                InsertSpecification or MergeSpecification => ResolveDirectTarget(spec.Target),
+                UpdateSpecification update => ResolveTarget(update.Target, update.FromClause, scope),
+                DeleteSpecification delete => ResolveTarget(delete.Target, delete.FromClause, scope),
+                InsertSpecification or MergeSpecification => ResolveDirectTarget(spec.Target, scope),
                 _ => TargetResolution.Unsupported,
             };
+
+            if (!TryRecord(resolution))
+                return;
+
+            if (spec.OutputIntoClause is { } outputInto &&
+                !TryRecord(ResolveDirectTarget(outputInto.IntoTable, scope)))
+            {
+                return;
+            }
+
+            base.ExplicitVisit(node);
+        }
+
+        private bool TryRecord(TargetResolution resolution)
+        {
+            if (resolution.Kind == TargetResolutionKind.TableVariable)
+            {
+                HasTableVariableTarget = true;
+                return true;
+            }
 
             if (resolution.Kind != TargetResolutionKind.Resolved || resolution.Name is null)
             {
                 Unsupported = true;
-                return;
+                return false;
             }
 
             Targets.Add(resolution.Name);
-
-            if (spec.OutputIntoClause is { } outputInto)
-            {
-                var outputTarget = ResolveDirectTarget(outputInto.IntoTable);
-                if (outputTarget.Kind != TargetResolutionKind.Resolved || outputTarget.Name is null)
-                {
-                    Unsupported = true;
-                    return;
-                }
-
-                Targets.Add(outputTarget.Name);
-            }
-
-            base.ExplicitVisit(node);
+            return true;
         }
     }
 
     private sealed class SafetyInspectionVisitor : TSqlFragmentVisitor
     {
+        // 011/T3: OUTPUT INTO @t is local only for a table variable proven in the batch being walked.
+        private BatchVariableScope _scope = BatchVariableScope.Empty;
+        private readonly Dictionary<TSqlBatch, BatchVariableScope> _scopes = [];
+
         internal bool HasCrossDatabaseReference { get; private set; }
         internal bool HasExternalAccess { get; private set; }
         internal bool HasStatefulExpression { get; private set; }
@@ -632,6 +834,18 @@ internal sealed class SqlSafetyClassifier
         internal bool HasSelectInto { get; private set; }
         internal bool HasNonLocalSelectInto { get; private set; }
         internal bool HasNonLocalOutputInto { get; private set; }
+
+        // The scope built during the inspection walk, reused by statement
+        // classification. Classify walks the whole script before it classifies
+        // any batch, so every batch has one.
+        internal BatchVariableScope ScopeOf(TSqlBatch batch) => _scopes[batch];
+
+        public override void ExplicitVisit(TSqlBatch node)
+        {
+            _scope = CollectBatchScope(node);
+            _scopes[node] = _scope;
+            base.ExplicitVisit(node);
+        }
 
         public override void ExplicitVisit(SchemaObjectName node)
         {
@@ -698,7 +912,9 @@ internal sealed class SqlSafetyClassifier
 
         public override void ExplicitVisit(OutputIntoClause node)
         {
-            HasNonLocalOutputInto |= !IsLocalTemp(GetName(node.IntoTable));
+            var isProvenTableVariable =
+                _scope.IsProvenTableVariable(node.IntoTable as VariableTableReference);
+            HasNonLocalOutputInto |= !isProvenTableVariable && !IsLocalTemp(GetName(node.IntoTable));
             base.ExplicitVisit(node);
         }
     }
@@ -1298,6 +1514,11 @@ internal static class SqlParameterReferenceValidator
         {
             references.Add(node.Name);
             base.ExplicitVisit(node);
+        }
+
+        // 011/T3: a table-position @name is never a reference to a supplied scalar parameter.
+        public override void ExplicitVisit(VariableTableReference node)
+        {
         }
     }
 }

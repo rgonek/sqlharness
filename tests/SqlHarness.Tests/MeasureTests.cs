@@ -161,6 +161,56 @@ public class SqlHarnessMeasureTests
         Assert.Null(outcome.Report);
     }
 
+    // 011/final (M1): the plan 011 allows through the `measure` entry point.
+    // Setup may use a table variable; the measured SQL may use SET.
+    [Fact]
+    public async Task Measure_runs_table_variable_setup_and_SET_in_measured_SQL_unchanged()
+    {
+        var session = FakeMeasureSession.Create();
+        var operation = Measure(repeat: 2) with
+        {
+            SetupSql = "DECLARE @seed TABLE (Id int); INSERT @seed (Id) VALUES (1); SELECT Id INTO #ids FROM @seed",
+            QuerySql = "DECLARE @n int; SET @n = 1; SELECT Value FROM dbo.Clients WHERE Id = @n",
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(["setup", "warmup", "query-1", "query-2"], session.Labels);
+        Assert.Equal(1, session.FactoryOpenCount);
+        Assert.Single(session.Commands, command => command.Sql == operation.SetupSql);
+        Assert.Equal(3, session.Commands.Count(command => command.Sql == operation.QuerySql));
+        var report = Assert.IsType<SqlHarnessMeasureReport>(outcome.Report);
+        Assert.Equal("session-local", report.Classification.Setup);
+        Assert.Equal("read-only", report.Classification.Query);
+    }
+
+    [Theory]
+    // SET is denied in setup.
+    [InlineData("DECLARE @n int; SET @n = 1; SELECT Id INTO #ids FROM dbo.Clients WHERE Id = @n", "SELECT Value FROM dbo.Clients", "setup")]
+    // A table variable declared in setup is another batch: the measured SQL cannot use it.
+    [InlineData("DECLARE @seed TABLE (Id int); INSERT @seed (Id) VALUES (1); SELECT Id INTO #ids FROM @seed", "SELECT Id AS Value FROM @seed", "query")]
+    // Undeclared table variable in setup; SET to an undeclared local in the measured SQL.
+    [InlineData("INSERT @seed (Id) VALUES (1); SELECT Id INTO #ids FROM dbo.Clients", "SELECT Value FROM dbo.Clients", "setup")]
+    [InlineData("SELECT Id INTO #ids FROM dbo.Clients", "SET @n = 1; SELECT Value FROM dbo.Clients", "query")]
+    public async Task Measure_rejects_unproven_SET_and_table_variable_SQL_before_authentication(
+        string setup, string query, string label)
+    {
+        var session = FakeMeasureSession.Create();
+        var azure = new FakeAzureCli();
+        var writer = new CapturingArtifactWriter();
+
+        var outcome = await Module(session, azure, writer: writer)
+            .ExecuteAsync(Measure(1) with { SetupSql = setup, QuerySql = query });
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Contains($"SQL safety rejection for {label}:", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Empty(azure.Calls);
+        Assert.Equal(0, session.FactoryOpenCount);
+        Assert.Empty(writer.Runs);
+        Assert.Null(outcome.Report);
+    }
+
     [Fact]
     public async Task Measure_parameter_matching_uses_case_insensitive_union_of_setup_and_query()
     {
