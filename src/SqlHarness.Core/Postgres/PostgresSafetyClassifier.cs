@@ -172,11 +172,18 @@ internal sealed class PostgresSafetyClassifier
                     // An ON COMMIT DROP temp does not outlive its transaction, and the
                     // classifier does not know where that transaction ends, so its
                     // name never proves a later target of any statement kind.
+                    // A qualified declaration proves its relation name only through
+                    // the pg_temp alias: the server rejects any other schema for a
+                    // temp, except a pg_temp_<N> that cannot be told offline from
+                    // another session's.
+                    var declared = create.Element.Name.Values;
                     knownTemps.Record(
                         key,
-                        create.Element.Name.Values[^1],
+                        declared[^1],
                         survivesCommit: create.Element.OnCommit != OnCommit.Drop,
-                        ifNotExists: create.Element.IfNotExists);
+                        ifNotExists: create.Element.IfNotExists,
+                        provesName: declared.Count == 1 ||
+                            (declared.Count == 2 && IsPgTempAlias(declared[0])));
                     return FromWrites(effect.Targets, knownTemps, emptyIsSessionLocal: true);
                 }
 
@@ -360,7 +367,7 @@ internal sealed class PostgresSafetyClassifier
         var key = ObjectKey(into.Name);
         if (key is null)
             return StatementOutcome.Unsupported;
-        knownTemps.Record(key, into.Name.Values[^1], survivesCommit: true, ifNotExists: false);
+        knownTemps.Record(key, into.Name.Values[^1], survivesCommit: true, ifNotExists: false, provesName: true);
         if (FromWrites(effect.Targets, knownTemps).Kind == StatementKind.Mutation)
             return StatementOutcome.SessionLocalMutation;
         return StatementOutcome.SessionLocal;
@@ -538,7 +545,9 @@ internal sealed class PostgresSafetyClassifier
         internal bool RemembersCommitDrop =>
             _commitDropped.Count > 0 || _commitDroppedUnknownName || _commitDroppedAnyName;
 
-        internal void Record(string key, Ident declaredAs, bool survivesCommit, bool ifNotExists)
+        // provesName false: the declaration can still withhold or revoke proof
+        // (the branches below), but it never adds any.
+        internal void Record(string key, Ident declaredAs, bool survivesCommit, bool ifNotExists, bool provesName)
         {
             if (!FoldsLikeServer(declaredAs))
             {
@@ -573,6 +582,9 @@ internal sealed class PostgresSafetyClassifier
             }
 
             if (ifNotExists && MayBeCommitDropped(key))
+                return;
+
+            if (!provesName)
                 return;
 
             // A plain CREATE TEMP TABLE fails on the server when the name is
