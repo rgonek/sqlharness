@@ -795,6 +795,66 @@ public sealed class PostgresSafetyTests
         Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
     }
 
+    [Theory]
+    // PostgreSQL folds only ASCII A-Z in an unquoted identifier; the offline
+    // parser accepts non-ASCII unquoted identifiers and keeps them as written.
+    // U+00C9 is not folded to U+00E9 by the server, and U+212A (Kelvin sign) is
+    // not folded to k, so none of these targets is the temp the batch created.
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); TRUNCATE É")]
+    [InlineData("CREATE TEMP TABLE k (id int); TRUNCATE K")]
+    [InlineData("CREATE TEMP TABLE É (id int); TRUNCATE \"é\"")]
+    [InlineData("CREATE TEMP TABLE K (id int); TRUNCATE k")]
+    [InlineData("CREATE TEMP TABLE É (id int); TRUNCATE É")]
+    [InlineData("SELECT 1 AS id INTO TEMP TABLE K; TRUNCATE k")]
+    public void T4_Truncate_proof_does_not_depend_on_unicode_case_folding(string sql)
+    {
+        foreach (var usage in new[] { SqlUsage.Query, SqlUsage.CompareSetup })
+        {
+            var decision = _classifier.Classify(sql, usage, "appdb", true, "appdb", Empty);
+            Assert.False(decision.Allowed);
+            Assert.Equal(SqlSafetyReason.NonTemporaryWrite, decision.Reason);
+        }
+    }
+
+    [Fact]
+    public void T4_Truncate_non_ascii_unquoted_target_parses_and_is_denied_without_provenance()
+    {
+        // Pins the parser behaviour the rule above relies on: an identifier, not a parse error.
+        var decision = _classifier.Classify("TRUNCATE É", SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, decision.Reason);
+    }
+
+    [Theory]
+    // Quoted identifiers are exact, so a quoted non-ASCII temp stays provable;
+    // ASCII unquoted names still fold the way the server folds them.
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); TRUNCATE \"é\"")]
+    [InlineData("CREATE TEMP TABLE \"É\" (id int); TRUNCATE \"É\"")]
+    [InlineData("CREATE TEMP TABLE Items (id int); TRUNCATE ITEMS")]
+    [InlineData("CREATE TEMP TABLE Items (id int); TRUNCATE \"items\"")]
+    public void T4_Truncate_exact_identifier_match_is_session_local(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Theory]
+    // Guard: the stricter identifier rule is local to TRUNCATE. The shared
+    // session-local helper keeps its existing fold for DML / DROP / CREATE INDEX.
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); INSERT INTO É VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); CREATE INDEX ix ON É (id)")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE É")]
+    [InlineData("CREATE TEMP TABLE É (id int); DELETE FROM \"é\"")]
+    public void T4_Non_truncate_non_ascii_fold_verdicts_are_unchanged(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+    }
+
     private static SqlUsage ParseUsage(string usage) => usage switch
     {
         "Query" => SqlUsage.Query,
