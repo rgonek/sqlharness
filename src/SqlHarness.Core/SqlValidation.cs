@@ -227,6 +227,7 @@ internal static class SqlParameterReferences
             return [];
         var collector = new SqlServerReferenceCollector();
         document.Fragment.Accept(collector);
+        collector.CloseBatch();
         collector.Names.ExceptWith(collector.LocalNames);
         return collector.Names.Order(StringComparer.OrdinalIgnoreCase).ToArray();
     }
@@ -247,10 +248,28 @@ internal static class SqlParameterReferences
     {
         internal HashSet<string> Names { get; } = new(StringComparer.OrdinalIgnoreCase);
         internal HashSet<string> LocalNames { get; } = new(StringComparer.OrdinalIgnoreCase);
+        // 011/T3b: a table variable is local to its declaring GO batch only, so
+        // its name is subtracted per batch. In any other batch the same @name
+        // in scalar position is an ordinary required parameter.
+        private readonly HashSet<string> _batchNames = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _batchTableVariables = new(StringComparer.OrdinalIgnoreCase);
+        public override void ExplicitVisit(TSqlBatch node)
+        {
+            CloseBatch();
+            base.ExplicitVisit(node);
+            CloseBatch();
+        }
+        internal void CloseBatch()
+        {
+            _batchNames.ExceptWith(_batchTableVariables);
+            Names.UnionWith(_batchNames);
+            _batchNames.Clear();
+            _batchTableVariables.Clear();
+        }
         public override void ExplicitVisit(VariableReference node)
         {
             if (!node.Name.StartsWith("@@", StringComparison.Ordinal))
-                Names.Add(node.Name);
+                _batchNames.Add(node.Name);
             base.ExplicitVisit(node);
         }
         public override void ExplicitVisit(DeclareVariableStatement node)
@@ -264,7 +283,7 @@ internal static class SqlParameterReferences
         public override void ExplicitVisit(DeclareTableVariableBody node)
         {
             if (node.VariableName?.Value is { } name)
-                LocalNames.Add(name);
+                _batchTableVariables.Add(name);
             base.ExplicitVisit(node);
         }
         public override void ExplicitVisit(VariableTableReference node)
