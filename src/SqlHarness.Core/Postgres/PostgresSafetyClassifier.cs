@@ -169,12 +169,14 @@ internal sealed class PostgresSafetyClassifier
                     if (key is null)
                         return StatementOutcome.Unsupported;
 
-                    // An ON COMMIT DROP temp does not outlive its transaction, so its
-                    // name is tracked as before but never proves a TRUNCATE target.
+                    // An ON COMMIT DROP temp does not outlive its transaction, and the
+                    // classifier does not know where that transaction ends, so its
+                    // name never proves a later target of any statement kind.
                     knownTemps.Record(
                         key,
                         create.Element.Name.Values[^1],
-                        survivesCommit: create.Element.OnCommit != OnCommit.Drop);
+                        survivesCommit: create.Element.OnCommit != OnCommit.Drop,
+                        ifNotExists: create.Element.IfNotExists);
                     return FromWrites(effect.Targets, knownTemps, emptyIsSessionLocal: true);
                 }
 
@@ -325,7 +327,7 @@ internal sealed class PostgresSafetyClassifier
         var key = ObjectKey(into.Name);
         if (key is null)
             return StatementOutcome.Unsupported;
-        knownTemps.Record(key, into.Name.Values[^1], survivesCommit: true);
+        knownTemps.Record(key, into.Name.Values[^1], survivesCommit: true, ifNotExists: false);
         if (FromWrites(effect.Targets, knownTemps).Kind == StatementKind.Mutation)
             return StatementOutcome.SessionLocalMutation;
         return StatementOutcome.SessionLocal;
@@ -450,7 +452,9 @@ internal sealed class PostgresSafetyClassifier
         new(true, SqlSafetyReason.Allowed, hasMutation)
         {
             HasSessionLocalWork = hasSessionLocal,
-            SessionTempTables = sessionTemps is null || sessionTemps.Count == 0
+            // An empty set is still carried when it remembers an ON COMMIT DROP name.
+            SessionTempTables = sessionTemps is null ||
+                (sessionTemps.Count == 0 && sessionTemps is not SessionTemps { RemembersCommitDrop: true })
                 ? EmptyTemps
                 : new SessionTemps(sessionTemps),
         };
@@ -470,12 +474,27 @@ internal sealed class PostgresSafetyClassifier
             : base(names, StringComparer.Ordinal)
         {
             if (names is SessionTemps prior)
+            {
                 TruncateProven.UnionWith(prior.TruncateProven);
+                _commitDropped.UnionWith(prior._commitDropped);
+                _commitDroppedUnknownName = prior._commitDroppedUnknownName;
+            }
         }
+
+        // Names declared ON COMMIT DROP in this session flow. Such a temp may
+        // still exist, so a later CREATE TEMP TABLE IF NOT EXISTS of the same
+        // name can be a no-op on the server and proves nothing.
+        private readonly HashSet<string> _commitDropped = new(StringComparer.Ordinal);
+
+        // Set when an ON COMMIT DROP declaration had an unknown stored name
+        // (unquoted non-ASCII): it may be any non-ASCII name.
+        private bool _commitDroppedUnknownName;
 
         internal HashSet<string> TruncateProven { get; } = new(StringComparer.Ordinal);
 
-        internal void Record(string key, Ident declaredAs, bool survivesCommit)
+        internal bool RemembersCommitDrop => _commitDropped.Count > 0 || _commitDroppedUnknownName;
+
+        internal void Record(string key, Ident declaredAs, bool survivesCommit, bool ifNotExists)
         {
             if (!FoldsLikeServer(declaredAs))
             {
@@ -483,15 +502,31 @@ internal sealed class PostgresSafetyClassifier
                 // spellings this declaration was ever keyed under lose their proof.
                 Forget(key);
                 Forget(declaredAs.Value.ToLowerInvariant());
+                if (!survivesCommit)
+                    _commitDroppedUnknownName = true;
                 return;
             }
 
+            if (!survivesCommit)
+            {
+                Forget(key);
+                _commitDropped.Add(key);
+                return;
+            }
+
+            if (ifNotExists && MayBeCommitDropped(key))
+                return;
+
+            // A plain CREATE TEMP TABLE fails on the server when the name is
+            // still taken, so reaching the next statement means this one exists.
+            _commitDropped.Remove(key);
             Add(key);
-            if (survivesCommit)
-                TruncateProven.Add(key);
-            else
-                TruncateProven.Remove(key);
+            TruncateProven.Add(key);
         }
+
+        private bool MayBeCommitDropped(string key) =>
+            _commitDropped.Contains(key) ||
+            (_commitDroppedUnknownName && !key.All(char.IsAscii));
 
         internal void Forget(string key)
         {
