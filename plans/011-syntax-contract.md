@@ -78,20 +78,48 @@ a scalar `DECLARE`, or a supplied parameter never qualifies a DML target as loca
 Real AST (`Statement.Truncate`): `Names: Sequence<TruncateTableTarget{Name: ObjectName}>`,
 `Table`, `Only`, `Partitions`, `Identity: Nullable<TruncateIdentityOption{Restart, Continue}>`,
 `Cascade: Nullable<TruncateCascadeOption{Cascade, Restrict}>`, `OnCluster`.
-Allowed shape: **ALL** names proven current-session temps. Proof = membership in the
-session `knownTemps` set (single-part name recorded from `CREATE TEMP` / `SELECT INTO TEMP`
-in the same session flow). The current `pg_temp` / `pg_temp_*` prefix shortcut
-(`PostgresSafetyClassifier.cs:340-344`) is NOT proof of current-session ownership and must
-stop qualifying targets (untrusted schema can carry that prefix).
+Allowed shape: **ALL** names proven current-session temps. The `pg_temp` / `pg_temp_*`
+prefix shortcut of the shared `IsSessionLocal` helper is NOT proof of current-session
+ownership and does not qualify a TRUNCATE target (untrusted schema can carry that prefix).
+
+Proof as implemented (011/T4 fix round 1 + 011/T4b). "Proven temp" below means all of:
+
+1. the target is a single-part name (no schema qualifier);
+2. the target identifier has a stored name that is known offline: it is quoted (taken as
+   written) or unquoted and all-ASCII (lower-cased A-Z only). An unquoted identifier with any
+   non-ASCII character proves nothing, because the server's fold of it depends on the server
+   encoding;
+3. the same name was recorded by this classifier from `CREATE TEMP TABLE` / `SELECT INTO TEMP`
+   in the same session flow, from a declaring identifier that also satisfies (2). Names are
+   compared ordinally after the ASCII-only fold; no Unicode case mapping takes part;
+4. the declaration was not `ON COMMIT DROP` (carried from setup or in the same batch), and it
+   was not a `CREATE TEMP TABLE IF NOT EXISTS` of a name this flow already declared
+   `ON COMMIT DROP` (a server no-op while that temp exists);
+5. the record reached the statement inside a set this classifier produced
+   (`SqlSafetyDecision.SessionTempTables` passed back unchanged). A name that only a
+   caller-built plain set supplies proves no TRUNCATE target.
+
+Rule for every other statement that relies on session-temp proof (011/T4b; `INSERT` /
+`UPDATE` / `DELETE` / `MERGE` targets, `DROP TABLE`, `CREATE INDEX ... ON`): points 2, 3 and 4
+apply unchanged through the shared `IsSessionLocal` helper. Two differences from TRUNCATE
+remain and are unchanged by T4b: a `pg_temp` / `pg_temp_*` schema qualifier still qualifies
+the target, and a name supplied in a caller-built plain set still proves it. An unproven
+target is not session-local: DML takes the persistent-mutation path (`MutationNotAllowed`
+without approval, `NonTemporaryWrite` in compare setup); `DROP TABLE` / `CREATE INDEX` are
+`UnsupportedStatement`.
 
 | ID | AST node / construct | Verdict | Test (planned) |
 |---|---|---|---|
-| 011-T4-A1 | `Statement.Truncate`, every `Names[].Name` in `knownTemps`, `Identity` null or `Continue`, `Cascade` null or `Restrict`, `OnCluster` null, `Only` true or false | ALLOW session-local (same standing as temp DML: no mutation approval needed; persistent-mutation path never engaged). `ONLY` decision: `TRUNCATE [TABLE] ONLY <temp>[, ...]` is ALLOWED on the same terms as the form without `ONLY`. `Only` is one flag for the whole statement, it only narrows the statement to the named tables (no descendants), and it does not relax the target proof: `TRUNCATE ONLY <persistent>` stays DENY `NonTemporaryWrite` (011-T4-D1). | `T4_Truncate_all_session_temps_is_session_local` (case `TRUNCATE ONLY t`), `T4_Truncate_persistent_target_is_denied` (case `TRUNCATE ONLY items`) |
-| 011-T4-D1 | `Statement.Truncate` with any persistent (non-`knownTemps`) target | DENY `NonTemporaryWrite` | `Truncate_persistent_target_is_denied` |
+| 011-T4-A1 | `Statement.Truncate`, every `Names[].Name` a proven temp (points 1-5 above), `Identity` null or `Continue`, `Cascade` null or `Restrict`, `OnCluster` null, `Only` true or false | ALLOW session-local (same standing as temp DML: no mutation approval needed; persistent-mutation path never engaged). `ONLY` decision: `TRUNCATE [TABLE] ONLY <temp>[, ...]` is ALLOWED on the same terms as the form without `ONLY`. `Only` is one flag for the whole statement, it only narrows the statement to the named tables (no descendants), and it does not relax the target proof: `TRUNCATE ONLY <persistent>` stays DENY `NonTemporaryWrite` (011-T4-D1). | `T4_Truncate_all_session_temps_is_session_local` (case `TRUNCATE ONLY t`), `T4_Truncate_persistent_target_is_denied` (case `TRUNCATE ONLY items`) |
+| 011-T4-D1 | `Statement.Truncate` with any target that is not a proven temp (points 1-5 above): persistent, schema-qualified, non-ASCII unquoted on either side, `ON COMMIT DROP`, or supplied only by a caller-built set | DENY `NonTemporaryWrite` | `T4_Truncate_persistent_target_is_denied`, `T4_Truncate_schema_qualified_name_is_denied_even_when_relation_name_is_a_tracked_temp`, `T4_Truncate_proof_does_not_depend_on_unicode_case_folding`, `T4_Truncate_of_setup_temp_created_on_commit_drop_is_denied`, `T4_Truncate_of_on_commit_drop_temp_in_the_same_batch_is_denied`, `T4_Truncate_proof_travels_only_in_a_classifier_produced_temp_set` |
 | 011-T4-D2 | `Statement.Truncate` with mixed temp + persistent list (one bad target poisons the batch) | DENY `NonTemporaryWrite` | `Truncate_mixed_targets_are_denied` |
 | 011-T4-D3 | `Statement.Truncate` with `Cascade == Cascade` (blast radius exceeds named targets) | DENY `UnsupportedStatement` | `Truncate_cascade_is_denied` |
-| 011-T4-D4 | `Statement.Truncate` on `pg_temp_*`-prefixed name with NO `knownTemps` provenance | DENY (prefix is not proof). Scope: the prefix-tightening applies to the TRUNCATE path only and MUST NOT change the shared `IsSessionLocal` helper (used by the write / create-index / drop paths) — the T4 brief enforces this. | `Truncate_pg_temp_prefix_without_provenance_is_denied` |
+| 011-T4-D4 | `Statement.Truncate` on `pg_temp_*`-prefixed name that is not a proven temp | DENY (prefix is not proof). Scope: the prefix-tightening applies to the TRUNCATE path only; the `pg_temp` qualifier shortcut of the shared `IsSessionLocal` helper (write / create-index / drop paths) is unchanged. The helper's identifier fold and `ON COMMIT DROP` handling were tightened later under 011/T4b (Ruling R10), see 011-T4b-D1..D4. | `Truncate_pg_temp_prefix_without_provenance_is_denied` |
 | 011-T4-D5 | `Statement.Truncate` with `OnCluster` set (non-PG cluster routing; session-locality unprovable) | DENY `UnsupportedStatement` | `Truncate_on_cluster_is_denied` |
+| 011-T4b-D1 | DML / `DROP TABLE` / `CREATE INDEX` whose target or whose declaring `CREATE TEMP` / `SELECT INTO TEMP` identifier is unquoted with a non-ASCII character (for example `CREATE TEMP TABLE "é" ...; INSERT INTO É`, and the reverse quoting) | DENY as not session-local: DML `MutationNotAllowed` / `NonTemporaryWrite` in setup; DDL `UnsupportedStatement`. ASCII is unchanged: unquoted `Items` matches temp `items`, quoted `"Items"` does not. Stricter than the server needs when both sides are the same unquoted non-ASCII spelling; quote the name to use it. | `T4b_Non_ascii_name_never_proves_a_target_across_quoting`, `T4b_Carried_temp_declared_with_non_ascii_unquoted_name_proves_no_target`, `T4_Non_truncate_non_ascii_fold_is_denied`, `T4b_Ascii_fold_and_exact_quoted_match_stay_session_local`, `T4b_Ascii_quoted_case_mismatch_stays_denied` |
+| 011-T4b-D2 | DML / `DROP TABLE` / `CREATE INDEX` / `TRUNCATE` on a name declared `CREATE TEMP TABLE ... ON COMMIT DROP`, carried from setup or in the same batch | DENY as not session-local (same reasons as D1). The name is not reported in `SessionTempTables`. `ON COMMIT DELETE ROWS` / `PRESERVE ROWS` keep the table and stay allowed. | `T4b_Carried_on_commit_drop_temp_proves_no_target`, `T4b_On_commit_drop_temp_in_the_same_batch_proves_no_target`, `T4b_Temp_that_survives_commit_stays_session_local` |
+| 011-T4b-D3 | `CREATE TEMP TABLE IF NOT EXISTS x` after this flow declared `x` `ON COMMIT DROP` (also after an unquoted non-ASCII `ON COMMIT DROP` declaration, for any non-ASCII `x`) | The create itself stays allowed; it records no proof, so later writes / DDL / TRUNCATE on `x` are DENIED. A plain `CREATE TEMP TABLE x` (no `IF NOT EXISTS`) records proof again: it fails on the server while the name is taken. | `T4b_If_not_exists_does_not_restore_proof_for_an_on_commit_drop_temp`, `T4b_If_not_exists_after_non_ascii_on_commit_drop_proves_no_non_ascii_name`, `T4b_If_not_exists_without_an_on_commit_drop_record_still_proves_the_temp` |
+| 011-T4b-D4 | Unicode-escape identifier `U&"..."` (with or without `UESCAPE`) as a relation name | No AST: the offline parser rejects it → `ParseError`. A quoted `"\0074"` is an ordinary name and is never decoded to `t`. | `T4b_Unicode_escape_identifier_is_a_parse_error`, `T4b_Quoted_backslash_name_is_not_decoded` |
 
 Ruling R4 (decided HERE, final — T4 must not re-decide): **`RESTART IDENTITY` is DENIED.**
 `TRUNCATE … RESTART IDENTITY` on session temps stays `UnsupportedStatement` even when all
