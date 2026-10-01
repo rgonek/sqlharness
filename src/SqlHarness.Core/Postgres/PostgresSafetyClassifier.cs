@@ -525,7 +525,8 @@ internal sealed class PostgresSafetyClassifier
         private readonly HashSet<string> _commitDropped = new(StringComparer.Ordinal);
 
         // Set when an ON COMMIT DROP declaration had an unknown stored name
-        // (unquoted non-ASCII): it may be any non-ASCII name.
+        // (unquoted non-ASCII). The stored name may even be all-ASCII: a
+        // single-byte Turkish locale folds U+0130 to i. So it may be any name.
         private bool _commitDroppedUnknownName;
 
         // Set when an ON COMMIT DROP declaration was longer than the server's
@@ -583,8 +584,8 @@ internal sealed class PostgresSafetyClassifier
 
         private bool MayBeCommitDropped(string key) =>
             _commitDroppedAnyName ||
-            _commitDropped.Contains(key) ||
-            (_commitDroppedUnknownName && !key.All(char.IsAscii));
+            _commitDroppedUnknownName ||
+            _commitDropped.Contains(key);
 
         internal void Forget(string key)
         {
