@@ -169,7 +169,12 @@ internal sealed class PostgresSafetyClassifier
                     if (key is null)
                         return StatementOutcome.Unsupported;
 
-                    knownTemps.Record(key, create.Element.Name.Values[^1]);
+                    // An ON COMMIT DROP temp does not outlive its transaction, so its
+                    // name is tracked as before but never proves a TRUNCATE target.
+                    knownTemps.Record(
+                        key,
+                        create.Element.Name.Values[^1],
+                        survivesCommit: create.Element.OnCommit != OnCommit.Drop);
                     return FromWrites(effect.Targets, knownTemps, emptyIsSessionLocal: true);
                 }
 
@@ -316,7 +321,7 @@ internal sealed class PostgresSafetyClassifier
         var key = ObjectKey(into.Name);
         if (key is null)
             return StatementOutcome.Unsupported;
-        knownTemps.Record(key, into.Name.Values[^1]);
+        knownTemps.Record(key, into.Name.Values[^1], survivesCommit: true);
         if (FromWrites(effect.Targets, knownTemps).Kind == StatementKind.Mutation)
             return StatementOutcome.SessionLocalMutation;
         return StatementOutcome.SessionLocal;
@@ -453,10 +458,10 @@ internal sealed class PostgresSafetyClassifier
 
         internal HashSet<string> TruncateProven { get; } = new(StringComparer.Ordinal);
 
-        internal void Record(string key, Ident declaredAs)
+        internal void Record(string key, Ident declaredAs, bool survivesCommit)
         {
             Add(key);
-            if (FoldsLikeServer(declaredAs))
+            if (survivesCommit && FoldsLikeServer(declaredAs))
                 TruncateProven.Add(key);
             else
                 TruncateProven.Remove(key);
