@@ -76,14 +76,14 @@ internal static partial class SqlParameterMatrixParser
         IEnumerable<string> fixedParameterNames)
     {
         ArgumentNullException.ThrowIfNull(matrix);
-        ArgumentNullException.ThrowIfNull(matrix.Values);
         ArgumentNullException.ThrowIfNull(fixedParameterNames);
 
         var parameterName = matrix.Name is not null && NamePattern().IsMatch(matrix.Name) ? "@" + matrix.Name : null;
         if (string.IsNullOrEmpty(matrix.Type))
             throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires a type."));
 
-        if (matrix.Values.Count < 2)
+        // A caller-built model may carry no value list at all: a safety rejection, like no values.
+        if (matrix.Values is null || matrix.Values.Count < 2)
             throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires at least two values."));
 
         var parsedValues = new List<SqlHarnessParameter>(matrix.Values.Count);
