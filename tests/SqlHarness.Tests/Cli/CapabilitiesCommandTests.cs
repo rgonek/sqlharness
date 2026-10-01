@@ -94,16 +94,16 @@ public sealed class CapabilitiesCommandTests
     }
 
     private const string CapabilitySetEntry =
-        "Plain SET @v = <expr> to a scalar local declared earlier in the same batch; query SQL only, denied in --setup (RHS analyzed for external/stateful/cross-database sources; compound (+=), cursor, and session/transaction option SET stay denied)";
+        "Plain SET @v = expr to a scalar local declared earlier in the same batch: allowed in query and measured SQL, denied in --setup. The RHS gets the external, stateful and cross-database checks. Compound, cursor, member and session/transaction option SET stay denied";
 
     private const string CapabilityTableVariableEntry =
-        "DECLARE @t TABLE (...) then INSERT/UPDATE/DELETE/MERGE/SELECT against that table variable, declared earlier in the same batch; OUTPUT INTO @t only when the statement's primary target is also proven local (persistent primary target: MutationNotAllowed); aliased DML targets and user-defined table types stay denied";
+        "DECLARE @t TABLE (...) then INSERT/UPDATE/DELETE/MERGE/SELECT against it, declared earlier in the same batch. A table variable from --setup is not visible to measured SQL (separate batch): carry data in #temp. OUTPUT INTO @t only when the primary target is also proven local (persistent primary target: MutationNotAllowed). Aliased DML targets and user-defined table types stay denied";
 
     private const string CapabilityPostgresTruncateEntry =
-        "TRUNCATE [ONLY] of proven current-session temps only (single-part name; not ON COMMIT DROP; persistent, mixed, CASCADE, RESTART IDENTITY, and schema-qualified targets stay denied)";
+        "TRUNCATE [ONLY] of proven current-session temps only, named unqualified or as pg_temp.name; not ON COMMIT DROP. Persistent, mixed, CASCADE, RESTART IDENTITY and other schema-qualified targets stay denied";
 
     private const string CapabilityPostgresProofEntry =
-        "Session-temp proof for temp DML, DROP TABLE, CREATE INDEX, and TRUNCATE targets: name-based, assumes the default search_path (pg_temp first) for unqualified names; the name must be quoted or all-ASCII-unquoted and at most 63 UTF-8 bytes where declared and where used, else never proven (quote or shorten); DROP TABLE of a name unknown offline revokes every proof; see AGENTS.md";
+        "Session-temp proof for temp DML, DROP TABLE, CREATE INDEX and TRUNCATE targets is name-based. An unqualified name assumes the default search_path (pg_temp first) and is not checked against the server; when search_path may differ, write to pg_temp.name, which does not depend on it. A name must be quoted or all-ASCII-unquoted and at most 63 UTF-8 bytes where declared and where used, else never proven (quote or shorten). DROP TABLE of a name unknown offline revokes every proof. See AGENTS.md";
 
     private static readonly IReadOnlySet<string> NoCarriedTemps = new HashSet<string>(StringComparer.Ordinal);
 
@@ -144,7 +144,28 @@ public sealed class CapabilitiesCommandTests
             statements["postgres"]);
     }
 
+    // 011/final (M8): the plan 011 entries hold no character that the JSON
+    // writer escapes, so the text an agent reads is the text in the source.
+    [Fact]
+    public async Task SessionTempStatements_serialize_without_json_escapes()
+    {
+        var output = new StringWriter();
+        var exitCode = await SqlHarnessCli.Create(new RecordingModule(), output).RunAsync(["capabilities", "--json"]);
+        Assert.Equal(0, exitCode);
+
+        using var document = JsonDocument.Parse(output.ToString());
+        var raw = document.RootElement.GetProperty("limits").GetProperty("sessionTempStatements").GetRawText();
+        Assert.DoesNotContain("\\u", raw, StringComparison.Ordinal);
+
+        foreach (var entry in new[] { CapabilitySetEntry, CapabilityTableVariableEntry, CapabilityPostgresTruncateEntry, CapabilityPostgresProofEntry })
+        {
+            Assert.Contains("\"" + entry + "\"", raw, StringComparison.Ordinal);
+            Assert.DoesNotContain(entry, character => character is '<' or '>' or '+' or '\'' or '&' or '`' or '"' or '\\' || character > 0x7E);
+        }
+    }
+
     [Theory]
+    // SqlUsage.Query is the usage of `query` and of the measured measure / compare SQL.
     [InlineData("DECLARE @n int; SET @n = 5; SELECT @n")]
     [InlineData("DECLARE @m int; SET @m = (SELECT MAX(Id) FROM dbo.Clients); SELECT @m")]
     public void SessionTempStatements_sqlserver_SET_entry_allows_what_it_claims(string sql)
@@ -161,13 +182,14 @@ public sealed class CapabilitiesCommandTests
     [InlineData("SET @undeclared = 1; SELECT @undeclared", "UnsupportedStatement")]
     [InlineData("SET @v = 1; DECLARE @v int; SELECT @v", "UnsupportedStatement")]
     [InlineData("DECLARE @v int;\nGO\nSET @v = 1; SELECT @v", "UnsupportedStatement")]
-    // "RHS analyzed for external/stateful/cross-database sources"
+    // "The RHS gets the external, stateful and cross-database checks"
     [InlineData("DECLARE @n int; SET @n = (SELECT COUNT(*) FROM OPENROWSET('MSOLEDBSQL', 'Server=other;Trusted_Connection=yes;', 'SELECT 1') AS r); SELECT @n", "UnsupportedStatement")]
     [InlineData("DECLARE @n int; SET @n = NEXT VALUE FOR dbo.Seq; SELECT @n", "UnsupportedStatement")]
     [InlineData("DECLARE @m int; SET @m = (SELECT MAX(Id) FROM otherdb.dbo.Clients); SELECT @m", "CrossDatabaseReference")]
-    // "compound (+=), cursor, and session/transaction option SET stay denied"
+    // "Compound, cursor, member and session/transaction option SET stay denied"
     [InlineData("DECLARE @v int; SET @v += 1; SELECT @v", "UnsupportedStatement")]
     [InlineData("DECLARE @cur int; SET @cur = CURSOR FOR SELECT Id FROM dbo.Clients; SELECT @cur", "UnsupportedStatement")]
+    [InlineData("DECLARE @v dbo.SomeType; SET @v.Member = 1", "UnsupportedStatement")]
     [InlineData("SET NOCOUNT ON", "UnsupportedStatement")]
     [InlineData("SET TRANSACTION ISOLATION LEVEL READ COMMITTED", "UnsupportedStatement")]
     public void SessionTempStatements_sqlserver_SET_entry_denies_what_it_names(string sql, string expected)
@@ -199,6 +221,28 @@ public sealed class CapabilitiesCommandTests
         var decision = new SqlSafetyClassifier().Classify("DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (1)", SqlUsage.CompareSetup, "db", allowMutation: false);
         Assert.True(decision.Allowed, decision.RejectionDescription);
         Assert.False(decision.HasMutation);
+    }
+
+    [Fact]
+    public void SessionTempStatements_sqlserver_table_variable_from_setup_is_not_visible_to_measured_SQL()
+    {
+        // 011/final (M7): setup and measured SQL are separate batches, and a
+        // table variable lives in its declaring batch. #temp carries the data.
+        Assert.Contains(CapabilityTableVariableEntry, SessionTempStatements()["sqlserver"]);
+        var classifier = new SqlSafetyClassifier();
+
+        const string setup = "DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (1); SELECT Id INTO #ids FROM @t";
+        var setupDecision = classifier.Classify(setup, SqlUsage.CompareSetup, "db", allowMutation: false);
+        Assert.True(setupDecision.Allowed, setupDecision.RejectionDescription);
+        Assert.True(setupDecision.HasSessionLocalWork);
+
+        var measuredFromVariable = classifier.Classify("SELECT Id FROM @t", SqlUsage.Query, "db", allowMutation: false);
+        Assert.False(measuredFromVariable.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, measuredFromVariable.Reason);
+
+        var measuredFromTemp = classifier.Classify("SELECT Id FROM #ids", SqlUsage.Query, "db", allowMutation: false);
+        Assert.True(measuredFromTemp.Allowed, measuredFromTemp.RejectionDescription);
+        Assert.False(measuredFromTemp.HasMutation);
     }
 
     [Theory]
@@ -301,6 +345,9 @@ public sealed class CapabilitiesCommandTests
     [InlineData("CREATE TEMP TABLE {A63} (id int); INSERT INTO {A63} VALUES (1); TRUNCATE {A63}")]
     // A DROP whose stored name is known revokes only that name.
     [InlineData("CREATE TEMP TABLE items (id int); CREATE TEMP TABLE other (id int); DROP TABLE other; UPDATE items SET id = 1")]
+    // 011/final (I2): the pg_temp-qualified spelling the entry recommends.
+    [InlineData("INSERT INTO pg_temp.items VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE items (id int); DELETE FROM pg_temp.items; TRUNCATE pg_temp.items")]
     public void SessionTempStatements_postgres_proof_entry_allows_what_it_claims(string sql)
     {
         Assert.Contains(CapabilityPostgresProofEntry, SessionTempStatements()["postgres"]);
