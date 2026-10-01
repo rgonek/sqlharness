@@ -61,7 +61,8 @@ public static class McpResultSanitizer
 /// <summary>
 /// Maps MCP tool arguments onto existing Core operations. The mapper never
 /// composes shell commands or SQL text: SQL travels verbatim from the caller
-/// into Core operations, parameters travel as Core declaration strings, and
+/// into Core operations, parameters and matrix values travel as the typed
+/// Core parameter model (never joined into or split from text), and
 /// every safety check stays inside Core (SqlValidation, dialect classifiers,
 /// the parameter binder, and module bounds). There is no second SQL
 /// validator here; argument faults below are contract checks with constant
@@ -305,14 +306,16 @@ public static partial class McpOperationMapper
         // a setup-dependent batch validates under engine query rules here,
         // the same as execution without setup.
         var sqlText = await McpInputReader.ReadSqlAsync(sql, file, scope, ct);
-        var declarations = FormatParameters(parameters);
         var options = new ValidationOptions(usage!.ToLowerInvariant() switch
         {
             "setup" => ValidationUsage.Setup,
             "benchmark" => ValidationUsage.Benchmark,
             _ => ValidationUsage.Query,
-        });
-        return SqlValidation.Validate(scope.TargetRequest, sqlText, declarations, scope.Profiles, options);
+        })
+        {
+            TypedParameters = MapParameters(parameters),
+        };
+        return SqlValidation.Validate(scope.TargetRequest, sqlText, [], scope.Profiles, options);
     }
 
     public static Task<SqlHarnessQueryOperation> MapQueryAsync(
@@ -340,8 +343,11 @@ public static partial class McpOperationMapper
         // with no confirmation database, and its classifier enforces read-only
         // plus session-local temp rules.
         return new SqlHarnessQueryOperation(
-            scope.TargetRequest, sqlText, FormatParameters(parameters),
-            RequireTimeout(timeout), RequireMaxRows(maxRows), AllowMutation: false, ConfirmDatabase: null);
+            scope.TargetRequest, sqlText, [],
+            RequireTimeout(timeout), RequireMaxRows(maxRows), AllowMutation: false, ConfirmDatabase: null)
+        {
+            TypedParameters = MapParameters(parameters),
+        };
     }
 
     public static async Task<SqlHarnessMeasureOperation> MapMeasureAsync(
@@ -360,8 +366,11 @@ public static partial class McpOperationMapper
         var setupSql = await ReadOptionalSourceAsync(setup, scope, "setup", ct);
         var sets = await ReadParameterSetsOrNullAsync(paramSetFiles, scope, ct);
         return new SqlHarnessMeasureOperation(
-            scope.TargetRequest, setupSql, querySql, FormatParameters(parameters),
-            RequireTimeout(timeout), RequireRepeat(repeat), sets);
+            scope.TargetRequest, setupSql, querySql, [],
+            RequireTimeout(timeout), RequireRepeat(repeat), sets)
+        {
+            TypedParameters = MapParameters(parameters),
+        };
     }
 
     public static async Task<SqlHarnessOperation> MapCompareAsync(
@@ -391,16 +400,23 @@ public static partial class McpOperationMapper
         var baselineSql = await McpInputReader.ReadSqlAsync(baseline.Sql, baseline.File, scope, ct);
         var candidateSql = await McpInputReader.ReadSqlAsync(candidate.Sql, candidate.File, scope, ct);
         var setupSql = await ReadOptionalSourceAsync(setup, scope, "setup", ct);
-        var declarations = FormatParameters(parameters);
+        var typedParameters = MapParameters(parameters);
         var validatedTimeout = RequireTimeout(timeout);
         var validatedRepeat = RequireRepeat(repeat);
         if (matrix is null)
             return new SqlHarnessCompareOperation(
                 scope.TargetRequest, setupSql, baselineSql, candidateSql,
-                declarations, validatedTimeout, validatedRepeat, mode);
+                [], validatedTimeout, validatedRepeat, mode)
+            {
+                TypedParameters = typedParameters,
+            };
         return new SqlHarnessCompareMatrixOperation(
             scope.TargetRequest, setupSql, baselineSql, candidateSql,
-            declarations, validatedTimeout, validatedRepeat, FormatMatrix(matrix), mode);
+            [], validatedTimeout, validatedRepeat, string.Empty, mode)
+        {
+            TypedParameters = typedParameters,
+            TypedMatrix = MapMatrix(matrix),
+        };
     }
 
     public static async Task<SqlHarnessWatchOperation> MapWatchAsync(
@@ -424,12 +440,15 @@ public static partial class McpOperationMapper
             throw new McpMappingException("The untilUnchanged argument must be a positive integer.");
         var sqlText = await McpInputReader.ReadSqlAsync(sql, file, scope, ct);
         return new SqlHarnessWatchOperation(
-            scope.TargetRequest, sqlText, FormatParameters(parameters),
+            scope.TargetRequest, sqlText, [],
             RequireTimeout(timeout), RequireMaxRows(maxRows),
             ParseWatchDuration(interval, DefaultWatchInterval, "interval"),
             ParseWatchDuration(maxDuration, DefaultWatchMaxDuration, "maxDuration"),
             hasUntil ? until!.Trim() : null,
-            hasUntil ? null : untilUnchanged ?? DefaultWatchUntilUnchanged);
+            hasUntil ? null : untilUnchanged ?? DefaultWatchUntilUnchanged)
+        {
+            TypedParameters = MapParameters(parameters),
+        };
     }
 
     public static async Task<SqlHarnessSnapshotOperation> MapSnapshotAsync(
@@ -454,10 +473,13 @@ public static partial class McpOperationMapper
         // The frozen scope owner travels on the operation so Core stamps
         // scoped captures and refuses foreign baselines before data.
         return new SqlHarnessSnapshotOperation(
-            scope.TargetRequest, sqlText, FormatParameters(parameters),
+            scope.TargetRequest, sqlText, [],
             RequireTimeout(timeout), RequireMaxRows(maxRows), name,
             Diff: string.Equals(action, "diff", StringComparison.OrdinalIgnoreCase), Force: false,
-            Owner: scope.Owner);
+            Owner: scope.Owner)
+        {
+            TypedParameters = MapParameters(parameters),
+        };
     }
 
     public static async Task<SqlHarnessPlanOperation> MapPlanAsync(
@@ -485,45 +507,41 @@ public static partial class McpOperationMapper
     }
 
     /// <summary>
-    /// Formats MCP parameters as Core declaration strings without any further
-    /// interpretation: null becomes name[:type]:null, anything else becomes
-    /// name[:type]=value (so '=' inside a value survives: only the first '='
-    /// separates the declaration). Duplicates, unknown types, and bad values
-    /// stay Core's job at execution; nothing is echoed here.
+    /// Hands MCP parameters to Core as the typed model, one input per
+    /// argument and in caller order, without building or parsing text: the
+    /// value stays whole, and a null value is SQL NULL (typed when a type is
+    /// given). Only the argument shape is checked here. Names, duplicates,
+    /// unknown types, and bad values stay the Core binder's job; nothing is
+    /// echoed here.
     /// </summary>
-    public static IReadOnlyList<string> FormatParameters(IReadOnlyList<McpParameterArgument>? parameters)
+    public static IReadOnlyList<SqlHarnessParameterInput> MapParameters(IReadOnlyList<McpParameterArgument>? parameters)
     {
         if (parameters is null || parameters.Count == 0)
             return [];
-        var declarations = new List<string>(parameters.Count);
+        var inputs = new List<SqlHarnessParameterInput>(parameters.Count);
         foreach (var parameter in parameters)
         {
             if (parameter is null || string.IsNullOrWhiteSpace(parameter.Name))
                 throw new McpMappingException("Each parameter requires a non-empty name.");
-            declarations.Add(parameter.Value is null
-                ? parameter.Type is null ? $"{parameter.Name}:null" : $"{parameter.Name}:{parameter.Type}:null"
-                : parameter.Type is null ? $"{parameter.Name}={parameter.Value}" : $"{parameter.Name}:{parameter.Type}={parameter.Value}");
+            inputs.Add(new SqlHarnessParameterInput(parameter.Name, parameter.Type, parameter.Value));
         }
 
-        return declarations;
+        return inputs;
     }
 
-    internal static string FormatMatrix(McpMatrixArgument matrix)
+    /// <summary>
+    /// Hands the matrix to Core as the typed model. Shape checks only: a
+    /// comma, an empty string, and a null (typed NULL) are all legal values
+    /// here, and the Core binder decides whether each fits the matrix type.
+    /// </summary>
+    internal static SqlHarnessParameterMatrixInput MapMatrix(McpMatrixArgument matrix)
     {
         ArgumentNullException.ThrowIfNull(matrix);
         if (string.IsNullOrWhiteSpace(matrix.Name) || string.IsNullOrWhiteSpace(matrix.Type))
             throw new McpMappingException("The matrix requires a non-empty name and type.");
         if (matrix.Values is null || matrix.Values.Count < 2)
             throw new McpMappingException("The matrix requires at least two values.");
-        foreach (var value in matrix.Values)
-        {
-            if (string.IsNullOrEmpty(value))
-                throw new McpMappingException("The matrix contains an empty value.");
-            if (value.Contains(',', StringComparison.Ordinal))
-                throw new McpMappingException("The matrix value is not representable: it contains a comma.");
-        }
-
-        return $"{matrix.Name}:{matrix.Type}={string.Join(",", matrix.Values)}";
+        return new SqlHarnessParameterMatrixInput(matrix.Name, matrix.Type, matrix.Values);
     }
 
     private static async Task<string?> ReadOptionalSourceAsync(

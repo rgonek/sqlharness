@@ -10,8 +10,9 @@ namespace SqlHarness.Mcp.Tests;
 
 /// <summary>
 /// T3 mapping contract: MCP arguments become the same Core operations the CLI
-/// builds, parameters travel as Core declaration strings (null, decimal,
-/// Unicode, '=' preserved; duplicates and unknown types left to Core), PG
+/// builds, parameters and matrix values travel as the typed Core model
+/// (null, decimal, Unicode, '=', ',' and empty text preserved whole;
+/// duplicates and unknown types left to Core), PG
 /// gates fire before any connection, Core safety stays authoritative offline,
 /// and plan results lose statement text and literal predicates. Only synthetic
 /// HOME directories and an unreachable profile target are used; no test opens
@@ -90,13 +91,14 @@ public sealed class McpMappingTests : IDisposable
         SqlHarnessQueryOperation actual,
         SqlTargetRequest target,
         string sql,
-        string[] parameters,
+        SqlHarnessParameterInput[] parameters,
         int timeout,
         int maxRows)
     {
         Assert.Same(target, actual.Target);
         Assert.Equal(sql, actual.Sql);
-        Assert.Equal(parameters, actual.Parameters.ToArray());
+        Assert.Empty(actual.Parameters);
+        Assert.Equal(parameters, actual.TypedParameters);
         Assert.Equal(timeout, actual.TimeoutSeconds);
         Assert.Equal(maxRows, actual.MaxRows);
         Assert.False(actual.AllowMutation);
@@ -110,7 +112,7 @@ public sealed class McpMappingTests : IDisposable
         var operation = await McpOperationMapper.MapQueryAsync(
             scope, "SELECT 1", null, [P("customerId", "int", "42")], 30, 50, CancellationToken.None);
         AssertQueryOperation(
-            operation, scope.TargetRequest, "SELECT 1", ["customerId:int=42"], 30, 50);
+            operation, scope.TargetRequest, "SELECT 1", [new("customerId", "int", "42")], 30, 50);
     }
 
     [Fact]
@@ -123,7 +125,7 @@ public sealed class McpMappingTests : IDisposable
         Assert.False(result.IsError == true);
         var operation = Assert.IsType<SqlHarnessQueryOperation>(Assert.Single(recording.Operations));
         AssertQueryOperation(
-            operation, scope.TargetRequest, "SELECT 1", ["customerId:int=42"], 30, 50);
+            operation, scope.TargetRequest, "SELECT 1", [new("customerId", "int", "42")], 30, 50);
     }
 
     [Fact]
@@ -264,7 +266,8 @@ public sealed class McpMappingTests : IDisposable
         Assert.Same(rooted.TargetRequest, operation.Target);
         Assert.Equal("SELECT @id;", operation.QuerySql);
         Assert.Equal("SELECT 1;", operation.SetupSql);
-        Assert.Equal(["tenant:nvarchar=frozen"], operation.Parameters.ToArray());
+        Assert.Empty(operation.Parameters);
+        Assert.Equal([new SqlHarnessParameterInput("tenant", "nvarchar", "frozen")], operation.TypedParameters);
         Assert.Equal(5, operation.Repeat);
         Assert.Equal(30, operation.TimeoutSeconds);
         Assert.NotNull(operation.ParameterSets);
@@ -279,11 +282,13 @@ public sealed class McpMappingTests : IDisposable
             scope,
             new McpSqlSourceArgument { Sql = "SELECT 1" },
             new McpSqlSourceArgument { Sql = "SELECT 2" },
-            null, null, 5, 30, "multiset", null, CancellationToken.None);
+            null, [P("tenant", "nvarchar", "frozen")], 5, 30, "multiset", null, CancellationToken.None);
         var compare = Assert.IsType<SqlHarnessCompareOperation>(plain);
         Assert.Equal("SELECT 1", compare.BaselineSql);
         Assert.Equal("SELECT 2", compare.CandidateSql);
         Assert.Equal(ResultComparisonMode.Multiset, compare.CompareResults);
+        Assert.Empty(compare.Parameters);
+        Assert.Equal([new SqlHarnessParameterInput("tenant", "nvarchar", "frozen")], compare.TypedParameters);
 
         var matrix = await McpOperationMapper.MapCompareAsync(
             scope,
@@ -293,15 +298,29 @@ public sealed class McpMappingTests : IDisposable
             new McpMatrixArgument { Name = "BatchSize", Type = "int", Values = ["1", "20", "100"] },
             CancellationToken.None);
         var matrixOperation = Assert.IsType<SqlHarnessCompareMatrixOperation>(matrix);
-        Assert.Equal("BatchSize:int=1,20,100", matrixOperation.Matrix);
+        Assert.Equal(string.Empty, matrixOperation.Matrix);
+        Assert.Empty(matrixOperation.Parameters);
+        Assert.Equal([], matrixOperation.TypedParameters);
+        Assert.NotNull(matrixOperation.TypedMatrix);
+        Assert.Equal("BatchSize", matrixOperation.TypedMatrix.Name);
+        Assert.Equal("int", matrixOperation.TypedMatrix.Type);
+        Assert.Equal(new string?[] { "1", "20", "100" }, matrixOperation.TypedMatrix.Values.ToArray());
 
-        await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapCompareAsync(
-            scope,
-            new McpSqlSourceArgument { Sql = "SELECT @n" },
-            new McpSqlSourceArgument { Sql = "SELECT @n" },
-            null, null, 5, 30, "ordered",
-            new McpMatrixArgument { Name = "BatchSize", Type = "int", Values = ["1,2", "3"] },
-            CancellationToken.None));
+        // Shape checks stay in the mapper; value checks belong to Core.
+        foreach (var malformed in new[]
+        {
+            new McpMatrixArgument { Name = "BatchSize", Type = "int", Values = ["1"] },
+            new McpMatrixArgument { Name = " ", Type = "int", Values = ["1", "2"] },
+            new McpMatrixArgument { Name = "BatchSize", Type = "", Values = ["1", "2"] },
+        })
+        {
+            await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapCompareAsync(
+                scope,
+                new McpSqlSourceArgument { Sql = "SELECT @n" },
+                new McpSqlSourceArgument { Sql = "SELECT @n" },
+                null, null, 5, 30, "ordered", malformed, CancellationToken.None));
+        }
+
         await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapCompareAsync(
             scope,
             new McpSqlSourceArgument { Sql = "SELECT @n" },
@@ -436,20 +455,69 @@ public sealed class McpMappingTests : IDisposable
     }
 
     [Fact]
-    public void Parameter_formatting_preserves_null_decimal_unicode_and_equals()
+    public void Parameter_mapping_preserves_null_decimal_unicode_and_separator_characters()
     {
-        Assert.Equal(["a:null"], McpOperationMapper.FormatParameters([P("a")]).ToArray());
-        Assert.Equal(["a:int:null"], McpOperationMapper.FormatParameters([P("a", "int")]).ToArray());
+        Assert.Empty(McpOperationMapper.MapParameters(null));
+        Assert.Equal([new SqlHarnessParameterInput("a", null, null)], McpOperationMapper.MapParameters([P("a")]));
+        Assert.Equal([new SqlHarnessParameterInput("a", "int", null)], McpOperationMapper.MapParameters([P("a", "int")]));
         Assert.Equal(
-            ["amount:decimal(19,4)=1234.5600"],
-            McpOperationMapper.FormatParameters([P("amount", "decimal(19,4)", "1234.5600")]).ToArray());
+            [new SqlHarnessParameterInput("amount", "decimal(19,4)", "1234.5600")],
+            McpOperationMapper.MapParameters([P("amount", "decimal(19,4)", "1234.5600")]));
         Assert.Equal(
-            ["note:nvarchar=" + UnicodeValue],
-            McpOperationMapper.FormatParameters([P("note", "nvarchar", UnicodeValue)]).ToArray());
-        Assert.Equal(
-            ["note:nvarchar=a=b"],
-            McpOperationMapper.FormatParameters([P("note", "nvarchar", "a=b")]).ToArray());
-        Assert.Throws<McpMappingException>(() => McpOperationMapper.FormatParameters([P("  ")]));
+            [new SqlHarnessParameterInput("note", "nvarchar", UnicodeValue)],
+            McpOperationMapper.MapParameters([P("note", "nvarchar", UnicodeValue)]));
+        foreach (var value in new[] { "a=b", "a,b", "a:b", "", "null" })
+        {
+            Assert.Equal(
+                [new SqlHarnessParameterInput("note", "nvarchar", value)],
+                McpOperationMapper.MapParameters([P("note", "nvarchar", value)]));
+        }
+
+        Assert.Throws<McpMappingException>(() => McpOperationMapper.MapParameters([P("  ")]));
+    }
+
+    [Fact]
+    public async Task Watch_and_snapshot_mapping_carry_typed_parameters()
+    {
+        var scope = Scope();
+        SqlHarnessParameterInput[] expected = [new("note", "nvarchar", "a,b")];
+        var watch = await McpOperationMapper.MapWatchAsync(
+            scope, "SELECT @note", null, [P("note", "nvarchar", "a,b")], 30, 50, null, null, null, null, CancellationToken.None);
+        Assert.Empty(watch.Parameters);
+        Assert.Equal(expected, watch.TypedParameters);
+        var snapshot = await McpOperationMapper.MapSnapshotAsync(
+            scope, "capture", "before-import", "SELECT @note", null, [P("note", "nvarchar", "a,b")], 30, 50, CancellationToken.None);
+        Assert.Empty(snapshot.Parameters);
+        Assert.Equal(expected, snapshot.TypedParameters);
+    }
+
+    // Offline proof that the typed parameters reach the Core binder whole:
+    // a missing-parameter verdict would mean the binder lost one, and a
+    // parameter failure would mean a separator character was reinterpreted.
+    [Theory]
+    [InlineData("a,b")]
+    [InlineData("a=b:c")]
+    [InlineData("")]
+    [InlineData(null)]
+    public async Task Validate_binds_typed_parameter_values_whole(string? value)
+    {
+        foreach (var profile in new[] { ProfileName, PgProfileName })
+        {
+            var report = await McpOperationMapper.MapValidateAsync(
+                Scope(profile), "SELECT @note;", null, "query", [P("note", "nvarchar", value)], CancellationToken.None);
+            Assert.True(report.Allowed, JsonSerializer.Serialize(report));
+            Assert.Equal("note", Assert.Single(report.Parameters).Name);
+        }
+    }
+
+    [Fact]
+    public async Task Validate_rejects_a_bad_typed_value_in_core_without_echo()
+    {
+        var report = await McpOperationMapper.MapValidateAsync(
+            Scope(), "SELECT @id;", null, "query", [P("id", "int", SecretValue)], CancellationToken.None);
+        Assert.False(report.Allowed);
+        Assert.Equal("parameter_validation_failed", report.Reason);
+        Assert.DoesNotContain(SecretValue, JsonSerializer.Serialize(report), StringComparison.Ordinal);
     }
 
     [Theory]
@@ -594,7 +662,9 @@ public sealed class McpMappingTests : IDisposable
 
         var duplicate = await McpOperationMapper.MapQueryAsync(
             scope, "SELECT @a;", null, [P("a", "int", "1"), P("a", "int", "2")], 30, 50, CancellationToken.None);
-        Assert.Equal(["a:int=1", "a:int=2"], duplicate.Parameters.ToArray());
+        Assert.Equal(
+            [new SqlHarnessParameterInput("a", "int", "1"), new SqlHarnessParameterInput("a", "int", "2")],
+            duplicate.TypedParameters);
         var duplicateOutcome = await module.ExecuteAsync(duplicate, cts.Token);
         Assert.Equal(SqlHarnessExitCode.Safety, duplicateOutcome.ExitCode);
 

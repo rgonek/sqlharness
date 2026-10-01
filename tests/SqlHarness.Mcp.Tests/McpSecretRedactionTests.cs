@@ -4,6 +4,7 @@ using ModelContextProtocol.Protocol;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Targets;
+using SqlHarness.Mcp.Tools;
 
 namespace SqlHarness.Mcp.Tests;
 
@@ -42,6 +43,74 @@ public sealed class McpSecretRedactionTests
         Assert.Contains("[REDACTED]", text, StringComparison.Ordinal);
         using var document = JsonDocument.Parse(text);
         Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
+    }
+
+    /// <summary>
+    /// 012/T2: a typed value travels whole, so a secret with a comma (or an
+    /// '=' in a fixed parameter) is one value end to end. Core rejects the
+    /// bad value offline and neither the value nor a comma-split half of it
+    /// reaches either result representation.
+    /// </summary>
+    [Fact]
+    public async Task Typed_values_with_separator_characters_never_reach_the_result_whole_or_in_halves()
+    {
+        const string FirstHalf = "fikcyjna-polowa-4410";
+        const string SecondHalf = "fikcyjna-reszta-8852";
+        const string CommaSecret = FirstHalf + "," + SecondHalf;
+        var savedHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
+        var home = Path.Combine(Path.GetTempPath(), "sqlharness-mcp-012-redact-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(home);
+        Environment.SetEnvironmentVariable("SQLHARNESS_HOME", home);
+        try
+        {
+            var scope = McpScope.Create(
+                new McpServerOptions { Profile = "mcp-012" },
+                new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+                {
+                    ["mcp-012"] = new TargetProfile(
+                        "mcp-unreachable.invalid", "reportdb",
+                        new Dictionary<string, string>(), "integrated"),
+                });
+            var handlers = new McpToolHandlers(scope, scope.CreateModule());
+
+            var matrix = await handlers.CompareAsync(
+                null!,
+                new McpSqlSourceArgument { Sql = "SELECT @n" },
+                new McpSqlSourceArgument { Sql = "SELECT @n" },
+                matrix: new McpMatrixArgument { Name = "n", Type = "int", Values = ["1", CommaSecret] });
+            var query = await handlers.QueryAsync(
+                null!, "SELECT @n",
+                parameters: [new McpParameterArgument { Name = "n", Type = "int", Value = FirstHalf + "=" + SecondHalf }]);
+
+            foreach (var result in new[] { matrix, query })
+            {
+                Assert.True(result.IsError == true);
+                var text = TextOf(result);
+                using var document = JsonDocument.Parse(text);
+                Assert.Equal((int)SqlHarnessExitCode.Safety, document.RootElement.GetProperty("exitCode").GetInt32());
+                Assert.DoesNotContain(FirstHalf, text, StringComparison.Ordinal);
+                Assert.DoesNotContain(SecondHalf, text, StringComparison.Ordinal);
+            }
+
+            using var matrixDocument = JsonDocument.Parse(TextOf(matrix));
+            Assert.Equal(
+                "The --matrix option for SQL parameter '@n' of type 'int' is invalid.",
+                matrixDocument.RootElement.GetProperty("error").GetProperty("message").GetString());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SQLHARNESS_HOME", savedHome);
+            try
+            {
+                Directory.Delete(home, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
     }
 
     [Fact]

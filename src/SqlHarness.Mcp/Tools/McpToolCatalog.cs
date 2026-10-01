@@ -181,7 +181,7 @@ public sealed class McpToolHandlers(
         [Description("Result comparison mode.")]
         [AllowedValues("ordered", "multiset", "set", "off")]
         string compareResults = "ordered",
-        [Description("Optional single matrix dimension {name, type, values}: at least two values, no commas.")]
+        [Description("Optional single matrix dimension {name, type, values}: at least two distinct values, each a culture-invariant string or JSON null.")]
         McpMatrixArgument? matrix = null,
         [Description("Response cap 4096..1048576 bytes; only lowers the process maximum.")]
         int? maxResultBytes = null,
