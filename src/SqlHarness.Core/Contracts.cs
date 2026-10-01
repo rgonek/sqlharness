@@ -57,9 +57,25 @@ public sealed record SqlHarnessCompareMatrixOperation(
     string Matrix,
     ResultComparisonMode CompareResults = ResultComparisonMode.Ordered) : SqlHarnessOperation;
 
+/// <summary>
+/// One SQL parameter as structure instead of a <c>name:type=value</c> declaration (012).
+/// <see cref="Name"/> has no <c>@</c>. A null <see cref="Type"/> binds as <c>nvarchar</c>.
+/// A null <see cref="Value"/> is SQL NULL; an empty string is a text value. The value is
+/// never split or unescaped, so <c>,</c> <c>=</c> and <c>:</c> are ordinary characters.
+/// </summary>
+public sealed record SqlHarnessParameterInput(string Name, string? Type, string? Value);
+
+/// <summary>
+/// One matrix dimension as structure (012): one parameter name, one type, and the values in
+/// caller order. A null element is a typed NULL of <see cref="Type"/>; it is distinct from
+/// an empty string and from the text <c>null</c>.
+/// </summary>
+public sealed record SqlHarnessParameterMatrixInput(string Name, string Type, IReadOnlyList<string?> Values);
+
+/// <summary><see cref="ParameterValue"/> is null only for a typed NULL cell, which legacy matrix text cannot express.</summary>
 public sealed record CompareMatrixCellReport(
     int Index,
-    string ParameterValue,
+    string? ParameterValue,
     SqlHarnessCompareReport Compare);
 
 public sealed record SqlHarnessCompareMatrixReport(

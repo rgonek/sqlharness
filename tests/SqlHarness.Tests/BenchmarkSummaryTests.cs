@@ -271,7 +271,7 @@ public sealed class BenchmarkSummaryTests
 
         Assert.Equal("@BatchSize", summary.ParameterName);
         Assert.Equal("int", summary.ParameterType);
-        Assert.Equal(["100", "20", "1"], summary.Cells.Select(cell => cell.ParameterValue).ToArray());
+        Assert.Equal(["100", "20", "1"], summary.Cells.Select(cell => cell.ParameterValue));
         Assert.Equal([0, 1, 2], summary.Cells.Select(cell => cell.Index).ToArray());
 
         var first = summary.Cells[0].Compare;

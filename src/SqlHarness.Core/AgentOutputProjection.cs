@@ -109,7 +109,7 @@ public static class AgentOutputProjection
                     var cellDetailLimit = CalculateDetailLimit(cellBudget, maximumCellCharacters);
                     var projected = Project(cell.Compare, maximumCellCharacters, cellDetailLimit, out var cellOmitted, cellBudget);
                     nestedOmitted += cellOmitted;
-                    return new CompareMatrixCellSummary(cell.Index, Clip(cell.ParameterValue)!, (CompareBenchmarkSummary)projected!);
+                    return new CompareMatrixCellSummary(cell.Index, Clip(cell.ParameterValue), (CompareBenchmarkSummary)projected!);
                 }).ToArray();
                 omissions += nestedOmitted;
                 var parameterName = Clip(matrix.ParameterName)!;

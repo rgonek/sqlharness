@@ -10,12 +10,12 @@ namespace SqlHarness.Core;
 public sealed record SqlParameterMatrixSpec(
     string Name,
     string Type,
-    IReadOnlyList<string> DisplayValues);
+    IReadOnlyList<string?> DisplayValues);
 
 internal sealed record ParsedParameterMatrix(
     string Name,
     string Type,
-    IReadOnlyList<string> DisplayValues,
+    IReadOnlyList<string?> DisplayValues,
     IReadOnlyList<SqlHarnessParameter> Values)
 {
     public SqlParameterMatrixSpec Spec => new(Name, Type, DisplayValues);
@@ -28,6 +28,20 @@ internal static partial class SqlParameterMatrixParser
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(fixedParameters);
 
+        // Lazy on purpose: a fixed declaration is read only after the matrix itself is valid.
+        return Bind(
+            ToInput(input),
+            fixedParameters.Select(fixedParameter => SqlParameterParser.ParseOne(fixedParameter).Name));
+    }
+
+    /// <summary>
+    /// Legacy <c>name:type=v1,v2</c> text to the model. The comma split and the empty-value
+    /// rejection belong to this text grammar only; the model itself has neither limit.
+    /// </summary>
+    internal static SqlHarnessParameterMatrixInput ToInput(string input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
         var equalsIndex = input.IndexOf('=');
         if (equalsIndex < 0)
             throw new SqlHarnessSafetyException(MatrixError(TryCanonicalName(input), "must use name:type=value,value syntax."));
@@ -39,7 +53,6 @@ internal static partial class SqlParameterMatrixParser
         if (typeSeparator <= 0 || typeSeparator == declaration.Length - 1)
             throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires a type."));
 
-        var type = declaration[(typeSeparator + 1)..];
         if (valueText.Length == 0)
             throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires at least two values."));
 
@@ -48,17 +61,39 @@ internal static partial class SqlParameterMatrixParser
         if (displayValues.Any(value => value.Length == 0))
             throw new SqlHarnessSafetyException(MatrixError(parameterName, "contains an empty value."));
 
-        if (displayValues.Length < 2)
+        return new SqlHarnessParameterMatrixInput(
+            declaration[..typeSeparator],
+            declaration[(typeSeparator + 1)..],
+            displayValues);
+    }
+
+    /// <summary>
+    /// The model to bound values. <paramref name="fixedParameterNames"/> are canonical
+    /// (<c>@name</c>) and are enumerated only after every matrix value is bound.
+    /// </summary>
+    internal static ParsedParameterMatrix Bind(
+        SqlHarnessParameterMatrixInput matrix,
+        IEnumerable<string> fixedParameterNames)
+    {
+        ArgumentNullException.ThrowIfNull(matrix);
+        ArgumentNullException.ThrowIfNull(matrix.Values);
+        ArgumentNullException.ThrowIfNull(fixedParameterNames);
+
+        var parameterName = matrix.Name is not null && NamePattern().IsMatch(matrix.Name) ? "@" + matrix.Name : null;
+        if (string.IsNullOrEmpty(matrix.Type))
+            throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires a type."));
+
+        if (matrix.Values.Count < 2)
             throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires at least two values."));
 
-        var parsedValues = new List<SqlHarnessParameter>(displayValues.Length);
+        var parsedValues = new List<SqlHarnessParameter>(matrix.Values.Count);
         var seen = new HashSet<MatrixValueKey>();
-        foreach (var displayValue in displayValues)
+        foreach (var displayValue in matrix.Values)
         {
             SqlHarnessParameter parsed;
             try
             {
-                parsed = SqlParameterParser.ParseOne($"{declaration}={displayValue}");
+                parsed = SqlParameterParser.Bind(new SqlHarnessParameterInput(matrix.Name!, matrix.Type, displayValue));
             }
             catch (SqlHarnessSafetyException exception) when (exception.IsParameterValue)
             {
@@ -78,14 +113,13 @@ internal static partial class SqlParameterMatrixParser
         }
 
         var name = parsedValues[0].Name;
-        foreach (var fixedParameter in fixedParameters)
+        foreach (var fixedName in fixedParameterNames)
         {
-            var fixedName = SqlParameterParser.ParseOne(fixedParameter).Name;
             if (string.Equals(fixedName, name, StringComparison.OrdinalIgnoreCase))
                 throw new SqlHarnessSafetyException(MatrixError(name, "duplicates a fixed parameter."));
         }
 
-        return new ParsedParameterMatrix(name, type, displayValues, parsedValues);
+        return new ParsedParameterMatrix(name, matrix.Type, matrix.Values, parsedValues);
     }
 
     // Same ASCII name rule as SqlParameterParser, so a rejection can name the parameter before ParseOne runs.

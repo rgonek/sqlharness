@@ -937,14 +937,22 @@ internal static partial class SqlParameterParser
     private static readonly DateTime SmallDateTimeMin = new(1900, 1, 1);
     private static readonly DateTime SmallDateTimeMax = new(2079, 6, 6, 23, 59, 0);
 
-    internal static IReadOnlyList<SqlHarnessParameter> Parse(IReadOnlyList<string> inputs)
+    internal static IReadOnlyList<SqlHarnessParameter> Parse(IReadOnlyList<string> inputs) =>
+        // Lazy on purpose: each declaration is read and bound before the next one is read,
+        // so the first failing declaration decides the error, whatever kind of failure it is.
+        Bind(inputs.Select(ToInput));
+
+    internal static SqlHarnessParameter ParseOne(string input) => Bind(ToInput(input));
+
+    /// <summary>The one binder. Declaration text and structured callers both end here.</summary>
+    internal static IReadOnlyList<SqlHarnessParameter> Bind(IEnumerable<SqlHarnessParameterInput> inputs)
     {
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var parameters = new List<SqlHarnessParameter>(inputs.Count);
+        var parameters = new List<SqlHarnessParameter>();
 
         foreach (var input in inputs)
         {
-            var parameter = ParseOne(input);
+            var parameter = Bind(input);
             if (!names.Add(parameter.Name))
             {
                 throw new SqlHarnessSafetyException($"Duplicate SQL parameter '{parameter.Name}'.");
@@ -956,67 +964,55 @@ internal static partial class SqlParameterParser
         return parameters;
     }
 
-    internal static SqlHarnessParameter ParseOne(string input)
+    /// <summary>
+    /// Legacy declaration text to the model: name=value, name:type=value, name:null, name:type:null.
+    /// Only the grammar is decided here. Name, type and value are validated by <see cref="Bind(SqlHarnessParameterInput)"/>.
+    /// </summary>
+    internal static SqlHarnessParameterInput ToInput(string input)
     {
         var equalsIndex = input.IndexOf('=');
         if (equalsIndex < 0)
         {
-            return ParseNullDeclaration(input);
+            var lastColon = input.LastIndexOf(':');
+            if (lastColon <= 0 || input[(lastColon + 1)..] != "null")
+            {
+                throw new SqlHarnessSafetyException(
+                    "SQL parameter must use name=value, name:type=value, name:null, or name:type:null syntax.");
+            }
+
+            return SplitDeclaration(input[..lastColon], value: null);
         }
 
-        var declaration = input[..equalsIndex];
-        var value = input[(equalsIndex + 1)..];
+        return SplitDeclaration(input[..equalsIndex], input[(equalsIndex + 1)..]);
+    }
+
+    // The name ends at the first ':'. Everything after it is the type token, so decimal(10,2) stays whole.
+    private static SqlHarnessParameterInput SplitDeclaration(string declaration, string? value)
+    {
         var typeSeparator = declaration.IndexOf(':');
-        var name = typeSeparator < 0 ? declaration : declaration[..typeSeparator];
-        var type = typeSeparator < 0 ? null : declaration[(typeSeparator + 1)..];
+        return typeSeparator < 0
+            ? new(declaration, null, value)
+            : new(declaration[..typeSeparator], declaration[(typeSeparator + 1)..], value);
+    }
+
+    internal static SqlHarnessParameter Bind(SqlHarnessParameterInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        var name = input.Name;
+        var type = input.Type;
+        var value = input.Value;
         ValidateName(name);
 
         if (type is null)
         {
-            return CreateUnicodeString(name, value, max: false);
+            return value is null
+                ? CreateNull(name, SqlDbType.NVarChar, size: null)
+                : CreateUnicodeString(name, value, max: false);
         }
 
         try
         {
-            return BindTyped(name, type, value);
-        }
-        catch (SqlHarnessSafetyException exception) when (exception.IsParameterValue)
-        {
-            throw;
-        }
-        catch (SqlHarnessSafetyException exception) when (IsInvalidParameterValue(exception))
-        {
-            throw SqlHarnessSafetyException.InvalidParameter(name, type, exception.InnerException ?? exception.Diagnostic);
-        }
-        catch (Exception exception) when (exception is FormatException or OverflowException or ArgumentOutOfRangeException or ArgumentException)
-        {
-            throw SqlHarnessSafetyException.InvalidParameter(name, type, exception);
-        }
-    }
-
-    private static SqlHarnessParameter ParseNullDeclaration(string input)
-    {
-        var lastColon = input.LastIndexOf(':');
-        if (lastColon <= 0 || input[(lastColon + 1)..] != "null")
-        {
-            throw new SqlHarnessSafetyException(
-                "SQL parameter must use name=value, name:type=value, name:null, or name:type:null syntax.");
-        }
-
-        var left = input[..lastColon];
-        var typeSeparator = left.IndexOf(':');
-        if (typeSeparator < 0)
-        {
-            ValidateName(left);
-            return CreateNull(left, SqlDbType.NVarChar, size: null);
-        }
-
-        var name = left[..typeSeparator];
-        var type = left[(typeSeparator + 1)..];
-        ValidateName(name);
-        try
-        {
-            return CreateTypedNull(name, type);
+            return value is null ? CreateTypedNull(name, type) : BindTyped(name, type, value);
         }
         catch (SqlHarnessSafetyException exception) when (exception.IsParameterValue)
         {
@@ -1463,7 +1459,8 @@ internal static partial class SqlParameterParser
 
     private static void ValidateName(string name)
     {
-        if (!NamePattern().IsMatch(name))
+        // A structured caller can hand over a null name; declaration text cannot.
+        if (name is null || !NamePattern().IsMatch(name))
         {
             throw new SqlHarnessSafetyException("Invalid SQL parameter name.");
         }
