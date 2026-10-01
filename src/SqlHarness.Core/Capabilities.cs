@@ -72,12 +72,15 @@ public static class SqlHarnessCapabilitiesProvider
                 {
                     ["sqlserver"] = [
                         "DECLARE scalar variables with analyzed initializers",
+                        "SET to a scalar local declared earlier in the same batch (RHS analyzed for external/stateful/cross-database sources; session/transaction option SET stays denied)",
+                        "DECLARE @t TABLE (...) then INSERT/UPDATE/DELETE/MERGE/SELECT/OUTPUT INTO against that table variable, proven by a same-batch DECLARE",
                         "TRUNCATE TABLE #temp (unambiguous local temp only)",
                         "ALTER TABLE #temp ADD/DROP COLUMN and local CHECK/DEFAULT/NULL/UNIQUE constraints"],
                     ["postgres"] = [
                         "EXPLAIN over a safe SELECT (plan-only, read-only)",
                         "EXPLAIN ANALYZE with full inner-statement effect analysis",
-                        "SELECT INTO TEMP TABLE with unambiguous single-part name"],
+                        "SELECT INTO TEMP TABLE with unambiguous single-part name",
+                        "TRUNCATE [ONLY] of proven current-session temps only (single-part name; not ON COMMIT DROP; persistent, mixed, CASCADE, RESTART IDENTITY, and schema-qualified targets stay denied)"],
                 },
                 ["artifactRead"] = new { sections = ArtifactReader.SupportedSections, manifestVersion = ArtifactReader.CurrentManifestVersion, maxReportBytes = ArtifactReader.MaxReportBytes },
                 ["watchNdjson"] = new { events = new[] { "started", "changed", "completed", "failed" }, schemaVersion = WatchNdjsonWriter.SchemaVersion, sequence = "strictly increasing from started; exactly one terminal record", history = "no retention: every change is emitted immediately" },

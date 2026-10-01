@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using SqlHarness.Cli;
 using SqlHarness.Core;
+using SqlHarness.Core.Postgres;
 
 namespace SqlHarness.Tests.Cli;
 
@@ -90,6 +91,59 @@ public sealed class CapabilitiesCommandTests
         Assert.DoesNotContain("read-only query", watch.Description, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("no mutation", watch.Description, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("without mutation", watch.Description, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SessionTempStatements_sqlserver_entries_match_the_classifiers_real_verdicts()
+    {
+        // 011/T6: capabilities must describe only what the classifier actually
+        // allows (SET to a same-batch scalar local, DML against a proven table
+        // variable) and must not overclaim (undeclared targets stay denied).
+        var sessionTempStatements = (Dictionary<string, string[]>)SqlHarnessCapabilitiesProvider.Get().Limits["sessionTempStatements"];
+        var sqlServer = sessionTempStatements["sqlserver"];
+
+        Assert.Contains(sqlServer, entry => entry.Contains("SET", StringComparison.Ordinal) && entry.Contains("scalar local", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(sqlServer, entry => entry.Contains("DECLARE @t TABLE", StringComparison.Ordinal));
+
+        var classifier = new SqlSafetyClassifier();
+
+        var setAllowed = classifier.Classify("DECLARE @n int; SET @n = 5; SELECT @n", SqlUsage.Query, "db", allowMutation: false);
+        Assert.True(setAllowed.Allowed, setAllowed.RejectionDescription);
+
+        var setDenied = classifier.Classify("SET @undeclared = 1; SELECT @undeclared", SqlUsage.Query, "db", allowMutation: false);
+        Assert.False(setDenied.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, setDenied.Reason);
+
+        var tableVariableAllowed = classifier.Classify("DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (1)", SqlUsage.Query, "db", allowMutation: false);
+        Assert.True(tableVariableAllowed.Allowed, tableVariableAllowed.RejectionDescription);
+        Assert.True(tableVariableAllowed.HasSessionLocalWork);
+
+        var tableVariableDenied = classifier.Classify("INSERT @t (Id) VALUES (1)", SqlUsage.Query, "db", allowMutation: false);
+        Assert.False(tableVariableDenied.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, tableVariableDenied.Reason);
+    }
+
+    [Fact]
+    public void SessionTempStatements_postgres_TRUNCATE_entry_matches_the_classifiers_real_verdicts()
+    {
+        // 011/T6: capabilities must describe PG TRUNCATE exactly as the
+        // classifier implements it: allowed only over proven session temps,
+        // denied for any persistent target even with mutation approval.
+        var sessionTempStatements = (Dictionary<string, string[]>)SqlHarnessCapabilitiesProvider.Get().Limits["sessionTempStatements"];
+        var postgres = sessionTempStatements["postgres"];
+
+        Assert.Contains(postgres, entry => entry.Contains("TRUNCATE", StringComparison.Ordinal) && entry.Contains("session temps", StringComparison.OrdinalIgnoreCase));
+
+        var classifier = new PostgresSafetyClassifier();
+        var empty = (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal);
+
+        var truncateAllowed = classifier.Classify("CREATE TEMP TABLE t (id int); TRUNCATE t", SqlUsage.Query, "appdb", allowMutation: false, confirmDatabase: null, empty);
+        Assert.True(truncateAllowed.Allowed, truncateAllowed.RejectionDescription);
+        Assert.True(truncateAllowed.HasSessionLocalWork);
+
+        var truncatePersistentDenied = classifier.Classify("TRUNCATE items", SqlUsage.Query, "appdb", allowMutation: true, confirmDatabase: "appdb", empty);
+        Assert.False(truncatePersistentDenied.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, truncatePersistentDenied.Reason);
     }
 
     private sealed class RecordingModule : ISqlHarnessModule
