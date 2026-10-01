@@ -292,9 +292,8 @@ internal sealed class PostgresSafetyClassifier
 
     // Stricter than IsSessionLocal, and used by TRUNCATE only: the sole proof is
     // an unqualified name that this session flow recorded from CREATE TEMP /
-    // SELECT INTO TEMP. A pg_temp / pg_temp_N qualifier or name prefix proves
-    // nothing about ownership (pg_temp_N can be another session's schema), and
-    // neither does a name that only a caller-built set supplied.
+    // SELECT INTO TEMP. The pg_temp schema alias does not qualify a TRUNCATE
+    // target, and neither does a name that only a caller-built set supplied.
     // Both the target and the recorded name must be spelled so that the
     // server's fold is known offline; see FoldsLikeServer.
     private static bool IsProvenSessionTemp(ObjectName name, SessionTemps knownTemps) =>
@@ -396,10 +395,14 @@ internal sealed class PostgresSafetyClassifier
         if (name.Values.Count == 0)
             return false;
 
-        var first = FoldIdent(name.Values[0]);
-        if (first == "pg_temp" || first.StartsWith("pg_temp_", StringComparison.Ordinal))
-            return true;
+        // schema.relation: only the pg_temp alias, which the server resolves to
+        // the current session's temp schema. A pg_temp_<N> schema can belong to
+        // another session, so that prefix proves nothing.
+        if (name.Values.Count == 2)
+            return FoldIdent(name.Values[0]) == "pg_temp";
 
+        // An unqualified name gets no credit for how it is spelled (a persistent
+        // table may be called pg_temp_stuff, or pg_temp): it must be proven.
         if (name.Values.Count != 1 || !FoldsLikeServer(name.Values[0]))
             return false;
 
