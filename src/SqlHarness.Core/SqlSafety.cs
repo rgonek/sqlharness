@@ -392,26 +392,51 @@ internal sealed class SqlSafetyClassifier
     // DeclareTableVariableStatement declares it AND no DeclareVariableStatement
     // of any type (scalar, cursor, user type) reuses the name. Ambiguous
     // scalar-vs-table names prove nothing and stay denied on both paths.
+    //
+    // 011/T3b: declaration must precede use. ScalarLocals and TableVariables
+    // map a name to the end offset of its first declaring statement; a SET
+    // target or a table-position @name proves nothing unless it starts at or
+    // after that offset. The disqualifying checks (dual declaration, table
+    // name in scalar position) stay whole-batch, so order never widens an allow.
     private sealed record BatchVariableScope(
-        HashSet<string> ScalarLocals,
-        HashSet<string> TableVariables,
+        Dictionary<string, int> ScalarLocals,
+        Dictionary<string, int> TableVariables,
         HashSet<string> NonTableDeclarations)
     {
         internal static BatchVariableScope Empty { get; } = new(
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
             new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
-        internal bool IsProvenTableVariable(string? name) =>
-            !string.IsNullOrEmpty(name) &&
-            TableVariables.Contains(name) &&
+        internal bool IsTableVariableName(string? name) =>
+            !string.IsNullOrEmpty(name) && TableVariables.ContainsKey(name);
+
+        internal bool IsProvenTableVariable(VariableTableReference? reference) =>
+            reference?.Variable?.Name is { Length: > 0 } name &&
+            IsDeclaredBefore(TableVariables, name, reference) &&
             !NonTableDeclarations.Contains(name);
+
+        internal bool IsProvenScalarLocal(VariableReference? variable) =>
+            variable?.Name is { Length: > 0 } name &&
+            IsDeclaredBefore(ScalarLocals, name, variable) &&
+            !TableVariables.ContainsKey(name);
+
+        private static bool IsDeclaredBefore(Dictionary<string, int> declarations, string name, TSqlFragment use) =>
+            declarations.TryGetValue(name, out var declarationEnd) &&
+            use.StartOffset >= 0 &&
+            use.StartOffset >= declarationEnd;
     }
+
+    // Unknown fragment positions prove nothing: no use can follow int.MaxValue.
+    private static int DeclarationEnd(TSqlFragment statement) =>
+        statement.StartOffset >= 0 && statement.FragmentLength >= 0
+            ? statement.StartOffset + statement.FragmentLength
+            : int.MaxValue;
 
     private static BatchVariableScope CollectBatchScope(TSqlBatch batch)
     {
-        var scalars = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var tables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var scalars = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var tables = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var nonTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var statement in batch.Statements)
         {
@@ -433,13 +458,13 @@ internal sealed class SqlSafetyClassifier
                 {
                     if (declaration is DeclareVariableElement element &&
                         element.VariableName?.Value is { } scalarName)
-                        scalars.Add(scalarName);
+                        scalars.TryAdd(scalarName, DeclarationEnd(statement));
                 }
             }
             else if (statement is DeclareTableVariableStatement declareTable &&
                 declareTable.Body?.VariableName?.Value is { } tableName)
             {
-                tables.Add(tableName);
+                tables.TryAdd(tableName, DeclarationEnd(statement));
             }
         }
 
@@ -459,17 +484,17 @@ internal sealed class SqlSafetyClassifier
 
         public override void ExplicitVisit(VariableTableReference node)
         {
-            // Table position: undeclared, scalar, parameter, other-batch, or
-            // dual-declared names are not proven local. The inner
-            // VariableReference is the table name, not a scalar use.
-            if (!scope.IsProvenTableVariable(node.Variable?.Name))
+            // Table position: undeclared, scalar, parameter, other-batch,
+            // not-yet-declared, or dual-declared names are not proven local.
+            // The inner VariableReference is the table name, not a scalar use.
+            if (!scope.IsProvenTableVariable(node))
                 HasUnprovenUse = true;
         }
 
         public override void ExplicitVisit(VariableReference node)
         {
             // Scalar position: a declared table variable is never a scalar.
-            if (scope.TableVariables.Contains(node.Name))
+            if (scope.IsTableVariableName(node.Name))
                 HasUnprovenUse = true;
             base.ExplicitVisit(node);
         }
@@ -481,10 +506,7 @@ internal sealed class SqlSafetyClassifier
         // operators (+=, ...) stay denied.
         if (set.AssignmentKind != AssignmentKind.Equals || set.Expression is null)
             return false;
-        var name = set.Variable?.Name;
-        if (string.IsNullOrEmpty(name))
-            return false;
-        return scope.ScalarLocals.Contains(name) && !scope.TableVariables.Contains(name);
+        return scope.IsProvenScalarLocal(set.Variable);
     }
 
     private static StatementClassification ClassifyDmlWrites(
@@ -578,7 +600,7 @@ internal sealed class SqlSafetyClassifier
         {
             NamedTableReference named => TargetResolution.Resolved(named.SchemaObject),
             // 011/T3: only a proven same-batch table variable is a local target.
-            VariableTableReference variable when scope.IsProvenTableVariable(variable.Variable?.Name) =>
+            VariableTableReference variable when scope.IsProvenTableVariable(variable) =>
                 TargetResolution.TableVariable,
             _ => TargetResolution.Unsupported,
         };
@@ -871,8 +893,7 @@ internal sealed class SqlSafetyClassifier
         public override void ExplicitVisit(OutputIntoClause node)
         {
             var isProvenTableVariable =
-                node.IntoTable is VariableTableReference variable &&
-                _scope.IsProvenTableVariable(variable.Variable?.Name);
+                _scope.IsProvenTableVariable(node.IntoTable as VariableTableReference);
             HasNonLocalOutputInto |= !isProvenTableVariable && !IsLocalTemp(GetName(node.IntoTable));
             base.ExplicitVisit(node);
         }
