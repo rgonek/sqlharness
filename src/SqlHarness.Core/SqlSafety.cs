@@ -189,7 +189,8 @@ internal sealed class SqlSafetyClassifier
         var hasSessionLocal = false;
         foreach (var batch in batches)
         {
-            // 011/T2: SET targets are proven against same-batch declarations (Ruling R3).
+            // 011/T2, 011/T3: SET targets and table variables are proven
+            // against same-batch declarations (Ruling R3).
             var scope = inspection.ScopeOf(batch);
             foreach (var statement in batch.Statements)
             {
@@ -237,7 +238,9 @@ internal sealed class SqlSafetyClassifier
         var hasSessionLocal = false;
         foreach (var batch in batches)
         {
-            // 011/T2: SET targets are proven against same-batch declarations (Ruling R3).
+            // 011/T3: table variables are proven against same-batch
+            // declarations. A SET never reaches an allow here: it is neither a
+            // SELECT nor session-local work, so setup denies it below.
             var scope = inspection.ScopeOf(batch);
             foreach (var statement in batch.Statements)
             {
