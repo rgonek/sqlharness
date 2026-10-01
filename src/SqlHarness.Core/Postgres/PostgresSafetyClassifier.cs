@@ -85,7 +85,7 @@ internal sealed class PostgresSafetyClassifier
                 case StatementKind.Unsupported:
                     return Denied(SqlSafetyReason.UnsupportedStatement);
                 case StatementKind.NonTemporaryWrite:
-                    return Denied(SqlSafetyReason.NonTemporaryWrite);
+                    return DeniedWrite(SqlSafetyReason.NonTemporaryWrite, knownTemps);
                 default:
                     return Denied(SqlSafetyReason.UnsupportedStatement);
             }
@@ -95,7 +95,7 @@ internal sealed class PostgresSafetyClassifier
             return Allowed(hasSessionLocal: hasSessionLocal, sessionTemps: knownTemps);
 
         if (!allowMutation)
-            return Denied(SqlSafetyReason.MutationNotAllowed);
+            return DeniedWrite(SqlSafetyReason.MutationNotAllowed, knownTemps);
 
         if (confirmDatabase is null)
             return Denied(SqlSafetyReason.DatabaseConfirmationRequired);
@@ -125,7 +125,7 @@ internal sealed class PostgresSafetyClassifier
                 case StatementKind.SessionLocalMutation:
                 case StatementKind.NonTemporaryWrite:
                 case StatementKind.SelectInto:
-                    return Denied(SqlSafetyReason.NonTemporaryWrite);
+                    return DeniedWrite(SqlSafetyReason.NonTemporaryWrite, knownTemps);
                 default:
                     return Denied(SqlSafetyReason.UnsupportedStatement);
             }
@@ -506,6 +506,16 @@ internal sealed class PostgresSafetyClassifier
     private static SqlSafetyDecision Denied(SqlSafetyReason reason) =>
         new(false, reason);
 
+    // Fixed text, never SQL: shown with a write denial when the flow declared
+    // a TEMP table that recorded no proof. Reason and exit code are unchanged.
+    private const string UnprovenTempHint =
+        "A TEMP table declared in this session flow is not a proven session temp " +
+        "(unquoted non-ASCII name, name over 63 UTF-8 bytes, ON COMMIT DROP, or a schema other than pg_temp). " +
+        "If it is the write target, quote or shorten its name and keep it past commit; mutation approval is not the remedy.";
+
+    private static SqlSafetyDecision DeniedWrite(SqlSafetyReason reason, SessionTemps knownTemps) =>
+        new(false, reason, Detail: knownTemps.HasUnprovenDeclaration ? UnprovenTempHint : null);
+
     // The session temp set plus the subset that is strong enough to prove a
     // TRUNCATE target. The base set holds every name that proves a DML / DROP /
     // CREATE INDEX target: names this classifier recorded, plus names a caller
@@ -523,8 +533,15 @@ internal sealed class PostgresSafetyClassifier
                 _commitDropped.UnionWith(prior._commitDropped);
                 _commitDroppedUnknownName = prior._commitDroppedUnknownName;
                 _commitDroppedAnyName = prior._commitDroppedAnyName;
+                _unprovenDeclaration = prior._unprovenDeclaration;
             }
         }
+
+        // Set when a TEMP declaration recorded no proof. It only words a
+        // denial (UnprovenTempHint); no verdict reads it.
+        private bool _unprovenDeclaration;
+
+        internal bool HasUnprovenDeclaration => _unprovenDeclaration || RemembersCommitDrop;
 
         // Names declared ON COMMIT DROP in this session flow. Such a temp may
         // still exist, so a later CREATE TEMP TABLE IF NOT EXISTS of the same
@@ -553,6 +570,7 @@ internal sealed class PostgresSafetyClassifier
             {
                 // The stored name is unknown, so nothing is recorded. Both
                 // spellings this declaration was ever keyed under lose their proof.
+                _unprovenDeclaration = true;
                 Forget(key);
                 Forget(declaredAs.Value.ToLowerInvariant());
                 if (survivesCommit)
@@ -581,11 +599,11 @@ internal sealed class PostgresSafetyClassifier
                 return;
             }
 
-            if (ifNotExists && MayBeCommitDropped(key))
+            if ((ifNotExists && MayBeCommitDropped(key)) || !provesName)
+            {
+                _unprovenDeclaration = true;
                 return;
-
-            if (!provesName)
-                return;
+            }
 
             // A plain CREATE TEMP TABLE fails on the server when the name is
             // still taken, so reaching the next statement means this one exists.
