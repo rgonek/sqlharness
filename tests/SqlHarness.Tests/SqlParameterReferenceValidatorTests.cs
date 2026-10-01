@@ -52,6 +52,57 @@ public class SqlParameterReferenceValidatorTests
     }
 
     [Fact]
+    public void T3_Validate_table_variable_is_local_not_required()
+    {
+        var required = SqlParameterReferences.Collect(
+            SqlEngine.SqlServer,
+            "DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (1); SELECT Id FROM @t");
+
+        Assert.Empty(required);
+    }
+
+    [Theory]
+    [InlineData("INSERT @x (Id) VALUES (1)")]
+    [InlineData("SELECT Id FROM @x")]
+    [InlineData("DECLARE @t TABLE (Id int); DELETE @t OUTPUT deleted.Id INTO @x (Id)")]
+    public void T3_Validate_undeclared_table_target_is_rejected(string sql)
+    {
+        // A table-position @name can never be satisfied by a scalar --param:
+        // it is not offered as a required parameter, and the classifier denies it.
+        var required = SqlParameterReferences.Collect(SqlEngine.SqlServer, sql);
+
+        Assert.DoesNotContain("@x", required, StringComparer.OrdinalIgnoreCase);
+        var decision = new SqlSafetyClassifier().Classify(sql, SqlUsage.Query, "db", allowMutation: false, confirmDatabase: null);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    [Fact]
+    public void T3_Validate_scalar_reference_next_to_table_variable_is_still_required()
+    {
+        var required = SqlParameterReferences.Collect(
+            SqlEngine.SqlServer,
+            "DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (@seed); SELECT Id FROM @t WHERE Id = @seed");
+
+        Assert.Equal(["@seed"], required);
+    }
+
+    [Theory]
+    [InlineData("t:int=1", "@t", "DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (1); SELECT Id FROM @t")]
+    [InlineData("t:int=1", "@t", "DECLARE @t TABLE (Id int); SELECT 1")]
+    [InlineData("x:int=1", "@x", "SELECT Id FROM @x")]
+    [InlineData("x:int=1", "@x", "INSERT @x (Id) VALUES (1)")]
+    public void T3_Validate_rejects_supplied_parameter_used_only_as_table_name(string declaration, string name, string sql)
+    {
+        var parameters = SqlParameterParser.Parse([declaration]);
+
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            SqlParameterReferenceValidator.Validate(parameters, sql));
+
+        Assert.Contains(name, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void T2_Validate_SET_target_is_not_a_required_parameter()
     {
         var required = SqlParameterReferences.Collect(

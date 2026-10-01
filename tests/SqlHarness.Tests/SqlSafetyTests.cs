@@ -596,15 +596,6 @@ public class SqlSafetyTests
     }
 
     [Fact]
-    public void Query_denies_declare_table_variable()
-    {
-        var decision = ClassifyQuery("DECLARE @t TABLE (Id int); SELECT Id FROM @t");
-
-        Assert.False(decision.Allowed);
-        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
-    }
-
-    [Fact]
     public void Query_denies_declare_with_stateful_initializer()
     {
         var decision = ClassifyQuery("DECLARE @id int = NEXT VALUE FOR dbo.Seq; SELECT @id");
@@ -783,6 +774,233 @@ public class SqlSafetyTests
 
         Assert.False(decision.Allowed);
         Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    // 011/T3: table variables. A @name is a table only when a same-batch
+    // DECLARE @name TABLE proves it; everything else stays fail closed.
+    private const string T3Declare = "DECLARE @t TABLE (Id int PRIMARY KEY, Name nvarchar(20)); ";
+
+    [Fact]
+    public void T3_Compare_setup_allows_declare_table_variable()
+    {
+        var decision = _classifier.Classify(T3Declare, SqlUsage.CompareSetup, "db", false, null);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Theory]
+    [InlineData("INSERT @t (Id, Name) VALUES (1, N'a')")]
+    [InlineData("INSERT INTO @t (Id) SELECT Id FROM dbo.Clients")]
+    [InlineData("UPDATE @t SET Name = N'b' WHERE Id = 1")]
+    [InlineData("DELETE FROM @t WHERE Id = 1")]
+    [InlineData("DELETE @t")]
+    [InlineData("MERGE @t AS tgt USING (SELECT 1 AS Id) AS src ON tgt.Id = src.Id WHEN NOT MATCHED THEN INSERT (Id) VALUES (src.Id);")]
+    [InlineData("INSERT @t (Id) OUTPUT inserted.Id VALUES (1)")]
+    [InlineData("UPDATE @t SET Name = N'b' OUTPUT inserted.Id, deleted.Name")]
+    [InlineData("DELETE @t OUTPUT deleted.Id")]
+    [InlineData("DECLARE @log TABLE (Id int); INSERT @t (Id) OUTPUT inserted.Id INTO @log (Id) VALUES (1)")]
+    [InlineData("DECLARE @log TABLE (Id int); UPDATE @t SET Name = N'b' OUTPUT inserted.Id INTO @log (Id)")]
+    [InlineData("DECLARE @log TABLE (Id int); DELETE @t OUTPUT deleted.Id INTO @log (Id)")]
+    [InlineData("CREATE TABLE #log (Id int); DELETE @t OUTPUT deleted.Id INTO #log (Id)")]
+    [InlineData("INSERT @t (Id) VALUES (1); SELECT t.Id FROM @t AS t JOIN dbo.Clients AS c ON c.Id = t.Id")]
+    public void T3_Query_allows_DML_against_declared_table_variable(string sql)
+    {
+        var decision = ClassifyQuery(T3Declare + sql);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+        Assert.True(decision.HasSessionLocalWork);
+    }
+
+    [Theory]
+    [InlineData("SELECT Id FROM @t")]
+    [InlineData("SELECT c.Id FROM dbo.Clients AS c WHERE EXISTS (SELECT 1 FROM @t AS t WHERE t.Id = c.Id)")]
+    public void T3_Query_allows_SELECT_from_declared_table_variable(string sql)
+    {
+        var decision = ClassifyQuery(T3Declare + sql);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Theory]
+    [InlineData("INSERT @t (Id) VALUES (1); UPDATE @t SET Name = N'b'; DELETE @t WHERE Id = 1; SELECT Id FROM @t")]
+    [InlineData("DECLARE @log TABLE (Id int); INSERT @t (Id) OUTPUT inserted.Id INTO @log (Id) VALUES (1)")]
+    [InlineData("CREATE TABLE #src (Id int); INSERT @t (Id) SELECT Id FROM #src")]
+    public void T3_Compare_setup_allows_table_variable_DML(string sql)
+    {
+        var decision = _classifier.Classify(T3Declare + sql, SqlUsage.CompareSetup, "db", false, null);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Theory]
+    [InlineData("INSERT @x (Id) VALUES (1)")]
+    [InlineData("UPDATE @x SET Id = 2")]
+    [InlineData("DELETE FROM @x")]
+    [InlineData("MERGE @x AS tgt USING (SELECT 1 AS Id) AS src ON tgt.Id = src.Id WHEN NOT MATCHED THEN INSERT (Id) VALUES (src.Id);")]
+    [InlineData("DECLARE @t TABLE (Id int); INSERT @x (Id) SELECT Id FROM @t")]
+    public void T3_Query_denies_DML_against_undeclared_table_variable(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+
+        // Not approvable either: an unproven @target is never a known write.
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.False(approved.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, approved.Reason);
+
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
+    [InlineData("DECLARE @v int = 1; INSERT @v (Id) VALUES (1)")]
+    [InlineData("DECLARE @v int = 1; UPDATE @v SET Id = 2")]
+    [InlineData("DECLARE @v int = 1; DELETE @v")]
+    [InlineData("DECLARE @v int = 1; SELECT Id FROM @v")]
+    [InlineData("DECLARE @v dbo.SomeType; INSERT @v (Id) VALUES (1)")]
+    public void T3_Query_denies_scalar_variable_as_DML_target(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
+    [InlineData("DECLARE @t TABLE (Id int); SELECT @t")]
+    [InlineData("DECLARE @t TABLE (Id int); SELECT Id FROM dbo.Clients WHERE Id = @t")]
+    [InlineData("DECLARE @t TABLE (Id int); DECLARE @n int = @t; SELECT @n")]
+    [InlineData("DECLARE @t TABLE (Id int); SELECT Id FROM dbo.SomeFunction(@t)")]
+    public void T3_Query_denies_table_variable_in_scalar_position(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
+    [InlineData("DECLARE @t int; DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (1)")]
+    [InlineData("DECLARE @t TABLE (Id int); DECLARE @t int; SELECT Id FROM @t")]
+    [InlineData("DECLARE @t TABLE (Id int); DECLARE @t int; SET @t = 1")]
+    [InlineData("DECLARE @t TABLE (Id int); DECLARE @t CURSOR; INSERT @t (Id) VALUES (1)")]
+    public void T3_Query_denies_name_declared_as_both_scalar_and_table(string sql)
+    {
+        Assert.False(ClassifyQuery(sql).Allowed);
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
+    [InlineData("DECLARE @t TABLE (Id int);\nGO\nINSERT @t (Id) VALUES (1)")]
+    [InlineData("DECLARE @t TABLE (Id int);\nGO\nSELECT Id FROM @t")]
+    [InlineData("INSERT @t (Id) VALUES (1)\nGO\nDECLARE @t TABLE (Id int);")]
+    [InlineData("DECLARE @t TABLE (Id int);\nGO\nDECLARE @log TABLE (Id int); DELETE @log OUTPUT deleted.Id INTO @t (Id)")]
+    public void T3_Query_denies_table_variable_across_batches(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
+    [InlineData("SELECT Id FROM @y")]
+    [InlineData("SELECT c.Id FROM dbo.Clients AS c JOIN @y AS y ON y.Id = c.Id")]
+    [InlineData("SELECT Id FROM dbo.Clients WHERE Id IN (SELECT Id FROM @y)")]
+    [InlineData("DECLARE @t TABLE (Id int); SELECT Id FROM @t UNION ALL SELECT Id FROM @y")]
+    [InlineData("WITH c AS (SELECT Id FROM @y) SELECT Id FROM c")]
+    [InlineData("DECLARE @n int = (SELECT COUNT(*) FROM @y); SELECT @n")]
+    public void T3_Query_denies_SELECT_from_undeclared_table_variable(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
+    [InlineData("INSERT @t (Id) OUTPUT inserted.Id INTO @missing (Id) VALUES (1)")]
+    [InlineData("DELETE @t OUTPUT deleted.Id INTO @missing (Id)")]
+    [InlineData("DECLARE @v int; UPDATE @t SET Name = N'b' OUTPUT inserted.Id INTO @v (Id)")]
+    [InlineData("CREATE TABLE #s (Id int); DELETE #s OUTPUT deleted.Id INTO @missing (Id)")]
+    public void T3_Query_denies_OUTPUT_INTO_unproven_table_variable(string sql)
+    {
+        var decision = ClassifyQuery(T3Declare + sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.False(_classifier.Classify(T3Declare + sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
+    [InlineData("INSERT @t (Id) OUTPUT inserted.Id INTO dbo.Audit (Id) VALUES (1)")]
+    [InlineData("UPDATE @t SET Name = N'b' OUTPUT inserted.Id INTO dbo.Audit (Id)")]
+    [InlineData("DELETE @t OUTPUT deleted.Id INTO dbo.Audit (Id)")]
+    [InlineData("INSERT @t (Id) OUTPUT inserted.Id INTO ##global (Id) VALUES (1)")]
+    public void T3_Table_variable_DML_with_persistent_OUTPUT_INTO_requires_approval(string sql)
+    {
+        var denied = ClassifyQuery(T3Declare + sql);
+        Assert.False(denied.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, denied.Reason);
+
+        var allowed = _classifier.Classify(T3Declare + sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.True(allowed.Allowed, allowed.RejectionDescription);
+        Assert.True(allowed.HasMutation);
+
+        var setup = _classifier.Classify(T3Declare + sql, SqlUsage.CompareSetup, "db", false, null);
+        Assert.False(setup.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, setup.Reason);
+    }
+
+    [Theory]
+    [InlineData("UPDATE dbo.Clients SET Active = 0 OUTPUT inserted.Id INTO @t (Id)")]
+    [InlineData("DELETE dbo.Clients OUTPUT deleted.Id INTO @t (Id)")]
+    [InlineData("INSERT @t (Id) SELECT d.Id FROM (DELETE dbo.Clients OUTPUT deleted.Id) AS d")]
+    public void T3_Persistent_write_stays_a_mutation_when_a_table_variable_is_involved(string sql)
+    {
+        var denied = ClassifyQuery(T3Declare + sql);
+        Assert.False(denied.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, denied.Reason);
+
+        var allowed = _classifier.Classify(T3Declare + sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.True(allowed.Allowed, allowed.RejectionDescription);
+        Assert.True(allowed.HasMutation);
+
+        var setup = _classifier.Classify(T3Declare + sql, SqlUsage.CompareSetup, "db", false, null);
+        Assert.False(setup.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, setup.Reason);
+    }
+
+    [Theory]
+    [InlineData("UPDATE x SET Name = N'b' FROM @t AS x")]
+    [InlineData("DELETE x FROM @t AS x")]
+    public void T3_Aliased_table_variable_DML_target_stays_denied(string sql)
+    {
+        // The alias token is a NamedTableReference; binding it to @t is not proven by this task.
+        Assert.False(ClassifyQuery(T3Declare + sql).Allowed);
+        Assert.False(_classifier.Classify(T3Declare + sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
+    [InlineData("DECLARE @t TABLE (Id int DEFAULT (NEXT VALUE FOR dbo.Seq)); SELECT Id FROM @t", nameof(SqlSafetyReason.UnsupportedStatement))]
+    [InlineData("DECLARE @t TABLE (Id int); INSERT @t (Id) SELECT Id FROM other.dbo.Clients", nameof(SqlSafetyReason.CrossDatabaseReference))]
+    [InlineData("DECLARE @t TABLE (Id int); INSERT @t EXEC dbo.DoWork", nameof(SqlSafetyReason.UnsupportedStatement))]
+    public void T3_Table_variable_does_not_hide_standing_denials(string sql, string reason)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(reason, decision.Reason.ToString());
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
     }
 
     private SqlSafetyDecision ClassifyQuery(string sql) =>
