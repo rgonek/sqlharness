@@ -169,6 +169,30 @@ public class CompareMatrixTests
         Assert.DoesNotContain("9.99", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
+    // 012/T3: the same Postgres type rejection, reached through the typed
+    // fixed-parameter path (no declaration text) on a plain compare, not the matrix.
+    [Fact]
+    public async Task Postgres_rejects_unsupported_typed_fixed_parameter_before_connect()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+        const string sql = "SELECT @Amount AS Amount";
+        var operation = new SqlHarnessCompareOperation(
+            new SqlTargetRequest("local-pg", new Dictionary<string, string>()),
+            null, sql, sql, [], 30, 1)
+        {
+            TypedParameters = [new SqlHarnessParameterInput("Amount", "money", "9.99")],
+        };
+
+        var outcome = await Module(factory, artifacts, PostgresProfiles).ExecuteAsync(operation);
+
+        Assert.Equal(2, (int)outcome.ExitCode);
+        Assert.Equal(0, factory.ConnectCount);
+        Assert.Null(outcome.Report);
+        Assert.Contains("not supported on Postgres", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("9.99", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Matrix_stops_on_sql_failure_and_keeps_the_earlier_artifact_directory()
     {
@@ -478,6 +502,65 @@ public class CompareMatrixTests
 
         Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
         Assert.Equal("a,b=c:d", Assert.Single(factory.Sessions).MatrixValue);
+    }
+
+    // 012/T3: non-ASCII text and a surrogate pair (the emoji below is two UTF-16
+    // code units) are bound as one opaque value, byte for byte.
+    [Theory]
+    [InlineData("zażółć gęślą jaźń")]
+    [InlineData("𝕊urrogate pair 😀 inside")]
+    public async Task Typed_parameter_preserves_unicode_values_including_a_surrogate_pair(string value)
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+        var operation = new SqlHarnessQueryOperation(
+            new SqlTargetRequest("test", new Dictionary<string, string> { ["env"] = "a" }),
+            "SELECT Value FROM dbo.Clients WHERE BatchSize = @BatchSize",
+            [],
+            30,
+            10,
+            false,
+            null)
+        {
+            TypedParameters = [new SqlHarnessParameterInput("BatchSize", null, value)],
+        };
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
+
+        Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
+        Assert.Equal(value, Assert.Single(factory.Sessions).MatrixValue);
+    }
+
+    // 012/T1 review gap: typed fixed parameters plus parameter sets must run
+    // a measure-sets operation to completion, so ParseShaped(typed) is
+    // actually executed past the bind call, not just invoked and thrown from.
+    [Fact]
+    public async Task Typed_fixed_parameters_run_to_completion_with_two_measure_parameter_sets()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+        const string sql = "SELECT Value FROM dbo.Clients WHERE Tenant = @Tenant AND BatchSize = @BatchSize";
+        var operation = new SqlHarnessMeasureOperation(
+            new SqlTargetRequest("test", new Dictionary<string, string> { ["env"] = "a" }),
+            null,
+            sql,
+            [],
+            30,
+            1,
+            [new("small", ["BatchSize:int=1"]), new("large", ["BatchSize:int=2"])])
+        {
+            TypedParameters = [new SqlHarnessParameterInput("Tenant", "int", "7")],
+        };
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
+
+        Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
+        var report = Assert.IsType<SqlHarnessMeasureSetReport>(outcome.Report);
+        Assert.Equal(["small", "large"], report.Sets.Select(set => set.Name));
+        var session = Assert.Single(factory.Sessions);
+        Assert.All(
+            session.Commands.Where(command => !IsStatistics(command.Sql)),
+            command => Assert.Equal(7, (int)command.Parameters.Single(parameter => parameter.Name == "@Tenant").Value));
     }
 
     private static SqlHarnessCompareMatrixOperation TypedMatrix(params string?[] values) =>
