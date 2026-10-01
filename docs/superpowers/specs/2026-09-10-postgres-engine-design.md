@@ -204,13 +204,17 @@ Temp identity is **not** a name prefix. A table is session-local when:
 2. `--setup` on this invocation created it as TEMP and the name is passed
    into query classification; or
 3. the target is qualified as exactly `pg_temp` (the server's alias for the
-   current session's temp schema). **Superseded by plan 011**
-   (`plans/011-syntax-contract.md`, rule 011-T4b-D7): a `pg_temp_*` prefix —
-   on a schema qualifier or on a bare relation name — is no longer proof of
-   session locality for any statement.
+   current session's temp schema). **Changed by plan 011** (2026-10-01,
+   `plans/011-syntax-contract.md`, rule 011-T4b-D7): item 3 as written here is
+   the current rule. Before plan 011 it also accepted a `pg_temp_*` prefix; a
+   `pg_temp_*` prefix — on a schema qualifier or on a bare relation name — is
+   not proof of session locality for any statement.
 
 Unquoted identifiers are folded to lowercase when recorded and looked up,
 matching Postgres. Quoted identifiers keep their case.
+**Changed by plan 011** (2026-10-01, rules 011-T4b-D1 and 011-T4b-D6): the
+fold is ASCII-only (A-Z). An unquoted identifier with a non-ASCII character,
+and any identifier longer than 63 UTF-8 bytes, is never proven session-local.
 
 `UNLOGGED` tables are persistent. `CREATE TABLE` without `TEMP` is not
 session-local.
@@ -231,6 +235,10 @@ Persistent **DDL** (`CREATE TABLE` without TEMP, `ALTER`, `DROP` of non-temp,
 `TRUNCATE`, `CREATE INDEX` on a persistent table, `CREATE EXTENSION`,
 `VACUUM`, …) remains `UnsupportedStatement` and cannot be unlocked with the
 mutation flags.
+**Changed by plan 011** (2026-10-01, rules 011-T4-A1 and 011-T4-D1):
+`TRUNCATE` no longer belongs to this list. Over proven current-session temps
+it is session-local; a persistent or mixed target list returns
+`NonTemporaryWrite` and still cannot be unlocked with the mutation flags.
 
 Postgres `SELECT INTO` creates a persistent table. It is rejected as
 `SelectIntoNotAllowed`. Use `CREATE TEMP TABLE AS` or explicit DML.
