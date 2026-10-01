@@ -272,6 +272,41 @@ public class CompareMatrixTests
             await outcome.EmissionReceipt.CompleteAsync(new OutputFootprint(0, 0)));
     }
 
+    // 012/T1 characterization: legacy --matrix text keeps its comma and empty-value meaning end to end.
+    [Theory]
+    [InlineData("BatchSize:int=1,,20", "The --matrix option for SQL parameter '@BatchSize' contains an empty value.")]
+    [InlineData("BatchSize:int=1,20,", "The --matrix option for SQL parameter '@BatchSize' contains an empty value.")]
+    [InlineData("BatchSize:int=1", "The --matrix option for SQL parameter '@BatchSize' requires at least two values.")]
+    public async Task Legacy_matrix_text_rejects_empty_and_single_values_before_any_connection(string matrix, string expected)
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix(matrix));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal(expected, outcome.SafeError);
+        Assert.Null(outcome.Report);
+        Assert.Equal(0, factory.ConnectCount);
+    }
+
+    [Fact]
+    public async Task Legacy_matrix_text_serializes_each_cell_value_as_the_split_display_text()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix("BatchSize:int=01,20"));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
+        Assert.Equal(
+            ["{\"Index\":0,\"ParameterValue\":\"01\"}", "{\"Index\":1,\"ParameterValue\":\"20\"}"],
+            report.Cells.Select(cell => System.Text.Json.JsonSerializer.Serialize(new { cell.Index, cell.ParameterValue })));
+        Assert.Equal([1], factory.Sessions[0].BatchSizes);
+        Assert.Equal([20], factory.Sessions[1].BatchSizes);
+    }
+
     private static SqlHarnessModule Module(
         MatrixSessionFactory sessions,
         ICompareArtifactWriter artifacts,
