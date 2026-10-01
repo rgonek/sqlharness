@@ -50,8 +50,9 @@ public sealed record McpSqlSourceArgument
 
 /// <summary>
 /// One compare matrix dimension: a typed parameter name plus at least two
-/// string values in caller order. Values containing a comma are rejected so
-/// the Core value-list split keeps its meaning.
+/// values in caller order. Each value travels to Core whole: a comma is an
+/// ordinary character, an empty string is a text value, and JSON null is a
+/// typed NULL of the matrix type. The Core binder owns value validation.
 /// </summary>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record McpMatrixArgument
@@ -64,7 +65,10 @@ public sealed record McpMatrixArgument
     [JsonPropertyName("type")]
     public required string Type { get; init; }
 
-    /// <summary>At least two values; commas and empty values are rejected.</summary>
+    /// <summary>
+    /// At least two distinct values: culture-invariant value text, or JSON
+    /// null for a typed NULL. Values are never echoed in errors.
+    /// </summary>
     [JsonPropertyName("values")]
-    public required IReadOnlyList<string> Values { get; init; }
+    public required IReadOnlyList<string?> Values { get; init; }
 }

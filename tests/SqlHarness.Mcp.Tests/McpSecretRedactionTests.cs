@@ -4,6 +4,7 @@ using ModelContextProtocol.Protocol;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Targets;
+using SqlHarness.Mcp.Tools;
 
 namespace SqlHarness.Mcp.Tests;
 
@@ -42,6 +43,128 @@ public sealed class McpSecretRedactionTests
         Assert.Contains("[REDACTED]", text, StringComparison.Ordinal);
         using var document = JsonDocument.Parse(text);
         Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
+    }
+
+    /// <summary>
+    /// 012/T2: a typed value travels whole, so a secret with a comma (or an
+    /// '=' in a fixed parameter) is one value end to end. Core rejects the
+    /// bad value offline with a constant message that never interpolates a
+    /// value, which this test pins by exact equality for both operations
+    /// (not just the matrix one, as before). That equality is the real
+    /// regression guard: if either rejection ever started interpolating the
+    /// value, this assertion would fail on the first changed character. The
+    /// <c>DoesNotContain</c> lines below are a belt-and-suspenders check on
+    /// top of it, not an independent proof of redaction -- a message that
+    /// never contains a value to begin with trivially satisfies them.
+    /// Genuine redaction (a message that WOULD echo a value without secret
+    /// registration, only suppressed because of it) is proven separately by
+    /// <see cref="Execution_phase_failure_that_echoes_a_typed_matrix_value_is_redacted_only_when_collected_as_a_known_secret"/>,
+    /// closing the 012/T2 review carry-forward.
+    /// </summary>
+    [Fact]
+    public async Task Typed_values_with_separator_characters_reach_core_whole_and_its_rejection_is_a_constant_message()
+    {
+        const string FirstHalf = "fikcyjna-polowa-4410";
+        const string SecondHalf = "fikcyjna-reszta-8852";
+        const string CommaSecret = FirstHalf + "," + SecondHalf;
+        var savedHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
+        var home = Path.Combine(Path.GetTempPath(), "sqlharness-mcp-012-redact-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(home);
+        Environment.SetEnvironmentVariable("SQLHARNESS_HOME", home);
+        try
+        {
+            var scope = McpScope.Create(
+                new McpServerOptions { Profile = "mcp-012" },
+                new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+                {
+                    ["mcp-012"] = new TargetProfile(
+                        "mcp-unreachable.invalid", "reportdb",
+                        new Dictionary<string, string>(), "integrated"),
+                });
+            var handlers = new McpToolHandlers(scope, scope.CreateModule());
+
+            var matrix = await handlers.CompareAsync(
+                null!,
+                new McpSqlSourceArgument { Sql = "SELECT @n" },
+                new McpSqlSourceArgument { Sql = "SELECT @n" },
+                matrix: new McpMatrixArgument { Name = "n", Type = "int", Values = ["1", CommaSecret] });
+            var query = await handlers.QueryAsync(
+                null!, "SELECT @n",
+                parameters: [new McpParameterArgument { Name = "n", Type = "int", Value = FirstHalf + "=" + SecondHalf }]);
+
+            foreach (var result in new[] { matrix, query })
+            {
+                Assert.True(result.IsError == true);
+                var text = TextOf(result);
+                using var document = JsonDocument.Parse(text);
+                Assert.Equal((int)SqlHarnessExitCode.Safety, document.RootElement.GetProperty("exitCode").GetInt32());
+                Assert.DoesNotContain(FirstHalf, text, StringComparison.Ordinal);
+                Assert.DoesNotContain(SecondHalf, text, StringComparison.Ordinal);
+            }
+
+            using var matrixDocument = JsonDocument.Parse(TextOf(matrix));
+            Assert.Equal(
+                "The --matrix option for SQL parameter '@n' of type 'int' is invalid.",
+                matrixDocument.RootElement.GetProperty("error").GetProperty("message").GetString());
+            using var queryDocument = JsonDocument.Parse(TextOf(query));
+            Assert.Equal(
+                "Invalid value for SQL parameter 'n' of type 'int'.",
+                queryDocument.RootElement.GetProperty("error").GetProperty("message").GetString());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SQLHARNESS_HOME", savedHome);
+            try
+            {
+                Directory.Delete(home, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
+    /// <summary>
+    /// 012/T4, reworded 012/final F1: this does NOT prove that a typed matrix value is
+    /// collected and redacted on the MCP path. No production call site of
+    /// <see cref="McpResultAdapter.Adapt"/> (<c>McpToolCatalog.cs</c>, <c>McpExecutionGate.cs</c>)
+    /// ever supplies <c>knownSecrets</c> -- Core already redacts
+    /// <see cref="SqlHarnessOutcome.MachineError"/> before MCP ever sees the outcome, so this
+    /// parameter is unreachable from production. What this test proves is narrower: that
+    /// <see cref="McpResultAdapter.Adapt"/> redacts whatever known secret it is given, for a
+    /// message shape that genuinely would echo a value -- the same shape Core's own fake
+    /// session produces in
+    /// <c>CompareMatrixTests.Typed_matrix_failure_redacts_a_value_that_contains_a_comma</c>,
+    /// which is the real guard for collection on the production path. Run once with the value
+    /// registered as a known secret and once without, so the second call proves the first
+    /// call's assertions are not vacuous.
+    /// </summary>
+    [Fact]
+    public void McpResultAdapter_redacts_an_execution_phase_value_it_is_given_as_a_known_secret()
+    {
+        const string FirstHalf = "fikcyjna-exec-polowa-2201";
+        const string SecondHalf = "fikcyjna-exec-reszta-3317";
+        const string CommaValue = FirstHalf + "," + SecondHalf;
+        var outcome = new SqlHarnessOutcome(
+            SqlHarnessExitCode.SqlExecution,
+            null,
+            $"Comparison matrix cell 0 for SQL parameter '@n' failed. measured-run-failed:{CommaValue}");
+
+        var redactedText = TextOf(McpResultAdapter.Adapt(outcome, "sqlharness_compare", knownSecrets: [CommaValue]));
+        Assert.DoesNotContain(CommaValue, redactedText, StringComparison.Ordinal);
+        Assert.DoesNotContain(FirstHalf, redactedText, StringComparison.Ordinal);
+        Assert.DoesNotContain(SecondHalf, redactedText, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", redactedText, StringComparison.Ordinal);
+
+        // Same outcome, no known secret registered: the value leaks. This is
+        // the counter-example that makes the assertions above capable of
+        // failing -- they would fail here if they were checked against this
+        // call instead.
+        var leakedText = TextOf(McpResultAdapter.Adapt(outcome, "sqlharness_compare", knownSecrets: []));
+        Assert.Contains(CommaValue, leakedText, StringComparison.Ordinal);
     }
 
     [Fact]

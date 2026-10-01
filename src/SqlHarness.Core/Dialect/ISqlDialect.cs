@@ -13,7 +13,11 @@ internal interface ISqlDialect
         string? confirmDatabase,
         IReadOnlySet<string> sessionTempTables);
 
+    /// <summary>Legacy text adapter kept for compatibility and characterization tests only (012/final F3): no production call site uses it. Production resolves and binds through <see cref="BindParameters"/>.</summary>
     IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs);
+
+    /// <summary>Binds the typed model. <see cref="ParseParameters"/> is the declaration-text adapter over it.</summary>
+    IReadOnlyList<SqlHarnessParameter> BindParameters(IEnumerable<SqlHarnessParameterInput> inputs);
 
     void ValidateParameterReferences(IReadOnlyList<SqlHarnessParameter> parameters, params string?[] batches);
 

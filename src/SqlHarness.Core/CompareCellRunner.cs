@@ -37,7 +37,8 @@ internal static class CompareOperationPreparer
         IReadOnlyList<string> parameterInputs,
         int timeoutSeconds,
         int repeat,
-        List<string> knownSecrets)
+        List<string> knownSecrets,
+        IReadOnlyList<SqlHarnessParameterInput>? typedParameters = null)
     {
         ArgumentNullException.ThrowIfNull(targetRequest);
         ArgumentNullException.ThrowIfNull(profiles);
@@ -72,7 +73,7 @@ internal static class CompareOperationPreparer
         EnsureSafe(candidateSafety, "candidate");
 
         SqlParameterSecrets.AddValues(knownSecrets, parameterInputs);
-        var parameters = dialect.ParseParameters(parameterInputs);
+        var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(parameterInputs, typedParameters));
 
         return new PreparedCompareFamily(
             target,

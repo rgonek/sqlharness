@@ -65,7 +65,7 @@ public sealed record MeasureSetBenchmarkSummary(
 
 public sealed record CompareMatrixCellSummary(
     int Index,
-    string ParameterValue,
+    string? ParameterValue,
     CompareBenchmarkSummary Compare);
 
 public sealed record CompareMatrixBenchmarkSummary(

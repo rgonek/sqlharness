@@ -4,7 +4,7 @@ internal sealed record CompareMatrixRun(
     CompareCellRequest Template,
     IReadOnlyList<SqlHarnessParameter> FixedParameters,
     IReadOnlyList<SqlHarnessParameter> MatrixValues,
-    IReadOnlyList<string> DisplayValues,
+    IReadOnlyList<string?> DisplayValues,
     string ParameterName,
     string ParameterType);
 

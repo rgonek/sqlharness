@@ -34,7 +34,11 @@ public sealed record SqlHarnessQueryOperation(
     int TimeoutSeconds,
     int MaxRows,
     bool AllowMutation,
-    string? ConfirmDatabase) : SqlHarnessOperation;
+    string? ConfirmDatabase) : SqlHarnessOperation
+{
+    /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
+    public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+}
 
 public sealed record SqlHarnessCompareOperation(
     SqlTargetRequest Target,
@@ -44,7 +48,11 @@ public sealed record SqlHarnessCompareOperation(
     IReadOnlyList<string> Parameters,
     int TimeoutSeconds,
     int Repeat,
-    ResultComparisonMode CompareResults = ResultComparisonMode.Ordered) : SqlHarnessOperation;
+    ResultComparisonMode CompareResults = ResultComparisonMode.Ordered) : SqlHarnessOperation
+{
+    /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
+    public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+}
 
 public sealed record SqlHarnessCompareMatrixOperation(
     SqlTargetRequest Target,
@@ -55,11 +63,43 @@ public sealed record SqlHarnessCompareMatrixOperation(
     int TimeoutSeconds,
     int Repeat,
     string Matrix,
-    ResultComparisonMode CompareResults = ResultComparisonMode.Ordered) : SqlHarnessOperation;
+    ResultComparisonMode CompareResults = ResultComparisonMode.Ordered) : SqlHarnessOperation
+{
+    /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
+    public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
 
+    /// <summary>Typed alternative to <see cref="Matrix"/> (012). When it is set, <see cref="Matrix"/> must be empty.</summary>
+    public SqlHarnessParameterMatrixInput? TypedMatrix { get; init; }
+}
+
+/// <summary>
+/// One SQL parameter as structure instead of a <c>name:type=value</c> declaration (012).
+/// <see cref="Name"/> has no <c>@</c>. A null <see cref="Type"/> binds as <c>nvarchar</c>.
+/// A null <see cref="Value"/> is SQL NULL; an empty string is a text value. The value is
+/// never split or unescaped, so <c>,</c> <c>=</c> and <c>:</c> are ordinary characters.
+/// </summary>
+public sealed record SqlHarnessParameterInput(string Name, string? Type, string? Value)
+{
+    /// <summary>Name and type only (012/final F8): the generated ToString() would print Value.</summary>
+    public override string ToString() => $"SqlHarnessParameterInput {{ Name = {Name}, Type = {Type} }}";
+}
+
+/// <summary>
+/// One matrix dimension as structure (012): one parameter name, one type, and the values in
+/// caller order. A null element is a typed NULL of <see cref="Type"/>; it is distinct from
+/// an empty string and from the text <c>null</c>.
+/// </summary>
+public sealed record SqlHarnessParameterMatrixInput(string Name, string Type, IReadOnlyList<string?> Values)
+{
+    /// <summary>Name, type and a count only (012/final F8): the generated ToString() would print Values.</summary>
+    public override string ToString() =>
+        $"SqlHarnessParameterMatrixInput {{ Name = {Name}, Type = {Type}, Values.Count = {Values?.Count} }}";
+}
+
+/// <summary><see cref="ParameterValue"/> is null only for a typed NULL cell, which legacy matrix text cannot express.</summary>
 public sealed record CompareMatrixCellReport(
     int Index,
-    string ParameterValue,
+    string? ParameterValue,
     SqlHarnessCompareReport Compare);
 
 public sealed record SqlHarnessCompareMatrixReport(
@@ -78,7 +118,11 @@ public sealed record SqlHarnessMeasureOperation(
     int TimeoutSeconds,
     int Repeat,
     IReadOnlyList<SqlHarnessParameterSetInput>? ParameterSets = null)
-    : SqlHarnessOperation;
+    : SqlHarnessOperation
+{
+    /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
+    public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+}
 
 public sealed record SqlHarnessGainOperation : SqlHarnessOperation;
 
@@ -150,7 +194,11 @@ public static class IndexObjectSyntax
 public sealed record SqlHarnessWatchOperation(
     SqlTargetRequest Target, string Sql, IReadOnlyList<string> Parameters,
     int TimeoutSeconds, int MaxRows, TimeSpan Interval, TimeSpan MaxDuration,
-    string? Until, int? UntilUnchanged, int HistoryLimit = 100) : SqlHarnessOperation;
+    string? Until, int? UntilUnchanged, int HistoryLimit = 100) : SqlHarnessOperation
+{
+    /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
+    public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+}
 
 /// <summary>
 /// Optional scope owner for snapshot capture/diff (003): the MCP mapper sets
@@ -161,7 +209,11 @@ public sealed record SqlHarnessWatchOperation(
 public sealed record SqlHarnessSnapshotOperation(
     SqlTargetRequest Target, string Sql, IReadOnlyList<string> Parameters,
     int TimeoutSeconds, int MaxRows, string Name, bool Diff, bool Force,
-    ArtifactOwner? Owner = null) : SqlHarnessOperation;
+    ArtifactOwner? Owner = null) : SqlHarnessOperation
+{
+    /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
+    public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+}
 
 public enum WatchExitReason { ConditionMet, Unchanged, MaxDuration }
 public enum SnapshotVerdict { Stored, Identical, Different }

@@ -10,12 +10,12 @@ namespace SqlHarness.Core;
 public sealed record SqlParameterMatrixSpec(
     string Name,
     string Type,
-    IReadOnlyList<string> DisplayValues);
+    IReadOnlyList<string?> DisplayValues);
 
 internal sealed record ParsedParameterMatrix(
     string Name,
     string Type,
-    IReadOnlyList<string> DisplayValues,
+    IReadOnlyList<string?> DisplayValues,
     IReadOnlyList<SqlHarnessParameter> Values)
 {
     public SqlParameterMatrixSpec Spec => new(Name, Type, DisplayValues);
@@ -23,10 +23,31 @@ internal sealed record ParsedParameterMatrix(
 
 internal static partial class SqlParameterMatrixParser
 {
+    /// <summary>
+    /// Legacy text adapter kept for compatibility and characterization tests only (012/final
+    /// F3): no production call site uses this convenience combination. Production composes
+    /// <see cref="SqlParameterInputs.ResolveMatrix"/> and <see cref="Bind"/> itself (see
+    /// <see cref="SqlHarnessModule"/>'s compare-matrix path), which binds the fixed parameters
+    /// first and only then the matrix -- the opposite order this method characterizes.
+    /// </summary>
     internal static ParsedParameterMatrix Parse(string input, IReadOnlyList<string> fixedParameters)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(fixedParameters);
+
+        // Lazy on purpose: a fixed declaration is read only after the matrix itself is valid.
+        return Bind(
+            ToInput(input),
+            fixedParameters.Select(fixedParameter => SqlParameterParser.ParseOne(fixedParameter).Name));
+    }
+
+    /// <summary>
+    /// Legacy <c>name:type=v1,v2</c> text to the model. The comma split and the empty-value
+    /// rejection belong to this text grammar only; the model itself has neither limit.
+    /// </summary>
+    internal static SqlHarnessParameterMatrixInput ToInput(string input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
 
         var equalsIndex = input.IndexOf('=');
         if (equalsIndex < 0)
@@ -39,7 +60,6 @@ internal static partial class SqlParameterMatrixParser
         if (typeSeparator <= 0 || typeSeparator == declaration.Length - 1)
             throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires a type."));
 
-        var type = declaration[(typeSeparator + 1)..];
         if (valueText.Length == 0)
             throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires at least two values."));
 
@@ -48,17 +68,39 @@ internal static partial class SqlParameterMatrixParser
         if (displayValues.Any(value => value.Length == 0))
             throw new SqlHarnessSafetyException(MatrixError(parameterName, "contains an empty value."));
 
-        if (displayValues.Length < 2)
+        return new SqlHarnessParameterMatrixInput(
+            declaration[..typeSeparator],
+            declaration[(typeSeparator + 1)..],
+            displayValues);
+    }
+
+    /// <summary>
+    /// The model to bound values. <paramref name="fixedParameterNames"/> are canonical
+    /// (<c>@name</c>) and are enumerated only after every matrix value is bound.
+    /// </summary>
+    internal static ParsedParameterMatrix Bind(
+        SqlHarnessParameterMatrixInput matrix,
+        IEnumerable<string> fixedParameterNames)
+    {
+        ArgumentNullException.ThrowIfNull(matrix);
+        ArgumentNullException.ThrowIfNull(fixedParameterNames);
+
+        var parameterName = matrix.Name is not null && NamePattern().IsMatch(matrix.Name) ? "@" + matrix.Name : null;
+        if (string.IsNullOrEmpty(matrix.Type))
+            throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires a type."));
+
+        // A caller-built model may carry no value list at all: a safety rejection, like no values.
+        if (matrix.Values is null || matrix.Values.Count < 2)
             throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires at least two values."));
 
-        var parsedValues = new List<SqlHarnessParameter>(displayValues.Length);
+        var parsedValues = new List<SqlHarnessParameter>(matrix.Values.Count);
         var seen = new HashSet<MatrixValueKey>();
-        foreach (var displayValue in displayValues)
+        foreach (var displayValue in matrix.Values)
         {
             SqlHarnessParameter parsed;
             try
             {
-                parsed = SqlParameterParser.ParseOne($"{declaration}={displayValue}");
+                parsed = SqlParameterParser.Bind(new SqlHarnessParameterInput(matrix.Name!, matrix.Type, displayValue));
             }
             catch (SqlHarnessSafetyException exception) when (exception.IsParameterValue)
             {
@@ -78,14 +120,13 @@ internal static partial class SqlParameterMatrixParser
         }
 
         var name = parsedValues[0].Name;
-        foreach (var fixedParameter in fixedParameters)
+        foreach (var fixedName in fixedParameterNames)
         {
-            var fixedName = SqlParameterParser.ParseOne(fixedParameter).Name;
             if (string.Equals(fixedName, name, StringComparison.OrdinalIgnoreCase))
                 throw new SqlHarnessSafetyException(MatrixError(name, "duplicates a fixed parameter."));
         }
 
-        return new ParsedParameterMatrix(name, type, displayValues, parsedValues);
+        return new ParsedParameterMatrix(name, matrix.Type, matrix.Values, parsedValues);
     }
 
     // Same ASCII name rule as SqlParameterParser, so a rejection can name the parameter before ParseOne runs.
@@ -109,10 +150,11 @@ internal static partial class SqlParameterMatrixParser
 
     // SqlDbType, precision, scale, size, and the invariant typed value. Not the raw display text.
     // "o" keeps fractional seconds. Spatial WKT alone omits SRID, so the key includes both.
-    private readonly record struct MatrixValueKey(SqlDbType Type, byte? Precision, byte? Scale, int? Size, string InvariantValue)
+    // IsNull keeps a typed NULL apart from the text "null" of the same sized type.
+    private readonly record struct MatrixValueKey(SqlDbType Type, byte? Precision, byte? Scale, int? Size, bool IsNull, string InvariantValue)
     {
         public static MatrixValueKey From(SqlHarnessParameter parameter) =>
-            new(parameter.Type, parameter.Precision, parameter.Scale, parameter.Size, InvariantText(parameter.Value));
+            new(parameter.Type, parameter.Precision, parameter.Scale, parameter.Size, parameter.Value is DBNull, InvariantText(parameter.Value));
 
         private static string InvariantText(object value) => value switch
         {

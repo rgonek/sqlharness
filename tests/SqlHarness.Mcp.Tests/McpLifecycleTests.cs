@@ -492,9 +492,9 @@ public sealed class McpLifecycleTests
         var secondOperation = Assert.IsType<SqlHarnessQueryOperation>(module.Operations[1]);
         Assert.NotSame(firstOperation, secondOperation);
         Assert.Equal("SELECT 1", firstOperation.Sql);
-        Assert.Equal(["customerId:int=42"], firstOperation.Parameters.ToArray());
+        Assert.Equal([new SqlHarnessParameterInput("customerId", "int", "42")], firstOperation.TypedParameters);
         Assert.Equal("SELECT 2", secondOperation.Sql);
-        Assert.Equal(["otherId:int=7"], secondOperation.Parameters.ToArray());
+        Assert.Equal([new SqlHarnessParameterInput("otherId", "int", "7")], secondOperation.TypedParameters);
     }
 
     [Fact]
