@@ -78,14 +78,23 @@ public sealed record SqlHarnessCompareMatrixOperation(
 /// A null <see cref="Value"/> is SQL NULL; an empty string is a text value. The value is
 /// never split or unescaped, so <c>,</c> <c>=</c> and <c>:</c> are ordinary characters.
 /// </summary>
-public sealed record SqlHarnessParameterInput(string Name, string? Type, string? Value);
+public sealed record SqlHarnessParameterInput(string Name, string? Type, string? Value)
+{
+    /// <summary>Name and type only (012/final F8): the generated ToString() would print Value.</summary>
+    public override string ToString() => $"SqlHarnessParameterInput {{ Name = {Name}, Type = {Type} }}";
+}
 
 /// <summary>
 /// One matrix dimension as structure (012): one parameter name, one type, and the values in
 /// caller order. A null element is a typed NULL of <see cref="Type"/>; it is distinct from
 /// an empty string and from the text <c>null</c>.
 /// </summary>
-public sealed record SqlHarnessParameterMatrixInput(string Name, string Type, IReadOnlyList<string?> Values);
+public sealed record SqlHarnessParameterMatrixInput(string Name, string Type, IReadOnlyList<string?> Values)
+{
+    /// <summary>Name, type and a count only (012/final F8): the generated ToString() would print Values.</summary>
+    public override string ToString() =>
+        $"SqlHarnessParameterMatrixInput {{ Name = {Name}, Type = {Type}, Values.Count = {Values?.Count} }}";
+}
 
 /// <summary><see cref="ParameterValue"/> is null only for a typed NULL cell, which legacy matrix text cannot express.</summary>
 public sealed record CompareMatrixCellReport(

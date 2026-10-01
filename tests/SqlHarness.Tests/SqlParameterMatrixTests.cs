@@ -353,6 +353,33 @@ public class SqlParameterMatrixTests
         Assert.Equal(["1.25", "2.50"], model.Values);
     }
 
+    // 012/final F8: the model records' generated ToString() must never print Value/Values --
+    // only Name and Type, so a logged/thrown model instance cannot leak a secret.
+    [Fact]
+    public void Model_parameter_input_ToString_never_prints_the_value()
+    {
+        var input = new SqlHarnessParameterInput("Tenant", "nvarchar", "se,cret");
+
+        var text = input.ToString();
+
+        Assert.DoesNotContain("se,cret", text, StringComparison.Ordinal);
+        Assert.Contains("Tenant", text, StringComparison.Ordinal);
+        Assert.Contains("nvarchar", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Model_matrix_input_ToString_never_prints_the_values()
+    {
+        var matrix = new SqlHarnessParameterMatrixInput("BatchSize", "int", ["se,cret", "other-secret"]);
+
+        var text = matrix.ToString();
+
+        Assert.DoesNotContain("se,cret", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("other-secret", text, StringComparison.Ordinal);
+        Assert.Contains("BatchSize", text, StringComparison.Ordinal);
+        Assert.Contains("int", text, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Model_parameter_value_is_bound_whole_and_null_is_explicit()
     {
