@@ -855,6 +855,43 @@ public sealed class PostgresSafetyTests
         Assert.False(decision.HasMutation);
     }
 
+    [Fact]
+    public void T4_Truncate_proof_travels_only_in_a_classifier_produced_temp_set()
+    {
+        // A bare name set carries no record of how each temp was declared, so it
+        // proves no TRUNCATE target; other statements read it as before.
+        var plain = new HashSet<string>(StringComparer.Ordinal) { "t" };
+        var truncate = _classifier.Classify("TRUNCATE t", SqlUsage.Query, "appdb", true, "appdb", plain);
+        Assert.False(truncate.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, truncate.Reason);
+
+        var insert = _classifier.Classify("INSERT INTO t VALUES (1)", SqlUsage.Query, "appdb", false, null, plain);
+        Assert.True(insert.Allowed, insert.RejectionDescription);
+        Assert.False(insert.HasMutation);
+
+        // The proof survives any number of classifier-produced hops.
+        var setup = _classifier.Classify(
+            "CREATE TEMP TABLE t (id int)", SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        var first = _classifier.Classify(
+            "INSERT INTO t VALUES (1)", SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        var second = _classifier.Classify(
+            "TRUNCATE t", SqlUsage.Query, "appdb", false, null, first.SessionTempTables);
+        Assert.True(second.Allowed, second.RejectionDescription);
+        Assert.False(second.HasMutation);
+    }
+
+    [Fact]
+    public void T4_Truncate_of_carried_temp_declared_with_non_ascii_unquoted_name_is_denied()
+    {
+        var setup = _classifier.Classify(
+            "CREATE TEMP TABLE K (id int)", SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        var query = _classifier.Classify(
+            "TRUNCATE k", SqlUsage.Query, "appdb", true, "appdb", setup.SessionTempTables);
+        Assert.False(query.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, query.Reason);
+    }
+
     private static SqlUsage ParseUsage(string usage) => usage switch
     {
         "Query" => SqlUsage.Query,

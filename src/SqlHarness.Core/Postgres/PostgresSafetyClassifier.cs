@@ -44,7 +44,7 @@ internal sealed class PostgresSafetyClassifier
             parsed.Add((statement, effect));
         }
 
-        var knownTemps = new HashSet<string>(sessionTempTables, StringComparer.Ordinal);
+        var knownTemps = new SessionTemps(sessionTempTables);
         return usage switch
         {
             SqlUsage.Query => ClassifyQuery(parsed, database, allowMutation, confirmDatabase, knownTemps),
@@ -58,7 +58,7 @@ internal sealed class PostgresSafetyClassifier
         string? database,
         bool allowMutation,
         string? confirmDatabase,
-        HashSet<string> knownTemps)
+        SessionTemps knownTemps)
     {
         var hasMutation = false;
         var hasSessionLocal = false;
@@ -108,7 +108,7 @@ internal sealed class PostgresSafetyClassifier
 
     private static SqlSafetyDecision ClassifyCompareSetup(
         List<(Statement Statement, StatementEffect Effect)> statements,
-        HashSet<string> knownTemps)
+        SessionTemps knownTemps)
     {
         var hasSessionLocal = false;
         foreach (var (statement, effect) in statements)
@@ -137,7 +137,7 @@ internal sealed class PostgresSafetyClassifier
     private static StatementOutcome ClassifyStatement(
         Statement statement,
         StatementEffect effect,
-        HashSet<string> knownTemps)
+        SessionTemps knownTemps)
     {
         if (effect.HasSelectInto && statement is not Statement.Select)
             return StatementOutcome.SelectInto;
@@ -169,7 +169,7 @@ internal sealed class PostgresSafetyClassifier
                     if (key is null)
                         return StatementOutcome.Unsupported;
 
-                    knownTemps.Add(key);
+                    knownTemps.Record(key, create.Element.Name.Values[^1]);
                     return FromWrites(effect.Targets, knownTemps, emptyIsSessionLocal: true);
                 }
 
@@ -194,7 +194,7 @@ internal sealed class PostgresSafetyClassifier
                         {
                             var key = ObjectKey(name);
                             if (key is not null)
-                                knownTemps.Remove(key);
+                                knownTemps.Forget(key);
                         }
 
                         return StatementOutcome.SessionLocal;
@@ -256,7 +256,7 @@ internal sealed class PostgresSafetyClassifier
         }
     }
 
-    private static StatementOutcome ClassifyTruncate(Statement.Truncate truncate, HashSet<string> knownTemps)
+    private static StatementOutcome ClassifyTruncate(Statement.Truncate truncate, SessionTemps knownTemps)
     {
         // Closed option allowlist: anything whose effect reaches past the named
         // rows stays unsupported, even over proven temps. CASCADE follows foreign
@@ -287,13 +287,23 @@ internal sealed class PostgresSafetyClassifier
     // an unqualified name that this session flow recorded from CREATE TEMP /
     // SELECT INTO TEMP. A pg_temp / pg_temp_N qualifier or name prefix proves
     // nothing about ownership (pg_temp_N can be another session's schema).
-    private static bool IsProvenSessionTemp(ObjectName name, IReadOnlySet<string> knownTemps) =>
-        name.Values.Count == 1 && knownTemps.Contains(FoldIdent(name.Values[0]));
+    // Both the target and the recorded name must be spelled so that FoldIdent
+    // agrees with the server; see FoldsLikeServer.
+    private static bool IsProvenSessionTemp(ObjectName name, SessionTemps knownTemps) =>
+        name.Values.Count == 1 &&
+        FoldsLikeServer(name.Values[0]) &&
+        knownTemps.TruncateProven.Contains(FoldIdent(name.Values[0]));
+
+    // PostgreSQL lower-cases only ASCII A-Z in an unquoted identifier, while
+    // FoldIdent lower-cases with invariant Unicode rules. The two agree for a
+    // quoted identifier (kept as written) and for an all-ASCII unquoted one.
+    private static bool FoldsLikeServer(Ident ident) =>
+        ident.QuoteStyle is not null || ident.Value.All(char.IsAscii);
 
     private static StatementOutcome ClassifySelect(
         Statement.Select select,
         StatementEffect effect,
-        HashSet<string> knownTemps)
+        SessionTemps knownTemps)
     {
         var into = PostgresQueryShape.TopLevelSelectInto(select.Query);
         if (into is null)
@@ -306,13 +316,13 @@ internal sealed class PostgresSafetyClassifier
         var key = ObjectKey(into.Name);
         if (key is null)
             return StatementOutcome.Unsupported;
-        knownTemps.Add(key);
+        knownTemps.Record(key, into.Name.Values[^1]);
         if (FromWrites(effect.Targets, knownTemps).Kind == StatementKind.Mutation)
             return StatementOutcome.SessionLocalMutation;
         return StatementOutcome.SessionLocal;
     }
 
-    private static StatementOutcome ClassifyExplain(Statement.Explain explain, HashSet<string> knownTemps)
+    private static StatementOutcome ClassifyExplain(Statement.Explain explain, SessionTemps knownTemps)
     {
         var innerEffect = StatementEffectVisitor.Inspect(explain.Statement);
         if (innerEffect.HasProhibitedFunction)
@@ -327,7 +337,7 @@ internal sealed class PostgresSafetyClassifier
                 PostgresQueryShape.HasWrite(innerSelect.Query))
                 return StatementOutcome.Unsupported;
             var inner = ClassifyStatement(
-                explain.Statement, innerEffect, new HashSet<string>(knownTemps, StringComparer.Ordinal));
+                explain.Statement, innerEffect, new SessionTemps(knownTemps));
             return inner.Kind is StatementKind.ReadOnly or StatementKind.SessionLocal
                 ? StatementOutcome.ReadOnly
                 : StatementOutcome.Unsupported;
@@ -422,11 +432,42 @@ internal sealed class PostgresSafetyClassifier
             HasSessionLocalWork = hasSessionLocal,
             SessionTempTables = sessionTemps is null || sessionTemps.Count == 0
                 ? EmptyTemps
-                : new HashSet<string>(sessionTemps, StringComparer.Ordinal),
+                : new SessionTemps(sessionTemps),
         };
 
     private static SqlSafetyDecision Denied(SqlSafetyReason reason) =>
         new(false, reason);
+
+    // The session temp set plus the subset that is strong enough to prove a
+    // TRUNCATE target. The base set keeps the names and fold every other
+    // statement has always used. The subset travels only inside a set this
+    // classifier produced, so a set built anywhere else proves no TRUNCATE.
+    private sealed class SessionTemps : HashSet<string>
+    {
+        internal SessionTemps(IEnumerable<string> names)
+            : base(names, StringComparer.Ordinal)
+        {
+            if (names is SessionTemps prior)
+                TruncateProven.UnionWith(prior.TruncateProven);
+        }
+
+        internal HashSet<string> TruncateProven { get; } = new(StringComparer.Ordinal);
+
+        internal void Record(string key, Ident declaredAs)
+        {
+            Add(key);
+            if (FoldsLikeServer(declaredAs))
+                TruncateProven.Add(key);
+            else
+                TruncateProven.Remove(key);
+        }
+
+        internal void Forget(string key)
+        {
+            Remove(key);
+            TruncateProven.Remove(key);
+        }
+    }
 
     private enum StatementKind
     {
