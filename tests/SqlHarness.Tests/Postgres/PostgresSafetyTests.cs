@@ -1507,26 +1507,108 @@ public sealed class PostgresSafetyTests
         Assert.Equal(expected, later.Reason.ToString());
     }
 
-    [Fact]
-    public void T4b_Ascii_name_is_still_proven_after_a_non_ascii_on_commit_drop_declaration()
+    // 011/final (M2): flipped. This test used to pin that an all-ASCII name is
+    // still proven by IF NOT EXISTS after an unquoted non-ASCII ON COMMIT DROP
+    // declaration, on the claim that the unknown stored name is non-ASCII under
+    // every server fold. That does not hold: a single-byte Turkish locale folds
+    // U+0130 to ASCII i, so `İtems` can be stored as `items`. After such a
+    // declaration IF NOT EXISTS proves no name at all.
+    [Theory]
+    [InlineData("İtems", "INSERT INTO items VALUES (1)", "MutationNotAllowed")]
+    [InlineData("İtems", "TRUNCATE items", "NonTemporaryWrite")]
+    [InlineData("İtems", "TRUNCATE pg_temp.items", "NonTemporaryWrite")]
+    [InlineData("İtems", "DROP TABLE items", "UnsupportedStatement")]
+    [InlineData("İtems", "CREATE INDEX ix ON items (id)", "UnsupportedStatement")]
+    [InlineData("É", "INSERT INTO items VALUES (1)", "MutationNotAllowed")]
+    [InlineData("É", "TRUNCATE items", "NonTemporaryWrite")]
+    public void Final_If_not_exists_after_non_ascii_on_commit_drop_proves_no_name_at_all(
+        string declared, string tail, string expected)
     {
-        // The unknown stored name contains a non-ASCII character under every
-        // server fold, so it cannot be the all-ASCII name declared next.
-        const string tail =
-            "CREATE TEMP TABLE IF NOT EXISTS items (id int); INSERT INTO items VALUES (1); TRUNCATE items";
-
         var sameBatch = _classifier.Classify(
-            "CREATE TEMP TABLE É (id int) ON COMMIT DROP; " + tail,
+            $"CREATE TEMP TABLE {declared} (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS items (id int); {tail}",
             SqlUsage.Query, "appdb", false, null, Empty);
-        Assert.True(sameBatch.Allowed, sameBatch.RejectionDescription);
-        Assert.True(sameBatch.HasSessionLocalWork);
-        Assert.False(sameBatch.HasMutation);
+        Assert.False(sameBatch.Allowed);
+        Assert.Equal(expected, sameBatch.Reason.ToString());
 
         var setup = _classifier.Classify(
-            "CREATE TEMP TABLE É (id int) ON COMMIT DROP", SqlUsage.CompareSetup, "appdb", false, null, Empty);
-        var carried = _classifier.Classify(tail, SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
-        Assert.True(carried.Allowed, carried.RejectionDescription);
-        Assert.False(carried.HasMutation);
+            $"CREATE TEMP TABLE {declared} (id int) ON COMMIT DROP", SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        var carried = _classifier.Classify(
+            "CREATE TEMP TABLE IF NOT EXISTS items (id int); " + tail,
+            SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.False(carried.Allowed);
+        Assert.Equal(expected, carried.Reason.ToString());
+    }
+
+    [Fact]
+    public void Final_Plain_create_is_still_proven_after_a_non_ascii_on_commit_drop_declaration()
+    {
+        // A plain CREATE TEMP TABLE fails while the name is taken, so reaching
+        // the next statement means a new temp exists (contract row 011-T4b-D3).
+        var decision = _classifier.Classify(
+            "CREATE TEMP TABLE İtems (id int) ON COMMIT DROP; CREATE TEMP TABLE items (id int); INSERT INTO items VALUES (1); TRUNCATE items",
+            SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+    }
+
+    // 011/final (M4): a CREATE TEMP TABLE whose name carries any qualifier other
+    // than the pg_temp alias records no proof under its relation name. The
+    // server rejects `public.x`; `pg_temp_3.x` may be another session's schema.
+    [Theory]
+    [InlineData("CREATE TEMP TABLE public.x (id int); INSERT INTO x VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE public.x (id int); DELETE FROM x", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE public.x (id int); TRUNCATE x", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE public.x (id int); TRUNCATE pg_temp.x", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE public.x (id int); DROP TABLE x", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE public.x (id int); CREATE INDEX ix ON x (id)", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE IF NOT EXISTS public.x (id int); INSERT INTO x VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE pg_temp_3.x (id int); INSERT INTO x VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE pg_temp_3.x (id int); TRUNCATE x", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE \"pg_temp_3\".x (id int); DROP TABLE x", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE \"PG_TEMP\".x (id int); INSERT INTO x VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE appdb.pg_temp.x (id int); INSERT INTO x VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE appdb.public.x (id int); TRUNCATE x", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE public.x AS SELECT 1 AS id; INSERT INTO x VALUES (1)", "MutationNotAllowed")]
+    // The withholding side of a qualified declaration is unchanged.
+    [InlineData("CREATE TEMP TABLE x (id int); CREATE TEMP TABLE public.x (id int) ON COMMIT DROP; INSERT INTO x VALUES (1)", "MutationNotAllowed")]
+    public void Final_Qualified_create_temp_records_no_proof_under_its_relation_name(string sql, string expected) =>
+        AssertDeniedInBothUsages(sql, expected);
+
+    [Theory]
+    [InlineData("CREATE TEMP TABLE public.x (id int)")]
+    [InlineData("CREATE TEMP TABLE pg_temp_3.x (id int)")]
+    [InlineData("CREATE TEMP TABLE appdb.pg_temp.x (id int)")]
+    public void Final_Qualified_create_temp_is_not_reported_as_a_session_temp(string sql)
+    {
+        // The declaration itself keeps its verdict; it only stops proving.
+        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        Assert.Empty(setup.SessionTempTables);
+
+        var carried = _classifier.Classify(
+            "INSERT INTO x VALUES (1)", SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.False(carried.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, carried.Reason);
+    }
+
+    [Theory]
+    // Decision: the two-part pg_temp alias keeps recording proof. The server
+    // resolves pg_temp to the current session's temp schema, so the relation
+    // created is exactly the session temp of that name.
+    [InlineData("CREATE TEMP TABLE pg_temp.x (id int); INSERT INTO x VALUES (1); TRUNCATE x; DROP TABLE x")]
+    [InlineData("CREATE TEMP TABLE PG_TEMP.x (id int); DELETE FROM x; TRUNCATE pg_temp.x")]
+    [InlineData("CREATE TEMP TABLE \"pg_temp\".x (id int); CREATE INDEX ix ON x (id)")]
+    public void Final_Pg_temp_qualified_create_temp_still_records_proof(string sql)
+    {
+        foreach (var usage in new[] { SqlUsage.Query, SqlUsage.CompareSetup })
+        {
+            var decision = _classifier.Classify(sql, usage, "appdb", false, null, Empty);
+            Assert.True(decision.Allowed, decision.RejectionDescription);
+            Assert.True(decision.HasSessionLocalWork);
+            Assert.False(decision.HasMutation);
+        }
     }
 
     // 011/T4b fix round 1 (F4, contract row 011-T4b-D3): a plain CREATE TEMP
