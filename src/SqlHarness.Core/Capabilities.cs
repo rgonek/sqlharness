@@ -72,15 +72,16 @@ public static class SqlHarnessCapabilitiesProvider
                 {
                     ["sqlserver"] = [
                         "DECLARE scalar variables with analyzed initializers",
-                        "SET to a scalar local declared earlier in the same batch (RHS analyzed for external/stateful/cross-database sources; session/transaction option SET stays denied)",
-                        "DECLARE @t TABLE (...) then INSERT/UPDATE/DELETE/MERGE/SELECT/OUTPUT INTO against that table variable, proven by a same-batch DECLARE",
+                        "Plain SET @v = <expr> to a scalar local declared earlier in the same batch; query SQL only, denied in --setup (RHS analyzed for external/stateful/cross-database sources; compound (+=), cursor, and session/transaction option SET stay denied)",
+                        "DECLARE @t TABLE (...) then INSERT/UPDATE/DELETE/MERGE/SELECT against that table variable, declared earlier in the same batch; OUTPUT INTO @t only when the statement's primary target is also proven local (persistent primary target: MutationNotAllowed); aliased DML targets and user-defined table types stay denied",
                         "TRUNCATE TABLE #temp (unambiguous local temp only)",
                         "ALTER TABLE #temp ADD/DROP COLUMN and local CHECK/DEFAULT/NULL/UNIQUE constraints"],
                     ["postgres"] = [
                         "EXPLAIN over a safe SELECT (plan-only, read-only)",
                         "EXPLAIN ANALYZE with full inner-statement effect analysis",
                         "SELECT INTO TEMP TABLE with unambiguous single-part name",
-                        "TRUNCATE [ONLY] of proven current-session temps only (single-part name; not ON COMMIT DROP; persistent, mixed, CASCADE, RESTART IDENTITY, and schema-qualified targets stay denied)"],
+                        "TRUNCATE [ONLY] of proven current-session temps only (single-part name; not ON COMMIT DROP; persistent, mixed, CASCADE, RESTART IDENTITY, and schema-qualified targets stay denied)",
+                        "Session-temp proof for temp DML, DROP TABLE, CREATE INDEX, and TRUNCATE targets: name-based, assumes the default search_path (pg_temp first) for unqualified names; the name must be quoted or all-ASCII-unquoted and at most 63 UTF-8 bytes where declared and where used, else never proven (quote or shorten); DROP TABLE of a name unknown offline revokes every proof; see AGENTS.md"],
                 },
                 ["artifactRead"] = new { sections = ArtifactReader.SupportedSections, manifestVersion = ArtifactReader.CurrentManifestVersion, maxReportBytes = ArtifactReader.MaxReportBytes },
                 ["watchNdjson"] = new { events = new[] { "started", "changed", "completed", "failed" }, schemaVersion = WatchNdjsonWriter.SchemaVersion, sequence = "strictly increasing from started; exactly one terminal record", history = "no retention: every change is emitted immediately" },
