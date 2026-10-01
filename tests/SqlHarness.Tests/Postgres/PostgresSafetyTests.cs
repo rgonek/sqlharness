@@ -581,6 +581,37 @@ public sealed class PostgresSafetyTests
         Assert.Equal(SqlSafetyReason.ParseError, decision.Reason);
     }
 
+    // 011/T5 parser spike (plans/011-analyze-parser-spike.md): probe-verified on
+    // SqlParserCS 0.6.5 PostgreSqlDialect. Every canonical PostgreSQL ANALYZE
+    // spelling the parser is asked to accept a TABLE keyword next and throws
+    // SqlParser.ParserException when it is missing, so each form below is a
+    // parse error -> PostgresDocument.TryParse returns false -> ParseError.
+    // These forms never reach the classifier's Unsupported switch at all.
+    [Theory]
+    [InlineData("ANALYZE VERBOSE t")]
+    [InlineData("ANALYZE (VERBOSE) t")]
+    [InlineData("ANALYZE (SKIP_LOCKED) t")]
+    [InlineData("ANALYZE")]
+    public void T5_Analyze_additional_canonical_forms_are_parse_errors(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.ParseError, decision.Reason);
+    }
+
+    // 011/T5: the ONLY "ANALYZE ..." spelling this parser version actually
+    // parses is the Hive-style ANALYZE TABLE form, which yields Statement.Analyze
+    // (a Hive-shaped node: Name/Partitions/ForColumns/Columns/CacheMetadata/
+    // NoScan/ComputeStatistics -- no VERBOSE, no PG column list). It must stay
+    // denied and must never be reinterpreted as canonical PostgreSQL ANALYZE.
+    [Fact]
+    public void T5_Analyze_hive_form_stays_unsupported()
+    {
+        var decision = _classifier.Classify("ANALYZE TABLE t", SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
     // 011/T4: TRUNCATE. A target is a current-session temp only when its
     // single-part name is in the session temp set (recorded from CREATE TEMP /
     // SELECT INTO TEMP). A name prefix or a schema qualifier is never proof.
