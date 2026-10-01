@@ -18,9 +18,12 @@ internal sealed class PostgresDialect : ISqlDialect
         IReadOnlySet<string> sessionTempTables) =>
         _classifier.Classify(sql, usage, database, allowMutation, confirmDatabase, sessionTempTables);
 
-    public IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs)
+    public IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs) =>
+        BindParameters(inputs.Select(SqlParameterParser.ToInput));
+
+    public IReadOnlyList<SqlHarnessParameter> BindParameters(IEnumerable<SqlHarnessParameterInput> inputs)
     {
-        var parsed = SqlParameterParser.Parse(inputs);
+        var parsed = SqlParameterParser.Bind(inputs);
         PostgresParameters.Validate(parsed);
         return parsed;
     }

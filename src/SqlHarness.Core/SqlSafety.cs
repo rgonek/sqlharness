@@ -67,6 +67,29 @@ internal static class SqlParameterSecrets
             AddValue(knownSecrets, declaration);
     }
 
+    // Typed values are registered whole: a comma, '=' or ':' inside one is part of the secret.
+    internal static void AddValues(ICollection<string> knownSecrets, IEnumerable<SqlHarnessParameterInput>? inputs)
+    {
+        if (inputs is null)
+            return;
+        foreach (var input in inputs)
+        {
+            if (!string.IsNullOrEmpty(input?.Value))
+                knownSecrets.Add(input.Value);
+        }
+    }
+
+    internal static void AddMatrixValues(ICollection<string> knownSecrets, SqlHarnessParameterMatrixInput? matrix)
+    {
+        if (matrix?.Values is null)
+            return;
+        foreach (var value in matrix.Values)
+        {
+            if (!string.IsNullOrEmpty(value))
+                knownSecrets.Add(value);
+        }
+    }
+
     internal static void AddMatrixValues(ICollection<string> knownSecrets, string? matrix)
     {
         if (string.IsNullOrEmpty(matrix))
@@ -91,6 +114,42 @@ internal static class SqlParameterSecrets
         var value = declaration[(equals + 1)..];
         if (!string.IsNullOrEmpty(value))
             knownSecrets.Add(value);
+    }
+}
+
+/// <summary>
+/// Compatibility adapter (012): an operation carries declaration text or the typed model, never both.
+/// Legacy text is turned into the same model, so every caller ends in the one binder.
+/// </summary>
+internal static class SqlParameterInputs
+{
+    internal static IEnumerable<SqlHarnessParameterInput> Resolve(
+        IReadOnlyList<string> declarations,
+        IReadOnlyList<SqlHarnessParameterInput>? typed)
+    {
+        // Lazy on purpose: see SqlParameterParser.Parse.
+        if (typed is null)
+            return declarations.Select(SqlParameterParser.ToInput);
+        if (declarations is { Count: > 0 })
+        {
+            throw new SqlHarnessSafetyException(
+                "SQL parameters must be supplied either as declarations or as typed inputs, not both.");
+        }
+
+        return typed;
+    }
+
+    internal static SqlHarnessParameterMatrixInput ResolveMatrix(string matrix, SqlHarnessParameterMatrixInput? typed)
+    {
+        if (typed is null)
+            return SqlParameterMatrixParser.ToInput(matrix);
+        if (!string.IsNullOrEmpty(matrix))
+        {
+            throw new SqlHarnessSafetyException(
+                "The --matrix option must be supplied either as text or as a typed matrix, not both.");
+        }
+
+        return typed;
     }
 }
 
@@ -997,7 +1056,9 @@ internal static partial class SqlParameterParser
 
     internal static SqlHarnessParameter Bind(SqlHarnessParameterInput input)
     {
-        ArgumentNullException.ThrowIfNull(input);
+        // A null entry has no name. Declaration text cannot produce one.
+        if (input is null)
+            throw new SqlHarnessSafetyException("Invalid SQL parameter name.");
         var name = input.Name;
         var type = input.Type;
         var value = input.Value;

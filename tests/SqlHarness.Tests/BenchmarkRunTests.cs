@@ -414,6 +414,7 @@ public sealed class BenchmarkRunTests
         public string SpaceSql => throw Unused();
         public SqlSafetyDecision Classify(string sql, SqlUsage usage, string? database, bool allowMutation, string? confirmDatabase, IReadOnlySet<string> sessionTempTables) => throw Unused();
         public IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs) => throw Unused();
+        public IReadOnlyList<SqlHarnessParameter> BindParameters(IEnumerable<SqlHarnessParameterInput> inputs) => throw Unused();
         public void ValidateParameterReferences(IReadOnlyList<SqlHarnessParameter> parameters, params string?[] batches) => throw Unused();
         public void ValidateMeasuredBatch(string sql) => throw Unused();
         public string BuildCountsExactSql(IReadOnlyList<ResolvedCountObject> objects) => throw Unused();

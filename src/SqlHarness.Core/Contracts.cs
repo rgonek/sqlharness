@@ -34,7 +34,11 @@ public sealed record SqlHarnessQueryOperation(
     int TimeoutSeconds,
     int MaxRows,
     bool AllowMutation,
-    string? ConfirmDatabase) : SqlHarnessOperation;
+    string? ConfirmDatabase) : SqlHarnessOperation
+{
+    /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
+    public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+}
 
 public sealed record SqlHarnessCompareOperation(
     SqlTargetRequest Target,
@@ -44,7 +48,11 @@ public sealed record SqlHarnessCompareOperation(
     IReadOnlyList<string> Parameters,
     int TimeoutSeconds,
     int Repeat,
-    ResultComparisonMode CompareResults = ResultComparisonMode.Ordered) : SqlHarnessOperation;
+    ResultComparisonMode CompareResults = ResultComparisonMode.Ordered) : SqlHarnessOperation
+{
+    /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
+    public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+}
 
 public sealed record SqlHarnessCompareMatrixOperation(
     SqlTargetRequest Target,
@@ -55,7 +63,14 @@ public sealed record SqlHarnessCompareMatrixOperation(
     int TimeoutSeconds,
     int Repeat,
     string Matrix,
-    ResultComparisonMode CompareResults = ResultComparisonMode.Ordered) : SqlHarnessOperation;
+    ResultComparisonMode CompareResults = ResultComparisonMode.Ordered) : SqlHarnessOperation
+{
+    /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
+    public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+
+    /// <summary>Typed alternative to <see cref="Matrix"/> (012). When it is set, <see cref="Matrix"/> must be empty.</summary>
+    public SqlHarnessParameterMatrixInput? TypedMatrix { get; init; }
+}
 
 /// <summary>
 /// One SQL parameter as structure instead of a <c>name:type=value</c> declaration (012).
@@ -94,7 +109,11 @@ public sealed record SqlHarnessMeasureOperation(
     int TimeoutSeconds,
     int Repeat,
     IReadOnlyList<SqlHarnessParameterSetInput>? ParameterSets = null)
-    : SqlHarnessOperation;
+    : SqlHarnessOperation
+{
+    /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
+    public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+}
 
 public sealed record SqlHarnessGainOperation : SqlHarnessOperation;
 
@@ -166,7 +185,11 @@ public static class IndexObjectSyntax
 public sealed record SqlHarnessWatchOperation(
     SqlTargetRequest Target, string Sql, IReadOnlyList<string> Parameters,
     int TimeoutSeconds, int MaxRows, TimeSpan Interval, TimeSpan MaxDuration,
-    string? Until, int? UntilUnchanged, int HistoryLimit = 100) : SqlHarnessOperation;
+    string? Until, int? UntilUnchanged, int HistoryLimit = 100) : SqlHarnessOperation
+{
+    /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
+    public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+}
 
 /// <summary>
 /// Optional scope owner for snapshot capture/diff (003): the MCP mapper sets
@@ -177,7 +200,11 @@ public sealed record SqlHarnessWatchOperation(
 public sealed record SqlHarnessSnapshotOperation(
     SqlTargetRequest Target, string Sql, IReadOnlyList<string> Parameters,
     int TimeoutSeconds, int MaxRows, string Name, bool Diff, bool Force,
-    ArtifactOwner? Owner = null) : SqlHarnessOperation;
+    ArtifactOwner? Owner = null) : SqlHarnessOperation
+{
+    /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
+    public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+}
 
 public enum WatchExitReason { ConditionMet, Unchanged, MaxDuration }
 public enum SnapshotVerdict { Stored, Identical, Different }

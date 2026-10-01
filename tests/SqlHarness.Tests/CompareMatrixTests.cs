@@ -307,6 +307,169 @@ public class CompareMatrixTests
         Assert.Equal([20], factory.Sessions[1].BatchSizes);
     }
 
+    // 012/T1: the typed model reaches the same binder without any declaration text.
+    [Fact]
+    public async Task Typed_matrix_runs_comma_empty_null_and_null_text_as_four_cells()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(TypedMatrix("a,b", "", null, "null"));
+
+        Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
+        Assert.Equal(4, factory.ConnectCount);
+        Assert.All(factory.Sessions, session => Assert.Equal(1, session.SetupCount));
+        Assert.All(factory.Sessions, session => Assert.Equal([7], session.TenantValues));
+        Assert.Equal<object>(["a,b", "", DBNull.Value, "null"], factory.Sessions.Select(session => session.MatrixValue));
+
+        var report = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
+        Assert.Equal("@BatchSize", report.ParameterName);
+        Assert.Equal("nvarchar(20)", report.ParameterType);
+        Assert.Equal(["a,b", "", null, "null"], report.Cells.Select(cell => cell.ParameterValue));
+        Assert.Equal(
+            "{\"Index\":2,\"ParameterValue\":null}",
+            System.Text.Json.JsonSerializer.Serialize(new { report.Cells[2].Index, report.Cells[2].ParameterValue }));
+    }
+
+    [Fact]
+    public async Task Typed_matrix_failure_redacts_a_value_that_contains_a_comma()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory(failSqlAt: 0);
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(TypedMatrix("se,cret", "other"));
+
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
+        var error = outcome.SafeError ?? string.Empty;
+        Assert.Contains("cell 0", error, StringComparison.Ordinal);
+        Assert.Contains("measured-run-failed", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("se,", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("cret", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Typed_matrix_rejects_a_bad_value_like_the_text_path_without_echoing_it()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+        var operation = TypedMatrix() with
+        {
+            TypedMatrix = new SqlHarnessParameterMatrixInput("BatchSize", "int", ["1", "private,audit"]),
+        };
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal("The --matrix option for SQL parameter '@BatchSize' of type 'int' is invalid.", outcome.SafeError);
+        Assert.Equal(0, factory.ConnectCount);
+    }
+
+    [Fact]
+    public async Task Typed_matrix_name_that_duplicates_a_typed_fixed_parameter_is_rejected()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+        var operation = TypedMatrix("Q1", "Q2") with
+        {
+            TypedParameters =
+            [
+                new SqlHarnessParameterInput("Tenant", "int", "7"),
+                new SqlHarnessParameterInput("batchsize", null, "Zz9"),
+            ],
+        };
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal("The --matrix option for SQL parameter '@BatchSize' duplicates a fixed parameter.", outcome.SafeError);
+        Assert.Equal(0, factory.ConnectCount);
+    }
+
+    [Theory]
+    [InlineData(true, "SQL parameters must be supplied either as declarations or as typed inputs, not both.")]
+    [InlineData(false, "The --matrix option must be supplied either as text or as a typed matrix, not both.")]
+    public async Task Declaration_text_together_with_the_typed_model_is_rejected(bool parameters, string expected)
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+        var operation = parameters
+            ? TypedMatrix("Q1", "Q2") with { Parameters = ["Other:int=1"] }
+            : TypedMatrix("Q1", "Q2") with { Matrix = "BatchSize:nvarchar(20)=Q3,Q4" };
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal(expected, outcome.SafeError);
+        Assert.Equal(0, factory.ConnectCount);
+    }
+
+    [Theory]
+    [InlineData("query")]
+    [InlineData("compare")]
+    [InlineData("matrix")]
+    [InlineData("measure")]
+    [InlineData("measure-sets")]
+    [InlineData("watch")]
+    [InlineData("snapshot")]
+    public async Task Typed_parameters_reach_the_binder_of_every_operation(string kind)
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+        var target = new SqlTargetRequest("test", new Dictionary<string, string> { ["env"] = "a" });
+        IReadOnlyList<SqlHarnessParameterInput> typed = [new("Tenant", "int", "private,audit=value")];
+        const string sql = "SELECT Value FROM dbo.Clients WHERE Tenant = @Tenant";
+        const string setSql = "SELECT Value FROM dbo.Clients WHERE Tenant = @Tenant AND BatchSize = @BatchSize";
+        SqlHarnessOperation operation = kind switch
+        {
+            "query" => new SqlHarnessQueryOperation(target, sql, [], 30, 10, false, null) { TypedParameters = typed },
+            "compare" => new SqlHarnessCompareOperation(target, null, sql, sql, [], 30, 1) { TypedParameters = typed },
+            "matrix" => TypedMatrix("Q1", "Q2") with { TypedParameters = typed },
+            "measure" => new SqlHarnessMeasureOperation(target, null, sql, [], 30, 1) { TypedParameters = typed },
+            "measure-sets" => new SqlHarnessMeasureOperation(
+                target, null, setSql, [], 30, 1,
+                [new("small", ["BatchSize:int=1"]), new("large", ["BatchSize:int=2"])]) { TypedParameters = typed },
+            "watch" => new SqlHarnessWatchOperation(
+                target, sql, [], 30, 10, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1), null, 3) { TypedParameters = typed },
+            _ => new SqlHarnessSnapshotOperation(target, sql, [], 30, 10, "before", false, false) { TypedParameters = typed },
+        };
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal("Invalid value for SQL parameter 'Tenant' of type 'int'.", outcome.SafeError);
+        Assert.Equal(0, factory.ConnectCount);
+    }
+
+    [Fact]
+    public async Task Typed_query_parameter_is_bound_whole_with_its_separator_characters()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+        var operation = new SqlHarnessQueryOperation(
+            new SqlTargetRequest("test", new Dictionary<string, string> { ["env"] = "a" }),
+            "SELECT Value FROM dbo.Clients WHERE BatchSize = @BatchSize",
+            [],
+            30,
+            10,
+            false,
+            null)
+        {
+            TypedParameters = [new SqlHarnessParameterInput("BatchSize", null, "a,b=c:d")],
+        };
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
+
+        Assert.True(outcome.ExitCode == SqlHarnessExitCode.Success, outcome.SafeError);
+        Assert.Equal("a,b=c:d", Assert.Single(factory.Sessions).MatrixValue);
+    }
+
+    private static SqlHarnessCompareMatrixOperation TypedMatrix(params string?[] values) =>
+        Matrix(string.Empty, parameters: []) with
+        {
+            TypedParameters = [new SqlHarnessParameterInput("Tenant", "int", "7")],
+            TypedMatrix = new SqlHarnessParameterMatrixInput("BatchSize", "nvarchar(20)", values),
+        };
+
     private static SqlHarnessModule Module(
         MatrixSessionFactory sessions,
         ICompareArtifactWriter artifacts,
@@ -437,6 +600,14 @@ public class CompareMatrixTests
 
         public IReadOnlyList<int> BatchSizes => Values("@BatchSize");
         public IReadOnlyList<int> TenantValues => Values("@Tenant");
+
+        /// <summary>The single @BatchSize value this session saw, as bound (DBNull for a typed NULL).</summary>
+        public object MatrixValue =>
+            Commands
+                .Where(command => !IsStatistics(command.Sql))
+                .Select(command => command.Parameters.Single(parameter => parameter.Name == "@BatchSize").Value)
+                .Distinct()
+                .Single();
 
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
         {

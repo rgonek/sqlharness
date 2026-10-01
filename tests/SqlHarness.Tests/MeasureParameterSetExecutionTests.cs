@@ -622,6 +622,9 @@ public sealed class MeasureParameterSetExecutionTests
         public IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs) =>
             inner.ParseParameters(inputs);
 
+        public IReadOnlyList<SqlHarnessParameter> BindParameters(IEnumerable<SqlHarnessParameterInput> inputs) =>
+            inner.BindParameters(inputs);
+
         public void ValidateParameterReferences(IReadOnlyList<SqlHarnessParameter> parameters, params string?[] batches) =>
             inner.ValidateParameterReferences(parameters, batches);
 

@@ -23,7 +23,10 @@ internal sealed class SqlServerDialect : ISqlDialect
         _classifier.Classify(sql, usage, database, allowMutation, confirmDatabase);
 
     public IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs) =>
-        SqlParameterParser.Parse(inputs);
+        BindParameters(inputs.Select(SqlParameterParser.ToInput));
+
+    public IReadOnlyList<SqlHarnessParameter> BindParameters(IEnumerable<SqlHarnessParameterInput> inputs) =>
+        SqlParameterParser.Bind(inputs);
 
     public void ValidateParameterReferences(IReadOnlyList<SqlHarnessParameter> parameters, params string?[] batches) =>
         SqlParameterReferenceValidator.Validate(parameters, batches);

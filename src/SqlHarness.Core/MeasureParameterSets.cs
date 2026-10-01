@@ -25,14 +25,18 @@ internal static class MeasureParameterSetValidator
         IReadOnlyList<SqlHarnessParameterSetInput> parameterSets,
         string? setupSql,
         string querySql,
-        ISqlDialect? dialect = null)
+        ISqlDialect? dialect = null,
+        IReadOnlyList<SqlHarnessParameterInput>? typedFixedParameters = null)
     {
         ArgumentNullException.ThrowIfNull(fixedParameters);
         ArgumentNullException.ThrowIfNull(parameterSets);
         ArgumentNullException.ThrowIfNull(querySql);
         dialect ??= SqlDialects.For(SqlEngine.SqlServer);
 
-        var fixedParsed = ParseShaped(fixedParameters, setName: null);
+        // The module rejects text and typed fixed parameters together before it gets here.
+        var fixedParsed = typedFixedParameters is null
+            ? ParseShaped(fixedParameters, setName: null)
+            : ParseShaped(typedFixedParameters);
         var fixedNames = new HashSet<string>(
             fixedParsed.Select(parameter => parameter.Name),
             StringComparer.OrdinalIgnoreCase);
@@ -82,11 +86,11 @@ internal static class MeasureParameterSetValidator
         return prepared;
     }
 
-    private static IReadOnlyList<SqlHarnessParameter> Parse(IReadOnlyList<string> inputs, string? setName)
+    private static IReadOnlyList<SqlHarnessParameter> Parse(IEnumerable<SqlHarnessParameterInput> inputs, string? setName)
     {
         try
         {
-            return SqlParameterParser.Parse(inputs);
+            return SqlParameterParser.Bind(inputs);
         }
         catch (SqlHarnessSafetyException exception) when (exception.IsParameterValue)
         {
@@ -107,10 +111,21 @@ internal static class MeasureParameterSetValidator
 
     private static IReadOnlyList<ShapedParameter> ParseShaped(IReadOnlyList<string> inputs, string? setName)
     {
-        var parsed = Parse(inputs, setName);
+        var parsed = Parse(inputs.Select(SqlParameterParser.ToInput), setName);
         var shaped = new ShapedParameter[parsed.Count];
         for (var i = 0; i < parsed.Count; i++)
             shaped[i] = new ShapedParameter(parsed[i], DeclaredShape.From(TypeToken(inputs[i])));
+
+        return shaped;
+    }
+
+    // Typed fixed parameters carry their type token; there is no declaration text to read it from.
+    private static IReadOnlyList<ShapedParameter> ParseShaped(IReadOnlyList<SqlHarnessParameterInput> inputs)
+    {
+        var parsed = Parse(inputs, setName: null);
+        var shaped = new ShapedParameter[parsed.Count];
+        for (var i = 0; i < parsed.Count; i++)
+            shaped[i] = new ShapedParameter(parsed[i], DeclaredShape.From(inputs[i].Type));
 
         return shaped;
     }

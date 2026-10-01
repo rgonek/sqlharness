@@ -15,6 +15,9 @@ internal interface ISqlDialect
 
     IReadOnlyList<SqlHarnessParameter> ParseParameters(IReadOnlyList<string> inputs);
 
+    /// <summary>Binds the typed model. <see cref="ParseParameters"/> is the declaration-text adapter over it.</summary>
+    IReadOnlyList<SqlHarnessParameter> BindParameters(IEnumerable<SqlHarnessParameterInput> inputs);
+
     void ValidateParameterReferences(IReadOnlyList<SqlHarnessParameter> parameters, params string?[] batches);
 
     void ValidateMeasuredBatch(string sql);

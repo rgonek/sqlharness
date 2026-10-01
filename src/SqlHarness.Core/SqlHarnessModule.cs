@@ -188,6 +188,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         CanonicalResultAccumulator? raw = null;
         var knownSecrets = new List<string> { query.Sql };
         knownSecrets.AddRange(query.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+        SqlParameterSecrets.AddValues(knownSecrets, query.TypedParameters);
 
         try
         {
@@ -204,7 +205,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
             SqlParameterSecrets.AddValues(knownSecrets, query.Parameters);
-            var parameters = dialect.ParseParameters(query.Parameters);
+            var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(query.Parameters, query.TypedParameters));
             dialect.ValidateParameterReferences(parameters, query.Sql);
 
             foreach (var parameter in parameters)
@@ -316,6 +317,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         if (!string.IsNullOrWhiteSpace(compare.SetupSql))
             knownSecrets.Add(compare.SetupSql);
         knownSecrets.AddRange(compare.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+        SqlParameterSecrets.AddValues(knownSecrets, compare.TypedParameters);
 
         try
         {
@@ -328,7 +330,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 compare.Parameters,
                 compare.TimeoutSeconds,
                 compare.Repeat,
-                knownSecrets);
+                knownSecrets,
+                compare.TypedParameters);
             foreach (var parameter in prepared.FixedParameters)
             {
                 if (parameter.Value is not DBNull)
@@ -404,6 +407,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         if (!string.IsNullOrWhiteSpace(operation.SetupSql))
             knownSecrets.Add(operation.SetupSql);
         knownSecrets.AddRange(operation.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+        SqlParameterSecrets.AddValues(knownSecrets, operation.TypedParameters);
+        SqlParameterSecrets.AddMatrixValues(knownSecrets, operation.TypedMatrix);
 
         try
         {
@@ -416,10 +421,14 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 operation.Parameters,
                 operation.TimeoutSeconds,
                 operation.Repeat,
-                knownSecrets);
+                knownSecrets,
+                operation.TypedParameters);
             SqlParameterSecrets.AddMatrixValues(knownSecrets, operation.Matrix);
 
-            var matrix = SqlParameterMatrixParser.Parse(operation.Matrix, operation.Parameters);
+            // The fixed parameters are already bound, so their names need no second parse.
+            var matrix = SqlParameterMatrixParser.Bind(
+                SqlParameterInputs.ResolveMatrix(operation.Matrix, operation.TypedMatrix),
+                prepared.FixedParameters.Select(parameter => parameter.Name));
             foreach (var displayValue in matrix.DisplayValues)
             {
                 if (!string.IsNullOrEmpty(displayValue))
@@ -431,11 +440,12 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             foreach (var parameter in fixedParameters)
                 AddTypedSecret(knownSecrets, parameter);
 
-            var declaration = MatrixDeclaration(matrix);
+            // Second bind through the dialect: the engine may reject a type the shared binder accepts.
+            var matrixName = MatrixParameterName(matrix);
             var matrixParameters = new List<SqlHarnessParameter>(matrix.DisplayValues.Count);
             foreach (var displayValue in matrix.DisplayValues)
             {
-                var bound = dialect.ParseParameters([$"{declaration}={displayValue}"]);
+                var bound = dialect.BindParameters([new SqlHarnessParameterInput(matrixName, matrix.Type, displayValue)]);
                 if (bound.Count != 1)
                     throw new SqlHarnessSafetyException($"The --matrix option for SQL parameter '{matrix.Name}' is invalid.");
                 matrixParameters.Add(bound[0]);
@@ -525,11 +535,11 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         knownSecrets.Add(Convert.ToString(parameter.Value, CultureInfo.InvariantCulture) ?? string.Empty);
     }
 
-    private static string MatrixDeclaration(ParsedParameterMatrix matrix)
+    private static string MatrixParameterName(ParsedParameterMatrix matrix)
     {
         if (matrix.Name.Length < 2 || matrix.Name[0] != '@')
             throw new SqlHarnessSafetyException("The --matrix option is invalid.");
-        return $"{matrix.Name[1..]}:{matrix.Type}";
+        return matrix.Name[1..];
     }
 
     private static string FormatMatrixCellError(CompareMatrixCellFailedException failed, IReadOnlyList<string> knownSecrets)
@@ -557,6 +567,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         if (!string.IsNullOrWhiteSpace(measure.SetupSql))
             knownSecrets.Add(measure.SetupSql);
         knownSecrets.AddRange(measure.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+        SqlParameterSecrets.AddValues(knownSecrets, measure.TypedParameters);
 
         try
         {
@@ -593,7 +604,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     SqlParameterSecrets.AddValues(knownSecrets, set?.Parameters);
             }
 
-            var parameters = dialect.ParseParameters(measure.Parameters);
+            var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(measure.Parameters, measure.TypedParameters));
             dialect.ValidateParameterReferences(parameters, measure.SetupSql, measure.QuerySql);
             dialect.ValidateMeasuredBatch(measure.QuerySql);
 
@@ -698,17 +709,17 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             parameterSets,
             measure.SetupSql,
             measure.QuerySql,
-            dialect);
+            dialect,
+            measure.TypedParameters);
         var bound = new PreparedMeasureParameterSet[prepared.Count];
         for (var index = 0; index < prepared.Count; index++)
         {
             foreach (var parameter in prepared[index].Parameters)
                 AddTypedSecret(knownSecrets, parameter);
 
-            var merged = new List<string>(measure.Parameters.Count + parameterSets[index].Parameters.Count);
-            merged.AddRange(measure.Parameters);
-            merged.AddRange(parameterSets[index].Parameters);
-            var parsed = dialect.ParseParameters(merged);
+            var parsed = dialect.BindParameters(
+                SqlParameterInputs.Resolve(measure.Parameters, measure.TypedParameters)
+                    .Concat(parameterSets[index].Parameters.Select(SqlParameterParser.ToInput)));
             foreach (var parameter in parsed)
                 AddTypedSecret(knownSecrets, parameter);
             bound[index] = prepared[index] with { Parameters = parsed };
@@ -800,6 +811,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         var rawFootprint = new OutputFootprint(0, 0);
         var knownSecrets = new List<string> { watch.Sql };
         knownSecrets.AddRange(watch.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+        SqlParameterSecrets.AddValues(knownSecrets, watch.TypedParameters);
         if (watch.Until is not null)
             knownSecrets.Add(watch.Until);
 
@@ -818,7 +830,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
             SqlParameterSecrets.AddValues(knownSecrets, watch.Parameters);
-            var parameters = dialect.ParseParameters(watch.Parameters);
+            var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(watch.Parameters, watch.TypedParameters));
             dialect.ValidateParameterReferences(parameters, watch.Sql);
             // Predicate syntax is validated before authentication so bad --until fails closed.
             if (watch.Until is not null)
@@ -875,6 +887,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         var rawFootprint = new OutputFootprint(0, 0);
         var knownSecrets = new List<string> { watch.Sql };
         knownSecrets.AddRange(watch.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+        SqlParameterSecrets.AddValues(knownSecrets, watch.TypedParameters);
         if (watch.Until is not null)
             knownSecrets.Add(watch.Until);
 
@@ -893,7 +906,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
             SqlParameterSecrets.AddValues(knownSecrets, watch.Parameters);
-            var parameters = dialect.ParseParameters(watch.Parameters);
+            var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(watch.Parameters, watch.TypedParameters));
             dialect.ValidateParameterReferences(parameters, watch.Sql);
             // Predicate syntax is validated before authentication so bad --until fails closed.
             if (watch.Until is not null)
@@ -993,6 +1006,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         var rawFootprint = new OutputFootprint(0, 0);
         var knownSecrets = new List<string> { snapshot.Sql };
         knownSecrets.AddRange(snapshot.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+        SqlParameterSecrets.AddValues(knownSecrets, snapshot.TypedParameters);
 
         try
         {
@@ -1009,7 +1023,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
             SqlParameterSecrets.AddValues(knownSecrets, snapshot.Parameters);
-            var parameters = dialect.ParseParameters(snapshot.Parameters);
+            var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(snapshot.Parameters, snapshot.TypedParameters));
             dialect.ValidateParameterReferences(parameters, snapshot.Sql);
 
             foreach (var parameter in parameters)
