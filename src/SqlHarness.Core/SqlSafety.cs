@@ -405,10 +405,13 @@ internal sealed class SqlSafetyClassifier
     // target or a table-position @name proves nothing unless it starts at or
     // after that offset. The disqualifying checks (dual declaration, table
     // name in scalar position) stay whole-batch, so order never widens an allow.
-    private sealed record BatchVariableScope(
-        Dictionary<string, int> ScalarLocals,
-        Dictionary<string, int> TableVariables,
-        HashSet<string> NonTableDeclarations)
+    //
+    // The collections are read-only views: the shared Empty instance and a
+    // scope handed to several visitors cannot be changed after construction.
+    private sealed class BatchVariableScope(
+        IReadOnlyDictionary<string, int> scalarLocals,
+        IReadOnlyDictionary<string, int> tableVariables,
+        IReadOnlySet<string> nonTableDeclarations)
     {
         internal static BatchVariableScope Empty { get; } = new(
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
@@ -416,19 +419,19 @@ internal sealed class SqlSafetyClassifier
             new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
         internal bool IsTableVariableName(string? name) =>
-            !string.IsNullOrEmpty(name) && TableVariables.ContainsKey(name);
+            !string.IsNullOrEmpty(name) && tableVariables.ContainsKey(name);
 
         internal bool IsProvenTableVariable(VariableTableReference? reference) =>
             reference?.Variable?.Name is { Length: > 0 } name &&
-            IsDeclaredBefore(TableVariables, name, reference) &&
-            !NonTableDeclarations.Contains(name);
+            IsDeclaredBefore(tableVariables, name, reference) &&
+            !nonTableDeclarations.Contains(name);
 
         internal bool IsProvenScalarLocal(VariableReference? variable) =>
             variable?.Name is { Length: > 0 } name &&
-            IsDeclaredBefore(ScalarLocals, name, variable) &&
-            !TableVariables.ContainsKey(name);
+            IsDeclaredBefore(scalarLocals, name, variable) &&
+            !tableVariables.ContainsKey(name);
 
-        private static bool IsDeclaredBefore(Dictionary<string, int> declarations, string name, TSqlFragment use) =>
+        private static bool IsDeclaredBefore(IReadOnlyDictionary<string, int> declarations, string name, TSqlFragment use) =>
             declarations.TryGetValue(name, out var declarationEnd) &&
             use.StartOffset >= 0 &&
             use.StartOffset >= declarationEnd;
@@ -814,6 +817,15 @@ internal sealed class SqlSafetyClassifier
         private BatchVariableScope _scope = BatchVariableScope.Empty;
         private readonly Dictionary<TSqlBatch, BatchVariableScope> _scopes = [];
 
+        internal bool HasCrossDatabaseReference { get; private set; }
+        internal bool HasExternalAccess { get; private set; }
+        internal bool HasStatefulExpression { get; private set; }
+        internal bool HasStatefulTableSource { get; private set; }
+        internal bool HasExecuteInsertSource { get; private set; }
+        internal bool HasSelectInto { get; private set; }
+        internal bool HasNonLocalSelectInto { get; private set; }
+        internal bool HasNonLocalOutputInto { get; private set; }
+
         // The scope built during the inspection walk, reused by statement classification.
         internal BatchVariableScope ScopeOf(TSqlBatch batch) =>
             _scopes.TryGetValue(batch, out var scope) ? scope : CollectBatchScope(batch);
@@ -824,15 +836,6 @@ internal sealed class SqlSafetyClassifier
             _scopes[node] = _scope;
             base.ExplicitVisit(node);
         }
-
-        internal bool HasCrossDatabaseReference { get; private set; }
-        internal bool HasExternalAccess { get; private set; }
-        internal bool HasStatefulExpression { get; private set; }
-        internal bool HasStatefulTableSource { get; private set; }
-        internal bool HasExecuteInsertSource { get; private set; }
-        internal bool HasSelectInto { get; private set; }
-        internal bool HasNonLocalSelectInto { get; private set; }
-        internal bool HasNonLocalOutputInto { get; private set; }
 
         public override void ExplicitVisit(SchemaObjectName node)
         {
