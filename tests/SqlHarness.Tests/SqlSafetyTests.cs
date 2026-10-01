@@ -1149,6 +1149,39 @@ public class SqlSafetyTests
         Assert.False(decision.HasMutation);
     }
 
+    // 011/T6 fix round 1: a schema-qualified type name may be a scalar alias
+    // type (CREATE TYPE dbo.SomeType FROM int), which the offline parser cannot
+    // tell from a table type. The declaration counts as scalar for SET only;
+    // T3_Query_denies_scalar_variable_as_DML_target keeps table positions denied.
+    [Theory]
+    [InlineData("DECLARE @v dbo.SomeType; SET @v = 1; SELECT @v")]
+    [InlineData("DECLARE @v dbo.SomeType; SET @v = (SELECT MAX(Id) FROM dbo.Clients)")]
+    [InlineData("DECLARE @v sysname; SET @v = N'a'; SELECT @v")]
+    public void T6_Query_allows_SET_to_local_declared_with_user_defined_type(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+        Assert.False(decision.HasSessionLocalWork);
+    }
+
+    // 011/T6 fix round 1: pins shipped behaviour. Setup accepts SELECT and
+    // session-local work only; a SET is neither, whatever the local's type.
+    [Theory]
+    [InlineData("DECLARE @v int; SET @v = 1")]
+    [InlineData("DECLARE @v int; SET @v = 1; SELECT @v")]
+    [InlineData("DECLARE @v int; SET @v = 1; CREATE TABLE #t (Id int)")]
+    [InlineData("DECLARE @v dbo.SomeType; SET @v = 1; SELECT @v")]
+    public void T6_Compare_setup_denies_SET_local_scalar_assignment(string sql)
+    {
+        Assert.True(ClassifyQuery(sql).Allowed);
+
+        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null);
+        Assert.False(setup.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, setup.Reason);
+    }
+
     private SqlSafetyDecision ClassifyQuery(string sql) =>
         _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: false, confirmDatabase: null);
 }
