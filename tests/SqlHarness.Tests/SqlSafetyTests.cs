@@ -755,6 +755,19 @@ public class SqlSafetyTests
     }
 
     [Theory]
+    [InlineData("DECLARE @v int;\nGO\nSET @v = 1; SELECT @v")]
+    [InlineData("DECLARE @v int = 1;\nGO\nSET @v = 2")]
+    public void T2_Query_denies_SET_to_scalar_declared_in_previous_batch(string sql)
+    {
+        // 011/T3b: a scalar local lives in its declaring batch only.
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Theory]
     [InlineData("SET NOCOUNT ON")]
     [InlineData("SET ANSI_NULLS ON")]
     [InlineData("SET QUOTED_IDENTIFIER ON")]
@@ -893,7 +906,16 @@ public class SqlSafetyTests
     [InlineData("DECLARE @t TABLE (Id int); DECLARE @t CURSOR; INSERT @t (Id) VALUES (1)")]
     public void T3_Query_denies_name_declared_as_both_scalar_and_table(string sql)
     {
-        Assert.False(ClassifyQuery(sql).Allowed);
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+
+        // Not approvable either: an ambiguous name is never a known write.
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.False(approved.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, approved.Reason);
+
         Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
     }
 
@@ -986,7 +1008,16 @@ public class SqlSafetyTests
     public void T3_Aliased_table_variable_DML_target_stays_denied(string sql)
     {
         // The alias token is a NamedTableReference; binding it to @t is not proven by this task.
-        Assert.False(ClassifyQuery(T3Declare + sql).Allowed);
+        var decision = ClassifyQuery(T3Declare + sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+
+        // Not approvable either: the denial must not turn into a mutation prompt.
+        var approved = _classifier.Classify(T3Declare + sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.False(approved.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, approved.Reason);
+
         Assert.False(_classifier.Classify(T3Declare + sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
     }
 
@@ -1000,6 +1031,47 @@ public class SqlSafetyTests
 
         Assert.False(decision.Allowed);
         Assert.Equal(reason, decision.Reason.ToString());
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    // 011/T3b (review Minor 4): shapes that were correct by reading only.
+    [Theory]
+    [InlineData("DECLARE @t AS TABLE (Id int); INSERT @t (Id) VALUES (1); SELECT Id FROM @t")]
+    [InlineData("DECLARE @t TABLE (Id int); MERGE INTO @t USING (SELECT 1 AS SrcId) AS src ON Id = src.SrcId WHEN NOT MATCHED THEN INSERT (Id) VALUES (src.SrcId);")]
+    [InlineData("DECLARE @t TABLE (Id int IDENTITY(1,1), Name nvarchar(20) DEFAULT N'x'); INSERT @t DEFAULT VALUES")]
+    [InlineData("DECLARE @t TABLE (Id int IDENTITY(1,1)); INSERT INTO @t DEFAULT VALUES; SELECT Id FROM @t")]
+    [InlineData("DECLARE @t TABLE (Id int); INSERT @T (Id) VALUES (1); SELECT Id FROM @T")]
+    public void T3b_Query_allows_less_common_proven_table_variable_shapes(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+        Assert.True(decision.HasSessionLocalWork);
+
+        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        Assert.False(setup.HasMutation);
+    }
+
+    [Theory]
+    [InlineData("MERGE INTO @x USING (SELECT 1 AS SrcId) AS src ON Id = src.SrcId WHEN NOT MATCHED THEN INSERT (Id) VALUES (src.SrcId);")]
+    [InlineData("INSERT @x DEFAULT VALUES")]
+    [InlineData("DECLARE @x AS int; INSERT @x DEFAULT VALUES")]
+    [InlineData("BEGIN DECLARE @t TABLE (Id int) END; INSERT @t (Id) VALUES (1)")]
+    [InlineData("IF 1 = 1 BEGIN DECLARE @t TABLE (Id int) END; SELECT Id FROM @t")]
+    [InlineData("DECLARE @v dbo.SomeType; SELECT Id FROM @v")]
+    public void T3b_Query_denies_less_common_unproven_table_variable_shapes(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.False(approved.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, approved.Reason);
+
         Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
     }
 
