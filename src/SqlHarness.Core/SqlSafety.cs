@@ -515,14 +515,9 @@ internal sealed class SqlSafetyClassifier
         TSqlFragment statement,
         BatchVariableScope scope)
     {
-        if (primary.Kind == TargetResolutionKind.Ambiguous ||
-            primary.Kind == TargetResolutionKind.Unsupported)
-        {
-            return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
-        }
-
         // 011/T3: a proven table-variable write is session-local; it carries
         // no SchemaObjectName and never enters the #temp name check below.
+        // Any other resolution kind (ambiguous, unsupported) is denied.
         var hasSessionLocal = false;
         var targets = new List<SchemaObjectName?>();
         if (primary.Kind == TargetResolutionKind.Resolved)
