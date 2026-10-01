@@ -1264,6 +1264,238 @@ public sealed class PostgresSafetyTests
         Assert.Equal(expected, decision.Reason.ToString());
     }
 
+    // 011/T4b fix round 1 (F1): a DROP revokes proof for every tracked temp it
+    // may address. `pg_temp.<unquoted non-ASCII>` has a server spelling that is
+    // unknown offline, so it may have dropped any tracked temp.
+    [Theory]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; INSERT INTO \"é\" VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; UPDATE \"é\" SET id = 1", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; DELETE FROM \"é\"", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; MERGE INTO \"é\" USING (SELECT 1 AS id) s ON \"é\".id = s.id WHEN MATCHED THEN DELETE", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; CREATE INDEX ix ON \"é\" (id)", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; DROP TABLE \"é\"", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; TRUNCATE \"é\"", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; EXPLAIN ANALYZE INSERT INTO \"é\" VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE pg_temp.É; INSERT INTO \"é\" VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); CREATE TEMP TABLE other (id int); DROP TABLE other, pg_temp.É; INSERT INTO \"é\" VALUES (1)", "MutationNotAllowed")]
+    // Kelvin sign: Unicode lower-casing maps it to k; the server never does.
+    [InlineData("CREATE TEMP TABLE k (id int); DROP TABLE pg_temp.K; INSERT INTO k VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE k (id int); DROP TABLE pg_temp.K; TRUNCATE k", "NonTemporaryWrite")]
+    // The unqualified shape of the same sequence: the DROP itself is unproven.
+    [InlineData("CREATE TEMP TABLE \"pg_temp_é\" (id int); DROP TABLE PG_TEMP_É; INSERT INTO \"pg_temp_é\" VALUES (1)", "UnsupportedStatement")]
+    // When in doubt every proof goes, including an unrelated ASCII temp.
+    [InlineData("CREATE TEMP TABLE items (id int); DROP TABLE IF EXISTS pg_temp.É; INSERT INTO items VALUES (1)", "MutationNotAllowed")]
+    public void T4b_Drop_with_unknown_stored_name_revokes_every_tracked_temp(string sql, string expected) =>
+        AssertDeniedInBothUsages(sql, expected);
+
+    [Theory]
+    [InlineData("INSERT INTO \"é\" VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE INDEX ix ON \"é\" (id)", "UnsupportedStatement")]
+    [InlineData("TRUNCATE \"é\"", "NonTemporaryWrite")]
+    public void T4b_Drop_with_unknown_stored_name_revokes_a_carried_temp(string tail, string expected)
+    {
+        var setup = _classifier.Classify(
+            "CREATE TEMP TABLE \"é\" (id int)", SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+
+        var query = _classifier.Classify(
+            "DROP TABLE IF EXISTS pg_temp.É; " + tail,
+            SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.False(query.Allowed);
+        Assert.Equal(expected, query.Reason.ToString());
+
+        // The revocation travels: the DROP in one batch, the write in the next.
+        var drop = _classifier.Classify(
+            "DROP TABLE IF EXISTS pg_temp.É", SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.True(drop.Allowed, drop.RejectionDescription);
+        Assert.Empty(drop.SessionTempTables);
+        var later = _classifier.Classify(tail, SqlUsage.Query, "appdb", false, null, drop.SessionTempTables);
+        Assert.False(later.Allowed);
+        Assert.Equal(expected, later.Reason.ToString());
+    }
+
+    [Theory]
+    // A DROP whose stored name is known revokes exactly that temp, as before.
+    [InlineData("CREATE TEMP TABLE items (id int); CREATE TEMP TABLE other (id int); DROP TABLE pg_temp.other; INSERT INTO items VALUES (1); TRUNCATE items")]
+    [InlineData("CREATE TEMP TABLE items (id int); CREATE TEMP TABLE \"é\" (id int); DROP TABLE pg_temp.\"é\"; DELETE FROM items")]
+    [InlineData("CREATE TEMP TABLE items (id int); CREATE TEMP TABLE other (id int); DROP TABLE other; UPDATE items SET id = 1")]
+    public void T4b_Drop_with_known_stored_name_keeps_the_other_temps(string sql)
+    {
+        foreach (var usage in new[] { SqlUsage.Query, SqlUsage.CompareSetup })
+        {
+            var decision = _classifier.Classify(sql, usage, "appdb", false, null, Empty);
+            Assert.True(decision.Allowed, decision.RejectionDescription);
+            Assert.True(decision.HasSessionLocalWork);
+            Assert.False(decision.HasMutation);
+        }
+    }
+
+    // 011/T4b fix round 1 (F2): the server truncates an identifier to 63 bytes,
+    // so two spellings longer than that can address one relation. Such a name
+    // never proves and is never proven. {A63} is 63 ASCII letters; {E32} is 32
+    // two-byte letters (64 bytes in UTF-8); {E31} is 31 of them (62 bytes).
+    [Theory]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS {A63}y (id int); INSERT INTO {A63}y VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS {A63}y (id int); TRUNCATE {A63}y", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS {A63} (id int); INSERT INTO {A63} VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS {A63} (id int); TRUNCATE {A63}", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS \"{A63}\" (id int); DROP TABLE \"{A63}\"", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE {A63} (id int); CREATE TEMP TABLE IF NOT EXISTS {A63}x (id int) ON COMMIT DROP; INSERT INTO {A63} VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); DROP TABLE pg_temp.{A63}y; INSERT INTO {A63}x VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE {A63} (id int); DROP TABLE pg_temp.{A63}y; INSERT INTO {A63} VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE {A63} (id int); DROP TABLE pg_temp.{A63}y; TRUNCATE {A63}", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE {A63} (id int); DROP TABLE IF EXISTS pg_temp.\"{A63}y\"; CREATE INDEX ix ON {A63} (id)", "UnsupportedStatement")]
+    // The same long spelling on both sides: safe on the server, denied by the rule.
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); INSERT INTO {A63}x VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); UPDATE {A63}x SET id = 1", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); DELETE FROM {A63}x", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); DROP TABLE {A63}x", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); CREATE INDEX ix ON {A63}x (id)", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); TRUNCATE {A63}x", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE \"{A63}x\" (id int); DELETE FROM \"{A63}x\"", "MutationNotAllowed")]
+    [InlineData("SELECT 1 AS id INTO TEMP TABLE {A63}x; DELETE FROM {A63}x", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \"{E32}\" (id int); INSERT INTO \"{E32}\" VALUES (1)", "MutationNotAllowed")]
+    // A long declaration or target never matches its own 63-byte prefix either.
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); INSERT INTO {A63} VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE {A63} (id int); INSERT INTO {A63}x VALUES (1)", "MutationNotAllowed")]
+    public void T4b_Name_longer_than_63_bytes_never_proves_and_is_never_proven(string sql, string expected) =>
+        AssertDeniedInBothUsages(ExpandNames(sql), expected);
+
+    [Theory]
+    [InlineData("CREATE TEMP TABLE IF NOT EXISTS {A63} (id int); INSERT INTO {A63} VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE IF NOT EXISTS items (id int); TRUNCATE items", "NonTemporaryWrite")]
+    public void T4b_Carried_long_on_commit_drop_name_blocks_if_not_exists_proof(string querySql, string expected)
+    {
+        // The stored name of the ON COMMIT DROP temp is not known offline, so the
+        // record that travels with the set withholds proof from every later
+        // IF NOT EXISTS, whatever its name.
+        var setup = _classifier.Classify(
+            ExpandNames("CREATE TEMP TABLE \"{E32}\" (id int) ON COMMIT DROP"),
+            SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+
+        var query = _classifier.Classify(
+            ExpandNames(querySql), SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.False(query.Allowed);
+        Assert.Equal(expected, query.Reason.ToString());
+    }
+
+    [Theory]
+    // Exactly 63 bytes is not truncated and is proven like any other name.
+    [InlineData("CREATE TEMP TABLE {A63} (id int); INSERT INTO {A63} VALUES (1); TRUNCATE {A63}; CREATE INDEX ix ON {A63} (id); DROP TABLE {A63}")]
+    [InlineData("CREATE TEMP TABLE \"{E31}a\" (id int); INSERT INTO \"{E31}a\" VALUES (1); TRUNCATE \"{E31}a\"")]
+    public void T4b_Name_of_exactly_63_bytes_stays_session_local(string sql)
+    {
+        foreach (var usage in new[] { SqlUsage.Query, SqlUsage.CompareSetup })
+        {
+            var decision = _classifier.Classify(ExpandNames(sql), usage, "appdb", false, null, Empty);
+            Assert.True(decision.Allowed, decision.RejectionDescription);
+            Assert.True(decision.HasSessionLocalWork);
+            Assert.False(decision.HasMutation);
+        }
+    }
+
+    // 011/T4b fix round 1 (Ruling R12): a pg_temp_ prefix is not proof of the
+    // current session. An unqualified relation merely named pg_temp_stuff is an
+    // ordinary name, and pg_temp_<N> can be another session's temp schema.
+    [Theory]
+    [InlineData("INSERT INTO pg_temp_stuff VALUES (1)", "MutationNotAllowed")]
+    [InlineData("UPDATE pg_temp_stuff SET id = 1", "MutationNotAllowed")]
+    [InlineData("DELETE FROM pg_temp_stuff", "MutationNotAllowed")]
+    [InlineData("MERGE INTO pg_temp_stuff USING (SELECT 1 AS id) s ON pg_temp_stuff.id = s.id WHEN MATCHED THEN DELETE", "MutationNotAllowed")]
+    [InlineData("DROP TABLE pg_temp_stuff", "UnsupportedStatement")]
+    [InlineData("DROP TABLE IF EXISTS pg_temp_stuff", "UnsupportedStatement")]
+    [InlineData("CREATE INDEX ix ON pg_temp_stuff (id)", "UnsupportedStatement")]
+    [InlineData("EXPLAIN ANALYZE INSERT INTO pg_temp_stuff VALUES (1)", "MutationNotAllowed")]
+    [InlineData("WITH changed AS (INSERT INTO pg_temp_stuff VALUES (1) RETURNING id) SELECT id FROM changed", "MutationNotAllowed")]
+    [InlineData("INSERT INTO \"pg_temp_stuff\" VALUES (1)", "MutationNotAllowed")]
+    [InlineData("INSERT INTO PG_TEMP_STUFF VALUES (1)", "MutationNotAllowed")]
+    // An unqualified relation named exactly pg_temp is not the schema alias.
+    [InlineData("INSERT INTO pg_temp VALUES (1)", "MutationNotAllowed")]
+    [InlineData("DROP TABLE pg_temp", "UnsupportedStatement")]
+    [InlineData("CREATE INDEX ix ON pg_temp (id)", "UnsupportedStatement")]
+    // pg_temp_<N> as a schema qualifier.
+    [InlineData("INSERT INTO pg_temp_3.x VALUES (1)", "MutationNotAllowed")]
+    [InlineData("UPDATE pg_temp_3.x SET id = 1", "MutationNotAllowed")]
+    [InlineData("DELETE FROM pg_temp_3.x", "MutationNotAllowed")]
+    [InlineData("MERGE INTO pg_temp_3.x USING (SELECT 1 AS id) s ON x.id = s.id WHEN MATCHED THEN DELETE", "MutationNotAllowed")]
+    [InlineData("DROP TABLE pg_temp_3.x", "UnsupportedStatement")]
+    [InlineData("CREATE INDEX ix ON pg_temp_3.x (id)", "UnsupportedStatement")]
+    [InlineData("EXPLAIN ANALYZE DELETE FROM pg_temp_3.x", "MutationNotAllowed")]
+    [InlineData("INSERT INTO \"pg_temp_3\".\"x\" VALUES (1)", "MutationNotAllowed")]
+    [InlineData("DELETE FROM pg_temp_fake.items", "MutationNotAllowed")]
+    // A tracked temp of the same relation name does not lend proof to the qualifier.
+    [InlineData("CREATE TEMP TABLE x (id int); INSERT INTO pg_temp_3.x VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE x (id int); DROP TABLE pg_temp_3.x", "UnsupportedStatement")]
+    // pg_temp in any position other than the schema of a two-part name.
+    [InlineData("INSERT INTO pg_temp.x.y VALUES (1)", "MutationNotAllowed")]
+    [InlineData("DROP TABLE pg_temp.x.y", "UnsupportedStatement")]
+    [InlineData("INSERT INTO \"PG_TEMP\".x VALUES (1)", "MutationNotAllowed")]
+    public void T4b_Pg_temp_prefix_is_not_proof_for_any_statement(string sql, string expected) =>
+        AssertDeniedInBothUsages(sql, expected);
+
+    [Fact]
+    public void T4b_Write_to_a_pg_temp_prefixed_name_is_an_ordinary_approvable_mutation()
+    {
+        foreach (var sql in new[] { "INSERT INTO pg_temp_stuff VALUES (1)", "DELETE FROM pg_temp_3.x" })
+        {
+            var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+            Assert.True(decision.Allowed, decision.RejectionDescription);
+            Assert.True(decision.HasMutation);
+            Assert.False(decision.HasSessionLocalWork);
+        }
+    }
+
+    [Theory]
+    // An unqualified pg_temp_-prefixed name is session-local only when proven
+    // like any other temp; the plain pg_temp schema alias keeps its treatment.
+    [InlineData("CREATE TEMP TABLE pg_temp_stuff (id int); INSERT INTO pg_temp_stuff VALUES (1); CREATE INDEX ix ON pg_temp_stuff (id); TRUNCATE pg_temp_stuff; DROP TABLE pg_temp_stuff")]
+    [InlineData("INSERT INTO pg_temp.x VALUES (1)")]
+    [InlineData("UPDATE PG_TEMP.x SET id = 1")]
+    [InlineData("DELETE FROM \"pg_temp\".x")]
+    [InlineData("CREATE INDEX ix ON pg_temp.x (id)")]
+    [InlineData("DROP TABLE IF EXISTS pg_temp.x")]
+    public void T4b_Proven_pg_temp_prefixed_temp_and_pg_temp_alias_stay_session_local(string sql)
+    {
+        foreach (var usage in new[] { SqlUsage.Query, SqlUsage.CompareSetup })
+        {
+            var decision = _classifier.Classify(sql, usage, "appdb", false, null, Empty);
+            Assert.True(decision.Allowed, decision.RejectionDescription);
+            Assert.True(decision.HasSessionLocalWork);
+            Assert.False(decision.HasMutation);
+        }
+    }
+
+    [Fact]
+    public void T4b_Dropped_pg_temp_prefixed_temp_loses_proof()
+    {
+        var decision = _classifier.Classify(
+            "CREATE TEMP TABLE pg_temp_stuff (id int); DROP TABLE pg_temp_stuff; INSERT INTO pg_temp_stuff VALUES (1)",
+            SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, decision.Reason);
+    }
+
+    // Query usage without approval, then compare setup, where an unproven DML
+    // target is reported as NonTemporaryWrite.
+    private void AssertDeniedInBothUsages(string sql, string expected)
+    {
+        var query = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(query.Allowed);
+        Assert.Equal(expected, query.Reason.ToString());
+
+        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.False(setup.Allowed);
+        Assert.Equal(
+            expected == "MutationNotAllowed" ? "NonTemporaryWrite" : expected,
+            setup.Reason.ToString());
+    }
+
+    private static string ExpandNames(string sql) => sql
+        .Replace("{A63}", new string('a', 63), StringComparison.Ordinal)
+        .Replace("{E32}", new string('é', 32), StringComparison.Ordinal)
+        .Replace("{E31}", new string('é', 31), StringComparison.Ordinal);
+
     private static SqlUsage ParseUsage(string usage) => usage switch
     {
         "Query" => SqlUsage.Query,
