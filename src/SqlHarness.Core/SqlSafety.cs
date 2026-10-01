@@ -190,7 +190,7 @@ internal sealed class SqlSafetyClassifier
         foreach (var batch in batches)
         {
             // 011/T2: SET targets are proven against same-batch declarations (Ruling R3).
-            var scope = CollectBatchScope(batch);
+            var scope = inspection.ScopeOf(batch);
             foreach (var statement in batch.Statements)
             {
                 var classification = ClassifyStatement(statement, scope);
@@ -238,14 +238,18 @@ internal sealed class SqlSafetyClassifier
         foreach (var batch in batches)
         {
             // 011/T2: SET targets are proven against same-batch declarations (Ruling R3).
-            var scope = CollectBatchScope(batch);
+            var scope = inspection.ScopeOf(batch);
             foreach (var statement in batch.Statements)
             {
-                if (statement is DeclareVariableStatement &&
-                    !HasUnprovenTableVariableUse(statement, scope))
+                // One walk per statement: a DECLARE is skipped only when it
+                // hides no unproven table-position name.
+                var hasUnprovenUse = HasUnprovenTableVariableUse(statement, scope);
+                if (statement is DeclareVariableStatement && !hasUnprovenUse)
                     continue;
 
-                var classification = ClassifyStatement(statement, scope);
+                var classification = hasUnprovenUse
+                    ? StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement)
+                    : ClassifyProvenStatement(statement, scope);
                 if (classification.DenyReason is { } deny)
                 {
                     // Setup never takes the mutation-approval path; any write outside local temps is NonTemporaryWrite.
@@ -280,9 +284,14 @@ internal sealed class SqlSafetyClassifier
         // 011/T3: every table-position @name anywhere in the statement (DML
         // target, FROM, subquery, OUTPUT INTO) must be a proven same-batch
         // table variable, and a table variable never appears as a scalar.
-        if (HasUnprovenTableVariableUse(statement, scope))
-            return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
+        return HasUnprovenTableVariableUse(statement, scope)
+            ? StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement)
+            : ClassifyProvenStatement(statement, scope);
+    }
 
+    // Callers have already established that the statement holds no unproven table-variable use.
+    private static StatementClassification ClassifyProvenStatement(TSqlStatement statement, BatchVariableScope scope)
+    {
         switch (statement)
         {
             case DeclareTableVariableStatement declareTable:
@@ -304,9 +313,7 @@ internal sealed class SqlSafetyClassifier
                 // Scalar variables only; initializers are covered by the global
                 // inspection (cross-database, external, stateful, EXEC sources).
                 // Table variables parse as DeclareTableVariableStatement (011/T3 case above).
-                return declare.Declarations.All(d =>
-                        d is DeclareVariableElement element &&
-                        element.DataType is SqlDataTypeReference or UserDataTypeReference)
+                return IsScalarDeclaration(declare)
                     ? StatementClassification.ReadOnly
                     : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
 
@@ -433,6 +440,13 @@ internal sealed class SqlSafetyClassifier
             ? statement.StartOffset + statement.FragmentLength
             : int.MaxValue;
 
+    // The one definition of "scalar DECLARE": the statement verdict and the
+    // SET-target scope can never disagree.
+    private static bool IsScalarDeclaration(DeclareVariableStatement declare) =>
+        declare.Declarations.All(d =>
+            d is DeclareVariableElement element &&
+            element.DataType is SqlDataTypeReference or UserDataTypeReference);
+
     private static BatchVariableScope CollectBatchScope(TSqlBatch batch)
     {
         var scalars = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -440,25 +454,17 @@ internal sealed class SqlSafetyClassifier
         var nonTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var statement in batch.Statements)
         {
-            if (statement is DeclareVariableStatement anyDeclare)
+            if (statement is DeclareVariableStatement declare)
             {
-                foreach (var declaration in anyDeclare.Declarations)
-                {
-                    if (declaration?.VariableName?.Value is { } declaredName)
-                        nonTables.Add(declaredName);
-                }
-            }
-
-            if (statement is DeclareVariableStatement declare &&
-                declare.Declarations.All(d =>
-                    d is DeclareVariableElement element &&
-                    element.DataType is SqlDataTypeReference or UserDataTypeReference))
-            {
+                var isScalar = IsScalarDeclaration(declare);
                 foreach (var declaration in declare.Declarations)
                 {
-                    if (declaration is DeclareVariableElement element &&
-                        element.VariableName?.Value is { } scalarName)
-                        scalars.TryAdd(scalarName, DeclarationEnd(statement));
+                    if (declaration?.VariableName?.Value is not { } declaredName)
+                        continue;
+
+                    nonTables.Add(declaredName);
+                    if (isScalar)
+                        scalars.TryAdd(declaredName, DeclarationEnd(statement));
                 }
             }
             else if (statement is DeclareTableVariableStatement declareTable &&
@@ -806,10 +812,16 @@ internal sealed class SqlSafetyClassifier
     {
         // 011/T3: OUTPUT INTO @t is local only for a table variable proven in the batch being walked.
         private BatchVariableScope _scope = BatchVariableScope.Empty;
+        private readonly Dictionary<TSqlBatch, BatchVariableScope> _scopes = [];
+
+        // The scope built during the inspection walk, reused by statement classification.
+        internal BatchVariableScope ScopeOf(TSqlBatch batch) =>
+            _scopes.TryGetValue(batch, out var scope) ? scope : CollectBatchScope(batch);
 
         public override void ExplicitVisit(TSqlBatch node)
         {
             _scope = CollectBatchScope(node);
+            _scopes[node] = _scope;
             base.ExplicitVisit(node);
         }
 
