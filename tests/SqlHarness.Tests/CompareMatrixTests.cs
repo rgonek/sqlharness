@@ -392,12 +392,15 @@ public class CompareMatrixTests
             [artifacts.Directories[0], artifacts.Directories[1]],
             partialReport.Cells.Select(cell => cell.Compare.ArtifactDirectory));
 
+        // No DoesNotContain("se,cret"/"x4"/"x5") here (012/final F4): the failing cell
+        // (index 2) is the typed NULL, whose value never reaches the message text, and
+        // cells 3/4 never connect -- none of those three strings could ever appear in
+        // this scenario's error, so the assertion could not fail. Redaction of a value
+        // that genuinely would be echoed is covered by
+        // Typed_matrix_failure_redacts_a_value_that_contains_a_comma below.
         var error = outcome.SafeError ?? string.Empty;
         Assert.Contains("cell 2", error, StringComparison.Ordinal);
         Assert.Contains("@BatchSize", error, StringComparison.Ordinal);
-        Assert.DoesNotContain("se,cret", error, StringComparison.Ordinal);
-        Assert.DoesNotContain("x4", error, StringComparison.Ordinal);
-        Assert.DoesNotContain("x5", error, StringComparison.Ordinal);
     }
 
     [Fact]
