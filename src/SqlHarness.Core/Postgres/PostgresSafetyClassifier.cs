@@ -291,17 +291,21 @@ internal sealed class PostgresSafetyClassifier
     // Stricter than IsSessionLocal, and used by TRUNCATE only: the sole proof is
     // an unqualified name that this session flow recorded from CREATE TEMP /
     // SELECT INTO TEMP. A pg_temp / pg_temp_N qualifier or name prefix proves
-    // nothing about ownership (pg_temp_N can be another session's schema).
-    // Both the target and the recorded name must be spelled so that FoldIdent
-    // agrees with the server; see FoldsLikeServer.
+    // nothing about ownership (pg_temp_N can be another session's schema), and
+    // neither does a name that only a caller-built set supplied.
+    // Both the target and the recorded name must be spelled so that the
+    // server's fold is known offline; see FoldsLikeServer.
     private static bool IsProvenSessionTemp(ObjectName name, SessionTemps knownTemps) =>
         name.Values.Count == 1 &&
         FoldsLikeServer(name.Values[0]) &&
         knownTemps.TruncateProven.Contains(FoldIdent(name.Values[0]));
 
-    // PostgreSQL lower-cases only ASCII A-Z in an unquoted identifier, while
-    // FoldIdent lower-cases with invariant Unicode rules. The two agree for a
-    // quoted identifier (kept as written) and for an all-ASCII unquoted one.
+    // The server keeps a quoted identifier as written and lower-cases ASCII A-Z
+    // in an unquoted one. What it does to a non-ASCII character of an unquoted
+    // identifier depends on the server encoding (left alone under UTF-8, may be
+    // lower-cased under a single-byte encoding), which is unknown offline. So
+    // the stored name is known only for a quoted identifier and for an all-ASCII
+    // unquoted one; any other identifier neither proves nor is proven.
     private static bool FoldsLikeServer(Ident ident) =>
         ident.QuoteStyle is not null || ident.Value.All(char.IsAscii);
 
@@ -394,11 +398,10 @@ internal sealed class PostgresSafetyClassifier
         if (first == "pg_temp" || first.StartsWith("pg_temp_", StringComparison.Ordinal))
             return true;
 
-        if (name.Values.Count != 1)
+        if (name.Values.Count != 1 || !FoldsLikeServer(name.Values[0]))
             return false;
 
-        var key = ObjectKey(name);
-        return key is not null && knownTemps.Contains(key);
+        return knownTemps.Contains(FoldIdent(name.Values[0]));
     }
 
     private static string? ObjectKey(ObjectName name)
@@ -410,8 +413,20 @@ internal sealed class PostgresSafetyClassifier
         return FoldIdent(name.Values[^1]);
     }
 
+    // ASCII-only fold, the part of the server's fold that holds in every
+    // encoding. No Unicode case mapping takes part in a name comparison.
     private static string FoldIdent(Ident ident) =>
-        ident.QuoteStyle is null ? ident.Value.ToLowerInvariant() : ident.Value;
+        ident.QuoteStyle is null ? FoldAscii(ident.Value) : ident.Value;
+
+    private static string FoldAscii(string value) =>
+        string.Create(value.Length, value, static (span, source) =>
+        {
+            for (var i = 0; i < span.Length; i++)
+            {
+                var c = source[i];
+                span[i] = c is >= 'A' and <= 'Z' ? (char)(c + ('a' - 'A')) : c;
+            }
+        });
 
     private static ObjectName? GetRelationName(TableFactor? relation) => relation switch
     {
@@ -444,9 +459,11 @@ internal sealed class PostgresSafetyClassifier
         new(false, reason);
 
     // The session temp set plus the subset that is strong enough to prove a
-    // TRUNCATE target. The base set keeps the names and fold every other
-    // statement has always used. The subset travels only inside a set this
-    // classifier produced, so a set built anywhere else proves no TRUNCATE.
+    // TRUNCATE target. The base set holds every name that proves a DML / DROP /
+    // CREATE INDEX target: names this classifier recorded, plus names a caller
+    // supplied in a plain set. The subset holds only the recorded ones and
+    // travels only inside a set this classifier produced, so a set built
+    // anywhere else proves no TRUNCATE.
     private sealed class SessionTemps : HashSet<string>
     {
         internal SessionTemps(IEnumerable<string> names)
@@ -460,8 +477,17 @@ internal sealed class PostgresSafetyClassifier
 
         internal void Record(string key, Ident declaredAs, bool survivesCommit)
         {
+            if (!FoldsLikeServer(declaredAs))
+            {
+                // The stored name is unknown, so nothing is recorded. Both
+                // spellings this declaration was ever keyed under lose their proof.
+                Forget(key);
+                Forget(declaredAs.Value.ToLowerInvariant());
+                return;
+            }
+
             Add(key);
-            if (survivesCommit && FoldsLikeServer(declaredAs))
+            if (survivesCommit)
                 TruncateProven.Add(key);
             else
                 TruncateProven.Remove(key);
