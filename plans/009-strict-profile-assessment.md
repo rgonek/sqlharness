@@ -50,6 +50,10 @@ Rozważane zaostrzenia (projekt, nie wdrożenie):
    (pierwszy identyfikator `pg_temp` / prefiks `pg_temp_` albo zbiór tabel batcha; polityka,
    „Classify" pkt 4). Doprecyzowanie kwalifikacji nie domyka żadnego z trzech skutków
    (trwały DML, efekty administracyjne, dostęp zewnętrzny); odłożone.
+   (2026-10-01, superseded by plan 011 — see `plans/011-syntax-contract.md`, rule
+   011-T4b-D7: the `pg_temp_` prefix described above is no longer proof of session
+   locality for any statement; only an exact `pg_temp` qualifier or a name this
+   session recorded from `CREATE TEMP` counts.)
 
 ## 2. Funkcje SECURITY DEFINER
 

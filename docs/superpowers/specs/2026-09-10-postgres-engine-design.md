@@ -203,7 +203,11 @@ Temp identity is **not** a name prefix. A table is session-local when:
 1. this batch created it as `TEMP` / `TEMPORARY`; or
 2. `--setup` on this invocation created it as TEMP and the name is passed
    into query classification; or
-3. the target is qualified as `pg_temp` (or `pg_temp_*`).
+3. the target is qualified as exactly `pg_temp` (the server's alias for the
+   current session's temp schema). **Superseded by plan 011**
+   (`plans/011-syntax-contract.md`, rule 011-T4b-D7): a `pg_temp_*` prefix —
+   on a schema qualifier or on a bare relation name — is no longer proof of
+   session locality for any statement.
 
 Unquoted identifiers are folded to lowercase when recorded and looked up,
 matching Postgres. Quoted identifiers keep their case.

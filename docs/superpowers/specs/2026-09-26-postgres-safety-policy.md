@@ -91,7 +91,7 @@ Cel zapisu to cel `INSERT`, `UPDATE`, `DELETE` albo `MERGE` znaleziony w zdaniu,
 
 Gdy wszystkie znalezione cele są sesyjnie lokalne, zdanie jest pracą lokalną. Gdy choć jeden nie jest, zdanie jest mutacją, nawet jeśli równocześnie tworzy tabelę tymczasową. Brak celów w `SELECT` bez `INTO` to odczyt tekstowy (`Allowed`, bez mutacji i bez pracy lokalnej).
 
-Cel jest sesyjnie lokalny, gdy pierwszy identyfikator to `pg_temp` albo prefiks `pg_temp_`, albo gdy nazwa jest jednym identyfikatorem obecnym w zbiorze tabel tymczasowych tej sesji i tego batcha. Prefiks w nazwie nie wystarcza.
+Cel jest sesyjnie lokalny, gdy nazwa jest jednym identyfikatorem obecnym w zbiorze tabel tymczasowych tej sesji i tego batcha, albo gdy ma dokładnie dwa człony i pierwszy to dokładnie `pg_temp` (alias serwera na schemat tymczasowy bieżącej sesji). **Superseded by plan 011** (`plans/011-syntax-contract.md`, reguła 011-T4b-D7): prefiks `pg_temp_` — w nazwie schematu (`pg_temp_<N>`) albo w nazwie relacji — nie jest już dowodem dla żadnego zdania.
 
 `Query` przy mutacji: brak `allowMutation` daje `MutationNotAllowed`; brak `confirmDatabase` daje `DatabaseConfirmationRequired`; inna nazwa bazy, porównanie porządkowe, daje `DatabaseConfirmationMismatch`; zgodna para flag daje `Allowed` z `HasMutation=true`. Praca lokalna ustawia `HasSessionLocalWork` i zwraca zbiór nazw tymczasowych.
 
@@ -117,7 +117,7 @@ Bez flag mutacji nadal wolno, w `Query` i w `CompareSetup`:
 - `INSERT` / `UPDATE` / `DELETE` / `MERGE` oraz modyfikujące CTE, których każdy cel jest sesyjnie lokalny;
 - `CREATE INDEX` i `DROP` tych tabel oraz `DROP` indeksu oznaczonego jako tymczasowy.
 
-`UNLOGGED` i `CREATE TABLE` bez `TEMP` pozostają trwałym DDL. Zapis do `pg_temp_fake` nadal jest traktowany jak lokalny, bo kwalifikator zaczyna się od `pg_temp_`; to istniejąca reguła nazwy schematu tymczasowego, nie nowa obietnica.
+`UNLOGGED` i `CREATE TABLE` bez `TEMP` pozostają trwałym DDL. **Superseded by plan 011** (011-T4b-D7): zapis do `pg_temp_fake` już NIE jest traktowany jak lokalny — kwalifikator `pg_temp_<N>` przestał być dowodem; lokalny pozostaje tylko dokładny alias `pg_temp` albo nazwa dowiedziona przez `CREATE TEMP` w tej sesji.
 
 Batch tymczasowy, który dodatkowo zawiera widoczny trwały cel zapisu, nie jest „tylko lokalny”. W setupie jest `NonTemporaryWrite`. W `Query` wymaga kontraktu mutacji.
 

@@ -633,6 +633,7 @@ Top-level allow:
 - `CREATE TABLE AS SELECT` only when TEMP
 
 Session-local when: created in this batch as TEMP; name in `sessionTempTables`; or first identifier is `pg_temp` / starts with `pg_temp_`. Fold unquoted identifiers to lowercase; keep quoted case.
+(2026-10-01, superseded by plan 011 — see `plans/011-syntax-contract.md`, rule 011-T4b-D7: a `pg_temp_*` prefix is no longer proof of session locality for any statement; only an exact `pg_temp` two-part qualifier or a name recorded from this session's `CREATE TEMP` counts, and the identifier fold is ASCII-only, not full Unicode lowercasing.)
 
 `SELECT INTO` (Postgres) → `SelectIntoNotAllowed` even with mutation flags.
 
