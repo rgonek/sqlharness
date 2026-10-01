@@ -48,11 +48,21 @@ public sealed class McpSecretRedactionTests
     /// <summary>
     /// 012/T2: a typed value travels whole, so a secret with a comma (or an
     /// '=' in a fixed parameter) is one value end to end. Core rejects the
-    /// bad value offline and neither the value nor a comma-split half of it
-    /// reaches either result representation.
+    /// bad value offline with a constant message that never interpolates a
+    /// value, which this test pins by exact equality for both operations
+    /// (not just the matrix one, as before). That equality is the real
+    /// regression guard: if either rejection ever started interpolating the
+    /// value, this assertion would fail on the first changed character. The
+    /// <c>DoesNotContain</c> lines below are a belt-and-suspenders check on
+    /// top of it, not an independent proof of redaction -- a message that
+    /// never contains a value to begin with trivially satisfies them.
+    /// Genuine redaction (a message that WOULD echo a value without secret
+    /// registration, only suppressed because of it) is proven separately by
+    /// <see cref="Execution_phase_failure_that_echoes_a_typed_matrix_value_is_redacted_only_when_collected_as_a_known_secret"/>,
+    /// closing the 012/T2 review carry-forward.
     /// </summary>
     [Fact]
-    public async Task Typed_values_with_separator_characters_never_reach_the_result_whole_or_in_halves()
+    public async Task Typed_values_with_separator_characters_reach_core_whole_and_its_rejection_is_a_constant_message()
     {
         const string FirstHalf = "fikcyjna-polowa-4410";
         const string SecondHalf = "fikcyjna-reszta-8852";
@@ -96,6 +106,10 @@ public sealed class McpSecretRedactionTests
             Assert.Equal(
                 "The --matrix option for SQL parameter '@n' of type 'int' is invalid.",
                 matrixDocument.RootElement.GetProperty("error").GetProperty("message").GetString());
+            using var queryDocument = JsonDocument.Parse(TextOf(query));
+            Assert.Equal(
+                "Invalid value for SQL parameter 'n' of type 'int'.",
+                queryDocument.RootElement.GetProperty("error").GetProperty("message").GetString());
         }
         finally
         {
@@ -111,6 +125,46 @@ public sealed class McpSecretRedactionTests
             {
             }
         }
+    }
+
+    /// <summary>
+    /// 012/T4: closes the Task 2 review carry-forward on the test above. That
+    /// test's <c>DoesNotContain</c> assertions cannot fail, because Core's
+    /// pre-connection matrix/parameter rejection is a constant message that
+    /// never echoes a value, with or without redaction. This test drives the
+    /// shape of message that genuinely would echo a value -- an
+    /// execution-phase failure, the same shape Core's own
+    /// <c>CompareMatrixTests.Typed_matrix_failure_redacts_a_value_that_contains_a_comma</c>
+    /// produces from a typed matrix comma value via the real fake session --
+    /// through <see cref="McpResultAdapter.Adapt"/>, once with the value
+    /// registered as a known secret and once without. The first call proves
+    /// redaction; the second proves the first call's assertions are not
+    /// vacuous, because the identical message leaks the value when it is not
+    /// registered.
+    /// </summary>
+    [Fact]
+    public void Execution_phase_failure_that_echoes_a_typed_matrix_value_is_redacted_only_when_collected_as_a_known_secret()
+    {
+        const string FirstHalf = "fikcyjna-exec-polowa-2201";
+        const string SecondHalf = "fikcyjna-exec-reszta-3317";
+        const string CommaValue = FirstHalf + "," + SecondHalf;
+        var outcome = new SqlHarnessOutcome(
+            SqlHarnessExitCode.SqlExecution,
+            null,
+            $"Comparison matrix cell 0 for SQL parameter '@n' failed. measured-run-failed:{CommaValue}");
+
+        var redactedText = TextOf(McpResultAdapter.Adapt(outcome, "sqlharness_compare", knownSecrets: [CommaValue]));
+        Assert.DoesNotContain(CommaValue, redactedText, StringComparison.Ordinal);
+        Assert.DoesNotContain(FirstHalf, redactedText, StringComparison.Ordinal);
+        Assert.DoesNotContain(SecondHalf, redactedText, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", redactedText, StringComparison.Ordinal);
+
+        // Same outcome, no known secret registered: the value leaks. This is
+        // the counter-example that makes the assertions above capable of
+        // failing -- they would fail here if they were checked against this
+        // call instead.
+        var leakedText = TextOf(McpResultAdapter.Adapt(outcome, "sqlharness_compare", knownSecrets: []));
+        Assert.Contains(CommaValue, leakedText, StringComparison.Ordinal);
     }
 
     [Fact]
