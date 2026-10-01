@@ -872,18 +872,18 @@ public sealed class PostgresSafetyTests
     }
 
     [Theory]
-    // Guard: the stricter identifier rule is local to TRUNCATE. The shared
-    // session-local helper keeps its existing fold for DML / DROP / CREATE INDEX.
-    [InlineData("CREATE TEMP TABLE \"é\" (id int); INSERT INTO É VALUES (1)")]
-    [InlineData("CREATE TEMP TABLE \"é\" (id int); CREATE INDEX ix ON É (id)")]
-    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE É")]
-    [InlineData("CREATE TEMP TABLE É (id int); DELETE FROM \"é\"")]
-    public void T4_Non_truncate_non_ascii_fold_verdicts_are_unchanged(string sql)
+    // 011/T4b: flipped. This guard used to pin the Unicode fold for DML / DROP /
+    // CREATE INDEX as session-local; the server would address a persistent
+    // relation, so the same identifier rule as TRUNCATE now applies.
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); INSERT INTO É VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); CREATE INDEX ix ON É (id)", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE É", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE É (id int); DELETE FROM \"é\"", "MutationNotAllowed")]
+    public void T4_Non_truncate_non_ascii_fold_is_denied(string sql, string expected)
     {
         var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
-        Assert.True(decision.Allowed, decision.RejectionDescription);
-        Assert.True(decision.HasSessionLocalWork);
-        Assert.False(decision.HasMutation);
+        Assert.False(decision.Allowed);
+        Assert.Equal(expected, decision.Reason.ToString());
     }
 
     [Fact]
@@ -932,18 +932,19 @@ public sealed class PostgresSafetyTests
     {
         var setup = _classifier.Classify(setupSql, SqlUsage.CompareSetup, "appdb", false, null, Empty);
         Assert.True(setup.Allowed, setup.RejectionDescription);
-        Assert.Contains("items", setup.SessionTempTables);
+        // 011/T4b: the name is no longer reported as a session temp at all.
+        Assert.DoesNotContain("items", setup.SessionTempTables);
 
         var truncate = _classifier.Classify(
             "TRUNCATE items", SqlUsage.Query, "appdb", true, "appdb", setup.SessionTempTables);
         Assert.False(truncate.Allowed);
         Assert.Equal(SqlSafetyReason.NonTemporaryWrite, truncate.Reason);
 
-        // Guard: the non-TRUNCATE verdict over the same carried name is unchanged.
+        // 011/T4b: flipped. A write to the same carried name is a persistent write.
         var insert = _classifier.Classify(
             "INSERT INTO items VALUES (1)", SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
-        Assert.True(insert.Allowed, insert.RejectionDescription);
-        Assert.False(insert.HasMutation);
+        Assert.False(insert.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, insert.Reason);
     }
 
     [Theory]
@@ -1008,6 +1009,259 @@ public sealed class PostgresSafetyTests
         var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
         Assert.False(decision.Allowed);
         Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    // 011/T4b: the session-temp proof is the same for every statement kind.
+    // PostgreSQL folds an unquoted identifier itself (ASCII only under UTF-8,
+    // encoding-dependent otherwise), so an unquoted name with a non-ASCII
+    // character never proves a target and never records a provable temp.
+    // \u00C9 / \u00E9 are E-acute upper / lower; \u212A is the Kelvin sign.
+    [Theory]
+    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); INSERT INTO \u00C9 VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); UPDATE \u00C9 SET id = 1", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); DELETE FROM \u00C9", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); MERGE INTO \u00C9 USING (SELECT 1 AS id) s ON \u00C9.id = s.id WHEN MATCHED THEN DELETE", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); DROP TABLE \u00C9", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); CREATE INDEX ix ON \u00C9 (id)", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int); INSERT INTO \"\u00E9\" VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int); UPDATE \"\u00E9\" SET id = 1", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int); DELETE FROM \"\u00E9\"", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int); DROP TABLE \"\u00E9\"", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int); CREATE INDEX ix ON \"\u00E9\" (id)", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE k (id int); INSERT INTO \u212A VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \u212A (id int); DROP TABLE k", "UnsupportedStatement")]
+    [InlineData("SELECT 1 AS id INTO TEMP TABLE \u212A; DELETE FROM k", "MutationNotAllowed")]
+    // Quoted and unquoted spellings of the same non-ASCII text: equal under a
+    // UTF-8 server, different under an encoding whose fold changes the letter.
+    [InlineData("CREATE TEMP TABLE \"\u00C9\" (id int); INSERT INTO \u00C9 VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int); DROP TABLE \"\u00C9\"", "UnsupportedStatement")]
+    // Unquoted on both sides: stricter than needed, same decision as TRUNCATE.
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int); INSERT INTO \u00C9 VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int); CREATE INDEX ix ON \u00C9 (id)", "UnsupportedStatement")]
+    public void T4b_Non_ascii_name_never_proves_a_target_across_quoting(string sql, string expected)
+    {
+        var query = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(query.Allowed);
+        Assert.Equal(expected, query.Reason.ToString());
+
+        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.False(setup.Allowed);
+        Assert.Equal(
+            expected == "MutationNotAllowed" ? "NonTemporaryWrite" : expected,
+            setup.Reason.ToString());
+    }
+
+    [Theory]
+    [InlineData("INSERT INTO k VALUES (1)", "MutationNotAllowed")]
+    [InlineData("UPDATE k SET id = 1", "MutationNotAllowed")]
+    [InlineData("DELETE FROM k", "MutationNotAllowed")]
+    [InlineData("DROP TABLE k", "UnsupportedStatement")]
+    [InlineData("CREATE INDEX ix ON k (id)", "UnsupportedStatement")]
+    public void T4b_Carried_temp_declared_with_non_ascii_unquoted_name_proves_no_target(
+        string querySql, string expected)
+    {
+        var setup = _classifier.Classify(
+            "CREATE TEMP TABLE \u212A (id int)", SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        Assert.DoesNotContain("k", setup.SessionTempTables);
+
+        var query = _classifier.Classify(
+            querySql, SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.False(query.Allowed);
+        Assert.Equal(expected, query.Reason.ToString());
+    }
+
+    [Theory]
+    // ASCII behaviour is exactly as before: an unquoted name folds to lower
+    // case, a quoted name is taken as written; a quoted non-ASCII name matches
+    // only the same quoted spelling.
+    [InlineData("CREATE TEMP TABLE Items (id int); INSERT INTO items VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE Items (id int); INSERT INTO ITEMS VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE Items (id int); UPDATE \"items\" SET id = 1")]
+    [InlineData("CREATE TEMP TABLE \"items\" (id int); DELETE FROM Items")]
+    [InlineData("CREATE TEMP TABLE Items (id int); CREATE INDEX ix ON ITEMS (id); DROP TABLE iTeMs")]
+    [InlineData("CREATE TEMP TABLE \"Items\" (id int); INSERT INTO \"Items\" VALUES (1); DROP TABLE \"Items\"")]
+    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); INSERT INTO \"\u00E9\" VALUES (1); CREATE INDEX ix ON \"\u00E9\" (id); DROP TABLE \"\u00E9\"")]
+    [InlineData("SELECT 1 AS id INTO TEMP TABLE \"\u00C9\"; DELETE FROM \"\u00C9\"")]
+    public void T4b_Ascii_fold_and_exact_quoted_match_stay_session_local(string sql)
+    {
+        foreach (var usage in new[] { SqlUsage.Query, SqlUsage.CompareSetup })
+        {
+            var decision = _classifier.Classify(sql, usage, "appdb", false, null, Empty);
+            Assert.True(decision.Allowed, decision.RejectionDescription);
+            Assert.True(decision.HasSessionLocalWork);
+            Assert.False(decision.HasMutation);
+        }
+    }
+
+    [Theory]
+    [InlineData("CREATE TEMP TABLE Items (id int); INSERT INTO \"Items\" VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \"Items\" (id int); INSERT INTO Items VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \"Items\" (id int); DROP TABLE items", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); DELETE FROM \"\u00C9\"", "MutationNotAllowed")]
+    public void T4b_Ascii_quoted_case_mismatch_stays_denied(string sql, string expected)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(expected, decision.Reason.ToString());
+    }
+
+    [Theory]
+    // An ON COMMIT DROP temp is gone when its transaction ends, so its name must
+    // not prove any later write or DDL target.
+    [InlineData("CREATE TEMP TABLE items (id int) ON COMMIT DROP", "INSERT INTO items VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE items (id int) ON COMMIT DROP", "UPDATE items SET id = 1", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE items (id int) ON COMMIT DROP", "DELETE FROM items", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE items (id int) ON COMMIT DROP", "DROP TABLE items", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE items (id int) ON COMMIT DROP", "CREATE INDEX ix ON items (id)", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE items ON COMMIT DROP AS SELECT 1 AS id", "DELETE FROM items", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE items (id int); CREATE TEMP TABLE IF NOT EXISTS items (id int) ON COMMIT DROP", "DELETE FROM items", "MutationNotAllowed")]
+    public void T4b_Carried_on_commit_drop_temp_proves_no_target(
+        string setupSql, string querySql, string expected)
+    {
+        var setup = _classifier.Classify(setupSql, SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        Assert.DoesNotContain("items", setup.SessionTempTables);
+
+        var query = _classifier.Classify(
+            querySql, SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.False(query.Allowed);
+        Assert.Equal(expected, query.Reason.ToString());
+    }
+
+    [Theory]
+    // Same batch: denied as well, the same decision as TRUNCATE. The classifier
+    // does not know where the transaction that owns the temp ends.
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; INSERT INTO t VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; UPDATE t SET id = 1", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; DELETE FROM t", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; DROP TABLE t", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; CREATE INDEX ix ON t (id)", "UnsupportedStatement")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; EXPLAIN ANALYZE INSERT INTO t VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE t (id int); DROP TABLE t; CREATE TEMP TABLE t (id int) ON COMMIT DROP; INSERT INTO t VALUES (1)", "MutationNotAllowed")]
+    public void T4b_On_commit_drop_temp_in_the_same_batch_proves_no_target(string sql, string expected)
+    {
+        var query = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(query.Allowed);
+        Assert.Equal(expected, query.Reason.ToString());
+
+        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.False(setup.Allowed);
+        Assert.Equal(
+            expected == "MutationNotAllowed" ? "NonTemporaryWrite" : expected,
+            setup.Reason.ToString());
+    }
+
+    [Theory]
+    // These ON COMMIT actions keep the table itself, so the proof holds.
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DELETE ROWS; INSERT INTO t VALUES (1); DROP TABLE t")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT PRESERVE ROWS; DELETE FROM t; CREATE INDEX ix ON t (id)")]
+    public void T4b_Temp_that_survives_commit_stays_session_local(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Theory]
+    // N1: when the name already exists as an ON COMMIT DROP temp, the server
+    // treats CREATE TEMP TABLE IF NOT EXISTS as a no-op. It must not restore proof.
+    [InlineData("TRUNCATE items", "NonTemporaryWrite")]
+    [InlineData("INSERT INTO items VALUES (1)", "MutationNotAllowed")]
+    [InlineData("DELETE FROM items", "MutationNotAllowed")]
+    [InlineData("DROP TABLE items", "UnsupportedStatement")]
+    [InlineData("CREATE INDEX ix ON items (id)", "UnsupportedStatement")]
+    public void T4b_If_not_exists_does_not_restore_proof_for_an_on_commit_drop_temp(
+        string querySql, string expected)
+    {
+        var setup = _classifier.Classify(
+            "CREATE TEMP TABLE items (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS items (id int)",
+            SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        Assert.DoesNotContain("items", setup.SessionTempTables);
+
+        var carried = _classifier.Classify(
+            querySql, SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.False(carried.Allowed);
+        Assert.Equal(expected, carried.Reason.ToString());
+
+        // The same sequence inside one batch.
+        var sameBatch = _classifier.Classify(
+            "CREATE TEMP TABLE items (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS items (id int); " + querySql,
+            SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(sameBatch.Allowed);
+        Assert.Equal(expected, sameBatch.Reason.ToString());
+
+        // The ON COMMIT DROP record is carried even when nothing else was created.
+        var first = _classifier.Classify(
+            "CREATE TEMP TABLE items (id int) ON COMMIT DROP",
+            SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        var second = _classifier.Classify(
+            "CREATE TEMP TABLE IF NOT EXISTS \"items\" (id int); " + querySql,
+            SqlUsage.Query, "appdb", false, null, first.SessionTempTables);
+        Assert.False(second.Allowed);
+        Assert.Equal(expected, second.Reason.ToString());
+    }
+
+    [Theory]
+    // An unquoted non-ASCII ON COMMIT DROP name has an unknown server spelling,
+    // so afterwards IF NOT EXISTS proves no non-ASCII name at all.
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS \"\u00E9\" (id int); TRUNCATE \"\u00E9\"", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS \"\u00E9\" (id int); INSERT INTO \"\u00E9\" VALUES (1)", "MutationNotAllowed")]
+    public void T4b_If_not_exists_after_non_ascii_on_commit_drop_proves_no_non_ascii_name(
+        string sql, string expected)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(expected, decision.Reason.ToString());
+    }
+
+    [Fact]
+    public void T4b_If_not_exists_without_an_on_commit_drop_record_still_proves_the_temp()
+    {
+        var decision = _classifier.Classify(
+            "CREATE TEMP TABLE IF NOT EXISTS items (id int); INSERT INTO items VALUES (1); TRUNCATE items",
+            SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Theory]
+    // Pins the offline parser (SqlParserCS, PostgreSqlDialect): a Unicode-escape
+    // identifier U&"..." is not accepted as a relation name, so no batch that
+    // declares or targets one reaches the session-temp proof.
+    [InlineData("CREATE TEMP TABLE U&\"\\0074\" (id int)")]
+    [InlineData("CREATE TEMP TABLE U&\"\\0074\" (id int); TRUNCATE \"\\0074\"")]
+    [InlineData("CREATE TEMP TABLE U&\"\\0074\" (id int); INSERT INTO \"\\0074\" VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE U&\"\\0074\" (id int); DELETE FROM \"\\0074\"")]
+    [InlineData("CREATE TEMP TABLE U&\"\\0074\" (id int); DROP TABLE \"\\0074\"")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE U&\"\\0074\"")]
+    [InlineData("CREATE TEMP TABLE t (id int); INSERT INTO U&\"\\0074\" VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE u&\"\\0074\" (id int)")]
+    [InlineData("CREATE TEMP TABLE U&\"d!0061t\" UESCAPE '!' (id int)")]
+    public void T4b_Unicode_escape_identifier_is_a_parse_error(string sql)
+    {
+        foreach (var usage in new[] { SqlUsage.Query, SqlUsage.CompareSetup })
+        {
+            var decision = _classifier.Classify(sql, usage, "appdb", true, "appdb", Empty);
+            Assert.False(decision.Allowed);
+            Assert.Equal(SqlSafetyReason.ParseError, decision.Reason);
+        }
+    }
+
+    [Theory]
+    // A quoted name that only looks like an escape is an ordinary identifier
+    // spelled with a backslash; it is not the temp t.
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE \"\\0074\"", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int); INSERT INTO \"\\0074\" VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE t (id int); DROP TABLE \"\\0074\"", "UnsupportedStatement")]
+    public void T4b_Quoted_backslash_name_is_not_decoded(string sql, string expected)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(expected, decision.Reason.ToString());
     }
 
     private static SqlUsage ParseUsage(string usage) => usage switch
