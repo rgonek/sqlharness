@@ -581,6 +581,220 @@ public sealed class PostgresSafetyTests
         Assert.Equal(SqlSafetyReason.ParseError, decision.Reason);
     }
 
+    // 011/T4: TRUNCATE. A target is a current-session temp only when its
+    // single-part name is in the session temp set (recorded from CREATE TEMP /
+    // SELECT INTO TEMP). A name prefix or a schema qualifier is never proof.
+    [Theory]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); TRUNCATE t")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); TRUNCATE TABLE t")]
+    [InlineData("Query", "CREATE TEMPORARY TABLE t (id int); TRUNCATE ONLY t")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); TRUNCATE t RESTRICT")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); CREATE TEMP TABLE u (id int); TRUNCATE TABLE t, u")]
+    [InlineData("Query", "SELECT 1 AS id INTO TEMP TABLE t; TRUNCATE t")]
+    [InlineData("Query", "CREATE TEMP TABLE \"T\" (id int); TRUNCATE \"T\"")]
+    [InlineData("CompareSetup", "CREATE TEMP TABLE t (id int); INSERT INTO t VALUES (1); TRUNCATE t")]
+    [InlineData("CompareSetup", "CREATE TEMP TABLE t (id int); CREATE TEMP TABLE u (id int); TRUNCATE t, u")]
+    public void T4_Truncate_all_session_temps_is_session_local(string usage, string sql)
+    {
+        var decision = _classifier.Classify(sql, ParseUsage(usage), "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Fact]
+    public void T4_Truncate_of_setup_temp_is_session_local_and_keeps_provenance()
+    {
+        var setup = _classifier.Classify(
+            "CREATE TEMP TABLE t (id int)",
+            SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        var query = _classifier.Classify(
+            "TRUNCATE t; INSERT INTO t VALUES (1)",
+            SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.True(query.Allowed, query.RejectionDescription);
+        Assert.True(query.HasSessionLocalWork);
+        Assert.False(query.HasMutation);
+        Assert.Contains("t", query.SessionTempTables);
+    }
+
+    [Theory]
+    [InlineData("TRUNCATE items")]
+    [InlineData("TRUNCATE TABLE public.items")]
+    [InlineData("TRUNCATE ONLY items")]
+    public void T4_Truncate_persistent_target_is_denied(string sql)
+    {
+        var denied = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(denied.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, denied.Reason);
+
+        // Not approvable either: persistent TRUNCATE never joins the mutation path.
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.False(approved.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, approved.Reason);
+
+        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.False(setup.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, setup.Reason);
+    }
+
+    [Theory]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); TRUNCATE t, items")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); TRUNCATE items, t")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); TRUNCATE TABLE t, public.items")]
+    [InlineData("CompareSetup", "CREATE TEMP TABLE t (id int); TRUNCATE t, items")]
+    public void T4_Truncate_mixed_targets_are_denied(string usage, string sql)
+    {
+        var decision = _classifier.Classify(sql, ParseUsage(usage), "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, decision.Reason);
+    }
+
+    [Theory]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); TRUNCATE t CASCADE")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); TRUNCATE t CONTINUE IDENTITY CASCADE")]
+    [InlineData("Query", "TRUNCATE items CASCADE")]
+    [InlineData("CompareSetup", "CREATE TEMP TABLE t (id int); TRUNCATE t CASCADE")]
+    public void T4_Truncate_cascade_is_denied(string usage, string sql)
+    {
+        var decision = _classifier.Classify(sql, ParseUsage(usage), "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    [Theory]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); TRUNCATE t RESTART IDENTITY")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); TRUNCATE TABLE t RESTART IDENTITY RESTRICT")]
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); TRUNCATE t RESTART IDENTITY CASCADE")]
+    [InlineData("CompareSetup", "CREATE TEMP TABLE t (id int); TRUNCATE t RESTART IDENTITY")]
+    public void T4_Truncate_restart_identity_is_denied_R4(string usage, string sql)
+    {
+        var decision = _classifier.Classify(sql, ParseUsage(usage), "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    [Theory]
+    [InlineData("Query")]
+    [InlineData("CompareSetup")]
+    public void T4_Truncate_continue_identity_over_temps_is_session_local(string usage)
+    {
+        var decision = _classifier.Classify(
+            "CREATE TEMP TABLE t (id int); TRUNCATE t CONTINUE IDENTITY",
+            ParseUsage(usage), "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Theory]
+    [InlineData("TRUNCATE pg_temp_3.t")]
+    [InlineData("TRUNCATE pg_temp.t")]
+    [InlineData("TRUNCATE pg_temp_items")]
+    [InlineData("TRUNCATE \"pg_temp_3\".\"t\"")]
+    public void T4_Truncate_pg_temp_prefix_without_provenance_is_denied(string sql)
+    {
+        foreach (var usage in new[] { SqlUsage.Query, SqlUsage.CompareSetup })
+        {
+            var decision = _classifier.Classify(sql, usage, "appdb", true, "appdb", Empty);
+            Assert.False(decision.Allowed);
+            Assert.Equal(SqlSafetyReason.NonTemporaryWrite, decision.Reason);
+        }
+    }
+
+    [Theory]
+    // A qualifier is never proof, even when the relation name matches a tracked temp:
+    // only the unqualified name is what the session flow recorded.
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp_3.t")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.t")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE public.t")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE appdb.public.t")]
+    public void T4_Truncate_schema_qualified_name_is_denied_even_when_relation_name_is_a_tracked_temp(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, decision.Reason);
+    }
+
+    [Theory]
+    [InlineData("Query")]
+    [InlineData("CompareSetup")]
+    public void T4_Truncate_on_cluster_is_denied(string usage)
+    {
+        var decision = _classifier.Classify(
+            "CREATE TEMP TABLE t (id int); TRUNCATE TABLE t ON CLUSTER c",
+            ParseUsage(usage), "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    [Fact]
+    public void T4_Truncate_partition_clause_is_denied()
+    {
+        // Hive-only shape the library accepts; PostgreSQL has no such clause.
+        var decision = _classifier.Classify(
+            "CREATE TEMP TABLE t (id int); TRUNCATE TABLE t PARTITION (id = 1)",
+            SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    [Fact]
+    public void T4_Truncate_after_drop_loses_provenance()
+    {
+        var decision = _classifier.Classify(
+            "CREATE TEMP TABLE t (id int); DROP TABLE t; TRUNCATE t",
+            SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, decision.Reason);
+    }
+
+    [Theory]
+    // Identifiers match as stored: quoted "T" and folded t are different relations.
+    [InlineData("CREATE TEMP TABLE \"T\" (id int); TRUNCATE T")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE \"T\"")]
+    public void T4_Truncate_matches_temp_names_case_sensitively(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, decision.Reason);
+    }
+
+    [Fact]
+    public void T4_Truncate_before_create_temp_is_denied()
+    {
+        var decision = _classifier.Classify(
+            "TRUNCATE t; CREATE TEMP TABLE t (id int)",
+            SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, decision.Reason);
+    }
+
+    [Theory]
+    // Guard: the TRUNCATE rule is local to TRUNCATE. The shared session-local
+    // helper behind DROP TABLE / CREATE INDEX / DML keeps its verdicts.
+    [InlineData("Query", "CREATE TEMP TABLE t (id int); CREATE INDEX ix ON t (id); DROP TABLE t")]
+    [InlineData("CompareSetup", "CREATE TEMP TABLE t (id int); CREATE INDEX ix ON t (id); DROP TABLE t")]
+    [InlineData("Query", "CREATE INDEX ix ON pg_temp.t (id)")]
+    [InlineData("Query", "DROP TABLE pg_temp.t")]
+    [InlineData("Query", "INSERT INTO pg_temp.t VALUES (1)")]
+    public void T4_Non_truncate_session_local_verdicts_are_unchanged(string usage, string sql)
+    {
+        var decision = _classifier.Classify(sql, ParseUsage(usage), "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Theory]
+    [InlineData("DROP TABLE items")]
+    [InlineData("CREATE INDEX ix ON items (id)")]
+    public void T4_Non_truncate_persistent_ddl_verdicts_are_unchanged(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
     private static SqlUsage ParseUsage(string usage) => usage switch
     {
         "Query" => SqlUsage.Query,
