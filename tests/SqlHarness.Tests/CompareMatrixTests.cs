@@ -419,6 +419,31 @@ public class CompareMatrixTests
         Assert.DoesNotContain("cret", error, StringComparison.Ordinal);
     }
 
+    // 012/final F6: the test above echoes the typed MATRIX value at execution phase; no
+    // existing test does the same for a typed FIXED parameter. The setup command (the
+    // first command on a cell with a non-null SetupSql) carries both the fixed and the
+    // matrix parameter, so a comma in the fixed @Tenant value reaches the fake session's
+    // failure message exactly as a comma in the matrix value does above.
+    [Fact]
+    public async Task Typed_fixed_parameter_failure_redacts_a_value_that_contains_a_comma()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory(failSqlAt: 0, echoParameterName: "@Tenant");
+        var operation = TypedMatrix("1", "2") with
+        {
+            TypedParameters = [new SqlHarnessParameterInput("Tenant", "nvarchar", "se,cret")],
+        };
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
+        var error = outcome.SafeError ?? string.Empty;
+        Assert.Contains("cell 0", error, StringComparison.Ordinal);
+        Assert.Contains("measured-run-failed", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("se,", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("cret", error, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Typed_matrix_rejects_a_bad_value_like_the_text_path_without_echoing_it()
     {
@@ -704,12 +729,18 @@ public class CompareMatrixTests
         private readonly int? _failSqlAt;
         private readonly bool _failConnect;
         private readonly int _resultRowCount;
+        private readonly string _echoParameterName;
 
-        public MatrixSessionFactory(int? failSqlAt = null, bool failConnect = false, int resultRowCount = 1)
+        public MatrixSessionFactory(
+            int? failSqlAt = null,
+            bool failConnect = false,
+            int resultRowCount = 1,
+            string echoParameterName = "@BatchSize")
         {
             _failSqlAt = failSqlAt;
             _failConnect = failConnect;
             _resultRowCount = resultRowCount;
+            _echoParameterName = echoParameterName;
         }
 
         public int ConnectCount { get; private set; }
@@ -722,7 +753,7 @@ public class CompareMatrixTests
             if (_failConnect)
                 return Task.FromException<ISqlSession>(new InvalidOperationException("login failed"));
 
-            var session = new MatrixSession(failSql: _failSqlAt == index, _resultRowCount);
+            var session = new MatrixSession(failSql: _failSqlAt == index, _resultRowCount, _echoParameterName);
             Sessions.Add(session);
             return Task.FromResult<ISqlSession>(session);
         }
@@ -732,12 +763,14 @@ public class CompareMatrixTests
     {
         private readonly bool _failSql;
         private readonly int _resultRowCount;
+        private readonly string _echoParameterName;
         private readonly List<string> _messages = [];
 
-        public MatrixSession(bool failSql, int resultRowCount)
+        public MatrixSession(bool failSql, int resultRowCount, string echoParameterName = "@BatchSize")
         {
             _failSql = failSql;
             _resultRowCount = resultRowCount;
+            _echoParameterName = echoParameterName;
         }
 
         public List<SqlExecutionCommand> Commands { get; } = [];
@@ -765,10 +798,10 @@ public class CompareMatrixTests
 
             if (_failSql)
             {
-                var batch = Convert.ToString(
-                    command.Parameters.Single(parameter => parameter.Name == "@BatchSize").Value,
+                var echoed = Convert.ToString(
+                    command.Parameters.Single(parameter => parameter.Name == _echoParameterName).Value,
                     CultureInfo.InvariantCulture);
-                return Task.FromException<ISqlReader>(new TimeoutException($"measured-run-failed:{batch}"));
+                return Task.FromException<ISqlReader>(new TimeoutException($"measured-run-failed:{echoed}"));
             }
 
             if (command.Sql.Contains("INTO #ids", StringComparison.Ordinal))
