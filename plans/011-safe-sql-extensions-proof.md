@@ -4,16 +4,26 @@
 
 **Code and documentation complete. NOT a full PASS.**
 
-The plan's scoped filter, the `-warnaserror` build and the Core/CLI test
-project (`SqlHarness.Tests`) are green. The third closure gate (full
-non-Integration suite, exit 0) is **not** claimed as passed: the MCP test
-project (`SqlHarness.Mcp.Tests`) is intermittently flaky, on this branch's head
-**and** on the base commit `0fad2a8`. No commit on this branch changes a file
-under the MCP project (`src/SqlHarness.Mcp`, `tests/SqlHarness.Mcp.Tests`), so
-the gate failure is recorded as an independent failure, owned by plan 005
-(which diagnoses the MCP timeouts). That the failures at head and at base
-share one cause is an inference from "same project, no file changed", not
-something this branch proved.
+The plan's scoped filter and the `-warnaserror` build are green. The third
+closure gate (full non-Integration suite, exit 0) is **not** claimed as
+passed, for two reasons:
+
+1. The MCP test project (`SqlHarness.Mcp.Tests`) is intermittently flaky, on
+   this branch's head **and** on the base commit `0fad2a8`. No commit on this
+   branch changes a file under the MCP project (`src/SqlHarness.Mcp`,
+   `tests/SqlHarness.Mcp.Tests`), so the gate failure is recorded as an
+   independent failure, owned by plan 005 (which diagnoses the MCP timeouts).
+   That the failures at head and at base share one cause is an inference from
+   "same project, no file changed", not something this branch proved.
+2. In the Core/CLI project (`SqlHarness.Tests`) one test,
+   `ProcessRunnerTests.RunAsync_CancellationTerminatesEntireProcessTree`,
+   failed in 2 of the 10 non-Integration runs of that project made during the
+   final fix wave, one of them the full-solution run on `d9b7479`. It passed
+   in the other 8. No commit on this branch changes `ProcessRunner` or its
+   tests. It was not run on the base commit, so "pre-existing" is not shown
+   here; the file history has three earlier stabilisation commits for this
+   test (`914e818`, `6c30861`, `015d202`). Every other test of that project
+   passed in every run.
 
 Branch `feat/plan-011-safe-sql-extensions`, worktree
 `.worktrees/plan-011-safe-sql-extensions`, base / merge-base with `main`:
@@ -22,14 +32,17 @@ instruction).
 
 Commit range: `0fad2a8..` up to and including the commit that carries this
 version of the proof. A commit cannot name its own hash, so the range is
-stated through its predecessor: `0fad2a8..7ceed54` is 64 commits (47 up to
-`8abaa15`, then the 17 commits of the final fix wave); the proof commit is the
-65th and touches only `plans/011-safe-sql-extensions-proof.md`,
+stated through its predecessor: `0fad2a8..d9b7479` is 65 commits (47 up to
+`8abaa15`, then 18 commits of the final fix wave, `d9b7479` being the first
+version of this rewritten proof); the commit carrying this version is the
+66th. It and `d9b7479` touch only `plans/011-safe-sql-extensions-proof.md`,
 `plans/011-safe-sql-extensions.md` and `plans/README.md`. The last commit that
 touches code, tests or a test fixture is `9f07deb`; `950c162`, `9870899` and
 `7ceed54` touch only `*.md` files. `AGENTS.md` and `README.md` are read by
 `ContractsTests`, so the gates of the final fix wave were run on tree `7ceed54`,
-after every one of those documents was final.
+after every one of those documents was final, and again on `d9b7479`. Any run
+made after the commit carrying this version is recorded only in the final fix
+report, not here.
 
 ## Goal
 
@@ -98,17 +111,31 @@ project is stable; see B.
 
 `CapabilitiesCommandTests` alone: 72 passed, 0 failed, 0 skipped.
 
-One further failure was seen by this implementer during the wave, in the
-Core/CLI project, and is recorded here because it is a failure:
-a run of `SqlHarness.Tests` (non-Integration) on the working tree that became
-commit `ff54b16` gave 2652 passed / 1 failed / 0 skipped; the failing test was
-`SqlHarness.Tests.Auth.ProcessRunnerTests.RunAsync_CancellationTerminatesEntireProcessTree`
-(a process-tree termination test that starts `powershell.exe`). Three reruns of
-`ProcessRunnerTests` (5/0/0 each) and an immediate rerun of the whole project
-(2653/0/0) passed, and so did every later run of that project in the wave,
-including the gate run above. The failure message was not captured. No commit
-on this branch changes `ProcessRunner` or its tests. It is recorded as a
-second intermittent test, not explained.
+The same three commands were run again on tree `d9b7479` (the first version of
+this rewritten proof; `plans/*.md` only since `7ceed54`):
+
+- build `-warnaserror`: `Build succeeded. 0 Warning(s) 0 Error(s)`, exit code 0;
+- scoped filter: 797 passed / 0 failed / 0 skipped, exit code 0;
+- full non-Integration suite: **exit code 1.** SqlHarness.Tests 2711 passed /
+  **1 failed** / 0 skipped; the failing test was
+  `SqlHarness.Tests.Auth.ProcessRunnerTests.RunAsync_CancellationTerminatesEntireProcessTree`.
+  SqlHarness.Mcp.Tests 193 passed / 0 failed / 4 skipped.
+- `SqlHarness.Tests` (non-Integration) rerun on the same tree, five times:
+  2712 / 0 / 0 each.
+
+That test (a process-tree termination test that starts `powershell.exe`) had
+failed once before in this wave: a run of `SqlHarness.Tests` on the working
+tree that became commit `ff54b16` gave 2652 passed / 1 failed / 0 skipped, the
+same test. Three reruns of `ProcessRunnerTests` (5/0/0 each) and an immediate
+rerun of the whole project (2653/0/0) passed. In total this implementer ran
+the non-Integration `SqlHarness.Tests` project 10 times in the wave: 8 clean,
+2 with this one failure. The failure message was not captured in either case.
+No commit on this branch changes `ProcessRunner` or its tests, and the test
+was not run on the base commit. It is recorded as a second intermittent test,
+not explained and not attributed.
+
+This implementer ran the MCP project twice (inside the two full-solution
+runs): 193 / 0 / 4 both times.
 
 ### B. Controller-observed runs (reported to the final fix wave; not re-derived here)
 
@@ -154,8 +181,9 @@ exact UTF-8 byte pin: 5710 → 6219 (`02fbc97`) → 6887 (`e234f4c`) → **7100*
 (`9f07deb`; first run after the rewording: `Expected: 6887, Actual: 7100`).
 The ceiling is 8192 bytes, unchanged by this branch; 1092 bytes remain.
 
-`git diff --check` → exit 0 after every commit of the final fix wave.
-`git status --short` → clean at the end of the wave.
+`git diff --check` → exit 0 after every commit of the final fix wave, and
+`git diff --check 0fad2a8..d9b7479` → exit 0.
+`git status --short` → clean at `d9b7479`.
 
 ## Final fix wave (review of `0fad2a8..8abaa15`)
 
@@ -361,5 +389,6 @@ taken from the engines' documentation, not observed.
 - Accept or reject the `search_path` residual for unqualified names (I2).
 - M3: carry the proof state in a dedicated type instead of a runtime subtype.
 - M6: allow `SET` in `--setup`, or keep the denial.
-- The MCP test project's intermittent failures (plan 005) and the one
-  `ProcessRunnerTests` failure recorded above.
+- The MCP test project's intermittent failures (plan 005) and the
+  intermittent `ProcessRunnerTests.RunAsync_CancellationTerminatesEntireProcessTree`
+  failure recorded above (no owner assigned on this branch).
