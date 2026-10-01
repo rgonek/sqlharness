@@ -278,6 +278,48 @@ public class WatchNdjsonTests
         Assert.Equal((int)SqlHarnessExitCode.Safety, failed.Data.GetProperty("exitCode").GetInt32());
     }
 
+    // 012/T1 review gap: ExecuteWatchNdjsonAsync (the NDJSON streaming twin of
+    // ExecuteWatchAsync) reads TypedParameters too, but had no test of its own;
+    // CompareMatrixTests only exercises the non-streaming watch dispatch.
+    [Fact]
+    public async Task Ndjson_typed_parameter_is_bound_whole_into_the_poll()
+    {
+        var session = FakeSession.WithScalarPolls(1, 1);
+        var transport = new StringWriter();
+        var operation = Watch(sql: "SELECT @Flag AS Value", untilUnchanged: 1) with
+        {
+            TypedParameters = [new SqlHarnessParameterInput("Flag", null, "a,b=c:d")],
+        };
+
+        var outcome = await Module(session, new FakeWatchClock()).ExecuteWatchNdjsonAsync(operation, transport);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.NotEmpty(session.Commands);
+        Assert.All(session.Commands, command =>
+            Assert.Equal("a,b=c:d", command.Parameters.Single(p => p.Name == "@Flag").Value));
+    }
+
+    [Fact]
+    public async Task Ndjson_typed_parameter_rejection_emits_failed_without_echoing_the_value()
+    {
+        var transport = new StringWriter();
+        var operation = Watch(untilUnchanged: 1) with
+        {
+            TypedParameters = [new SqlHarnessParameterInput("Flag", "int", "nope-secret")],
+        };
+
+        var outcome = await Module(FakeSession.WithScalarPolls(1), new FakeWatchClock())
+            .ExecuteWatchNdjsonAsync(operation, transport);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal("Invalid value for SQL parameter 'Flag' of type 'int'.", outcome.SafeError);
+        Assert.DoesNotContain("nope-secret", transport.ToString(), StringComparison.Ordinal);
+
+        var records = Parse(transport);
+        var failed = Assert.Single(records);
+        Assert.Equal("failed", failed.Event);
+    }
+
     [Fact]
     public async Task Ndjson_gain_receipt_covers_completed_stream_as_success()
     {
