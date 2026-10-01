@@ -1,6 +1,6 @@
 # Plan 011: Zaplanuj i dodaj wąskie rozszerzenia bezpiecznej składni
 
-Status: **DONE** (branch `feat/plan-011-safe-sql-extensions`, `0fad2a8..02fbc97` kod, docs do `6319a0c`; T5 ANALYZE DESIGN COMPLETE, nie IMPLEMENTED; dowód: [011-safe-sql-extensions-proof](011-safe-sql-extensions-proof.md))
+Status: **DONE** (branch `feat/plan-011-safe-sql-extensions`, `0fad2a8..e234f4c` kod, docs do `c300cf6`; T5 ANALYZE DESIGN COMPLETE, nie IMPLEMENTED; dowód: [011-safe-sql-extensions-proof](011-safe-sql-extensions-proof.md))
 Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
 Priorytet: P2; nakład: L; ryzyko zmiany: HIGH.
 Pokrycie: **nadmiarowe blokady SET, table variables, PG TEMP TRUNCATE i ANALYZE**. Zależności: **007, 009**.
