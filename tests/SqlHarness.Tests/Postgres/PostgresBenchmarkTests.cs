@@ -363,6 +363,79 @@ public sealed class PostgresBenchmarkTests
         Assert.DoesNotContain("SELECT 2", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
+    // 011/final (M1): PostgreSQL TRUNCATE is reachable in `--setup` only (the
+    // measured SQL is one EXPLAIN-able SELECT). Both accepted spellings run
+    // through the measure and compare entry points with the setup SQL unchanged.
+    [Theory]
+    [InlineData("CREATE TEMP TABLE t (id int); INSERT INTO t VALUES (1); TRUNCATE t; INSERT INTO t VALUES (2)")]
+    [InlineData("CREATE TEMP TABLE t (id int); INSERT INTO t VALUES (1); TRUNCATE ONLY pg_temp.t")]
+    public async Task Measure_and_compare_run_setup_that_truncates_a_proven_temp(string setup)
+    {
+        var measureSession = FakeSession.Create();
+        var measured = await Module(measureSession).ExecuteAsync(
+            Measure("SELECT id AS n FROM t", repeat: 1) with { SetupSql = setup });
+
+        Assert.Equal(SqlHarnessExitCode.Success, measured.ExitCode);
+        Assert.Equal(1, measureSession.FactoryOpenCount);
+        Assert.Equal(setup, measureSession.Commands[0].Sql);
+        Assert.Single(measureSession.Commands, command => command.Sql == setup);
+        var measureReport = Assert.IsType<SqlHarnessMeasureReport>(measured.Report);
+        Assert.Equal("session-local", measureReport.Classification.Setup);
+
+        var compareSession = FakeSession.Create();
+        var compared = await Module(compareSession).ExecuteAsync(
+            Compare("SELECT id AS n FROM t", "SELECT id AS n FROM t WHERE id > 0", repeat: 1) with { SetupSql = setup });
+
+        Assert.Equal(SqlHarnessExitCode.Success, compared.ExitCode);
+        Assert.Equal(1, compareSession.FactoryOpenCount);
+        Assert.Equal(setup, compareSession.Commands[0].Sql);
+        Assert.Single(compareSession.Commands, command => command.Sql == setup);
+        var compareReport = Assert.IsType<SqlHarnessCompareReport>(compared.Report);
+        Assert.Equal("session-local", compareReport.Classification.Setup);
+    }
+
+    [Theory]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE t, items")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE public.t")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE t CASCADE")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; TRUNCATE pg_temp.t")]
+    [InlineData("TRUNCATE items")]
+    public async Task Measure_and_compare_reject_setup_that_truncates_an_unproven_target_before_connect(string setup)
+    {
+        var measureSession = FakeSession.Create();
+        var measured = await Module(measureSession).ExecuteAsync(
+            Measure("SELECT 1", repeat: 1) with { SetupSql = setup });
+
+        Assert.Equal(SqlHarnessExitCode.Safety, measured.ExitCode);
+        Assert.Contains("SQL safety rejection for setup:", measured.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Equal(0, measureSession.FactoryOpenCount);
+        Assert.Empty(measureSession.Commands);
+
+        var compareSession = FakeSession.Create();
+        var writer = new CapturingArtifactWriter();
+        var compared = await Module(compareSession, writer).ExecuteAsync(
+            Compare("SELECT 1", "SELECT 1", repeat: 1) with { SetupSql = setup });
+
+        Assert.Equal(SqlHarnessExitCode.Safety, compared.ExitCode);
+        Assert.Contains("SQL safety rejection for setup:", compared.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Equal(0, compareSession.FactoryOpenCount);
+        Assert.Empty(writer.Runs);
+    }
+
+    [Fact]
+    public async Task Measure_rejects_truncate_as_measured_sql_before_connect()
+    {
+        // The measured batch must be one EXPLAIN-able SELECT, so a TRUNCATE of a
+        // setup temp is never a measured statement.
+        var session = FakeSession.Create();
+
+        var outcome = await Module(session).ExecuteAsync(
+            Measure("TRUNCATE t", repeat: 1) with { SetupSql = "CREATE TEMP TABLE t (id int)" });
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal(0, session.FactoryOpenCount);
+    }
+
     private static SqlHarnessModule Module(FakeSession session, ICompareArtifactWriter? writer = null) =>
         new(session, new FakeGain(), writer ?? new CapturingArtifactWriter(), Profiles);
 

@@ -33,6 +33,71 @@ public sealed class PostgresQueryTests
         Assert.Equal("session-local", Assert.IsType<SqlHarnessQueryReport>(outcome.Report).StatementClassification);
     }
 
+    // 011/final (M1): PostgreSQL TRUNCATE of a proven session temp through the
+    // module entry point that `query` uses, in both accepted spellings.
+    [Theory]
+    [InlineData("CREATE TEMP TABLE t (id int); INSERT INTO t VALUES (1); TRUNCATE t; SELECT id FROM t")]
+    [InlineData("CREATE TEMP TABLE t (id int); INSERT INTO t VALUES (1); TRUNCATE ONLY pg_temp.t; SELECT id FROM pg_temp.t")]
+    public async Task Postgres_truncate_of_a_proven_temp_runs_unchanged_without_mutation_approval(string sql)
+    {
+        var session = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["id"]));
+        var module = new SqlHarnessModule(session, new FakeGain(), Profiles);
+
+        var outcome = await module.ExecuteAsync(Query(sql));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(sql, Assert.Single(session.Commands).Sql);
+        Assert.Equal("session-local", Assert.IsType<SqlHarnessQueryReport>(outcome.Report).StatementClassification);
+    }
+
+    [Theory]
+    [InlineData("TRUNCATE items", "NonTemporaryWrite.")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE t, items", "NonTemporaryWrite.")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE public.t", "NonTemporaryWrite.")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp_3.t", "NonTemporaryWrite.")]
+    [InlineData("TRUNCATE pg_temp.t", "NonTemporaryWrite.")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE t CASCADE", "UnsupportedStatement.")]
+    [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE pg_temp.t RESTART IDENTITY", "UnsupportedStatement.")]
+    public async Task Postgres_truncate_of_an_unproven_target_is_rejected_before_connect(string sql, string reason)
+    {
+        var session = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["id"]));
+        var module = new SqlHarnessModule(session, new FakeGain(), Profiles);
+
+        // Mutation approval does not unlock a persistent TRUNCATE either.
+        foreach (var approve in new[] { false, true })
+        {
+            var outcome = await module.ExecuteAsync(Query(sql) with
+            {
+                AllowMutation = approve,
+                ConfirmDatabase = approve ? "appdb" : null,
+            });
+
+            Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+            Assert.Equal($"SQL safety rejection: {reason}", outcome.SafeError);
+            Assert.Empty(session.Commands);
+            Assert.Null(outcome.Report);
+        }
+    }
+
+    [Fact]
+    public async Task Postgres_unproven_temp_write_is_rejected_with_the_hint_and_no_sql_echo()
+    {
+        // 011/final (M9) end to end: exit code 2 and the reason are unchanged.
+        const string sql = "CREATE TEMP TABLE scratch_rows (id int) ON COMMIT DROP; INSERT INTO scratch_rows VALUES (1)";
+        var session = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["id"]));
+        var module = new SqlHarnessModule(session, new FakeGain(), Profiles);
+
+        var outcome = await module.ExecuteAsync(Query(sql));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.StartsWith("SQL safety rejection: MutationNotAllowed. A TEMP table declared in this session flow is not a proven session temp", outcome.SafeError, StringComparison.Ordinal);
+        Assert.DoesNotContain("scratch_rows", outcome.SafeError, StringComparison.Ordinal);
+        Assert.Empty(session.Commands);
+    }
+
+    private static SqlHarnessQueryOperation Query(string sql) =>
+        new(new SqlTargetRequest("local-pg", new Dictionary<string, string>()), sql, [], 30, 50, false, null);
+
     private static IReadOnlyDictionary<string, TargetProfile> Profiles() =>
         new Dictionary<string, TargetProfile>
         {

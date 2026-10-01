@@ -104,6 +104,48 @@ public class SqlHarnessQueryTests
         Assert.Null(outcome.Report);
     }
 
+    // 011/final (M1): the plan 011 allows, driven through the module entry
+    // point that `query` uses, with the fake session used by the tests above.
+    [Theory]
+    [InlineData("DECLARE @n int; SET @n = 5; SELECT @n AS Value", "read-only")]
+    [InlineData("DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (1); SELECT Id AS Value FROM @t", "session-local")]
+    [InlineData("DECLARE @t TABLE (Id int); DECLARE @n int; SET @n = 2; INSERT @t (Id) VALUES (@n); UPDATE @t SET Id = 3; DELETE @t; SELECT @n AS Value", "session-local")]
+    public async Task Query_runs_SET_and_table_variable_batches_unchanged_without_mutation_approval(
+        string sql, string classification)
+    {
+        var session = FakeSqlSession.WithIdentity(
+            "test-server",
+            "testdb-a",
+            FakeSqlReader.Rows(["Value"], [5]));
+
+        var outcome = await Module(session).ExecuteAsync(Query(sql));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(sql, Assert.Single(session.Commands).Sql);
+        Assert.Equal(classification, Assert.IsType<SqlHarnessQueryReport>(outcome.Report).StatementClassification);
+    }
+
+    [Theory]
+    [InlineData("SET @n = 5; SELECT @n AS Value", "UnsupportedStatement")]
+    [InlineData("DECLARE @n int; SET @n += 5; SELECT @n AS Value", "UnsupportedStatement")]
+    [InlineData("DECLARE @n dbo.SomeType; SET @n.Member = 5", "UnsupportedStatement")]
+    [InlineData("INSERT @t (Id) VALUES (1)", "UnsupportedStatement")]
+    [InlineData("DECLARE @t TABLE (Id int);\nGO\nINSERT @t (Id) VALUES (1)", "UnsupportedStatement")]
+    [InlineData("DECLARE @t TABLE (Id int); UPDATE dbo.Clients SET Active = 0 OUTPUT inserted.Id INTO @t (Id)", "MutationNotAllowed")]
+    public async Task Query_rejects_unproven_SET_and_table_variable_batches_before_connect(string sql, string reason)
+    {
+        var azure = new FakeAzureCli(Token);
+        var session = FakeSqlSession.WithIdentity("test-server", "testdb-a");
+
+        var outcome = await Module(session, azure: azure).ExecuteAsync(Query(sql));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Contains($"SQL safety rejection: {reason}.", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Empty(azure.Calls);
+        Assert.Empty(session.Commands);
+        Assert.Null(outcome.Report);
+    }
+
     [Fact]
     public async Task Query_persistent_OUTPUT_INTO_allows_only_with_exact_mutation_contract()
     {
