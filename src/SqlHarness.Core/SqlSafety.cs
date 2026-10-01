@@ -832,9 +832,10 @@ internal sealed class SqlSafetyClassifier
         internal bool HasNonLocalSelectInto { get; private set; }
         internal bool HasNonLocalOutputInto { get; private set; }
 
-        // The scope built during the inspection walk, reused by statement classification.
-        internal BatchVariableScope ScopeOf(TSqlBatch batch) =>
-            _scopes.TryGetValue(batch, out var scope) ? scope : CollectBatchScope(batch);
+        // The scope built during the inspection walk, reused by statement
+        // classification. Classify walks the whole script before it classifies
+        // any batch, so every batch has one.
+        internal BatchVariableScope ScopeOf(TSqlBatch batch) => _scopes[batch];
 
         public override void ExplicitVisit(TSqlBatch node)
         {
