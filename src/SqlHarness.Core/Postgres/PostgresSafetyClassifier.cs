@@ -211,6 +211,9 @@ internal sealed class PostgresSafetyClassifier
                     return StatementOutcome.Unsupported;
                 }
 
+            case Statement.Truncate truncate:
+                return ClassifyTruncate(truncate, knownTemps);
+
             case Statement.StartTransaction:
             case Statement.Commit:
             case Statement.Rollback:
@@ -233,7 +236,6 @@ internal sealed class PostgresSafetyClassifier
             case Statement.Grant:
             case Statement.Revoke:
             case Statement.Analyze:
-            case Statement.Truncate:
             case Statement.AlterTable:
             case Statement.AlterIndex:
             case Statement.AlterView:
@@ -253,6 +255,40 @@ internal sealed class PostgresSafetyClassifier
                 return StatementOutcome.Unsupported;
         }
     }
+
+    private static StatementOutcome ClassifyTruncate(Statement.Truncate truncate, HashSet<string> knownTemps)
+    {
+        // Closed option allowlist: anything whose effect reaches past the named
+        // rows stays unsupported, even over proven temps. CASCADE follows foreign
+        // keys to tables that are not named; RESTART IDENTITY resets sequences
+        // whose session locality temp tracking does not prove; ON CLUSTER and
+        // PARTITION are not PostgreSQL shapes.
+        if (truncate.Cascade is not (null or TruncateCascadeOption.Restrict))
+            return StatementOutcome.Unsupported;
+        if (truncate.Identity is not (null or TruncateIdentityOption.Continue))
+            return StatementOutcome.Unsupported;
+        if (truncate.OnCluster is not null || truncate.Partitions is not null)
+            return StatementOutcome.Unsupported;
+        if (truncate.Names is not { Count: > 0 })
+            return StatementOutcome.Unsupported;
+
+        // Every target must be proven; one unproven name denies the statement.
+        // Never approvable: persistent TRUNCATE does not join the mutation path.
+        foreach (var target in truncate.Names)
+        {
+            if (!IsProvenSessionTemp(target.Name, knownTemps))
+                return StatementOutcome.NonTemporaryWrite;
+        }
+
+        return StatementOutcome.SessionLocal;
+    }
+
+    // Stricter than IsSessionLocal, and used by TRUNCATE only: the sole proof is
+    // an unqualified name that this session flow recorded from CREATE TEMP /
+    // SELECT INTO TEMP. A pg_temp / pg_temp_N qualifier or name prefix proves
+    // nothing about ownership (pg_temp_N can be another session's schema).
+    private static bool IsProvenSessionTemp(ObjectName name, IReadOnlySet<string> knownTemps) =>
+        name.Values.Count == 1 && knownTemps.Contains(FoldIdent(name.Values[0]));
 
     private static StatementOutcome ClassifySelect(
         Statement.Select select,
