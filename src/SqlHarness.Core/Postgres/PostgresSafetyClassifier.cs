@@ -197,11 +197,17 @@ internal sealed class PostgresSafetyClassifier
                             return StatementOutcome.Unsupported;
                         if (!drop.Names.All(name => IsSessionLocal(name, knownTemps)))
                             return StatementOutcome.Unsupported;
+                        // Revocation must cover every temp the server may have
+                        // dropped. With a known stored name that is one key. With
+                        // an unknown one (reachable through pg_temp.<name>) the
+                        // match cannot be narrowed offline, so every proof goes.
                         foreach (var name in drop.Names)
                         {
-                            var key = ObjectKey(name);
-                            if (key is not null)
-                                knownTemps.Forget(key);
+                            var relation = name.Values[^1];
+                            if (FoldsLikeServer(relation))
+                                knownTemps.Forget(FoldIdent(relation));
+                            else
+                                knownTemps.ForgetAll();
                         }
 
                         return StatementOutcome.SessionLocal;
@@ -535,6 +541,14 @@ internal sealed class PostgresSafetyClassifier
         {
             Remove(key);
             TruncateProven.Remove(key);
+        }
+
+        // Drops every proof, including names a caller supplied. The ON COMMIT
+        // DROP record stays: it only ever withholds proof.
+        internal void ForgetAll()
+        {
+            Clear();
+            TruncateProven.Clear();
         }
     }
 
