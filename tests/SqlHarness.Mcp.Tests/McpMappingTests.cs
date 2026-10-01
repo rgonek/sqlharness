@@ -375,8 +375,8 @@ public sealed class McpMappingTests : IDisposable
             JsonSerializer.Deserialize<McpMatrixArgument>(
                 "{\"name\":\"Label\",\"type\":\"nvarchar(20)\",\"values\":[\"a,b\",\"\",null,\"null\"]}"),
             CancellationToken.None);
-        var outcome = await scope.CreateModule().ExecuteAsync(
-            operation, new CancellationTokenSource(TimeSpan.FromSeconds(30)).Token);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var outcome = await scope.CreateModule().ExecuteAsync(operation, cts.Token);
         Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
         Assert.Equal("The --matrix option for SQL parameter '@Label' duplicates a fixed parameter.", outcome.SafeError);
     }
@@ -397,8 +397,8 @@ public sealed class McpMappingTests : IDisposable
             JsonSerializer.Deserialize<McpMatrixArgument>(
                 "{\"name\":\"Label\",\"type\":\"" + type + "\",\"values\":" + valuesJson + "}"),
             CancellationToken.None);
-        var outcome = await scope.CreateModule().ExecuteAsync(
-            operation, new CancellationTokenSource(TimeSpan.FromSeconds(30)).Token);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var outcome = await scope.CreateModule().ExecuteAsync(operation, cts.Token);
         Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
         Assert.Equal(expected, outcome.SafeError);
     }
