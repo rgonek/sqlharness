@@ -1476,6 +1476,118 @@ public sealed class PostgresSafetyTests
         Assert.Equal(SqlSafetyReason.MutationNotAllowed, decision.Reason);
     }
 
+    // 011/T4b fix round 1 (F3): the "unknown stored name" record of an unquoted
+    // non-ASCII ON COMMIT DROP declaration travels with the set from setup.
+    [Theory]
+    [InlineData("INSERT INTO \"é\" VALUES (1)", "MutationNotAllowed")]
+    [InlineData("TRUNCATE \"é\"", "NonTemporaryWrite")]
+    [InlineData("DROP TABLE \"é\"", "UnsupportedStatement")]
+    public void T4b_Carried_non_ascii_on_commit_drop_record_blocks_if_not_exists_proof(
+        string tail, string expected)
+    {
+        var setup = _classifier.Classify(
+            "CREATE TEMP TABLE É (id int) ON COMMIT DROP", SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        Assert.Empty(setup.SessionTempTables);
+
+        var query = _classifier.Classify(
+            "CREATE TEMP TABLE IF NOT EXISTS \"é\" (id int); " + tail,
+            SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.False(query.Allowed);
+        Assert.Equal(expected, query.Reason.ToString());
+
+        // The record survives a hop through a batch that declares nothing.
+        var hop = _classifier.Classify(
+            "SELECT 1", SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.True(hop.Allowed, hop.RejectionDescription);
+        var later = _classifier.Classify(
+            "CREATE TEMP TABLE IF NOT EXISTS \"é\" (id int); " + tail,
+            SqlUsage.Query, "appdb", false, null, hop.SessionTempTables);
+        Assert.False(later.Allowed);
+        Assert.Equal(expected, later.Reason.ToString());
+    }
+
+    [Fact]
+    public void T4b_Ascii_name_is_still_proven_after_a_non_ascii_on_commit_drop_declaration()
+    {
+        // The unknown stored name contains a non-ASCII character under every
+        // server fold, so it cannot be the all-ASCII name declared next.
+        const string tail =
+            "CREATE TEMP TABLE IF NOT EXISTS items (id int); INSERT INTO items VALUES (1); TRUNCATE items";
+
+        var sameBatch = _classifier.Classify(
+            "CREATE TEMP TABLE É (id int) ON COMMIT DROP; " + tail,
+            SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(sameBatch.Allowed, sameBatch.RejectionDescription);
+        Assert.True(sameBatch.HasSessionLocalWork);
+        Assert.False(sameBatch.HasMutation);
+
+        var setup = _classifier.Classify(
+            "CREATE TEMP TABLE É (id int) ON COMMIT DROP", SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        var carried = _classifier.Classify(tail, SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.True(carried.Allowed, carried.RejectionDescription);
+        Assert.False(carried.HasMutation);
+    }
+
+    // 011/T4b fix round 1 (F4, contract row 011-T4b-D3): a plain CREATE TEMP
+    // TABLE (no IF NOT EXISTS) fails on the server while the name is taken, and
+    // a failed statement ends the batch. Reaching the next statement therefore
+    // means a new temp without ON COMMIT DROP exists, so proof is recorded again.
+    [Theory]
+    [InlineData("INSERT INTO items VALUES (1)")]
+    [InlineData("UPDATE items SET id = 1")]
+    [InlineData("DELETE FROM items")]
+    [InlineData("CREATE INDEX ix ON items (id)")]
+    [InlineData("TRUNCATE items")]
+    [InlineData("DROP TABLE items")]
+    [InlineData("CREATE TEMP TABLE IF NOT EXISTS items (id int); INSERT INTO items VALUES (1)")]
+    public void T4b_Plain_create_after_on_commit_drop_of_the_same_name_records_proof_again(string tail)
+    {
+        var sameBatch = _classifier.Classify(
+            "CREATE TEMP TABLE items (id int) ON COMMIT DROP; CREATE TEMP TABLE items (id int); " + tail,
+            SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(sameBatch.Allowed, sameBatch.RejectionDescription);
+        Assert.True(sameBatch.HasSessionLocalWork);
+        Assert.False(sameBatch.HasMutation);
+
+        var setup = _classifier.Classify(
+            "CREATE TEMP TABLE items (id int) ON COMMIT DROP", SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        var carried = _classifier.Classify(
+            "CREATE TEMP TABLE items (id int); " + tail,
+            SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.True(carried.Allowed, carried.RejectionDescription);
+        Assert.True(carried.HasSessionLocalWork);
+        Assert.False(carried.HasMutation);
+
+        // Declared in setup, used in the query.
+        var setupBoth = _classifier.Classify(
+            "CREATE TEMP TABLE items (id int) ON COMMIT DROP; CREATE TEMP TABLE items (id int)",
+            SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setupBoth.Allowed, setupBoth.RejectionDescription);
+        Assert.Contains("items", setupBoth.SessionTempTables);
+        var query = _classifier.Classify(tail, SqlUsage.Query, "appdb", false, null, setupBoth.SessionTempTables);
+        Assert.True(query.Allowed, query.RejectionDescription);
+        Assert.False(query.HasMutation);
+    }
+
+    [Fact]
+    public void T4b_Plain_create_is_proven_after_a_long_on_commit_drop_declaration()
+    {
+        // Whatever name the truncated ON COMMIT DROP temp has, a plain create
+        // that succeeds made a new temp.
+        var setup = _classifier.Classify(
+            ExpandNames("CREATE TEMP TABLE {A63}x (id int) ON COMMIT DROP"),
+            SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+
+        var query = _classifier.Classify(
+            "CREATE TEMP TABLE items (id int); INSERT INTO items VALUES (1); TRUNCATE items",
+            SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.True(query.Allowed, query.RejectionDescription);
+        Assert.False(query.HasMutation);
+    }
+
     // Query usage without approval, then compare setup, where an unproven DML
     // target is reported as NonTemporaryWrite.
     private void AssertDeniedInBothUsages(string sql, string expected)
