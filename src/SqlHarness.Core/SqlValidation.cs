@@ -80,10 +80,16 @@ public enum ValidationUsage
 /// context for Query/Benchmark (classified as setup and its session temps
 /// shared with the main batch, like the compare/measure preflight); it is
 /// ignored for Setup, which classifies the main batch itself as setup.
+/// TypedParameters is the typed alternative to the declaration list of
+/// Validate (null keeps the declaration text path); supplying both fails
+/// parameter validation, as it does at execution.
 /// </summary>
 public sealed record ValidationOptions(
     ValidationUsage Usage = ValidationUsage.Query,
-    string? SetupSql = null);
+    string? SetupSql = null)
+{
+    public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+}
 
 public static class SqlValidation
 {
@@ -140,7 +146,8 @@ public static class SqlValidation
         {
             try
             {
-                parsedParameters = dialect.ParseParameters(parameterDeclarations);
+                parsedParameters = dialect.BindParameters(
+                    SqlParameterInputs.Resolve(parameterDeclarations, options?.TypedParameters));
                 dialect.ValidateParameterReferences(parsedParameters, setupSql, sql);
                 parameterValidationCompleted = true;
             }

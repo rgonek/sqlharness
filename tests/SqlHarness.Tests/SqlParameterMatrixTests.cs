@@ -4,6 +4,7 @@ using System.Globalization;
 using Microsoft.SqlServer.Types;
 
 using SqlHarness.Core;
+using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Tests;
 
@@ -441,6 +442,69 @@ public class SqlParameterMatrixTests
 
         Assert.Equal("The --matrix option for SQL parameter '@BatchSize' requires at least two values.", exception.Message);
     }
+
+    // Offline validation: the typed list and the declaration text end in the same binder.
+    [Theory]
+    [InlineData("sqlserver", "int", "42", "id:int=42", true, null)]
+    [InlineData("postgres", "int", "42", "id:int=42", true, null)]
+    [InlineData("sqlserver", "int", "x1", "id:int=x1", false, "parameter_validation_failed")]
+    [InlineData("sqlserver", "frobnicate", "1", "id:frobnicate=1", false, "parameter_validation_failed")]
+    [InlineData("postgres", "money", "5", "id:money=5", false, "parameter_validation_failed")]
+    [InlineData("sqlserver", "nvarchar", null, "id:nvarchar:null", true, null)]
+    public void Validation_gives_typed_parameters_the_verdict_of_the_declaration_text(
+        string engine, string type, string? value, string declaration, bool allowed, string? reason)
+    {
+        var (request, profiles) = ValidationTarget(engine);
+
+        var text = SqlValidation.Validate(request, "SELECT @id;", [declaration], profiles, new ValidationOptions());
+        var typed = SqlValidation.Validate(
+            request, "SELECT @id;", [], profiles,
+            new ValidationOptions { TypedParameters = [new SqlHarnessParameterInput("id", type, value)] });
+
+        Assert.Equal(allowed, typed.Allowed);
+        Assert.Equal(reason, typed.Reason);
+        Assert.Equal(text.Allowed, typed.Allowed);
+        Assert.Equal(text.Reason, typed.Reason);
+        Assert.Equal(text.Parameters, typed.Parameters);
+    }
+
+    [Theory]
+    [InlineData("a,b")]
+    [InlineData("a=b:c")]
+    [InlineData("")]
+    public void Validation_binds_a_typed_value_whole(string value)
+    {
+        var (request, profiles) = ValidationTarget("sqlserver");
+
+        var report = SqlValidation.Validate(
+            request, "SELECT @note;", [], profiles,
+            new ValidationOptions { TypedParameters = [new SqlHarnessParameterInput("note", "nvarchar", value)] });
+
+        Assert.True(report.Allowed);
+        Assert.Equal([new SqlValidationParameter("note", "nvarchar")], report.Parameters);
+    }
+
+    [Fact]
+    public void Validation_rejects_declaration_text_together_with_typed_parameters()
+    {
+        var (request, profiles) = ValidationTarget("sqlserver");
+
+        var report = SqlValidation.Validate(
+            request, "SELECT @id;", ["id:int=1"], profiles,
+            new ValidationOptions { TypedParameters = [new SqlHarnessParameterInput("id", "int", "1")] });
+
+        Assert.False(report.Allowed);
+        Assert.Equal("parameter_validation_failed", report.Reason);
+    }
+
+    private static (SqlTargetRequest Request, Dictionary<string, TargetProfile> Profiles) ValidationTarget(string engine) =>
+        (new SqlTargetRequest("test", new Dictionary<string, string>()),
+            new Dictionary<string, TargetProfile>
+            {
+                ["test"] = new(
+                    "server-unused", "database-unused", new Dictionary<string, string>(),
+                    "sql", "user-unused", "MUST_NOT_BE_READ", Engine: engine),
+            });
 
     private static SqlHarnessSafetyException Reject(string input, params string[] fixedParameters) =>
         Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterMatrixParser.Parse(input, fixedParameters));
