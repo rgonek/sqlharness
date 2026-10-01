@@ -2,27 +2,31 @@
 
 ## Status
 
-**Kod i dokumentacja kompletne. Pełny PASS gate'ów T4.** Weryfikacja planu
-(filtr), build `-warnaserror` i pełny suite bez `Integration` zakończyły się
-bez błędów w przebiegach tej sesji (zob. "Dowody testów" poniżej). Brak
-dowodu live-DB/platformowego — zob. sekcja dedykowana niżej.
+**Kod i dokumentacja kompletne, włącznie z falą poprawek po finalnym
+review (F1-F10).** Weryfikacja planu (filtr), build `-warnaserror` i pełny
+suite bez `Integration` zakończyły się bez błędów w przebiegach tej sesji
+(zob. "Dowody testów" poniżej). Brak dowodu live-DB/platformowego — zob.
+sekcja dedykowana niżej.
 
 Branch `feat/plan-012-typed-matrix`, worktree
 `.worktrees/plan-012-typed-matrix`. Branch zaczął się od `3d56a81` (nie od
 bazy planu `8aa01f8` — pomiędzy nimi scalono poprzedników 007/009/011, co
 `progress.md` odnotowuje jako oczekiwany rozjazd). Brak merge, brak push.
 
-Zakres commitów: `3d56a81..da73e14`, 15 commitów: T1 `8bf6331..7b6afd4` (4),
-T2 `a451014..879526e` (5), T3 `e57b1fc..30950eb` (4), T4 `c06e940..da73e14`
-(2 kodowo-testowe; dokumenty tego dowodu są kolejnymi commitami powyżej
-`da73e14`, patrz niżej — commit nie może nazwać własnego hasha).
+Zakres commitów T1-T4: `3d56a81..da73e14`, 15 commitów: T1 `8bf6331..7b6afd4`
+(4), T2 `a451014..879526e` (5), T3 `e57b1fc..30950eb` (4), T4
+`c06e940..da73e14` (2 kodowo-testowe). Finalny review (`final-findings.md`,
+F1-F10) dodał falę poprawek `e906fbd..6760a96` (9 commitów, zob. tabelę
+niżej); dokumenty tego dowodu są kolejnymi commitami powyżej `6760a96`,
+patrz "Pliki zmienione" niżej — commit nie może nazwać własnego hasha.
 
 | Zadanie | Commity | Co dostarczono |
 |---|---|---|
 | T1 | `8bf6331` (red, charakteryzacja), `a4bfeb1` (refactor), `4b03997` (typed NULL), `7b6afd4` (operacje + typed matrix) | Addytywny model Core `SqlHarnessParameterInput`/`SqlHarnessParameterMatrixInput`; jeden binder (`SqlParameterParser.Bind`, `SqlParameterMatrixParser.Bind`, `ISqlDialect.BindParameters`); adapter kompatybilności tekst→model; typed NULL odróżniony od tekstu `"null"` (R3); `TypedParameters`/`TypedMatrix` jako pola addytywne na rekordach operacji. |
-| T2 | `a451014` (red), `5ba5419` (fix), `bb119b3` (validate), `fb39d61` (mapper), `879526e` (docs) | `McpOperationMapper` przestał składać/rozcinać tekst (`FormatParameters`/`FormatMatrix` usunięte); `MapParameters`/`MapMatrix` przekazują strukturę; `McpMatrixArgument.Values` dopuszcza JSON `null`; `ValidationOptions.TypedParameters` (R5) dla `sqlharness_validate`; schemat `matrix.values.items.type` = `["string","null"]`. |
+| T2 | `a451014` (red), `5ba5419` (fix), `bb119b3` (validate), `fb39d61` (mapper), `879526e` (docs) | `McpOperationMapper` przestał składać/rozcinać tekst (`FormatParameters`/`FormatMatrix` usunięte -- **`FormatParameters` było publiczną metodą zestawu MCP host, bez konsumentów poza plikiem**, zob. F9 niżej); `MapParameters`/`MapMatrix` przekazują strukturę; `McpMatrixArgument.Values` dopuszcza JSON `null`; `ValidationOptions.TypedParameters` (R5) dla `sqlharness_validate`; schemat `matrix.values.items.type` = `["string","null"]`. |
 | T3 | `e57b1fc`, `8890dc1`, `55fe55a`, `30950eb` | Domknięcie trzech zaległości z review T1: Unicode/para surogatów przez prawdziwy binder, `decimal(p,s)` na torze typed, case-insensitive duplikat nazw, odrzucenie typu Postgres przez `PostgresDialect.BindParameters` i przez `SqlHarnessModule.ExecuteAsync`, `MeasureParameterSetValidator.ParseShaped` domknięte do końca, oraz `SqlHarnessModule.ExecuteWatchNdjsonAsync` (nie „ExecuteWatchStreamingAsync” — korekta niżej) na torze typed. |
-| T4 | `c06e940`, `da73e14` | Ten dowód. Inwarianty runnera matrix (nowa sesja/setup per cela, kolejność, first-failure, zachowane artefakty/partial report) dowiedzione dla typed wejścia z komórkami przecinek/puste/null; naprawiony test redakcji, który wcześniej nie mógł zawieść. |
+| T4 | `c06e940`, `da73e14` | Inwarianty runnera matrix (nowa sesja/setup per cela, kolejność, first-failure, zachowane artefakty/partial report) dowiedzione dla typed wejścia z komórkami przecinek/puste/null; naprawiony test redakcji, który wcześniej nie mógł zawieść. |
+| Final fix wave | `e906fbd`..`6760a96` (9) | Poprawki F1-F10 z finalnego review (`.superpowers/sdd/012-typed-matrix/final-findings.md`): zob. sekcję "Final fix wave" niżej dla każdego finding'u. |
 
 ## Korekty zakresu (rulingi kontrolera, kopiowane z `progress.md`)
 
@@ -55,7 +59,25 @@ T2 `a451014..879526e` (5), T3 `e57b1fc..30950eb` (4), T4 `c06e940..da73e14`
   wywołanie CLI nietknięte — `validate` jest operacją mapowaną przez MCP, a
   pozostawienie jej na text-join zachowałoby most, który plan usuwa.
 
-(R1-R5 verbatim z `.superpowers/sdd/012-typed-matrix/progress.md`.)
+**Korekta F2 (final fix wave):** powyższe R1-R5 to **streszczenie**, nie
+cytat `verbatim` -- każda ruling w `progress.md` jest dłuższa i zawiera
+własne uzasadnienie oraz klauzulę "cost if wrong", które ten dowód musi
+cytować samodzielnie, bo `progress.md` jest lokalnym scratchem pod
+`.superpowers/` i zostanie usunięty (ten dowód nie linkuje do niego jako do
+ścieżki, która będzie istnieć). Klauzule "cost if wrong" źródłowych
+rulingów:
+
+- R1: diff dotyka plików, które autor planu chciał zamrożone; każdy taki
+  plik musi być nazwany w raporcie/dowodzie z uzasadnieniem (zob. "Pliki
+  zmienione poza listą planu" niżej -- wymóg spełniony).
+- R2: CLI wciąż nie może wyrazić przecinka/pustej wartości w matrix;
+  pozostaje jako dodatkowy follow-up (zob. "Otwarte pozycje" niżej).
+- R3: konsumenci MCP zakładający nie-nullowy string dla `parameterValue`
+  łamią się na komórce null; publiczna adnotacja rekordu `string ->
+  string?`.
+- R4: większy diff przez rekordy operacji niż zmiana tylko matrix.
+- R5: jeden dodatkowy publiczny punkt wejścia Core poza listą plików
+  planu.
 
 ## Korekty do zacytowania dokładnie (z briefu T4)
 
@@ -193,17 +215,88 @@ asercja równości komunikatu. Naprawione w commicie `da73e14`:
 
 Żadna z tych trzech kategorii nie wymagała nowego testu T4.
 
-## Dowody testów (ta sesja, ten worktree, Windows/x64)
+## Final fix wave — F1-F10 (`final-findings.md`)
 
-Komenda weryfikacji (`constraints.md`):
+Finalny whole-branch review zwrócił werdykt "ready to merge with fixes":
+0 Critical, F1-F2 Important, F3-F10 Minor. Każdy finding naprawiony w tej
+fali (`e906fbd..6760a96`); pełny raport z lokalizacjami plik:linia,
+komendami i wyjściami: `.superpowers/sdd/012-typed-matrix/final-fix-report.md`.
+Skrót:
+
+- **F1** (test) — `McpSecretRedactionTests.cs`: test twierdził, że dowodzi
+  zbierania typed matrix value jako znanego sekretu na ścieżce MCP. Żadne
+  miejsce produkcyjne (`McpToolCatalog.cs:343,420,437`,
+  `McpExecutionGate.cs:92,108`) nie przekazuje `knownSecrets` do
+  `McpResultAdapter.Adapt` -- Core redaguje `SqlHarnessOutcome` zanim MCP go
+  zobaczy. Zmieniono nazwę na
+  `McpResultAdapter_redacts_an_execution_phase_value_it_is_given_as_a_known_secret`
+  i komentarz, wskazując Core'owy
+  `CompareMatrixTests.Typed_matrix_failure_redacts_a_value_that_contains_a_comma`
+  jako realny strażnik zbierania. Commit `46b12cf`.
+- **F2** (docs) — ten dowód: R1-R5 to streszczenie, nie `verbatim`; klauzule
+  "cost if wrong" dodane (zob. sekcję "Korekty zakresu" wyżej). Commit
+  bieżący.
+- **F3** (docs + test) — `SqlParameterMatrixParser.Parse`,
+  `SqlParameterParser.Parse`, `ISqlDialect.ParseParameters` (obie
+  implementacje) nie mają konsumenta produkcyjnego (potwierdzone `grep` po
+  `src/`); dodano komentarz "legacy text adapter" na każdym, wskazujący
+  prawdziwą ścieżkę produkcyjną (`SqlParameterInputs.Resolve`/`ResolveMatrix`
+  + `BindParameters`). `Legacy_matrix_checks_itself_before_the_fixed_parameters`
+  pinował porządek, którego produkcja nigdy nie miała (produkcja wiąże
+  najpierw fixed, potem matrix -- odwrotnie niż `.Parse`); przemianowany na
+  `Legacy_matrix_Parse_checks_itself_before_reading_any_fixed_declaration`.
+  Commity `6b89a2f`, `14e3c98`.
+- **F4** (test) — `CompareMatrixTests.cs`: trzy asercje `DoesNotContain`
+  ("se,cret"/"x4"/"x5") nie mogły zawieść (komórka 2 to typed NULL, komórki
+  3/4 nigdy się nie łączą); usunięte z komentarzem. Commit `522a85d`.
+- **F5** (refactor) — `MeasureParameterSets.cs`: `TypeToken` re-parsował
+  gramatykę, którą już posiada `SqlParameterParser.ToInput`; dwa prawie
+  identyczne przeciążenia `ParseShaped` scalone przez wspólny helper
+  `Shape`. Zachowanie, teksty błędów i porządek niezmienione (konwersja
+  tekst→model wciąż leniwa, w tym samym `try`/`catch`, które dokłada prefiks
+  `setName`). Strażnik `MeasureParameterSet*Tests`: 85/0 przed i po.
+  Commit `b2090bb`.
+- **F6** (test) — brak testu echo'ującego typed FIXED parametr (w
+  odróżnieniu od matrix) w fazie wykonania; dodano
+  `Typed_fixed_parameter_failure_redacts_a_value_that_contains_a_comma`.
+  RED potwierdzony usunięciem OBU rejestracji sekretu naraz
+  (`SqlParameterSecrets.AddValues(knownSecrets, operation.TypedParameters)`
+  i `foreach` z `AddTypedSecret` po `fixedParameters`) -- usunięcie
+  dowolnej JEDNEJ z nich samodzielnie zostawiało test zielonym (druga wciąż
+  rejestrowała tę samą wartość). Mutacja odwrócona przed commitem. Commit
+  `e125df0`.
+- **F7** (docs) — `docs/mcp.md`: dodana klauzula, że `parameterValue`
+  komórki w wyniku jest JSON null dla komórki typed NULL, nie tylko że
+  `values` na wejściu przyjmuje JSON null. Commit `6760a96`.
+- **F8** (fix + test) — `SqlHarnessParameterInput`/`SqlHarnessParameterMatrixInput`
+  (`Contracts.cs`): generowany `ToString()` drukował `Value`/`Values`.
+  Nadpisano, żeby drukować tylko `Name`/`Type` (i licznik dla matrix). RED
+  potwierdzony dla `SqlHarnessParameterInput` (matrix nie przeciekał
+  domyślnie, bo `string[]`/`List<string?>`.`ToString()` nie wylicza
+  elementów -- nadpisane mimo to, bo to własność konkretnego typu kolekcji,
+  nie gwarancja bezpieczeństwa). Commit `02f368b`.
+- **F9** (docs) — ten dowód: usunięcie `McpOperationMapper.FormatParameters`
+  (T2) oznaczone jako usunięcie publicznego API zestawu MCP host (metoda
+  była `public static`, bez konsumentów poza plikiem i testami -- `git grep`
+  w `3d56a81` potwierdza). Zob. wiersz T2 w tabeli wyżej.
+- **F10** (test) — `McpMappingTests.cs`: dwa `CancellationTokenSource`
+  dodane na tym branchu (`Matrix_comma_empty_null_and_null_text_bind_in_core_as_distinct_values`,
+  `Matrix_value_rejections_come_from_the_core_binder`) były undisposed;
+  zmienione na `using var cts`. Commit `e906fbd`.
+
+## Dowody testów (ta sesja, ten worktree, Windows/x64, po fali F1-F10)
+
+Komenda weryfikacji (`constraints.md`), uruchomiona po commicie `6760a96`:
 ```
-dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal
+dotnet test SqlHarness.sln --no-build --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal
 ```
-→ `SqlHarness.Tests.dll`: `Passed! - Failed: 0, Passed: 134, Skipped: 0, Total: 134`.
+→ `SqlHarness.Tests.dll`: `Passed! - Failed: 0, Passed: 137, Skipped: 0, Total: 137`.
 → `SqlHarness.Mcp.Tests.dll`: `Passed! - Failed: 0, Passed: 73, Skipped: 0, Total: 73`.
-(Stan po T3: 133 / 72; T4 dodał +1 w każdym projekcie — po jednym nowym
-teście w każdym, pozostałe zmiany T4 to zamiana istniejącego testu, nie
-dodanie.)
+(Stan po T4: 134 / 73. Final fix wave: SqlHarness.Tests +3 netto -- F8
+dodał 2 nowe testy, F6 dodał 1, F4 usunęła 3 asercje z jednego istniejącego
+testu bez usuwania testów, F3/F5 nie dodały/usunęły testów, zmieniły
+istniejące. SqlHarness.Mcp.Tests bez zmiany liczby (73): F1/F10 zmieniły
+istniejące testy, nie dodały nowych.)
 
 ```
 dotnet build SqlHarness.sln --no-restore -warnaserror
@@ -213,7 +306,8 @@ dotnet build SqlHarness.sln --no-restore -warnaserror
 ```
 dotnet test SqlHarness.sln --no-build --filter "FullyQualifiedName!~Integration" --verbosity minimal
 ```
-→ `SqlHarness.Tests.dll`: `Passed! - Failed: 0, Passed: 2808, Skipped: 0, Total: 2808`.
+→ `SqlHarness.Tests.dll`: `Passed! - Failed: 0, Passed: 2811, Skipped: 0, Total: 2811`
+  (było 2808 po T4; final fix wave +3, zgodnie z filtrem wyżej).
 → `SqlHarness.Mcp.Tests.dll`: `Passed! - Failed: 0, Passed: 212, Skipped: 4, Total: 216`
   (4 skip = 2 live opt-in `McpStdioLiveTests` + 2 foreign-RID publish-smoke
   `McpStdioProcessTests`, jak w każdym wcześniejszym zadaniu tego planu).
@@ -233,19 +327,60 @@ niezależny przebieg, również bez awarii).
 Dwa czyste przebiegi projektu MCP w tej sesji nie dowodzą, że te dwa testy
 nigdy nie zawiodą (T1 i T2 odnotowały pojedyncze awarie tych samych
 testów, obie przechodzące po powtórce) — tylko że w tej sesji nie
-zaobserwowano awarii. Żaden plik tego planu nie dotyka kodu hosta
-stdio/lifecycle (plan 005 jest właścicielem tej niestabilności).
+zaobserwowano awarii, w tej fali ani w poprzedniej. Żaden plik tego planu
+nie dotyka kodu hosta stdio/lifecycle (plan 005 jest właścicielem tej
+niestabilności).
+
+Osobno, jako strażnik refaktoryzacji F5 (`MeasureParameterSets.cs`):
+```
+dotnet test tests/SqlHarness.Tests --no-build --filter 'FullyQualifiedName~MeasureParameterSet' --verbosity minimal
+```
+→ przed refaktoryzacją: `Passed! - Failed: 0, Passed: 85, Skipped: 0, Total: 85`.
+→ po refaktoryzacji: `Passed! - Failed: 0, Passed: 85, Skipped: 0, Total: 85`
+  (identyczne).
 
 ```
 git diff --check
 ```
-→ exit 0 (puste wyjście).
+→ exit 0 (puste wyjście), sprawdzone po commicie `6760a96`.
 
 ```
 git status --short
 ```
-→ puste po ostatnim commicie tego zadania (`da73e14`); dokumenty tego dowodu
-dodane kolejnym commitem, patrz "Pliki zmienione" niżej.
+→ puste po ostatnim commicie tego dowodu; dokumenty tego dowodu dodane
+kolejnym commitem, patrz "Pliki zmienione" niżej.
+
+## Pliki zmienione w final fix wave (F1-F10)
+
+W zakresie listy planu:
+- `tests/SqlHarness.Mcp.Tests/McpMappingTests.cs` (F10, commit `e906fbd`).
+- `src/SqlHarness.Core/SqlParameterMatrix.cs`, `src/SqlHarness.Core/SqlSafety.cs`,
+  `src/SqlHarness.Core/Dialect/ISqlDialect.cs`,
+  `src/SqlHarness.Core/Dialect/SqlServerDialect.cs`,
+  `src/SqlHarness.Core/Postgres/PostgresDialect.cs` (F3 komentarze, commit
+  `6b89a2f`).
+- `tests/SqlHarness.Tests/SqlParameterMatrixTests.cs` (F3 przemianowanie
+  testu, commit `14e3c98`; F8 dwa nowe testy, commit `02f368b`).
+- `tests/SqlHarness.Tests/CompareMatrixTests.cs` (F4, commit `522a85d`; F6,
+  commit `e125df0`).
+- `src/SqlHarness.Core/MeasureParameterSets.cs` (F5, commit `b2090bb`).
+- `src/SqlHarness.Core/Contracts.cs` (F8, commit `02f368b`).
+- `tests/SqlHarness.Mcp.Tests/McpSecretRedactionTests.cs` (F1, commit
+  `46b12cf`).
+- `docs/mcp.md` (F7, commit `6760a96`).
+- `plans/012-typed-matrix-proof.md`, `plans/README.md` (F2/F9, dowód
+  zamknięcia -- ten i następny commit).
+
+Poza listą planu: **brak nowych**. Wszystkie pliki produkcyjne dotknięte w
+tej fali (`SqlParameterMatrix.cs`, `SqlSafety.cs`, `ISqlDialect.cs`,
+`SqlServerDialect.cs`, `PostgresDialect.cs`, `MeasureParameterSets.cs`,
+`Contracts.cs`) były już na liście "poza planem z uzasadnieniem R1/R3" z
+T1-T4 (zob. sekcję niżej) albo są dosłownie na liście planu
+(`Contracts.cs`). Dwie tymczasowe mutacje produkcyjne użyte wyłącznie jako
+dowód RED/fail-ability dla F6 (`SqlHarnessModule.cs`, dwie rejestracje
+sekretu usunięte razem) zostały odwrócone przed jakimkolwiek commitem --
+potwierdzone `git diff --stat` pustym dla `SqlHarnessModule.cs`
+bezpośrednio przed commitem `e125df0`.
 
 ## Pliki zmienione w T4
 
@@ -319,6 +454,14 @@ serwera), pochodzi z dokumentacji typów Postgres/`npgsql`, nie z obserwacji
 
 ## Otwarte pozycje dla użytkownika
 
+- **Oczekują potwierdzenia użytkownika (z finalnego review, F1-F10 wave):**
+  - **R2** — CLI wciąż nie może wyrazić przecinka/pustej/NULL wartości w
+    matrix (legacy `--matrix name:type=v1,v2` zostaje bez zmian, zgodnie z
+    rulingiem R2); to świadoma decyzja zakresu planu 012, nie przeoczenie.
+  - **R3** — `parameterValue` komórki raportu compare-matrix może być JSON
+    `null` dla konsumentów MCP (komórka typed NULL); konsumenci MCP
+    zakładający nie-nullowy string muszą się dostosować (zob. `docs/mcp.md`,
+    klauzula dodana w F7).
 - Zaległości nieblokujące, przeniesione bez zmian z T1-T3 (brak zadania,
   które by ich dotyczyło w zakresie 012): `.sqljson` pliki param-set
   pozostają tekstem deklaracji, nie strukturą JSON MCP; komunikaty błędów
