@@ -1,4 +1,7 @@
+using Microsoft.SqlServer.TransactSql.ScriptDom;
+
 using SqlHarness.Core;
+using SqlHarness.Core.Dialect;
 
 namespace SqlHarness.Tests;
 
@@ -1180,6 +1183,52 @@ public class SqlSafetyTests
         var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null);
         Assert.False(setup.Allowed);
         Assert.Equal(SqlSafetyReason.UnsupportedStatement, setup.Reason);
+    }
+
+    // 011/final (M5): pins the ScriptDom AST the SET rule reads. A member,
+    // static-member or method target is a SetVariableStatement like the plain
+    // form; only Identifier / SeparatorType / FunctionCallExists tell them apart.
+    [Theory]
+    [InlineData("DECLARE @v int; SET @v = 1", null, "NotSpecified", false, true)]
+    [InlineData("DECLARE @v dbo.SomeType; SET @v.Member = 1", "Member", "Dot", false, true)]
+    [InlineData("DECLARE @v dbo.SomeType; SET @v::StaticMember = 1", "StaticMember", "DoubleColon", false, true)]
+    [InlineData("DECLARE @v dbo.SomeType; SET @v.DoIt(1)", "DoIt", "Dot", true, false)]
+    [InlineData("DECLARE @x xml; SET @x.modify('delete /a')", "modify", "Dot", true, false)]
+    public void Final_ScriptDom_shape_of_SET_with_a_member_or_method_target(
+        string sql, string? identifier, string separator, bool functionCall, bool hasExpression)
+    {
+        var document = SqlServerDocument.Parse(sql);
+        Assert.False(document.HasErrors);
+        var set = Assert.Single(((TSqlScript)document.Fragment).Batches[0].Statements.OfType<SetVariableStatement>());
+
+        Assert.Equal(identifier, set.Identifier?.Value);
+        Assert.Equal(separator, set.SeparatorType.ToString());
+        Assert.Equal(functionCall, set.FunctionCallExists);
+        Assert.Equal(hasExpression, set.Expression is not null);
+        Assert.Equal(AssignmentKind.Equals, set.AssignmentKind);
+    }
+
+    // 011/final (M5): the contract allows only `SET @v = <expr>` to a scalar
+    // local. A member, static-member or method target is another shape.
+    [Theory]
+    [InlineData("DECLARE @v dbo.SomeType; SET @v.Member = 1")]
+    [InlineData("DECLARE @v dbo.SomeType; SET @v.Member = 1; SELECT 1")]
+    [InlineData("DECLARE @v dbo.SomeType; SET @v::StaticMember = 1")]
+    [InlineData("DECLARE @v int; SET @v.Member = (SELECT MAX(Id) FROM dbo.Clients)")]
+    [InlineData("DECLARE @v dbo.SomeType; SET @v.DoIt(1)")]
+    [InlineData("DECLARE @x xml; SET @x.modify('delete /a')")]
+    public void Final_Query_denies_SET_with_a_member_or_method_target(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.False(approved.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, approved.Reason);
+
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
     }
 
     private SqlSafetyDecision ClassifyQuery(string sql) =>
