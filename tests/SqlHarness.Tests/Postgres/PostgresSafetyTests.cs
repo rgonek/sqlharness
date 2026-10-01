@@ -1784,6 +1784,75 @@ public sealed class PostgresSafetyTests
         }
     }
 
+    // 011/final (M11): "revoke every proof" also covers a name that only a
+    // caller-built plain set supplied, and a new declaration proves it again.
+    [Theory]
+    [InlineData("DROP TABLE pg_temp.\u00C9; INSERT INTO t VALUES (1)", "MutationNotAllowed")]
+    [InlineData("DROP TABLE IF EXISTS pg_temp.\u00C9; DELETE FROM t", "MutationNotAllowed")]
+    [InlineData("DROP TABLE pg_temp.\u00C9; CREATE INDEX ix ON t (id)", "UnsupportedStatement")]
+    [InlineData("DROP TABLE pg_temp.\u00C9; DROP TABLE t", "UnsupportedStatement")]
+    [InlineData("DROP TABLE pg_temp.{A63}y; INSERT INTO t VALUES (1)", "MutationNotAllowed")]
+    // A long ON COMMIT DROP declaration takes the same clear-all path.
+    [InlineData("CREATE TEMP TABLE {A63}x (id int) ON COMMIT DROP; INSERT INTO t VALUES (1)", "MutationNotAllowed")]
+    public void Final_Clear_all_revokes_a_name_from_a_caller_built_set(string sql, string expected)
+    {
+        var plain = new HashSet<string>(StringComparer.Ordinal) { "t" };
+
+        // The name proves the write before the clear-all statement is added.
+        var before = _classifier.Classify("INSERT INTO t VALUES (1)", SqlUsage.Query, "appdb", false, null, plain);
+        Assert.True(before.Allowed, before.RejectionDescription);
+
+        var decision = _classifier.Classify(ExpandNames(sql), SqlUsage.Query, "appdb", false, null, plain);
+        Assert.False(decision.Allowed);
+        Assert.Equal(expected, decision.Reason.ToString());
+
+        // The caller's own set is never mutated.
+        Assert.Equal(["t"], plain);
+    }
+
+    [Fact]
+    public void Final_Clear_all_result_carries_no_name_and_a_new_declaration_proves_again()
+    {
+        var plain = new HashSet<string>(StringComparer.Ordinal) { "t", "u" };
+
+        var drop = _classifier.Classify(
+            "DROP TABLE pg_temp.\u00C9", SqlUsage.Query, "appdb", false, null, plain);
+        Assert.True(drop.Allowed, drop.RejectionDescription);
+        Assert.Empty(drop.SessionTempTables);
+
+        var later = _classifier.Classify(
+            "INSERT INTO u VALUES (1)", SqlUsage.Query, "appdb", false, null, drop.SessionTempTables);
+        Assert.False(later.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, later.Reason);
+
+        var redeclared = _classifier.Classify(
+            "DROP TABLE pg_temp.\u00C9; CREATE TEMP TABLE t (id int); INSERT INTO t VALUES (1); TRUNCATE t",
+            SqlUsage.Query, "appdb", false, null, plain);
+        Assert.True(redeclared.Allowed, redeclared.RejectionDescription);
+        Assert.True(redeclared.HasSessionLocalWork);
+        Assert.False(redeclared.HasMutation);
+        Assert.Equal(["t"], redeclared.SessionTempTables);
+
+        // Only the redeclared name came back.
+        var other = _classifier.Classify(
+            "DROP TABLE pg_temp.\u00C9; CREATE TEMP TABLE t (id int); INSERT INTO u VALUES (1)",
+            SqlUsage.Query, "appdb", false, null, plain);
+        Assert.False(other.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, other.Reason);
+    }
+
+    // 011/final (M12): evidence that the Unicode-lower-case Forget in
+    // SessionTemps.Record is live code, not vestigial. An unquoted non-ASCII
+    // declaration revokes the proof of the quoted name it lower-cases to.
+    // Stricter than a UTF-8 server needs; removing the call would turn this
+    // denial into an allow.
+    [Theory]
+    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); CREATE TEMP TABLE \u00C9 (id int); INSERT INTO \"\u00E9\" VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); CREATE TEMP TABLE IF NOT EXISTS \u00C9 (id int); TRUNCATE \"\u00E9\"", "NonTemporaryWrite")]
+    public void Final_Unquoted_non_ascii_declaration_revokes_the_quoted_name_it_lower_cases_to(
+        string sql, string expected) =>
+        AssertDeniedInBothUsages(sql, expected);
+
     // Query usage without approval, then compare setup, where an unproven DML
     // target is reported as NonTemporaryWrite.
     private void AssertDeniedInBothUsages(string sql, string expected)

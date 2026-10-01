@@ -1231,6 +1231,99 @@ public class SqlSafetyTests
         Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
     }
 
+    // 011/final (M11): MERGE into a proven table variable is judged on its
+    // USING side as well. The source is read, so a same-database table is fine;
+    // every source the classifier denies elsewhere stays denied here.
+    [Theory]
+    [InlineData("DECLARE @t TABLE (Id int); MERGE @t AS tgt USING otherdb.dbo.Src AS src ON tgt.Id = src.Id WHEN NOT MATCHED THEN INSERT (Id) VALUES (src.Id);", "CrossDatabaseReference", "CrossDatabaseReference")]
+    [InlineData("DECLARE @t TABLE (Id int); MERGE @t AS tgt USING linked.otherdb.dbo.Src AS src ON tgt.Id = src.Id WHEN NOT MATCHED THEN INSERT (Id) VALUES (src.Id);", "CrossDatabaseReference", "CrossDatabaseReference")]
+    [InlineData("DECLARE @t TABLE (Id int); MERGE @t AS tgt USING (SELECT Id FROM otherdb.dbo.Src) AS src ON tgt.Id = src.Id WHEN NOT MATCHED THEN INSERT (Id) VALUES (src.Id);", "CrossDatabaseReference", "CrossDatabaseReference")]
+    [InlineData("DECLARE @t TABLE (Id int); MERGE @t AS tgt USING OPENROWSET('MSOLEDBSQL', 'Server=other;Trusted_Connection=yes;', 'SELECT 1 AS Id') AS src ON tgt.Id = src.Id WHEN NOT MATCHED THEN INSERT (Id) VALUES (src.Id);", "UnsupportedStatement", "UnsupportedStatement")]
+    [InlineData("DECLARE @t TABLE (Id int); MERGE @t AS tgt USING (SELECT NEXT VALUE FOR dbo.Seq AS Id) AS src ON tgt.Id = src.Id WHEN NOT MATCHED THEN INSERT (Id) VALUES (src.Id);", "UnsupportedStatement", "UnsupportedStatement")]
+    // An undeclared table-position name on the USING side.
+    [InlineData("DECLARE @t TABLE (Id int); MERGE @t AS tgt USING @u AS src ON tgt.Id = src.Id WHEN NOT MATCHED THEN INSERT (Id) VALUES (src.Id);", "UnsupportedStatement", "NonTemporaryWrite")]
+    // Nested DML as a MERGE source is not T-SQL (only INSERT ... SELECT takes one).
+    [InlineData("DECLARE @t TABLE (Id int); MERGE @t AS tgt USING (SELECT d.Id FROM (DELETE dbo.Clients OUTPUT deleted.Id) AS d) AS src ON tgt.Id = src.Id WHEN NOT MATCHED THEN INSERT (Id) VALUES (src.Id);", "ParseError", "ParseError")]
+    // A persistent OUTPUT INTO target beside the local MERGE target.
+    [InlineData("DECLARE @t TABLE (Id int); MERGE @t AS tgt USING (SELECT 1 AS Id) AS src ON tgt.Id = src.Id WHEN NOT MATCHED THEN INSERT (Id) VALUES (src.Id) OUTPUT inserted.Id INTO dbo.Audit (Id);", "MutationNotAllowed", "NonTemporaryWrite")]
+    public void Final_Merge_into_table_variable_denies_unsafe_USING_and_OUTPUT_sides(
+        string sql, string expectedQuery, string expectedSetup)
+    {
+        var query = ClassifyQuery(sql);
+        Assert.False(query.Allowed);
+        Assert.Equal(expectedQuery, query.Reason.ToString());
+
+        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null);
+        Assert.False(setup.Allowed);
+        Assert.Equal(expectedSetup, setup.Reason.ToString());
+    }
+
+    [Theory]
+    [InlineData("Query")]
+    [InlineData("CompareSetup")]
+    public void Final_Merge_into_table_variable_from_a_same_database_source_is_session_local(string usage)
+    {
+        const string sql = "DECLARE @t TABLE (Id int); MERGE @t AS tgt USING dbo.Src AS src ON tgt.Id = src.Id WHEN NOT MATCHED THEN INSERT (Id) VALUES (src.Id);";
+
+        var decision = _classifier.Classify(
+            sql, usage == "Query" ? SqlUsage.Query : SqlUsage.CompareSetup, "db", false, null);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+    }
+
+    // 011/final (M11): pins shipped behaviour. A table variable declared twice
+    // in one batch is not denied by the classifier: the first declaration
+    // proves the name, both targets are the variable, and the verdict is
+    // session-local. SQL Server rejects the duplicate declaration when it
+    // compiles the batch, so nothing runs. No persistent write either way.
+    [Theory]
+    [InlineData("DECLARE @t TABLE (Id int); DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (1)")]
+    [InlineData("DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (1); DECLARE @t TABLE (Id int); DELETE @t")]
+    public void Final_Twice_declared_table_variable_stays_session_local(string sql)
+    {
+        foreach (var usage in new[] { SqlUsage.Query, SqlUsage.CompareSetup })
+        {
+            var decision = _classifier.Classify(sql, usage, "db", false, null);
+            Assert.True(decision.Allowed, decision.RejectionDescription);
+            Assert.True(decision.HasSessionLocalWork);
+            Assert.False(decision.HasMutation);
+        }
+    }
+
+    [Theory]
+    // The second declaration never moves the proof point forward or back:
+    // a use before the first declaration stays denied.
+    [InlineData("INSERT @t (Id) VALUES (1); DECLARE @t TABLE (Id int); DECLARE @t TABLE (Id int)")]
+    // A name declared both as a table and as a scalar proves nothing.
+    [InlineData("DECLARE @t TABLE (Id int); DECLARE @t int; INSERT @t (Id) VALUES (1)")]
+    public void Final_Twice_declared_name_never_widens_the_table_variable_proof(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    // 011/final (M11): `GO <count>` is a client-tool directive the parser does
+    // not accept, so no repeated batch ever reaches the per-batch scope rules.
+    [Theory]
+    [InlineData("SELECT 1\nGO 2")]
+    [InlineData("DECLARE @v int; SET @v = 1\nGO 3")]
+    [InlineData("DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (1)\nGO 2")]
+    [InlineData("DECLARE @t TABLE (Id int);\nGO 2\nINSERT @t (Id) VALUES (1)")]
+    public void Final_GO_with_a_repeat_count_is_a_parse_error(string sql)
+    {
+        foreach (var usage in new[] { SqlUsage.Query, SqlUsage.CompareSetup })
+        {
+            var decision = _classifier.Classify(sql, usage, "db", allowMutation: true, confirmDatabase: "db");
+            Assert.False(decision.Allowed);
+            Assert.Equal(SqlSafetyReason.ParseError, decision.Reason);
+        }
+    }
+
     private SqlSafetyDecision ClassifyQuery(string sql) =>
         _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: false, confirmDatabase: null);
 }
