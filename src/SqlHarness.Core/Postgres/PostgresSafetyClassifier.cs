@@ -313,8 +313,18 @@ internal sealed class PostgresSafetyClassifier
     // lower-cased under a single-byte encoding), which is unknown offline. So
     // the stored name is known only for a quoted identifier and for an all-ASCII
     // unquoted one; any other identifier neither proves nor is proven.
+    // The server also truncates an identifier to 63 bytes, so two longer
+    // spellings can address one relation: a truncated identifier has no known
+    // stored name either.
     private static bool FoldsLikeServer(Ident ident) =>
-        ident.QuoteStyle is not null || ident.Value.All(char.IsAscii);
+        !IsTruncatedByServer(ident) &&
+        (ident.QuoteStyle is not null || ident.Value.All(char.IsAscii));
+
+    // NAMEDATALEN - 1 in a stock server build, counted in UTF-8 bytes.
+    private const int MaxIdentifierBytes = 63;
+
+    private static bool IsTruncatedByServer(Ident ident) =>
+        System.Text.Encoding.UTF8.GetByteCount(ident.Value) > MaxIdentifierBytes;
 
     private static StatementOutcome ClassifySelect(
         Statement.Select select,
@@ -487,6 +497,7 @@ internal sealed class PostgresSafetyClassifier
                 TruncateProven.UnionWith(prior.TruncateProven);
                 _commitDropped.UnionWith(prior._commitDropped);
                 _commitDroppedUnknownName = prior._commitDroppedUnknownName;
+                _commitDroppedAnyName = prior._commitDroppedAnyName;
             }
         }
 
@@ -499,9 +510,14 @@ internal sealed class PostgresSafetyClassifier
         // (unquoted non-ASCII): it may be any non-ASCII name.
         private bool _commitDroppedUnknownName;
 
+        // Set when an ON COMMIT DROP declaration was longer than the server's
+        // identifier limit: after truncation it may be any name at all.
+        private bool _commitDroppedAnyName;
+
         internal HashSet<string> TruncateProven { get; } = new(StringComparer.Ordinal);
 
-        internal bool RemembersCommitDrop => _commitDropped.Count > 0 || _commitDroppedUnknownName;
+        internal bool RemembersCommitDrop =>
+            _commitDropped.Count > 0 || _commitDroppedUnknownName || _commitDroppedAnyName;
 
         internal void Record(string key, Ident declaredAs, bool survivesCommit, bool ifNotExists)
         {
@@ -511,8 +527,22 @@ internal sealed class PostgresSafetyClassifier
                 // spellings this declaration was ever keyed under lose their proof.
                 Forget(key);
                 Forget(declaredAs.Value.ToLowerInvariant());
-                if (!survivesCommit)
+                if (survivesCommit)
+                    return;
+
+                if (IsTruncatedByServer(declaredAs))
+                {
+                    // The truncated name may be a tracked temp that an
+                    // IF NOT EXISTS ... ON COMMIT DROP left in place, or may
+                    // become one later: revoke everything, prove nothing after.
+                    ForgetAll();
+                    _commitDroppedAnyName = true;
+                }
+                else
+                {
                     _commitDroppedUnknownName = true;
+                }
+
                 return;
             }
 
@@ -534,6 +564,7 @@ internal sealed class PostgresSafetyClassifier
         }
 
         private bool MayBeCommitDropped(string key) =>
+            _commitDroppedAnyName ||
             _commitDropped.Contains(key) ||
             (_commitDroppedUnknownName && !key.All(char.IsAscii));
 
