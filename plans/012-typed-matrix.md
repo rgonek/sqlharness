@@ -1,6 +1,6 @@
 # Plan 012: Zastąp tekstowy most MCP typowanym modelem parametrów
 
-Status: **TODO**
+Status: **DONE** (branch `feat/plan-012-typed-matrix`, `3d56a81..da73e14`; dowód: [012-typed-matrix-proof](012-typed-matrix-proof.md); merge/push czeka na decyzję)
 Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
 Priorytet: P2; nakład: L; ryzyko zmiany: MED.
 Pokrycie: **matrix z przecinkami/pustą wartością; funkcja typowanych wejść**. Zależności: **007, 009**.
@@ -48,25 +48,25 @@ Poza zakresem: live DB, deploy, profile i hasła użytkownika, instalacja, push,
 
 ### 012/T1
 
-- [ ] Dodaj addytywny model Core dla nazwy, typu i wartości z jawnym null. CLI parser deklaracji ma produkować ten model; zachowaj istniejące publiczne konstruktory przez adapter kompatybilności.
+- [x] Dodaj addytywny model Core dla nazwy, typu i wartości z jawnym null. CLI parser deklaracji ma produkować ten model; zachowaj istniejące publiczne konstruktory przez adapter kompatybilności.
 
 **Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
 
 ### 012/T2
 
-- [ ] Przenieś współdzieloną walidację typu i wiązania do jednego toru; MCP przekazuje strukturę bez join/split. Zdefiniuj puste stringi jako wartości tekstowe, null jako null, a przecinek jako znak wartości; nadal jedna dimensja i co najmniej dwa elementy.
+- [x] Przenieś współdzieloną walidację typu i wiązania do jednego toru; MCP przekazuje strukturę bez join/split. Zdefiniuj puste stringi jako wartości tekstowe, null jako null, a przecinek jako znak wartości; nadal jedna dimensja i co najmniej dwa elementy.
 
 **Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
 
 ### 012/T3
 
-- [ ] Testuj przecinki, równość, dwukropek, Unicode, pusty string, null, decimal(p,s), błędną liczbę, duplikaty nazw i oba silniki. Legacy CLI zachowuje dotychczasowe znaczenie przecinka; nowa reprezentacja CLI wymaga osobnego jawnego argumentu/pliku, bez cichej zmiany parsera.
+- [x] Testuj przecinki, równość, dwukropek, Unicode, pusty string, null, decimal(p,s), błędną liczbę, duplikaty nazw i oba silniki. Legacy CLI zachowuje dotychczasowe znaczenie przecinka; nowa reprezentacja CLI wymaga osobnego jawnego argumentu/pliku, bez cichej zmiany parsera.
 
 **Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
 
 ### 012/T4
 
-- [ ] Zachowaj nową sesję/setup per cell, kolejność, first-failure i dotychczasowy kontrakt poufności matrix versus param-set. Test redakcji obejmuje nowe błędy typowane. Nie kopiuj param-set wartości/ścieżek do raportu.
+- [x] Zachowaj nową sesję/setup per cell, kolejność, first-failure i dotychczasowy kontrakt poufności matrix versus param-set. Test redakcji obejmuje nowe błędy typowane. Nie kopiuj param-set wartości/ścieżek do raportu.
 
 **Weryfikacja:** `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal` → exit 0 po zmianie. Dla testu regresji najpierw potwierdź oczekiwaną porażkę starego kodu. Krok wyłącznie dokumentacyjny: `git diff --check` i sprawdzenie ścieżek.
 
@@ -74,14 +74,14 @@ Poza zakresem: live DB, deploy, profile i hasła użytkownika, instalacja, push,
 
 MCP obsługuje legalne wartości tekstowe z przecinkami i puste stringi bez zmiany legacy CLI; ten sam binder i te same odmowy typów dla obu ścieżek.
 
-- [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal` → exit 0.
-- [ ] `dotnet build SqlHarness.sln --no-restore -warnaserror` → exit 0.
-- [ ] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName!~Integration' --verbosity minimal` → exit 0; zapisz passed/failed/skipped.
-- [ ] Testy obejmują zachowanie właściwego adaptera/runnera, a nie tylko listę nazw lub stałą.
-- [ ] `git diff --check` → exit 0.
-- [ ] `git status --short` pokazuje wyłącznie autorskie zmiany w zakresie.
-- [ ] Indeks zawiera status, commit i dowód; lokalne ścieżki istnieją lub są oznaczone jako nowe.
-- [ ] Brak dowodu live/platformowego jest jawny.
+- [x] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName~SqlParameterMatrixTests|FullyQualifiedName~CompareMatrixTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpSecretRedactionTests' --verbosity minimal` → exit 0 (SqlHarness.Tests 134/0/0, SqlHarness.Mcp.Tests 73/0/0).
+- [x] `dotnet build SqlHarness.sln --no-restore -warnaserror` → exit 0 (0 Warning(s), 0 Error(s)).
+- [x] `dotnet test SqlHarness.sln --filter 'FullyQualifiedName!~Integration' --verbosity minimal` → exit 0; SqlHarness.Tests 2808/0/0, SqlHarness.Mcp.Tests 212/0/4 skipped (2 live opt-in + 2 foreign-RID smoke).
+- [x] Testy obejmują zachowanie właściwego adaptera/runnera, a nie tylko listę nazw lub stałą (zob. dowód T4: `CompareMatrixRunner`/`McpResultAdapter` przez tymczasową mutację + odwrócenie).
+- [x] `git diff --check` → exit 0.
+- [x] `git status --short` pokazuje wyłącznie autorskie zmiany w zakresie.
+- [x] Indeks (`plans/README.md`) zawiera status, commit i dowód; lokalne ścieżki istnieją.
+- [x] Brak dowodu live/platformowego jest jawny — zob. [012-typed-matrix-proof](012-typed-matrix-proof.md), sekcja "Brak dowodu live-DB / platformowego".
 
 Baseline audytu: 1895 Core/CLI passed; MCP 122 passed, 2 timeouty, 4 skipped. Plan005 diagnozuje timeouty. Wcześniejsza naprawa bezpieczeństwa może być gotowa do review przy udokumentowanej niezależnej awarii gate; nie ogłaszaj wtedy pełnego PASS.
 
