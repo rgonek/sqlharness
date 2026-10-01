@@ -939,6 +939,46 @@ public sealed class PostgresSafetyTests
         Assert.False(decision.HasMutation);
     }
 
+    [Theory]
+    // The offline parser accepts EXPLAIN over TRUNCATE (the server does not).
+    // EXPLAIN ANALYZE executes its inner statement, so it inherits the TRUNCATE
+    // verdict and the same target proof; it is never an extra way in.
+    [InlineData("CREATE TEMP TABLE t (id int); EXPLAIN ANALYZE TRUNCATE t")]
+    [InlineData("CREATE TEMP TABLE t (id int); EXPLAIN (ANALYZE) TRUNCATE t")]
+    public void T4_Explain_analyze_truncate_of_session_temp_inherits_session_local_verdict(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Theory]
+    [InlineData("EXPLAIN ANALYZE TRUNCATE items")]
+    [InlineData("EXPLAIN (ANALYZE) TRUNCATE items")]
+    [InlineData("CREATE TEMP TABLE t (id int); EXPLAIN ANALYZE TRUNCATE t, items")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; EXPLAIN ANALYZE TRUNCATE t")]
+    public void T4_Explain_analyze_truncate_of_unproven_target_is_denied(string sql)
+    {
+        foreach (var usage in new[] { SqlUsage.Query, SqlUsage.CompareSetup })
+        {
+            var decision = _classifier.Classify(sql, usage, "appdb", true, "appdb", Empty);
+            Assert.False(decision.Allowed);
+            Assert.Equal(SqlSafetyReason.NonTemporaryWrite, decision.Reason);
+        }
+    }
+
+    [Theory]
+    // Plan-only EXPLAIN is allowed over a safe SELECT only.
+    [InlineData("CREATE TEMP TABLE t (id int); EXPLAIN TRUNCATE t")]
+    [InlineData("EXPLAIN TRUNCATE items")]
+    public void T4_Plan_only_explain_truncate_is_denied(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
     private static SqlUsage ParseUsage(string usage) => usage switch
     {
         "Query" => SqlUsage.Query,
