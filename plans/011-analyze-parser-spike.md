@@ -13,6 +13,11 @@ as necessary for this spike.
 
 ## 1. Observed parser behaviour (probe-verified, not from memory or docs)
 
+No live PostgreSQL server was started or connected to for this spike; every
+finding below rests solely on the offline `SqlParserCS` parser's observed
+behaviour, not on a real server's grammar or error messages (carried review
+finding T5-I1).
+
 A throwaway xUnit probe (`tests/SqlHarness.Tests/Postgres/_T5AnalyzeProbe.cs`,
 written, run, and deleted before any commit — never checked in) called
 `new SqlQueryParser().Parse(sql.AsSpan(), new PostgreSqlDialect())` directly,
