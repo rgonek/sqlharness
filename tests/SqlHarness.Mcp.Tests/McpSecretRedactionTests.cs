@@ -128,22 +128,22 @@ public sealed class McpSecretRedactionTests
     }
 
     /// <summary>
-    /// 012/T4: closes the Task 2 review carry-forward on the test above. That
-    /// test's <c>DoesNotContain</c> assertions cannot fail, because Core's
-    /// pre-connection matrix/parameter rejection is a constant message that
-    /// never echoes a value, with or without redaction. This test drives the
-    /// shape of message that genuinely would echo a value -- an
-    /// execution-phase failure, the same shape Core's own
-    /// <c>CompareMatrixTests.Typed_matrix_failure_redacts_a_value_that_contains_a_comma</c>
-    /// produces from a typed matrix comma value via the real fake session --
-    /// through <see cref="McpResultAdapter.Adapt"/>, once with the value
-    /// registered as a known secret and once without. The first call proves
-    /// redaction; the second proves the first call's assertions are not
-    /// vacuous, because the identical message leaks the value when it is not
-    /// registered.
+    /// 012/T4, reworded 012/final F1: this does NOT prove that a typed matrix value is
+    /// collected and redacted on the MCP path. No production call site of
+    /// <see cref="McpResultAdapter.Adapt"/> (<c>McpToolCatalog.cs</c>, <c>McpExecutionGate.cs</c>)
+    /// ever supplies <c>knownSecrets</c> -- Core already redacts
+    /// <see cref="SqlHarnessOutcome.MachineError"/> before MCP ever sees the outcome, so this
+    /// parameter is unreachable from production. What this test proves is narrower: that
+    /// <see cref="McpResultAdapter.Adapt"/> redacts whatever known secret it is given, for a
+    /// message shape that genuinely would echo a value -- the same shape Core's own fake
+    /// session produces in
+    /// <c>CompareMatrixTests.Typed_matrix_failure_redacts_a_value_that_contains_a_comma</c>,
+    /// which is the real guard for collection on the production path. Run once with the value
+    /// registered as a known secret and once without, so the second call proves the first
+    /// call's assertions are not vacuous.
     /// </summary>
     [Fact]
-    public void Execution_phase_failure_that_echoes_a_typed_matrix_value_is_redacted_only_when_collected_as_a_known_secret()
+    public void McpResultAdapter_redacts_an_execution_phase_value_it_is_given_as_a_known_secret()
     {
         const string FirstHalf = "fikcyjna-exec-polowa-2201";
         const string SecondHalf = "fikcyjna-exec-reszta-3317";
