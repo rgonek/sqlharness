@@ -1853,6 +1853,85 @@ public sealed class PostgresSafetyTests
         string sql, string expected) =>
         AssertDeniedInBothUsages(sql, expected);
 
+    // 011/final (M9): a write denied in a flow that declared a TEMP table
+    // without proof carries a fixed hint, so an agent does not ask for mutation
+    // approval for what was meant as a temp write. Reason and exit code are
+    // unchanged; the hint never echoes SQL.
+    private const string UnprovenTempHint =
+        "A TEMP table declared in this session flow is not a proven session temp " +
+        "(unquoted non-ASCII name, name over 63 UTF-8 bytes, ON COMMIT DROP, or a schema other than pg_temp). " +
+        "If it is the write target, quote or shorten its name and keep it past commit; mutation approval is not the remedy.";
+
+    [Theory]
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int); INSERT INTO \u00C9 VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); DELETE FROM {A63}x", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; UPDATE t SET id = 1", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS t (id int); INSERT INTO t VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE public.t (id int); INSERT INTO t VALUES (1)", "MutationNotAllowed")]
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int); TRUNCATE \u00C9", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; TRUNCATE pg_temp.t", "NonTemporaryWrite")]
+    public void Final_Write_denied_after_an_unproven_temp_declaration_carries_a_hint(string sql, string expected)
+    {
+        var expanded = ExpandNames(sql);
+        var query = _classifier.Classify(expanded, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(query.Allowed);
+        Assert.Equal(expected, query.Reason.ToString());
+        Assert.Equal(UnprovenTempHint, query.Detail);
+        Assert.Equal($"{expected}. {UnprovenTempHint}", query.RejectionDescription);
+        Assert.DoesNotContain("\u00C9", query.RejectionDescription, StringComparison.Ordinal);
+        Assert.DoesNotContain("INSERT", query.RejectionDescription, StringComparison.Ordinal);
+
+        var setup = _classifier.Classify(expanded, SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.False(setup.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, setup.Reason);
+        Assert.Equal(UnprovenTempHint, setup.Detail);
+    }
+
+    [Fact]
+    public void Final_Write_denied_after_a_carried_on_commit_drop_declaration_carries_the_hint()
+    {
+        var setup = _classifier.Classify(
+            "CREATE TEMP TABLE t (id int) ON COMMIT DROP", SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+
+        var query = _classifier.Classify(
+            "INSERT INTO t VALUES (1)", SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.False(query.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, query.Reason);
+        Assert.Equal(UnprovenTempHint, query.Detail);
+    }
+
+    [Theory]
+    // No unproven declaration in the flow: the text is what it was.
+    [InlineData("INSERT INTO items VALUES (1)", "MutationNotAllowed.")]
+    [InlineData("TRUNCATE items", "NonTemporaryWrite.")]
+    [InlineData("CREATE TEMP TABLE t (id int); INSERT INTO items VALUES (1)", "MutationNotAllowed.")]
+    [InlineData("CREATE TEMP TABLE t (id int); DROP TABLE t; INSERT INTO t VALUES (1)", "MutationNotAllowed.")]
+    // Other reasons never carry the hint, even after an unproven declaration.
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int); DROP TABLE \u00C9", "UnsupportedStatement.")]
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int); CREATE INDEX ix ON \u00C9 (id)", "UnsupportedStatement.")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; TRUNCATE t CASCADE", "UnsupportedStatement.")]
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int); SELECT 1 INTO public.x", "SelectIntoNotAllowed.")]
+    public void Final_Denial_text_is_unchanged_without_an_unproven_temp_write(string sql, string expected)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(decision.Allowed);
+        Assert.Null(decision.Detail);
+        Assert.Equal(expected, decision.RejectionDescription);
+    }
+
+    [Fact]
+    public void Final_Approved_mutation_after_an_unproven_temp_declaration_is_still_an_ordinary_mutation()
+    {
+        // The hint changes no verdict: with approval the write is a mutation.
+        var decision = _classifier.Classify(
+            "CREATE TEMP TABLE \u00C9 (id int); INSERT INTO \u00C9 VALUES (1)",
+            SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasMutation);
+        Assert.Null(decision.Detail);
+    }
+
     // Query usage without approval, then compare setup, where an unproven DML
     // target is reported as NonTemporaryWrite.
     private void AssertDeniedInBothUsages(string sql, string expected)
