@@ -1,6 +1,6 @@
 # Kontrakt pg_stat_statements — macierz źródeł
 
-Status: macierz źródeł (T1).
+Status: macierz źródeł (T1); sekwencja połączenia (T2).
 
 ## Macierz źródeł
 
@@ -185,3 +185,45 @@ Odwołania lokalne:
 
 - `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`
 - `src/SqlHarness.Mcp/McpOperationMapper.cs`
+
+## Sekwencja połączenia
+
+Ta sekcja jest krokiem T2. Macierzy nie przepisuje. Nie dodaje komend, stubów ani capabilities. Nie projektuje rankingu, delty ani listy plików. Nie uruchamiano live DB ani `dotnet test`.
+
+Kolejność jest jedna: resolve, auth, identity, wersja serwera, wersja rozszerzenia, potem SQL zależny od kolumn. Wyjścia ustala istniejący `OperationFailureMapper.Map`. Numery są w `SqlHarnessExitCode`. Adapter nie dostaje własnego klasyfikatora. `QueryStoreAvailable: !pg` w `src/SqlHarness.Mcp/McpOperationMapper.cs` zostaje. Ta sekwencja nie jest nową capability.
+
+1. **Resolve.** `TargetResolver.Resolve` w `src/SqlHarness.Core/Targets/TargetResolver.cs` buduje `ResolvedTarget` z profilu albo ze ścieżki `--unsafe-direct`. `TargetProfile` w `src/SqlHarness.Core/Targets/TargetProfile.cs` nie ma pola wersji serwera. `ResolvedTarget` też jej nie niesie: ma `Server`, `Database`, `Auth`, `Mode`, `Engine` i `Transport`. Silnik bierze `SqlEngineNames.Parse`. Pominięty `engine` zostaje `SqlEngine.SqlServer` i od kroku auth nie wchodzi w tę sekwencję. Postgres wymaga `AuthStrategy.Sql`. Inna strategia, nieznany profil, złe `--var` i zły transport są `SqlHarnessSafetyException` przed otwarciem połączenia. Mapper daje exit `2` (`SqlHarnessExitCode.Safety`). Podłogi PostgreSQL 14 nie da się sprawdzić na profilu, bo wersji tam nie ma.
+
+2. **Auth.** `EngineSessionFactory` kieruje `SqlEngine.Postgres` do `NpgsqlSessionFactory.ConnectAsync`. W `ConnectAsync` najpierw działa `PostgresConnectionString.Build`. Brak użytkownika albo pusta lub nieobecna zmienna hasła to `SqlHarnessSafetyException` przed `NpgsqlConnection.OpenAsync`. Mapper daje exit `2`, nie exit `3`, także gdy wołający ustawił już `OperationPhase.Authentication`. Komunikat może nazwać zmienną. Nie zawiera wartości hasła. Samo `OpenAsync` jest uwierzytelnieniem. `NpgsqlException` w fazie `Authentication` mapuje się na exit `3` (`SqlHarnessExitCode.Authentication`). To jest przed potwierdzeniem tożsamości i przed odczytem rozszerzenia. Po nieudanym `OpenAsync` sesja nie wraca do wołającego.
+
+3. **Identity.** Po udanym otwarciu, nadal wewnątrz `ConnectAsync`, `ReadIdentityAsync` wykonuje `PostgresPing.IdentitySql`: `current_database()` i `COALESCE(inet_server_addr()::text, 'localhost')`. To nie jest `server_version` i nie jest wersja rozszerzenia. Komentarz w `NpgsqlSessionFactory` zostawia `inet_server_addr()` na raporcie. O tym, czy cel się zgadza, decyduje ustanowione połączenie w `PostgresEndpointIdentity.Matches`. Fałsz kończy się `SqlTargetMismatchException` z `src/SqlHarness.Core/SqlExecution.cs`. Mapper daje exit `4` (`SqlHarnessExitCode.TargetMismatch`) niezależnie od fazy. `ConnectAsync` w `catch` zamyka sesję przez `DisposeAsync` i rzuca dalej. Exit `3` i exit `4` są oba przed próbą rozszerzenia. `NpgsqlException` zapytania tożsamości, dopóki faza wołającego to nadal `Authentication`, zostaje exit `3`. To samo dotyczy braku wiersza tożsamości: `ReadIdentityAsync` rzuca wtedy `InvalidOperationException`, a gałąź mappera dla fazy `Authentication` też daje exit `3`. Nie jest to exit `4` ani exit `5`.
+
+4. **Wersja serwera.** Odczyt wersji nie wchodzi do `PostgresPing.IdentitySql` i nie wchodzi do `ConnectAsync`. Dopóki faza wołającego to `Authentication`, `NpgsqlException` tego odczytu mapowałby się na exit `3`. Wersja pada dopiero, gdy `ConnectAsync` zwróci sesję i wołający ustawi `OperationPhase.Sql`, tak jak dzisiejsze operacje w `SqlHarnessModule`. Odczyt idzie istniejącym `ISqlSession.ExecuteReaderAsync`. SQL to `SELECT current_setting('server_version_num')`. Preset `server_version_num` jest typu `integer` (`PG_VERSION_NUM`). `current_setting` zwraca `text`. Porównanie używa liczby sparsowanej niezmiennie kulturowo, nie napisu `server_version`. Kodowanie jest to samo co `PQserverVersion`: major razy `10000` plus minor. Strona libpq podaje wersję 11.0 jako `110000`, więc próg PostgreSQL 14.0 to `140000`. Podłoga: liczba mniejsza niż `140000`. Exit zostaje `2`. Wyjątek to `SqlHarnessSafetyException`, żeby ten sam mapper dał `Safety`, a nie błąd SQL. Wzorzec `qstop` tego nie jest: `ExecuteQueryStoreTopAsync` rzuca `InvalidOperationException` po połączeniu, w fazie `Sql`, i domyślna gałąź mappera daje exit `5`. Faza podłogi nie wraca do `Validation` ani do `Authentication`. Gdy odczyt rzuci `NpgsqlException` albo tekst nie jest liczbą, exit to `5` (`SqlHarnessExitCode.SqlExecution`) i sekwencja staje. To nie jest `SqlHarnessSafetyException` i nie jest podłoga. Przy podłodze połączenie zostało otwarte i zamknięte. Sesja zwrócona przez `ConnectAsync` jest zwalniana (`await using`, `NpgsqlSession.DisposeAsync` zamyka `NpgsqlConnection`) zanim wyjdzie exit `2`. Do wersji rozszerzenia i do SQL kolumn ta ścieżka nie dochodzi.
+
+5. **Wersja rozszerzenia.** Osobny odczyt po udanej podłodze, nadal w fazie `Sql`. Kolumna to `pg_available_extensions.installed_version` przy `name` równym `pg_stat_statements`. To nie jest `server_version`, nie jest `server_version_num` i nie jest `default_version`. Macierz: `installed_version` jest NULL, gdy rozszerzenie nie jest zainstalowane. `pg_extension.extversion` jest nazwą wersji, gdy wiersz istnieje. `default_version` z pliku kontrolnego to `1.9` na PostgreSQL 14 oraz `1.10` na PostgreSQL 15 i 16. Zainstalowana wersja może zostać w tyle za serwerem, bo `ALTER EXTENSION … UPDATE` jest osobno od upgrade serwera. NULL `installed_version` albo brak wiersza `pg_stat_statements` to brak rozszerzenia w rozstrzygniętej bazie. To niepowodzenie, nie pusta lista i nie exit `0`. Przyczyna jest osobna od braku uprawnień. Exit to `5`. To nie jest `SqlHarnessSafetyException`, bo tamto dałoby exit `2`. Nowej gałęzi mappera nie ma: wyjątek w fazie `Sql`, którego mapper nie bierze jako safety, mismatch ani auth, daje `SqlExecution`. Sekwencja nie woła `CREATE EXTENSION` ani `ALTER EXTENSION`. SQLSTATE `42P01` i `42883` nie opisują tego kroku. Macierz pokazuje brak instalacji jako NULL `installed_version`, nie jako brak relacji. Zostają wyłącznie hipotezą specyfikacji §2, gdyby późniejsze polecenie i tak dotknęło brakującego widoku lub funkcji. Ta sekwencja do takiego polecenia nie przechodzi, gdy katalog już pokazał brak instalacji.
+
+6. **Probe.** SQL, który wymienia kolumny widoku, stoi za oboma odczytami. Nie startuje, gdy podłoga odrzuciła serwer, gdy wersja rozszerzenia nie wróciła, albo gdy rozszerzenia nie ma. Lista kolumn jest listą macierzy dla głównej wersji serwera. Nie jest funkcją samego `extversion` ani samego `server_version_num`. Para, którą macierz opisuje wprost: serwer 14 z zainstalowanym `1.9` używa kolumn PG14 i nie wymienia `temp_blk_read_time`, `temp_blk_write_time` ani `jit_functions`, `jit_generation_time`, `jit_inlining_count`, `jit_inlining_time`, `jit_optimization_count`, `jit_optimization_time`, `jit_emission_count`, `jit_emission_time`. Serwer 15 albo 16 z zainstalowanym `1.10` może użyć kolumn, które macierz oznacza jako obecne dla tej wersji, w tym tych dwóch kolumn I/O i tej ósemki `jit_*`. Każda inna para, także serwer 15 lub 16 z wersją inną niż `1.10` oraz serwer nowszy niż 16, nie dostaje SQL kolumn. Kształt takiej pary jest `UNPROVEN`. Warunek: odczyt nazw kolumn widoku na jawnym celu dla tej pary. Tego odczytu nie wykonano. Brak uprawnień przy odczycie katalogu albo przy tym późniejszym SQL jest osobnym niepowodzeniem. Też exit `5`, nigdy pusta lista sukcesu. SQLSTATE `42501` zostaje hipotezą specyfikacji §2 i §9. Mapper nie czyta `SqlState` i tego numeru nie obala: `NpgsqlException` w fazie `Sql` i tak jest exit `5`. Klasyfikatora, który zmienia exit według SQLSTATE, nie dodajemy. Treść błędu nazywa klasę przyczyny i nie zawiera tekstu SQL. Probe nie woła `pg_stat_statements_reset`. Zmiana `stats_reset` nie jest dowodem resetu jednego `queryid`. Ten skutek w macierzy jest `UNPROVEN`. Probe nie agreguje `queryid` i nie rozstrzyga, czy ukryty `queryid` jest NULL, czy brakiem wiersza. To zostaje `UNPROVEN` i należy do rankingu, nie tutaj.
+
+Specyfikacja §9 kładzie brak rozszerzenia i brak uprawnień na ten sam exit `5`. Ta sekcja ten numer zachowuje i rozdziela przyczyny. Czytelny widok z zerem wierszy nie jest żadną z tych dwóch przyczyn. Specyfikacja §9 nazywa taki czytelny pusty wynik exit `0`. Ta sekcja tego raportu nie projektuje. Exit `6`, `7` i `8` ta sekwencja nie rusza. Nowego kodu wyjścia nie ma.
+
+Źródła odczytu wersji serwera, otwarte w tym kroku:
+
+- https://www.postgresql.org/docs/14/runtime-config-preset.html (`server_version` jest `string`, `server_version_num` jest `integer`)
+- https://www.postgresql.org/docs/14/libpq-status.html (`PQserverVersion`: major razy `10000` plus minor; wersja 11.0 to `110000`)
+
+Odwołania lokalne tego kroku:
+
+- `src/SqlHarness.Core/Targets/TargetResolver.cs`
+- `src/SqlHarness.Core/Targets/TargetProfile.cs`
+- `src/SqlHarness.Core/SqlEngine.cs`
+- `src/SqlHarness.Core/EngineSessionFactory.cs`
+- `src/SqlHarness.Core/Postgres/PostgresConnectionString.cs`
+- `src/SqlHarness.Core/Postgres/NpgsqlSessionFactory.cs`
+- `src/SqlHarness.Core/Postgres/PostgresPing.cs`
+- `src/SqlHarness.Core/Postgres/PostgresEndpointIdentity.cs`
+- `src/SqlHarness.Core/SqlExecution.cs`
+- `src/SqlHarness.Core/OperationFailureMapper.cs`
+- `src/SqlHarness.Core/Contracts.cs`
+- `src/SqlHarness.Core/SqlHarnessModule.cs`
+- `src/SqlHarness.Mcp/McpOperationMapper.cs`
+- `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`, sekcje 2 i 9, jako hipoteza tam, gdzie kroki 5 i 6 jej nie obalają
