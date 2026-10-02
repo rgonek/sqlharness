@@ -1,6 +1,6 @@
 # Kontrakt pg_stat_statements — macierz źródeł
 
-Status: macierz źródeł (T1); sekwencja połączenia (T2).
+Status: macierz źródeł (T1); sekwencja połączenia (T2); osobny kontrakt od qstop (T3).
 
 ## Macierz źródeł
 
@@ -227,3 +227,145 @@ Odwołania lokalne tego kroku:
 - `src/SqlHarness.Core/SqlHarnessModule.cs`
 - `src/SqlHarness.Mcp/McpOperationMapper.cs`
 - `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`, sekcje 2 i 9, jako hipoteza tam, gdzie kroki 5 i 6 jej nie obalają
+
+## Osobny kontrakt od qstop
+
+Ta sekcja jest krokiem T3. Macierzy i sekwencji nie przepisuje. Nie dodaje komend, stubów ani capabilities. Nie projektuje delty ani listy plików. Nie uruchamiano live DB ani `dotnet test`.
+
+`qstop` zostaje kontraktem SQL Server. W `ExecuteQueryStoreTopAsync` silnik `SqlEngine.Postgres` dostaje `InvalidOperationException` z tekstem „Query Store is available only on SQL Server.” Faza jest już `Sql`, więc mapper daje exit `5` (`SqlHarnessExitCode.SqlExecution`). `QueryStoreAvailable: !pg` w `src/SqlHarness.Mcp/McpOperationMapper.cs` zostaje. Ten kontrakt nie jest zmianą `qstop` i nie jest nową capability.
+
+### Czego ten kontrakt nie bierze z `qstop`
+
+| Z `qstop` | Źródło w kodzie | Ten kontrakt |
+|---|---|---|
+| `--window`, `windowMinutes` (1..44640 minut, domyślnie `24h`) | `QueryStoreTopCommand.Settings`, `QueryStoreWindowParser`, predykat `DATEADD` w `QueryStoreTopQuery.Sql` | Nie ma `--window`. Liczniki są skumulowane. Brak `--window` jest granicą kontraktu. |
+| `lastExecutionAt` | `MAX(rs.last_execution_time)`; pole `QueryStoreTopItemReport.LastExecutionAt` | Nie ma pola recency. W macierzy kolumn widoku nie ma czasu na wpis. |
+| `totalCpuMilliseconds`, `averageCpuMilliseconds`, `maximumCpuMilliseconds` | Drugi klucz `ORDER BY` i pola raportu | Nie ma metryki CPU. Kontrakt nie wstawia zera, żeby kształt wyglądał jak `qstop`. `CpuTimeMs` równe 0 na `measure` i `compare` nie jest polem tego raportu. |
+| `queryHash` | Kolumna Query Store i pole linii `queries.jsonl` | Widok nie ma tej kolumny. Kontrakt jej nie dorabia z tekstu. |
+| `querySqlText` | Trzecie pole linii; `RequiredText` odrzuca null | Linia niesie `query`. Null w `query` nie jest błędem odczytu. |
+| `totalLogicalReads`, `averageLogicalReads`, `maximumLogicalReads`, `objectName`, `planCount` | Pola `QueryStoreTopItemReport` | Nie wchodzą. Odczyty tutaj to liczniki bloków widoku, nie strony logical reads. |
+
+Porządek `qstop` to `total_duration_milliseconds` DESC, `total_cpu_milliseconds` DESC, `execution_count` DESC, `query_id` ASC. Ten kontrakt tego porządku nie używa. Rekord `SqlHarnessQueryStoreTopReport` nie jest rekordem tego kontraktu: nie ma tu `windowMinutes`.
+
+Nazwy JSON linii `qstop` to `queryId`, `queryHash`, `querySqlText` (`QueryTextArtifact` przy `JsonSerializerDefaults.Web`; test `QueryStoreArtifactWriterTests` sprawdza tę trójkę). Z tej trójki ten kontrakt zostawia pisownię `queryId`. Tekst linii nazywa się `query`, nie `querySqlText`.
+
+### Filtr bieżącej bazy
+
+Strony modułu: gdy `pg_stat_statements` jest aktywne, śledzi statystyki we wszystkich bazach serwera. Kolumna `dbid` to „OID of database in which the statement was executed” i odwołuje się do `pg_database.oid`. Sam widok nie jest filtrem bieżącej bazy.
+
+Filtr tego kontraktu jest po stronie serwera, przed agregacją. Zostają wiersze, których `dbid` jest OID bazy tego połączenia. OID jest wierszem `pg_database`, którego `datname` jest `current_database()` tej sesji. Porównanie jest OID do OID. Klient nie podstawia nazwy. Nie ma argumentu użytkownika z nazwą bazy: ani flagi, ani osobnego `--var`, ani nazwy z profilu wstawionej jako predykat. Tożsamość sesji została sprawdzona w sekwencji. Ten filtr nie jest drugim sprawdzeniem endpointu.
+
+Wiersz z innym `dbid` nie jest pozycją i nie dodaje się do pozycji o tym samym numerze `queryid`. Strony mówią, że kolizja hasha nie scala zapytań należących do różnych baz w jeden wpis widoku. Ten kontrakt i tak nie sumuje baz.
+
+### Znany `queryid`
+
+Wpis widoku, z macierzy, to jedna kombinacja database ID, user ID, query ID i tego, czy polecenie jest top-level. Pozycja tego kontraktu nie jest wpisem. Pozycja jest jednym znanym `queryid` w bazie filtra.
+
+Znany `queryid` to nie-null `bigint` zwrócony w wierszu po filtrze. Pole raportu nazywa się `queryId`: pisownia specyfikacji §5 i JSON `qstop`. Wartość jest tą liczbą, ze znakiem. Nie ma wartości bezwzględnej i nie ma drugiego identyfikatora.
+
+`queryid` nie jest kluczem między serwerami. Strony: hash z drzewa po analizie składni; drop i odtworzenie tabeli rozdziela wpisy; wynik zależy od architektury; nie jest stabilny między wersjami głównymi; replika logiczna nie zachowuje użyteczności `queryid` do sumowania kosztów. Pozycja jest kluczem w tym serwerze, w tej wersji głównej i w tej bazie połączenia. To nie jest delta i nie jest porównaniem między serwerami.
+
+### Ukryty albo null `queryid`
+
+Ukrycie zostaje `UNPROVEN`, wierszem macierzy „Wartość ukryta: null albo brak wiersza”. Strona nie mówi, czy `query` i `queryid` cudzego zapytania są NULL, czy wiersz znika. PG14: „only superusers and members of the `pg_read_all_stats` role”. PG15 i PG16: „only superusers and roles with privileges of the `pg_read_all_stats` role”. Inni użytkownicy widzą statystyki, jeśli widok jest zainstalowany w ich bazie. Warunek dowodu zostaje ten z macierzy. Tego odczytu nie wykonano. Ta sekcja nie dodaje pola, które wymagałoby rozstrzygnięcia kształtu.
+
+Reprezentacja bez wymyślonego identyfikatora:
+
+- Brak wiersza nie jest pozycją.
+- NULL w `queryid` nie jest znanym kluczem. `QueryStoreTopQuery.RequiredInt64` nie zamienia null na `long`. Null nie staje się `QueryId`. Tutaj NULL też nie staje się pozycją.
+- Wiersze bez znanego `queryid` nie są scalane. Nie łączy ich wspólny null, tekst `query`, `userid`, `toplevel`, numer wiersza ani `queryHash`. Tekst nie jest kluczem.
+- Liczba `0` w `pg_stat_statements_reset` znaczy parametr invalid. Nie jest identyfikatorem nieznanych wierszy. Nie-null `queryid` równe `0`, gdyby widok je zwrócił, byłoby znaną wartością `bigint`, nie wspólną pozycją ukrytych.
+- Takie wiersze nie wchodzą do porządku, nie zajmują miejsca w `--top` i nie dostają linii `queries.jsonl`. Nieznane id nie tworzą jednej pozycji ani jednej pary agregacji. Delta jest poza tą sekcją.
+
+Widoczność statystyk w widoku nie tworzy pozycji bez znanego `queryid`. Raport nie jest zrzutem każdego wiersza widoku.
+
+`qstop` przy null `query_id` przerywa cały odczyt (`InvalidOperationException`). Ten kontrakt tego rzutu nie kopiuje. Macierz zostawia kształt ukrycia jako `UNPROVEN` i mówi, że statystyki mogą być widoczne. Exit `5` na cały odczyt uznałby ten kształt za błąd. Odczyt, który doszedł do rankingu i nie dał żadnego znanego `queryid`, jest pustą listą pozycji.
+
+Pusta lista pozycji po udanym odczycie to exit `0` (`SqlHarnessExitCode.Success`). Nie jest brakiem rozszerzenia i nie jest brakiem uprawnień. Te dwa zostają exit `5` w sekwencji, zanim ranking wystartuje. Pusta lista nie twierdzi, że widok nie miał wierszy. Twierdzi, że w bazie filtra nie było pozycji o znanym `queryid`. Specyfikacja §8 i §9 nazywa czytelny brak wierszy exit `0`. Ta sekcja zostawia ten numer także dla listy bez znanego `queryid`.
+
+Ścieżka sukcesu `ExecuteQueryStoreTopAsync` zapisuje artefakt po `ReadAsync` i nie ma osobnej gałęzi dla zera metryk. Pusta lista `qstop` też jest exit `0` z artefaktem. Ten kontrakt robi to samo dla pustej listy pozycji: artefakt jest, `queries.jsonl` nie ma linii.
+
+### Agregacja
+
+Agregacja dotyczy tylko wierszy o tym samym znanym `queryid` po filtrze bazy. `userid` i `toplevel` nie rozcinają pozycji. Kilka wierszy widoku o tym samym `queryid` staje się jedną pozycją. Powtórzenie `queryid` przed agregacją nie jest błędem. `qstop` rzuca przy zduplikowanym `query_id` w zbiorze metryk (`RequireMatchingTexts`), bo jego SQL już zgrupował plany. Tutaj ziarno widoku jest drobniejsze niż pozycja, więc ten rzut nie obowiązuje. Po agregacji jest jedna pozycja na jeden znany `queryid`. Pozycja nie liczy własnego hasha. Bierze `queryid` z widoku.
+
+Formuły są hipotezą specyfikacji §4. Kolumny są w zbiorze PG14, więc wolno je wybrać i przy zainstalowanym `1.9` na PostgreSQL 14, i przy zainstalowanym `1.10` na PostgreSQL 15 albo 16. `total_exec_time` jest już w milisekundach. Dzielenia przez 1000 z SQL `qstop` nie ma.
+
+- `executionCount` = `SUM(calls)`
+- `totalDurationMs` = `SUM(total_exec_time)`
+- `maximumDurationMs` = `MAX(max_exec_time)`
+- `averageDurationMs` = `totalDurationMs / SUM(calls)`, tylko gdy `SUM(calls)` nie jest 0
+- `totalPlanMs` = `SUM(total_plan_time)`
+- `maximumPlanMs` = `MAX(max_plan_time)`
+- `averagePlanMs` = `totalPlanMs / SUM(calls)`, tylko gdy `SUM(calls)` nie jest 0
+- `rowsReturned` = `SUM(rows)`
+- `sharedBlocksHit` = `SUM(shared_blks_hit)`
+- `sharedBlocksRead` = `SUM(shared_blks_read)`
+- `localBlocksRead` = `SUM(local_blks_read)`
+- `localBlocksWritten` = `SUM(local_blks_written)`
+- `tempBlocksRead` = `SUM(temp_blks_read)`
+- `tempBlocksWritten` = `SUM(temp_blks_written)`
+- `walBytes` = `SUM(wal_bytes)`
+- `blockReadMs` = `SUM(blk_read_time)`
+- `blockWriteMs` = `SUM(blk_write_time)`
+- `toplevelOnly` jest true wtedy i tylko wtedy, gdy każdy wiersz tej pozycji ma `toplevel` true
+
+`tempBlocksRead` i `tempBlocksWritten` są licznikami `temp_blks_read` i `temp_blks_written`. Nie są czasami `temp_blk_read_time` i `temp_blk_write_time`.
+
+`mean_exec_time`, `mean_plan_time`, `min_*` i `stddev_*` nie są polami pozycji. Średnia wiersza nie jest średnią pozycji. Specyfikacja §4 mówi też ogólnie o sumie liczników odczytu, zapisu, buforów i WAL. Lista pól jest węższa i jest listą ze specyfikacji §5. Kolumny spoza tej listy nie dostają pól. W szczególności nie dostają ich `shared_blks_dirtied`, `shared_blks_written`, `local_blks_hit`, `local_blks_dirtied`, `wal_records` i `wal_fpi`.
+
+Specyfikacja dzieli przez `SUM(calls)` i nie podaje wyniku dla zera. Strona mówi, że `plans` i `calls` nie zawsze się zgadzają, bo statystyki planu i wykonania aktualizują się osobno. Przy `SUM(calls) = 0` kontrakt nie podstawia 0, null ani `mean_*`. Pól `averageDurationMs` i `averagePlanMs` w tej pozycji nie ma. To nie jest exit `5`. Klucz rankingu i tak jest sumą `total_exec_time`, nie średnią.
+
+Tekst linii jest kolumną `query`, verbatim, bez obcięcia. Null, gdy serwer zwrócił null, zostaje null. Macierz: po odrzuceniu tekstów `query` jest null, a statystyki przy `queryid` zostają. To nie jest błąd. Null z `pg_stat_statements(showtext := false)` jest osobnym faktem macierzy i nie jest tekstem linii. Odczyt z `showtext := false` nie jest źródłem `queries.jsonl`.
+
+Gdy każdy wiersz pozycji ma `query` null, linia ma null. Gdy każdy wiersz ma ten sam nie-null tekst, linia ma ten tekst. Porównanie tekstu jest równością tej treści, nie kolejnością wierszy. Gdy wartości się różnią, w tym gdy obok tekstu jest null, wybór „pierwszego” wiersza zależałby od skanu. Tego wyboru nie ma. Strona wiąże resztę tekstu z pierwszym zapytaniem, które miało dany `queryid` przy tym wpisie, nie z pozycją złożoną z kilku `userid` albo z obu `toplevel`. Który tekst należy do takiej pozycji, jest `UNPROVEN`. Warunek: odczyt `query` dla jednego znanego `queryid` przy dwóch `userid` albo przy obu wartościach `toplevel`, na jawnym celu. Tego odczytu nie wykonano. Do tego czasu linia ma `queryId` i `query` równe null i nie zawiera żadnego z tych tekstów. Ten null nie jest twierdzeniem, że serwer zwrócił null.
+
+### Ranking
+
+Ranking jest po kroku 6 sekwencji: wersja serwera i zainstalowana wersja rozszerzenia są już znane. SQL kolumn jest tylko dla PostgreSQL 14 z zainstalowanym `1.9` oraz dla PostgreSQL 15 albo 16 z zainstalowanym `1.10`. Inna para nie dostaje SQL kolumn. Ta sekcja nie nazywa jej kodu wyjścia i nie daje jej porządku. Zostaje to przy sekwencji. Braku wiersza rozszerzenia ta sekcja też nie poprawia.
+
+Klucze używają tylko kolumn, które obie dozwolone pary mogą wybrać. Nie ma wśród nich `temp_blk_read_time`, `temp_blk_write_time` ani `jit_functions`, `jit_generation_time`, `jit_inlining_count`, `jit_inlining_time`, `jit_optimization_count`, `jit_optimization_time`, `jit_emission_count`, `jit_emission_time`. Sekwencja przy parze `1.10` może te kolumny odczytać. Ten kontrakt nie używa ich w porządku i nie wstawia ich do stdout.
+
+Porządek jest porządkiem pozycji po agregacji, nie porządkiem wierszy widoku. Klucze, hipoteza specyfikacji §4, dają pełny porządek:
+
+1. `SUM(total_exec_time)` malejąco
+2. `SUM(calls)` malejąco
+3. `SUM(shared_blks_hit) + SUM(shared_blks_read)` malejąco
+4. `queryid` rosnąco
+
+Każda pozycja ma jeden znany `queryid`, więc czwarty klucz rozstrzyga remis wcześniejszych. Dwie pozycje nie mają równych czterech kluczy. Kolejność wierszy, `userid` i tekst nie są kluczami. Remis nie zależy od kolejności wierszy.
+
+Zostaje co najwyżej `--top` pierwszych pozycji tego porządku. Zakres to 1..500, ten sam co `OperationLimits.IsTop` (`TopMin` 1, `TopMax` 500) i sprawdzenie w `ExecuteQueryStoreTopAsync`. Ta sekcja nie przenosi domyślnego `20` z `QueryStoreTopCommand.Settings`. Nie stawia `--window` obok `--top`. `--top` w tej sekcji jest cięciem listy, nie nową capability i nie nową komendą.
+
+Liczniki pozycji są wartościami widoku po agregacji. Kontrakt nic od nich nie odejmuje. Nie nadaje im czasu trwania. Skutek resetu selektywnego dla `stats_reset` zostaje `UNPROVEN` z macierzy. Ta sekcja nie projektuje delty.
+
+### Stdout i `queries.jsonl`
+
+Stdout pozycji ma metryki i `queryId`. Nie ma pola `query`, tekstu SQL, `queryHash`, CPU, recency ani `windowMinutes`. Nazwy są pisownią specyfikacji §5: `queryId`, `toplevelOnly`, `executionCount`, `totalDurationMs`, `averageDurationMs`, `maximumDurationMs`, `totalPlanMs`, `averagePlanMs`, `maximumPlanMs`, `rowsReturned`, `sharedBlocksHit`, `sharedBlocksRead`, `localBlocksRead`, `localBlocksWritten`, `tempBlocksRead`, `tempBlocksWritten`, `walBytes`, `blockReadMs`, `blockWriteMs`. Specyfikacja zapisuje część z nich skrótem ze slashem (`sharedBlocksHit/Read`, `localBlocksRead/Written`, `tempBlocksRead/Written`, `blockReadMs/blockWriteMs`, `totalPlanMs / averagePlanMs / maximumPlanMs`). Rozwinięcie jest tą listą, nie nowym polem. Średnie znikają tylko przy `SUM(calls) = 0`, jak wyżej.
+
+Kontekst raportu, nie pozycja:
+
+- `server_version_num` już odczytany w sekwencji. To nie jest napis `server_version` i nie jest `installed_version`. Specyfikacja §5 mówi „server version string”. Ta sekcja zwęża to do liczby, którą sekwencja już ma. `installed_version` zostaje progiem sekwencji i nie zastępuje tej liczby na raporcie.
+- `pg_stat_statements.track`, `pg_stat_statements.track_utility`, `pg_stat_statements.track_planning`, w pisowni GUC. Wartość jest tą z serwera. Nie ma skróconego aliasu.
+- `dealloc` i `stats_reset`, w pisowni kolumn widoku info. `stats_reset` nie jest `lastExecutionAt` i nie jest etykietą „ostatnie 24h”.
+
+Te odczyty kontekstu stoją za tym samym progiem co probe: po znanej wersji serwera i znanej zainstalowanej wersji rozszerzenia. Niepowodzenie w fazie `Sql` jest exit `5` istniejącym mapperem. Nowej gałęzi nie ma. Odczyty nie wołają `pg_stat_statements_reset` i nie interpretują zmiany `stats_reset`.
+
+`artifactDirectory` jest nazwą JSON pola `ArtifactDirectory` z raportu `qstop`: katalog artefaktu, bez tekstu SQL w nazwie pliku. Układ katalogu i nazwy typów należą do planu plików, nie tutaj. Raport nie przyjmuje nazwy bazy jako argumentu rankingu.
+
+Tekst SQL jest tylko w lokalnym `queries.jsonl`. Jedna linia na pozycję, która weszła do wyniku. Linia ma tylko `queryId` i `query`. Stdout, stderr, treść błędu i nazwy plików tekstu nie zawierają. Linia jest lokalnie wrażliwa tak jak `queries.jsonl` przy `qstop`: bez wklejania i bez publikacji bez przeglądu. Nie wchodzi do gain. Specyfikacja §6 stawia tę samą granicę.
+
+Niepowodzenie zapisu artefaktu jest exit `6` (`SqlHarnessExitCode.LocalStorage`). W `ExecuteQueryStoreTopAsync` faza `Artifact` mapuje wyjątek na ten numer, a wynik nie niesie raportu. Ten kontrakt zostawia to samo: exit `6` bez raportu.
+
+### Odwołania tego kroku
+
+- `src/SqlHarness.Core/QueryStoreTop.cs`
+- `src/SqlHarness.Core/QueryStoreArtifacts.cs`
+- `src/SqlHarness.Core/Contracts.cs` (`QueryStoreTopItemReport`, `SqlHarnessQueryStoreTopReport`, `SqlHarnessExitCode`)
+- `src/SqlHarness.Core/SqlHarnessModule.cs` (`ExecuteQueryStoreTopAsync`)
+- `src/SqlHarness.Core/OperationLimits.cs`
+- `src/SqlHarness.Cli/Commands/QueryStoreTopCommand.cs`
+- `src/SqlHarness.Mcp/McpOperationMapper.cs`
+- `tests/SqlHarness.Tests/QueryStoreArtifactWriterTests.cs` (nazwy pól linii `qstop`)
+- `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`, sekcje 4, 5, 6 i 8, jako hipoteza porządku i pól stdout tam, gdzie ta sekcja ich nie zwęża
+- strony modułu z macierzy, otwarte ponownie dla filtra `dbid`, tekstu reprezentatywnego i granic `queryid`: https://www.postgresql.org/docs/14/pgstatstatements.html , https://www.postgresql.org/docs/15/pgstatstatements.html , https://www.postgresql.org/docs/16/pgstatstatements.html
