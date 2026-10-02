@@ -2,9 +2,9 @@
 
 Status funkcji: **PLANNED**. Ten dokument nie jest wdrożeniem. Nie dodaje komend, stubów ani capabilities. Nie zmienia kodu, testów ani `plans/013-regression-contract.md`.
 
-Data: 2026-10-02. Gałąź: `docs/plan-013-regression-policy`. Baza tego planu: `057bcb0`. Autorytet zachowania: `plans/013-regression-contract.md` przez ten commit. Tam, gdzie kontrakt różni się od sekcji 4 i 5 w `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md`, wygrywa kontrakt. Sekcje 5, 7 i 9 specyfikacji określają przypadki, kształt komendy i przyszłe pliki, ale nie kolejność reguł.
+Data: 2026-10-02. Gałąź: `docs/plan-013-regression-policy`. Baza tego planu: `057bcb0`. Autorytet zachowania: `plans/013-regression-contract.md`. Tam, gdzie kontrakt różni się od sekcji 4 i 5 w `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md`, wygrywa kontrakt. Sekcje 5, 7 i 9 specyfikacji określają przypadki, kształt komendy i przyszłe pliki, ale nie kolejność reguł.
 
-Dwie luki słowne zostają w kontrakcie. Tego pliku się nie poprawia. Obowiązuje brama 2 i niezmiennik CPU, nie węższy wiersz mapy w „Zmiana względem sekcji 4”: na `Engine` równym `postgres` CPU nigdy nie korroboruje, także gdy token to `measured`. Brak `Engine` nie jest `postgres` i nie wolno go wnosić z `CpuTimeMilliseconds` równego 0.
+Wiersz dostępności w „Zmiana względem sekcji 4” mówi to samo co brama 2 i niezmiennik CPU: na `Engine` równym `postgres` każdy token CPU, także `measured`, usuwa wymiar i CPU nie korroboruje. Brak `Engine` nie jest `postgres` i nie wolno go wnosić z `CpuTimeMilliseconds` równego 0.
 
 ## Zestaw implementacji
 
@@ -98,18 +98,19 @@ Tokeny porównywać porządkowo z `BenchmarkMetricReport.Measured` (`measured`) 
 - Brak `Engine` (null, składowa pominięta w JSON) nie jest `postgres`. `CpuTimeMilliseconds` równe 0 tego nie zmienia. Przy braku `Engine` token `measured` może korroborować, a `unavailable` wymiar usuwa.
 - Wejście polityki v1, które zawiera próg CPU, nie przywraca wymiaru na `postgres`.
 
-Węższy wiersz mapy kontraktu mówi tylko o `unavailable` przy `postgres`. Tego wiersza implementacja nie stosuje. `PostgresBenchmark.ParseStats` i tak zapisuje CPU jako `unavailable`, a `NpgsqlSessionFactory` stawia `Engine` przez `PostgresEndpointIdentity.CreateReport` na `SqlEngineNames.Postgres` (`postgres`). Para `postgres` + token `measured` jest obowiązkiem decidera, nie dzisiejszym zapisem writera.
+Wiersz dostępności w „Zmiana względem sekcji 4” mówi to samo: na `postgres` każdy token CPU, także `measured`, usuwa wymiar i nie korroboruje, a brak `Engine` nie jest `postgres`. `PostgresBenchmark.ParseStats` i tak zapisuje CPU jako `unavailable`, a `NpgsqlSessionFactory` stawia `Engine` przez `PostgresEndpointIdentity.CreateReport` na `SqlEngineNames.Postgres` (`postgres`). Para `postgres` + token `measured` jest obowiązkiem decidera, nie dzisiejszym zapisem writera.
 
 `SqlExecution.ConnectAsync` buduje `SqlHarnessTargetIdentityReport` bez `Engine`. Artefakt z tej ścieżki ma brak silnika. To nie jest dowód z plików użytkownika; `~/.sqlharness` nie był czytany.
 
 ### Brama 3
 
-Czyta enum `ResultComparisonMode`, nie cyfrę JSON. Bez konwertera enum w `JsonOptions` zapisuje się jako liczba; po deserializacji decider widzi enum. `Off` jest sprawdzane przed mismatch.
+`ResultEquivalenceReport.Mode` jest zapisane jako liczba. Bez konwertera enum w `JsonOptions` deserializacja daje wartość enuma, także liczbę spoza nazw `Ordered`, `Multiset`, `Set` i `Off`. Taka wartość to undefined numeric mode. Nie nadawać jej nowej nazwy enuma. `Off` jest sprawdzane przed mismatch.
 
 - `Mode` = `Off`: `inconclusive`. Null w `Equivalent` nie jest ani zgodą, ani mismatch. `Equivalent` false przy `Off` zostaje przy `Off`, nie przechodzi w R7.
 - Brak obiektu `Equivalence`, albo `Mode` = `Ordered`, `Multiset` lub `Set` i `Equivalent` null: `inconclusive`.
 - `Equivalent` false przy `Ordered`, `Multiset` albo `Set`: `inconclusive`, nigdy `fail`.
-- Dalej tylko `Ordered`, `Multiset` albo `Set` oraz `Equivalent` true.
+- `Mode` inne niż `Ordered`, `Multiset`, `Set` albo `Off` (undefined numeric mode): `inconclusive`, nigdy `pass` ani `fail`. Także gdy `Equivalent` jest true.
+- Dalej tylko `Ordered`, `Multiset` albo `Set` oraz `Equivalent` true. Inne `Mode` nie spada do zer ani progów.
 
 Inicjalizator z zerami liczników jest obiektem obecnym. Decider nie nazywa go brakiem. Pochodzenie tych zer zostaje UNPROVEN. `HasMissingMembers` odrzuca null obiektu `Equivalence` na raporcie compare, więc czytelny artefakt compare nie niesie null obiektu: to `ArtifactReadException`, bez werdyktu, i to nie jest wiersz C-missing-equivalence. Null `Equivalent` przy `Ordered` jest czytelny, bo inicjalizator kopiuje `ResultsEquivalent`.
 
@@ -202,10 +203,12 @@ Osobne asercje, bez nowego id kombinacji: mediana candidate dokładnie 5 ms po b
 | Z2 | Para kompletna. Czas 0 / 30. Baseline 0, 0, 0. Candidate czasu na przykład 28, 30, 32, więc iloraz ≤ 25%. | zera | `inconclusive`, nigdy `fail`. Sekcja 4 też (R2). |
 | Z3 | Para kompletna. Czas 0 / 3. Trójki 0, 0, 0 oraz 3, 3, 3. Granica 5 ms jest osobną asercją, nie innym id. | zera | `pass`. Sekcja 4 też (R2, candidate ≤ 5 ms). |
 | ujemna-mediana | Para kompletna. Czas baseline −100, candidate 0 (trójki −100, −100, −100 oraz 0, 0, 0). Reads 1000 / 1200. To nie jest id kombinacji kontraktu. | po bramach, przed zerami i progami | `inconclusive`, nigdy `fail`. Brama 4 tej mediany nie łapie. Progi dałyby `fail` (czas 0 ≥ −110 i +100 ≥ 5, reads 1200 ≥ 1100 i +200 ≥ 100). |
+| ujemna-candidate | Para kompletna. Czas baseline 100, candidate −1 (trójki 100, 100, 100 oraz −1, −1, −1). Reads 1000 / 1000. Baseline > 0 i candidate < 0. To nie jest id kombinacji kontraktu. | po bramach, przed zerami i progami | `inconclusive`. Brama 4 nie łapie candidate (`Median` < 0). Gdyby doszło do progów, byłoby `pass`: −1 nie spełnia progu względnego ani absolutnego wobec baseline 100, a reads są płaskie. |
 | C-mismatch-00 | Jak Z1, ale `Equivalent` false przy `Ordered`. Bramy 1, 2 i 4 by przeszły. | brama 3 | `inconclusive`. Sekcja 4 dałaby R1 `pass`. |
 | C-mismatch-03 | Jak Z3, ale `Equivalent` false. Candidate ≤ 5 ms. | brama 3 | `inconclusive`. Sekcja 4 dałaby R2 `pass`. |
 | C-mismatch-30 | Jak Z2, ale `Equivalent` false. Candidate > 5 ms. | brama 3 | `inconclusive`, nigdy `fail`. Sekcja 4 też `inconclusive`, ale z R2, zanim zobaczyłaby R7. |
 | C-off-00 | Jak Z1, ale `Mode` = `Off`. `Equivalent` null nie jest zgodą. | brama 3 | `inconclusive`. Sekcja 4 dałaby R1 `pass`. |
+| undefined-numeric-mode | Para kompletna poza `Mode`. `Equivalent` true. `Mode` jest undefined numeric mode: liczba spoza `Ordered`, `Multiset`, `Set` i `Off` (na przykład 4). Nie nadawać jej nazwy enuma. Dwa przypadki. (1) Czas 0 / 0, obie trójki 0, 0, 0, jak Z1. (2) Czas 100 / 120, reads 1000 / 1150, CPU płaskie, jak F1. | brama 3 | Oba `inconclusive`, nigdy `pass` ani `fail`. Bez tej reguły (1) byłoby Z1 `pass`, a (2) byłoby F1 `fail`. |
 | C-missing-shape | Trzy testy przy czasie 0 / 0 i trójkach 0, 0, 0. (1) Czytelny manifest compare bez `summary` albo bez `metrics`. (2) Liczba wariantu null, przy `Repetitions` 5 i `MeasuredRunCount` raportu 10. (3) Liczba 4 na jednym wariancie i 5 na drugim. | brama 1 | `inconclusive`. Sekcja 4 dałaby R1 `pass`. Nie dzielić 10 / 2. |
 | C-missing-availability | Jak Z1, ale `MetricReport` null na jednym wariancie, albo token czasu lub reads inny niż `measured` (także `unavailable`, pusty i obcy) przy medianach 0. | brama 2 | `inconclusive`. Sekcja 4 dałaby R1 `pass`. |
 | C-missing-equivalence | Jak Z1, ale `Equivalent` null przy `Ordered`. Drugi test decidera: obiekt `Equivalence` null. JSON compare z `equivalence` null nie jest tym wierszem. | brama 3 | `inconclusive`. Sekcja 4 dałaby R1 `pass`. Null obiektu w pliku compare to nieczytelny raport, bez werdyktu. |
@@ -229,7 +232,7 @@ Osobne asercje, bez nowego id kombinacji: mediana candidate dokładnie 5 ms po b
 | E1 | Liczby jak F1, które progami byłyby `fail`. `Mode` = `Off`. | brama 3 | `inconclusive`. Baseline > 0. Werdykt zgodny z sekcją 5. Pierwsze dopasowanie jest bramą 3, nie progami. |
 | E2 | Liczby jak F1. `Ordered`, `Equivalent` false. | brama 3 | `inconclusive`, nigdy `fail`. Werdykt zgodny z sekcją 5. |
 | E3 | Liczby jak F1. `Multiset`, `Equivalent` true. Decider nie liczy wierszy ponownie. | progi | `fail`. Zgodność w wybranym trybie przechodzi bramę 3. Wyjście procesu 0. |
-| pg-cpu-measured | Para kompletna poza silnikiem. `Engine` = `postgres`. Token CPU `measured` na obu. Czas 200 / 230. Reads 5000 / 4900. CPU 50 / 70. Trójki zbite. | progi | `pass`. CPU nie korroboruje mimo tokenu `measured` i mimo obu progów CPU. Zostają reads, które się poprawiają. Węższy wiersz mapy zostawiłby CPU i dał `fail`. Nie stosować go. |
+| pg-cpu-measured | Para kompletna poza silnikiem. `Engine` = `postgres`. Token CPU `measured` na obu. Czas 200 / 230. Reads 5000 / 4900. CPU 50 / 70. Trójki zbite. | progi | `pass`. CPU nie korroboruje mimo tokenu `measured` i mimo obu progów CPU. Zostają reads, które się poprawiają. Wiersz dostępności mówi to samo: na `postgres` token `measured` też usuwa wymiar. |
 | engine-absent-cpu-measured | `Engine` null. Token CPU `measured`. Czas 200 / 230. Reads 5000 / 4900. CPU baseline 0, candidate 70, trójki zbite. | progi | `fail`. Token `measured` przy braku silnika może korroborować: 70 ≥ 0 i +70 ≥ 5. Zero milisekund CPU nie ustawia `postgres`. Gdyby ustawiło, werdykt byłby `pass`. |
 | legacy-missing-count | Czytelny compare, sekcje są, reszta jak F1 (progami byłoby `fail`). Nowej składowej nie ma: null, nie 0. `Repetitions` 5, `MeasuredRunCount` raportu 10. | brama 1 | `inconclusive`, wyjście 0. Test deserializacji stwierdza null. Obecne 0 to inny fakt, też `inconclusive`, bo 0 < 5, ale nie jest brakiem składowej. |
 | unknown-id | Id, którego katalogu nie ma. | odczyt | Brak werdyktu. `ArtifactReadException`, komunikat `Unknown artifact id.`, wyjście 2. |

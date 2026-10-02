@@ -144,8 +144,9 @@ Brama czyta `ResultEquivalenceReport.Mode` i `Equivalent`. Liczniki `DifferingPo
 - `Mode` jest `Off`. To dawne R6. Null w `Equivalent` przy `Off` nie jest ani zgodą, ani mismatch.
 - Brak wyniku. Sekcja compare nie ma `Equivalence`, albo `Mode` jest `Ordered`, `Multiset` lub `Set`, a `Equivalent` jest null. To też dawne R6.
 - Mismatch. `Equivalent` jest false przy `Ordered`, `Multiset` albo `Set`. To dawne R7. Werdykt nie jest `fail`: inny wynik nie jest wolniejszym tym samym wynikiem.
+- `Mode` inne niż `Ordered`, `Multiset`, `Set` albo `Off`. To jest undefined numeric mode. Werdykt jest `inconclusive`, nigdy `pass` ani `fail`. `ResultEquivalenceReport.Mode` jest zapisane jako liczba. Nie nadawać tej wartości nowej nazwy enuma.
 
-Dalej tylko wtedy, gdy `Mode` jest `Ordered`, `Multiset` albo `Set` i `Equivalent` jest true. To jest zgodność w wybranym trybie. Nazwy ze specyfikacji (`ordered`, `multiset`, `set`, `off`) są tymi wartościami `ResultComparisonMode`. Decyzja czyta enum, nie cyfrę, którą JSON zapisuje bez konwertera.
+Dalej tylko wtedy, gdy `Mode` jest `Ordered`, `Multiset` albo `Set` i `Equivalent` jest true. To jest zgodność w wybranym trybie. Każde inne `Mode` jest już `inconclusive` i nie jest ani `pass`, ani `fail`. Nazwy ze specyfikacji (`ordered`, `multiset`, `set`, `off`) są tymi wartościami `ResultComparisonMode`. JSON bez konwertera zapisuje `Mode` jako liczbę; liczba spoza tych czterech wartości jest undefined numeric mode. Nie nadawać jej nowej nazwy enuma.
 
 Inicjalizator z mapy T1 jest obiektem obecnym. Brama nie nazywa go brakiem tylko dlatego, że liczniki są zerami. Brakiem jest null obiektu albo null `Equivalent` poza `Off`. Odczyt, który nie odróżnia inicjalizatora od zapisanego `Ordered`, zostaje ograniczeniem mapy. Ta brama go nie zamyka.
 
@@ -169,15 +170,14 @@ Brama przechodzi tylko wtedy, gdy żaden wariant nie dał `inconclusive`. Oba mo
 
 ### Po bramach: zera, potem progi
 
-Gdy bramy 1–4 nie rozstrzygnęły, wchodzą przypadki zera, a dopiero po nich progi sekcji 3. Przypadki zera są terminalne. Nie wracają do bram.
+Gdy bramy 1–4 nie rozstrzygnęły, najpierw sprawdza się ujemną medianę czasu, potem przypadki zera, a dopiero po nich progi sekcji 3. Te sprawdzenia są terminalne. Nie wracają do bram.
 
 Mediana czasu to `CompareDistribution.Median` na `ElapsedTimeMilliseconds`. Nie jest nią `ElapsedTimeMillisecondsExact`. Brama 2 już wymaga, żeby ten czas był `measured`, więc zero poniżej jest zmierzonym zerem całych milisekund, nie placeholderem przy tokenie `unavailable`.
 
+- Mediana czasu baseline albo candidate jest mniejsza od 0: `inconclusive`. To nie jest przypadek zera i nie jest wejściem progów.
 - Obie mediany czasu są 0: `pass`. To dawne R1. Mediany reads i CPU tego werdyktu nie zmieniają.
 - Mediana baseline jest 0, a mediana candidate jest większa od 0: `pass` tylko gdy candidate ma co najwyżej 5 ms. Inaczej `inconclusive`. Nigdy `fail`. To dawne R2. 5 ms jest podłogą absolutną czasu z sekcji 3 i się nie zmienia. Równe 5 ms daje `pass`.
-- Mediana baseline jest większa od 0: to nie jest przypadek zera, także gdy mediana candidate jest 0. Obowiązują progi sekcji 3.
-
-Ujemna mediana czasu nie jest przypadkiem zera ani wejściem progów. Werdykt jest `inconclusive`.
+- Mediana baseline jest większa od 0, a mediana candidate jest ≥ 0: to nie jest przypadek zera, także gdy mediana candidate jest 0. Obowiązują progi sekcji 3.
 
 Liczby sekcji 3 zostają: czas +10% oraz 5 ms, logical reads +10% oraz 100, CPU +15% oraz 5 ms. Minimum 5 przebiegów jest bramą 1. Spread 25% jest bramą 4. Sekcja „Niezmienniki” te liczby powtarza. Ta kolejność ich nie zmienia.
 
@@ -196,8 +196,8 @@ Późniejszy plan testów może śledzić dawne id w tabeli. Ten plik nie ustala
 | Krok | Dawne id | Co zostaje, co się przesuwa |
 |---|---|---|
 | 1. Kompletność | R5 | Nadal `inconclusive` dla braku `summary` albo `metrics` na czytelnej parze compare i dla liczby przebiegów wariantu mniejszej niż 5. Liczba `unknown` też jest `inconclusive`; nie wolno jej doliczać. Czytelny measure, measure-set i rollup macierzy są tym samym `inconclusive`, z wyjściem procesu 0. |
-| 2. Dostępność | R3 oraz nowa brama | Null `MetricReport` oraz czas lub reads inaczej niż tokenem `measured` są `inconclusive`, w tym przy jawnym `unavailable`. R3 nie jest werdyktem: CPU `unavailable` przy `Engine` równym `postgres` usuwa wymiar i ocena idzie dalej. CPU nie jest wymagane. |
-| 3. Equivalence | R6, R7 | `Off` albo brak wyniku: `inconclusive` (R6). Mismatch: `inconclusive`, nigdy `fail` (R7). Zgodność w wybranym trybie idzie dalej. |
+| 2. Dostępność | R3 oraz nowa brama | Null `MetricReport` oraz czas lub reads inaczej niż tokenem `measured` są `inconclusive`, w tym przy jawnym `unavailable`. R3 nie jest werdyktem: na `Engine` równym `postgres` każdy token CPU, także `measured`, usuwa wymiar i CPU nie korroboruje; ocena idzie dalej. Brak `Engine` nie jest `postgres`. CPU nie jest wymagane. |
+| 3. Equivalence | R6, R7 | `Off` albo brak wyniku: `inconclusive` (R6). Mismatch: `inconclusive`, nigdy `fail` (R7). `Mode` inne niż `Ordered`, `Multiset`, `Set` albo `Off` (undefined numeric mode) jest `inconclusive`, nigdy `pass` ani `fail`. Zgodność w wybranym trybie idzie dalej. |
 | 4. Stabilność | R4 | Nadal `inconclusive`, gdy iloraz czasu jest większy niż 25%. Brak zapisanej składowej nie jest `stable` i sam nie jest powodem stopu. Mediana 0 przy `Max` > 0 jest `inconclusive`. Trójka 0, 0, 0 przechodzi dalej. |
 | 5. Zera | R1, R2 | Te same werdykty i ten sam próg 5 ms, ale tylko po bramach 1–4. R1 i R2 nie skracają już R4–R7. |
 | 6. Progi | R8, R9 | Liczby sekcji 3 bez zmian. `fail` tylko przy regresji czasu (oba progi) i korroboracji. Inaczej `pass`. |
