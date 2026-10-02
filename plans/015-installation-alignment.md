@@ -1,6 +1,6 @@
 # Plan 015: Zdiagnozuj rozjazd zainstalowanego CLI i repozytorium
 
-Status: **DONE — tylko etap diagnostyczny** (rozjazd zostaje; nie RESOLVED EXTERNALLY; binarka PATH nie została zastąpiona; instalacja nie wykonana; dowód: `plans/015-installation-evidence.md`; commity `d2a0729..22c0644`; nie scalono; push czeka)
+Status: **DONE — tylko etap diagnostyczny** (rozjazd zostaje; nie RESOLVED EXTERNALLY; binarka PATH nie została zastąpiona; instalacja nie wykonana; dowód: `plans/015-installation-evidence.md`; commity `d2a0729..8e00431`, koniec to follow-up guard procedury; nie scalono; push czeka)
 Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
 Priorytet: P3; nakład: S; ryzyko zmiany: LOW.
 Pokrycie: **obserwacja PATH i nieaktualnego help**. Zależności: **005**.
