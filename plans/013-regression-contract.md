@@ -1,12 +1,12 @@
-# Kontrakt regresji — mapa pól
+# Kontrakt regresji — mapa pól i kolejność decyzji
 
-Status: draft, T1 only
+Status: draft, mapa pól (T1) i kolejność decyzji (T2). Sekcji niezmienników i planu implementacji tu nie ma.
 
 HEAD mapowania: `39451fcabc7c3eac184e0370bdef7196c7e1e683`. To nie jest baza audytu planu (`8aa01f8`).
 
-Kolejność decyzji nie jest w tym pliku rozstrzygnięta.
+Kolejność decyzji jest w sekcji „Kolejność decyzji”. Zastępuje pierwsze dopasowanie z sekcji 4 specyfikacji. Mapy pól poniżej nie zmienia.
 
-Ten plik mapuje siedem faktów na typy z HEAD. Nie opisuje kolejności reguł, nie spisuje sekcji niezmienników i nie jest planem implementacji. Nie dodaje komend, stubów ani capabilities. Sekcja 2 w `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md` tylko nazywa wejścia, których polityka chce użyć. Kolejność reguł z tej specyfikacji nie jest tu przenoszona.
+Ten plik mapuje siedem faktów na typy z HEAD i zapisuje kolejność reguł. Nie spisuje sekcji niezmienników i nie jest planem implementacji. Nie dodaje komend, stubów ani capabilities. Sekcja 2 w `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md` tylko nazywa wejścia, których polityka chce użyć. Kolejność reguł z sekcji 4 tej specyfikacji nie jest tu przenoszona: jest zastąpiona.
 
 Nazwy z planu: CompareReport to `SqlHarnessCompareReport`, MetricReport to `BenchmarkMetricReport`. Nazwy typów i składowych są w pisowni źródła.
 
@@ -106,3 +106,121 @@ Measure ma inny fakt, o innej nazwie i innym znaczeniu. `SqlHarnessMeasureReport
 Measure-set: `MeasureParameterSetReport.ResultsStable` jest tą samą równością `ResultHash` wewnątrz zestawu (`MeasureParameterSetReportProjector.ProjectSet`). Gdy skróty się różnią, zapisany `ResultHash` zestawu jest null. Summary kopiuje `MeasureParameterSetSummary.ResultsStable` i nie kopiuje `ResultHash`. Metrics `ResultsStable` nie kopiuje. `runs.jsonl` ma `ResultHash` per przebieg; reader selektywny go nie zwraca.
 
 Żadna z tych składowych measure nie jest werdyktem stabilności pary compare i nie jest spreadem czasu.
+
+## Kolejność decyzji
+
+Werdykt domenowy to `pass`, `fail` albo `inconclusive`. Pierwsze dopasowanie wygrywa. Ta kolejność zastępuje sekcję 4 w `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md`. Tam R1 i R2 były terminalne i zwracały `pass` dla zer, zanim R4–R7 sprawdziły niestabilność, brak pomiaru i equivalence. Sekcja 1 tej specyfikacji mówi, że pomiar niekompletny albo technicznie nierównoważny jest `inconclusive`. Ta sekcja usuwa tę sprzeczność. Mapa pól wyżej zostaje bez zmian. Progi z sekcji 3 specyfikacji nie zmieniają liczb i wchodzą dopiero po czterech bramach. Osobnej sekcji niezmienników tu nie ma.
+
+Wejście to jeden już zapisany artefakt, czytany offline polami z mapy. `runs.jsonl` nie jest wejściem tej kolejności.
+
+### Brama 1. Kompletność
+
+Jedna para to artefakt, który ma manifest, sekcję `summary` i sekcję `metrics`, a `ArtifactManifest.ArtifactKind` jest `compare` (`ArtifactReader.CompareKind`). Sekcja `operators` nie jest wymagana: nie niesie żadnego z siedmiu faktów. Komórka macierzy zapisana jako osobny `SqlHarnessCompareReport` jest jedną parą. Rollup macierzy nią nie jest. `SqlHarnessCompareMatrixReport` nie jest rodzajem artefaktu.
+
+Measure (`ArtifactReader.MeasureKind`, `measure`), measure-set (`ArtifactReader.MeasureSetKind`, `measure-set`) i rollup macierzy nie są jedną parą compare. To dopasowanie jest pierwsze, przed brakiem sekcji i przed liczbą przebiegów. Na każdym takim wierszu wynik jest ten sam: `refused`. To nie jest `pass`, `fail` ani `inconclusive` i nie jest czwartym werdyktem domenowym. Werdyktu domenowego nie ma. Udany odczyt takiego artefaktu nie zamienia go w niekompletny pomiar pary. Sekcja 6 specyfikacji i tak nie nadaje werdyktu zestawom parametrów ani przekrojowi komórek macierzy; każda ukończona komórka zostaje własną parą. Ten plik nie wybiera kodu wyjścia.
+
+Artefakt bez manifestu (legacy) albo para compare bez sekcji `summary` lub `metrics` daje `inconclusive`. To samo, gdy manifest tej sekcji nie wymienia.
+
+Liczba przebiegów zmierzonych jednego wariantu jest `unknown`. Mapa T1 nie ma na nią składowej w sekcji `summary` ani `metrics`. Nie wolno wyprowadzać jej z `SqlHarnessCompareReport.MeasuredRunCount / 2` ani podstawiać `Repetitions`. Liczba `unknown` daje `inconclusive`. Podana liczba mniejsza niż 5 dla któregokolwiek wariantu też daje `inconclusive`. Minimum 5 zostaje. Chodzi o przebiegi zmierzone, nie o rozgrzewkę. Gdy obie liczby są podane i każda wynosi co najmniej 5, ta część bramy przechodzi. Dziś selektywny odczyt tej liczby nie wystawia, więc dzisiejsza para compare staje na tej bramie.
+
+### Brama 2. Dostępność
+
+`BenchmarkMetricReport` baseline albo candidate jest null: `inconclusive`. Jawne zapisane tokeny to tylko `BenchmarkMetricReport.Measured` (`"measured"`) i `BenchmarkMetricReport.Unavailable` (`"unavailable"`). Brak tokenu, pusty napis albo dowolna inna wartość na `ElapsedTimeAvailability` lub `LogicalReadsAvailability` daje `inconclusive`.
+
+Czas i logical reads są wymagane u obu wariantów. Brama przechodzi na nich tylko przy tokenie `measured`. Token `unavailable` jest zapisany i jawny, ale znaczy, że wymiaru nie zmierzono, więc daje `inconclusive`. Nie wolno iść z takim tokenem w przypadki zera. Zero w `CompareDistribution` nie jest tokenem i nie oznacza, że metrykę zmierzono. Mapa T1 opisuje, skąd kod bierze te napisy. Sąsiednie składowe (`ElapsedTimeMillisecondsExact`, `ElapsedWholeMillisecondsAreExact`, `LogicalReadsSource`) nie są dostępnością.
+
+CPU nie jest wymagane w tej bramie. Gdy `SqlHarnessTargetIdentityReport.Engine` jest `postgres`, a `CpuTimeAvailability` jest `unavailable`, wymiar CPU odpada i ocena idzie dalej. To dawny modyfikator R3, nie werdykt. Wejście polityki, które na PostgreSQL wskazuje CPU, nie przywraca wymiaru. CPU odpada także wtedy, gdy jego token nie jest `measured`, na dowolnym silniku: brama go nie wymaga, a `CpuTimeMilliseconds` równe 0 nie jest tokenem `measured`. Token `measured` zostawia CPU do korroboracji przy progach. Brak `Engine` nie rozstrzyga tokenu CPU.
+
+### Brama 3. Equivalence
+
+Brama czyta `ResultEquivalenceReport.Mode` i `Equivalent`. Liczniki `DifferingPositions`, `BaselineOnlyCount` i `CandidateOnlyCount` nie są tym faktem. Pochodzenie ich zer zostaje UNPROVEN, tak jak w mapie. Tej niepewności tu się nie zamyka.
+
+`inconclusive`, gdy zachodzi którekolwiek:
+
+- `Mode` jest `Off`. To dawne R6. Null w `Equivalent` przy `Off` nie jest ani zgodą, ani mismatch.
+- Brak wyniku. Sekcja compare nie ma `Equivalence`, albo `Mode` jest `Ordered`, `Multiset` lub `Set`, a `Equivalent` jest null. To też dawne R6.
+- Mismatch. `Equivalent` jest false przy `Ordered`, `Multiset` albo `Set`. To dawne R7. Werdykt nie jest `fail`: inny wynik nie jest wolniejszym tym samym wynikiem.
+
+Dalej tylko wtedy, gdy `Mode` jest `Ordered`, `Multiset` albo `Set` i `Equivalent` jest true. To jest zgodność w wybranym trybie. Nazwy ze specyfikacji (`ordered`, `multiset`, `set`, `off`) są tymi wartościami `ResultComparisonMode`. Decyzja czyta enum, nie cyfrę, którą JSON zapisuje bez konwertera.
+
+Inicjalizator z mapy T1 jest obiektem obecnym. Brama nie nazywa go brakiem tylko dlatego, że liczniki są zerami. Brakiem jest null obiektu albo null `Equivalent` poza `Off`. Odczyt, który nie odróżnia inicjalizatora od zapisanego `Ordered`, zostaje ograniczeniem mapy. Ta brama go nie zamyka.
+
+### Brama 4. Stabilność
+
+Para compare nie ma zapisanej składowej werdyktu stabilności. Nie wolno wstawiać `stable`. `SqlHarnessMeasureReport.ResultsStable` i `MeasureParameterSetReport.ResultsStable` nie są tą bramą i nie są spreadem czasu.
+
+Formuła specyfikacji `(Max - Min) / Median` stosuje się do czasu: `ElapsedTimeMilliseconds` typu `CompareDistribution` na baseline i na candidate. Używa zapisanych `Min`, `Median` i `Max`. Te liczby są w summary (`BenchmarkVariantSummary`) i w metrics (`ArtifactNamedMetrics`). Status zapisanego spreadu zostaje `unknown`. Formuła nie dodaje składowej.
+
+Obcięcie mediany do `long` przy parzystej liczbie próbek zostaje UNPROVEN wobec surowych próbek. Nie czytać `runs.jsonl`. Iloraz liczy się z zapisanych liczb jako porównanie z progiem 25%, nie jako dzielenie całkowite, które ten próg by skasowało.
+
+Dla każdego wariantu, pierwsze dopasowanie:
+
+- `Median` > 0 i iloraz > 25%: `inconclusive`. Wystarczy jeden wariant. To dawne R4. Próg 25% się nie zmienia.
+- `Median` > 0 i iloraz ≤ 25%: ten wariant formułę przechodzi. Iloraz równy 25% przechodzi, bo warunek stopu jest „większy niż”.
+- `Median` jest 0 oraz `Max` i `Min` są 0: brak obserwowanego spreadu. To nie jest zapisane `stable`.
+- `Median` jest 0 i `Max` > 0: `inconclusive`. Iloraz jest niezdefiniowany. To nie jest czyste zero z R1.
+- Każde inne `Median` równe 0: `inconclusive`. Jedyna mediana 0, która przechodzi dalej, to trójka 0, 0, 0.
+
+Brama przechodzi tylko wtedy, gdy żaden wariant nie dał `inconclusive`. Oba mogą przejść formułę, oba mogą nie mieć obserwowanego spreadu, albo jeden nie ma obserwowanego spreadu, a drugi przeszedł formułę. Spread `CpuTimeMilliseconds` i `LogicalReads` nie wchodzi do tej bramy. Sekcja 4 specyfikacji nie nazywała metryki formuły; tu formuła jest jawnie na czasie, bo te `Min`, `Median` i `Max` są obecne, a próbek przebiegów się nie czyta.
+
+### Po bramach: zera, potem progi
+
+Gdy bramy 1–4 nie rozstrzygnęły, wchodzą przypadki zera, a dopiero po nich progi sekcji 3. Przypadki zera są terminalne. Nie wracają do bram.
+
+Mediana czasu to `CompareDistribution.Median` na `ElapsedTimeMilliseconds`. Nie jest nią `ElapsedTimeMillisecondsExact`. Brama 2 już wymaga, żeby ten czas był `measured`, więc zero poniżej jest zmierzonym zerem całych milisekund, nie placeholderem przy tokenie `unavailable`.
+
+- Obie mediany czasu są 0: `pass`. To dawne R1. Mediany reads i CPU tego werdyktu nie zmieniają.
+- Mediana baseline jest 0, a mediana candidate jest większa od 0: `pass` tylko gdy candidate ma co najwyżej 5 ms. Inaczej `inconclusive`. Nigdy `fail`. To dawne R2. 5 ms jest podłogą absolutną czasu z sekcji 3 i się nie zmienia. Równe 5 ms daje `pass`.
+- Mediana baseline jest większa od 0: to nie jest przypadek zera, także gdy mediana candidate jest 0. Obowiązują progi sekcji 3.
+
+Ujemna mediana czasu nie jest przypadkiem zera ani wejściem progów. Werdykt jest `inconclusive`.
+
+Liczby sekcji 3 zostają: czas +10% oraz 5 ms, logical reads +10% oraz 100, CPU +15% oraz 5 ms. Minimum 5 przebiegów jest bramą 1. Spread 25% jest bramą 4. T3 ma te niezmienniki powtórzyć. Tu nie ma tej sekcji.
+
+`fail`, dawne R8, tylko wtedy, gdy czas spełnia oba swoje progi, względny i absolutny, i co najmniej jeden sygnał kosztów też spełnia oba swoje. Sygnałem są logical reads albo CPU, to drugie tylko gdy wymiar CPU nie odpadł w bramie 2. Sam czas nie wystarcza. Spełnienie tylko jednego progu metryki jest szumem, nie sygnałem. Gdy CPU odpadło, korroboracja może przyjść tylko z reads. W pozostałych przypadkach `pass`, dawne R9. `missingIndexes` i operatory godne uwagi nie zmieniają werdyktu.
+
+Zero razem z mismatch, z brakiem albo nieznanym faktem wymaganym, albo z niestabilnym lub niezdefiniowanym spreadem, jest `inconclusive`, także gdy obie mediany czasu są 0. Wiersze Z1, Z2 i Z3 zostają tylko wtedy, gdy bramy 1–4 przeszły.
+
+### Zmiana względem sekcji 4
+
+Sekcja 4 sprawdzała po kolei R1, R2, modyfikator R3, potem R4, R5, R6, R7, R8 i R9. R1 i R2 kończyły ocenę, zanim R4–R7 zobaczyły brak danych, niestabilność i equivalence. Nowa kolejność stawia te sprawdzenia wcześniej: kompletność (dawne R5), dostępność (nowa brama terminalna; R3 zostaje modyfikatorem), equivalence (R6, potem R7), stabilność (R4), i dopiero potem zera (R1, R2) oraz progi (R8, R9).
+
+Werdykt zmienia się tam, gdzie stare pierwsze dopasowanie kończyło się w R1 albo R2, a wada z R4–R7 albo brak tokenu dostępności nie była jeszcze sprawdzona. S1, M1, E1 i E2 przy medianie baseline większej od zera i tak były `inconclusive`. Przy zerze ta sama wada już nie przegrywa z R1 ani z R2.
+
+Późniejszy plan testów może śledzić dawne id w tabeli. Ten plik nie ustala pola `rule` w JSON.
+
+| Krok | Dawne id | Co zostaje, co się przesuwa |
+|---|---|---|
+| 1. Kompletność | R5 | Nadal `inconclusive` dla legacy bez manifestu, braku `summary` albo `metrics` i liczby przebiegów wariantu mniejszej niż 5. Liczba `unknown` też jest `inconclusive`; nie wolno jej doliczać. Measure, measure-set i rollup macierzy są `refused`, nie R5. |
+| 2. Dostępność | R3 oraz nowa brama | Null `MetricReport` oraz czas lub reads inaczej niż tokenem `measured` są `inconclusive`, w tym przy jawnym `unavailable`. R3 nie jest werdyktem: CPU `unavailable` przy `Engine` równym `postgres` usuwa wymiar i ocena idzie dalej. CPU nie jest wymagane. |
+| 3. Equivalence | R6, R7 | `Off` albo brak wyniku: `inconclusive` (R6). Mismatch: `inconclusive`, nigdy `fail` (R7). Zgodność w wybranym trybie idzie dalej. |
+| 4. Stabilność | R4 | Nadal `inconclusive`, gdy iloraz czasu jest większy niż 25%. Brak zapisanej składowej nie jest `stable` i sam nie jest powodem stopu. Mediana 0 przy `Max` > 0 jest `inconclusive`. Trójka 0, 0, 0 przechodzi dalej. |
+| 5. Zera | R1, R2 | Te same werdykty i ten sam próg 5 ms, ale tylko po bramach 1–4. R1 i R2 nie skracają już R4–R7. |
+| 6. Progi | R8, R9 | Liczby sekcji 3 bez zmian. `fail` tylko przy regresji czasu (oba progi) i korroboracji. Inaczej `pass`. |
+
+### Kombinacje zera
+
+Izolowane wiersze Z1, Z2 i Z3 nie wystarczają. Tabela ma też zero z mismatch, zero z brakiem i zero z niestabilnym albo niezdefiniowanym spreadem. „Bramy 1–4 przeszły” znaczy: jedna para `compare` z manifestem, `summary` i `metrics`; liczba przebiegów wariantu jest podana i wynosi co najmniej 5 dla obu; czas i logical reads mają token `measured`; `Equivalent` jest true przy `Ordered`, `Multiset` albo `Set`; spread czasu albo ma iloraz nie większy niż 25%, albo jest trójką 0, 0, 0.
+
+Dzisiejszy artefakt compare liczby przebiegów wariantu nie podaje. Z samego tego faktu jest `inconclusive` na bramie 1 i nie dochodzi do Z1. To nie jest polecenie, żeby policzyć tę liczbę z `MeasuredRunCount` albo z `Repetitions`.
+
+| Id | Mediany czasu, ms (baseline / candidate) | Dodatkowy fakt | Sekcja 4 | Ta kolejność |
+|---|---|---|---|---|
+| Z1 | 0 / 0 | bramy 1–4 przeszły | R1 `pass` | `pass` |
+| Z2 | 0 / 30 | bramy 1–4 przeszły | R2 `inconclusive`, nigdy `fail` | `inconclusive`, nigdy `fail` |
+| Z3 | 0 / 3 | bramy 1–4 przeszły | R2 `pass`, bo candidate ≤ 5 ms | `pass` |
+| C-mismatch-00 | 0 / 0 | `Equivalent` false w wybranym trybie; bramy 1, 2 i 4 by przeszły | R1 `pass`; R7 nie dochodzi | `inconclusive` (brama 3, R7) |
+| C-mismatch-03 | 0 / 3 | to samo; candidate ≤ 5 ms | R2 `pass` | `inconclusive` (brama 3, R7) |
+| C-mismatch-30 | 0 / 30 | to samo; candidate > 5 ms | R2 `inconclusive`, nigdy `fail` | `inconclusive` (brama 3, R7, nigdy `fail`) |
+| C-off-00 | 0 / 0 | `Mode` = `Off` | R1 `pass`; R6 nie dochodzi | `inconclusive` (brama 3, R6) |
+| C-missing-shape | 0 / 0 | brak manifestu, brak `summary` albo `metrics`, liczba wariantu `unknown`, albo liczba < 5 | R1 `pass`; R5 nie dochodzi | `inconclusive` (brama 1, R5) |
+| C-missing-availability | 0 / 0 | `MetricReport` null, albo czas lub reads bez tokenu `measured` (w tym `unavailable`) | R1 `pass`; dostępność nie była regułą terminalną | `inconclusive` (brama 2) |
+| C-missing-equivalence | 0 / 0 | brak `Equivalence`, albo `Equivalent` null przy trybie innym niż `Off` | R1 `pass`; R6 nie dochodzi | `inconclusive` (brama 3, R6) |
+| C-unstable-03 | 0 / 3 | baseline ma trójkę 0, 0, 0; iloraz czasu candidate > 25%; bramy 1–3 przeszły | R2 `pass`; R4 nie dochodzi | `inconclusive` (brama 4, R4) |
+| C-undefined-00 | 0 / 0 | któryś wariant ma medianę 0 i `Max` > 0 | R1 `pass` | `inconclusive` (brama 4; iloraz niezdefiniowany) |
+| C-first-match | 0 / 0 | liczba wariantu `unknown` i równocześnie mismatch | R1 `pass` | `inconclusive` (brama 1, nie brama 3) |
+| C-measure | 0 / 0 | rodzaj `measure` | nie ma werdyktu pary compare | `refused` |
+| C-measure-set | 0 / 0 | rodzaj `measure-set` | nie ma werdyktu pary compare | `refused` |
+| C-matrix-rollup | 0 / 0 | rollup macierzy, nie jedna komórka rodzaju `compare` | nie ma werdyktu jednej pary | `refused` |
+
+Trójka 0, 0, 0 na obu wariantach nie jest wierszem niestabilności. Gdy bramy 1–3 przeszły, jest to Z1 i `pass`. `refused` na `measure`, `measure-set` i rollupie macierzy jest tym samym wynikiem na każdym z tych wierszy, także przy zerach.
