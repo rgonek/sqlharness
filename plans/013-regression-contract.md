@@ -117,9 +117,11 @@ Wejście to jeden już zapisany artefakt, czytany offline polami z mapy. `runs.j
 
 Jedna para to artefakt, który ma manifest, sekcję `summary` i sekcję `metrics`, a `ArtifactManifest.ArtifactKind` jest `compare` (`ArtifactReader.CompareKind`). Sekcja `operators` nie jest wymagana: nie niesie żadnego z siedmiu faktów. Komórka macierzy zapisana jako osobny `SqlHarnessCompareReport` jest jedną parą. Rollup macierzy nią nie jest. `SqlHarnessCompareMatrixReport` nie jest rodzajem artefaktu.
 
-Measure (`ArtifactReader.MeasureKind`, `measure`), measure-set (`ArtifactReader.MeasureSetKind`, `measure-set`) i rollup macierzy nie są jedną parą compare. To dopasowanie jest pierwsze, przed brakiem sekcji i przed liczbą przebiegów. Na każdym takim wierszu wynik jest ten sam: `refused`. To nie jest `pass`, `fail` ani `inconclusive` i nie jest czwartym werdyktem domenowym. Werdyktu domenowego nie ma. Udany odczyt takiego artefaktu nie zamienia go w niekompletny pomiar pary. Sekcja 6 specyfikacji i tak nie nadaje werdyktu zestawom parametrów ani przekrojowi komórek macierzy; każda ukończona komórka zostaje własną parą. Ten plik nie wybiera kodu wyjścia.
+Measure (`ArtifactReader.MeasureKind`, `measure`), measure-set (`ArtifactReader.MeasureSetKind`, `measure-set`) i rollup macierzy nie są jedną parą compare. To dopasowanie jest pierwsze, przed brakiem sekcji i przed liczbą przebiegów. Czytelny artefakt każdego z tych trzech rodzajów ma werdykt domenowy `inconclusive` i wyjście procesu 0. Ten sam wynik jest na każdym takim wierszu, także gdy obie mediany czasu są 0. Nie jest to `pass` ani `fail`. Udany odczyt nie robi z niego pary compare. Sekcja 6 specyfikacji nie nadaje werdyktu zestawom parametrów ani przekrojowi komórek macierzy; każda ukończona komórka zostaje własną parą.
 
-Artefakt bez manifestu (legacy) albo para compare bez sekcji `summary` lub `metrics` daje `inconclusive`. To samo, gdy manifest tej sekcji nie wymienia.
+Nieznany identyfikator artefaktu i nieczytelny manifest zostają przy istniejących wyjściach `ArtifactReader` i nie niosą werdyktu domenowego.
+
+Para compare bez sekcji `summary` lub `metrics` daje `inconclusive`. To samo, gdy czytelny manifest tej sekcji nie wymienia.
 
 Liczba przebiegów zmierzonych jednego wariantu jest `unknown`. Mapa T1 nie ma na nią składowej w sekcji `summary` ani `metrics`. Nie wolno wyprowadzać jej z `SqlHarnessCompareReport.MeasuredRunCount / 2` ani podstawiać `Repetitions`. Liczba `unknown` daje `inconclusive`. Podana liczba mniejsza niż 5 dla któregokolwiek wariantu też daje `inconclusive`. Minimum 5 zostaje. Chodzi o przebiegi zmierzone, nie o rozgrzewkę. Gdy obie liczby są podane i każda wynosi co najmniej 5, ta część bramy przechodzi. Dziś selektywny odczyt tej liczby nie wystawia, więc dzisiejsza para compare staje na tej bramie.
 
@@ -191,7 +193,7 @@ Późniejszy plan testów może śledzić dawne id w tabeli. Ten plik nie ustala
 
 | Krok | Dawne id | Co zostaje, co się przesuwa |
 |---|---|---|
-| 1. Kompletność | R5 | Nadal `inconclusive` dla legacy bez manifestu, braku `summary` albo `metrics` i liczby przebiegów wariantu mniejszej niż 5. Liczba `unknown` też jest `inconclusive`; nie wolno jej doliczać. Measure, measure-set i rollup macierzy są `refused`, nie R5. |
+| 1. Kompletność | R5 | Nadal `inconclusive` dla braku `summary` albo `metrics` na czytelnej parze compare i dla liczby przebiegów wariantu mniejszej niż 5. Liczba `unknown` też jest `inconclusive`; nie wolno jej doliczać. Czytelny measure, measure-set i rollup macierzy są tym samym `inconclusive`, z wyjściem procesu 0. |
 | 2. Dostępność | R3 oraz nowa brama | Null `MetricReport` oraz czas lub reads inaczej niż tokenem `measured` są `inconclusive`, w tym przy jawnym `unavailable`. R3 nie jest werdyktem: CPU `unavailable` przy `Engine` równym `postgres` usuwa wymiar i ocena idzie dalej. CPU nie jest wymagane. |
 | 3. Equivalence | R6, R7 | `Off` albo brak wyniku: `inconclusive` (R6). Mismatch: `inconclusive`, nigdy `fail` (R7). Zgodność w wybranym trybie idzie dalej. |
 | 4. Stabilność | R4 | Nadal `inconclusive`, gdy iloraz czasu jest większy niż 25%. Brak zapisanej składowej nie jest `stable` i sam nie jest powodem stopu. Mediana 0 przy `Max` > 0 jest `inconclusive`. Trójka 0, 0, 0 przechodzi dalej. |
@@ -213,14 +215,14 @@ Dzisiejszy artefakt compare liczby przebiegów wariantu nie podaje. Z samego teg
 | C-mismatch-03 | 0 / 3 | to samo; candidate ≤ 5 ms | R2 `pass` | `inconclusive` (brama 3, R7) |
 | C-mismatch-30 | 0 / 30 | to samo; candidate > 5 ms | R2 `inconclusive`, nigdy `fail` | `inconclusive` (brama 3, R7, nigdy `fail`) |
 | C-off-00 | 0 / 0 | `Mode` = `Off` | R1 `pass`; R6 nie dochodzi | `inconclusive` (brama 3, R6) |
-| C-missing-shape | 0 / 0 | brak manifestu, brak `summary` albo `metrics`, liczba wariantu `unknown`, albo liczba < 5 | R1 `pass`; R5 nie dochodzi | `inconclusive` (brama 1, R5) |
+| C-missing-shape | 0 / 0 | brak `summary` albo `metrics` na czytelnej parze compare, liczba wariantu `unknown`, albo liczba < 5 | R1 `pass`; R5 nie dochodzi | `inconclusive` (brama 1, R5) |
 | C-missing-availability | 0 / 0 | `MetricReport` null, albo czas lub reads bez tokenu `measured` (w tym `unavailable`) | R1 `pass`; dostępność nie była regułą terminalną | `inconclusive` (brama 2) |
 | C-missing-equivalence | 0 / 0 | brak `Equivalence`, albo `Equivalent` null przy trybie innym niż `Off` | R1 `pass`; R6 nie dochodzi | `inconclusive` (brama 3, R6) |
 | C-unstable-03 | 0 / 3 | baseline ma trójkę 0, 0, 0; iloraz czasu candidate > 25%; bramy 1–3 przeszły | R2 `pass`; R4 nie dochodzi | `inconclusive` (brama 4, R4) |
 | C-undefined-00 | 0 / 0 | któryś wariant ma medianę 0 i `Max` > 0 | R1 `pass` | `inconclusive` (brama 4; iloraz niezdefiniowany) |
 | C-first-match | 0 / 0 | liczba wariantu `unknown` i równocześnie mismatch | R1 `pass` | `inconclusive` (brama 1, nie brama 3) |
-| C-measure | 0 / 0 | rodzaj `measure` | nie ma werdyktu pary compare | `refused` |
-| C-measure-set | 0 / 0 | rodzaj `measure-set` | nie ma werdyktu pary compare | `refused` |
-| C-matrix-rollup | 0 / 0 | rollup macierzy, nie jedna komórka rodzaju `compare` | nie ma werdyktu jednej pary | `refused` |
+| C-measure | 0 / 0 | czytelny rodzaj `measure` | nie ma werdyktu pary compare | `inconclusive`, wyjście 0 |
+| C-measure-set | 0 / 0 | czytelny rodzaj `measure-set` | nie ma werdyktu pary compare | `inconclusive`, wyjście 0 |
+| C-matrix-rollup | 0 / 0 | czytelny rollup macierzy, nie jedna komórka rodzaju `compare` | nie ma werdyktu jednej pary | `inconclusive`, wyjście 0 |
 
-Trójka 0, 0, 0 na obu wariantach nie jest wierszem niestabilności. Gdy bramy 1–3 przeszły, jest to Z1 i `pass`. `refused` na `measure`, `measure-set` i rollupie macierzy jest tym samym wynikiem na każdym z tych wierszy, także przy zerach.
+Trójka 0, 0, 0 na obu wariantach nie jest wierszem niestabilności. Gdy bramy 1–3 przeszły, jest to Z1 i `pass`. Czytelny `measure`, `measure-set` i rollup macierzy mają ten sam werdykt `inconclusive` i wyjście procesu 0 na każdym z tych wierszy, także przy zerach.
