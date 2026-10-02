@@ -1,12 +1,14 @@
-# Kontrakt regresji — mapa pól i kolejność decyzji
+# Kontrakt regresji — mapa pól, kolejność decyzji i niezmienniki
 
-Status: draft, mapa pól (T1) i kolejność decyzji (T2). Sekcji niezmienników i planu implementacji tu nie ma.
+Status: draft, mapa pól (T1), kolejność decyzji (T2) i niezmienniki (T3). Planu implementacji tu nie ma.
 
 HEAD mapowania: `39451fcabc7c3eac184e0370bdef7196c7e1e683`. To nie jest baza audytu planu (`8aa01f8`).
 
 Kolejność decyzji jest w sekcji „Kolejność decyzji”. Zastępuje pierwsze dopasowanie z sekcji 4 specyfikacji. Mapy pól poniżej nie zmienia.
 
-Ten plik mapuje siedem faktów na typy z HEAD i zapisuje kolejność reguł. Nie spisuje sekcji niezmienników i nie jest planem implementacji. Nie dodaje komend, stubów ani capabilities. Sekcja 2 w `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md` tylko nazywa wejścia, których polityka chce użyć. Kolejność reguł z sekcji 4 tej specyfikacji nie jest tu przenoszona: jest zastąpiona.
+Niezmienniki są w sekcji „Niezmienniki” i nie zmieniają mapy pól ani kolejności decyzji.
+
+Ten plik mapuje siedem faktów na typy z HEAD, zapisuje kolejność reguł i spisuje niezmienniki, których ta kolejność nie zmienia. Nie jest planem implementacji. Nie dodaje komend, stubów ani capabilities. Sekcja 2 w `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md` tylko nazywa wejścia, których polityka chce użyć. Kolejność reguł z sekcji 4 tej specyfikacji nie jest tu przenoszona: jest zastąpiona.
 
 Nazwy z planu: CompareReport to `SqlHarnessCompareReport`, MetricReport to `BenchmarkMetricReport`. Nazwy typów i składowych są w pisowni źródła.
 
@@ -109,7 +111,7 @@ Measure-set: `MeasureParameterSetReport.ResultsStable` jest tą samą równości
 
 ## Kolejność decyzji
 
-Werdykt domenowy to `pass`, `fail` albo `inconclusive`. Pierwsze dopasowanie wygrywa. Ta kolejność zastępuje sekcję 4 w `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md`. Tam R1 i R2 były terminalne i zwracały `pass` dla zer, zanim R4–R7 sprawdziły niestabilność, brak pomiaru i equivalence. Sekcja 1 tej specyfikacji mówi, że pomiar niekompletny albo technicznie nierównoważny jest `inconclusive`. Ta sekcja usuwa tę sprzeczność. Mapa pól wyżej zostaje bez zmian. Progi z sekcji 3 specyfikacji nie zmieniają liczb i wchodzą dopiero po czterech bramach. Osobnej sekcji niezmienników tu nie ma.
+Werdykt domenowy to `pass`, `fail` albo `inconclusive`. Pierwsze dopasowanie wygrywa. Ta kolejność zastępuje sekcję 4 w `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md`. Tam R1 i R2 były terminalne i zwracały `pass` dla zer, zanim R4–R7 sprawdziły niestabilność, brak pomiaru i equivalence. Sekcja 1 tej specyfikacji mówi, że pomiar niekompletny albo technicznie nierównoważny jest `inconclusive`. Ta sekcja usuwa tę sprzeczność. Mapa pól wyżej zostaje bez zmian. Progi z sekcji 3 specyfikacji nie zmieniają liczb i wchodzą dopiero po czterech bramach. Sekcja „Niezmienniki” powtarza to, czego ta kolejność nie zmienia.
 
 Wejście to jeden już zapisany artefakt, czytany offline polami z mapy. `runs.jsonl` nie jest wejściem tej kolejności.
 
@@ -177,7 +179,7 @@ Mediana czasu to `CompareDistribution.Median` na `ElapsedTimeMilliseconds`. Nie 
 
 Ujemna mediana czasu nie jest przypadkiem zera ani wejściem progów. Werdykt jest `inconclusive`.
 
-Liczby sekcji 3 zostają: czas +10% oraz 5 ms, logical reads +10% oraz 100, CPU +15% oraz 5 ms. Minimum 5 przebiegów jest bramą 1. Spread 25% jest bramą 4. T3 ma te niezmienniki powtórzyć. Tu nie ma tej sekcji.
+Liczby sekcji 3 zostają: czas +10% oraz 5 ms, logical reads +10% oraz 100, CPU +15% oraz 5 ms. Minimum 5 przebiegów jest bramą 1. Spread 25% jest bramą 4. Sekcja „Niezmienniki” te liczby powtarza. Ta kolejność ich nie zmienia.
 
 `fail`, dawne R8, tylko wtedy, gdy czas spełnia oba swoje progi, względny i absolutny, i co najmniej jeden sygnał kosztów też spełnia oba swoje. Sygnałem są logical reads albo CPU, to drugie tylko gdy wymiar CPU nie odpadł w bramie 2. Sam czas nie wystarcza. Spełnienie tylko jednego progu metryki jest szumem, nie sygnałem. Gdy CPU odpadło, korroboracja może przyjść tylko z reads. W pozostałych przypadkach `pass`, dawne R9. `missingIndexes` i operatory godne uwagi nie zmieniają werdyktu.
 
@@ -226,3 +228,75 @@ Dzisiejszy artefakt compare liczby przebiegów wariantu nie podaje. Z samego teg
 | C-matrix-rollup | 0 / 0 | czytelny rollup macierzy, nie jedna komórka rodzaju `compare` | nie ma werdyktu jednej pary | `inconclusive`, wyjście 0 |
 
 Trójka 0, 0, 0 na obu wariantach nie jest wierszem niestabilności. Gdy bramy 1–3 przeszły, jest to Z1 i `pass`. Czytelny `measure`, `measure-set` i rollup macierzy mają ten sam werdykt `inconclusive` i wyjście procesu 0 na każdym z tych wierszy, także przy zerach.
+
+## Niezmienniki
+
+Ta sekcja niczego nie zmienia. Mapa pól zostaje. Kolejność decyzji zostaje. Nie ma tu uzasadnienia, żeby zmieniać progi, minimum przebiegów albo spread.
+
+Liczby sekcji 3 w `docs/superpowers/specs/2026-09-26-benchmark-regression-policy.md` zostają: czas +10% oraz 5 ms, logical reads +10% oraz 100, CPU +15% oraz 5 ms. To zadanie nie uzasadnia ich zmiany. W specyfikacji próg względny to kandydat ≥ baseline × 1.10 (czas i logical reads) albo × 1.15 (CPU), a próg absolutny to różnica ≥ 5 ms (czas i CPU) albo ≥ 100 (logical reads; jednostka w specyfikacji: pages/buffers). Kolejność już tych liczb używa w „Po bramach: zera, potem progi” i zostawia podłogę 5 ms przy dawnym R2. Ta sekcja ich nie rusza.
+
+### Odczyt offline
+
+Nadal obowiązuje. Ocena czyta już zapisany artefakt. Nie otwiera połączenia i nie uruchamia benchmarku ponownie. Ścieżką odczytu zostaje `ArtifactReader`.
+
+Specyfikacja, sekcja 1: źródłem metryki jest już zapisany artefakt, czytany offline; ocena regresji nie uruchamia benchmarku ponownie. Sekcja 7: odczyt jest offline, bez celu, bez połączenia i bez rebenchmarku, z sekcji `summary` i `metrics`.
+
+Kontrakt, sekcja „Odczyt offline”: `ArtifactReader.ReadSection` czyta wyłącznie `manifest.json` i `report.json`. Nie otwiera `runs.jsonl`, planów ani SQL. Sekcja „Kolejność decyzji”: wejście to jeden już zapisany artefakt, czytany offline polami z mapy; `runs.jsonl` nie jest wejściem. Brama 4: nie czytać `runs.jsonl`.
+
+### Werdykt i wyjście 0
+
+Nadal obowiązuje. Werdykt domenowy to tylko `pass`, `fail` albo `inconclusive`. Udana ocena kończy się wyjściem procesu 0, także gdy werdykt jest `fail`. CI rozstrzyga po polu werdyktu, nie po kodzie wyjścia.
+
+Specyfikacja, sekcja 1: werdykt jest polem ładunku i nie zależy od sukcesu procesu; wyjście `0` może nieść `fail` albo `inconclusive`. Sekcja 7: udana ocena ma wyjście procesu `0`, domenowe `fail` tego kodu nie zmienia, a CI bramkuje pole `verdict`, nie wyjście procesu. Sekcja 8: przy wyjściu `0` werdykt może być każdym z `pass`, `fail`, `inconclusive`. Przy wyjściach `2/3/4/5/6` pola werdyktu nie ma.
+
+Kontrakt, otwarcie „Kolejność decyzji”: werdykt domenowy to `pass`, `fail` albo `inconclusive`. Brama 1: czytelny `measure`, `measure-set` i rollup macierzy mają `inconclusive` i wyjście procesu 0. Kolejność nie nadaje werdyktowi `fail` innego wyjścia. Nieznany identyfikator artefaktu i nieczytelny manifest zostają przy istniejących wyjściach `ArtifactReader` i nie niosą werdyktu domenowego.
+
+### Wyjście 8
+
+Nadal obowiązuje. Wyjście `8` zostaje różnicami `snapshot --diff`. Ta polityka go nie używa.
+
+Specyfikacja, sekcja 1: kody `0/2/3/4/5/6/7/8` zostają przy obecnym kontrakcie; wyjście `8` jest wyłącznie `snapshot --diff found differences` i ta polityka go nie przedefiniowuje. Sekcja 7: wyjście `8` zostaje nietknięte (`snapshot --diff` only). Sekcja 8: wyjście `8` nie dotyczy regresji i nigdy nie jest werdyktem regresji.
+
+Kontrakt, „Kolejność decyzji”: jedyne wyjście procesu, które ta kolejność nadaje przy werdykcie domenowym, to 0 (czytelny `measure`, `measure-set` i rollup macierzy). Błąd odczytu zostaje przy istniejących wyjściach `ArtifactReader` i bez werdyktu. Żadna brama i żaden wiersz nie nadaje wyjścia `8`.
+
+### CPU PostgreSQL `unavailable`
+
+Nadal obowiązuje. Gdy `CpuTimeAvailability` jest `unavailable`, a `SqlHarnessTargetIdentityReport.Engine` jest `postgres`, wymiar CPU odpada. Nie jest to zmierzone zero i samo nie rozstrzyga werdyktu. Korroboracja zostaje wtedy tylko z logical reads.
+
+Specyfikacja, sekcja 3: na PostgreSQL wymiaru CPU nie ma, więc korroboracja może przyjść tylko z reads; bez regresji czasu werdykt nie jest `fail`, z CPU albo bez. Sekcja 4, R3: to modyfikator, nie werdykt; na `postgres` wymiar odpada, stałe `CpuTimeMs` równe 0 nie jest wejściem decyzji, ocena idzie dalej, a korroboracja jest tylko z reads.
+
+Kontrakt, mapa „Dostępność czasu, CPU i logical reads”: `PostgresBenchmark.ParseStats` zapisuje `CpuTimeAvailability` zawsze jako `unavailable`. `CpuTimeMs` równe 0 nie jest zmierzonym zerem; mówi to `BenchmarkMetricText.PostgresCpuUnavailable`. Brama 2: gdy `Engine` jest `postgres`, a `CpuTimeAvailability` jest `unavailable`, wymiar CPU odpada i ocena idzie dalej. To dawny R3, nie werdykt. Wejście polityki, które na PostgreSQL wskazuje CPU, nie przywraca wymiaru. `CpuTimeMilliseconds` równe 0 nie jest tokenem `measured`. Akapit progów: gdy CPU odpadło, korroboracja może przyjść tylko z reads.
+
+Brama 2 zostaje dosłownie, także zdanie „Token `measured` zostawia CPU do korroboracji przy progach”. To zdanie nie nazywa silnika. Ta sekcja go nie skreśla. Różnica wobec sekcji 3 specyfikacji zostaje otwarta: tam na PostgreSQL wymiaru CPU nie ma, więc token `measured` też nie jest korroboracją. Tej różnicy tu się nie zamyka.
+
+### Oba progi naraz
+
+Nadal obowiązuje. Metryka jest sygnałem regresji tylko wtedy, gdy spełnia oba progi: względny oraz absolutny. Spełnienie tylko jednego jest szumem, nie sygnałem.
+
+Specyfikacja, sekcja 3: metryka regresuje tylko gdy oba progi są spełnione (względny AND absolutny). Jeden próg nigdy nie jest sygnałem regresji.
+
+Kontrakt, „Po bramach: zera, potem progi”: „Spełnienie tylko jednego progu metryki jest szumem, nie sygnałem.” Wiersz progów w „Zmiana względem sekcji 4” zostawia liczby sekcji 3 bez zmian.
+
+### `fail` to czas plus korroboracja
+
+Nadal obowiązuje. `fail` wymaga regresji czasu (oba progi) oraz co najmniej jednego sygnału korroboracji: logical reads, oba progi, albo CPU, oba progi, na SQL Server. Sam czas nigdy nie daje `fail`.
+
+Specyfikacja, sekcja 3: `fail` wymaga regresji czasu (oba progi) plus korroboracji z logical reads (oba progi) albo — tylko SQL Server — z CPU (oba progi). CPU jest korroboracją i samo nie wystarcza.
+
+Kontrakt, ten sam akapit: `fail`, dawne R8, tylko gdy czas spełnia oba progi, względny i absolutny, i co najmniej jeden sygnał kosztów też spełnia oba swoje. Sygnałem są logical reads albo CPU, to drugie tylko gdy wymiar CPU nie odpadł w bramie 2. „Sam czas nie wystarcza.” W pozostałych przypadkach `pass`, dawne R9. `missingIndexes` i operatory godne uwagi nie zmieniają werdyktu.
+
+### Minimum 5
+
+Nadal obowiązuje. Minimum to 5 zmierzonych przebiegów na wariant. Brama 1 już mówi, że liczba `unknown` albo mniejsza niż 5 jest `inconclusive`. `Repetitions` tego nie zastępuje.
+
+Specyfikacja, sekcja 4, R5: mniej niż 5 zmierzonych przebiegów na wariant jest `inconclusive`. Sekcja 6: minimum 5 zmierzonych przebiegów na wariant; rozgrzewka nie wchodzi do statystyki.
+
+Kontrakt, brama 1: nie wolno wyprowadzać liczby z `SqlHarnessCompareReport.MeasuredRunCount / 2` ani podstawiać `Repetitions`. Liczba `unknown` daje `inconclusive`. Podana liczba mniejsza niż 5 dla któregokolwiek wariantu też daje `inconclusive`. Minimum 5 zostaje. Chodzi o przebiegi zmierzone, nie o rozgrzewkę. Mapa „Liczba przebiegów”: `Repetitions` nie jest zamiennikiem liczby przebiegów wariantu, a jej status zostaje `unknown`. Ta sekcja nie zastępuje tej bramy innym licznikiem.
+
+### Spread 25%
+
+Nadal obowiązuje. Próg zostaje 25% na formule rozkładu czasu, którą brama 4 już zapisała. Ta sekcja formuły nie zmienia.
+
+Specyfikacja, sekcja 4, R4: iloraz `(max − min) / median` większy niż 25% na zmierzonych przebiegach wariantu jest `inconclusive`.
+
+Kontrakt, brama 4: formuła `(Max - Min) / Median` stosuje się do `ElapsedTimeMilliseconds` typu `CompareDistribution` na baseline i na candidate, z zapisanych `Min`, `Median` i `Max`. Próg 25% się nie zmienia. Iloraz > 25% jest `inconclusive`. Iloraz równy 25% przechodzi, bo warunek stopu jest „większy niż”. Spread `CpuTimeMilliseconds` i `LogicalReads` nie wchodzi do tej bramy. Wiersz stabilności w „Zmiana względem sekcji 4” mówi to samo.
