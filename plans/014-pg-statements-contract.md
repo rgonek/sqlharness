@@ -1,6 +1,6 @@
 # Kontrakt pg_stat_statements — macierz źródeł
 
-Status: macierz źródeł (T1); sekwencja połączenia (T2); osobny kontrakt od qstop (T3).
+Status: macierz źródeł (T1); sekwencja połączenia (T2); osobny kontrakt od qstop (T3); delta (T4).
 
 ## Macierz źródeł
 
@@ -369,3 +369,126 @@ Niepowodzenie zapisu artefaktu jest exit `6` (`SqlHarnessExitCode.LocalStorage`)
 - `tests/SqlHarness.Tests/QueryStoreArtifactWriterTests.cs` (nazwy pól linii `qstop`)
 - `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`, sekcje 4, 5, 6 i 8, jako hipoteza porządku i pól stdout tam, gdzie ta sekcja ich nie zwęża
 - strony modułu z macierzy, otwarte ponownie dla filtra `dbid`, tekstu reprezentatywnego i granic `queryid`: https://www.postgresql.org/docs/14/pgstatstatements.html , https://www.postgresql.org/docs/15/pgstatstatements.html , https://www.postgresql.org/docs/16/pgstatstatements.html
+
+## Delta
+
+Ta sekcja jest krokiem T4. Macierzy, sekwencji i sekcji qstop nie przepisuje. Nie dodaje komend, stubów ani capabilities. Nie projektuje listy plików. Nie uruchamiano live DB ani `dotnet test`. `QueryStoreAvailable: !pg` zostaje.
+
+Specyfikacja §7 jest hipotezą. Ta sekcja zwęża ją do tego, czego dowodzi macierz. Nie wkleja jej. Macierz delty nie projektuje. Reguły niżej nie zastępują wierszy macierzy o `stats_reset`, `dealloc` i resecie.
+
+Delta jest porównaniem dwóch udanych wyników kontraktu z sekcji qstop. Kolejność jest kolejnością wołającego: pierwszy i drugi. Nie wyznacza jej `stats_reset` ani zegar. Delta nie ma `--window` i nie ma `windowMinutes`. Nie ma etykiety „ostatnie N godzin” ani „ostatnie 24h”. Nie ma czasu trwania i nie ma ilorazu na jednostkę czasu. Liczniki zostają skumulowane. Sekcja qstop zostawia je bez odejmowania i bez czasu trwania. Ta sekcja też nie odejmuje: status nie niesie różnicy.
+
+Niepowodzenie odczytu zostaje przy sekwencji i przy sekcji qstop. Ta sekcja nie nadaje mu statusu delty i nie zmienia numerów wyjścia. Nie woła `pg_stat_statements_reset`.
+
+### Para
+
+Para wymaga tego samego rozstrzygniętego celu, tej samej głównej wersji serwera i tej samej bazy filtra. Główna wersja jest ilorazem całkowitym `server_version_num` przez `10000`, tym samym kodowaniem co próg sekwencji. `queryid` nie jest kluczem między serwerami, architekturami, wersjami głównymi ani repliką logiczną. Poza tą granicą pary nie ma. To nie jest nowy identyfikator.
+
+W tej granicy para jest jednym znanym, nie-null `queryid` obecnym w obu wynikach. Wartość jest tą liczbą `bigint`, ze znakiem. Pole zostaje `queryId`.
+
+Nieznane albo null `queryid` nie są pozycjami. Nie są scalane między wynikami. Nie są parą. Nie łączy ich null, tekst `query`, `userid`, `toplevel`, numer wiersza ani `queryHash`. `0` w `pg_stat_statements_reset` nie jest ich identyfikatorem.
+
+Znane `queryid` tylko w jednym wyniku nie jest parą. Brak wpisu nie jest wykrytym resetem selektywnym. Nie wstawia się zera. Ciągłość takiego id ma status `unknown`.
+
+Rozjazd tekstu `query` zostawia znane `queryid` i ustawia tylko `query` na null, jak w sekcji qstop. Tekst nie jest przyczyną statusu. Null tekstu nie jest resetem.
+
+Pusta lista pozycji zostaje exit `0` z sekcji qstop. Ta sekcja nie zmienia tego numeru i nie robi z pustki pary.
+
+### Status
+
+Tokeny statusu są dwa: `incomparable` i `unknown`. Nie mają polskich zamienników. Nie ma tokenu porównawalności.
+
+Specyfikacja §7 mówi, że delta jest porównawalna tylko wtedy, gdy równe są trzy znaczniki: `stats_reset`, `dealloc` i `pg_postmaster_start_time()`. Macierz tego zdania nie dowodzi. To zdanie nie obowiązuje. Równość odczytów nie jest deltą porównawalną.
+
+Przyczyny `incomparable`, i tylko te, to: reset, dealloc, restart, spadek licznika. Przyczyna, która zaszła, zostaje nazwana przy statusie. Kilka naraz nie zmienia tokenu i nie nazywa się resetem selektywnym. Gdy nie zaszła żadna, status pary jest `unknown`.
+
+Status nie jest kodem wyjścia.
+
+### Reset
+
+`stats_reset` znaczy: „Time at which all statistics in the `pg_stat_statements` view were last reset.” Gdy oba wyniki mają odczyt `stats_reset` i odczyty się różnią, czas ostatniego resetu wszystkich statystyk widoku jest inny. Każda para tego porównania jest `incomparable`, przyczyna reset. Gdy par nie ma, porównanie i tak niesie tę przyczynę. Nie tworzy par z brakujących id i nie wstawia zer.
+
+To nie jest dowód, że wołano `pg_stat_statements_reset`. Sekwencja zostawia zdanie, że zmiana `stats_reset` nie jest dowodem resetu jednego `queryid`. Ta sekcja go nie cofa. Reset jednego `queryid` nie jest opisany jako odrzucenie wszystkich statystyk widoku. Jego skutek dla `stats_reset` i `dealloc` zostaje `UNPROVEN`. Warunek jest wierszem macierzy „Skutek resetu jednego `queryid` dla `stats_reset` i `dealloc`”. Tego odczytu nie wykonano. Zdanie specyfikacji §7, że reset selektywny zmienia `stats_reset`, zostaje rozjazdem z macierzy. Nie jest faktem źródła.
+
+Reset bazy nie jest osobną przyczyną. Jego skutek dla `stats_reset` i `dealloc` zostaje `UNPROVEN`, wierszem macierzy o tym skutku. Tego odczytu nie wykonano.
+
+Czy pełny reset, bez argumentów albo same zera, ustawia `stats_reset`, zeruje `dealloc`, czy robi oba, zostaje `UNPROVEN`. Warunek jest wierszem macierzy „Skutek resetu całości dla `stats_reset` osobno i dla `dealloc` osobno”. Tego odczytu nie wykonano. Różnica kolumny nie rozstrzyga tej komórki. Kolumna jest jedna na cały widok, nie na bazę filtra. Przyczyna reset nie mówi, że reset dotyczył tylko tej bazy.
+
+Gdy któregoś odczytu `stats_reset` brak, w tym gdy jest NULL, porównanie nie jest równością i nie jest różnicą. Przyczyna reset nie zachodzi. Macierz nie mówi, czy kolumna bywa NULL. To zostaje `UNPROVEN`. Warunek: odczyt `pg_stat_statements_info` na jawnym celu, który pokaże, czy `stats_reset` bywa NULL. Tego odczytu nie wykonano.
+
+### Dealloc
+
+`dealloc` jest łączną liczbą wyrzuceń wpisów o najmniej wykonywanych poleceniach, gdy zaobserwowano więcej różnych poleceń niż `pg_stat_statements.max`. Gdy oba wyniki mają odczyt `dealloc` i drugi jest większy, każda para jest `incomparable`, przyczyna dealloc. Gdy par nie ma, porównanie i tak niesie tę przyczynę i nie wstawia zer.
+
+Strony nie opisują delty per wpis po tym wyrzuceniu. Nie wskazują `queryid` ani bazy. Nie ma liczb „tylko dla wpisów, które zostały”. Zdanie specyfikacji §7, że delty per wpis są wtedy „silently partial”, nie jest zdaniem źródła. Ta sekcja go nie przyjmuje.
+
+Spadek `dealloc` nie jest tą przyczyną. Jest spadkiem licznika, niżej. Równe `dealloc` nie jest dowodem, że wpisy trwają.
+
+Brak odczytu albo NULL nie jest wzrostem. Przyczyna dealloc nie zachodzi. Czy `dealloc` bywa NULL, jest `UNPROVEN` na tym samym warunku co NULL w `stats_reset`. Tego odczytu nie wykonano.
+
+### Restart
+
+`pg_postmaster_start_time()` nie jest znacznikiem ciągłości. Macierz go nie dowodzi. Ta sekcja nie otwiera strony tej funkcji i nie robi z niej trzeciego znacznika. Równość albo różnica tego odczytu sama nie jest `incomparable` i sama nie jest deltą porównawalną. Nowego tokenu ciągłości nie ma.
+
+Przyczyna restart zachodzi tylko łącznie. Oba wyniki mają odczyt tej funkcji i te odczyty się różnią. Oba wyniki mają `pg_stat_statements.save` równe `off`. Fakt macierzy: `off` nie zapisuje statystyk przy wyłączeniu i nie wczytuje ich przy starcie. Każda para jest wtedy `incomparable`, przyczyna restart. Domyślne `on` nie jest podstawiane, gdy `save` nie zostało odczytane. Samo `off`, bez różnicy odczytu startu, nie jest tą przyczyną. Dwa odczyty `save` nie są odczytem w chwili wyłączenia. Innego faktu o restarcie macierz nie ma, więc inny układ `save` tej przyczyny nie daje.
+
+Gdy `save` jest `on`, macierz nie podaje reguły delty, także przy różnym odczycie startu. Przyczyna restart nie zachodzi. Delta nie staje się porównawalna. Skutek jest `UNPROVEN`. Warunek: zdanie źródła albo odczyt na jawnym celu, które mówi, czy statystyki po starcie przy `save = on` są statystykami sprzed wyłączenia. Tego odczytu nie wykonano.
+
+Brak odczytu startu nie znaczy, że restartu nie było. Nie uprawnia odejmowania. Zmiana `save` między wynikami, bez koniunkcji wyżej, nie jest przyczyną. Jej skutek dla liczników jest `UNPROVEN`. Warunek: zdanie źródła, które mówi, czy zmiana `save` bez wyłączenia rusza statystyki. Macierz go nie ma. Tego odczytu nie wykonano.
+
+Odczyt startu i `save` nie jest polem stdout sekcji qstop. Ta sekcja nie dopisuje tam pól. Bez tych odczytów przyczyna restart nie zachodzi.
+
+### Spadek licznika
+
+Przyczyna spadek licznika zachodzi, gdy w kolejności wołającego drugi wynik ma mniejszą wartość niż pierwszy. Dotyczy `dealloc`, gdy obie wartości są obecne. Dotyczy pary, gdy oba wyniki mają to samo pole po agregacji z sekcji qstop i druga wartość jest mniejsza:
+
+- `executionCount`
+- `totalDurationMs`
+- `maximumDurationMs`
+- `totalPlanMs`
+- `maximumPlanMs`
+- `rowsReturned`
+- `sharedBlocksHit`
+- `sharedBlocksRead`
+- `localBlocksRead`
+- `localBlocksWritten`
+- `tempBlocksRead`
+- `tempBlocksWritten`
+- `walBytes`
+- `blockReadMs`
+- `blockWriteMs`
+
+Jedno mniejsze pole wystarcza. Para jest `incomparable` w całości. Żadne pole nie dostaje różnicy. Średnie `averageDurationMs` i `averagePlanMs` nie są tym testem. Ich spadek przy niespadających sumach nie jest tą przyczyną. Ich brak przy `SUM(calls) = 0` też nie jest. `toplevelOnly` i `query` nie są tym testem. Brak pola po jednej stronie nie jest zerem i nie jest spadkiem.
+
+Spadek nie jest wykrytym resetem selektywnym i nie jest wykrytym resetem bazy. Nazywa obserwację, nie funkcję, której strony na `stats_reset` nie pokazują.
+
+### Ciągłość `unknown`
+
+Gdy dla pary nie zaszła żadna przyczyna, status jest `unknown`. Równe `stats_reset`, równe `dealloc`, brak koniunkcji restartu i liczniki, które nie są mniejsze, nie wykluczają resetu jednego `queryid` ani resetu bazy. Skutek tych resetów dla obu kolumn jest `UNPROVEN`, jak w macierzy. Tego odczytu nie wykonano. Ta równość nie jest deltą porównawalną.
+
+Kontrakt nie obiecuje pełnego wykrycia resetu selektywnego. W macierzy nie ma metadanej resetu jednego `queryid`. Tej metadanej się nie wymyśla. Reset, którego źródło nie pokazuje, zostaje `unknown`. Nie jest wykrytym resetem i nie jest deltą porównawalną.
+
+`unknown` też nie niesie różnicy liczników. Wzrost licznika nie jest ciągiem. Mógł powstać po resecie, którego te kolumny nie pokazują, a potem powyżej wartości z pierwszego wyniku.
+
+### Przypadki statusu
+
+To nie jest tabela testów implementacji. Pliki, typy i testy należą do osobnego planu, nie tutaj. Lista jest tylko statusami z tej sekcji.
+
+| Przypadek | Obserwacja | Status |
+|---|---|---|
+| Różne `stats_reset` | Inny czas ostatniego resetu wszystkich statystyk widoku. To nie jest nazwa wywołania. | `incomparable`, reset |
+| `dealloc` większe w drugim wyniku | Wyrzucenie pod `pg_stat_statements.max`. Bez delty per wpis. | `incomparable`, dealloc |
+| Różny start i `save = off` w obu wynikach | Nie zapisano przy wyłączeniu i nie wczytano przy starcie. | `incomparable`, restart |
+| `save = on`, także przy różnym starcie | Macierz nie ma reguły delty. | `unknown`; skutek `UNPROVEN` |
+| Mniejszy licznik pary albo mniejszy `dealloc` | Spadek w kolejności wołającego. | `incomparable`, spadek licznika |
+| Równe `stats_reset` i równe `dealloc`, liczniki nie mniejsze, restart nie zaszedł | Reset jednego `queryid` i reset bazy nie są wykluczone. | `unknown` |
+| Znane `queryid` w jednym wyniku | Nie para. Brak nie jest wykrytym resetem selektywnym. | ciągłość `unknown` |
+| Null albo nieznane `queryid` | Nie pozycja i nie para. Bez scalenia. | nie para |
+| Rozjazd `query` | Zostaje `queryId`. Nulluje się tylko `query`. | status liczników bez zmiany z powodu tekstu |
+
+### Odwołania
+
+- Macierz tego pliku: `stats_reset`, `pg_stat_statements_reset`, `dealloc`, `pg_stat_statements.max`, `pg_stat_statements.save` i rozjazd specyfikacji §7. Ta sekcja tych wierszy nie zastępuje.
+- Sekcja qstop tego pliku: znane `queryid`, brak pary z nieznanego id, rozjazd tekstu nulluje tylko `query`, liczniki bez odejmowania i bez czasu trwania. Zdanie, że ta sekcja nie projektuje delty, zostaje przy niej. Projekt delty jest tutaj.
+- Sekwencja tego pliku: zmiana `stats_reset` nie jest dowodem resetu jednego `queryid`. To zdanie zostaje.
+- `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md` §7, jako hipoteza zwężona powyżej. Zdanie o trzech równych znacznikach nie obowiązuje.
