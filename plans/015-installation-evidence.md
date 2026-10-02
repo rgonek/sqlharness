@@ -1,6 +1,6 @@
 # Pomiar zainstalowanego CLI i buildu repo
 
-Status: transkrypt 015/T1. Bez instalacji i bez zmiany kodu.
+Status: ten plik jest diagnozą 015/T1–T3. Instalacji nie wykonano. Kodu nie zmieniano.
 
 ## 015/T1
 
@@ -491,6 +491,7 @@ Zapis jest z 2026-10-02 na this Windows host. Rozjazd z `## 015/T1` i `## 015/T2
 - Rozjazd zostaje. Help zainstalowany, zapisany w `## 015/T1`, ma `query`, `measure`, `compare`, `gain`, `plan`, `schema`, `ping`, `counts`, `space`, `watch`, `snapshot`. Nie ma `capabilities`, `validate` ani `mcp`. Help repo z tamtego pomiaru ma także `artifact`, `qstop`, `indexes`, `capabilities`, `doctor`, `validate` i `mcp`.
 - Nie oznaczono RESOLVED EXTERNALLY. `## 015/T2` też tego nie oznaczył.
 - Procedura jest zapisana poniżej. Instalacji nie wykonano. Zapis planu nie zastępuje pliku PATH.
+- Wybór tagu zostaje `v0.3.1`. Nie zamyka rozjazdu. Oczekuje się, że krok 5 odrzuci asset zbudowany z tego tagu. Zamknięcie rozjazdu wymaga buildu nowszego niż każdy opublikowany tag z tabeli. Ten plan takiego buildu nie autoryzuje. Odczyt gita jest przy wyborze tagu.
 - Pochodzenie pliku zostaje UNPROVEN, na warunku z `## 015/T2`. Zapytanie o metadane wydań nie dało sumy kontrolnej równej SHA-256 `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`.
 - Oba napisy `--version` to `1.0.0`, jeden z binarki PATH i jeden z pola `version` w `capabilities --json`. Ten napis nie pokazuje rozjazdu. Rozjazd jest w zestawie nazw helpa.
 - Różnica `mcp` jest zapisana w `## 015/T1`: help repo wymienia `mcp`, a `capabilities --json` z tego samego pomiaru nie ma tej nazwy w `commands` ani jako podciągu. Zostaje tak, jak jest zapisane. Jest poza zakresem tego kroku. Kodu produktu nie zmieniano.
@@ -518,11 +519,23 @@ Odczyt był tylko do odczytu. Pobrano nazwy, daty publikacji i flagi draft oraz 
 
 Przy każdym z tych czterech tagów lista assetów ma też `sqlharness-linux-x64.tar.gz` i `sqlharness-osx-arm64.tar.gz`. Ta procedura ich nie używa. To nie jest dowód z innej platformy.
 
-Lista tagów nie jest tekstem `--help`. Czy którekolwiek z tych wydań zamyka rozjazd, zostaje UNPROVEN, dopóki nie ma przebiegu kroku 5.
+Lista tagów nie jest tekstem `--help`. Stdout kroku 5 nie został zapisany. Oczekiwanie z gita jest przy wyborze tagu: krok 5 ma odrzucić asset zbudowany z `v0.3.1`. Żaden tag z tabeli nie zamyka rozjazdu, jeśli jego asset jest zbudowany z tego tagu.
 
 Data ostatniego zapisu pliku PATH z `## 015/T2` to 2026-09-23T08:58:00.4821692Z. Najnowsza publikacja z tabeli jest wcześniejsza. To nie jest log publikacji i nie utożsamia pliku z tagiem. Pochodzenie zostaje UNPROVEN.
 
 Kontrakt dystrybucji jest w README, w sekcji `Install a release binary`: archiwum `sqlharness-win-x64.zip`, plik `SHA256SUMS` i weryfikacja przed rozpakowaniem. Przykład w tej sekcji wstawia `v0.1.0` z komentarzem, że tag trzeba zastąpić wybranym. Ten przykład nie jest wyborem tej diagnozy. Procedura poniżej wybiera `v0.3.1`, bo ten odczyt wskazuje go jako najnowszy opublikowany tag, który ma oba pliki kontraktu. Ten wybór nie dowodzi helpa.
+
+Każdy tag z tabeli jest wcześniejszy niż commity, które dodały `capabilities`, `validate` i `mcp`. To jest odczyt gita z tego worktree. Nie było nowego zapytania o wydanie i nie wymyślono publikacji. Data publikacji `v0.3.1` z tabeli, `2026-08-04T13:30:57Z`, nie jest datą committera tego tagu.
+
+`git rev-parse v0.3.1` zwraca obiekt tagu `aec21ca362ae1c1b04f769e5b3a25ea1769b77a9`. `git cat-file -t v0.3.1` zwrócił `tag`. `git rev-parse "v0.3.1^{commit}"` zwraca commit `1f5707897b57f24c69380c542928407fc97693a2`. Data committera, `git log -1 --format=%cI v0.3.1`, to `2026-08-04T15:28:51+02:00`. Temat to `fix: include SqlClient Azure authentication`.
+
+`c798c1a1334b5a6ff14f94c9a65e1bdfa79748ea` dodał `capabilities` i `validate`. Data committera to `2026-09-26T19:18:08+02:00`. Temat to `feat: add offline capabilities and validation commands`. `git merge-base --is-ancestor c798c1a1334b5a6ff14f94c9a65e1bdfa79748ea v0.3.1` zakończył się kodem 1, więc ten commit nie jest przodkiem `v0.3.1`. `git merge-base --is-ancestor v0.3.1 c798c1a1334b5a6ff14f94c9a65e1bdfa79748ea` zakończył się kodem 0, więc `v0.3.1` jest przodkiem tego commita.
+
+`f2d988aa88a0d120facbde3b3dc8ef380a199512` dodał `mcp`. Data committera to `2026-09-28T14:35:34+02:00`. Temat to `feat: host a profile-scoped MCP server over stdio`. `git merge-base --is-ancestor f2d988aa88a0d120facbde3b3dc8ef380a199512 v0.3.1` zakończył się kodem 1. `git merge-base --is-ancestor v0.3.1 f2d988aa88a0d120facbde3b3dc8ef380a199512` zakończył się kodem 0.
+
+`v0.3.0` wskazuje commit `f607e5f5d68aa1d6d946fe28d9a3df4a65b23f1b`, committer `2026-08-03T20:23:29+02:00`, temat `docs: define complete select syntax contract`. `v0.2.0` wskazuje commit `af71450ebac48c72cd579ac848b007f424e39b68`, committer `2026-07-30T12:30:29+02:00`, temat `fix: polish watch/snapshot gain success and stop edges`. `v0.1.0` wskazuje commit `14c58c0f19761f977910a55ad4ac168d8a4dd9a3`, committer `2026-07-18T17:06:55+02:00`, temat `Merge branch 'feature/sqlharness-extraction' — release job repository context`. Dla `v0.3.0`, `v0.2.0` i `v0.1.0` oba `git merge-base --is-ancestor` od `c798c1a1334b5a6ff14f94c9a65e1bdfa79748ea` i od `f2d988aa88a0d120facbde3b3dc8ef380a199512` zakończyły się kodem 1, a oba w drugą stronę kodem 0.
+
+Oczekuje się, że krok 5 odrzuci asset zbudowany z `v0.3.1`. Tego kroku nie uruchomiono i archiwum nie pobrano. Zamknięcie rozjazdu wymaga buildu nowszego niż każdy opublikowany tag z tabeli. Ten plan takiego buildu nie autoryzuje.
 
 ### Ścieżki
 
@@ -532,9 +545,9 @@ Katalog staging to `C:\Users\rgone\AppData\Local\Temp\sqlharness-015-staging`. N
 
 ### Procedura
 
-Polecenia poniżej są dla późniejszego zadania. Ten krok ich nie uruchomił. Zapis nie zastępuje pliku PATH. Bloki idą po kolei. Pierwszy wyjątek zatrzymuje resztę. Kroki 3–5 mogą zatrzymać się już po kroku 2: plik PATH jest wtedy nadal oryginałem, a kopia już leży. Tej kopii ta procedura nie usuwa.
+Polecenia poniżej są dla późniejszego zadania. Ten krok ich nie uruchomił. Zapis nie zastępuje pliku PATH. Bloki idą po kolei. Pierwszy wyjątek zatrzymuje resztę. Kroki 3–5 mogą zatrzymać się już po kroku 2: plik PATH jest wtedy nadal oryginałem, a kopia, której SHA-256 jest `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`, już leży. Tej zgodnej kopii ta procedura nie usuwa. Jeśli hash kopii z kroku 2 nie jest tym SHA-256, krok 2 usuwa tę złą kopię i dopiero wtedy rzuca. Zła kopia nie zostaje, więc następny uporządkowany przebieg nie staje na zakazie nadpisania istniejącej nazwy.
 
-Tag procedury to `v0.3.1`. Nie podmieniaj go na `v0.1.0` z przykładu README tylko dlatego, że przykład tak jest napisany.
+Tag procedury to `v0.3.1`. Nie podmieniaj go na `v0.1.0` z przykładu README tylko dlatego, że przykład tak jest napisany. Ten tag, jak każdy tag z tabeli, jest wcześniejszy niż commity `capabilities`, `validate` i `mcp`. Oczekuje się, że krok 5 odrzuci asset zbudowany z `v0.3.1`. Szczegół gita jest przy wyborze tagu.
 
 1. Zatrzymaj się, chyba że `Get-Command sqlharness -All` nadal zwraca dokładnie jeden obiekt i ten obiekt jest aplikacją `C:\Users\rgone\.local\bin\sqlharness.exe`, a SHA-256 tego pliku nadal jest `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`.
 
@@ -555,7 +568,7 @@ if ($hash -cne $expectedInstalled) {
 }
 ```
 
-2. Skopiuj ten plik do `C:\Users\rgone\.local\bin\sqlharness.exe.bak-bb702504d05a`. Jeśli ta nazwa już istnieje, zatrzymaj się. Nie nadpisuj jej.
+2. Skopiuj ten plik do `C:\Users\rgone\.local\bin\sqlharness.exe.bak-bb702504d05a`. Jeśli ta nazwa już istnieje, zatrzymaj się. Nie nadpisuj jej. Po kopiowaniu porównaj SHA-256 kopii z `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. Przy różnicy usuń tę złą kopię i zatrzymaj się. Pliku PATH nie zastępuj. Usunięcie dotyczy tylko kopii o złym hashu. Zgodnej kopii nie usuwaj.
 
 ```powershell
 $path = "C:\Users\rgone\.local\bin\sqlharness.exe"
@@ -567,7 +580,11 @@ if (Test-Path -LiteralPath $backup) {
 Copy-Item -LiteralPath $path -Destination $backup
 $backupHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $backup).Hash.ToLowerInvariant()
 if ($backupHash -cne $expectedInstalled) {
-  throw "Stop: kopia nie ma SHA-256 pliku PATH. Pliku PATH nie zastępuj."
+  Remove-Item -LiteralPath $backup
+  if (Test-Path -LiteralPath $backup) {
+    throw "Stop: kopia nie ma SHA-256 $expectedInstalled i nie dała się usunąć. Pliku PATH nie zastępuj. Nie nadpisuj tej kopii."
+  }
+  throw "Stop: kopia nie miała SHA-256 $expectedInstalled. Złą kopię usunięto. Pliku PATH nie zastępuj."
 }
 ```
 
@@ -672,25 +689,36 @@ foreach ($required in @("capabilities", "validate", "mcp")) {
 }
 ```
 
-6. Dopiero wtedy zastąp `C:\Users\rgone\.local\bin\sqlharness.exe` plikiem ze stagingu. Kopia z kroku 2 zostaje. Nie usuwaj jej. Nie dopisuj `$HOME\bin\sqlharness` do `PATH`. Ten plan kroku 6 nie wykonuje.
+6. Dopiero wtedy zastąp `C:\Users\rgone\.local\bin\sqlharness.exe` plikiem ze stagingu. Przed `-Force` zarówno SHA-256 kopii z kroku 2, jak i SHA-256 bieżącego pliku PATH, muszą być `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. Inaczej zatrzymaj się i nie wołaj `-Force`. Kopia z kroku 2 zostaje. Nie usuwaj jej. Nie dopisuj `$HOME\bin\sqlharness` do `PATH`. Ten plan kroku 6 nie wykonuje.
 
-Hash po podmianie porównaj z hashem pliku ze stagingu, czyli z plikiem, który właśnie kopiujesz. Nie porównuj go z `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f` jakby to był hash docelowy. Jeśli kopiowanie zgłosi błąd, zatrzymaj się. Kopii z kroku 2 nie usuwaj.
+Hash po podmianie porównaj z hashem pliku ze stagingu, czyli z plikiem, który właśnie kopiujesz. Nie porównuj go z `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f` jakby to był hash docelowy. Jeśli hash po podmianie nie jest hashem pliku ze stagingu, skopiuj kopię z kroku 2 z powrotem na plik PATH, potem porównaj SHA-256 pliku PATH z tym samym znanym hashem i zatrzymaj się. Kopii z kroku 2 nie usuwaj. Jeśli kopiowanie zgłosi błąd, zatrzymaj się.
 
 ```powershell
 $path = "C:\Users\rgone\.local\bin\sqlharness.exe"
 $backup = "C:\Users\rgone\.local\bin\sqlharness.exe.bak-bb702504d05a"
 $stagedExe = "C:\Users\rgone\AppData\Local\Temp\sqlharness-015-staging\extract\sqlharness.exe"
+$expectedInstalled = "bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f"
 if (-not (Test-Path -LiteralPath $backup)) {
   throw "Stop: brak kopii z kroku 2. Pliku PATH nie zastępuj."
 }
 if (-not (Test-Path -LiteralPath $stagedExe)) {
   throw "Stop: brak pliku ze stagingu. Pliku PATH nie zastępuj."
 }
+$backupHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $backup).Hash.ToLowerInvariant()
+$pathHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
+if ($backupHash -cne $expectedInstalled -or $pathHash -cne $expectedInstalled) {
+  throw "Stop: SHA-256 kopii albo bieżącego pliku PATH nie jest $expectedInstalled. Nie wołaj -Force. Pliku PATH nie zastępuj."
+}
 $stagedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $stagedExe).Hash.ToLowerInvariant()
 Copy-Item -LiteralPath $stagedExe -Destination $path -Force
 $replaced = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
 if ($replaced -cne $stagedHash) {
-  throw "Stop: hash pliku PATH po kopii nie jest hashem pliku ze stagingu. Kopia z kroku 2 zostaje. Ta instrukcja jej nie usuwa."
+  Copy-Item -LiteralPath $backup -Destination $path -Force
+  $restored = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
+  if ($restored -cne $expectedInstalled) {
+    throw "Stop: hash po podmianie nie jest hashem pliku ze stagingu, a przywrócenie kopii nie wróciło SHA-256 $expectedInstalled. Kopii z kroku 2 nie usuwaj."
+  }
+  throw "Stop: hash pliku PATH po kopii nie jest hashem pliku ze stagingu. Kopię z kroku 2 skopiowano z powrotem na plik PATH. Tej kopii nie usuwaj."
 }
 ```
 
@@ -709,12 +737,14 @@ Jedna pozycja na polecenie, które ta diagnoza naprawdę uruchomiła. Polecenia 
 | `FileVersionInfo.GetVersionInfo` | `FileVersion` `1.0.0.0`; `ProductVersion` `1.0.0+3d2c41892d15d563c22dba9c917c71aa31cb66ff`; `OriginalFilename` `sqlharness.dll`; `FileDescription` `sqlharness` | `## 015/T2` |
 | `Get-AuthenticodeSignature` | `Status` `NotSigned`; certyfikat podpisującego null | `## 015/T2` |
 | `gh release list --repo rgonek/sqlharness --limit 20` i `gh release view` czterech tagów | kod 0; cztery opublikowane tagi; przy każdym `sqlharness-win-x64.zip` i `SHA256SUMS` | ta sekcja, `Zapytanie o wydania` |
+| `git rev-parse`, `git cat-file -t`, `git log -1 --format=%cI` i `git merge-base --is-ancestor` dla tagów z tabeli oraz `c798c1a1334b5a6ff14f94c9a65e1bdfa79748ea` i `f2d988aa88a0d120facbde3b3dc8ef380a199512` | kody przy wyborze tagu; oba commity funkcji nie są przodkami żadnego z czterech tagów (kod 1); każdy tag jest przodkiem obu (kod 0) | przy wyborze tagu |
 | `git diff --check` | exit 0; brak wyjścia | ten wiersz dla dopisku `## 015/T3`; przebiegi T1 i T2 też exit 0, w raportach zadań poza gitem |
+| `git diff --check` dla dopisku guarda | exit 0; brak wyjścia | ten wiersz |
 | `dotnet test` | nie uruchomiono; plan zabrania testów aplikacji przy samym zapisie dokumentów | ten wiersz |
 
 ### UNPROVEN
 
-- Tekst `--help` wydania, w tym czy help assetu `sqlharness-win-x64.zip` wymienia `capabilities`, `validate` i `mcp`. Warunek: wykonać krok 5 i zapisać stdout. Lista tagów tego nie dowodzi. Tego przebiegu nie było. Czy wydanie GitHub zamyka ten rozjazd, zostaje UNPROVEN.
+- Tekst `--help` wydania, czyli stdout kroku 5. Warunek: wykonać krok 5 i zapisać stdout. Tego przebiegu nie było, więc tego tekstu tu nie ma. Oczekiwanie z gita, zapisane przy wyborze tagu, nie jest tym stdoutem: krok 5 ma odrzucić asset zbudowany z `v0.3.1`. Zamknięcie rozjazdu wymaga buildu nowszego niż każdy opublikowany tag z tabeli. Ten plan takiego buildu nie autoryzuje.
 - Czy hash któregokolwiek assetu wydania jest równy buildowi tego worktree. Warunek: zahashować wyjęty `sqlharness.exe` i build z tego worktree, potem porównać te dwa hashe. Tego dokumentu nie ma takiej pary. SHA-256 pliku PATH nie jest oczekiwanym hashem wyjętego pliku i nie jest tą parą.
 - Ciało `SHA256SUMS` i bajty zipa. Warunek: pobrać te pliki w kroku 3 i zapisać sumę oraz wynik porównania. To zapytanie wzięło nazwy assetów, daty i flagi. Sumy nie czytało.
 - Pochodzenie pliku PATH poza polami z `## 015/T2`. Warunek zostaje ten z `## 015/T2`: suma kontrolna wydania albo log publikacji równe SHA-256 `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. To zapytanie tego warunku nie spełnia.
