@@ -1,6 +1,6 @@
 # Plan 013: Doprecyzuj i przygotuj wdrożenie decyzji regresji CI
 
-Status: **DONE — etap projektowy/diagnostyczny** (funkcja nadal **PLANNED**; dokumenty: `plans/013-regression-contract.md`, `plans/013-regression-implementation.md`; commity `983f7b6..d5f994f`)
+Status: **DONE — etap projektowy/diagnostyczny** (funkcja nadal **PLANNED**; dokumenty: `plans/013-regression-contract.md`, `plans/013-regression-implementation.md`; commity `983f7b6..f6c8d7a`)
 Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
 Priorytet: P2; nakład: L; ryzyko zmiany: MED.
 Pokrycie: **propozycja funkcji regresji**. Zależności: **003, 006, 009**.
