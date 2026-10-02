@@ -17,7 +17,7 @@ Nie są nowym projektem. Zadanie, które je rusza, nie wybiera innego kształtu.
 - Pozycja jest jednym znanym, nie-null `queryid`. Nieznane id nie są scalane i nie dostają wymyślonego id. Rozjazd tekstu zostawia `queryId` i ustawia tylko `query` na null.
 - Nie ma `--window`, pola recency ani metryki CPU. Tekst SQL jest tylko w lokalnym `queries.jsonl`. Stdout ma metryki i identyfikatory.
 - Tokeny delty są tylko `incomparable` i `unknown`. Nie ma odejmowania i nie ma ścieżki porównawalnej. Reset selektywny nie jest wykrywany. Po dozwolonej parze komenda czyta `current_setting('pg_stat_statements.save')` i `pg_postmaster_start_time()`. Zostają nieserializowanymi polami jednego wyniku w pamięci. Nie są znacznikiem ciągłości, nie są stdout i nie są polami `report.json`. `pgstop` nie woła `Compare`. `Compare` czyta te pola z dwóch wyników, które dostaje. Dwa wywołania CLI nie pokażą restartu, dopóki nie ma późniejszego magazynu. Ten plan go nie dodaje. Przyczyna restart zachodzi tylko wtedy, gdy oba wyniki mają `save` równe `off` i czas startu się różni. Przy braku odczytu przyczyna restart nie zachodzi. `save = on` nie jest deltą porównawalną i nie kasuje innej przyczyny.
-- Nie ma `CREATE EXTENSION`, `ALTER EXTENSION`, zmiany GUC ani wywołania `pg_stat_statements_reset`.
+- Nie ma `CREATE EXTENSION`, `ALTER EXTENSION`, zmiany GUC ani wywołania `pg_stat_statements_reset`. Odczyt `current_setting('track_io_timing')` nie jest zmianą GUC.
 - `QueryStoreAvailable: !pg` w `src/SqlHarness.Mcp/McpOperationMapper.cs` zostaje. Ten dokument tej linii nie zmienia. Żadne zadanie poniżej też jej nie zmienia: flaga nie jest odczytem `pg_stat_statements`.
 
 ## Nity odłożone
@@ -26,8 +26,7 @@ Ledger: `D:\Dev\sqlharness\.superpowers\sdd\014-postgres-diagnostics-design\prog
 
 - Brak wiersza `pg_available_extensions` wobec NULL `installed_version` (kontrakt, linia 203). Zadanie realizuje zdanie kontraktu: NULL albo brak wiersza to brak rozszerzenia, exit `5`. Nie rozdziela tych dwóch przypadków i nie oznacza braku wiersza jako nowego `UNPROVEN`.
 - Para inna niż 14+`1.9` i 15/16+`1.10` nie ma numeru wyjścia (kontrakt, linia 205). Zadanie nie dopisuje „to nie jest exit 0” do kontraktu. Ścieżka i tak nie jest exit `0` ani pustym sukcesem. Numeru nie nazywa.
-- `track_io_timing` obok `blockReadMs` / `blockWriteMs` (kontrakt, linia 349). Kontekst zostaje przy trzech GUC z kontraktu. Zadanie nie dopisuje `track_io_timing`.
-- Trzy nity tabeli delty (kontrakt, linie 427, 482 i 487). Zadanie nie dopisuje „and no other cause”, nie dopisuje słowa `dealloc` do warunku NULL i nie zamienia komórki „nie para” na token statusu. Obowiązuje proza sekcji Delta, nie poszerzona tabela.
+- Trzy nity tabeli delty (kontrakt, linie 428, 483 i 488). Zadanie nie dopisuje „and no other cause”, nie dopisuje słowa `dealloc` do warunku NULL i nie zamienia komórki „nie para” na token statusu. Obowiązuje proza sekcji Delta, nie poszerzona tabela.
 
 ## Korekta szkicu §10 i §11
 
@@ -59,7 +58,7 @@ Gate operacji DB jest bramą planu 004: `McpExecutionGate.IsDbTool` i `RunDbAsyn
 Tylko te:
 
 1. `src/SqlHarness.Core/Postgres/PgStatementTopQuery.cs` — stałe SQL i wybór SQL kolumn. Bez I/O i bez połączenia.
-2. `src/SqlHarness.Core/Postgres/PgStatementTop.cs` — rola Reader: `PgStatementTop.ReadAsync` na `ISqlReader`, agregacja, ranking i czysta delta. Osobnego pliku Reader nie ma. To jest ten sam podział co `QueryStoreTopQuery.ReadAsync`, nie nowy klasyfikator.
+2. `src/SqlHarness.Core/Postgres/PgStatementTop.cs` — rola Reader: `PgStatementTop.ReadAsync` na `ISqlReader`, agregacja, ranking i czysta delta. Osobnego pliku Reader nie ma. To jest ten sam podział co `QueryStoreTopQuery.ReadAsync`, nie nowy klasyfikator. Agregacja jest po odczycie. SQL kolumn zwraca każdy wiersz po filtrze i nie ma `LIMIT` ani `TOP`. `--top` jest tylko na pozycjach po agregacji.
 3. `src/SqlHarness.Core/PgStatementArtifactWriter.cs` — `PgStatementArtifactWriter` i `IPgStatementArtifactWriter`.
 4. `src/SqlHarness.Cli/Commands/PgStatementTopCommand.cs` — komenda `pgstop`.
 5. `tests/SqlHarness.Tests/PgStatementTopTests.cs` — fixture, error, empty, reset i version na `FakeReader` oraz na szwie modułu z `QueryStoreTopTests`.
@@ -85,10 +84,10 @@ Stałe, porównywane w teście jako tekst. Nie idą przez `PostgresSafetyClassif
 
 - Wersja: `SELECT current_setting('server_version_num')`. Liczba jest parsowana niezmiennie kulturowo. Próg mniejszy niż `140000` to podłoga.
 - Rozszerzenie: `SELECT installed_version FROM pg_available_extensions WHERE name = 'pg_stat_statements'`. To nie jest `default_version` i nie jest `server_version_num`.
-- Kontekst, dopiero po dozwolonej parze: `current_setting` dla `pg_stat_statements.track`, `pg_stat_statements.track_utility`, `pg_stat_statements.track_planning` i `pg_stat_statements.save`, oraz `pg_postmaster_start_time()`, oraz `dealloc` i `stats_reset` z `pg_stat_statements_info`. Bez `track_io_timing`. `save` i czas startu zostają nieserializowanymi polami wyniku w pamięci. Nie wchodzą do stdout ani do `report.json`. Nie są znacznikiem ciągłości.
+- Kontekst, dopiero po dozwolonej parze: `current_setting` dla `pg_stat_statements.track`, `pg_stat_statements.track_utility`, `pg_stat_statements.track_planning`, `track_io_timing` i `pg_stat_statements.save`, oraz `pg_postmaster_start_time()`, oraz `dealloc` i `stats_reset` z `pg_stat_statements_info`. `track_io_timing` jest tylko odczytem `current_setting('track_io_timing')`. Nazwa zostaje `track_io_timing`. To nie jest zmiana GUC, nie jest kluczem rankingu i nie jest tekstem SQL na stdout. Wchodzi do kontekstu raportu. `save` i czas startu zostają nieserializowanymi polami wyniku w pamięci. Nie wchodzą do stdout ani do `report.json`. Nie są znacznikiem ciągłości.
 - SQL kolumn jest jednym z dwóch stałych napisów albo żadnym. `PgStatementTopQuery.ColumnSql` zwraca null, gdy pary nie ma. Null nie jest sukcesem.
 
-Filtr bazy jest w SQL, przed agregacją: `dbid` równe `oid` z `pg_database`, którego `datname` jest `current_database()` tej sesji. Porównanie jest OID do OID. Klient nie podstawia nazwy bazy. Nie ma parametru nazwy.
+Filtr bazy jest w SQL, przed agregacją: `dbid` równe `oid` z `pg_database`, którego `datname` jest `current_database()` tej sesji. Porównanie jest OID do OID. Klient nie podstawia nazwy bazy. Nie ma parametru nazwy. SQL kolumn zwraca każdy wiersz po tym filtrze. Nie ma w nim `LIMIT` ani `TOP`. `--top` stosuje się tylko do pozycji po agregacji. Kształt `QueryStoreTopQuery.Sql`, który grupuje w SQL i potem bierze `TOP (@top)`, tu nie obowiązuje: porządkowałby wiersze `(userid, toplevel)` i odcinał część jednego `queryid`.
 
 Para 14 i `1.9` wymienia z nazwy kolumny macierzy PG14 i nie wymienia `temp_blk_read_time`, `temp_blk_write_time`, `jit_functions`, `jit_generation_time`, `jit_inlining_count`, `jit_inlining_time`, `jit_optimization_count`, `jit_optimization_time`, `jit_emission_count`, `jit_emission_time`.
 
@@ -114,7 +113,7 @@ Zakazane w każdym stałym SQL: `CREATE EXTENSION`, `ALTER EXTENSION`, `pg_stat_
 
 Sumy `bigint` są licznikami całkowitymi. `wal_bytes` zostaje `decimal`, bo widok ma `numeric`. Czasy fixture są liczbami, które asercja porównuje dokładnie. Reader nie dokłada trybu zaokrąglenia. Odwzorowanie żywego `double` z Npgsql jest w braku dowodu live, nie w tym planie.
 
-JSON pozycji używa nazw kontraktu (`JsonSerializerDefaults.Web` daje `queryId` i resztę listy). Średnie mają `[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]`. Klucze kontekstu, których camelCase zepsułby pisownię, mają `JsonPropertyName`: `server_version_num`, `pg_stat_statements.track`, `pg_stat_statements.track_utility`, `pg_stat_statements.track_planning`, `dealloc`, `stats_reset`, oraz `artifactDirectory` jak pole `ArtifactDirectory` raportu `qstop`. `pg_stat_statements.save` i `pg_postmaster_start_time()` nie są tymi kluczami. Są nieserializowanymi polami wyniku w pamięci (`JsonIgnore`): serializacja ich nie zapisuje, więc nie ma ich w `report.json` ani w stdout. `installed_version` nie zastępuje liczby wersji i nie jest polem raportu. Nie ma `windowMinutes`, `query`, `queryHash`, CPU ani recency.
+JSON pozycji używa nazw kontraktu (`JsonSerializerDefaults.Web` daje `queryId` i resztę listy). Średnie mają `[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]`. Klucze kontekstu, których camelCase zepsułby pisownię, mają `JsonPropertyName`: `server_version_num`, `pg_stat_statements.track`, `pg_stat_statements.track_utility`, `pg_stat_statements.track_planning`, `track_io_timing`, `dealloc`, `stats_reset`, oraz `artifactDirectory` jak pole `ArtifactDirectory` raportu `qstop`. `pg_stat_statements.save` i `pg_postmaster_start_time()` nie są tymi kluczami. Są nieserializowanymi polami wyniku w pamięci (`JsonIgnore`): serializacja ich nie zapisuje, więc nie ma ich w `report.json` ani w stdout. `installed_version` nie zastępuje liczby wersji i nie jest polem raportu. Nie ma `windowMinutes`, `query`, `queryHash`, CPU ani recency.
 
 ## Delta
 
@@ -218,7 +217,7 @@ Istniejący fakt zostaje: `tests/SqlHarness.Mcp.Tests/McpMappingTests.cs` wymaga
 
 Ten etap nie wpisuje kindu do katalogu. Zadanie jest opcjonalne i też startuje dopiero po zadaniu 4. Ten dokument go nie wykonuje. Nie jest nową capability i nie jest dwunastym narzędziem.
 
-Jeśli powstanie, kind nazywa się `pgstop` i jest argumentem istniejącego `sqlharness_inspect`. `McpLimits.MaxTools` zostaje. `InspectKinds` i `AllowedValues` w `src/SqlHarness.Mcp/Tools/McpToolCatalog.cs` dostają tę nazwę. `MapInspect` nie buduje `SqlHarnessQueryStoreTopOperation`. Nie przyjmuje `window` (`allowWindow: false`). Na SQL Server rzuca `McpMappingException` przed modułem, na wzór `ThrowIfPostgres`. Na Postgresie idzie w istniejącym `RunDbAsync("sqlharness_inspect", ...)`. `IsDbTool` już zawiera `sqlharness_inspect`. Drugiej bramy nie ma.
+Jeśli powstanie, kind nazywa się `pgstop` i jest argumentem istniejącego `sqlharness_inspect`. `McpLimits.MaxTools` zostaje. `InspectKinds` i `AllowedValues` w `src/SqlHarness.Mcp/Tools/McpToolCatalog.cs` dostają tę nazwę. `MapInspect` nie buduje `SqlHarnessQueryStoreTopOperation`. Nie przyjmuje `window` (`allowWindow: false`). Pominięte `top` i `timeout` nie są `20` i nie są `30`. Nie podstawia się domyślnego `20` z `MapQueryStoreInspect` ani domyślnego `30` z `RequireTimeout`. Odrzuca je ta sama granica co CLI: `top` 1..500 i `timeout` 1..300. Na SQL Server rzuca `McpMappingException` przed modułem, na wzór `ThrowIfPostgres`. Na Postgresie idzie w istniejącym `RunDbAsync("sqlharness_inspect", ...)`. `IsDbTool` już zawiera `sqlharness_inspect`. Drugiej bramy nie ma.
 
 Wtedy, i tylko wtedy, aktualizuje się zdanie kindów w `docs/mcp.md` oraz asercja `["ping", "schema", "counts", "space", "qstop", "indexes"]` w `tests/SqlHarness.Mcp.Tests/McpToolSchemaTests.cs`. Do tego czasu ta szóstka zostaje. `QueryStoreAvailable` zostaje.
 

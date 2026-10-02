@@ -347,6 +347,7 @@ Kontekst raportu, nie pozycja:
 
 - `server_version_num` już odczytany w sekwencji. To nie jest napis `server_version` i nie jest `installed_version`. Specyfikacja §5 mówi „server version string”. Ta sekcja zwęża to do liczby, którą sekwencja już ma. `installed_version` zostaje progiem sekwencji i nie zastępuje tej liczby na raporcie.
 - `pg_stat_statements.track`, `pg_stat_statements.track_utility`, `pg_stat_statements.track_planning`, w pisowni GUC. Wartość jest tą z serwera. Nie ma skróconego aliasu.
+- `track_io_timing`, w tej pisowni, obok `blockReadMs` i `blockWriteMs`. Odczyt jest tylko `current_setting('track_io_timing')`. Wartość jest tą z serwera. To nie jest zmiana GUC, nie jest kluczem rankingu i nie jest tekstem SQL na stdout. Macierz: `blk_read_time` i `blk_write_time` są zero, gdy ten GUC jest wyłączony. Ta wartość odróżnia „nieśledzone” od „szybkiego”.
 - `dealloc` i `stats_reset`, w pisowni kolumn widoku info. `stats_reset` nie jest `lastExecutionAt` i nie jest etykietą „ostatnie 24h”.
 
 Te odczyty kontekstu stoją za tym samym progiem co probe: po znanej wersji serwera i znanej zainstalowanej wersji rozszerzenia. Niepowodzenie w fazie `Sql` jest exit `5` istniejącym mapperem. Nowej gałęzi nie ma. Odczyty nie wołają `pg_stat_statements_reset` i nie interpretują zmiany `stats_reset`.

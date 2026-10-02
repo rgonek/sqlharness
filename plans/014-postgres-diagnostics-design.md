@@ -1,6 +1,6 @@
 # Plan 014: Przygotuj wykonalny kontrakt diagnostyki pg_stat_statements
 
-Status: **TODO — etap projektowy/diagnostyczny**
+Status: **DONE — tylko etap projektowy/diagnostyczny** (funkcja `pgstop` nadal **PLANNED**; commity `f0934b3..7d82bf1`; niezaznaczone pola zadań nie są statusem)
 Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
 Priorytet: P2; nakład: L; ryzyko zmiany: MED.
 Pokrycie: **propozycja diagnostyki PG**. Zależności: **003, 004, 009**.
