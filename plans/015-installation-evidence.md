@@ -481,3 +481,246 @@ Różnica `mcp` między helpem repo a `capabilities --json` zostaje w `## 015/T1
 - Pochodzenie pliku poza polami zapisanymi wyżej. Warunek: suma kontrolna wydania albo log publikacji równe SHA-256 `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. Brak podpisu, `OriginalFilename` = `sqlharness.dll` i sufiks `ProductVersion` tego warunku nie spełniają. Tego dopasowania nie ma w tym kroku.
 - Czy bajty zahashowane w tym kroku są bajtami procesu, który wypisał help i `--version` w `## 015/T1`. Warunek: hash pliku zdjęty przy tamtym pomiarze. T1 zapisał ścieżkę i hash stdout, nie hash pliku. W tym kroku pliku nie zastępowano. To nie dowodzi ani wymiany bajtów, ani ich tożsamości.
 - Czy commit `3d2c41892d15d563c22dba9c917c71aa31cb66ff` wytworzył te bajty. Warunek jest ten sam co dla pochodzenia: dopasowanie hasha pliku. Sam napis w zasobie wersji i bycie przodkiem HEAD tego nie robią.
+
+## 015/T3
+
+Zapis jest z 2026-10-02 na this Windows host. Rozjazd z `## 015/T1` i `## 015/T2` zostaje. Oznaczenia RESOLVED EXTERNALLY nie ma. Ten krok zapisuje procedurę aktualizacji i jej nie uruchamia. Nie pobierano archiwum wydania ani pliku `SHA256SUMS`. Nie kopiowano, nie przenoszono i nie zastępowano `C:\Users\rgone\.local\bin\sqlharness.exe`. Kopii `C:\Users\rgone\.local\bin\sqlharness.exe.bak-bb702504d05a` nie utworzono. Katalogu staging nie utworzono. Nie pisano konfiguracji użytkownika. Nie czytano `targets.json`, profili, haseł, connection stringów ani wartości zmiennych środowiska. Nie uruchamiano `dotnet test`. Nie zmieniano kodu produktu. Ta procedura nie jest lokalnym `dotnet publish` i nie jest kopią wyniku publish na `.local\bin`. Ten plan takiego publish nie autoryzuje.
+
+### Decyzje
+
+- Rozjazd zostaje. Help zainstalowany, zapisany w `## 015/T1`, ma `query`, `measure`, `compare`, `gain`, `plan`, `schema`, `ping`, `counts`, `space`, `watch`, `snapshot`. Nie ma `capabilities`, `validate` ani `mcp`. Help repo z tamtego pomiaru ma także `artifact`, `qstop`, `indexes`, `capabilities`, `doctor`, `validate` i `mcp`.
+- Nie oznaczono RESOLVED EXTERNALLY. `## 015/T2` też tego nie oznaczył.
+- Procedura jest zapisana poniżej. Instalacji nie wykonano. Zapis planu nie zastępuje pliku PATH.
+- Pochodzenie pliku zostaje UNPROVEN, na warunku z `## 015/T2`. Zapytanie o metadane wydań nie dało sumy kontrolnej równej SHA-256 `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`.
+- Oba napisy `--version` to `1.0.0`, jeden z binarki PATH i jeden z pola `version` w `capabilities --json`. Ten napis nie pokazuje rozjazdu. Rozjazd jest w zestawie nazw helpa.
+- Różnica `mcp` jest zapisana w `## 015/T1`: help repo wymienia `mcp`, a `capabilities --json` z tego samego pomiaru nie ma tej nazwy w `commands` ani jako podciągu. Zostaje tak, jak jest zapisane. Jest poza zakresem tego kroku. Kodu produktu nie zmieniano.
+
+### Granice
+
+Brak live DB. Brak profilu i sekretu. Tylko this Windows host. Żadna inna platforma. Brak zmiany kodu produktu.
+
+### Zakres przyszłych plików
+
+W repozytorium żadnych. Ścieżka kopii `C:\Users\rgone\.local\bin\sqlharness.exe.bak-bb702504d05a` leży poza repozytorium i nie została utworzona. Katalog staging `C:\Users\rgone\AppData\Local\Temp\sqlharness-015-staging` też leży poza repozytorium i nie został utworzony.
+
+### Zapytanie o wydania
+
+Odczyt był tylko do odczytu. Pobrano nazwy, daty publikacji i flagi draft oraz prerelease. Nie pobrano bajtów assetów. Tokenu nie wypisywano. Zapytanie nie padło.
+
+`gh release list --repo rgonek/sqlharness --limit 20` zwrócił cztery pozycje i oznaczył `v0.3.1` jako Latest. Potem `gh release view` dla `v0.3.1`, `v0.3.0`, `v0.2.0` i `v0.1.0`, z polami tagu, daty publikacji, draft, prerelease i nazw assetów. Dla `v0.3.1` odczytano też rozmiar i typ treści; do tej tabeli wchodzą tylko flagi obecności dwóch plików kontraktu. Rozmiaru zipa nie zestawiano z długością pliku PATH.
+
+| Tag | Publikacja | Draft | Prerelease | `sqlharness-win-x64.zip` | `SHA256SUMS` |
+|---|---|---|---|---|---|
+| `v0.3.1` | 2026-08-04T13:30:57Z | nie | nie | tak | tak |
+| `v0.3.0` | 2026-08-03T18:39:26Z | nie | nie | tak | tak |
+| `v0.2.0` | 2026-08-03T07:41:50Z | nie | nie | tak | tak |
+| `v0.1.0` | 2026-07-18T15:12:22Z | nie | nie | tak | tak |
+
+Przy każdym z tych czterech tagów lista assetów ma też `sqlharness-linux-x64.tar.gz` i `sqlharness-osx-arm64.tar.gz`. Ta procedura ich nie używa. To nie jest dowód z innej platformy.
+
+Lista tagów nie jest tekstem `--help`. Czy którekolwiek z tych wydań zamyka rozjazd, zostaje UNPROVEN, dopóki nie ma przebiegu kroku 5.
+
+Data ostatniego zapisu pliku PATH z `## 015/T2` to 2026-09-23T08:58:00.4821692Z. Najnowsza publikacja z tabeli jest wcześniejsza. To nie jest log publikacji i nie utożsamia pliku z tagiem. Pochodzenie zostaje UNPROVEN.
+
+Kontrakt dystrybucji jest w README, w sekcji `Install a release binary`: archiwum `sqlharness-win-x64.zip`, plik `SHA256SUMS` i weryfikacja przed rozpakowaniem. Przykład w tej sekcji wstawia `v0.1.0` z komentarzem, że tag trzeba zastąpić wybranym. Ten przykład nie jest wyborem tej diagnozy. Procedura poniżej wybiera `v0.3.1`, bo ten odczyt wskazuje go jako najnowszy opublikowany tag, który ma oba pliki kontraktu. Ten wybór nie dowodzi helpa.
+
+### Ścieżki
+
+Przykład README rozpakowuje do `$HOME\bin\sqlharness` i dopisuje ten katalog do `PATH`. `Get-Command sqlharness -All` w `## 015/T1` i `## 015/T2` zwrócił `C:\Users\rgone\.local\bin\sqlharness.exe`. To są różne ścieżki. Samo zastąpienie celu z przykładu README zostawiłoby tę binarkę PATH na miejscu. Ta procedura nie rozpakowuje do `$HOME\bin\sqlharness` i nie dopisuje tego katalogu do `PATH`. Cel podmiany w kroku 6, jeśli późniejsze zadanie do niego dojdzie, to plik z `Get-Command`, nie katalog z przykładu.
+
+Katalog staging to `C:\Users\rgone\AppData\Local\Temp\sqlharness-015-staging`. Nie jest worktree `D:\Dev\sqlharness\.worktrees\plan-015-installation-alignment` i nie jest katalogiem binarki PATH `C:\Users\rgone\.local\bin`.
+
+### Procedura
+
+Polecenia poniżej są dla późniejszego zadania. Ten krok ich nie uruchomił. Zapis nie zastępuje pliku PATH. Bloki idą po kolei. Pierwszy wyjątek zatrzymuje resztę. Kroki 3–5 mogą zatrzymać się już po kroku 2: plik PATH jest wtedy nadal oryginałem, a kopia już leży. Tej kopii ta procedura nie usuwa.
+
+Tag procedury to `v0.3.1`. Nie podmieniaj go na `v0.1.0` z przykładu README tylko dlatego, że przykład tak jest napisany.
+
+1. Zatrzymaj się, chyba że `Get-Command sqlharness -All` nadal zwraca dokładnie jeden obiekt i ten obiekt jest aplikacją `C:\Users\rgone\.local\bin\sqlharness.exe`, a SHA-256 tego pliku nadal jest `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`.
+
+```powershell
+$path = "C:\Users\rgone\.local\bin\sqlharness.exe"
+$expectedInstalled = "bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f"
+$cmd = @(Get-Command sqlharness -All)
+if ($cmd.Count -ne 1) {
+  throw "Stop: Get-Command sqlharness -All nie zwraca dokładnie jednego obiektu."
+}
+$one = $cmd[0]
+if ([string]$one.CommandType -cne "Application" -or $one.Name -cne "sqlharness.exe" -or $one.Path -cne $path -or $one.Source -cne $path -or $one.Definition -cne $path) {
+  throw "Stop: wynik nie jest dokładnie $path."
+}
+$hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
+if ($hash -cne $expectedInstalled) {
+  throw "Stop: SHA-256 pliku PATH nie jest $expectedInstalled. Pliku nie ruszaj."
+}
+```
+
+2. Skopiuj ten plik do `C:\Users\rgone\.local\bin\sqlharness.exe.bak-bb702504d05a`. Jeśli ta nazwa już istnieje, zatrzymaj się. Nie nadpisuj jej.
+
+```powershell
+$path = "C:\Users\rgone\.local\bin\sqlharness.exe"
+$expectedInstalled = "bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f"
+$backup = "C:\Users\rgone\.local\bin\sqlharness.exe.bak-bb702504d05a"
+if (Test-Path -LiteralPath $backup) {
+  throw "Stop: kopia już istnieje. Nie nadpisuj jej."
+}
+Copy-Item -LiteralPath $path -Destination $backup
+$backupHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $backup).Hash.ToLowerInvariant()
+if ($backupHash -cne $expectedInstalled) {
+  throw "Stop: kopia nie ma SHA-256 pliku PATH. Pliku PATH nie zastępuj."
+}
+```
+
+3. Pobierz `sqlharness-win-x64.zip` i `SHA256SUMS` tagu `v0.3.1` do katalogu staging. Zweryfikuj zip porównaniem z README wobec `SHA256SUMS`. Przy niezgodzie zatrzymaj się i zostaw plik PATH nietknięty. Ten krok nie rozpakowuje archiwum.
+
+Porównanie z README, sekcja `Install a release binary`, to te dwie linie, uruchomione w katalogu staging: pierwsza bierze pierwszy niepusty token linii `SHA256SUMS`, która zawiera `sqlharness-win-x64.zip`; druga porównuje go, po `ToLowerInvariant`, z `Get-FileHash` tego zipa algorytmem SHA256 i przy różnicy rzuca `Checksum mismatch.` Ten wyjątek też zostawia plik PATH nietknięty. Kopia z kroku 2 zostaje.
+
+```powershell
+$version = "v0.3.1"
+$staging = "C:\Users\rgone\AppData\Local\Temp\sqlharness-015-staging"
+$worktree = "D:\Dev\sqlharness\.worktrees\plan-015-installation-alignment"
+$pathDir = "C:\Users\rgone\.local\bin"
+$stagingFull = [System.IO.Path]::GetFullPath($staging)
+$worktreeFull = [System.IO.Path]::GetFullPath($worktree)
+$pathDirFull = [System.IO.Path]::GetFullPath($pathDir)
+$stagingPrefix = $stagingFull.TrimEnd('\') + '\'
+$worktreePrefix = $worktreeFull.TrimEnd('\') + '\'
+$pathPrefix = $pathDirFull.TrimEnd('\') + '\'
+if ($stagingPrefix.StartsWith($worktreePrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+  throw "Stop: staging leży w worktree."
+}
+if ($stagingPrefix.StartsWith($pathPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+  throw "Stop: staging leży w katalogu binarki PATH."
+}
+if (Test-Path -LiteralPath $staging) {
+  throw "Stop: katalog staging już istnieje. Nie mieszaj pobrania z istniejącą zawartością."
+}
+New-Item -ItemType Directory -Path $staging | Out-Null
+$base = "https://github.com/rgonek/sqlharness/releases/download/$version"
+Invoke-WebRequest "$base/sqlharness-win-x64.zip" -OutFile (Join-Path $staging "sqlharness-win-x64.zip")
+Invoke-WebRequest "$base/SHA256SUMS" -OutFile (Join-Path $staging "SHA256SUMS")
+Push-Location -LiteralPath $staging
+try {
+  $sumHits = @(Select-String 'sqlharness-win-x64.zip' SHA256SUMS)
+  if ($sumHits.Count -ne 1) {
+    throw "Stop: SHA256SUMS nie wskazuje dokładnie jednej linii sqlharness-win-x64.zip. Plik PATH zostaje nietknięty."
+  }
+  $expected = (Select-String 'sqlharness-win-x64.zip' SHA256SUMS).Line.Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries)[0]
+  if ((Get-FileHash sqlharness-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected.ToLowerInvariant()) { throw "Checksum mismatch." }
+}
+finally {
+  Pop-Location
+}
+```
+
+4. Rozpakuj do katalogu wewnątrz stagingu, nie na plik PATH. Zapisz SHA-256 wyjętego `sqlharness.exe`. Ten dokument nie ma oczekiwanego hasha tego pliku. Nie porównuj go z `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f` jakby to był hash docelowy. Inna wartość nie jest błędem tego kroku. Taka sama wartość też nie jest błędem tego kroku i nie jest dowodem, że plik PATH już jest tym wydaniem.
+
+Układ zipa nie jest w tym dokumencie. Jeśli `sqlharness.exe` nie leży bezpośrednio w katalogu rozpakowania, zatrzymaj się. Nie szukaj innego pliku. Plik PATH zostaje.
+
+```powershell
+$path = "C:\Users\rgone\.local\bin\sqlharness.exe"
+$pathDir = "C:\Users\rgone\.local\bin"
+$staging = "C:\Users\rgone\AppData\Local\Temp\sqlharness-015-staging"
+$extract = Join-Path $staging "extract"
+if (-not $extract.StartsWith($staging + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
+  throw "Stop: rozpakowanie nie leży w stagingu."
+}
+if ($extract -eq $pathDir -or $extract -eq $path) {
+  throw "Stop: rozpakowanie wskazuje plik PATH albo jego katalog."
+}
+if (Test-Path -LiteralPath $extract) {
+  throw "Stop: katalog rozpakowania już istnieje."
+}
+Expand-Archive -LiteralPath (Join-Path $staging "sqlharness-win-x64.zip") -DestinationPath $extract
+$stagedExe = Join-Path $extract "sqlharness.exe"
+if (-not (Test-Path -LiteralPath $stagedExe)) {
+  throw "Stop: sqlharness.exe nie leży bezpośrednio w katalogu rozpakowania. Nie szukaj innego pliku. Plik PATH zostaje."
+}
+$stagedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $stagedExe).Hash.ToLowerInvariant()
+Write-Output $stagedHash
+```
+
+Wypisany SHA-256 zapisz w notatce zadania, które wykonuje instalację. Nie wpisuj go wstecz do tego dokumentu jako wartości oczekiwanej.
+
+5. Uruchom `--help` na pliku ze stagingu, nie przez nazwę `sqlharness` z PATH. Idź dalej tylko wtedy, gdy ten help wymienia `capabilities`, `validate` i `mcp`. Nazwa komendy to pierwszy token linii pod `COMMANDS:`, której wcięcie ma dokładnie cztery spacje, tak jak w `## 015/T1`. Porównanie tokenu jest wrażliwe na wielkość liter. Dopóki tego przebiegu nie ma, to, czy wydanie GitHub zamyka ten rozjazd, jest UNPROVEN. Lista tagów nie dowodzi tekstu helpa.
+
+```powershell
+$stagedExe = "C:\Users\rgone\AppData\Local\Temp\sqlharness-015-staging\extract\sqlharness.exe"
+$helpText = & $stagedExe --help
+if ($LASTEXITCODE -ne 0 -or $null -eq $helpText) {
+  throw "Stop: --help pliku ze stagingu nie zakończył się kodem 0 albo nie dał stdout. Plik PATH zostaje."
+}
+$names = New-Object System.Collections.Generic.List[string]
+$inCommands = $false
+foreach ($line in @($helpText -split '\r?\n')) {
+  if ($line -eq "COMMANDS:") {
+    $inCommands = $true
+    continue
+  }
+  if (-not $inCommands) { continue }
+  $four = $line.Length -ge 4 -and $line.Substring(0, 4) -eq "    "
+  $deeper = $line.Length -ge 5 -and $line.Substring(0, 5) -eq "     "
+  if ($four -and -not $deeper) {
+    $token = ($line.Trim() -split '\s+', 2)[0]
+    if (-not [string]::IsNullOrEmpty($token)) { $names.Add($token) }
+  }
+}
+foreach ($required in @("capabilities", "validate", "mcp")) {
+  if (-not $names.Contains($required)) {
+    throw "Stop: help pliku ze stagingu nie wymienia $required. Plik PATH zostaje. Kopia z kroku 2 zostaje."
+  }
+}
+```
+
+6. Dopiero wtedy zastąp `C:\Users\rgone\.local\bin\sqlharness.exe` plikiem ze stagingu. Kopia z kroku 2 zostaje. Nie usuwaj jej. Nie dopisuj `$HOME\bin\sqlharness` do `PATH`. Ten plan kroku 6 nie wykonuje.
+
+Hash po podmianie porównaj z hashem pliku ze stagingu, czyli z plikiem, który właśnie kopiujesz. Nie porównuj go z `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f` jakby to był hash docelowy. Jeśli kopiowanie zgłosi błąd, zatrzymaj się. Kopii z kroku 2 nie usuwaj.
+
+```powershell
+$path = "C:\Users\rgone\.local\bin\sqlharness.exe"
+$backup = "C:\Users\rgone\.local\bin\sqlharness.exe.bak-bb702504d05a"
+$stagedExe = "C:\Users\rgone\AppData\Local\Temp\sqlharness-015-staging\extract\sqlharness.exe"
+if (-not (Test-Path -LiteralPath $backup)) {
+  throw "Stop: brak kopii z kroku 2. Pliku PATH nie zastępuj."
+}
+if (-not (Test-Path -LiteralPath $stagedExe)) {
+  throw "Stop: brak pliku ze stagingu. Pliku PATH nie zastępuj."
+}
+$stagedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $stagedExe).Hash.ToLowerInvariant()
+Copy-Item -LiteralPath $stagedExe -Destination $path -Force
+$replaced = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
+if ($replaced -cne $stagedHash) {
+  throw "Stop: hash pliku PATH po kopii nie jest hashem pliku ze stagingu. Kopia z kroku 2 zostaje. Ta instrukcja jej nie usuwa."
+}
+```
+
+### Tabela testów
+
+Jedna pozycja na polecenie, które ta diagnoza naprawdę uruchomiła. Polecenia z procedury powyżej nie są wierszami, bo ten krok ich nie uruchomił.
+
+| Polecenie | Wynik | Gdzie zapisane |
+|---|---|---|
+| `Get-Command sqlharness -All` | jeden obiekt `Application`; `Source`, `Path` i `Definition` = `C:\Users\rgone\.local\bin\sqlharness.exe`; T2 to samo | `## 015/T1`, `## 015/T2` |
+| `sqlharness --help` | kod 0; 376 B; nazwy bez `capabilities`, `validate`, `mcp` | `## 015/T1` |
+| `sqlharness --version` | kod 0; tekst `1.0.0` | `## 015/T1` |
+| `dotnet run --project src/SqlHarness.Cli -- --help` | kod 0; 1971 B; jest `capabilities`, `validate`, `mcp` | `## 015/T1` |
+| `dotnet run --project src/SqlHarness.Cli -- capabilities --json` | kod 0; 6956 B; `mcp` nie występuje w tym JSON | `## 015/T1` |
+| `Get-FileHash -Algorithm SHA256` pliku PATH | `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`; długość 95604247 B | `## 015/T2` |
+| `FileVersionInfo.GetVersionInfo` | `FileVersion` `1.0.0.0`; `ProductVersion` `1.0.0+3d2c41892d15d563c22dba9c917c71aa31cb66ff`; `OriginalFilename` `sqlharness.dll`; `FileDescription` `sqlharness` | `## 015/T2` |
+| `Get-AuthenticodeSignature` | `Status` `NotSigned`; certyfikat podpisującego null | `## 015/T2` |
+| `gh release list --repo rgonek/sqlharness --limit 20` i `gh release view` czterech tagów | kod 0; cztery opublikowane tagi; przy każdym `sqlharness-win-x64.zip` i `SHA256SUMS` | ta sekcja, `Zapytanie o wydania` |
+| `git diff --check` | exit 0; brak wyjścia | ten wiersz dla dopisku `## 015/T3`; przebiegi T1 i T2 też exit 0, w raportach zadań poza gitem |
+| `dotnet test` | nie uruchomiono; plan zabrania testów aplikacji przy samym zapisie dokumentów | ten wiersz |
+
+### UNPROVEN
+
+- Tekst `--help` wydania, w tym czy help assetu `sqlharness-win-x64.zip` wymienia `capabilities`, `validate` i `mcp`. Warunek: wykonać krok 5 i zapisać stdout. Lista tagów tego nie dowodzi. Tego przebiegu nie było. Czy wydanie GitHub zamyka ten rozjazd, zostaje UNPROVEN.
+- Czy hash któregokolwiek assetu wydania jest równy buildowi tego worktree. Warunek: zahashować wyjęty `sqlharness.exe` i build z tego worktree, potem porównać te dwa hashe. Tego dokumentu nie ma takiej pary. SHA-256 pliku PATH nie jest oczekiwanym hashem wyjętego pliku i nie jest tą parą.
+- Ciało `SHA256SUMS` i bajty zipa. Warunek: pobrać te pliki w kroku 3 i zapisać sumę oraz wynik porównania. To zapytanie wzięło nazwy assetów, daty i flagi. Sumy nie czytało.
+- Pochodzenie pliku PATH poza polami z `## 015/T2`. Warunek zostaje ten z `## 015/T2`: suma kontrolna wydania albo log publikacji równe SHA-256 `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. To zapytanie tego warunku nie spełnia.
+- Dowolna platforma inna niż this Windows host. Warunek: powtórzyć diagnozę na tej platformie. Nie robiono tego. Nazwy archiwów linux i osx nie są tym dowodem.
+- Live DB. Warunek: pomiar na żywej bazie. Nie robiono tego. Ta diagnoza go nie wymaga i go nie zastępuje.
+
+### Brak dowodu live i brak dowodu z innej platformy
+
+Ten krok nie łączył się z bazą danych. Nie ma dowodu live. Nie uruchamiano diagnozy na Linuksie, macOS ani na innym hoście. Nazwy `sqlharness-linux-x64.tar.gz` i `sqlharness-osx-arm64.tar.gz` z metadanych wydań nie są dowodem z innej platformy, bo tych archiwów nie pobierano i ich nie uruchamiano. Brak dowodu live i brak dowodu z innej platformy jest brakiem, nie wynikiem pozytywnym.
