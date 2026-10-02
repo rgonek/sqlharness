@@ -404,3 +404,80 @@ Na tym pomiarze rozjazd powierzchni helpa jest. Zainstalowany zestaw nazw jest p
 - Czy help `mcp` w buildzie repo wymienia `serve`. Warunek: `dotnet run --project src/SqlHarness.Cli -- mcp --help`. Na stronie głównej helpa jest `mcp`, nie ma `serve`.
 - Hash pliku, czas pliku i zasób wersji PE poza właściwością `Version` z `Get-Command`. Warunek: odczyt metadanych tego pliku bez jego zastąpienia. `1.0.0.0` jest tylko tą właściwością.
 - Czy pusty stderr `dotnet run` oznacza brak przebudowy. Warunek: log MSBuild z tego samego polecenia. W przechwyconych strumieniach go nie było.
+
+## 015/T2
+
+Odczyt jest z 2026-10-02T19:41:48.1799751+02:00 na this Windows host. Rozjazd z `## 015/T1` nie zniknął. Oznaczenia RESOLVED EXTERNALLY nie ma. Nie było reinstalacji. Nie publikowano, nie kopiowano, nie przenoszono i nie zastępowano binarki. Nie pisano konfiguracji użytkownika. Nie czytano `targets.json`, profili, haseł, connection stringów ani wartości zmiennych środowiska. Nie uruchamiano `dotnet test`, `dotnet run`, `--help` ani `--version`. Pliku nie uruchamiano. Ten krok nie zapisuje procedury aktualizacji.
+
+### Get-Command
+
+`Get-Command sqlharness -All` zwraca jeden obiekt. Wyjątku nie było. `CommandType` = `Application`. `Name` = `sqlharness.exe`. `Source`, `Path` i `Definition` = `C:\Users\rgone\.local\bin\sqlharness.exe`. `Version` obiektu polecenia = `1.0.0.0`. Nie było drugiej aplikacji, funkcji ani aliasu. Ścieżka i ta właściwość `Version` są te same co w `## 015/T1`.
+
+Ta ścieżka jest jedyną binarką tego kroku. Atrybuty to `Archive`. `LinkType` jest null, `Target` jest null. W tym odczycie plik nie jest linkiem. Hash, czasy i zasób wersji dotyczą tego pliku.
+
+### Plik
+
+| Pole | Wartość |
+|---|---|
+| Ścieżka | `C:\Users\rgone\.local\bin\sqlharness.exe` |
+| Długość | 95604247 B |
+| SHA-256 | `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f` |
+| Utworzenie | 2026-07-19T22:30:24.3089416+02:00 |
+| Ostatni zapis | 2026-09-23T10:58:00.4821692+02:00 |
+
+`Get-FileHash -Algorithm SHA256` zwrócił `BB702504D05ACC124F0C50030818D61EC4790BF33EB3B35DFE0B651983BE5C2F`. Osobny skrót SHA-256 ze strumienia tych samych bajtów dał te same cyfry. W tabeli są małymi literami, jak hashe stdout w `## 015/T1`. Długość strumienia jest równa długości pliku, 95604247 B. Po odczycie długość i czas ostatniego zapisu były te same.
+
+Strefa zaobserwowana to Windows `Central European Standard Time`. Ma czas letni. Nazwa letnia to `Central European Daylight Time`. Bazowy offset strefy to `+01:00`. Napis strefy w Windows pokazuje ten bazowy offset. Na obu znacznikach i w chwili odczytu czas letni obowiązywał, więc ich offset to `+02:00`, nie `+01:00`. `Kind` lokalnego czasu utworzenia i ostatniego zapisu to `Local`. Ten sam moment utworzenia w UTC to 2026-07-19T20:30:24.3089416Z. Ten sam moment ostatniego zapisu w UTC to 2026-09-23T08:58:00.4821692Z.
+
+### Zasób wersji
+
+Odczyt `FileVersionInfo` bez uruchamiania pliku. Cztery pola są obecne i niepuste. Żadnego nie brakuje.
+
+| Pole | Wartość |
+|---|---|
+| FileVersion | `1.0.0.0` |
+| ProductVersion | `1.0.0+3d2c41892d15d563c22dba9c917c71aa31cb66ff` |
+| OriginalFilename | `sqlharness.dll` |
+| FileDescription | `sqlharness` |
+
+`FileVersion` jest równe właściwości `Version` z `Get-Command`. Nie jest tekstem stdout `--version` z `## 015/T1`. Tamten stdout to znaki `1.0.0`. `ProductVersion` jest innym, dłuższym napisem. Nie jest równe `buildId` z `capabilities --json` w `## 015/T1` (`1.0.0+ece0d7fcaef90325d20865db639c12b47bc2de4e`). Sufiks po `+` nie jest SHA-256 tego pliku.
+
+Te 40 znaków hex jest pełnym id obiektu w tym repozytorium. `git cat-file -t` zwrócił `commit`. `git merge-base --is-ancestor` względem HEAD `d2a07291ffc6b51f40792635c681d9fc47f7552e` zakończył się kodem 0, więc ten commit jest przodkiem, nie tym HEAD. Data committera, `git log -1 --format=%cI`, to 2026-09-11T11:28:10+02:00. Temat to `Merge branch 'feat/postgres-engine'`. Czas utworzenia pliku jest wcześniejszy niż ta data committera. Czas ostatniego zapisu pliku jest późniejszy. To trzy czasy, nie log publikacji.
+
+`OriginalFilename` kończy się na `.dll`. Plik z `Get-Command` kończy się na `.exe`. To wartość zasobu. Nie jest metodą publikacji.
+
+### Authenticode
+
+`Get-AuthenticodeSignature`: `Status` = `NotSigned`, `SignatureType` = `None`, `IsOSBinary` = false. Certyfikat podpisującego jest null. Podpisu nie ma, więc nie ma nazwy podpisującego. Brak podpisu nie jest wydaniem GitHub i nie jest lokalnym `dotnet publish`.
+
+### Pochodzenie
+
+Pochodzenie poza ścieżką, długością, SHA-256, dwoma czasami pliku, czterema polami zasobu wersji i brakiem podpisu jest UNPROVEN. Warunek, który by je wykazał: suma kontrolna wydania albo log publikacji równe SHA-256 `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. Takiego dopasowania ten krok nie ma. Nie wymyślono źródła.
+
+Przed tym dopiskiem tekst worktree nie zawierał tego SHA-256 ani pełnego id `3d2c41892d15d563c22dba9c917c71aa31cb66ff`. Obiekt gita istnieje osobno od tego tekstu. To nie jest przegląd katalogów poza tym worktree i nie jest sumą wydania.
+
+### Lista komend
+
+Lista dostępnych komend jest listą z helpa zainstalowanego, wyjętą w `## 015/T1` pod `Nazwy w helpie`. Kolejność jest kolejnością z tamtej tabeli, nie sortowaniem. Helpa nie uruchamiano ponownie. To nie jest nowe wykonanie każdej nazwy.
+
+- `query`
+- `measure`
+- `compare`
+- `gain`
+- `plan`
+- `schema`
+- `ping`
+- `counts`
+- `space`
+- `watch`
+- `snapshot`
+
+Strona repo jest w `## 015/T1`, w tej samej tabeli. Tamta tabela: tylko w helpie zainstalowanym żadna nazwa; tylko w helpie repo `artifact`, `qstop`, `indexes`, `capabilities`, `doctor`, `validate`, `mcp`. `capabilities`, `validate` i `mcp` nie są na liście powyżej. Rozjazd zostaje.
+
+Różnica `mcp` między helpem repo a `capabilities --json` zostaje w `## 015/T1`. Ten krok jej nie zmienia. Warunek z `## 015/T1`, czy brak nazwy w helpie jest kodem odmowy, też zostaje tam. Tych nazw nie uruchamiano.
+
+### UNPROVEN
+
+- Pochodzenie pliku poza polami zapisanymi wyżej. Warunek: suma kontrolna wydania albo log publikacji równe SHA-256 `bb702504d05acc124f0c50030818d61ec4790bf33eb3b35dfe0b651983be5c2f`. Brak podpisu, `OriginalFilename` = `sqlharness.dll` i sufiks `ProductVersion` tego warunku nie spełniają. Tego dopasowania nie ma w tym kroku.
+- Czy bajty zahashowane w tym kroku są bajtami procesu, który wypisał help i `--version` w `## 015/T1`. Warunek: hash pliku zdjęty przy tamtym pomiarze. T1 zapisał ścieżkę i hash stdout, nie hash pliku. W tym kroku pliku nie zastępowano. To nie dowodzi ani wymiany bajtów, ani ich tożsamości.
+- Czy commit `3d2c41892d15d563c22dba9c917c71aa31cb66ff` wytworzył te bajty. Warunek jest ten sam co dla pochodzenia: dopasowanie hasha pliku. Sam napis w zasobie wersji i bycie przodkiem HEAD tego nie robią.
