@@ -16,7 +16,7 @@ Nie są nowym projektem. Zadanie, które je rusza, nie wybiera innego kształtu.
 - SQL kolumn jest tylko dla PostgreSQL 14 z zainstalowanym `1.9` oraz dla PostgreSQL 15 albo 16 z zainstalowanym `1.10`. Inna para nie dostaje SQL kolumn. Kształt zostaje `UNPROVEN`. Nie jest exit `0` i nie jest pustym sukcesem.
 - Pozycja jest jednym znanym, nie-null `queryid`. Nieznane id nie są scalane i nie dostają wymyślonego id. Rozjazd tekstu zostawia `queryId` i ustawia tylko `query` na null.
 - Nie ma `--window`, pola recency ani metryki CPU. Tekst SQL jest tylko w lokalnym `queries.jsonl`. Stdout ma metryki i identyfikatory.
-- Tokeny delty są tylko `incomparable` i `unknown`. Nie ma odejmowania i nie ma ścieżki porównawalnej. Reset selektywny nie jest wykrywany. `pg_postmaster_start_time()` nie jest znacznikiem ciągłości. Przyczyna restart zachodzi tylko wtedy, gdy oba odczyty mają `pg_stat_statements.save` równe `off` i czas startu się różni.
+- Tokeny delty są tylko `incomparable` i `unknown`. Nie ma odejmowania i nie ma ścieżki porównawalnej. Reset selektywny nie jest wykrywany. Po dozwolonej parze komenda czyta `current_setting('pg_stat_statements.save')` i `pg_postmaster_start_time()` tylko jako wejście przyczyny restart. Nie są znacznikiem ciągłości, nie są stdout i nie są polami `report.json`. Przyczyna restart zachodzi tylko wtedy, gdy oba odczyty mają `save` równe `off` i czas startu się różni. Przy braku odczytu przyczyna restart nie zachodzi. `save = on` nie jest deltą porównawalną i nie kasuje innej przyczyny.
 - Nie ma `CREATE EXTENSION`, `ALTER EXTENSION`, zmiany GUC ani wywołania `pg_stat_statements_reset`.
 - `QueryStoreAvailable: !pg` w `src/SqlHarness.Mcp/McpOperationMapper.cs` zostaje. Ten dokument tej linii nie zmienia. Żadne zadanie poniżej też jej nie zmienia: flaga nie jest odczytem `pg_stat_statements`.
 
@@ -40,7 +40,7 @@ Ledger: `D:\Dev\sqlharness\.superpowers\sdd\014-postgres-diagnostics-design\prog
 | §10: jeden kształt 35 kolumn i „extra `jit_*` ignorowane” przy `SELECT *` | Dwa SQL kolumn, bo kolumny zależą od wersji rozszerzenia, nie od samego serwera. Nie ma `SELECT *`. |
 | §5 i §11: ranking przez `showtext := false`, tekst tylko dla top-N | `showtext := false` nie jest źródłem `queries.jsonl`. Tekst linii jest kolumną `query` widoku. |
 | §7: trzy równe znaczniki dają deltę porównawalną | To zdanie nie obowiązuje. Równość odczytów nie jest deltą porównawalną. |
-| §11: jedna paczka z probe, info, GUC i `pg_postmaster_start_time()` | Osobne odczyty, w kolejności sekwencji. Komenda nie woła `pg_postmaster_start_time()` i nie czyta `save` po to, żeby mieć znacznik ciągłości. |
+| §11: jedna paczka z probe, info, GUC i `pg_postmaster_start_time()` | Osobne odczyty, w kolejności sekwencji. Po dozwolonej parze komenda czyta `current_setting('pg_stat_statements.save')` i `pg_postmaster_start_time()` tylko jako wejście przyczyny restart. Nie są znacznikiem ciągłości, nie są stdout i nie są polami raportu. |
 | §11: reklama w `Capabilities.cs` razem z plikami | Reklama jest osobnym zadaniem po istnieniu komendy. Ten dokument jej nie wykonuje. |
 | §11: nazwa komendy do ewentualnej zmiany | Nazwa jest `pgstop`. |
 
@@ -85,7 +85,7 @@ Stałe, porównywane w teście jako tekst. Nie idą przez `PostgresSafetyClassif
 
 - Wersja: `SELECT current_setting('server_version_num')`. Liczba jest parsowana niezmiennie kulturowo. Próg mniejszy niż `140000` to podłoga.
 - Rozszerzenie: `SELECT installed_version FROM pg_available_extensions WHERE name = 'pg_stat_statements'`. To nie jest `default_version` i nie jest `server_version_num`.
-- Kontekst, dopiero po dozwolonej parze: `current_setting` dla `pg_stat_statements.track`, `pg_stat_statements.track_utility` i `pg_stat_statements.track_planning`, oraz `dealloc` i `stats_reset` z `pg_stat_statements_info`. Bez `track_io_timing`. Bez `pg_stat_statements.save`. Bez `pg_postmaster_start_time()`.
+- Kontekst, dopiero po dozwolonej parze: `current_setting` dla `pg_stat_statements.track`, `pg_stat_statements.track_utility`, `pg_stat_statements.track_planning` i `pg_stat_statements.save`, oraz `pg_postmaster_start_time()`, oraz `dealloc` i `stats_reset` z `pg_stat_statements_info`. Bez `track_io_timing`. `save` i czas startu są tylko wejściem przyczyny restart. Nie wchodzą do stdout ani do `report.json`.
 - SQL kolumn jest jednym z dwóch stałych napisów albo żadnym. `PgStatementTopQuery.ColumnSql` zwraca null, gdy pary nie ma. Null nie jest sukcesem.
 
 Filtr bazy jest w SQL, przed agregacją: `dbid` równe `oid` z `pg_database`, którego `datname` jest `current_database()` tej sesji. Porównanie jest OID do OID. Klient nie podstawia nazwy bazy. Nie ma parametru nazwy.
@@ -114,7 +114,7 @@ Zakazane w każdym stałym SQL: `CREATE EXTENSION`, `ALTER EXTENSION`, `pg_stat_
 
 Sumy `bigint` są licznikami całkowitymi. `wal_bytes` zostaje `decimal`, bo widok ma `numeric`. Czasy fixture są liczbami, które asercja porównuje dokładnie. Reader nie dokłada trybu zaokrąglenia. Odwzorowanie żywego `double` z Npgsql jest w braku dowodu live, nie w tym planie.
 
-JSON pozycji używa nazw kontraktu (`JsonSerializerDefaults.Web` daje `queryId` i resztę listy). Średnie mają `[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]`. Klucze kontekstu, których camelCase zepsułby pisownię, mają `JsonPropertyName`: `server_version_num`, `pg_stat_statements.track`, `pg_stat_statements.track_utility`, `pg_stat_statements.track_planning`, `dealloc`, `stats_reset`, oraz `artifactDirectory` jak pole `ArtifactDirectory` raportu `qstop`. `installed_version` nie zastępuje liczby wersji i nie jest polem raportu. Nie ma `windowMinutes`, `query`, `queryHash`, CPU ani recency.
+JSON pozycji używa nazw kontraktu (`JsonSerializerDefaults.Web` daje `queryId` i resztę listy). Średnie mają `[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]`. Klucze kontekstu, których camelCase zepsułby pisownię, mają `JsonPropertyName`: `server_version_num`, `pg_stat_statements.track`, `pg_stat_statements.track_utility`, `pg_stat_statements.track_planning`, `dealloc`, `stats_reset`, oraz `artifactDirectory` jak pole `ArtifactDirectory` raportu `qstop`. `pg_stat_statements.save` i `pg_postmaster_start_time()` nie są tymi kluczami. `installed_version` nie zastępuje liczby wersji i nie jest polem raportu. Nie ma `windowMinutes`, `query`, `queryHash`, CPU ani recency.
 
 ## Delta
 
@@ -128,7 +128,7 @@ Status pary albo całego porównania, gdy przyczyna jest widokowa, jest tylko `i
 
 Test spadku jest tylko „druga wartość jest mniejsza”. Dotyczy pól z listy kontraktu „Spadek licznika” oraz `dealloc`, gdy obie wartości są. Jedno mniejsze pole wystarcza na całą parę. Żadne pole nie dostaje różnicy. Średnie, `toplevelOnly` i `query` nie są tym testem. Brak średniej przy `SUM(calls) = 0` nie jest spadkiem. Brak pola nie jest zerem.
 
-Odczyty startu i `save` są argumentami funkcji w teście. Nie są polami `PgStatementTopReport`, nie są stdout i nie są w `report.json`. Komenda ich nie czyta. Bez nich przyczyna restart nie zachodzi. To jest zdanie kontraktu, nie brakujący znacznik do dopisania.
+Funkcja w teście nadal przyjmuje odczyt startu i `save` jako argumenty. Komenda, po dozwolonej parze, te dwa odczyty wykonuje i podaje je funkcji tylko jako wejście przyczyny restart. Nie są polami `PgStatementTopReport`, nie są stdout, nie są w `report.json` i nie są znacznikiem ciągłości. Brak któregoś odczytu znaczy, że przyczyna restart nie zachodzi. `save = on` ani brak odczytu nie jest deltą porównawalną i nie kasuje innej przyczyny, która zaszła.
 
 `save = on` w wierszu tabeli przypadków da się przeczytać tak, jakby kasowało reset, dealloc albo spadek. Zadanie trzyma się prozy: każda przyczyna, która zaszła, zostaje nazwana. Wiersza tabeli nie poprawia.
 
@@ -151,7 +151,7 @@ Wzorzec faz jest wzorcem `ExecuteQueryStoreTopAsync`. Nowa metoda go nie zastęp
 5. Odczyt `installed_version`. NULL albo brak wiersza: brak rozszerzenia w rozstrzygniętej bazie. Wyjątek nie jest `SqlHarnessSafetyException`. Exit `5`. Komunikat: `pg_stat_statements is not installed in the resolved database.` Brak artefaktu sukcesu. W wykonanych paczkach nie ma `CREATE EXTENSION` ani `ALTER EXTENSION`.
 6. Brak uprawnień przy katalogu albo przy późniejszym SQL: `NpgsqlException` w fazie `Sql`, exit `5`. Komunikat nazywa klasę przyczyny i nie zawiera stałego SQL ani tekstu `query`. Gałęzi `SqlState` nie ma.
 7. `ColumnSql` null: nie wysyłać SQL kolumn, nie agregować, nie zapisywać artefaktu sukcesu, nie zwracać `SqlHarnessExitCode.Success`. Nie rzucać `SqlHarnessSafetyException`, bo to jest wyjątek podłogi, nie tej pary. Nie dodawać gałęzi mappera i nie dopisywać numeru do kontraktu. Test sprawdza brak SQL kolumn, raport null i zero zapisów sukcesu. Nie wiąże pary z wartością `SqlHarnessExitCode`. Numer, który nada istniejący mapper, nie jest decyzją tego planu i ten plan go nie nazywa.
-8. Dozwolona para: kontekst, potem SQL kolumn, potem reader. Pusta lista znanych `queryid` jest exit `0` z artefaktem i z pustym `queries.jsonl`. To nie jest twierdzenie, że widok nie miał wierszy.
+8. Dozwolona para: kontekst, potem SQL kolumn, potem reader. Kontekst obejmuje `current_setting('pg_stat_statements.save')` i `pg_postmaster_start_time()`. Te dwa odczyty zostają przy przyczynie restart i nie są przepisywane na raport. Pusta lista znanych `queryid` jest exit `0` z artefaktem i z pustym `queries.jsonl`. To nie jest twierdzenie, że widok nie miał wierszy.
 9. Faza `Artifact`. Wyjątek pisarza: exit `6`, raport null.
 
 Komunikat błędu nie zawiera tekstu SQL. Hasło zostaje w zmiennej środowiska. Tego planu nie obchodzi wartość tej zmiennej.
@@ -192,7 +192,7 @@ Fakt: tekst `query` jest tylko w `queries.jsonl`. `report.json` go nie ma. Null 
 
 Edycje: `Contracts.cs`, `SqlHarnessPaths.cs`, `SqlHarnessModule.cs`. Fakty na szwie `QueryStoreTopTests`: podmieniona sesja, licznik poleceń, pisarz. Klasy: error, empty, version co do odmowy pary.
 
-Fakty: E-floor, E-auth, E-identity, E-mismatch, E-version, E-ext, E-perm, E-engine, E-bounds, E-artifact, P-empty, V-pair. `QueryStoreTopTests` zostaje zielony. `ExecuteQueryStoreTopAsync` nie zmienia tekstu odmowy Postgresa.
+Fakty: E-floor, E-auth, E-identity, E-mismatch, E-version, E-ext, E-perm, E-engine, E-bounds, E-artifact, P-empty, V-pair. Dozwolona para, w tym P-empty, wykonuje `current_setting('pg_stat_statements.save')` i `pg_postmaster_start_time()`. `report.json` tych odczytów nie zawiera. `QueryStoreTopTests` zostaje zielony. `ExecuteQueryStoreTopAsync` nie zmienia tekstu odmowy Postgresa.
 
 **Weryfikacja:** `dotnet test .\SqlHarness.sln --filter "FullyQualifiedName~PgStatementTopTests|FullyQualifiedName~QueryStoreTopTests" --verbosity minimal` → exit 0.
 
