@@ -1,6 +1,6 @@
 # Plan 015: Zdiagnozuj rozjazd zainstalowanego CLI i repozytorium
 
-Status: **TODO — etap projektowy/diagnostyczny**
+Status: **DONE — tylko etap diagnostyczny** (rozjazd zostaje; nie RESOLVED EXTERNALLY; binarka PATH nie została zastąpiona; instalacja nie wykonana; dowód: `plans/015-installation-evidence.md`; commity `d2a0729..22c0644`; nie scalono; push czeka)
 Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
 Priorytet: P3; nakład: S; ryzyko zmiany: LOW.
 Pokrycie: **obserwacja PATH i nieaktualnego help**. Zależności: **005**.
@@ -38,19 +38,19 @@ Poza zakresem: live DB, deploy, profile i hasła użytkownika, instalacja, push,
 
 ### 015/T1
 
-- [ ] Uruchom Get-Command sqlharness -All, sqlharness --help i --version; porównaj z dotnet run --project src/SqlHarness.Cli -- --help oraz capabilities --json z buildu repo. Nie wyświetlaj targets.json, env ani profili.
+- [x] Uruchom Get-Command sqlharness -All, sqlharness --help i --version; porównaj z dotnet run --project src/SqlHarness.Cli -- --help oraz capabilities --json z buildu repo. Nie wyświetlaj targets.json, env ani profili.
 
 **Weryfikacja:** sprawdź wskazane źródła i odwołania lokalne; `git diff --check` → exit 0; rezultat kroku zapisany w dokumencie wynikowym.
 
 ### 015/T2
 
-- [ ] Zapisz pochodzenie, datę/hash binarki i listę dostępnych komend w evidence. Jeżeli rozjazd już zniknął, oznacz RESOLVED EXTERNALLY, nie wykonuj reinstalacji.
+- [x] Zapisz pochodzenie, datę/hash binarki i listę dostępnych komend w evidence. Jeżeli rozjazd już zniknął, oznacz RESOLVED EXTERNALLY, nie wykonuj reinstalacji.
 
 **Weryfikacja:** sprawdź wskazane źródła i odwołania lokalne; `git diff --check` → exit 0; rezultat kroku zapisany w dokumencie wynikowym.
 
 ### 015/T3
 
-- [ ] Przy istniejącym rozjeździe przygotuj dokładną instrukcję aktualizacji z weryfikacją sumy i kopią poprzedniej binarki. Wykonanie instalacji jest osobnym zadaniem; zapis planu nie oznacza zastąpienia PATH executable.
+- [x] Przy istniejącym rozjeździe przygotuj dokładną instrukcję aktualizacji z weryfikacją sumy i kopią poprzedniej binarki. Wykonanie instalacji jest osobnym zadaniem; zapis planu nie oznacza zastąpienia PATH executable.
 
 **Weryfikacja:** sprawdź wskazane źródła i odwołania lokalne; `git diff --check` → exit 0; rezultat kroku zapisany w dokumencie wynikowym.
 
@@ -58,13 +58,13 @@ Poza zakresem: live DB, deploy, profile i hasła użytkownika, instalacja, push,
 
 Jest bieżący dowód źródła komendy i rozjazdu lub jego ustąpienia; brak zmian profili/instalacji.
 
-- [ ] Dokumenty wynikowe zawierają decyzje, granice, zakres przyszłych plików oraz tabelę testów.
-- [ ] Niepewności oznaczone UNPROVEN z warunkiem uzyskania dowodu.
-- [ ] Nie uruchamiaj testów aplikacji przy samym zapisie dokumentów.
-- [ ] `git diff --check` → exit 0.
-- [ ] `git status --short` pokazuje wyłącznie autorskie zmiany w zakresie.
-- [ ] Indeks zawiera status, commit i dowód; lokalne ścieżki istnieją lub są oznaczone jako nowe.
-- [ ] Brak dowodu live/platformowego jest jawny.
+- [x] Dokumenty wynikowe zawierają decyzje, granice, zakres przyszłych plików oraz tabelę testów.
+- [x] Niepewności oznaczone UNPROVEN z warunkiem uzyskania dowodu.
+- [x] Nie uruchamiaj testów aplikacji przy samym zapisie dokumentów.
+- [x] `git diff --check` → exit 0.
+- [x] `git status --short` pokazuje wyłącznie autorskie zmiany w zakresie.
+- [x] Indeks zawiera status, commit i dowód; lokalne ścieżki istnieją lub są oznaczone jako nowe.
+- [x] Brak dowodu live/platformowego jest jawny.
 
 Baseline audytu: 1895 Core/CLI passed; MCP 122 passed, 2 timeouty, 4 skipped. Plan005 diagnozuje timeouty. Wcześniejsza naprawa bezpieczeństwa może być gotowa do review przy udokumentowanej niezależnej awarii gate; nie ogłaszaj wtedy pełnego PASS.
 
