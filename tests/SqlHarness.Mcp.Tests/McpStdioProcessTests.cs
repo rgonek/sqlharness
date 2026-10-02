@@ -95,22 +95,30 @@ internal static class McpStdioProcessHarness
                 CreateNoWindow = true,
             };
             using var process = Process.Start(psi) ?? throw new InvalidOperationException("dotnet publish did not start.");
-            var stdout = process.StandardOutput.ReadToEndAsync(ct);
-            var stderr = process.StandardError.ReadToEndAsync(ct);
+            // Pipe reads use their own token. The caller token also cancels
+            // WaitForExitAsync; tying the reads to it makes a finished publish
+            // throw from ReadToEndAsync while a descendant still holds the pipe.
+            using var pipeReads = new CancellationTokenSource();
+            var stdout = process.StandardOutput.ReadToEndAsync(pipeReads.Token);
+            var stderr = process.StandardError.ReadToEndAsync(pipeReads.Token);
             using var budget = new CancellationTokenSource(TimeSpan.FromMinutes(10));
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, budget.Token);
             try
             {
                 await process.WaitForExitAsync(linked.Token);
             }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
                 try { process.Kill(entireProcessTree: true); } catch { }
-                throw new InvalidOperationException($"dotnet publish -r {rid} timed out after 10 minutes.");
+                var (cancelledOut, cancelledErr) = await DrainPipesAsync(stdout, stderr, pipeReads);
+                var reason = ct.IsCancellationRequested
+                    ? "the caller cancelled it before the publish process exited"
+                    : "it exceeded 10 minutes";
+                throw new InvalidOperationException(
+                    $"dotnet publish -r {rid} failed: {reason}.\nSTDOUT:\n{Tail(cancelledOut)}\nSTDERR:\n{Tail(cancelledErr)}");
             }
 
-            var outText = await stdout;
-            var errText = await stderr;
+            var (outText, errText) = await DrainPipesAsync(stdout, stderr, pipeReads);
             if (process.ExitCode != 0)
                 throw new InvalidOperationException($"dotnet publish -r {rid} failed with exit {process.ExitCode}.\nSTDOUT:\n{Tail(outText)}\nSTDERR:\n{Tail(errText)}");
 
@@ -125,6 +133,57 @@ internal static class McpStdioProcessHarness
         finally
         {
             PublishGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// After <c>dotnet.exe</c> exits, a descendant can keep the redirected
+    /// write end open, so <c>ReadToEndAsync</c> never sees EOF. Wait briefly,
+    /// then cancel those reads. The publish result is the exit code and the
+    /// single-file binary, not an open pipe.
+    /// </summary>
+    private static async Task<(string Stdout, string Stderr)> DrainPipesAsync(
+        Task<string> stdout,
+        Task<string> stderr,
+        CancellationTokenSource pipeReads)
+    {
+        try
+        {
+            await Task.WhenAll(stdout, stderr).WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        catch (TimeoutException)
+        {
+            try { pipeReads.Cancel(); } catch (ObjectDisposedException) { }
+        }
+        catch (Exception)
+        {
+            // The pipe already faulted. Capture below keeps the text or returns empty.
+        }
+
+        return (await CapturePipeAsync(stdout), await CapturePipeAsync(stderr));
+    }
+
+    private static async Task<string> CapturePipeAsync(Task<string> read)
+    {
+        try
+        {
+            return await read.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        catch (Exception)
+        {
+            // Cancellation unblocks a pipe a descendant still holds. If it
+            // does not, leave the read running but observed so a later fault
+            // cannot tear down the test host.
+            if (!read.IsCompleted)
+            {
+                _ = read.ContinueWith(
+                    static task => { _ = task.Exception; },
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
+
+            return string.Empty;
         }
     }
 
