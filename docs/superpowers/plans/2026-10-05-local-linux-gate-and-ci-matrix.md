@@ -834,7 +834,9 @@ Expected: all pass. Then re-read the three edited documents and confirm, quoting
 
 Run: `git diff --name-only main`
 
-Expected: exactly these six paths, and nothing else:
+`git diff` compares `main` against the working tree, so this lists the whole branch, not just the
+uncommitted part. Expected: exactly these ten paths — six deliverables plus four test files — and
+nothing else.
 
 ```
 .github/workflows/ci.yml
@@ -843,9 +845,14 @@ README.md
 plans/README.md
 scripts/setup-linux-gate.ps1
 scripts/verify-linux.ps1
+tests/SqlHarness.Tests/CiGateParityTests.cs
+tests/SqlHarness.Tests/RepositoryFile.cs
+tests/SqlHarness.Tests/SetupLocalLinuxGateScriptTests.cs
+tests/SqlHarness.Tests/VerifyLinuxScriptTests.cs
 ```
 
-Plus the three new test files, which are already committed in Tasks 1-3 and therefore do not appear in this diff. If any other path appears, something outside the plan's scope was modified — investigate before continuing.
+If any other path appears, something outside the plan's scope was modified — investigate before
+continuing.
 
 - [ ] **Step 6: Run both gates on the final commit**
 
