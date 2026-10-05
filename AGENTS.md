@@ -127,6 +127,14 @@ For agent-authored SQL, every ScriptDom-parsable construct inside a top-level `S
 - Treat `.sqlplan`, comparison artifacts, named snapshots under `~/.sqlharness/snapshots` (sensitive result data; replace only with `--force`), `qstop` artifacts (`artifactDirectory/queries.jsonl`), and runtime parameters as locally sensitive. `snapshot --diff` never prints cell values. Do not paste or publish `queries.jsonl` without explicit review. Secrets, passwords, and tokens stay only in process memory.
 - Exit codes: `0` success; `2` validation/safety; `3` authentication; `4` target mismatch; `5` SQL execution; `6` local storage; `7` `watch` max duration without a stop condition; `8` `snapshot --diff` found differences (valid comparison, not an execution failure).
 
+## Verify changes
+
+```powershell
+pwsh ./scripts/verify.ps1
+```
+
+> CI runs the same four stages on ubuntu-latest; tests that pass only on Windows are not done.
+
 ## MCP server (local stdio)
 
 One `sqlharness` process can serve the same Core diagnostics and benchmarks to an MCP client over local stdio (one client per process). Full contract: [docs/mcp.md](docs/mcp.md).
