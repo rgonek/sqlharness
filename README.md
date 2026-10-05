@@ -280,7 +280,10 @@ The local MCP server over stdio is implemented: see [docs/mcp.md](docs/mcp.md).
 
 ## Development
 
+Run `pwsh ./scripts/verify.ps1` before committing; it matches the CI gate for restore, build, and format check, and runs the local non-integration test gate (CI's own test invocation is unfiltered). The .NET SDK version comes from `global.json` (currently `9.0.316`, `rollForward: latestPatch`).
+
 ```powershell
+pwsh ./scripts/verify.ps1
 dotnet test
 dotnet run --project src\SqlHarness.Cli -- --help
 ```

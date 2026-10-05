@@ -94,7 +94,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|---|
-| [016](016-restore-green-ci.md) | Main is green again in CI; one local command reproduces the gate | P1 | S | — | TODO |
+| [016](016-restore-green-ci.md) | Main is green again in CI; one local command reproduces the gate | P1 | S | — | DONE (branch fix/plan-016-green-ci; Linux proof pending first CI run) |
 | [017](017-tsql-hash-named-cte-bypass.md) | A `#`-named CTE can no longer pass off persistent DML as `#temp` work | P1 | S | 016 | TODO |
 | [018](018-tsql-external-access-fail-closed.md) | T-SQL external-access and cross-database checks fail closed; parser to TSql180 | P1 | M | 016, 017 | TODO |
 | [019](019-pg-classifier-holes.md) | The PG classifier denies self-named temp CTE writes, SQL-string executors and deny-list gaps | P1 | S | 016 | TODO |

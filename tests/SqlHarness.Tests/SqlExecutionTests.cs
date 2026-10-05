@@ -3,9 +3,9 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 
-using Npgsql;
-
 using Microsoft.Data.SqlClient;
+
+using Npgsql;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;

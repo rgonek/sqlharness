@@ -8,7 +8,7 @@
   "observedUtf8Bytes": {
     "discoveryThenSchema": 7100,
     "validationCorrection": 1300,
-    "compareSummary": 1006
+    "compareSummary": 962
   },
   "calls": {
     "discoveryThenSchema": 2,

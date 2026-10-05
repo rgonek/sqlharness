@@ -541,9 +541,11 @@ public class CompareMatrixTests
             "measure" => new SqlHarnessMeasureOperation(target, null, sql, [], 30, 1) { TypedParameters = typed },
             "measure-sets" => new SqlHarnessMeasureOperation(
                 target, null, setSql, [], 30, 1,
-                [new("small", ["BatchSize:int=1"]), new("large", ["BatchSize:int=2"])]) { TypedParameters = typed },
+                [new("small", ["BatchSize:int=1"]), new("large", ["BatchSize:int=2"])])
+            { TypedParameters = typed },
             "watch" => new SqlHarnessWatchOperation(
-                target, sql, [], 30, 10, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1), null, 3) { TypedParameters = typed },
+                target, sql, [], 30, 10, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1), null, 3)
+            { TypedParameters = typed },
             _ => new SqlHarnessSnapshotOperation(target, sql, [], 30, 10, "before", false, false) { TypedParameters = typed },
         };
 

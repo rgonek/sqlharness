@@ -1,6 +1,7 @@
 using System.IO.Pipelines;
 
 using Microsoft.Extensions.Logging.Abstractions;
+
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -8,8 +9,8 @@ using ModelContextProtocol.Server;
 
 using SqlHarness.Cli;
 using SqlHarness.Core;
-using SqlHarness.Mcp.Tools;
 using SqlHarness.Core.Targets;
+using SqlHarness.Mcp.Tools;
 
 namespace SqlHarness.Mcp.Tests;
 

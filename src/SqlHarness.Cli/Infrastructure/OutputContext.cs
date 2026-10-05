@@ -1,6 +1,7 @@
-using SqlHarness.Core;
 using System.Globalization;
+
 using SqlHarness.Cli.Commands;
+using SqlHarness.Core;
 
 namespace SqlHarness.Cli.Infrastructure;
 
