@@ -1,11 +1,12 @@
-using System.Text.Json;
 using System.Diagnostics;
-using Xunit.Abstractions;
+using System.Text.Json;
 
 using SqlHarness.Cli;
 using SqlHarness.Cli.Commands;
 using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
+
+using Xunit.Abstractions;
 
 namespace SqlHarness.Tests.Cli;
 

@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 
 using Microsoft.Extensions.Logging.Abstractions;
+
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;

@@ -33,7 +33,8 @@ public sealed record ArtifactManifest(
             ArtifactReader.ReportFileName, ArtifactReader.SupportedSections),
         _ => throw new ArgumentOutOfRangeException(
             nameof(report), report.GetType(), "Unsupported benchmark report type."),
-    }) with { Owner = owner };
+    }) with
+    { Owner = owner };
 }
 
 /// <summary>One named variant (baseline/candidate/query/set) with its measured metrics.</summary>

@@ -4,6 +4,7 @@ using System.Text.Json;
 using SqlHarness.Cli;
 using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
+
 using Xunit.Abstractions;
 
 namespace SqlHarness.Tests;

@@ -1,8 +1,8 @@
 using System.Reflection;
+using System.Text.Json;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Targets;
-using System.Text.Json;
 
 namespace SqlHarness.Mcp.Tests;
 

@@ -1,9 +1,9 @@
 ﻿using System.Data;
 using System.Text;
 
-using Xunit.Abstractions;
-
 using SqlHarness.Core;
+
+using Xunit.Abstractions;
 
 namespace SqlHarness.Tests;
 
