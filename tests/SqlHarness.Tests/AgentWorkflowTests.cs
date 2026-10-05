@@ -97,7 +97,9 @@ public sealed class AgentWorkflowTests
             Assert.True(File.Exists(Path.Combine(artifactPath!, "baseline.sqlplan")));
             Assert.True(File.Exists(Path.Combine(artifactPath!, "candidate.sqlplan")));
             Assert.IsType<SqlHarnessCompareOperation>(Assert.Single(module.Operations));
-            AssertBytesWithinBudget("compareSummary", output.ToString(), exitCodes);
+            var escapedDirectory = JsonSerializer.Serialize(artifactDirectory).Trim('"');
+            var normalized = output.ToString().Replace(escapedDirectory, "<artifactDirectory>", StringComparison.Ordinal);
+            AssertBytesWithinBudget("compareSummary", normalized, exitCodes);
         }
         finally
         {

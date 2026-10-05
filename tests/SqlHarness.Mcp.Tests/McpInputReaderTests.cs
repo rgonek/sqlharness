@@ -365,7 +365,9 @@ public sealed class McpInputReaderTests : IDisposable
         if (Directory.Exists(probe.ToUpperInvariant()))
             return; // Case-insensitive FS: no proof possible here. See T1 report.
 
-        var sibling = _root.ToUpperInvariant();
+        var sibling = Path.Combine(
+            Path.GetDirectoryName(_root)!,
+            Path.GetFileName(_root).ToUpperInvariant());
         Directory.CreateDirectory(sibling);
         var siblingFile = Path.Combine(sibling, "q.sql");
         File.WriteAllText(siblingFile, "SELECT 1;");
