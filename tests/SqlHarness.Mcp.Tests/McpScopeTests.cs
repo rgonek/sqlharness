@@ -89,6 +89,57 @@ public sealed class McpScopeTests : IDisposable
     }
 
     [Fact]
+    public async Task Frozen_scope_isolated_from_source_profile_mutation_and_keeps_target_vars_read_only()
+    {
+        var sourceVars = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["tenant"] = "^frozen$",
+        };
+        var sourceProfile = new TargetProfile(
+            "source-server.invalid",
+            "source-{tenant}",
+            sourceVars,
+            "integrated");
+        var sourceProfiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+        {
+            [ProfileName] = sourceProfile,
+        };
+
+        var scope = McpScope.Create(Options(), sourceProfiles);
+        sourceVars["tenant"] = "^changed$";
+        sourceProfiles[ProfileName] = sourceProfile with
+        {
+            Server = "changed-server.invalid",
+            Database = "changed-database",
+        };
+        sourceProfiles["late-profile"] = sourceProfile;
+
+        Assert.NotSame(sourceProfiles, scope.ProfileProvider());
+        Assert.Same(scope.Profiles, scope.ProfileProvider());
+        Assert.Equal("source-server.invalid", scope.ResolvedTarget.Server);
+        Assert.Equal("source-frozen", scope.ResolvedTarget.Database);
+        Assert.Equal("^frozen$", scope.Profiles[ProfileName].Vars["tenant"]);
+        Assert.DoesNotContain("late-profile", scope.Profiles.Keys);
+
+        var exposedVars = Assert.IsAssignableFrom<IDictionary<string, string>>(scope.TargetRequest.Vars);
+        Assert.Throws<NotSupportedException>(() => exposedVars["tenant"] = "changed");
+        Assert.Equal(FrozenTenant, scope.TargetRequest.Vars["tenant"]);
+
+        // The module resolves through the scope's frozen provider. Its
+        // cross-database safety result proves the original var rule and
+        // profile definition remained in use without opening a connection.
+        var module = scope.CreateModule();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var outcome = await module.ExecuteAsync(
+            new SqlHarnessQueryOperation(scope.TargetRequest, CrossDatabaseSql, [], 5, 50, false, null),
+            cts.Token);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Contains("safety rejection", outcome.SafeError, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("validation rule", outcome.SafeError ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Scoped_module_uses_frozen_snapshot_instead_of_rereading_the_file()
     {
         WriteTargetsFile(FrozenDatabase, "^frozen$");
