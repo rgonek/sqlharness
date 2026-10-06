@@ -110,7 +110,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [029](029-agent-docs-and-capabilities-drift.md) | Skill/README/AGENTS/capabilities match the shipped CLI; a sync test guards them | P2 | S | 016 (after 021/023/024/026/027 if scheduled) | TODO |
 | [030](030-datetime-params-and-pg-plan-depth.md) | Date/time params never shift silently; deep PG plans parse | P2 | S | 016 (after 022 if both) | TODO |
 | [031](031-pg-session-hardening.md) | PG refuses non-standard string lexing; SCRAM only on unauthenticated transports | P2 | S–M | 019 (and 022) | TODO |
-| [032](032-ci-matrix-and-test-hygiene.md) | CI on Windows and Linux; honest skips; no env races; no publish leak; Pester runs | P2 | M | 016, 028 | TODO |
+| [032](032-ci-matrix-and-test-hygiene.md) | CI on Windows and Linux; honest skips; no env races; no publish leak; Pester runs | P2 | M | 016, 028 | PARTIAL (local Linux gate + parity guard landed on ci/plan-032-matrix; CI matrix withheld on the plan-005 MCP flake; Steps 1-3, Pester, .gitattributes remain) |
 | [033](033-sqlserver-target-identity.md) | SQL Server identity accepts FQDN/listeners/db casing without weakening detection | P2 | M | 016 | TODO |
 | [034](034-private-sqlharness-home.md) | Unix: home/data owner-only; `doctor` warns on an exposed home | P2 | M | 016 (proof via 032) | TODO |
 | [035](035-implement-regress-decider.md) | Direction: implement plan 013 `regress`, Phase A (`MeasuredRunCount`) first | P2 | M–L | 016 | TODO |

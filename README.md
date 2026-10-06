@@ -280,10 +280,18 @@ The local MCP server over stdio is implemented: see [docs/mcp.md](docs/mcp.md).
 
 ## Development
 
-Run `pwsh ./scripts/verify.ps1` before committing; it matches the CI gate for restore, build, and format check, and runs the local non-integration test gate (CI's own test invocation is unfiltered). The .NET SDK version comes from `global.json` (currently `9.0.316`, `rollForward: latestPatch`).
+Run both gates before committing; they run the same four stages (restore, build, test, format) that
+CI runs, with the local non-integration test filter. `verify.ps1` covers Windows; `verify-linux.ps1`
+runs the identical stages inside WSL on a case-sensitive ext4 filesystem and is the only way to see
+Linux-only behaviour before pushing — provision it once with `pwsh ./scripts/setup-linux-gate.ps1`
+(installs the `global.json` SDK in the distro and creates a disposable clone under `~/src`; it never
+uses `/mnt/d`, which is case-insensitive). Neither gate replaces CI, and CI itself currently runs
+only ubuntu-latest with an unfiltered test step. A change is not done until both gates are green.
+The .NET SDK version comes from `global.json` (currently `9.0.316`, `rollForward: latestPatch`).
 
 ```powershell
 pwsh ./scripts/verify.ps1
+pwsh ./scripts/verify-linux.ps1
 dotnet test
 dotnet run --project src\SqlHarness.Cli -- --help
 ```
