@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Read `docs/superpowers/specs/2026-07-29-local-adventureworks-playground-design.md` before editing.
-- Do not modify, stop, recreate, or reuse `civiclens-sql`, port `14334`, BSI profiles, or another project's resources.
+- Do not modify, stop, recreate, or reuse `civiclens-sql`, port `14334`, other existing profiles, or another project's resources.
 - Use exactly container `sqlharness-sql`, volume `sqlharness-sql-data`, host port `14335`, database `AdventureWorks2022`, and profile `local-playground`.
 - Treat the playground as optional development infrastructure, never as a runtime, build, packaging, or ordinary unit-test dependency.
 - Do not edit `~/.sqlharness/targets.json`; document an exact fragment for the user to merge.

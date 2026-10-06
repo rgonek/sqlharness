@@ -70,7 +70,7 @@ existing profiles.
 
 The existing CivicLens container and its host port `14334` are out of scope and must
 not be inspected beyond a name/port collision check, modified, stopped, or reused.
-Existing BSI profiles are also out of scope.
+Other existing profiles are also out of scope.
 
 ## Bootstrap Behavior
 
@@ -136,7 +136,7 @@ The implementing agent must stop and report evidence instead of working around:
 - missing or blank password input;
 - failure to identify the backup's logical data and log files;
 - a SQLHarness safety rejection;
-- any required modification to CivicLens, BSI, or another project's resources.
+- any required modification to other projects' resources.
 
 ## Acceptance Criteria
 
