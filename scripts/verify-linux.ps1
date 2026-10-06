@@ -27,11 +27,56 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function Assert-WslDistroVersion2 {
+    param(
+        [Parameter(Mandatory)][string]$Distro
+    )
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = 'wsl.exe'
+    $psi.Arguments = '-l -v'
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.StandardOutputEncoding = [System.Text.Encoding]::Unicode
+    $psi.StandardErrorEncoding = [System.Text.Encoding]::Unicode
+    $psi.CreateNoWindow = $true
+
+    $proc = [System.Diagnostics.Process]::Start($psi)
+    $stdout = $proc.StandardOutput.ReadToEnd()
+    $stderr = $proc.StandardError.ReadToEnd()
+    $proc.WaitForExit()
+
+    if ($proc.ExitCode -ne 0) {
+        throw "Could not list WSL distributions. Ensure WSL is installed and the '$Distro' distribution is available. Details: $stderr"
+    }
+
+    $found = $false
+    $lines = $stdout -split "`r?`n" | Where-Object { $_ -match '\S' }
+    foreach ($line in $lines) {
+        if ($line -match '^\s*NAME\s+STATE\s+VERSION\s*$') { continue }
+        $pattern = '^\s*\*?\s*{0}\s+\S+\s+(\d+)\s*$' -f [regex]::Escape($Distro)
+        if ($line -match $pattern) {
+            if ($matches[1] -ne '2') {
+                throw "WSL distribution '$Distro' is version $($matches[1]), but version 2 is required."
+            }
+            $found = $true
+            break
+        }
+    }
+
+    if (-not $found) {
+        throw "WSL distribution '$Distro' was not found. Run 'wsl -l -v' to list distributions, then re-run with -Distro <name>."
+    }
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $branch = (& git -C $repoRoot rev-parse --abbrev-ref HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($branch)) {
     throw 'Could not determine the current branch.'
 }
+
+Assert-WslDistroVersion2 -Distro $Distro
 
 $windowsRepo = (& wsl -d $Distro -- wslpath -a ($repoRoot -replace '\\', '/')).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($windowsRepo)) {
@@ -39,6 +84,9 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($windowsRepo)) {
 }
 
 $wslHome = (& wsl -d $Distro -- bash -lc 'printf %s "$HOME"').Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($wslHome)) {
+    throw "Could not determine the WSL home directory for distro '$Distro'."
+}
 $gateClone = "$wslHome/src/sqlharness-gate"
 
 function Invoke-GateStage {
