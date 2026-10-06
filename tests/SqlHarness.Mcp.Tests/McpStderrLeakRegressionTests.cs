@@ -40,7 +40,7 @@ public sealed class McpStderrLeakRegressionTests
             var stdin = child.Process.StandardInput.BaseStream;
             await using var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct);
 
-            Dictionary<string, object?> RequestScope() => new()
+            static Dictionary<string, object?> RequestScope() => new()
             {
                 ["profile"] = "mcp-stdio",
                 ["vars"] = new Dictionary<string, string> { ["tenant"] = ScopeVarMarker },

@@ -2,9 +2,11 @@ using System.IO.Pipelines;
 using System.Text;
 
 using Microsoft.Extensions.Logging.Abstractions;
+
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+
 using SqlHarness.Core.Targets;
 using SqlHarness.Mcp.Tools;
 

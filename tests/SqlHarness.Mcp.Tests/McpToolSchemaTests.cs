@@ -332,26 +332,30 @@ public sealed class McpToolSchemaTests : IDisposable
 
         var valid = new Dictionary<string, object?>
         {
-            ["usage"] = "query", ["sql"] = "SELECT 1",
+            ["usage"] = "query",
+            ["sql"] = "SELECT 1",
             ["scope"] = new { profile = ProfileName, vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
         };
         var first = await served.Client.CallToolAsync("sqlharness_validate", valid, cancellationToken: CancellationToken.None);
         Assert.False(first.IsError == true);
         var second = await served.Client.CallToolAsync("sqlharness_validate", new Dictionary<string, object?>
         {
-            ["usage"] = "query", ["sql"] = "SELECT 1",
+            ["usage"] = "query",
+            ["sql"] = "SELECT 1",
             ["scope"] = new { profile = "sample-b", vars = new Dictionary<string, string> { ["tenant"] = "b" } },
         }, cancellationToken: CancellationToken.None);
         Assert.False(second.IsError == true);
         var wrongB = await served.Client.CallToolAsync("sqlharness_validate", new Dictionary<string, object?>
         {
-            ["usage"] = "query", ["sql"] = "SELECT 1",
+            ["usage"] = "query",
+            ["sql"] = "SELECT 1",
             ["scope"] = new { profile = "sample-b", vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
         }, cancellationToken: CancellationToken.None);
         Assert.Equal(2, ServedEnvelope(wrongB, "sqlharness_validate").GetProperty("exitCode").GetInt32());
         var malformedScope = new Dictionary<string, object?>
         {
-            ["usage"] = "query", ["sql"] = "SELECT 1",
+            ["usage"] = "query",
+            ["sql"] = "SELECT 1",
             ["scope"] = new { profile = ProfileName, vars = new Dictionary<string, string> { ["tenant"] = "frozen" }, extra = "sentinel" },
         };
         var rejected = await served.Client.CallToolAsync("sqlharness_validate", malformedScope, cancellationToken: CancellationToken.None);
@@ -363,7 +367,8 @@ public sealed class McpToolSchemaTests : IDisposable
         await using var fixedServed = await ServedCatalog.CreateAsync(scope);
         var fixedWithScope = await fixedServed.Client.CallToolAsync("sqlharness_validate", new Dictionary<string, object?>
         {
-            ["usage"] = "query", ["sql"] = "SELECT 1",
+            ["usage"] = "query",
+            ["sql"] = "SELECT 1",
             ["scope"] = new { profile = ProfileName, vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
         }, cancellationToken: CancellationToken.None);
         Assert.True(fixedWithScope.IsError == true);

@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 
 using Microsoft.Extensions.Logging.Abstractions;
+
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -88,7 +89,7 @@ public sealed class McpLifecycleTests
                 Values.Add(value);
         }
 
-    public IReadOnlyList<ProgressNotificationValue> Snapshot()
+        public IReadOnlyList<ProgressNotificationValue> Snapshot()
         {
             lock (_sync)
                 return Values.ToArray();
@@ -97,34 +98,34 @@ public sealed class McpLifecycleTests
 
     private static async Task<IReadOnlyList<ProgressNotificationValue>> WaitForProgressCountAsync(
             ProgressCollector collector, int expected, CancellationToken ct)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
+        while (true)
         {
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
-            while (true)
-            {
-                var snapshot = collector.Snapshot();
-                if (snapshot.Count >= expected)
-                    return snapshot;
-                await Task.Delay(TimeSpan.FromMilliseconds(25), linked.Token);
-            }
+            var snapshot = collector.Snapshot();
+            if (snapshot.Count >= expected)
+                return snapshot;
+            await Task.Delay(TimeSpan.FromMilliseconds(25), linked.Token);
         }
+    }
 
     private static async Task AssertNoProgressGrowthAsync(
             ProgressCollector collector, int expected, TimeSpan settle, CancellationToken ct)
+    {
+        // Negative silence assertion: poll until the settle window elapses
+        // and fail loudly on any growth, so a lagging/spurious notification
+        // arriving after the token-less call cannot pass on a too-early
+        // snapshot. The 30 s Budget on the caller's token is the backstop.
+        var deadline = DateTime.UtcNow + settle;
+        while (true)
         {
-            // Negative silence assertion: poll until the settle window elapses
-            // and fail loudly on any growth, so a lagging/spurious notification
-            // arriving after the token-less call cannot pass on a too-early
-            // snapshot. The 30 s Budget on the caller's token is the backstop.
-            var deadline = DateTime.UtcNow + settle;
-            while (true)
-            {
-                Assert.Equal(expected, collector.Snapshot().Count);
-                if (DateTime.UtcNow >= deadline)
-                    return;
-                await Task.Delay(TimeSpan.FromMilliseconds(25), ct);
-            }
+            Assert.Equal(expected, collector.Snapshot().Count);
+            if (DateTime.UtcNow >= deadline)
+                return;
+            await Task.Delay(TimeSpan.FromMilliseconds(25), ct);
         }
+    }
 
     private static ProgressNotificationValue? TryParseProgress(JsonNode? paramsNode)
     {

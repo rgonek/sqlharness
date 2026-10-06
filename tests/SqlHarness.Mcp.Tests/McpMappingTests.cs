@@ -600,7 +600,7 @@ public sealed class McpMappingTests : IDisposable
     {
         var scope = Scope();
         var report = await McpOperationMapper.MapValidateAsync(
-            scope, "DELETE FROM dbo.T WHERE Id = @id;", null, "query", [P("id", "int",  "42")], CancellationToken.None);
+            scope, "DELETE FROM dbo.T WHERE Id = @id;", null, "query", [P("id", "int", "42")], CancellationToken.None);
         Assert.False(report.Allowed);
         Assert.False(report.Executed);
         await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapValidateAsync(

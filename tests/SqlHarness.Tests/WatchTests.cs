@@ -329,7 +329,8 @@ public class WatchTests
             Watch(
                 untilUnchanged: 100,
                 interval: TimeSpan.FromSeconds(30),
-                maxDuration: TimeSpan.FromSeconds(40)) with { TimeoutSeconds = 300 });
+                maxDuration: TimeSpan.FromSeconds(40)) with
+            { TimeoutSeconds = 300 });
 
         var report = Assert.IsType<SqlHarnessWatchReport>(outcome.Report);
         Assert.Equal(SqlHarnessExitCode.WatchMaxDuration, outcome.ExitCode);
@@ -351,7 +352,8 @@ public class WatchTests
             Watch(
                 untilUnchanged: 100,
                 interval: TimeSpan.FromSeconds(30),
-                maxDuration: TimeSpan.FromSeconds(40)) with { TimeoutSeconds = 300 });
+                maxDuration: TimeSpan.FromSeconds(40)) with
+            { TimeoutSeconds = 300 });
 
         var report = Assert.IsType<SqlHarnessWatchReport>(outcome.Report);
         Assert.Equal(SqlHarnessExitCode.WatchMaxDuration, outcome.ExitCode);

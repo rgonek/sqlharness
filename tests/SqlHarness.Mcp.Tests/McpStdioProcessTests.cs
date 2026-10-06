@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 
 using Microsoft.Extensions.Logging.Abstractions;
+
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -452,7 +453,7 @@ public sealed class McpStdioProcessTests
                 "scope",
                 validateSchema.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
 
-            Dictionary<string, object?> Scope(string profile) => new()
+            static Dictionary<string, object?> Scope(string profile) => new()
             {
                 ["profile"] = profile,
                 ["vars"] = new Dictionary<string, string> { ["tenant"] = "example", ["env"] = "test" },

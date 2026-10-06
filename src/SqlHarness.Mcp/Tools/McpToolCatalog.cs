@@ -493,8 +493,13 @@ public static class McpToolCatalog
             type.GetMethod(method) ?? throw new InvalidOperationException($"Unknown MCP tool method '{method}'."), handlers,
             new McpServerToolCreateOptions
             {
-                Name = name, Description = description, ReadOnly = readOnly, Destructive = destructive,
-                Idempotent = idempotent, OpenWorld = openWorld, UseStructuredContent = true,
+                Name = name,
+                Description = description,
+                ReadOnly = readOnly,
+                Destructive = destructive,
+                Idempotent = idempotent,
+                OpenWorld = openWorld,
+                UseStructuredContent = true,
                 OutputSchema = McpResultAdapter.OutputSchema.RootElement,
             });
         var tools = new List<McpServerTool>(ToolNames.Count)
