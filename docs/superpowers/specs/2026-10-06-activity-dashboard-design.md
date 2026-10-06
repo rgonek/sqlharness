@@ -93,6 +93,7 @@ Upsert: `INSERT … ON CONFLICT(session_key) DO UPDATE SET last_seen = excluded.
 | group | columns |
 |---|---|
 | identity | `id INTEGER PRIMARY KEY`, `session_id` → `sessions.id`, `operation` (`query`/`measure`/`compare`/`watch`/`snapshot`/`counts`/`schema`/`space`/`ping`/`qstop`/`indexes`/`validate`/`plan`/`artifact`/…), `started_at`, `updated_at`, `finished_at` |
+| process | `host_pid`, `host_started_at` (per operation, because every CLI call is its own process; used for `abandoned` detection) |
 | state | `status` (`running`/`succeeded`/`failed`/`rejected`/`abandoned`), `exit_code`, `error_kind`, `duration_ms` |
 | target | `profile`, `vars_json` (profile variable values; these are scope, not secrets), `engine`, `server`, `database`, `mutation_requested` |
 | result | `result_sets`, `rows_returned`, `artifact_dir`, `summary_json` (bounded, see below), `progress_json` (`watch`: polls, condition met) |
@@ -101,7 +102,7 @@ Upsert: `INSERT … ON CONFLICT(session_key) DO UPDATE SET last_seen = excluded.
 
 Indexes: `(session_id, id)`, `(updated_at)`, `(status)`, `(sql_hash)`.
 
-`rejected` means exit `2` (validation/safety). It is a distinct status so the operator can filter safety rejections. `abandoned` is set by the dashboard when a row is `running` but the `(host_pid, host_started_at)` pair no longer exists. Both PID and start time are checked because PIDs are reused.
+`rejected` means exit `2` (validation/safety). It is a distinct status so the operator can filter safety rejections. `abandoned` is set by the dashboard when a row is `running` but the operation's `(host_pid, host_started_at)` pair no longer exists. Both PID and start time are checked because PIDs are reused.
 
 ### `operation_metrics` (always stored; contains no SQL text and no values)
 
@@ -192,7 +193,7 @@ Views:
 
 | situation | behavior |
 |---|---|
-| journal write fails (lock, disk, permissions) | operation continues and its exit code is unchanged; one stderr line; `busy_timeout` about 250 ms |
+| journal write fails (lock, disk, permissions) | operation continues and its exit code is unchanged; one stderr line per process; `busy_timeout` 250 ms, and the command timeout of 1 s (the `Microsoft.Data.Sqlite` minimum) bounds the busy-retry loop |
 | `activity.db` corrupt | renamed to `activity.db.corrupt-<timestamp>`, recreated; dashboard shows a banner |
 | `user_version` newer than the binary | journal disabled for this process (no writes); dashboard refuses to run, with a clear message |
 | concurrent first start / migration | `BEGIN IMMEDIATE`; losers wait on `busy_timeout`, then re-check the version |
