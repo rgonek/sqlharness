@@ -29,6 +29,32 @@ public sealed class SnapshotScopeMappingTests
         Assert.Same(scope.Owner, diff.Owner);
     }
 
+    [Fact]
+    public async Task Snapshot_baseline_and_capture_owners_follow_each_resolved_request_scope()
+    {
+        var process = McpProcessContext.Create(
+            new McpServerOptions { RequestScope = true, AllowedProfiles = ["sample-a", "sample-b"] },
+            () => new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+            {
+                ["sample-a"] = new("server-a.invalid", "database-a", new Dictionary<string, string> { ["tenant"] = "^a$" }, "integrated"),
+                ["sample-b"] = new("server-b.invalid", "database-b", new Dictionary<string, string> { ["tenant"] = "^b$" }, "integrated"),
+            });
+        var a = process.ResolveScope(new McpRequestScope("sample-a", new Dictionary<string, string> { ["tenant"] = "a" }));
+        var b = process.ResolveScope(new McpRequestScope("sample-b", new Dictionary<string, string> { ["tenant"] = "b" }));
+
+        var baseline = await McpOperationMapper.MapSnapshotAsync(
+            a, "diff", "shared-label", "SELECT 1", null, null, 30, 50, CancellationToken.None);
+        var capture = await McpOperationMapper.MapSnapshotAsync(
+            b, "capture", "shared-label", "SELECT 1", null, null, 30, 50, CancellationToken.None);
+
+        Assert.Same(a.Owner, baseline.Owner);
+        Assert.Same(b.Owner, capture.Owner);
+        Assert.True(a.Owner.Matches(baseline.Owner));
+        Assert.True(b.Owner.Matches(capture.Owner));
+        Assert.False(a.Owner.Matches(capture.Owner));
+        Assert.False(b.Owner.Matches(baseline.Owner));
+    }
+
     private static McpScope Scope() => McpScope.Create(
         new McpServerOptions
         {

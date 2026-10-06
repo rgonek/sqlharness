@@ -145,6 +145,94 @@ public sealed class McpCancellationTests
     }
 
     [Fact]
+    public async Task Request_scope_A_cancellation_disposes_its_session_releases_process_gate_and_allows_B()
+    {
+        var process = McpProcessContext.Create(
+            new McpServerOptions { RequestScope = true, AllowedProfiles = ["scope-a", "scope-b"] },
+            () => new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+            {
+                ["scope-a"] = new("server-a.invalid", "database-a", new Dictionary<string, string> { ["tenant"] = "^a$" }, "integrated"),
+                ["scope-b"] = new("server-b.invalid", "database-b", new Dictionary<string, string> { ["tenant"] = "^b$" }, "integrated"),
+            });
+        var module = new DisposableBlockingModule();
+        var handlers = new McpRequestToolHandlers(process, moduleFactory: _ => module);
+        using var cancelA = new CancellationTokenSource(Budget);
+
+        var a = handlers.QueryAsync(null!, new McpRequestScopeArgument("scope-a", new() { ["tenant"] = "a" }), "SELECT 1", ct: cancelA.Token);
+        await module.Entered.Task.WaitAsync(Budget);
+        await cancelA.CancelAsync();
+
+        AssertCancelled(await a.WaitAsync(Budget), "sqlharness_query");
+        await module.Disposed.Task.WaitAsync(Budget);
+        Assert.True(process.Gate.TryEnterDb());
+        process.Gate.ExitDb();
+
+        var b = await handlers.QueryAsync(null!, new McpRequestScopeArgument("scope-b", new() { ["tenant"] = "b" }), "SELECT 2");
+        Assert.False(b.IsError == true, Text(b));
+        Assert.Equal(["scope-a", "scope-b"], module.Targets.Select(target => target.Profile));
+        Assert.Equal(["database-a", "database-b"], module.Targets.Select(target => TargetResolver.Resolve(target, process.Profiles).Database));
+    }
+
+    [Fact]
+    public async Task Request_scope_process_deadline_reaches_execution_and_disposes_the_session()
+    {
+        var process = McpProcessContext.Create(
+            new McpServerOptions
+            {
+                RequestScope = true,
+                AllowedProfiles = ["scope-a"],
+                MaxOperationSeconds = 1,
+            },
+            () => new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+            {
+                ["scope-a"] = new("server-a.invalid", "database-a", new Dictionary<string, string> { ["tenant"] = "^a$" }, "integrated"),
+            });
+        var module = new DisposableBlockingModule();
+        var handlers = new McpRequestToolHandlers(process, moduleFactory: _ => module);
+        using var guard = new CancellationTokenSource(Budget);
+
+        var result = await handlers.QueryAsync(
+            null!, new McpRequestScopeArgument("scope-a", new() { ["tenant"] = "a" }), "SELECT 1", ct: guard.Token);
+
+        AssertCancelled(result, "sqlharness_query");
+        await module.Entered.Task.WaitAsync(Budget);
+        await module.Disposed.Task.WaitAsync(Budget);
+    }
+
+    private sealed class DisposableBlockingModule : ISqlHarnessModule
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Disposed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public List<SqlTargetRequest> Targets { get; } = [];
+
+        public async Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default)
+        {
+            var request = operation switch
+            {
+                SqlHarnessQueryOperation query => query.Target,
+                _ => throw new InvalidOperationException("Expected a scoped query operation."),
+            };
+            lock (Targets) Targets.Add(request);
+            await using var session = new DisposableSession(Disposed);
+            if (Targets.Count == 1)
+            {
+                Entered.TrySetResult();
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            return new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null);
+        }
+    }
+
+    private sealed class DisposableSession(TaskCompletionSource disposed) : IAsyncDisposable
+    {
+        public ValueTask DisposeAsync()
+        {
+            disposed.TrySetResult();
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [Fact]
     public async Task Process_deadline_cancels_a_long_call()
     {
         var scope = TestScope(new McpServerOptions { Profile = "mcp-t5", MaxOperationSeconds = 1 });

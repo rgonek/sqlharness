@@ -225,6 +225,45 @@ public sealed class McpLifecycleTests
     }
 
     [Fact]
+    public async Task Request_scopes_share_gate_while_local_capabilities_keeps_running()
+    {
+        var process = McpProcessContext.Create(
+            new McpServerOptions { RequestScope = true, AllowedProfiles = ["sample-a", "sample-b"] },
+            () => new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+            {
+                ["sample-a"] = new("server-a.invalid", "database-a", new Dictionary<string, string> { ["tenant"] = "^a$" }, "integrated"),
+                ["sample-b"] = new("server-b.invalid", "database-b", new Dictionary<string, string> { ["tenant"] = "^b$" }, "integrated"),
+            });
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var module = new RecordingModule
+        {
+            Behavior = async (_, ct) =>
+            {
+                entered.TrySetResult();
+                await release.Task.WaitAsync(ct);
+                return new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null);
+            },
+        };
+        var handlers = new McpRequestToolHandlers(process, moduleFactory: _ => module);
+        using var guard = new CancellationTokenSource(Budget);
+
+        var blocked = handlers.QueryAsync(null!, new McpRequestScopeArgument("sample-a", new() { ["tenant"] = "a" }), "SELECT 1", ct: guard.Token);
+        await entered.Task.WaitAsync(Budget, guard.Token);
+        var capabilities = await handlers.CapabilitiesAsync(null!, ct: guard.Token);
+        Assert.False(capabilities.IsError == true, Text(capabilities));
+        var capabilitiesJson = Envelope(capabilities);
+        Assert.Equal("request", capabilitiesJson.GetProperty("result").GetProperty("scopeMode").GetString());
+        Assert.Contains("sample-a", capabilitiesJson.GetProperty("result").GetProperty("allowedProfiles").EnumerateArray().Select(item => item.GetString()));
+        Assert.DoesNotContain("server-a", Text(capabilities), StringComparison.Ordinal);
+
+        release.TrySetResult();
+        Assert.False((await blocked).IsError == true);
+        Assert.Single(module.Operations);
+        Assert.Equal("sample-a", Assert.IsType<SqlHarnessQueryOperation>(module.Operations[0]).Target.Profile);
+    }
+
+    [Fact]
     public async Task Local_capabilities_runs_while_a_database_call_holds_the_gate()
     {
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -653,6 +692,84 @@ public sealed class McpLifecycleTests
         catch (OperationCanceledException)
         {
         }
+        Assert.True(gate.TryEnterDb());
+        gate.ExitDb();
+        _ = inflight;
+    }
+
+    [Fact]
+    public async Task Request_scope_EOF_cancels_A_and_never_runs_queued_B()
+    {
+        var process = McpProcessContext.Create(
+            new McpServerOptions { RequestScope = true, AllowedProfiles = ["sample-a", "sample-b"] },
+            () => new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+            {
+                ["sample-a"] = new("server-a.invalid", "database-a", new Dictionary<string, string> { ["tenant"] = "^a$" }, "integrated"),
+                ["sample-b"] = new("server-b.invalid", "database-b", new Dictionary<string, string> { ["tenant"] = "^b$" }, "integrated"),
+            });
+        var gate = process.Gate;
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var moduleCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var moduleExited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var module = new RecordingModule
+        {
+            Behavior = async (_, ct) =>
+            {
+                using var reg = ct.Register(() => moduleCancelled.TrySetResult());
+                entered.TrySetResult();
+                try { await Task.Delay(Timeout.Infinite, ct); }
+                finally { moduleExited.TrySetResult(); }
+                throw new InvalidOperationException("A cancelled request never completes.");
+            },
+        };
+        using var guard = new CancellationTokenSource(Budget);
+        using var externalShutdown = new CancellationTokenSource();
+        using var eofShutdown = new CancellationTokenSource();
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(externalShutdown.Token, eofShutdown.Token);
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+        var serverOptions = new ModelContextProtocol.Server.McpServerOptions
+        {
+            ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "t5-test" },
+            ProtocolVersion = McpHost.PinnedProtocolVersion,
+        };
+        McpToolCatalog.Wire(serverOptions, process, hostShutdown: lifetime.Token, moduleFactory: _ => module);
+        using var eofInput = new EofShutdownInput(clientToServer.Reader.AsStream(), eofShutdown);
+        await using var server = McpServer.Create(
+            new StreamServerTransport(eofInput, serverToClient.Writer.AsStream(), "t5-request-server", NullLoggerFactory.Instance),
+            serverOptions, NullLoggerFactory.Instance, serviceProvider: null);
+        var serverTask = server.RunAsync(lifetime.Token);
+        await using var client = await McpClient.CreateAsync(
+            new StreamClientTransport(clientToServer.Writer.AsStream(), serverToClient.Reader.AsStream(), NullLoggerFactory.Instance),
+            new McpClientOptions
+            {
+                ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
+                ProtocolVersion = McpHost.PinnedProtocolVersion,
+            }, NullLoggerFactory.Instance, guard.Token);
+
+        static Dictionary<string, object?> WatchArgs(string profile, string tenant) => new()
+        {
+            ["scope"] = new Dictionary<string, object?>
+            {
+                ["profile"] = profile,
+                ["vars"] = new Dictionary<string, string> { ["tenant"] = tenant },
+            },
+            ["sql"] = "SELECT 1",
+        };
+
+        var inflight = client.CallToolAsync("sqlharness_watch", WatchArgs("sample-a", "a"), cancellationToken: guard.Token);
+        await entered.Task.WaitAsync(Budget, guard.Token);
+        var queuedB = await client.CallToolAsync("sqlharness_watch", WatchArgs("sample-b", "b"), cancellationToken: guard.Token);
+        Assert.True(queuedB.IsError == true, Text(queuedB));
+        Assert.Equal(McpExecutionGate.BusyCode, Envelope(queuedB).GetProperty("error").GetProperty("code").GetString());
+
+        await clientToServer.Writer.CompleteAsync();
+        await moduleCancelled.Task.WaitAsync(Budget, guard.Token);
+        await moduleExited.Task.WaitAsync(Budget, guard.Token);
+        try { await serverTask.WaitAsync(Budget, guard.Token); }
+        catch (OperationCanceledException) { }
+        Assert.Single(module.Operations);
+        Assert.Equal("sample-a", Assert.IsType<SqlHarnessWatchOperation>(module.Operations[0]).Target.Profile);
         Assert.True(gate.TryEnterDb());
         gate.ExitDb();
         _ = inflight;

@@ -15,9 +15,12 @@ public sealed record McpRequestScopeArgument(string Profile, Dictionary<string, 
 public sealed class McpRequestToolHandlers(
     McpProcessContext process,
     IMcpClock? clock = null,
-    CancellationToken hostShutdown = default)
+    CancellationToken hostShutdown = default,
+    Func<McpScope, ISqlHarnessModule>? moduleFactory = null)
 {
+    private static readonly JsonSerializerOptions ScopeJsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IMcpClock _clock = clock ?? SystemMcpClock.Instance;
+    private readonly Func<McpScope, ISqlHarnessModule> _moduleFactory = moduleFactory ?? (scope => scope.CreateModule());
 
     public Task<CallToolResult> CapabilitiesAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Include local counts and existence flags. Never secrets, paths, or profile lists.")] bool includeDiagnostics = false,
@@ -159,7 +162,7 @@ public sealed class McpRequestToolHandlers(
         {
             return Task.FromResult(Failure("The MCP request scope is invalid.", command, process.MaxResultBytes));
         }
-        var handlers = new McpToolHandlers(scope, scope.CreateModule(), process.Gate, _clock, hostShutdown, acceptRequestScope: true);
+        var handlers = new McpToolHandlers(scope, _moduleFactory(scope), process.Gate, _clock, hostShutdown, acceptRequestScope: true);
         return invoke(handlers);
     }
 
@@ -188,7 +191,7 @@ public sealed class McpRequestToolHandlers(
         if (ctx?.Params?.Arguments?.TryGetValue("scope", out var raw) == true && raw is JsonElement element)
             json = element;
         else
-            json = JsonSerializer.SerializeToElement(suppliedScope);
+            json = JsonSerializer.SerializeToElement(suppliedScope, ScopeJsonOptions);
         if (json.ValueKind != JsonValueKind.Object)
             throw new McpMappingException("The MCP request scope is invalid.");
         string? profile = null;

@@ -45,6 +45,37 @@ public sealed class McpSecretRedactionTests
         Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
     }
 
+    [Fact]
+    public async Task Request_scope_core_error_redacts_SQL_scope_and_typed_parameter_sentinels()
+    {
+        const string SqlSentinel = "request-sql-sentinel-7741";
+        const string VariableSentinel = "request-var-secret-5528";
+        const string ParameterSentinel = "request-param-secret-9360";
+        var process = McpProcessContext.Create(
+            new McpServerOptions { RequestScope = true, AllowedProfiles = ["sample-a"] },
+            () => new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+            {
+                ["sample-a"] = new(
+                    "mcp-unreachable.invalid", "request-redaction-db",
+                    new Dictionary<string, string> { ["tenant"] = ".*" }, "integrated"),
+            });
+        var handlers = new McpRequestToolHandlers(process);
+
+        var result = await handlers.QueryAsync(
+            null!,
+            new McpRequestScopeArgument("sample-a", new Dictionary<string, string> { ["tenant"] = VariableSentinel }),
+            $"SELECT @n -- {SqlSentinel}",
+            parameters: [new McpParameterArgument { Name = "n", Type = "int", Value = ParameterSentinel }]);
+
+        Assert.True(result.IsError == true, TextOf(result));
+        var text = TextOf(result);
+        Assert.DoesNotContain(SqlSentinel, text, StringComparison.Ordinal);
+        Assert.DoesNotContain(VariableSentinel, text, StringComparison.Ordinal);
+        Assert.DoesNotContain(ParameterSentinel, text, StringComparison.Ordinal);
+        using var document = JsonDocument.Parse(text);
+        Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
+    }
+
     /// <summary>
     /// 012/T2: a typed value travels whole, so a secret with a comma (or an
     /// '=' in a fixed parameter) is one value end to end. Core rejects the

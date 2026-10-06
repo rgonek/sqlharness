@@ -21,6 +21,8 @@ public sealed class McpStderrLeakRegressionTests
     private const string PathMarker = "steno-path-5590";
     private const string FrameMarker = "steno-frame-6643";
     private const string ExceptionMarker = "steno-exc-2098";
+    private const string ScopeVarMarker = "steno-scope-var-7745";
+    private const string DuplicateScopeMarker = "steno-duplicate-scope-6458";
 
     [Fact]
     public async Task Process_stdio_keeps_request_content_off_stderr()
@@ -30,13 +32,19 @@ public sealed class McpStderrLeakRegressionTests
         var exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
         var home = McpStdioProcessHarness.CreateSyntheticHome(
             McpStdioProcessHarness.ProfileName,
-            """{"mcp-stdio": {"server": "mcp-unreachable.invalid", "database": "mcp-stdio-db", "vars": {"tenant": "^stdio$"}, "auth": "integrated"}}""");
+            """{"mcp-stdio": {"server": "mcp-unreachable.invalid", "database": "mcp-stdio-db", "vars": {"tenant": "^steno-scope-var-7745$"}, "auth": "integrated"}}""");
         McpStdioProcessHarness.StdioChild? child = null;
         try
         {
-            child = McpStdioProcessHarness.StartServer(exe, home, "mcp serve mcp-stdio --var tenant=stdio");
+            child = McpStdioProcessHarness.StartServer(exe, home, "mcp serve --request-scope --allow-profile mcp-stdio");
             var stdin = child.Process.StandardInput.BaseStream;
             await using var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct);
+
+            Dictionary<string, object?> RequestScope() => new()
+            {
+                ["profile"] = "mcp-stdio",
+                ["vars"] = new Dictionary<string, string> { ["tenant"] = ScopeVarMarker },
+            };
 
             // Handshake oracle: pinned protocol revision and server identity.
             Assert.Equal(McpStdioProcessHarness.PinnedProtocolVersion, client.NegotiatedProtocolVersion);
@@ -48,6 +56,7 @@ public sealed class McpStderrLeakRegressionTests
                 "sqlharness_validate",
                 new Dictionary<string, object?>
                 {
+                    ["scope"] = RequestScope(),
                     ["usage"] = "query",
                     ["sql"] = $"SELECT @stenoparam, '{SqlMarker}'",
                     ["parameters"] = new object[]
@@ -65,6 +74,7 @@ public sealed class McpStderrLeakRegressionTests
             var validEnvelope = McpStdioProcessHarness.Envelope(valid);
             Assert.Equal("success", validEnvelope.GetProperty("status").GetString());
             Assert.Equal(0, validEnvelope.GetProperty("exitCode").GetInt32());
+            Assert.DoesNotContain(ScopeVarMarker, validEnvelope.ToString(), StringComparison.Ordinal);
 
             // Rejected file path carrying the path marker. This server has no
             // input roots, so the path is refused with a constant message that
@@ -73,6 +83,7 @@ public sealed class McpStderrLeakRegressionTests
                 "sqlharness_validate",
                 new Dictionary<string, object?>
                 {
+                    ["scope"] = RequestScope(),
                     ["usage"] = "query",
                     ["file"] = $"{PathMarker}/missing.sql",
                 },
@@ -91,6 +102,7 @@ public sealed class McpStderrLeakRegressionTests
                 "sqlharness_validate",
                 new Dictionary<string, object?>
                 {
+                    ["scope"] = RequestScope(),
                     ["usage"] = "query",
                     ["sql"] = "SELECT 1",
                     ["bogusArgument"] = ParamMarker,
@@ -110,6 +122,7 @@ public sealed class McpStderrLeakRegressionTests
                 "sqlharness_validate",
                 new Dictionary<string, object?>
                 {
+                    ["scope"] = RequestScope(),
                     ["usage"] = "bogus-" + ExceptionMarker,
                     ["sql"] = "SELECT 1",
                 },
@@ -123,7 +136,7 @@ public sealed class McpStderrLeakRegressionTests
             Assert.False(child.Process.HasExited, "The published server died on rejected arguments.");
             var afterRejection = await client.CallToolAsync(
                 "sqlharness_validate",
-                new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 2" },
+                new Dictionary<string, object?> { ["scope"] = RequestScope(), ["usage"] = "query", ["sql"] = "SELECT 2" },
                 cancellationToken: ct);
             Assert.False(afterRejection.IsError == true, McpStdioProcessHarness.Envelope(afterRejection).ToString());
 
@@ -136,9 +149,18 @@ public sealed class McpStderrLeakRegressionTests
             Assert.False(child.Process.HasExited, "The published server died on malformed input.");
             var afterGarbage = await client.CallToolAsync(
                 "sqlharness_validate",
-                new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 3" },
+                new Dictionary<string, object?> { ["scope"] = RequestScope(), ["usage"] = "query", ["sql"] = "SELECT 3" },
                 cancellationToken: ct);
             Assert.False(afterGarbage.IsError == true, McpStdioProcessHarness.Envelope(afterGarbage).ToString());
+
+            // Duplicate raw scope fields are stopped before SDK parsing; the
+            // secret value in the second occurrence must stay out of frames and stderr.
+            var duplicate = Encoding.UTF8.GetBytes(
+                "{\"jsonrpc\":\"2.0\",\"id\":\"duplicate-scope\",\"method\":\"tools/call\",\"params\":{\"name\":\"sqlharness_validate\",\"arguments\":{\"scope\":{\"profile\":\"mcp-stdio\",\"vars\":{\"tenant\":\"" + ScopeVarMarker + "\"}},\"scope\":{\"profile\":\"mcp-stdio\",\"vars\":{\"tenant\":\"" + DuplicateScopeMarker + "\"}},\"usage\":\"query\",\"sql\":\"SELECT 1\"}}}\n");
+            await stdin.WriteAsync(duplicate, ct);
+            await stdin.FlushAsync(ct);
+            var afterDuplicate = await client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: ct);
+            Assert.False(afterDuplicate.IsError == true, McpStdioProcessHarness.Envelope(afterDuplicate).ToString());
 
             await client.DisposeAsync();
             child.Process.StandardInput.Close();
@@ -149,6 +171,12 @@ public sealed class McpStderrLeakRegressionTests
             // protocol-error frames are all valid JSON-RPC).
             await child.StdoutTee.DrainRemainingAsync(TimeSpan.FromSeconds(10), ct);
             McpStdioProcessHarness.AssertStdoutIsPureProtocol(child.StdoutTee.Recorded);
+            var stdout = Encoding.UTF8.GetString(child.StdoutTee.Recorded);
+            Assert.DoesNotContain(SqlMarker, stdout, StringComparison.Ordinal);
+            Assert.DoesNotContain(ParamMarker, stdout, StringComparison.Ordinal);
+            Assert.DoesNotContain(ScopeVarMarker, stdout, StringComparison.Ordinal);
+            Assert.DoesNotContain(DuplicateScopeMarker, stdout, StringComparison.Ordinal);
+            Assert.DoesNotContain(ExceptionMarker, stdout, StringComparison.Ordinal);
 
             // Stderr carries none of the request content on any path.
             var stderr = await child.Stderr.WaitAsync(TimeSpan.FromSeconds(10), ct);
@@ -157,6 +185,8 @@ public sealed class McpStderrLeakRegressionTests
             Assert.DoesNotContain(PathMarker, stderr, StringComparison.Ordinal);
             Assert.DoesNotContain(FrameMarker, stderr, StringComparison.Ordinal);
             Assert.DoesNotContain(ExceptionMarker, stderr, StringComparison.Ordinal);
+            Assert.DoesNotContain(ScopeVarMarker, stderr, StringComparison.Ordinal);
+            Assert.DoesNotContain(DuplicateScopeMarker, stderr, StringComparison.Ordinal);
         }
         finally
         {

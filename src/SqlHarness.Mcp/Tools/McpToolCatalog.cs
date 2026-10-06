@@ -476,12 +476,13 @@ public static class McpToolCatalog
     public static IReadOnlyList<McpServerTool> CreateTools(
         McpProcessContext process,
         IMcpClock? clock = null,
-        CancellationToken hostShutdown = default)
+        CancellationToken hostShutdown = default,
+        Func<McpScope, ISqlHarnessModule>? moduleFactory = null)
     {
         ArgumentNullException.ThrowIfNull(process);
         if (!process.RequestScope)
             return CreateTools(process.FixedScope!, process.FixedScope!.CreateModule(), process.Gate, clock, hostShutdown);
-        var handlers = new McpRequestToolHandlers(process, clock, hostShutdown);
+        var handlers = new McpRequestToolHandlers(process, clock, hostShutdown, moduleFactory);
         var type = typeof(McpRequestToolHandlers);
         McpServerTool Tool(string name, string method, string description, bool? readOnly, bool? destructive,
             bool? idempotent, bool? openWorld) => McpServerTool.Create(
@@ -515,11 +516,12 @@ public static class McpToolCatalog
         ModelContextProtocol.Server.McpServerOptions options,
         McpProcessContext process,
         IMcpClock? clock = null,
-        CancellationToken hostShutdown = default)
+        CancellationToken hostShutdown = default,
+        Func<McpScope, ISqlHarnessModule>? moduleFactory = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         var collection = new McpServerPrimitiveCollection<McpServerTool>();
-        foreach (var tool in CreateTools(process, clock, hostShutdown)) collection.Add(tool);
+        foreach (var tool in CreateTools(process, clock, hostShutdown, moduleFactory)) collection.Add(tool);
         options.ToolCollection = collection;
     }
 
