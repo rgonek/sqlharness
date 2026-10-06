@@ -1,6 +1,6 @@
 # SQLHarness MCP: request-scoped SQL Server design
 
-Status: proposed; implementation has not started. The general global MCP is available in Codex CLI and Claude Code. A closed profile and its variables come from each explicitly authorized task, not startup configuration. Public implementation, examples, tests and documentation contain no organizational identifiers or personal deployment data.
+Status: implemented in the public CLI and MCP server. Fixed-profile mode remains available; request-scoped mode is SQL Server only. The published stdio smoke verifies the server protocol and tool behavior with synthetic profiles. Private client registration and live database checks have not been performed. A closed profile and its variables come from each explicitly authorized task, not startup configuration. Public implementation, examples, tests and documentation contain no organizational identifiers or personal deployment data.
 
 ## Behavior
 

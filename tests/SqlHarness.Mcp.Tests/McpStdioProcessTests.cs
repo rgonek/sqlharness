@@ -418,6 +418,105 @@ public sealed class McpStdioProcessTests
     public async Task Published_single_file_server_passes_the_stdio_smoke_on_this_rid() =>
         await RunSmokeAsync(McpStdioProcessHarness.CurrentRid);
 
+    [Fact]
+    public async Task Published_single_file_request_scoped_server_passes_the_stdio_smoke_on_this_rid()
+    {
+        using var cts = new CancellationTokenSource(SmokeBudget);
+        var ct = cts.Token;
+        var exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
+        var home = McpStdioProcessHarness.CreateSyntheticHome(
+            "sample-country",
+            """{"sample-country":{"server":"country.invalid","database":"countrydb","vars":{"tenant":"^example$","env":"^test$"},"auth":"integrated"},"sample-shared":{"server":"shared.invalid","database":"shareddb","vars":{"tenant":"^example$","env":"^test$"},"auth":"integrated"}}""");
+        McpStdioProcessHarness.StdioChild? child = null;
+        try
+        {
+            child = McpStdioProcessHarness.StartServer(
+                exe,
+                home,
+                "mcp serve --request-scope --allow-profile sample-country --allow-profile sample-shared");
+            var stdin = child.Process.StandardInput.BaseStream;
+            await using var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct);
+
+            Assert.Equal(McpStdioProcessHarness.PinnedProtocolVersion, client.NegotiatedProtocolVersion);
+            Assert.Equal(McpHost.ServerName, client.ServerInfo.Name);
+
+            var tools = await client.ListToolsAsync(cancellationToken: ct);
+            Assert.Equal(11, tools.Count);
+            Assert.Equal(
+                McpToolCatalog.ToolNames.Order(StringComparer.Ordinal),
+                tools.Select(tool => tool.Name).Order(StringComparer.Ordinal).ToArray());
+
+            Dictionary<string, object?> Scope(string profile) => new()
+            {
+                ["profile"] = profile,
+                ["vars"] = new Dictionary<string, string> { ["tenant"] = "example", ["env"] = "test" },
+            };
+
+            foreach (var profile in new[] { "sample-country", "sample-shared" })
+            {
+                var validate = await client.CallToolAsync(
+                    "sqlharness_validate",
+                    new Dictionary<string, object?>
+                    {
+                        ["scope"] = Scope(profile),
+                        ["usage"] = "query",
+                        ["sql"] = "SELECT 1",
+                    },
+                    cancellationToken: ct);
+                AssertValidateSuccess(validate, "sqlharness_validate");
+            }
+
+            var missingScope = await client.CallToolAsync(
+                "sqlharness_validate",
+                new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+                cancellationToken: ct);
+            Assert.True(missingScope.IsError == true);
+
+            var unsafeArguments = await client.CallToolAsync(
+                "sqlharness_query",
+                new Dictionary<string, object?>
+                {
+                    ["scope"] = Scope("sample-country"),
+                    ["sql"] = "SELECT 1",
+                    ["server"] = "raw-target.invalid",
+                    ["allowMutation"] = true,
+                },
+                cancellationToken: ct);
+            Assert.True(unsafeArguments.IsError == true);
+
+            var planXml = File.ReadAllText(McpStdioProcessHarness.FindRepositoryFile(
+                "tests", "SqlHarness.Tests", "Fixtures", "distiller-sample.sqlplan"));
+            var plan = await client.CallToolAsync(
+                "sqlharness_plan",
+                new Dictionary<string, object?> { ["content"] = planXml },
+                cancellationToken: ct);
+            AssertValidateSuccess(plan, "sqlharness_plan");
+
+            await client.DisposeAsync();
+            child.Process.StandardInput.Close();
+            Assert.True(child.Process.WaitForExit(30_000), "The published request-scoped server did not exit after stdin EOF.");
+            Assert.Equal(0, child.Process.ExitCode);
+            await child.StdoutTee.DrainRemainingAsync(TimeSpan.FromSeconds(10), ct);
+            McpStdioProcessHarness.AssertStdoutIsPureProtocol(child.StdoutTee.Recorded);
+            var stderr = await child.Stderr.WaitAsync(TimeSpan.FromSeconds(10), ct);
+            Assert.DoesNotContain("country.invalid", stderr, StringComparison.Ordinal);
+            Assert.DoesNotContain("shared.invalid", stderr, StringComparison.Ordinal);
+            Assert.DoesNotContain("countrydb", stderr, StringComparison.Ordinal);
+            Assert.DoesNotContain("shareddb", stderr, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (child is not null && !child.Process.HasExited)
+            {
+                try { child.Process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+                child.Process.WaitForExit(10_000);
+            }
+
+            child?.Process.Dispose();
+            McpStdioProcessHarness.DeleteHome(home);
+        }
+    }
+
     [NativeRidFact("linux-x64")]
     public async Task Published_single_file_server_passes_the_stdio_smoke_on_linux_x64() =>
         await RunSmokeAsync("linux-x64");

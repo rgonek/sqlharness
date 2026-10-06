@@ -48,6 +48,22 @@ sqlharness --help
 
 For Linux/macOS, verify the downloaded archive with the checksum utility available on the host, extract it, make `sqlharness` executable, and add its directory to `PATH`.
 
+## MCP over local stdio
+
+The CLI distribution also includes an MCP server for one local stdio client per process. Fixed-profile mode freezes one profile at startup:
+
+```powershell
+sqlharness mcp serve sample-country --var tenant=example --var env=test --input-root C:\work\sqlharness-inputs
+```
+
+SQL Server users can instead freeze an explicit allowlist and supply a target scope for each target-dependent tool call:
+
+```powershell
+sqlharness mcp serve --request-scope --allow-profile sample-country --allow-profile sample-shared --input-root C:\work\sqlharness-inputs
+```
+
+Request mode is SQL Server only. It keeps the existing eleven tool names; `inspect`, `validate`, `query`, `measure`, `compare`, `watch`, `snapshot`, and `artifact` require a nested `scope` with an allowlisted profile and its variables. `capabilities`, `plan`, and `gain` remain target-free. The process snapshots profiles, input roots, and budgets at startup, and one process-wide gate allows one database operation at a time across all request scopes. SQLHarness does not register or edit client configuration. See [the MCP contract](docs/mcp.md) for both client-entry shapes, scope behavior, and limits.
+
 ## Quick start
 
 Create `~/.sqlharness/targets.json` from [docs/example-targets.json](docs/example-targets.json), replacing the example server and database template with your own closed target definition. The example uses the `prod-eu` profile with required `tenant` and `env` variables.

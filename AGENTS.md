@@ -129,15 +129,17 @@ For agent-authored SQL, every ScriptDom-parsable construct inside a top-level `S
 
 ## MCP server (local stdio)
 
-One `sqlharness` process can serve the same Core diagnostics and benchmarks to an MCP client over local stdio (one client per process). Full contract: [docs/mcp.md](docs/mcp.md).
+One `sqlharness` process serves one MCP client over local stdio. It supports fixed-profile mode and SQL Server-only request-scoped mode. Full contract and client configuration examples: [docs/mcp.md](docs/mcp.md).
 
 ```powershell
-sqlharness mcp serve prod-eu --var tenant=acme --var env=uat --input-root C:\work\sqlharness-inputs
+sqlharness mcp serve sample-country --var tenant=example --var env=test --input-root C:\work\sqlharness-inputs
+sqlharness mcp serve --request-scope --allow-profile sample-country --allow-profile sample-shared --input-root C:\work\sqlharness-inputs
 ```
 
-- The profile and `--var` values are frozen at startup; a different target needs a restart. `--unsafe-direct` is blocked on this path (exit `2`).
+- Fixed mode freezes one profile and its `--var` values at startup. Request mode freezes a nonempty explicit allowlist of SQL Server profiles and resolves a required nested `scope` on each target-dependent call. Neither mode accepts `--unsafe-direct` (exit `2`).
 - Exactly 11 tools: `sqlharness_capabilities`, `sqlharness_inspect` (`ping`/`schema`/`counts`/`space`/`qstop`/`indexes`; `qstop`/`indexes` are SQL Server only), `sqlharness_validate` (offline), `sqlharness_query`, `sqlharness_measure`, `sqlharness_compare`, `sqlharness_watch`, `sqlharness_snapshot`, `sqlharness_plan` (offline, sanitized), `sqlharness_artifact` (`summary`/`metrics`/`operators`), `sqlharness_gain`.
+- Request scope is required on inspect, validate, query, measure, compare, watch, snapshot, and artifact. Capabilities, plan, and gain stay target-free.
 - File inputs only under absolute `--input-root` directories (empty by default means no file inputs); inline payloads above 1 MiB must arrive as files. Parameter-set files stay strict `.sqljson` (64 KiB, only `name` and `parameters`).
 - No persistent mutations: query runs with `AllowMutation: false` and no confirmation database; snapshot capture never overwrites and has no force flag.
-- Budgets are enforced on wire bytes: one `CallToolResult` defaults to 16384 B (range 4096..1048576), tools/list to 32768 B, cells to 512 characters (max 4096). One database operation per process; a second concurrent call gets a stable `busy` rejection. Controlled outcomes `watch_max_duration` (exit `7`) and `snapshot_differences` (exit `8`) are valid results with `isError=false`.
+- Budgets are enforced on wire bytes: one `CallToolResult` defaults to 16384 B (range 4096..1048576), tools/list to 32768 B, cells to 512 characters (max 4096). One database operation per process across all request scopes; a second concurrent call gets a stable `busy` rejection. Controlled outcomes `watch_max_duration` (exit `7`) and `snapshot_differences` (exit `8`) are valid results with `isError=false`.
 - Stdout carries only protocol frames; logs go to stderr without arguments, SQL, values, or secrets. Tested SDK `ModelContextProtocol` 2.2.0 with protocol revision `2025-11-25` only. Register the client entry manually; SQLHarness never edits client configuration. Byte counts are not token counts.

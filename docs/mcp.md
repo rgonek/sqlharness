@@ -4,7 +4,9 @@ One `sqlharness` process can serve the SQLHarness diagnostics and benchmarks to 
 
 ## Start
 
-Exact syntax:
+The server supports a fixed-profile mode and a SQL Server-only request-scoped mode. Each process serves one local stdio client.
+
+Fixed-profile mode keeps the existing command shape:
 
 ```powershell
 sqlharness mcp serve <profile> --var key=value [--input-root <absolute-directory>]
@@ -14,16 +16,36 @@ sqlharness mcp serve <profile> --var key=value [--input-root <absolute-directory
 - `--input-root` is repeatable and takes an absolute directory that allows file inputs. By default no input roots are configured, which means no file inputs are admitted at all.
 - `--max-result-bytes` sets the process response cap in bytes: default 16384, accepted range 4096..1048576. A single tool call may only lower it.
 - `--max-operation-seconds` sets the process database time budget in seconds: default 900, accepted range 1..86400. A single tool call may only lower it.
-- `--unsafe-direct` is blocked for `mcp serve` and rejected with exit 2. The MCP server always runs on a closed named profile; direct server/database targets are not available on this path.
+- `--unsafe-direct` is blocked for `mcp serve` and rejected with exit 2. Direct server/database targets are not available on this path.
+
+Request-scoped mode selects one of the explicitly allowed SQL Server profiles on each target-dependent call:
+
+```powershell
+sqlharness mcp serve --request-scope --allow-profile sample-country --allow-profile sample-shared --input-root C:\work\sqlharness-inputs
+```
+
+The nonempty `--allow-profile` list is required and repeatable. Do not provide a startup profile or `--var` in this mode. Startup rejects duplicate profile names and any allowlisted profile that resolves to Postgres. The process snapshots the allowed profile definitions, file roots, and budgets once; editing the profile store or changing the allowlist requires a restart. Startup does not connect to a database or perform interactive login. Request-scoped mode is not available for Postgres.
 
 ## Client configuration
 
 SQLHarness never installs or edits a client configuration automatically. To register the server, paste an entry manually into the MCP client configuration file. Neutral shape (field names vary by client):
 
+Fixed-profile client entry:
+
 ```json
 {
   "command": "sqlharness",
-  "args": ["mcp", "serve", "prod-eu", "--var", "tenant=acme", "--var", "env=uat", "--input-root", "C:\\work\\sqlharness-inputs"],
+  "args": ["mcp", "serve", "sample-country", "--var", "tenant=example", "--var", "env=test", "--input-root", "C:\\work\\sqlharness-inputs"],
+  "env": {}
+}
+```
+
+Request-scoped client entry:
+
+```json
+{
+  "command": "C:\\tools\\sqlharness.exe",
+  "args": ["mcp", "serve", "--request-scope", "--allow-profile", "sample-country", "--allow-profile", "sample-shared", "--input-root", "C:\\work\\sqlharness-inputs"],
   "env": {}
 }
 ```
@@ -32,9 +54,13 @@ Connection secrets stay in the process environment and the operator's profile st
 
 ## Scope lifetime
 
-The operator supplies the profile and vars once at process start. The server reads the profile set once, resolves the target once, and freezes an immutable scope for all calls in that process. Editing `targets.json` while the server runs cannot redirect the next call; a different profile, variables, or target requires a restart. Start and discovery open no database connection and perform no interactive login. One process serves one profile with one variable set.
+In fixed mode, the operator supplies the profile and vars once at process start. The server resolves and freezes one immutable scope for all calls; a different profile, variables, or target requires a restart.
 
-The frozen scope carries an artifact owner tuple built once from the startup request and the resolved target: `{ profile, canonical vars, engine, server, database }`. Vars are stored case-insensitively with deterministic (ordinal-sorted) order, so the same scope serializes stably. The owner holds no auth material and no secrets: passwords and environment values never land in owner metadata or reports. Matching is exact and fails closed: profile, engine, server, and database compare ordinal; var keys compare case-insensitively with exact values; the full var set must agree (count included). Malformed candidate metadata simply does not match and never throws. The owner survives a restart because it is persisted in the artifact, not in server memory: a new process with the same profile, canonical vars, and resolved engine/server/database matches again without any in-memory state.
+In request-scoped mode, each target-dependent call supplies a nested scope, for example `{"scope":{"profile":"sample-country","vars":{"tenant":"example","env":"test"}}}`. The scope is required for `inspect`, `validate`, `query`, `measure`, `compare`, `watch`, `snapshot`, and `artifact`. Each call resolves the selected allowlisted profile against the immutable startup snapshot and builds a fresh scoped handler/module. The other three tools (`capabilities`, `plan`, and `gain`) remain target-free; in particular, offline plan distillation does not invent a scope. Fixed mode retains its existing schemas and rejects the request-only `scope` argument. Matrix and parameter-set values are execution parameters and cannot change the scope.
+
+Capabilities identify `scopeMode` as `fixed` or `request`. Request mode reports the SQL Server engine and the permitted profile names from the explicit allowlist; neither mode reports resolved database lists, variable values, credentials, or local paths. The allowlist is an operator configuration boundary, not user authorization. Clients must confirm the intended profile and target before SQL and require a new explicit user request before changing task scope. Static validation remains offline and does not prove live identity, object existence, or database permissions.
+
+Each resolved scope carries an artifact owner tuple built from its profile request and resolved target: `{ profile, canonical vars, engine, server, database }`. In fixed mode the scope comes from the startup request; in request-scoped mode it comes from that tool call. Vars are stored case-insensitively with deterministic (ordinal-sorted) order, so the same scope serializes stably. The owner holds no auth material and no secrets: passwords and environment values never land in owner metadata or reports. Matching is exact and fails closed: profile, engine, server, and database compare ordinal; var keys compare case-insensitively with exact values; the full var set must agree (count included). Malformed candidate metadata simply does not match and never throws. The owner survives a restart because it is persisted in the artifact, not in server memory: a new process with the same profile, canonical vars, and resolved engine/server/database matches again without any in-memory state.
 
 ## Input roots and file inputs
 
@@ -51,9 +77,9 @@ Exactly 11 tools are registered explicitly by name. No assembly scanning is used
 
 | Tool | Behavior |
 |---|---|
-| `sqlharness_capabilities` | Server versions and build, scope engine, tool list, and limits; optional local diagnostics with counts and existence flags only, never secrets, paths, or profile lists. |
+| `sqlharness_capabilities` | Server versions and build, scope mode, engine, tool list, and limits; request mode also reports only the explicitly permitted profile names. Optional local diagnostics contain counts and existence flags only, never secrets, paths, or resolved database lists. |
 | `sqlharness_inspect` | One catalog inspection with fixed internal probes: `ping`, `schema`, `counts`, `space`, `qstop`, or `indexes`. No SQL input. `qstop` and `indexes` are SQL Server only and are rejected before connecting on Postgres. It runs under the process gate like the other database tools. |
-| `sqlharness_validate` | Static check of SQL effects visible in the text (see `safetyAnalysis`) for usage `query`, `setup`, or `benchmark`. One Core offline classifier serves every usage; it never connects, and object and permission status stays unknown. `benchmark` adds the measured-batch shape check. The tool carries no setup-SQL input: a setup-dependent batch validates under engine query rules, as if executed without setup. |
+| `sqlharness_validate` | Static check of SQL effects visible in the text (see `safetyAnalysis`) for usage `query`, `setup`, or `benchmark`. One Core offline classifier serves every usage; it never connects, and object and permission status stays unknown. `benchmark` adds the measured-batch shape check. The tool carries no setup-SQL input: a setup-dependent batch validates under engine query rules, as if executed without setup. In request mode it needs a scope even though it remains target-free at execution time. |
 | `sqlharness_query` | Bounded query passing the static visible-effects text check, with timeout and row cap. No persistent-mutation flags are offered on this path; hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. |
 | `sqlharness_measure` | Measure one query across repeats, with optional setup and `.sqljson` parameter-set files. Same sessions and rules as the CLI. |
 | `sqlharness_compare` | Compare baseline versus candidate with the CLI sessions and equivalence rules, with an optional single matrix dimension. |
@@ -95,7 +121,7 @@ Every tool returns a versioned agent envelope (`schemaVersion`, `command`, `stat
 
 ## Concurrency, deadline, cancellation, and progress
 
-`query`, `measure`, `compare`, `watch`, `snapshot`, and `inspect` run under the process gate; a matrix or parameter-set batch travels inside its single call and counts as one operation. Every execution is bounded by the process time budget (default 900 s, range 1..86400 s) through a linked deadline that always reaches Core.
+`query`, `measure`, `compare`, `watch`, `snapshot`, and `inspect` run under one process-wide gate shared across every request scope; a matrix or parameter-set batch travels inside its single call and counts as one operation. A second concurrent database operation receives the stable `busy` outcome. Every execution is bounded by the process time budget (default 900 s, range 1..86400 s) through a linked deadline that always reaches Core.
 
 Cancellation propagates to connection, execution, reads, delays, and artifact writes. Closing the process (host shutdown) or stdin EOF cancels an in-flight call, which reports a stable cancelled result (`isError=true`), never the natural watch-deadline exit 7. The gate is released on every path, so a cancelled or failed call never blocks the next one.
 
@@ -126,6 +152,6 @@ Scenario comparison counts the whole MCP run: tools/list discovery plus the call
 
 ## Zakres dowodów
 
-Executed: published single-file stdio smoke on the native win-x64 runner (PASS in `McpStdioProcessTests`), the full offline test suite, and the NuGet dependency audit. The cost comparison above comes from the offline `McpGainTests` on synthetic data, without opening a database.
+Executed: published single-file stdio smokes for both fixed and request-scoped modes on the native win-x64 runner. The request-mode proof uses two synthetic profiles and exercises per-call validation; it does not register or launch the server through an MCP client's private configuration. The MCP test project passed its offline tests, with live-database and non-native RID cases skipped. The full solution offline run exposed two failures in `SqlHarness.Tests`: one output-size fixture mismatch also reproduced on the request-scope implementation's base commit, and one transient artifact-directory `IOException` that passed on focused rerun. The cost comparison above comes from the offline `McpGainTests` on synthetic data, without opening a database.
 
-Not executed: published-binary runs on linux-x64 and osx-arm64 (binaries build; the per-RID smoke tests Skip without native runners), and live SQL Server and Postgres stdio drives (Skip without explicit disposable-database authorization). Live scenarios and additional RIDs must not be reported as passing.
+Not executed: published-binary runs on linux-x64 and osx-arm64 (binaries build; the per-RID smoke tests Skip without native runners), live SQL Server and Postgres stdio drives (Skip without explicit disposable-database authorization), or private client registration/startup. A stdio driver is protocol evidence, not actual-client evidence. Live scenarios, client registration, and additional RIDs must not be reported as passing.
