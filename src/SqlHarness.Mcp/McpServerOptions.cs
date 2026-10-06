@@ -1,9 +1,10 @@
 namespace SqlHarness.Mcp;
 
 /// <summary>
-/// Startup configuration for one MCP server process. A process serves a
-/// single closed profile with fixed vars (spec section 3); tools cannot
-/// change the target or credentials afterwards.
+/// Startup configuration for one MCP server process. Fixed mode freezes one
+/// closed profile and its vars. Request-scoped mode freezes an explicit
+/// profile allowlist and resolves each target-dependent call into a fresh
+/// immutable scope; calls cannot mutate a selected target or credentials.
 /// </summary>
 public sealed class McpServerOptions
 {

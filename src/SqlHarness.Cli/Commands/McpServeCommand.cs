@@ -17,10 +17,12 @@ public sealed class McpHostConsole(TextWriter error)
 }
 
 /// <summary>
-/// `mcp serve`: start one profile-scoped MCP server process over stdio
-/// (spec sections 2-3). Startup syntax is exactly
-/// `mcp serve &lt;profile&gt; --var key=value [--input-root &lt;absolute-directory&gt;]`;
-/// --unsafe-direct and any other startup option are rejected with exit 2.
+/// `mcp serve`: start one MCP server process over stdio in fixed mode
+/// (`mcp serve &lt;profile&gt; --var key=value`) or request-scoped mode
+/// (`mcp serve --request-scope --allow-profile &lt;profile&gt;`). The selected
+/// profile and vars, or the explicit profile allowlist, are frozen at startup;
+/// request scopes are resolved immutably per call, with no mutable selection.
+/// Raw targets, --unsafe-direct, and unsupported startup options are rejected.
 /// </summary>
 public sealed class McpServeCommand(McpHostConsole console) : AsyncCommand<McpServeCommand.Settings>
 {

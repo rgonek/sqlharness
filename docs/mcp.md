@@ -50,7 +50,7 @@ Request-scoped client entry:
 }
 ```
 
-Connection secrets stay in the process environment and the operator's profile store. Tool arguments never carry profile, server, database, vars, auth, engine, `unsafeDirect`, `allowMutation`, `confirmDatabase`, or password fields, and unknown argument keys are rejected before execution.
+Connection secrets stay in the process environment and the operator's profile store. In fixed mode, tool arguments never carry a profile or vars. In request-scoped mode, profile and vars may appear only inside the required nested `scope`. In both modes, tool arguments never carry raw server or database, auth, engine, `unsafeDirect`, `allowMutation`, `confirmDatabase`, or password fields, and unknown argument keys are rejected before execution.
 
 ## Scope lifetime
 
