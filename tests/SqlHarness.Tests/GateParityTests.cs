@@ -188,35 +188,82 @@ public sealed class GateParityTests
         Assert.DoesNotContain("it's fine", command, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void StageCommand_extracts_full_command_when_quoted_argument_contains_closing_brace()
+    {
+        var content = """
+            Invoke-Stage -Name 'build' -Action { dotnet build SqlHarness.sln --property:Foo="a}b" }
+            """;
+
+        var command = StageCommand(content, "build");
+
+        Assert.Equal("dotnet build SqlHarness.sln --property:Foo=\"a}b\"", command);
+    }
+
+    [Fact]
+    public void StageCommand_preserves_windows_single_quoted_filter()
+    {
+        var content = """
+            Invoke-Stage -Name 'test' -Action { dotnet test --filter 'FullyQualifiedName!~Integration' }
+            """;
+
+        var command = StageCommand(content, "test");
+
+        Assert.Equal("dotnet test --filter \"FullyQualifiedName!~Integration\"", command);
+    }
+
+    [Fact]
+    public void StageCommand_drops_trailing_unquoted_comment_from_yaml_run()
+    {
+        var content = """
+            steps:
+              - run: dotnet build SqlHarness.sln # note
+            """;
+
+        var command = StageCommand(content, "build");
+
+        Assert.Equal("dotnet build SqlHarness.sln", command);
+        Assert.DoesNotContain("# note", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_extractor_returns_the_expected_commands_for_the_real_gate_files()
+    {
+        var windows = File.ReadAllText(RepositoryFile.Locate("scripts", "verify.ps1"));
+        var linux = File.ReadAllText(RepositoryFile.Locate("scripts", "verify-linux.ps1"));
+
+        Assert.Equal("dotnet restore SqlHarness.sln", StageCommand(windows, "restore"));
+        Assert.Equal("dotnet restore SqlHarness.sln", StageCommand(linux, "restore"));
+        Assert.Equal("dotnet build SqlHarness.sln --no-restore -warnaserror", StageCommand(windows, "build"));
+        Assert.Equal("dotnet build SqlHarness.sln --no-restore -warnaserror", StageCommand(linux, "build"));
+        Assert.Equal("dotnet test SqlHarness.sln --no-build --filter \"FullyQualifiedName!~Integration\"", StageCommand(windows, "test"));
+        Assert.Equal("dotnet test SqlHarness.sln --no-build --filter \"FullyQualifiedName!~Integration\" --logger \"console;verbosity=normal\"", StageCommand(linux, "test"));
+        Assert.Equal("dotnet format SqlHarness.sln --no-restore --verify-no-changes", StageCommand(windows, "format"));
+        Assert.Equal("dotnet format SqlHarness.sln --no-restore --verify-no-changes", StageCommand(linux, "format"));
+    }
+
+    private const string VerbGroup = @"(?<verb>restore|build|test|format)";
+    private const string Body = @"(?:[^""'\}\r\n]|""[^""]*""|'[^']*')*";
+    private const string LinuxBody = @"(?:[^""'\r\n]|""[^""]*"")*";
+    private const string YamlBody = @"(?:[^""'\r\n]|""[^""]*""|'[^']*')*";
+
     internal static string[] StageVerbs(string content)
     {
-        const string VerbGroup = "(restore|build|test|format)";
-        var pattern = $@"(?:\{{ dotnet {VerbGroup}\b[^}}\r\n]*\}})|(?:'dotnet {VerbGroup}\b[^'\r\n]*')|(?:(?m)^\s*(?:-\s+)?run:\s*dotnet {VerbGroup}\b.*$)";
+        var pattern = $@"(?:\{{\s*dotnet {VerbGroup}\b{Body}\s*\}})|(?:'dotnet {VerbGroup}\b{LinuxBody}')|(?:(?m)^\s*(?:-\s+)?run:\s*dotnet {VerbGroup}\b{YamlBody})";
         return Regex.Matches(content, pattern)
-            .Select(match => match.Groups[1].Success ? match.Groups[1].Value
-                : match.Groups[2].Success ? match.Groups[2].Value
-                : match.Groups[3].Value)
+            .Select(match => match.Groups["verb"].Value)
             .ToArray();
     }
 
     internal static string StageCommand(string content, string verb)
     {
-        var match = Regex.Match(content, $@"\{{\s*(dotnet {verb}\b[^}}\r\n]*)\s*\}}");
-        if (match.Success)
-        {
-            return NormalizeCommand(match.Groups[1].Value);
-        }
+        var pattern = $@"(?:\{{\s*(?<command>dotnet {verb}\b{Body})\s*\}})|(?:'(?<command>dotnet {verb}\b{LinuxBody})')|(?:(?m)^\s*(?:-\s+)?run:\s*(?<command>dotnet {verb}\b{YamlBody}))";
 
-        match = Regex.Match(content, $@"'(dotnet {verb}\b[^'\r\n]*)'");
+        var match = Regex.Match(content, pattern);
         if (match.Success)
         {
-            return NormalizeCommand(match.Groups[1].Value);
-        }
-
-        match = Regex.Match(content, $@"(?m)^\s*(?:-\s+)?run:\s*(dotnet {verb}\b.*)$");
-        if (match.Success)
-        {
-            return NormalizeCommand(match.Groups[1].Value);
+            var command = Regex.Replace(match.Groups["command"].Value, @"\s+#.*$", "");
+            return NormalizeCommand(command);
         }
 
         Assert.Fail($"No 'dotnet {verb}' command was found.");
