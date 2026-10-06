@@ -64,8 +64,9 @@ Steps, in order, failing closed with a concrete remediation message at the first
    is created with `core.autocrlf=false`, so the Linux working tree holds LF — byte-identical to what
    a GitHub runner checks out.
 
-The script writes only inside the WSL distro and its own `~/.bashrc`. It never touches `~/.sqlharness`,
-never opens a database connection, and never handles a secret.
+The script writes only inside the WSL distro, its own `~/.bashrc`, and one transient Windows temp file
+that is always deleted. It never touches `~/.sqlharness`, never opens a database connection, and never
+handles a secret.
 
 ## Component 2: `scripts/verify-linux.ps1`
 

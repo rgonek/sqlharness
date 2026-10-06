@@ -284,8 +284,8 @@ Run both gates before committing; they run the same four stages (restore, build,
 CI runs, with the local non-integration test filter. `verify.ps1` covers Windows; `verify-linux.ps1`
 runs the identical stages inside WSL on a case-sensitive ext4 filesystem and is the only way to see
 Linux-only behaviour before pushing — provision it once with `pwsh ./scripts/setup-linux-gate.ps1`
-(installs the `global.json` SDK in the distro and creates a disposable clone under `~/src`; it never
-uses `/mnt/d`, which is case-insensitive). Neither gate replaces CI, and CI itself currently runs
+(installs the `global.json` SDK in the distro and creates a disposable clone under `~/src`; the gate
+clone never lives under `/mnt/d`). Neither gate replaces CI, and CI itself currently runs
 only ubuntu-latest with an unfiltered test step. A change is not done until both gates are green.
 The .NET SDK version comes from `global.json` (currently `9.0.316`, `rollForward: latestPatch`).
 
