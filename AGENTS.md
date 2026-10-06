@@ -131,9 +131,12 @@ For agent-authored SQL, every ScriptDom-parsable construct inside a top-level `S
 
 ```powershell
 pwsh ./scripts/verify.ps1
+pwsh ./scripts/verify-linux.ps1
 ```
 
 > CI runs the same four stages on ubuntu-latest; tests that pass only on Windows are not done.
+> `verify-linux.ps1` runs those stages inside WSL on case-sensitive ext4 (provision once with
+> `pwsh ./scripts/setup-linux-gate.ps1`); a change is not done until both gates are green.
 
 ## MCP server (local stdio)
 
