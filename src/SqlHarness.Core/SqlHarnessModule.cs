@@ -304,7 +304,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             {
                 return Task.FromResult(SqlHarnessExitCode.LocalStorage);
             }
-        });
+        })
+        {
+            RawFootprint = raw,
+        };
         return outcome with { EmissionReceipt = receipt };
     }
 

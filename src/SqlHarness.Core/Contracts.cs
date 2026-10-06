@@ -503,6 +503,9 @@ public sealed class SqlHarnessEmissionReceipt
         Func<OutputFootprint, CancellationToken, Task<SqlHarnessExitCode>> complete) =>
         _complete = complete;
 
+    /// <summary>Pre-projection footprint known to the module; the journal records it alongside the emitted footprint.</summary>
+    internal OutputFootprint? RawFootprint { get; init; }
+
     public Task<SqlHarnessExitCode> CompleteAsync(
         OutputFootprint emitted,
         CancellationToken ct = default)
