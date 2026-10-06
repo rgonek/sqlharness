@@ -445,6 +445,12 @@ public sealed class McpStdioProcessTests
             Assert.Equal(
                 McpToolCatalog.ToolNames.Order(StringComparer.Ordinal),
                 tools.Select(tool => tool.Name).Order(StringComparer.Ordinal).ToArray());
+            var validateSchema = JsonSerializer.SerializeToElement(
+                Assert.Single(tools, tool => tool.Name == "sqlharness_validate").ProtocolTool)
+                .GetProperty("inputSchema");
+            Assert.Contains(
+                "scope",
+                validateSchema.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
 
             Dictionary<string, object?> Scope(string profile) => new()
             {
@@ -471,6 +477,8 @@ public sealed class McpStdioProcessTests
                 new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
                 cancellationToken: ct);
             Assert.True(missingScope.IsError == true);
+            var missingScopeMessage = string.Concat(missingScope.Content.OfType<TextContentBlock>().Select(block => block.Text));
+            Assert.Contains("sqlharness_validate", missingScopeMessage, StringComparison.Ordinal);
 
             var unsafeArguments = await client.CallToolAsync(
                 "sqlharness_query",
@@ -483,6 +491,12 @@ public sealed class McpStdioProcessTests
                 },
                 cancellationToken: ct);
             Assert.True(unsafeArguments.IsError == true);
+            var unsafeArgumentsEnvelope = McpStdioProcessHarness.Envelope(unsafeArguments);
+            Assert.Equal("error", unsafeArgumentsEnvelope.GetProperty("status").GetString());
+            Assert.Equal("sqlharness_query", unsafeArgumentsEnvelope.GetProperty("command").GetString());
+            Assert.Equal((int)SqlHarnessExitCode.Safety, unsafeArgumentsEnvelope.GetProperty("exitCode").GetInt32());
+            Assert.Equal("safety_rejected", unsafeArgumentsEnvelope.GetProperty("error").GetProperty("code").GetString());
+            Assert.StartsWith("Unknown argument.", unsafeArgumentsEnvelope.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
 
             var planXml = File.ReadAllText(McpStdioProcessHarness.FindRepositoryFile(
                 "tests", "SqlHarness.Tests", "Fixtures", "distiller-sample.sqlplan"));
