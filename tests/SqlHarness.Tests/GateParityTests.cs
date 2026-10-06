@@ -127,30 +127,104 @@ public sealed class GateParityTests
         }
     }
 
-    private static string[] StageVerbs(string content) =>
-        Regex.Matches(content, @"\bdotnet\s+(restore|build|test|format)\b")
-            .Select(match => match.Groups[1].Value)
-            .ToArray();
-
-    private static string StageCommand(string content, string verb)
+    [Fact]
+    public void StageCommand_ignores_comment_shadow_above_wrapped_command()
     {
-        var match = Regex.Match(content, @"'?\bdotnet\s+" + verb + @"\b[^\r\n]*'?");
+        var content = """
+            # dotnet build SqlHarness.sln --no-restore -warnaserror -clp:NoSummary
+            Invoke-Stage -Name 'build' -Action { dotnet build SqlHarness.sln --no-restore -warnaserror }
+            """;
 
-        Assert.True(match.Success, $"No 'dotnet {verb}' command was found.");
-        var normalized = match.Value.Trim();
+        var command = StageCommand(content, "build");
 
-        if (normalized.Length >= 2 && normalized[0] == '\'' && normalized[^1] == '\'')
-        {
-            normalized = normalized[1..^1].Trim();
-        }
-
-        if (normalized.EndsWith('}'))
-        {
-            normalized = normalized[..^1].Trim();
-        }
-
-        return normalized.Replace('\'', '"');
+        Assert.Equal("dotnet build SqlHarness.sln --no-restore -warnaserror", command);
     }
+
+    [Fact]
+    public void StageCommand_comment_shadow_does_not_hide_real_command_drift()
+    {
+        var baseline = """
+            # dotnet build SqlHarness.sln --no-restore -warnaserror -clp:NoSummary
+            Invoke-Stage -Name 'build' -Action { dotnet build SqlHarness.sln --no-restore -warnaserror }
+            """;
+        var candidate = """
+            # dotnet build SqlHarness.sln --no-restore -warnaserror -clp:NoSummary
+            Invoke-Stage -Name 'build' -Action { dotnet build SqlHarness.sln --no-restore -warnaserror -clp:NoSummary }
+            """;
+
+        var baselineCommand = StageCommand(baseline, "build");
+        var candidateCommand = StageCommand(candidate, "build");
+
+        Assert.Equal("dotnet build SqlHarness.sln --no-restore -warnaserror", baselineCommand);
+        Assert.Equal("dotnet build SqlHarness.sln --no-restore -warnaserror -clp:NoSummary", candidateCommand);
+        Assert.NotEqual(baselineCommand, candidateCommand);
+    }
+
+    [Fact]
+    public void StageCommand_ignores_trailing_comment_outside_windows_wrapper()
+    {
+        var content = """
+            Invoke-Stage -Name 'build' -Action { dotnet build SqlHarness.sln --no-restore -warnaserror } # it's fine
+            """;
+
+        var command = StageCommand(content, "build");
+
+        Assert.Equal("dotnet build SqlHarness.sln --no-restore -warnaserror", command);
+        Assert.DoesNotContain("it's fine", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StageCommand_ignores_trailing_comment_outside_linux_wrapper()
+    {
+        var content = """
+            Invoke-GateStage -Name 'build' -Arguments @($gateClone) -Lines @(
+                'dotnet build SqlHarness.sln --no-restore -warnaserror'
+            ) # it's fine
+            """;
+
+        var command = StageCommand(content, "build");
+
+        Assert.Equal("dotnet build SqlHarness.sln --no-restore -warnaserror", command);
+        Assert.DoesNotContain("it's fine", command, StringComparison.Ordinal);
+    }
+
+    internal static string[] StageVerbs(string content)
+    {
+        const string VerbGroup = "(restore|build|test|format)";
+        var pattern = $@"(?:\{{ dotnet {VerbGroup}\b[^}}\r\n]*\}})|(?:'dotnet {VerbGroup}\b[^'\r\n]*')|(?:(?m)^\s*(?:-\s+)?run:\s*dotnet {VerbGroup}\b.*$)";
+        return Regex.Matches(content, pattern)
+            .Select(match => match.Groups[1].Success ? match.Groups[1].Value
+                : match.Groups[2].Success ? match.Groups[2].Value
+                : match.Groups[3].Value)
+            .ToArray();
+    }
+
+    internal static string StageCommand(string content, string verb)
+    {
+        var match = Regex.Match(content, $@"\{{\s*(dotnet {verb}\b[^}}\r\n]*)\s*\}}");
+        if (match.Success)
+        {
+            return NormalizeCommand(match.Groups[1].Value);
+        }
+
+        match = Regex.Match(content, $@"'(dotnet {verb}\b[^'\r\n]*)'");
+        if (match.Success)
+        {
+            return NormalizeCommand(match.Groups[1].Value);
+        }
+
+        match = Regex.Match(content, $@"(?m)^\s*(?:-\s+)?run:\s*(dotnet {verb}\b.*)$");
+        if (match.Success)
+        {
+            return NormalizeCommand(match.Groups[1].Value);
+        }
+
+        Assert.Fail($"No 'dotnet {verb}' command was found.");
+        return null!;
+    }
+
+    private static string NormalizeCommand(string command) =>
+        command.Trim().Replace('\'', '"');
 
     private static string FilterValue(string content) =>
         Regex.Match(content, @"--filter\s+['""]?(?<value>[^'""\s]+)")
