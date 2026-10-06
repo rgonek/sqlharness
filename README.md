@@ -270,6 +270,18 @@ Never work around a safety rejection. Narrow the operation or obtain explicit ap
 
 Every command except `gain` records metadata-only raw and emitted byte counts in `~/.sqlharness/data/gain.jsonl`; SQL text, result values, plans, messages, and secrets are not recorded there. The `gain` command estimates tokens as `ceil(UTF-8 bytes / 4)` using the `utf8-bytes-div-4` heuristic. `savedEstimatedTokens` remains the historical nonnegative gross field; `netEstimatedTokens` is the signed raw-minus-emitted delta, and savings percentage uses that signed net. Raw means SQLHarness's canonical internal representation, not the response from an alternative tool. This is a model-independent output-size estimate, not a tokenizer measurement or a claim about LLM cost.
 
+### Activity journal
+
+Every CLI command and MCP tool call is recorded in a local activity journal (`~/.sqlharness/data/activity.db`, owner-only on Unix): operation, scope, target identity, status, timings, token footprints, and a SHA-256 hash of the SQL. Session identity is implicit (MCP `clientInfo`, or the CLI's nearest `claude`/`codex` ancestor process); agents send nothing extra. SQL text is stored only with `journal.storeSensitive: true` in `~/.sqlharness/config.json`; parameter values, secrets, and result cells are never stored. An invalid `config.json` falls back to defaults (hash-only). Journal failures never change output or exit codes. Treat `activity.db` as locally sensitive. `sqlharness doctor --json` reports whether the config file is present and valid, the effective journal settings, and whether the journal file exists.
+
+```json
+{
+  "journal": { "enabled": true, "storeSensitive": false }
+}
+```
+
+The `retention` and `dashboard` keys are accepted but have no effect until later releases.
+
 ### Results to fill from real runs before publishing
 
 | Scenario | Raw bytes | Emitted bytes | Net estimated token delta | Evidence |
@@ -282,6 +294,7 @@ Every command except `gain` records metadata-only raw and emitted byte counts in
 
 - Target profiles: `~/.sqlharness/targets.json`
 - Gain records: `~/.sqlharness/data/gain.jsonl`
+- Activity journal: `~/.sqlharness/data/activity.db` (locally sensitive)
 - Comparison artifacts: `~/.sqlharness/compare/`
 - Named snapshots: `~/.sqlharness/snapshots/` (sensitive result data; replace only with `snapshot --force`)
 - Query Store artifacts: `~/.sqlharness/query-store/` (`artifactDirectory/queries.jsonl` holds SQL text and is locally sensitive)

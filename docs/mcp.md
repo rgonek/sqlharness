@@ -137,7 +137,7 @@ Every live publish stamps the frozen scope owner into versioned metadata written
 
 ## Stdout and stderr
 
-Stdout carries only protocol frames. All logging goes to stderr without arguments, SQL, parameter values, or secrets. A pre-handshake startup failure writes one generic line to stderr and exits 2 without echoing values or secrets; an unexpected transport failure exits 1. Clean shutdown on EOF or cancellation exits 0.
+Stdout carries only protocol frames. All logging goes to stderr without arguments, SQL, parameter values, or secrets. A pre-handshake startup failure writes one generic line to stderr and exits 2 without echoing values or secrets; an unexpected transport failure exits 1. Clean shutdown on EOF or cancellation exits 0. Tool calls are recorded in the local activity journal with the client's `clientInfo` name and version; journal diagnostics go to stderr only, and journal failures never change a tool result.
 
 ## Versions
 

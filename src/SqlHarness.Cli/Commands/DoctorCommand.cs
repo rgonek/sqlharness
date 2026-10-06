@@ -29,6 +29,7 @@ public sealed class DoctorCommand(OutputContext output) : AsyncCommand<DoctorCom
         }
 
         var assembly = typeof(DoctorCommand).Assembly;
+        var config = SqlHarnessConfigLoader.Load();
         var report = new
         {
             version = assembly.GetName().Version?.ToString(3) ?? "0.0.0",
@@ -36,6 +37,11 @@ public sealed class DoctorCommand(OutputContext output) : AsyncCommand<DoctorCom
             runtime = Environment.Version.ToString(),
             profilesFilePresent = File.Exists(SqlHarnessPaths.TargetsFile),
             profileDirectoryPresent = Directory.Exists(Path.GetDirectoryName(SqlHarnessPaths.TargetsFile)),
+            configFilePresent = config.Status != SqlHarnessConfigStatus.Missing,
+            configValid = config.Status != SqlHarnessConfigStatus.Invalid,
+            journalEnabled = config.Config.Journal.Enabled,
+            journalStoreSensitive = config.Config.Journal.StoreSensitive,
+            activityJournalPresent = File.Exists(SqlHarnessPaths.ActivityDatabase),
             databaseCheckPerformed = false,
             credentialsRead = false,
             tokenRequested = false,
