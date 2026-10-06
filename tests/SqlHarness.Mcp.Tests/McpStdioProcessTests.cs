@@ -648,49 +648,63 @@ public sealed class McpStdioProcessTests
     [Fact]
     public async Task Inprocess_session_keeps_stdout_pure_protocol_and_exits_zero_on_eof()
     {
-        using var cts = new CancellationTokenSource(SeamBudget);
-        var ct = cts.Token;
-        var clientToServer = new Pipe();
-        var serverToClient = new Pipe();
-        var recording = new RecordingStream(serverToClient.Reader.AsStream());
-        var log = new StringWriter();
-
-        Task<int> hostTask = McpHost.RunAsync(
-            new McpServerOptions { Profile = "mcp-t3" },
-            clientToServer.Reader.AsStream(),
-            serverToClient.Writer.AsStream(),
-            log,
-            SeamProfiles,
-            ct);
-
-        await using (var client = await McpClient.CreateAsync(
-            new StreamClientTransport(
-                clientToServer.Writer.AsStream(),
-                recording,
-                NullLoggerFactory.Instance),
-            new McpClientOptions
-            {
-                ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
-                ProtocolVersion = McpStdioProcessHarness.PinnedProtocolVersion,
-            },
-            NullLoggerFactory.Instance,
-            ct))
+        // The host journals module calls; keep any journal rows out of the real home.
+        var savedHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
+        var home = Path.Combine(Path.GetTempPath(), "sqlharness-mcp-stdio-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(home);
+        Environment.SetEnvironmentVariable("SQLHARNESS_HOME", home);
+        try
         {
-            Assert.Equal(McpStdioProcessHarness.PinnedProtocolVersion, client.NegotiatedProtocolVersion);
-            var validate = await client.CallToolAsync(
-                "sqlharness_validate",
-                new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
-                cancellationToken: ct);
-            AssertValidateSuccess(validate, "sqlharness_validate");
+            using var cts = new CancellationTokenSource(SeamBudget);
+            var ct = cts.Token;
+            var clientToServer = new Pipe();
+            var serverToClient = new Pipe();
+            var recording = new RecordingStream(serverToClient.Reader.AsStream());
+            var log = new StringWriter();
+
+            Task<int> hostTask = McpHost.RunAsync(
+                new McpServerOptions { Profile = "mcp-t3" },
+                clientToServer.Reader.AsStream(),
+                serverToClient.Writer.AsStream(),
+                log,
+                SeamProfiles,
+                ct);
+
+            await using (var client = await McpClient.CreateAsync(
+                new StreamClientTransport(
+                    clientToServer.Writer.AsStream(),
+                    recording,
+                    NullLoggerFactory.Instance),
+                new McpClientOptions
+                {
+                    ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
+                    ProtocolVersion = McpStdioProcessHarness.PinnedProtocolVersion,
+                },
+                NullLoggerFactory.Instance,
+                ct))
+            {
+                Assert.Equal(McpStdioProcessHarness.PinnedProtocolVersion, client.NegotiatedProtocolVersion);
+                var validate = await client.CallToolAsync(
+                    "sqlharness_validate",
+                    new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+                    cancellationToken: ct);
+                AssertValidateSuccess(validate, "sqlharness_validate");
+            }
+
+            await clientToServer.Writer.CompleteAsync();
+            Assert.Equal((int)SqlHarnessExitCode.Success, await hostTask.WaitAsync(SeamBudget, ct));
+
+            // Drain shutdown-phase bytes the client never read before judging
+            // purity; every emitted byte must still be a protocol frame.
+            await recording.DrainRemainingAsync(TimeSpan.FromSeconds(10), ct);
+            McpStdioProcessHarness.AssertStdoutIsPureProtocol(recording.Recorded);
         }
-
-        await clientToServer.Writer.CompleteAsync();
-        Assert.Equal((int)SqlHarnessExitCode.Success, await hostTask.WaitAsync(SeamBudget, ct));
-
-        // Drain shutdown-phase bytes the client never read before judging
-        // purity; every emitted byte must still be a protocol frame.
-        await recording.DrainRemainingAsync(TimeSpan.FromSeconds(10), ct);
-        McpStdioProcessHarness.AssertStdoutIsPureProtocol(recording.Recorded);
+        finally
+        {
+            Environment.SetEnvironmentVariable("SQLHARNESS_HOME", savedHome);
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            Directory.Delete(home, true);
+        }
     }
 
     /// <summary>
