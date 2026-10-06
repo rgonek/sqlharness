@@ -73,6 +73,30 @@ public sealed class McpMappingTests : IDisposable
         },
         ProfileStore.Load(_targetsFile));
 
+    [Fact]
+    public void Request_capabilities_only_exposes_operator_allowlist_and_process_limits()
+    {
+        var fixedScope = Scope();
+        var process = McpProcessContext.Create(new McpServerOptions
+        {
+            RequestScope = true,
+            AllowedProfiles = [ProfileName],
+            MaxResultBytes = 8192,
+            MaxOperationSeconds = 30,
+        }, () => fixedScope.Profiles);
+
+        var document = McpOperationMapper.BuildCapabilities(process, includeDiagnostics: false);
+        var json = JsonSerializer.Serialize(document);
+
+        Assert.Equal("request", document.ScopeMode);
+        Assert.Equal("sqlserver", document.Engine);
+        Assert.Equal([ProfileName], document.AllowedProfiles);
+        Assert.Equal(8192, document.Limits["callToolResultBudgetBytes"]);
+        Assert.Equal(30, document.Limits["maxOperationSeconds"]);
+        Assert.DoesNotContain("frozen", json, StringComparison.Ordinal);
+        Assert.DoesNotContain(PgProfileName, json, StringComparison.Ordinal);
+    }
+
     private sealed class RecordingModule : ISqlHarnessModule
     {
         public List<SqlHarnessOperation> Operations { get; } = [];

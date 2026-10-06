@@ -41,11 +41,13 @@ public sealed class McpToolHandlers(
     ISqlHarnessModule module,
     McpExecutionGate? gate = null,
     IMcpClock? clock = null,
-    CancellationToken hostShutdown = default)
+    CancellationToken hostShutdown = default,
+    bool acceptRequestScope = false)
 {
     private readonly McpExecutionGate _gate = gate ?? new McpExecutionGate();
     private readonly IMcpClock _clock = clock ?? SystemMcpClock.Instance;
     private readonly CancellationToken _hostShutdown = hostShutdown;
+    private readonly bool _acceptRequestScope = acceptRequestScope;
 
     public Task<CallToolResult> CapabilitiesAsync(
         RequestContext<CallToolRequestParams> ctx,
@@ -309,7 +311,7 @@ public sealed class McpToolHandlers(
     /// compare case-insensitively (matching binder behavior); the rejection
     /// lists supported names only and never echoes values.
     /// </summary>
-    private static void ThrowIfUnknown(RequestContext<CallToolRequestParams> ctx, string[] known)
+    private void ThrowIfUnknown(RequestContext<CallToolRequestParams> ctx, string[] known)
     {
         var keys = ctx?.Params?.Arguments?.Keys;
         if (keys is null)
@@ -325,6 +327,9 @@ public sealed class McpToolHandlers(
                     break;
                 }
             }
+
+            if (!recognized && _acceptRequestScope && string.Equals(key, "scope", StringComparison.OrdinalIgnoreCase))
+                recognized = true;
 
             if (!recognized)
                 throw new McpMappingException("Unknown argument. Supported arguments: " + string.Join(", ", known) + ".");
@@ -467,6 +472,56 @@ public static class McpToolCatalog
         "sqlharness_artifact",
         "sqlharness_gain",
     ];
+
+    public static IReadOnlyList<McpServerTool> CreateTools(
+        McpProcessContext process,
+        IMcpClock? clock = null,
+        CancellationToken hostShutdown = default)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+        if (!process.RequestScope)
+            return CreateTools(process.FixedScope!, process.FixedScope!.CreateModule(), process.Gate, clock, hostShutdown);
+        var handlers = new McpRequestToolHandlers(process, clock, hostShutdown);
+        var type = typeof(McpRequestToolHandlers);
+        McpServerTool Tool(string name, string method, string description, bool? readOnly, bool? destructive,
+            bool? idempotent, bool? openWorld) => McpServerTool.Create(
+            type.GetMethod(method) ?? throw new InvalidOperationException($"Unknown MCP tool method '{method}'."), handlers,
+            new McpServerToolCreateOptions
+            {
+                Name = name, Description = description, ReadOnly = readOnly, Destructive = destructive,
+                Idempotent = idempotent, OpenWorld = openWorld, UseStructuredContent = true,
+                OutputSchema = McpResultAdapter.OutputSchema.RootElement,
+            });
+        var tools = new List<McpServerTool>(ToolNames.Count)
+        {
+            Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), "Describe server versions, request-scope mode, permitted profiles, tools, and limits.", true, false, true, false),
+            Tool(ToolNames[1], nameof(McpRequestToolHandlers.InspectAsync), "Run one catalog inspection against the supplied request scope.", true, false, null, true),
+            Tool(ToolNames[2], nameof(McpRequestToolHandlers.ValidateAsync), "Static check of SQL effects visible in the text; never connects.", true, false, true, false),
+            Tool(ToolNames[3], nameof(McpRequestToolHandlers.QueryAsync), "Run a bounded query against the supplied request scope.", true, false, null, true),
+            Tool(ToolNames[4], nameof(McpRequestToolHandlers.MeasureAsync), "Measure one query against the supplied request scope.", null, false, null, true),
+            Tool(ToolNames[5], nameof(McpRequestToolHandlers.CompareAsync), "Compare queries against the supplied request scope.", null, false, null, true),
+            Tool(ToolNames[6], nameof(McpRequestToolHandlers.WatchAsync), "Poll a bounded query against the supplied request scope.", true, false, null, true),
+            Tool(ToolNames[7], nameof(McpRequestToolHandlers.SnapshotAsync), "Capture or diff a snapshot against the supplied request scope.", null, false, null, true),
+            Tool(ToolNames[8], nameof(McpRequestToolHandlers.PlanAsync), "Distill a plan document offline.", true, false, true, false),
+            Tool(ToolNames[9], nameof(McpRequestToolHandlers.ArtifactAsync), "Read a safe section of an artifact against the supplied request scope.", true, false, true, false),
+            Tool(ToolNames[10], nameof(McpRequestToolHandlers.GainAsync), "Report the local output-savings aggregate.", null, false, null, false),
+        };
+        if (tools.Count != McpLimits.MaxTools)
+            throw new InvalidOperationException($"The MCP catalog must serve exactly {McpLimits.MaxTools} tools.");
+        return tools;
+    }
+
+    public static void Wire(
+        ModelContextProtocol.Server.McpServerOptions options,
+        McpProcessContext process,
+        IMcpClock? clock = null,
+        CancellationToken hostShutdown = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var collection = new McpServerPrimitiveCollection<McpServerTool>();
+        foreach (var tool in CreateTools(process, clock, hostShutdown)) collection.Add(tool);
+        options.ToolCollection = collection;
+    }
 
     public static IReadOnlyList<McpServerTool> CreateTools(
         McpScope scope,

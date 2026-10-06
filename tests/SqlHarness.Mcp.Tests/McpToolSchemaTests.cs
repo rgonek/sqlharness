@@ -131,6 +131,26 @@ public sealed class McpToolSchemaTests : IDisposable
             return catalog;
         }
 
+        public static async Task<ServedCatalog> CreateAsync(McpProcessContext process)
+        {
+            var catalog = new ServedCatalog();
+            var serverOptions = new ModelContextProtocol.Server.McpServerOptions
+            {
+                ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "t3-test" },
+                ProtocolVersion = McpHost.PinnedProtocolVersion,
+            };
+            McpToolCatalog.Wire(serverOptions, process);
+            var server = McpServer.Create(
+                new StreamServerTransport(catalog._clientToServer.Reader.AsStream(), catalog._serverToClient.Writer.AsStream(), "t3-test-server", NullLoggerFactory.Instance),
+                serverOptions, NullLoggerFactory.Instance, serviceProvider: null);
+            catalog._serverTask = server.RunAsync(catalog._cts.Token);
+            catalog.Client = await McpClient.CreateAsync(
+                new StreamClientTransport(catalog._clientToServer.Writer.AsStream(), catalog._serverToClient.Reader.AsStream(), NullLoggerFactory.Instance),
+                new McpClientOptions { ClientInfo = new Implementation { Name = "t3-test-client", Version = "1.0.0" }, ProtocolVersion = McpHost.PinnedProtocolVersion },
+                NullLoggerFactory.Instance, catalog._cts.Token);
+            return catalog;
+        }
+
         public async ValueTask DisposeAsync()
         {
             await _cts.CancelAsync();
@@ -246,6 +266,111 @@ public sealed class McpToolSchemaTests : IDisposable
         // The transport may order tools differently; the contract is the set.
         Assert.Equal(ExpectedTools.Order(StringComparer.Ordinal), tools.Select(tool => tool.Name).Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(ExpectedTools.Length, tools.Count());
+    }
+
+    [Fact]
+    public async Task Request_scope_schema_is_required_only_on_the_eight_target_tools()
+    {
+        var scope = Scope();
+        var process = McpProcessContext.Create(new McpServerOptions
+        {
+            RequestScope = true,
+            AllowedProfiles = [ProfileName],
+        }, () => scope.Profiles);
+        await using var requestServed = await ServedCatalog.CreateAsync(process);
+        var requestSchemas = (await requestServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None))
+            .ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
+        var targetTools = new[] { "sqlharness_inspect", "sqlharness_validate", "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot", "sqlharness_artifact" };
+        foreach (var tool in targetTools)
+        {
+            Assert.Contains("scope", Required(requestSchemas[tool]));
+            Assert.True(Properties(requestSchemas[tool]).TryGetProperty("scope", out var scopeSchema), requestSchemas[tool].GetRawText());
+            Assert.True(scopeSchema.TryGetProperty("type", out var scopeType), requestSchemas[tool].GetRawText());
+            Assert.Equal("object", scopeType.GetString());
+            Assert.Equal(new[] { "profile", "vars" }, scopeSchema.GetProperty("required").EnumerateArray().Select(value => value.GetString()).Order(StringComparer.Ordinal));
+            Assert.True(scopeSchema.GetProperty("properties").TryGetProperty("profile", out _));
+            Assert.True(scopeSchema.GetProperty("properties").TryGetProperty("vars", out _));
+        }
+        foreach (var tool in new[] { "sqlharness_capabilities", "sqlharness_plan", "sqlharness_gain" })
+            Assert.DoesNotContain("scope", Properties(requestSchemas[tool]).EnumerateObject().Select(property => property.Name));
+        var rawNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var schema in requestSchemas.Values) CollectPropertyNames(schema, rawNames);
+        Assert.DoesNotContain("server", rawNames);
+        Assert.DoesNotContain("database", rawNames);
+        Assert.DoesNotContain("auth", rawNames);
+        Assert.DoesNotContain("engine", rawNames);
+        Assert.DoesNotContain("allowMutation", rawNames);
+
+        await using var fixedServed = await ServedCatalog.CreateAsync(scope);
+        var fixedSchemas = (await fixedServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None))
+            .ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
+        foreach (var tool in targetTools)
+            Assert.DoesNotContain("scope", Properties(fixedSchemas[tool]).EnumerateObject().Select(property => property.Name));
+    }
+
+    [Fact]
+    public async Task Request_calls_resolve_each_supplied_scope_and_target_free_tools_need_none()
+    {
+        var scope = Scope();
+        var profiles = scope.Profiles.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        profiles["sample-b"] = new TargetProfile("mcp-b.invalid", "reportdb-b",
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["tenant"] = "^b$" }, "integrated");
+        var process = McpProcessContext.Create(new McpServerOptions
+        {
+            RequestScope = true,
+            AllowedProfiles = [ProfileName, "sample-b"],
+        }, () => profiles);
+        await using var served = await ServedCatalog.CreateAsync(process);
+
+        var capabilities = await served.Client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: CancellationToken.None);
+        Assert.False(capabilities.IsError == true);
+        var capabilityDocument = JsonDocument.Parse(Assert.Single(capabilities.Content.OfType<TextContentBlock>()).Text);
+        var capability = capabilityDocument.RootElement.GetProperty("result");
+        Assert.Equal("request", capability.GetProperty("scopeMode").GetString());
+        Assert.Equal(new[] { ProfileName, "sample-b" }, capability.GetProperty("allowedProfiles").EnumerateArray().Select(value => value.GetString()));
+        Assert.DoesNotContain("frozen", capabilityDocument.RootElement.GetRawText(), StringComparison.Ordinal);
+
+        var valid = new Dictionary<string, object?>
+        {
+            ["usage"] = "query", ["sql"] = "SELECT 1",
+            ["scope"] = new { profile = ProfileName, vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
+        };
+        var first = await served.Client.CallToolAsync("sqlharness_validate", valid, cancellationToken: CancellationToken.None);
+        Assert.False(first.IsError == true);
+        var second = await served.Client.CallToolAsync("sqlharness_validate", new Dictionary<string, object?>
+        {
+            ["usage"] = "query", ["sql"] = "SELECT 1",
+            ["scope"] = new { profile = "sample-b", vars = new Dictionary<string, string> { ["tenant"] = "b" } },
+        }, cancellationToken: CancellationToken.None);
+        Assert.False(second.IsError == true);
+        var wrongB = await served.Client.CallToolAsync("sqlharness_validate", new Dictionary<string, object?>
+        {
+            ["usage"] = "query", ["sql"] = "SELECT 1",
+            ["scope"] = new { profile = "sample-b", vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
+        }, cancellationToken: CancellationToken.None);
+        Assert.Equal(2, ServedEnvelope(wrongB, "sqlharness_validate").GetProperty("exitCode").GetInt32());
+        var malformedScope = new Dictionary<string, object?>
+        {
+            ["usage"] = "query", ["sql"] = "SELECT 1",
+            ["scope"] = new { profile = ProfileName, vars = new Dictionary<string, string> { ["tenant"] = "frozen" }, extra = "sentinel" },
+        };
+        var rejected = await served.Client.CallToolAsync("sqlharness_validate", malformedScope, cancellationToken: CancellationToken.None);
+        Assert.True(rejected.IsError == true);
+        Assert.DoesNotContain("sentinel", string.Concat(rejected.Content.OfType<TextContentBlock>().Select(block => block.Text)), StringComparison.Ordinal);
+        var noScope = await served.Client.CallToolAsync("sqlharness_validate", new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" }, cancellationToken: CancellationToken.None);
+        Assert.True(noScope.IsError == true);
+
+        await using var fixedServed = await ServedCatalog.CreateAsync(scope);
+        var fixedWithScope = await fixedServed.Client.CallToolAsync("sqlharness_validate", new Dictionary<string, object?>
+        {
+            ["usage"] = "query", ["sql"] = "SELECT 1",
+            ["scope"] = new { profile = ProfileName, vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
+        }, cancellationToken: CancellationToken.None);
+        Assert.True(fixedWithScope.IsError == true);
+
+        var planXml = File.ReadAllText(McpStdioProcessHarness.FindRepositoryFile("tests", "SqlHarness.Tests", "Fixtures", "distiller-sample.sqlplan"));
+        var plan = await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = planXml }, cancellationToken: CancellationToken.None);
+        Assert.False(plan.IsError == true);
     }
 
     [Theory]

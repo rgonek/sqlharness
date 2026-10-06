@@ -55,10 +55,10 @@ public static class McpHost
         ArgumentNullException.ThrowIfNull(log);
         ArgumentNullException.ThrowIfNull(loadProfiles);
 
-        McpScope scope;
+        McpProcessContext process;
         try
         {
-            scope = McpScope.Create(options, loadProfiles);
+            process = McpProcessContext.Create(options, loadProfiles);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -68,12 +68,9 @@ public static class McpHost
             return (int)SqlHarnessExitCode.Safety;
         }
 
-        // Eager shared composition over the frozen provider. This opens no
-        // database connection and performs no auth; the explicit T3 tool
-        // catalog executes on it. The T5 execution gate is process-wide: one
-        // active database operation, shared by every tool call in process.
-        var module = scope.CreateModule();
-        var gate = new McpExecutionGate();
+        // Composition reads only the frozen profile snapshot and opens no
+        // database connection. The process context owns one gate for every
+        // request scope.
 
         var loggerFactory = new McpStderrLoggerFactory(log);
         var serverOptions = new ModelContextProtocol.Server.McpServerOptions
@@ -92,13 +89,14 @@ public static class McpHost
         using var eofShutdown = new CancellationTokenSource();
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct, eofShutdown.Token);
         using var eofInput = new EofShutdownInput(input, eofShutdown);
-        Tools.McpToolCatalog.Wire(serverOptions, scope, module, gate, hostShutdown: lifetime.Token);
+        using var guardedInput = process.RequestScope ? new McpDuplicateJsonFieldGuardInput(eofInput) : null;
+        Tools.McpToolCatalog.Wire(serverOptions, process, hostShutdown: lifetime.Token);
 
         try
         {
             // Tools come only from the explicit catalog wired above.
             await using var server = ModelContextProtocol.Server.McpServer.Create(
-                new ModelContextProtocol.Server.StreamServerTransport(eofInput, output, ServerName, loggerFactory),
+                new ModelContextProtocol.Server.StreamServerTransport((Stream?)guardedInput ?? eofInput, output, ServerName, loggerFactory),
                 serverOptions,
                 loggerFactory,
                 serviceProvider: null);

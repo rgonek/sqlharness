@@ -62,6 +62,26 @@ public sealed class McpTokenBudgetTests
     }
 
     [Fact]
+    public void Request_catalog_stays_within_tools_list_budget()
+    {
+        var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+        {
+            ["sample-country"] = new("server.invalid", "sampledb",
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["tenant"] = "^[a-z]+$" }, "integrated"),
+        };
+        var process = McpProcessContext.Create(new McpServerOptions
+        {
+            RequestScope = true,
+            AllowedProfiles = ["sample-country"],
+        }, () => profiles);
+
+        var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(
+            McpToolCatalog.CreateTools(process).Select(tool => tool.ProtocolTool)));
+
+        Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"request-mode tools/list is {bytes} bytes.");
+    }
+
+    [Fact]
     public void Unicode_cells_fit_the_default_budget_with_escaping_counted()
     {
         var text = string.Concat(Enumerable.Repeat("語😀", 10000));

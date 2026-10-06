@@ -21,7 +21,9 @@ public sealed record McpCapabilitiesDocument(
     bool QueryStoreAvailable,
     bool IndexesAvailable,
     IReadOnlyDictionary<string, string>? Diagnostics,
-    SqlHarnessSafetyAnalysis SafetyAnalysis);
+    SqlHarnessSafetyAnalysis SafetyAnalysis,
+    string ScopeMode = "fixed",
+    IReadOnlyList<string>? AllowedProfiles = null);
 
 /// <summary>
 /// Shared projection sanitizer for plan and artifact results. Distilled plans
@@ -129,6 +131,48 @@ public static partial class McpOperationMapper
                 SqlSafetyAnalysis.ObjectAndPermissionStatus));
     }
 
+    public static McpCapabilitiesDocument BuildCapabilities(McpProcessContext context, bool includeDiagnostics)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        if (!context.RequestScope)
+            return BuildCapabilities(context.FixedScope!, includeDiagnostics);
+
+        var diagnostics = includeDiagnostics
+            ? LocalDiagnostics(context.InputRoots)
+            : null;
+        return new McpCapabilitiesDocument(
+            McpHost.ServerName,
+            McpHost.ServerVersion,
+            McpHost.PinnedProtocolVersion,
+            "sqlserver",
+            McpToolCatalog.ToolNames,
+            new Dictionary<string, long>(StringComparer.Ordinal)
+            {
+                ["maxSqlBytes"] = McpLimits.MaxSqlBytes,
+                ["maxPlanBytes"] = McpLimits.MaxPlanBytes,
+                ["maxParameterSetBytes"] = McpLimits.MaxParameterSetBytes,
+                ["maxInlineBytes"] = McpLimits.MaxInlineBytes,
+                ["maxTools"] = McpLimits.MaxTools,
+                ["toolsListBudgetBytes"] = McpLimits.ToolsListBudgetBytes,
+                ["maxTimeoutSeconds"] = OperationLimits.QueryTimeoutSecondsMax,
+                ["maxRepeat"] = OperationLimits.RepeatMax,
+                ["maxTop"] = OperationLimits.TopMax,
+                ["maxRows"] = OperationLimits.MaxRowsMax,
+                ["callToolResultBudgetBytes"] = context.MaxResultBytes,
+                ["maxOperationSeconds"] = context.MaxOperationSeconds,
+            },
+            QueryStoreAvailable: true,
+            IndexesAvailable: true,
+            diagnostics,
+            new SqlHarnessSafetyAnalysis(
+                SqlSafetyAnalysis.AnalysisKind,
+                SqlSafetyAnalysis.ContractVersion,
+                SqlSafetyAnalysis.HiddenEffectsVerified,
+                SqlSafetyAnalysis.ObjectAndPermissionStatus),
+            ScopeMode: "request",
+            AllowedProfiles: context.AllowedProfiles);
+    }
+
     private static IReadOnlyDictionary<string, string> LocalDiagnostics(McpScope scope)
     {
         // Local counts and existence flags only: no profile list, no paths, no secrets.
@@ -153,6 +197,22 @@ public static partial class McpOperationMapper
             }
         }
 
+        return diagnostics;
+    }
+
+    private static IReadOnlyDictionary<string, string> LocalDiagnostics(IReadOnlyList<string> inputRoots)
+    {
+        var diagnostics = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["inputRootCount"] = inputRoots.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["tools"] = McpToolCatalog.ToolNames.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        };
+        foreach (var (key, directory) in new (string, string)[]
+        {
+            ("compareDirExists", SqlHarnessPaths.CompareDir),
+            ("snapshotsDirExists", SqlHarnessPaths.SnapshotsDir),
+        })
+            diagnostics[key] = Directory.Exists(directory) ? "true" : "false";
         return diagnostics;
     }
 
@@ -490,6 +550,19 @@ public static partial class McpOperationMapper
     {
         ArgumentNullException.ThrowIfNull(scope);
         var text = await McpInputReader.ReadPlanAsync(content, file, scope, ct);
+        var bytes = Encoding.UTF8.GetByteCount(text);
+        var lines = text.Length == 0 ? 0 : text.Count(character => character == '\n') + (text[^1] == '\n' ? 0 : 1);
+        return new SqlHarnessPlanOperation(text, new OutputFootprint(bytes, lines));
+    }
+
+    public static async Task<SqlHarnessPlanOperation> MapPlanAsync(
+        IReadOnlyList<string> inputRoots,
+        string? content,
+        string? file,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(inputRoots);
+        var text = await McpInputReader.ReadPlanAsync(content, file, inputRoots, ct);
         var bytes = Encoding.UTF8.GetByteCount(text);
         var lines = text.Length == 0 ? 0 : text.Count(character => character == '\n') + (text[^1] == '\n' ? 0 : 1);
         return new SqlHarnessPlanOperation(text, new OutputFootprint(bytes, lines));

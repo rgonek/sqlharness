@@ -42,6 +42,12 @@ public static class McpInputReader
     public static Task<string> ReadPlanAsync(string? content, string? file, McpScope scope, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(scope);
+        return ReadPlanAsync(content, file, scope.InputRoots, ct);
+    }
+
+    public static Task<string> ReadPlanAsync(string? content, string? file, IReadOnlyList<string> inputRoots, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(inputRoots);
         var hasInline = !string.IsNullOrWhiteSpace(content);
         var hasFile = !string.IsNullOrWhiteSpace(file);
         if (hasInline == hasFile)
@@ -52,7 +58,7 @@ public static class McpInputReader
             return Task.FromResult(content!);
         }
 
-        return ReadTextFileAsync(file!, scope.InputRoots, McpLimits.MaxPlanBytes, ct, kind: "plan document");
+        return ReadTextFileAsync(file!, inputRoots, McpLimits.MaxPlanBytes, ct, kind: "plan document");
     }
 
     /// <summary>
