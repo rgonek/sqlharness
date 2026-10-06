@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="SqlHarness.Tests" />
+    <InternalsVisibleTo Include="SqlHarness.Mcp.Tests" />
   </ItemGroup>
 
   <ItemGroup>

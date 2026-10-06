@@ -421,6 +421,10 @@ public sealed class McpToolHandlers(
                 return Fail(exception.ExitCode, exception.Message, command, budget);
             }
 
+            // Core may translate provider cancellation into a failure outcome
+            // after disposing its session. Keep the MCP contract stable by
+            // checking the linked request budget before adapting that outcome.
+            linked.Token.ThrowIfCancellationRequested();
             await progress.ReportAsync(context, command, McpProgressReporter.Finished, linked.Token);
             return McpResultAdapter.Adapt(outcome, command, budget);
         }

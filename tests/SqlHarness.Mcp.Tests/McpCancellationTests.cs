@@ -154,23 +154,24 @@ public sealed class McpCancellationTests
                 ["scope-a"] = new("server-a.invalid", "database-a", new Dictionary<string, string> { ["tenant"] = "^a$" }, "integrated"),
                 ["scope-b"] = new("server-b.invalid", "database-b", new Dictionary<string, string> { ["tenant"] = "^b$" }, "integrated"),
             });
-        var module = new DisposableBlockingModule();
-        var handlers = new McpRequestToolHandlers(process, moduleFactory: _ => module);
+        var sessions = new CoreSessionFactory(blockFirstSession: true);
+        var handlers = new McpRequestToolHandlers(process, moduleFactory: scope =>
+            new SqlHarnessModule(sessions, new GainStore(), scope.ProfileProvider));
         using var cancelA = new CancellationTokenSource(Budget);
 
         var a = handlers.QueryAsync(null!, new McpRequestScopeArgument("scope-a", new() { ["tenant"] = "a" }), "SELECT 1", ct: cancelA.Token);
-        await module.Entered.Task.WaitAsync(Budget);
+        await sessions.FirstExecuteEntered.Task.WaitAsync(Budget);
         await cancelA.CancelAsync();
 
         AssertCancelled(await a.WaitAsync(Budget), "sqlharness_query");
-        await module.Disposed.Task.WaitAsync(Budget);
+        await sessions.FirstSessionDisposed.Task.WaitAsync(Budget);
         Assert.True(process.Gate.TryEnterDb());
         process.Gate.ExitDb();
 
         var b = await handlers.QueryAsync(null!, new McpRequestScopeArgument("scope-b", new() { ["tenant"] = "b" }), "SELECT 2");
         Assert.False(b.IsError == true, Text(b));
-        Assert.Equal(["scope-a", "scope-b"], module.Targets.Select(target => target.Profile));
-        Assert.Equal(["database-a", "database-b"], module.Targets.Select(target => TargetResolver.Resolve(target, process.Profiles).Database));
+        Assert.Equal(2, sessions.ConnectedSessions);
+        Assert.Equal(["database-a", "database-b"], sessions.Targets.Select(target => target.Database));
     }
 
     [Fact]
@@ -187,49 +188,71 @@ public sealed class McpCancellationTests
             {
                 ["scope-a"] = new("server-a.invalid", "database-a", new Dictionary<string, string> { ["tenant"] = "^a$" }, "integrated"),
             });
-        var module = new DisposableBlockingModule();
-        var handlers = new McpRequestToolHandlers(process, moduleFactory: _ => module);
+        var sessions = new CoreSessionFactory(blockFirstSession: true);
+        var handlers = new McpRequestToolHandlers(process, moduleFactory: scope =>
+            new SqlHarnessModule(sessions, new GainStore(), scope.ProfileProvider));
         using var guard = new CancellationTokenSource(Budget);
 
         var result = await handlers.QueryAsync(
             null!, new McpRequestScopeArgument("scope-a", new() { ["tenant"] = "a" }), "SELECT 1", ct: guard.Token);
 
         AssertCancelled(result, "sqlharness_query");
-        await module.Entered.Task.WaitAsync(Budget);
-        await module.Disposed.Task.WaitAsync(Budget);
+        await sessions.FirstExecuteEntered.Task.WaitAsync(Budget);
+        await sessions.FirstSessionDisposed.Task.WaitAsync(Budget);
     }
 
-    private sealed class DisposableBlockingModule : ISqlHarnessModule
+    private sealed class CoreSessionFactory(bool blockFirstSession) : ISqlSessionFactory
     {
-        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public TaskCompletionSource Disposed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public List<SqlTargetRequest> Targets { get; } = [];
+        private int _connectedSessions;
+        public int ConnectedSessions => Volatile.Read(ref _connectedSessions);
+        public List<ResolvedTarget> Targets { get; } = [];
+        public TaskCompletionSource FirstExecuteEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource FirstSessionDisposed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public async Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default)
+        public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
         {
-            var request = operation switch
+            ct.ThrowIfCancellationRequested();
+            var number = Interlocked.Increment(ref _connectedSessions);
+            lock (Targets) Targets.Add(target);
+            return Task.FromResult<ISqlSession>(new CoreSession(target, number == 1 && blockFirstSession, FirstExecuteEntered, () =>
             {
-                SqlHarnessQueryOperation query => query.Target,
-                _ => throw new InvalidOperationException("Expected a scoped query operation."),
-            };
-            lock (Targets) Targets.Add(request);
-            await using var session = new DisposableSession(Disposed);
-            if (Targets.Count == 1)
+                if (number == 1) FirstSessionDisposed.TrySetResult();
+            }));
+        }
+    }
+
+    private sealed class CoreSession(
+        ResolvedTarget target,
+        bool block,
+        TaskCompletionSource readEntered,
+        Action disposed) : ISqlSession
+    {
+        public IReadOnlyList<string> Messages => [];
+        public SqlHarnessTargetIdentityReport Identity { get; set; } = new(target.Server, target.Database, target.Server, target.Database, "profile");
+        public async Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
+        {
+            if (block)
             {
-                Entered.TrySetResult();
+                readEntered.TrySetResult();
                 await Task.Delay(Timeout.Infinite, ct);
             }
-            return new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null);
+            ct.ThrowIfCancellationRequested();
+            return new CoreReader();
         }
+        public ValueTask DisposeAsync() { disposed(); return ValueTask.CompletedTask; }
     }
 
-    private sealed class DisposableSession(TaskCompletionSource disposed) : IAsyncDisposable
+    private sealed class CoreReader : ISqlReader
     {
-        public ValueTask DisposeAsync()
-        {
-            disposed.TrySetResult();
-            return ValueTask.CompletedTask;
-        }
+        public int FieldCount => 0;
+        public int RecordsAffected => 0;
+        public string GetName(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public Type GetFieldType(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public bool GetAllowNull(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public object GetValue(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public Task<bool> ReadAsync(CancellationToken ct) { ct.ThrowIfCancellationRequested(); return Task.FromResult(false); }
+        public Task<bool> NextResultAsync(CancellationToken ct) { ct.ThrowIfCancellationRequested(); return Task.FromResult(false); }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     [Fact]

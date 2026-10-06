@@ -150,13 +150,8 @@ public sealed class McpRequestScopeIsolationTests : IDisposable
                     InputRoots = [inputRoot],
                 },
                 () => Profiles);
-            var module = new RecordingModule();
-            var owners = new List<ArtifactOwner>();
             var handlers = new McpRequestToolHandlers(process, moduleFactory: scope =>
-            {
-                owners.Add(scope.Owner);
-                return module;
-            });
+                new SqlHarnessModule(new EmptySessionFactory(), new GainStore(), scope.ProfileProvider));
 
             var matrix = await handlers.CompareAsync(
                 null!, new McpSqlSourceArgument { Sql = "SELECT @n" }, new McpSqlSourceArgument { Sql = "SELECT @n" },
@@ -167,23 +162,65 @@ public sealed class McpRequestScopeIsolationTests : IDisposable
 
             Assert.False(matrix.IsError == true, Text(matrix));
             Assert.False(parameterSets.IsError == true, Text(parameterSets));
-            var matrixOperation = Assert.IsType<SqlHarnessCompareMatrixOperation>(module.Operations[0]);
-            var setOperation = Assert.IsType<SqlHarnessMeasureOperation>(module.Operations[1]);
-            Assert.Equal("sample-a", matrixOperation.Target.Profile);
-            Assert.Equal("sample-b", setOperation.Target.Profile);
-            Assert.Equal("server-a", owners[0].Server);
-            Assert.Equal("database-a", owners[0].Database);
-            Assert.Equal("server-b", owners[1].Server);
-            Assert.Equal("database-b", owners[1].Database);
-            var resolvedA = TargetResolver.Resolve(matrixOperation.Target, process.Profiles);
-            var resolvedB = TargetResolver.Resolve(setOperation.Target, process.Profiles);
-            Assert.True(owners[0].Matches(ArtifactOwner.From(matrixOperation.Target, resolvedA)));
-            Assert.True(owners[1].Matches(ArtifactOwner.From(setOperation.Target, resolvedB)));
+            var manifests = Directory.GetFiles(SqlHarnessPaths.CompareDir, "manifest.json", SearchOption.AllDirectories)
+                .Select(path => (Path: path, Owner: JsonDocument.Parse(File.ReadAllText(path)).RootElement.TryGetProperty("owner", out var owner)
+                    ? owner.Deserialize<ArtifactOwner>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                    : null))
+                .ToArray();
+            var matrixManifests = manifests.Where(item => item.Owner?.Profile == "sample-a").ToArray();
+            var setManifest = Assert.Single(manifests, item => item.Owner?.Profile == "sample-b");
+            Assert.Equal(2, matrixManifests.Length);
+            var expectedA = process.ResolveScope(new McpRequestScope("sample-a", new Dictionary<string, string> { ["tenant"] = "example" })).Owner;
+            var expectedB = process.ResolveScope(new McpRequestScope("sample-b", new Dictionary<string, string> { ["tenant"] = "example" })).Owner;
+            Assert.All(matrixManifests, item => Assert.True(expectedA.Matches(item.Owner)));
+            Assert.True(expectedB.Matches(setManifest.Owner));
+
+            // The writer-produced artifact is readable by its request owner
+            // and denied when the other request scope presents the same ID.
+            var setId = Path.GetFileName(Path.GetDirectoryName(setManifest.Path))!;
+            var ownRead = await handlers.ArtifactAsync(null!, setId, "summary", Scope("sample-b"));
+            var foreignRead = await handlers.ArtifactAsync(null!, setId, "summary", Scope("sample-a"));
+            Assert.False(ownRead.IsError == true, Text(ownRead));
+            Assert.True(foreignRead.IsError == true, Text(foreignRead));
         }
         finally
         {
             Directory.Delete(inputRoot, recursive: true);
         }
+    }
+
+    private sealed class EmptySessionFactory : ISqlSessionFactory
+    {
+        public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult<ISqlSession>(new EmptySession(target));
+        }
+    }
+
+    private sealed class EmptySession(ResolvedTarget target) : ISqlSession
+    {
+        public IReadOnlyList<string> Messages => [];
+        public SqlHarnessTargetIdentityReport Identity { get; set; } = new(target.Server, target.Database, target.Server, target.Database, "profile");
+        public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult<ISqlReader>(new EmptyReader());
+        }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class EmptyReader : ISqlReader
+    {
+        public int FieldCount => 0;
+        public int RecordsAffected => 0;
+        public string GetName(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public Type GetFieldType(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public bool GetAllowNull(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public object GetValue(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public Task<bool> ReadAsync(CancellationToken ct) { ct.ThrowIfCancellationRequested(); return Task.FromResult(false); }
+        public Task<bool> NextResultAsync(CancellationToken ct) { ct.ThrowIfCancellationRequested(); return Task.FromResult(false); }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     [Fact]
