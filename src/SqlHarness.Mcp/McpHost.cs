@@ -90,6 +90,20 @@ public static class McpHost
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct, eofShutdown.Token);
         using var eofInput = new EofShutdownInput(input, eofShutdown);
         using var guardedInput = process.RequestScope ? new McpDuplicateJsonFieldGuardInput(eofInput) : null;
+        // Activity journal: content-free stderr diagnostics only; stdout stays protocol-only.
+        var config = SqlHarnessConfigLoader.Load();
+        if (config.Warning is not null)
+            log.WriteLine(config.Warning);
+        var journal = new Lazy<IActivityJournal>(
+            () => ActivityJournal.Open(config.Config.Journal, log),
+            LazyThreadSafetyMode.ExecutionAndPublication);
+        var sessionKey = "mcp:" + Guid.NewGuid().ToString("N");
+        var mcpMode = process.RequestScope ? "request" : "fixed";
+        ModelContextProtocol.Server.McpServer? running = null;
+        process.DecorateModules(module => new JournalingModule(
+            module,
+            () => journal.Value,
+            () => SessionIdentities.Mcp(ProcessInfo.Current, sessionKey, running?.ClientInfo?.Name, running?.ClientInfo?.Version, mcpMode)));
         Tools.McpToolCatalog.Wire(serverOptions, process, hostShutdown: lifetime.Token);
 
         try
@@ -100,6 +114,7 @@ public static class McpHost
                 serverOptions,
                 loggerFactory,
                 serviceProvider: null);
+            running = server;
             await server.RunAsync(lifetime.Token);
             return (int)SqlHarnessExitCode.Success;
         }

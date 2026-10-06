@@ -20,7 +20,7 @@ public sealed class McpRequestToolHandlers(
 {
     private static readonly JsonSerializerOptions ScopeJsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IMcpClock _clock = clock ?? SystemMcpClock.Instance;
-    private readonly Func<McpScope, ISqlHarnessModule> _moduleFactory = moduleFactory ?? (scope => scope.CreateModule());
+    private readonly Func<McpScope, ISqlHarnessModule> _moduleFactory = moduleFactory ?? (scope => process.Decorate(scope.CreateModule()));
 
     public Task<CallToolResult> CapabilitiesAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Include local counts and existence flags. Never secrets, paths, or profile lists.")] bool includeDiagnostics = false,
