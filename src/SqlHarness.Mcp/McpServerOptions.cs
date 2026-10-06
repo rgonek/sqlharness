@@ -7,6 +7,12 @@ namespace SqlHarness.Mcp;
 /// </summary>
 public sealed class McpServerOptions
 {
+    /// <summary>Resolve a target from each target-dependent tool request.</summary>
+    public bool RequestScope { get; init; }
+
+    /// <summary>Profiles permitted for request-scoped mode.</summary>
+    public IReadOnlyList<string> AllowedProfiles { get; init; } = [];
+
     /// <summary>Closed target profile selected by the operator at startup.</summary>
     public string Profile { get; init; } = string.Empty;
 

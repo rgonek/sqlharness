@@ -273,4 +273,33 @@ public sealed class McpStartupTests
         Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
         Assert.Equal(string.Empty, output.ToString());
     }
+
+    [Fact]
+    public async Task Serve_rejects_incompatible_or_missing_scope_mode_options()
+    {
+        string[][] invalidArgs =
+        [
+            ["--request-scope"],
+            ["--request-scope", "--allow-profile", "sample-a", "sample-a"],
+            ["--allow-profile", "sample-a"],
+            ["sample-a", "--request-scope", "--allow-profile", "sample-a"],
+        ];
+        foreach (var args in invalidArgs)
+        {
+            var output = new StringWriter();
+            var error = new StringWriter();
+            var app = SqlHarnessCli.Create(
+                new SqlHarnessModule(),
+                output,
+                new StringReader(""),
+                stdinRedirected: false,
+                mcpError: error);
+
+            var exit = await app.RunAsync(["mcp", "serve", .. args]);
+
+            Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+            Assert.Equal(string.Empty, output.ToString());
+            Assert.DoesNotContain("sample-a", error.ToString(), StringComparison.Ordinal);
+        }
+    }
 }

@@ -26,9 +26,17 @@ public sealed class McpServeCommand(McpHostConsole console) : AsyncCommand<McpSe
 {
     public sealed class Settings : CommandSettings
     {
-        [CommandArgument(0, "<profile>")]
+        [CommandArgument(0, "[<profile>]")]
         [Description("Closed target profile frozen for this server process.")]
         public string? Profile { get; set; }
+
+        [CommandOption("--request-scope")]
+        [Description("Resolve a closed target profile from each target-dependent request.")]
+        public bool RequestScope { get; set; }
+
+        [CommandOption("--allow-profile <PROFILE>")]
+        [Description("Profile permitted for request-scoped mode. Required and repeatable with --request-scope.")]
+        public string[] AllowedProfiles { get; set; } = [];
 
         [CommandOption("--var <KEY=VALUE>")]
         [Description("Profile variable fixed at startup.")]
@@ -55,8 +63,23 @@ public sealed class McpServeCommand(McpHostConsole console) : AsyncCommand<McpSe
     {
         if (settings.UnsafeDirect)
             return Task.FromResult(Fail("The MCP server does not support --unsafe-direct."));
-        if (string.IsNullOrWhiteSpace(settings.Profile))
+        if (settings.RequestScope)
+        {
+            if (!string.IsNullOrWhiteSpace(settings.Profile) || settings.Vars.Length != 0)
+                return Task.FromResult(Fail("Request-scoped mode cannot include a startup profile or --var."));
+            if (settings.AllowedProfiles.Length == 0 || settings.AllowedProfiles.Any(string.IsNullOrWhiteSpace))
+                return Task.FromResult(Fail("Request-scoped mode requires at least one --allow-profile."));
+            if (settings.AllowedProfiles.Distinct(StringComparer.OrdinalIgnoreCase).Count() != settings.AllowedProfiles.Length)
+                return Task.FromResult(Fail("Each --allow-profile value must be unique."));
+        }
+        else if (settings.AllowedProfiles.Length != 0)
+        {
+            return Task.FromResult(Fail("--allow-profile requires --request-scope."));
+        }
+        else if (string.IsNullOrWhiteSpace(settings.Profile))
+        {
             return Task.FromResult(Fail("The MCP server requires a closed profile."));
+        }
 
         var vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in settings.Vars)
@@ -79,7 +102,9 @@ public sealed class McpServeCommand(McpHostConsole console) : AsyncCommand<McpSe
 
         var options = new SqlHarness.Mcp.McpServerOptions
         {
-            Profile = settings.Profile,
+            RequestScope = settings.RequestScope,
+            AllowedProfiles = settings.AllowedProfiles,
+            Profile = settings.Profile ?? string.Empty,
             Vars = vars,
             InputRoots = settings.InputRoots,
             MaxResultBytes = settings.MaxResultBytes,

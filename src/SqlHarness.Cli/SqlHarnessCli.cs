@@ -61,7 +61,7 @@ public static class SqlHarnessCli
             c.AddBranch("mcp", mcp =>
             {
                 mcp.SetDescription("Model Context Protocol adapter.");
-                mcp.AddCommand<McpServeCommand>("serve").WithDescription("Serve a profile-scoped MCP server over stdio.");
+                mcp.AddCommand<McpServeCommand>("serve").WithDescription("Serve a fixed-profile or request-scoped MCP server over stdio.");
             });
         });
         return new SqlHarnessApp(app, outputContext);

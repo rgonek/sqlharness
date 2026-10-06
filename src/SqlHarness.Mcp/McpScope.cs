@@ -1,3 +1,5 @@
+using System.Collections.ObjectModel;
+
 using SqlHarness.Core;
 using SqlHarness.Core.Targets;
 
@@ -11,10 +13,9 @@ public sealed class McpStartupException(string message, Exception? innerExceptio
     : Exception(message, innerException);
 
 /// <summary>
-/// Immutable startup scope for one MCP server process. The profile set is
-/// read exactly once and the target is resolved once; later profile-file
-/// edits cannot redirect subsequent calls (spec section 3). There is no
-/// reload or switch-target surface: a new target requires a process restart.
+/// Immutable target scope for one MCP call. Fixed-mode scopes are resolved
+/// at startup; request-mode scopes are resolved against the process snapshot
+/// for each call. Neither retains caller-mutable profile or var dictionaries.
 /// </summary>
 public sealed class McpScope
 {
@@ -36,10 +37,10 @@ public sealed class McpScope
         MaxOperationSeconds = maxOperationSeconds;
     }
 
-    /// <summary>Target request as approved at startup.</summary>
+    /// <summary>Closed-profile request resolved for this call.</summary>
     public SqlTargetRequest TargetRequest { get; }
 
-    /// <summary>Target resolved once at startup and never re-resolved.</summary>
+    /// <summary>Target resolved for this immutable call scope.</summary>
     public ResolvedTarget ResolvedTarget { get; }
 
     /// <summary>Artifact owner stamped by live publishes and enforced on MCP artifact reads.</summary>
@@ -61,7 +62,7 @@ public sealed class McpScope
     /// </summary>
     public int MaxOperationSeconds { get; }
 
-    /// <summary>Frozen profile snapshot shared by every call in this process.</summary>
+    /// <summary>Frozen profile snapshot used to resolve this scope.</summary>
     public IReadOnlyDictionary<string, TargetProfile> Profiles { get; }
 
     /// <summary>
@@ -115,14 +116,8 @@ public sealed class McpScope
         if (string.IsNullOrWhiteSpace(options.Profile))
             throw new McpStartupException("The MCP startup profile is invalid.");
 
-        var roots = ValidateInputRoots(options.InputRoots);
-
-        if (options.MaxResultBytes < McpLimits.MinCallToolResultBudgetBytes ||
-            options.MaxResultBytes > McpLimits.MaxCallToolResultBudgetBytes)
-            throw new McpStartupException("The MCP result budget is invalid.");
-        if (options.MaxOperationSeconds < McpLimits.MinOperationSeconds ||
-            options.MaxOperationSeconds > McpLimits.MaxOperationSeconds)
-            throw new McpStartupException("The MCP operation budget is invalid.");
+        var roots = ValidateOptions(options);
+        var frozenProfiles = FreezeProfiles(snapshot);
 
         var vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (options.Vars is not null)
@@ -139,14 +134,80 @@ public sealed class McpScope
         ResolvedTarget resolved;
         try
         {
-            resolved = TargetResolver.Resolve(request, snapshot);
+            resolved = TargetResolver.Resolve(request, frozenProfiles);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             throw new McpStartupException("The MCP profile or variables are invalid.", exception);
         }
 
-        return new McpScope(request, resolved, ArtifactOwner.From(request, resolved), roots, snapshot, options.MaxResultBytes, options.MaxOperationSeconds);
+        return CreateResolved(request, resolved, roots, frozenProfiles, options.MaxResultBytes, options.MaxOperationSeconds);
+    }
+
+    internal static McpScope CreateResolved(
+        SqlTargetRequest request,
+        ResolvedTarget resolved,
+        IReadOnlyList<string> roots,
+        IReadOnlyDictionary<string, TargetProfile> profiles,
+        int maxResultBytes,
+        int maxOperationSeconds)
+    {
+        var frozenVars = new ReadOnlyDictionary<string, string>(
+            request.Vars.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase));
+        var frozenRequest = request with { Vars = frozenVars };
+        return new McpScope(
+            frozenRequest,
+            resolved,
+            ArtifactOwner.From(frozenRequest, resolved),
+            Array.AsReadOnly(roots.ToArray()),
+            profiles,
+            maxResultBytes,
+            maxOperationSeconds);
+    }
+
+    internal static IReadOnlyList<string> ValidateOptions(McpServerOptions options)
+    {
+        var roots = ValidateInputRoots(options.InputRoots);
+        if (options.MaxResultBytes < McpLimits.MinCallToolResultBudgetBytes ||
+            options.MaxResultBytes > McpLimits.MaxCallToolResultBudgetBytes)
+            throw new McpStartupException("The MCP result budget is invalid.");
+        if (options.MaxOperationSeconds < McpLimits.MinOperationSeconds ||
+            options.MaxOperationSeconds > McpLimits.MaxOperationSeconds)
+            throw new McpStartupException("The MCP operation budget is invalid.");
+        return Array.AsReadOnly(roots.ToArray());
+    }
+
+    internal static IReadOnlyDictionary<string, TargetProfile> FreezeProfiles(
+        IReadOnlyDictionary<string, TargetProfile> profiles)
+    {
+        try
+        {
+            var copy = new Dictionary<string, TargetProfile>(StringComparer.Ordinal);
+            foreach (var (name, profile) in profiles)
+            {
+                if (string.IsNullOrWhiteSpace(name) || profile is null || profile.Vars is null)
+                    throw new McpStartupException("The MCP profile data is invalid.");
+                var vars = new Dictionary<string, string>(StringComparer.Ordinal);
+                var variableNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var (key, value) in profile.Vars)
+                {
+                    if (string.IsNullOrWhiteSpace(key) || value is null ||
+                        !variableNames.Add(key) || !vars.TryAdd(key, value))
+                        throw new McpStartupException("The MCP profile data is invalid.");
+                }
+                if (!copy.TryAdd(name, profile with { Vars = new ReadOnlyDictionary<string, string>(vars) }))
+                    throw new McpStartupException("The MCP profile data is invalid.");
+            }
+            return new ReadOnlyDictionary<string, TargetProfile>(copy);
+        }
+        catch (McpStartupException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            throw new McpStartupException("The MCP profile data is invalid.", exception);
+        }
     }
 
     private static IReadOnlyList<string> ValidateInputRoots(IReadOnlyList<string>? roots)
