@@ -107,6 +107,7 @@ public sealed class JournalGainStoreTests
             Assert.Equal((400L, 3L, 40L, 1L), ((long)row["raw_bytes"]!, (long)row["raw_lines"]!, (long)row["emitted_bytes"]!, (long)row["emitted_lines"]!));
         }
     }
+
     [Theory]
     [InlineData("")]
     [InlineData("v2")]

@@ -288,7 +288,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
     private async Task<SqlHarnessOutcome> ExecuteCompareAsync(SqlHarnessCompareOperation compare, CancellationToken ct)
     {
-        var stopwatch = Stopwatch.StartNew();
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
         var knownSecrets = new List<string> { compare.BaselineSql, compare.CandidateSql };
@@ -381,7 +380,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         SqlHarnessCompareMatrixOperation operation,
         CancellationToken ct)
     {
-        var stopwatch = Stopwatch.StartNew();
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
         var knownSecrets = new List<string> { operation.BaselineSql, operation.CandidateSql, operation.Matrix };
@@ -541,7 +539,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
     private async Task<SqlHarnessOutcome> ExecuteMeasureAsync(SqlHarnessMeasureOperation measure, CancellationToken ct)
     {
-        var stopwatch = Stopwatch.StartNew();
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
         CanonicalResultAccumulator? raw = null;
@@ -759,7 +756,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
     private async Task<SqlHarnessOutcome> ExecuteSchemaAsync(SqlHarnessSchemaOperation schema, CancellationToken ct)
     {
-        var stopwatch = Stopwatch.StartNew(); var phase = OperationPhase.Validation; var raw = new OutputFootprint(0, 0);
+        var phase = OperationPhase.Validation; var raw = new OutputFootprint(0, 0);
         var knownSecrets = new List<string>();
         if (schema.Filter is not null) knownSecrets.Add(schema.Filter);
         if (schema.Object is not null) knownSecrets.Add(schema.Object);
@@ -794,7 +791,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
     private async Task<SqlHarnessOutcome> ExecuteWatchAsync(SqlHarnessWatchOperation watch, CancellationToken ct)
     {
-        var stopwatch = Stopwatch.StartNew();
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
         var knownSecrets = new List<string> { watch.Sql };
@@ -870,7 +866,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         ArgumentNullException.ThrowIfNull(watch);
         ArgumentNullException.ThrowIfNull(writer);
 
-        var stopwatch = Stopwatch.StartNew();
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
         var knownSecrets = new List<string> { watch.Sql };
@@ -980,7 +975,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
     private async Task<SqlHarnessOutcome> ExecuteSnapshotAsync(SqlHarnessSnapshotOperation snapshot, CancellationToken ct)
     {
-        var stopwatch = Stopwatch.StartNew();
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
         var knownSecrets = new List<string> { snapshot.Sql };
@@ -1095,7 +1089,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
     private async Task<SqlHarnessOutcome> ExecuteCountsAsync(SqlHarnessCountsOperation counts, CancellationToken ct)
     {
-        var stopwatch = Stopwatch.StartNew();
         var phase = OperationPhase.Validation;
         var raw = new OutputFootprint(0, 0);
         var knownSecrets = new List<string>(CollectTargetSecrets(counts.Target));
@@ -1173,7 +1166,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
     private async Task<SqlHarnessOutcome> ExecuteSpaceAsync(SqlHarnessSpaceOperation space, CancellationToken ct)
     {
-        var stopwatch = Stopwatch.StartNew();
         var phase = OperationPhase.Validation;
         var raw = new OutputFootprint(0, 0);
         var knownSecrets = new List<string>(CollectTargetSecrets(space.Target));
@@ -1229,7 +1221,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         SqlHarnessQueryStoreTopOperation operation,
         CancellationToken ct)
     {
-        var stopwatch = Stopwatch.StartNew();
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
         var knownSecrets = new List<string>(CollectTargetSecrets(operation.Target))
@@ -1299,7 +1290,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         SqlHarnessIndexesOperation operation,
         CancellationToken ct)
     {
-        var stopwatch = Stopwatch.StartNew();
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
         var knownSecrets = new List<string>(CollectTargetSecrets(operation.Target))
@@ -1467,7 +1457,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
     private SqlHarnessOutcome ExecutePlan(SqlHarnessPlanOperation operation)
     {
-        var stopwatch = Stopwatch.StartNew();
         var raw = operation.RawFootprint;
         try
         {
