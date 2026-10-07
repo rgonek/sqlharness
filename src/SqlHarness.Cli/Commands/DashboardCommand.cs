@@ -40,17 +40,24 @@ public sealed class DashboardCommand : AsyncCommand<DashboardCommand.Settings>
         Console.CancelKeyPress += onCancel;
         try
         {
+            var config = SqlHarnessConfigLoader.Load();
+            // Background mode writes nothing: the autostart launcher closes the standard streams.
+            var quiet = settings.Background;
             return await DashboardHost.RunAsync(
                 new DashboardHostOptions(
                     SqlHarnessPaths.Home,
                     SqlHarnessPaths.ActivityDatabase,
-                    SqlHarnessConfigLoader.Load(),
+                    config,
                     OpenBrowser: !settings.NoOpen && !settings.Background,
-                    Quiet: settings.Background,
-                    Console.Out,
-                    Console.Error,
+                    Quiet: quiet,
+                    quiet ? TextWriter.Null : Console.Out,
+                    quiet ? TextWriter.Null : Console.Error,
                     ProcessInfo.Current,
-                    new SystemBrowserLauncher()),
+                    new SystemBrowserLauncher())
+                {
+                    // Only the autostarted instance idle-exits; a dashboard started by hand runs until Ctrl+C.
+                    IdleShutdown = settings.Background ? TimeSpan.FromHours(config.Config.Dashboard.IdleShutdownHours) : null,
+                },
                 stop.Token);
         }
         finally

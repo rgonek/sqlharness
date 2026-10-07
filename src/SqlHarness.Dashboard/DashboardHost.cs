@@ -24,6 +24,19 @@ public sealed record DashboardHostOptions(
 
     /// <summary>Test hook invoked once the server is listening and published.</summary>
     public Action<RunningDashboard>? Started { get; init; }
+
+    /// <summary>Exit after this long without journal writes, requests or open live streams; null never (foreground).</summary>
+    public TimeSpan? IdleShutdown { get; init; }
+
+    public TimeSpan HousekeepingInterval { get; init; } = TimeSpan.FromMinutes(1);
+
+    public TimeSpan RetentionInterval { get; init; } = TimeSpan.FromHours(1);
+
+    /// <summary>Clock for retention ages, idle decisions and housekeeping delays.</summary>
+    public TimeProvider Time { get; init; } = TimeProvider.System;
+
+    /// <summary>Test hook invoked after each housekeeping pass that did not end the dashboard.</summary>
+    internal Action? Housekept { get; init; }
 }
 
 /// <summary>
@@ -117,6 +130,7 @@ public static class DashboardHost
             return (int)SqlHarnessExitCode.LocalStorage;
         }
 
+        var activity = new DashboardActivity(options.Time);
         RunningDashboard running;
         try
         {
@@ -124,6 +138,7 @@ public static class DashboardHost
                 new DashboardServerOptions(options.DatabasePath, options.PortOverride ?? options.Config.Config.Dashboard.Port, options.Processes)
                 {
                     LivePollInterval = options.LivePollInterval,
+                    Activity = activity,
                 },
                 ct);
         }
@@ -155,7 +170,7 @@ public static class DashboardHost
                 using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct, running.Stopping);
                 try
                 {
-                    await Task.Delay(Timeout.Infinite, stop.Token);
+                    await HousekeepAsync(options, reader, activity, stop.Token);
                 }
                 catch (OperationCanceledException)
                 {
@@ -169,6 +184,69 @@ public static class DashboardHost
         }
 
         return (int)SqlHarnessExitCode.Success;
+    }
+
+    /// <summary>
+    /// Runs retention at start and every RetentionInterval, and in background mode returns
+    /// once nothing happened for IdleShutdown: no journal commit (PRAGMA data_version on a
+    /// held read-only connection), no authenticated request, and no open live stream.
+    /// </summary>
+    private static async Task HousekeepAsync(DashboardHostOptions options, JournalReader reader, DashboardActivity activity, CancellationToken ct)
+    {
+        var journal = options.Config.Config.Journal;
+        DateTimeOffset? lastRetention = null;
+        var lastJournalChange = options.Time.GetUtcNow();
+        long? lastVersion = null;
+        SqliteConnection? watch = null;
+        try
+        {
+            while (true)
+            {
+                var now = options.Time.GetUtcNow();
+                if (journal.Enabled && journal.Retention.Enabled
+                    && (lastRetention is not { } last || now - last >= options.RetentionInterval))
+                {
+                    lastRetention = now;
+                    // Never throws; a failed pass is retried at the next interval.
+                    await Task.Run(() => JournalRetention.Run(options.DatabasePath, journal, options.Processes, options.Time), ct);
+                }
+
+                try
+                {
+                    watch ??= reader.OpenReadOnly();
+                    if (watch is not null)
+                    {
+                        using var command = watch.CreateCommand();
+                        command.CommandText = "PRAGMA data_version;";
+                        var version = (long)command.ExecuteScalar()!;
+                        if (lastVersion is not null && version != lastVersion)
+                            lastJournalChange = now;
+                        lastVersion = version;
+                    }
+                }
+                catch (SqliteException)
+                {
+                    // An unreadable journal is no activity; reopen on the next pass.
+                    watch?.Dispose();
+                    watch = null;
+                    lastVersion = null;
+                }
+
+                if (options.IdleShutdown is { } idle && activity.OpenStreams == 0)
+                {
+                    var lastActivity = lastJournalChange > activity.LastRequest ? lastJournalChange : activity.LastRequest;
+                    if (now - lastActivity >= idle)
+                        return;
+                }
+
+                options.Housekept?.Invoke();
+                await Task.Delay(options.HousekeepingInterval, options.Time, ct);
+            }
+        }
+        finally
+        {
+            watch?.Dispose();
+        }
     }
 
     private static void Announce(DashboardHostOptions options, Uri uri)
