@@ -11,6 +11,10 @@
     {
       "files": ["src/components/ui/**/*.{ts,tsx}"],
       "rules": { "react/only-export-components": "off" }
+    },
+    {
+      "files": ["src/main.tsx"],
+      "rules": { "react/only-export-components": "off" }
     }
   ]
 }

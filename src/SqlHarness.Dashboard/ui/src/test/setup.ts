@@ -22,4 +22,7 @@ window.matchMedia ??= ((query: string) => ({
   dispatchEvent: () => false,
 })) as typeof window.matchMedia
 
+// TanStack Router restores scroll on navigation; jsdom logs "Not implemented" for scrollTo.
+window.scrollTo = (() => {}) as typeof window.scrollTo
+
 afterEach(() => cleanup())
