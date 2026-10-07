@@ -23,7 +23,7 @@ public sealed class ActivityJournalBenchmarkTests
         ]);
 
     [Fact]
-    public void Version_1_database_migrates_to_version_2_and_keeps_rows()
+    public void Version_1_database_migrates_to_the_current_version_and_keeps_rows()
     {
         using var temp = new JournalTempDirectory();
         Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
@@ -44,6 +44,7 @@ public sealed class ActivityJournalBenchmarkTests
         Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
         Assert.Single(JournalDb.Rows(temp.DatabasePath, "SELECT id FROM sessions WHERE session_key = 'cli:old'"));
         Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT id FROM operation_metrics"));
+        Assert.Contains("raw_bytes", JournalDb.Rows(temp.DatabasePath, "SELECT name FROM pragma_table_info('operations')").Select(r => (string)r["name"]!));
     }
 
     [Fact]
