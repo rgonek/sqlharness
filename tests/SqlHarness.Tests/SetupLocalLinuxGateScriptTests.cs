@@ -105,4 +105,17 @@ public sealed class SetupLocalLinuxGateScriptTests
         Assert.DoesNotContain("sudo apt-get", script, StringComparison.Ordinal);
         Assert.Contains("sudo -n apt-get", script, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Setup_script_provisions_the_node_version_pinned_by_nvmrc_with_a_verified_checksum()
+    {
+        var script = Script();
+
+        Assert.Contains(".nvmrc", script, StringComparison.Ordinal);
+        Assert.Contains("https://nodejs.org/dist/v$node_version/", script, StringComparison.Ordinal);
+        Assert.Contains("SHASUMS256.txt", script, StringComparison.Ordinal);
+        Assert.Contains("sha256sum -c", script, StringComparison.Ordinal);
+        Assert.Contains("$HOME/.node/current", script, StringComparison.Ordinal);
+        Assert.Contains("xz-utils", script, StringComparison.Ordinal);
+    }
 }

@@ -242,6 +242,50 @@ public sealed class GateParityTests
         Assert.Equal("dotnet format SqlHarness.sln --no-restore --verify-no-changes", StageCommand(linux, "format"));
     }
 
+    private static readonly string[] UiCommands =
+    [
+        "npm ci --prefix src/SqlHarness.Dashboard/ui",
+        "npm run check --prefix src/SqlHarness.Dashboard/ui",
+    ];
+
+    [Theory]
+    [InlineData("scripts/verify.ps1")]
+    [InlineData("scripts/verify-linux.ps1")]
+    [InlineData(".github/workflows/ci.yml")]
+    public void Every_gate_installs_and_checks_the_ui_before_restore(string path)
+    {
+        var content = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
+        var restore = content.IndexOf("dotnet restore", StringComparison.Ordinal);
+
+        Assert.True(restore > 0, "the gate must restore");
+        foreach (var command in UiCommands)
+        {
+            var index = content.IndexOf(command, StringComparison.Ordinal);
+            Assert.True(index >= 0, $"{path} must run '{command}'");
+            Assert.True(index < restore, $"{path} must run '{command}' before dotnet restore");
+        }
+    }
+
+    [Fact]
+    public void Ci_and_release_take_node_from_nvmrc()
+    {
+        foreach (var path in new[] { ".github/workflows/ci.yml", ".github/workflows/release.yml" })
+        {
+            var content = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
+            Assert.Contains("actions/setup-node@", content, StringComparison.Ordinal);
+            Assert.Contains("node-version-file: .nvmrc", content, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void Linux_gate_puts_the_provisioned_node_first_and_checks_its_version()
+    {
+        var content = File.ReadAllText(RepositoryFile.Locate("scripts", "verify-linux.ps1"));
+
+        Assert.Contains("$HOME/.node/current/bin", content, StringComparison.Ordinal);
+        Assert.Contains("cat .nvmrc", content, StringComparison.Ordinal);
+    }
+
     private const string VerbGroup = @"(?<verb>restore|build|test|format)";
     private const string Body = @"(?:[^""'\}\r\n]|""[^""]*""|'[^']*')*";
     private const string LinuxBody = @"(?:[^""'\r\n]|""[^""]*"")*";

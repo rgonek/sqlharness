@@ -12,6 +12,13 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: src/SqlHarness.Dashboard/ui/package-lock.json
+      - run: npm ci --prefix src/SqlHarness.Dashboard/ui
+      - run: npm run check --prefix src/SqlHarness.Dashboard/ui
       - run: dotnet restore
       - run: dotnet build --no-restore -warnaserror
       - run: dotnet test --no-build
