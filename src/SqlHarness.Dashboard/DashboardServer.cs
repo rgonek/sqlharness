@@ -167,8 +167,9 @@ public static partial class DashboardServer
         });
         MapRead(api, "/{**rest}", () => Results.NotFound());
 
-        MapRead(app, "/", () => Index());
-        MapRead(app, "/{**path}", () => Index());
+        var assets = DashboardAssets.Default;
+        MapRead(app, "/", () => assets.Index());
+        MapRead(app, "/{**path}", (string? path) => assets.Resolve(path));
         return app;
     }
 
@@ -211,14 +212,6 @@ public static partial class DashboardServer
             ? ("application/json", ".explain.json")
             : ("application/xml", ".sqlplan");
         return Results.File(System.Text.Encoding.UTF8.GetBytes(plan.Document), contentType, plan.Hash.ToLowerInvariant() + extension);
-    }
-
-    private static IResult Index()
-    {
-        using var stream = typeof(DashboardServer).Assembly.GetManifestResourceStream("SqlHarness.Dashboard.wwwroot.index.html")
-            ?? throw new InvalidOperationException("Dashboard index is missing.");
-        using var text = new StreamReader(stream);
-        return Results.Content(text.ReadToEnd(), "text/html; charset=utf-8");
     }
 
     private static IResult BadRequest(string message) => Results.Json(new { error = message }, Json, statusCode: StatusCodes.Status400BadRequest);

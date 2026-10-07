@@ -5,8 +5,10 @@
 
 .DESCRIPTION
     Syncs the current branch into the disposable gate clone created by
-    scripts/setup-linux-gate.ps1, then runs the same four stages CI runs:
-    restore, build -warnaserror, test, and format --verify-no-changes.
+    scripts/setup-linux-gate.ps1, checks that the provisioned Node matches
+    .nvmrc, installs and checks the dashboard UI, then runs the same four .NET
+    stages CI runs: restore, build -warnaserror, test, and format
+    --verify-no-changes.
 
     The test stage logs skip counts, which is the signal a Windows run cannot
     give. Stops at the first failing stage and exits with that stage's exit
@@ -100,8 +102,10 @@ function Invoke-GateStage {
 
     # PATH is exported here rather than sourced from ~/.bashrc: Ubuntu's stock
     # .bashrc returns early in a non-interactive shell, so an rc-file PATH would
-    # silently not apply and the gate would fail for the wrong reason.
-    $script = "set -euo pipefail`nexport PATH=`"`$HOME/.dotnet:`$PATH`"`n" + ($Lines -join "`n")
+    # silently not apply and the gate would fail for the wrong reason. The
+    # provisioned Node (~/.node/current, from scripts/setup-linux-gate.ps1) comes
+    # first so it wins over any Windows-interop `node`/`npm` on the WSL PATH.
+    $script = "set -euo pipefail`nexport PATH=`"`$HOME/.node/current/bin:`$HOME/.dotnet:`$PATH`"`n" + ($Lines -join "`n")
 
     # The block is materialised as an LF-only, BOM-less file instead of piped on
     # stdin: PowerShell injects CRLF into native-command stdin, and a trailing CR
@@ -143,6 +147,22 @@ Invoke-GateStage -Name 'sync' -Arguments @($gateClone, $windowsRepo, $branch) -L
 Invoke-GateStage -Name 'sdk' -Arguments @($gateClone) -Lines @(
     'cd "$1"',
     'dotnet --version'
+)
+
+Invoke-GateStage -Name 'node' -Arguments @($gateClone) -Lines @(
+    'cd "$1"',
+    'node --version',
+    'test "$(node --version)" = "v$(cat .nvmrc)" || { echo "node $(node --version) differs from .nvmrc; run scripts/setup-linux-gate.ps1" >&2; exit 1; }'
+)
+
+Invoke-GateStage -Name 'ui-install' -Arguments @($gateClone) -Lines @(
+    'cd "$1"',
+    'npm ci --prefix src/SqlHarness.Dashboard/ui'
+)
+
+Invoke-GateStage -Name 'ui-check' -Arguments @($gateClone) -Lines @(
+    'cd "$1"',
+    'npm run check --prefix src/SqlHarness.Dashboard/ui'
 )
 
 Invoke-GateStage -Name 'restore' -Arguments @($gateClone) -Lines @(

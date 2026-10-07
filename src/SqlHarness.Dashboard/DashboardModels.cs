@@ -63,6 +63,7 @@ public sealed record WaitStat(string WaitType, double TotalWaitMs);
 
 public sealed record TargetStat(string? Profile, string? Database, int Count);
 
+/// <summary>Token totals over operations that carry both a raw and an emitted count (MCP rows carry raw only).</summary>
 public sealed record TokenStat(long Raw, long Emitted);
 
 public sealed record DashboardStats(

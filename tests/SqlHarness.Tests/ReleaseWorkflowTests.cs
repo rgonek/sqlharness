@@ -51,6 +51,16 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("PublishTrimmed=false", workflow, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Release_builds_the_ui_before_testing_and_publishing()
+    {
+        var workflow = File.ReadAllText(RepositoryFile.Locate(".github", "workflows", "release.yml"));
+        var install = workflow.IndexOf("npm ci --prefix src/SqlHarness.Dashboard/ui", StringComparison.Ordinal);
+
+        Assert.True(install >= 0);
+        Assert.True(install < workflow.IndexOf("dotnet test", StringComparison.Ordinal));
+    }
+
     private static void AssertBuildPair(string workflow, string os, string rid)
     {
         var pair = Regex.Match(

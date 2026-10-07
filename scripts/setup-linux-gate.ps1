@@ -5,7 +5,9 @@
 
 .DESCRIPTION
     Checks that a WSL2 distribution is reachable, installs the .NET SDK version
-    pinned by global.json into ~/.dotnet, puts ~/.dotnet on PATH for interactive
+    pinned by global.json into ~/.dotnet, installs the Node version pinned by
+    .nvmrc into ~/.node (checksum-verified against nodejs.org SHASUMS256.txt,
+    with ~/.node/current pointing at it), puts both on PATH for interactive
     shells, and clones this repository into ~/src/sqlharness-gate.
 
     The clone lives on the WSL ext4 filesystem on purpose: /mnt/d is
@@ -91,6 +93,12 @@ if ([string]::IsNullOrWhiteSpace($sdkVersion)) {
     throw "global.json does not pin sdk.version."
 }
 
+$nvmrcPath = Join-Path $repoRoot '.nvmrc'
+$nodeVersion = (Get-Content -LiteralPath $nvmrcPath -Raw).Trim()
+if ($nodeVersion -notmatch '^\d+\.\d+\.\d+$') {
+    throw ".nvmrc must pin an exact Node version (for example 24.18.0)."
+}
+
 $repoRootUnix = $repoRoot -replace '\\', '/'
 $windowsRepo = (& wsl -d $Distro -- wslpath -a $repoRootUnix).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($windowsRepo)) {
@@ -110,6 +118,7 @@ sdk_version="$1"
 bashrc_marker="$2"
 windows_repo="$3"
 gate_clone="$4"
+node_version="$5"
 dotnet_dir="$HOME/.dotnet"
 
 missing=()
@@ -117,6 +126,7 @@ for tool in curl git; do
   command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
 done
 dpkg -s ca-certificates >/dev/null 2>&1 || missing+=("ca-certificates")
+dpkg -s xz-utils >/dev/null 2>&1 || missing+=("xz-utils")
 if [ "${#missing[@]}" -gt 0 ]; then
   if ! sudo -n true 2>/dev/null; then
     echo "sudo needs a password; install these manually and re-run: ${missing[*]}" >&2
@@ -145,7 +155,33 @@ else
   rm -f "$installer"
 fi
 
-if grep -qF "$bashrc_marker" "$HOME/.bashrc" 2>/dev/null; then
+node_root="$HOME/.node"
+node_dir="$node_root/v$node_version"
+if [ -x "$node_dir/bin/node" ]; then
+  echo "==> node already provisioned ($node_version)"
+else
+  echo "==> node $node_version"
+  case "$(uname -m)" in
+    x86_64) node_arch=x64 ;;
+    aarch64) node_arch=arm64 ;;
+    *) echo "Unsupported architecture $(uname -m) for Node." >&2; exit 1 ;;
+  esac
+  tarball="node-v$node_version-linux-$node_arch.tar.xz"
+  work="$(mktemp -d)"
+  curl -fsSL "https://nodejs.org/dist/v$node_version/$tarball" -o "$work/$tarball"
+  curl -fsSL "https://nodejs.org/dist/v$node_version/SHASUMS256.txt" -o "$work/SHASUMS256.txt"
+  (cd "$work" && grep " $tarball\$" SHASUMS256.txt | sha256sum -c -)
+  # Extract beside the download and move into place only when complete, so a failed
+  # extract never leaves a bin/node that the next run mistakes for a finished install.
+  mkdir -p "$work/node" "$node_root"
+  tar -xJf "$work/$tarball" -C "$work/node" --strip-components=1
+  rm -rf "$node_dir"
+  mv "$work/node" "$node_dir"
+  rm -rf "$work"
+fi
+ln -sfn "$node_dir" "$node_root/current"
+
+if grep -qxF "# $bashrc_marker" "$HOME/.bashrc" 2>/dev/null; then
   echo "==> path already configured"
 else
   echo "==> path"
@@ -153,6 +189,18 @@ else
     echo ""
     echo "# $bashrc_marker"
     echo 'export PATH="$HOME/.dotnet:$PATH"'
+  } >> "$HOME/.bashrc"
+fi
+
+node_marker="$bashrc_marker (node)"
+if grep -qxF "# $node_marker" "$HOME/.bashrc" 2>/dev/null; then
+  echo "==> node path already configured"
+else
+  echo "==> node path"
+  {
+    echo ""
+    echo "# $node_marker"
+    echo 'export PATH="$HOME/.node/current/bin:$PATH"'
   } >> "$HOME/.bashrc"
 fi
 
@@ -193,7 +241,7 @@ try {
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($provisionWslPath)) {
         throw "Could not translate the temporary provision file path '$($provisionFile.FullName)' into a WSL path."
     }
-    [array]$provisionOutput = & wsl -d $Distro -- bash $provisionWslPath $sdkVersion $bashrcMarker $windowsRepo $gateClone
+    [array]$provisionOutput = & wsl -d $Distro -- bash $provisionWslPath $sdkVersion $bashrcMarker $windowsRepo $gateClone $nodeVersion
     $exitCode = $LASTEXITCODE
 }
 finally {

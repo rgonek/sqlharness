@@ -311,6 +311,22 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Stats_token_totals_count_only_operations_with_both_token_counts()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var s = JournalSeed.Session("cli:a");
+        seed.Operation(s);
+        seed.Operation(s, tokens: SeedTokens.RawOnly);
+        seed.Operation(s, tokens: SeedTokens.EmittedOnly);
+        seed.Operation(s, tokens: SeedTokens.EmittedOnly);
+
+        var stats = Reader(home).Stats(new StatsQuery());
+
+        Assert.Equal((100L, 10L), (stats.Tokens.Raw, stats.Tokens.Emitted));
+    }
+
+    [Fact]
     public void Stats_respect_the_time_window()
     {
         using var home = new TempHome();
