@@ -66,7 +66,7 @@ public sealed class DashboardServerTests
 
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PostAsync("/api/sessions", null)).StatusCode);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.DeleteAsync("/api/operations/1")).StatusCode);
-        Assert.All(server.Endpoints, endpoint => Assert.Equal(["GET"], endpoint.Methods));
+        Assert.All(server.Endpoints, endpoint => Assert.Equal(["GET", "HEAD"], endpoint.Methods));
         Assert.Contains(server.Endpoints, endpoint => endpoint.Route == "/api/live");
     }
 
@@ -144,21 +144,100 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
-    public async Task Environment_urls_do_not_change_the_loopback_binding()
+    public async Task Head_requests_are_served_like_get()
     {
         using var home = new TempHome();
-        var saved = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
-        Environment.SetEnvironmentVariable("ASPNETCORE_URLS", "http://0.0.0.0:5999");
-        try
-        {
-            await using var server = await DashboardServer.StartAsync(new DashboardServerOptions(home.DatabasePath, 0, new FakeProcesses()), CancellationToken.None);
+        var (server, client) = await StartAuthenticated(home);
+        await using var _ = server;
 
-            Assert.Equal("127.0.0.1", server.BaseUri.Host);
-            Assert.NotEqual(5999, server.Port);
-        }
-        finally
+        using var head = new HttpRequestMessage(HttpMethod.Head, "/api/sessions");
+        var response = await client.SendAsync(head);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl!.ToString());
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task Token_query_key_is_removed_regardless_of_case()
+    {
+        using var home = new TempHome();
+        await using var server = await DashboardServer.StartAsync(new DashboardServerOptions(home.DatabasePath, 0, new FakeProcesses()), CancellationToken.None);
+        using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = server.BaseUri };
+
+        var response = await client.GetAsync($"/sessions?T={server.Token}&view=x");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/sessions?view=x", response.Headers.Location!.OriginalString);
+    }
+
+    [Theory]
+    [InlineData("//evil.example/x")]
+    [InlineData("///evil.example/x")]
+    [InlineData("/%5Cevil.example/x")]
+    [InlineData("/%5C/evil.example/x")]
+    public async Task Token_exchange_redirect_stays_on_the_dashboard(string path)
+    {
+        using var home = new TempHome();
+        await using var server = await DashboardServer.StartAsync(new DashboardServerOptions(home.DatabasePath, 0, new FakeProcesses()), CancellationToken.None);
+        using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
+
+        var response = await client.GetAsync(new Uri($"http://127.0.0.1:{server.Port}{path}?t={server.Token}"));
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location!.OriginalString;
+        Assert.StartsWith("/", location);
+        Assert.False(location.Length > 1 && location[1] is '/' or '\\', location);
+        Assert.DoesNotContain("%5C", location[..Math.Min(4, location.Length)], StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Corrupt_stored_plan_is_unprocessable()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath, storeSensitive: true);
+        seed.Operation(JournalSeed.Session("cli:a"));
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={home.DatabasePath};Pooling=False"))
         {
-            Environment.SetEnvironmentVariable("ASPNETCORE_URLS", saved);
+            connection.Open();
+            using var insert = connection.CreateCommand();
+            insert.CommandText = "INSERT INTO plans (hash, format, raw_size, gz, first_seen) VALUES ($h, 'showplan-xml', 3, x'00010203', '2026-10-07T09:00:00Z');";
+            insert.Parameters.AddWithValue("$h", new string('C', 64));
+            insert.ExecuteNonQuery();
         }
+
+        var (server, client) = await StartAuthenticated(home);
+        await using var _ = server;
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.GetAsync($"/api/plans/{new string('C', 64)}")).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.GetAsync($"/api/plans/{new string('C', 64)}?view=distilled")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Server_errors_are_empty_and_keep_security_headers()
+    {
+        using var home = new TempHome();
+        Directory.CreateDirectory(Path.GetDirectoryName(home.DatabasePath)!);
+        await File.WriteAllTextAsync(home.DatabasePath, "this is not a sqlite database, it is long enough to have a header");
+        var (server, client) = await StartAuthenticated(home);
+        await using var _ = server;
+
+        var response = await client.GetAsync("/api/sessions");
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+        Assert.Equal("no-store", response.Headers.CacheControl!.ToString());
+        Assert.Equal("DENY", response.Headers.GetValues("X-Frame-Options").Single());
+        Assert.Contains("default-src 'self'", response.Headers.GetValues("Content-Security-Policy").Single());
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(65536)]
+    public async Task Preferred_port_outside_the_tcp_range_is_rejected(int port)
+    {
+        using var home = new TempHome();
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            DashboardServer.StartAsync(new DashboardServerOptions(home.DatabasePath, port, new FakeProcesses()), CancellationToken.None));
     }
 }

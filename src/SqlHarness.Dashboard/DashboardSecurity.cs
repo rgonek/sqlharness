@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -19,19 +20,46 @@ internal static class DashboardSecurity
     internal static string NewToken() =>
         Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
+    /// <summary>
+    /// Outermost step: any unhandled failure becomes an empty 500 that still carries
+    /// the security headers, so no exception detail or stack trace reaches the client.
+    /// </summary>
     internal static async Task InvokeAsync(HttpContext context, Func<Task> next, string token, Func<int> port)
     {
-        var headers = context.Response.Headers;
+        ApplyHeaders(context.Response.Headers);
+        try
+        {
+            await GuardAsync(context, next, token, port);
+        }
+        catch (Exception) when (!context.Response.HasStarted && !context.RequestAborted.IsCancellationRequested)
+        {
+            context.Response.Clear();
+            ApplyHeaders(context.Response.Headers);
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        }
+    }
+
+    private static void ApplyHeaders(IHeaderDictionary headers)
+    {
         headers.CacheControl = "no-store";
         headers.XContentTypeOptions = "nosniff";
         headers["Referrer-Policy"] = "no-referrer";
         headers.XFrameOptions = "DENY";
         headers.ContentSecurityPolicy =
             "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'";
+    }
 
+    private static async Task GuardAsync(HttpContext context, Func<Task> next, string token, Func<int> port)
+    {
         var host = context.Request.Host.Value;
         var allowedPort = port();
+        var local = context.Connection.LocalIpAddress;
+        if (local is { IsIPv4MappedToIPv6: true })
+            local = local.MapToIPv4();
         if (allowedPort == 0
+            || local is null
+            || !local.Equals(IPAddress.Loopback)
+            || context.Connection.LocalPort != allowedPort
             || !(string.Equals(host, $"127.0.0.1:{allowedPort}", StringComparison.Ordinal)
                  || string.Equals(host, $"localhost:{allowedPort}", StringComparison.OrdinalIgnoreCase)))
         {
@@ -63,9 +91,11 @@ internal static class DashboardSecurity
                 IsEssential = true,
             });
             var query = new QueryBuilder(context.Request.Query
-                .Where(pair => pair.Key != TokenQuery)
+                .Where(pair => !string.Equals(pair.Key, TokenQuery, StringComparison.OrdinalIgnoreCase))
                 .SelectMany(pair => pair.Value.Select(value => new KeyValuePair<string, string>(pair.Key, value ?? string.Empty))));
-            context.Response.Redirect(context.Request.PathBase + context.Request.Path + query.ToQueryString());
+            // Collapse leading slashes and backslashes so "//host/x" cannot become a protocol-relative redirect.
+            var path = "/" + (context.Request.PathBase + context.Request.Path).Value?.TrimStart('/', '\\');
+            context.Response.Redirect(new PathString(path).ToUriComponent() + query.ToQueryString());
             return;
         }
 
