@@ -197,4 +197,35 @@ public sealed class DashboardLockTests
         Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(home.Path, "dashboard.lock")));
         Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, File.GetUnixFileMode(home.Path));
     }
+
+    [Fact]
+    public void Acquire_keeps_the_lock_when_the_earlier_info_file_cannot_be_deleted()
+    {
+        using var home = new TempHome();
+        var info = Path.Combine(home.Path, "dashboard.json");
+        Directory.CreateDirectory(info);
+        File.WriteAllText(Path.Combine(info, "blocker"), "x");
+
+        using var held = DashboardLock.TryAcquire(home.Path);
+
+        Assert.NotNull(held);
+        Assert.Null(DashboardLock.TryAcquire(home.Path));
+    }
+
+    [Fact]
+    public async Task Acquire_retries_once_when_a_probe_briefly_holds_the_lock()
+    {
+        using var home = new TempHome();
+        var probe = DashboardLock.TryAcquire(home.Path)!;
+        var release = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(50));
+            probe.Dispose();
+        });
+
+        using var held = DashboardLock.TryAcquire(home.Path);
+        await release;
+
+        Assert.NotNull(held);
+    }
 }

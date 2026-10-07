@@ -35,7 +35,10 @@ public sealed class DashboardLock : IDisposable
     internal const string LockFileName = "dashboard.lock";
     internal const string InfoFileName = "dashboard.json";
     private const UnixFileMode OwnerReadWrite = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+    private const int DeleteAttempts = 5;
     private static readonly TimeSpan StartTolerance = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan AcquireRetryDelay = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan DeleteRetryDelay = TimeSpan.FromMilliseconds(50);
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private readonly FileStream _lock;
@@ -53,16 +56,22 @@ public sealed class DashboardLock : IDisposable
         ArgumentException.ThrowIfNullOrEmpty(home);
         Directory.CreateDirectory(home);
         OwnerOnlyFiles.Directory(home);
+        // A reader's ReadRunning probe holds the lock for an instant; one retry keeps a
+        // starting server from mistaking that probe for another dashboard.
+        if (TryAcquireOnce(home) is { } acquired)
+            return acquired;
+        Thread.Sleep(AcquireRetryDelay);
+        return TryAcquireOnce(home);
+    }
+
+    private static DashboardLock? TryAcquireOnce(string home)
+    {
         var lockPath = Path.Combine(home, LockFileName);
         FileStream? stream = null;
         try
         {
             stream = OpenExclusive(lockPath, FileMode.OpenOrCreate);
             OwnerOnlyFiles.File(lockPath);
-            var infoPath = Path.Combine(home, InfoFileName);
-            // Whatever an earlier holder published is stale now that this process holds the lock.
-            File.Delete(infoPath);
-            return new DashboardLock(stream, infoPath);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -73,6 +82,34 @@ public sealed class DashboardLock : IDisposable
         {
             stream?.Dispose();
             throw;
+        }
+
+        var infoPath = Path.Combine(home, InfoFileName);
+        DeleteStaleInfo(infoPath);
+        return new DashboardLock(stream, infoPath);
+    }
+
+    /// <summary>
+    /// Whatever an earlier holder published is stale now that this process holds the lock.
+    /// A concurrent reader can block the delete on Windows for a moment, so it is retried;
+    /// if it still fails the lock is kept, because readers only trust the file while the
+    /// lock is held and <see cref="Publish"/> overwrites it.
+    /// </summary>
+    private static void DeleteStaleInfo(string infoPath)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Delete(infoPath);
+                return;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                if (attempt >= DeleteAttempts)
+                    return;
+                Thread.Sleep(DeleteRetryDelay);
+            }
         }
     }
 
