@@ -282,4 +282,46 @@ public sealed class JournalingModuleTests
                 throw new IOException("emission");
         }
     }
+    [Fact]
+    public async Task Receipt_completion_records_the_emitted_footprint_once_and_keeps_the_exit_code()
+    {
+        var receipt = new SqlHarnessEmissionReceipt((_, _) => Task.FromResult(SqlHarnessExitCode.SqlExecution))
+        {
+            RawFootprint = new OutputFootprint(800, 20),
+        };
+        var (module, temp) = Create(new FakeModule((_, _) =>
+            Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, null, "failed", receipt))));
+        using (temp)
+        {
+            var outcome = await module.ExecuteAsync(Query());
+            var results = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => outcome.EmissionReceipt!.CompleteAsync(new OutputFootprint(80, 4))));
+
+            Assert.All(results, code => Assert.Equal(SqlHarnessExitCode.SqlExecution, code));
+            var row = JournalDb.Rows(temp.DatabasePath, "SELECT raw_bytes, emitted_bytes, emitted_lines, status FROM operations").Single();
+            Assert.Equal((800L, 80L, 4L, "failed"), ((long)row["raw_bytes"]!, (long)row["emitted_bytes"]!, (long)row["emitted_lines"]!, (string)row["status"]!));
+        }
+    }
+
+    [Fact]
+    public async Task Gain_write_failure_never_changes_the_exit_code()
+    {
+        var receipt = new SqlHarnessEmissionReceipt((_, _) => Task.FromResult(SqlHarnessExitCode.Success));
+        var journal = new ThrowingEmissionJournal();
+        var module = new JournalingModule(
+            new FakeModule((_, _) => Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null, receipt))),
+            () => journal,
+            () => JournalTestData.Session());
+
+        var outcome = await module.ExecuteAsync(Query());
+
+        Assert.Equal(SqlHarnessExitCode.Success, await outcome.EmissionReceipt!.CompleteAsync(new OutputFootprint(8, 1)));
+    }
+
+    private sealed class ThrowingEmissionJournal : IActivityJournal
+    {
+        public JournalHandle? Begin(SessionIdentity session, OperationStart start) => new(1);
+        public bool Complete(JournalHandle? handle, OperationEnd end) => true;
+        public void RecordEmission(JournalHandle? handle, OutputFootprint? raw, OutputFootprint emitted) =>
+            throw new IOException("disk full");
+    }
 }

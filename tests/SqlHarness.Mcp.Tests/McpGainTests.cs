@@ -20,13 +20,13 @@ using Xunit.Abstractions;
 namespace SqlHarness.Mcp.Tests;
 
 /// <summary>
-/// T4 gain accounting: one gain record per logical execution (a second
-/// <c>CompleteAsync</c> never writes again), the footprint covers both result
+/// T4 gain accounting: one journal emission per logical execution (a second
+/// <c>CompleteAsync</c> never counts again), the footprint covers both result
 /// representations with the bytes/4 heuristic from the spec, discovery is
 /// measured separately instead of being folded into saved data, and CLI/MCP
 /// scenarios are compared with the tools/list and artifact follow-up costs on
 /// the MCP side — without promising that MCP is cheaper per call.
-/// Gain isolation uses a synthetic HOME; no database is opened.
+/// Gain isolation uses a synthetic HOME; no SQL database is opened.
 /// </summary>
 [Collection("McpScopeHome")]
 public sealed class McpGainTests : IDisposable
@@ -84,11 +84,14 @@ public sealed class McpGainTests : IDisposable
     }
 
     [Fact]
-    public async Task One_execution_writes_one_gain_record_despite_double_complete()
+    public async Task One_execution_counts_once_in_gain_despite_double_complete()
     {
         // Empty profile map: resolution fails before any connection, but the
-        // failure outcome still carries its emission receipt.
-        var module = new SqlHarnessModule(() => new Dictionary<string, TargetProfile>(StringComparer.Ordinal));
+        // failure outcome still carries its emission receipt. The journal
+        // records the completion; gain aggregates it from the journal.
+        var inner = new SqlHarnessModule(() => new Dictionary<string, TargetProfile>(StringComparer.Ordinal));
+        var journal = ActivityJournal.Open(new JournalConfig(), TextWriter.Null);
+        var module = new JournalingModule(inner, () => journal, () => SessionIdentities.Cli(ProcessInfo.Current));
         var operation = new SqlHarnessQueryOperation(
             new SqlTargetRequest("missing-profile", new Dictionary<string, string>()),
             "SELECT 1", [], 30, 50, false, null);
@@ -96,15 +99,13 @@ public sealed class McpGainTests : IDisposable
 
         Assert.NotEqual(SqlHarnessExitCode.Success, outcome.ExitCode);
         Assert.NotNull(outcome.EmissionReceipt);
-        var receipt = outcome.EmissionReceipt!;
         var emitted = McpResultAdapter.EmittedFootprint(McpResultAdapter.Adapt(outcome, "sqlharness_query"));
 
-        var first = await receipt.CompleteAsync(emitted);
-        var second = await receipt.CompleteAsync(emitted);
+        var first = await outcome.EmissionReceipt!.CompleteAsync(emitted);
+        var second = await outcome.EmissionReceipt!.CompleteAsync(emitted);
 
         Assert.Equal(first, second);
-        var gain = Assert.IsType<SqlHarnessGainReport>(
-            (await module.ExecuteAsync(new SqlHarnessGainOperation())).Report);
+        var gain = Assert.IsType<SqlHarnessGainReport>((await inner.ExecuteAsync(new SqlHarnessGainOperation())).Report);
         Assert.Equal(1, gain.Total.Executions);
         Assert.Equal(emitted.Bytes, gain.Total.EmittedBytes);
     }

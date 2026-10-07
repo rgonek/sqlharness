@@ -18,7 +18,7 @@ public class SqlHarnessPathsTests
             argument => argument.MemberName == nameof(CollectionDefinitionAttribute.DisableParallelization));
         Assert.Equal(true, disableParallelization.TypedValue.Value);
 
-        foreach (var type in new[] { typeof(SqlHarnessPathsTests), typeof(GainStoreTests), typeof(ArtifactWriterTests) })
+        foreach (var type in new[] { typeof(SqlHarnessPathsTests), typeof(ArtifactWriterTests) })
         {
             var collection = Assert.Single(
                 type.CustomAttributes,
@@ -42,7 +42,6 @@ public class SqlHarnessPathsTests
 
                 Assert.Equal(expectedHome, SqlHarnessPaths.Home);
                 Assert.Equal(Path.Combine(expectedHome, "targets.json"), SqlHarnessPaths.TargetsFile);
-                Assert.Equal(Path.Combine(expectedHome, "data", "gain.jsonl"), SqlHarnessPaths.GainFile);
                 Assert.Equal(Path.Combine(expectedHome, "compare"), SqlHarnessPaths.CompareDir);
                 Assert.Equal(Path.Combine(expectedHome, "snapshots"), SqlHarnessPaths.SnapshotsDir);
                 Assert.Equal(Path.Combine(expectedHome, "query-store"), SqlHarnessPaths.QueryStoreDir);
@@ -67,7 +66,6 @@ public class SqlHarnessPathsTests
 
                 Assert.Equal(home, SqlHarnessPaths.Home);
                 Assert.Equal(Path.Combine(home, "targets.json"), SqlHarnessPaths.TargetsFile);
-                Assert.Equal(Path.Combine(home, "data", "gain.jsonl"), SqlHarnessPaths.GainFile);
                 Assert.Equal(Path.Combine(home, "compare"), SqlHarnessPaths.CompareDir);
                 Assert.Equal(Path.Combine(home, "snapshots"), SqlHarnessPaths.SnapshotsDir);
                 Assert.Equal(Path.Combine(home, "query-store"), SqlHarnessPaths.QueryStoreDir);

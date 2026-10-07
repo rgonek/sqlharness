@@ -62,6 +62,8 @@ public sealed class Renderer
             RenderMatrix(matrix, output);
         else if (outcome.Report is SqlHarnessGainReport gain)
         {
+            if (!gain.JournalEnabled)
+                output.WriteLine("The activity journal is disabled (journal.enabled: false in config.json); gain has nothing to count.");
             output.WriteLine("Scope\tExecutions\tFailures\tSaved tokens\tSavings %");
             WriteGain("total", gain.Total, output); WriteGain("query", gain.Query, output);
             WriteGain("compare", gain.Compare, output); WriteGain("measure", gain.Measure, output);

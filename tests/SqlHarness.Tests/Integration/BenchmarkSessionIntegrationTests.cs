@@ -188,12 +188,8 @@ public sealed class BenchmarkSessionIntegrationTests
         }
     }
 
-    private sealed class NullGainStore : IGainStore
+    private sealed class NullGainStore : IGainSource
     {
-        public void Append(GainRecord record)
-        {
-        }
-
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 

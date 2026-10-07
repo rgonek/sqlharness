@@ -21,22 +21,28 @@ namespace SqlHarness.Dashboard;
 public sealed record DashboardServerOptions(string DatabasePath, int PreferredPort, IProcessInfo Processes)
 {
     public TimeSpan LivePollInterval { get; init; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>Records requests and open live streams; a new instance on the system clock when null.</summary>
+    internal DashboardActivity? Activity { get; init; }
 }
 
 public sealed class RunningDashboard : IAsyncDisposable
 {
     private readonly WebApplication _app;
 
-    internal RunningDashboard(WebApplication app, int port, string token)
+    internal RunningDashboard(WebApplication app, int port, string token, DashboardActivity activity)
     {
         _app = app;
         Port = port;
         Token = token;
+        Activity = activity;
     }
 
     public int Port { get; }
 
     public string Token { get; }
+
+    internal DashboardActivity Activity { get; }
 
     public Uri BaseUri => new($"http://127.0.0.1:{Port}/");
 
@@ -85,11 +91,12 @@ public static partial class DashboardServer
         int[] candidates = options.PreferredPort == 0
             ? [0]
             : [.. Enumerable.Range(options.PreferredPort, PortAttempts).Where(port => port <= IPEndPoint.MaxPort), 0];
+        var activity = options.Activity ?? new DashboardActivity(TimeProvider.System);
         Exception? last = null;
         foreach (var candidate in candidates)
         {
             var boundPort = 0;
-            var app = Build(options, token, candidate, () => boundPort);
+            var app = Build(options, activity, token, candidate, () => boundPort);
             try
             {
                 await app.StartAsync(ct);
@@ -107,13 +114,13 @@ public static partial class DashboardServer
                 throw;
             }
 
-            return new RunningDashboard(app, boundPort, token);
+            return new RunningDashboard(app, boundPort, token, activity);
         }
 
         throw new IOException("No free loopback port for the dashboard.", last);
     }
 
-    private static WebApplication Build(DashboardServerOptions options, string token, int port, Func<int> boundPort)
+    private static WebApplication Build(DashboardServerOptions options, DashboardActivity activity, string token, int port, Func<int> boundPort)
     {
         // The empty builder reads no command line, environment variables, or appsettings files,
         // so nothing outside this method can add a Kestrel endpoint, change the environment,
@@ -139,6 +146,12 @@ public static partial class DashboardServer
         var app = builder.Build();
         var reader = new JournalReader(options.DatabasePath, options.Processes);
         app.Use((context, next) => DashboardSecurity.InvokeAsync(context, () => next(context), token, boundPort));
+        // Only authenticated requests reach here, so probes from other local processes do not keep the dashboard alive.
+        app.Use((context, next) =>
+        {
+            activity.Touch();
+            return next(context);
+        });
         app.UseRouting();
 
         var api = app.MapGroup("/api");
@@ -163,7 +176,15 @@ public static partial class DashboardServer
         {
             // Stopping ends open streams, so a connected browser never holds up shutdown.
             using var stream = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, app.Lifetime.ApplicationStopping);
-            await LiveFeed.StreamAsync(context, reader, options.LivePollInterval, stream.Token);
+            activity.StreamOpened();
+            try
+            {
+                await LiveFeed.StreamAsync(context, reader, options.LivePollInterval, stream.Token);
+            }
+            finally
+            {
+                activity.StreamClosed();
+            }
         });
         MapRead(api, "/{**rest}", () => Results.NotFound());
 

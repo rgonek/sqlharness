@@ -112,9 +112,8 @@ public sealed class PostgresQueryTests
                 Engine: "postgres"),
         };
 
-    private sealed class FakeGain : IGainStore
+    private sealed class FakeGain : IGainSource
     {
-        public void Append(GainRecord record) { }
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 

@@ -155,11 +155,18 @@ public sealed class ActivityJournal : IActivityJournal
             using var connection = Connect();
             using var update = connection.CreateCommand();
             update.CommandText = """
-                UPDATE operations SET raw_tokens = $raw, emitted_tokens = $emitted, updated_at = $now WHERE id = $id;
+                UPDATE operations SET raw_tokens = $raw, emitted_tokens = $emitted,
+                    raw_bytes = $rawBytes, raw_lines = $rawLines, emitted_bytes = $emittedBytes, emitted_lines = $emittedLines,
+                    updated_at = $now
+                WHERE id = $id;
                 """;
             update.Parameters.AddWithValue("$id", handle.OperationId);
             update.Parameters.AddWithValue("$raw", raw is null ? DBNull.Value : raw.EstimatedTokenCount);
             update.Parameters.AddWithValue("$emitted", emitted.EstimatedTokenCount);
+            update.Parameters.AddWithValue("$rawBytes", raw is null ? DBNull.Value : raw.Bytes);
+            update.Parameters.AddWithValue("$rawLines", raw is null ? DBNull.Value : raw.Lines);
+            update.Parameters.AddWithValue("$emittedBytes", emitted.Bytes);
+            update.Parameters.AddWithValue("$emittedLines", emitted.Lines);
             update.Parameters.AddWithValue("$now", Timestamp(_time.GetUtcNow()));
             update.ExecuteNonQuery();
         }
@@ -293,6 +300,8 @@ public sealed class ActivityJournal : IActivityJournal
                 Execute(connection, JournalSchema.Version1);
             if (locked < 2)
                 Execute(connection, JournalSchema.Version2);
+            if (locked < 3)
+                Execute(connection, JournalSchema.Version3);
             Execute(connection, $"PRAGMA user_version = {JournalSchema.CurrentVersion};");
             Execute(connection, "COMMIT;");
         }

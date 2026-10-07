@@ -621,10 +621,8 @@ public sealed class TargetResolverTests
         }
     }
 
-    private sealed class UnusedGainStore : IGainStore
+    private sealed class UnusedGainStore : IGainSource
     {
-        public void Append(GainRecord record) { }
-
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 

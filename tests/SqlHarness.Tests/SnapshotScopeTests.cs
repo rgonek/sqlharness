@@ -259,12 +259,8 @@ public class SnapshotScopeTests
     private static SnapshotDocument OwnedDocument(ArtifactOwner? owner, object?[][]? rows = null) =>
         Document(rows) with { Owner = owner };
 
-    private sealed class FakeGainStore : IGainStore
+    private sealed class FakeGainStore : IGainSource
     {
-        public void Append(GainRecord record)
-        {
-        }
-
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 

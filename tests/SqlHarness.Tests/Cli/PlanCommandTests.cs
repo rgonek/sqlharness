@@ -124,33 +124,16 @@ public sealed class PlanCommandTests
     }
 
     [Fact]
-    public async Task Plan_invalid_xml_returns_safety_and_records_actual_output_footprint()
+    public async Task Plan_invalid_xml_returns_safety_and_carries_the_raw_footprint()
     {
-        var gain = new CapturingGainStore();
         var output = new StringWriter();
-        var module = new SqlHarnessModule(new NeverSessionFactory(), gain, () => throw new InvalidOperationException("profiles must not load"));
+        var module = new OutcomeCapturingModule(
+            new SqlHarnessModule(new NeverSessionFactory(), new CapturingGainStore(), () => throw new InvalidOperationException("profiles must not load")));
 
         var exit = await SqlHarnessCli.Create(module, output, planStdin: new MemoryStream(Encoding.UTF8.GetBytes("<invalid />"))).RunAsync(["plan", "-"]);
 
         Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
-        var record = Assert.Single(gain.Records);
-        Assert.Equal("plan", record.Command);
-        Assert.False(record.Success);
-        Assert.Equal(Encoding.UTF8.GetByteCount("<invalid />"), record.RawBytes);
-        Assert.Equal(Encoding.UTF8.GetByteCount(output.ToString()), record.EmittedBytes);
-    }
-
-    [Fact]
-    public async Task Plan_gain_write_failure_returns_local_storage_after_rendering_valid_output()
-    {
-        var xml = await File.ReadAllTextAsync(Fixture);
-        var output = new StringWriter();
-        var module = new SqlHarnessModule(new NeverSessionFactory(), new ThrowingGainStore(), () => throw new InvalidOperationException("profiles must not load"));
-
-        var exit = await SqlHarnessCli.Create(module, output, planStdin: new MemoryStream(Encoding.UTF8.GetBytes(xml))).RunAsync(["plan"]);
-
-        Assert.Equal((int)SqlHarnessExitCode.LocalStorage, exit);
-        Assert.Contains("Index Seek", output.ToString(), StringComparison.Ordinal);
+        Assert.Equal(Encoding.UTF8.GetByteCount("<invalid />"), module.Outcome!.EmissionReceipt!.RawFootprint!.Bytes);
     }
 
     [Fact]
@@ -189,13 +172,13 @@ public sealed class PlanCommandTests
         var xml = await File.ReadAllTextAsync(Fixture);
         Encoding encoding = utf16 ? new UnicodeEncoding(false, true, true) : new UTF8Encoding(true, true);
         var bytes = encoding.GetPreamble().Concat(encoding.GetBytes(xml)).ToArray();
-        var gain = new CapturingGainStore();
-        var module = new SqlHarnessModule(new NeverSessionFactory(), gain, () => throw new InvalidOperationException());
+        var module = new OutcomeCapturingModule(
+            new SqlHarnessModule(new NeverSessionFactory(), new CapturingGainStore(), () => throw new InvalidOperationException()));
 
         var exit = await SqlHarnessCli.Create(module, new StringWriter(), planStdin: new MemoryStream(bytes)).RunAsync(["plan"]);
 
         Assert.Equal(0, exit);
-        Assert.Equal(bytes.Length, Assert.Single(gain.Records).RawBytes);
+        Assert.Equal(bytes.Length, module.Outcome!.EmissionReceipt!.RawFootprint!.Bytes);
     }
 
     [Fact]
@@ -266,16 +249,19 @@ public sealed class PlanCommandTests
             throw new Xunit.Sdk.XunitException("plan command must not connect to a database");
     }
 
-    private sealed class CapturingGainStore : IGainStore
+    private sealed class OutcomeCapturingModule(ISqlHarnessModule inner) : ISqlHarnessModule
     {
-        public List<GainRecord> Records { get; } = [];
-        public void Append(GainRecord record) => Records.Add(record);
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
+        public SqlHarnessOutcome? Outcome { get; private set; }
+
+        public async Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default)
+        {
+            Outcome = await inner.ExecuteAsync(operation, ct);
+            return Outcome;
+        }
     }
 
-    private sealed class ThrowingGainStore : IGainStore
+    private sealed class CapturingGainStore : IGainSource
     {
-        public void Append(GainRecord record) => throw new IOException("gain unavailable");
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 

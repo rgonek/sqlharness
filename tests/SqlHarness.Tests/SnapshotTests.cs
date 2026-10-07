@@ -249,26 +249,22 @@ public class SnapshotTests
     }
 
     [Fact]
-    public async Task Snapshot_gain_receipt_uses_snapshot_command_name()
+    public async Task Snapshot_receipt_carries_a_nonzero_raw_footprint()
     {
         var gain = new FakeGainStore();
         var store = new FakeSnapshotStore();
         var session = FakeSession.WithRows(1);
         var outcome = await Module(session, store, gain: gain).ExecuteAsync(Snapshot());
 
-        Assert.Empty(gain.Records);
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
             .CompleteAsync(new OutputFootprint(10, 1));
 
-        var record = Assert.Single(gain.Records);
-        Assert.Equal("snapshot", record.Command);
-        Assert.True(record.Success);
-        Assert.True(record.RawBytes > 0);
-        Assert.Equal(10, record.EmittedBytes);
+        var record = outcome.EmissionReceipt!.RawFootprint!;
+        Assert.True(record.Bytes > 0);
     }
 
     [Fact]
-    public async Task Snapshot_diff_differences_gain_receipt_counts_as_success()
+    public async Task Snapshot_diff_differences_receipt_keeps_the_controlled_exit_code()
     {
         var gain = new FakeGainStore();
         var store = new FakeSnapshotStore(SnapshotFixture.Document(rows: [[1]]));
@@ -276,12 +272,8 @@ public class SnapshotTests
             .ExecuteAsync(Snapshot(diff: true));
 
         Assert.Equal(SqlHarnessExitCode.SnapshotDifferences, outcome.ExitCode);
-        await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
-            .CompleteAsync(new OutputFootprint(5, 1));
-
-        var record = Assert.Single(gain.Records);
-        Assert.Equal("snapshot", record.Command);
-        Assert.True(record.Success);
+        Assert.Equal(SqlHarnessExitCode.SnapshotDifferences, await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
+            .CompleteAsync(new OutputFootprint(5, 1)));
     }
 
     [Fact]
@@ -411,12 +403,8 @@ public class SnapshotTests
         }
     }
 
-    private sealed class FakeGainStore : IGainStore
+    private sealed class FakeGainStore : IGainSource
     {
-        public List<GainRecord> Records { get; } = [];
-
-        public void Append(GainRecord record) => Records.Add(record);
-
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 

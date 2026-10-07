@@ -156,7 +156,7 @@ public sealed class McpCancellationTests
             });
         var sessions = new CoreSessionFactory(blockFirstSession: true);
         var handlers = new McpRequestToolHandlers(process, moduleFactory: scope =>
-            new SqlHarnessModule(sessions, new GainStore(), scope.ProfileProvider));
+            new SqlHarnessModule(sessions, new JournalGainStore(SqlHarnessPaths.ActivityDatabase, () => false), scope.ProfileProvider));
         using var cancelA = new CancellationTokenSource(Budget);
 
         var a = handlers.QueryAsync(null!, new McpRequestScopeArgument("scope-a", new() { ["tenant"] = "a" }), "SELECT 1", ct: cancelA.Token);
@@ -190,7 +190,7 @@ public sealed class McpCancellationTests
             });
         var sessions = new CoreSessionFactory(blockFirstSession: true);
         var handlers = new McpRequestToolHandlers(process, moduleFactory: scope =>
-            new SqlHarnessModule(sessions, new GainStore(), scope.ProfileProvider));
+            new SqlHarnessModule(sessions, new JournalGainStore(SqlHarnessPaths.ActivityDatabase, () => false), scope.ProfileProvider));
         using var guard = new CancellationTokenSource(Budget);
 
         var result = await handlers.QueryAsync(

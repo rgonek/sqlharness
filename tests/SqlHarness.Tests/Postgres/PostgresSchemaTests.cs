@@ -195,9 +195,8 @@ public sealed class PostgresSchemaTests
     private static object?[][] Set(string[] names, params object?[][] rows) =>
         [[.. names], .. rows];
 
-    private sealed class FakeGain : IGainStore
+    private sealed class FakeGain : IGainSource
     {
-        public void Append(GainRecord record) { }
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 

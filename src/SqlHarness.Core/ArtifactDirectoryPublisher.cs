@@ -13,7 +13,7 @@ namespace SqlHarness.Core;
 /// main path already failed, a cleanup failure is swallowed so the original
 /// cause propagates). Content policy — what is written and which sensitive
 /// payloads may accompany a report — stays in the domain writer.
-/// SnapshotStore/GainStore do not use this contract.
+/// SnapshotStore does not use this contract.
 /// </summary>
 internal sealed partial class ArtifactDirectoryPublisher
 {

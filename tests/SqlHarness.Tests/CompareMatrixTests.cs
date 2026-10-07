@@ -711,9 +711,8 @@ public class CompareMatrixTests
     private static bool IsStatistics(string sql) =>
         sql.Contains("STATISTICS", StringComparison.Ordinal);
 
-    private sealed class FakeGainStore : IGainStore
+    private sealed class FakeGainStore : IGainSource
     {
-        public void Append(GainRecord record) { }
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 

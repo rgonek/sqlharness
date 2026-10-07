@@ -244,29 +244,11 @@ public sealed class QueryStoreTopTests
         var outcome = await Module(session, artifacts, gain).ExecuteAsync(Operation());
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
-        Assert.Empty(gain.Records);
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
             .CompleteAsync(new OutputFootprint(10, 1));
-        var record = Assert.Single(gain.Records);
-        Assert.Equal("qstop", record.Command);
-        Assert.True(record.Success);
-        Assert.True(record.RawBytes > 0);
-        Assert.True(record.RawLines > 0);
-    }
-
-    [Fact]
-    public async Task Qstop_gain_append_failure_completes_as_local_storage()
-    {
-        var session = Fixture.Session();
-        var gain = new FakeGain(new IOException("disk full"));
-
-        var outcome = await Module(session, new CapturingQueryStoreArtifactWriter("qstop-artifacts"), gain)
-            .ExecuteAsync(Operation());
-
-        var completion = await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
-            .CompleteAsync(new OutputFootprint(8, 1));
-
-        Assert.Equal(SqlHarnessExitCode.LocalStorage, completion);
+        var record = outcome.EmissionReceipt!.RawFootprint!;
+        Assert.True(record.Bytes > 0);
+        Assert.True(record.Lines > 0);
     }
 
     private static async Task AssertSqlPhaseFailure(FakeSession session)
@@ -336,17 +318,8 @@ public sealed class QueryStoreTopTests
     private static SqlException FakeSqlException() =>
         (SqlException)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(SqlException));
 
-    private sealed class FakeGain(Exception? appendFailure = null) : IGainStore
+    private sealed class FakeGain : IGainSource
     {
-        public List<GainRecord> Records { get; } = [];
-
-        public void Append(GainRecord record)
-        {
-            if (appendFailure is not null)
-                throw appendFailure;
-            Records.Add(record);
-        }
-
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 
