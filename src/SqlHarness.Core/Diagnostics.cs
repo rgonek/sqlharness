@@ -52,7 +52,10 @@ internal sealed record TableIoCounters(
     long LobReadAheadReads);
 
 /// <summary>
-/// Every STATISTICS IO counter per table, for the activity journal only.
+/// Per-table SQL Server STATISTICS IO counters for the activity journal only:
+/// scan count and logical, physical, page server, read-ahead, and LOB
+/// logical/physical/read-ahead reads. Page server read-ahead and LOB page
+/// server counters are not kept.
 /// Missing counters (older servers) read as zero; a table repeated across
 /// statements is summed. Agent reports keep using <see cref="StatisticsIoParser"/>.
 /// </summary>

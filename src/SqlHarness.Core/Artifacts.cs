@@ -315,7 +315,7 @@ internal sealed record CompareRunArtifact(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParameterSet = null,
     BenchmarkRunMetrics? Metrics = null)
 {
-    /// <summary>Every STATISTICS IO counter per table (SQL Server). Journal only; never serialized.</summary>
+    /// <summary>Per-table STATISTICS IO detail counters (SQL Server; see <see cref="StatisticsIoDetailParser"/>). Journal only; never serialized.</summary>
     [JsonIgnore]
     public IReadOnlyList<TableIoCounters> TableIo { get; init; } = [];
 

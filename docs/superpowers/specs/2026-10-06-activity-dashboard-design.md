@@ -110,13 +110,13 @@ One row per measured variant (`measure`, `baseline`, `candidate`, matrix cell, p
 
 - elapsed ms, CPU ms, logical reads;
 - memory grant requested / granted / max used (KB), DOP, compile time / CPU;
-- spill flag and count, warnings, implicit conversions, missing-index count;
+- spill flag and count, warnings, implicit conversions, missing-index count (plan-derived columns are best-effort: an unparseable plan records zero spills, warnings, and missing indexes);
 - top wait stats from the plan (`WaitStats`, up to 10 by wait time);
 - Postgres: shared hit / read / dirtied / written, temp read / written.
 
 ### `operation_table_io` (always stored)
 
-Per variant and table, from `STATISTICS IO` (SQL Server): scan count, logical reads, physical reads, page server reads, read-ahead reads, lob logical / physical / read-ahead. `Worktable` and `Workfile` rows are kept as-is. Lines without logical reads (localized output, columnstore segment lines) are not recorded, and truncated `STATISTICS` output records no table IO. Postgres rows carry relation buffer reads as `logical_reads`; the SQL Server-only counters are null.
+Per variant and table, from `STATISTICS IO` (SQL Server): scan count, logical reads, physical reads, page server reads, read-ahead reads, lob logical / physical / read-ahead, and `cold_runs` (measured runs with physical, read-ahead, or LOB physical/read-ahead reads). Page server read-ahead and LOB page server counters are not kept. `Worktable` and `Workfile` rows are kept as-is. Lines without logical reads (localized output, columnstore segment lines) are not recorded, and truncated `STATISTICS` output records no table IO. Postgres rows carry relation buffer reads as `logical_reads`; the SQL Server-only counters are null. `cold_runs` and the detail counters are meaningful only for SQL Server rows with detail (`physical_reads` non-null); other rows store `cold_runs = 0`.
 
 ### `operation_plans` (always stored) and `plans` (only with `storeSensitive`)
 
@@ -125,16 +125,16 @@ Per variant and table, from `STATISTICS IO` (SQL Server): scan count, logical re
 
 ### Never stored, regardless of configuration
 
-`--param` / `--param-set` values, passwords, tokens, connection strings, and result cell values.
+`--param` / `--param-set` values as columns, passwords, tokens, connection strings, and result cell values. Stored plans may still embed parameter values (see the caveats below).
 
 Caveats:
 
-- With `storeSensitive`, stored plans may embed parameter values (`ParameterCompiledValue`) and always embed SQL text (`StatementText`). Documentation states this in the same way it does for `.sqlplan` artifacts.
+- With `storeSensitive`, stored plans may embed parameter values, including `--param-set` and matrix values (`ParameterCompiledValue` / `ParameterRuntimeValue`, or literals in Postgres plans), and always embed SQL text (`StatementText`). Metric rows still identify matrix cells by index only. Documentation states this in the same way it does for `.sqlplan` artifacts.
 - Without `storeSensitive`, `summary_json` must not carry plan predicates or statement text, because `PlanDistiller` predicates can contain SQL literals. Operators are recorded by physical op, object, and flags only.
 
 ## Metrics capture changes
 
-- Extend `StatisticsIoParser` to retain every `STATISTICS IO` column per table (today it keeps only logical + lob logical reads).
+- Add a journal-only `STATISTICS IO` detail parser that keeps scan count and logical, physical, page server, read-ahead, and LOB logical / physical / read-ahead reads per table (`StatisticsIoParser` keeps only logical + lob logical reads).
 - Extract memory grant, DOP, compile stats, waits, and spills from the actual plan XML, and Postgres buffer/temp counters from `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`. Extraction runs before the `storeSensitive` decision, so the metrics are kept even when the plan is discarded.
 - **Agent-visible reports are unchanged.** New fields feed only the journal. Exposing any of them to agents is a separate decision.
 
