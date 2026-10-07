@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 using Microsoft.AspNetCore.Http;
@@ -10,11 +11,14 @@ namespace SqlHarness.Dashboard;
 /// the stream because PRAGMA data_version only changes for commits made by other
 /// connections; rows are queried only when it changes. Running rows are re-checked
 /// each tick so a dead process turns into an <c>abandoned</c> event without any write.
-/// Each tick reads one WAL snapshot.
+/// Each tick reads one WAL snapshot, and a row is sent whenever its payload changes.
 /// </summary>
 internal static class LiveFeed
 {
     internal const int BatchLimit = 500;
+
+    /// <summary>How far behind the newest timestamp a late commit is still picked up by the window re-read.</summary>
+    internal static readonly TimeSpan Lookback = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan Heartbeat = TimeSpan.FromSeconds(15);
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -60,20 +64,21 @@ internal static class LiveFeed
 
     private sealed class Feed(JournalReader reader) : IDisposable
     {
-        private readonly HashSet<(long, string)> _sentAtOperationCursor = [];
-        private readonly HashSet<(long, string)> _sentAtSessionCursor = [];
-        private readonly Dictionary<long, string> _runningStatus = [];
+        private readonly Dictionary<long, Sent> _operations = [];
+        private readonly Dictionary<long, Sent> _sessions = [];
+        private readonly HashSet<long> _live = [];
+        private readonly HashSet<long> _touchedSessions = [];
         private SqliteConnection? _connection;
-        private string? _operationCursor;
-        private string? _sessionCursor;
+        private string _operationCursor = string.Empty;
+        private string _sessionCursor = string.Empty;
         private long? _lastVersion;
         private bool _initialized;
         private bool _sawMissingDatabase;
 
         /// <summary>
-        /// Opens the connection; the first successful open sets the cursors. A database
+        /// Opens the connection; the first successful open sets the baseline. A database
         /// that was missing or unreadable at connect streams everything once it appears;
-        /// an existing one streams only news, so rows at its newest timestamp count as sent.
+        /// an existing one streams only news, so the rows it already holds count as sent.
         /// </summary>
         public bool TryOpen()
         {
@@ -90,7 +95,15 @@ internal static class LiveFeed
 
                 if (!_initialized)
                 {
-                    InSnapshot(Initialize);
+                    if (!_sawMissingDatabase)
+                    {
+                        InSnapshot(() =>
+                        {
+                            _operationCursor = _sessionCursor = JournalReader.MaxTimestamp(_connection) ?? string.Empty;
+                            Read(null);
+                        });
+                    }
+
                     _initialized = true;
                 }
 
@@ -116,7 +129,7 @@ internal static class LiveFeed
             }
             catch (SqliteException)
             {
-                // Retry on the next tick with a fresh connection; the cursors are kept.
+                // Retry on the next tick with a fresh connection; what was sent is kept.
                 Reset();
             }
 
@@ -125,60 +138,83 @@ internal static class LiveFeed
 
         public void Dispose() => _connection?.Dispose();
 
-        private void Initialize()
-        {
-            var existing = _sawMissingDatabase ? null : JournalReader.MaxTimestamp(_connection!);
-            _operationCursor = existing ?? string.Empty;
-            _sessionCursor = existing ?? string.Empty;
-            if (existing is not null)
-            {
-                foreach (var session in reader.SessionsSeenSince(_connection!, existing, BatchLimit))
-                    Advance(ref _sessionCursor, _sentAtSessionCursor, session.Id, session.LastSeen);
-                foreach (var operation in reader.OperationsUpdatedSince(_connection!, existing, BatchLimit))
-                    Advance(ref _operationCursor, _sentAtOperationCursor, operation.Id, operation.UpdatedAt);
-            }
-
-            foreach (var running in reader.RunningOperations(_connection!))
-                _runningStatus[running.Id] = running.Status;
-        }
-
-        private void Read(List<(string, string)> events)
+        /// <summary>
+        /// One tick on one snapshot. Writers stamp a row before they take the write lock,
+        /// so commit order is not timestamp order: every commit re-reads the trailing
+        /// <see cref="Lookback"/> window and emits rows whose payload changed. Running rows
+        /// are re-read every tick, because liveness changes produce no journal write, and a
+        /// running row that left the running set is fetched by id even when its timestamp
+        /// fell behind the window. Null <paramref name="events"/> records without emitting.
+        /// </summary>
+        private void Read(List<(string, string)>? events)
         {
             var connection = _connection!;
             var version = DataVersion(connection);
             if (version != _lastVersion)
             {
-                var sessions = reader.SessionsSeenSince(connection, _sessionCursor!, BatchLimit);
-                foreach (var session in sessions)
-                {
-                    if (Advance(ref _sessionCursor, _sentAtSessionCursor, session.Id, session.LastSeen))
-                        events.Add(("session", JsonSerializer.Serialize(session, Json)));
-                }
+                _lastVersion = version;
+                var sessionFloor = Floor(_sessionCursor);
+                foreach (var session in Pages(sessionFloor, (at, id) => reader.SessionsSeenAfter(connection, at, id, BatchLimit), s => (s.LastSeen, s.Id)))
+                    Session(session, events);
 
-                var operations = reader.OperationsUpdatedSince(connection, _operationCursor!, BatchLimit);
-                foreach (var operation in operations)
-                {
-                    if (!Advance(ref _operationCursor, _sentAtOperationCursor, operation.Id, operation.UpdatedAt))
-                        continue;
-                    if (operation.Status is "running" or "abandoned")
-                        _runningStatus[operation.Id] = operation.Status;
-                    else
-                        _runningStatus.Remove(operation.Id);
-                    events.Add(("operation", JsonSerializer.Serialize(operation, Json)));
-                }
+                var operationFloor = Floor(_operationCursor);
+                foreach (var operation in Pages(operationFloor, (at, id) => reader.OperationsUpdatedAfter(connection, at, id, BatchLimit), o => (o.UpdatedAt, o.Id)))
+                    Operation(operation, events);
 
-                // A full batch may have left rows behind: query again next tick even without a new commit.
-                _lastVersion = sessions.Count < BatchLimit && operations.Count < BatchLimit ? version : null;
+                Prune(_sessions, sessionFloor, null);
+                Prune(_operations, operationFloor, _live);
             }
 
-            // Liveness changes produce no journal write, so check running rows every tick.
-            foreach (var running in reader.RunningOperations(connection))
+            var running = reader.RunningOperations(connection);
+            foreach (var operation in running)
+                Operation(operation, events);
+            foreach (var id in _live.Except(running.Select(operation => operation.Id)).ToArray())
             {
-                if (_runningStatus.TryGetValue(running.Id, out var known) && known == running.Status)
-                    continue;
-                _runningStatus[running.Id] = running.Status;
-                events.Add(("operation", JsonSerializer.Serialize(running, Json)));
+                if (reader.OperationById(connection, id) is { } operation)
+                    Operation(operation, events);
+                else
+                    _live.Remove(id);
             }
+
+            foreach (var id in _touchedSessions)
+            {
+                if (reader.SessionById(connection, id) is { } session)
+                    Session(session, events);
+            }
+
+            _touchedSessions.Clear();
+        }
+
+        private void Operation(OperationSummary operation, List<(string, string)>? events)
+        {
+            var json = JsonSerializer.Serialize(operation, Json);
+            var known = _operations.TryGetValue(operation.Id, out var sent);
+            if (known && sent.Json == json)
+                return;
+            _operations[operation.Id] = new Sent(operation.UpdatedAt, json, operation.Status);
+            if (string.CompareOrdinal(operation.UpdatedAt, _operationCursor) > 0)
+                _operationCursor = operation.UpdatedAt;
+            if (operation.Status is "running" or "abandoned")
+                _live.Add(operation.Id);
+            else
+                _live.Remove(operation.Id);
+            if (events is null)
+                return;
+            events.Add(("operation", json));
+            // A new row or a status change moves its session's running and abandoned counts.
+            if (!known || sent.Status != operation.Status)
+                _touchedSessions.Add(operation.SessionId);
+        }
+
+        private void Session(SessionSummary session, List<(string, string)>? events)
+        {
+            var json = JsonSerializer.Serialize(session, Json);
+            if (_sessions.TryGetValue(session.Id, out var sent) && sent.Json == json)
+                return;
+            _sessions[session.Id] = new Sent(session.LastSeen, json, null);
+            if (string.CompareOrdinal(session.LastSeen, _sessionCursor) > 0)
+                _sessionCursor = session.LastSeen;
+            events?.Add(("session", json));
         }
 
         private void InSnapshot(Action read)
@@ -202,22 +238,37 @@ internal static class LiveFeed
         }
     }
 
-    /// <summary>
-    /// Keyset cursor on (timestamp, id): rows with the same millisecond timestamp as the
-    /// cursor are de-duplicated by id, so equal timestamps are neither lost nor repeated.
-    /// </summary>
-    private static bool Advance(ref string? cursor, HashSet<(long, string)> sentAtCursor, long id, string timestamp)
-    {
-        var comparison = string.CompareOrdinal(timestamp, cursor);
-        if (comparison < 0)
-            return false;
-        if (comparison > 0)
-        {
-            cursor = timestamp;
-            sentAtCursor.Clear();
-        }
+    private readonly record struct Sent(string Timestamp, string Json, string? Status);
 
-        return sentAtCursor.Add((id, timestamp));
+    /// <summary>Every row from <paramref name="floor"/> on, as keyset pages on (timestamp, id) so each page progresses.</summary>
+    private static IEnumerable<T> Pages<T>(string floor, Func<string, long, IReadOnlyList<T>> page, Func<T, (string At, long Id)> key)
+    {
+        var (at, id) = (floor, 0L);
+        while (true)
+        {
+            var rows = page(at, id);
+            foreach (var row in rows)
+                yield return row;
+            if (rows.Count < BatchLimit)
+                yield break;
+            (at, id) = key(rows[^1]);
+        }
+    }
+
+    /// <summary>Start of the re-read window: <see cref="Lookback"/> before the newest timestamp seen.</summary>
+    private static string Floor(string cursor) =>
+        DateTimeOffset.TryParse(cursor, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var newest)
+            ? (newest - Lookback).UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture)
+            : cursor;
+
+    /// <summary>Forgets rows that left the window so memory stays bounded; <paramref name="keep"/> ids stay tracked.</summary>
+    private static void Prune(Dictionary<long, Sent> sent, string floor, HashSet<long>? keep)
+    {
+        foreach (var (id, row) in sent.ToArray())
+        {
+            if (string.CompareOrdinal(row.Timestamp, floor) < 0 && keep?.Contains(id) != true)
+                sent.Remove(id);
+        }
     }
 
     private static long DataVersion(SqliteConnection connection)

@@ -337,19 +337,34 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             (int)cold);
     }
 
-    public IReadOnlyList<OperationSummary> OperationsUpdatedSince(SqliteConnection connection, string cursor, int limit)
+    /// <summary>Keyset page of operations after (updatedAt, id), oldest first, on the caller's snapshot.</summary>
+    public IReadOnlyList<OperationSummary> OperationsUpdatedAfter(SqliteConnection connection, string updatedAt, long id, int limit)
     {
         var liveness = new ProcessLiveness(processes);
         return Query(connection, $"""
             SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id
-            WHERE o.updated_at >= $cursor ORDER BY o.updated_at, o.id LIMIT $limit;
-            """, [("$cursor", cursor), ("$limit", limit)], reader => ReadOperation(reader, liveness));
+            WHERE o.updated_at >= $at AND (o.updated_at > $at OR o.id > $id) ORDER BY o.updated_at, o.id LIMIT $limit;
+            """, [("$at", updatedAt), ("$id", id), ("$limit", limit)], reader => ReadOperation(reader, liveness));
     }
 
-    public IReadOnlyList<SessionSummary> SessionsSeenSince(SqliteConnection connection, string cursor, int limit) =>
+    /// <summary>Keyset page of sessions after (lastSeen, id), oldest first, on the caller's snapshot.</summary>
+    public IReadOnlyList<SessionSummary> SessionsSeenAfter(SqliteConnection connection, string lastSeen, long id, int limit) =>
         WithRunning(connection, Query(connection, $"""
-            SELECT {SessionColumns} FROM sessions s WHERE s.last_seen >= $cursor ORDER BY s.last_seen, s.id LIMIT $limit;
-            """, [("$cursor", cursor), ("$limit", limit)], ReadSessionRow).ToArray());
+            SELECT {SessionColumns} FROM sessions s
+            WHERE s.last_seen >= $at AND (s.last_seen > $at OR s.id > $id) ORDER BY s.last_seen, s.id LIMIT $limit;
+            """, [("$at", lastSeen), ("$id", id), ("$limit", limit)], ReadSessionRow).ToArray());
+
+    public OperationSummary? OperationById(SqliteConnection connection, long id)
+    {
+        var liveness = new ProcessLiveness(processes);
+        return Query(connection, $"""
+            SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id WHERE o.id = $id;
+            """, [("$id", id)], reader => ReadOperation(reader, liveness)).FirstOrDefault();
+    }
+
+    public SessionSummary? SessionById(SqliteConnection connection, long id) =>
+        WithRunning(connection, Query(connection, $"SELECT {SessionColumns} FROM sessions s WHERE s.id = $id;",
+            [("$id", id)], ReadSessionRow).ToArray()).FirstOrDefault();
 
     public IReadOnlyList<OperationSummary> RunningOperations(SqliteConnection connection)
     {
