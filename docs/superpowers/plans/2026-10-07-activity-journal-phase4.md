@@ -53,7 +53,7 @@
 | `ui/src/api/types.ts`, `client.ts`, `queries.ts` | API types, fetch wrapper, query hooks |
 | `ui/src/router.tsx` | TanStack Router route tree, `createAppRouter(history?)`, and router type registration |
 | `ui/src/live/liveStore.ts`, `useLiveFeed.ts` | SSE merge logic and hook |
-| `ui/src/lib/format.ts`, `flags.ts`, `compare.ts`, `stats.ts`, `useNow.ts`, `theme.ts` | Pure helpers |
+| `ui/src/lib/format.ts`, `flags.ts`, `compare.ts`, `stats.ts`, `plan.ts`, `routeId.ts`, `useNow.ts`, `theme.ts` | Pure helpers (`plan.ts` flattens a distilled plan tree; `routeId.ts` parses route ids) |
 | `ui/src/components/*.tsx` | `AppLayout`, `ErrorState`, `StatusBadge`, `FlagBadges`, `OperationTable`, `SessionTable`, `Kpi`, `PlanTree`, `VariantPanel` |
 | `ui/src/pages/*.tsx` | `LivePage`, `SessionsPage`, `SessionPage`, `OperationPage`, `StatsPage`, `NotFoundPage` |
 | `ui/src/test/setup.ts`, `fixtures.ts`, `render.tsx` | Test setup, DTO fixtures, `stubFetch`, and `renderApp(url)` (the whole app on a memory history) |
@@ -3454,6 +3454,22 @@ git commit -m "Add the statistics view and document the dashboard UI"
 ```
 
 ---
+
+## As built
+
+Accepted deviations from the tasks above:
+
+- Linting uses oxlint (the Vite template's choice), not ESLint.
+- TypeScript 6 without `baseUrl`; the `@` alias resolves through `paths` and the Vite alias (`import.meta.dirname`).
+- shadcn style `base-nova` on `@base-ui/react`; `lib/utils.ts` re-exports `cn` from the `cn` package (not `clsx` + `tailwind-merge`).
+- The csproj uses a separate `_DashboardUiFile` MSBuild item for the embedded build output and `WithCulture=false`, so UI files are never treated as satellite-culture resources.
+- Gate scripts match the PATH markers in `.bashrc` by exact line and install Node atomically (download, verify, then move into place).
+- The Live Running list is authoritative from the `["live","running"]` query; it is refetched on every feed (re)connect and when `EventSource` gives up (`readyState` CLOSED, so a 401 surfaces), pinned by `live/runningStore.test.ts`.
+- Route ids go through `parseRouteId` (`lib/routeId.ts`, plain decimal digits only); the distilled plan table uses `flattenPlan` (`lib/plan.ts`).
+- Operation detail shows `measure --param-set` facts (`stableSets/sets sets stable`, unstable-results badge) and `compare --matrix` facts (parameter name/type, `equivalentCells/cells cells equivalent`).
+- Compare deltas render through `formatChange` (no `+0%`).
+- Stats token totals sum only operations that carry both raw and emitted counts (MCP rows carry raw only).
+- The single-file publish check ran as a linux-x64 headless smoke (publish, start `dashboard --no-open`, fetch `/` with the cookie) instead of a win-x64 desktop run.
 
 ## Not in this phase
 

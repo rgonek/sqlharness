@@ -174,6 +174,12 @@ shadcn/ui generated for Base UI primitives. Files in `components/ui` stay exactl
 
 Implemented with TanStack Router (code-based route tree) and TanStack Query; TanStack Table was not needed (tables are not client-sortable in this version). The SPA is embedded through an MSBuild target; `-p:SkipDashboardUi=true` builds without Node and serves the placeholder.
 
+This version does not build, from the views listed below:
+
+- Live active-session cards without profile/database or last operation (they show agent, cwd and idle time; the operation feed carries target and status);
+- no physical-reads KPI tile on operation detail; physical reads appear in the per-table IO table;
+- "tables by logical reads" is a top-N table for the selected window, not a series over time.
+
 Views:
 
 1. **Live** (home):
