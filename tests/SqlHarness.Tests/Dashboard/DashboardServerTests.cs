@@ -1,0 +1,164 @@
+using System.Net;
+using System.Net.Sockets;
+using System.Text.Json;
+
+using SqlHarness.Dashboard;
+
+namespace SqlHarness.Tests.Dashboard;
+
+public sealed class DashboardServerTests
+{
+    internal static async Task<(RunningDashboard Server, HttpClient Client)> StartAuthenticated(TempHome home)
+    {
+        var server = await DashboardServer.StartAsync(new DashboardServerOptions(home.DatabasePath, 0, new FakeProcesses()), CancellationToken.None);
+        var handler = new HttpClientHandler { AllowAutoRedirect = false, CookieContainer = new CookieContainer() };
+        var client = new HttpClient(handler) { BaseAddress = server.BaseUri };
+        var exchange = await client.GetAsync($"/?t={server.Token}");
+        Assert.Equal(HttpStatusCode.Redirect, exchange.StatusCode);
+        return (server, client);
+    }
+
+    [Fact]
+    public async Task Token_exchange_sets_a_strict_http_only_cookie_and_redirects_without_the_token()
+    {
+        using var home = new TempHome();
+        await using var server = await DashboardServer.StartAsync(new DashboardServerOptions(home.DatabasePath, 0, new FakeProcesses()), CancellationToken.None);
+        using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = server.BaseUri };
+
+        var response = await client.GetAsync($"/sessions?t={server.Token}");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/sessions", response.Headers.Location!.OriginalString);
+        var cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
+        Assert.Contains(DashboardSecurity.CookieName + "=", cookie);
+        Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("samesite=strict", cookie, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Requests_without_cookie_or_with_foreign_host_are_rejected()
+    {
+        using var home = new TempHome();
+        var (server, client) = await StartAuthenticated(home);
+        await using var _ = server;
+        using var anonymous = new HttpClient { BaseAddress = server.BaseUri };
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/sessions")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/?t=wrong")).StatusCode);
+
+        using var rebinding = new HttpRequestMessage(HttpMethod.Get, "/api/sessions");
+        rebinding.Headers.Host = $"attacker.example:{server.Port}";
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.SendAsync(rebinding)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/sessions")).StatusCode);
+        using var viaLocalhost = new HttpRequestMessage(HttpMethod.Get, "/api/sessions");
+        viaLocalhost.Headers.Host = $"localhost:{server.Port}";
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(viaLocalhost)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Only_get_endpoints_exist()
+    {
+        using var home = new TempHome();
+        var (server, client) = await StartAuthenticated(home);
+        await using var _ = server;
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PostAsync("/api/sessions", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.DeleteAsync("/api/operations/1")).StatusCode);
+        Assert.All(server.Endpoints, endpoint => Assert.Equal(["GET"], endpoint.Methods));
+        Assert.Contains(server.Endpoints, endpoint => endpoint.Route == "/api/live");
+    }
+
+    [Fact]
+    public async Task Responses_carry_security_headers()
+    {
+        using var home = new TempHome();
+        var (server, client) = await StartAuthenticated(home);
+        await using var _ = server;
+
+        var response = await client.GetAsync("/");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/html", response.Content.Headers.ContentType!.MediaType);
+        Assert.Equal("no-store", response.Headers.CacheControl!.ToString());
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal("no-referrer", response.Headers.GetValues("Referrer-Policy").Single());
+        Assert.Equal("DENY", response.Headers.GetValues("X-Frame-Options").Single());
+        Assert.Contains("default-src 'self'", response.Headers.GetValues("Content-Security-Policy").Single());
+    }
+
+    [Fact]
+    public async Task Api_serves_journal_data_and_validates_input()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath, storeSensitive: true);
+        var handle = seed.Operation(JournalSeed.Session("cli:a"), operation: "measure", benchmark: JournalSeed.Benchmark());
+        var (server, client) = await StartAuthenticated(home);
+        await using var running = server;
+
+        using var sessions = JsonDocument.Parse(await client.GetStringAsync("/api/sessions?limit=10"));
+        Assert.Equal("claude", sessions.RootElement.GetProperty("items")[0].GetProperty("agentKind").GetString());
+
+        using var detail = JsonDocument.Parse(await client.GetStringAsync($"/api/operations/{handle.OperationId}"));
+        Assert.Equal("measure", detail.RootElement.GetProperty("operation").GetProperty("operation").GetString());
+
+        var raw = await client.GetAsync($"/api/plans/{new string('A', 64)}");
+        Assert.Equal("application/xml", raw.Content.Headers.ContentType!.MediaType);
+        Assert.Equal("attachment", raw.Content.Headers.ContentDisposition!.DispositionType);
+
+        using var distilled = JsonDocument.Parse(await client.GetStringAsync($"/api/plans/{new string('A', 64)}?view=distilled"));
+        Assert.True(distilled.RootElement.TryGetProperty("statements", out _));
+
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/operations/999999")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/plans/{new string('B', 64)}")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/plans/not-a-hash")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/stats?from=yesterday")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/operations?limit=abc")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/stats?from=2026-10-01T00:00:00Z")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Unknown_non_api_paths_serve_the_spa_entry_and_unknown_api_paths_are_404()
+    {
+        using var home = new TempHome();
+        var (server, client) = await StartAuthenticated(home);
+        await using var _ = server;
+
+        Assert.Equal("text/html", (await client.GetAsync("/sessions/42")).Content.Headers.ContentType!.MediaType);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/nope")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Busy_preferred_port_falls_back_to_the_next_free_port()
+    {
+        using var home = new TempHome();
+        using var blocker = new TcpListener(IPAddress.Loopback, 0);
+        blocker.Start();
+        var busy = ((IPEndPoint)blocker.LocalEndpoint).Port;
+
+        await using var server = await DashboardServer.StartAsync(new DashboardServerOptions(home.DatabasePath, busy, new FakeProcesses()), CancellationToken.None);
+
+        Assert.NotEqual(busy, server.Port);
+        Assert.InRange(server.Port, busy + 1, busy + DashboardServer.PortAttempts);
+    }
+
+    [Fact]
+    public async Task Environment_urls_do_not_change_the_loopback_binding()
+    {
+        using var home = new TempHome();
+        var saved = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
+        Environment.SetEnvironmentVariable("ASPNETCORE_URLS", "http://0.0.0.0:5999");
+        try
+        {
+            await using var server = await DashboardServer.StartAsync(new DashboardServerOptions(home.DatabasePath, 0, new FakeProcesses()), CancellationToken.None);
+
+            Assert.Equal("127.0.0.1", server.BaseUri.Host);
+            Assert.NotEqual(5999, server.Port);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ASPNETCORE_URLS", saved);
+        }
+    }
+}
