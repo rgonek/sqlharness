@@ -8,7 +8,6 @@ public static class SqlHarnessPaths
 
     public static string TargetsFile => Path.Combine(Home, "targets.json");
     public static string ConfigFile => Path.Combine(Home, "config.json");
-    public static string GainFile => Path.Combine(Home, "data", "gain.jsonl");
     public static string ActivityDatabase => Path.Combine(Home, "data", "activity.db");
     public static string CompareDir => Path.Combine(Home, "compare");
     public static string SnapshotsDir => Path.Combine(Home, "snapshots");

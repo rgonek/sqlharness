@@ -382,17 +382,12 @@ public class SqlHarnessCompareTests
     [Fact]
     public async Task Compare_raw_footprint_includes_setup_warmups_messages_and_every_plan_but_hashes_are_result_only()
     {
-        var minimalGain = new FakeGainStore();
-        var richGain = new FakeGainStore();
-        var minimal = await Module(FakeCompareSession.Create(), gain: minimalGain).ExecuteAsync(Compare(repeat: 1));
+        var minimal = await Module(FakeCompareSession.Create()).ExecuteAsync(Compare(repeat: 1));
         var rich = await Module(
-            FakeCompareSession.Create(includeSetupResult: true, includeSecondPlan: true, includeExtraMessage: true),
-            gain: richGain).ExecuteAsync(Compare(repeat: 1));
+            FakeCompareSession.Create(includeSetupResult: true, includeSecondPlan: true, includeExtraMessage: true))
+            .ExecuteAsync(Compare(repeat: 1));
 
-        await Assert.IsType<SqlHarnessEmissionReceipt>(minimal.EmissionReceipt).CompleteAsync(new OutputFootprint(1, 1));
-        await Assert.IsType<SqlHarnessEmissionReceipt>(rich.EmissionReceipt).CompleteAsync(new OutputFootprint(1, 1));
-
-        Assert.True(Assert.Single(richGain.Records).RawBytes > Assert.Single(minimalGain.Records).RawBytes);
+        Assert.True(rich.EmissionReceipt!.RawFootprint!.Bytes > minimal.EmissionReceipt!.RawFootprint!.Bytes);
         Assert.True(Assert.IsType<SqlHarnessCompareReport>(rich.Report).ResultsEquivalent);
     }
 
@@ -409,20 +404,15 @@ public class SqlHarnessCompareTests
     }
 
     [Fact]
-    public async Task Compare_defers_gain_until_receipt_completion()
+    public async Task Compare_receipt_completion_returns_the_exit_code()
     {
         var session = FakeCompareSession.Create();
-        var gain = new FakeGainStore();
-        var outcome = await Module(session, gain: gain).ExecuteAsync(Compare(repeat: 1));
+        var outcome = await Module(session).ExecuteAsync(Compare(repeat: 1));
 
-        Assert.Empty(gain.Records);
         var completion = await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
             .CompleteAsync(new OutputFootprint(80, 4));
 
         Assert.Equal(SqlHarnessExitCode.Success, completion);
-        var record = Assert.Single(gain.Records);
-        Assert.Equal("compare", record.Command);
-        Assert.Equal(80, record.EmittedBytes);
     }
 
     [Fact]
@@ -439,12 +429,9 @@ public class SqlHarnessCompareTests
     [Fact]
     public async Task Measured_failure_receipt_preserves_exact_setup_and_warmup_raw_footprint()
     {
-        var gain = new FakeGainStore();
         var session = FakeCompareSession.Create(includeSetupResult: true, failOnBenchmarkNumber: 3);
 
-        var outcome = await Module(session, gain: gain).ExecuteAsync(Compare(repeat: 1));
-        await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
-            .CompleteAsync(new OutputFootprint(1, 1));
+        var outcome = await Module(session).ExecuteAsync(Compare(repeat: 1));
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
         using var expected = new CanonicalResultAccumulator();
@@ -456,10 +443,10 @@ public class SqlHarnessCompareTests
         expected.AddMessage("planXml", PlanB);
         expected.AddMessage("sql", StatisticsMessage(5, 10, 12));
         var completed = expected.Complete().Footprint;
-        var record = Assert.Single(gain.Records);
-        Assert.Equal(completed.Bytes - 2, record.RawBytes);
-        Assert.Equal(completed.Lines, record.RawLines);
-        Assert.True(record.RawBytes > 0);
+        var raw = outcome.EmissionReceipt!.RawFootprint!;
+        Assert.Equal(completed.Bytes - 2, raw.Bytes);
+        Assert.Equal(completed.Lines, raw.Lines);
+        Assert.True(raw.Bytes > 0);
     }
 
     [Fact]
@@ -676,14 +663,13 @@ public class SqlHarnessCompareTests
     [Fact]
     public async Task Compare_failure_still_carries_a_completion_receipt()
     {
-        var gain = new FakeGainStore();
         var session = FakeCompareSession.Create();
         var operation = Compare(repeat: 1) with
         {
             BaselineSql = "DELETE dbo.Clients",
         };
 
-        var outcome = await Module(session, gain: gain).ExecuteAsync(operation);
+        var outcome = await Module(session).ExecuteAsync(operation);
 
         Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
         Assert.Null(outcome.Report);
@@ -691,28 +677,6 @@ public class SqlHarnessCompareTests
         Assert.Equal(
             SqlHarnessExitCode.Safety,
             await outcome.EmissionReceipt.CompleteAsync(new OutputFootprint(0, 0)));
-        Assert.Single(gain.Records);
-    }
-
-    [Fact]
-    public async Task Compare_receipt_reports_local_storage_when_gain_store_fails()
-    {
-        var module = new SqlHarnessModule(
-            FakeCompareSession.Create(), new ThrowingGainStore(), new NullArtifactWriter(), Profiles);
-
-        var outcome = await module.ExecuteAsync(Compare(repeat: 1));
-
-        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
-        Assert.NotNull(outcome.EmissionReceipt);
-        Assert.Equal(
-            SqlHarnessExitCode.LocalStorage,
-            await outcome.EmissionReceipt.CompleteAsync(new OutputFootprint(0, 0)));
-    }
-
-    private sealed class ThrowingGainStore : IGainStore
-    {
-        public void Append(GainRecord record) => throw new IOException("gain store unavailable");
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 
     private sealed class IdentityAssigningFactory(FakeCompareSession inner) : ISqlSessionFactory
@@ -790,10 +754,8 @@ public class SqlHarnessCompareTests
         }
     }
 
-    private sealed class FakeGainStore : IGainStore
+    private sealed class FakeGainStore : IGainSource
     {
-        public List<GainRecord> Records { get; } = [];
-        public void Append(GainRecord record) => Records.Add(record);
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 

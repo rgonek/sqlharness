@@ -34,7 +34,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         new HashSet<string>(StringComparer.Ordinal);
 
     private readonly ISqlSessionFactory _sessionFactory;
-    private readonly IGainStore _gainStore;
+    private readonly IGainSource _gainSource;
     private readonly ICompareArtifactWriter _artifactWriter;
     private readonly CompareCellRunner _cellRunner;
     private readonly CompareMatrixRunner _matrixRunner;
@@ -68,7 +68,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     public SqlHarnessModule(Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles)
         : this(
             new EngineSessionFactory(new SqlClientSessionFactory(new AzureCli()), new NpgsqlSessionFactory()),
-            new GainStore(),
+            new JournalGainStore(SqlHarnessPaths.ActivityDatabase, () => SqlHarnessConfigLoader.Load().Config.Journal.Enabled),
             new CompareArtifactWriter(),
             loadProfiles,
             queryStoreArtifacts: new QueryStoreArtifactWriter(),
@@ -78,7 +78,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
     internal SqlHarnessModule(
         ISqlSessionFactory sessionFactory,
-        IGainStore gainStore,
+        IGainSource gainSource,
         Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
         IWatchClock? watchClock = null,
         ISnapshotStore? snapshotStore = null,
@@ -86,7 +86,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         IIndexAnalysisArtifactWriter? indexAnalysisArtifacts = null)
         : this(
             sessionFactory,
-            gainStore,
+            gainSource,
             new CompareArtifactWriter(),
             loadProfiles,
             watchClock,
@@ -98,7 +98,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
     internal SqlHarnessModule(
         ISqlSessionFactory sessionFactory,
-        IGainStore gainStore,
+        IGainSource gainSource,
         ICompareArtifactWriter artifactWriter,
         Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
         IWatchClock? watchClock = null,
@@ -107,7 +107,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         IIndexAnalysisArtifactWriter? indexAnalysisArtifacts = null)
     {
         _sessionFactory = sessionFactory ?? throw new ArgumentNullException(nameof(sessionFactory));
-        _gainStore = gainStore ?? throw new ArgumentNullException(nameof(gainStore));
+        _gainSource = gainSource ?? throw new ArgumentNullException(nameof(gainSource));
         _artifactWriter = artifactWriter ?? throw new ArgumentNullException(nameof(artifactWriter));
         _cellRunner = new CompareCellRunner(_sessionFactory, _artifactWriter);
         _matrixRunner = new CompareMatrixRunner(_cellRunner);
@@ -127,7 +127,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             try
             {
-                return Checked(operation, new SqlHarnessOutcome(SqlHarnessExitCode.Success, _gainStore.Aggregate(), null));
+                return Checked(operation, new SqlHarnessOutcome(SqlHarnessExitCode.Success, _gainSource.Aggregate(), null));
             }
             catch (Exception exception)
             {
@@ -243,7 +243,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 rawFootprint,
                 collected.OmittedMessageCount);
             var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
-            return Checked(query, WithReceipt(success, stopwatch.ElapsedMilliseconds, rawFootprint));
+            return Checked(query, WithReceipt(success, rawFootprint));
         }
         catch (Exception exception)
         {
@@ -254,7 +254,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 exitCode,
                 null,
                 SecretRedactor.Redact(exception, knownSecrets));
-            return Checked(query, WithReceipt(failure, stopwatch.ElapsedMilliseconds, rawFootprint));
+            return Checked(query, WithReceipt(failure, rawFootprint));
         }
         finally
         {
@@ -273,38 +273,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         return outcome;
     }
 
-    private SqlHarnessOutcome WithReceipt(
-        SqlHarnessOutcome outcome,
-        long durationMilliseconds,
-        OutputFootprint raw,
-        string command = "query")
+    /// <summary>
+    /// Attaches the emission receipt: it carries the raw footprint for the activity journal
+    /// (JournalingModule records raw and emitted footprints) and returns the outcome's exit code.
+    /// </summary>
+    private static SqlHarnessOutcome WithReceipt(SqlHarnessOutcome outcome, OutputFootprint raw)
     {
-        var receipt = new SqlHarnessEmissionReceipt((emitted, _) =>
-        {
-            try
-            {
-                var rawTokens = raw.EstimatedTokenCount;
-                var emittedTokens = emitted.EstimatedTokenCount;
-                // savedEstimatedTokens is the historical nonnegative gross field; reports derive signed net from both estimates.
-                _gainStore.Append(new GainRecord(
-                    DateTimeOffset.UtcNow,
-                    command,
-                    IsGainSuccess(outcome.ExitCode),
-                    Math.Max(durationMilliseconds, 0),
-                    raw.Bytes,
-                    raw.Lines,
-                    emitted.Bytes,
-                    emitted.Lines,
-                    rawTokens,
-                    emittedTokens,
-                    Math.Max(rawTokens - emittedTokens, 0)));
-                return Task.FromResult(outcome.ExitCode);
-            }
-            catch (Exception)
-            {
-                return Task.FromResult(SqlHarnessExitCode.LocalStorage);
-            }
-        })
+        var receipt = new SqlHarnessEmissionReceipt((_, _) => Task.FromResult(outcome.ExitCode))
         {
             RawFootprint = raw,
         };
@@ -390,7 +365,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             {
                 BenchmarkRuns = cell.Runs,
             };
-            return WithReceipt(success, stopwatch.ElapsedMilliseconds, rawFootprint, "compare");
+            return WithReceipt(success, rawFootprint);
         }
         catch (Exception exception)
         {
@@ -398,7 +373,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 ? SqlHarnessExitCode.LocalStorage
                 : OperationFailureMapper.Map(exception, phase);
             var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, knownSecrets));
-            return WithReceipt(failure, stopwatch.ElapsedMilliseconds, rawFootprint, "compare");
+            return WithReceipt(failure, rawFootprint);
         }
     }
 
@@ -507,9 +482,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     : OperationFailureMapper.Map(failed.InnerException ?? failed, phase);
                 return WithReceipt(
                     new SqlHarnessOutcome(exitCode, failed.PartialReport, FormatMatrixCellError(failed, knownSecrets)),
-                    stopwatch.ElapsedMilliseconds,
-                    rawFootprint,
-                    "compare");
+                    rawFootprint);
             }
 
             rawFootprint = result.RawFootprint;
@@ -517,7 +490,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             {
                 BenchmarkRuns = result.Runs,
             };
-            return WithReceipt(success, stopwatch.ElapsedMilliseconds, rawFootprint, "compare");
+            return WithReceipt(success, rawFootprint);
         }
         catch (Exception exception)
         {
@@ -525,7 +498,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 ? SqlHarnessExitCode.LocalStorage
                 : OperationFailureMapper.Map(exception, phase);
             var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, knownSecrets));
-            return WithReceipt(failure, stopwatch.ElapsedMilliseconds, rawFootprint, "compare");
+            return WithReceipt(failure, rawFootprint);
         }
     }
 
@@ -655,7 +628,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 {
                     BenchmarkRuns = execution.Runs.Select(run => run.Artifact).ToArray(),
                 };
-                return WithReceipt(setSuccess, stopwatch.ElapsedMilliseconds, rawFootprint, "measure");
+                return WithReceipt(setSuccess, rawFootprint);
             }
 
             phase = OperationPhase.Authentication;
@@ -695,7 +668,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             {
                 BenchmarkRuns = runs.Select(run => run.Artifact).ToArray(),
             };
-            return WithReceipt(success, stopwatch.ElapsedMilliseconds, rawFootprint, "measure");
+            return WithReceipt(success, rawFootprint);
         }
         catch (Exception exception)
         {
@@ -705,7 +678,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 ? SqlHarnessExitCode.LocalStorage
                 : OperationFailureMapper.Map(exception, phase);
             var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, LongestFirst(knownSecrets)));
-            return WithReceipt(failure, stopwatch.ElapsedMilliseconds, rawFootprint, "measure");
+            return WithReceipt(failure, rawFootprint);
         }
         finally
         {
@@ -811,11 +784,11 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             raw = result.Raw;
             if (selection.IsObjectMode && (result.Objects.Count != 1 || result.Omitted != 0))
                 throw new SqlHarnessSafetyException(SchemaReader.MissingOrAmbiguousMessage);
-            return WithReceipt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, new SqlHarnessSchemaReport(session.Identity, result.Objects, result.Omitted), null), stopwatch.ElapsedMilliseconds, raw, "schema");
+            return WithReceipt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, new SqlHarnessSchemaReport(session.Identity, result.Objects, result.Omitted), null), raw);
         }
         catch (Exception exception)
         {
-            return WithReceipt(new SqlHarnessOutcome(OperationFailureMapper.Map(exception, phase), null, SecretRedactor.Redact(exception, knownSecrets)), stopwatch.ElapsedMilliseconds, raw, "schema");
+            return WithReceipt(new SqlHarnessOutcome(OperationFailureMapper.Map(exception, phase), null, SecretRedactor.Redact(exception, knownSecrets)), raw);
         }
     }
 
@@ -867,7 +840,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 ct);
             rawFootprint = raw;
             // Runner already mapped connect/SQL failures; preserve its exit code and report.
-            return WithReceipt(outcome, stopwatch.ElapsedMilliseconds, rawFootprint, "watch");
+            return WithReceipt(outcome, rawFootprint);
         }
         catch (Exception exception)
         {
@@ -876,7 +849,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 exitCode,
                 null,
                 SecretRedactor.Redact(exception, knownSecrets));
-            return WithReceipt(failure, stopwatch.ElapsedMilliseconds, rawFootprint, "watch");
+            return WithReceipt(failure, rawFootprint);
         }
     }
 
@@ -945,7 +918,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 ct);
             rawFootprint = raw;
             // Runner already mapped connect/SQL failures; preserve its exit code.
-            return Checked(watch, WithReceipt(outcome, stopwatch.ElapsedMilliseconds, rawFootprint, "watch"));
+            return Checked(watch, WithReceipt(outcome, rawFootprint));
         }
         catch (Exception exception)
         {
@@ -953,7 +926,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var message = SecretRedactor.Redact(exception, knownSecrets);
             EmitWatchNdjsonFailed(writer, exitCode, SqlHarnessError.From(exitCode, message, "validation"), knownSecrets);
             var failure = new SqlHarnessOutcome(exitCode, null, message);
-            return Checked(watch, WithReceipt(failure, stopwatch.ElapsedMilliseconds, rawFootprint, "watch"));
+            return Checked(watch, WithReceipt(failure, rawFootprint));
         }
     }
 
@@ -1005,15 +978,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             throw new SqlHarnessSafetyException("Watch --until requires --max-rows of at least 1.");
     }
 
-    /// <summary>
-    /// Controlled terminal exits (max-duration / intentional snapshot differences) count as gain successes.
-    /// Process exit codes remain non-zero so agents can still branch on them.
-    /// </summary>
-    private static bool IsGainSuccess(SqlHarnessExitCode exitCode) =>
-        exitCode is SqlHarnessExitCode.Success
-            or SqlHarnessExitCode.WatchMaxDuration
-            or SqlHarnessExitCode.SnapshotDifferences;
-
     private async Task<SqlHarnessOutcome> ExecuteSnapshotAsync(SqlHarnessSnapshotOperation snapshot, CancellationToken ct)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -1057,7 +1021,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 ct);
             rawFootprint = raw;
             // Runner already mapped connect/SQL/storage failures; preserve its exit code and report.
-            return WithReceipt(outcome, stopwatch.ElapsedMilliseconds, rawFootprint, "snapshot");
+            return WithReceipt(outcome, rawFootprint);
         }
         catch (Exception exception)
         {
@@ -1066,7 +1030,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 exitCode,
                 null,
                 SecretRedactor.Redact(exception, knownSecrets));
-            return WithReceipt(failure, stopwatch.ElapsedMilliseconds, rawFootprint, "snapshot");
+            return WithReceipt(failure, rawFootprint);
         }
     }
 
@@ -1116,9 +1080,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 stopwatch.ElapsedMilliseconds);
             return WithReceipt(
                 new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null),
-                stopwatch.ElapsedMilliseconds,
-                raw,
-                "ping");
+                raw);
         }
         catch (Exception exception)
         {
@@ -1127,9 +1089,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     OperationFailureMapper.Map(exception, phase),
                     null,
                     SecretRedactor.Redact(exception, knownSecrets)),
-                stopwatch.ElapsedMilliseconds,
-                raw,
-                "ping");
+                raw);
         }
     }
 
@@ -1198,9 +1158,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var report = new SqlHarnessCountsReport(session.Identity, tables, selection.Omitted);
             return WithReceipt(
                 new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null),
-                stopwatch.ElapsedMilliseconds,
-                raw,
-                "counts");
+                raw);
         }
         catch (Exception exception)
         {
@@ -1209,9 +1167,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     OperationFailureMapper.Map(exception, phase),
                     null,
                     SecretRedactor.Redact(exception, knownSecrets)),
-                stopwatch.ElapsedMilliseconds,
-                raw,
-                "counts");
+                raw);
         }
     }
 
@@ -1256,9 +1212,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 collected.Indexes);
             return WithReceipt(
                 new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null),
-                stopwatch.ElapsedMilliseconds,
-                raw,
-                "space");
+                raw);
         }
         catch (Exception exception)
         {
@@ -1267,9 +1221,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     OperationFailureMapper.Map(exception, phase),
                     null,
                     SecretRedactor.Redact(exception, knownSecrets)),
-                stopwatch.ElapsedMilliseconds,
-                raw,
-                "space");
+                raw);
         }
     }
 
@@ -1327,9 +1279,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             report = report with { ArtifactDirectory = directory };
             return WithReceipt(
                 new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null),
-                stopwatch.ElapsedMilliseconds,
-                rawFootprint,
-                "qstop");
+                rawFootprint);
         }
         catch (Exception exception)
         {
@@ -1341,9 +1291,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     exitCode,
                     null,
                     SecretRedactor.Redact(exception, LongestFirst(knownSecrets))),
-                stopwatch.ElapsedMilliseconds,
-                rawFootprint,
-                "qstop");
+                rawFootprint);
         }
     }
 
@@ -1454,9 +1402,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             report = report with { ArtifactDirectory = directory };
             return WithReceipt(
                 new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null),
-                stopwatch.ElapsedMilliseconds,
-                rawFootprint,
-                "indexes");
+                rawFootprint);
         }
         catch (Exception exception)
         {
@@ -1468,9 +1414,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     exitCode,
                     null,
                     SecretRedactor.Redact(exception, LongestFirst(knownSecrets))),
-                stopwatch.ElapsedMilliseconds,
-                rawFootprint,
-                "indexes");
+                rawFootprint);
         }
     }
 
@@ -1528,12 +1472,12 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         try
         {
             var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, DistillPlanDocument(operation.ShowplanXml), null);
-            return WithReceipt(outcome, stopwatch.ElapsedMilliseconds, raw, "plan");
+            return WithReceipt(outcome, raw);
         }
         catch (Exception exception)
         {
             var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, SecretRedactor.Redact(exception, [operation.ShowplanXml]));
-            return WithReceipt(outcome, stopwatch.ElapsedMilliseconds, raw, "plan");
+            return WithReceipt(outcome, raw);
         }
     }
 

@@ -262,14 +262,13 @@ public sealed class SpaceTests
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
             .CompleteAsync(new OutputFootprint(10, 1));
-        var record = Assert.Single(gain.Records);
-        Assert.Equal("space", record.Command);
-        Assert.True(record.RawBytes > 0);
-        Assert.True(record.RawLines > 0);
+        var record = outcome.EmissionReceipt!.RawFootprint!;
+        Assert.True(record.Bytes > 0);
+        Assert.True(record.Lines > 0);
     }
 
     [Fact]
-    public async Task Space_records_gain_with_space_command()
+    public async Task Space_receipt_completes_with_the_exit_code()
     {
         var session = SpaceFixture.Session(objectMatches: 0);
         var gain = new FakeGain();
@@ -278,26 +277,8 @@ public sealed class SpaceTests
             new SqlHarnessSpaceOperation(Target(), 25, null, 30));
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
-        Assert.Empty(gain.Records);
-        await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
-            .CompleteAsync(new OutputFootprint(20, 2));
-        Assert.Equal("space", Assert.Single(gain.Records).Command);
-        Assert.True(Assert.Single(gain.Records).Success);
-    }
-
-    [Fact]
-    public async Task Space_receipt_maps_gain_storage_failure_to_local_storage()
-    {
-        var session = SpaceFixture.Session(objectMatches: 0);
-        var gain = new FakeGain(new IOException("disk full"));
-
-        var outcome = await Module(session, gain).ExecuteAsync(
-            new SqlHarnessSpaceOperation(Target(), 25, null, 30));
-
-        var completion = await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
-            .CompleteAsync(new OutputFootprint(8, 1));
-
-        Assert.Equal(SqlHarnessExitCode.LocalStorage, completion);
+        Assert.Equal(SqlHarnessExitCode.Success, await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
+            .CompleteAsync(new OutputFootprint(20, 2)));
     }
 
     private static SqlHarnessModule Module(FakeSession session, FakeGain? gain = null) =>
@@ -319,16 +300,8 @@ public sealed class SpaceTests
     private static SqlException FakeSqlException() =>
         (SqlException)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(SqlException));
 
-    private sealed class FakeGain(Exception? appendFailure = null) : IGainStore
+    private sealed class FakeGain : IGainSource
     {
-        public List<GainRecord> Records { get; } = [];
-        public void Append(GainRecord record)
-        {
-            if (appendFailure is not null)
-                throw appendFailure;
-            Records.Add(record);
-        }
-
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 

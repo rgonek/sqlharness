@@ -264,7 +264,7 @@ public class SqlHarnessMeasureTests
     }
 
     [Fact]
-    public async Task Measure_defers_measure_gain_receipt_and_full_raw_includes_setup_warmup_and_measured_runs()
+    public async Task Measure_receipt_raw_footprint_includes_setup_warmup_and_measured_runs()
     {
         var leanGain = new FakeGainStore();
         var richGain = new FakeGainStore();
@@ -272,14 +272,10 @@ public class SqlHarnessMeasureTests
         var rich = await Module(FakeMeasureSession.Create(includeSetupResult: true, includeExtraMessage: true), gain: richGain)
             .ExecuteAsync(Measure(1));
 
-        Assert.Empty(richGain.Records);
         await Assert.IsType<SqlHarnessEmissionReceipt>(lean.EmissionReceipt).CompleteAsync(new OutputFootprint(1, 1));
         await Assert.IsType<SqlHarnessEmissionReceipt>(rich.EmissionReceipt).CompleteAsync(new OutputFootprint(80, 4));
 
-        var record = Assert.Single(richGain.Records);
-        Assert.Equal("measure", record.Command);
-        Assert.Equal(80, record.EmittedBytes);
-        Assert.True(record.RawBytes > Assert.Single(leanGain.Records).RawBytes);
+        Assert.True(rich.EmissionReceipt!.RawFootprint!.Bytes > lean.EmissionReceipt!.RawFootprint!.Bytes);
     }
 
     [Fact]
@@ -292,7 +288,7 @@ public class SqlHarnessMeasureTests
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt).CompleteAsync(new OutputFootprint(1, 1));
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
-        Assert.True(Assert.Single(gain.Records).RawBytes > 0);
+        Assert.True(outcome.EmissionReceipt!.RawFootprint!.Bytes > 0);
     }
 
     [Fact]
@@ -310,9 +306,9 @@ public class SqlHarnessMeasureTests
         expected.AddMessage("sql", StatisticsMessage(5, 10, 12));
         expected.AddMessage("sql", "diagnostic before query failure");
         var footprint = expected.SnapshotFootprint();
-        var record = Assert.Single(gain.Records);
-        Assert.Equal(footprint.Bytes, record.RawBytes);
-        Assert.Equal(footprint.Lines, record.RawLines);
+        var record = outcome.EmissionReceipt!.RawFootprint!;
+        Assert.Equal(footprint.Bytes, record.Bytes);
+        Assert.Equal(footprint.Lines, record.Lines);
     }
 
     [Fact]
@@ -327,9 +323,9 @@ public class SqlHarnessMeasureTests
         using var expected = new CanonicalResultAccumulator();
         expected.AddMessage("sql", "diagnostic before setup failure");
         var footprint = expected.SnapshotFootprint();
-        var record = Assert.Single(gain.Records);
-        Assert.Equal(footprint.Bytes, record.RawBytes);
-        Assert.Equal(footprint.Lines, record.RawLines);
+        var record = outcome.EmissionReceipt!.RawFootprint!;
+        Assert.Equal(footprint.Bytes, record.Bytes);
+        Assert.Equal(footprint.Lines, record.Lines);
     }
 
     [Fact]
@@ -571,10 +567,8 @@ public class SqlHarnessMeasureTests
         }
     }
 
-    private sealed class FakeGainStore : IGainStore
+    private sealed class FakeGainStore : IGainSource
     {
-        public List<GainRecord> Records { get; } = [];
-        public void Append(GainRecord record) => Records.Add(record);
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 

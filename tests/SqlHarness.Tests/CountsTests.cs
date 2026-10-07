@@ -201,18 +201,16 @@ public sealed class CountsTests
     }
 
     [Fact]
-    public async Task Counts_records_gain_with_counts_command()
+    public async Task Counts_receipt_completes_with_the_exit_code()
     {
         var session = FakeSession.ForCatalog(("dbo", "Contracts", 123L));
-        var gain = new FakeGain();
 
-        var outcome = await Module(session, gain).ExecuteAsync(
+        var outcome = await Module(session, new FakeGain()).ExecuteAsync(
             new SqlHarnessCountsOperation(Target(), ["dbo.Contracts"], null, 50, false, 30));
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
-        await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
-            .CompleteAsync(new OutputFootprint(10, 1));
-        Assert.Equal("counts", Assert.Single(gain.Records).Command);
+        Assert.Equal(SqlHarnessExitCode.Success, await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
+            .CompleteAsync(new OutputFootprint(10, 1)));
     }
 
     [Fact]
@@ -246,10 +244,8 @@ public sealed class CountsTests
     private static SqlException FakeSqlException() =>
         (SqlException)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(SqlException));
 
-    private sealed class FakeGain : IGainStore
+    private sealed class FakeGain : IGainSource
     {
-        public List<GainRecord> Records { get; } = [];
-        public void Append(GainRecord record) => Records.Add(record);
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 

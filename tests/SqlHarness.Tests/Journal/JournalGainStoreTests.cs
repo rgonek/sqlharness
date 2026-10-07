@@ -1,3 +1,5 @@
+using Microsoft.Data.Sqlite;
+
 using SqlHarness.Core;
 
 namespace SqlHarness.Tests.Journal;
@@ -104,5 +106,36 @@ public sealed class JournalGainStoreTests
 
             Assert.Equal((400L, 3L, 40L, 1L), ((long)row["raw_bytes"]!, (long)row["raw_lines"]!, (long)row["emitted_bytes"]!, (long)row["emitted_lines"]!));
         }
+    }
+    [Theory]
+    [InlineData("")]
+    [InlineData("v2")]
+    [InlineData("v3-without-operations")]
+    public void Database_older_than_schema_v3_or_without_operations_reports_zeros(string shape)
+    {
+        using var temp = new JournalTempDirectory();
+        Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
+        using (var connection = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = shape switch
+            {
+                "v2" => JournalSchema.Version1 + JournalSchema.Version2 + """
+                    INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, first_seen, last_seen)
+                    VALUES ('cli:old', 'claude', 'cli', 'process-tree', 1, 't', 't');
+                    PRAGMA user_version = 2;
+                    """,
+                "v3-without-operations" => "PRAGMA user_version = 3;",
+                _ => "SELECT 1;",
+            };
+            command.ExecuteNonQuery();
+        }
+
+        var report = new JournalGainStore(temp.DatabasePath, () => true).Aggregate();
+
+        Assert.True(report.JournalEnabled);
+        Assert.Equal(0, report.Total.Executions);
+        Assert.Equal(0, report.Query.Executions);
     }
 }

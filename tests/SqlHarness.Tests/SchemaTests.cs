@@ -112,7 +112,6 @@ public sealed class SchemaTests
             p => { Assert.Equal("@objectSchema", p.Name); Assert.Equal(SqlDbType.NVarChar, p.Type); Assert.Equal(DBNull.Value, p.Value); },
             p => { Assert.Equal("@objectName", p.Name); Assert.Equal(SqlDbType.NVarChar, p.Type); Assert.Equal(DBNull.Value, p.Value); });
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt).CompleteAsync(new(20, 2));
-        Assert.Equal("schema", Assert.Single(gain.Records).Command);
     }
 
     [Fact]
@@ -291,10 +290,8 @@ public sealed class SchemaTests
     private static object?[][] Set(string[] names, params object?[][] rows) => [[.. names], .. rows];
     private static SqlTargetRequest Target() => new("test", new Dictionary<string, string>());
     private static IReadOnlyDictionary<string, TargetProfile> Profiles() => new Dictionary<string, TargetProfile> { ["test"] = new("server", "db", new Dictionary<string, string>(), "integrated") };
-    private sealed class FakeGain : IGainStore
+    private sealed class FakeGain : IGainSource
     {
-        public List<GainRecord> Records { get; } = [];
-        public void Append(GainRecord record) => Records.Add(record);
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
     private sealed class FakeSession(FakeReader reader) : ISqlSessionFactory, ISqlSession

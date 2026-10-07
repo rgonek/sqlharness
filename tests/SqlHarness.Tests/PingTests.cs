@@ -183,7 +183,7 @@ public sealed class PingTests
     }
 
     [Fact]
-    public async Task Ping_records_gain_with_ping_command()
+    public async Task Ping_receipt_completes_with_the_exit_code()
     {
         var session = new FakeSession(Row(1, "db", "server", "login"));
         var gain = new FakeGain();
@@ -191,9 +191,8 @@ public sealed class PingTests
         var outcome = await Module(session, gain).ExecuteAsync(new SqlHarnessPingOperation(Target(), 5));
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
-        await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
-            .CompleteAsync(new OutputFootprint(10, 1));
-        Assert.Equal("ping", Assert.Single(gain.Records).Command);
+        Assert.Equal(SqlHarnessExitCode.Success, await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
+            .CompleteAsync(new OutputFootprint(10, 1)));
     }
 
     private static SqlHarnessModule Module(
@@ -237,10 +236,8 @@ public sealed class PingTests
     private static SqlException FakeSqlException() =>
         (SqlException)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(SqlException));
 
-    private sealed class FakeGain : IGainStore
+    private sealed class FakeGain : IGainSource
     {
-        public List<GainRecord> Records { get; } = [];
-        public void Append(GainRecord record) => Records.Add(record);
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 

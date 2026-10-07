@@ -131,9 +131,8 @@ public sealed class JournalContractTests : IDisposable
             ["test"] = new("test-server", "testdb-{env}", new Dictionary<string, string> { ["env"] = "^(a|b)$" }, "integrated"),
         };
 
-    private sealed class NullGainStore : IGainStore
+    private sealed class NullGainStore : IGainSource
     {
-        public void Append(GainRecord record) { }
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 

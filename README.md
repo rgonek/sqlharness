@@ -268,7 +268,7 @@ Never work around a safety rejection. Narrow the operation or obtain explicit ap
 
 ## Gain accounting
 
-Every command except `gain` records metadata-only raw and emitted byte counts in `~/.sqlharness/data/gain.jsonl`; SQL text, result values, plans, messages, and secrets are not recorded there. The `gain` command estimates tokens as `ceil(UTF-8 bytes / 4)` using the `utf8-bytes-div-4` heuristic. `savedEstimatedTokens` remains the historical nonnegative gross field; `netEstimatedTokens` is the signed raw-minus-emitted delta, and savings percentage uses that signed net. Raw means SQLHarness's canonical internal representation, not the response from an alternative tool. This is a model-independent output-size estimate, not a tokenizer measurement or a claim about LLM cost.
+`gain` aggregates the activity journal (`~/.sqlharness/data/activity.db`): every CLI command except `gain` whose output was rendered contributes its raw and emitted byte counts (MCP tool calls are not counted). With `journal.enabled: false` it reports zeros and says the journal is disabled. The `gain` command estimates tokens as `ceil(UTF-8 bytes / 4)` using the `utf8-bytes-div-4` heuristic. `savedEstimatedTokens` remains the historical nonnegative gross field; `netEstimatedTokens` is the signed raw-minus-emitted delta, and savings percentage uses that signed net. Raw means SQLHarness's canonical internal representation, not the response from an alternative tool. This is a model-independent output-size estimate, not a tokenizer measurement or a claim about LLM cost.
 
 ### Activity journal
 
@@ -306,7 +306,6 @@ The UI lives in `src/SqlHarness.Dashboard/ui` (React, Vite, shadcn/ui on Base UI
 ## Local data
 
 - Target profiles: `~/.sqlharness/targets.json`
-- Gain records: `~/.sqlharness/data/gain.jsonl`
 - Activity journal: `~/.sqlharness/data/activity.db` (locally sensitive)
 - Comparison artifacts: `~/.sqlharness/compare/`
 - Named snapshots: `~/.sqlharness/snapshots/` (sensitive result data; replace only with `snapshot --force`)

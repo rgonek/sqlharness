@@ -32,6 +32,8 @@ internal sealed class JournalGainStore(string databasePath, Func<bool> journalEn
             DefaultTimeout = 2,
         }.ToString());
         connection.Open();
+        if (!HasFootprintColumns(connection))
+            return Empty();
         using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT operation, status, COALESCE(duration_ms, 0), raw_bytes, raw_lines, emitted_bytes, emitted_lines
@@ -66,6 +68,23 @@ internal sealed class JournalGainStore(string databasePath, Func<bool> journalEn
             QueryStoreTop = buckets["qstop"].ToSummary(),
             Indexes = buckets["indexes"].ToSummary(),
         };
+    }
+
+    /// <summary>
+    /// The journal migrates lazily on first write, so a database can still be at schema v1/v2
+    /// (or have no operations table) when gain reads it; such a database has nothing to count.
+    /// </summary>
+    private static bool HasFootprintColumns(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA user_version;";
+        if (Convert.ToInt64(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) < 3)
+            return false;
+        command.CommandText = """
+            SELECT COUNT(*) FROM pragma_table_info('operations')
+            WHERE name IN ('operation', 'status', 'duration_ms', 'raw_bytes', 'raw_lines', 'emitted_bytes', 'emitted_lines');
+            """;
+        return Convert.ToInt64(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) == 7;
     }
 
     private static SqlHarnessGainReport Empty() =>

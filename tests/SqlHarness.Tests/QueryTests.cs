@@ -257,9 +257,9 @@ public class SqlHarnessQueryTests
             .CompleteAsync(new OutputFootprint(0, 0));
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
-        var record = Assert.Single(gain.Records);
-        Assert.Equal(0, record.RawBytes);
-        Assert.Equal(0, record.RawLines);
+        var record = outcome.EmissionReceipt!.RawFootprint!;
+        Assert.Equal(0, record.Bytes);
+        Assert.Equal(0, record.Lines);
     }
 
     [Fact]
@@ -286,9 +286,9 @@ public class SqlHarnessQueryTests
         expected.EndResultSet();
         expected.AddMessage("sql", message);
         var completed = expected.Complete().Footprint;
-        var record = Assert.Single(gain.Records);
-        Assert.Equal(completed.Bytes - 2, record.RawBytes);
-        Assert.Equal(completed.Lines, record.RawLines);
+        var record = outcome.EmissionReceipt!.RawFootprint!;
+        Assert.Equal(completed.Bytes - 2, record.Bytes);
+        Assert.Equal(completed.Lines, record.Lines);
     }
 
     [Fact]
@@ -318,47 +318,6 @@ public class SqlHarnessQueryTests
     }
 
     [Fact]
-    public async Task Gain_is_deferred_until_receipt_completion_and_receives_exact_emitted_footprint()
-    {
-        var gain = new FakeGainStore();
-        var successSession = FakeSqlSession.WithIdentity(
-            "test-server",
-            "testdb-a",
-            FakeSqlReader.Rows(["Value"], [1]));
-        var failureSession = FakeSqlSession.WithIdentity(
-            "test-server",
-            "testdb-a",
-            failure: new TimeoutException(Token));
-
-        var success = await Module(successSession, gain: gain).ExecuteAsync(Query("SELECT 1"));
-        var failure = await Module(failureSession, gain: gain).ExecuteAsync(Query("SELECT 2"));
-
-        Assert.Empty(gain.Records);
-        Assert.Equal(SqlHarnessExitCode.Success, await Assert.IsType<SqlHarnessEmissionReceipt>(success.EmissionReceipt)
-            .CompleteAsync(new OutputFootprint(40, 2)));
-        Assert.Equal(SqlHarnessExitCode.SqlExecution, await Assert.IsType<SqlHarnessEmissionReceipt>(failure.EmissionReceipt)
-            .CompleteAsync(new OutputFootprint(12, 1)));
-
-        Assert.Collection(
-            gain.Records,
-            record =>
-            {
-                Assert.True(record.Success);
-                Assert.Equal(40, record.EmittedBytes);
-                Assert.Equal(2, record.EmittedLines);
-            },
-            record =>
-            {
-                Assert.False(record.Success);
-                Assert.Equal(12, record.EmittedBytes);
-                Assert.Equal(1, record.EmittedLines);
-            });
-        Assert.All(gain.Records, record => Assert.Equal("query", record.Command));
-        Assert.DoesNotContain(Token, JsonSerializer.Serialize(gain.Records), StringComparison.Ordinal);
-        Assert.DoesNotContain("SELECT", JsonSerializer.Serialize(gain.Records), StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task Receipt_completion_is_exactly_once_and_thread_safe()
     {
         var gain = new FakeGainStore();
@@ -373,23 +332,6 @@ public class SqlHarnessQueryTests
             .Select(_ => receipt.CompleteAsync(new OutputFootprint(24, 1))));
 
         Assert.All(results, code => Assert.Equal(SqlHarnessExitCode.Success, code));
-        Assert.Single(gain.Records);
-    }
-
-    [Fact]
-    public async Task Receipt_maps_gain_storage_failure_without_leaking_exception()
-    {
-        var gain = new FakeGainStore(new IOException($"disk failure {Token}"));
-        var session = FakeSqlSession.WithIdentity(
-            "test-server",
-            "testdb-a",
-            FakeSqlReader.Rows(["Value"], [1]));
-        var outcome = await Module(session, gain: gain).ExecuteAsync(Query("SELECT 1"));
-
-        var completion = await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
-            .CompleteAsync(new OutputFootprint(8, 1));
-
-        Assert.Equal(SqlHarnessExitCode.LocalStorage, completion);
     }
 
     [Fact]
@@ -408,8 +350,6 @@ public class SqlHarnessQueryTests
         var validCompletion = await receipt.CompleteAsync(new OutputFootprint(16, 1));
 
         Assert.Equal(SqlHarnessExitCode.Success, validCompletion);
-        Assert.Single(gain.Records);
-        Assert.Equal(16, gain.Records[0].EmittedBytes);
     }
 
     [Fact]
@@ -429,8 +369,6 @@ public class SqlHarnessQueryTests
         var validCompletion = await receipt.CompleteAsync(new OutputFootprint(20, 1));
 
         Assert.Equal(SqlHarnessExitCode.Success, validCompletion);
-        Assert.Single(gain.Records);
-        Assert.Equal(20, gain.Records[0].EmittedBytes);
     }
 
     [Fact]
@@ -478,8 +416,6 @@ public class SqlHarnessQueryTests
         Assert.Equal(SqlHarnessExitCode.TargetMismatch, outcome.ExitCode);
         Assert.Equal(SqlHarnessExitCode.TargetMismatch, first);
         Assert.Equal(first, second);
-        Assert.Single(gain.Records);
-        Assert.Equal(4, gain.Records[0].EmittedBytes);
         Assert.Empty(session.Commands);
         Assert.DoesNotContain(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
@@ -751,18 +687,10 @@ public class SqlHarnessQueryTests
     }
 
     private sealed class FakeGainStore(
-        Exception? failure = null,
         SqlHarnessGainReport? aggregate = null,
-        Exception? aggregateFailure = null) : IGainStore
+        Exception? aggregateFailure = null) : IGainSource
     {
-        public List<GainRecord> Records { get; } = [];
         public SqlHarnessGainReport? AggregateResult => aggregate;
-        public void Append(GainRecord record)
-        {
-            if (failure is not null)
-                throw failure;
-            Records.Add(record);
-        }
         public SqlHarnessGainReport Aggregate() =>
             aggregateFailure is not null ? throw aggregateFailure : aggregate ?? throw new NotSupportedException();
     }

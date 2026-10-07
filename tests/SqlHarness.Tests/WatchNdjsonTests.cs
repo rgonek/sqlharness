@@ -321,7 +321,7 @@ public class WatchNdjsonTests
     }
 
     [Fact]
-    public async Task Ndjson_gain_receipt_covers_completed_stream_as_success()
+    public async Task Ndjson_receipt_completes_with_the_exit_code_of_the_completed_stream()
     {
         var gain = new FakeGainStore();
         var transport = new StringWriter();
@@ -329,15 +329,9 @@ public class WatchNdjsonTests
             .ExecuteWatchNdjsonAsync(Watch(untilUnchanged: 1), transport);
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
-        Assert.Empty(gain.Records);
-        await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
-            .CompleteAsync(new OutputFootprint(10, 4));
-
-        var record = Assert.Single(gain.Records);
-        Assert.Equal("watch", record.Command);
-        Assert.True(record.Success);
-        Assert.Equal(10, record.EmittedBytes);
-        Assert.Equal(4, record.EmittedLines);
+        Assert.Equal(SqlHarnessExitCode.Success, await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
+            .CompleteAsync(new OutputFootprint(10, 4)));
+        Assert.NotNull(outcome.EmissionReceipt!.RawFootprint);
     }
 
     [Fact]
@@ -356,7 +350,7 @@ public class WatchNdjsonTests
     }
 
     [Fact]
-    public async Task Watch_ndjson_cli_streams_lines_and_counts_gain()
+    public async Task Watch_ndjson_cli_streams_lines_and_reports_the_emitted_footprint()
     {
         var sql = TempFile("SELECT 1 AS Value");
         try
@@ -375,7 +369,7 @@ public class WatchNdjsonTests
             Assert.Equal("started", JsonDocument.Parse(lines[0]).RootElement.GetProperty("event").GetString());
             Assert.Equal("completed", JsonDocument.Parse(lines[1]).RootElement.GetProperty("event").GetString());
 
-            // Gain counts the whole stream as emitted output.
+            // The whole stream counts as emitted output.
             Assert.NotNull(module.CapturedFootprint);
             Assert.Equal(Encoding.UTF8.GetByteCount(output.ToString()), module.CapturedFootprint.Bytes);
             Assert.Equal(2, module.CapturedFootprint.Lines);
@@ -903,12 +897,8 @@ public class WatchNdjsonTests
         }
     }
 
-    private sealed class FakeGainStore : IGainStore
+    private sealed class FakeGainStore : IGainSource
     {
-        public List<GainRecord> Records { get; } = [];
-
-        public void Append(GainRecord record) => Records.Add(record);
-
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 

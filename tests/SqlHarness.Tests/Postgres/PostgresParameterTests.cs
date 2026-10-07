@@ -383,9 +383,8 @@ public sealed class PostgresParameterTests
         public SnapshotDocument Load(string name) => throw new NotSupportedException();
     }
 
-    private sealed class FakeGain : IGainStore
+    private sealed class FakeGain : IGainSource
     {
-        public void Append(GainRecord record) { }
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 

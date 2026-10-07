@@ -346,14 +346,11 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.Contains(setA.ValueHash, json, StringComparison.Ordinal);
         Assert.Contains(setB.ValueHash, json, StringComparison.Ordinal);
 
-        Assert.Empty(gain.Records);
         Assert.Equal(
             SqlHarnessExitCode.Success,
             await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt).CompleteAsync(new OutputFootprint(4, 1)));
-        var gainRecord = Assert.Single(gain.Records);
-        Assert.Equal("measure", gainRecord.Command);
-        Assert.True(gainRecord.Success);
-        Assert.True(gainRecord.RawBytes > 0);
+        var gainRecord = outcome.EmissionReceipt!.RawFootprint!;
+        Assert.True(gainRecord.Bytes > 0);
         Assert.DoesNotContain(tenant, gainRecord.ToString(), StringComparison.Ordinal);
     }
 
@@ -669,12 +666,8 @@ public sealed class MeasureParameterSetExecutionTests
         }
     }
 
-    private sealed class FakeGainStore : IGainStore
+    private sealed class FakeGainStore : IGainSource
     {
-        public List<GainRecord> Records { get; } = [];
-
-        public void Append(GainRecord record) => Records.Add(record);
-
         public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 
