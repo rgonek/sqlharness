@@ -35,6 +35,13 @@ internal static class OperationJournalDescriber
         var (resultSets, rows) = outcome.Report is SqlHarnessQueryReport query
             ? (query.ResultSets.Count, query.ResultSets.Sum(set => set.RowCount))
             : ((int?)null, (long?)null);
+        var artifactDirectory = outcome.Report switch
+        {
+            SqlHarnessMeasureReport value => value.ArtifactDirectory,
+            SqlHarnessMeasureSetReport value => value.ArtifactDirectory,
+            SqlHarnessCompareReport value => value.ArtifactDirectory,
+            _ => null,
+        };
         return new OperationEnd(
             Status(outcome.ExitCode),
             (int)outcome.ExitCode,
@@ -46,7 +53,9 @@ internal static class OperationJournalDescriber
             resultSets,
             rows,
             // MCP never completes the emission receipt, so the raw footprint is recorded here.
-            outcome.EmissionReceipt?.RawFootprint?.EstimatedTokenCount);
+            outcome.EmissionReceipt?.RawFootprint?.EstimatedTokenCount,
+            ArtifactDirectory: artifactDirectory,
+            SummaryJson: JournalSummary.Build(outcome.Report));
     }
 
     internal static OperationEnd Cancelled(long durationMilliseconds) =>
@@ -94,6 +103,7 @@ internal static class OperationJournalDescriber
         SqlHarnessMeasureReport value => value.Target,
         SqlHarnessMeasureSetReport value => value.Target,
         SqlHarnessCompareReport value => value.Target,
+        SqlHarnessCompareMatrixReport { Cells.Count: > 0 } value => value.Cells[0].Compare.Target,
         SqlHarnessWatchReport value => value.Target,
         SqlHarnessSnapshotReport value => value.Target,
         SqlHarnessSchemaReport value => value.Target,

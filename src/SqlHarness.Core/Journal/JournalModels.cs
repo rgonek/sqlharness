@@ -46,6 +46,8 @@ public sealed record OperationEnd(
     string? Database,
     int? ResultSets,
     long? RowsReturned,
-    long? RawTokens = null);
+    long? RawTokens = null,
+    string? ArtifactDirectory = null,
+    string? SummaryJson = null);
 
 public sealed record JournalHandle(long OperationId);

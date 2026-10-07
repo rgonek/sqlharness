@@ -13,13 +13,13 @@ public sealed class ActivityJournalTests
             time ?? new FixedTimeProvider(JournalTestData.T0));
 
     [Fact]
-    public void Open_creates_schema_version_1_in_wal_mode()
+    public void Open_creates_current_schema_in_wal_mode()
     {
         using var temp = new JournalTempDirectory();
 
         Assert.IsType<ActivityJournal>(Open(temp, TextWriter.Null));
 
-        Assert.Equal(1L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
         Assert.Equal("wal", JournalDb.Rows(temp.DatabasePath, "PRAGMA journal_mode")[0]["journal_mode"]);
     }
 

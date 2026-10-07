@@ -107,4 +107,23 @@ public sealed class OperationJournalDescriberTests
         Assert.Equal(("failed", "cancelled"), (OperationJournalDescriber.Cancelled(3).Status, OperationJournalDescriber.Cancelled(3).ErrorKind));
         Assert.Equal(("failed", "unhandled_exception"), (OperationJournalDescriber.Crashed(3).Status, OperationJournalDescriber.Crashed(3).ErrorKind));
     }
+
+    [Fact]
+    public void Benchmark_end_carries_artifact_directory_summary_and_matrix_target()
+    {
+        var identity = new SqlHarnessTargetIdentityReport("srv", "db", "srv-actual", "db-actual", "profile");
+        var variant = new CompareVariantReport("measure", new(1, 1, 1), new(1, 1, 1), new(1, 1, 1), new Dictionary<string, long>(), [], []);
+        var measure = new SqlHarnessMeasureReport(identity, 1, 1, true, variant, "/artifacts/m1");
+        var compare = new SqlHarnessCompareReport(identity, 1, 2, true, variant, variant, "/artifacts/c1");
+        var matrix = new SqlHarnessCompareMatrixReport("BatchSize", "int", [new CompareMatrixCellReport(0, "1", compare)]);
+
+        var measureEnd = OperationJournalDescriber.DescribeEnd(new SqlHarnessOutcome(SqlHarnessExitCode.Success, measure, null), 1);
+        var matrixEnd = OperationJournalDescriber.DescribeEnd(new SqlHarnessOutcome(SqlHarnessExitCode.Success, matrix, null), 1);
+
+        Assert.Equal("/artifacts/m1", measureEnd.ArtifactDirectory);
+        Assert.NotNull(measureEnd.SummaryJson);
+        Assert.Equal("srv-actual", matrixEnd.Server);
+        Assert.Null(matrixEnd.ArtifactDirectory);
+        Assert.Contains("compare-matrix", matrixEnd.SummaryJson);
+    }
 }
