@@ -54,6 +54,9 @@ public sealed class JournalingModule : ISqlHarnessModule
         }
 
         var completed = Complete(journal, handle, () => OperationJournalDescriber.DescribeEnd(outcome, stopwatch.ElapsedMilliseconds));
+        if (completed && journal is not null && handle is not null && outcome.BenchmarkRuns is { Count: > 0 } runs)
+            RecordBenchmark(journal, handle, runs);
+
         // A failed completion (busy or broken journal) skips the emission write, so one
         // operation never waits on a locked journal a second time.
         if (!completed || journal is null || handle is null || outcome.EmissionReceipt is not { } inner)
@@ -108,6 +111,20 @@ public sealed class JournalingModule : ISqlHarnessModule
         {
             // IActivityJournal implementations do not throw; this guards third-party implementations.
             return false;
+        }
+    }
+
+    private static void RecordBenchmark(IActivityJournal journal, JournalHandle handle, IReadOnlyList<CompareRunArtifact> runs)
+    {
+        try
+        {
+            // Plan parsing and aggregation run inside the guard: a malformed run never
+            // turns a successful benchmark into an exception.
+            journal.RecordBenchmark(handle, JournalBenchmarkBuilder.Build(runs));
+        }
+        catch (Exception)
+        {
+            // Best-effort: the journal row stays completed without benchmark detail.
         }
     }
 
