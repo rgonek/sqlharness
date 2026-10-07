@@ -594,7 +594,7 @@ public class SqlHarnessMeasureTests
             throw new IOException("disk unavailable");
     }
 
-    private sealed class FakeMeasureSession : ISqlSessionFactory, ISqlSession
+    internal sealed class FakeMeasureSession : ISqlSessionFactory, ISqlSession
     {
         private readonly bool _changeLastResult;
         private readonly bool _includeSetupResult;
@@ -606,6 +606,7 @@ public class SqlHarnessMeasureTests
         private readonly string _ioTable;
         private readonly Func<int, long>? _tableReadsForMeasured;
         private readonly int _resultRowCount;
+        private readonly string _plan;
         private readonly List<string> _messages = [];
         private int _queryCount;
 
@@ -627,8 +628,10 @@ public class SqlHarnessMeasureTests
             bool failSetup,
             string ioTable,
             Func<int, long>? tableReadsForMeasured,
-            int resultRowCount)
+            int resultRowCount,
+            string plan)
         {
+            _plan = plan;
             _changeLastResult = changeLastResult;
             _includeSetupResult = includeSetupResult;
             _includeExtraMessage = includeExtraMessage;
@@ -651,8 +654,9 @@ public class SqlHarnessMeasureTests
             bool failSetup = false,
             string ioTable = "Clients",
             Func<int, long>? tableReadsForMeasured = null,
-            int resultRowCount = 1) =>
-            new(changeLastResult, includeSetupResult, includeExtraMessage, failOnQueryNumber, cancelOnQuery, emitMessageBeforeQueryFailure, failSetup, ioTable, tableReadsForMeasured, resultRowCount);
+            int resultRowCount = 1,
+            string plan = Plan) =>
+            new(changeLastResult, includeSetupResult, includeExtraMessage, failOnQueryNumber, cancelOnQuery, emitMessageBeforeQueryFailure, failSetup, ioTable, tableReadsForMeasured, resultRowCount, plan);
 
         public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
         {
@@ -704,7 +708,7 @@ public class SqlHarnessMeasureTests
             object?[][] rows = Enumerable.Range(0, _resultRowCount)
                 .Select(index => new object?[] { value + index })
                 .ToArray();
-            return Task.FromResult<ISqlReader>(FakeReader.WithPlan(["Value"], rows, Plan));
+            return Task.FromResult<ISqlReader>(FakeReader.WithPlan(["Value"], rows, _plan));
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
