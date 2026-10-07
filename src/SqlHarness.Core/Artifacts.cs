@@ -313,7 +313,16 @@ internal sealed record CompareRunArtifact(
     long LogicalReads, IReadOnlyDictionary<string, long> LogicalReadsByTable,
     string ResultHash, IReadOnlyList<string> PlanXmls, int MessageCount,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParameterSet = null,
-    BenchmarkRunMetrics? Metrics = null);
+    BenchmarkRunMetrics? Metrics = null)
+{
+    /// <summary>Every STATISTICS IO counter per table (SQL Server). Journal only; never serialized.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<TableIoCounters> TableIo { get; init; } = [];
+
+    /// <summary>Zero-based compare --matrix cell index; never the matrix value. Journal only; never serialized.</summary>
+    [JsonIgnore]
+    public int? MatrixCell { get; init; }
+}
 
 internal interface ICompareArtifactWriter
 {
