@@ -151,8 +151,11 @@ Invoke-GateStage -Name 'sdk' -Arguments @($gateClone) -Lines @(
 
 Invoke-GateStage -Name 'node' -Arguments @($gateClone) -Lines @(
     'cd "$1"',
-    'node --version',
-    'test "$(node --version)" = "v$(cat .nvmrc)" || { echo "node $(node --version) differs from .nvmrc; run scripts/setup-linux-gate.ps1" >&2; exit 1; }'
+    'node_path="$(command -v node || true)"',
+    'case "$node_path" in ""|/mnt/*) echo "No Linux node on PATH (found: ${node_path:-none}); run scripts/setup-linux-gate.ps1" >&2; exit 1 ;; esac',
+    'node_version="$(node --version)"',
+    'echo "$node_version"',
+    'test "$node_version" = "v$(cat .nvmrc)" || { echo "node $node_version differs from .nvmrc; run scripts/setup-linux-gate.ps1" >&2; exit 1; }'
 )
 
 Invoke-GateStage -Name 'ui-install' -Arguments @($gateClone) -Lines @(

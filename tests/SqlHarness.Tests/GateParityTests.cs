@@ -286,6 +286,19 @@ public sealed class GateParityTests
         Assert.Contains("cat .nvmrc", content, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Linux_gate_rejects_a_windows_interop_node_with_a_setup_hint()
+    {
+        // Without a provisioned Linux node, WSL interop resolves node.exe from the Windows PATH
+        // (/mnt/...). It prints its version with CRLF, so a plain comparison would report a
+        // misleading "differs from .nvmrc" for the same version.
+        var content = File.ReadAllText(RepositoryFile.Locate("scripts", "verify-linux.ps1"));
+
+        Assert.Contains("command -v node", content, StringComparison.Ordinal);
+        Assert.Contains("/mnt/*", content, StringComparison.Ordinal);
+        Assert.Contains("No Linux node on PATH", content, StringComparison.Ordinal);
+    }
+
     private const string VerbGroup = @"(?<verb>restore|build|test|format)";
     private const string Body = @"(?:[^""'\}\r\n]|""[^""]*""|'[^']*')*";
     private const string LinuxBody = @"(?:[^""'\r\n]|""[^""]*"")*";
