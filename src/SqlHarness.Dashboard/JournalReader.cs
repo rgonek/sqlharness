@@ -313,7 +313,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             GROUP BY o.profile, o.database ORDER BY COUNT(*) DESC, o.profile, o.database LIMIT {TopLimit};
             """, window, r => new TargetStat(NullableString(r, 0), NullableString(r, 1), r.GetInt32(2)));
         var tokens = Query(connection, $"""
-            SELECT COALESCE(SUM(o.raw_tokens), 0), COALESCE(SUM(o.emitted_tokens), 0) FROM operations o WHERE {inWindow};
+            SELECT COALESCE(SUM(o.raw_tokens), 0), COALESCE(SUM(o.emitted_tokens), 0) FROM operations o
+            WHERE {inWindow} AND o.raw_tokens IS NOT NULL AND o.emitted_tokens IS NOT NULL;
             """, window, r => new TokenStat(r.GetInt64(0), r.GetInt64(1))).Single();
         var spills = Scalar<long>(connection, $"""
             SELECT COUNT(DISTINCT o.id) FROM operations o JOIN operation_metrics m ON m.operation_id = o.id

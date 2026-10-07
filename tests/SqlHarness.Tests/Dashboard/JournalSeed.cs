@@ -18,7 +18,8 @@ internal sealed class JournalSeed
 
     public JournalHandle Operation(
         SessionIdentity session, string operation = "query", string status = "succeeded", int exitCode = 0,
-        string sql = "SELECT 1", long durationMs = 10, BenchmarkJournalRecord? benchmark = null, bool complete = true)
+        string sql = "SELECT 1", long durationMs = 10, BenchmarkJournalRecord? benchmark = null, bool complete = true,
+        SeedTokens tokens = SeedTokens.Both)
     {
         var handle = _journal.Begin(session, new OperationStart(operation, "local", new Dictionary<string, string> { ["tenant"] = "acme" },
             false, OperationJournalDescriber.SqlHash(sql), null, sql, null))!;
@@ -26,8 +27,11 @@ internal sealed class JournalSeed
         if (complete)
         {
             _journal.Complete(handle, new OperationEnd(status, exitCode, status == "rejected" ? "safety" : null, durationMs,
-                "sqlserver", "srv", "db", 1, 3, 100, null, null));
-            _journal.RecordEmission(handle, new OutputFootprint(400, 1), new OutputFootprint(40, 1));
+                "sqlserver", "srv", "db", 1, 3, tokens == SeedTokens.RawOnly ? 500 : null, null, null));
+            if (tokens == SeedTokens.Both)
+                _journal.RecordEmission(handle, new OutputFootprint(400, 1), new OutputFootprint(40, 1));
+            else if (tokens == SeedTokens.EmittedOnly)
+                _journal.RecordEmission(handle, null, new OutputFootprint(40, 1));
         }
 
         if (benchmark is not null)
@@ -46,4 +50,12 @@ internal sealed class JournalSeed
                 [new JournalPlanLink(1, 0, new string('A', 64))]),
         ],
         [new JournalPlanDocument(new string('A', 64), "showplan-xml", Journal.PlanMetricsExtractorTests.ActualPlan)]);
+}
+
+/// <summary>Which token counts a seeded operation carries: both, raw only (MCP-style), or emitted only.</summary>
+internal enum SeedTokens
+{
+    Both,
+    RawOnly,
+    EmittedOnly,
 }
