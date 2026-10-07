@@ -2,7 +2,7 @@ using SqlHarness.Cli;
 using SqlHarness.Core;
 
 var config = SqlHarnessConfigLoader.Load();
-if (config.Warning is not null)
+if (config.Warning is not null && !SqlHarnessCli.PrintsOwnConfigWarning(args))
     Console.Error.WriteLine(config.Warning);
 
 var module = new JournalingModule(

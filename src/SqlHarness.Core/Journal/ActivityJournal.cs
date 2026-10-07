@@ -48,12 +48,12 @@ public sealed class ActivityJournal : IActivityJournal
         }
         catch (JournalSchemaTooNewException)
         {
-            log.WriteLine("sqlharness: activity journal schema is newer than this sqlharness; journal disabled.");
+            SafeWriteLine(log, "sqlharness: activity journal schema is newer than this sqlharness; journal disabled.");
             return NullActivityJournal.Instance;
         }
         catch (Exception)
         {
-            log.WriteLine("sqlharness: activity journal unavailable; continuing without it.");
+            SafeWriteLine(log, "sqlharness: activity journal unavailable; continuing without it.");
             return NullActivityJournal.Instance;
         }
     }
@@ -98,10 +98,10 @@ public sealed class ActivityJournal : IActivityJournal
         }
     }
 
-    public void Complete(JournalHandle? handle, OperationEnd end)
+    public bool Complete(JournalHandle? handle, OperationEnd end)
     {
         if (handle is null)
-            return;
+            return false;
         try
         {
             var now = Timestamp(_time.GetUtcNow());
@@ -112,7 +112,7 @@ public sealed class ActivityJournal : IActivityJournal
             update.CommandText = """
                 UPDATE operations SET status = $status, exit_code = $exit, error_kind = $error, duration_ms = $duration,
                     engine = $engine, server = $server, database = $database, result_sets = $sets, rows_returned = $rows,
-                    finished_at = $now, updated_at = $now
+                    raw_tokens = COALESCE($raw, raw_tokens), finished_at = $now, updated_at = $now
                 WHERE id = $id;
                 UPDATE sessions SET last_seen = $now
                 WHERE id = (SELECT session_id FROM operations WHERE id = $id);
@@ -127,13 +127,16 @@ public sealed class ActivityJournal : IActivityJournal
             update.Parameters.AddWithValue("$database", (object?)end.Database ?? DBNull.Value);
             update.Parameters.AddWithValue("$sets", (object?)end.ResultSets ?? DBNull.Value);
             update.Parameters.AddWithValue("$rows", (object?)end.RowsReturned ?? DBNull.Value);
+            update.Parameters.AddWithValue("$raw", (object?)end.RawTokens ?? DBNull.Value);
             update.Parameters.AddWithValue("$now", now);
             update.ExecuteNonQuery();
             transaction.Commit();
+            return true;
         }
         catch (Exception)
         {
             Warn();
+            return false;
         }
     }
 
@@ -303,7 +306,19 @@ public sealed class ActivityJournal : IActivityJournal
     private void Warn()
     {
         if (Interlocked.Exchange(ref _warned, 1) == 0)
-            _log.WriteLine("sqlharness: activity journal write failed; continuing without recording.");
+            SafeWriteLine(_log, "sqlharness: activity journal write failed; continuing without recording.");
+    }
+
+    /// <summary>Diagnostics are best-effort too: a closed or broken stderr must not escape a catch block.</summary>
+    private static void SafeWriteLine(TextWriter log, string line)
+    {
+        try
+        {
+            log.WriteLine(line);
+        }
+        catch (Exception)
+        {
+        }
     }
 
     private sealed class JournalSchemaTooNewException : Exception;

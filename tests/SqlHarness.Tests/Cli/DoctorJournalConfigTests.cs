@@ -53,6 +53,15 @@ public sealed class DoctorJournalConfigTests : IDisposable
         Assert.True(document.RootElement.GetProperty("configValid").GetBoolean());
     }
 
+    [Theory]
+    [InlineData(new[] { "mcp", "serve", "p" }, true)]
+    [InlineData(new[] { "mcp" }, true)]
+    [InlineData(new[] { "query", "p" }, false)]
+    [InlineData(new[] { "MCP", "serve" }, false)]
+    [InlineData(new string[0], false)]
+    public void Only_the_mcp_branch_prints_its_own_config_warning(string[] args, bool expected) =>
+        Assert.Equal(expected, SqlHarnessCli.PrintsOwnConfigWarning(args));
+
     private sealed class NoopModule : ISqlHarnessModule
     {
         public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default) =>

@@ -100,10 +100,15 @@ public static class McpHost
         var sessionKey = "mcp:" + Guid.NewGuid().ToString("N");
         var mcpMode = process.RequestScope ? "request" : "fixed";
         ModelContextProtocol.Server.McpServer? running = null;
+        // One identity per serve process: resolved lazily on the first journaled call
+        // (after initialize, so ClientInfo is set) and shared by every per-call decorator.
+        var identity = new Lazy<SessionIdentity>(
+            () => SessionIdentities.Mcp(ProcessInfo.Current, sessionKey, running?.ClientInfo?.Name, running?.ClientInfo?.Version, mcpMode),
+            LazyThreadSafetyMode.ExecutionAndPublication);
         process.DecorateModules(module => new JournalingModule(
             module,
             () => journal.Value,
-            () => SessionIdentities.Mcp(ProcessInfo.Current, sessionKey, running?.ClientInfo?.Name, running?.ClientInfo?.Version, mcpMode)));
+            () => identity.Value));
         Tools.McpToolCatalog.Wire(serverOptions, process, hostShutdown: lifetime.Token);
 
         try

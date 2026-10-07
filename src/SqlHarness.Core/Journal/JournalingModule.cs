@@ -44,23 +44,33 @@ public sealed class JournalingModule : ISqlHarnessModule
         }
         catch (OperationCanceledException)
         {
-            Complete(journal, handle, OperationJournalDescriber.Cancelled(stopwatch.ElapsedMilliseconds));
+            Complete(journal, handle, () => OperationJournalDescriber.Cancelled(stopwatch.ElapsedMilliseconds));
             throw;
         }
         catch (Exception)
         {
-            Complete(journal, handle, OperationJournalDescriber.Crashed(stopwatch.ElapsedMilliseconds));
+            Complete(journal, handle, () => OperationJournalDescriber.Crashed(stopwatch.ElapsedMilliseconds));
             throw;
         }
 
-        Complete(journal, handle, OperationJournalDescriber.DescribeEnd(outcome, stopwatch.ElapsedMilliseconds));
-        if (journal is null || handle is null || outcome.EmissionReceipt is not { } inner)
+        var completed = Complete(journal, handle, () => OperationJournalDescriber.DescribeEnd(outcome, stopwatch.ElapsedMilliseconds));
+        // A failed completion (busy or broken journal) skips the emission write, so one
+        // operation never waits on a locked journal a second time.
+        if (!completed || journal is null || handle is null || outcome.EmissionReceipt is not { } inner)
             return outcome;
 
         var wrapped = new SqlHarnessEmissionReceipt(async (emitted, ct) =>
         {
             var exitCode = await inner.CompleteAsync(emitted, ct);
-            journal.RecordEmission(handle, inner.RawFootprint, emitted);
+            try
+            {
+                journal.RecordEmission(handle, inner.RawFootprint, emitted);
+            }
+            catch (Exception)
+            {
+                // IActivityJournal implementations do not throw; this guards third-party implementations.
+            }
+
             return exitCode;
         })
         {
@@ -71,7 +81,8 @@ public sealed class JournalingModule : ISqlHarnessModule
 
     private JournalHandle? Begin(IActivityJournal? journal, SqlHarnessOperation operation)
     {
-        if (journal is null || _session.Value is not { } session)
+        // A disabled journal records nothing, so the process tree is not walked at all.
+        if (journal is null or NullActivityJournal || _session.Value is not { } session)
             return null;
         try
         {
@@ -83,15 +94,20 @@ public sealed class JournalingModule : ISqlHarnessModule
         }
     }
 
-    private static void Complete(IActivityJournal? journal, JournalHandle? handle, OperationEnd end)
+    private static bool Complete(IActivityJournal? journal, JournalHandle? handle, Func<OperationEnd> end)
     {
+        if (journal is null || handle is null)
+            return false;
         try
         {
-            journal?.Complete(handle, end);
+            // The end row is described inside the guard: a describer failure must neither turn
+            // a success into an exception nor replace the operation's own exception.
+            return journal.Complete(handle, end());
         }
         catch (Exception)
         {
             // IActivityJournal implementations do not throw; this guards third-party implementations.
+            return false;
         }
     }
 

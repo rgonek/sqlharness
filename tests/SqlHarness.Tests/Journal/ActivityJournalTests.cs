@@ -123,6 +123,55 @@ public sealed class ActivityJournalTests
     }
 
     [Fact]
+    public void Broken_log_writer_never_throws_out_of_the_journal()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, ThrowingWriter.Instance);
+        var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start());
+        Assert.NotNull(handle);
+        using var holder = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False");
+        holder.Open();
+        using (var begin = holder.CreateCommand())
+        {
+            begin.CommandText = "BEGIN IMMEDIATE;";
+            begin.ExecuteNonQuery();
+        }
+
+        Assert.Null(journal.Begin(JournalTestData.Session(), JournalTestData.Start()));
+        Assert.False(journal.Complete(handle, JournalTestData.End()));
+        journal.RecordEmission(handle, null, new OutputFootprint(1, 1));
+    }
+
+    [Fact]
+    public void Broken_log_writer_never_throws_out_of_open()
+    {
+        using var temp = new JournalTempDirectory();
+        Directory.CreateDirectory(temp.DatabasePath); // a directory where the database file should be: unavailable
+
+        Assert.Same(NullActivityJournal.Instance, Open(temp, ThrowingWriter.Instance));
+    }
+
+    [Fact]
+    public void Complete_reports_whether_the_row_was_written()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, TextWriter.Null);
+        var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start());
+
+        Assert.True(journal.Complete(handle, JournalTestData.End()));
+        Assert.False(journal.Complete(null, JournalTestData.End()));
+    }
+
+    private sealed class ThrowingWriter : TextWriter
+    {
+        public static readonly ThrowingWriter Instance = new();
+        public override System.Text.Encoding Encoding => System.Text.Encoding.UTF8;
+        public override void Write(char value) => throw new IOException("stderr closed");
+        public override void Write(string? value) => throw new IOException("stderr closed");
+        public override void WriteLine(string? value) => throw new IOException("stderr closed");
+    }
+
+    [Fact]
     public void Complete_and_emission_with_null_handle_are_no_ops()
     {
         using var temp = new JournalTempDirectory();

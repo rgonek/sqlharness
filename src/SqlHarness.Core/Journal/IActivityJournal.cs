@@ -8,7 +8,8 @@ public interface IActivityJournal
 {
     JournalHandle? Begin(SessionIdentity session, OperationStart start);
 
-    void Complete(JournalHandle? handle, OperationEnd end);
+    /// <summary>Returns true only when the completion row was written; callers skip later writes for that handle otherwise.</summary>
+    bool Complete(JournalHandle? handle, OperationEnd end);
 
     void RecordEmission(JournalHandle? handle, OutputFootprint? raw, OutputFootprint emitted);
 }
@@ -21,7 +22,7 @@ public sealed class NullActivityJournal : IActivityJournal
 
     public JournalHandle? Begin(SessionIdentity session, OperationStart start) => null;
 
-    public void Complete(JournalHandle? handle, OperationEnd end) { }
+    public bool Complete(JournalHandle? handle, OperationEnd end) => false;
 
     public void RecordEmission(JournalHandle? handle, OutputFootprint? raw, OutputFootprint emitted) { }
 }

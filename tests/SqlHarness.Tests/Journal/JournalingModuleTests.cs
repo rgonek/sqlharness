@@ -150,9 +150,10 @@ public sealed class JournalingModuleTests
     {
         var journalOpens = 0;
         var identities = 0;
+        var journal = new RecordingJournal();
         var module = new JournalingModule(
             new FakeModule((_, _) => Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null))),
-            () => { Interlocked.Increment(ref journalOpens); return NullActivityJournal.Instance; },
+            () => { Interlocked.Increment(ref journalOpens); return journal; },
             () => { Interlocked.Increment(ref identities); return JournalTestData.Session(); });
 
         await module.ExecuteAsync(Query());
@@ -160,5 +161,125 @@ public sealed class JournalingModuleTests
 
         Assert.Equal(1, journalOpens);
         Assert.Equal(1, identities);
+        Assert.Equal(2, journal.Begins);
+    }
+
+    [Fact]
+    public async Task Disabled_journal_never_resolves_the_session_identity()
+    {
+        var identities = 0;
+        var module = new JournalingModule(
+            new FakeModule((_, _) => Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null))),
+            () => NullActivityJournal.Instance,
+            () => { Interlocked.Increment(ref identities); return JournalTestData.Session(); });
+
+        await module.ExecuteAsync(Query());
+
+        Assert.Equal(0, identities);
+    }
+
+    [Fact]
+    public async Task Throwing_emission_write_does_not_change_the_receipt_exit_code()
+    {
+        var receipt = new SqlHarnessEmissionReceipt((_, _) => Task.FromResult(SqlHarnessExitCode.LocalStorage))
+        {
+            RawFootprint = new OutputFootprint(800, 20),
+        };
+        var journal = new RecordingJournal { ThrowOnEmission = true };
+        var module = new JournalingModule(
+            new FakeModule((_, _) => Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null, receipt))),
+            () => journal,
+            () => JournalTestData.Session());
+
+        var outcome = await module.ExecuteAsync(Query());
+        var exit = await outcome.EmissionReceipt!.CompleteAsync(new OutputFootprint(80, 4));
+
+        Assert.Equal(SqlHarnessExitCode.LocalStorage, exit);
+        Assert.Equal(1, journal.Emissions);
+    }
+
+    [Fact]
+    public async Task Throwing_complete_does_not_change_outcome_or_exception()
+    {
+        var expected = new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null);
+        var journal = new RecordingJournal { ThrowOnComplete = true };
+        var ok = new JournalingModule(new FakeModule((_, _) => Task.FromResult(expected)), () => journal, () => JournalTestData.Session());
+        var crashing = new JournalingModule(
+            new FakeModule((_, _) => throw new InvalidOperationException("boom")), () => journal, () => JournalTestData.Session());
+
+        Assert.Same(expected, await ok.ExecuteAsync(Query()));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => crashing.ExecuteAsync(Query()));
+    }
+
+    [Fact]
+    public async Task Failed_complete_skips_the_emission_write()
+    {
+        var receipt = new SqlHarnessEmissionReceipt((_, _) => Task.FromResult(SqlHarnessExitCode.Success))
+        {
+            RawFootprint = new OutputFootprint(800, 20),
+        };
+        var journal = new RecordingJournal { CompleteResult = false };
+        var module = new JournalingModule(
+            new FakeModule((_, _) => Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null, receipt))),
+            () => journal,
+            () => JournalTestData.Session());
+
+        var outcome = await module.ExecuteAsync(Query());
+        var exit = await outcome.EmissionReceipt!.CompleteAsync(new OutputFootprint(80, 4));
+
+        Assert.Equal(SqlHarnessExitCode.Success, exit);
+        Assert.Equal(1, journal.Completes);
+        Assert.Equal(0, journal.Emissions);
+    }
+
+    [Fact]
+    public async Task Raw_tokens_are_recorded_at_completion_without_an_emission()
+    {
+        var receipt = new SqlHarnessEmissionReceipt((_, _) => Task.FromResult(SqlHarnessExitCode.Success))
+        {
+            RawFootprint = new OutputFootprint(800, 20),
+        };
+        var (module, temp) = Create(new FakeModule((_, _) =>
+            Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null, receipt))));
+        using (temp)
+        {
+            // MCP never completes the receipt; raw tokens must still land.
+            await module.ExecuteAsync(Query());
+
+            var row = JournalDb.Rows(temp.DatabasePath, "SELECT raw_tokens, emitted_tokens FROM operations").Single();
+            Assert.Equal(200L, row["raw_tokens"]);
+            Assert.Null(row["emitted_tokens"]);
+        }
+    }
+
+    private sealed class RecordingJournal : IActivityJournal
+    {
+        public int Begins;
+        public int Completes;
+        public int Emissions;
+        public bool ThrowOnComplete { get; init; }
+        public bool ThrowOnEmission { get; init; }
+        public bool CompleteResult { get; init; } = true;
+
+        public JournalHandle? Begin(SessionIdentity session, OperationStart start)
+        {
+            Interlocked.Increment(ref Begins);
+            return new JournalHandle(Begins);
+        }
+
+        public bool Complete(JournalHandle? handle, OperationEnd end)
+        {
+            Interlocked.Increment(ref Completes);
+            if (ThrowOnComplete)
+                throw new IOException("complete");
+            return CompleteResult;
+        }
+
+        public void RecordEmission(JournalHandle? handle, OutputFootprint? raw, OutputFootprint emitted)
+        {
+            Interlocked.Increment(ref Emissions);
+            if (ThrowOnEmission)
+                throw new IOException("emission");
+        }
     }
 }

@@ -45,6 +45,7 @@ public sealed record OperationEnd(
     string? Server,
     string? Database,
     int? ResultSets,
-    long? RowsReturned);
+    long? RowsReturned,
+    long? RawTokens = null);
 
 public sealed record JournalHandle(long OperationId);

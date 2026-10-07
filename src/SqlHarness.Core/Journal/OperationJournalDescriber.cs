@@ -44,7 +44,9 @@ internal static class OperationJournalDescriber
             identity?.ActualServer,
             identity?.ActualDatabase,
             resultSets,
-            rows);
+            rows,
+            // MCP never completes the emission receipt, so the raw footprint is recorded here.
+            outcome.EmissionReceipt?.RawFootprint?.EstimatedTokenCount);
     }
 
     internal static OperationEnd Cancelled(long durationMilliseconds) =>
