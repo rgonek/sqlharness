@@ -298,6 +298,49 @@ public sealed class DashboardHousekeepingTests
     }
 
     [Fact]
+    public async Task A_journal_write_just_before_a_retention_pass_still_counts_as_activity()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var config = SqlHarnessConfig.Default with
+        {
+            Journal = new JournalConfig { Retention = new JournalRetentionConfig { Enabled = true } },
+        };
+        var clock = Clock();
+        var passes = new Passes();
+        Action? armed = null;
+        var run = DashboardHost.RunAsync(
+            Options(home, Idle, clock, passes, config) with
+            {
+                RetentionInterval = TimeSpan.FromMinutes(30),
+                // Runs on the housekeeping loop after its version check: the write lands after the
+                // last check, and the advanced clock makes the very next pass run retention first.
+                Housekept = () =>
+                {
+                    Interlocked.Exchange(ref armed, null)?.Invoke();
+                    passes.Completed();
+                },
+            },
+            CancellationToken.None);
+        await passes.MoreAsync();
+
+        Volatile.Write(ref armed, () =>
+        {
+            clock.Advance(TimeSpan.FromMinutes(50));
+            seed.Operation(JournalSeed.Session("cli:busy"));
+        });
+        await passes.MoreAsync();
+        Assert.Null(Volatile.Read(ref armed));
+
+        clock.Advance(TimeSpan.FromMinutes(50));
+        await Task.WhenAny(run, passes.MoreAsync());
+        Assert.False(run.IsCompleted, "an agent write before a retention pass restarts the idle window");
+
+        clock.Advance(TimeSpan.FromMinutes(10));
+        Assert.Equal(0, await run.WaitAsync(TimeSpan.FromSeconds(20)));
+    }
+
+    [Fact]
     public async Task Housekeeping_skips_retention_when_it_is_disabled()
     {
         using var home = new TempHome();

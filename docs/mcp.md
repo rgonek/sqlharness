@@ -141,7 +141,7 @@ Stdout carries only protocol frames. All logging goes to stderr without argument
 
 With `dashboard.autoStart: true` in `~/.sqlharness/config.json`, a validated startup (an invalid startup configuration never launches anything) also launches `sqlharness dashboard --background` as a detached process that inherits none of the server's standard handles, with the SQLHarness home as working directory, when no dashboard is running for that home, and starts one journal retention pass in the background (it does anything only with `journal.retention.enabled: true`). Both happen before the transport starts, neither writes to stdout, and a failed launch writes one line to stderr and never changes the server's behavior. The MCP client still sees EOF when the server exits, while the dashboard keeps running until it idle-exits after `dashboard.idleShutdownHours` (default 8). Known limitation: the dashboard is not placed in a new session or process group, so Ctrl+C or SIGHUP delivered to the client's process group (or closing its console on Windows) also stops it; the next `mcp serve` relaunches it.
 
-`sqlharness_gain` aggregates the activity journal (CLI operations with an emitted footprint; MCP calls are not counted). `gain.jsonl` is no longer written or read, and its data is not migrated. With `journal.enabled: false` the result reports zeros and `journalEnabled: false`.
+`sqlharness_gain` aggregates the activity journal (CLI operations with an emitted footprint; MCP calls are not counted) and covers only operations the journal still holds (retention trims them). `gain.jsonl` is no longer written or read, and its data is not migrated. With `journal.enabled: false` the result reports zeros and `journalEnabled: false`.
 
 ## Versions
 

@@ -230,6 +230,11 @@ public static class DashboardHost
                     && (lastRetention is not { } last || now - last >= options.RetentionInterval))
                 {
                     lastRetention = now;
+                    // Agent commits since the last check would be hidden by the post-retention
+                    // baseline: count them before retention runs.
+                    var before = ReadVersion();
+                    if (before is not null && lastVersion is not null && before != lastVersion)
+                        lastJournalChange = now;
                     // Never throws; a failed pass is retried at the next interval. Ctrl+C waits for an
                     // in-flight pass, which its short delete batches keep brief.
                     await Task.Run(() => JournalRetention.Run(options.DatabasePath, journal, options.Processes, options.Time), ct);

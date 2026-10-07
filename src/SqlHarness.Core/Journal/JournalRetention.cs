@@ -31,14 +31,15 @@ public static class JournalRetention
     public static RetentionResult Run(string databasePath, JournalConfig journal, IProcessInfo processes, TimeProvider time) =>
         Run(databasePath, journal, processes, time, onBatchCommitted: null);
 
-    internal static RetentionResult Run(string databasePath, JournalConfig journal, IProcessInfo processes, TimeProvider time, Action? onBatchCommitted)
+    internal static RetentionResult Run(string databasePath, JournalConfig journal, IProcessInfo processes, TimeProvider time, Action? onBatchCommitted,
+        Action<int>? onOperationBatchCommitted = null)
     {
         ArgumentNullException.ThrowIfNull(journal);
         if (!journal.Enabled || !journal.Retention.Enabled || !File.Exists(databasePath))
             return RetentionResult.Skipped;
 
         // Every batch commits on its own, so a run that fails partway still reports what it deleted.
-        var totals = new Totals(onBatchCommitted);
+        var totals = new Totals(onBatchCommitted, onOperationBatchCommitted);
         var started = false;
         try
         {
@@ -74,13 +75,17 @@ public static class JournalRetention
         }
     }
 
-    private sealed class Totals(Action? onBatchCommitted)
+    private sealed class Totals(Action? onBatchCommitted, Action<int>? onOperationBatchCommitted)
     {
         internal int Operations { get; private set; }
         internal int Plans { get; private set; }
         internal int Sessions { get; private set; }
 
-        internal void CommittedOperations(int count) => Committed(() => Operations += count);
+        internal void CommittedOperations(int count)
+        {
+            Committed(() => Operations += count);
+            onOperationBatchCommitted?.Invoke(count);
+        }
         internal void CommittedPlans(int count) => Committed(() => Plans += count);
         internal void CommittedSessions(int count) => Committed(() => Sessions += count);
 

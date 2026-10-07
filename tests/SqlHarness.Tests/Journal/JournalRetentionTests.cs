@@ -111,13 +111,15 @@ public sealed class JournalRetentionTests
         using var temp = new JournalTempDirectory();
         for (var i = 0; i < JournalRetention.BatchSize * 2 + 10; i++)
             Seed(temp, Now.AddDays(-40).AddSeconds(i));
-        var writes = 0;
+        var operationBatches = new List<int>();
 
         var result = JournalRetention.Run(temp.DatabasePath, Config(maxAgeDays: 30), new Processes(), new FixedTimeProvider(Now),
-            onBatchCommitted: () => writes++);
+            onBatchCommitted: null, onOperationBatchCommitted: operationBatches.Add);
 
         Assert.Equal(JournalRetention.BatchSize * 2 + 10, result.DeletedOperations);
-        Assert.True(writes >= 3, $"expected at least 3 batches, saw {writes}");
+        Assert.Equal(result.DeletedOperations, operationBatches.Sum());
+        Assert.True(operationBatches.Count >= 3, $"expected at least 3 operation batches, saw {operationBatches.Count}");
+        Assert.All(operationBatches, size => Assert.InRange(size, 1, JournalRetention.BatchSize));
     }
 
     [Fact]
