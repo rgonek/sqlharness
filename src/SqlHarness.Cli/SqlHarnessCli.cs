@@ -10,6 +10,16 @@ namespace SqlHarness.Cli;
 
 public static class SqlHarnessCli
 {
+    /// <summary>
+    /// The MCP branch loads config.json itself (McpHost) and reports an invalid file once on
+    /// stderr, so the process entry point must not print the same warning for it.
+    /// </summary>
+    public static bool PrintsOwnConfigWarning(IReadOnlyList<string> args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        return args.Count > 0 && string.Equals(args[0], "mcp", StringComparison.Ordinal);
+    }
+
     public static SqlHarnessApp Create(ISqlHarnessModule module, TextWriter? output = null, TextReader? stdin = null, bool? stdinRedirected = null, Stream? planStdin = null, TextWriter? mcpError = null)
     {
         var registrar = new Registrar();

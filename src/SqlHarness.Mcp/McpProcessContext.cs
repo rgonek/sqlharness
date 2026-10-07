@@ -40,6 +40,8 @@ public sealed class McpProcessContext
     public int MaxOperationSeconds { get; }
     public McpExecutionGate Gate { get; }
 
+    private Func<ISqlHarnessModule, ISqlHarnessModule> _decorator = static module => module;
+
     /// <summary>
     /// Creates process policy from one profile read. Profile definitions and
     /// nested var maps are copied so caller-owned mutable dictionaries cannot
@@ -170,8 +172,14 @@ public sealed class McpProcessContext
             MaxOperationSeconds);
     }
 
+    /// <summary>Installs the host's module decorator (activity journal); call before wiring tools.</summary>
+    public void DecorateModules(Func<ISqlHarnessModule, ISqlHarnessModule> decorator) =>
+        _decorator = decorator ?? throw new ArgumentNullException(nameof(decorator));
+
+    public ISqlHarnessModule Decorate(ISqlHarnessModule module) => _decorator(module);
+
     /// <summary>Composition for target-free tools; it performs no connection.</summary>
-    public ISqlHarnessModule CreateModule() => new SqlHarnessModule(() => Profiles);
+    public ISqlHarnessModule CreateModule() => Decorate(new SqlHarnessModule(() => Profiles));
 
     private static IReadOnlyList<string> ValidateAllowlist(
         McpServerOptions options,

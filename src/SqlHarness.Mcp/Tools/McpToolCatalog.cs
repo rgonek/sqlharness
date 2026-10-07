@@ -485,7 +485,7 @@ public static class McpToolCatalog
     {
         ArgumentNullException.ThrowIfNull(process);
         if (!process.RequestScope)
-            return CreateTools(process.FixedScope!, process.FixedScope!.CreateModule(), process.Gate, clock, hostShutdown);
+            return CreateTools(process.FixedScope!, moduleFactory?.Invoke(process.FixedScope!) ?? process.Decorate(process.FixedScope!.CreateModule()), process.Gate, clock, hostShutdown);
         var handlers = new McpRequestToolHandlers(process, clock, hostShutdown, moduleFactory);
         var type = typeof(McpRequestToolHandlers);
         McpServerTool Tool(string name, string method, string description, bool? readOnly, bool? destructive,
