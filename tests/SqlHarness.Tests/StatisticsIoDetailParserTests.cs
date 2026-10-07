@@ -42,10 +42,18 @@ public sealed class StatisticsIoDetailParserTests
     [InlineData("")]
     [InlineData("SQL Server parse and compile time: CPU time = 0 ms.")]
     [InlineData("Table 'Broken'. Scan count x, logical reads.")]
-    public void Text_without_counters_yields_no_rows_or_zero_rows(string text)
-    {
-        var tables = StatisticsIoDetailParser.Parse(text);
+    [InlineData("Table 'Clients'. Lectures logiques 5, lectures physiques 0.")]
+    public void Text_without_counters_yields_no_rows(string text) =>
+        Assert.Empty(StatisticsIoDetailParser.Parse(text));
 
-        Assert.All(tables, table => Assert.Equal(0, table.LogicalReads));
+    [Fact]
+    public void Columnstore_segment_lines_do_not_add_rows()
+    {
+        const string text = """
+            Table 'Sales'. Scan count 1, logical reads 0, physical reads 0, lob logical reads 30, lob physical reads 0, lob read-ahead reads 0.
+            Table 'Sales'. Segment reads 2, segment skipped 1.
+            """;
+
+        Assert.Equal(new TableIoCounters("Sales", 1, 0, 0, 0, 0, 30, 0, 0), Assert.Single(StatisticsIoDetailParser.Parse(text)));
     }
 }

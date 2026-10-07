@@ -81,6 +81,11 @@ internal static class StatisticsIoDetailParser
                     values[match.Groups["name"].Value.Trim()] = value;
             }
 
+            // Like StatisticsIoParser, a line without logical reads (localized output,
+            // columnstore segment lines) is not a counter line; recording it would turn unknown into zero.
+            if (!values.ContainsKey("logical reads"))
+                continue;
+
             long Get(string name) => values.GetValueOrDefault(name);
             var counters = new TableIoCounters(
                 table,
