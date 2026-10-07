@@ -198,6 +198,14 @@ public sealed record SqlHarnessWatchOperation(
 {
     /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
     public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+
+    /// <summary>
+    /// Per-poll progress for the activity journal. Internal and never serialized; the
+    /// runner invokes it best-effort after each completed poll, so a throwing callback
+    /// cannot change the watch outcome.
+    /// </summary>
+    [JsonIgnore]
+    internal Action<WatchProgress>? Progress { get; init; }
 }
 
 /// <summary>

@@ -33,6 +33,34 @@ public class WatchTests
     }
 
     [Fact]
+    public async Task Watch_reports_progress_after_every_completed_poll()
+    {
+        var clock = new FakeWatchClock();
+        var session = FakeSession.WithScalarPolls(1, 1, 2, 2, 2);
+        var progress = new List<WatchProgress>();
+
+        var outcome = await Module(session, clock).ExecuteAsync(
+            Watch(untilUnchanged: 2) with { Progress = progress.Add });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal([1, 2, 3, 4, 5], progress.Select(p => p.Polls));
+        Assert.Equal([1, 1, 2, 2, 2], progress.Select(p => p.ChangedPolls));
+    }
+
+    [Fact]
+    public async Task Watch_progress_callback_failure_does_not_change_the_outcome()
+    {
+        var clock = new FakeWatchClock();
+        var session = FakeSession.WithScalarPolls(1, 1);
+
+        var outcome = await Module(session, clock).ExecuteAsync(
+            Watch(untilUnchanged: 1) with { Progress = _ => throw new InvalidOperationException("journal") });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(2, Assert.IsType<SqlHarnessWatchReport>(outcome.Report).PollCount);
+    }
+
+    [Fact]
     public async Task Watch_predicate_match_exits_condition_met()
     {
         var clock = new FakeWatchClock();

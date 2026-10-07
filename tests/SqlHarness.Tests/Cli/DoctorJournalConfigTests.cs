@@ -59,7 +59,8 @@ public sealed class DoctorJournalConfigTests : IDisposable
     [InlineData(new[] { "query", "p" }, false)]
     [InlineData(new[] { "MCP", "serve" }, false)]
     [InlineData(new string[0], false)]
-    public void Only_the_mcp_branch_prints_its_own_config_warning(string[] args, bool expected) =>
+    [InlineData(new[] { "dashboard" }, true)]
+    public void Branches_that_load_config_print_their_own_warning(string[] args, bool expected) =>
         Assert.Equal(expected, SqlHarnessCli.PrintsOwnConfigWarning(args));
 
     private sealed class NoopModule : ISqlHarnessModule

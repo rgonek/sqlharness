@@ -11,13 +11,15 @@ namespace SqlHarness.Cli;
 public static class SqlHarnessCli
 {
     /// <summary>
-    /// The MCP branch loads config.json itself (McpHost) and reports an invalid file once on
-    /// stderr, so the process entry point must not print the same warning for it.
+    /// The MCP branch (McpHost) and the dashboard command (DashboardHost) load config.json
+    /// themselves and report an invalid file once on stderr, so the process entry point must
+    /// not print the same warning for them.
     /// </summary>
     public static bool PrintsOwnConfigWarning(IReadOnlyList<string> args)
     {
         ArgumentNullException.ThrowIfNull(args);
-        return args.Count > 0 && string.Equals(args[0], "mcp", StringComparison.Ordinal);
+        return args.Count > 0 && (string.Equals(args[0], "mcp", StringComparison.Ordinal)
+            || string.Equals(args[0], "dashboard", StringComparison.Ordinal));
     }
 
     public static SqlHarnessApp Create(ISqlHarnessModule module, TextWriter? output = null, TextReader? stdin = null, bool? stdinRedirected = null, Stream? planStdin = null, TextWriter? mcpError = null)
@@ -40,6 +42,12 @@ public static class SqlHarnessCli
                     // The MCP server owns process stdout for protocol frames only,
                     // so branch parse errors go to stderr with the CLI contract code.
                     (mcpError ?? Console.Error).WriteLine("sqlharness-mcp: Invalid command line arguments.");
+                    return (int)SqlHarnessExitCode.Safety;
+                }
+                if (string.Equals(outputContext.Command, "dashboard", StringComparison.Ordinal) && exception is CommandAppException)
+                {
+                    // The dashboard is an operator command with its own exit contract: 2 for invalid arguments.
+                    (mcpError ?? Console.Error).WriteLine("sqlharness: Invalid command line arguments.");
                     return (int)SqlHarnessExitCode.Safety;
                 }
                 if (outputContext.Mode == OutputMode.Text)
@@ -67,6 +75,7 @@ public static class SqlHarnessCli
             c.AddCommand<IndexesCommand>("indexes").WithDescription("Inspect SQL Server missing-index evidence.");
             c.AddCommand<CapabilitiesCommand>("capabilities").WithDescription("Describe local commands, engines, limits, and output modes.");
             c.AddCommand<DoctorCommand>("doctor").WithDescription("Check local installation and profile-file availability without connecting.");
+            c.AddCommand<DashboardCommand>("dashboard").WithDescription("Serve the local activity dashboard on 127.0.0.1.");
             c.AddCommand<ValidateCommand>("validate").WithDescription("Classify SQL offline using a closed profile; static visible-effects check only, never connects.");
             c.AddBranch("mcp", mcp =>
             {

@@ -19,6 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\SqlHarness.Dashboard\SqlHarness.Dashboard.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Spectre.Console.Cli" />
   </ItemGroup>
 

@@ -384,6 +384,8 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
                 previousHash = hash;
             }
 
+            ReportProgress(operation, poll, totalChangedPolls, elapsed);
+
             if (condition is not null)
             {
                 var firstSet = collected.ResultSets.Count > 0
@@ -409,6 +411,20 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
             {
                 return new WatchPollOutcome(WatchExitReason.MaxDuration, poll, totalChangedPolls);
             }
+        }
+    }
+
+    private static void ReportProgress(SqlHarnessWatchOperation operation, int poll, int changedPolls, long elapsedMilliseconds)
+    {
+        if (operation.Progress is not { } progress)
+            return;
+        try
+        {
+            progress(new WatchProgress(poll, changedPolls, elapsedMilliseconds));
+        }
+        catch (Exception)
+        {
+            // Journal progress is best-effort; it never changes polling or the outcome.
         }
     }
 
