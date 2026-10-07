@@ -172,4 +172,42 @@ public sealed class JournalRetentionTests
         Assert.Equal(1, result.DeletedOperations);
         Assert.Equal("running", JournalDb.Rows(temp.DatabasePath, "SELECT status FROM operations").Single()["status"]);
     }
+
+    [Fact]
+    public void A_run_failing_partway_reports_what_it_already_deleted()
+    {
+        using var temp = new JournalTempDirectory();
+        for (var i = 0; i < JournalRetention.BatchSize + 10; i++)
+            Seed(temp, Now.AddDays(-40).AddSeconds(i));
+        var batches = 0;
+
+        var result = JournalRetention.Run(temp.DatabasePath, Config(maxAgeDays: 30), new Processes(), new FixedTimeProvider(Now),
+            onBatchCommitted: () =>
+            {
+                if (++batches == 1)
+                    throw new SqliteException("database is locked", 5);
+            });
+
+        Assert.True(result.Ran);
+        Assert.Equal(JournalRetention.BatchSize, result.DeletedOperations);
+        Assert.Equal(10, Count(temp, "operations"));
+    }
+
+    [Fact]
+    public void Orphan_plans_are_deleted_in_short_transactions()
+    {
+        using var temp = new JournalTempDirectory();
+        var plans = JournalRetention.BatchSize + 20;
+        for (var i = 0; i < plans; i++)
+            Seed(temp, Now.AddDays(-40).AddSeconds(i), benchmark: Benchmark(i.ToString("X64", System.Globalization.CultureInfo.InvariantCulture)));
+        var writes = 0;
+
+        var result = JournalRetention.Run(temp.DatabasePath, Config(maxAgeDays: 30), new Processes(), new FixedTimeProvider(Now),
+            onBatchCommitted: () => writes++);
+
+        Assert.Equal((plans, plans, 1), (result.DeletedOperations, result.DeletedPlans, result.DeletedSessions));
+        Assert.Equal(0, Count(temp, "plans"));
+        // Two operation batches, two plan batches, one session batch; an unbatched orphan delete would give at most four.
+        Assert.Equal(5, writes);
+    }
 }

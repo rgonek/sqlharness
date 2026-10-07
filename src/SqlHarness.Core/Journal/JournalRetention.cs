@@ -36,39 +36,60 @@ public static class JournalRetention
         ArgumentNullException.ThrowIfNull(journal);
         if (!journal.Enabled || !journal.Retention.Enabled || !File.Exists(databasePath))
             return RetentionResult.Skipped;
+
+        // Every batch commits on its own, so a run that fails partway still reports what it deleted.
+        var totals = new Totals(onBatchCommitted);
+        var started = false;
         try
         {
             using var connection = Connect(databasePath);
             if (Scalar(connection, "PRAGMA user_version;") != JournalSchema.CurrentVersion)
                 return RetentionResult.Skipped;
+            started = true;
 
             // A lookup that fails proves nothing: retention keeps that running row.
             var liveness = new ProcessLiveness(processes, new DeadProcesses(), failedLookupIsAlive: true);
             var cutoff = time.GetUtcNow().AddDays(-journal.Retention.MaxAgeDays).UtcDateTime
                 .ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
 
-            var operations = DeleteOperations(connection, liveness, "AND started_at < $cutoff", cutoff, int.MaxValue, onBatchCommitted);
-            var (plans, sessions) = DeleteOrphans(connection, cutoff);
+            DeleteOperations(connection, liveness, "AND started_at < $cutoff", cutoff, int.MaxValue, totals);
+            DeleteOrphans(connection, cutoff, totals);
 
             var limit = (long)journal.Retention.MaxSizeMb * 1024 * 1024;
             while (UsedBytes(connection) > limit)
             {
-                var deleted = DeleteOperations(connection, liveness, string.Empty, cutoff, SizeStep, onBatchCommitted);
-                var (morePlans, moreSessions) = DeleteOrphans(connection, cutoff: null);
-                operations += deleted;
-                plans += morePlans;
-                sessions += moreSessions;
+                var deleted = DeleteOperations(connection, liveness, string.Empty, cutoff, SizeStep, totals);
+                DeleteOrphans(connection, cutoff: null, totals);
                 if (deleted == 0)
                     break;
             }
 
             IncrementalVacuum(connection);
             Execute(connection, "PRAGMA wal_checkpoint(PASSIVE);");
-            return new RetentionResult(true, operations, plans, sessions);
+            return totals.Result();
         }
         catch (Exception)
         {
-            return RetentionResult.Skipped;
+            return started ? totals.Result() : RetentionResult.Skipped;
+        }
+    }
+
+    private sealed class Totals(Action? onBatchCommitted)
+    {
+        internal int Operations { get; private set; }
+        internal int Plans { get; private set; }
+        internal int Sessions { get; private set; }
+
+        internal void CommittedOperations(int count) => Committed(() => Operations += count);
+        internal void CommittedPlans(int count) => Committed(() => Plans += count);
+        internal void CommittedSessions(int count) => Committed(() => Sessions += count);
+
+        internal RetentionResult Result() => new(true, Operations, Plans, Sessions);
+
+        private void Committed(Action count)
+        {
+            count();
+            onBatchCommitted?.Invoke();
         }
     }
 
@@ -76,7 +97,7 @@ public static class JournalRetention
     /// Deletes oldest-first in batches; returns the number of operations deleted (at most <paramref name="max"/>).
     /// Live running rows are skipped by id (keyset), so they never block older deletable rows behind them.
     /// </summary>
-    private static int DeleteOperations(SqliteConnection connection, ProcessLiveness liveness, string extraFilter, string cutoff, int max, Action? onBatchCommitted)
+    private static int DeleteOperations(SqliteConnection connection, ProcessLiveness liveness, string extraFilter, string cutoff, int max, Totals totals)
     {
         var deleted = 0;
         var after = 0L;
@@ -124,7 +145,7 @@ public static class JournalRetention
                 }
 
                 deleted += ids.Length;
-                onBatchCommitted?.Invoke();
+                totals.CommittedOperations(ids.Length);
             }
 
             if (candidates.Count < BatchSize)
@@ -134,38 +155,47 @@ public static class JournalRetention
         return deleted;
     }
 
-    private static (int Plans, int Sessions) DeleteOrphans(SqliteConnection connection, string? cutoff)
+    /// <summary>Deletes unreferenced plans, then empty sessions, each in batches of at most <see cref="BatchSize"/> rows.</summary>
+    private static void DeleteOrphans(SqliteConnection connection, string? cutoff, Totals totals)
     {
-        Execute(connection, "BEGIN IMMEDIATE;");
-        try
+        DeleteInBatches(connection, null, totals.CommittedPlans, $"""
+            DELETE FROM plans WHERE rowid IN (
+                SELECT rowid FROM plans WHERE hash NOT IN (SELECT plan_hash FROM operation_plans) LIMIT {BatchSize});
+            """);
+        DeleteInBatches(connection, cutoff, totals.CommittedSessions, $"""
+            DELETE FROM sessions WHERE id IN (
+                SELECT id FROM sessions
+                WHERE NOT EXISTS (SELECT 1 FROM operations o WHERE o.session_id = sessions.id)
+                  AND ($cutoff IS NULL OR last_seen < $cutoff)
+                LIMIT {BatchSize});
+            """);
+    }
+
+    private static void DeleteInBatches(SqliteConnection connection, string? cutoff, Action<int> committed, string sql)
+    {
+        int changed;
+        do
         {
-            int plans;
-            using (var deletePlans = connection.CreateCommand())
+            Execute(connection, "BEGIN IMMEDIATE;");
+            try
             {
-                deletePlans.CommandText = "DELETE FROM plans WHERE hash NOT IN (SELECT plan_hash FROM operation_plans);";
-                plans = deletePlans.ExecuteNonQuery();
+                using var delete = connection.CreateCommand();
+                delete.CommandText = sql;
+                if (sql.Contains("$cutoff", StringComparison.Ordinal))
+                    delete.Parameters.AddWithValue("$cutoff", (object?)cutoff ?? DBNull.Value);
+                changed = delete.ExecuteNonQuery();
+                Execute(connection, "COMMIT;");
+            }
+            catch
+            {
+                Execute(connection, "ROLLBACK;");
+                throw;
             }
 
-            int sessions;
-            using (var deleteSessions = connection.CreateCommand())
-            {
-                deleteSessions.CommandText = """
-                    DELETE FROM sessions
-                    WHERE NOT EXISTS (SELECT 1 FROM operations o WHERE o.session_id = sessions.id)
-                      AND ($cutoff IS NULL OR last_seen < $cutoff);
-                    """;
-                deleteSessions.Parameters.AddWithValue("$cutoff", (object?)cutoff ?? DBNull.Value);
-                sessions = deleteSessions.ExecuteNonQuery();
-            }
-
-            Execute(connection, "COMMIT;");
-            return (plans, sessions);
+            if (changed > 0)
+                committed(changed);
         }
-        catch
-        {
-            Execute(connection, "ROLLBACK;");
-            throw;
-        }
+        while (changed >= BatchSize);
     }
 
     /// <summary>

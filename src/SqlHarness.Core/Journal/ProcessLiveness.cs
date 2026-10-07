@@ -34,7 +34,8 @@ internal sealed class DeadProcesses
 /// rows as stored rather than guessing. Live results are cached for one read
 /// only; dead results go to the shared <see cref="DeadProcesses"/>. Retention
 /// passes <paramref name="failedLookupIsAlive"/> so a lookup that throws never
-/// makes a possibly live row deletable.
+/// makes a possibly live row deletable. Limitation: LinuxProcessInfo.Get maps
+/// IOException/UnauthorizedAccessException to null (not found), which still reads as dead.
 /// </summary>
 internal sealed class ProcessLiveness(IProcessInfo processes, DeadProcesses dead, bool failedLookupIsAlive = false)
 {
