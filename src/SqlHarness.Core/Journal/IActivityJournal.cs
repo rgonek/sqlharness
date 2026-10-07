@@ -12,6 +12,9 @@ public interface IActivityJournal
     bool Complete(JournalHandle? handle, OperationEnd end);
 
     void RecordEmission(JournalHandle? handle, OutputFootprint? raw, OutputFootprint emitted);
+
+    /// <summary>Per-variant benchmark metrics; full plan documents only when the journal stores sensitive content.</summary>
+    void RecordBenchmark(JournalHandle? handle, BenchmarkJournalRecord record) { }
 }
 
 public sealed class NullActivityJournal : IActivityJournal

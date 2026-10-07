@@ -638,6 +638,19 @@ public class CompareMatrixTests
             command => Assert.Equal(7, (int)command.Parameters.Single(parameter => parameter.Name == "@Tenant").Value));
     }
 
+    [Fact]
+    public async Task Matrix_exposes_runs_with_cell_indexes_only()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+
+        var outcome = await Module(new MatrixSessionFactory(), artifacts).ExecuteAsync(Matrix("BatchSize:int=1,20,100"));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var runs = outcome.BenchmarkRuns!;
+        Assert.Equal([0, 1, 2], runs.Select(run => run.MatrixCell!.Value).Distinct());
+        Assert.All(runs, run => Assert.Contains(run.Variant, new[] { "baseline", "candidate" }));
+    }
+
     private static SqlHarnessCompareMatrixOperation TypedMatrix(params string?[] values) =>
         Matrix(string.Empty, parameters: []) with
         {

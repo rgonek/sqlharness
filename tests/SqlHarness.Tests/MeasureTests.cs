@@ -442,6 +442,56 @@ public class SqlHarnessMeasureTests
             "'private'");
     }
 
+    [Fact]
+    public async Task Measure_runs_carry_full_table_io_for_the_journal()
+    {
+        var session = FakeMeasureSession.Create();
+
+        var outcome = await Module(session).ExecuteAsync(Measure(3));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var runs = outcome.BenchmarkRuns!;
+        Assert.Equal(3, runs.Count);
+        Assert.All(runs, run =>
+        {
+            var table = Assert.Single(run.TableIo);
+            Assert.Equal("Clients", table.Table);
+            Assert.Equal(1, table.ScanCount);
+            Assert.Equal(run.LogicalReads, table.LogicalReads);
+        });
+    }
+
+    [Fact]
+    public async Task Measure_parameter_sets_expose_runs_with_set_names()
+    {
+        var session = FakeMeasureSession.Create();
+
+        var outcome = await Module(session).ExecuteAsync(Measure(2) with
+        {
+            SetupSql = null,
+            QuerySql = "SELECT @n AS Value",
+            ParameterSets =
+            [
+                new SqlHarnessParameterSetInput("small", ["n:int=7"]),
+                new SqlHarnessParameterSetInput("large", ["n:int=8"]),
+            ],
+        });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(4, outcome.BenchmarkRuns!.Count);
+        Assert.Equal(["large", "small", "small", "large"], outcome.BenchmarkRuns.Select(run => run.ParameterSet));
+        Assert.All(outcome.BenchmarkRuns, run => Assert.Null(run.MatrixCell));
+    }
+
+    [Fact]
+    public async Task Failed_measure_exposes_no_runs()
+    {
+        var outcome = await Module(FakeMeasureSession.Create()).ExecuteAsync(Measure(1) with { QuerySql = "DELETE FROM dbo.Clients" });
+
+        Assert.NotEqual(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Null(outcome.BenchmarkRuns);
+    }
+
     private static void AssertParameterError(SqlHarnessOutcome outcome, string expected, params string[] forbidden)
     {
         Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
@@ -544,7 +594,7 @@ public class SqlHarnessMeasureTests
             throw new IOException("disk unavailable");
     }
 
-    private sealed class FakeMeasureSession : ISqlSessionFactory, ISqlSession
+    internal sealed class FakeMeasureSession : ISqlSessionFactory, ISqlSession
     {
         private readonly bool _changeLastResult;
         private readonly bool _includeSetupResult;
@@ -556,6 +606,7 @@ public class SqlHarnessMeasureTests
         private readonly string _ioTable;
         private readonly Func<int, long>? _tableReadsForMeasured;
         private readonly int _resultRowCount;
+        private readonly string _plan;
         private readonly List<string> _messages = [];
         private int _queryCount;
 
@@ -577,8 +628,10 @@ public class SqlHarnessMeasureTests
             bool failSetup,
             string ioTable,
             Func<int, long>? tableReadsForMeasured,
-            int resultRowCount)
+            int resultRowCount,
+            string plan)
         {
+            _plan = plan;
             _changeLastResult = changeLastResult;
             _includeSetupResult = includeSetupResult;
             _includeExtraMessage = includeExtraMessage;
@@ -601,8 +654,9 @@ public class SqlHarnessMeasureTests
             bool failSetup = false,
             string ioTable = "Clients",
             Func<int, long>? tableReadsForMeasured = null,
-            int resultRowCount = 1) =>
-            new(changeLastResult, includeSetupResult, includeExtraMessage, failOnQueryNumber, cancelOnQuery, emitMessageBeforeQueryFailure, failSetup, ioTable, tableReadsForMeasured, resultRowCount);
+            int resultRowCount = 1,
+            string plan = Plan) =>
+            new(changeLastResult, includeSetupResult, includeExtraMessage, failOnQueryNumber, cancelOnQuery, emitMessageBeforeQueryFailure, failSetup, ioTable, tableReadsForMeasured, resultRowCount, plan);
 
         public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
         {
@@ -654,7 +708,7 @@ public class SqlHarnessMeasureTests
             object?[][] rows = Enumerable.Range(0, _resultRowCount)
                 .Select(index => new object?[] { value + index })
                 .ToArray();
-            return Task.FromResult<ISqlReader>(FakeReader.WithPlan(["Value"], rows, Plan));
+            return Task.FromResult<ISqlReader>(FakeReader.WithPlan(["Value"], rows, _plan));
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;

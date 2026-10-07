@@ -462,6 +462,19 @@ public class SqlHarnessCompareTests
         Assert.True(record.RawBytes > 0);
     }
 
+    [Fact]
+    public async Task Compare_exposes_measured_runs_of_both_variants()
+    {
+        var session = FakeCompareSession.Create();
+
+        var outcome = await Module(session).ExecuteAsync(Compare(repeat: 2));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var runs = outcome.BenchmarkRuns!;
+        Assert.Equal(["baseline", "candidate", "candidate", "baseline"], runs.Select(run => run.Variant));
+        Assert.All(runs, run => Assert.NotEmpty(run.TableIo));
+    }
+
     private static void AddResult(
         CanonicalResultAccumulator accumulator,
         string name,
@@ -804,7 +817,7 @@ public class SqlHarnessCompareTests
         }
     }
 
-    private sealed class FakeCompareSession : ISqlSessionFactory, ISqlSession
+    internal sealed class FakeCompareSession : ISqlSessionFactory, ISqlSession
     {
         private readonly int _candidateValue;
         private readonly bool _failStatisticsEnable;
@@ -819,6 +832,7 @@ public class SqlHarnessCompareTests
         private readonly string? _secondaryIoTable;
         private readonly Func<int, long>? _secondaryTableReadsForMeasured;
         private readonly int _resultRowCount;
+        private readonly string? _plan;
         private int _baseline;
         private int _candidate;
         private readonly List<string> _messages = [];
@@ -844,8 +858,10 @@ public class SqlHarnessCompareTests
             Func<int, long>? tableReadsForMeasured,
             string? secondaryIoTable,
             Func<int, long>? secondaryTableReadsForMeasured,
-            int resultRowCount)
+            int resultRowCount,
+            string? plan)
         {
+            _plan = plan;
             _candidateValue = candidateValue;
             _failStatisticsEnable = failStatisticsEnable;
             _cancelOnBenchmark = cancelOnBenchmark;
@@ -874,8 +890,9 @@ public class SqlHarnessCompareTests
             Func<int, long>? tableReadsForMeasured = null,
             string? secondaryIoTable = null,
             Func<int, long>? secondaryTableReadsForMeasured = null,
-            int resultRowCount = 1) =>
-            new(candidateValue, failStatisticsEnable, cancelOnBenchmark, includeSetupResult, includeSecondPlan, includeExtraMessage, failOnBenchmarkNumber, reorderCandidate, ioTable, tableReadsForMeasured, secondaryIoTable, secondaryTableReadsForMeasured, resultRowCount);
+            int resultRowCount = 1,
+            string? plan = null) =>
+            new(candidateValue, failStatisticsEnable, cancelOnBenchmark, includeSetupResult, includeSecondPlan, includeExtraMessage, failOnBenchmarkNumber, reorderCandidate, ioTable, tableReadsForMeasured, secondaryIoTable, secondaryTableReadsForMeasured, resultRowCount, plan);
 
         public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
         {
@@ -931,7 +948,7 @@ public class SqlHarnessCompareTests
             _messages.Add(message);
             if (_includeExtraMessage)
                 _messages.Add("ordinary diagnostic message");
-            var plans = _includeSecondPlan ? new[] { PlanA, PlanB } : new[] { baseline ? PlanA : PlanB };
+            var plans = _plan is not null ? new[] { _plan } : _includeSecondPlan ? new[] { PlanA, PlanB } : new[] { baseline ? PlanA : PlanB };
             if (_reorderCandidate)
             {
                 object?[][] rows = baseline

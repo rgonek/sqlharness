@@ -78,8 +78,9 @@ internal sealed class SqlServerDialect : ISqlDialect
             foreach (var message in messages)
                 raw.AddMessage("sql", message);
             messagesCaptured = true;
-            var io = StatisticsIoParser.Parse(string.Join(Environment.NewLine, messages));
-            var time = StatisticsTimeParser.Parse(string.Join(Environment.NewLine, messages));
+            var statistics = string.Join(Environment.NewLine, messages);
+            var io = StatisticsIoParser.Parse(statistics);
+            var time = StatisticsTimeParser.Parse(statistics);
             var plans = result.PlanXmls.Select(ExecutionPlanParser.Parse).ToArray();
             var artifact = new CompareRunArtifact(
                 variant,
@@ -91,7 +92,11 @@ internal sealed class SqlServerDialect : ISqlDialect
                 result.Canonical.Hash,
                 result.PlanXmls,
                 messages.Length,
-                Metrics: TruncatedMetricsOrNull(consumed.OmittedMessageCount));
+                Metrics: TruncatedMetricsOrNull(consumed.OmittedMessageCount))
+            {
+                // Truncated message windows make the counters partial; the journal then records none.
+                TableIo = consumed.OmittedMessageCount > 0 ? [] : StatisticsIoDetailParser.Parse(statistics),
+            };
             return new CollectedCompareRun(artifact, plans, result.Comparison);
         }
         catch (Exception exception)

@@ -40,6 +40,91 @@ internal static class StatisticsIoParser
     private static long ParseLong(string value) => long.Parse(value, NumberStyles.None, CultureInfo.InvariantCulture);
 }
 
+internal sealed record TableIoCounters(
+    string Table,
+    long ScanCount,
+    long LogicalReads,
+    long PhysicalReads,
+    long PageServerReads,
+    long ReadAheadReads,
+    long LobLogicalReads,
+    long LobPhysicalReads,
+    long LobReadAheadReads);
+
+/// <summary>
+/// Per-table SQL Server STATISTICS IO counters for the activity journal only:
+/// scan count and logical, physical, page server, read-ahead, and LOB
+/// logical/physical/read-ahead reads. Page server read-ahead and LOB page
+/// server counters are not kept.
+/// Missing counters (older servers) read as zero; a table repeated across
+/// statements is summed. Agent reports keep using <see cref="StatisticsIoParser"/>.
+/// </summary>
+internal static class StatisticsIoDetailParser
+{
+    private static readonly Regex TableLine = new(
+        @"Table\s+'(?<table>(?:''|[^'])+)'\.(?<counters>[^\r\n]*)",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex Counter = new(
+        @"^(?<name>[A-Za-z][A-Za-z -]*?)\s+(?<value>\d+)\.?$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    internal static IReadOnlyList<TableIoCounters> Parse(string text)
+    {
+        var tables = new Dictionary<string, TableIoCounters>(StringComparer.Ordinal);
+        var order = new List<string>();
+        foreach (Match line in TableLine.Matches(text))
+        {
+            var table = line.Groups["table"].Value.Replace("''", "'", StringComparison.Ordinal);
+            var values = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            foreach (var segment in line.Groups["counters"].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            {
+                var match = Counter.Match(segment);
+                if (match.Success && long.TryParse(match.Groups["value"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var value))
+                    values[match.Groups["name"].Value.Trim()] = value;
+            }
+
+            // Like StatisticsIoParser, a line without logical reads (localized output,
+            // columnstore segment lines) is not a counter line; recording it would turn unknown into zero.
+            if (!values.ContainsKey("logical reads"))
+                continue;
+
+            long Get(string name) => values.GetValueOrDefault(name);
+            var counters = new TableIoCounters(
+                table,
+                Get("scan count"),
+                Get("logical reads"),
+                Get("physical reads"),
+                Get("page server reads"),
+                Get("read-ahead reads"),
+                Get("lob logical reads"),
+                Get("lob physical reads"),
+                Get("lob read-ahead reads"));
+            if (tables.TryGetValue(table, out var existing))
+            {
+                tables[table] = existing with
+                {
+                    ScanCount = existing.ScanCount + counters.ScanCount,
+                    LogicalReads = existing.LogicalReads + counters.LogicalReads,
+                    PhysicalReads = existing.PhysicalReads + counters.PhysicalReads,
+                    PageServerReads = existing.PageServerReads + counters.PageServerReads,
+                    ReadAheadReads = existing.ReadAheadReads + counters.ReadAheadReads,
+                    LobLogicalReads = existing.LobLogicalReads + counters.LobLogicalReads,
+                    LobPhysicalReads = existing.LobPhysicalReads + counters.LobPhysicalReads,
+                    LobReadAheadReads = existing.LobReadAheadReads + counters.LobReadAheadReads,
+                };
+            }
+            else
+            {
+                tables[table] = counters;
+                order.Add(table);
+            }
+        }
+
+        return order.Select(table => tables[table]).ToArray();
+    }
+}
+
 internal sealed record StatisticsTime(long CpuTimeMs, long ElapsedTimeMs);
 
 internal static class StatisticsTimeParser
