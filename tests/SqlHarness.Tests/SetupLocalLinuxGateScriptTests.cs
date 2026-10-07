@@ -37,7 +37,7 @@ public sealed class SetupLocalLinuxGateScriptTests
 
         Assert.Contains("sudo -n true", script, StringComparison.Ordinal);
         Assert.Contains("-d \"$gate_clone/.git\"", script, StringComparison.Ordinal);
-        Assert.Contains("grep -qF \"$bashrc_marker\"", script, StringComparison.Ordinal);
+        Assert.Contains("grep -qxF \"# $bashrc_marker\"", script, StringComparison.Ordinal);
     }
 
     [Fact]

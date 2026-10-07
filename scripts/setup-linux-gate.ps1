@@ -171,13 +171,17 @@ else
   curl -fsSL "https://nodejs.org/dist/v$node_version/$tarball" -o "$work/$tarball"
   curl -fsSL "https://nodejs.org/dist/v$node_version/SHASUMS256.txt" -o "$work/SHASUMS256.txt"
   (cd "$work" && grep " $tarball\$" SHASUMS256.txt | sha256sum -c -)
-  mkdir -p "$node_dir"
-  tar -xJf "$work/$tarball" -C "$node_dir" --strip-components=1
+  # Extract beside the download and move into place only when complete, so a failed
+  # extract never leaves a bin/node that the next run mistakes for a finished install.
+  mkdir -p "$work/node" "$node_root"
+  tar -xJf "$work/$tarball" -C "$work/node" --strip-components=1
+  rm -rf "$node_dir"
+  mv "$work/node" "$node_dir"
   rm -rf "$work"
 fi
 ln -sfn "$node_dir" "$node_root/current"
 
-if grep -qF "$bashrc_marker" "$HOME/.bashrc" 2>/dev/null; then
+if grep -qxF "# $bashrc_marker" "$HOME/.bashrc" 2>/dev/null; then
   echo "==> path already configured"
 else
   echo "==> path"
@@ -189,7 +193,7 @@ else
 fi
 
 node_marker="$bashrc_marker (node)"
-if grep -qF "$node_marker" "$HOME/.bashrc" 2>/dev/null; then
+if grep -qxF "# $node_marker" "$HOME/.bashrc" 2>/dev/null; then
   echo "==> node path already configured"
 else
   echo "==> node path"
