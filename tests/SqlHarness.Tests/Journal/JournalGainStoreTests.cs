@@ -43,7 +43,7 @@ public sealed class JournalGainStoreTests
             Assert.Equal(1, report.Compare.Executions);
             Assert.Equal(1, report.QueryStoreTop.Executions);
             Assert.Equal(0, report.Measure.Executions);
-            // Saved tokens are the per-execution non-negative gross, as gain.jsonl recorded them.
+            // Saved tokens are the per-execution non-negative gross, summed per operation.
             Assert.Equal(SumSaved([400, 100, 800, 40, 40, 0], [40, 20, 80, 4, 8, 4]), report.Total.SavedEstimatedTokens);
         }
     }

@@ -5,7 +5,7 @@ namespace SqlHarness.Core;
 /// <summary>
 /// Gain statistics from the activity journal: every operation of a counted kind whose
 /// emission receipt completed (raw and emitted byte counts present). MCP tool calls
-/// never complete the receipt, so they are not counted, as with the former gain.jsonl.
+/// never complete the receipt, so they are not counted.
 /// plan and schema count only toward the total.
 /// </summary>
 internal sealed class JournalGainStore(string databasePath, Func<bool> journalEnabled) : IGainSource

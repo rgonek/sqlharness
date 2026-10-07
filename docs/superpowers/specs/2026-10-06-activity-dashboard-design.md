@@ -1,6 +1,6 @@
 # SQLHarness activity journal and local dashboard
 
-Status: design approved in conversation on 2026-10-06; not implemented. Implementation plan to follow.
+Status: design approved in conversation on 2026-10-06; implemented in phases 1–5 (plans `docs/superpowers/plans/2026-10-06-activity-journal-phase1.md` and `2026-10-07-activity-journal-phase{2,3,4,5}.md`; each plan's "As built" section records accepted deviations). Phase 5 decisions recorded on 2026-10-07 are reflected below.
 
 ## Goal
 
@@ -19,8 +19,7 @@ Success criteria:
 - Correlating sessions with Claude/Codex conversation transcripts. This design only records the data such a correlator would need: timestamps, tool/command, working directory, and agent and host process identity.
 - Session identity supplied by the agent or by configuration: environment variables, hooks, or a `--session` flag.
 - Graphical plan rendering (SSMS-style tree).
-- IO/plan statistics for `query`. Enabling them would change its execution, so it needs a separate decision.
-- Migrating `gain.jsonl` into SQLite.
+- IO/plan statistics for `query`: rejected (2026-10-07); `measure` and `compare` are the measurement commands.
 - Visual design. The UI is unstyled shadcn; styling comes later.
 
 ## Decisions
@@ -30,8 +29,9 @@ Success criteria:
 | Storage | SQLite (`Microsoft.Data.Sqlite`), WAL mode, `~/.sqlharness/data/activity.db` |
 | Session identity | Layer 1: MCP `clientInfo` plus one `mcp serve` process instance. Layer 2: CLI process-tree walk. Nothing else. MCP is the primary path, CLI is the fallback |
 | Sensitive content | One flag `journal.storeSensitive` (default `false`) gates both SQL text and full plans |
-| Journal on/off | `journal.enabled`, default `true` (hash-and-metadata only by default, like `gain.jsonl`) |
+| Journal on/off | `journal.enabled`, default `true` (hash-and-metadata only by default, like the former `gain.jsonl`) |
 | Retention | Opt-in, `journal.retention.enabled` default `false` |
+| Gain statistics | Aggregated from the journal (operations with an emitted footprint); gain.jsonl is no longer written or read; no migration of old data; gain write failures never change an exit code |
 | Dashboard lifetime | Explicit `sqlharness dashboard`. Opt-in `dashboard.autoStart` makes `mcp serve` spawn it as a detached process |
 | UI | React + TypeScript + Vite SPA, embedded into the .NET assembly. shadcn/ui on Base UI primitives, Tailwind v4, default `neutral` theme, no custom styling |
 
@@ -148,13 +148,16 @@ Caveats:
 - Stopping: Ctrl+C and SIGTERM stop the server cleanly with exit `0`, releasing the lock.
 - `abandoned` is computed at read time (API, statistics, live feed) when a running row's `(host_pid, host_started_at)` no longer exists; the dashboard does not write to the journal. On platforms without a process reader (macOS) rows are reported as stored.
 - `watch` writes `progress_json` after each completed poll (`polls`, `changedPolls`, `elapsedMs`); progress recording stops for that watch after the first failed journal write.
-- Autostart (opt-in): after `initialize`, `mcp serve` checks the lock. If no live server exists, it spawns `sqlharness dashboard --background --no-open` detached, with stdio redirected to null, and does not wait. A spawn failure is logged to stderr and otherwise ignored. MCP stdout stays protocol-only.
-- Idle shutdown: the server exits after `idleShutdownHours` with no journal writes (`PRAGMA data_version` unchanged) and no connected SSE clients.
+- Autostart (opt-in): after startup validation and before the MCP transport starts, `mcp serve` checks the published dashboard. If no live server exists, it launches `sqlharness dashboard --background` (which never opens a browser) and does not wait. A launch failure is logged to stderr and otherwise ignored. MCP stdout stays protocol-only.
+- Autostart launches the dashboard detached: ShellExecute with a hidden window on Windows, closed redirected stdio on Unix, the SQLHarness home as working directory. It is not placed in a new session or process group, so a signal to the MCP client's process group (Ctrl+C, SIGHUP, closing a Windows console) also stops it; the next `mcp serve` relaunches it.
+- Idle shutdown applies to `--background` (autostarted) only: the server exits after `idleShutdownHours` with no journal commits (`PRAGMA data_version`), no authenticated requests, and no open live streams. The dashboard's own retention commits do not count as activity.
 - Retention (opt-in) runs at dashboard start, then hourly, and also at `mcp serve` start so it applies without the dashboard. Order of deletion:
-  1. operations older than `maxAgeDays`, never `running`;
-  2. unreferenced plans;
-  3. if the file still exceeds `maxSizeMb`, oldest operations;
-  4. finally `PRAGMA incremental_vacuum`. The database is created with `auto_vacuum = INCREMENTAL`.
+  1. operations older than `maxAgeDays`, never a running operation whose host process is alive (abandoned rows are deleted like finished ones; a failed liveness lookup keeps the row);
+  2. unreferenced plans and empty sessions;
+  3. while the used size (pages minus free pages) still exceeds `maxSizeMb`, oldest operations (same running-row rule), then orphans again;
+  4. finally `PRAGMA incremental_vacuum`. The database is created with `auto_vacuum = INCREMENTAL`; a database without it is not converted and is not vacuumed.
+
+  Deletes run in transactions of at most 500 rows, so concurrent writers stay within their 1 s busy budget.
 
 ### API (read-only; no write endpoints exist)
 

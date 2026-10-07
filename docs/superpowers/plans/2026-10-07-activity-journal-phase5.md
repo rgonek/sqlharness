@@ -1719,6 +1719,16 @@ git commit -m "Document retention, idle shutdown, autostart and journal-based ga
 
 ---
 
+## As built
+
+Accepted deviations from the tasks above:
+
+- **Tasks 1–2:** `JournalGainStore` returns zeros (with `journalEnabled: true`) for a journal below schema v3 or one without the `operations` table or footprint columns, instead of failing. Stopwatch locals left unused by the receipt change were dropped.
+- **Task 3:** `ProcessLiveness` moved to Core with a `failedLookupIsAlive` flag. Retention passes `true`: a lookup that throws keeps the running row. `LinuxProcessInfo` maps unreadable `/proc` entries to "not found", so they still read as dead (documented limitation); macOS (`SelfOnlyProcessInfo`) treats every row as alive. Retention deletes abandoned running rows (host process gone) like finished ones and never a live one; this refines the spec's "never `running`". Deletes page by id past live running rows. Every delete (operations, orphan plans, orphan sessions) runs in short `BEGIN IMMEDIATE` batches of at most 500 rows. `incremental_vacuum(1024)` runs in short steps and is skipped when `auto_vacuum` is not `INCREMENTAL`; existing databases are not converted. A run that fails midway reports the counts it already committed.
+- **Task 4:** Idle decisions use an injectable `TimeProvider`. A `data_version` read error reconnects on the next pass instead of stopping the dashboard. The dashboard's own retention commits are not counted as activity. Ctrl+C waits for an in-flight retention pass (short batches).
+- **Task 5:** Launch command detection splits the process path on both `/` and `\`. IL3000 is suppressed for the single-file `Assembly.Location` read. Autostart and the startup retention pass run from an `McpHost` `started` hook after startup validation (an invalid startup configuration never launches anything) and before the transport starts. The launcher is injectable (`IDashboardLauncher`); `McpDashboardAutostartTests` pins silent stdout. Known limitation: the autostarted dashboard is not placed in a new session or process group, so Ctrl+C/SIGHUP to the MCP client's process group (or closing its console on Windows) also stops it; the next `mcp serve` relaunches it. Documented in `README.md`, `AGENTS.md`, `docs/mcp.md`, and the spec.
+- **Task 6:** `verify-linux.ps1` (WSL) was not run; `verify.ps1` ran on a Linux container, exercising the same stages on Linux. The manual autostart check ran on Linux only (framework-dependent `dotnet sqlharness.dll` and a linux-x64 single-file publish); the Windows check was not run.
+
 ## Not in this phase
 
 These remain separate projects, each needing its own spec:

@@ -268,7 +268,7 @@ Never work around a safety rejection. Narrow the operation or obtain explicit ap
 
 ## Gain accounting
 
-`gain` aggregates the activity journal (`~/.sqlharness/data/activity.db`): every CLI command except `gain` whose output was rendered contributes its raw and emitted byte counts (MCP tool calls are not counted). With `journal.enabled: false` it reports zeros and says the journal is disabled. The `gain` command estimates tokens as `ceil(UTF-8 bytes / 4)` using the `utf8-bytes-div-4` heuristic. `savedEstimatedTokens` remains the historical nonnegative gross field; `netEstimatedTokens` is the signed raw-minus-emitted delta, and savings percentage uses that signed net. Raw means SQLHarness's canonical internal representation, not the response from an alternative tool. This is a model-independent output-size estimate, not a tokenizer measurement or a claim about LLM cost.
+`gain` aggregates the activity journal (`~/.sqlharness/data/activity.db`): every CLI command except `gain` whose output was rendered contributes its raw and emitted byte counts (MCP tool calls are not counted). With `journal.enabled: false` it reports zeros, `journalEnabled: false` in JSON, and a one-line note in text; a journal created by an older sqlharness that has not been upgraded also reads as zeros. `~/.sqlharness/data/gain.jsonl` is no longer written or read; its data is not migrated and an existing file is left on disk and ignored. A gain storage failure never changes a command's exit code. The `gain` command estimates tokens as `ceil(UTF-8 bytes / 4)` using the `utf8-bytes-div-4` heuristic. `savedEstimatedTokens` remains the historical nonnegative gross field; `netEstimatedTokens` is the signed raw-minus-emitted delta, and savings percentage uses that signed net. Raw means SQLHarness's canonical internal representation, not the response from an alternative tool. This is a model-independent output-size estimate, not a tokenizer measurement or a claim about LLM cost.
 
 ### Activity journal
 
@@ -280,7 +280,17 @@ Every operation that reaches the SQLHarness module (`query`, `measure`, `compare
 }
 ```
 
-`dashboard.port` sets the dashboard's preferred port. The `retention` key and the other `dashboard` keys are accepted but have no effect until later releases.
+`dashboard.port` sets the dashboard's preferred port. Optional behavior in `~/.sqlharness/config.json`:
+
+```json
+{
+  "journal": { "retention": { "enabled": true, "maxAgeDays": 30, "maxSizeMb": 500 } },
+  "dashboard": { "autoStart": true, "idleShutdownHours": 8 }
+}
+```
+
+- `journal.retention` (off by default; needs `journal.enabled`) deletes operations older than `maxAgeDays` (1..3650, default 30), then unreferenced plans and empty sessions last seen before that age, then the oldest operations while the database's used size exceeds `maxSizeMb` (10..102400, default 500), and finally returns free pages with `PRAGMA incremental_vacuum` (skipped for a database whose `auto_vacuum` is not `INCREMENTAL`; every journal SQLHarness creates is). It never deletes a running operation whose host process is alive (or whose liveness cannot be determined); a running row whose host process is gone (`abandoned`) is deleted like a finished one. On Linux an unreadable `/proc` entry counts as a gone process. Deletes run in short transactions of at most 500 rows, so concurrent journal writes are not starved. It runs when the dashboard starts, every hour while it runs, and once in the background when `mcp serve` starts.
+- `dashboard.autoStart` (off by default; an invalid `config.json` never enables it) makes every `mcp serve` start `sqlharness dashboard --background` when no dashboard is running for this home. The launch happens after startup validation and before the MCP transport starts; it is detached from the server's standard streams (closed redirected stdio on Unix, ShellExecute with a hidden window on Windows) with the SQLHarness home as working directory, so MCP stdout stays protocol-only and the client still sees EOF when the server exits. A failed launch writes one line to stderr. The background dashboard exits after `idleShutdownHours` (1..168, default 8) without journal writes (other than its own retention), requests, or open browser tabs; the next `mcp serve` starts it again. A dashboard started by hand never idle-exits. Open the running dashboard with `sqlharness dashboard`. Known limitation: the autostarted dashboard is not placed in a new session or process group, so Ctrl+C or SIGHUP delivered to the MCP client's process group (or closing its console on Windows) also stops it; the next `mcp serve` relaunches it.
 
 ### Dashboard
 
