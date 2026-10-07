@@ -107,6 +107,16 @@ public static class DashboardHost
             return (int)SqlHarnessExitCode.LocalStorage;
         }
 
+        // Older means the journal was not migrated (disabled, or the migration failed): every
+        // read would fail, so refuse instead of serving a dashboard whose API only returns 500.
+        if (version < JournalSchema.CurrentVersion)
+        {
+            options.Error.WriteLine(options.Config.Config.Journal.Enabled
+                ? "sqlharness: the activity journal schema is older than this sqlharness and could not be upgraded; the dashboard cannot read it."
+                : "sqlharness: the activity journal schema is older than this sqlharness and was not upgraded because the journal is disabled; enable the journal to upgrade it.");
+            return (int)SqlHarnessExitCode.LocalStorage;
+        }
+
         RunningDashboard running;
         try
         {

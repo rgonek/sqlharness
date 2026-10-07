@@ -76,6 +76,79 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Dead_hosts_are_looked_up_once_while_live_hosts_are_rechecked()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:live", hostPid: 100), complete: false);
+        seed.Operation(JournalSeed.Session("cli:dead", hostPid: 200), complete: false);
+        var processes = new FakeProcesses().Alive(100, JournalSeed.HostStarted);
+        var reader = Reader(home, processes);
+
+        for (var tick = 0; tick < 3; tick++)
+        {
+            using var connection = reader.OpenReadOnly()!;
+            var statuses = reader.RunningOperations(connection).ToDictionary(o => o.SessionId, o => o.Status);
+            Assert.Equal(["abandoned", "running"], statuses.Values.Order());
+        }
+
+        Assert.Equal("abandoned", reader.Operations(new OperationQuery(Status: "abandoned")).Items.Single().Status);
+        Assert.Equal(1, processes.Lookups(200));
+        Assert.Equal(4, processes.Lookups(100));
+    }
+
+    [Fact]
+    public void Dead_process_cache_starts_over_when_full()
+    {
+        var dead = new DeadProcesses();
+        for (var pid = 0; pid < DeadProcesses.Capacity; pid++)
+            dead.Add(pid, null);
+        Assert.Equal(DeadProcesses.Capacity, dead.Count);
+
+        dead.Add(-1, "x");
+
+        Assert.Equal(1, dead.Count);
+        Assert.True(dead.Contains(-1, "x"));
+        Assert.False(dead.Contains(0, null));
+    }
+
+    [ProcessReaderFact]
+    public void Real_exited_host_is_abandoned_while_the_current_process_stays_running()
+    {
+        using var home = new TempHome();
+        // A child that waits on stdin, so its snapshot is taken while it is certainly alive.
+        var start = new System.Diagnostics.ProcessStartInfo(OperatingSystem.IsWindows() ? "cmd.exe" : "cat")
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        ProcessSnapshot child;
+        using (var process = System.Diagnostics.Process.Start(start)!)
+        {
+            child = ProcessInfo.Current.Get(process.Id)!;
+            Assert.NotNull(child);
+            process.StandardInput.Close();
+            Assert.True(process.WaitForExit(10_000));
+        }
+
+        var self = ProcessInfo.Current.Get(Environment.ProcessId)!;
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(Host("cli:exited", child), complete: false);
+        seed.Operation(Host("cli:self", self), complete: false);
+        var reader = new JournalReader(home.DatabasePath, ProcessInfo.Current);
+
+        var statuses = reader.Operations(new OperationQuery()).Items.ToDictionary(o => o.SessionId, o => o.Status);
+        var sessions = reader.Sessions(new SessionQuery()).Items.ToDictionary(s => s.SessionKey, s => s.Id);
+
+        Assert.Equal("abandoned", statuses[sessions["cli:exited"]]);
+        Assert.Equal("running", statuses[sessions["cli:self"]]);
+
+        static SessionIdentity Host(string key, ProcessSnapshot host) =>
+            JournalSeed.Session(key, hostPid: host.Pid) with { HostStartedAt = host.StartedAt };
+    }
+
+    [Fact]
     public void Live_filtered_pages_scan_past_dead_running_rows()
     {
         using var home = new TempHome();

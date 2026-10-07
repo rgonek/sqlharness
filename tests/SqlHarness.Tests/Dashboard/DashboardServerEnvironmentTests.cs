@@ -28,8 +28,9 @@ public sealed class DashboardServerEnvironmentTests
         var saved = Variables.ToDictionary(name => name, Environment.GetEnvironmentVariable);
         var settings = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
         var development = Path.Combine(AppContext.BaseDirectory, "appsettings.Development.json");
-        Assert.False(File.Exists(settings));
-        Assert.False(File.Exists(development));
+        // A run killed before its finally block leaves these behind; start from a clean base directory.
+        File.Delete(settings);
+        File.Delete(development);
         Environment.SetEnvironmentVariable("ASPNETCORE_URLS", "http://0.0.0.0:5999");
         Environment.SetEnvironmentVariable("ASPNETCORE_HTTP_PORTS", "5997");
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
@@ -42,8 +43,8 @@ public sealed class DashboardServerEnvironmentTests
         await File.WriteAllTextAsync(development, Wide.Replace("5994", "5993", StringComparison.Ordinal));
         try
         {
-            var (server, client) = await DashboardServerTests.StartAuthenticated(home);
-            await using var _ = server;
+            await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
+            var (server, client) = dashboard;
 
             Assert.Equal("127.0.0.1", server.BaseUri.Host);
             var address = Assert.Single(server.Addresses);

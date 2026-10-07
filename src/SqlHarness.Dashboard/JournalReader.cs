@@ -22,6 +22,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     public const int TopLimit = 20;
     internal const long OverGrantMinimumKb = 1024;
 
+    // Shared across reads and threads (live feed ticks, API requests): dead hosts stay dead.
+    private readonly DeadProcesses _dead = new();
+
     private static readonly string OperationColumns = $"""
         o.id, o.session_id, s.agent_kind, o.operation, o.status, o.exit_code, o.error_kind, o.started_at, o.updated_at,
         o.finished_at, o.duration_ms, o.profile, o.engine, o.server, o.database, o.mutation_requested, o.sql_hash,
@@ -127,7 +130,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             .FirstOrDefault();
         if (session is null)
             return null;
-        var liveness = new ProcessLiveness(processes);
+        var liveness = new ProcessLiveness(processes, _dead);
         var operations = Query(connection, $"""
             SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id
             WHERE o.session_id = $id ORDER BY o.id DESC LIMIT $limit;
@@ -146,7 +149,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         // or the rows run out, so dead rows never yield an empty page with a cursor.
         var liveFiltered = query.Status is "running" or "abandoned";
         var storedStatus = liveFiltered ? "running" : query.Status;
-        var liveness = new ProcessLiveness(processes);
+        var liveness = new ProcessLiveness(processes, _dead);
         var matches = new List<OperationSummary>();
         var cursor = query.Cursor;
         while (true)
@@ -189,7 +192,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         using var connection = OpenSnapshot();
         if (connection is null)
             return null;
-        var liveness = new ProcessLiveness(processes);
+        var liveness = new ProcessLiveness(processes, _dead);
         var summary = Query(connection, $"""
             SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id WHERE o.id = $id;
             """, [("$id", id)], reader => ReadOperation(reader, liveness)).FirstOrDefault();
@@ -251,7 +254,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             WHERE {inWindow} GROUP BY day, s.agent_kind ORDER BY day, s.agent_kind;
             """, window, r => new DayAgentCount(r.GetString(0), r.GetString(1), r.GetInt32(2)));
 
-        var liveness = new ProcessLiveness(processes);
+        var liveness = new ProcessLiveness(processes, _dead);
         var statuses = Query(connection, $"""
             SELECT o.status, COUNT(*) FROM operations o WHERE {inWindow} AND o.status <> 'running' GROUP BY o.status;
             """, window, r => new KeyCount(r.GetString(0), r.GetInt32(1))).ToList();
@@ -340,7 +343,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     /// <summary>Keyset page of operations after (updatedAt, id), oldest first, on the caller's snapshot.</summary>
     public IReadOnlyList<OperationSummary> OperationsUpdatedAfter(SqliteConnection connection, string updatedAt, long id, int limit)
     {
-        var liveness = new ProcessLiveness(processes);
+        var liveness = new ProcessLiveness(processes, _dead);
         return Query(connection, $"""
             SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id
             WHERE o.updated_at >= $at AND (o.updated_at > $at OR o.id > $id) ORDER BY o.updated_at, o.id LIMIT $limit;
@@ -356,7 +359,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
 
     public OperationSummary? OperationById(SqliteConnection connection, long id)
     {
-        var liveness = new ProcessLiveness(processes);
+        var liveness = new ProcessLiveness(processes, _dead);
         return Query(connection, $"""
             SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id WHERE o.id = $id;
             """, [("$id", id)], reader => ReadOperation(reader, liveness)).FirstOrDefault();
@@ -368,7 +371,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
 
     public IReadOnlyList<OperationSummary> RunningOperations(SqliteConnection connection)
     {
-        var liveness = new ProcessLiveness(processes);
+        var liveness = new ProcessLiveness(processes, _dead);
         return Query(connection, $"""
             SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id
             WHERE o.status = 'running' ORDER BY o.id;
@@ -412,7 +415,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     {
         if (sessions.Length == 0)
             return sessions;
-        var liveness = new ProcessLiveness(processes);
+        var liveness = new ProcessLiveness(processes, _dead);
         var ids = string.Join(",", sessions.Select(s => s.Id.ToString(CultureInfo.InvariantCulture)));
         var running = Query(connection, $"""
             SELECT session_id, host_pid, host_started_at FROM operations WHERE status = 'running' AND session_id IN ({ids});

@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using SqlHarness.Core;
 
@@ -7,8 +8,8 @@ namespace SqlHarness.Dashboard;
 
 public sealed record DashboardEndpoint(int Pid, DateTimeOffset? StartedAt, int Port, string Token)
 {
-    public Uri BaseUri => new($"http://127.0.0.1:{Port}/");
-
+    /// <summary>Computed, never written to <c>dashboard.json</c>: the file carries the token once.</summary>
+    [JsonIgnore]
     public Uri OpenUri => new($"http://127.0.0.1:{Port}/?t={Token}");
 
     private bool PrintMembers(StringBuilder builder)

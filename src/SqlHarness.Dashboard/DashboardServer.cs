@@ -21,9 +21,6 @@ namespace SqlHarness.Dashboard;
 public sealed record DashboardServerOptions(string DatabasePath, int PreferredPort, IProcessInfo Processes)
 {
     public TimeSpan LivePollInterval { get; init; } = TimeSpan.FromSeconds(1);
-
-    /// <summary>Fixed token for tests; production generates a fresh random token per start.</summary>
-    internal string? Token { get; init; }
 }
 
 public sealed class RunningDashboard : IAsyncDisposable
@@ -82,10 +79,12 @@ public static partial class DashboardServer
         ArgumentNullException.ThrowIfNull(options);
         ArgumentOutOfRangeException.ThrowIfNegative(options.PreferredPort, nameof(options));
         ArgumentOutOfRangeException.ThrowIfGreaterThan(options.PreferredPort, IPEndPoint.MaxPort, nameof(options));
-        var token = options.Token ?? DashboardSecurity.NewToken();
-        var candidates = options.PreferredPort == 0
+        var token = DashboardSecurity.NewToken();
+        // The preferred port and the next ones, then an ephemeral loopback port as the last resort;
+        // the caller publishes whatever port was actually bound.
+        int[] candidates = options.PreferredPort == 0
             ? [0]
-            : Enumerable.Range(options.PreferredPort, PortAttempts).Where(port => port <= IPEndPoint.MaxPort).ToArray();
+            : [.. Enumerable.Range(options.PreferredPort, PortAttempts).Where(port => port <= IPEndPoint.MaxPort), 0];
         Exception? last = null;
         foreach (var candidate in candidates)
         {

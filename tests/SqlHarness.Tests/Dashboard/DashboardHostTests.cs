@@ -137,6 +137,33 @@ public sealed class DashboardHostTests
     }
 
     [Fact]
+    public async Task Older_journal_schema_with_the_journal_disabled_refuses_to_serve()
+    {
+        using var home = new TempHome();
+        new JournalSeed(home.DatabasePath);
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = $"PRAGMA user_version = {JournalSchema.CurrentVersion - 1};";
+            command.ExecuteNonQuery();
+        }
+
+        var error = new StringWriter();
+        var browser = new RecordingBrowser();
+        var config = new SqlHarnessConfigLoadResult(
+            SqlHarnessConfig.Default with { Journal = new JournalConfig { Enabled = false } }, SqlHarnessConfigStatus.Valid, null);
+
+        var exit = await DashboardHost.RunAsync(Options(home, new StringWriter(), error, browser, config: config), CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(20));
+
+        Assert.Equal((int)SqlHarnessExitCode.LocalStorage, exit);
+        Assert.Contains("older", error.ToString());
+        Assert.Empty(browser.Opened);
+        Assert.False(File.Exists(Path.Combine(home.Path, "dashboard.json")));
+    }
+
+    [Fact]
     public async Task Disabled_journal_still_serves_without_creating_the_database()
     {
         using var home = new TempHome();

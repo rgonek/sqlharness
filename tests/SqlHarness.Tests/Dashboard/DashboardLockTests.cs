@@ -44,6 +44,27 @@ public sealed class DashboardLockTests
     }
 
     [Fact]
+    public void Published_file_carries_the_token_once_and_older_files_with_uris_still_read()
+    {
+        using var home = new TempHome();
+        using var held = DashboardLock.TryAcquire(home.Path)!;
+        held.Publish(new DashboardEndpoint(4242, Started, 47801, "secret-token"));
+        var info = Path.Combine(home.Path, "dashboard.json");
+
+        var published = File.ReadAllText(info);
+        Assert.DoesNotContain("uri", published, StringComparison.OrdinalIgnoreCase);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(published, "secret-token"));
+
+        File.WriteAllText(info, """
+            {"pid":4242,"startedAt":"2026-10-07T08:00:00+00:00","port":47801,"token":"tok",
+             "baseUri":"http://127.0.0.1:47801/","openUri":"http://127.0.0.1:47801/?t=tok"}
+            """);
+        var running = DashboardLock.ReadRunning(home.Path, new FakeProcesses().Alive(4242, Started));
+
+        Assert.Equal(new DashboardEndpoint(4242, Started, 47801, "tok"), running);
+    }
+
+    [Fact]
     public void Stale_info_file_is_not_trusted()
     {
         using var home = new TempHome();

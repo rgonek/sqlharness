@@ -8,14 +8,36 @@ namespace SqlHarness.Tests.Dashboard;
 
 public sealed class DashboardServerTests
 {
-    internal static async Task<(RunningDashboard Server, HttpClient Client)> StartAuthenticated(TempHome home)
+    /// <summary>A started server and a client holding its session cookie; disposing stops both.</summary>
+    internal sealed class AuthenticatedDashboard(RunningDashboard server, HttpClient client) : IAsyncDisposable
+    {
+        public void Deconstruct(out RunningDashboard runningServer, out HttpClient authenticatedClient) =>
+            (runningServer, authenticatedClient) = (server, client);
+
+        public async ValueTask DisposeAsync()
+        {
+            client.Dispose();
+            await server.DisposeAsync();
+        }
+    }
+
+    internal static async Task<AuthenticatedDashboard> StartAuthenticated(TempHome home)
     {
         var server = await DashboardServer.StartAsync(new DashboardServerOptions(home.DatabasePath, 0, new FakeProcesses()), CancellationToken.None);
         var handler = new HttpClientHandler { AllowAutoRedirect = false, CookieContainer = new CookieContainer() };
         var client = new HttpClient(handler) { BaseAddress = server.BaseUri };
-        var exchange = await client.GetAsync($"/?t={server.Token}");
-        Assert.Equal(HttpStatusCode.Redirect, exchange.StatusCode);
-        return (server, client);
+        var dashboard = new AuthenticatedDashboard(server, client);
+        try
+        {
+            using var exchange = await client.GetAsync($"/?t={server.Token}");
+            Assert.Equal(HttpStatusCode.Redirect, exchange.StatusCode);
+            return dashboard;
+        }
+        catch
+        {
+            await dashboard.DisposeAsync();
+            throw;
+        }
     }
 
     [Fact]
@@ -39,8 +61,8 @@ public sealed class DashboardServerTests
     public async Task Requests_without_cookie_or_with_foreign_host_are_rejected()
     {
         using var home = new TempHome();
-        var (server, client) = await StartAuthenticated(home);
-        await using var _ = server;
+        await using var dashboard = await StartAuthenticated(home);
+        var (server, client) = dashboard;
         using var anonymous = new HttpClient { BaseAddress = server.BaseUri };
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/sessions")).StatusCode);
@@ -61,8 +83,8 @@ public sealed class DashboardServerTests
     public async Task Only_get_endpoints_exist()
     {
         using var home = new TempHome();
-        var (server, client) = await StartAuthenticated(home);
-        await using var _ = server;
+        await using var dashboard = await StartAuthenticated(home);
+        var (server, client) = dashboard;
 
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PostAsync("/api/sessions", null)).StatusCode);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.DeleteAsync("/api/operations/1")).StatusCode);
@@ -74,8 +96,8 @@ public sealed class DashboardServerTests
     public async Task Responses_carry_security_headers()
     {
         using var home = new TempHome();
-        var (server, client) = await StartAuthenticated(home);
-        await using var _ = server;
+        await using var dashboard = await StartAuthenticated(home);
+        var (server, client) = dashboard;
 
         var response = await client.GetAsync("/");
 
@@ -94,14 +116,19 @@ public sealed class DashboardServerTests
         using var home = new TempHome();
         var seed = new JournalSeed(home.DatabasePath, storeSensitive: true);
         var handle = seed.Operation(JournalSeed.Session("cli:a"), operation: "measure", benchmark: JournalSeed.Benchmark());
-        var (server, client) = await StartAuthenticated(home);
-        await using var running = server;
+        await using var dashboard = await StartAuthenticated(home);
+        var (server, client) = dashboard;
 
         using var sessions = JsonDocument.Parse(await client.GetStringAsync("/api/sessions?limit=10"));
         Assert.Equal("claude", sessions.RootElement.GetProperty("items")[0].GetProperty("agentKind").GetString());
 
         using var detail = JsonDocument.Parse(await client.GetStringAsync($"/api/operations/{handle.OperationId}"));
         Assert.Equal("measure", detail.RootElement.GetProperty("operation").GetProperty("operation").GetString());
+
+        // The server's process reader sees no live process, so the journaled host is gone.
+        var orphan = seed.Operation(JournalSeed.Session("cli:gone", hostPid: 6161), complete: false);
+        using var abandoned = JsonDocument.Parse(await client.GetStringAsync($"/api/operations/{orphan.OperationId}"));
+        Assert.Equal("abandoned", abandoned.RootElement.GetProperty("operation").GetProperty("status").GetString());
 
         var raw = await client.GetAsync($"/api/plans/{new string('A', 64)}");
         Assert.Equal("application/xml", raw.Content.Headers.ContentType!.MediaType);
@@ -122,8 +149,8 @@ public sealed class DashboardServerTests
     public async Task Unknown_non_api_paths_serve_the_spa_entry_and_unknown_api_paths_are_404()
     {
         using var home = new TempHome();
-        var (server, client) = await StartAuthenticated(home);
-        await using var _ = server;
+        await using var dashboard = await StartAuthenticated(home);
+        var (server, client) = dashboard;
 
         Assert.Equal("text/html", (await client.GetAsync("/sessions/42")).Content.Headers.ContentType!.MediaType);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/nope")).StatusCode);
@@ -144,11 +171,33 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
+    public async Task Exhausted_candidate_ports_fall_back_to_an_ephemeral_loopback_port()
+    {
+        using var home = new TempHome();
+        // The top port is the only candidate; if another process already holds it, it is busy either way.
+        using var blocker = new TcpListener(IPAddress.Loopback, IPEndPoint.MaxPort);
+        try
+        {
+            blocker.Start();
+        }
+        catch (SocketException)
+        {
+        }
+
+        await using var server = await DashboardServer.StartAsync(
+            new DashboardServerOptions(home.DatabasePath, IPEndPoint.MaxPort, new FakeProcesses()), CancellationToken.None);
+
+        Assert.NotEqual(IPEndPoint.MaxPort, server.Port);
+        Assert.InRange(server.Port, 1, IPEndPoint.MaxPort - 1);
+        Assert.Equal(new Uri($"http://127.0.0.1:{server.Port}"), new Uri(Assert.Single(server.Addresses)));
+    }
+
+    [Fact]
     public async Task Head_requests_are_served_like_get()
     {
         using var home = new TempHome();
-        var (server, client) = await StartAuthenticated(home);
-        await using var _ = server;
+        await using var dashboard = await StartAuthenticated(home);
+        var (server, client) = dashboard;
 
         using var head = new HttpRequestMessage(HttpMethod.Head, "/api/sessions");
         var response = await client.SendAsync(head);
@@ -206,8 +255,8 @@ public sealed class DashboardServerTests
             insert.ExecuteNonQuery();
         }
 
-        var (server, client) = await StartAuthenticated(home);
-        await using var _ = server;
+        await using var dashboard = await StartAuthenticated(home);
+        var (server, client) = dashboard;
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.GetAsync($"/api/plans/{new string('C', 64)}")).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.GetAsync($"/api/plans/{new string('C', 64)}?view=distilled")).StatusCode);
@@ -219,8 +268,8 @@ public sealed class DashboardServerTests
         using var home = new TempHome();
         Directory.CreateDirectory(Path.GetDirectoryName(home.DatabasePath)!);
         await File.WriteAllTextAsync(home.DatabasePath, "this is not a sqlite database, it is long enough to have a header");
-        var (server, client) = await StartAuthenticated(home);
-        await using var _ = server;
+        await using var dashboard = await StartAuthenticated(home);
+        var (server, client) = dashboard;
 
         var response = await client.GetAsync("/api/sessions");
 
