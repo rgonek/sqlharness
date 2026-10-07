@@ -48,7 +48,7 @@
 |---|---|
 | `.nvmrc` (new) | Node version pin `24.18.0` |
 | `.gitignore` (modify) | Ignore `src/SqlHarness.Dashboard/ui/dist/` |
-| `src/SqlHarness.Dashboard/ui/` (new) | Vite app: `package.json`, `package-lock.json`, `index.html`, `vite.config.ts`, `tsconfig*.json`, `eslint.config.js`, `components.json`, `src/**` |
+| `src/SqlHarness.Dashboard/ui/` (new) | Vite app: `package.json`, `package-lock.json`, `index.html`, `vite.config.ts`, `tsconfig*.json`, `.oxlintrc.json`, `components.json`, `src/**` |
 | `ui/src/components/ui/*` | shadcn-generated components (never edited) |
 | `ui/src/api/types.ts`, `client.ts`, `queries.ts` | API types, fetch wrapper, query hooks |
 | `ui/src/router.tsx` | TanStack Router route tree, `createAppRouter(history?)`, and router type registration |
@@ -74,7 +74,7 @@
 
 **Interfaces:**
 - Produces:
-  - npm scripts `build` (`vite build`), `typecheck` (`tsc -b`), `lint` (`eslint .`), `test` (`vitest run`), `check` (all three)
+  - npm scripts `build` (`vite build`), `typecheck` (`tsc -b`), `lint` (`oxlint`), `test` (`vitest run`), `check` (all three)
   - The `@/` path alias to `ui/src`
   - shadcn components `button`, `badge`, `card`, `table`, `tabs`, `skeleton`, `separator`, `alert`, `chart`
   - Test helpers `stubFetch` (`ui/src/test/render.tsx`; Task 4 adds `renderApp`) and `src/test/setup.ts`
@@ -91,7 +91,7 @@ npm install @tanstack/react-router @tanstack/react-query
 npm install -D tailwindcss @tailwindcss/vite @types/node vitest jsdom @testing-library/react @testing-library/dom @testing-library/jest-dom @testing-library/user-event
 ```
 
-Expected: `ui/` contains `package.json`, `package-lock.json`, `index.html`, `vite.config.ts`, `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`, `eslint.config.js`, and `src/`. Delete the template's demo assets (`src/App.css`, `src/assets/react.svg`, `public/vite.svg`) and the demo content of `src/App.tsx`. Task 4 replaces `App.tsx` with the router.
+Expected: `ui/` contains `package.json`, `package-lock.json`, `index.html`, `vite.config.ts`, `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`, and `src/` (the scaffold's ESLint config is replaced by `.oxlintrc.json`, see Step 4). Delete the template's demo assets (`src/App.css`, `src/assets/react.svg`, `public/vite.svg`) and the demo content of `src/App.tsx`. Task 4 replaces `App.tsx` with the router.
 
 Add to `.gitignore` after the `node_modules/` line:
 
@@ -166,7 +166,7 @@ export default defineConfig({
   "dev": "vite",
   "build": "vite build",
   "typecheck": "tsc -b",
-  "lint": "eslint .",
+  "lint": "oxlint",
   "test": "vitest run",
   "check": "npm run typecheck && npm run lint && npm run test"
 }
@@ -203,18 +203,18 @@ Expected exports:
 
 **STOP** and report any missing export. Do not edit the generated files to add one.
 
-- [ ] **Step 4: ESLint exception for generated components**
+- [ ] **Step 4: Lint exception for generated components (oxlint)**
 
-The generated components export non-component helpers (for example `buttonVariants`), which `react-refresh/only-export-components` flags. In `ui/eslint.config.js`, append one config object to the exported array:
+The generated components export non-component helpers (for example `buttonVariants`), which `react/only-export-components` flags. The UI lints with oxlint, configured in `ui/.oxlintrc.json` (plugins `react`, `typescript`, `oxc`; `"ignorePatterns": ["dist"]`). Turn the rule off for the generated components with an override:
 
-```js
-  {
-    files: ["src/components/ui/**/*.{ts,tsx}"],
-    rules: { "react-refresh/only-export-components": "off" },
-  },
+```json
+  "overrides": [
+    {
+      "files": ["src/components/ui/**/*.{ts,tsx}"],
+      "rules": { "react/only-export-components": "off" }
+    }
+  ]
 ```
-
-Also add `"dist"` to the template's `globalIgnores([...])` call if it is not already there.
 
 - [ ] **Step 5: Test setup and provider helper**
 
@@ -912,7 +912,7 @@ All paths in Tasks 4–8 are relative to `src/SqlHarness.Dashboard/`.
 
 **Interfaces:**
 - Produces:
-  - **Types** mirroring `DashboardModels.cs`: `Page<T>`, `SessionSummary`, `OperationSummary`, `OperationStatus`, `WatchProgress`, `SessionDetail`, `Spread`, `TableIoRow`, `PlanLinkRow`, `PostgresBuffers`, `Wait`, `VariantDetail`, `OperationDetail`, `DashboardStats`, `KeyCount`, `DayAgentCount`, `SqlHashStat`, `TableReadStat`, `WaitStat`, `TargetStat`, `TokenStat`, `DistilledPlan`, `DistilledStatement`, `PlanNode`, `MissingIndex`
+  - **Types** mirroring `DashboardModels.cs`: `Page<T>`, `SessionSummary`, `OperationSummary`, `OperationStatus`, `WatchProgress`, `SessionDetail`, `Spread`, `TableIoRow`, `PlanLinkRow`, `PostgresBuffers`, `Wait`, `VariantDetail`, `OperationDetail`, `DashboardStats`, `KeyCount`, `DayAgentCount`, `SqlHashStat`, `TableReadStat`, `WaitStat`, `TargetStat`, `TokenStat`, `DistilledPlan`, `DistilledStatement`, `PlanNode`, `MissingIndex`. `DistilledStatement` is `{ sql?, root, missingIndexes? }` (the server writes the statement text as `sql` and omits empty `missingIndexes`)
   - **Client:** `getJson<T>(path, params?)`, `withQuery(path, params?)`, `UnauthorizedError`, `NotFoundError`
   - **Query hooks:** `useSessions(filters)` (infinite), `useSession(id)`, `useOperation(id)`, `useStats(range)`, `useDistilledPlan(hash, enabled)`; `queryKeys`; `createQueryClient()`
   - **Format helpers:** `formatDuration`, `formatNumber`, `formatKb`, `formatTimestamp`, `formatAge`, `shortHash`, `formatPercent`
@@ -1092,7 +1092,8 @@ export type MissingIndex = {
   includeColumns: string[]
   impact: number
 }
-export type DistilledStatement = { statementText?: string; root: PlanNode; missingIndexes: MissingIndex[] }
+// PlanStatementJsonConverter writes the text as "sql" and omits "missingIndexes" when empty.
+export type DistilledStatement = { sql?: string; root: PlanNode; missingIndexes?: MissingIndex[] }
 export type DistilledPlan = { statements: DistilledStatement[] }
 ```
 

@@ -172,6 +172,8 @@ Caveats:
 
 shadcn/ui generated for Base UI primitives. Files in `components/ui` stay exactly as the shadcn CLI generates them. Views use only layout utilities (grid, flex, gap, width, overflow, sticky) and functional variants such as `Badge` variants for status. There is no custom CSS and no theme changes. Dark mode follows the system preference. Tables use shadcn `Table` with TanStack Table. Charts use the shadcn `Chart` component (Recharts) with its defaults.
 
+Implemented with TanStack Router (code-based route tree) and TanStack Query; TanStack Table was not needed (tables are not client-sortable in this version). The SPA is embedded through an MSBuild target; `-p:SkipDashboardUi=true` builds without Node and serves the placeholder.
+
 Views:
 
 1. **Live** (home):
@@ -217,7 +219,7 @@ Views:
 - **Process tree:** `IProcessInfo` fakes for the walk logic, plus one real smoke test per OS.
 - **MCP:** `clientInfo` produces the session row; fixed and request modes are recorded; autostart with a fake spawner, which must not write to stdout.
 - **Dashboard API**, in-memory `TestServer`: `401` without the cookie, foreign `Host` rejected, token exchange, pagination, SSE event after a write from another connection, and a route table containing only `GET`.
-- **UI:** Vitest with React Testing Library for views and data hooks, `tsc --noEmit`, ESLint. No end-to-end browser tests in this version.
+- **UI:** Vitest with React Testing Library for views and data hooks, TypeScript typecheck (`tsc -b`), oxlint. No end-to-end browser tests in this version.
 - **Gates:** add a `ui` stage (`npm ci`, `npm run build`, `npm test`, typecheck, lint) to `scripts/verify.ps1`, `scripts/verify-linux.ps1`, `.github/workflows/ci.yml` and `release.yml`. Pin Node in `.nvmrc`. `setup-linux-gate.ps1` provisions Node in WSL.
 
 ## Implementation phases

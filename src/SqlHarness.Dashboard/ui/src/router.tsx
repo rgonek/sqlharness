@@ -5,6 +5,7 @@ import { NotFoundPage } from "@/pages/NotFoundPage"
 import { OperationPage } from "@/pages/OperationPage"
 import { SessionPage } from "@/pages/SessionPage"
 import { SessionsPage } from "@/pages/SessionsPage"
+import { StatsPage } from "@/pages/StatsPage"
 
 const rootRoute = createRootRoute({ component: AppLayout, notFoundComponent: NotFoundPage })
 
@@ -12,7 +13,7 @@ const liveRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", comp
 const sessionsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sessions", component: SessionsPage })
 const sessionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sessions/$id", component: SessionPage })
 const operationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations/$id", component: OperationPage })
-const statsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/stats", component: NotFoundPage })
+const statsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/stats", component: StatsPage })
 
 export const routeTree = rootRoute.addChildren([liveRoute, sessionsRoute, sessionRoute, operationRoute, statsRoute])
 
