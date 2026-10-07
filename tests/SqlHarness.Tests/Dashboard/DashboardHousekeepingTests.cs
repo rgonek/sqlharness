@@ -259,6 +259,45 @@ public sealed class DashboardHousekeepingTests
     }
 
     [Fact]
+    public async Task Own_retention_deletes_do_not_keep_the_background_dashboard_up()
+    {
+        using var home = new TempHome();
+        // One operation per hour, so every hourly retention pass finds one more row past MaxAgeDays.
+        var t0 = new DateTimeOffset(2026, 10, 7, 0, 0, 0, TimeSpan.Zero);
+        var writeTime = new Journal.FixedTimeProvider(t0);
+        var journal = ActivityJournal.Open(home.DatabasePath, new JournalConfig(), TextWriter.Null, writeTime);
+        for (var i = 0; i < 12; i++)
+        {
+            writeTime.Now = t0.AddHours(i);
+            var handle = journal.Begin(Journal.JournalTestData.Session("cli:history"), Journal.JournalTestData.Start())!;
+            journal.Complete(handle, Journal.JournalTestData.End());
+        }
+
+        var config = SqlHarnessConfig.Default with
+        {
+            Journal = new JournalConfig { Retention = new JournalRetentionConfig { Enabled = true, MaxAgeDays = 1 } },
+        };
+        var clock = new ManualClock(t0.AddDays(1).AddMinutes(30));
+        var passes = new Passes();
+        var run = DashboardHost.RunAsync(
+            Options(home, TimeSpan.FromHours(3), clock, passes, config) with { RetentionInterval = TimeSpan.FromHours(1) },
+            CancellationToken.None);
+        await passes.MoreAsync();
+
+        for (var step = 0; step < 8 && !run.IsCompleted; step++)
+        {
+            clock.Advance(TimeSpan.FromHours(1));
+            await Task.WhenAny(run, passes.MoreAsync());
+        }
+
+        Assert.True(run.IsCompleted || await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(20))) == run,
+            "retention deletes made by the dashboard itself are not activity");
+        Assert.Equal(0, await run);
+        var remaining = Journal.JournalDb.Rows(home.DatabasePath, "SELECT id FROM operations").Count;
+        Assert.InRange(remaining, 1, 10);
+    }
+
+    [Fact]
     public async Task Housekeeping_skips_retention_when_it_is_disabled()
     {
         using var home = new TempHome();

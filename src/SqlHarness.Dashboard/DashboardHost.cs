@@ -188,8 +188,9 @@ public static class DashboardHost
 
     /// <summary>
     /// Runs retention at start and every RetentionInterval, and in background mode returns
-    /// once nothing happened for IdleShutdown: no journal commit (PRAGMA data_version on a
-    /// held read-only connection), no authenticated request, and no open live stream.
+    /// once nothing happened for IdleShutdown: no journal commit other than its own retention
+    /// (PRAGMA data_version on a held read-only connection), no authenticated request, and no
+    /// open live stream.
     /// </summary>
     private static async Task HousekeepAsync(DashboardHostOptions options, JournalReader reader, DashboardActivity activity, CancellationToken ct)
     {
@@ -198,6 +199,28 @@ public static class DashboardHost
         var lastJournalChange = options.Time.GetUtcNow();
         long? lastVersion = null;
         SqliteConnection? watch = null;
+
+        // PRAGMA data_version on the held connection changes when any other connection commits.
+        long? ReadVersion()
+        {
+            try
+            {
+                watch ??= reader.OpenReadOnly();
+                if (watch is null)
+                    return null;
+                using var command = watch.CreateCommand();
+                command.CommandText = "PRAGMA data_version;";
+                return (long)command.ExecuteScalar()!;
+            }
+            catch (SqliteException)
+            {
+                // An unreadable journal is no activity; reopen on the next pass.
+                watch?.Dispose();
+                watch = null;
+                return null;
+            }
+        }
+
         try
         {
             while (true)
@@ -207,30 +230,17 @@ public static class DashboardHost
                     && (lastRetention is not { } last || now - last >= options.RetentionInterval))
                 {
                     lastRetention = now;
-                    // Never throws; a failed pass is retried at the next interval.
+                    // Never throws; a failed pass is retried at the next interval. Ctrl+C waits for an
+                    // in-flight pass, which its short delete batches keep brief.
                     await Task.Run(() => JournalRetention.Run(options.DatabasePath, journal, options.Processes, options.Time), ct);
+                    // Retention's own commits are not activity: take the version after it as the baseline.
+                    lastVersion = ReadVersion();
                 }
 
-                try
-                {
-                    watch ??= reader.OpenReadOnly();
-                    if (watch is not null)
-                    {
-                        using var command = watch.CreateCommand();
-                        command.CommandText = "PRAGMA data_version;";
-                        var version = (long)command.ExecuteScalar()!;
-                        if (lastVersion is not null && version != lastVersion)
-                            lastJournalChange = now;
-                        lastVersion = version;
-                    }
-                }
-                catch (SqliteException)
-                {
-                    // An unreadable journal is no activity; reopen on the next pass.
-                    watch?.Dispose();
-                    watch = null;
-                    lastVersion = null;
-                }
+                var version = ReadVersion();
+                if (version is not null && lastVersion is not null && version != lastVersion)
+                    lastJournalChange = now;
+                lastVersion = version;
 
                 if (options.IdleShutdown is { } idle && activity.OpenStreams == 0)
                 {
