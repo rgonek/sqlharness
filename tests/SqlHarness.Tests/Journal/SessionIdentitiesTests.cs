@@ -62,6 +62,47 @@ public sealed class SessionIdentitiesTests
     public void Classify_recognizes_native_and_node_hosted_agents(string name, string? cmd, string? expected) =>
         Assert.Equal(expected, SessionIdentities.Classify(new ProcessSnapshot(1, null, name, T, cmd)));
 
+    [Theory]
+    [InlineData("codex-x86_64-unknown-linux-musl", "codex")]
+    [InlineData("codex-aarch64-pc-windows-msvc.exe", "codex")]
+    [InlineData("codexer", null)]
+    [InlineData("/home/u/.local/share/claude/versions/2.1.3 (deleted)", null)]
+    [InlineData("/home/u/.local/bin/claude (deleted)", "claude")]
+    public void Classify_normalizes_prefixed_and_deleted_names(string name, string? expected) =>
+        Assert.Equal(expected, SessionIdentities.Classify(new ProcessSnapshot(1, null, name, T, null)));
+
+    [Fact]
+    public void Classify_falls_back_to_comm_for_a_version_named_native_claude()
+    {
+        var snapshot = new ProcessSnapshot(1, null, "2.1.3", T, "/home/u/.local/share/claude/versions/2.1.3 --resume",
+            AlternateNames: ["claude", "/home/u/.local/share/claude/versions/2.1.3"]);
+
+        Assert.Equal("claude", SessionIdentities.Classify(snapshot));
+    }
+
+    [Fact]
+    public void Classify_falls_back_to_argv0_basename()
+    {
+        var snapshot = new ProcessSnapshot(1, null, "2.1.3 (deleted)", T, null, AlternateNames: ["MainThread", "/usr/local/bin/claude"]);
+
+        Assert.Equal("claude", SessionIdentities.Classify(snapshot));
+    }
+
+    [Fact]
+    public void Stable_start_identity_survives_wall_clock_drift()
+    {
+        var first = SessionIdentities.Cli(new FakeProcesses(30, P(30, 10, "sqlharness"),
+            new ProcessSnapshot(10, null, "claude", T, null, StartIdentity: "boot-a:12345")));
+        var drifted = SessionIdentities.Cli(new FakeProcesses(31, P(31, 10, "sqlharness"),
+            new ProcessSnapshot(10, null, "claude", T.AddSeconds(1), null, StartIdentity: "boot-a:12345")));
+        var rebooted = SessionIdentities.Cli(new FakeProcesses(31, P(31, 10, "sqlharness"),
+            new ProcessSnapshot(10, null, "claude", T, null, StartIdentity: "boot-b:12345")));
+
+        Assert.Equal(first.SessionKey, drifted.SessionKey);
+        Assert.NotEqual(first.SessionKey, rebooted.SessionKey);
+        Assert.Equal(T.AddSeconds(1), drifted.AgentStartedAt);
+    }
+
     [Fact]
     public void No_agent_yields_unknown_keyed_by_parent()
     {

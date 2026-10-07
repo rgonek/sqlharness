@@ -18,11 +18,11 @@ public static class SessionIdentities
         var walk = Walk(processes);
         string key;
         if (walk.Agent is { } agent)
-            key = Key("cli", walk.AgentKind!, agent.Pid, agent.StartedAt);
+            key = Key("cli", walk.AgentKind!, agent.Pid, agent);
         else if (walk.Parent is { } parent)
-            key = Key("cli", "unknown", parent.Pid, parent.StartedAt);
+            key = Key("cli", "unknown", parent.Pid, parent);
         else
-            key = Key("cli", "unknown", processes.CurrentPid, walk.Self?.StartedAt);
+            key = Key("cli", "unknown", processes.CurrentPid, walk.Self);
 
         return new SessionIdentity(
             key,
@@ -73,14 +73,29 @@ public static class SessionIdentities
 
     internal static string? Classify(ProcessSnapshot process)
     {
-        var name = Path.GetFileNameWithoutExtension(process.Name).ToLowerInvariant();
+        if (ClassifyName(process.Name, process.CommandLine) is { } kind)
+            return kind;
+        foreach (var alternate in process.AlternateNames ?? [])
+        {
+            if (ClassifyName(alternate, process.CommandLine) is { } alternateKind)
+                return alternateKind;
+        }
+
+        return null;
+    }
+
+    private static string? ClassifyName(string rawName, string? commandLine)
+    {
+        const string deleted = " (deleted)";
+        var trimmed = rawName.EndsWith(deleted, StringComparison.Ordinal) ? rawName[..^deleted.Length] : rawName;
+        var name = Path.GetFileNameWithoutExtension(trimmed).ToLowerInvariant();
         switch (name)
         {
             case "claude":
                 return "claude";
             case "codex":
                 return "codex";
-            case "node" or "bun" when process.CommandLine is { } commandLine:
+            case "node" or "bun" when commandLine is not null:
                 var normalized = commandLine.Replace('\\', '/');
                 if (normalized.Contains("@anthropic-ai/claude-code", StringComparison.OrdinalIgnoreCase))
                     return "claude";
@@ -88,7 +103,8 @@ public static class SessionIdentities
                     return "codex";
                 return null;
             default:
-                return null;
+                // Native codex release binaries carry a target-triple suffix (codex-x86_64-unknown-linux-musl).
+                return name.StartsWith("codex-", StringComparison.Ordinal) ? "codex" : null;
         }
     }
 
@@ -120,9 +136,14 @@ public static class SessionIdentities
         return new Walked(self, parent, null, null);
     }
 
-    private static string Key(string prefix, string kind, int pid, DateTimeOffset? started)
+    private static string Key(string prefix, string kind, int pid, ProcessSnapshot? process)
     {
-        var material = string.Create(CultureInfo.InvariantCulture, $"{kind}|{pid}|{started?.ToUnixTimeMilliseconds()}");
+        // A clock-independent start identity (Linux boot id + ticks) wins over the wall-clock
+        // start, which can drift with NTP or WSL clock sync and would split one session.
+        var start = process?.StartIdentity is { } identity
+            ? "id:" + identity
+            : process?.StartedAt?.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture);
+        var material = string.Create(CultureInfo.InvariantCulture, $"{kind}|{pid}|{start}");
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material))).ToLowerInvariant();
         return prefix + ":" + hash[..32];
     }

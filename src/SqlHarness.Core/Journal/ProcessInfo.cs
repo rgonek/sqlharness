@@ -4,7 +4,16 @@ using System.Runtime.InteropServices;
 
 namespace SqlHarness.Core;
 
-public sealed record ProcessSnapshot(int Pid, int? ParentPid, string Name, DateTimeOffset? StartedAt, string? CommandLine);
+/// <param name="AlternateNames">Further names to classify by when <paramref name="Name"/> does not match (Linux: comm, argv[0]).</param>
+/// <param name="StartIdentity">Clock-independent start identity used for session keys when present (Linux: boot id + start ticks).</param>
+public sealed record ProcessSnapshot(
+    int Pid,
+    int? ParentPid,
+    string Name,
+    DateTimeOffset? StartedAt,
+    string? CommandLine,
+    IReadOnlyList<string>? AlternateNames = null,
+    string? StartIdentity = null);
 
 public interface IProcessInfo
 {
@@ -41,6 +50,7 @@ internal sealed class LinuxProcessInfo : IProcessInfo
     // USER_HZ is 100 on every mainstream Linux ABI; starttime is in USER_HZ ticks since boot.
     private const double TicksPerSecond = 100;
     private static readonly Lazy<long?> BootTimeSeconds = new(ReadBootTime);
+    private static readonly Lazy<string?> BootId = new(() => ReadOptional("/proc/sys/kernel/random/boot_id"));
 
     public int CurrentPid => Environment.ProcessId;
 
@@ -52,17 +62,50 @@ internal sealed class LinuxProcessInfo : IProcessInfo
             var parsed = ParseStat(File.ReadAllText(directory + "/stat"));
             if (parsed is null)
                 return null;
-            var name = ReadName(directory);
-            var commandLine = File.ReadAllText(directory + "/cmdline").Replace('\0', ' ').Trim();
+            var rawCommandLine = File.ReadAllText(directory + "/cmdline");
+            if (Names(ReadExeTarget(directory), ReadOptional(directory + "/comm"), rawCommandLine) is not { } names)
+                return null;
+            var commandLine = rawCommandLine.Replace('\0', ' ').Trim();
             DateTimeOffset? started = BootTimeSeconds.Value is { } boot
                 ? DateTimeOffset.FromUnixTimeMilliseconds((long)((boot + parsed.Value.StartTicks / TicksPerSecond) * 1000))
                 : null;
-            return new ProcessSnapshot(pid, parsed.Value.ParentPid, name, started, commandLine.Length == 0 ? null : commandLine);
+            return new ProcessSnapshot(
+                pid,
+                parsed.Value.ParentPid,
+                names.Name,
+                started,
+                commandLine.Length == 0 ? null : commandLine,
+                names.Alternates,
+                StartIdentity(BootId.Value, parsed.Value.StartTicks));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Classification candidates: the exe link target's basename first (it may be
+    /// version-named or carry " (deleted)"), then comm and argv[0] as fallbacks.
+    /// </summary>
+    internal static (string Name, IReadOnlyList<string> Alternates)? Names(string? exeTarget, string? comm, string? rawCommandLine)
+    {
+        var candidates = new List<string>(3);
+        if (!string.IsNullOrEmpty(exeTarget))
+            candidates.Add(Path.GetFileName(exeTarget));
+        if (comm?.Trim() is { Length: > 0 } trimmedComm)
+            candidates.Add(trimmedComm);
+        if (rawCommandLine?.Split('\0')[0].Trim() is { Length: > 0 } argv0)
+            candidates.Add(argv0);
+        var distinct = candidates.Where(name => name.Length > 0).Distinct(StringComparer.Ordinal).ToList();
+        return distinct.Count == 0 ? null : (distinct[0], distinct.Skip(1).ToArray());
+    }
+
+    /// <summary>Start ticks are relative to boot; the boot id makes them unique across reboots and immune to wall-clock steps.</summary>
+    internal static string StartIdentity(string? bootId, long startTicks)
+    {
+        var ticks = startTicks.ToString(CultureInfo.InvariantCulture);
+        return string.IsNullOrWhiteSpace(bootId) ? "ticks:" + ticks : "boot:" + bootId.Trim() + ":" + ticks;
     }
 
     /// <summary>Parses /proc/[pid]/stat: comm may contain spaces and ')' so split after the last ')'.</summary>
@@ -80,19 +123,28 @@ internal sealed class LinuxProcessInfo : IProcessInfo
         return (parent, start);
     }
 
-    private static string ReadName(string directory)
+    private static string? ReadExeTarget(string directory)
     {
         try
         {
-            var target = new FileInfo(directory + "/exe").LinkTarget;
-            if (!string.IsNullOrEmpty(target))
-                return Path.GetFileName(target);
+            return new FileInfo(directory + "/exe").LinkTarget;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            return null;
         }
+    }
 
-        return File.ReadAllText(directory + "/comm").Trim();
+    private static string? ReadOptional(string path)
+    {
+        try
+        {
+            return File.ReadAllText(path);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     private static long? ReadBootTime()
