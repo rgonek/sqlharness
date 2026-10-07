@@ -76,6 +76,76 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Live_filtered_pages_scan_past_dead_running_rows()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:live", hostPid: 100), complete: false);
+        for (var i = 0; i < 3; i++)
+            seed.Operation(JournalSeed.Session("cli:dead", hostPid: 200), complete: false);
+        var reader = Reader(home, new FakeProcesses().Alive(100, JournalSeed.HostStarted));
+
+        var running = reader.Operations(new OperationQuery(Status: "running", Limit: 2));
+        var abandoned = reader.Operations(new OperationQuery(Status: "abandoned", Limit: 2));
+        var rest = reader.Operations(new OperationQuery(Status: "abandoned", Limit: 2, Cursor: abandoned.NextCursor));
+
+        Assert.Equal("running", Assert.Single(running.Items).Status);
+        Assert.Null(running.NextCursor);
+        Assert.Equal(2, abandoned.Items.Count);
+        Assert.NotNull(abandoned.NextCursor);
+        Assert.Equal("abandoned", Assert.Single(rest.Items).Status);
+        Assert.Null(rest.NextCursor);
+    }
+
+    [Fact]
+    public void Session_detail_lists_operations_with_running_and_abandoned_counts()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:x", hostPid: 100), complete: false);
+        seed.Operation(JournalSeed.Session("cli:x", hostPid: 200), complete: false);
+        seed.Operation(JournalSeed.Session("cli:x", hostPid: 100));
+        var reader = Reader(home, new FakeProcesses().Alive(100, JournalSeed.HostStarted));
+        var summary = Assert.Single(reader.Sessions(new SessionQuery()).Items);
+
+        var detail = reader.Session(summary.Id)!;
+
+        Assert.Equal((1, 1), (summary.Running, summary.Abandoned));
+        Assert.Equal((1, 1), (detail.Session.Running, detail.Session.Abandoned));
+        Assert.Equal(3, detail.Session.Operations);
+        Assert.Equal(["succeeded", "abandoned", "running"], detail.Operations.Select(o => o.Status));
+        Assert.Null(reader.Session(summary.Id + 1));
+    }
+
+    [Fact]
+    public void Malformed_stored_json_reads_as_null_fields()
+    {
+        using var home = new TempHome();
+        var handle = new JournalSeed(home.DatabasePath).Operation(
+            JournalSeed.Session("cli:j"), operation: "measure", benchmark: JournalSeed.Benchmark());
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={home.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE operations SET vars_json = '{', summary_json = 'nope', progress_json = '[';
+                UPDATE operation_metrics SET waits_json = '[{"waitType":';
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        var reader = Reader(home);
+        var detail = reader.Operation(handle.OperationId)!;
+        var stats = reader.Stats(new StatsQuery());
+
+        Assert.Null(detail.Vars);
+        Assert.Null(detail.Summary);
+        Assert.Null(detail.Operation.Progress);
+        Assert.Null(Assert.Single(detail.Variants).Waits);
+        Assert.Empty(stats.TopWaits);
+    }
+
+    [Fact]
     public void Operation_detail_has_metrics_table_io_waits_and_plan_links()
     {
         using var home = new TempHome();

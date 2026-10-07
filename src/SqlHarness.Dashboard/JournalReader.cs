@@ -22,7 +22,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     public const int TopLimit = 20;
     internal const long OverGrantMinimumKb = 1024;
 
-    private const string OperationColumns = """
+    private static readonly string OperationColumns = $"""
         o.id, o.session_id, s.agent_kind, o.operation, o.status, o.exit_code, o.error_kind, o.started_at, o.updated_at,
         o.finished_at, o.duration_ms, o.profile, o.engine, o.server, o.database, o.mutation_requested, o.sql_hash,
         o.rows_returned, o.progress_json, o.host_pid, o.host_started_at,
@@ -30,7 +30,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         EXISTS (SELECT 1 FROM operation_metrics m WHERE m.operation_id = o.id AND m.spill_count > 0) AS has_spill,
         EXISTS (SELECT 1 FROM operation_metrics m JOIN operation_table_io t ON t.metric_id = m.id
                 WHERE m.operation_id = o.id AND t.cold_runs > 0) AS cold_cache,
-        EXISTS (SELECT 1 FROM operation_metrics m WHERE m.operation_id = o.id AND m.grant_granted_kb >= 1024
+        EXISTS (SELECT 1 FROM operation_metrics m WHERE m.operation_id = o.id AND m.grant_granted_kb >= {OverGrantMinimumKb}
                 AND m.grant_max_used_kb IS NOT NULL AND m.grant_max_used_kb * 4 < m.grant_granted_kb) AS over_granted
         """;
 
@@ -64,9 +64,33 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         return connection;
     }
 
+    /// <summary>
+    /// Read-only connection inside one deferred read transaction, so a method that
+    /// runs several queries sees a single WAL snapshot. Disposing the connection
+    /// ends the transaction; nothing is ever written.
+    /// </summary>
+    private SqliteConnection? OpenSnapshot()
+    {
+        var connection = OpenReadOnly();
+        if (connection is null)
+            return null;
+        try
+        {
+            using var begin = connection.CreateCommand();
+            begin.CommandText = "BEGIN DEFERRED;";
+            begin.ExecuteNonQuery();
+            return connection;
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
+        }
+    }
+
     public Page<SessionSummary> Sessions(SessionQuery query)
     {
-        using var connection = OpenReadOnly();
+        using var connection = OpenSnapshot();
         if (connection is null)
             return new Page<SessionSummary>([], null);
         var limit = Clamp(query.Limit);
@@ -96,7 +120,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
 
     public SessionDetail? Session(long id)
     {
-        using var connection = OpenReadOnly();
+        using var connection = OpenSnapshot();
         if (connection is null)
             return null;
         var session = Query(connection, $"SELECT {SessionColumns} FROM sessions s WHERE s.id = $id;", [("$id", id)], ReadSessionRow)
@@ -113,45 +137,56 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
 
     public Page<OperationSummary> Operations(OperationQuery query)
     {
-        using var connection = OpenReadOnly();
+        using var connection = OpenSnapshot();
         if (connection is null)
             return new Page<OperationSummary>([], null);
         var limit = Clamp(query.Limit);
         // abandoned is computed, not stored: filter running rows in SQL, then by liveness here.
-        var storedStatus = query.Status is "abandoned" ? "running" : query.Status;
+        // A live-filtered page keeps scanning older batches until it has limit + 1 matches
+        // or the rows run out, so dead rows never yield an empty page with a cursor.
+        var liveFiltered = query.Status is "running" or "abandoned";
+        var storedStatus = liveFiltered ? "running" : query.Status;
         var liveness = new ProcessLiveness(processes);
-        (string, object?)[] parameters =
-        [
-            ("$session", query.SessionId),
-            ("$status", storedStatus),
-            ("$operation", query.Operation),
-            ("$from", Iso(query.From)),
-            ("$to", Iso(query.To)),
-            ("$cursor", query.Cursor),
-            ("$limit", limit + 1),
-        ];
-        var rows = Query(connection, $"""
-            SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id
-            WHERE ($session IS NULL OR o.session_id = $session)
-              AND ($status IS NULL OR o.status = $status)
-              AND ($operation IS NULL OR o.operation = $operation)
-              AND ($from IS NULL OR o.started_at >= $from)
-              AND ($to IS NULL OR o.started_at < $to)
-              AND ($cursor IS NULL OR o.id < $cursor)
-            ORDER BY o.id DESC LIMIT $limit;
-            """,
-            parameters,
-            reader => ReadOperation(reader, liveness));
-        var page = rows.Take(limit).ToArray();
-        var next = rows.Count > limit ? page[^1].Id : (long?)null;
-        if (query.Status is "running" or "abandoned")
-            page = page.Where(row => row.Status == query.Status).ToArray();
+        var matches = new List<OperationSummary>();
+        var cursor = query.Cursor;
+        while (true)
+        {
+            (string, object?)[] parameters =
+            [
+                ("$session", query.SessionId),
+                ("$status", storedStatus),
+                ("$operation", query.Operation),
+                ("$from", Iso(query.From)),
+                ("$to", Iso(query.To)),
+                ("$cursor", cursor),
+                ("$limit", limit + 1),
+            ];
+            var rows = Query(connection, $"""
+                SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id
+                WHERE ($session IS NULL OR o.session_id = $session)
+                  AND ($status IS NULL OR o.status = $status)
+                  AND ($operation IS NULL OR o.operation = $operation)
+                  AND ($from IS NULL OR o.started_at >= $from)
+                  AND ($to IS NULL OR o.started_at < $to)
+                  AND ($cursor IS NULL OR o.id < $cursor)
+                ORDER BY o.id DESC LIMIT $limit;
+                """,
+                parameters,
+                reader => ReadOperation(reader, liveness));
+            matches.AddRange(liveFiltered ? rows.Where(row => row.Status == query.Status) : rows);
+            if (matches.Count > limit || rows.Count <= limit)
+                break;
+            cursor = rows[^1].Id;
+        }
+
+        var page = matches.Take(limit).ToArray();
+        var next = matches.Count > limit ? page[^1].Id : (long?)null;
         return new Page<OperationSummary>(page, next);
     }
 
     public OperationDetail? Operation(long id)
     {
-        using var connection = OpenReadOnly();
+        using var connection = OpenSnapshot();
         if (connection is null)
             return null;
         var liveness = new ProcessLiveness(processes);
@@ -165,7 +200,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             SELECT vars_json, candidate_sql_hash, sql_text, candidate_sql_text, raw_tokens, emitted_tokens, artifact_dir, summary_json
             FROM operations WHERE id = $id;
             """, [("$id", id)], reader => (
-                Vars: reader.IsDBNull(0) ? null : JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(0)),
+                Vars: Vars(NullableString(reader, 0)),
                 CandidateHash: NullableString(reader, 1),
                 SqlText: NullableString(reader, 2),
                 CandidateText: NullableString(reader, 3),
@@ -205,7 +240,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
 
     public DashboardStats Stats(StatsQuery query)
     {
-        using var connection = OpenReadOnly();
+        using var connection = OpenSnapshot();
         if (connection is null)
             return new DashboardStats([], [], [], [], [], [], [], [], [], new TokenStat(0, 0), 0, 0);
         (string, object?)[] window = [("$from", Iso(query.From)), ("$to", Iso(query.To))];
@@ -254,17 +289,25 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             WHERE {inWindow} AND m.waits_json IS NOT NULL;
             """, window, r => (r.GetString(0), r.GetInt32(1))))
         {
-            using var document = JsonDocument.Parse(json);
-            foreach (var wait in document.RootElement.EnumerateArray())
+            if (Json(json) is not { ValueKind: JsonValueKind.Array } array)
+                continue;
+            foreach (var wait in array.EnumerateArray())
             {
-                var type = wait.GetProperty("waitType").GetString() ?? "UNKNOWN";
-                waits[type] = waits.GetValueOrDefault(type) + wait.GetProperty("averageWaitMs").GetDouble() * runs;
+                if (wait.ValueKind != JsonValueKind.Object
+                    || !wait.TryGetProperty("averageWaitMs", out var average)
+                    || average.ValueKind != JsonValueKind.Number
+                    || !average.TryGetDouble(out var averageMs))
+                    continue;
+                var type = wait.TryGetProperty("waitType", out var name) && name.ValueKind == JsonValueKind.String
+                    ? name.GetString()!
+                    : "UNKNOWN";
+                waits[type] = waits.GetValueOrDefault(type) + averageMs * runs;
             }
         }
 
         var targets = Query(connection, $"""
             SELECT o.profile, o.database, COUNT(*) FROM operations o WHERE {inWindow}
-            GROUP BY o.profile, o.database ORDER BY COUNT(*) DESC LIMIT {TopLimit};
+            GROUP BY o.profile, o.database ORDER BY COUNT(*) DESC, o.profile, o.database LIMIT {TopLimit};
             """, window, r => new TargetStat(NullableString(r, 0), NullableString(r, 1), r.GetInt32(2)));
         var tokens = Query(connection, $"""
             SELECT COALESCE(SUM(o.raw_tokens), 0), COALESCE(SUM(o.emitted_tokens), 0) FROM operations o WHERE {inWindow};
@@ -396,12 +439,34 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     private static Spread? SpreadAt(SqliteDataReader r, int index) =>
         r.IsDBNull(index) ? null : new Spread(r.GetInt64(index), r.GetInt64(index + 1), r.GetInt64(index + 2));
 
+    /// <summary>A stored JSON value, or null when it is absent or malformed, so one bad row never fails a response.</summary>
     private static JsonElement? Json(string? text)
     {
         if (text is null)
             return null;
-        using var document = JsonDocument.Parse(text);
-        return document.RootElement.Clone();
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return document.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static Dictionary<string, string>? Vars(string? text)
+    {
+        if (text is null)
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<Dictionary<string, string>>(text);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static string? NullableString(SqliteDataReader r, int index) => r.IsDBNull(index) ? null : r.GetString(index);
