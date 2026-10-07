@@ -15,6 +15,9 @@ public interface IActivityJournal
 
     /// <summary>Per-variant benchmark metrics; full plan documents only when the journal stores sensitive content.</summary>
     void RecordBenchmark(JournalHandle? handle, BenchmarkJournalRecord record) { }
+
+    /// <summary>Latest progress of a running watch. Returns false when not written; callers stop reporting then.</summary>
+    bool RecordWatchProgress(JournalHandle? handle, WatchProgress progress) => false;
 }
 
 public sealed class NullActivityJournal : IActivityJournal

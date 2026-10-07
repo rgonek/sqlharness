@@ -169,6 +169,32 @@ public sealed class ActivityJournal : IActivityJournal
         }
     }
 
+    public bool RecordWatchProgress(JournalHandle? handle, WatchProgress progress)
+    {
+        if (handle is null || progress is null)
+            return false;
+        try
+        {
+            using var connection = Connect();
+            using var update = connection.CreateCommand();
+            update.CommandText = """
+                UPDATE operations SET progress_json = $progress, updated_at = $now
+                WHERE id = $id AND status = 'running';
+                """;
+            update.Parameters.AddWithValue("$id", handle.OperationId);
+            update.Parameters.AddWithValue("$progress", string.Create(CultureInfo.InvariantCulture,
+                $$"""{"polls":{{progress.Polls}},"changedPolls":{{progress.ChangedPolls}},"elapsedMs":{{progress.ElapsedMilliseconds}}}"""));
+            update.Parameters.AddWithValue("$now", Timestamp(_time.GetUtcNow()));
+            update.ExecuteNonQuery();
+            return true;
+        }
+        catch (Exception)
+        {
+            Warn();
+            return false;
+        }
+    }
+
     public void RecordBenchmark(JournalHandle? handle, BenchmarkJournalRecord record)
     {
         if (handle is null || record is null || record.Variants.Count == 0)

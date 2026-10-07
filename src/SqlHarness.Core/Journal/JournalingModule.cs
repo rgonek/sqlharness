@@ -24,23 +24,26 @@ public sealed class JournalingModule : ISqlHarnessModule
     }
 
     public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default) =>
-        RunAsync(operation, () => _inner.ExecuteAsync(operation, ct));
+        RunAsync(operation, effective => _inner.ExecuteAsync(effective, ct));
 
     public Task<SqlHarnessOutcome> ExecuteWatchNdjsonAsync(
         SqlHarnessWatchOperation operation,
         TextWriter writer,
         CancellationToken ct = default) =>
-        RunAsync(operation, () => _inner.ExecuteWatchNdjsonAsync(operation, writer, ct));
+        RunAsync(operation, effective => _inner.ExecuteWatchNdjsonAsync((SqlHarnessWatchOperation)effective, writer, ct));
 
-    private async Task<SqlHarnessOutcome> RunAsync(SqlHarnessOperation operation, Func<Task<SqlHarnessOutcome>> run)
+    private async Task<SqlHarnessOutcome> RunAsync(SqlHarnessOperation operation, Func<SqlHarnessOperation, Task<SqlHarnessOutcome>> run)
     {
         var journal = _journal.Value;
         var handle = Begin(journal, operation);
+        var effective = journal is not null && handle is not null && operation is SqlHarnessWatchOperation watch
+            ? watch with { Progress = ProgressRecorder(journal, handle) }
+            : operation;
         var stopwatch = Stopwatch.StartNew();
         SqlHarnessOutcome outcome;
         try
         {
-            outcome = await run();
+            outcome = await run(effective);
         }
         catch (OperationCanceledException)
         {
@@ -126,6 +129,26 @@ public sealed class JournalingModule : ISqlHarnessModule
         {
             // Best-effort: the journal row stays completed without benchmark detail.
         }
+    }
+
+    private static Action<WatchProgress> ProgressRecorder(IActivityJournal journal, JournalHandle handle)
+    {
+        var enabled = true;
+        return progress =>
+        {
+            if (!enabled)
+                return;
+            try
+            {
+                // One failed write (busy or broken journal) stops progress for this watch,
+                // so a locked journal cannot add its timeout to every poll.
+                enabled = journal.RecordWatchProgress(handle, progress);
+            }
+            catch (Exception)
+            {
+                enabled = false;
+            }
+        };
     }
 
     private static T? Try<T>(Func<T> factory) where T : class
