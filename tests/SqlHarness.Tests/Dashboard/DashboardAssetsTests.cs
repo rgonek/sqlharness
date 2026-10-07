@@ -38,6 +38,8 @@ public sealed class DashboardAssetsTests
     [InlineData("")]
     [InlineData("sessions")]
     [InlineData("operations/42")]
+    [InlineData("index.html")]
+    [InlineData("/index.html")]
     public void Client_routes_serve_the_spa_entry(string? path)
     {
         var index = Assert.IsType<FileContentHttpResult>(WithUi().Resolve(path));

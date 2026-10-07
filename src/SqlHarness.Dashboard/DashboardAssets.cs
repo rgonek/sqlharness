@@ -37,7 +37,9 @@ internal sealed class DashboardAssets
     internal IResult Resolve(string? path)
     {
         var key = Normalize(path ?? string.Empty);
-        if (key.Length > 0 && key != "index.html" && _files.TryGetValue(key, out var bytes))
+        if (key == "index.html")
+            return Index();
+        if (key.Length > 0 && _files.TryGetValue(key, out var bytes))
             return Results.Bytes(bytes, ContentType(key));
         var lastSegment = key[(key.LastIndexOf('/') + 1)..];
         return lastSegment.Contains('.') ? Results.NotFound() : Index();
