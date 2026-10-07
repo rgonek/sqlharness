@@ -1,10 +1,12 @@
 import { useParams } from "@tanstack/react-router"
+import { NotFoundError } from "@/api/client"
 import { useSession } from "@/api/queries"
 import { ErrorState } from "@/components/ErrorState"
 import { OperationTable } from "@/components/OperationTable"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatTimestamp } from "@/lib/format"
+import { parseRouteId } from "@/lib/routeId"
 
 function Fact({ label, value }: { label: string; value: string | null | undefined }) {
   return (
@@ -16,7 +18,13 @@ function Fact({ label, value }: { label: string; value: string | null | undefine
 }
 
 export function SessionPage() {
-  const id = Number(useParams({ from: "/sessions/$id" }).id)
+  const raw = useParams({ from: "/sessions/$id" }).id
+  const id = parseRouteId(raw)
+  if (id === null) return <ErrorState error={new NotFoundError(`/sessions/${raw}`)} />
+  return <SessionView id={id} />
+}
+
+function SessionView({ id }: { id: number }) {
   const detail = useSession(id)
 
   if (detail.error) return <ErrorState error={detail.error} />
@@ -27,7 +35,10 @@ export function SessionPage() {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="font-mono">{session.sessionKey}</CardTitle>
+          <CardTitle>
+            <h1>Session {session.id}</h1>
+          </CardTitle>
+          <div className="font-mono">{session.sessionKey}</div>
           <CardDescription>
             {session.agentKind} via {session.transport} ({session.source})
           </CardDescription>

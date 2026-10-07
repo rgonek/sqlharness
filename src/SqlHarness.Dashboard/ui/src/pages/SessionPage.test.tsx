@@ -23,3 +23,16 @@ test("unknown session shows not found", async () => {
   renderApp("/sessions/999")
   expect(await screen.findByText("Not found")).toBeInTheDocument()
 })
+
+test("session detail has a heading", async () => {
+  stubFetch({ "/api/sessions/7": { session: session({ id: 7 }), operations: [] } })
+  renderApp("/sessions/7")
+  expect(await screen.findByRole("heading", { level: 1, name: "Session 7" })).toBeInTheDocument()
+})
+
+test("a non-decimal session id shows not found without calling the api", async () => {
+  const calls = stubFetch({ "/api/sessions/16": { session: session({ id: 16 }), operations: [] } })
+  renderApp("/sessions/0x10")
+  expect(await screen.findByText("Not found")).toBeInTheDocument()
+  expect(calls).toEqual([])
+})
