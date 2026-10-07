@@ -12,8 +12,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { comparePairs, compareRows, variantLabel } from "@/lib/compare"
-import { formatDuration, formatNumber, formatPercent, formatTimestamp, shortHash } from "@/lib/format"
+import { comparePairs, compareRows, formatChange, variantLabel } from "@/lib/compare"
+import { formatDuration, formatNumber, formatTimestamp, shortHash } from "@/lib/format"
 import { parseRouteId } from "@/lib/routeId"
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
@@ -27,13 +27,23 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 
 function SummaryFacts({ summary }: { summary: Record<string, unknown> }) {
   const equivalent = summary.resultsEquivalent
+  const { sets, stableSets } = summary
   return (
     <div className="flex flex-wrap items-center gap-2">
       {typeof summary.kind === "string" && <Badge variant="outline">{summary.kind}</Badge>}
       {typeof summary.comparison === "string" && <span className="text-sm">comparison: {summary.comparison}</span>}
       {equivalent === true && <Badge variant="secondary">equivalent</Badge>}
       {equivalent === false && <Badge variant="destructive">not equivalent</Badge>}
-      {summary.resultsStable === false && <Badge variant="destructive">unstable results</Badge>}
+      {(summary.resultsStable === false || (typeof sets === "number" && typeof stableSets === "number" && stableSets < sets)) && (
+        <Badge variant="destructive">unstable results</Badge>
+      )}
+      {typeof sets === "number" && typeof stableSets === "number" && <span className="text-sm">{stableSets}/{sets} sets stable</span>}
+      {typeof summary.parameterName === "string" && (
+        <span className="text-sm">
+          parameter: {summary.parameterName}
+          {typeof summary.parameterType === "string" && ` (${summary.parameterType})`}
+        </span>
+      )}
       {typeof summary.cells === "number" && <span className="text-sm">{summary.equivalentCells as number}/{summary.cells} cells equivalent</span>}
     </div>
   )
@@ -67,7 +77,7 @@ function Comparison({ detail }: { detail: OperationDetail }) {
                     <TableCell className="text-right">{formatNumber(row.baseline)}</TableCell>
                     <TableCell className="text-right">{formatNumber(row.candidate)}</TableCell>
                     <TableCell className="text-right">
-                      {row.delta === null ? "—" : `${row.delta > 0 ? "+" : ""}${formatPercent(row.delta)}`}
+                      {formatChange(row.delta)}
                     </TableCell>
                   </TableRow>
                 ))}

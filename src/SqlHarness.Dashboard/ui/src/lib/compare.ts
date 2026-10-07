@@ -1,4 +1,5 @@
 import type { VariantDetail } from "@/api/types"
+import { formatPercent } from "@/lib/format"
 
 export function variantLabel(variant: VariantDetail): string {
   const parts = [variant.variant]
@@ -38,4 +39,10 @@ export function compareRows(baseline: VariantDetail, candidate: VariantDetail): 
     row("Spills", v => v.spillCount),
     row("Compile (ms)", v => v.compileTimeMs),
   ]
+}
+
+/** Relative change as a percent; "+" only when the rounded percent is above zero (never "+0%"). */
+export function formatChange(delta: number | null): string {
+  if (delta === null) return "—"
+  return `${Math.round(delta * 100) > 0 ? "+" : ""}${formatPercent(delta)}`
 }

@@ -40,7 +40,8 @@ export function PlanTree({ plan }: { plan: DistilledPlan }) {
                     <TableCell className="text-right">{formatPercent(row.node.costFraction)}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        {(row.node.warnings ?? []).map(warning => <Badge key={warning} variant="outline">{warning}</Badge>)}
+                        {/* The distiller does not dedupe warnings, so the index is part of the key. */}
+                        {(row.node.warnings ?? []).map((warning, i) => <Badge key={`${i}:${warning}`} variant="outline">{warning}</Badge>)}
                       </div>
                     </TableCell>
                   </TableRow>

@@ -90,7 +90,7 @@ export function VariantPanel({ variant }: { variant: VariantDetail }) {
           </CardContent>
         </Card>
       )}
-      {variant.waits && variant.waits.length > 0 && (
+      {Array.isArray(variant.waits) && variant.waits.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Waits (average per run)</CardTitle>

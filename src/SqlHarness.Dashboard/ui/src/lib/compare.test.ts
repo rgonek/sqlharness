@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
 import { variant } from "@/test/fixtures"
-import { comparePairs, compareRows, variantLabel } from "./compare"
+import { comparePairs, compareRows, formatChange, variantLabel } from "./compare"
 
 test("labels include parameter set and matrix cell", () => {
   expect(variantLabel(variant())).toBe("measure")
@@ -24,4 +24,12 @@ test("rows report relative change of medians", () => {
   )
   expect(rows.find(row => row.metric === "Elapsed (median ms)")).toEqual({ metric: "Elapsed (median ms)", baseline: 100, candidate: 25, delta: -0.75 })
   expect(rows.find(row => row.metric === "Logical reads (median)")?.delta).toBeNull()
+})
+
+test("change shows a sign only when the rounded percent is not zero", () => {
+  expect(formatChange(null)).toBe("—")
+  expect(formatChange(0.5)).toBe("+50%")
+  expect(formatChange(-0.5)).toBe("-50%")
+  expect(formatChange(0.001)).toBe("0%")
+  expect(formatChange(0)).toBe("0%")
 })

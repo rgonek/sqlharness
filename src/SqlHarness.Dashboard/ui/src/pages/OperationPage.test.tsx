@@ -86,3 +86,28 @@ test("a non-numeric operation id shows not found without calling the api", async
   expect(await screen.findByText("Not found")).toBeInTheDocument()
   expect(calls).toEqual([])
 })
+
+test("measure-sets summary shows set stability", async () => {
+  stubFetch({ "/api/operations/10": operationDetail({ summary: { kind: "measure-sets", sets: 3, stableSets: 2 } }) })
+  renderApp("/operations/10")
+  expect(await screen.findByText("2/3 sets stable")).toBeInTheDocument()
+  expect(screen.getByText("unstable results")).toBeInTheDocument()
+})
+
+test("stable measure-sets summary has no unstable badge", async () => {
+  stubFetch({ "/api/operations/10": operationDetail({ summary: { kind: "measure-sets", sets: 2, stableSets: 2 } }) })
+  renderApp("/operations/10")
+  expect(await screen.findByText("2/2 sets stable")).toBeInTheDocument()
+  expect(screen.queryByText("unstable results")).not.toBeInTheDocument()
+})
+
+test("compare-matrix summary shows the matrix parameter and equivalent cells", async () => {
+  stubFetch({
+    "/api/operations/10": operationDetail({
+      summary: { kind: "compare-matrix", parameterName: "BatchSize", parameterType: "int", cells: 3, equivalentCells: 2 },
+    }),
+  })
+  renderApp("/operations/10")
+  expect(await screen.findByText("parameter: BatchSize (int)")).toBeInTheDocument()
+  expect(screen.getByText("2/3 cells equivalent")).toBeInTheDocument()
+})
