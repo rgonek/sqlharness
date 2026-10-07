@@ -106,7 +106,7 @@ Indexes: `(session_id, id)`, `(updated_at)`, `(status)`, `(sql_hash)`.
 
 ### `operation_metrics` (always stored; contains no SQL text and no values)
 
-One row per measured variant (`measure`, `baseline`, `candidate`, matrix cell, parameter set by name hash). It stores medians plus min/max where the benchmark already computes distributions:
+One row per measured variant (`measure`, `baseline`, `candidate`, matrix cell, parameter set by name). It stores medians plus min/max where the benchmark already computes distributions. A metric the run marks unavailable (truncated `STATISTICS` messages, Postgres CPU) is stored as `NULL`, never `0`:
 
 - elapsed ms, CPU ms, logical reads;
 - memory grant requested / granted / max used (KB), DOP, compile time / CPU;
@@ -116,12 +116,12 @@ One row per measured variant (`measure`, `baseline`, `candidate`, matrix cell, p
 
 ### `operation_table_io` (always stored)
 
-Per variant and table, from `STATISTICS IO` (SQL Server): scan count, logical reads, physical reads, page server reads, read-ahead reads, lob logical / physical / read-ahead. `Worktable` and `Workfile` rows are kept as-is.
+Per variant and table, from `STATISTICS IO` (SQL Server): scan count, logical reads, physical reads, page server reads, read-ahead reads, lob logical / physical / read-ahead. `Worktable` and `Workfile` rows are kept as-is. Lines without logical reads (localized output, columnstore segment lines) are not recorded, and truncated `STATISTICS` output records no table IO. Postgres rows carry relation buffer reads as `logical_reads`; the SQL Server-only counters are null.
 
-### `plans` and `operation_plans` (only with `storeSensitive`)
+### `operation_plans` (always stored) and `plans` (only with `storeSensitive`)
 
-- `plans(hash TEXT PRIMARY KEY, engine, format, raw_size, gz BLOB, first_seen)`: deduplicated by the existing `PlanIdentity` hash and gzip-compressed. Measured sizes: median plan 21 KB, max 227 KB, about 17× compression.
-- `operation_plans(operation_id, plan_hash, role, ordinal)`: `role` is `measure`/`baseline`/`candidate`; `ordinal` is the repetition or matrix cell.
+- `operation_plans(metric_id, repetition, ordinal, plan_hash)` — always stored; plan identity hashes are not sensitive.
+- `plans(hash TEXT PRIMARY KEY, format, raw_size, gz BLOB, first_seen)` — only with `storeSensitive`: `format` is `showplan-xml` or `explain-json`; deduplicated by the existing `PlanIdentity` hash, gzip-compressed (measured: median plan 21 KB, max 227 KB, ~17× compression). A stored plan is the first actual plan observed for its shape.
 
 ### Never stored, regardless of configuration
 
