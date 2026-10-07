@@ -105,7 +105,7 @@ function StatsContent({ stats }: { stats: DashboardStats }) {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Operations per day</CardTitle>
+          <CardTitle>Operations per day (UTC)</CardTitle>
         </CardHeader>
         <CardContent>
           <ChartContainer config={perDayConfig} className="h-64 w-full">

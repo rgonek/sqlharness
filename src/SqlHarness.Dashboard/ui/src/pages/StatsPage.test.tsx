@@ -9,7 +9,7 @@ test("shows KPIs, charts and top lists, and switches range", async () => {
   renderApp("/stats")
 
   expect(await screen.findByText("90%")).toBeInTheDocument()
-  expect(screen.getByText("Operations per day")).toBeInTheDocument()
+  expect(screen.getByText("Operations per day (UTC)")).toBeInTheDocument()
   expect(screen.getByText("aaaaaaaaaaaa")).toBeInTheDocument()
   expect(screen.getByRole("cell", { name: "Orders" })).toBeInTheDocument()
   expect(screen.getByRole("cell", { name: "PAGEIOLATCH_SH" })).toBeInTheDocument()
