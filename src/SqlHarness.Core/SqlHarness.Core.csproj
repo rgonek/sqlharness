@@ -9,6 +9,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="SqlHarness.Tests" />
     <InternalsVisibleTo Include="SqlHarness.Mcp.Tests" />
+    <InternalsVisibleTo Include="SqlHarness.Dashboard" />
   </ItemGroup>
 
   <ItemGroup>

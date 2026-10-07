@@ -28,6 +28,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\SqlHarness.Core\SqlHarness.Core.csproj" />
     <ProjectReference Include="..\..\src\SqlHarness.Cli\SqlHarness.Cli.csproj" />
+    <ProjectReference Include="..\..\src\SqlHarness.Dashboard\SqlHarness.Dashboard.csproj" />
   </ItemGroup>
 
 </Project>
