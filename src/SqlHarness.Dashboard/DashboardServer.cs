@@ -154,7 +154,12 @@ public static partial class DashboardServer
             TryWindow(from, to, out var window)
                 ? Results.Json(reader.Stats(new StatsQuery(window.From, window.To)), Json)
                 : BadRequest("from/to must be ISO-8601 timestamps."));
-        MapRead(api, "/live", (HttpContext context) => LiveFeed.StreamAsync(context, reader, options.LivePollInterval, context.RequestAborted));
+        MapRead(api, "/live", async (HttpContext context) =>
+        {
+            // Stopping ends open streams, so a connected browser never holds up shutdown.
+            using var stream = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, app.Lifetime.ApplicationStopping);
+            await LiveFeed.StreamAsync(context, reader, options.LivePollInterval, stream.Token);
+        });
         MapRead(api, "/{**rest}", () => Results.NotFound());
 
         MapRead(app, "/", () => Index());
