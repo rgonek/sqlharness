@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { getJson } from "@/api/client"
 import { queryKeys } from "@/api/queries"
 import type { OperationSummary, Page, SessionSummary } from "@/api/types"
@@ -8,22 +8,30 @@ import { SessionTable } from "@/components/SessionTable"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { isActiveSession } from "@/live/liveStore"
+import { isActiveSession, mergeOperations, mergeSessions } from "@/live/liveStore"
 import { useLiveFeed } from "@/live/useLiveFeed"
 import { useNow } from "@/lib/useNow"
 
 export function LivePage() {
+  const client = useQueryClient()
   const { connected } = useLiveFeed()
   const now = useNow(1000)
-  // Seeded once; the live feed keeps these caches current through setQueryData.
+  // Fetched on load and on every live-feed (re)connect; in between, pushed events keep these
+  // caches current through setQueryData. A fetch merges into the cache instead of replacing it.
   const operations = useQuery({
     queryKey: queryKeys.liveOperations,
-    queryFn: async () => (await getJson<Page<OperationSummary>>("/api/operations", { limit: 100 })).items,
+    queryFn: async () => {
+      const page = await getJson<Page<OperationSummary>>("/api/operations", { limit: 100 })
+      return mergeOperations(client.getQueryData<OperationSummary[]>(queryKeys.liveOperations) ?? [], page.items)
+    },
     staleTime: Infinity,
   })
   const sessions = useQuery({
     queryKey: queryKeys.liveSessions,
-    queryFn: async () => (await getJson<Page<SessionSummary>>("/api/sessions", { limit: 100 })).items,
+    queryFn: async () => {
+      const page = await getJson<Page<SessionSummary>>("/api/sessions", { limit: 100 })
+      return mergeSessions(client.getQueryData<SessionSummary[]>(queryKeys.liveSessions) ?? [], page.items)
+    },
     staleTime: Infinity,
   })
 

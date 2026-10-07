@@ -24,6 +24,18 @@ export function mergeSession(list: SessionSummary[], incoming: SessionSummary, c
   return next.slice(0, cap)
 }
 
+/**
+ * Folds a fetched page into the live list with the same rules as pushed events, so a refetch
+ * whose response is older than an event that arrived meanwhile cannot roll that row back.
+ */
+export function mergeOperations(list: OperationSummary[], fetched: OperationSummary[], cap = LIVE_CAP): OperationSummary[] {
+  return fetched.reduce((current, item) => mergeOperation(current, item, cap), list)
+}
+
+export function mergeSessions(list: SessionSummary[], fetched: SessionSummary[], cap = LIVE_CAP): SessionSummary[] {
+  return fetched.reduce((current, item) => mergeSession(current, item, cap), list)
+}
+
 export function isActiveSession(session: SessionSummary, now: number, windowMs = ACTIVE_WINDOW_MS): boolean {
   return session.running > 0 || now - Date.parse(session.lastSeen) <= windowMs
 }

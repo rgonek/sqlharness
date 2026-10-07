@@ -1,4 +1,4 @@
-import { act, screen, within } from "@testing-library/react"
+import { act, screen, waitFor, within } from "@testing-library/react"
 import { expect, test } from "vitest"
 import { operation, session } from "@/test/fixtures"
 import { renderApp, stubFetch } from "@/test/render"
@@ -44,4 +44,39 @@ test("live page shows running, recent and pushed operations", async () => {
   const recent = screen.getByRole("region", { name: "Recent operations" })
   expect(await within(recent).findByText("measure")).toBeInTheDocument()
   expect(screen.getByText("connected")).toBeInTheDocument()
+})
+
+test("live lists are refetched on every (re)connect so changes made during a gap show", async () => {
+  globalThis.EventSource = FakeEventSource as unknown as typeof EventSource
+  let finished = false
+  const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } })
+  const calls = stubFetch({
+    "/api/operations": () => json({
+      items: [operation({ id: 2, operation: "watch", ...(finished
+        ? { status: "succeeded", updatedAt: "2026-10-07T09:00:05.000Z" }
+        : { status: "running", updatedAt: "2026-10-07T09:00:01.000Z" }) })],
+      nextCursor: null,
+    }),
+    "/api/sessions": () => json({ items: [session({ lastSeen: new Date().toISOString() })], nextCursor: null }),
+  })
+  const fetched = (path: string) => calls.filter(call => call.startsWith(`${path}?`) || call === path).length
+
+  renderApp("/")
+  const running = await screen.findByRole("region", { name: "Running" })
+  expect(await within(running).findByText("watch")).toBeInTheDocument()
+
+  act(() => FakeEventSource.last!.onopen?.())
+  await waitFor(() => expect(fetched("/api/operations")).toBe(2))
+  expect(fetched("/api/sessions")).toBe(2)
+
+  act(() => FakeEventSource.last!.onerror?.())
+  expect(screen.getByText("disconnected")).toBeInTheDocument()
+  finished = true
+  act(() => FakeEventSource.last!.onopen?.())
+
+  await waitFor(() => expect(fetched("/api/operations")).toBe(3))
+  expect(fetched("/api/sessions")).toBe(3)
+  expect(await within(running).findByText("Nothing is running.")).toBeInTheDocument()
+  const recent = screen.getByRole("region", { name: "Recent operations" })
+  expect(within(recent).getByText("succeeded")).toBeInTheDocument()
 })
