@@ -8,10 +8,34 @@ public sealed class DashboardHostTests
     private sealed class RecordingBrowser : IBrowserLauncher
     {
         public List<Uri> Opened { get; } = [];
-        public void Open(Uri uri) => Opened.Add(uri);
+
+        /// <summary>Content of each opened local page, read at open time.</summary>
+        public List<string> Pages { get; } = [];
+
+        public void Open(Uri uri)
+        {
+            Opened.Add(uri);
+            Pages.Add(uri.IsFile ? File.ReadAllText(uri.LocalPath) : string.Empty);
+        }
     }
 
-    private static DashboardHostOptions Options(TempHome home, StringWriter output, StringWriter error, RecordingBrowser browser,
+    private sealed class ThrowingBrowser : IBrowserLauncher
+    {
+        public void Open(Uri uri) => throw new InvalidOperationException("browser failed for " + uri);
+    }
+
+    private static string PagePath(TempHome home) => Path.Combine(home.Path, "dashboard-open.html");
+
+    private static void AssertOpenedThroughPage(TempHome home, RecordingBrowser browser, Uri target)
+    {
+        var opened = Assert.Single(browser.Opened);
+        Assert.True(opened.IsFile);
+        Assert.Equal(Path.GetFullPath(PagePath(home)), Path.GetFullPath(opened.LocalPath));
+        Assert.DoesNotContain(target.Query, opened.ToString());
+        Assert.Contains(target.ToString(), Assert.Single(browser.Pages));
+    }
+
+    private static DashboardHostOptions Options(TempHome home, StringWriter output, StringWriter error, IBrowserLauncher browser,
         bool openBrowser = true, bool quiet = false, SqlHarnessConfigLoadResult? config = null) =>
         new(home.Path, home.DatabasePath, config ?? new SqlHarnessConfigLoadResult(SqlHarnessConfig.Default, SqlHarnessConfigStatus.Missing, null),
             openBrowser, quiet, output, error, new FakeProcesses().Alive(Environment.ProcessId, null), browser)
@@ -34,9 +58,10 @@ public sealed class DashboardHostTests
         Assert.Equal(0, exit);
         Assert.NotNull(started);
         Assert.Contains(started!.OpenUri.ToString(), output.ToString());
-        Assert.Equal([started.OpenUri], browser.Opened);
+        AssertOpenedThroughPage(home, browser, started.OpenUri);
         Assert.True(File.Exists(home.DatabasePath));
         Assert.False(File.Exists(Path.Combine(home.Path, "dashboard.json")));
+        Assert.False(File.Exists(PagePath(home)));
     }
 
     [Fact]
@@ -70,7 +95,7 @@ public sealed class DashboardHostTests
 
         Assert.Equal(0, exit);
         Assert.Contains(endpoint.OpenUri.ToString(), output.ToString());
-        Assert.Equal([endpoint.OpenUri], browser.Opened);
+        AssertOpenedThroughPage(home, browser, endpoint.OpenUri);
         Assert.False(File.Exists(home.DatabasePath));
     }
 
@@ -178,5 +203,93 @@ public sealed class DashboardHostTests
 
         Assert.Equal((int)SqlHarnessExitCode.LocalStorage, exit);
         Assert.Contains("dashboard", error.ToString());
+    }
+
+    [Fact]
+    public async Task Open_page_is_owner_only_and_redirects_to_the_token_url()
+    {
+        using var home = new TempHome();
+        using var cts = new CancellationTokenSource();
+        string? content = null;
+        UnixFileMode? mode = null;
+
+        var exit = await DashboardHost.RunAsync(
+            Options(home, new StringWriter(), new StringWriter(), new RecordingBrowser()) with
+            {
+                Started = s =>
+                {
+                    content = File.ReadAllText(PagePath(home));
+                    if (!OperatingSystem.IsWindows())
+                        mode = File.GetUnixFileMode(PagePath(home));
+                    Assert.Contains($"location.replace(\"{s.OpenUri}\")", content);
+                    Assert.Contains($"<meta http-equiv=\"refresh\" content=\"0;url={s.OpenUri}\">", content);
+                    cts.Cancel();
+                },
+            },
+            cts.Token).WaitAsync(TimeSpan.FromSeconds(20));
+
+        Assert.Equal(0, exit);
+        Assert.NotNull(content);
+        if (!OperatingSystem.IsWindows())
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, mode);
+        Assert.False(File.Exists(PagePath(home)));
+    }
+
+    [Fact]
+    public async Task Host_shutdown_stops_the_dashboard_and_releases_it()
+    {
+        using var home = new TempHome();
+
+        var exit = await DashboardHost.RunAsync(
+            Options(home, new StringWriter(), new StringWriter(), new RecordingBrowser()) with { Started = s => s.RequestStop() },
+            CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(20));
+
+        Assert.Equal(0, exit);
+        Assert.False(File.Exists(Path.Combine(home.Path, "dashboard.json")));
+        Assert.False(File.Exists(PagePath(home)));
+        using var again = DashboardLock.TryAcquire(home.Path);
+        Assert.NotNull(again);
+    }
+
+    [Fact]
+    public async Task Lock_released_during_the_wait_is_taken_over()
+    {
+        using var home = new TempHome();
+        var held = DashboardLock.TryAcquire(home.Path)!;
+        using var cts = new CancellationTokenSource();
+        RunningDashboard? started = null;
+        var release = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(500));
+            held.Dispose();
+        });
+
+        var exit = await DashboardHost.RunAsync(
+            Options(home, new StringWriter(), new StringWriter(), new RecordingBrowser()) with { Started = s => { started = s; cts.Cancel(); } },
+            cts.Token).WaitAsync(TimeSpan.FromSeconds(20));
+        await release;
+
+        Assert.Equal(0, exit);
+        Assert.NotNull(started);
+    }
+
+    [Fact]
+    public async Task Unexpected_failure_exits_with_local_storage_without_details()
+    {
+        using var home = new TempHome();
+        var error = new StringWriter();
+        RunningDashboard? started = null;
+
+        var exit = await DashboardHost.RunAsync(
+            Options(home, new StringWriter(), error, new ThrowingBrowser()) with { Started = s => started = s },
+            CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(20));
+
+        Assert.Equal((int)SqlHarnessExitCode.LocalStorage, exit);
+        Assert.Null(started);
+        Assert.Contains("InvalidOperationException", error.ToString());
+        Assert.DoesNotContain("browser failed", error.ToString());
+        Assert.DoesNotContain("?t=", error.ToString());
+        Assert.False(File.Exists(Path.Combine(home.Path, "dashboard.json")));
+        Assert.False(File.Exists(PagePath(home)));
     }
 }

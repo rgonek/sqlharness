@@ -55,23 +55,37 @@ public static class DashboardHost
             options.Error.WriteLine("sqlharness: the dashboard could not use its lock or address file in the SQLHarness home.");
             return (int)SqlHarnessExitCode.LocalStorage;
         }
+        catch (Exception exception)
+        {
+            // Last resort: report and exit instead of crashing. Only the type name, because
+            // messages can carry paths or the token URL.
+            options.Error.WriteLine($"sqlharness: the dashboard stopped unexpectedly ({exception.GetType().Name}).");
+            return (int)SqlHarnessExitCode.LocalStorage;
+        }
     }
 
     private static async Task<int> RunCoreAsync(DashboardHostOptions options, CancellationToken ct)
     {
-        using var held = DashboardLock.TryAcquire(options.Home);
-        if (held is null)
+        var acquired = DashboardLock.TryAcquire(options.Home);
+        if (acquired is null)
         {
             var existing = await DashboardLock.WaitForRunningAsync(options.Home, options.Processes, ExistingInstanceWait, ct);
-            if (existing is null)
+            if (existing is not null)
+            {
+                Announce(options, existing.OpenUri);
+                return (int)SqlHarnessExitCode.Success;
+            }
+
+            // The holder may have exited during the wait without publishing; take over if so.
+            acquired = DashboardLock.TryAcquire(options.Home);
+            if (acquired is null)
             {
                 options.Error.WriteLine("sqlharness: another dashboard holds the lock but has not published its address.");
                 return (int)SqlHarnessExitCode.LocalStorage;
             }
-
-            Announce(options, existing.OpenUri);
-            return (int)SqlHarnessExitCode.Success;
         }
+
+        using var held = acquired;
 
         if (options.Config.Config.Journal.Enabled)
             _ = ActivityJournal.Open(options.DatabasePath, options.Config.Config.Journal, TextWriter.Null, TimeProvider.System);
@@ -111,25 +125,36 @@ public static class DashboardHost
 
         await using (running)
         {
-            var self = options.Processes.Get(Environment.ProcessId);
             try
             {
-                held.Publish(new DashboardEndpoint(Environment.ProcessId, self?.StartedAt, running.Port, running.Token));
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                options.Error.WriteLine("sqlharness: the dashboard could not publish its address in the SQLHarness home.");
-                return (int)SqlHarnessExitCode.LocalStorage;
-            }
+                var self = options.Processes.Get(Environment.ProcessId);
+                try
+                {
+                    held.Publish(new DashboardEndpoint(Environment.ProcessId, self?.StartedAt, running.Port, running.Token));
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    options.Error.WriteLine("sqlharness: the dashboard could not publish its address in the SQLHarness home.");
+                    return (int)SqlHarnessExitCode.LocalStorage;
+                }
 
-            Announce(options, running.OpenUri);
-            options.Started?.Invoke(running);
-            try
-            {
-                await Task.Delay(Timeout.Infinite, ct);
+                Announce(options, running.OpenUri);
+                options.Started?.Invoke(running);
+
+                // Ctrl+C cancels ct; SIGTERM/SIGQUIT reach the host lifetime and signal Stopping.
+                using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct, running.Stopping);
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, stop.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                }
             }
-            catch (OperationCanceledException)
+            finally
             {
+                // The page holds the token, so it lives no longer than this server.
+                DashboardOpenPage.Delete(options.Home);
             }
         }
 
@@ -144,7 +169,20 @@ public static class DashboardHost
             options.Output.Flush();
         }
 
-        if (options.OpenBrowser)
-            options.Browser.Open(uri);
+        if (!options.OpenBrowser)
+            return;
+        Uri page;
+        try
+        {
+            page = DashboardOpenPage.Write(options.Home, uri);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Never fall back to launching the token URL: its arguments are visible to other users.
+            options.Error.WriteLine("sqlharness: could not prepare the browser page; open the URL above.");
+            return;
+        }
+
+        options.Browser.Open(page);
     }
 }

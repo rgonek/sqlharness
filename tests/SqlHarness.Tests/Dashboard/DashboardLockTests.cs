@@ -213,19 +213,42 @@ public sealed class DashboardLockTests
     }
 
     [Fact]
-    public async Task Acquire_retries_once_when_a_probe_briefly_holds_the_lock()
+    public void Acquire_retries_once_when_a_probe_briefly_holds_the_lock()
     {
         using var home = new TempHome();
         var probe = DashboardLock.TryAcquire(home.Path)!;
-        var release = Task.Run(async () =>
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(50));
-            probe.Dispose();
-        });
 
-        using var held = DashboardLock.TryAcquire(home.Path);
-        await release;
+        using var held = DashboardLock.TryAcquire(home.Path, beforeRetry: probe.Dispose);
 
         Assert.NotNull(held);
+    }
+
+    [Fact]
+    public void Acquire_gives_up_after_one_retry()
+    {
+        using var home = new TempHome();
+        using var first = DashboardLock.TryAcquire(home.Path)!;
+        var retries = 0;
+
+        var second = DashboardLock.TryAcquire(home.Path, beforeRetry: () => retries++);
+
+        Assert.Null(second);
+        Assert.Equal(1, retries);
+    }
+
+    [Fact]
+    public void Failed_publish_removes_its_temp_file()
+    {
+        using var home = new TempHome();
+        var info = Path.Combine(home.Path, "dashboard.json");
+        Directory.CreateDirectory(info);
+        File.WriteAllText(Path.Combine(info, "blocker"), "x");
+        using var held = DashboardLock.TryAcquire(home.Path)!;
+
+        var failure = Record.Exception(() => held.Publish(new DashboardEndpoint(4242, Started, 47801, "tok")));
+
+        Assert.True(failure is IOException or UnauthorizedAccessException, failure?.GetType().Name);
+
+        Assert.False(File.Exists(info + ".tmp"));
     }
 }

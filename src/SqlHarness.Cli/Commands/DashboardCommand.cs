@@ -28,7 +28,14 @@ public sealed class DashboardCommand : AsyncCommand<DashboardCommand.Settings>
         ConsoleCancelEventHandler onCancel = (_, args) =>
         {
             args.Cancel = true;
-            stop.Cancel();
+            try
+            {
+                stop.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Ctrl+C raced the command's return; nothing is left to stop.
+            }
         };
         Console.CancelKeyPress += onCancel;
         try

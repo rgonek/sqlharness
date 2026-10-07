@@ -51,16 +51,23 @@ public sealed class DashboardLock : IDisposable
         _infoPath = infoPath;
     }
 
-    public static DashboardLock? TryAcquire(string home)
+    public static DashboardLock? TryAcquire(string home) =>
+        TryAcquire(home, beforeRetry: () => Thread.Sleep(AcquireRetryDelay));
+
+    /// <summary>
+    /// A reader's ReadRunning probe holds the lock for an instant; one retry, after
+    /// <paramref name="beforeRetry"/>, keeps a starting server from mistaking that probe
+    /// for another dashboard.
+    /// </summary>
+    internal static DashboardLock? TryAcquire(string home, Action beforeRetry)
     {
         ArgumentException.ThrowIfNullOrEmpty(home);
+        ArgumentNullException.ThrowIfNull(beforeRetry);
         Directory.CreateDirectory(home);
         OwnerOnlyFiles.Directory(home);
-        // A reader's ReadRunning probe holds the lock for an instant; one retry keeps a
-        // starting server from mistaking that probe for another dashboard.
         if (TryAcquireOnce(home) is { } acquired)
             return acquired;
-        Thread.Sleep(AcquireRetryDelay);
+        beforeRetry();
         return TryAcquireOnce(home);
     }
 
@@ -116,23 +123,46 @@ public sealed class DashboardLock : IDisposable
     public void Publish(DashboardEndpoint endpoint)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
-        var temp = _infoPath + ".tmp";
-        File.Delete(temp);
-        var content = JsonSerializer.Serialize(endpoint, Json);
-        if (OperatingSystem.IsWindows())
-        {
-            File.WriteAllText(temp, content);
-        }
-        else
-        {
-            var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, UnixCreateMode = OwnerReadWrite };
-            using var writer = new StreamWriter(temp, new UTF8Encoding(false), options);
-            writer.Write(content);
-        }
-
-        OwnerOnlyFiles.File(temp);
-        File.Move(temp, _infoPath, overwrite: true);
+        WriteOwnerOnly(_infoPath, JsonSerializer.Serialize(endpoint, Json));
         _published = true;
+    }
+
+    /// <summary>
+    /// Replaces <paramref name="path"/> atomically with an owner-only file (0600 from
+    /// creation on Unix). A failed write removes its temp file.
+    /// </summary>
+    internal static void WriteOwnerOnly(string path, string content)
+    {
+        var temp = path + ".tmp";
+        File.Delete(temp);
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                File.WriteAllText(temp, content);
+            }
+            else
+            {
+                var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, UnixCreateMode = OwnerReadWrite };
+                using var writer = new StreamWriter(temp, new UTF8Encoding(false), options);
+                writer.Write(content);
+            }
+
+            OwnerOnlyFiles.File(temp);
+            File.Move(temp, path, overwrite: true);
+        }
+        catch
+        {
+            try
+            {
+                File.Delete(temp);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+            }
+
+            throw;
+        }
     }
 
     public static DashboardEndpoint? ReadRunning(string home, IProcessInfo processes)

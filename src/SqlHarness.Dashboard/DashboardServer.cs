@@ -45,6 +45,12 @@ public sealed class RunningDashboard : IAsyncDisposable
 
     public Uri OpenUri => new($"http://127.0.0.1:{Port}/?t={Token}");
 
+    /// <summary>Signalled when the server is asked to stop, including by SIGTERM/SIGQUIT through the host lifetime.</summary>
+    public CancellationToken Stopping => _app.Lifetime.ApplicationStopping;
+
+    /// <summary>Asks the server to stop, the way a host shutdown signal does.</summary>
+    internal void RequestStop() => _app.Lifetime.StopApplication();
+
     internal IReadOnlyList<string> Addresses =>
         _app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.ToArray();
 
