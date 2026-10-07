@@ -5,7 +5,7 @@
 **Goal:** Replace the placeholder page of `sqlharness dashboard` with a React SPA that has five views: Live, Sessions, Session detail, Operation detail, and Statistics. The SPA is built with Vite, embedded into `SqlHarness.Dashboard.dll`, and served by the existing loopback server. Both gates build and test it.
 
 **Architecture:**
-- `src/SqlHarness.Dashboard/ui` is a Vite + React + TypeScript app using shadcn/ui on Base UI primitives (Tailwind v4, the default preset, with generated components left untouched), React Router, and TanStack Query.
+- `src/SqlHarness.Dashboard/ui` is a Vite + React + TypeScript app using shadcn/ui on Base UI primitives (Tailwind v4, the default preset, with generated components left untouched), TanStack Router (a code-based route tree in `router.tsx`), and TanStack Query.
 - The live feed (`/api/live` SSE) merges `operation`/`session` events into query caches.
 - An MSBuild target in `SqlHarness.Dashboard.csproj` runs `npm ci` (only when `node_modules` is missing) and `npm run build` (incrementally), then embeds `ui/dist/**` as manifest resources. `DashboardAssets` serves them, falling back to the existing placeholder page when the UI was skipped (`-p:SkipDashboardUi=true`).
 - Both local gates and CI gain `npm ci` and `npm run check` (typecheck, lint, Vitest) stages before `dotnet restore`. Node is pinned by `.nvmrc` and provisioned in WSL by `setup-linux-gate.ps1`.
@@ -14,7 +14,7 @@
 - Node 24.18.0 (`.nvmrc`), npm
 - Vite (react-ts template), React, TypeScript
 - Tailwind CSS v4 (`@tailwindcss/vite`), shadcn CLI (`--base base`), Recharts (via the shadcn `chart` component)
-- `react-router`, `@tanstack/react-query`
+- `@tanstack/react-router`, `@tanstack/react-query`
 - Vitest, Testing Library, jsdom
 - MSBuild `Exec` targets
 - Versions are whatever `npm` resolves at scaffold time and are locked by the committed `package-lock.json`.
@@ -51,11 +51,12 @@
 | `src/SqlHarness.Dashboard/ui/` (new) | Vite app: `package.json`, `package-lock.json`, `index.html`, `vite.config.ts`, `tsconfig*.json`, `eslint.config.js`, `components.json`, `src/**` |
 | `ui/src/components/ui/*` | shadcn-generated components (never edited) |
 | `ui/src/api/types.ts`, `client.ts`, `queries.ts` | API types, fetch wrapper, query hooks |
+| `ui/src/router.tsx` | TanStack Router route tree, `createAppRouter(history?)`, and router type registration |
 | `ui/src/live/liveStore.ts`, `useLiveFeed.ts` | SSE merge logic and hook |
 | `ui/src/lib/format.ts`, `flags.ts`, `compare.ts`, `stats.ts`, `useNow.ts`, `theme.ts` | Pure helpers |
 | `ui/src/components/*.tsx` | `AppLayout`, `ErrorState`, `StatusBadge`, `FlagBadges`, `OperationTable`, `SessionTable`, `Kpi`, `PlanTree`, `VariantPanel` |
 | `ui/src/pages/*.tsx` | `LivePage`, `SessionsPage`, `SessionPage`, `OperationPage`, `StatsPage`, `NotFoundPage` |
-| `ui/src/test/setup.ts`, `fixtures.ts`, `render.tsx` | Test setup, DTO fixtures, provider wrapper |
+| `ui/src/test/setup.ts`, `fixtures.ts`, `render.tsx` | Test setup, DTO fixtures, `stubFetch`, and `renderApp(url)` (the whole app on a memory history) |
 | `src/SqlHarness.Dashboard/SqlHarness.Dashboard.csproj` (modify) | UI build and embed targets |
 | `src/SqlHarness.Dashboard/DashboardAssets.cs` (new), `DashboardServer.cs` (modify) | Serve embedded SPA files |
 | `tests/SqlHarness.Tests/Dashboard/DashboardAssetsTests.cs`, `DashboardContractTests.cs` (new) | Asset serving and API contract pins |
@@ -76,7 +77,7 @@
   - npm scripts `build` (`vite build`), `typecheck` (`tsc -b`), `lint` (`eslint .`), `test` (`vitest run`), `check` (all three)
   - The `@/` path alias to `ui/src`
   - shadcn components `button`, `badge`, `card`, `table`, `tabs`, `skeleton`, `separator`, `alert`, `chart`
-  - Test helpers `renderWithProviders` (`ui/src/test/render.tsx`) and `src/test/setup.ts`
+  - Test helpers `stubFetch` (`ui/src/test/render.tsx`; Task 4 adds `renderApp`) and `src/test/setup.ts`
 
 - [ ] **Step 1: Pin Node and create the Vite app**
 
@@ -86,11 +87,11 @@ cd src/SqlHarness.Dashboard
 npm create vite@latest ui -- --template react-ts
 cd ui
 npm install
-npm install react-router @tanstack/react-query
+npm install @tanstack/react-router @tanstack/react-query
 npm install -D tailwindcss @tailwindcss/vite @types/node vitest jsdom @testing-library/react @testing-library/dom @testing-library/jest-dom @testing-library/user-event
 ```
 
-Expected: `ui/` contains `package.json`, `package-lock.json`, `index.html`, `vite.config.ts`, `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`, `eslint.config.js`, and `src/`. Delete the template's demo assets (`src/App.css`, `src/assets/react.svg`, `public/vite.svg`) and the demo content of `src/App.tsx`. Task 4 replaces it.
+Expected: `ui/` contains `package.json`, `package-lock.json`, `index.html`, `vite.config.ts`, `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`, `eslint.config.js`, and `src/`. Delete the template's demo assets (`src/App.css`, `src/assets/react.svg`, `public/vite.svg`) and the demo content of `src/App.tsx`. Task 4 replaces `App.tsx` with the router.
 
 Add to `.gitignore` after the `node_modules/` line:
 
@@ -247,32 +248,9 @@ window.matchMedia ??= ((query: string) => ({
 afterEach(() => cleanup())
 ```
 
-`ui/src/test/render.tsx`:
+`ui/src/test/render.tsx` (Task 4 adds `renderApp` to this file):
 
 ```tsx
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render } from "@testing-library/react"
-import type { ReactElement } from "react"
-import { MemoryRouter, Route, Routes } from "react-router"
-
-export function renderWithProviders(element: ReactElement, options: { route?: string; path?: string } = {}) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
-  const route = options.route ?? "/"
-  const path = options.path ?? "*"
-  return {
-    client,
-    ...render(
-      <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={[route]}>
-          <Routes>
-            <Route path={path} element={element} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    ),
-  }
-}
-
 /** Replaces fetch with a route table: exact path+query match first, then path only. */
 export function stubFetch(routes: Record<string, unknown | ((url: URL) => Response)>) {
   const calls: string[] = []
@@ -288,7 +266,7 @@ export function stubFetch(routes: Record<string, unknown | ((url: URL) => Respon
 }
 ```
 
-`ui/src/App.tsx`, temporary content that Task 4 replaces:
+`ui/src/App.tsx`, temporary content that Task 4 deletes:
 
 ```tsx
 export default function App() {
@@ -925,7 +903,9 @@ git commit -m "Install and check the dashboard UI in both gates, CI and release"
 
 **Files:**
 - Create: `ui/src/api/types.ts`, `client.ts`, `queries.ts`; `ui/src/lib/format.ts`, `flags.ts`, `useNow.ts`, `theme.ts`; `ui/src/components/AppLayout.tsx`, `ErrorState.tsx`, `StatusBadge.tsx`, `FlagBadges.tsx`; `ui/src/pages/NotFoundPage.tsx`; `ui/src/test/fixtures.ts`
-- Modify: `ui/src/main.tsx`, `ui/src/App.tsx`, `ui/src/App.test.tsx`
+- Create: `ui/src/router.tsx`, `ui/src/router.test.tsx`
+- Modify: `ui/src/main.tsx`, `ui/src/test/render.tsx`
+- Delete: `ui/src/App.tsx`, `ui/src/App.test.tsx`
 - Test: `ui/src/lib/format.test.ts`, `ui/src/lib/flags.test.ts`, `ui/src/api/client.test.ts`, `ui/src/components/ErrorState.test.tsx`
 
 All paths in Tasks 4–8 are relative to `src/SqlHarness.Dashboard/`.
@@ -939,6 +919,8 @@ All paths in Tasks 4–8 are relative to `src/SqlHarness.Dashboard/`.
   - **Flags:** `operationFlags(op)`, `statusVariant(status)`
   - **Hooks:** `useNow(intervalMs)`, `useSystemTheme()`
   - **Components:** `<ErrorState error />`, `<StatusBadge status />`, `<FlagBadges operation />`, `<AppLayout />` (with `<Outlet />`)
+  - **Router:** `routeTree`, `createAppRouter(history?)`, and route paths `/`, `/sessions`, `/sessions/$id`, `/operations/$id`, `/stats`. Pages read params with `useParams({ from: "/sessions/$id" })` and link with `<Link to="/operations/$id" params={{ id: String(id) }}>`. They never import `router.tsx`, so there are no import cycles; types flow through the `Register` declaration.
+  - **Test helper:** `renderApp(url): { client, router }` renders the whole app at `url` on a memory history.
 
 - [ ] **Step 1: Types and fixtures**
 
@@ -1618,32 +1600,31 @@ export function FlagBadges({ operation }: { operation: OperationSummary }) {
 `ui/src/components/AppLayout.tsx`:
 
 ```tsx
-import { NavLink, Outlet } from "react-router"
+import { Link, Outlet, useRouterState } from "@tanstack/react-router"
 import { buttonVariants } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 
 const links = [
-  { to: "/", label: "Live", end: true },
-  { to: "/sessions", label: "Sessions", end: false },
-  { to: "/stats", label: "Statistics", end: false },
-]
+  { to: "/", label: "Live", exact: true },
+  { to: "/sessions", label: "Sessions", exact: false },
+  { to: "/stats", label: "Statistics", exact: false },
+] as const
 
 export function AppLayout() {
+  const pathname = useRouterState({ select: state => state.location.pathname })
   return (
     <div className="min-h-screen">
       <header className="mx-auto flex max-w-7xl items-center gap-4 p-4">
         <span className="font-semibold">SQLHarness</span>
         <nav className="flex gap-1">
-          {links.map(link => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              end={link.end}
-              className={({ isActive }) => buttonVariants({ variant: isActive ? "secondary" : "ghost", size: "sm" })}
-            >
-              {link.label}
-            </NavLink>
-          ))}
+          {links.map(link => {
+            const active = link.exact ? pathname === link.to : pathname === link.to || pathname.startsWith(`${link.to}/`)
+            return (
+              <Link key={link.to} to={link.to} className={buttonVariants({ variant: active ? "secondary" : "ghost", size: "sm" })}>
+                {link.label}
+              </Link>
+            )
+          })}
         </nav>
       </header>
       <Separator />
@@ -1654,6 +1635,8 @@ export function AppLayout() {
   )
 }
 ```
+
+The active state is computed from the location instead of TanStack's `activeProps`, because `activeProps.className` is appended to `className`. Two sets of `buttonVariants` classes would then compete.
 
 `ui/src/pages/NotFoundPage.tsx`:
 
@@ -1666,50 +1649,57 @@ export function NotFoundPage() {
 }
 ```
 
-`ui/src/App.tsx` (routes for pages that later tasks add; until then they point at `NotFoundPage`, and each later task swaps in its page):
+`ui/src/router.tsx`. Routes whose page a later task adds point at `NotFoundPage` until then; each later task swaps in its page component:
 
 ```tsx
-import { Route, Routes } from "react-router"
+import { createRootRoute, createRoute, createRouter, type RouterHistory } from "@tanstack/react-router"
 import { AppLayout } from "@/components/AppLayout"
 import { NotFoundPage } from "@/pages/NotFoundPage"
 
-export default function App() {
-  return (
-    <Routes>
-      <Route element={<AppLayout />}>
-        <Route index element={<NotFoundPage />} />
-        <Route path="sessions" element={<NotFoundPage />} />
-        <Route path="sessions/:id" element={<NotFoundPage />} />
-        <Route path="operations/:id" element={<NotFoundPage />} />
-        <Route path="stats" element={<NotFoundPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Route>
-    </Routes>
-  )
+const rootRoute = createRootRoute({ component: AppLayout, notFoundComponent: NotFoundPage })
+
+const liveRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: NotFoundPage })
+const sessionsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sessions", component: NotFoundPage })
+const sessionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sessions/$id", component: NotFoundPage })
+const operationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations/$id", component: NotFoundPage })
+const statsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/stats", component: NotFoundPage })
+
+export const routeTree = rootRoute.addChildren([liveRoute, sessionsRoute, sessionRoute, operationRoute, statsRoute])
+
+/** Browser history in the app; tests pass a memory history. */
+export function createAppRouter(history?: RouterHistory) {
+  return createRouter({ routeTree, history, defaultPreload: false })
+}
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: ReturnType<typeof createAppRouter>
+  }
 }
 ```
+
+Unknown URLs render the root `notFoundComponent` in place of the root `<Outlet />`, so the navigation stays visible.
 
 `ui/src/main.tsx`:
 
 ```tsx
 import { QueryClientProvider } from "@tanstack/react-query"
+import { RouterProvider } from "@tanstack/react-router"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
-import { BrowserRouter } from "react-router"
-import App from "./App"
 import { createQueryClient } from "./api/queries"
 import "./index.css"
 import { useSystemTheme } from "./lib/theme"
+import { createAppRouter } from "./router"
 
 const client = createQueryClient()
+const router = createAppRouter()
 
 function Root() {
   useSystemTheme()
   return (
     <QueryClientProvider client={client}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   )
 }
@@ -1721,28 +1711,43 @@ createRoot(document.getElementById("root")!).render(
 )
 ```
 
-`ui/src/App.test.tsx`, replace with:
+`ui/src/test/render.tsx`. Keep `stubFetch` unchanged and add above it:
 
 ```tsx
-import { QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
-import { MemoryRouter } from "react-router"
-import { expect, test } from "vitest"
-import App from "./App"
-import { createQueryClient } from "./api/queries"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { createMemoryHistory, RouterProvider } from "@tanstack/react-router"
+import { render } from "@testing-library/react"
+import { createAppRouter } from "@/router"
 
-test("renders the navigation", () => {
-  render(
-    <QueryClientProvider client={createQueryClient()}>
-      <MemoryRouter initialEntries={["/nowhere"]}>
-        <App />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  )
-  expect(screen.getByRole("link", { name: "Live" })).toBeInTheDocument()
-  expect(screen.getByRole("link", { name: "Sessions" })).toBeInTheDocument()
-  expect(screen.getByRole("link", { name: "Statistics" })).toBeInTheDocument()
-  expect(screen.getByText("Not found")).toBeInTheDocument()
+/** Renders the whole app at `url` on a memory history; assert with findBy* because routes resolve asynchronously. */
+export function renderApp(url = "/") {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
+  const router = createAppRouter(createMemoryHistory({ initialEntries: [url] }))
+  return {
+    client,
+    router,
+    ...render(
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    ),
+  }
+}
+```
+
+Delete `ui/src/App.tsx` and `ui/src/App.test.tsx`. Create `ui/src/router.test.tsx`:
+
+```tsx
+import { screen } from "@testing-library/react"
+import { expect, test } from "vitest"
+import { renderApp } from "@/test/render"
+
+test("unknown urls keep the navigation and show not found", async () => {
+  renderApp("/nowhere")
+  expect(await screen.findByText("Not found")).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Live" })).toHaveAttribute("href", "/")
+  expect(screen.getByRole("link", { name: "Sessions" })).toHaveAttribute("href", "/sessions")
+  expect(screen.getByRole("link", { name: "Statistics" })).toHaveAttribute("href", "/stats")
 })
 ```
 
@@ -1765,7 +1770,7 @@ git commit -m "Add the dashboard API client, helpers and app shell"
 
 **Files:**
 - Create: `ui/src/live/liveStore.ts`, `ui/src/live/useLiveFeed.ts`, `ui/src/components/OperationTable.tsx`, `ui/src/components/SessionTable.tsx`, `ui/src/pages/LivePage.tsx`
-- Modify: `ui/src/App.tsx` (index route → `LivePage`)
+- Modify: `ui/src/router.tsx` (`/` → `LivePage`)
 - Test: `ui/src/live/liveStore.test.ts`, `ui/src/pages/LivePage.test.tsx`
 
 **Interfaces:**
@@ -1832,8 +1837,7 @@ describe("liveStore", () => {
 import { act, screen, within } from "@testing-library/react"
 import { expect, test } from "vitest"
 import { operation, session } from "@/test/fixtures"
-import { renderWithProviders, stubFetch } from "@/test/render"
-import { LivePage } from "./LivePage"
+import { renderApp, stubFetch } from "@/test/render"
 
 class FakeEventSource {
   static last: FakeEventSource | undefined
@@ -1859,7 +1863,7 @@ test("live page shows running, recent and pushed operations", async () => {
     "/api/sessions": { items: [session({ id: 1, running: 1, lastSeen: new Date().toISOString() })], nextCursor: null },
   })
 
-  renderWithProviders(<LivePage />)
+  renderApp("/")
 
   const running = await screen.findByRole("region", { name: "Running" })
   expect(within(running).getByText("watch")).toBeInTheDocument()
@@ -1963,7 +1967,7 @@ export function useLiveFeed(): { connected: boolean } {
 `ui/src/components/OperationTable.tsx`:
 
 ```tsx
-import { Link } from "react-router"
+import { Link } from "@tanstack/react-router"
 import type { OperationSummary } from "@/api/types"
 import { FlagBadges } from "@/components/FlagBadges"
 import { StatusBadge } from "@/components/StatusBadge"
@@ -1992,7 +1996,9 @@ export function OperationTable({ operations, now }: { operations: OperationSumma
           {operations.map(operation => (
             <TableRow key={operation.id}>
               <TableCell>
-                <Link to={`/operations/${operation.id}`}>{operation.id}</Link>
+                <Link to="/operations/$id" params={{ id: String(operation.id) }}>
+                  {operation.id}
+                </Link>
               </TableCell>
               <TableCell className="whitespace-nowrap">{formatTimestamp(operation.startedAt)}</TableCell>
               <TableCell>{operation.agentKind}</TableCell>
@@ -2027,7 +2033,7 @@ export function OperationTable({ operations, now }: { operations: OperationSumma
 `ui/src/components/SessionTable.tsx`:
 
 ```tsx
-import { Link } from "react-router"
+import { Link } from "@tanstack/react-router"
 import type { SessionSummary } from "@/api/types"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -2053,7 +2059,9 @@ export function SessionTable({ sessions, now }: { sessions: SessionSummary[]; no
           {sessions.map(session => (
             <TableRow key={session.id}>
               <TableCell className="font-mono">
-                <Link to={`/sessions/${session.id}`}>{session.sessionKey}</Link>
+                <Link to="/sessions/$id" params={{ id: String(session.id) }}>
+                  {session.sessionKey}
+                </Link>
               </TableCell>
               <TableCell>
                 {session.agentKind}
@@ -2159,7 +2167,7 @@ export function LivePage() {
 }
 ```
 
-`ui/src/App.tsx`: import `LivePage` from `@/pages/LivePage` and change the index route to `<Route index element={<LivePage />} />`. Update `App.test.tsx` only if it breaks. It renders `/nowhere`, so it should not.
+`ui/src/router.tsx`: import `LivePage` from `@/pages/LivePage` and set `component: LivePage` on `liveRoute`.
 
 - [ ] **Step 4: Run to verify they pass**
 
@@ -2179,7 +2187,7 @@ git commit -m "Add the live view with SSE merging"
 
 **Files:**
 - Create: `ui/src/pages/SessionsPage.tsx`, `ui/src/pages/SessionPage.tsx`
-- Modify: `ui/src/App.tsx`
+- Modify: `ui/src/router.tsx`
 - Test: `ui/src/pages/SessionsPage.test.tsx`, `ui/src/pages/SessionPage.test.tsx`
 
 **Interfaces:**
@@ -2194,8 +2202,7 @@ import { screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
 import { session } from "@/test/fixtures"
-import { renderWithProviders, stubFetch } from "@/test/render"
-import { SessionsPage } from "./SessionsPage"
+import { renderApp, stubFetch } from "@/test/render"
 
 test("lists sessions, filters by agent and loads more", async () => {
   const calls = stubFetch({
@@ -2204,7 +2211,7 @@ test("lists sessions, filters by agent and loads more", async () => {
     "/api/sessions?agent=codex&limit=50": { items: [session({ id: 3, sessionKey: "mcp:codex", agentKind: "codex" })], nextCursor: null },
   })
 
-  renderWithProviders(<SessionsPage />)
+  renderApp("/sessions")
   expect(await screen.findByText("cli:two")).toBeInTheDocument()
 
   await userEvent.click(screen.getByRole("button", { name: "Load more" }))
@@ -2223,8 +2230,7 @@ test("lists sessions, filters by agent and loads more", async () => {
 import { screen } from "@testing-library/react"
 import { expect, test } from "vitest"
 import { operation, session } from "@/test/fixtures"
-import { renderWithProviders, stubFetch } from "@/test/render"
-import { SessionPage } from "./SessionPage"
+import { renderApp, stubFetch } from "@/test/render"
 
 test("shows session facts and its operations", async () => {
   stubFetch({
@@ -2234,7 +2240,7 @@ test("shows session facts and its operations", async () => {
     },
   })
 
-  renderWithProviders(<SessionPage />, { route: "/sessions/7", path: "/sessions/:id" })
+  renderApp("/sessions/7")
 
   expect(await screen.findByText("mcp:xyz")).toBeInTheDocument()
   expect(screen.getByText("claude-code 2.1.0")).toBeInTheDocument()
@@ -2243,7 +2249,7 @@ test("shows session facts and its operations", async () => {
 
 test("unknown session shows not found", async () => {
   stubFetch({})
-  renderWithProviders(<SessionPage />, { route: "/sessions/999", path: "/sessions/:id" })
+  renderApp("/sessions/999")
   expect(await screen.findByText("Not found")).toBeInTheDocument()
 })
 ```
@@ -2322,7 +2328,7 @@ If the generated `Tabs` types `onValueChange` with a specific value type, keep t
 `ui/src/pages/SessionPage.tsx`:
 
 ```tsx
-import { useParams } from "react-router"
+import { useParams } from "@tanstack/react-router"
 import { useSession } from "@/api/queries"
 import { ErrorState } from "@/components/ErrorState"
 import { OperationTable } from "@/components/OperationTable"
@@ -2340,7 +2346,7 @@ function Fact({ label, value }: { label: string; value: string | null | undefine
 }
 
 export function SessionPage() {
-  const id = Number(useParams().id)
+  const id = Number(useParams({ from: "/sessions/$id" }).id)
   const detail = useSession(id)
 
   if (detail.error) return <ErrorState error={detail.error} />
@@ -2381,7 +2387,7 @@ export function SessionPage() {
 }
 ```
 
-`ui/src/App.tsx`: route `sessions` → `<SessionsPage />` and `sessions/:id` → `<SessionPage />`.
+`ui/src/router.tsx`: set `component: SessionsPage` on `sessionsRoute` and `component: SessionPage` on `sessionRoute`.
 
 - [ ] **Step 4: Run to verify they pass**
 
@@ -2401,7 +2407,7 @@ git commit -m "Add the sessions and session detail views"
 
 **Files:**
 - Create: `ui/src/lib/compare.ts`, `ui/src/components/Kpi.tsx`, `ui/src/components/VariantPanel.tsx`, `ui/src/components/PlanTree.tsx`, `ui/src/pages/OperationPage.tsx`
-- Modify: `ui/src/App.tsx`
+- Modify: `ui/src/router.tsx`
 - Test: `ui/src/lib/compare.test.ts`, `ui/src/components/PlanTree.test.tsx`, `ui/src/pages/OperationPage.test.tsx`
 
 **Interfaces:**
@@ -2470,14 +2476,11 @@ import { screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
 import { operation, operationDetail, session, variant } from "@/test/fixtures"
-import { renderWithProviders, stubFetch } from "@/test/render"
-import { OperationPage } from "./OperationPage"
-
-const route = { route: "/operations/10", path: "/operations/:id" }
+import { renderApp, stubFetch } from "@/test/render"
 
 test("measure shows facts, KPIs, table IO, waits and the sql-not-stored note", async () => {
   stubFetch({ "/api/operations/10": operationDetail() })
-  renderWithProviders(<OperationPage />, route)
+  renderApp("/operations/10")
 
   expect(await screen.findByRole("heading", { name: "Operation #10" })).toBeInTheDocument()
   expect(screen.getByText("acme")).toBeInTheDocument()
@@ -2505,7 +2508,7 @@ test("compare shows baseline versus candidate and stored plans with operators", 
     }),
     [`/api/plans/${hash}?view=distilled`]: { statements: [{ statementText: "SELECT 1", root: { physicalOp: "Clustered Index Scan", objectName: "Orders" }, missingIndexes: [] }] },
   })
-  renderWithProviders(<OperationPage />, route)
+  renderApp("/operations/10")
 
   const comparison = await screen.findByRole("region", { name: "Baseline vs candidate" })
   expect(within(comparison).getByText("-50%")).toBeInTheDocument()
@@ -2524,7 +2527,7 @@ test("Operation_without_metrics_or_target_renders", async () => {
       session: session(), vars: null, rawTokens: null, emittedTokens: null, artifactDirectory: null, summary: null, variants: [],
     }),
   })
-  renderWithProviders(<OperationPage />, route)
+  renderApp("/operations/10")
   expect(await screen.findByRole("heading", { name: "Operation #10" })).toBeInTheDocument()
   expect(screen.queryByRole("region", { name: "Key metrics" })).not.toBeInTheDocument()
 })
@@ -2847,7 +2850,7 @@ The `Kpi` grid sets `aria-label="Key metrics"` on a `<section>`, which makes it 
 
 ```tsx
 import type { ReactNode } from "react"
-import { Link, useParams } from "react-router"
+import { Link, useParams } from "@tanstack/react-router"
 import { useOperation } from "@/api/queries"
 import type { OperationDetail } from "@/api/types"
 import { ErrorState } from "@/components/ErrorState"
@@ -2927,7 +2930,7 @@ function Comparison({ detail }: { detail: OperationDetail }) {
 }
 
 export function OperationPage() {
-  const id = Number(useParams().id)
+  const id = Number(useParams({ from: "/operations/$id" }).id)
   const query = useOperation(id)
 
   if (query.error) return <ErrorState error={query.error} />
@@ -2947,7 +2950,10 @@ export function OperationPage() {
             <FlagBadges operation={op} />
           </div>
           <CardDescription>
-            {op.operation} by {op.agentKind} in <Link to={`/sessions/${op.sessionId}`}>{detail.session.sessionKey}</Link>
+            {op.operation} by {op.agentKind} in{" "}
+            <Link to="/sessions/$id" params={{ id: String(op.sessionId) }}>
+              {detail.session.sessionKey}
+            </Link>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -3024,7 +3030,7 @@ The `compare` test asserts the elapsed change of `-50%`: baseline median 12 to c
 
 The `Download plan` link exists once per distinct stored hash. In the compare fixture only the baseline (the first, default tab) has a stored plan, so the test finds exactly one link whether or not inactive tab panels stay mounted.
 
-`ui/src/App.tsx`: route `operations/:id` → `<OperationPage />`.
+`ui/src/router.tsx`: set `component: OperationPage` on `operationRoute`.
 
 - [ ] **Step 5: Run to verify they pass**
 
@@ -3044,7 +3050,7 @@ git commit -m "Add the operation detail view with metrics, IO, waits and plans"
 
 **Files:**
 - Create: `ui/src/lib/stats.ts`, `ui/src/pages/StatsPage.tsx`
-- Modify: `ui/src/App.tsx`, `README.md`, `docs/superpowers/specs/2026-10-06-activity-dashboard-design.md`
+- Modify: `ui/src/router.tsx`, `README.md`, `docs/superpowers/specs/2026-10-06-activity-dashboard-design.md`
 - Test: `ui/src/lib/stats.test.ts`, `ui/src/pages/StatsPage.test.tsx`
 
 **Interfaces:**
@@ -3082,12 +3088,11 @@ import { screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
 import { stats } from "@/test/fixtures"
-import { renderWithProviders, stubFetch } from "@/test/render"
-import { StatsPage } from "./StatsPage"
+import { renderApp, stubFetch } from "@/test/render"
 
 test("shows KPIs, charts and top lists, and switches range", async () => {
   const calls = stubFetch({ "/api/stats": stats() })
-  renderWithProviders(<StatsPage />)
+  renderApp("/stats")
 
   expect(await screen.findByText("90%")).toBeInTheDocument()
   expect(screen.getByText("Operations per day")).toBeInTheDocument()
@@ -3381,7 +3386,7 @@ function StatsContent({ stats }: { stats: DashboardStats }) {
 
 Agent kinds are lowercase ASCII (`claude`, `codex`, `other`, `unknown`), which keeps `var(--color-${agent})` a valid CSS variable name generated by `ChartContainer` from the config keys.
 
-`ui/src/App.tsx`: route `stats` → `<StatsPage />`. All `NotFoundPage` placeholders except `*` are now replaced.
+`ui/src/router.tsx`: set `component: StatsPage` on `statsRoute`. Only the root `notFoundComponent` still uses `NotFoundPage`.
 
 - [ ] **Step 4: Run to verify they pass**
 
@@ -3404,7 +3409,7 @@ Add a `#### Building the dashboard UI` paragraph:
 The UI lives in `src/SqlHarness.Dashboard/ui` (React, Vite, shadcn/ui on Base UI) and is embedded into the binary by `dotnet build`, which runs `npm ci` (when `node_modules` is missing) and `npm run build`. Node is pinned in `.nvmrc`. Build without Node with `dotnet build -p:SkipDashboardUi=true` (a placeholder page is served). For UI development run `sqlharness dashboard --no-open`, then in `ui/` run `SQLHARNESS_DASHBOARD_TOKEN=<t value> npm run dev`; the Vite dev server proxies `/api` to the running dashboard.
 ```
 
-In the spec's `## UI` section, add: "Implemented with React Router and TanStack Query; TanStack Table was not needed (tables are not client-sortable in this version). The SPA is embedded through an MSBuild target; `-p:SkipDashboardUi=true` builds without Node and serves the placeholder."
+In the spec's `## UI` section, add: "Implemented with TanStack Router (code-based route tree) and TanStack Query; TanStack Table was not needed (tables are not client-sortable in this version). The SPA is embedded through an MSBuild target; `-p:SkipDashboardUi=true` builds without Node and serves the placeholder."
 
 - [ ] **Step 6: Final gates and real-browser smoke**
 
