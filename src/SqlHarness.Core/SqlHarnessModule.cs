@@ -386,7 +386,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             }
 
             rawFootprint = cell.RawFootprint;
-            var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, cell.Report, null);
+            var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, cell.Report, null)
+            {
+                BenchmarkRuns = cell.Runs,
+            };
             return WithReceipt(success, stopwatch.ElapsedMilliseconds, rawFootprint, "compare");
         }
         catch (Exception exception)
@@ -510,7 +513,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             }
 
             rawFootprint = result.RawFootprint;
-            var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, result.Report, null);
+            var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, result.Report, null)
+            {
+                BenchmarkRuns = result.Runs,
+            };
             return WithReceipt(success, stopwatch.ElapsedMilliseconds, rawFootprint, "compare");
         }
         catch (Exception exception)
@@ -645,7 +651,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     target.Database,
                     ArtifactOwner.From(measure.Target, target));
                 setReport = setReport with { ArtifactDirectory = setDirectory };
-                var setSuccess = new SqlHarnessOutcome(SqlHarnessExitCode.Success, setReport, null);
+                var setSuccess = new SqlHarnessOutcome(SqlHarnessExitCode.Success, setReport, null)
+                {
+                    BenchmarkRuns = execution.Runs.Select(run => run.Artifact).ToArray(),
+                };
                 return WithReceipt(setSuccess, stopwatch.ElapsedMilliseconds, rawFootprint, "measure");
             }
 
@@ -682,7 +691,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             phase = OperationPhase.Artifact;
             var directory = _artifactWriter.Write(report, runs.Select(run => run.Artifact).ToArray(), target.Database, ArtifactOwner.From(measure.Target, target));
             report = report with { ArtifactDirectory = directory };
-            var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
+            var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null)
+            {
+                BenchmarkRuns = runs.Select(run => run.Artifact).ToArray(),
+            };
             return WithReceipt(success, stopwatch.ElapsedMilliseconds, rawFootprint, "measure");
         }
         catch (Exception exception)

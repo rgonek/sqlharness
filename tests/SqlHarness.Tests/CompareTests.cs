@@ -462,6 +462,19 @@ public class SqlHarnessCompareTests
         Assert.True(record.RawBytes > 0);
     }
 
+    [Fact]
+    public async Task Compare_exposes_measured_runs_of_both_variants()
+    {
+        var session = FakeCompareSession.Create();
+
+        var outcome = await Module(session).ExecuteAsync(Compare(repeat: 2));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var runs = outcome.BenchmarkRuns!;
+        Assert.Equal(["baseline", "candidate", "candidate", "baseline"], runs.Select(run => run.Variant));
+        Assert.All(runs, run => Assert.NotEmpty(run.TableIo));
+    }
+
     private static void AddResult(
         CanonicalResultAccumulator accumulator,
         string name,

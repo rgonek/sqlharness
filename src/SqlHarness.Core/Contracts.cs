@@ -473,6 +473,13 @@ public sealed record SqlHarnessOutcome(
     /// <summary>Structured error mapped at outcome construction, before any renderer runs.</summary>
     public SqlHarnessError? MachineError { get; } = MapMachineError(ExitCode, SafeError, Error);
 
+    /// <summary>
+    /// Measured benchmark runs of a successful measure/compare, for the activity journal only.
+    /// Internal and never serialized: agent output and artifacts are unchanged by its presence.
+    /// </summary>
+    [JsonIgnore]
+    internal IReadOnlyList<CompareRunArtifact>? BenchmarkRuns { get; init; }
+
     private static SqlHarnessError? MapMachineError(
         SqlHarnessExitCode exitCode,
         string? safeError,
