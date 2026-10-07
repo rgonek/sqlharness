@@ -32,6 +32,19 @@ public sealed class JournalWatchProgressTests
         }
     }
 
+    private sealed class ThrowingJournal : IActivityJournal
+    {
+        public int ProgressCalls;
+        public JournalHandle? Begin(SessionIdentity session, OperationStart start) => new(1);
+        public bool Complete(JournalHandle? handle, OperationEnd end) => true;
+        public void RecordEmission(JournalHandle? handle, OutputFootprint? raw, OutputFootprint emitted) { }
+        public bool RecordWatchProgress(JournalHandle? handle, WatchProgress progress)
+        {
+            ProgressCalls++;
+            throw new InvalidOperationException("journal");
+        }
+    }
+
     private static SqlHarnessWatchOperation Watch() =>
         new(Target, "SELECT 1", [], 30, 10, TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(1), null, 3);
 
@@ -58,6 +71,33 @@ public sealed class JournalWatchProgressTests
         await new JournalingModule(new ProgressModule(polls: 5), () => journal, () => JournalTestData.Session()).ExecuteAsync(Watch());
 
         Assert.Equal(1, journal.ProgressCalls);
+    }
+
+    [Fact]
+    public async Task Progress_recording_stops_after_the_first_thrown_write()
+    {
+        var journal = new ThrowingJournal();
+
+        await new JournalingModule(new ProgressModule(polls: 5), () => journal, () => JournalTestData.Session()).ExecuteAsync(Watch());
+
+        Assert.Equal(1, journal.ProgressCalls);
+    }
+
+    [Fact]
+    public void Progress_is_not_written_after_the_operation_completed()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = ActivityJournal.Open(temp.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
+        var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start());
+        const string Expected = """{"polls":2,"changedPolls":1,"elapsedMs":20}""";
+
+        Assert.True(journal.RecordWatchProgress(handle, new WatchProgress(2, 1, 20)));
+        Assert.Equal(Expected, JournalDb.Rows(temp.DatabasePath, "SELECT progress_json FROM operations").Single()["progress_json"]);
+
+        Assert.True(journal.Complete(handle, JournalTestData.End()));
+        journal.RecordWatchProgress(handle, new WatchProgress(9, 7, 90));
+
+        Assert.Equal(Expected, JournalDb.Rows(temp.DatabasePath, "SELECT progress_json FROM operations").Single()["progress_json"]);
     }
 
     [Fact]
