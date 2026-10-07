@@ -4,6 +4,7 @@ using Spectre.Console.Cli;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Targets;
+using SqlHarness.Dashboard;
 
 namespace SqlHarness.Cli.Commands;
 
@@ -102,6 +103,12 @@ public sealed class McpServeCommand(McpHostConsole console) : AsyncCommand<McpSe
             }
         }
 
+        // Side effects of starting an MCP server; neither touches stdout nor delays the handshake.
+        var config = SqlHarnessConfigLoader.Load().Config;
+        if (StartDashboard(config) is AutostartResult.Failed)
+            console.Error.WriteLine("sqlharness-mcp: dashboard autostart failed; start it with: sqlharness dashboard");
+        _ = Task.Run(() => JournalRetention.Run(SqlHarnessPaths.ActivityDatabase, config.Journal, ProcessInfo.Current, TimeProvider.System));
+
         var options = new SqlHarness.Mcp.McpServerOptions
         {
             RequestScope = settings.RequestScope,
@@ -119,6 +126,21 @@ public sealed class McpServeCommand(McpHostConsole console) : AsyncCommand<McpSe
             console.Error,
             () => ProfileStore.Load(),
             ct);
+    }
+
+    private static AutostartResult StartDashboard(SqlHarnessConfig config)
+    {
+        if (!config.Dashboard.AutoStart)
+            return AutostartResult.Disabled;
+        try
+        {
+            // Resolving the launch command can throw (unknown process path); that must not fail mcp serve.
+            return DashboardAutostart.TryStart(SqlHarnessPaths.Home, config, ProcessInfo.Current, new DetachedDashboardLauncher(), DashboardLaunchCommand.Current());
+        }
+        catch (Exception)
+        {
+            return AutostartResult.Failed;
+        }
     }
 
     private int Fail(string message)
