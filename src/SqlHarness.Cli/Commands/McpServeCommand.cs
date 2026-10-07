@@ -25,7 +25,7 @@ public sealed class McpHostConsole(TextWriter error)
 /// request scopes are resolved immutably per call, with no mutable selection.
 /// Raw targets, --unsafe-direct, and unsupported startup options are rejected.
 /// </summary>
-public sealed class McpServeCommand(McpHostConsole console) : AsyncCommand<McpServeCommand.Settings>
+public sealed class McpServeCommand(McpHostConsole console, IDashboardLauncher launcher) : AsyncCommand<McpServeCommand.Settings>
 {
     public sealed class Settings : CommandSettings
     {
@@ -103,12 +103,6 @@ public sealed class McpServeCommand(McpHostConsole console) : AsyncCommand<McpSe
             }
         }
 
-        // Side effects of starting an MCP server; neither touches stdout nor delays the handshake.
-        var config = SqlHarnessConfigLoader.Load().Config;
-        if (StartDashboard(config) is AutostartResult.Failed)
-            console.Error.WriteLine("sqlharness-mcp: dashboard autostart failed; start it with: sqlharness dashboard");
-        _ = Task.Run(() => JournalRetention.Run(SqlHarnessPaths.ActivityDatabase, config.Journal, ProcessInfo.Current, TimeProvider.System));
-
         var options = new SqlHarness.Mcp.McpServerOptions
         {
             RequestScope = settings.RequestScope,
@@ -125,17 +119,34 @@ public sealed class McpServeCommand(McpHostConsole console) : AsyncCommand<McpSe
             Console.OpenStandardOutput(),
             console.Error,
             () => ProfileStore.Load(),
-            ct);
+            ct,
+            OnStarted(launcher, console.Error));
     }
 
-    private static AutostartResult StartDashboard(SqlHarnessConfig config)
+    /// <summary>
+    /// Side effects of a validated MCP start: dashboard autostart and one background
+    /// retention pass. Neither writes to stdout; a failed autostart is one stderr line.
+    /// </summary>
+    public static Action<SqlHarnessConfig> OnStarted(IDashboardLauncher launcher, TextWriter error)
+    {
+        ArgumentNullException.ThrowIfNull(launcher);
+        ArgumentNullException.ThrowIfNull(error);
+        return config =>
+        {
+            if (StartDashboard(config, launcher) is AutostartResult.Failed)
+                error.WriteLine("sqlharness-mcp: dashboard autostart failed; start it with: sqlharness dashboard");
+            _ = Task.Run(() => JournalRetention.Run(SqlHarnessPaths.ActivityDatabase, config.Journal, ProcessInfo.Current, TimeProvider.System));
+        };
+    }
+
+    private static AutostartResult StartDashboard(SqlHarnessConfig config, IDashboardLauncher launcher)
     {
         if (!config.Dashboard.AutoStart)
             return AutostartResult.Disabled;
         try
         {
             // Resolving the launch command can throw (unknown process path); that must not fail mcp serve.
-            return DashboardAutostart.TryStart(SqlHarnessPaths.Home, config, ProcessInfo.Current, new DetachedDashboardLauncher(), DashboardLaunchCommand.Current());
+            return DashboardAutostart.TryStart(SqlHarnessPaths.Home, config, ProcessInfo.Current, launcher, DashboardLaunchCommand.Current());
         }
         catch (Exception)
         {

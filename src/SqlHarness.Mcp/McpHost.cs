@@ -39,7 +39,10 @@ public static class McpHost
 
     /// <summary>
     /// Hosting seam for embedding and tests: the same startup path with
-    /// explicit streams, log writer, and profile loader.
+    /// explicit streams, log writer, and profile loader. <paramref name="started"/>
+    /// runs once, only after startup validation succeeded and before the
+    /// transport starts, with the loaded config; it must not write to stdout,
+    /// and an exception from it is swallowed so it never fails the server.
     /// </summary>
     public static async Task<int> RunAsync(
         McpServerOptions options,
@@ -47,7 +50,8 @@ public static class McpHost
         Stream output,
         TextWriter log,
         Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Action<SqlHarnessConfig>? started = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(input);
@@ -110,6 +114,14 @@ public static class McpHost
             () => journal.Value,
             () => identity.Value));
         Tools.McpToolCatalog.Wire(serverOptions, process, hostShutdown: lifetime.Token);
+        try
+        {
+            started?.Invoke(config.Config);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Startup side effects (dashboard autostart, retention) are best-effort.
+        }
 
         try
         {
