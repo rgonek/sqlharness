@@ -53,7 +53,8 @@
     <ItemGroup>
       <_DashboardUiFile Include="$(DashboardUiDist)/**/*" />
       <EmbeddedResource Include="@(_DashboardUiFile)"
-                        LogicalName="SqlHarness.Dashboard.ui/%(_DashboardUiFile.RecursiveDir)%(_DashboardUiFile.Filename)%(_DashboardUiFile.Extension)" />
+                        LogicalName="SqlHarness.Dashboard.ui/%(_DashboardUiFile.RecursiveDir)%(_DashboardUiFile.Filename)%(_DashboardUiFile.Extension)"
+                        WithCulture="false" />
     </ItemGroup>
   </Target>
 
