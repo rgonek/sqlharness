@@ -61,3 +61,11 @@ describe("fetched pages", () => {
     expect(mergeSessions(cached, fetched).map(s => [s.id, s.running])).toEqual([[1, 0], [2, 0]])
   })
 })
+
+describe("fetched pages at equal timestamps", () => {
+  test("a fetched running row does not replace a pushed abandoned one with the same updatedAt", () => {
+    const running = operation({ id: 5, status: "running" })
+    const abandoned = { ...running, status: "abandoned" as const }
+    expect(mergeOperations([abandoned], [running])[0].status).toBe("abandoned")
+  })
+})

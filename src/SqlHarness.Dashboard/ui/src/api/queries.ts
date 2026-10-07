@@ -12,6 +12,7 @@ export const queryKeys = {
   stats: (range: StatsRange) => ["stats", range] as const,
   plan: (hash: string) => ["plan", hash] as const,
   liveOperations: ["live", "operations"] as const,
+  liveRunning: ["live", "running"] as const,
   liveSessions: ["live", "sessions"] as const,
 }
 
