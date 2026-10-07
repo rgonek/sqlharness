@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 
 using SqlHarness.Core;
@@ -9,6 +10,15 @@ public sealed record DashboardEndpoint(int Pid, DateTimeOffset? StartedAt, int P
     public Uri BaseUri => new($"http://127.0.0.1:{Port}/");
 
     public Uri OpenUri => new($"http://127.0.0.1:{Port}/?t={Token}");
+
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("Pid = ").Append(Pid)
+            .Append(", StartedAt = ").Append(StartedAt)
+            .Append(", Port = ").Append(Port)
+            .Append(", Token = <redacted>");
+        return true;
+    }
 }
 
 /// <summary>
@@ -16,12 +26,15 @@ public sealed record DashboardEndpoint(int Pid, DateTimeOffset? StartedAt, int P
 /// <c>dashboard.lock</c> for its whole lifetime (FileShare.None; an advisory
 /// flock on Unix) and publishes its endpoint in <c>dashboard.json</c>
 /// (owner-only), which other processes read because the lock file itself is
-/// unreadable while held on Windows.
+/// unreadable while held on Windows. The holder deletes any earlier
+/// <c>dashboard.json</c> right after taking the lock, so a published file is
+/// trusted only while the lock is held.
 /// </summary>
 public sealed class DashboardLock : IDisposable
 {
     internal const string LockFileName = "dashboard.lock";
     internal const string InfoFileName = "dashboard.json";
+    private const UnixFileMode OwnerReadWrite = UnixFileMode.UserRead | UnixFileMode.UserWrite;
     private static readonly TimeSpan StartTolerance = TimeSpan.FromSeconds(2);
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -39,19 +52,27 @@ public sealed class DashboardLock : IDisposable
     {
         ArgumentException.ThrowIfNullOrEmpty(home);
         Directory.CreateDirectory(home);
+        OwnerOnlyFiles.Directory(home);
+        var lockPath = Path.Combine(home, LockFileName);
+        FileStream? stream = null;
         try
         {
-            var stream = new FileStream(Path.Combine(home, LockFileName), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-            OwnerOnlyFiles.File(Path.Combine(home, LockFileName));
-            return new DashboardLock(stream, Path.Combine(home, InfoFileName));
+            stream = OpenExclusive(lockPath, FileMode.OpenOrCreate);
+            OwnerOnlyFiles.File(lockPath);
+            var infoPath = Path.Combine(home, InfoFileName);
+            // Whatever an earlier holder published is stale now that this process holds the lock.
+            File.Delete(infoPath);
+            return new DashboardLock(stream, infoPath);
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            stream?.Dispose();
             return null;
         }
-        catch (UnauthorizedAccessException)
+        catch
         {
-            return null;
+            stream?.Dispose();
+            throw;
         }
     }
 
@@ -59,7 +80,19 @@ public sealed class DashboardLock : IDisposable
     {
         ArgumentNullException.ThrowIfNull(endpoint);
         var temp = _infoPath + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(endpoint, Json));
+        File.Delete(temp);
+        var content = JsonSerializer.Serialize(endpoint, Json);
+        if (OperatingSystem.IsWindows())
+        {
+            File.WriteAllText(temp, content);
+        }
+        else
+        {
+            var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, UnixCreateMode = OwnerReadWrite };
+            using var writer = new StreamWriter(temp, new UTF8Encoding(false), options);
+            writer.Write(content);
+        }
+
         OwnerOnlyFiles.File(temp);
         File.Move(temp, _infoPath, overwrite: true);
         _published = true;
@@ -67,6 +100,7 @@ public sealed class DashboardLock : IDisposable
 
     public static DashboardEndpoint? ReadRunning(string home, IProcessInfo processes)
     {
+        ArgumentException.ThrowIfNullOrEmpty(home);
         ArgumentNullException.ThrowIfNull(processes);
         try
         {
@@ -74,11 +108,15 @@ public sealed class DashboardLock : IDisposable
             if (!File.Exists(path))
                 return null;
             var endpoint = JsonSerializer.Deserialize<DashboardEndpoint>(File.ReadAllText(path), Json);
-            if (endpoint is null || endpoint.Port is < 1 or > 65535 || string.IsNullOrEmpty(endpoint.Token))
+            if (endpoint is null || endpoint.Pid <= 0 || endpoint.Port is < 1 or > 65535 || string.IsNullOrEmpty(endpoint.Token))
+                return null;
+            if (!IsHeldElsewhere(Path.Combine(home, LockFileName)))
                 return null;
             var process = processes.Get(endpoint.Pid);
             if (process is null)
-                return null;
+                // A reader that sees every process proves the publisher dead; a self-only reader
+                // (macOS) cannot tell, so the held lock is the only evidence and is trusted.
+                return processes is SelfOnlyProcessInfo ? endpoint : null;
             if (endpoint.StartedAt is { } published && process.StartedAt is { } actual
                 && (actual - published).Duration() > StartTolerance)
                 return null;
@@ -92,6 +130,7 @@ public sealed class DashboardLock : IDisposable
 
     public static async Task<DashboardEndpoint?> WaitForRunningAsync(string home, IProcessInfo processes, TimeSpan timeout, CancellationToken ct)
     {
+        ArgumentException.ThrowIfNullOrEmpty(home);
         var deadline = DateTimeOffset.UtcNow + timeout;
         while (true)
         {
@@ -117,5 +156,35 @@ public sealed class DashboardLock : IDisposable
         }
 
         _lock.Dispose();
+    }
+
+    private static FileStream OpenExclusive(string path, FileMode mode)
+    {
+        var options = new FileStreamOptions { Mode = mode, Access = FileAccess.ReadWrite, Share = FileShare.None };
+        if (!OperatingSystem.IsWindows() && mode != FileMode.Open)
+            options.UnixCreateMode = OwnerReadWrite;
+        return new FileStream(path, options);
+    }
+
+    /// <summary>True when another holder has the lock; a free or missing lock file means nobody serves.</summary>
+    private static bool IsHeldElsewhere(string lockPath)
+    {
+        try
+        {
+            using var probe = OpenExclusive(lockPath, FileMode.Open);
+            return false;
+        }
+        catch (FileNotFoundException)
+        {
+            return false;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
     }
 }

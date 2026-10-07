@@ -1,3 +1,4 @@
+using SqlHarness.Core;
 using SqlHarness.Dashboard;
 
 namespace SqlHarness.Tests.Dashboard;
@@ -60,9 +61,12 @@ public sealed class DashboardLockTests
     [InlineData("not json")]
     [InlineData("""{"pid":1,"port":99999,"token":"x"}""")]
     [InlineData("""{"pid":1,"port":47800,"token":""}""")]
+    [InlineData("""{"pid":0,"port":47800,"token":"x"}""")]
+    [InlineData("""{"pid":-5,"port":47800,"token":"x"}""")]
     public void Malformed_info_file_reads_as_not_running(string content)
     {
         using var home = new TempHome();
+        using var held = DashboardLock.TryAcquire(home.Path)!;
         File.WriteAllText(Path.Combine(home.Path, "dashboard.json"), content);
 
         Assert.Null(DashboardLock.ReadRunning(home.Path, new FakeProcesses().Alive(1, null)));
@@ -101,5 +105,96 @@ public sealed class DashboardLockTests
         held.Publish(new DashboardEndpoint(1, null, 47800, "tok"));
 
         Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(home.Path, "dashboard.json")));
+    }
+
+    [Fact]
+    public void Held_lock_with_a_dead_publisher_is_not_trusted()
+    {
+        using var home = new TempHome();
+        using var held = DashboardLock.TryAcquire(home.Path)!;
+        held.Publish(new DashboardEndpoint(4242, Started, 47801, "tok"));
+
+        Assert.Null(DashboardLock.ReadRunning(home.Path, new FakeProcesses()));
+    }
+
+    [Fact]
+    public void Self_only_reader_trusts_the_file_only_while_the_lock_is_held()
+    {
+        using var home = new TempHome();
+        var held = DashboardLock.TryAcquire(home.Path)!;
+        held.Publish(new DashboardEndpoint(int.MaxValue, Started, 47801, "tok"));
+
+        Assert.Equal(47801, DashboardLock.ReadRunning(home.Path, new SelfOnlyProcessInfo())?.Port);
+
+        held.Dispose();
+        File.WriteAllText(Path.Combine(home.Path, "dashboard.json"),
+            """{"pid":2147483647,"port":47801,"token":"tok"}""");
+        Assert.Null(DashboardLock.ReadRunning(home.Path, new SelfOnlyProcessInfo()));
+    }
+
+    [Fact]
+    public void Acquire_removes_an_earlier_info_file()
+    {
+        using var home = new TempHome();
+        var info = Path.Combine(home.Path, "dashboard.json");
+        File.WriteAllText(info, """{"pid":4242,"port":47801,"token":"tok"}""");
+
+        using var held = DashboardLock.TryAcquire(home.Path)!;
+
+        Assert.False(File.Exists(info));
+    }
+
+    [Fact]
+    public async Task Wait_for_running_returns_an_endpoint_published_during_the_wait()
+    {
+        using var home = new TempHome();
+        using var held = DashboardLock.TryAcquire(home.Path)!;
+        var processes = new FakeProcesses().Alive(4242, Started);
+
+        var wait = DashboardLock.WaitForRunningAsync(home.Path, processes, TimeSpan.FromSeconds(10), CancellationToken.None);
+        await Task.Delay(250);
+        held.Publish(new DashboardEndpoint(4242, Started, 47801, "tok"));
+
+        Assert.Equal(new DashboardEndpoint(4242, Started, 47801, "tok"), await wait);
+    }
+
+    [Fact]
+    public void Endpoint_text_redacts_the_token()
+    {
+        var text = new DashboardEndpoint(4242, Started, 47801, "secret-token").ToString();
+
+        Assert.DoesNotContain("secret-token", text, StringComparison.Ordinal);
+        Assert.Contains("47801", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Publish_replaces_a_leftover_temp_file_and_stays_owner_only_on_unix()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var home = new TempHome();
+        using var held = DashboardLock.TryAcquire(home.Path)!;
+        var temp = Path.Combine(home.Path, "dashboard.json.tmp");
+        File.WriteAllText(temp, "leftover");
+        File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+
+        held.Publish(new DashboardEndpoint(1, null, 47800, "tok"));
+
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(home.Path, "dashboard.json")));
+        Assert.False(File.Exists(temp));
+    }
+
+    [Fact]
+    public void Lock_file_and_home_are_owner_only_on_unix()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var home = new TempHome();
+        File.SetUnixFileMode(home.Path, (UnixFileMode)0b111_101_101);
+
+        using var held = DashboardLock.TryAcquire(home.Path)!;
+
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(home.Path, "dashboard.lock")));
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, File.GetUnixFileMode(home.Path));
     }
 }
