@@ -13,7 +13,7 @@ const token = process.env.SQLHARNESS_DASHBOARD_TOKEN ?? ""
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    alias: { "@": path.resolve(import.meta.dirname, "./src") },
   },
   build: {
     outDir: "dist",
