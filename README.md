@@ -293,7 +293,7 @@ One dashboard runs per SQLHarness home; a second invocation opens the running on
 
 #### Building the dashboard UI
 
-The UI lives in `src/SqlHarness.Dashboard/ui` (React, Vite, shadcn/ui on Base UI) and is embedded into the binary by `dotnet build`, which runs `npm ci` (when `node_modules` is missing) and `npm run build`. Node is pinned in `.nvmrc`. Build without Node with `dotnet build -p:SkipDashboardUi=true` (a placeholder page is served). For UI development run `sqlharness dashboard --no-open`, then in `ui/` run `SQLHARNESS_DASHBOARD_TOKEN=<t value> npm run dev`; the Vite dev server proxies `/api` to the running dashboard (set `SQLHARNESS_DASHBOARD_URL` when it is not on the default `http://127.0.0.1:47800`).
+The UI lives in `src/SqlHarness.Dashboard/ui` (React, Vite, shadcn/ui on Base UI) and is embedded into the binary by `dotnet build`, which runs `npm ci` (when `node_modules` is missing) and `npm run build`. Node is pinned in `.nvmrc`. Build without Node with `dotnet build -p:SkipDashboardUi=true` (a placeholder page is served). For UI development run `sqlharness dashboard --no-open`, then in `ui/` run `SQLHARNESS_DASHBOARD_TOKEN=<t value> npm run dev` (bash) or `$env:SQLHARNESS_DASHBOARD_TOKEN='<t value>'; npm run dev` (PowerShell); the Vite dev server proxies `/api` to the running dashboard (set `SQLHARNESS_DASHBOARD_URL` when it is not on the default `http://127.0.0.1:47800`).
 
 ### Results to fill from real runs before publishing
 
