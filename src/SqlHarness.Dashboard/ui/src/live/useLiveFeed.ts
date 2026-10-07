@@ -23,7 +23,7 @@ const liveLists = [queryKeys.liveOperations, queryKeys.liveRunning, queryKeys.li
  * new token), the live lists are refetched once so the reason surfaces through the queries'
  * error (UnauthorizedError is not retried).
  */
-export function useLiveFeed(): { connected: boolean; state: LiveFeedState } {
+export function useLiveFeed(): LiveFeedState {
   const client = useQueryClient()
   const [state, setState] = useState<LiveFeedState>("connecting")
 
@@ -55,5 +55,5 @@ export function useLiveFeed(): { connected: boolean; state: LiveFeedState } {
     return () => source.close()
   }, [client])
 
-  return { connected: state === "connected", state }
+  return state
 }

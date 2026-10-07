@@ -14,7 +14,7 @@ import { useNow } from "@/lib/useNow"
 
 export function LivePage() {
   const client = useQueryClient()
-  const { state } = useLiveFeed()
+  const state = useLiveFeed()
   const now = useNow(1000)
   // Fetched on load and on every live-feed (re)connect; in between, pushed events keep these
   // caches current through setQueryData. A fetch merges into the cache instead of replacing it.
