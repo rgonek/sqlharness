@@ -1,10 +1,11 @@
 import { createRootRoute, createRoute, createRouter, type RouterHistory } from "@tanstack/react-router"
 import { AppLayout } from "@/components/AppLayout"
+import { LivePage } from "@/pages/LivePage"
 import { NotFoundPage } from "@/pages/NotFoundPage"
 
 const rootRoute = createRootRoute({ component: AppLayout, notFoundComponent: NotFoundPage })
 
-const liveRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: NotFoundPage })
+const liveRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: LivePage })
 const sessionsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sessions", component: NotFoundPage })
 const sessionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sessions/$id", component: NotFoundPage })
 const operationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations/$id", component: NotFoundPage })
