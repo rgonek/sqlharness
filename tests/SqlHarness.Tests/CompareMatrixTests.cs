@@ -718,6 +718,8 @@ public class CompareMatrixTests
 
     private sealed class DirectoryArtifactWriter : ICompareArtifactWriter, IDisposable
     {
+        public void CheckStorage() => new ArtifactStoragePreflight().Check(Root);
+
         public List<string> Directories { get; } = [];
         public string Root { get; } = Path.Combine(Path.GetTempPath(), "sqlharness-matrix-" + Guid.NewGuid().ToString("N"));
 

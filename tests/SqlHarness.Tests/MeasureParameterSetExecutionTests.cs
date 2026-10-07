@@ -673,6 +673,8 @@ public sealed class MeasureParameterSetExecutionTests
 
     private sealed class CapturingWriter : ICompareArtifactWriter
     {
+        public void CheckStorage() { /* This test writer stores artifacts in memory. */ }
+
         public int Writes { get; private set; }
         public object? Report { get; private set; }
         public IReadOnlyList<CompareRunArtifact> Runs { get; private set; } = [];
@@ -690,6 +692,8 @@ public sealed class MeasureParameterSetExecutionTests
 
     private sealed class ThrowingWriter : ICompareArtifactWriter
     {
+        public void CheckStorage() { /* This test writer stores artifacts in memory. */ }
+
         public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target) =>
             throw new IOException("disk unavailable");
     }

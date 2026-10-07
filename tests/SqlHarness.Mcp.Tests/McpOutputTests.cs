@@ -29,6 +29,29 @@ public sealed class McpOutputTests
     private static void AssertValidEnvelope(JsonElement envelope) =>
         Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
 
+    [Theory]
+    [InlineData(4096)]
+    [InlineData(16384)]
+    public void Storage_preflight_error_preserves_diagnostics_in_the_wire_budget(int maximumBytes)
+    {
+        var exception = new ArtifactStoragePreflightException("/tmp/benchmark-artifacts",
+            new UnauthorizedAccessException("storage denied"));
+        var error = exception.ToError([]);
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.LocalStorage, null, error.Message, Error: error);
+
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_compare", new McpResultBudget(maximumBytes));
+
+        var envelope = EnvelopeOf(result);
+        AssertValidEnvelope(envelope);
+        Assert.True(result.IsError);
+        Assert.Equal(6, envelope.GetProperty("exitCode").GetInt32());
+        var emitted = envelope.GetProperty("error");
+        Assert.Equal("local_storage_failed", emitted.GetProperty("code").GetString());
+        Assert.Equal("artifact-preflight", emitted.GetProperty("phase").GetString());
+        Assert.Contains("process account", emitted.GetProperty("hint").GetString());
+        Assert.Equal("/tmp/benchmark-artifacts", emitted.GetProperty("location").GetProperty("path").GetString());
+    }
+
     [Fact]
     public void Success_carries_a_valid_envelope_without_error()
     {

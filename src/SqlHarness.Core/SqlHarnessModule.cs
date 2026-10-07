@@ -323,6 +323,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 [prepared.FixedParameters]);
             var target = prepared.Target;
 
+            _artifactWriter.CheckStorage();
+
             var request = new CompareCellRequest(
                 target,
                 compare.SetupSql,
@@ -371,7 +373,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var exitCode = phase == OperationPhase.Artifact
                 ? SqlHarnessExitCode.LocalStorage
                 : OperationFailureMapper.Map(exception, phase);
-            var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, knownSecrets));
+            var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, knownSecrets),
+                Error: (exception as ArtifactStoragePreflightException)?.ToError(knownSecrets));
             return WithReceipt(failure, rawFootprint);
         }
     }
@@ -439,6 +442,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 matrixParameters.Select(matrixParameter => (IReadOnlyList<SqlHarnessParameter>)[.. fixedParameters, matrixParameter]).ToArray());
 
             var target = prepared.Target;
+            _artifactWriter.CheckStorage();
+
             var template = new CompareCellRequest(
                 target,
                 operation.SetupSql,
@@ -495,7 +500,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var exitCode = phase == OperationPhase.Artifact
                 ? SqlHarnessExitCode.LocalStorage
                 : OperationFailureMapper.Map(exception, phase);
-            var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, knownSecrets));
+            var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, knownSecrets),
+                Error: (exception as ArtifactStoragePreflightException)?.ToError(knownSecrets));
             return WithReceipt(failure, rawFootprint);
         }
     }
@@ -596,6 +602,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             if (measure.ParameterSets is { Count: > 0 } parameterSets)
             {
                 var boundSets = BindMeasureParameterSets(dialect, measure, parameterSets, knownSecrets);
+                _artifactWriter.CheckStorage();
                 phase = OperationPhase.Authentication;
                 await using var multiSession = await _sessionFactory.ConnectAsync(target, ct);
                 phase = OperationPhase.Sql;
@@ -628,6 +635,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 return WithReceipt(setSuccess, rawFootprint);
             }
 
+            _artifactWriter.CheckStorage();
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
             phase = OperationPhase.Sql;
@@ -674,7 +682,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var exitCode = phase == OperationPhase.Artifact
                 ? SqlHarnessExitCode.LocalStorage
                 : OperationFailureMapper.Map(exception, phase);
-            var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, LongestFirst(knownSecrets)));
+            var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, LongestFirst(knownSecrets)),
+                Error: (exception as ArtifactStoragePreflightException)?.ToError(knownSecrets));
             return WithReceipt(failure, rawFootprint);
         }
         finally

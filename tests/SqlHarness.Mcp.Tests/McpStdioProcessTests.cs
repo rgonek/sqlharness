@@ -499,6 +499,37 @@ public sealed class McpStdioProcessTests
             Assert.Equal("safety_rejected", unsafeArgumentsEnvelope.GetProperty("error").GetProperty("code").GetString());
             Assert.StartsWith("Unknown argument.", unsafeArgumentsEnvelope.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
 
+            var blockedStorage = Path.Combine(home, "compare");
+            File.WriteAllText(blockedStorage, "existing file");
+            foreach (var toolName in new[] { "sqlharness_measure", "sqlharness_compare" })
+            {
+                var arguments = new Dictionary<string, object?>
+                {
+                    ["scope"] = Scope("sample-country"),
+                    ["repeat"] = 1,
+                    ["timeout"] = 1,
+                    ["maxOperationSeconds"] = 2,
+                };
+                if (toolName == "sqlharness_measure")
+                    arguments["query"] = new Dictionary<string, object?> { ["sql"] = "SELECT 1" };
+                else
+                {
+                    arguments["baseline"] = new Dictionary<string, object?> { ["sql"] = "SELECT 1" };
+                    arguments["candidate"] = new Dictionary<string, object?> { ["sql"] = "SELECT 1" };
+                }
+
+                var denied = await client.CallToolAsync(toolName, arguments, cancellationToken: ct);
+                var envelope = McpStdioProcessHarness.Envelope(denied);
+                Assert.True(denied.IsError);
+                Assert.Equal(6, envelope.GetProperty("exitCode").GetInt32());
+                var error = envelope.GetProperty("error");
+                Assert.Equal("artifact-preflight", error.GetProperty("phase").GetString());
+                Assert.Equal(blockedStorage, error.GetProperty("location").GetProperty("path").GetString());
+                Assert.Contains("process account", error.GetProperty("hint").GetString());
+                Assert.Equal("existing file", File.ReadAllText(blockedStorage));
+            }
+            File.Delete(blockedStorage);
+
             var planXml = File.ReadAllText(McpStdioProcessHarness.FindRepositoryFile(
                 "tests", "SqlHarness.Tests", "Fixtures", "distiller-sample.sqlplan"));
             var plan = await client.CallToolAsync(

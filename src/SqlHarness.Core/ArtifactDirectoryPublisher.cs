@@ -86,6 +86,10 @@ internal sealed partial class ArtifactDirectoryPublisher
         return directory;
     }
 
+    internal void CheckStorage() => new ArtifactStoragePreflight(
+        writeText: _writeText, moveDirectory: _moveDirectory,
+        deleteFile: _deleteFile, deleteDirectory: _deleteDirectory).Check(_root);
+
     internal void WriteText(string path, string content, Encoding encoding) =>
         _writeText(path, content, encoding);
 

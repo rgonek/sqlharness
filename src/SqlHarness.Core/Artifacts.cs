@@ -326,6 +326,8 @@ internal sealed record CompareRunArtifact(
 
 internal interface ICompareArtifactWriter
 {
+    void CheckStorage();
+
     string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target);
 
     // Owner-aware publish. The default keeps existing fakes compiling
@@ -359,6 +361,8 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
         _publisher = new ArtifactDirectoryPublisher(
             root, utcNow, writeText, moveDirectory, moveFile, deleteFile, deleteDirectory);
     }
+
+    public void CheckStorage() => _publisher.CheckStorage();
 
     public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target) =>
         Write(report, runs, target, owner: null);

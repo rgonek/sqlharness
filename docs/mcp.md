@@ -26,6 +26,16 @@ sqlharness mcp serve --request-scope --allow-profile sample-country --allow-prof
 
 The nonempty `--allow-profile` list is required and repeatable. Do not provide a startup profile or `--var` in this mode. Startup rejects duplicate profile names and any allowlisted profile that resolves to Postgres. The process snapshots the allowed profile definitions, file roots, and budgets once; editing the profile store or changing the allowlist requires a restart. Startup does not connect to a database or perform interactive login. Request-scoped mode is not available for Postgres.
 
+## Benchmark artifact storage
+
+`measure` (including parameter sets) and `compare` (including matrices) check the benchmark artifact directory after input validation and before opening a database session. The check creates a unique probe directory, writes a nonsensitive marker, renames the directory, and removes the probe. It uses the same storage root as artifact publication and leaves existing artifacts untouched.
+
+The process account must be able to create directories, write files, rename directories, and delete its files and directories under the artifact root (by default `~/.sqlharness/compare`). On Windows, an MCP client may launch a restricted process whose effective permissions differ from those of an interactive terminal. Check the actual MCP process identity and token before changing access rules; keep any access grant limited to the required artifact directory.
+
+A failed probe returns `local_storage_failed`, exit code `6`, phase `artifact-preflight`, a redacted storage location, and a permissions hint. SQLHarness never changes ACLs or elevates the process. A successful check does not guarantee a later write will succeed: permissions, disk space, or other filesystem conditions may change during the benchmark. Publication failures still retain completed matrix cells and use the existing staging cleanup behavior.
+
+`SQLHARNESS_HOME` changes the whole SQLHarness home, including configuration and profiles, not just the artifact directory. Changing it requires deliberate operator configuration. Read-only `query` and `inspect` do not run this benchmark storage check.
+
 ## Client configuration
 
 SQLHarness never installs or edits a client configuration automatically. To register the server, paste an entry manually into the MCP client configuration file. Neutral shape (field names vary by client):

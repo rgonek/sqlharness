@@ -22,6 +22,26 @@ public sealed class McpSecretRedactionTests
     private const string FictionalPassword = "fikcyjne-haslo-9917";
     private static readonly SqlHarnessTargetIdentityReport Target = new("req-srv", "req-db", "srv", "db", "profile");
 
+    [Fact]
+    public void Storage_preflight_secrets_do_not_reach_either_wire_representation()
+    {
+        var exception = new ArtifactStoragePreflightException("/tmp/" + FictionalSecret,
+            new IOException("write failed: " + FictionalPassword));
+        var error = exception.ToError([FictionalSecret, FictionalPassword]);
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.LocalStorage, null, error.Message, Error: error);
+
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_measure", new McpResultBudget(4096),
+            [FictionalSecret, FictionalPassword]);
+
+        var text = TextOf(result);
+        Assert.DoesNotContain(FictionalSecret, text);
+        Assert.DoesNotContain(FictionalPassword, text);
+        Assert.Contains("[REDACTED]", text);
+        Assert.Equal(text, result.StructuredContent?.GetRawText());
+        using var document = JsonDocument.Parse(text);
+        Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
+    }
+
     private static string TextOf(CallToolResult result)
     {
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;

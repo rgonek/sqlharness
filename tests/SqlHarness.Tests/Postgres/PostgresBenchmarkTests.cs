@@ -488,6 +488,8 @@ public sealed class PostgresBenchmarkTests
 
     private sealed class CapturingArtifactWriter : ICompareArtifactWriter
     {
+        public void CheckStorage() { /* This test writer stores artifacts in memory. */ }
+
         public IReadOnlyList<CompareRunArtifact> Runs { get; private set; } = [];
 
         public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target)

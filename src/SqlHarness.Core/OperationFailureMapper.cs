@@ -27,6 +27,7 @@ internal static class OperationFailureMapper
 {
     internal static SqlHarnessExitCode Map(Exception exception, OperationPhase phase) => exception switch
     {
+        ArtifactStoragePreflightException => SqlHarnessExitCode.LocalStorage,
         SqlTargetMismatchException => SqlHarnessExitCode.TargetMismatch,
         SqlHarnessSafetyException => SqlHarnessExitCode.Safety,
         IOException or UnauthorizedAccessException when phase == OperationPhase.Validation => SqlHarnessExitCode.LocalStorage,
