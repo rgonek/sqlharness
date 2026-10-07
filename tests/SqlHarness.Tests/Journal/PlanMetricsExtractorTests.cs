@@ -106,6 +106,16 @@ public sealed class PlanMetricsExtractorTests
         Assert.Equal(PlanMetrics.Empty, PlanMetricsExtractor.Extract(document));
 
     [Fact]
+    public void Oversized_plan_yields_the_empty_metrics_instance()
+    {
+        // Trailing whitespace keeps the XML well formed, so only the size cap can reject it.
+        var oversized = ActualPlan + new string(' ', PlanMetricsExtractor.MaximumCharacters - ActualPlan.Length + 1);
+
+        Assert.NotSame(PlanMetrics.Empty, PlanMetricsExtractor.Extract(ActualPlan));
+        Assert.Same(PlanMetrics.Empty, PlanMetricsExtractor.Extract(oversized));
+    }
+
+    [Fact]
     public void Plan_without_runtime_elements_has_null_grant_and_no_waits()
     {
         const string estimated = """<ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"><BatchSequence><Batch><Statements><StmtSimple><QueryPlan><RelOp NodeId="0" PhysicalOp="Index Seek" /></QueryPlan></StmtSimple></Statements></Batch></BatchSequence></ShowPlanXML>""";
