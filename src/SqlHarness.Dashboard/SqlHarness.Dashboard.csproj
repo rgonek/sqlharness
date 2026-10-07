@@ -22,4 +22,39 @@
     <EmbeddedResource Include="wwwroot\index.html" LogicalName="SqlHarness.Dashboard.wwwroot.index.html" />
   </ItemGroup>
 
+  <!--
+    The React UI (ui/) is built with npm and embedded as manifest resources named
+    SqlHarness.Dashboard.ui/<path>. npm ci runs only when node_modules is missing;
+    vite build runs only when a UI input is newer than dist/index.html. Pass
+    -p:SkipDashboardUi=true to build without Node; the placeholder page is served then.
+  -->
+  <PropertyGroup>
+    <DashboardUiDir>$(MSBuildProjectDirectory)/ui</DashboardUiDir>
+    <DashboardUiDist>$(DashboardUiDir)/dist</DashboardUiDist>
+    <DashboardUiEnabled Condition="'$(SkipDashboardUi)' != 'true' AND '$(DesignTimeBuild)' != 'true'">true</DashboardUiEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <DashboardUiSource Include="ui/src/**/*;ui/public/**/*;ui/index.html;ui/package.json;ui/package-lock.json;ui/vite.config.ts;ui/tsconfig*.json;ui/components.json"
+                       Exclude="ui/src/**/*.test.ts;ui/src/**/*.test.tsx;ui/src/test/**/*" />
+  </ItemGroup>
+
+  <Target Name="InstallDashboardUi" Condition="'$(DashboardUiEnabled)' == 'true' AND !Exists('$(DashboardUiDir)/node_modules/.package-lock.json')">
+    <Exec Command="npm ci" WorkingDirectory="$(DashboardUiDir)" />
+  </Target>
+
+  <Target Name="BuildDashboardUi" DependsOnTargets="InstallDashboardUi" Condition="'$(DashboardUiEnabled)' == 'true'"
+          Inputs="@(DashboardUiSource)" Outputs="$(DashboardUiDist)/index.html">
+    <Exec Command="npm run build" WorkingDirectory="$(DashboardUiDir)" />
+  </Target>
+
+  <Target Name="EmbedDashboardUi" BeforeTargets="BeforeBuild" DependsOnTargets="BuildDashboardUi" Condition="'$(DashboardUiEnabled)' == 'true'">
+    <!-- Two steps: a glob and a metadata reference on the same item inside a target batch wrongly. -->
+    <ItemGroup>
+      <_DashboardUiFile Include="$(DashboardUiDist)/**/*" />
+      <EmbeddedResource Include="@(_DashboardUiFile)"
+                        LogicalName="SqlHarness.Dashboard.ui/%(_DashboardUiFile.RecursiveDir)%(_DashboardUiFile.Filename)%(_DashboardUiFile.Extension)" />
+    </ItemGroup>
+  </Target>
+
 </Project>
