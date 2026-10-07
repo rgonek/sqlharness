@@ -102,7 +102,7 @@ Upsert: `INSERT … ON CONFLICT(session_key) DO UPDATE SET last_seen = excluded.
 
 Indexes: `(session_id, id)`, `(updated_at)`, `(status)`, `(sql_hash)`.
 
-`rejected` means exit `2` (validation/safety). It is a distinct status so the operator can filter safety rejections. `abandoned` is set by the dashboard when a row is `running` but the operation's `(host_pid, host_started_at)` pair no longer exists. Both PID and start time are checked because PIDs are reused.
+`rejected` means exit `2` (validation/safety). It is a distinct status so the operator can filter safety rejections. `abandoned` is reported by the dashboard when a row is `running` but the operation's `(host_pid, host_started_at)` pair no longer exists; it is computed at read time and never stored (see "Dashboard server"). Both PID and start time are checked because PIDs are reused.
 
 ### `operation_metrics` (always stored; contains no SQL text and no values)
 
@@ -140,9 +140,14 @@ Caveats:
 
 ## Dashboard server
 
-- Binds only to `127.0.0.1`. Rejects any `Host` header other than `127.0.0.1:<port>` or `localhost:<port>` (DNS-rebinding defense).
-- Access token: random per server start and written to the lock file. The opening URL carries `?t=<token>`, which the server exchanges for an `HttpOnly`, `SameSite=Strict` cookie and then redirects to a token-free URL. Every API request without the cookie gets `401`.
-- Singleton: an exclusive lock on `~/.sqlharness/dashboard.lock`, which holds `{ pid, startedAt, port, token }`. A second `sqlharness dashboard` reads the file and opens the existing URL. If the configured port is busy, the server takes the next free port and records it.
+- Binds only to `127.0.0.1`, one listener. Kestrel/ASP.NET Core configuration (`ASPNETCORE_URLS`, `Kestrel:Endpoints`, environment name, `appsettings`) is ignored. Rejects any `Host` header other than `127.0.0.1:<port>` or `localhost:<port>` (DNS-rebinding defense), and any connection on a local endpoint other than the bound `127.0.0.1` port.
+- Only `GET` and `HEAD` are served; other methods get `405`.
+- Access token: 32 random bytes per server start, published in `dashboard.json`. The opening URL carries `?t=<token>`, which the server exchanges for an `HttpOnly`, `SameSite=Strict` cookie and then redirects to a token-free URL. Every request without the cookie gets `401`. Known limitation: browsers do not isolate cookies by port, so the cookie is also sent to other services on `127.0.0.1`/`localhost` visited in the same browser; the dashboard is meant for single-user workstations.
+- Browser launch: the browser opens an owner-only `dashboard-open.html` redirect page in the SQLHarness home, never the token URL, so the token does not appear in process arguments. The serving process deletes the page when it stops.
+- Singleton: an exclusive lock on `~/.sqlharness/dashboard.lock` (an advisory `flock` on Unix) held for the server's lifetime; the endpoint `{ pid, startedAt, port, token }` is published in owner-only `~/.sqlharness/dashboard.json`, which is trusted only while the lock is held. A second `sqlharness dashboard` reads it and opens the existing URL. If the configured port is busy, the server takes the next free port and publishes it. Starting the dashboard makes the SQLHarness home directory owner-only (`0700`) on Unix.
+- Stopping: Ctrl+C and SIGTERM stop the server cleanly with exit `0`, releasing the lock.
+- `abandoned` is computed at read time (API, statistics, live feed) when a running row's `(host_pid, host_started_at)` no longer exists; the dashboard does not write to the journal. On platforms without a process reader (macOS) rows are reported as stored.
+- `watch` writes `progress_json` after each completed poll (`polls`, `changedPolls`, `elapsedMs`); progress recording stops for that watch after the first failed journal write.
 - Autostart (opt-in): after `initialize`, `mcp serve` checks the lock. If no live server exists, it spawns `sqlharness dashboard --background --no-open` detached, with stdio redirected to null, and does not wait. A spawn failure is logged to stderr and otherwise ignored. MCP stdout stays protocol-only.
 - Idle shutdown: the server exits after `idleShutdownHours` with no journal writes (`PRAGMA data_version` unchanged) and no connected SSE clients.
 - Retention (opt-in) runs at dashboard start, then hourly, and also at `mcp serve` start so it applies without the dashboard. Order of deletion:
@@ -155,12 +160,12 @@ Caveats:
 
 | endpoint | purpose |
 |---|---|
-| `GET /api/live` | SSE stream of `session` and `operation` upserts. The server checks `PRAGMA data_version` about once per second and queries `updated_at > cursor` only when it changed |
+| `GET /api/live` | SSE stream of `session` and `operation` upserts. The server checks `PRAGMA data_version` about once per second; when it changed, it re-reads a 10 s lookback window (commit order is not timestamp order) and resends rows whose payload changed. Running rows are re-read every tick, and a running operation that leaves the running set is always fetched and sent |
 | `GET /api/sessions?agent=&transport=&from=&to=&cursor=` | keyset pagination by `id` |
 | `GET /api/sessions/{id}` | session plus operation timeline |
 | `GET /api/operations?session=&status=&operation=&from=&to=&cursor=` | |
-| `GET /api/operations/{id}` | metadata, metrics, table IO, SQL text and distilled plan when stored |
-| `GET /api/plans/{hash}` | decompressed plan download (`.sqlplan` / `.json`) |
+| `GET /api/operations/{id}` | metadata, metrics, table IO, SQL text when stored, and plan links (hash and whether the plan is stored) |
+| `GET /api/plans/{hash}` | decompressed plan download (`.sqlplan` / `.explain.json`); `?view=distilled` returns the distilled plan |
 | `GET /api/stats?from=&to=` | aggregated series for the statistics view |
 
 ## UI
@@ -199,7 +204,7 @@ Views:
 | concurrent first start / migration | `BEGIN IMMEDIATE`; losers wait on `busy_timeout`, then re-check the version |
 | invalid `config.json` | defaults (fail-closed) and a warning in stderr and `doctor` |
 | dashboard lock held | open the existing URL |
-| file permissions | `activity.db*`, `config.json` and `dashboard.lock` are owner-only on Unix. The journal does this itself whether or not plan 034 has landed. On Windows they inherit the user-profile ACL |
+| file permissions | `activity.db*`, `config.json`, `dashboard.lock`, `dashboard.json` and `dashboard-open.html` are owner-only on Unix. The journal does this itself whether or not plan 034 has landed. On Windows they inherit the user-profile ACL |
 
 ## Testing
 

@@ -280,7 +280,16 @@ Every operation that reaches the SQLHarness module (`query`, `measure`, `compare
 }
 ```
 
-The `retention` and `dashboard` keys are accepted but have no effect until later releases.
+`dashboard.port` sets the dashboard's preferred port. The `retention` key and the other `dashboard` keys are accepted but have no effect until later releases.
+
+### Dashboard
+
+```powershell
+sqlharness dashboard            # serve on 127.0.0.1 and open the browser
+sqlharness dashboard --no-open  # print the URL only
+```
+
+One dashboard runs per SQLHarness home; a second invocation opens the running one. It listens only on `127.0.0.1` (default port `47800`, next free port when taken), and the printed URL carries a one-time token that becomes an HttpOnly cookie. The browser is opened through an owner-only `dashboard-open.html` redirect page in the SQLHarness home, so the token never appears in process arguments; the page is deleted when the dashboard stops. The API under `/api` is read-only: sessions, operations, metrics, stored plans (with `journal.storeSensitive`), statistics, and a live feed. Running operations whose process ended show as `abandoned`. The data it serves is the activity journal and is locally sensitive. Browsers do not isolate cookies by port, so the session cookie is also sent to other services on `127.0.0.1`/`localhost` opened in the same browser; use the dashboard on a single-user workstation. Press Ctrl+C (or send SIGTERM) to stop it; it exits `0`.
 
 ### Results to fill from real runs before publishing
 
