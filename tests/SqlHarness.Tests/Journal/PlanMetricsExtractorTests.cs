@@ -117,4 +117,54 @@ public sealed class PlanMetricsExtractorTests
         Assert.Empty(metrics.Waits);
         Assert.Equal(0, metrics.SpillCount);
     }
+
+    [Fact]
+    public void Combining_huge_values_never_throws()
+    {
+        const string hugeWait = """<ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"><BatchSequence><Batch><Statements><StmtSimple><QueryPlan><WaitStats><Wait WaitType="X" WaitTimeMs="9223372036854775807" WaitCount="9223372036854775807" /></WaitStats></QueryPlan></StmtSimple></Statements></Batch></BatchSequence></ShowPlanXML>""";
+        const string hugeBuffers = """[{ "Plan": { "Node Type": "Seq Scan", "Shared Hit Blocks": 9223372036854775807, "Shared Read Blocks": 0, "Shared Dirtied Blocks": 0, "Shared Written Blocks": 0, "Temp Read Blocks": 0, "Temp Written Blocks": 0 } }]""";
+
+        var waits = Record.Exception(() => PlanMetricsExtractor.Extract([hugeWait, hugeWait]));
+        var buffers = Record.Exception(() => PlanMetricsExtractor.Extract([hugeBuffers, hugeBuffers]));
+
+        Assert.Null(waits);
+        Assert.Null(buffers);
+    }
+
+    [Fact]
+    public void Convert_implicit_in_statement_text_or_parameters_is_not_a_conversion()
+    {
+        const string plan = """<ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"><BatchSequence><Batch><Statements><StmtSimple StatementText="SELECT 1 /* CONVERT_IMPLICIT */"><QueryPlan><RelOp NodeId="0" PhysicalOp="Index Seek" /><ParameterList><ColumnReference Column="@p" ParameterCompiledValue="N'CONVERT_IMPLICIT'" /></ParameterList></QueryPlan></StmtSimple></Statements></Batch></BatchSequence></ShowPlanXML>""";
+
+        Assert.False(PlanMetricsExtractor.Extract(plan).HasImplicitConversion);
+    }
+
+    [Fact]
+    public void Convert_implicit_owned_by_an_operator_is_a_conversion()
+    {
+        const string plan = """<ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"><BatchSequence><Batch><Statements><StmtSimple><QueryPlan><RelOp NodeId="0" PhysicalOp="Compute Scalar"><ComputeScalar><DefinedValues><DefinedValue><ScalarOperator ScalarString="CONVERT_IMPLICIT(int,[c],0)" /></DefinedValue></DefinedValues></ComputeScalar></RelOp></QueryPlan></StmtSimple></Statements></Batch></BatchSequence></ShowPlanXML>""";
+
+        Assert.True(PlanMetricsExtractor.Extract(plan).HasImplicitConversion);
+    }
+
+    [Fact]
+    public void Out_of_range_dop_is_ignored()
+    {
+        const string plan = """<ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"><BatchSequence><Batch><Statements><StmtSimple><QueryPlan DegreeOfParallelism="4294967297" /></StmtSimple></Statements></Batch></BatchSequence></ShowPlanXML>""";
+        const string explain = """[{ "Plan": { "Node Type": "Gather", "Workers Launched": 4294967297, "Shared Hit Blocks": 1 } }]""";
+
+        Assert.Null(PlanMetricsExtractor.Extract(plan).Dop);
+        Assert.Null(PlanMetricsExtractor.Extract(explain).Dop);
+    }
+
+    [Fact]
+    public void Explain_without_buffers_has_null_postgres_counters()
+    {
+        const string explain = """[{ "Plan": { "Node Type": "Seq Scan", "Workers Launched": 1 } }]""";
+
+        var metrics = PlanMetricsExtractor.Extract(explain);
+
+        Assert.Null(metrics.Postgres);
+        Assert.Equal(2, metrics.Dop);
+    }
 }

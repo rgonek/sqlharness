@@ -39,6 +39,18 @@ internal static class PlanMetricsExtractor
 
     internal static PlanMetrics Extract(IEnumerable<string> documents)
     {
+        try
+        {
+            return Combine(documents);
+        }
+        catch (Exception exception) when (IsExtractionFailure(exception))
+        {
+            return PlanMetrics.Empty;
+        }
+    }
+
+    private static PlanMetrics Combine(IEnumerable<string> documents)
+    {
         var parts = documents.Select(Extract).Where(part => !ReferenceEquals(part, PlanMetrics.Empty)).ToArray();
         if (parts.Length == 0)
             return PlanMetrics.Empty;
@@ -77,12 +89,15 @@ internal static class PlanMetricsExtractor
             var trimmed = document.AsSpan().TrimStart();
             return trimmed[0] is '{' or '[' ? ExtractExplain(document) : ExtractShowplan(document);
         }
-        catch (Exception exception) when (exception is XmlException or JsonException or FormatException
-            or OverflowException or InvalidOperationException or KeyNotFoundException)
+        catch (Exception exception) when (IsExtractionFailure(exception))
         {
             return PlanMetrics.Empty;
         }
     }
+
+    private static bool IsExtractionFailure(Exception exception) =>
+        exception is XmlException or JsonException or FormatException
+            or OverflowException or InvalidOperationException or KeyNotFoundException;
 
     private static PlanMetrics ExtractShowplan(string document)
     {
@@ -111,14 +126,12 @@ internal static class PlanMetricsExtractor
             SumOrNull(grants.Select(grant => Long(grant, "RequestedMemory"))),
             SumOrNull(grants.Select(grant => Long(grant, "GrantedMemory"))),
             SumOrNull(grants.Select(grant => Long(grant, "MaxUsedMemory"))),
-            queryPlans.Select(plan => (int?)Long(plan, "DegreeOfParallelism")).Max(),
+            queryPlans.Select(plan => Int(plan, "DegreeOfParallelism")).Max(),
             SumOrNull(queryPlans.Select(plan => Long(plan, "CompileTime"))),
             SumOrNull(queryPlans.Select(plan => Long(plan, "CompileCPU"))),
             Named("SpillToTempDb").Length,
             Named("Warnings").Length > 0,
-            Named("PlanAffectingConvert").Length > 0
-                || elements.Any(element => element.Attributes().Any(attribute =>
-                    attribute.Value.Contains("CONVERT_IMPLICIT", StringComparison.OrdinalIgnoreCase))),
+            Named("PlanAffectingConvert").Length > 0 || elements.Any(IsOperatorImplicitConversion),
             Named("MissingIndexGroup").Length,
             waits,
             null);
@@ -142,7 +155,8 @@ internal static class PlanMetricsExtractor
                 spills++;
             if (Number(node, "Hash Batches") > 1)
                 spills++;
-            workers = Math.Max(workers, (int)Number(node, "Workers Launched"));
+            if (Number(node, "Workers Launched") is > 0 and < int.MaxValue and var launched)
+                workers = Math.Max(workers, (int)launched);
             if (node.TryGetProperty("Plans", out var children) && children.ValueKind == JsonValueKind.Array)
             {
                 foreach (var child in children.EnumerateArray())
@@ -159,7 +173,7 @@ internal static class PlanMetricsExtractor
             false,
             0,
             [],
-            new PostgresBufferCounters(
+            !plan.TryGetProperty("Shared Hit Blocks", out _) ? null : new PostgresBufferCounters(
                 Number(plan, "Shared Hit Blocks"), Number(plan, "Shared Read Blocks"),
                 Number(plan, "Shared Dirtied Blocks"), Number(plan, "Shared Written Blocks"),
                 Number(plan, "Temp Read Blocks"), Number(plan, "Temp Written Blocks")));
@@ -171,7 +185,7 @@ internal static class PlanMetricsExtractor
         foreach (var value in values)
         {
             if (value is { } number)
-                sum = (sum ?? 0) + number;
+                sum = checked((sum ?? 0) + number);
         }
 
         return sum;
@@ -184,6 +198,19 @@ internal static class PlanMetricsExtractor
         Attribute(element, name) is { } value && long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)
             ? number
             : null;
+
+    private static int? Int(XElement element, string name) =>
+        Long(element, name) is >= int.MinValue and <= int.MaxValue and var number ? (int)number : null;
+
+    /// <summary>
+    /// Same rule as the agent-visible plan parser: CONVERT_IMPLICIT counts only in
+    /// elements owned by an operator, never in statement text or parameter values.
+    /// </summary>
+    private static bool IsOperatorImplicitConversion(XElement element) =>
+        element.Name.LocalName != "RelOp"
+        && element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "RelOp")
+        && element.Attributes().Any(attribute =>
+            attribute.Value.Contains("CONVERT_IMPLICIT", StringComparison.OrdinalIgnoreCase));
 
     private static string? Text(JsonElement node, string name) =>
         node.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
