@@ -310,6 +310,169 @@ public sealed class AgentOutputTests
         }
     }
 
+    [Fact]
+    public void Agent_projection_three_by_three_query_returns_all_cells_with_null_truncation()
+    {
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        var columns = new[]
+        {
+            new SqlHarnessColumnReport(0, "a", "int", true),
+            new SqlHarnessColumnReport(1, "b", "int", true),
+            new SqlHarnessColumnReport(2, "c", "int", true),
+        };
+        var rows = Enumerable.Range(1, 3)
+            .Select(i => new object?[] { i, i * 10, i * 100 })
+            .ToArray();
+        var set = new SqlHarnessResultSetReport(columns, rows, rows.Length, 0);
+        var report = new SqlHarnessQueryReport(target, "read-only", [set], [], 0, 1, "raw-hash", new OutputFootprint(2151, 1));
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "query",
+            new OutputCaptureWriter(output), new AgentOutputOptions(16384, 512));
+
+        using var json = JsonDocument.Parse(output.ToString());
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("truncation").ValueKind);
+        var resultSets = json.RootElement.GetProperty("result").GetProperty("resultSets");
+        Assert.Equal(1, resultSets.GetArrayLength());
+        var projectedSet = resultSets[0];
+        Assert.Equal(3, projectedSet.GetProperty("columns").GetArrayLength());
+        Assert.Equal(3, projectedSet.GetProperty("rows").GetArrayLength());
+        Assert.Equal(0, projectedSet.GetProperty("omittedRowCount").GetInt64());
+    }
+
+    [Fact]
+    public void Agent_projection_twenty_kb_query_truncates_and_reports_omitted_items()
+    {
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        var columns = new[]
+        {
+            new SqlHarnessColumnReport(0, "a", "int", true),
+            new SqlHarnessColumnReport(1, "b", "int", true),
+            new SqlHarnessColumnReport(2, "c", "int", true),
+        };
+        var rows = Enumerable.Range(1, 1000)
+            .Select(i => new object?[] { i, i * 10, i * 100 })
+            .ToArray();
+        var set = new SqlHarnessResultSetReport(columns, rows, rows.Length, 0);
+        var report = new SqlHarnessQueryReport(target, "read-only", [set], [], 0, 1, "raw-hash", new OutputFootprint(50000, 1));
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "query",
+            new OutputCaptureWriter(output), new AgentOutputOptions(16384, 512));
+
+        var bytes = System.Text.Encoding.UTF8.GetByteCount(output.ToString());
+        _testOutput.WriteLine($"1000 row projection: {bytes} UTF-8 bytes including newline (budget 16384)");
+        Assert.InRange(bytes, 1, 16384);
+        using var json = JsonDocument.Parse(output.ToString());
+        Assert.Equal(JsonValueKind.Object, json.RootElement.GetProperty("truncation").ValueKind);
+        Assert.True(json.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+    }
+
+    [Fact]
+    public void Agent_projection_three_small_result_sets_return_all_with_null_truncation()
+    {
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        var sets = Enumerable.Range(1, 3)
+            .Select(i =>
+            {
+                var columns = new[] { new SqlHarnessColumnReport(0, $"col{i}", "int", true) };
+                var rows = Enumerable.Range(1, 3)
+                    .Select(j => new object?[] { j + (i - 1) * 10 })
+                    .ToArray();
+                return new SqlHarnessResultSetReport(columns, rows, rows.Length, 0);
+            })
+            .ToArray();
+        var report = new SqlHarnessQueryReport(target, "read-only", sets, [], 0, 1, "raw-hash", new OutputFootprint(1754, 1));
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "query",
+            new OutputCaptureWriter(output), new AgentOutputOptions(16384, 512));
+
+        using var json = JsonDocument.Parse(output.ToString());
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("truncation").ValueKind);
+        var resultSets = json.RootElement.GetProperty("result").GetProperty("resultSets");
+        Assert.Equal(3, resultSets.GetArrayLength());
+        for (var i = 0; i < 3; i++)
+        {
+            Assert.Equal(1, resultSets[i].GetProperty("columns").GetArrayLength());
+            Assert.Equal(3, resultSets[i].GetProperty("rows").GetArrayLength());
+            Assert.Equal(0, resultSets[i].GetProperty("omittedRowCount").GetInt64());
+        }
+    }
+
+    [Fact]
+    public void Agent_projection_small_matrix_returns_all_cells_and_references()
+    {
+        var cells = Enumerable.Range(1, 3)
+            .Select(i => new CompareMatrixCellReport(i - 1, i.ToString(), BuildCompare($"warning{i}", $"/artifacts/cell{i}")))
+            .ToArray();
+        var matrix = new SqlHarnessCompareMatrixReport("batch", "int", cells);
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, matrix, null), "compare",
+            new OutputCaptureWriter(output), new AgentOutputOptions(16384, 512));
+
+        var bytes = System.Text.Encoding.UTF8.GetByteCount(output.ToString());
+        _testOutput.WriteLine($"3 cell matrix projection: {bytes} UTF-8 bytes including newline (budget 16384)");
+        Assert.InRange(bytes, 1, 16384);
+        using var json = JsonDocument.Parse(output.ToString());
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("truncation").ValueKind);
+        var resultCells = json.RootElement.GetProperty("result").GetProperty("cells");
+        Assert.Equal(3, resultCells.GetArrayLength());
+        Assert.All(resultCells.EnumerateArray(), cell =>
+            Assert.False(string.IsNullOrEmpty(cell.GetProperty("compare").GetProperty("artifactDirectory").GetString())));
+    }
+
+    [Fact]
+    public void Agent_projection_oversized_matrix_emits_retrievable_cell_references()
+    {
+        var cells = Enumerable.Range(0, 20)
+            .Select(i => new CompareMatrixCellReport(i, i.ToString(), BuildCompare(new string('w', 5000), $"/artifacts/matrix-cell-{i:D2}")))
+            .ToArray();
+        var matrix = new SqlHarnessCompareMatrixReport("batch", "int", cells);
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, matrix, null), "compare",
+            new OutputCaptureWriter(output), new AgentOutputOptions(4096, 128));
+
+        var bytes = System.Text.Encoding.UTF8.GetByteCount(output.ToString());
+        _testOutput.WriteLine($"20 cell oversized matrix projection: {bytes} UTF-8 bytes including newline (budget 4096)");
+        Assert.InRange(bytes, 1, 4096);
+        using var json = JsonDocument.Parse(output.ToString());
+        var result = json.RootElement.GetProperty("result");
+        var projectedCells = result.GetProperty("cells");
+        var references = result.GetProperty("omittedCellReferences");
+        Assert.True(projectedCells.GetArrayLength() < 20 || references.GetArrayLength() > 0,
+            "An oversized matrix should either project fewer than 20 full cells or emit references for omitted cells.");
+        Assert.True(json.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+        if (references.GetArrayLength() > 0)
+        {
+            Assert.All(references.EnumerateArray(), reference =>
+                Assert.False(string.IsNullOrEmpty(reference.GetProperty("artifactDirectory").GetString())));
+        }
+    }
+
+    [Theory]
+    [InlineData(4096)]
+    [InlineData(16384)]
+    public void Agent_projection_all_envelopes_fit_the_configured_byte_budget(int budget)
+    {
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        var text = string.Concat(Enumerable.Repeat("x", budget));
+        var set = new SqlHarnessResultSetReport([new SqlHarnessColumnReport(0, "value", "text", true)], [[text]], 1, 0);
+        var report = new SqlHarnessQueryReport(target, "read-only", [set], [], 0, 1, "raw-hash", new OutputFootprint(budget, 1));
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "query",
+            new OutputCaptureWriter(output), new AgentOutputOptions(budget, 512));
+
+        var bytes = System.Text.Encoding.UTF8.GetByteCount(output.ToString());
+        _testOutput.WriteLine($"Single huge cell projection: {bytes} UTF-8 bytes including newline (budget {budget})");
+        Assert.InRange(bytes, 1, budget);
+        using var json = JsonDocument.Parse(output.ToString());
+        Assert.True(json.RootElement.TryGetProperty("result", out _));
+    }
+
     private static SqlHarnessCompareReport BuildCompare(string warning, string artifactPath)
     {
         var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");

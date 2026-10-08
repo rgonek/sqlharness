@@ -173,16 +173,7 @@ public sealed class Renderer
             : outcome.Report is SqlHarnessCompareMatrixReport
                 ? "partial"
                 : "error";
-        var level = AgentOutputProjection.CalculateDetailLimit(requestedBytes, requestedCellChars);
-        var levels = new List<int>();
-        while (level > 0)
-        {
-            levels.Add(level);
-            if (level == 1) break;
-            level = Math.Max(1, level / 2);
-        }
-        levels.Add(0);
-        foreach (var detailLimit in levels.Distinct())
+        foreach (var detailLimit in AgentOutputProjection.GetCandidateDetailLimits(requestedBytes, requestedCellChars).Distinct())
         {
             var result = AgentOutputProjection.Project(outcome.Report, requestedCellChars, detailLimit, out var omitted, requestedBytes);
             omitted += errorOmitted;

@@ -126,7 +126,8 @@ Every tool returns a versioned agent envelope (`schemaVersion`, `command`, `stat
 
 - Statuses: `success`, `partial` (failed matrix-cell batch), `error`, `watch_max_duration` (exit 7), and `snapshot_differences` (exit 8). The two controlled outcomes are valid results with `isError=false`; only failures set `isError=true`.
 - Budgets are enforced on the whole serialized `CallToolResult` in UTF-8 bytes, including both representations, JSON escaping, and SDK metadata: default 16384 B, accepted range 4096..1048576. The tools/list catalog budget is 32768 B for at most 11 tools. The per-cell character limit defaults to 512 and an operator may configure at most 4096.
-- JSON is never truncated to fit: detail levels descend until the wire cost fits, ending in a minimum valid error envelope that always fits the smallest budget.
+- JSON is never truncated to fit: projection first tries an untruncated render, then descends through detail limits until the wire cost fits, ending in a minimum valid error envelope that always fits the smallest budget.
+- `compare --matrix` results that do not fit in full include `result.omittedCellReferences` (index, parameterValue, artifactDirectory) for omitted cells so the caller can retrieve them via `sqlharness_artifact` under the same scope. If even those references do not fit, the projection pages them and emits a `continuation` value with the next cell index.
 - One database operation runs per process. A second concurrent database call is rejected immediately with a stable BUSY result (`busy` code, exit 2, `isError=true`): no queue, no retry hint. Safe local tools (`capabilities`, `validate`, `plan`, `artifact`, `gain`) may run in parallel because every call builds its own operation records with no shared mutable state.
 
 ## Concurrency, deadline, cancellation, and progress

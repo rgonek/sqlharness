@@ -68,10 +68,18 @@ public sealed record CompareMatrixCellSummary(
     string? ParameterValue,
     CompareBenchmarkSummary Compare);
 
+/// <summary>Lightweight reference to a matrix cell omitted from the projection.</summary>
+public sealed record CompareMatrixCellReference(
+    int Index,
+    string? ParameterValue,
+    string? ArtifactDirectory);
+
 public sealed record CompareMatrixBenchmarkSummary(
     string ParameterName,
     string ParameterType,
-    IReadOnlyList<CompareMatrixCellSummary> Cells);
+    IReadOnlyList<CompareMatrixCellSummary> Cells,
+    IReadOnlyList<CompareMatrixCellReference>? OmittedCellReferences = null,
+    int? Continuation = null);
 
 public static class BenchmarkSummaryProjector
 {
