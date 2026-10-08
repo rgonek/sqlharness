@@ -76,6 +76,8 @@ Each resolved scope carries an artifact owner tuple built from its profile reque
 
 Inline input works without filesystem access. File input is admitted only under the absolute `--input-root` directories frozen at startup. The reader rejects path traversal, UNC and network paths, NTFS alternate streams, symlink and reparse-point escapes (including linked parent directories), and files replaced while they are read. Each file is opened once with a bounded read.
 
+A well-formed path outside every configured input root, including a path that resolves through a link outside those roots, reports how many roots are configured and points to `--input-root`; it never includes the root paths. Relative or malformed paths keep the generic invalid-path error.
+
 - SQL tools take exactly one of inline `sql` or `file`; the plan tool takes exactly one of inline `content` or `file`. Inline payloads above 1 MiB are rejected and must arrive as files under an input root. SQL and plan files are admitted up to 16 MiB, matching the CLI/Core SQL bound.
 - Parameter-set files must use the `.sqljson` extension, are limited to 64 KiB, and are parsed with the shared Core strict parser: only `name` and `parameters`, no BOM, comments, or trailing commas. Values are never copied into reports.
 - Parameters travel as `{name, type, value}` triples with culture-invariant string values or JSON null. The adapter maps them onto the existing Core binder and keeps its name, duplicate, and type validation; there is no second SQL validator and no second type list.

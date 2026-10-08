@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 
 using SqlHarness.Core;
@@ -123,6 +124,34 @@ public sealed class McpInputReaderTests : IDisposable
     }
 
     [Fact]
+    public async Task Outside_root_error_hints_at_configured_roots_without_disclosing_them()
+    {
+        var outside = Path.Combine(_home, "outside.sql");
+        File.WriteAllText(outside, "SELECT 1;");
+
+        var exception = await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadSqlAsync(null, outside, _scope, CancellationToken.None));
+
+        Assert.Equal("The input path must be under a configured --input-root (1 roots configured).", exception.Message);
+        Assert.DoesNotContain(_root, exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(outside, exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Relative_input_path_keeps_the_generic_invalid_path_error()
+    {
+        var exception = await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadSqlAsync(null, "relative.sql", _scope, CancellationToken.None));
+
+        Assert.Equal("The input path is invalid.", exception.Message);
+
+        var malformed = await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadSqlAsync(null, Path.Combine(_root, "bad\0name.sql"), _scope, CancellationToken.None));
+
+        Assert.Equal("The input path is invalid.", malformed.Message);
+    }
+
+    [Fact]
     public async Task Ads_unc_and_missing_files_are_rejected()
     {
         await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadSqlAsync(null, Path.Combine(_root, "q.sql:stream"), _scope, CancellationToken.None));
@@ -149,21 +178,49 @@ public sealed class McpInputReaderTests : IDisposable
         }
 
         await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadSqlAsync(null, link, _scope, CancellationToken.None));
+    }
 
+    [Fact]
+    public async Task Directory_link_to_outside_root_reports_root_hint_without_disclosing_target()
+    {
         var outsideDir = Path.Combine(_home, "outside-dir");
         Directory.CreateDirectory(outsideDir);
         File.WriteAllText(Path.Combine(outsideDir, "q.sql"), "SELECT 1;");
         var dirLink = Path.Combine(_root, "dirlink");
+        if (!TryCreateDirectoryLink(dirLink, outsideDir))
+            return;
+
+        var exception = await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadSqlAsync(null, Path.Combine(dirLink, "q.sql"), _scope, CancellationToken.None));
+
+        Assert.Equal("The input path must be under a configured --input-root (1 roots configured).", exception.Message);
+        Assert.DoesNotContain(outsideDir, exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(dirLink, exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryCreateDirectoryLink(string link, string target)
+    {
         try
         {
-            Directory.CreateSymbolicLink(dirLink, outsideDir);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            return;
-        }
+            if (!OperatingSystem.IsWindows())
+            {
+                Directory.CreateSymbolicLink(link, target);
+                return true;
+            }
 
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadSqlAsync(null, Path.Combine(dirLink, "q.sql"), _scope, CancellationToken.None));
+            var start = new ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{target}\"")
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false,
+            };
+            using var process = Process.Start(start);
+            process?.WaitForExit();
+            return process?.ExitCode == 0;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return false;
+        }
     }
 
     [Fact]
