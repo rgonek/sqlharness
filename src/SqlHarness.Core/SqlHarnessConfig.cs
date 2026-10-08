@@ -45,6 +45,10 @@ public sealed record SqlHarnessConfigLoadResult(
     SqlHarnessConfigStatus Status,
     string? Warning);
 
+public sealed record SqlHarnessConfigFieldError(string Field, string Message);
+
+public sealed record SqlHarnessConfigParseResult(SqlHarnessConfig? Config, IReadOnlyList<SqlHarnessConfigFieldError> Errors);
+
 /// <summary>
 /// Strict, fail-closed reader: any unreadable, malformed, unknown-field, or
 /// out-of-range file yields <see cref="SqlHarnessConfig.Default"/>, so an
@@ -76,8 +80,8 @@ public static class SqlHarnessConfigLoader
             if (new FileInfo(path).Length > MaximumBytes)
                 return Invalid();
 
-            var config = JsonSerializer.Deserialize<SqlHarnessConfig>(File.ReadAllBytes(path), Options);
-            return config is not null && IsComplete(config) && IsInRange(config)
+            var parsed = Parse(File.ReadAllBytes(path));
+            return parsed.Config is { } config
                 ? new SqlHarnessConfigLoadResult(config, SqlHarnessConfigStatus.Valid, null)
                 : Invalid();
         }
@@ -87,16 +91,44 @@ public static class SqlHarnessConfigLoader
         }
     }
 
+    /// <summary>Strict parse of one config document; the config is returned only when there are no errors.</summary>
+    public static SqlHarnessConfigParseResult Parse(byte[] json)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+        if (json.Length > MaximumBytes)
+            return Failed("$", "The settings document is larger than 64 KiB.");
+        SqlHarnessConfig? config;
+        try
+        {
+            config = JsonSerializer.Deserialize<SqlHarnessConfig>(json, Options);
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            var path = (exception as JsonException)?.Path;
+            return Failed(string.IsNullOrEmpty(path) ? "$" : path.TrimStart('$', '.'), "Unknown field or invalid value.");
+        }
+
+        if (config is null || !IsComplete(config))
+            return Failed("$", "The journal, journal.retention and dashboard sections must be objects.");
+
+        var errors = new List<SqlHarnessConfigFieldError>();
+        if (config.Journal.Retention.MaxAgeDays is < 1 or > 3650)
+            errors.Add(new("journal.retention.maxAgeDays", "Must be between 1 and 3650."));
+        if (config.Journal.Retention.MaxSizeMb is < 10 or > 102_400)
+            errors.Add(new("journal.retention.maxSizeMb", "Must be between 10 and 102400."));
+        if (config.Dashboard.Port is < 1024 or > 65535)
+            errors.Add(new("dashboard.port", "Must be between 1024 and 65535."));
+        if (config.Dashboard.IdleShutdownHours is < 1 or > 168)
+            errors.Add(new("dashboard.idleShutdownHours", "Must be between 1 and 168."));
+        return errors.Count == 0 ? new(config, []) : new(null, errors);
+    }
+
+    private static SqlHarnessConfigParseResult Failed(string field, string message) => new(null, [new(field, message)]);
+
     private static SqlHarnessConfigLoadResult Invalid() =>
         new(SqlHarnessConfig.Default, SqlHarnessConfigStatus.Invalid, InvalidWarning);
 
     // Explicit JSON nulls bypass initializers; treat them as invalid.
     private static bool IsComplete(SqlHarnessConfig config) =>
         config.Journal is not null && config.Journal.Retention is not null && config.Dashboard is not null;
-
-    private static bool IsInRange(SqlHarnessConfig config) =>
-        config.Journal.Retention.MaxAgeDays is >= 1 and <= 3650
-        && config.Journal.Retention.MaxSizeMb is >= 10 and <= 102_400
-        && config.Dashboard.Port is >= 1024 and <= 65535
-        && config.Dashboard.IdleShutdownHours is >= 1 and <= 168;
 }

@@ -97,4 +97,67 @@ public sealed class SqlHarnessConfigTests : IDisposable
         Assert.DoesNotContain("SQLH_CONFIG_MARKER", warning);
         Assert.DoesNotContain(_dir, warning);
     }
+
+    [Fact]
+    public void Parse_reports_out_of_range_fields_by_path()
+    {
+        var result = SqlHarnessConfigLoader.Parse("""
+            { "journal": { "enabled": true, "storeSensitive": false,
+                           "retention": { "enabled": true, "maxAgeDays": 0, "maxSizeMb": 5 } },
+              "dashboard": { "autoStart": false, "port": 47800, "idleShutdownHours": 999 } }
+            """u8.ToArray());
+
+        Assert.Null(result.Config);
+        Assert.Equal(
+            ["journal.retention.maxAgeDays", "journal.retention.maxSizeMb", "dashboard.idleShutdownHours"],
+            result.Errors.Select(error => error.Field));
+    }
+
+    [Fact]
+    public void Parse_rejects_unknown_fields_and_wrong_types()
+    {
+        Assert.NotEmpty(SqlHarnessConfigLoader.Parse("""{ "journal": { "bogus": 1 } }"""u8.ToArray()).Errors);
+        Assert.NotEmpty(SqlHarnessConfigLoader.Parse("""{ "journal": { "enabled": "yes" } }"""u8.ToArray()).Errors);
+        Assert.NotEmpty(SqlHarnessConfigLoader.Parse("""{ "journal": null }"""u8.ToArray()).Errors);
+        Assert.NotEmpty(SqlHarnessConfigLoader.Parse("not json"u8.ToArray()).Errors);
+    }
+
+    [Fact]
+    public void Written_config_round_trips_through_the_loader()
+    {
+        var config = SqlHarnessConfig.Default with
+        {
+            Journal = new JournalConfig { StoreSensitive = true, Retention = new JournalRetentionConfig { Enabled = true, MaxAgeDays = 7 } },
+            Dashboard = new DashboardConfig { AutoStart = true, IdleShutdownHours = 2 },
+        };
+
+        SqlHarnessConfigWriter.Write(ConfigPath, config);
+        var loaded = SqlHarnessConfigLoader.Load(ConfigPath);
+
+        Assert.Equal(SqlHarnessConfigStatus.Valid, loaded.Status);
+        Assert.Equal(config, loaded.Config);
+    }
+
+    [Fact]
+    public void Write_replaces_atomically_and_leaves_no_temp_file()
+    {
+        File.WriteAllText(ConfigPath, "{ broken");
+
+        SqlHarnessConfigWriter.Write(ConfigPath, SqlHarnessConfig.Default);
+
+        Assert.Equal(SqlHarnessConfigStatus.Valid, SqlHarnessConfigLoader.Load(ConfigPath).Status);
+        Assert.Equal(["config.json"], Directory.GetFiles(_dir).Select(Path.GetFileName));
+        if (!OperatingSystem.IsWindows())
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(ConfigPath));
+    }
+
+    [Fact]
+    public void Write_creates_the_home_directory()
+    {
+        var nested = Path.Combine(_dir, "fresh", "config.json");
+
+        SqlHarnessConfigWriter.Write(nested, SqlHarnessConfig.Default);
+
+        Assert.True(File.Exists(nested));
+    }
 }
