@@ -8,13 +8,15 @@ using Microsoft.AspNetCore.Http.Extensions;
 namespace SqlHarness.Dashboard;
 
 /// <summary>
-/// Loopback dashboard protection: exact Host allowlist (DNS rebinding), GET-only,
+/// Loopback dashboard protection: exact Host allowlist (DNS rebinding), GET-only except one guarded PUT on /api/settings,
 /// one-time ?t= token exchange into an HttpOnly SameSite=Strict cookie, and
 /// cookie authentication on every other request. Tokens are compared in constant time.
 /// </summary>
 internal static class DashboardSecurity
 {
     internal const string CookieName = "sqlharness_dashboard";
+    internal const string WriteHeader = "X-SqlHarness-Dashboard";
+    internal const string SettingsPath = "/api/settings";
     private const string TokenQuery = "t";
 
     internal static string NewToken() =>
@@ -67,10 +69,21 @@ internal static class DashboardSecurity
             return;
         }
 
-        if (!HttpMethods.IsGet(context.Request.Method) && !HttpMethods.IsHead(context.Request.Method))
+        var isRead = HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method);
+        var isSettingsWrite = HttpMethods.IsPut(context.Request.Method)
+            && string.Equals(context.Request.Path.Value, SettingsPath, StringComparison.Ordinal);
+        if (!isRead && !isSettingsWrite)
         {
             context.Response.Headers.Allow = "GET, HEAD";
             await Reject(context, StatusCodes.Status405MethodNotAllowed, "Method not allowed.");
+            return;
+        }
+
+        // The one write: a cross-site form cannot set the custom header, a cross-site fetch with it
+        // needs a CORS preflight the dashboard never answers, and a foreign Origin is refused outright.
+        if (isSettingsWrite && !IsTrustedWrite(context.Request, allowedPort))
+        {
+            await Reject(context, StatusCodes.Status403Forbidden, "Forbidden.");
             return;
         }
 
@@ -106,6 +119,20 @@ internal static class DashboardSecurity
         }
 
         await next();
+    }
+
+    private static bool IsTrustedWrite(HttpRequest request, int port)
+    {
+        if (request.Query.ContainsKey(TokenQuery))
+            return false;
+        if (!string.Equals(request.Headers[WriteHeader].ToString(), "1", StringComparison.Ordinal))
+            return false;
+        if (!request.HasJsonContentType())
+            return false;
+        var origin = request.Headers.Origin.ToString();
+        return origin.Length == 0
+            || string.Equals(origin, $"http://127.0.0.1:{port}", StringComparison.Ordinal)
+            || string.Equals(origin, $"http://localhost:{port}", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool Matches(string? supplied, string token) =>

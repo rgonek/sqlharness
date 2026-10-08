@@ -23,7 +23,13 @@ public sealed class DashboardServerTests
 
     internal static async Task<AuthenticatedDashboard> StartAuthenticated(TempHome home)
     {
-        var server = await DashboardServer.StartAsync(new DashboardServerOptions(home.DatabasePath, 0, new FakeProcesses()), CancellationToken.None);
+        var server = await DashboardServer.StartAsync(
+            new DashboardServerOptions(home.DatabasePath, 0, new FakeProcesses())
+            {
+                ConfigPath = Path.Combine(home.Path, "config.json"),
+                TargetsPath = Path.Combine(home.Path, "targets.json"),
+            },
+            CancellationToken.None);
         var handler = new HttpClientHandler { AllowAutoRedirect = false, CookieContainer = new CookieContainer() };
         var client = new HttpClient(handler) { BaseAddress = server.BaseUri };
         var dashboard = new AuthenticatedDashboard(server, client);
@@ -80,7 +86,7 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
-    public async Task Only_get_endpoints_exist()
+    public async Task Only_get_endpoints_and_the_settings_put_exist()
     {
         using var home = new TempHome();
         await using var dashboard = await StartAuthenticated(home);
@@ -88,7 +94,11 @@ public sealed class DashboardServerTests
 
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PostAsync("/api/sessions", null)).StatusCode);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.DeleteAsync("/api/operations/1")).StatusCode);
-        Assert.All(server.Endpoints, endpoint => Assert.Equal(["GET", "HEAD"], endpoint.Methods));
+        var writes = server.Endpoints.Where(endpoint => !endpoint.Methods.SequenceEqual(["GET", "HEAD"])).ToArray();
+        var settingsPut = Assert.Single(writes);
+        Assert.Equal("/api/settings", settingsPut.Route);
+        Assert.Equal(["PUT"], settingsPut.Methods);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PutAsync("/api/sessions", null)).StatusCode);
         Assert.Contains(server.Endpoints, endpoint => endpoint.Route == "/api/live");
     }
 

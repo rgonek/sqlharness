@@ -24,6 +24,12 @@ public sealed record DashboardServerOptions(string DatabasePath, int PreferredPo
 
     /// <summary>Records requests and open live streams; a new instance on the system clock when null.</summary>
     internal DashboardActivity? Activity { get; init; }
+
+    /// <summary>The operator settings file the settings page reads and writes.</summary>
+    public string ConfigPath { get; init; } = SqlHarnessPaths.ConfigFile;
+
+    /// <summary>The closed profile file shown read-only on the profiles page.</summary>
+    public string TargetsPath { get; init; } = SqlHarnessPaths.TargetsFile;
 }
 
 public sealed class RunningDashboard : IAsyncDisposable
@@ -186,6 +192,9 @@ public static partial class DashboardServer
                 activity.StreamClosed();
             }
         });
+        MapRead(api, "/settings", () => Results.Json(DashboardSettings.Read(options.ConfigPath), Json));
+        // The only write route; DashboardSecurity admits PUT here alone, with its extra checks.
+        api.MapMethods("/settings", [HttpMethods.Put], (Delegate)((HttpContext context) => DashboardSettings.PutAsync(context, options.ConfigPath, Json)));
         MapRead(api, "/{**rest}", () => Results.NotFound());
 
         var assets = DashboardAssets.Default;
