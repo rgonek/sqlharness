@@ -1,5 +1,7 @@
 # SQLHarness activity journal and local dashboard
 
+> Amended by `2026-10-07-dashboard-settings-errors-theme-design.md`: one guarded write endpoint (`PUT /api/settings`), read-only profiles, stored error messages (schema v4), SQL highlighting CSS, and an operator-selectable theme.
+
 Status: design approved in conversation on 2026-10-06; implemented in phases 1–5 (plans `docs/superpowers/plans/2026-10-06-activity-journal-phase1.md` and `2026-10-07-activity-journal-phase{2,3,4,5}.md`; each plan's "As built" section records accepted deviations). Phase 5 decisions recorded on 2026-10-07 are reflected below.
 
 ## Goal
