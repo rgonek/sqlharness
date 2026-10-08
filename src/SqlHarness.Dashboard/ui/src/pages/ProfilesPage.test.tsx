@@ -9,7 +9,7 @@ test("lists profiles with the password variable name only", async () => {
       message: null,
       profiles: [{
         name: "pg", engine: "postgres", server: "pg.example", database: "app_{env}", auth: "sql", sqlUser: "reader",
-        passwordEnvVar: "PG_PASSWORD", sslMode: "verify-full", trustServerCertificate: false, rootCertificate: null,
+        passwordEnvVar: "PG_PASSWORD", sslMode: "verify-full", trustServerCertificate: false, rootCertificate: "C:\\certs\\pg.crt",
         vars: [{ name: "env", rule: "uat|test" }],
       }],
     },
@@ -20,10 +20,11 @@ test("lists profiles with the password variable name only", async () => {
   expect(screen.getByText("app_{env}")).toBeInTheDocument()
   expect(screen.getByText("PG_PASSWORD")).toBeInTheDocument()
   expect(screen.getByText("env: uat|test")).toBeInTheDocument()
+  expect(screen.getByText("root: C:\\certs\\pg.crt")).toBeInTheDocument()
   expect(screen.queryByRole("button", { name: /edit/i })).not.toBeInTheDocument()
 })
 
-test("missing and invalid files show their states", async () => {
+test("missing file shows its state", async () => {
   stubFetch({ "/api/profiles": { status: "missing", message: null, profiles: [] } })
   renderApp("/profiles")
   expect(await screen.findByText(/No targets.json/)).toBeInTheDocument()

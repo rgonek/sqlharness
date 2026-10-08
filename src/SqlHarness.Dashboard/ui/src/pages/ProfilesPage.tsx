@@ -44,7 +44,10 @@ export function ProfilesPage() {
                   <TableCell>{profile.database}</TableCell>
                   <TableCell>{profile.sqlUser ? `${profile.auth} (${profile.sqlUser})` : profile.auth}</TableCell>
                   <TableCell>{profile.passwordEnvVar ?? "—"}</TableCell>
-                  <TableCell>{profile.sslMode ?? (profile.trustServerCertificate ? "trust server certificate" : "verify")}</TableCell>
+                  <TableCell>
+                    <div>{profile.sslMode ?? (profile.trustServerCertificate ? "trust server certificate" : "verify")}</div>
+                    {profile.rootCertificate && <div>{`root: ${profile.rootCertificate}`}</div>}
+                  </TableCell>
                   <TableCell>
                     {profile.vars.map(variable => (
                       <div key={variable.name}>{`${variable.name}: ${variable.rule}`}</div>
