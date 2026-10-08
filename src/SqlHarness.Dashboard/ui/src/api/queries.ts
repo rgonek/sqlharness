@@ -1,6 +1,6 @@
 import { QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { getJson, NotFoundError, putJson, UnauthorizedError } from "./client"
-import type { DashboardStats, DistilledPlan, OperationDetail, Page, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
+import type { DashboardStats, DistilledPlan, OperationDetail, Page, ProfilesResponse, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string }
 export type StatsRange = "24h" | "7d" | "30d" | "all"
@@ -11,6 +11,7 @@ export const queryKeys = {
   operation: (id: number) => ["operation", id] as const,
   stats: (range: StatsRange) => ["stats", range] as const,
   settings: () => ["settings"] as const,
+  profiles: () => ["profiles"] as const,
   plan: (hash: string) => ["plan", hash] as const,
   liveOperations: ["live", "operations"] as const,
   liveRunning: ["live", "running"] as const,
@@ -74,6 +75,10 @@ export function useDistilledPlan(hash: string, enabled: boolean) {
 
 export function useSettings() {
   return useQuery({ queryKey: queryKeys.settings(), queryFn: () => getJson<SettingsResponse>("/api/settings") })
+}
+
+export function useProfiles() {
+  return useQuery({ queryKey: queryKeys.profiles(), queryFn: () => getJson<ProfilesResponse>("/api/profiles") })
 }
 
 export function useSaveSettings() {

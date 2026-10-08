@@ -180,3 +180,19 @@ export type Settings = { journal: JournalSettings; dashboard: DashboardSettings 
 export type SettingsFileStatus = "missing" | "valid" | "invalid"
 export type SettingsResponse = { status: SettingsFileStatus; path: string; settings: Settings }
 export type FieldError = { field: string; message: string }
+
+export type ProfileVariable = { name: string; rule: string }
+export type ProfileView = {
+  name: string
+  engine: string
+  server: string
+  database: string
+  auth: string
+  sqlUser: string | null
+  passwordEnvVar: string | null
+  sslMode: string | null
+  trustServerCertificate: boolean
+  rootCertificate: string | null
+  vars: ProfileVariable[]
+}
+export type ProfilesResponse = { status: "missing" | "valid" | "invalid"; profiles: ProfileView[]; message: string | null }

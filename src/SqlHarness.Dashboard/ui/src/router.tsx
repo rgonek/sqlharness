@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/AppLayout"
 import { LivePage } from "@/pages/LivePage"
 import { NotFoundPage } from "@/pages/NotFoundPage"
 import { OperationPage } from "@/pages/OperationPage"
+import { ProfilesPage } from "@/pages/ProfilesPage"
 import { SessionPage } from "@/pages/SessionPage"
 import { SessionsPage } from "@/pages/SessionsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
@@ -15,9 +16,10 @@ const sessionsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/ses
 const sessionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sessions/$id", component: SessionPage })
 const operationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations/$id", component: OperationPage })
 const statsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/stats", component: StatsPage })
+const profilesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/profiles", component: ProfilesPage })
 const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsPage })
 
-export const routeTree = rootRoute.addChildren([liveRoute, sessionsRoute, sessionRoute, operationRoute, statsRoute, settingsRoute])
+export const routeTree = rootRoute.addChildren([liveRoute, sessionsRoute, sessionRoute, operationRoute, statsRoute, profilesRoute, settingsRoute])
 
 /** Browser history in the app; tests pass a memory history. */
 export function createAppRouter(history?: RouterHistory) {

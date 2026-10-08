@@ -7,6 +7,7 @@ const links = [
   { to: "/", label: "Live", exact: true },
   { to: "/sessions", label: "Sessions", exact: false },
   { to: "/stats", label: "Statistics", exact: false },
+  { to: "/profiles", label: "Profiles", exact: false },
   { to: "/settings", label: "Settings", exact: false },
 ] as const
 
