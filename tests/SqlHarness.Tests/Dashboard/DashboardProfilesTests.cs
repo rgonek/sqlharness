@@ -34,6 +34,27 @@ public sealed class DashboardProfilesTests
         Assert.Equal("sqlserver", profiles[1].GetProperty("engine").GetString());
     }
 
+    [Theory]
+    [InlineData("\"engine\": \"postgres\", \"sslMode\": \"verify-full\"", "verify-full")]
+    [InlineData("\"engine\": \"postgres\", \"trustServerCertificate\": false", "require (legacy)")]
+    [InlineData("\"engine\": \"postgres\", \"trustServerCertificate\": true", "disable (legacy)")]
+    [InlineData("\"trustServerCertificate\": true", "trust server certificate")]
+    [InlineData("\"trustServerCertificate\": false", "verify")]
+    public async Task Profiles_report_the_effective_tls_label(string fields, string expected)
+    {
+        using var home = new TempHome();
+        File.WriteAllText(TargetsPath(home), $$"""
+            { "p": { {{fields}}, "server": "s", "database": "d", "auth": "sql", "sqlUser": "u", "passwordEnvVar": "SQLH_TEST_TLS_PW", "vars": {} } }
+            """);
+        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        var body = JsonDocument.Parse(await client.GetStringAsync("/api/profiles")).RootElement;
+
+        Assert.Equal("valid", body.GetProperty("status").GetString());
+        Assert.Equal(expected, body.GetProperty("profiles")[0].GetProperty("tls").GetString());
+    }
+
     [Fact]
     public async Task Profiles_never_contain_password_values()
     {

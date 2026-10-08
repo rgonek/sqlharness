@@ -7,7 +7,7 @@ public sealed record ProfileVariable(string Name, string Rule);
 
 public sealed record ProfileView(
     string Name, string Engine, string Server, string Database, string Auth, string? SqlUser, string? PasswordEnvVar,
-    string? SslMode, bool TrustServerCertificate, string? RootCertificate, IReadOnlyList<ProfileVariable> Vars);
+    string? SslMode, bool TrustServerCertificate, string? RootCertificate, string Tls, IReadOnlyList<ProfileVariable> Vars);
 
 public sealed record ProfilesResponse(string Status, IReadOnlyList<ProfileView> Profiles, string? Message);
 
@@ -40,9 +40,18 @@ internal static class DashboardProfiles
             .ToArray(), null);
     }
 
+    private static string EngineOf(TargetProfile profile) =>
+        string.IsNullOrWhiteSpace(profile.Engine) ? "sqlserver" : profile.Engine.Trim().ToLowerInvariant();
+
+    // Mirrors PostgresTransportPolicy: without sslMode, trustServerCertificate false means Require and true means Disable.
+    private static string Tls(TargetProfile profile) =>
+        EngineOf(profile) == "postgres"
+            ? profile.SslMode ?? (profile.TrustServerCertificate ? "disable (legacy)" : "require (legacy)")
+            : profile.TrustServerCertificate ? "trust server certificate" : "verify";
+
     private static ProfileView View(string name, TargetProfile profile) => new(
         name,
-        string.IsNullOrWhiteSpace(profile.Engine) ? "sqlserver" : profile.Engine.Trim().ToLowerInvariant(),
+        EngineOf(profile),
         profile.Server,
         profile.Database,
         profile.Auth,
@@ -51,5 +60,6 @@ internal static class DashboardProfiles
         profile.SslMode,
         profile.TrustServerCertificate,
         profile.RootCertificate,
+        Tls(profile),
         profile.Vars.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => new ProfileVariable(pair.Key, pair.Value)).ToArray());
 }

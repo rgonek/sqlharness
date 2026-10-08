@@ -192,6 +192,7 @@ export type ProfileView = {
   passwordEnvVar: string | null
   sslMode: string | null
   trustServerCertificate: boolean
+  tls: string
   rootCertificate: string | null
   vars: ProfileVariable[]
 }
