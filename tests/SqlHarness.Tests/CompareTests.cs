@@ -558,7 +558,7 @@ public class SqlHarnessCompareTests
         var operation = Compare(1) with
         {
             SetupSql = $"DECLARE @{variable} int = 73195; SELECT '{value}'",
-            BaselineSql = $"SELECT @{variable}",
+            BaselineSql = $"SELECT @{variable}; DECLARE @{variable} int = 2;",
             CandidateSql = "SELECT 1",
         };
 

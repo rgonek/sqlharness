@@ -425,6 +425,25 @@ public sealed class ValidateCommandTests
         Assert.True(report.Allowed, JsonSerializer.Serialize(report));
     }
 
+    [Fact]
+    public void Setup_only_reference_before_late_variant_declaration_is_rejected_offline()
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("sqlserver") };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+        const string setup = "DECLARE @sharedValue int = 1; SELECT @sharedValue;";
+        const string query = "SELECT @sharedValue; DECLARE @sharedValue int = 2;";
+
+        var report = SqlValidation.Validate(
+            request, query, [], profiles,
+            new ValidationOptions(ValidationUsage.Benchmark, SetupSql: setup));
+
+        Assert.False(report.Allowed);
+        Assert.Equal("parameter_validation_failed", report.Reason);
+        Assert.Equal(
+            "A variable declared in setup is referenced by a benchmark batch. Setup variables do not cross into benchmark batches.",
+            report.Detail);
+    }
+
     private static TargetProfile Profile(string engine) => new(
         "server-unused", "database-unused", new Dictionary<string, string>(), "sql", "user-unused", "MUST_NOT_BE_READ", Engine: engine);
 

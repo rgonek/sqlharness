@@ -1657,7 +1657,10 @@ internal static class SqlSetupVariableReferenceValidator
 
         var setupNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var batch in setupScript.Batches)
-            CollectDeclaredVariableNames(batch, setupNames);
+        {
+            foreach (var name in CollectDeclaredVariablePositions(batch).Keys)
+                setupNames.Add(name);
+        }
         if (setupNames.Count == 0)
             return;
 
@@ -1671,12 +1674,13 @@ internal static class SqlSetupVariableReferenceValidator
 
             foreach (var batch in script.Batches)
             {
-                var localNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                CollectDeclaredVariableNames(batch, localNames);
+                var localDeclarations = CollectDeclaredVariablePositions(batch);
                 var references = new VariableReferenceCollector();
                 batch.Accept(references);
-                if (references.Names.Any(name => setupNames.Contains(name) &&
-                    !localNames.Contains(name) && !parameterNames.Contains(name)))
+                if (references.Positions.Any(reference => setupNames.Contains(reference.Name) &&
+                    !parameterNames.Contains(reference.Name) &&
+                    (!localDeclarations.TryGetValue(reference.Name, out var declarationOffset) ||
+                     reference.Offset < 0 || declarationOffset >= reference.Offset)))
                 {
                     throw new SqlSetupVariableScopeException();
                 }
@@ -1684,41 +1688,46 @@ internal static class SqlSetupVariableReferenceValidator
         }
     }
 
-    private static void CollectDeclaredVariableNames(TSqlBatch batch, ISet<string> names)
+    private static Dictionary<string, int> CollectDeclaredVariablePositions(TSqlBatch batch)
     {
+        var positions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var statement in batch.Statements)
         {
             if (statement is DeclareVariableStatement declare)
             {
                 foreach (var declaration in declare.Declarations)
                 {
-                    if (declaration?.VariableName?.Value is { } name)
-                        names.Add(name);
+                    if (declaration?.VariableName is { Value: { } name } variableName)
+                        positions.TryAdd(name, variableName.StartOffset);
                 }
             }
             else if (statement is DeclareTableVariableStatement declareTable &&
-                declareTable.Body?.VariableName?.Value is { } tableName)
+                declareTable.Body?.VariableName is { Value: { } tableName } tableVariableName)
             {
-                names.Add(tableName);
+                positions.TryAdd(tableName, tableVariableName.StartOffset);
             }
         }
+
+        return positions;
     }
 
     private sealed class VariableReferenceCollector : TSqlFragmentVisitor
     {
-        internal HashSet<string> Names { get; } = new(StringComparer.OrdinalIgnoreCase);
+        internal List<VariableReferencePosition> Positions { get; } = [];
 
         public override void ExplicitVisit(VariableReference node)
         {
-            Names.Add(node.Name);
+            Positions.Add(new VariableReferencePosition(node.Name, node.StartOffset));
             base.ExplicitVisit(node);
         }
 
         public override void ExplicitVisit(VariableTableReference node)
         {
             if (node.Variable?.Name is { } name)
-                Names.Add(name);
+                Positions.Add(new VariableReferencePosition(name, node.StartOffset));
             base.ExplicitVisit(node);
         }
     }
+
+    private sealed record VariableReferencePosition(string Name, int Offset);
 }
