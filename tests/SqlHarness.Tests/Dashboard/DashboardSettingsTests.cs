@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 
@@ -121,6 +120,27 @@ public sealed class DashboardSettingsTests
         Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(Put(server, ValidBody, origin: "http://evil.example"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(Put(server, ValidBody, contentType: "text/plain"))).StatusCode);
         Assert.False(File.Exists(ConfigPath(home)));
+    }
+
+    [Fact]
+    public async Task Put_with_null_origin_is_forbidden()
+    {
+        using var home = new TempHome();
+        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
+        var (server, client) = dashboard;
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(Put(server, ValidBody, origin: "null"))).StatusCode);
+        Assert.False(File.Exists(ConfigPath(home)));
+    }
+
+    [Fact]
+    public async Task Put_from_localhost_origin_is_allowed()
+    {
+        using var home = new TempHome();
+        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
+        var (server, client) = dashboard;
+
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(Put(server, ValidBody, origin: $"http://localhost:{server.Port}"))).StatusCode);
     }
 
     [Fact]

@@ -13,7 +13,8 @@ export function SqlBlock({ sql, engine, label }: { sql: string; engine: string |
         <Button variant="ghost" size="sm" onClick={() => setFormatted(value => !value)}>
           {formatted ? "Show original" : "Show formatted"}
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => void navigator.clipboard?.writeText(text)}>
+        {/* Clipboard access may be denied; copying is best-effort. */}
+        <Button variant="ghost" size="sm" onClick={() => void navigator.clipboard?.writeText(text).catch(() => {})}>
           Copy
         </Button>
       </div>

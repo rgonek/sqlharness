@@ -1,5 +1,5 @@
 import { QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { getJson, NotFoundError, putJson, UnauthorizedError } from "./client"
+import { ConflictError, getJson, NotFoundError, putJson, UnauthorizedError } from "./client"
 import type { DashboardStats, DistilledPlan, OperationDetail, Page, ProfilesResponse, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string }
@@ -87,5 +87,7 @@ export function useSaveSettings() {
     mutationFn: ({ settings, overwriteInvalid }: { settings: Settings; overwriteInvalid?: boolean }) =>
       putJson<SettingsResponse>("/api/settings", settings, overwriteInvalid ? { overwriteInvalid: "true" } : undefined),
     onSuccess: data => client.setQueryData(queryKeys.settings(), data),
+    // 409: the file became invalid after the page loaded; refetch so the page shows its invalid-file state.
+    onError: error => { if (error instanceof ConflictError) void client.invalidateQueries({ queryKey: queryKeys.settings() }) },
   })
 }

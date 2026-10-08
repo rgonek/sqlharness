@@ -53,6 +53,23 @@ test("disabling storeSensitive needs no confirmation", async () => {
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
 })
 
+test("a conflict on save refetches and shows the invalid-file alert", async () => {
+  let invalid = false
+  stubFetch({
+    "/api/settings": (_url: URL, init?: RequestInit) => {
+      if (init?.method === "PUT") {
+        invalid = true
+        return new Response(JSON.stringify({ error: "config.json is invalid" }), { status: 409 })
+      }
+      return new Response(JSON.stringify(response({ status: invalid ? "invalid" : "valid" })), { status: 200 })
+    },
+  })
+  renderApp("/settings")
+
+  await userEvent.click(await screen.findByRole("button", { name: "Save" }))
+  expect(await screen.findByRole("button", { name: "Replace with these settings" })).toBeInTheDocument()
+})
+
 test("port is read-only and an invalid file needs explicit replacement", async () => {
   const puts = stubSettings(response({ status: "invalid" }))
   renderApp("/settings")
