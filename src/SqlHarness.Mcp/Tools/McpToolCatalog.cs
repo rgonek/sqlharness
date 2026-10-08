@@ -285,7 +285,7 @@ public sealed class McpToolHandlers(
         [Description("Artifact directory name from a saved report.")]
         string id,
         [Description("Safe section to read.")]
-        [AllowedValues("summary", "metrics", "operators")]
+        [AllowedValues("summary", "metrics", "operators", "statements")]
         string section,
         CancellationToken ct = default) =>
         RunAsync("sqlharness_artifact", _ =>

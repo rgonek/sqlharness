@@ -455,7 +455,7 @@ public sealed class McpToolSchemaTests : IDisposable
 
         var artifact = schemas["sqlharness_artifact"];
         Assert.Equal(["id", "section"], Required(artifact).Order().ToArray());
-        Assert.Equal(["summary", "metrics", "operators"], EnumOf(artifact, "section"));
+        Assert.Equal(["summary", "metrics", "operators", "statements"], EnumOf(artifact, "section"));
 
         var gain = schemas["sqlharness_gain"];
         Assert.Empty(Properties(gain).EnumerateObject());

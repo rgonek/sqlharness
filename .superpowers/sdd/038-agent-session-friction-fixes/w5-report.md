@@ -31,3 +31,13 @@ Focused final run: 6 passed, 0 failed. MCP handler test: 1 passed, 0 failed. Ear
 The MCP path still validates manifest ownership before reading any section. The statements file has a fixed child name and the same 16 MiB read bound as report files. The extractor prohibits DTD/entity resolution, clips operator strings, saturates counter sums, treats malformed/missing plan details as unavailable, and never returns SQL text. Journal inserts share the existing benchmark transaction and cascade with operation deletion. No live database, profile, or secret was used.
 
 No unresolved implementation concern. The provided Linux script remains incompatible with this Windows worktree pointer; the normal-clone Linux stages passed.
+
+## Review follow-up: advertise the statements section
+
+Review found that fixed-mode MCP artifact reads accepted `statements` in the mapper/reader but omitted it from the generated tool schema. Added `statements` to the catalog's `[AllowedValues]` and expanded the generated `tools/list` schema assertion in `McpToolSchemaTests.Enum_required_and_default_shapes_are_correct`.
+
+TDD evidence:
+
+- RED: `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter FullyQualifiedName~McpToolSchemaTests.Enum_required_and_default_shapes_are_correct --no-restore --verbosity minimal` failed as expected: expected `summary, metrics, operators, statements`; actual `summary, metrics, operators`.
+- GREEN schema and byte-budget coverage: `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter FullyQualifiedName~McpToolSchemaTests --no-restore --verbosity minimal` passed: 37 passed, 0 failed. This class includes `Tools_list_fits_the_32KiB_budget`.
+- Full MCP test project: `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-restore --verbosity quiet` passed: 255 passed, 4 skipped, 0 failed.
