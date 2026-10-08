@@ -2,7 +2,7 @@ namespace SqlHarness.Core;
 
 internal static class JournalSchema
 {
-    internal const int CurrentVersion = 3;
+    internal const int CurrentVersion = 4;
 
     internal const string Version1 = """
         CREATE TABLE sessions (
@@ -113,5 +113,9 @@ internal static class JournalSchema
         ALTER TABLE operations ADD COLUMN raw_lines INTEGER;
         ALTER TABLE operations ADD COLUMN emitted_bytes INTEGER;
         ALTER TABLE operations ADD COLUMN emitted_lines INTEGER;
+        """;
+
+    internal const string Version4 = """
+        ALTER TABLE operations ADD COLUMN error_message TEXT;
         """;
 }

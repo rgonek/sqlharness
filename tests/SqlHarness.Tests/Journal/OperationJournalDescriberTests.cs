@@ -89,7 +89,7 @@ public sealed class OperationJournalDescriberTests
     }
 
     [Fact]
-    public void Failure_end_carries_machine_error_code_only()
+    public void Failure_end_carries_machine_error_code_and_message()
     {
         var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, "SQL safety rejection: SELECT secret");
 
@@ -98,7 +98,26 @@ public sealed class OperationJournalDescriberTests
         Assert.Equal("rejected", end.Status);
         Assert.Equal(2, end.ExitCode);
         Assert.Equal(outcome.MachineError?.Code, end.ErrorKind);
+        Assert.Equal("SQL safety rejection: SELECT secret", end.ErrorMessage);
         Assert.Null(end.Server);
+    }
+
+    [Fact]
+    public void Error_hint_is_appended_on_a_new_line()
+    {
+        var error = new SqlHarnessError("sql_execution_failed", "sql", "Timeout expired.", Hint: "Raise --timeout.");
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, null, null, Error: error);
+
+        Assert.Equal("Timeout expired.\nRaise --timeout.", OperationJournalDescriber.DescribeEnd(outcome, 1).ErrorMessage);
+    }
+
+    [Fact]
+    public void Success_and_controlled_outcomes_carry_no_error_message()
+    {
+        Assert.Null(OperationJournalDescriber.DescribeEnd(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null), 1).ErrorMessage);
+        Assert.Null(OperationJournalDescriber.DescribeEnd(new SqlHarnessOutcome(SqlHarnessExitCode.WatchMaxDuration, null, null), 1).ErrorMessage);
+        Assert.Null(OperationJournalDescriber.Cancelled(1).ErrorMessage);
+        Assert.Null(OperationJournalDescriber.Crashed(1).ErrorMessage);
     }
 
     [Fact]

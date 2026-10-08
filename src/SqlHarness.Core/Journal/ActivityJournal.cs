@@ -102,6 +102,12 @@ public sealed class ActivityJournal : IActivityJournal
         }
     }
 
+    /// <summary>Longest stored error message, including the trailing ellipsis of a truncated one.</summary>
+    internal const int ErrorMessageLimit = 4096;
+
+    internal static string? TruncateErrorMessage(string? message) =>
+        message is null || message.Length <= ErrorMessageLimit ? message : message[..(ErrorMessageLimit - 1)] + "\u2026";
+
     public bool Complete(JournalHandle? handle, OperationEnd end)
     {
         if (handle is null)
@@ -114,7 +120,7 @@ public sealed class ActivityJournal : IActivityJournal
             using var update = connection.CreateCommand();
             update.Transaction = transaction;
             update.CommandText = """
-                UPDATE operations SET status = $status, exit_code = $exit, error_kind = $error, duration_ms = $duration,
+                UPDATE operations SET status = $status, exit_code = $exit, error_kind = $error, error_message = $message, duration_ms = $duration,
                     engine = $engine, server = $server, database = $database, result_sets = $sets, rows_returned = $rows,
                     raw_tokens = COALESCE($raw, raw_tokens), artifact_dir = $artifact, summary_json = $summary, finished_at = $now, updated_at = $now
                 WHERE id = $id;
@@ -125,6 +131,7 @@ public sealed class ActivityJournal : IActivityJournal
             update.Parameters.AddWithValue("$status", end.Status);
             update.Parameters.AddWithValue("$exit", end.ExitCode);
             update.Parameters.AddWithValue("$error", (object?)end.ErrorKind ?? DBNull.Value);
+            update.Parameters.AddWithValue("$message", _storeSensitive ? (object?)TruncateErrorMessage(end.ErrorMessage) ?? DBNull.Value : DBNull.Value);
             update.Parameters.AddWithValue("$duration", end.DurationMilliseconds);
             update.Parameters.AddWithValue("$engine", (object?)end.Engine ?? DBNull.Value);
             update.Parameters.AddWithValue("$server", (object?)end.Server ?? DBNull.Value);
@@ -302,6 +309,8 @@ public sealed class ActivityJournal : IActivityJournal
                 Execute(connection, JournalSchema.Version2);
             if (locked < 3)
                 Execute(connection, JournalSchema.Version3);
+            if (locked < 4)
+                Execute(connection, JournalSchema.Version4);
             Execute(connection, $"PRAGMA user_version = {JournalSchema.CurrentVersion};");
             Execute(connection, "COMMIT;");
         }

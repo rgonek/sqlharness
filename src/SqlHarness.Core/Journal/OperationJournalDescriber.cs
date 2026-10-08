@@ -5,8 +5,8 @@ namespace SqlHarness.Core;
 
 /// <summary>
 /// Maps operations and outcomes to journal rows. It reads only names, scope,
-/// SQL text (for hashing and opt-in storage), and target identity; it never
-/// reads parameter values, result rows, or messages.
+/// SQL text (for hashing and opt-in storage), and target identity, plus the
+/// error message for opt-in storage; it never reads parameter values or result rows.
 /// </summary>
 internal static class OperationJournalDescriber
 {
@@ -31,6 +31,7 @@ internal static class OperationJournalDescriber
 
     internal static OperationEnd DescribeEnd(SqlHarnessOutcome outcome, long durationMilliseconds)
     {
+        var status = Status(outcome.ExitCode);
         var identity = TargetOf(outcome.Report);
         var (resultSets, rows) = outcome.Report is SqlHarnessQueryReport query
             ? (query.ResultSets.Count, query.ResultSets.Sum(set => set.RowCount))
@@ -43,7 +44,7 @@ internal static class OperationJournalDescriber
             _ => null,
         };
         return new OperationEnd(
-            Status(outcome.ExitCode),
+            status,
             (int)outcome.ExitCode,
             outcome.MachineError?.Code,
             Math.Max(durationMilliseconds, 0),
@@ -55,7 +56,8 @@ internal static class OperationJournalDescriber
             // MCP never completes the emission receipt, so the raw footprint is recorded here.
             outcome.EmissionReceipt?.RawFootprint?.EstimatedTokenCount,
             ArtifactDirectory: artifactDirectory,
-            SummaryJson: JournalSummary.Build(outcome.Report));
+            SummaryJson: JournalSummary.Build(outcome.Report),
+            ErrorMessage: status is "failed" or "rejected" ? Message(outcome.MachineError) : null);
     }
 
     internal static OperationEnd Cancelled(long durationMilliseconds) =>
@@ -70,6 +72,9 @@ internal static class OperationJournalDescriber
         SqlHarnessExitCode.Safety => "rejected",
         _ => "failed",
     };
+
+    private static string? Message(SqlHarnessError? error) =>
+        error is null ? null : string.IsNullOrWhiteSpace(error.Hint) ? error.Message : error.Message + "\n" + error.Hint;
 
     internal static string SqlHash(string sql) =>
         "sha256:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sql))).ToLowerInvariant();

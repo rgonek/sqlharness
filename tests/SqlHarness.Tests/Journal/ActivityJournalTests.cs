@@ -231,4 +231,63 @@ public sealed class ActivityJournalTests
         Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
             File.GetUnixFileMode(Path.GetDirectoryName(temp.DatabasePath)!));
     }
+
+    [Fact]
+    public void Error_message_is_stored_only_when_store_sensitive()
+    {
+        using var hashOnly = new JournalTempDirectory();
+        using var sensitive = new JournalTempDirectory();
+        var end = JournalTestData.End("failed", 5) with { ErrorKind = "sql_execution_failed", ErrorMessage = "Invalid object name 'SQLH_ERR_MARKER'." };
+
+        var plain = Open(hashOnly, TextWriter.Null);
+        plain.Complete(plain.Begin(JournalTestData.Session(), JournalTestData.Start()), end);
+        var stored = Open(sensitive, TextWriter.Null, storeSensitive: true);
+        stored.Complete(stored.Begin(JournalTestData.Session(), JournalTestData.Start()), end);
+
+        Assert.False(JournalDb.Contains(JournalDb.AllBytes(hashOnly.DatabasePath), "SQLH_ERR_MARKER"));
+        Assert.Null(JournalDb.Rows(hashOnly.DatabasePath, "SELECT error_message FROM operations")[0]["error_message"]);
+        Assert.Equal("Invalid object name 'SQLH_ERR_MARKER'.",
+            JournalDb.Rows(sensitive.DatabasePath, "SELECT error_message FROM operations")[0]["error_message"]);
+    }
+
+    [Fact]
+    public void Long_error_message_is_truncated()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, TextWriter.Null, storeSensitive: true);
+        var end = JournalTestData.End("failed", 5) with { ErrorMessage = new string('x', 5000) };
+
+        journal.Complete(journal.Begin(JournalTestData.Session(), JournalTestData.Start()), end);
+
+        var message = (string)JournalDb.Rows(temp.DatabasePath, "SELECT error_message FROM operations")[0]["error_message"]!;
+        Assert.Equal(ActivityJournal.ErrorMessageLimit, message.Length);
+        Assert.EndsWith("\u2026", message);
+    }
+
+    [Fact]
+    public void Version_3_journal_migrates_to_4_and_keeps_rows()
+    {
+        using var temp = new JournalTempDirectory();
+        Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
+        using (var connection = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = JournalSchema.Version1 + JournalSchema.Version2 + JournalSchema.Version3 + """
+                INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, first_seen, last_seen)
+                VALUES ('cli:old', 'claude', 'cli', 'process-tree', 1, 't', 't');
+                INSERT INTO operations (session_id, operation, host_pid, started_at, updated_at, status, error_kind)
+                VALUES (1, 'query', 1, 't', 't', 'failed', 'sql_execution_failed');
+                PRAGMA user_version = 3;
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        Open(temp, TextWriter.Null);
+
+        Assert.Equal(4L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        var row = JournalDb.Rows(temp.DatabasePath, "SELECT error_kind, error_message FROM operations")[0];
+        Assert.Equal("sql_execution_failed", row["error_kind"]);
+        Assert.Null(row["error_message"]);
+    }
 }

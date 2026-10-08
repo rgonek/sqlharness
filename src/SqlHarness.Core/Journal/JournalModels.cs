@@ -48,7 +48,8 @@ public sealed record OperationEnd(
     long? RowsReturned,
     long? RawTokens = null,
     string? ArtifactDirectory = null,
-    string? SummaryJson = null);
+    string? SummaryJson = null,
+    string? ErrorMessage = null);
 
 public sealed record JournalHandle(long OperationId);
 
