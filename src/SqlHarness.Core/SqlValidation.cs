@@ -61,7 +61,8 @@ public sealed record SqlValidationReport(
     IReadOnlyList<string>? CheckedConditions = null,
     string AnalysisKind = SqlSafetyAnalysis.AnalysisKind,
     int AnalysisContractVersion = SqlSafetyAnalysis.ContractVersion,
-    bool HiddenEffectsVerified = SqlSafetyAnalysis.HiddenEffectsVerified);
+    bool HiddenEffectsVerified = SqlSafetyAnalysis.HiddenEffectsVerified,
+    string? Detail = null);
 
 /// <summary>
 /// Caller intent for offline validation. Query is the default read path;
@@ -142,6 +143,7 @@ public static class SqlValidation
         IReadOnlyList<SqlHarnessParameter> parsedParameters = [];
         var parameterValidationCompleted = false;
         string? reason = setupReason ?? (decision.Allowed ? null : SafeReason(decision.Reason));
+        string? detail = null;
         if (reason is null)
         {
             try
@@ -151,6 +153,11 @@ public static class SqlValidation
                 dialect.ValidateParameterReferences(parsedParameters, setupSql, sql);
                 SetupSqlExecution.Validate(dialect.Engine, setupSql, parsedParameters);
                 parameterValidationCompleted = true;
+            }
+            catch (SetupSqlShapeException shapeException)
+            {
+                reason = "parameter_validation_failed";
+                detail = shapeException.Message;
             }
             catch (SqlHarnessSafetyException)
             {
@@ -204,7 +211,8 @@ public static class SqlValidation
             astLocations,
             AstLocationsAvailable: target.Engine == SqlEngine.SqlServer,
             Executed: false,
-            CheckedConditions: checkedConditions);
+            CheckedConditions: checkedConditions,
+            Detail: detail);
     }
 
     private static string CanonicalName(string name) => name.TrimStart('@', ':');

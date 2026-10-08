@@ -19,9 +19,11 @@ internal static class SetupSqlExecution
 {
     /// <summary>
     /// Validates that the setup SQL can be executed without losing session-local
-    /// temp tables. Throws <see cref="SqlHarnessSafetyException"/> for shapes
+    /// temp tables. Throws <see cref="SetupSqlShapeException"/> for shapes
     /// that cannot be split safely (for example, a SELECT INTO #temp or a
-    /// CREATE TABLE #temp whose definition references a parameter).
+    /// CREATE TABLE #temp whose definition references a parameter, or any
+    /// temp-creating statement placed at or after the first parameter-referencing
+    /// statement).
     /// </summary>
     internal static void Validate(SqlEngine engine, string? setupSql, IReadOnlyList<SqlHarnessParameter> parameters)
     {
@@ -56,14 +58,9 @@ internal static class SetupSqlExecution
             throw new SqlHarnessSafetyException("Setup SQL could not be parsed for execution.");
         }
 
-        var requiredNames = SqlParameterReferences.Collect(SqlEngine.SqlServer, setupSql);
-        var referencedParameters = parameters
-            .Where(parameter => requiredNames.Contains(parameter.Name, StringComparer.OrdinalIgnoreCase))
-            .ToArray();
-
         // Setup references no supplied parameters: execute it without bindings so
         // it runs in root scope and any #temp tables survive.
-        if (referencedParameters.Length == 0)
+        if (!ReferencesParameter(script))
         {
             return [new SqlExecutionCommand(setupSql, [], timeoutSeconds)];
         }
@@ -83,7 +80,7 @@ internal static class SetupSqlExecution
             if (split.RemainderStatements.Count > 0)
             {
                 var remainderSql = BuildSql(split.RemainderStatements, setupSql);
-                var remainderParameters = referencedParameters
+                var remainderParameters = parameters
                     .Where(parameter =>
                         SqlParameterReferences.Collect(SqlEngine.SqlServer, remainderSql)
                             .Contains(parameter.Name, StringComparer.OrdinalIgnoreCase))
@@ -95,35 +92,90 @@ internal static class SetupSqlExecution
         return commands;
     }
 
-    private static BatchSplit SplitBatch(TSqlBatch batch, string originalSql)
+    /// <summary>
+    /// Executes optional setup SQL once per session, applying the SQL Server
+    /// split when required. SQL Server setup that references parameters is split
+    /// into a parameter-free root-scope prefix followed by a parameterized
+    /// remainder; Postgres setup runs unchanged.
+    /// </summary>
+    internal static async Task ExecuteSetupAsync(
+        SqlEngine engine,
+        string? setupSql,
+        IReadOnlyList<SqlHarnessParameter> parameters,
+        int timeoutSeconds,
+        ISqlSession session,
+        CanonicalResultAccumulator raw,
+        CancellationToken ct)
     {
-        var prefix = new List<TSqlStatement>();
-        var remainder = new List<TSqlStatement>();
+        if (string.IsNullOrWhiteSpace(setupSql))
+            return;
 
-        foreach (var statement in batch.Statements)
+        var commands = engine == SqlEngine.SqlServer
+            ? PrepareCommands(setupSql, parameters, timeoutSeconds)
+            : [new SqlExecutionCommand(setupSql, parameters, timeoutSeconds)];
+        foreach (var command in commands)
         {
-            if (IsTempCreatingStatement(statement))
-            {
-                // A temp table must be created without parameters so the creation
-                // can run in root scope and survive past the command boundary.
-                if (StatementReferencesParameter(statement, batch))
-                {
-                    throw new SqlHarnessSafetyException(
-                        "Setup creates a session-local temp table and references parameters in the same statement. " +
-                        "Create the temp table in a parameter-free CREATE TABLE or SELECT INTO statement, then populate it in a separate statement.");
-                }
+            await BenchmarkRunner.ExecuteRawAsync(session, command, raw, ct);
+        }
+    }
 
-                prefix.Add(statement);
-            }
-            else
+    private static bool ReferencesParameter(TSqlScript script)
+    {
+        foreach (TSqlBatch batch in script.Batches)
+        {
+            foreach (var statement in batch.Statements)
             {
-                remainder.Add(statement);
+                if (StatementReferencesParameter(statement, batch))
+                    return true;
             }
         }
 
+        return false;
+    }
+
+    private static BatchSplit SplitBatch(TSqlBatch batch, string originalSql)
+    {
+        var statements = batch.Statements;
+        var firstParameterReferenceIndex = -1;
+        for (var index = 0; index < statements.Count; index++)
+        {
+            if (StatementReferencesParameter(statements[index], batch))
+            {
+                firstParameterReferenceIndex = index;
+                break;
+            }
+        }
+
+        if (firstParameterReferenceIndex < 0)
+        {
+            // The whole batch is parameter-free; it will run as a single root-scope
+            // command from the caller when no statement in the entire setup references
+            // a parameter. Returning an empty remainder keeps this helper consistent.
+            return new BatchSplit(statements.ToArray(), []);
+        }
+
+        for (var index = firstParameterReferenceIndex; index < statements.Count; index++)
+        {
+            if (IsTempCreatingStatement(statements[index]))
+            {
+                throw new SetupSqlShapeException(
+                    "Setup creates a session-local temp table at or after a statement that references a parameter. " +
+                    "Place all parameter-free CREATE TABLE or SELECT INTO statements before any statement that references a parameter.");
+            }
+        }
+
+        var prefix = statements.Take(firstParameterReferenceIndex).ToArray();
+        var remainder = statements.Skip(firstParameterReferenceIndex).ToArray();
         return new BatchSplit(prefix, remainder);
     }
 
+    /// <summary>
+    /// A statement needs root scope to survive if and only if it creates a new
+    /// session-local #temp table: CREATE TABLE #t or SELECT ... INTO #t. Other
+    /// statements (including INSERT, UPDATE, DELETE, ALTER TABLE, CREATE INDEX,
+    /// DROP TABLE, and TRUNCATE against an existing #temp) do not create the
+    /// table and can run parameterized after the prefix.
+    /// </summary>
     private static bool IsTempCreatingStatement(TSqlStatement statement) =>
         statement is CreateTableStatement create && IsLocalTemp(create.SchemaObjectName)
         || statement is SelectStatement { Into: not null } select && IsLocalTemp(select.Into);
@@ -199,5 +251,19 @@ internal static class SetupSqlExecution
 
             base.ExplicitVisit(node);
         }
+    }
+}
+
+/// <summary>
+/// Safety rejection for a setup SQL shape that cannot keep session-local #temp
+/// tables visible across the parameterized command boundary. The message is
+/// safe to surface on validation paths because it never contains SQL text,
+/// supplied parameter names, or supplied values.
+/// </summary>
+internal sealed class SetupSqlShapeException : SqlHarnessSafetyException
+{
+    internal SetupSqlShapeException(string message)
+        : base(message)
+    {
     }
 }

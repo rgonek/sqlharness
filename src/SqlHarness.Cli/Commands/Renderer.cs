@@ -120,7 +120,11 @@ public sealed class Renderer
         else if (mode == OutputMode.Text && outcome.Report is SqlHarnessCapabilities capabilities)
             output.WriteLine($"SQLHarness {capabilities.Version} ({capabilities.BuildId}); contract {capabilities.ContractVersion}; commands: {string.Join(", ", capabilities.Commands.Select(c => c.Name))}");
         else if (mode == OutputMode.Text && outcome.Report is SqlValidationReport validation)
+        {
             output.WriteLine($"{validation.Engine}: {validation.Classification}; executed: {validation.Executed}; reason: {validation.Reason ?? "none"}");
+            if (!string.IsNullOrWhiteSpace(validation.Detail))
+                output.WriteLine($"Detail: {validation.Detail}");
+        }
         if (!string.IsNullOrWhiteSpace(outcome.SafeError))
             output.WriteLine($"SQLHarness {outcome.ExitCode}: {SecretRedactor.Redact(outcome.SafeError, [])}");
     }

@@ -12,7 +12,7 @@ namespace SqlHarness.Core;
 
 
 // ParameterName marks a value-validation failure. Diagnostic is not InnerException, so ToString cannot inherit the rejected value.
-internal sealed class SqlHarnessSafetyException(string message, Exception? innerException = null) : Exception(message, innerException)
+internal class SqlHarnessSafetyException(string message, Exception? innerException = null) : Exception(message, innerException)
 {
     internal string? ParameterName { get; init; }
 

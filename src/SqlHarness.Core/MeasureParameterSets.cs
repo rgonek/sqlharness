@@ -463,14 +463,14 @@ internal sealed class MeasureParameterSetRunner
         var setupExecutionCount = 0;
         if (!string.IsNullOrWhiteSpace(operation.SetupSql))
         {
-            var setupCommands = _dialect.Engine == SqlEngine.SqlServer
-                ? SetupSqlExecution.PrepareCommands(operation.SetupSql, sets[0].Parameters, operation.TimeoutSeconds)
-                : [new SqlExecutionCommand(operation.SetupSql, sets[0].Parameters, operation.TimeoutSeconds)];
-            foreach (var command in setupCommands)
-            {
-                await BenchmarkRunner.ExecuteRawAsync(session, command, raw, ct);
-            }
-
+            await SetupSqlExecution.ExecuteSetupAsync(
+                _dialect.Engine,
+                operation.SetupSql,
+                sets[0].Parameters,
+                operation.TimeoutSeconds,
+                session,
+                raw,
+                ct);
             setupExecutionCount = 1;
         }
 

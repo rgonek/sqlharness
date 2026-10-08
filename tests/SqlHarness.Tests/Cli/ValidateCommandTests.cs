@@ -95,6 +95,34 @@ public sealed class ValidateCommandTests
         Assert.Empty(result.MissingParameters);
     }
 
+    [Fact]
+    public void Sql_server_setup_shape_rejection_preserves_actionable_detail_without_leaking_sql_or_identifiers()
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("sqlserver") };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+        var setupSql = "SELECT @id; CREATE TABLE #t (Id int);";
+        var querySql = "SELECT Id FROM #t;";
+
+        var report = SqlValidation.Validate(
+            request,
+            querySql,
+            ["id:int=42"],
+            profiles,
+            new ValidationOptions(ValidationUsage.Benchmark, setupSql));
+
+        Assert.False(report.Allowed);
+        Assert.Equal("parameter_validation_failed", report.Reason);
+        Assert.Equal("rejected", report.Classification);
+        Assert.NotNull(report.Detail);
+        Assert.Contains("session-local temp table", report.Detail, StringComparison.Ordinal);
+        Assert.Contains("before any statement that references a parameter", report.Detail, StringComparison.Ordinal);
+        var serialized = JsonSerializer.Serialize(report);
+        Assert.DoesNotContain(setupSql, serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("#t", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("@id", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("42", serialized, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("sqlserver", "SELECT @id;", "id:int=42", true)]
     [InlineData("postgres", "SELECT @id::int LIMIT 1;", "id:int=42", true)]
