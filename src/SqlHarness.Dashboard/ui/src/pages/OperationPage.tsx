@@ -113,7 +113,7 @@ function OperationView({ id }: { id: number }) {
             <CardTitle>
               <h1>Operation #{op.id}</h1>
             </CardTitle>
-            <StatusBadge status={op.status} />
+            <StatusBadge operation={op} />
             <FlagBadges operation={op} />
           </div>
           <CardDescription>

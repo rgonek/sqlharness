@@ -38,7 +38,7 @@ export function OperationTable({ operations, now }: { operations: OperationSumma
                 {operation.progress && <div className="text-sm text-muted-foreground">{operation.progress.polls} polls</div>}
               </TableCell>
               <TableCell>
-                <StatusBadge status={operation.status} />
+                <StatusBadge operation={operation} />
               </TableCell>
               <TableCell className="max-w-48 truncate">
                 {[operation.profile, operation.database].filter(Boolean).join(" / ") || "—"}
