@@ -908,7 +908,6 @@ internal sealed class SqlSafetyClassifier
 
         public override void ExplicitVisit(SelectStatement node)
         {
-            _queryAliases.Push(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
             if (node.Into is not null)
             {
                 HasSelectInto = true;
@@ -916,7 +915,19 @@ internal sealed class SqlSafetyClassifier
             }
 
             base.ExplicitVisit(node);
-            _queryAliases.Pop();
+        }
+
+        public override void ExplicitVisit(QuerySpecification node)
+        {
+            _queryAliases.Push(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            try
+            {
+                base.ExplicitVisit(node);
+            }
+            finally
+            {
+                _queryAliases.Pop();
+            }
         }
 
         public override void ExplicitVisit(NamedTableReference node)

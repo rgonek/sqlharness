@@ -21,6 +21,14 @@ Allowed read-only SQL Server XML methods `nodes`, `value`, `query`, and `exist` 
 - The same Linux stages on that ext4 clone passed UI install, UI check (25 files / 103 tests), restore, and build (0 warnings / 0 errors). The first full test run had MCP 255 passed / 1 failed / 3 skipped and core 3231 passed. `Inprocess_host_returns_zero_on_immediate_eof_without_stdout_bytes` was the only failure (expected exit 0, got 1); it passed in isolation and on the full rerun.
 - Full Linux test rerun: MCP 256 passed / 0 failed / 3 skipped; core 3231 passed / 0 failed. `dotnet format SqlHarness.sln --no-restore --verify-no-changes` passed. Together with the successful earlier UI, restore, and build stages, this completes the Linux gate on the ext4 clone.
 
+## Review follow-up: query-block alias isolation
+
+- RED command: `dotnet test tests\SqlHarness.Tests\SqlHarness.Tests.csproj --no-restore --filter FullyQualifiedName~XML_nodes_resolution_does_not_reuse_aliases_from_other_query_blocks`
+- RED output: failed 1 / passed 1; the UNION-branch `otherdb.dbo.nodes(...)` shape was incorrectly allowed because `otherdb` came from the first branch. The CTE collision case was already denied.
+- Fix: moved alias collection from `SelectStatement` to each `QuerySpecification`, isolating CTE and UNION query blocks while retaining in-block aliases for valid XML method resolution. The schema-qualified `nodes` function stays denied as `CrossDatabaseReference` when no same-block alias proves the XML shape.
+- GREEN: the collision tests passed 2/2; `SqlSafetyTests` passed 310/310.
+- Final Windows gate after the fix: `pwsh ./scripts/verify.ps1` exited 0 with `verify: OK`; UI 103, MCP 255 passed / 4 skipped, core 3233, build 0 warnings/errors, format passed.
+- Final Linux gate after the fix: pending.
 ## Self-review
 
 - Added tests for all four XML method names across variables/columns, including `.nodes()` in `CROSS APPLY` and a variable table source.
@@ -32,4 +40,5 @@ Allowed read-only SQL Server XML methods `nodes`, `value`, `query`, and `exist` 
 
 - `verify-linux.ps1` could not sync the linked worktree into WSL because the Windows worktree `.git` pointer is not a WSL-readable path; the same gate stages were run in a normal ext4 clone instead. The first full Linux test run had the intermittent MCP EOF failure described above; the isolated test and full rerun passed. Linux UI tests also print existing non-fatal chart-container warnings and Vite reports the existing large-bundle warning.
 - This is offline syntax classification only; column types and database object existence are not established. Successful classification does not prove runtime object validity or domain semantics.
+
 

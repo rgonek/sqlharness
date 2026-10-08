@@ -1351,6 +1351,17 @@ public class SqlSafetyTests
         Assert.Equal(SqlSafetyReason.CrossDatabaseReference, decision.Reason);
     }
 
+    [Theory]
+    [InlineData("WITH Cte AS (SELECT 1 AS Id FROM dbo.Items AS otherdb) SELECT 1 FROM Cte CROSS APPLY otherdb.dbo.nodes('/root/item') AS n(x)")]
+    [InlineData("SELECT otherdb.Id FROM dbo.Items AS otherdb UNION ALL SELECT 1 FROM otherdb.dbo.nodes('/root/item') AS n(x)")]
+    public void XML_nodes_resolution_does_not_reuse_aliases_from_other_query_blocks(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.CrossDatabaseReference, decision.Reason);
+    }
+
     [Fact]
     public void XML_method_support_does_not_allow_persistent_writes()
     {
