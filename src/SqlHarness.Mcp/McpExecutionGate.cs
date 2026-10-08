@@ -34,7 +34,7 @@ public sealed class SystemMcpClock : IMcpClock
 /// measure, compare, watch, snapshot, and inspect; a matrix or a parameter-set batch
 /// travels inside its single compare/measure call, so it counts as one
 /// operation. A second concurrent database call is rejected immediately with
-/// a stable BUSY result: no queue, no retry-after, the client decides; the hint names the running tool.
+/// a stable BUSY result: no queue and no retry-after delay; the hint names the running tool so the client can wait for it to return.
 /// Safe local tools (capabilities, validate, plan,
 /// artifact, gain) run in parallel as long as they share no mutable request
 /// state: every call builds its own Core operation records, so there is no
