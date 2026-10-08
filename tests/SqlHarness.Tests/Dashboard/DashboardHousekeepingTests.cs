@@ -357,6 +357,36 @@ public sealed class DashboardHousekeepingTests
         Assert.Single(Journal.JournalDb.Rows(home.DatabasePath, "SELECT id FROM operations"));
     }
 
+    [Fact]
+    public async Task Retention_uses_settings_saved_after_start()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:old"));
+        var configPath = Path.Combine(home.Path, "config.json");
+        var clock = new ManualClock(new DateTimeOffset(2026, 12, 1, 0, 0, 0, TimeSpan.Zero));
+        var passes = new Passes();
+        using var cts = new CancellationTokenSource();
+
+        // Started with retention off (defaults); the operator then enables it on the settings page.
+        var run = DashboardHost.RunAsync(
+            Options(home, idle: null, clock, passes) with { ConfigPath = configPath, RetentionInterval = TimeSpan.FromHours(1) },
+            cts.Token);
+        await passes.MoreAsync();
+        Assert.Single(Journal.JournalDb.Rows(home.DatabasePath, "SELECT id FROM operations"));
+
+        SqlHarnessConfigWriter.Write(configPath, SqlHarnessConfig.Default with
+        {
+            Journal = new JournalConfig { Retention = new JournalRetentionConfig { Enabled = true, MaxAgeDays = 1 } },
+        });
+        clock.Advance(TimeSpan.FromHours(1));
+        await passes.MoreAsync();
+        Assert.Empty(Journal.JournalDb.Rows(home.DatabasePath, "SELECT id FROM operations"));
+
+        cts.Cancel();
+        Assert.Equal(0, await run.WaitAsync(TimeSpan.FromSeconds(20)));
+    }
+
     private static async Task WaitForAsync(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);

@@ -55,6 +55,7 @@ public sealed class DashboardCommand : AsyncCommand<DashboardCommand.Settings>
                     ProcessInfo.Current,
                     new SystemBrowserLauncher())
                 {
+                    ConfigPath = SqlHarnessPaths.ConfigFile,
                     // Only the autostarted instance idle-exits; a dashboard started by hand runs until Ctrl+C.
                     IdleShutdown = settings.Background ? TimeSpan.FromHours(config.Config.Dashboard.IdleShutdownHours) : null,
                 },

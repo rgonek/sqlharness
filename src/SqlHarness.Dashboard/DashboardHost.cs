@@ -32,6 +32,9 @@ public sealed record DashboardHostOptions(
 
     public TimeSpan RetentionInterval { get; init; } = TimeSpan.FromHours(1);
 
+    /// <summary>config.json to re-read before each retention pass; null keeps <see cref="Config"/> (tests).</summary>
+    public string? ConfigPath { get; init; }
+
     /// <summary>Clock for retention ages, idle decisions and housekeeping delays.</summary>
     public TimeProvider Time { get; init; } = TimeProvider.System;
 
@@ -139,6 +142,8 @@ public static class DashboardHost
                 {
                     LivePollInterval = options.LivePollInterval,
                     Activity = activity,
+                    ConfigPath = options.ConfigPath ?? Path.Combine(options.Home, "config.json"),
+                    TargetsPath = Path.Combine(options.Home, "targets.json"),
                 },
                 ct);
         }
@@ -194,7 +199,6 @@ public static class DashboardHost
     /// </summary>
     private static async Task HousekeepAsync(DashboardHostOptions options, JournalReader reader, DashboardActivity activity, CancellationToken ct)
     {
-        var journal = options.Config.Config.Journal;
         DateTimeOffset? lastRetention = null;
         var lastJournalChange = options.Time.GetUtcNow();
         long? lastVersion = null;
@@ -226,20 +230,24 @@ public static class DashboardHost
             while (true)
             {
                 var now = options.Time.GetUtcNow();
-                if (journal.Enabled && journal.Retention.Enabled
-                    && (lastRetention is not { } last || now - last >= options.RetentionInterval))
+                if (lastRetention is not { } last || now - last >= options.RetentionInterval)
                 {
                     lastRetention = now;
-                    // Agent commits since the last check would be hidden by the post-retention
-                    // baseline: count them before retention runs.
-                    var before = ReadVersion();
-                    if (before is not null && lastVersion is not null && before != lastVersion)
-                        lastJournalChange = now;
-                    // Never throws; a failed pass is retried at the next interval. Ctrl+C waits for an
-                    // in-flight pass, which its short delete batches keep brief.
-                    await Task.Run(() => JournalRetention.Run(options.DatabasePath, journal, options.Processes, options.Time), ct);
-                    // Retention's own commits are not activity: take the version after it as the baseline.
-                    lastVersion = ReadVersion();
+                    // Settings saved from the settings page apply from the next pass; an invalid file means defaults.
+                    var journal = options.ConfigPath is null ? options.Config.Config.Journal : SqlHarnessConfigLoader.Load(options.ConfigPath).Config.Journal;
+                    if (journal.Enabled && journal.Retention.Enabled)
+                    {
+                        // Agent commits since the last check would be hidden by the post-retention
+                        // baseline: count them before retention runs.
+                        var before = ReadVersion();
+                        if (before is not null && lastVersion is not null && before != lastVersion)
+                            lastJournalChange = now;
+                        // Never throws; a failed pass is retried at the next interval. Ctrl+C waits for an
+                        // in-flight pass, which its short delete batches keep brief.
+                        await Task.Run(() => JournalRetention.Run(options.DatabasePath, journal, options.Processes, options.Time), ct);
+                        // Retention's own commits are not activity: take the version after it as the baseline.
+                        lastVersion = ReadVersion();
+                    }
                 }
 
                 var version = ReadVersion();
