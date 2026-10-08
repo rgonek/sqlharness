@@ -28,7 +28,7 @@ Allowed read-only SQL Server XML methods `nodes`, `value`, `query`, and `exist` 
 - Fix: moved alias collection from `SelectStatement` to each `QuerySpecification`, isolating CTE and UNION query blocks while retaining in-block aliases for valid XML method resolution. The schema-qualified `nodes` function stays denied as `CrossDatabaseReference` when no same-block alias proves the XML shape.
 - GREEN: the collision tests passed 2/2; `SqlSafetyTests` passed 310/310.
 - Final Windows gate after the fix: `pwsh ./scripts/verify.ps1` exited 0 with `verify: OK`; UI 103, MCP 255 passed / 4 skipped, core 3233, build 0 warnings/errors, format passed.
-- Final Linux gate after the fix: pending.
+- Final Linux gate after the fix: `pwsh ./scripts/verify-linux.ps1` again could not read the linked worktree pointer, so the same stages ran in `~/src/sqlharness-plan-038-linux` on WSL ext4 at commit `817c1ff`: `npm ci --prefix src/SqlHarness.Dashboard/ui`, `npm run check --prefix src/SqlHarness.Dashboard/ui`, `dotnet restore SqlHarness.sln`, `dotnet build SqlHarness.sln --no-restore -warnaserror`, `dotnet test SqlHarness.sln --no-build --filter "FullyQualifiedName!~Integration" --logger "console;verbosity=normal"`, and `dotnet format SqlHarness.sln --no-restore --verify-no-changes`. The stage script exited 0 with `verify-linux: OK`; UI 25 files / 103 tests, build 0 warnings/errors, MCP 256 passed / 3 skipped, core 3233 passed, and format passed.
 ## Self-review
 
 - Added tests for all four XML method names across variables/columns, including `.nodes()` in `CROSS APPLY` and a variable table source.
@@ -40,5 +40,3 @@ Allowed read-only SQL Server XML methods `nodes`, `value`, `query`, and `exist` 
 
 - `verify-linux.ps1` could not sync the linked worktree into WSL because the Windows worktree `.git` pointer is not a WSL-readable path; the same gate stages were run in a normal ext4 clone instead. The first full Linux test run had the intermittent MCP EOF failure described above; the isolated test and full rerun passed. Linux UI tests also print existing non-fatal chart-container warnings and Vite reports the existing large-bundle warning.
 - This is offline syntax classification only; column types and database object existence are not established. Successful classification does not prove runtime object validity or domain semantics.
-
-
