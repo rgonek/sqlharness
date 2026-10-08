@@ -15,7 +15,7 @@ const spread = (value: { min: number; median: number; max: number } | null, unit
   value ? `${formatNumber(value.median)}${unit}` : "—"
 const range = (value: { min: number; max: number } | null) => (value ? `${formatNumber(value.min)}–${formatNumber(value.max)}` : undefined)
 
-function StoredPlan({ link }: { link: PlanLinkRow }) {
+function StoredPlan({ link, engine }: { link: PlanLinkRow; engine: string | null }) {
   const [open, setOpen] = useState(false)
   const distilled = useDistilledPlan(link.hash, open)
   return (
@@ -31,12 +31,12 @@ function StoredPlan({ link }: { link: PlanLinkRow }) {
       </div>
       {open && (distilled.error ? <ErrorState error={distilled.error} /> : distilled.isPending
         ? <Skeleton className="h-24 w-full" />
-        : <PlanTree plan={distilled.data} />)}
+        : <PlanTree plan={distilled.data} engine={engine} />)}
     </div>
   )
 }
 
-export function VariantPanel({ variant }: { variant: VariantDetail }) {
+export function VariantPanel({ variant, engine }: { variant: VariantDetail; engine: string | null }) {
   const plans = [...new Map(variant.plans.map(link => [link.hash, link])).values()]
   return (
     <div className="space-y-4">
@@ -140,7 +140,7 @@ export function VariantPanel({ variant }: { variant: VariantDetail }) {
           <CardContent className="space-y-4">
             {plans.map(link =>
               link.stored ? (
-                <StoredPlan key={link.hash} link={link} />
+                <StoredPlan key={link.hash} link={link} engine={engine} />
               ) : (
                 <div key={link.hash} className="text-sm text-muted-foreground">
                   <span className="font-mono">{shortHash(link.hash)}</span> — plan not stored (journal.storeSensitive is off)

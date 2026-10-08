@@ -72,6 +72,10 @@
     --chart-3: oklch(0.439 0 0);
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
+    --sql-keyword: oklch(0.45 0.18 265);
+    --sql-string: oklch(0.45 0.13 150);
+    --sql-number: oklch(0.5 0.16 45);
+    --sql-type: oklch(0.45 0.13 320);
     --radius: 0.625rem;
     --sidebar: oklch(0.985 0 0);
     --sidebar-foreground: oklch(0.145 0 0);
@@ -107,6 +111,10 @@
     --chart-3: oklch(0.439 0 0);
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
+    --sql-keyword: oklch(0.78 0.12 265);
+    --sql-string: oklch(0.8 0.12 150);
+    --sql-number: oklch(0.8 0.12 60);
+    --sql-type: oklch(0.8 0.1 320);
     --sidebar: oklch(0.205 0 0);
     --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -127,4 +135,26 @@
   html {
     @apply font-sans;
     }
+}
+
+/* SQL highlighting (highlight.js token classes). The neutral theme's chart colours are greys that vanish on one background, so tokens use their own variables. */
+.sql-block .hljs-keyword,
+.sql-block .hljs-built_in {
+  color: var(--sql-keyword);
+  font-weight: 600;
+}
+.sql-block .hljs-string {
+  color: var(--sql-string);
+}
+.sql-block .hljs-number,
+.sql-block .hljs-literal {
+  color: var(--sql-number);
+}
+.sql-block .hljs-comment {
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+.sql-block .hljs-type,
+.sql-block .hljs-operator {
+  color: var(--sql-type);
 }

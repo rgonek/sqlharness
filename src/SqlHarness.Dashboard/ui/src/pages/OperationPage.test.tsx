@@ -42,12 +42,13 @@ test("compare shows baseline versus candidate and stored plans with operators", 
   const comparison = await screen.findByRole("region", { name: "Baseline vs candidate" })
   expect(within(comparison).getByText("-50%")).toBeInTheDocument()
   expect(screen.getByText("equivalent")).toBeInTheDocument()
-  expect(screen.getByText("SELECT 2")).toBeInTheDocument()
+  const sql = () => screen.getAllByTestId("sql-code").map(code => code.textContent?.replace(/\s+/g, " ").trim())
+  expect(sql()).toContain("SELECT 2")
   expect(screen.getByRole("link", { name: "Download plan" })).toHaveAttribute("href", `/api/plans/${hash}`)
 
   await userEvent.click(screen.getByRole("button", { name: "Show operators" }))
   expect(await screen.findByText("Clustered Index Scan")).toBeInTheDocument()
-  expect(screen.getByText("SELECT 1 /* plan */")).toBeInTheDocument()
+  expect(sql()).toContain("SELECT 1 /* plan */")
 })
 
 test("Operation_without_metrics_or_target_renders", async () => {

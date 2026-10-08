@@ -5,6 +5,7 @@ import { useOperation } from "@/api/queries"
 import type { OperationDetail } from "@/api/types"
 import { ErrorState } from "@/components/ErrorState"
 import { FlagBadges } from "@/components/FlagBadges"
+import { SqlBlock } from "@/components/SqlBlock"
 import { StatusBadge } from "@/components/StatusBadge"
 import { VariantPanel } from "@/components/VariantPanel"
 import { Badge } from "@/components/ui/badge"
@@ -153,7 +154,7 @@ function OperationView({ id }: { id: number }) {
 
       <Comparison detail={detail} />
 
-      {detail.variants.length === 1 && <VariantPanel variant={detail.variants[0]} />}
+      {detail.variants.length === 1 && <VariantPanel variant={detail.variants[0]} engine={op.engine} />}
       {detail.variants.length > 1 && (
         <Tabs defaultValue={String(detail.variants[0].ordinal)}>
           <TabsList>
@@ -165,7 +166,7 @@ function OperationView({ id }: { id: number }) {
           </TabsList>
           {detail.variants.map(v => (
             <TabsContent key={v.ordinal} value={String(v.ordinal)}>
-              <VariantPanel variant={v} />
+              <VariantPanel variant={v} engine={op.engine} />
             </TabsContent>
           ))}
         </Tabs>
@@ -180,10 +181,8 @@ function OperationView({ id }: { id: number }) {
             <p className="text-sm text-muted-foreground">SQL text is not stored (journal.storeSensitive is off).</p>
           ) : (
             <>
-              <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-sm">{detail.sqlText}</pre>
-              {detail.candidateSqlText !== null && (
-                <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-sm">{detail.candidateSqlText}</pre>
-              )}
+              <SqlBlock sql={detail.sqlText} engine={op.engine} label={detail.candidateSqlText !== null ? "Baseline" : undefined} />
+              {detail.candidateSqlText !== null && <SqlBlock sql={detail.candidateSqlText} engine={op.engine} label="Candidate" />}
             </>
           )}
         </CardContent>

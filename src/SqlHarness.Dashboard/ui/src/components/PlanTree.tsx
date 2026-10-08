@@ -1,15 +1,16 @@
 import type { DistilledPlan } from "@/api/types"
+import { SqlBlock } from "@/components/SqlBlock"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatNumber, formatPercent } from "@/lib/format"
 import { flattenPlan } from "@/lib/plan"
 
-export function PlanTree({ plan }: { plan: DistilledPlan }) {
+export function PlanTree({ plan, engine }: { plan: DistilledPlan; engine?: string | null }) {
   return (
     <div className="space-y-4">
       {plan.statements.map((statement, index) => (
         <div key={index} className="space-y-2">
-          {statement.sql && <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-sm">{statement.sql}</pre>}
+          {statement.sql && <SqlBlock sql={statement.sql} engine={engine} />}
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
