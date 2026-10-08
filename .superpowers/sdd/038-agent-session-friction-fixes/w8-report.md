@@ -38,3 +38,15 @@ Linux: `pwsh ./scripts/verify-linux.ps1` could not pass its initial `sync` stage
 - The setup-variable validator is SQL Server AST-only and is not run for PostgreSQL. It examines each variant batch independently and exempts caller-supplied parameter names.
 - The Windows `verify-linux.ps1` wrapper itself cannot source this worktree under WSL because of its absolute Windows Git pointer. All Linux gate stages passed against the committed code in the existing ext4 clone. The worktree pointer remains unchanged.
 - No additional concerns found in the reviewed diff.
+
+## Review follow-up: declaration order
+
+Review found that checking only whether a variant batch declared a same-named local could accept `SELECT @sharedValue; DECLARE @sharedValue int = 2;` when setup also declared `@sharedValue`. Added AST positions for declaration names and variable references. A local now exempts a setup name only when its declaration precedes that reference in the same batch. Typed bound inputs and earlier same-batch locals remain accepted.
+
+TDD regression: before the change, `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~Setup_only_reference_before_late_variant_declaration_is_rejected_offline"` failed as expected (`Assert.False()` expected false, actual true). After the change, the late declaration, setup-only rejection, typed parameter, and earlier-local tests passed: the focused filter reported 4 passed, 0 failed. The compare test now uses the same late-declaration shape and confirms a safety exit with zero connection opens. Covering Core suites passed 446/446; MCP mapping passed 69/69. `git diff --check` passed, and `dotnet format SqlHarness.sln --verify-no-changes` exited 0.
+
+Follow-up Windows gate at commit `8eb32dc`: `pwsh ./scripts/verify.ps1` exited 0 and printed `verify: OK`; UI 103/103, Core 3,239/3,239, MCP 257 passed / 4 skipped, build 0 warnings and 0 errors, format passed.
+
+Follow-up Linux ext4 clone at commit `8eb32dc`: SDK 9.0.316 and Node v24.18.0 matched; UI 103/103; restore passed; build passed with 0 warnings and 0 errors; Core passed 3,239/3,239; format passed. The full MCP stage did not pass cleanly. Its first run had 257 passed / 1 failed / 3 skipped: `McpStdioProcessTests.Inprocess_host_returns_zero_on_immediate_eof_without_stdout_bytes` expected exit 0 but got 1. A full MCP rerun had 256 passed / 2 failed / 3 skipped: that same immediate-EOF test and `McpJournalTests.Tool_call_records_session_from_client_info(mode: request)` (`ArgumentOutOfRangeException` in `StringBuilder.ToString`, test line 92). The EOF test passed in isolation (`FullyQualifiedName~Inprocess_host_returns_zero_on_immediate_eof_without_stdout_bytes`), and the request-mode journal test passed when isolated with `FullyQualifiedName~McpJournalTests.Tool_call_records_session_from_client_info&DisplayName~request`. No further full-suite retries were run. Thus the latest Linux full test stage is recorded as failed despite both individually passing reruns; the Linux format stage separately passed.
+
+The review fix commit is `8eb32dc` (`Require prior declarations for setup variable scope`). The report update is committed separately.
