@@ -395,8 +395,8 @@ public sealed class McpToolHandlers(
             return Fail(SqlHarnessExitCode.Safety, "The requested budget is invalid.", command);
         }
 
-        if (!_gate.TryEnterDb())
-            return McpExecutionGate.BusyResult(command, budget);
+        if (!_gate.TryEnterDb(command))
+            return McpExecutionGate.BusyResult(command, budget, _gate.RunningTool);
 
         try
         {

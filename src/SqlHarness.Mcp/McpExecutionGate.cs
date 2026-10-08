@@ -34,7 +34,7 @@ public sealed class SystemMcpClock : IMcpClock
 /// measure, compare, watch, snapshot, and inspect; a matrix or a parameter-set batch
 /// travels inside its single compare/measure call, so it counts as one
 /// operation. A second concurrent database call is rejected immediately with
-/// a stable BUSY result: no queue, no retry-after, the client decides.
+/// a stable BUSY result: no queue, no retry-after, the client decides; the hint names the running tool.
 /// Safe local tools (capabilities, validate, plan,
 /// artifact, gain) run in parallel as long as they share no mutable request
 /// state: every call builds its own Core operation records, so there is no
@@ -65,6 +65,7 @@ public sealed class McpExecutionGate
     };
 
     private readonly SemaphoreSlim _database = new(1, 1);
+    private string? _runningTool;
 
     /// <summary>
     /// True for the tools that open a database connection and therefore run
@@ -78,26 +79,52 @@ public sealed class McpExecutionGate
     /// another database operation already holds it; the caller must then
     /// return <see cref="BusyResult"/> instead of executing.
     /// </summary>
-    public bool TryEnterDb() => _database.Wait(TimeSpan.Zero);
+    public bool TryEnterDb(string? tool = null)
+    {
+        if (!_database.Wait(TimeSpan.Zero))
+            return false;
+        Volatile.Write(ref _runningTool, tool);
+        return true;
+    }
+
+    /// <summary>
+    /// Fixed identifier of the tool holding the database slot, or null when
+    /// none is recorded (free slot, unnamed holder, or the brief window between
+    /// taking the slot and recording the name).
+    /// </summary>
+    public string? RunningTool => Volatile.Read(ref _runningTool);
 
     /// <summary>Releases the database slot. Callers release on every path.</summary>
-    public void ExitDb() => _database.Release();
+    public void ExitDb()
+    {
+        Volatile.Write(ref _runningTool, null);
+        _database.Release();
+    }
 
     /// <summary>
     /// Stable BUSY rejection: the call was not executed, so
     /// <c>IsError</c> is true, the exit code is Safety (2), the error code is
-    /// <c>busy</c>, and the message is static.
+    /// <c>busy</c>, and the message is static. The hint names the running tool
+    /// (a fixed identifier, never scope or user data) when one is recorded.
     /// </summary>
-    public static CallToolResult BusyResult(string command, McpResultBudget? budget = null) =>
+    public static CallToolResult BusyResult(
+        string command,
+        McpResultBudget? budget = null,
+        string? runningTool = null) =>
         McpResultAdapter.Adapt(
             new SqlHarnessOutcome(
                 SqlHarnessExitCode.Safety,
                 null,
                 null,
                 null,
-                new SqlHarnessError(BusyCode, "execution", BusyMessage)),
+                new SqlHarnessError(BusyCode, "execution", BusyMessage, BusyHint(runningTool))),
             command,
             budget ?? new McpResultBudget());
+
+    private static string BusyHint(string? runningTool) =>
+        "One database operation runs per process. Wait for the running "
+        + (string.IsNullOrEmpty(runningTool) ? "database" : runningTool)
+        + " call to return, then send the next call.";
 
     /// <summary>
     /// Stable cancellation result: the call did not run to completion, so
