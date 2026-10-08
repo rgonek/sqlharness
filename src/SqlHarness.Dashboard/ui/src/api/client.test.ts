@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { stubFetch } from "@/test/render"
-import { getJson, NotFoundError, UnauthorizedError, withQuery } from "./client"
+import { ConflictError, FieldErrorsError, getJson, NotFoundError, putJson, UnauthorizedError, withQuery } from "./client"
 
 describe("client", () => {
   test("withQuery skips empty values", () => {
@@ -21,5 +21,22 @@ describe("client", () => {
   test("returns parsed json", async () => {
     stubFetch({ "/api/stats": { tokens: { raw: 1, emitted: 1 } } })
     expect(await getJson("/api/stats")).toEqual({ tokens: { raw: 1, emitted: 1 } })
+  })
+
+  test("putJson sends the write header and JSON, and maps 400 and 409", async () => {
+    let seen: RequestInit | undefined
+    globalThis.fetch = (async (_: RequestInfo | URL, init?: RequestInit) => {
+      seen = init
+      return new Response(JSON.stringify({ errors: [{ field: "journal.retention.maxAgeDays", message: "Must be between 1 and 3650." }] }), { status: 400 })
+    }) as typeof fetch
+    const error = await putJson("/api/settings", { a: 1 }).catch(e => e)
+    expect(error).toBeInstanceOf(FieldErrorsError)
+    expect((error as FieldErrorsError).errors[0].field).toBe("journal.retention.maxAgeDays")
+    expect(seen?.method).toBe("PUT")
+    expect(new Headers(seen?.headers).get("X-SqlHarness-Dashboard")).toBe("1")
+    expect(new Headers(seen?.headers).get("Content-Type")).toBe("application/json")
+
+    globalThis.fetch = (async () => new Response(JSON.stringify({ error: "invalid" }), { status: 409 })) as typeof fetch
+    expect(await putJson("/api/settings", {}).catch(e => e)).toBeInstanceOf(ConflictError)
   })
 })

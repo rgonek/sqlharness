@@ -1,6 +1,6 @@
-import { QueryClient, useInfiniteQuery, useQuery } from "@tanstack/react-query"
-import { getJson, NotFoundError, UnauthorizedError } from "./client"
-import type { DashboardStats, DistilledPlan, OperationDetail, Page, SessionDetail, SessionSummary } from "./types"
+import { QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { getJson, NotFoundError, putJson, UnauthorizedError } from "./client"
+import type { DashboardStats, DistilledPlan, OperationDetail, Page, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string }
 export type StatsRange = "24h" | "7d" | "30d" | "all"
@@ -10,6 +10,7 @@ export const queryKeys = {
   session: (id: number) => ["session", id] as const,
   operation: (id: number) => ["operation", id] as const,
   stats: (range: StatsRange) => ["stats", range] as const,
+  settings: () => ["settings"] as const,
   plan: (hash: string) => ["plan", hash] as const,
   liveOperations: ["live", "operations"] as const,
   liveRunning: ["live", "running"] as const,
@@ -68,5 +69,18 @@ export function useDistilledPlan(hash: string, enabled: boolean) {
     queryFn: () => getJson<DistilledPlan>(`/api/plans/${hash}`, { view: "distilled" }),
     enabled,
     staleTime: Infinity,
+  })
+}
+
+export function useSettings() {
+  return useQuery({ queryKey: queryKeys.settings(), queryFn: () => getJson<SettingsResponse>("/api/settings") })
+}
+
+export function useSaveSettings() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ settings, overwriteInvalid }: { settings: Settings; overwriteInvalid?: boolean }) =>
+      putJson<SettingsResponse>("/api/settings", settings, overwriteInvalid ? { overwriteInvalid: "true" } : undefined),
+    onSuccess: data => client.setQueryData(queryKeys.settings(), data),
   })
 }
