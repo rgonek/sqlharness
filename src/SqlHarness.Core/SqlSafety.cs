@@ -508,7 +508,7 @@ internal sealed class SqlSafetyClassifier
     private static bool IsScalarDeclaration(DeclareVariableStatement declare) =>
         declare.Declarations.All(d =>
             d is DeclareVariableElement element &&
-            element.DataType is SqlDataTypeReference or UserDataTypeReference);
+            element.DataType is SqlDataTypeReference or UserDataTypeReference or XmlDataTypeReference);
 
     private static BatchVariableScope CollectBatchScope(TSqlBatch batch)
     {
@@ -882,6 +882,8 @@ internal sealed class SqlSafetyClassifier
         // 011/T3: OUTPUT INTO @t is local only for a table variable proven in the batch being walked.
         private BatchVariableScope _scope = BatchVariableScope.Empty;
         private readonly Dictionary<TSqlBatch, BatchVariableScope> _scopes = [];
+        private readonly Stack<HashSet<string>> _queryAliases = new();
+        private readonly Stack<SchemaObjectName> _xmlMethodNames = new();
 
         internal bool HasCrossDatabaseReference { get; private set; }
         internal bool HasExternalAccess { get; private set; }
@@ -904,22 +906,56 @@ internal sealed class SqlSafetyClassifier
             base.ExplicitVisit(node);
         }
 
-        public override void ExplicitVisit(SchemaObjectName node)
+        public override void ExplicitVisit(SelectStatement node)
         {
-            if (node.Identifiers.Count > 2)
+            _queryAliases.Push(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            if (node.Into is not null)
             {
-                HasCrossDatabaseReference = true;
+                HasSelectInto = true;
+                HasNonLocalSelectInto |= !IsLocalTemp(node.Into);
+            }
+
+            base.ExplicitVisit(node);
+            _queryAliases.Pop();
+        }
+
+        public override void ExplicitVisit(NamedTableReference node)
+        {
+            if (_queryAliases.TryPeek(out var aliases))
+            {
+                var alias = node.Alias?.Value ?? node.SchemaObject.BaseIdentifier.Value;
+                if (!string.IsNullOrEmpty(alias))
+                    aliases.Add(alias);
             }
 
             base.ExplicitVisit(node);
         }
 
-        public override void ExplicitVisit(SelectStatement node)
+        public override void ExplicitVisit(SchemaObjectFunctionTableReference node)
         {
-            if (node.Into is not null)
+            var name = node.SchemaObject;
+            var isXmlNodesMethod = name is not null &&
+                name.Identifiers.Count == 3 &&
+                string.Equals(name.BaseIdentifier.Value, "nodes", StringComparison.OrdinalIgnoreCase) &&
+                _queryAliases.TryPeek(out var aliases) &&
+                aliases.Contains(name.Identifiers[0].Value);
+
+            if (isXmlNodesMethod)
+                _xmlMethodNames.Push(name!);
+
+            base.ExplicitVisit(node);
+
+            if (isXmlNodesMethod)
+                _xmlMethodNames.Pop();
+        }
+
+        public override void ExplicitVisit(SchemaObjectName node)
+        {
+            var isRecognizedXmlMethodName = _xmlMethodNames.TryPeek(out var methodName) &&
+                ReferenceEquals(methodName, node);
+            if (!isRecognizedXmlMethodName && node.Identifiers.Count > 2)
             {
-                HasSelectInto = true;
-                HasNonLocalSelectInto |= !IsLocalTemp(node.Into);
+                HasCrossDatabaseReference = true;
             }
 
             base.ExplicitVisit(node);

@@ -1324,6 +1324,42 @@ public class SqlSafetyTests
         }
     }
 
+    [Theory]
+    [InlineData("SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM dbo.Items AS item")]
+    [InlineData("SELECT item.XmlCol.query('/root/item') FROM dbo.Items AS item")]
+    [InlineData("SELECT item.XmlCol.exist('/root/item') FROM dbo.Items AS item")]
+    [InlineData("SELECT node.XmlCol.value('(/root/@id)[1]', 'int') FROM dbo.Items AS item CROSS APPLY item.XmlCol.nodes('/root/item') AS node(XmlCol)")]
+    [InlineData("DECLARE @xml xml = '<root><item id=\"1\" /></root>'; SELECT @xml.value('(/root/item/@id)[1]', 'int')")]
+    [InlineData("DECLARE @xml xml = '<root><item /></root>'; SELECT @xml.query('/root/item')")]
+    [InlineData("DECLARE @xml xml = '<root><item /></root>'; SELECT @xml.exist('/root/item')")]
+    [InlineData("DECLARE @xml xml = '<root><item id=\"1\" /></root>'; SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM @xml.nodes('/root/item') AS item(XmlCol)")]
+    public void Query_allows_read_only_XML_methods_on_columns_and_variables(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+        Assert.False(decision.HasSessionLocalWork);
+    }
+
+    [Fact]
+    public void XML_method_resolution_does_not_hide_three_part_database_references()
+    {
+        var decision = ClassifyQuery("SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM otherdb.dbo.Items AS item");
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.CrossDatabaseReference, decision.Reason);
+    }
+
+    [Fact]
+    public void XML_method_support_does_not_allow_persistent_writes()
+    {
+        var decision = ClassifyQuery("UPDATE dbo.Items SET XmlCol = XmlCol.query('/root/item')");
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, decision.Reason);
+    }
+
     private SqlSafetyDecision ClassifyQuery(string sql) =>
         _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: false, confirmDatabase: null);
 }
