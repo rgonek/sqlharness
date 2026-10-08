@@ -1,5 +1,7 @@
 # Activity Journal — Phase 1 (journal core and session identity) Implementation Plan
 
+**Status (2026-10-08):** DONE — journal on main (b262eb4, 2026-10-06; `src/SqlHarness.Core/Journal/`). Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Every CLI command and MCP tool call that goes through `ISqlHarnessModule` is recorded in a local SQLite journal (`~/.sqlharness/data/activity.db`), grouped into implicitly identified agent sessions. Agent-visible output and exit codes do not change.

@@ -1,5 +1,7 @@
 # Query Store Top Consumers Implementation Plan
 
+**Status (2026-10-08):** DONE — `qstop` shipped on main (e894e95..a375e6d, 2026-09-23). Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a read-only `qstop` command that ranks logical Query Store queries by cumulative elapsed duration while keeping SQL text out of stdout and safe errors.

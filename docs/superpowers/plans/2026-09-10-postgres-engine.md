@@ -1,5 +1,7 @@
 # PostgreSQL Engine Implementation Plan
 
+**Status (2026-10-08):** DONE — Postgres dialect pack on main (f809bb2 .. 4cf82a5, 2026-09-10..11; `src/SqlHarness.Core/Postgres/`). Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a Postgres dialect pack behind the existing `sqlharness` CLI so every current command works against a closed `engine: postgres` profile without changing SQL Server behavior.

@@ -1,5 +1,7 @@
 # Windows approval tray Implementation Plan
 
+**Status (2026-10-08):** TODO — brak implementacji. Wymaga decyzji produktowej: łamie obecny kontrakt MCP v1 („exactly 11 tools”, „no persistent mutations”).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Dodać do naszego SQLHarness MCP jednorazowe zatwierdzanie trwałego DML w lokalnej aplikacji Windows z ikoną tray i powiadomieniami.

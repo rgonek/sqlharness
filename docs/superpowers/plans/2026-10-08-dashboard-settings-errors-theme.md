@@ -1,5 +1,7 @@
 # Dashboard settings, profiles, error details, SQL rendering and theme — Implementation Plan
 
+**Status (2026-10-08):** DONE — e897844 (error details), 01eba6a (settings), e5135c1 (profiles), 73dc28a (theme), 970bca1 (SQL highlighting), 4d35679/ece2f30 (docs). Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let the operator edit `config.json` settings, view profiles read-only, see why an operation failed or was rejected, read formatted and highlighted SQL, and pick a light/dark/system theme in the SQLHarness dashboard.

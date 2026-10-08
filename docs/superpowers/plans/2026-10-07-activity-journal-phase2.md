@@ -1,5 +1,7 @@
 # Activity Journal — Phase 2 (metrics capture) Implementation Plan
 
+**Status (2026-10-08):** DONE — benchmark metrics in the journal on main (6105c8c, 75e693b, 0fdc9ec, 257fae7). Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** For every successful `measure` (including `--param-set`), `compare`, and `compare --matrix`, the activity journal stores per-variant performance metrics, full per-table `STATISTICS IO`, plan-derived diagnostics, and plan identity hashes. With `journal.storeSensitive`, it also stores the deduplicated, gzip-compressed full plans. Agent-visible output stays byte-identical.

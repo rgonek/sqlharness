@@ -1,5 +1,7 @@
 # Complete SELECT Syntax Safety Classification Implementation Plan
 
+**Status (2026-10-08):** DONE — 6bde9ea (behavioral classification), f607e5f (contract docs). Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Accept the complete ScriptDom-parsable syntax surface inside top-level `SELECT` statements while preserving explicit fail-closed checks for unsafe statements and behaviors.

@@ -1,5 +1,7 @@
 # Activity Journal — Phase 3 (dashboard server and read-only API) Implementation Plan
 
+**Status (2026-10-08):** DONE — `sqlharness dashboard` server on main (908b941 and neighbours, 2026-10-07). Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** `sqlharness dashboard` starts a loopback-only HTTP server (one per user, guarded by a lock file) that serves a token-protected, read-only JSON API and a live SSE feed over `~/.sqlharness/data/activity.db`. Running operations whose process died are reported as `abandoned`, and `watch` reports per-poll progress into the journal.

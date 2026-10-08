@@ -1,5 +1,7 @@
 # SQL safety audit remediation Implementation Plan
 
+**Status (2026-10-08):** DONE — T1 f75a25d/07bbb0f/0cfd7a4, T2 c900888, T3 044c0c7/bcb9e69/222ca22/bba0a9d, T4 4e31382. Checkboxy poniżej nie były odhaczane w trakcie wykonania.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Uszczelnić rozpoznawanie trwałych zapisów, redakcję wejścia i kontrolę celu; ustalić wykonalną politykę funkcji PostgreSQL.

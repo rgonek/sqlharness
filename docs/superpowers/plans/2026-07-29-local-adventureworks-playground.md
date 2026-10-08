@@ -1,5 +1,7 @@
 # Optional Local AdventureWorks Playground Implementation Plan
 
+**Status (2026-10-08):** DONE — `scripts/setup-local-adventureworks.ps1` on main (3830f2b..aeeb580). Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a reproducible but optional local SQL Server 2022/AdventureWorks2022 environment for manual SQLHarness work and opt-in integration tests.

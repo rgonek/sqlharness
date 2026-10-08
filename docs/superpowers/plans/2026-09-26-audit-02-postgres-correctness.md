@@ -1,5 +1,7 @@
 # PostgreSQL correctness audit Implementation Plan
 
+**Status (2026-10-08):** DONE — T1 3d8ce5f, T2 6b7801e/de84dfe, T3 10c44f8. Checkboxy poniżej nie były odhaczane w trakcie wykonania.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Usunąć fałszywe odrzucenia zapytań i połączeń oraz błędne metryki PostgreSQL.
