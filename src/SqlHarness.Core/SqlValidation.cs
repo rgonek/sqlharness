@@ -150,9 +150,16 @@ public static class SqlValidation
             {
                 parsedParameters = dialect.BindParameters(
                     SqlParameterInputs.Resolve(parameterDeclarations, options?.TypedParameters));
+                if (dialect.Engine == SqlEngine.SqlServer)
+                    SqlSetupVariableReferenceValidator.Validate(setupSql, parsedParameters, sql);
                 dialect.ValidateParameterReferences(parsedParameters, setupSql, sql);
                 SetupSqlExecution.Validate(dialect.Engine, setupSql, parsedParameters);
                 parameterValidationCompleted = true;
+            }
+            catch (SqlSetupVariableScopeException exception)
+            {
+                reason = "parameter_validation_failed";
+                detail = exception.Message;
             }
             catch (SetupSqlShapeException shapeException)
             {

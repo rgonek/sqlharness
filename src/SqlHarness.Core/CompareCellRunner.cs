@@ -97,6 +97,8 @@ internal static class CompareOperationPreparer
         ArgumentNullException.ThrowIfNull(variants);
         foreach (var variant in variants)
         {
+            if (prepared.Dialect.Engine == SqlEngine.SqlServer)
+                SqlSetupVariableReferenceValidator.Validate(setupSql, variant, baselineSql, candidateSql);
             prepared.Dialect.ValidateParameterReferences(variant, setupSql, baselineSql, candidateSql);
             SetupSqlExecution.Validate(prepared.Dialect.Engine, setupSql, variant);
         }

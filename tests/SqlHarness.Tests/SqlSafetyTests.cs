@@ -873,6 +873,22 @@ public class SqlSafetyTests
         Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
     }
 
+    [Fact]
+    public void T3_Compare_setup_explains_unproven_named_table_variable_without_echoing_sql_names()
+    {
+        const string sql = "DECLARE @agentInput dbo.PrivateType; INSERT @agentInput (Id) VALUES (1)";
+
+        var decision = _classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, decision.Reason);
+        Assert.Equal(
+            "NonTemporaryWrite. Table-position variables require an earlier inline TABLE declaration in the same batch. Named user-defined types are not proven as table variables. Setup variables do not cross into benchmark batches.",
+            decision.RejectionDescription);
+        Assert.DoesNotContain("agentInput", decision.RejectionDescription, StringComparison.Ordinal);
+        Assert.DoesNotContain("PrivateType", decision.RejectionDescription, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("DECLARE @v int = 1; INSERT @v (Id) VALUES (1)")]
     [InlineData("DECLARE @v int = 1; UPDATE @v SET Id = 2")]

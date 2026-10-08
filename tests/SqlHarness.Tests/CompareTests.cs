@@ -550,6 +550,33 @@ public class SqlHarnessCompareTests
     }
 
     [Fact]
+    public async Task Compare_rejects_setup_only_variable_before_connect_with_generic_diagnostic()
+    {
+        var session = FakeCompareSession.Create();
+        const string variable = "privateSetupVariableSentinel";
+        const string value = "privateSetupValueSentinel";
+        var operation = Compare(1) with
+        {
+            SetupSql = $"DECLARE @{variable} int = 73195; SELECT '{value}'",
+            BaselineSql = $"SELECT @{variable}",
+            CandidateSql = "SELECT 1",
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal(0, session.FactoryOpenCount);
+        Assert.Contains(
+            "A variable declared in setup is referenced by a benchmark batch. Setup variables do not cross into benchmark batches.",
+            outcome.SafeError,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(variable, outcome.SafeError, StringComparison.Ordinal);
+        Assert.DoesNotContain(value, outcome.SafeError, StringComparison.Ordinal);
+        Assert.DoesNotContain("73195", outcome.SafeError, StringComparison.Ordinal);
+        Assert.DoesNotContain("SELECT", outcome.SafeError, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Compare_matrix_invalid_value_keeps_name_and_type()
     {
         var session = FakeCompareSession.Create();

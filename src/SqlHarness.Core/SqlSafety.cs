@@ -189,6 +189,9 @@ internal sealed record SqlSafetyDecision(
 
 internal sealed class SqlSafetyClassifier
 {
+    private const string UnprovenTableVariableDetail =
+        "Table-position variables require an earlier inline TABLE declaration in the same batch. Named user-defined types are not proven as table variables. Setup variables do not cross into benchmark batches.";
+
     internal SqlSafetyDecision Classify(
         string sql,
         SqlUsage usage,
@@ -251,9 +254,10 @@ internal sealed class SqlSafetyClassifier
             var scope = inspection.ScopeOf(batch);
             foreach (var statement in batch.Statements)
             {
+                var hasUnprovenUse = HasUnprovenTableVariableUse(statement, scope);
                 var classification = ClassifyStatement(statement, scope);
                 if (classification.DenyReason is { } deny)
-                    return Denied(deny);
+                    return Denied(deny, hasUnprovenUse ? UnprovenTableVariableDetail : null);
 
                 hasMutation |= classification.HasPersistentWrite;
                 hasSessionLocal |= classification.HasSessionLocalWrite;
@@ -316,10 +320,12 @@ internal sealed class SqlSafetyClassifier
                     if (deny is SqlSafetyReason.MutationNotAllowed ||
                         (deny is SqlSafetyReason.UnsupportedStatement && IsWrite(statement)))
                     {
-                        return Denied(SqlSafetyReason.NonTemporaryWrite);
+                        return Denied(
+                            SqlSafetyReason.NonTemporaryWrite,
+                            hasUnprovenUse ? UnprovenTableVariableDetail : null);
                     }
 
-                    return Denied(deny);
+                    return Denied(deny, hasUnprovenUse ? UnprovenTableVariableDetail : null);
                 }
 
                 if (classification.HasPersistentWrite)
@@ -327,9 +333,9 @@ internal sealed class SqlSafetyClassifier
 
                 if (!classification.HasSessionLocalWrite && statement is not SelectStatement)
                 {
-                    return Denied(IsWrite(statement)
-                        ? SqlSafetyReason.NonTemporaryWrite
-                        : SqlSafetyReason.UnsupportedStatement);
+                    return Denied(
+                        IsWrite(statement) ? SqlSafetyReason.NonTemporaryWrite : SqlSafetyReason.UnsupportedStatement,
+                        hasUnprovenUse ? UnprovenTableVariableDetail : null);
                 }
 
                 hasSessionLocal |= classification.HasSessionLocalWrite;
@@ -1628,6 +1634,91 @@ internal static class SqlParameterReferenceValidator
         // 011/T3: a table-position @name is never a reference to a supplied scalar parameter.
         public override void ExplicitVisit(VariableTableReference node)
         {
+        }
+    }
+}
+
+internal sealed class SqlSetupVariableScopeException() : SqlHarnessSafetyException(
+    "A variable declared in setup is referenced by a benchmark batch. Setup variables do not cross into benchmark batches.");
+
+internal static class SqlSetupVariableReferenceValidator
+{
+    internal static void Validate(
+        string? setupSql,
+        IReadOnlyList<SqlHarnessParameter> parameters,
+        params string?[] variants)
+    {
+        if (string.IsNullOrWhiteSpace(setupSql) || variants.Length == 0)
+            return;
+
+        var setupDocument = SqlServerDocument.Parse(setupSql);
+        if (setupDocument.HasErrors || setupDocument.Fragment is not TSqlScript setupScript)
+            throw new SqlHarnessSafetyException("SQL parameter references could not be parsed.");
+
+        var setupNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var batch in setupScript.Batches)
+            CollectDeclaredVariableNames(batch, setupNames);
+        if (setupNames.Count == 0)
+            return;
+
+        var parameterNames = parameters.Select(parameter => parameter.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var variant in variants.Where(text => !string.IsNullOrWhiteSpace(text)))
+        {
+            var document = SqlServerDocument.Parse(variant!);
+            if (document.HasErrors || document.Fragment is not TSqlScript script)
+                throw new SqlHarnessSafetyException("SQL parameter references could not be parsed.");
+
+            foreach (var batch in script.Batches)
+            {
+                var localNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                CollectDeclaredVariableNames(batch, localNames);
+                var references = new VariableReferenceCollector();
+                batch.Accept(references);
+                if (references.Names.Any(name => setupNames.Contains(name) &&
+                    !localNames.Contains(name) && !parameterNames.Contains(name)))
+                {
+                    throw new SqlSetupVariableScopeException();
+                }
+            }
+        }
+    }
+
+    private static void CollectDeclaredVariableNames(TSqlBatch batch, ISet<string> names)
+    {
+        foreach (var statement in batch.Statements)
+        {
+            if (statement is DeclareVariableStatement declare)
+            {
+                foreach (var declaration in declare.Declarations)
+                {
+                    if (declaration?.VariableName?.Value is { } name)
+                        names.Add(name);
+                }
+            }
+            else if (statement is DeclareTableVariableStatement declareTable &&
+                declareTable.Body?.VariableName?.Value is { } tableName)
+            {
+                names.Add(tableName);
+            }
+        }
+    }
+
+    private sealed class VariableReferenceCollector : TSqlFragmentVisitor
+    {
+        internal HashSet<string> Names { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public override void ExplicitVisit(VariableReference node)
+        {
+            Names.Add(node.Name);
+            base.ExplicitVisit(node);
+        }
+
+        public override void ExplicitVisit(VariableTableReference node)
+        {
+            if (node.Variable?.Name is { } name)
+                Names.Add(name);
+            base.ExplicitVisit(node);
         }
     }
 }

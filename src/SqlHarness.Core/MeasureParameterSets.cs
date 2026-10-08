@@ -75,6 +75,8 @@ internal static class MeasureParameterSetValidator
             }
 
             var parameters = ordered.Select(parameter => parameter.Parameter).ToArray();
+            if (dialect.Engine == SqlEngine.SqlServer)
+                SqlSetupVariableReferenceValidator.Validate(setupSql, parameters, querySql);
             dialect.ValidateParameterReferences(parameters, setupSql, querySql);
             SetupSqlExecution.Validate(dialect.Engine, setupSql, parameters);
             prepared.Add(new PreparedMeasureParameterSet(

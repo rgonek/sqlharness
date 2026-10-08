@@ -31,6 +31,9 @@ public sealed class McpMappingTests : IDisposable
     private readonly string? _savedHome;
     private readonly string _targetsFile;
 
+    private static string TextOf(CallToolResult result) =>
+        string.Join("\n", result.Content.OfType<TextContentBlock>().Select(content => content.Text));
+
     public McpMappingTests()
     {
         _savedHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
@@ -381,6 +384,60 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal("Label", operation.TypedMatrix.Name);
         Assert.Equal("nvarchar(20)", operation.TypedMatrix.Type);
         Assert.Equal(JsonSerializer.Deserialize<string?[]>(valuesJson), operation.TypedMatrix.Values.ToArray());
+    }
+
+    [Fact]
+    public async Task Compare_setup_table_variable_diagnostic_is_generic_and_survives_mcp_redaction()
+    {
+        const string variableName = "requestPrivateTableSentinel";
+        const string typeName = "PrivateTableTypeSentinel";
+        const string value = "privateValueSentinel9384";
+        var scope = Scope();
+        var handlers = new McpToolHandlers(scope, scope.CreateModule());
+
+        var result = await handlers.CompareAsync(
+            null!,
+            new McpSqlSourceArgument { Sql = "SELECT 1" },
+            new McpSqlSourceArgument { Sql = "SELECT 1" },
+            setup: new McpSqlSourceArgument
+            {
+                Sql = $"DECLARE @{variableName} dbo.{typeName}; INSERT @{variableName} (Id) VALUES ('{value}')",
+            });
+
+        Assert.True(result.IsError == true);
+        var output = TextOf(result);
+        Assert.Contains("Table-position variables require an earlier inline TABLE declaration in the same batch.", output, StringComparison.Ordinal);
+        Assert.Contains("Named user-defined types are not proven as table variables.", output, StringComparison.Ordinal);
+        Assert.Contains("Setup variables do not cross into benchmark batches.", output, StringComparison.Ordinal);
+        Assert.DoesNotContain(variableName, output, StringComparison.Ordinal);
+        Assert.DoesNotContain(typeName, output, StringComparison.Ordinal);
+        Assert.DoesNotContain(value, output, StringComparison.Ordinal);
+        Assert.DoesNotContain("INSERT", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Compare_rejects_setup_only_variable_reference_before_connection_without_echoing_input()
+    {
+        const string variableName = "requestVariableScopeSentinel";
+        const string value = "valueScopeSentinel9384";
+        var scope = Scope();
+        var handlers = new McpToolHandlers(scope, scope.CreateModule());
+
+        var result = await handlers.CompareAsync(
+            null!,
+            new McpSqlSourceArgument { Sql = $"SELECT @{variableName}" },
+            new McpSqlSourceArgument { Sql = "SELECT 1" },
+            setup: new McpSqlSourceArgument { Sql = $"DECLARE @{variableName} int = 47913; SELECT '{value}'" });
+
+        Assert.True(result.IsError == true);
+        var output = TextOf(result);
+        Assert.Contains(
+            "A variable declared in setup is referenced by a benchmark batch. Setup variables do not cross into benchmark batches.",
+            output,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(variableName, output, StringComparison.Ordinal);
+        Assert.DoesNotContain(value, output, StringComparison.Ordinal);
+        Assert.DoesNotContain("47913", output, StringComparison.Ordinal);
     }
 
     // The fixed-name clash is the last matrix check in Core and runs only

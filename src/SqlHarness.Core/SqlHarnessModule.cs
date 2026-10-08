@@ -589,6 +589,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             }
 
             var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(measure.Parameters, measure.TypedParameters));
+            if (dialect.Engine == SqlEngine.SqlServer && measure.ParameterSets is not { Count: > 0 })
+                SqlSetupVariableReferenceValidator.Validate(measure.SetupSql, parameters, measure.QuerySql);
             dialect.ValidateParameterReferences(parameters, measure.SetupSql, measure.QuerySql);
             SetupSqlExecution.Validate(dialect.Engine, measure.SetupSql, parameters);
             dialect.ValidateMeasuredBatch(measure.QuerySql);
