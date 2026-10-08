@@ -23,7 +23,8 @@ public sealed record OperationSummary(
     long Id, long SessionId, string AgentKind, string Operation, string Status, int? ExitCode, string? ErrorKind,
     string StartedAt, string UpdatedAt, string? FinishedAt, long? DurationMs, string? Profile, string? Engine,
     string? Server, string? Database, bool MutationRequested, string? SqlHash, long? RowsReturned,
-    long? LogicalReadsMedian, bool HasSpill, bool ColdCache, bool OverGranted, JsonElement? Progress);
+    long? LogicalReadsMedian, bool HasSpill, bool ColdCache, bool OverGranted, JsonElement? Progress,
+    string? ErrorMessage);
 
 public sealed record SessionDetail(SessionSummary Session, IReadOnlyList<OperationSummary> Operations);
 

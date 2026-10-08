@@ -352,4 +352,19 @@ public sealed class JournalReaderTests
 
         Assert.Equal(99, Reader(home).SchemaVersion());
     }
+
+    [Fact]
+    public void Operation_carries_the_stored_error_message()
+    {
+        using var home = new TempHome();
+        var journal = ActivityJournal.Open(home.DatabasePath, new JournalConfig { StoreSensitive = true }, TextWriter.Null, TimeProvider.System);
+        var handle = journal.Begin(Journal.JournalTestData.Session(), Journal.JournalTestData.Start());
+        journal.Complete(handle, Journal.JournalTestData.End("failed", 5) with { ErrorKind = "sql_execution_failed", ErrorMessage = "Invalid column name 'x'." });
+        var reader = new JournalReader(home.DatabasePath, new FakeProcesses());
+
+        var operation = reader.Operation(handle!.OperationId)!.Operation;
+
+        Assert.Equal("sql_execution_failed", operation.ErrorKind);
+        Assert.Equal("Invalid column name 'x'.", operation.ErrorMessage);
+    }
 }

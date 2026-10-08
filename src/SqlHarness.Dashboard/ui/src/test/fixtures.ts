@@ -12,7 +12,7 @@ export const operation = (over: Partial<OperationSummary> = {}): OperationSummar
   startedAt: "2026-10-07T09:00:00.000Z", updatedAt: "2026-10-07T09:00:01.000Z", finishedAt: "2026-10-07T09:00:01.000Z",
   durationMs: 1200, profile: "local", engine: "sqlserver", server: "srv", database: "db", mutationRequested: false,
   sqlHash: "sha256:0123456789abcdef", rowsReturned: 3, logicalReadsMedian: null, hasSpill: false, coldCache: false,
-  overGranted: false, progress: null, ...over,
+  overGranted: false, progress: null, errorMessage: null, ...over,
 })
 
 export const variant = (over: Partial<VariantDetail> = {}): VariantDetail => ({

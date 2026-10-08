@@ -48,6 +48,8 @@ export type OperationSummary = {
   coldCache: boolean
   overGranted: boolean
   progress: WatchProgress | null
+  /** Full error text; stored only with journal.storeSensitive. */
+  errorMessage: string | null
 }
 
 export type SessionDetail = { session: SessionSummary; operations: OperationSummary[] }

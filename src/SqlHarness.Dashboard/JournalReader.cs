@@ -34,7 +34,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         EXISTS (SELECT 1 FROM operation_metrics m JOIN operation_table_io t ON t.metric_id = m.id
                 WHERE m.operation_id = o.id AND t.cold_runs > 0) AS cold_cache,
         EXISTS (SELECT 1 FROM operation_metrics m WHERE m.operation_id = o.id AND m.grant_granted_kb >= {OverGrantMinimumKb}
-                AND m.grant_max_used_kb IS NOT NULL AND m.grant_max_used_kb * 4 < m.grant_granted_kb) AS over_granted
+                AND m.grant_max_used_kb IS NOT NULL AND m.grant_max_used_kb * 4 < m.grant_granted_kb) AS over_granted,
+        o.error_message
         """;
 
     private const string SessionColumns = """
@@ -439,7 +440,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         r.IsDBNull(5) ? null : r.GetInt32(5), NullableString(r, 6), r.GetString(7), r.GetString(8), NullableString(r, 9),
         NullableLong(r, 10), NullableString(r, 11), NullableString(r, 12), NullableString(r, 13), NullableString(r, 14),
         r.GetInt64(15) != 0, NullableString(r, 16), NullableLong(r, 17), NullableLong(r, 21),
-        r.GetInt64(22) != 0, r.GetInt64(23) != 0, r.GetInt64(24) != 0, Json(NullableString(r, 18)));
+        r.GetInt64(22) != 0, r.GetInt64(23) != 0, r.GetInt64(24) != 0, Json(NullableString(r, 18)),
+        NullableString(r, 25));
 
     private static VariantDetail ReadVariant(SqliteDataReader r) => new(
         r.GetInt32(1), r.GetString(2), NullableString(r, 3), r.IsDBNull(4) ? null : r.GetInt32(4), r.GetInt32(5),

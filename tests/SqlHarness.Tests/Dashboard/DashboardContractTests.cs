@@ -19,12 +19,12 @@ public sealed class DashboardContractTests
     public void Operation_summary_names_match_the_ui()
     {
         var summary = new OperationSummary(1, 2, "claude", "query", "running", null, null, "s", "u", null, null, null, null,
-            null, null, false, null, null, null, false, false, false, null);
+            null, null, false, null, null, null, false, false, false, null, null);
 
         Assert.Equal(
             ["id", "sessionId", "agentKind", "operation", "status", "exitCode", "errorKind", "startedAt", "updatedAt",
              "finishedAt", "durationMs", "profile", "engine", "server", "database", "mutationRequested", "sqlHash",
-             "rowsReturned", "logicalReadsMedian", "hasSpill", "coldCache", "overGranted", "progress"],
+             "rowsReturned", "logicalReadsMedian", "hasSpill", "coldCache", "overGranted", "progress", "errorMessage"],
             Names(summary));
     }
 
