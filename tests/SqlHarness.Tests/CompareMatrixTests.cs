@@ -7,7 +7,7 @@ namespace SqlHarness.Tests;
 
 public class CompareMatrixTests
 {
-    private const string SetupSql = "SELECT Id INTO #ids FROM dbo.Clients WHERE Tenant = @Tenant";
+    private const string SetupSql = "CREATE TABLE #ids (Id int); INSERT #ids (Id) SELECT Id FROM dbo.Clients WHERE Tenant = @Tenant";
     private const string BaselineSql = "SELECT Value FROM dbo.Clients WHERE BatchSize = @BatchSize AND Tenant = @Tenant";
     private const string CandidateSql = "SELECT Value FROM dbo.Clients WHERE BatchSize = @BatchSize AND Tenant = @Tenant -- candidate";
     private const string Plan = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></BatchSequence></ShowPlanXML>";
@@ -35,7 +35,17 @@ public class CompareMatrixTests
             var userCommands = session.Commands.Where(command => !IsStatistics(command.Sql)).ToArray();
             Assert.NotEmpty(userCommands);
             Assert.All(userCommands, command =>
-                Assert.Equal(["@Tenant", "@BatchSize"], command.Parameters.Select(parameter => parameter.Name)));
+            {
+                if (command.Sql.Contains("CREATE TABLE #ids", StringComparison.Ordinal))
+                {
+                    Assert.Empty(command.Parameters);
+                }
+                else
+                {
+                    Assert.All(command.Parameters, parameter =>
+                        Assert.Contains(parameter.Name, new[] { "@Tenant", "@BatchSize" }));
+                }
+            });
         });
 
         var report = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
@@ -802,9 +812,10 @@ public class CompareMatrixTests
         public object MatrixValue =>
             Commands
                 .Where(command => !IsStatistics(command.Sql))
-                .Select(command => command.Parameters.Single(parameter => parameter.Name == "@BatchSize").Value)
+                .Select(command => command.Parameters.SingleOrDefault(parameter => parameter.Name == "@BatchSize")?.Value)
+                .Where(value => value is not null)
                 .Distinct()
-                .Single();
+                .Single()!;
 
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
         {
@@ -812,7 +823,7 @@ public class CompareMatrixTests
             if (IsStatistics(command.Sql))
                 return Task.FromResult<ISqlReader>(MatrixReader.Empty());
 
-            if (_failSql)
+            if (_failSql && command.Parameters.Any(parameter => parameter.Name == _echoParameterName))
             {
                 var echoed = Convert.ToString(
                     command.Parameters.Single(parameter => parameter.Name == _echoParameterName).Value,
@@ -820,7 +831,7 @@ public class CompareMatrixTests
                 return Task.FromException<ISqlReader>(new TimeoutException($"measured-run-failed:{echoed}"));
             }
 
-            if (command.Sql.Contains("INTO #ids", StringComparison.Ordinal))
+            if (command.Sql.Contains("CREATE TABLE #ids", StringComparison.Ordinal))
             {
                 SetupCount++;
                 return Task.FromResult<ISqlReader>(MatrixReader.Empty());
@@ -839,7 +850,9 @@ public class CompareMatrixTests
         private IReadOnlyList<int> Values(string name) =>
             Commands
                 .Where(command => !IsStatistics(command.Sql))
-                .Select(command => (int)command.Parameters.Single(parameter => parameter.Name == name).Value)
+                .Select(command => command.Parameters.SingleOrDefault(parameter => parameter.Name == name)?.Value)
+                .Where(value => value is not null)
+                .Cast<int>()
                 .Distinct()
                 .ToArray();
     }

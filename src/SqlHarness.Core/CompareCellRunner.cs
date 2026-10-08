@@ -96,7 +96,11 @@ internal static class CompareOperationPreparer
         ArgumentNullException.ThrowIfNull(prepared);
         ArgumentNullException.ThrowIfNull(variants);
         foreach (var variant in variants)
+        {
             prepared.Dialect.ValidateParameterReferences(variant, setupSql, baselineSql, candidateSql);
+            SetupSqlExecution.Validate(prepared.Dialect.Engine, setupSql, variant);
+        }
+
         prepared.Dialect.ValidateMeasuredBatch(baselineSql);
         prepared.Dialect.ValidateMeasuredBatch(candidateSql);
     }
@@ -166,11 +170,13 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
             raw = new CanonicalResultAccumulator();
             if (!string.IsNullOrWhiteSpace(request.SetupSql))
             {
-                await BenchmarkRunner.ExecuteRawAsync(
-                    session,
-                    new SqlExecutionCommand(request.SetupSql, request.Parameters, request.TimeoutSeconds),
-                    raw,
-                    ct);
+                var setupCommands = request.Target.Engine == SqlEngine.SqlServer
+                    ? SetupSqlExecution.PrepareCommands(request.SetupSql, request.Parameters, request.TimeoutSeconds)
+                    : [new SqlExecutionCommand(request.SetupSql, request.Parameters, request.TimeoutSeconds)];
+                foreach (var command in setupCommands)
+                {
+                    await BenchmarkRunner.ExecuteRawAsync(session, command, raw, ct);
+                }
             }
 
             // Fingerprints only for modes that run ResultComparer; off skips equivalence work entirely.

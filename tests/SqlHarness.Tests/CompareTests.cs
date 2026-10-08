@@ -123,7 +123,7 @@ public class SqlHarnessCompareTests
             });
         var operation = Compare(repeat: 3) with
         {
-            SetupSql = "SELECT Id INTO #ids FROM dbo.Clients WHERE Created <= @AsOfDate",
+            SetupSql = "CREATE TABLE #ids (Id int); INSERT #ids (Id) SELECT Id FROM dbo.Clients WHERE Created <= @AsOfDate",
             BaselineSql = "SELECT Value FROM dbo.Clients WHERE AsOf <= @AsOfDate",
             CandidateSql = "SELECT Value FROM dbo.Clients WHERE AsOf <= @AsOfDate -- candidate",
             Parameters = ["AsOfDate:datetime2=2026-07-29T12:00:00"],
@@ -367,15 +367,14 @@ public class SqlHarnessCompareTests
         var session = FakeCompareSession.Create();
         var operation = Compare(repeat: 1) with
         {
-            SetupSql = "SELECT @clientid AS Id INTO #ids FROM dbo.Clients",
+            SetupSql = "CREATE TABLE #ids (Id int); INSERT #ids (Id) VALUES (@clientid)",
             Parameters = ["CLIENTID:int=42"],
         };
 
         var outcome = await Module(session).ExecuteAsync(operation);
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
-        var setup = Assert.Single(session.Commands, command => command.Sql == operation.SetupSql);
-        Assert.Equal(operation.SetupSql, setup.Sql);
+        var setup = Assert.Single(session.Commands, command => command.Sql.Contains("INSERT #ids", StringComparison.Ordinal));
         Assert.Equal("@CLIENTID", Assert.Single(setup.Parameters).Name);
     }
 
@@ -880,9 +879,12 @@ public class SqlHarnessCompareTests
                 StatisticsCleanupTokens.Add(ct);
                 return Task.FromResult<ISqlReader>(FakeReader.Empty());
             }
-            if (command.Sql.Contains("INTO #ids", StringComparison.Ordinal))
+            if (command.Sql.Contains("CREATE TABLE #ids", StringComparison.Ordinal) ||
+                command.Sql.Contains("INSERT #ids", StringComparison.Ordinal) ||
+                command.Sql.Contains("INTO #ids", StringComparison.Ordinal))
             {
-                Labels.Add("setup");
+                if (!command.Sql.Contains("INSERT #ids", StringComparison.Ordinal))
+                    Labels.Add("setup");
                 return Task.FromResult<ISqlReader>(_includeSetupResult
                     ? FakeReader.Single(["SetupValue"], ["setup-result-value"])
                     : FakeReader.Empty());

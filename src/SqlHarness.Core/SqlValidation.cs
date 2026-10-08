@@ -149,6 +149,7 @@ public static class SqlValidation
                 parsedParameters = dialect.BindParameters(
                     SqlParameterInputs.Resolve(parameterDeclarations, options?.TypedParameters));
                 dialect.ValidateParameterReferences(parsedParameters, setupSql, sql);
+                SetupSqlExecution.Validate(dialect.Engine, setupSql, parsedParameters);
                 parameterValidationCompleted = true;
             }
             catch (SqlHarnessSafetyException)

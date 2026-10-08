@@ -591,6 +591,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
             var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(measure.Parameters, measure.TypedParameters));
             dialect.ValidateParameterReferences(parameters, measure.SetupSql, measure.QuerySql);
+            SetupSqlExecution.Validate(dialect.Engine, measure.SetupSql, parameters);
             dialect.ValidateMeasuredBatch(measure.QuerySql);
 
             foreach (var parameter in parameters)
@@ -642,7 +643,15 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
             raw = new CanonicalResultAccumulator();
             if (!string.IsNullOrWhiteSpace(measure.SetupSql))
-                await BenchmarkRunner.ExecuteRawAsync(session, new SqlExecutionCommand(measure.SetupSql, parameters, measure.TimeoutSeconds), raw, ct);
+            {
+                var setupCommands = dialect.Engine == SqlEngine.SqlServer
+                    ? SetupSqlExecution.PrepareCommands(measure.SetupSql, parameters, measure.TimeoutSeconds)
+                    : [new SqlExecutionCommand(measure.SetupSql, parameters, measure.TimeoutSeconds)];
+                foreach (var command in setupCommands)
+                {
+                    await BenchmarkRunner.ExecuteRawAsync(session, command, raw, ct);
+                }
+            }
 
             // Measure never runs ResultComparer; skip fingerprint retention and the 1M row comparison cap.
             await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, 0, "measure", raw, captureComparison: false, ct);

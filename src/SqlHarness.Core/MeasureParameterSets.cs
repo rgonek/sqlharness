@@ -76,6 +76,7 @@ internal static class MeasureParameterSetValidator
 
             var parameters = ordered.Select(parameter => parameter.Parameter).ToArray();
             dialect.ValidateParameterReferences(parameters, setupSql, querySql);
+            SetupSqlExecution.Validate(dialect.Engine, setupSql, parameters);
             prepared.Add(new PreparedMeasureParameterSet(
                 set.Name,
                 parameters,
@@ -462,11 +463,14 @@ internal sealed class MeasureParameterSetRunner
         var setupExecutionCount = 0;
         if (!string.IsNullOrWhiteSpace(operation.SetupSql))
         {
-            await BenchmarkRunner.ExecuteRawAsync(
-                session,
-                new SqlExecutionCommand(operation.SetupSql, sets[0].Parameters, operation.TimeoutSeconds),
-                raw,
-                ct);
+            var setupCommands = _dialect.Engine == SqlEngine.SqlServer
+                ? SetupSqlExecution.PrepareCommands(operation.SetupSql, sets[0].Parameters, operation.TimeoutSeconds)
+                : [new SqlExecutionCommand(operation.SetupSql, sets[0].Parameters, operation.TimeoutSeconds)];
+            foreach (var command in setupCommands)
+            {
+                await BenchmarkRunner.ExecuteRawAsync(session, command, raw, ct);
+            }
+
             setupExecutionCount = 1;
         }
 

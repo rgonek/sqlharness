@@ -111,6 +111,144 @@ public sealed class BenchmarkSessionIntegrationTests
         Assert.Equal(2, factory.ServerProcessIds.Distinct().Count());
     }
 
+    [SqlServerIntegrationFact]
+    [Trait("Category", "SqlServerIntegration")]
+    public async Task Measure_setup_temp_survives_warmup_and_repetitions_with_parameterized_population()
+    {
+        var connectionString = Environment.GetEnvironmentVariable(SqlServerIntegrationFactAttribute.Variable);
+        Assert.False(string.IsNullOrWhiteSpace(connectionString));
+
+        var builder = new SqlConnectionStringBuilder(connectionString);
+        Assert.False(string.IsNullOrWhiteSpace(builder.DataSource));
+        Assert.False(string.IsNullOrWhiteSpace(builder.InitialCatalog));
+
+        using var temp = new TempDirectory();
+        await using var factory = new IntegrationSessionFactory(connectionString);
+        var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+        {
+            ["integration"] = new(
+                builder.DataSource,
+                builder.InitialCatalog,
+                new Dictionary<string, string>(StringComparer.Ordinal),
+                "integrated"),
+        };
+
+        var module = new SqlHarnessModule(
+            factory,
+            new NullGainStore(),
+            new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UtcNow),
+            () => profiles);
+
+        var operation = new SqlHarnessMeasureOperation(
+            new SqlTargetRequest("integration", new Dictionary<string, string>()),
+            """
+            CREATE TABLE #Prepared (Id int NOT NULL PRIMARY KEY);
+            INSERT #Prepared(Id) VALUES (@Seed);
+            """,
+            "SELECT Id FROM #Prepared;",
+            ["Seed:int=42"],
+            30,
+            3);
+
+        var outcome = await module.ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessMeasureReport>(outcome.Report);
+        Assert.True(report.ResultsStable);
+        Assert.Equal(1, factory.ConnectCount);
+    }
+
+    [SqlServerIntegrationFact]
+    [Trait("Category", "SqlServerIntegration")]
+    public async Task Compare_setup_with_extra_fixed_parameter_used_only_by_measured_sql()
+    {
+        var connectionString = Environment.GetEnvironmentVariable(SqlServerIntegrationFactAttribute.Variable);
+        Assert.False(string.IsNullOrWhiteSpace(connectionString));
+
+        var builder = new SqlConnectionStringBuilder(connectionString);
+        Assert.False(string.IsNullOrWhiteSpace(builder.DataSource));
+        Assert.False(string.IsNullOrWhiteSpace(builder.InitialCatalog));
+
+        using var temp = new TempDirectory();
+        await using var factory = new IntegrationSessionFactory(connectionString);
+        var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+        {
+            ["integration"] = new(
+                builder.DataSource,
+                builder.InitialCatalog,
+                new Dictionary<string, string>(StringComparer.Ordinal),
+                "integrated"),
+        };
+
+        var module = new SqlHarnessModule(
+            factory,
+            new NullGainStore(),
+            new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UtcNow),
+            () => profiles);
+
+        var operation = new SqlHarnessCompareOperation(
+            new SqlTargetRequest("integration", new Dictionary<string, string>()),
+            """
+            CREATE TABLE #Req (Id int NOT NULL PRIMARY KEY);
+            INSERT #Req VALUES (1);
+            """,
+            "SELECT @Unused AS Id UNION ALL SELECT Id FROM #Req;",
+            "SELECT @Unused AS Id UNION ALL SELECT Id FROM #Req;",
+            ["Unused:int=99"],
+            30,
+            2);
+
+        var outcome = await module.ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessCompareReport>(outcome.Report);
+        Assert.True(report.ResultsEquivalent);
+        Assert.Equal(1, factory.ConnectCount);
+    }
+
+    [SqlServerIntegrationFact]
+    [Trait("Category", "SqlServerIntegration")]
+    public async Task Measure_rejects_parameterized_select_into_temp_offline()
+    {
+        var connectionString = Environment.GetEnvironmentVariable(SqlServerIntegrationFactAttribute.Variable);
+        Assert.False(string.IsNullOrWhiteSpace(connectionString));
+
+        var builder = new SqlConnectionStringBuilder(connectionString);
+        Assert.False(string.IsNullOrWhiteSpace(builder.DataSource));
+        Assert.False(string.IsNullOrWhiteSpace(builder.InitialCatalog));
+
+        using var temp = new TempDirectory();
+        await using var factory = new IntegrationSessionFactory(connectionString);
+        var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+        {
+            ["integration"] = new(
+                builder.DataSource,
+                builder.InitialCatalog,
+                new Dictionary<string, string>(StringComparer.Ordinal),
+                "integrated"),
+        };
+
+        var module = new SqlHarnessModule(
+            factory,
+            new NullGainStore(),
+            new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UtcNow),
+            () => profiles);
+
+        var operation = new SqlHarnessMeasureOperation(
+            new SqlTargetRequest("integration", new Dictionary<string, string>()),
+            "SELECT Id INTO #Req FROM sys.objects WHERE object_id = @Id;",
+            "SELECT Id FROM #Req;",
+            ["Id:int=1"],
+            30,
+            1);
+
+        var outcome = await module.ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Contains("session-local temp table", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Equal(0, factory.ConnectCount);
+    }
+
     private sealed class IntegrationSessionFactory : ISqlSessionFactory, IAsyncDisposable
     {
         private readonly string _connectionString;
