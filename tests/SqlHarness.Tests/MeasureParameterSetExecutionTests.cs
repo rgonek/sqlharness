@@ -418,7 +418,7 @@ public sealed class MeasureParameterSetExecutionTests
             setupSql: setupSql,
             querySql: querySql,
             failSetup: true,
-            failure: new TimeoutException($"failed 1 and 100 and {base64}"));
+            failure: new TimeoutException($"failed 1000 and 10000 and {base64}"));
         var operation = new SqlHarnessMeasureOperation(
             Target(),
             setupSql,
@@ -427,16 +427,16 @@ public sealed class MeasureParameterSetExecutionTests
             30,
             1,
             [
-                new("A", ["n:int=1", $"blob:varbinary={base64}"]),
-                new("B", ["n:int=100", $"blob:varbinary={base64}"]),
+                new("A", ["n:int=1000", $"blob:varbinary={base64}"]),
+                new("B", ["n:int=10000", $"blob:varbinary={base64}"]),
             ]);
 
         var outcome = await Module(session).ExecuteAsync(operation);
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
         Assert.Null(outcome.Report);
-        Assert.DoesNotContain("100", outcome.SafeError, StringComparison.Ordinal);
-        Assert.DoesNotContain("[REDACTED]00", outcome.SafeError, StringComparison.Ordinal);
+        Assert.DoesNotContain("10000", outcome.SafeError, StringComparison.Ordinal);
+        Assert.DoesNotContain("[REDACTED]000", outcome.SafeError, StringComparison.Ordinal);
         Assert.DoesNotContain(base64, outcome.SafeError, StringComparison.Ordinal);
         Assert.DoesNotContain("System.Byte[]", outcome.SafeError, StringComparison.Ordinal);
         Assert.Contains("[REDACTED]", outcome.SafeError, StringComparison.Ordinal);

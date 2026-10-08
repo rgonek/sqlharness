@@ -37,13 +37,18 @@ public static partial class SecretRedactor
 
     public static string Redact(string value, IReadOnlyList<string> knownSecrets)
     {
-        var safe = value;
-        foreach (var secret in knownSecrets
+        var secrets = knownSecrets
             .Where(secret => !string.IsNullOrEmpty(secret))
             .Distinct(StringComparer.Ordinal)
             .OrderByDescending(secret => secret.Length)
-            .ThenBy(secret => secret, StringComparer.Ordinal))
-            safe = safe.Replace(secret, "[REDACTED]", StringComparison.Ordinal);
+            .ThenBy(secret => secret, StringComparer.Ordinal)
+            .ToArray();
+        var safe = secrets.Length == 0
+            ? value
+            : new Regex(
+                string.Join("|", secrets.Select(Regex.Escape)),
+                RegexOptions.CultureInvariant | RegexOptions.NonBacktracking)
+                .Replace(value, "[REDACTED]");
         safe = AccessTokenPattern().Replace(safe, "$1[REDACTED]$3");
         safe = ConnectionSecretPattern().Replace(safe, "$1[REDACTED]");
         safe = JwtPattern().Replace(safe, "[REDACTED]");

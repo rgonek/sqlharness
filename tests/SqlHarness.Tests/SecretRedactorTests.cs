@@ -68,4 +68,32 @@ public sealed class SecretRedactorTests
         Assert.DoesNotContain("private-audit", safe, StringComparison.Ordinal);
         Assert.DoesNotContain("-value", safe, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Redact_does_not_rescan_replacement_markers_for_later_secrets()
+    {
+        var safe = SecretRedactor.Redact("@ClientID uses D", ["C", "D"]);
+
+        Assert.Equal("@[REDACTED]lientI[REDACTED] uses [REDACTED]", safe);
+    }
+
+    [Fact]
+    public void Parameter_values_shorter_than_four_characters_are_not_registered_for_redaction()
+    {
+        var knownSecrets = new List<string>();
+        SqlParameterSecrets.AddValues(knownSecrets, ["@short:nvarchar=C", "@long:nvarchar=long"]);
+
+        var safe = SecretRedactor.Redact("C and long", knownSecrets);
+
+        Assert.Equal("C and [REDACTED]", safe);
+    }
+
+    [Fact]
+    public void Short_known_passwords_are_still_redacted()
+    {
+        var safe = SecretRedactor.Redact("Password=C;", ["C"]);
+
+        Assert.Contains("Password=[REDACTED]", safe, StringComparison.Ordinal);
+        Assert.DoesNotContain("Password=C", safe, StringComparison.Ordinal);
+    }
 }

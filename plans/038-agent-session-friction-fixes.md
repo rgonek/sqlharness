@@ -121,8 +121,14 @@ never re-scanned. Separately decide, and record in the plan's "As built", whethe
 minimum length (e.g. < 4 characters) are excluded from redaction. That is a disclosure-policy decision for the
 user; do not change it silently.
 
-**Acceptance.** Tests: values `["C", "D"]` on `"@ClientID uses D"` yield one marker per real occurrence and never
-`[[REDAC`; the existing "1 vs 100" ordering test still passes.
+**Acceptance.** Tests: short known-secret values `["C", "D"]` passed directly to the redactor on
+`"@ClientID uses D"` yield one marker per real occurrence and never `[[REDAC`; parameter registration excludes
+values shorter than four characters; the existing "1 vs 100" ordering test still passes.
+
+**As built.** Known secrets are replaced in one longest-first regex pass, so replacement markers are not rescanned.
+Parameter values shorter than four characters are excluded from redaction, as decided by the user on 2026-10-08;
+passwords and separately collected known secrets remain redacted regardless of length. Parameter declaration, typed,
+matrix, and bound-value registration all apply the threshold. `README.md` documents this disclosure policy.
 
 ## W4 — Invalid input path gives no hint (P2, ux)
 

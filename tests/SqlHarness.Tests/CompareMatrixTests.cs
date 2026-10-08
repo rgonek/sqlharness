@@ -209,7 +209,7 @@ public class CompareMatrixTests
         using var artifacts = new DirectoryArtifactWriter();
         var factory = new MatrixSessionFactory(failSqlAt: 1);
 
-        var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix("BatchSize:int=1,20,100"));
+        var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix("BatchSize:int=1000,20000,100000"));
 
         Assert.Equal(5, (int)outcome.ExitCode);
         Assert.Equal(2, factory.ConnectCount);
@@ -220,9 +220,9 @@ public class CompareMatrixTests
         Assert.Contains("cell 1", error, StringComparison.Ordinal);
         Assert.Contains("@BatchSize", error, StringComparison.Ordinal);
         Assert.Contains("measured-run-failed", error, StringComparison.Ordinal);
-        Assert.DoesNotContain("20", error, StringComparison.Ordinal);
-        Assert.Equal([1], factory.Sessions[0].BatchSizes);
-        Assert.Equal([20], factory.Sessions[1].BatchSizes);
+        Assert.DoesNotContain("20000", error, StringComparison.Ordinal);
+        Assert.Equal([1000], factory.Sessions[0].BatchSizes);
+        Assert.Equal([20000], factory.Sessions[1].BatchSizes);
         var kept = Assert.Single(artifacts.Directories);
         Assert.True(Directory.Exists(kept));
     }
@@ -233,7 +233,7 @@ public class CompareMatrixTests
         using var artifacts = new DirectoryArtifactWriter();
         var factory = new MatrixSessionFactory(failSqlAt: 2);
 
-        var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix("BatchSize:int=1,20,100"));
+        var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix("BatchSize:int=1000,20000,100000"));
 
         Assert.Equal(5, (int)outcome.ExitCode);
         var partialReport = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
@@ -243,9 +243,9 @@ public class CompareMatrixTests
         Assert.Contains("cell 2", error, StringComparison.Ordinal);
         Assert.Contains("@BatchSize", error, StringComparison.Ordinal);
         Assert.Contains("measured-run-failed", error, StringComparison.Ordinal);
-        Assert.DoesNotContain("100", error, StringComparison.Ordinal);
-        Assert.DoesNotContain("00", error, StringComparison.Ordinal);
-        Assert.Equal([100], factory.Sessions[2].BatchSizes);
+        Assert.DoesNotContain("100000", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("0000", error, StringComparison.Ordinal);
+        Assert.Equal([100000], factory.Sessions[2].BatchSizes);
     }
 
     [Fact]

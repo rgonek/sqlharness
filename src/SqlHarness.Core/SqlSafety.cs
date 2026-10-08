@@ -59,6 +59,14 @@ internal class SqlHarnessSafetyException(string message, Exception? innerExcepti
 
 internal static class SqlParameterSecrets
 {
+    private const int MinimumRedactionLength = 4;
+
+    internal static void AddParameterValue(ICollection<string> knownSecrets, string? value)
+    {
+        if (value is { Length: >= MinimumRedactionLength })
+            knownSecrets.Add(value);
+    }
+
     internal static void AddValues(ICollection<string> knownSecrets, IEnumerable<string>? declarations)
     {
         if (declarations is null)
@@ -73,10 +81,7 @@ internal static class SqlParameterSecrets
         if (inputs is null)
             return;
         foreach (var input in inputs)
-        {
-            if (!string.IsNullOrEmpty(input?.Value))
-                knownSecrets.Add(input.Value);
-        }
+            AddParameterValue(knownSecrets, input?.Value);
     }
 
     internal static void AddMatrixValues(ICollection<string> knownSecrets, SqlHarnessParameterMatrixInput? matrix)
@@ -84,10 +89,7 @@ internal static class SqlParameterSecrets
         if (matrix?.Values is null)
             return;
         foreach (var value in matrix.Values)
-        {
-            if (!string.IsNullOrEmpty(value))
-                knownSecrets.Add(value);
-        }
+            AddParameterValue(knownSecrets, value);
     }
 
     internal static void AddMatrixValues(ICollection<string> knownSecrets, string? matrix)
@@ -98,10 +100,7 @@ internal static class SqlParameterSecrets
         if (equals < 0 || equals >= matrix.Length - 1)
             return;
         foreach (var value in matrix[(equals + 1)..].Split(','))
-        {
-            if (!string.IsNullOrEmpty(value))
-                knownSecrets.Add(value);
-        }
+            AddParameterValue(knownSecrets, value);
     }
 
     private static void AddValue(ICollection<string> knownSecrets, string declaration)
@@ -112,8 +111,7 @@ internal static class SqlParameterSecrets
         if (equals < 0 || equals >= declaration.Length - 1)
             return;
         var value = declaration[(equals + 1)..];
-        if (!string.IsNullOrEmpty(value))
-            knownSecrets.Add(value);
+        AddParameterValue(knownSecrets, value);
     }
 }
 
