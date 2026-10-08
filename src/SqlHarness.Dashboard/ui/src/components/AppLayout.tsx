@@ -1,6 +1,7 @@
 import { Link, Outlet, useRouterState } from "@tanstack/react-router"
 import { buttonVariants } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { ThemeMenu } from "@/components/ThemeMenu"
 
 const links = [
   { to: "/", label: "Live", exact: true },
@@ -24,6 +25,7 @@ export function AppLayout() {
             )
           })}
         </nav>
+        <div className="ml-auto"><ThemeMenu /></div>
       </header>
       <Separator />
       <main className="mx-auto max-w-7xl space-y-4 p-4">
