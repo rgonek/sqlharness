@@ -486,3 +486,6 @@ $RECYCLE.BIN/
 # Git worktrees (local agent isolation)
 .worktrees/
 .superpowers/sdd/
+
+# Repository plans are versioned even when ignored globally
+!/plans/
