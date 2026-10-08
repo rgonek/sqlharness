@@ -41,3 +41,11 @@ TDD evidence:
 - RED: `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter FullyQualifiedName~McpToolSchemaTests.Enum_required_and_default_shapes_are_correct --no-restore --verbosity minimal` failed as expected: expected `summary, metrics, operators, statements`; actual `summary, metrics, operators`.
 - GREEN schema and byte-budget coverage: `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter FullyQualifiedName~McpToolSchemaTests --no-restore --verbosity minimal` passed: 37 passed, 0 failed. This class includes `Tools_list_fits_the_32KiB_budget`.
 - Full MCP test project: `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-restore --verbosity quiet` passed: 255 passed, 4 skipped, 0 failed.
+
+## Formatting correction after W6 gate
+
+The W6 gate identified two unintended final LF bytes in the MCP catalog and schema test, contrary to `.editorconfig` (`insert_final_newline = false`). Removed only those two bytes; no code behavior changed.
+
+- `dotnet format SqlHarness.sln --verify-no-changes`: exit 0, no output.
+- `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --filter FullyQualifiedName~McpToolSchemaTests --no-restore --verbosity minimal`: passed, 37 passed, 0 failed.
+- `git diff --check`: passed.
