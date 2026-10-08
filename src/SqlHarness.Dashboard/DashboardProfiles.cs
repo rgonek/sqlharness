@@ -1,0 +1,55 @@
+using SqlHarness.Core;
+using SqlHarness.Core.Targets;
+
+namespace SqlHarness.Dashboard;
+
+public sealed record ProfileVariable(string Name, string Rule);
+
+public sealed record ProfileView(
+    string Name, string Engine, string Server, string Database, string Auth, string? SqlUser, string? PasswordEnvVar,
+    string? SslMode, bool TrustServerCertificate, string? RootCertificate, IReadOnlyList<ProfileVariable> Vars);
+
+public sealed record ProfilesResponse(string Status, IReadOnlyList<ProfileView> Profiles, string? Message);
+
+/// <summary>
+/// Read-only view of targets.json. It never reads environment variables: a profile's
+/// password stays in its variable and only the variable's name is shown.
+/// </summary>
+internal static class DashboardProfiles
+{
+    internal const string InvalidMessage = "targets.json could not be read. Run `sqlharness doctor` for details.";
+
+    internal static ProfilesResponse Read(string path)
+    {
+        if (!File.Exists(path))
+            return new ProfilesResponse("missing", [], null);
+        IReadOnlyDictionary<string, TargetProfile> profiles;
+        try
+        {
+            profiles = ProfileStore.Load(path);
+        }
+        catch (Exception exception) when (exception is SqlHarnessSafetyException or IOException or UnauthorizedAccessException)
+        {
+            // The loader's message names the path; the page gets a fixed sentence instead.
+            return new ProfilesResponse("invalid", [], InvalidMessage);
+        }
+
+        return new ProfilesResponse("valid", profiles
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair => View(pair.Key, pair.Value))
+            .ToArray(), null);
+    }
+
+    private static ProfileView View(string name, TargetProfile profile) => new(
+        name,
+        string.IsNullOrWhiteSpace(profile.Engine) ? "sqlserver" : profile.Engine.Trim().ToLowerInvariant(),
+        profile.Server,
+        profile.Database,
+        profile.Auth,
+        profile.SqlUser,
+        profile.PasswordEnvVar,
+        profile.SslMode,
+        profile.TrustServerCertificate,
+        profile.RootCertificate,
+        profile.Vars.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => new ProfileVariable(pair.Key, pair.Value)).ToArray());
+}
