@@ -60,6 +60,12 @@ Request-scoped client entry:
 }
 ```
 
+## Protect local agent configuration
+
+`~/.sqlharness/dashboard.json` contains a live dashboard access token. Do not print, paste, or expose that file. Avoid broad reads such as `cat ~/.sqlharness/*.json`; name `targets.json` explicitly when you need to inspect profiles. On Windows, the corresponding dashboard path is `%USERPROFILE%\.sqlharness\dashboard.json`.
+
+The sample hooks in [`scripts/hooks`](../scripts/hooks) block common Claude Code and Codex shell reads of `dashboard.json` and `~/.sqlharness/*.json`, while allowing an explicit `targets.json` read. They are optional guardrails for shell commands, not a filesystem access boundary. Review and merge the relevant example into your existing client hook configuration; do not replace other settings. Claude Code hooks use the repo-local script path in `claude-settings.example.json`. For Codex, copy `protect_sqlharness_config.py` to `~/.codex/hooks/` and merge `codex-hooks.example.json` into `~/.codex/hooks.json`; review and trust the hook when Codex prompts.
+
 Connection secrets stay in the process environment and the operator's profile store. In fixed mode, tool arguments never carry a profile or vars. In request-scoped mode, profile and vars may appear only inside the required nested `scope`. In both modes, tool arguments never carry raw server or database, auth, engine, `unsafeDirect`, `allowMutation`, `confirmDatabase`, or password fields, and unknown argument keys are rejected before execution.
 
 ## Scope lifetime
