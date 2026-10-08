@@ -238,6 +238,29 @@ public sealed class ActivityJournal : IActivityJournal
                 }
             }
 
+            for (var ordinal = 0; ordinal < record.Statements.Count; ordinal++)
+            {
+                var statement = record.Statements[ordinal];
+                using var insert = Command(connection, transaction, """
+                    INSERT INTO operation_statements (operation_id, ordinal, variant, parameter_set, matrix_cell,
+                        statement_ordinal, statement_hash, cpu_ms, elapsed_ms, dop, operators_json)
+                    VALUES ($operation, $ordinal, $variant, $set, $cell, $statementOrdinal, $hash,
+                        $cpu, $elapsed, $dop, $operators);
+                    """);
+                insert.Parameters.AddWithValue("$operation", handle.OperationId);
+                insert.Parameters.AddWithValue("$ordinal", ordinal);
+                insert.Parameters.AddWithValue("$variant", statement.Variant);
+                insert.Parameters.AddWithValue("$set", (object?)statement.ParameterSet ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$cell", (object?)statement.MatrixCell ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$statementOrdinal", statement.StatementOrdinal);
+                insert.Parameters.AddWithValue("$hash", statement.StatementHash);
+                insert.Parameters.AddWithValue("$cpu", (object?)statement.CpuMilliseconds ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$elapsed", (object?)statement.ElapsedMilliseconds ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$dop", (object?)statement.DegreeOfParallelism ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$operators", JsonSerializer.Serialize(statement.TopOperators, WaitJson));
+                insert.ExecuteNonQuery();
+            }
+
             if (_storeSensitive)
             {
                 foreach (var document in record.PlanDocuments)
@@ -311,6 +334,8 @@ public sealed class ActivityJournal : IActivityJournal
                 Execute(connection, JournalSchema.Version3);
             if (locked < 4)
                 Execute(connection, JournalSchema.Version4);
+            if (locked < 5)
+                Execute(connection, JournalSchema.Version5);
             Execute(connection, $"PRAGMA user_version = {JournalSchema.CurrentVersion};");
             Execute(connection, "COMMIT;");
         }

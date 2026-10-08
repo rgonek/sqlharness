@@ -58,6 +58,34 @@ public class ArtifactReaderTests
     }
 
     [Fact]
+    public void Statements_section_returns_per_statement_metrics_without_sql_text()
+    {
+        using var temp = new TempDirectory();
+        var report = CompareReport();
+        var runs = new[]
+        {
+            new CompareRunArtifact("baseline", 1, 30, 40, 0,
+                new Dictionary<string, long>(), "hash", [MultiStatementPlan()], 0),
+        };
+
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(report, runs, "wind");
+        var section = ArtifactReader.ReadSection(temp.Path, Path.GetFileName(directory), "statements");
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(section, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var statements = json.RootElement.GetProperty("statements").EnumerateArray().ToArray();
+
+        Assert.Equal(2, statements.Length);
+        Assert.Equal([0, 1], statements.Select(item => item.GetProperty("statementOrdinal").GetInt32()).ToArray());
+        Assert.Equal(30, statements.Sum(item => item.GetProperty("cpuTimeMilliseconds").GetInt64()));
+        Assert.Equal(40, statements.Sum(item => item.GetProperty("elapsedTimeMilliseconds").GetInt64()));
+        Assert.All(statements, item => Assert.Equal(64, item.GetProperty("statementHash").GetString()!.Length));
+        Assert.Equal(2, statements[0].GetProperty("degreeOfParallelism").GetInt32());
+        var statementPayload = JsonSerializer.Serialize(section);
+        Assert.Contains("Index Seek", statementPayload, StringComparison.Ordinal);
+        Assert.DoesNotContain("UPDATE dbo.SecretTable", statementPayload, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MeasureAndMeasureSet_AllSectionsRead()
     {
         using var temp = new TempDirectory();
@@ -426,6 +454,13 @@ public class ArtifactReaderTests
 
     private static string FixturePlan() => File.ReadAllText(
         Path.Combine(AppContext.BaseDirectory, "Fixtures", "distiller-sample.sqlplan"));
+
+    private static string MultiStatementPlan() => """
+        <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"><BatchSequence><Batch><Statements>
+        <StmtSimple StatementText="UPDATE dbo.SecretTable SET A = 1"><QueryPlan DegreeOfParallelism="2"><QueryTimeStats CpuTime="10" ElapsedTime="15"/><RelOp NodeId="0" PhysicalOp="Index Seek" EstimateRows="2"><RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualRows="4" ActualExecutions="1"/></RunTimeInformation><IndexScan><Object Table="[dbo].[SecretTable]" Index="[IX_A]"/></IndexScan></RelOp></QueryPlan></StmtSimple>
+        <StmtSimple StatementText="UPDATE dbo.SecretTable SET B = 2"><QueryPlan DegreeOfParallelism="1"><QueryTimeStats CpuTime="20" ElapsedTime="25"/><RelOp NodeId="0" PhysicalOp="Table Scan" EstimateRows="3"><RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualRows="6" ActualExecutions="2"/></RunTimeInformation><TableScan><Object Table="[dbo].[SecretTable]"/></TableScan></RelOp></QueryPlan></StmtSimple>
+        </Statements></Batch></BatchSequence></ShowPlanXML>
+        """;
 
     private static IReadOnlyDictionary<string, string> FileHashes(string directory)
     {

@@ -75,6 +75,33 @@ public sealed class ActivityJournalBenchmarkTests
     }
 
     [Fact]
+    public void Benchmark_record_persists_per_statement_metrics_without_statement_text()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, storeSensitive: false);
+        var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start());
+        var plan = """
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"><BatchSequence><Batch><Statements>
+            <StmtSimple StatementText="UPDATE dbo.SecretTable SET A = 1"><QueryPlan DegreeOfParallelism="2"><QueryTimeStats CpuTime="10" ElapsedTime="15"/><RelOp NodeId="0" PhysicalOp="Index Seek" EstimateRows="2"><RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualRows="4" ActualExecutions="1"/></RunTimeInformation><IndexScan><Object Table="[dbo].[SecretTable]" Index="[IX_A]"/></IndexScan></RelOp></QueryPlan></StmtSimple>
+            <StmtSimple StatementText="UPDATE dbo.SecretTable SET B = 2"><QueryPlan DegreeOfParallelism="1"><QueryTimeStats CpuTime="20" ElapsedTime="25"/><RelOp NodeId="0" PhysicalOp="Table Scan" EstimateRows="3"><RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualRows="6" ActualExecutions="2"/></RunTimeInformation><TableScan><Object Table="[dbo].[SecretTable]"/></TableScan></RelOp></QueryPlan></StmtSimple>
+            </Statements></Batch></BatchSequence></ShowPlanXML>
+            """;
+        var record = JournalBenchmarkBuilder.Build(
+            [new CompareRunArtifact("baseline", 1, 30, 40, 0, new Dictionary<string, long>(), "h", [plan], 0)]);
+
+        journal.RecordBenchmark(handle, record);
+
+        var statements = JournalDb.Rows(temp.DatabasePath,
+            "SELECT statement_ordinal, statement_hash, cpu_ms, elapsed_ms, dop, operators_json FROM operation_statements ORDER BY statement_ordinal");
+        Assert.Equal(2, statements.Count);
+        Assert.Equal([10L, 20L], statements.Select(row => (long)row["cpu_ms"]!).ToArray());
+        Assert.Equal([15L, 25L], statements.Select(row => (long)row["elapsed_ms"]!).ToArray());
+        Assert.All(statements, row => Assert.Equal(64, ((string)row["statement_hash"]!).Length));
+        Assert.Contains("Index Seek", (string)statements[0]["operators_json"]!);
+        Assert.DoesNotContain("UPDATE dbo.SecretTable", (string)statements[0]["operators_json"]!, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Plans_are_stored_compressed_and_deduplicated_only_when_sensitive()
     {
         using var temp = new JournalTempDirectory();

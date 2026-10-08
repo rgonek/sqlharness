@@ -385,6 +385,16 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
                 JsonSerializer.Serialize(persistedReport, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
             _publisher.WriteText(Path.Combine(staging, "manifest.json"),
                 JsonSerializer.Serialize(ArtifactManifest.ForReport(persistedReport, owner), ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
+            var artifactKind = persistedReport switch
+            {
+                SqlHarnessCompareReport => ArtifactReader.CompareKind,
+                SqlHarnessMeasureReport => ArtifactReader.MeasureKind,
+                SqlHarnessMeasureSetReport => ArtifactReader.MeasureSetKind,
+                _ => throw new ArgumentOutOfRangeException(nameof(persistedReport)),
+            };
+            var statements = ArtifactStatementProjector.Project(artifactKind, runs);
+            _publisher.WriteText(Path.Combine(staging, ArtifactReader.StatementsFileName),
+                JsonSerializer.Serialize(statements, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
             for (var index = 0; index < runs.Count; index++)
             {
                 var run = runs[index];

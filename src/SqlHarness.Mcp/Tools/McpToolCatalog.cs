@@ -581,7 +581,7 @@ public static class McpToolCatalog
             Tool(ToolNames[6], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
             Tool(ToolNames[7], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it. No force flag.", null, false, null, true),
             Tool(ToolNames[8], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. Sanitized projection only: no statement text or literal predicates.", true, false, true, false),
-            Tool(ToolNames[9], nameof(McpToolHandlers.ArtifactAsync), "Read one safe section (summary, metrics, operators) of a saved benchmark artifact.", true, false, true, false),
+            Tool(ToolNames[9], nameof(McpToolHandlers.ArtifactAsync), "Read one safe section (summary, metrics, operators, statements) of a saved benchmark artifact.", true, false, true, false),
             Tool(ToolNames[10], nameof(McpToolHandlers.GainAsync), "Report the local output-savings aggregate.", null, false, null, false),
         };
         if (tools.Count != McpLimits.MaxTools)

@@ -161,6 +161,27 @@ public sealed class AgentOutputTests
     }
 
     [Fact]
+    public void Agent_projection_bounds_statement_entries_and_operator_details()
+    {
+        var operation = new StatementOperatorSummary(1, new string('p', 40), new string('o', 40), new string('i', 40), 2, 4, 1);
+        var section = new ArtifactStatementsSection("id", "compare",
+        [
+            new ArtifactStatementMetric("baseline", null, null, 0, new string('a', 64), 10, 15, 2, [operation, operation]),
+            new ArtifactStatementMetric("baseline", null, null, 1, new string('b', 64), 20, 25, 1, [operation]),
+        ], 0);
+
+        var projected = Assert.IsType<ArtifactStatementsSection>(
+            AgentOutputProjection.Project(section, 16, 1, out var omittedItems));
+
+        Assert.Single(projected.Statements);
+        Assert.Single(projected.Statements[0].TopOperators);
+        Assert.Equal(1, projected.OmittedStatements);
+        Assert.True(omittedItems >= 2);
+        Assert.Equal(16, projected.Statements[0].TopOperators[0].PhysicalOp.Length);
+        Assert.Equal(16, projected.Statements[0].TopOperators[0].Object!.Length);
+    }
+
+    [Fact]
     public void Agent_projection_clips_huge_unicode_cells_and_keeps_raw_hash()
     {
         var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");

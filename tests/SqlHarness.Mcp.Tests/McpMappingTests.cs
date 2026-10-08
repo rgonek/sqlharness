@@ -848,7 +848,7 @@ public sealed class McpMappingTests : IDisposable
         Directory.CreateDirectory(directory);
         File.WriteAllText(
             Path.Combine(directory, "manifest.json"),
-            "{\"manifestVersion\": 1, \"artifactKind\": \"compare\", \"reportFile\": \"report.json\", \"sections\": [\"summary\", \"metrics\", \"operators\"]"
+            "{\"manifestVersion\": 1, \"artifactKind\": \"compare\", \"reportFile\": \"report.json\", \"sections\": [\"summary\", \"metrics\", \"operators\", \"statements\"]"
             + (ownerJson is null ? string.Empty : ", \"owner\": " + ownerJson) + "}");
         var report = new SqlHarnessCompareReport(
             new SqlHarnessTargetIdentityReport("artifact-own.invalid", "artifactdb", "artifact-own.invalid", "artifactdb", "profile"),
@@ -873,6 +873,8 @@ public sealed class McpMappingTests : IDisposable
         File.WriteAllText(
             Path.Combine(directory, "report.json"),
             JsonSerializer.Serialize(report, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        File.WriteAllText(Path.Combine(directory, ArtifactReader.StatementsFileName),
+            "{\"artifactId\":\"fixture\",\"artifactKind\":\"compare\",\"statements\":[{\"variant\":\"baseline\",\"statementOrdinal\":0,\"statementHash\":\"" + new string('a', 64) + "\",\"cpuTimeMilliseconds\":10,\"elapsedTimeMilliseconds\":15,\"degreeOfParallelism\":2,\"topOperators\":[{\"nodeId\":0,\"physicalOp\":\"Index Seek\",\"object\":\"[dbo].[T]\",\"index\":\"[IX_T]\",\"estimatedRows\":2,\"actualRows\":4,\"executions\":1}]}],\"omittedStatements\":0}");
         return id;
     }
 
@@ -887,6 +889,23 @@ public sealed class McpMappingTests : IDisposable
         var result = await handlers.ArtifactAsync(null!, id, "summary");
 
         Assert.False(result.IsError == true);
+    }
+
+    [Fact]
+    public async Task Artifact_handler_returns_safe_statements_projection_for_own_scope()
+    {
+        WriteArtifactTargetsFile();
+        var scope = ArtifactScope(ArtifactScopeProfile);
+        var id = WriteMappingArtifact("handler-own-statements-artifact", ArtifactOwnerJson(scope));
+        var handlers = new McpToolHandlers(scope, new RecordingModule());
+
+        var result = await handlers.ArtifactAsync(null!, id, "statements");
+        var payload = string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text));
+
+        Assert.False(result.IsError == true);
+        Assert.Contains("statementHash", payload, StringComparison.Ordinal);
+        Assert.Contains("Index Seek", payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("StatementText", payload, StringComparison.Ordinal);
     }
 
     [Fact]

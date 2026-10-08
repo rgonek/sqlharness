@@ -63,6 +63,24 @@ public sealed record ArtifactOperatorsSection(
     string ArtifactKind,
     IReadOnlyList<NoteworthyOperatorSummary> Operators);
 
+/// <summary>Bounded per-statement plan diagnostics. SQL text is never included.</summary>
+public sealed record ArtifactStatementMetric(
+    string Variant,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParameterSet,
+    int? MatrixCell,
+    int StatementOrdinal,
+    string StatementHash,
+    long? CpuTimeMilliseconds,
+    long? ElapsedTimeMilliseconds,
+    int? DegreeOfParallelism,
+    IReadOnlyList<StatementOperatorSummary> TopOperators);
+
+public sealed record ArtifactStatementsSection(
+    string ArtifactId,
+    string ArtifactKind,
+    IReadOnlyList<ArtifactStatementMetric> Statements,
+    int OmittedStatements);
+
 /// <summary>Safe refusal of a selective artifact read. The message never carries artifact content.</summary>
 public sealed class ArtifactReadException(string message, SqlHarnessExitCode exitCode) : Exception(message)
 {
@@ -87,8 +105,10 @@ public static partial class ArtifactReader
     public const string SummarySection = "summary";
     public const string MetricsSection = "metrics";
     public const string OperatorsSection = "operators";
+    public const string StatementsSection = "statements";
 
     internal const string ReportFileName = "report.json";
+    internal const string StatementsFileName = "statements.json";
     private const string ManifestFileName = "manifest.json";
 
     /// <summary>Manifest bound: mirrors the 64 KiB strict parameter-set file cap.</summary>
@@ -98,7 +118,7 @@ public static partial class ArtifactReader
     public const long MaxReportBytes = 16L * 1024 * 1024;
 
     public static readonly IReadOnlyList<string> SupportedSections =
-        [SummarySection, MetricsSection, OperatorsSection];
+        [SummarySection, MetricsSection, OperatorsSection, StatementsSection];
 
     private static readonly IReadOnlySet<string> SupportedKinds =
         new HashSet<string>(StringComparer.Ordinal) { CompareKind, MeasureKind, MeasureSetKind };
@@ -116,7 +136,7 @@ public static partial class ArtifactReader
     {
         if (!SupportedSections.Contains(section, StringComparer.Ordinal))
             throw new ArtifactReadException(
-                $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators.",
+                $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements.",
                 SqlHarnessExitCode.Safety);
 
         var directory = ResolveDirectory(root, artifactId);
@@ -135,8 +155,9 @@ public static partial class ArtifactReader
             SummarySection => ReadSummary(directory, artifactId, manifest),
             MetricsSection => ReadMetrics(directory, artifactId, manifest),
             OperatorsSection => ReadOperators(directory, artifactId, manifest),
+            StatementsSection => ReadStatements(directory, artifactId, manifest),
             _ => throw new ArtifactReadException(
-                $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators.",
+                $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements.",
                 SqlHarnessExitCode.Safety),
         };
     }
@@ -261,6 +282,36 @@ public static partial class ArtifactReader
             _ => throw new ArtifactReadException("Artifact manifest is invalid.", SqlHarnessExitCode.Safety),
         };
         return new ArtifactOperatorsSection(artifactId, manifest.ArtifactKind, operators);
+    }
+
+    private static ArtifactStatementsSection ReadStatements(string directory, string artifactId, ArtifactManifest manifest)
+    {
+        var path = Path.Combine(directory, StatementsFileName);
+        if (!IsPlainFile(path))
+            throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
+
+        try
+        {
+            var section = JsonSerializer.Deserialize<ArtifactStatementsSection>(
+                ReadBoundedText(path, MaxReportBytes), ArtifactDirectoryPublisher.JsonOptions);
+            if (section is null || section.Statements is null || section.OmittedStatements < 0
+                || section.Statements.Any(statement => statement is null || statement.StatementHash is null
+                    || statement.Variant is null || statement.TopOperators is null))
+                throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
+            return section with { ArtifactId = artifactId, ArtifactKind = manifest.ArtifactKind };
+        }
+        catch (ArtifactReadException)
+        {
+            throw;
+        }
+        catch (JsonException)
+        {
+            throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new ArtifactReadException("Artifact storage is unavailable.", SqlHarnessExitCode.LocalStorage);
+        }
     }
 
     private static IReadOnlyList<NoteworthyOperatorSummary> FlattenMeasureSet(SqlHarnessMeasureSetReport report) =>

@@ -43,6 +43,20 @@ public sealed record JournalVariantMetrics(
 /// <summary>Full plan text. Sensitive: the journal stores it only with journal.storeSensitive.</summary>
 public sealed record JournalPlanDocument(string Hash, string Format, string Document);
 
+public sealed record JournalStatementMetrics(
+    string Variant,
+    string? ParameterSet,
+    int? MatrixCell,
+    int StatementOrdinal,
+    string StatementHash,
+    long? CpuMilliseconds,
+    long? ElapsedMilliseconds,
+    int? DegreeOfParallelism,
+    IReadOnlyList<StatementOperatorSummary> TopOperators);
+
 public sealed record BenchmarkJournalRecord(
     IReadOnlyList<JournalVariantMetrics> Variants,
-    IReadOnlyList<JournalPlanDocument> PlanDocuments);
+    IReadOnlyList<JournalPlanDocument> PlanDocuments)
+{
+    public IReadOnlyList<JournalStatementMetrics> Statements { get; init; } = [];
+}

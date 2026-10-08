@@ -241,6 +241,26 @@ public static class AgentOutputProjection
                         omissions += clippedItems;
                         return operators with { Operators = selected };
                     }
+                case ArtifactStatementsSection statements:
+                    {
+                        var selected = Take(statements.Statements).Select(statement => statement with
+                        {
+                            Variant = Clip(statement.Variant)!,
+                            ParameterSet = Clip(statement.ParameterSet),
+                            TopOperators = Take(statement.TopOperators).Select(op => op with
+                            {
+                                PhysicalOp = Clip(op.PhysicalOp)!,
+                                Object = Clip(op.Object),
+                                Index = Clip(op.Index),
+                            }).ToArray(),
+                        }).ToArray();
+                        omissions += clippedItems;
+                        return statements with
+                        {
+                            Statements = selected,
+                            OmittedStatements = statements.OmittedStatements + Math.Max(0, statements.Statements.Count - selected.Length),
+                        };
+                    }
                 case SqlHarnessGainReport gain:
                     return gain;
                 default:
