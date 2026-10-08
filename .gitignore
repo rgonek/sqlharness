@@ -489,3 +489,8 @@ $RECYCLE.BIN/
 
 # Repository plans are versioned even when ignored globally
 !/plans/
+
+# Publish the generic session-report draft
+!/docs/superpowers/
+!/docs/superpowers/specs/
+!/docs/superpowers/specs/2026-10-07-agent-session-report-draft.md
