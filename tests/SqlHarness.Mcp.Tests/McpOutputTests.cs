@@ -283,7 +283,7 @@ public sealed class McpOutputTests
         Directory.CreateDirectory(root);
         try
         {
-            var cells = Enumerable.Range(0, 20)
+            var cells = Enumerable.Range(0, 100)
                 .Select(i =>
                 {
                     var id = $"matrixcell{i:D3}";
@@ -298,30 +298,68 @@ public sealed class McpOutputTests
                 })
                 .ToArray();
             var matrix = new SqlHarnessCompareMatrixReport("batch", "int", cells);
+            new CompareArtifactWriter(root, () => DateTimeOffset.UnixEpoch).WriteMatrixIndex(cells);
             var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, matrix, null);
+            var zeroProjection = AgentOutputProjection.Project(matrix, 128, 0, out _, 16384);
+            var zeroProjectionBytes = JsonSerializer.SerializeToUtf8Bytes(zeroProjection, new JsonSerializerOptions(JsonSerializerDefaults.Web)).Length;
+            Assert.True(zeroProjectionBytes < 16384, $"Zero-detail projection unexpectedly serializes to {zeroProjectionBytes} bytes.");
 
-            var result = McpResultAdapter.Adapt(outcome, "sqlharness_compare", new McpResultBudget(8192, 128));
+            var result = McpResultAdapter.Adapt(outcome, "sqlharness_compare", new McpResultBudget(16384, 128));
 
-            Assert.False(result.IsError == true);
-            Assert.True(McpResultAdapter.MeasureBytes(result) <= 8192,
+            Assert.False(result.IsError == true, Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+            Assert.True(McpResultAdapter.MeasureBytes(result) <= 16384,
                 "Oversized matrix projection must fit the requested wire budget.");
             var envelope = EnvelopeOf(result);
             AssertValidEnvelope(envelope);
             var projected = envelope.GetProperty("result");
+            Assert.DoesNotContain(root, envelope.GetRawText(), StringComparison.OrdinalIgnoreCase);
             var projectedCells = projected.GetProperty("cells");
             var references = projected.GetProperty("omittedCellReferences");
-            Assert.True(projectedCells.GetArrayLength() < 20 || references.GetArrayLength() > 0,
-                "An oversized matrix should either project fewer than 20 full cells or emit references for omitted cells.");
+            Assert.All(references.EnumerateArray(), reference =>
+                Assert.Equal(JsonValueKind.Null, reference.GetProperty("parameterValue").ValueKind));
+            Assert.True(projectedCells.GetArrayLength() < 100 || references.GetArrayLength() > 0,
+                "An oversized matrix should either project fewer than 100 full cells or emit references for omitted cells.");
             Assert.True(envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
-            Assert.True(references.GetArrayLength() > 0, "Omitted cell references must be emitted so the caller can retrieve detail.");
+            var matrixArtifactId = projected.GetProperty("matrixArtifactId").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(matrixArtifactId), "Paged recovery must identify the scope-owned matrix index artifact.");
+            Assert.Equal(JsonValueKind.Number, projected.GetProperty("continuation").ValueKind);
+            var foreign = Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(
+                root, matrixArtifactId!, "matrix-cells", owner with { Profile = "foreign-profile" }, projected.GetProperty("continuation").GetInt32()));
+            Assert.Equal("The artifact is not available in the current scope.", foreign.Message);
+            var recovered = new List<int>();
             foreach (var reference in references.EnumerateArray())
             {
-                var artifactDirectory = reference.GetProperty("artifactDirectory").GetString();
-                Assert.False(string.IsNullOrEmpty(artifactDirectory));
-                var id = Path.GetFileName(artifactDirectory)!;
+                var id = reference.GetProperty("artifactId").GetString();
+                Assert.False(string.IsNullOrEmpty(id));
                 var section = ArtifactReader.ReadSection(root, id, "metrics", owner);
                 Assert.IsType<ArtifactMetricsSection>(section);
+                recovered.Add(reference.GetProperty("index").GetInt32());
             }
+
+            var cursor = projected.TryGetProperty("continuation", out var continuation) && continuation.ValueKind == JsonValueKind.Number
+                ? continuation.GetInt32()
+                : (int?)null;
+            while (cursor is { } pageCursor)
+            {
+                var page = Assert.IsType<ArtifactMatrixCellsSection>(ArtifactReader.ReadSection(
+                    root, matrixArtifactId!, "matrix-cells", owner, pageCursor));
+                var pageOutcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, page, null);
+                var pageResult = McpResultAdapter.Adapt(pageOutcome, "sqlharness_artifact", new McpResultBudget(16384, 128));
+                Assert.True(McpResultAdapter.MeasureBytes(pageResult) <= 16384);
+                var pageEnvelope = EnvelopeOf(pageResult);
+                foreach (var cellReference in pageEnvelope.GetProperty("result").GetProperty("cells").EnumerateArray())
+                {
+                    var artifactId = cellReference.GetProperty("artifactId").GetString()!;
+                    var section = ArtifactReader.ReadSection(root, artifactId, "metrics", owner);
+                    Assert.IsType<ArtifactMetricsSection>(section);
+                    recovered.Add(cellReference.GetProperty("index").GetInt32());
+                }
+                cursor = pageEnvelope.GetProperty("result").TryGetProperty("continuation", out var next) && next.ValueKind == JsonValueKind.Number
+                    ? next.GetInt32()
+                    : null;
+            }
+
+            Assert.Equal(Enumerable.Range(0, 100).Where(index => !projectedCells.EnumerateArray().Any(cell => cell.GetProperty("index").GetInt32() == index)), recovered.Order());
         }
         finally
         {

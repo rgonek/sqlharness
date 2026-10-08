@@ -479,6 +479,26 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     _ => OperationPhase.Sql,
                 };
                 rawFootprint = failed.RawFootprint;
+                if (failed.PartialReport is { } partialReport)
+                {
+                    try
+                    {
+                        phase = OperationPhase.Artifact;
+                        _artifactWriter.WriteMatrixIndex(partialReport.Cells);
+                    }
+                    catch (Exception exception)
+                    {
+                        return WithReceipt(
+                            new SqlHarnessOutcome(SqlHarnessExitCode.LocalStorage, partialReport, SecretRedactor.Redact(exception, knownSecrets)),
+                            rawFootprint);
+                    }
+                    phase = failed.Phase switch
+                    {
+                        CompareCellPhase.Authentication => OperationPhase.Authentication,
+                        CompareCellPhase.Artifact => OperationPhase.Artifact,
+                        _ => OperationPhase.Sql,
+                    };
+                }
                 var exitCode = phase == OperationPhase.Artifact
                     ? SqlHarnessExitCode.LocalStorage
                     : OperationFailureMapper.Map(failed.InnerException ?? failed, phase);
@@ -488,6 +508,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             }
 
             rawFootprint = result.RawFootprint;
+            phase = OperationPhase.Artifact;
+            _artifactWriter.WriteMatrixIndex(result.Report.Cells);
             var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, result.Report, null)
             {
                 BenchmarkRuns = result.Runs,

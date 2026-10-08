@@ -72,14 +72,15 @@ public sealed record CompareMatrixCellSummary(
 public sealed record CompareMatrixCellReference(
     int Index,
     string? ParameterValue,
-    string? ArtifactDirectory);
+    string? ArtifactId);
 
 public sealed record CompareMatrixBenchmarkSummary(
     string ParameterName,
     string ParameterType,
     IReadOnlyList<CompareMatrixCellSummary> Cells,
     IReadOnlyList<CompareMatrixCellReference>? OmittedCellReferences = null,
-    int? Continuation = null);
+    int? Continuation = null,
+    string? MatrixArtifactId = null);
 
 public static class BenchmarkSummaryProjector
 {

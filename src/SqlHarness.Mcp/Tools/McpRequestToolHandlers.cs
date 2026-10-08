@@ -139,9 +139,11 @@ public sealed class McpRequestToolHandlers(
 
     public Task<CallToolResult> ArtifactAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Artifact directory name from a saved report.")] string id,
-        [Description("Safe section to read.")][AllowedValues("summary", "metrics", "operators")] string section,
-        [Description("Request target scope.")] McpRequestScopeArgument scope, CancellationToken ct = default) =>
-        Invoke(ctx, "sqlharness_artifact", scope, handler => handler.ArtifactAsync(ctx, id, section, ct));
+        [Description("Safe section to read.")][AllowedValues("summary", "metrics", "operators", "statements", "matrix-cells")] string section,
+        [Description("Request target scope.")] McpRequestScopeArgument scope,
+        [Description("Optional zero-based continuation cursor for matrix-cells pages.")] int? cursor = null,
+        CancellationToken ct = default) =>
+        Invoke(ctx, "sqlharness_artifact", scope, handler => handler.ArtifactAsync(ctx, id, section, cursor, ct));
 
     public Task<CallToolResult> GainAsync(RequestContext<CallToolRequestParams> ctx, CancellationToken ct = default) =>
         TargetFreeAsync("sqlharness_gain", ct, token =>

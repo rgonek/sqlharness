@@ -86,6 +86,63 @@ public class ArtifactReaderTests
     }
 
     [Fact]
+    public void Matrix_cell_index_pages_return_safe_ids_and_a_consumable_cursor()
+    {
+        using var temp = new TempDirectory();
+        const string id = "matrix-index";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"matrix-cells\"]}");
+        File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), JsonSerializer.Serialize(new
+        {
+            cells = Enumerable.Range(0, 40).Select(index => new { index, artifactId = $"cell-{index:D3}" }).ToArray(),
+        }));
+
+        var first = ArtifactReader.ReadSection(temp.Path, id, "matrix-cells");
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(first, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        Assert.Equal(32, json.RootElement.GetProperty("cells").GetArrayLength());
+        Assert.Equal(32, json.RootElement.GetProperty("continuation").GetInt32());
+        var second = Assert.IsType<ArtifactMatrixCellsSection>(ArtifactReader.ReadSection(temp.Path, id, "matrix-cells", cursor: 32));
+        Assert.Equal(8, second.Cells.Count);
+        Assert.Null(second.Continuation);
+        Assert.Equal(Enumerable.Range(32, 8), second.Cells.Select(cell => cell.Index));
+    }
+
+    [Fact]
+    public void Statement_metrics_keep_nested_relop_counters_and_objects_with_their_owner()
+    {
+        const string plan = """
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+              <BatchSequence><Batch><Statements><StmtSimple StatementText="safe">
+                <QueryPlan>
+                  <RelOp NodeId="0" PhysicalOp="Nested Loops" EstimateRows="2">
+                    <RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualRows="2" ActualExecutions="1" /></RunTimeInformation>
+                    <NestedLoops>
+                      <RelOp NodeId="1" PhysicalOp="Index Seek" EstimateRows="3">
+                        <RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualRows="7" ActualExecutions="4" /></RunTimeInformation>
+                        <IndexScan><Object Table="[dbo].[Child]" Index="[IX_Child]" /></IndexScan>
+                      </RelOp>
+                    </NestedLoops>
+                  </RelOp>
+                </QueryPlan>
+              </StmtSimple></Statements></Batch></BatchSequence>
+            </ShowPlanXML>
+            """;
+
+        var statements = StatementMetricsExtractor.Extract(plan, out _);
+        var operators = Assert.Single(statements).TopOperators.ToDictionary(item => item.NodeId);
+
+        Assert.Equal(2, operators[0].ActualRows);
+        Assert.Equal(1, operators[0].Executions);
+        Assert.Null(operators[0].Object);
+        Assert.Equal(7, operators[1].ActualRows);
+        Assert.Equal(4, operators[1].Executions);
+        Assert.Equal("[dbo].[Child]", operators[1].Object);
+        Assert.Equal("[IX_Child]", operators[1].Index);
+    }
+
+    [Fact]
     public void MeasureAndMeasureSet_AllSectionsRead()
     {
         using var temp = new TempDirectory();

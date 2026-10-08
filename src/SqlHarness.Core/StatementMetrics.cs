@@ -88,7 +88,7 @@ internal static class StatementMetricsExtractor
     private static StatementOperatorSummary ParseOperator(XElement relOp)
     {
         var own = relOp.DescendantsAndSelf().Where(element => element == relOp
-            || !element.Ancestors(Showplan + "RelOp").SkipWhile(parent => parent != relOp).Skip(1).Any()).ToArray();
+            || element.Ancestors(Showplan + "RelOp").FirstOrDefault() == relOp).ToArray();
         var objectElement = own.FirstOrDefault(element => element.Name == Showplan + "Object");
         var counters = own.Where(element => element.Name == Showplan + "RunTimeCountersPerThread").ToArray();
         var actualRows = Sum(counters, "ActualRows");

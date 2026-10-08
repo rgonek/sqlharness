@@ -229,20 +229,21 @@ public sealed class AgentOutputTests
     }
 
     [Fact]
-    public void Agent_projection_bounds_matrix_cells_long_warnings_and_artifact_paths()
+    public void Agent_projection_bounds_matrix_cells_and_long_warnings_without_emitting_artifact_paths()
     {
         var matrix = new SqlHarnessCompareMatrixReport("batch", "int",
-            Enumerable.Range(0, 100).Select(i => new CompareMatrixCellReport(i, i.ToString(), BuildCompare(new string('w', 100_000), new string('a', 20_000)))).ToArray());
+            Enumerable.Range(0, 100).Select(i => new CompareMatrixCellReport(i, i.ToString(), BuildCompare(new string('w', 100_000), $"/workspace/artifacts/cell-{i:D3}"))).ToArray());
         var output = new StringWriter();
 
         new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, matrix, null), "compare",
             new OutputCaptureWriter(output), new AgentOutputOptions(4096, 128));
 
         var bytes = System.Text.Encoding.UTF8.GetByteCount(output.ToString());
-        _testOutput.WriteLine($"100 cell matrix with long warning/path: {bytes} UTF-8 bytes including newline (budget 4096)");
+        _testOutput.WriteLine($"100 cell matrix with long warnings: {bytes} UTF-8 bytes including newline (budget 4096)");
         Assert.InRange(bytes, 1, 4096);
         using var json = JsonDocument.Parse(output.ToString());
         var result = json.RootElement.GetProperty("result");
+        Assert.DoesNotContain("/workspace/artifacts", json.RootElement.GetRawText(), StringComparison.OrdinalIgnoreCase);
         Assert.True(result.GetProperty("cells").GetArrayLength() < 100);
         Assert.Equal((int)ResultComparisonMode.Multiset, result.GetProperty("cells")[0].GetProperty("compare").GetProperty("equivalence").GetProperty("mode").GetInt32());
         Assert.True(json.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);

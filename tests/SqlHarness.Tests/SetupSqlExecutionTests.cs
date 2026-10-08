@@ -144,6 +144,18 @@ public class SetupSqlExecutionTests
     }
 
     [Fact]
+    public void Local_variable_declared_before_split_and_used_after_split_is_rejected()
+    {
+        var sql = "DECLARE @local int = 1; CREATE TABLE #t (Id int); INSERT #t VALUES (@value); INSERT #t VALUES (@local);";
+        var parameters = Parameters(("value", "int", "7"));
+
+        var exception = Assert.Throws<SetupSqlShapeException>(() =>
+            SetupSqlExecution.PrepareCommands(sql, parameters, 30));
+
+        Assert.Contains("local variable declared before the parameterized setup boundary", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Validate_is_no_op_for_empty_setup_or_no_parameters()
     {
         var parameters = Parameters(("x", "int", "7"));

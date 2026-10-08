@@ -81,6 +81,16 @@ public sealed record ArtifactStatementsSection(
     IReadOnlyList<ArtifactStatementMetric> Statements,
     int OmittedStatements);
 
+/// <summary>One safe reference to a saved compare cell, addressed only by its artifact id.</summary>
+public sealed record ArtifactMatrixCellReference(int Index, string ArtifactId);
+
+/// <summary>A bounded page of saved compare-cell references.</summary>
+public sealed record ArtifactMatrixCellsSection(
+    string ArtifactId,
+    IReadOnlyList<ArtifactMatrixCellReference> Cells,
+    int? Continuation,
+    int Cursor = 0);
+
 /// <summary>Safe refusal of a selective artifact read. The message never carries artifact content.</summary>
 public sealed class ArtifactReadException(string message, SqlHarnessExitCode exitCode) : Exception(message)
 {
@@ -106,6 +116,7 @@ public static partial class ArtifactReader
     public const string MetricsSection = "metrics";
     public const string OperatorsSection = "operators";
     public const string StatementsSection = "statements";
+    public const string MatrixCellsSection = "matrix-cells";
 
     internal const string ReportFileName = "report.json";
     internal const string StatementsFileName = "statements.json";
@@ -118,7 +129,7 @@ public static partial class ArtifactReader
     public const long MaxReportBytes = 16L * 1024 * 1024;
 
     public static readonly IReadOnlyList<string> SupportedSections =
-        [SummarySection, MetricsSection, OperatorsSection, StatementsSection];
+        [SummarySection, MetricsSection, OperatorsSection, StatementsSection, MatrixCellsSection];
 
     private static readonly IReadOnlySet<string> SupportedKinds =
         new HashSet<string>(StringComparer.Ordinal) { CompareKind, MeasureKind, MeasureSetKind };
@@ -132,12 +143,15 @@ public static partial class ArtifactReader
     /// owner is supplied (MCP always supplies the frozen scope owner;
     /// the offline CLI passes none and keeps reading by name).
     /// </summary>
-    public static object ReadSection(string root, string artifactId, string section, ArtifactOwner? owner = null)
+    public static object ReadSection(string root, string artifactId, string section, ArtifactOwner? owner = null, int? cursor = null)
     {
         if (!SupportedSections.Contains(section, StringComparer.Ordinal))
             throw new ArtifactReadException(
-                $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements.",
+                $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, matrix-cells.",
                 SqlHarnessExitCode.Safety);
+
+        if (cursor is < 0 || cursor is not null && section != MatrixCellsSection)
+            throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
 
         var directory = ResolveDirectory(root, artifactId);
         var manifest = ReadManifest(directory, artifactId);
@@ -156,10 +170,58 @@ public static partial class ArtifactReader
             MetricsSection => ReadMetrics(directory, artifactId, manifest),
             OperatorsSection => ReadOperators(directory, artifactId, manifest),
             StatementsSection => ReadStatements(directory, artifactId, manifest),
+            MatrixCellsSection => ReadMatrixCells(directory, artifactId, cursor ?? 0),
             _ => throw new ArtifactReadException(
-                $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements.",
+                $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, matrix-cells.",
                 SqlHarnessExitCode.Safety),
         };
+    }
+
+    private static ArtifactMatrixCellsSection ReadMatrixCells(string directory, string artifactId, int cursor)
+    {
+        const string fileName = "matrix-cells.json";
+        var path = Path.Combine(directory, fileName);
+        if (!IsPlainFile(path))
+            throw new ArtifactReadException("Artifact matrix index is invalid.", SqlHarnessExitCode.Safety);
+
+        try
+        {
+            using var document = JsonDocument.Parse(ReadBoundedText(path, MaxReportBytes));
+            if (!document.RootElement.TryGetProperty("cells", out var cells)
+                || cells.ValueKind != JsonValueKind.Array
+                || cells.GetArrayLength() > 100_000)
+                throw new ArtifactReadException("Artifact matrix index is invalid.", SqlHarnessExitCode.Safety);
+
+            if (cursor > cells.GetArrayLength())
+                throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
+
+            const int pageSize = 32;
+            var page = cells.EnumerateArray().Skip(cursor).Take(pageSize).Select(item =>
+            {
+                if (!item.TryGetProperty("index", out var index)
+                    || !index.TryGetInt32(out var cellIndex)
+                    || !item.TryGetProperty("artifactId", out var id)
+                    || id.ValueKind != JsonValueKind.String
+                    || id.GetString() is not { } artifactCellId
+                    || !ArtifactIdPattern().IsMatch(artifactCellId))
+                    throw new ArtifactReadException("Artifact matrix index is invalid.", SqlHarnessExitCode.Safety);
+                return new ArtifactMatrixCellReference(cellIndex, artifactCellId);
+            }).ToArray();
+            var next = cursor + page.Length;
+            return new ArtifactMatrixCellsSection(artifactId, page, next < cells.GetArrayLength() ? next : null, cursor);
+        }
+        catch (ArtifactReadException)
+        {
+            throw;
+        }
+        catch (JsonException)
+        {
+            throw new ArtifactReadException("Artifact matrix index is invalid.", SqlHarnessExitCode.Safety);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new ArtifactReadException("Artifact storage is unavailable.", SqlHarnessExitCode.LocalStorage);
+        }
     }
 
     private static string ResolveDirectory(string root, string artifactId)

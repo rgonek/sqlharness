@@ -166,7 +166,36 @@ internal static class SetupSqlExecution
 
         var prefix = statements.Take(firstParameterReferenceIndex).ToArray();
         var remainder = statements.Skip(firstParameterReferenceIndex).ToArray();
+        if (HasCrossSplitLocalReference(prefix, remainder))
+        {
+            throw new SetupSqlShapeException(
+                "Setup references a local variable declared before the parameterized setup boundary. " +
+                "Declare and use local variables in the same parameterized batch, or pass the value as a typed parameter.");
+        }
+
         return new BatchSplit(prefix, remainder);
+    }
+
+    private static bool HasCrossSplitLocalReference(
+        IReadOnlyList<TSqlStatement> prefix,
+        IReadOnlyList<TSqlStatement> remainder)
+    {
+        var declarations = new LocalDeclarationVisitor();
+        foreach (var statement in prefix)
+            statement.Accept(declarations);
+
+        if (declarations.Locals.Count == 0)
+            return false;
+
+        var visitor = new LocalReferenceVisitor(declarations.Locals);
+        foreach (var statement in remainder)
+        {
+            statement.Accept(visitor);
+            if (visitor.Found)
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -248,6 +277,43 @@ internal static class SetupSqlExecution
             {
                 HasParameterReference = true;
             }
+
+            base.ExplicitVisit(node);
+        }
+    }
+
+    private sealed class LocalReferenceVisitor(IReadOnlySet<string> locals) : TSqlFragmentVisitor
+    {
+        internal bool Found { get; private set; }
+
+        public override void ExplicitVisit(VariableReference node)
+        {
+            if (!node.Name.StartsWith("@@", StringComparison.Ordinal) && locals.Contains(node.Name))
+                Found = true;
+
+            base.ExplicitVisit(node);
+        }
+    }
+
+    private sealed class LocalDeclarationVisitor : TSqlFragmentVisitor
+    {
+        internal HashSet<string> Locals { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public override void ExplicitVisit(DeclareVariableStatement node)
+        {
+            foreach (var declaration in node.Declarations)
+            {
+                if (declaration.VariableName?.Value is { } name)
+                    Locals.Add(name);
+            }
+
+            base.ExplicitVisit(node);
+        }
+
+        public override void ExplicitVisit(DeclareTableVariableStatement node)
+        {
+            if (node.Body?.VariableName?.Value is { } name)
+                Locals.Add(name);
 
             base.ExplicitVisit(node);
         }

@@ -280,6 +280,8 @@ public sealed class McpToolSchemaTests : IDisposable
         await using var requestServed = await ServedCatalog.CreateAsync(process);
         var requestSchemas = (await requestServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None))
             .ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
+        Assert.Equal(["summary", "metrics", "operators", "statements", "matrix-cells"], EnumOf(requestSchemas["sqlharness_artifact"], "section"));
+        Assert.Contains("cursor", Properties(requestSchemas["sqlharness_artifact"]).EnumerateObject().Select(property => property.Name));
         var targetTools = new[] { "sqlharness_inspect", "sqlharness_validate", "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot", "sqlharness_artifact" };
         foreach (var tool in targetTools)
         {
@@ -455,7 +457,8 @@ public sealed class McpToolSchemaTests : IDisposable
 
         var artifact = schemas["sqlharness_artifact"];
         Assert.Equal(["id", "section"], Required(artifact).Order().ToArray());
-        Assert.Equal(["summary", "metrics", "operators", "statements"], EnumOf(artifact, "section"));
+        Assert.Equal(["summary", "metrics", "operators", "statements", "matrix-cells"], EnumOf(artifact, "section"));
+        Assert.Contains("cursor", Properties(artifact).EnumerateObject().Select(property => property.Name));
 
         var gain = schemas["sqlharness_gain"];
         Assert.Empty(Properties(gain).EnumerateObject());
