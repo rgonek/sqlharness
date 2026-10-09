@@ -192,6 +192,31 @@ internal sealed class SqlSafetyClassifier
     private const string UnprovenTableVariableDetail =
         "Table-position variables require an earlier inline TABLE declaration in the same batch. Named user-defined types are not proven as table variables. Setup variables do not cross into benchmark batches.";
 
+    // 018: concrete table sources that stay inside a read-only statement.
+    internal static readonly IReadOnlySet<Type> AllowedTableReferenceTypes = new HashSet<Type>
+    {
+        typeof(NamedTableReference),
+        typeof(VariableTableReference),
+        typeof(QueryDerivedTable),
+        typeof(InlineDerivedTable),
+        typeof(QualifiedJoin),
+        typeof(UnqualifiedJoin),
+        typeof(JoinParenthesisTableReference),
+        typeof(OdbcQualifiedJoinTableReference),
+        typeof(PivotedTableReference),
+        typeof(UnpivotedTableReference),
+        typeof(SchemaObjectFunctionTableReference),
+        typeof(BuiltInFunctionTableReference),
+        typeof(GlobalFunctionTableReference),
+        typeof(OpenJsonTableReference),
+        typeof(FullTextTableReference),
+        typeof(SemanticTableReference),
+        typeof(ChangeTableChangesTableReference),
+        typeof(ChangeTableVersionTableReference),
+        typeof(DataModificationTableReference),
+        typeof(VariableMethodCallTableReference),
+    };
+
     internal SqlSafetyDecision Classify(
         string sql,
         SqlUsage usage,
@@ -988,6 +1013,15 @@ internal sealed class SqlSafetyClassifier
             if (node.CallTarget is MultiPartIdentifierCallTarget { MultiPartIdentifier.Identifiers.Count: >= 2 })
                 HasCrossDatabaseReference = true;
             base.ExplicitVisit(node);
+        }
+
+        // 018: table sources are an allow-list. A type ScriptDom adds later is
+        // external until someone classifies it (see SqlSafetyNodeCoverageTests).
+        public override void Visit(TableReference node)
+        {
+            if (!AllowedTableReferenceTypes.Contains(node.GetType()))
+                HasExternalAccess = true;
+            base.Visit(node);
         }
 
         public override void ExplicitVisit(OpenRowsetTableReference node)
