@@ -97,7 +97,7 @@ public sealed record DimensionMatrixStats(
 
 public sealed record ProfileDimensionStats(
     string? Profile, bool ProfileDefinitionAvailable, int Operations, IReadOnlyList<DimensionStat> Dimensions,
-    IReadOnlyList<TargetStat> Targets, DimensionMatrixStats? Matrix = null);
+    IReadOnlyList<TargetStat> Targets, int TargetCount, DimensionMatrixStats? Matrix = null);
 
 /// <summary>Token totals over operations that carry both a raw and an emitted count.</summary>
 public sealed record TokenStat(long Raw, long Emitted, int TotalOperations = 0, int PairedOperations = 0,

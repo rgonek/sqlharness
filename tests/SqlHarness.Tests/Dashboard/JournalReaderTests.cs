@@ -418,6 +418,33 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Dimension_target_limit_reports_full_filtered_target_count_without_changing_totals()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        for (var i = 0; i < 23; i++)
+            seed.Operation(JournalSeed.Session($"cli:selected-{i}"), profile: "app",
+                variables: new Dictionary<string, string> { ["tenant"] = "selected", ["component"] = "api" },
+                server: $"server-{i}", database: $"db-{i}");
+        for (var i = 0; i < 3; i++)
+            seed.Operation(JournalSeed.Session($"cli:other-{i}"), profile: "app",
+                variables: new Dictionary<string, string> { ["tenant"] = "other", ["component"] = "api" },
+                server: $"other-server-{i}", database: $"other-db-{i}");
+
+        var stats = Reader(home).Stats(new StatsQuery(Profile: "app",
+            Dimensions: new Dictionary<string, string?> { ["tenant"] = "selected" },
+            RowDimension: "tenant", ColumnDimension: "component"),
+            new Dictionary<string, IReadOnlyList<string>> { ["app"] = ["tenant", "component"] });
+
+        Assert.Equal(23, stats.ProfileDimensions.Operations);
+        Assert.Equal(23, stats.ProfileDimensions.TargetCount);
+        Assert.Equal(20, stats.ProfileDimensions.Targets.Count);
+        Assert.Equal(23, stats.ProfileDimensions.Matrix!.Totals.Operations);
+        Assert.Equal(20, stats.ProfileDimensions.Targets.Sum(target => target.Count));
+        Assert.Equal(20, stats.ProfileDimensions.Targets.Select(target => (target.Engine, target.Server, target.Database)).Distinct().Count());
+    }
+
+    [Fact]
     public void Operation_pages_filter_by_profile_and_multiple_dimensions_without_losing_cursor_matches()
     {
         using var home = new TempHome();

@@ -273,7 +273,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         if (connection is null)
             return new DashboardStats([], [], [], [], [], [], [], [], [], new TokenStat(0, 0), 0, 0, [],
                 new ProfileDimensionStats(query.Profile,
-                    query.Profile is not null && profileDimensions?.ContainsKey(query.Profile) == true, 0, [], []));
+                    query.Profile is not null && profileDimensions?.ContainsKey(query.Profile) == true, 0, [], [], 0));
         (string, object?)[] window = [("$from", Iso(query.From)), ("$to", Iso(query.To))];
         const string inWindow = "($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to)";
 
@@ -441,7 +441,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             valueStats.Add(new DimensionStat(dimension, values));
         }
 
-        var targets = filtered.GroupBy(operation =>
+        var allTargets = filtered.GroupBy(operation =>
                 (operation.Profile, operation.Database, operation.Engine, operation.Server))
             .Select(group => new TargetStat(group.Key.Profile, group.Key.Database, group.Count(), group.Key.Engine, group.Key.Server))
             .OrderByDescending(target => target.Count)
@@ -449,10 +449,12 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             .ThenBy(target => target.Engine, StringComparer.Ordinal)
             .ThenBy(target => target.Server, StringComparer.Ordinal)
             .ThenBy(target => target.Database, StringComparer.Ordinal)
+            .ToArray();
+        var targets = allTargets
             .Take(TopLimit)
             .ToArray();
         var matrix = BuildDimensionMatrix(query, dimensions, filtered);
-        return new ProfileDimensionStats(query.Profile, profileDefinitionAvailable, filtered.Length, valueStats, targets, matrix);
+        return new ProfileDimensionStats(query.Profile, profileDefinitionAvailable, filtered.Length, valueStats, targets, allTargets.Length, matrix);
     }
 
     private static DimensionAggregate AggregateDimensionMetrics(IEnumerable<DimensionOperation> operations)

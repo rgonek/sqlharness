@@ -319,6 +319,7 @@ export function ProfileDimensionsPanel({
   const scope = query.data?.profileDimensions
   const displayedDimensions = scope?.dimensions ?? dimensions
   const displayedTargets = scope?.targets ?? targets
+  const targetCount = scope?.targetCount ?? targets.length
   const activeFilters = Object.entries(scopedFilters)
   const dimensionNames = displayedDimensions.map(dimension => dimension.name)
   const dimensionFilterOptions = filterOptions ?? dimensions
@@ -401,6 +402,7 @@ export function ProfileDimensionsPanel({
 
         <section className="grid gap-2" aria-label="Filtered databases">
           <h2 className="text-base font-semibold">Databases in this scope</h2>
+          <p className="text-xs text-muted-foreground">Showing {formatNumber(displayedTargets.length)} of {formatNumber(targetCount)} matching physical targets (top 20 limit).</p>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader><TableRow><TableHead>Engine</TableHead><TableHead>Server</TableHead><TableHead>Database</TableHead><TableHead className="text-right">Operations</TableHead></TableRow></TableHeader>

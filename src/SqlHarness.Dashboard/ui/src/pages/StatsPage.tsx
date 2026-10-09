@@ -318,7 +318,7 @@ function StatsContent({
         </Card>
       </div>
       <ProfileDimensionsPanel
-        key={profile ?? "unprofiled"}
+        key={profile === null ? `scope:${unprofiled ? "unprofiled" : "all"}` : `profile:${profile}`}
         range={range}
         window={window}
         profile={profile}

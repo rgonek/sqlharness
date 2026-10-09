@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test, vi } from "vitest"
 import type { DimensionValueSummary } from "@/api/types"
@@ -38,6 +38,7 @@ test("no-profile activity has a distinct scope and drills down without a profile
           profile: null, profileDefinitionAvailable: false, operations: 1,
           dimensions: [{ name: "region", values: [literalUnknown] }, { name: "component", values: [api] }],
           targets: [{ profile: null, database: "db", engine: "postgres", server: "local", count: 1 }],
+          targetCount: 1,
           matrix: { rowDimension: "region", columnDimension: "component",
             cells: [{ row: literalUnknown, column: api, metrics: matrixMetrics(1, 10) }], totals: matrixMetrics(1, 10) },
         } })
@@ -135,6 +136,73 @@ test("selects a profile and shows filtered, searchable dimension matrix totals",
   await userEvent.selectOptions(profile, "profile:empty")
   expect(await screen.findByText("This profile has no configured or recorded dimensions.")).toBeInTheDocument()
   expect(screen.getByRole("heading", { name: "Databases in this scope" })).toBeInTheDocument()
+})
+
+test("labels the bounded physical-target list with its full filtered count", async () => {
+  const response = stats()
+  response.profileDimensions.targets = Array.from({ length: 20 }, (_, index) => ({
+    profile: "local", database: `db-${index}`, count: 1, engine: "sqlserver", server: `server-${index}`,
+  }))
+  response.profileDimensions.targetCount = 23
+  stubFetch({ "/api/stats": response, "/api/profiles": profilesResponse() })
+  renderApp("/stats")
+
+  expect(await screen.findByText("Showing 20 of 23 matching physical targets (top 20 limit).")).toBeInTheDocument()
+  const databaseTable = within(screen.getByRole("region", { name: "Filtered databases" }))
+  expect(databaseTable.getAllByRole("row")).toHaveLength(21)
+  expect(databaseTable.getByRole("cell", { name: "db-19" })).toBeInTheDocument()
+  expect(databaseTable.queryByRole("cell", { name: "db-20" })).not.toBeInTheDocument()
+})
+
+test("switching from a profile named unprofiled to no-profile resets matrix controls", async () => {
+  const calls = stubFetch({
+    "/api/stats": (url: URL) => {
+      const unprofiled = url.searchParams.get("unprofiled") === "true"
+      const values = Array.from({ length: 30 }, (_, index) => dimensionValue(
+        unprofiled ? "region" : "project", `${unprofiled ? "scope" : "profile"}-value-${index}`, 1, 10))
+      const column = dimensionValue("component", "api", 30, 300)
+      const response = stats({
+        profileOperations: [{ profile: "unprofiled", operations: 30 }, { profile: null, operations: 30 }],
+        profileDimensions: {
+          profile: unprofiled ? null : "unprofiled", profileDefinitionAvailable: !unprofiled, operations: 30,
+          dimensions: [{ name: unprofiled ? "region" : "project", values }, { name: "component", values: [column] }],
+          targets: [{ profile: unprofiled ? null : "unprofiled", database: "db", engine: "sqlserver", server: "srv", count: 30 }],
+          targetCount: 1,
+          matrix: {
+            rowDimension: unprofiled ? "region" : "project", columnDimension: "component",
+            cells: values.map(value => ({ row: value, column, metrics: matrixMetrics(1, 10) })),
+            totals: matrixMetrics(30, 300),
+          },
+        },
+      })
+      return jsonResponse(response)
+    },
+    "/api/profiles": {
+      status: "valid", message: null, profiles: [{
+        name: "unprofiled", engine: "sqlserver", server: "srv", database: "db", auth: "sql", sqlUser: null,
+        passwordEnvVar: null, sslMode: null, trustServerCertificate: false, tls: "verify", rootCertificate: null,
+        vars: [{ name: "project", rule: ".*" }, { name: "component", rule: ".*" }],
+      }],
+    },
+  })
+  renderApp("/stats")
+
+  const profile = await screen.findByRole("combobox", { name: "Statistics profile" })
+  await screen.findByText(/Showing 25 of 30 row values/)
+  expect(profile).toHaveValue("profile:unprofiled")
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: "Metric" }), "failed")
+  await userEvent.type(screen.getByRole("textbox", { name: "Search row and column values" }), "profile-value-29")
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: "Display limit per axis" }), "10")
+
+  fireEvent.change(profile, { target: { value: "unprofiled" } })
+
+  await waitFor(() => expect(profile).toHaveValue("unprofiled"))
+  await waitFor(() => expect(calls.some(call => call.startsWith("/api/stats?") && call.includes("unprofiled=true"))).toBe(true))
+  expect(await screen.findByRole("combobox", { name: "region" })).toBeInTheDocument()
+  expect(screen.getByRole("combobox", { name: "Metric" })).toHaveValue("operations")
+  expect(screen.getByRole("textbox", { name: "Search row and column values" })).toHaveValue("")
+  expect(screen.getByRole("combobox", { name: "Display limit per axis" })).toHaveValue("25")
+  expect(screen.getByText(/Showing 25 of 30 row values/)).toBeInTheDocument()
 })
 
 test("marks search-hidden cross-intersections and excludes them from visible totals", async () => {
@@ -241,11 +309,11 @@ function profileStats(profile: string | null) {
     response.profileDimensions = {
       profile: "solo", profileDefinitionAvailable: true, operations: 2,
       dimensions: [{ name: "region", values: [dimensionValue("region", "west", 2, 20)] }],
-      targets: [{ profile: "solo", database: "db", engine: "sqlserver", server: "server-west", count: 2 }], matrix: null,
+      targets: [{ profile: "solo", database: "db", engine: "sqlserver", server: "server-west", count: 2 }], targetCount: 1, matrix: null,
     }
   } else if (profile === "empty") {
     response.profileDimensions = { profile: "empty", profileDefinitionAvailable: true, operations: 1, dimensions: [],
-      targets: [{ profile: "empty", database: "db", engine: "sqlserver", server: "server", count: 1 }], matrix: null }
+      targets: [{ profile: "empty", database: "db", engine: "sqlserver", server: "server", count: 1 }], targetCount: 1, matrix: null }
   } else {
     const api = dimensionValue("component", "api", 2, 30, 0, 1)
     const web = dimensionValue("component", "web", 1, null, 1, 0)
@@ -259,6 +327,7 @@ function profileStats(profile: string | null) {
         { name: "region", values: [dimensionValue("region", "west", 2, 20), dimensionValue("region", "east", 1, 10)] },
       ],
       targets: [{ profile: "app", database: "alpha.api", engine: "sqlserver", server: "server-eu", count: 3 }],
+      targetCount: 1,
       matrix: {
         rowDimension: "component", columnDimension: "project",
         cells: [

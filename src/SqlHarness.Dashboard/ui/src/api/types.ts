@@ -145,7 +145,7 @@ export type DimensionMatrixStats = {
 }
 export type ProfileDimensionStats = {
   profile: string | null; profileDefinitionAvailable: boolean; operations: number
-  dimensions: DimensionStat[]; targets: TargetStat[]; matrix: DimensionMatrixStats | null
+  dimensions: DimensionStat[]; targets: TargetStat[]; targetCount: number; matrix: DimensionMatrixStats | null
 }
 export type TokenStat = {
   raw: number; emitted: number; totalOperations: number; pairedOperations: number

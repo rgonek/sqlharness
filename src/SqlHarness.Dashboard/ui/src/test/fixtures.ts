@@ -57,6 +57,6 @@ export const stats = (over: Partial<DashboardStats> = {}): DashboardStats => ({
     profile: "local", profileDefinitionAvailable: true, operations: 6,
     dimensions: [{ name: "tenant", values: [{ name: "tenant", value: "acme", isUnknown: false, source: "recorded",
       operations: 6, percentage: 100, totalDurationMs: 7200, durationAvailableOperations: 6, durationUnavailableOperations: 0, failed: 0, rejected: 0 }] }],
-    targets: [{ profile: "local", database: "db", count: 6, engine: "sqlserver", server: "srv" }], matrix: null,
+    targets: [{ profile: "local", database: "db", count: 6, engine: "sqlserver", server: "srv" }], targetCount: 1, matrix: null,
   }, ...over,
 })
