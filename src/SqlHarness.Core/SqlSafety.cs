@@ -192,6 +192,9 @@ internal sealed class SqlSafetyClassifier
     private const string UnprovenTableVariableDetail =
         "Table-position variables require an earlier inline TABLE declaration in the same batch. Named user-defined types are not proven as table variables. Setup variables do not cross into benchmark batches.";
 
+    private const string BatchSeparatorDetail =
+        "Batch separators (GO) are not supported; send a single batch.";
+
     // 018: concrete table sources that stay inside a read-only statement.
     internal static readonly IReadOnlySet<Type> AllowedTableReferenceTypes = new HashSet<Type>
     {
@@ -261,17 +264,23 @@ internal sealed class SqlSafetyClassifier
             return Denied(SqlSafetyReason.UnsupportedStatement);
         }
 
+        // 023: GO is a client-tool separator; SQLHarness sends the text as one
+        // batch, so classifying it as several batches would describe SQL the
+        // server never runs. ScriptDom omits a leading or trailing GO from
+        // the batch list; the token stays in the stream.
+        if (script.ScriptTokenStream?.Any(token => token.TokenType == TSqlTokenType.Go) == true)
+        {
+            return Denied(SqlSafetyReason.UnsupportedStatement, BatchSeparatorDetail);
+        }
+
         if (script.Batches.All(batch => batch.Statements.Count == 0))
         {
             return Denied(SqlSafetyReason.UnsupportedStatement);
         }
 
-        // 023: GO is a client-tool separator; SQLHarness sends the text as one
-        // batch, so classifying it as several batches would describe SQL the
-        // server never runs.
         if (script.Batches.Count(batch => batch.Statements.Count > 0) > 1)
         {
-            return Denied(SqlSafetyReason.UnsupportedStatement, "Batch separators (GO) are not supported; send a single batch.");
+            return Denied(SqlSafetyReason.UnsupportedStatement, BatchSeparatorDetail);
         }
 
         return usage switch

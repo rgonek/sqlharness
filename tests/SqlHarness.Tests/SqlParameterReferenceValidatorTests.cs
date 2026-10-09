@@ -120,16 +120,19 @@ public class SqlParameterReferenceValidatorTests
     }
 
     [Fact]
-    public void T3b_Validation_report_requires_a_parameter_named_like_another_batch_table_variable()
+    public void T3b_Validation_report_rejects_a_go_separated_script()
     {
-        // 023: two non-empty batches are unsupported before the missing-parameter check.
+        // 023: a GO-separated script is unsupported before the missing-parameter check.
         const string sql = "DECLARE @t TABLE (Id int);\nGO\nSELECT Id FROM dbo.Clients WHERE Id = @t";
+        const string detail = "Batch separators (GO) are not supported; send a single batch.";
 
         var missing = ValidateOffline(sql);
 
         Assert.False(missing.Allowed);
         Assert.Equal("rejected", missing.Classification);
         Assert.Equal("unsupported_statement", missing.Reason);
+        Assert.Equal(detail, missing.Detail);
+        Assert.DoesNotContain(sql, missing.Detail, StringComparison.Ordinal);
         Assert.Empty(missing.MissingParameters);
         Assert.False(missing.Executed);
 
@@ -138,6 +141,8 @@ public class SqlParameterReferenceValidatorTests
         Assert.False(supplied.Allowed);
         Assert.Equal("rejected", supplied.Classification);
         Assert.Equal("unsupported_statement", supplied.Reason);
+        Assert.Equal(detail, supplied.Detail);
+        Assert.DoesNotContain(sql, supplied.Detail, StringComparison.Ordinal);
         Assert.Empty(supplied.MissingParameters);
         Assert.False(supplied.Executed);
     }

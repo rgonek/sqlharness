@@ -120,13 +120,17 @@ public static class SqlValidation
         var noTemps = new HashSet<string>(StringComparer.Ordinal);
         IReadOnlySet<string> setupTemps = noTemps;
         string? setupReason = null;
+        string? setupDetail = null;
         if (!string.IsNullOrWhiteSpace(setupSql))
         {
             var setupDecision = dialect.Classify(setupSql, SqlUsage.CompareSetup, target.Database, allowMutation: false, confirmDatabase: null, noTemps);
             if (setupDecision.Allowed)
                 setupTemps = setupDecision.SessionTempTables;
             else
+            {
                 setupReason = SafeReason(setupDecision.Reason);
+                setupDetail = setupDecision.Detail;
+            }
         }
 
         var mainUsage = usage == ValidationUsage.Setup ? SqlUsage.CompareSetup : SqlUsage.Query;
@@ -143,7 +147,11 @@ public static class SqlValidation
         IReadOnlyList<SqlHarnessParameter> parsedParameters = [];
         var parameterValidationCompleted = false;
         string? reason = setupReason ?? (decision.Allowed ? null : SafeReason(decision.Reason));
-        string? detail = null;
+        // The first failing classification owns detail. Parameter checks run
+        // only while reason is still null, and those catches assign detail.
+        string? detail = setupReason is not null
+            ? setupDetail
+            : decision.Allowed ? null : decision.Detail;
         if (reason is null)
         {
             try

@@ -813,10 +813,11 @@ public sealed class ValidateCommandTests
     [Fact]
     public async Task Validate_cli_json_rejects_two_nonempty_go_batches()
     {
-        // 023: two non-empty batches are UnsupportedStatement. The JSON code is
-        // the same safe reason the other validate tests read.
+        // 023: two non-empty batches are UnsupportedStatement. JSON carries
+        // the classifier sentence and not the SQL text.
         using var home = new TempHome();
-        var path = home.WriteSql("batches.sql", "SELECT 1\nGO\nSELECT 2");
+        const string sql = "SELECT 1\nGO\nSELECT 2";
+        var path = home.WriteSql("batches.sql", sql);
         var module = new RecordingModule();
         var output = new StringWriter();
 
@@ -825,9 +826,14 @@ public sealed class ValidateCommandTests
 
         Assert.Equal((int)SqlHarnessExitCode.Success, exitCode);
         Assert.Empty(module.Operations);
-        var result = Result(output.ToString());
+        var text = output.ToString();
+        var result = Result(text);
         Assert.False(result.GetProperty("allowed").GetBoolean());
         Assert.Equal("unsupported_statement", result.GetProperty("reason").GetString());
+        Assert.Equal(
+            "Batch separators (GO) are not supported; send a single batch.",
+            result.GetProperty("detail").GetString());
+        Assert.DoesNotContain(sql, text, StringComparison.Ordinal);
     }
 
     [Fact]

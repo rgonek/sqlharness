@@ -1340,31 +1340,49 @@ public class SqlSafetyTests
         }
     }
 
-    // 023: the expected verdict is ScriptDom's non-empty batch count.
-    // Two non-empty batches are UnsupportedStatement in Query and CompareSetup.
-    // Trailing GO and GO inside a string literal are each one non-empty batch.
+    // 023: a Go token is a separator even when ScriptDom keeps one non-empty
+    // batch. Two non-empty batches stay denied. GO inside a string, a
+    // comment, or an identifier is not a separator.
     [Theory]
     [InlineData("SELECT 1\nGO\nSELECT 2", false, false)]
     [InlineData("SELECT 1\nGO\nSELECT 2", true, false)]
     [InlineData("CREATE TABLE #t (Id int)\nGO\nINSERT #t VALUES (1)", false, false)]
     [InlineData("CREATE TABLE #t (Id int)\nGO\nINSERT #t VALUES (1)", true, false)]
-    [InlineData("SELECT 1\nGO", false, true)]
-    [InlineData("SELECT 1\nGO", true, true)]
+    [InlineData("SELECT 1\nGO", false, false)]
+    [InlineData("SELECT 1\nGO", true, false)]
+    [InlineData("GO\nSELECT 1", false, false)]
+    [InlineData("GO\nSELECT 1", true, false)]
+    [InlineData("SELECT 1;\nGO;", false, false)]
+    [InlineData("SELECT 1;\nGO;", true, false)]
+    [InlineData("SELECT 1\nGO --x", false, false)]
+    [InlineData("SELECT 1\nGO --x", true, false)]
+    [InlineData("GO", false, false)]
+    [InlineData("GO", true, false)]
     [InlineData("SELECT 'a\nGO\nb'", false, true)]
     [InlineData("SELECT 'a\nGO\nb'", true, true)]
-    public void Multi_batch_scripts_are_rejected(string sql, bool compareSetup, bool singleNonEmptyBatch)
+    [InlineData("SELECT 1 -- GO", false, true)]
+    [InlineData("SELECT 1 -- GO", true, true)]
+    [InlineData("SELECT 1 AS GO", false, true)]
+    [InlineData("SELECT 1 AS GO", true, true)]
+    public void Multi_batch_scripts_are_rejected(string sql, bool compareSetup, bool allowed)
     {
+        const string detail = "Batch separators (GO) are not supported; send a single batch.";
         var usage = compareSetup ? SqlUsage.CompareSetup : SqlUsage.Query;
         var decision = _classifier.Classify(sql, usage, "db", allowMutation: false, confirmDatabase: null);
 
-        if (singleNonEmptyBatch)
+        if (allowed)
         {
             Assert.True(decision.Allowed, decision.RejectionDescription);
             return;
         }
 
-        Assert.False(decision.Allowed, decision.Reason.ToString());
+        Assert.False(decision.Allowed);
         Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.Equal(detail, decision.Detail);
+        // The fixed detail contains the letters GO. Drop that sentence before
+        // searching so a script that is only those letters is not an echo.
+        Assert.Equal($"{SqlSafetyReason.UnsupportedStatement}. {detail}", decision.RejectionDescription);
+        Assert.DoesNotContain(sql, decision.RejectionDescription.Replace(detail, string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
     }
 
     [Theory]
