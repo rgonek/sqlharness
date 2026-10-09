@@ -1,6 +1,6 @@
 # Plan 038 final fix report
 
-Branch: `fix/plan-038-friction`  
+Branch: `fix/plan-038-friction`
 Implementation commit: `5c79db1524113dfbb86b8913f0ac5ede88a2b375` (`Fix Plan 038 agent session friction findings`)
 
 ## Findings fixed
