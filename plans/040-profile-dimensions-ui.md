@@ -73,6 +73,25 @@ Example (operation count):
   and later consumers. Keep reads local: no database probes, profile writes,
   or parameter-value collection are needed.
 
+## Gain visibility and data coverage
+
+The Statistics Tokens saved card must explain which operations contribute to
+its estimated gain. Keep gain scoped to the selected time range, like the
+other Statistics cards; Targets profile/dimension filters do not alter it.
+
+- Report the count of operations with both raw and emitted estimates against
+  the total operation count, and identify operations lacking one or both.
+- Compute estimated savings only from paired raw/emitted data. MCP operations
+  currently have raw estimates without emitted estimates and cannot contribute
+  a measured savings ratio. Do not invent emitted values or backfill history.
+- When no paired data is available, show gain unavailable and a clear reason,
+  rather than a dash accompanied by misleading zero raw/emitted totals. Empty
+  activity and incomplete coverage must remain distinguishable.
+- Label tokens as estimates derived from output bytes, not actual model usage.
+  Preserve negative net savings when emitted output exceeds raw output.
+- Verify all-MCP/raw-only activity, mixed CLI/MCP coverage, empty activity,
+  complete pairs, and negative savings with backend and UI tests.
+
 ## Reuse elsewhere
 
 After the Statistics flow, reuse the same dimension labels and attribution
