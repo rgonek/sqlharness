@@ -82,7 +82,7 @@ other Statistics cards; Targets profile/dimension filters do not alter it.
 - Report the count of operations with both raw and emitted estimates against
   the total operation count, and identify operations lacking one or both.
 - Compute estimated savings only from paired raw/emitted data. MCP operations
-  currently have raw estimates without emitted estimates and cannot contribute
+  historically have raw estimates without emitted estimates and cannot contribute
   a measured savings ratio. Do not invent emitted values or backfill history.
 - When no paired data is available, show gain unavailable and a clear reason,
   rather than a dash accompanied by misleading zero raw/emitted totals. Empty
@@ -91,6 +91,29 @@ other Statistics cards; Targets profile/dimension filters do not alter it.
   Preserve negative net savings when emitted output exceeds raw output.
 - Verify all-MCP/raw-only activity, mixed CLI/MCP coverage, empty activity,
   complete pairs, and negative savings with backend and UI tests.
+
+## MCP emitted estimates
+
+Record emitted output footprints for new MCP executions after the final
+budgeted CallToolResult has been built, using its SDK-serialized UTF-8 bytes
+and the existing ceil(bytes / 4) estimator. This is an estimate of the tool
+result representation, not actual model token usage or the full JSON-RPC
+transport envelope. Include the complete returned result representation.
+
+- Cover fixed-profile handlers and request-scoped target-free/target-dependent
+  handlers. Complete each logical operation's emission receipt once and only
+  once; keep execution gates, cancellation and response byte budgets intact.
+- Use the existing journal emission pipeline. Storage/accounting failures must
+  not alter valid tool output or leak sensitive values. Respect any existing
+  receipt semantics for genuine artifact-finalization failures.
+- Gain and Statistics may include CLI and new MCP operations with paired raw
+  and emitted footprints. Preserve negative net savings and document the
+  estimation method and coverage. Historical raw-only rows stay unavailable.
+- Update AGENTS.md, relevant MCP/gain documentation and tests to remove the
+  old promise that MCP emitted counts are never recorded. No sensitive text,
+  values or secrets are added to journal fields; store counts only.
+- Test fixed/request execution, errors, budgeted output, single-use receipts,
+  cancellation/busy paths and journal failure behavior without live databases.
 
 ## Reuse elsewhere
 
