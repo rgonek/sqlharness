@@ -12,7 +12,7 @@ namespace SqlHarness.Core;
 
 
 // ParameterName marks a value-validation failure. Diagnostic is not InnerException, so ToString cannot inherit the rejected value.
-internal sealed class SqlHarnessSafetyException(string message, Exception? innerException = null) : Exception(message, innerException)
+internal class SqlHarnessSafetyException(string message, Exception? innerException = null) : Exception(message, innerException)
 {
     internal string? ParameterName { get; init; }
 
@@ -59,6 +59,14 @@ internal sealed class SqlHarnessSafetyException(string message, Exception? inner
 
 internal static class SqlParameterSecrets
 {
+    private const int MinimumRedactionLength = 4;
+
+    internal static void AddParameterValue(ICollection<string> knownSecrets, string? value)
+    {
+        if (value is { Length: >= MinimumRedactionLength })
+            knownSecrets.Add(value);
+    }
+
     internal static void AddValues(ICollection<string> knownSecrets, IEnumerable<string>? declarations)
     {
         if (declarations is null)
@@ -73,10 +81,7 @@ internal static class SqlParameterSecrets
         if (inputs is null)
             return;
         foreach (var input in inputs)
-        {
-            if (!string.IsNullOrEmpty(input?.Value))
-                knownSecrets.Add(input.Value);
-        }
+            AddParameterValue(knownSecrets, input?.Value);
     }
 
     internal static void AddMatrixValues(ICollection<string> knownSecrets, SqlHarnessParameterMatrixInput? matrix)
@@ -84,10 +89,7 @@ internal static class SqlParameterSecrets
         if (matrix?.Values is null)
             return;
         foreach (var value in matrix.Values)
-        {
-            if (!string.IsNullOrEmpty(value))
-                knownSecrets.Add(value);
-        }
+            AddParameterValue(knownSecrets, value);
     }
 
     internal static void AddMatrixValues(ICollection<string> knownSecrets, string? matrix)
@@ -98,10 +100,7 @@ internal static class SqlParameterSecrets
         if (equals < 0 || equals >= matrix.Length - 1)
             return;
         foreach (var value in matrix[(equals + 1)..].Split(','))
-        {
-            if (!string.IsNullOrEmpty(value))
-                knownSecrets.Add(value);
-        }
+            AddParameterValue(knownSecrets, value);
     }
 
     private static void AddValue(ICollection<string> knownSecrets, string declaration)
@@ -112,8 +111,7 @@ internal static class SqlParameterSecrets
         if (equals < 0 || equals >= declaration.Length - 1)
             return;
         var value = declaration[(equals + 1)..];
-        if (!string.IsNullOrEmpty(value))
-            knownSecrets.Add(value);
+        AddParameterValue(knownSecrets, value);
     }
 }
 
@@ -191,6 +189,9 @@ internal sealed record SqlSafetyDecision(
 
 internal sealed class SqlSafetyClassifier
 {
+    private const string UnprovenTableVariableDetail =
+        "Table-position variables require an earlier inline TABLE declaration in the same batch. Named user-defined types are not proven as table variables. Setup variables do not cross into benchmark batches.";
+
     internal SqlSafetyDecision Classify(
         string sql,
         SqlUsage usage,
@@ -253,9 +254,10 @@ internal sealed class SqlSafetyClassifier
             var scope = inspection.ScopeOf(batch);
             foreach (var statement in batch.Statements)
             {
+                var hasUnprovenUse = HasUnprovenTableVariableUse(statement, scope);
                 var classification = ClassifyStatement(statement, scope);
                 if (classification.DenyReason is { } deny)
-                    return Denied(deny);
+                    return Denied(deny, hasUnprovenUse ? UnprovenTableVariableDetail : null);
 
                 hasMutation |= classification.HasPersistentWrite;
                 hasSessionLocal |= classification.HasSessionLocalWrite;
@@ -318,10 +320,12 @@ internal sealed class SqlSafetyClassifier
                     if (deny is SqlSafetyReason.MutationNotAllowed ||
                         (deny is SqlSafetyReason.UnsupportedStatement && IsWrite(statement)))
                     {
-                        return Denied(SqlSafetyReason.NonTemporaryWrite);
+                        return Denied(
+                            SqlSafetyReason.NonTemporaryWrite,
+                            hasUnprovenUse ? UnprovenTableVariableDetail : null);
                     }
 
-                    return Denied(deny);
+                    return Denied(deny, hasUnprovenUse ? UnprovenTableVariableDetail : null);
                 }
 
                 if (classification.HasPersistentWrite)
@@ -329,9 +333,9 @@ internal sealed class SqlSafetyClassifier
 
                 if (!classification.HasSessionLocalWrite && statement is not SelectStatement)
                 {
-                    return Denied(IsWrite(statement)
-                        ? SqlSafetyReason.NonTemporaryWrite
-                        : SqlSafetyReason.UnsupportedStatement);
+                    return Denied(
+                        IsWrite(statement) ? SqlSafetyReason.NonTemporaryWrite : SqlSafetyReason.UnsupportedStatement,
+                        hasUnprovenUse ? UnprovenTableVariableDetail : null);
                 }
 
                 hasSessionLocal |= classification.HasSessionLocalWrite;
@@ -510,7 +514,7 @@ internal sealed class SqlSafetyClassifier
     private static bool IsScalarDeclaration(DeclareVariableStatement declare) =>
         declare.Declarations.All(d =>
             d is DeclareVariableElement element &&
-            element.DataType is SqlDataTypeReference or UserDataTypeReference);
+            element.DataType is SqlDataTypeReference or UserDataTypeReference or XmlDataTypeReference);
 
     private static BatchVariableScope CollectBatchScope(TSqlBatch batch)
     {
@@ -884,6 +888,8 @@ internal sealed class SqlSafetyClassifier
         // 011/T3: OUTPUT INTO @t is local only for a table variable proven in the batch being walked.
         private BatchVariableScope _scope = BatchVariableScope.Empty;
         private readonly Dictionary<TSqlBatch, BatchVariableScope> _scopes = [];
+        private readonly Stack<HashSet<string>> _queryAliases = new();
+        private readonly Stack<SchemaObjectName> _xmlMethodNames = new();
 
         internal bool HasCrossDatabaseReference { get; private set; }
         internal bool HasExternalAccess { get; private set; }
@@ -906,22 +912,67 @@ internal sealed class SqlSafetyClassifier
             base.ExplicitVisit(node);
         }
 
-        public override void ExplicitVisit(SchemaObjectName node)
-        {
-            if (node.Identifiers.Count > 2)
-            {
-                HasCrossDatabaseReference = true;
-            }
-
-            base.ExplicitVisit(node);
-        }
-
         public override void ExplicitVisit(SelectStatement node)
         {
             if (node.Into is not null)
             {
                 HasSelectInto = true;
                 HasNonLocalSelectInto |= !IsLocalTemp(node.Into);
+            }
+
+            base.ExplicitVisit(node);
+        }
+
+        public override void ExplicitVisit(QuerySpecification node)
+        {
+            _queryAliases.Push(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            try
+            {
+                base.ExplicitVisit(node);
+            }
+            finally
+            {
+                _queryAliases.Pop();
+            }
+        }
+
+        public override void ExplicitVisit(NamedTableReference node)
+        {
+            if (_queryAliases.TryPeek(out var aliases))
+            {
+                var alias = node.Alias?.Value ?? node.SchemaObject.BaseIdentifier.Value;
+                if (!string.IsNullOrEmpty(alias))
+                    aliases.Add(alias);
+            }
+
+            base.ExplicitVisit(node);
+        }
+
+        public override void ExplicitVisit(SchemaObjectFunctionTableReference node)
+        {
+            var name = node.SchemaObject;
+            var isXmlNodesMethod = name is not null &&
+                name.Identifiers.Count == 3 &&
+                string.Equals(name.BaseIdentifier.Value, "nodes", StringComparison.OrdinalIgnoreCase) &&
+                _queryAliases.TryPeek(out var aliases) &&
+                aliases.Contains(name.Identifiers[0].Value);
+
+            if (isXmlNodesMethod)
+                _xmlMethodNames.Push(name!);
+
+            base.ExplicitVisit(node);
+
+            if (isXmlNodesMethod)
+                _xmlMethodNames.Pop();
+        }
+
+        public override void ExplicitVisit(SchemaObjectName node)
+        {
+            var isRecognizedXmlMethodName = _xmlMethodNames.TryPeek(out var methodName) &&
+                ReferenceEquals(methodName, node);
+            if (!isRecognizedXmlMethodName && node.Identifiers.Count > 2)
+            {
+                HasCrossDatabaseReference = true;
             }
 
             base.ExplicitVisit(node);
@@ -1585,4 +1636,98 @@ internal static class SqlParameterReferenceValidator
         {
         }
     }
+}
+
+internal sealed class SqlSetupVariableScopeException() : SqlHarnessSafetyException(
+    "A variable declared in setup is referenced by a benchmark batch. Setup variables do not cross into benchmark batches.");
+
+internal static class SqlSetupVariableReferenceValidator
+{
+    internal static void Validate(
+        string? setupSql,
+        IReadOnlyList<SqlHarnessParameter> parameters,
+        params string?[] variants)
+    {
+        if (string.IsNullOrWhiteSpace(setupSql) || variants.Length == 0)
+            return;
+
+        var setupDocument = SqlServerDocument.Parse(setupSql);
+        if (setupDocument.HasErrors || setupDocument.Fragment is not TSqlScript setupScript)
+            throw new SqlHarnessSafetyException("SQL parameter references could not be parsed.");
+
+        var setupNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var batch in setupScript.Batches)
+        {
+            foreach (var name in CollectDeclaredVariablePositions(batch).Keys)
+                setupNames.Add(name);
+        }
+        if (setupNames.Count == 0)
+            return;
+
+        var parameterNames = parameters.Select(parameter => parameter.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var variant in variants.Where(text => !string.IsNullOrWhiteSpace(text)))
+        {
+            var document = SqlServerDocument.Parse(variant!);
+            if (document.HasErrors || document.Fragment is not TSqlScript script)
+                throw new SqlHarnessSafetyException("SQL parameter references could not be parsed.");
+
+            foreach (var batch in script.Batches)
+            {
+                var localDeclarations = CollectDeclaredVariablePositions(batch);
+                var references = new VariableReferenceCollector();
+                batch.Accept(references);
+                if (references.Positions.Any(reference => setupNames.Contains(reference.Name) &&
+                    !parameterNames.Contains(reference.Name) &&
+                    (!localDeclarations.TryGetValue(reference.Name, out var declarationOffset) ||
+                     reference.Offset < 0 || declarationOffset >= reference.Offset)))
+                {
+                    throw new SqlSetupVariableScopeException();
+                }
+            }
+        }
+    }
+
+    private static Dictionary<string, int> CollectDeclaredVariablePositions(TSqlBatch batch)
+    {
+        var positions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var statement in batch.Statements)
+        {
+            if (statement is DeclareVariableStatement declare)
+            {
+                foreach (var declaration in declare.Declarations)
+                {
+                    if (declaration?.VariableName is { Value: { } name } variableName)
+                        positions.TryAdd(name, variableName.StartOffset);
+                }
+            }
+            else if (statement is DeclareTableVariableStatement declareTable &&
+                declareTable.Body?.VariableName is { Value: { } tableName } tableVariableName)
+            {
+                positions.TryAdd(tableName, tableVariableName.StartOffset);
+            }
+        }
+
+        return positions;
+    }
+
+    private sealed class VariableReferenceCollector : TSqlFragmentVisitor
+    {
+        internal List<VariableReferencePosition> Positions { get; } = [];
+
+        public override void ExplicitVisit(VariableReference node)
+        {
+            Positions.Add(new VariableReferencePosition(node.Name, node.StartOffset));
+            base.ExplicitVisit(node);
+        }
+
+        public override void ExplicitVisit(VariableTableReference node)
+        {
+            if (node.Variable?.Name is { } name)
+                Positions.Add(new VariableReferencePosition(name, node.StartOffset));
+            base.ExplicitVisit(node);
+        }
+    }
+
+    private sealed record VariableReferencePosition(string Name, int Offset);
 }

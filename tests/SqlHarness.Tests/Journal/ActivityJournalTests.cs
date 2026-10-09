@@ -265,7 +265,7 @@ public sealed class ActivityJournalTests
     }
 
     [Fact]
-    public void Version_3_journal_migrates_to_4_and_keeps_rows()
+    public void Version_3_journal_migrates_to_current_and_keeps_rows()
     {
         using var temp = new JournalTempDirectory();
         Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
@@ -285,7 +285,7 @@ public sealed class ActivityJournalTests
 
         Open(temp, TextWriter.Null);
 
-        Assert.Equal(4L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        Assert.Equal(5L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
         var row = JournalDb.Rows(temp.DatabasePath, "SELECT error_kind, error_message FROM operations")[0];
         Assert.Equal("sql_execution_failed", row["error_kind"]);
         Assert.Null(row["error_message"]);

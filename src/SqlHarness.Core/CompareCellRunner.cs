@@ -96,7 +96,13 @@ internal static class CompareOperationPreparer
         ArgumentNullException.ThrowIfNull(prepared);
         ArgumentNullException.ThrowIfNull(variants);
         foreach (var variant in variants)
+        {
+            if (prepared.Dialect.Engine == SqlEngine.SqlServer)
+                SqlSetupVariableReferenceValidator.Validate(setupSql, variant, baselineSql, candidateSql);
             prepared.Dialect.ValidateParameterReferences(variant, setupSql, baselineSql, candidateSql);
+            SetupSqlExecution.Validate(prepared.Dialect.Engine, setupSql, variant);
+        }
+
         prepared.Dialect.ValidateMeasuredBatch(baselineSql);
         prepared.Dialect.ValidateMeasuredBatch(candidateSql);
     }
@@ -164,14 +170,14 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
             phase = CompareCellPhase.Sql;
 
             raw = new CanonicalResultAccumulator();
-            if (!string.IsNullOrWhiteSpace(request.SetupSql))
-            {
-                await BenchmarkRunner.ExecuteRawAsync(
-                    session,
-                    new SqlExecutionCommand(request.SetupSql, request.Parameters, request.TimeoutSeconds),
-                    raw,
-                    ct);
-            }
+            await SetupSqlExecution.ExecuteSetupAsync(
+                request.Target.Engine,
+                request.SetupSql,
+                request.Parameters,
+                request.TimeoutSeconds,
+                session,
+                raw,
+                ct);
 
             // Fingerprints only for modes that run ResultComparer; off skips equivalence work entirely.
             // Warmup is EXPLAIN/STATISTICS only; sidecar follows measured repetitions.

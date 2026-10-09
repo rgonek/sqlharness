@@ -159,9 +159,13 @@ public static class McpInputReader
         if (Path.GetFileName(full).Contains(':', StringComparison.Ordinal))
             throw new McpInputException("The input path is invalid.");
         if (!McpInputRoots.IsUnderAnyRoot(full, roots))
-            throw new McpInputException("The input path is invalid.");
+            throw OutsideRootsException(roots);
         if (IsLinkOrReparseChain(full))
+        {
+            if (LinkTargetIsOutsideRoots(full, roots))
+                throw OutsideRootsException(roots);
             throw new McpInputException("The input path is invalid.");
+        }
 
         FileStream stream;
         try
@@ -255,6 +259,36 @@ public static class McpInputReader
 
         return false;
     }
+
+    private static bool LinkTargetIsOutsideRoots(string full, IReadOnlyList<string> roots)
+    {
+        var current = full;
+        while (current is not null)
+        {
+            try
+            {
+                FileSystemInfo info = File.Exists(current) ? new FileInfo(current) : new DirectoryInfo(current);
+                if (info.Exists && (info.LinkTarget is not null || (info.Attributes & FileAttributes.ReparsePoint) != 0))
+                {
+                    var target = info.ResolveLinkTarget(returnFinalTarget: true);
+                    if (target is not null && !McpInputRoots.IsUnderAnyRoot(Path.GetFullPath(target.FullName), roots))
+                        return true;
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                // Keep the existing generic rejection when a reparse target cannot be resolved safely.
+                return false;
+            }
+
+            current = Path.GetDirectoryName(current);
+        }
+
+        return false;
+    }
+
+    private static McpInputException OutsideRootsException(IReadOnlyList<string> roots) =>
+        new($"The input path must be under a configured --input-root ({roots.Count} roots configured).");
 
     private static bool IsLinkOrReparse(string path)
     {

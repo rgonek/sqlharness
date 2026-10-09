@@ -118,7 +118,7 @@ public sealed class McpTokenBudgetTests
     public void Long_warnings_paths_and_big_cells_fit_the_default_budget()
     {
         var warning = new string('w', 100000);
-        var path = new string('a', 20000);
+        var path = "/workspace/compare/artifact-001";
         var variant = new CompareVariantReport("variant", new CompareDistribution(1, 2, 3), new CompareDistribution(4, 5, 6),
             new CompareDistribution(7, 8, 9), new Dictionary<string, long>(), [], [warning]);
         var compare = new SqlHarnessCompareReport(Target, 1, 2, false, variant, variant, path)
@@ -134,6 +134,7 @@ public sealed class McpTokenBudgetTests
 
         WireBytes(result, (int)McpLimits.CallToolResultBudgetBytes);
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        Assert.DoesNotContain(path, document.RootElement.GetRawText(), StringComparison.OrdinalIgnoreCase);
         Assert.True(document.RootElement.GetProperty("result").GetProperty("cells").GetArrayLength() < 100);
         Assert.True(document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
     }

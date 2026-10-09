@@ -31,6 +31,9 @@ public sealed class McpMappingTests : IDisposable
     private readonly string? _savedHome;
     private readonly string _targetsFile;
 
+    private static string TextOf(CallToolResult result) =>
+        string.Join("\n", result.Content.OfType<TextContentBlock>().Select(content => content.Text));
+
     public McpMappingTests()
     {
         _savedHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
@@ -381,6 +384,60 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal("Label", operation.TypedMatrix.Name);
         Assert.Equal("nvarchar(20)", operation.TypedMatrix.Type);
         Assert.Equal(JsonSerializer.Deserialize<string?[]>(valuesJson), operation.TypedMatrix.Values.ToArray());
+    }
+
+    [Fact]
+    public async Task Compare_setup_table_variable_diagnostic_is_generic_and_survives_mcp_redaction()
+    {
+        const string variableName = "requestPrivateTableSentinel";
+        const string typeName = "PrivateTableTypeSentinel";
+        const string value = "privateValueSentinel9384";
+        var scope = Scope();
+        var handlers = new McpToolHandlers(scope, scope.CreateModule());
+
+        var result = await handlers.CompareAsync(
+            null!,
+            new McpSqlSourceArgument { Sql = "SELECT 1" },
+            new McpSqlSourceArgument { Sql = "SELECT 1" },
+            setup: new McpSqlSourceArgument
+            {
+                Sql = $"DECLARE @{variableName} dbo.{typeName}; INSERT @{variableName} (Id) VALUES ('{value}')",
+            });
+
+        Assert.True(result.IsError == true);
+        var output = TextOf(result);
+        Assert.Contains("Table-position variables require an earlier inline TABLE declaration in the same batch.", output, StringComparison.Ordinal);
+        Assert.Contains("Named user-defined types are not proven as table variables.", output, StringComparison.Ordinal);
+        Assert.Contains("Setup variables do not cross into benchmark batches.", output, StringComparison.Ordinal);
+        Assert.DoesNotContain(variableName, output, StringComparison.Ordinal);
+        Assert.DoesNotContain(typeName, output, StringComparison.Ordinal);
+        Assert.DoesNotContain(value, output, StringComparison.Ordinal);
+        Assert.DoesNotContain("INSERT", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Compare_rejects_setup_only_variable_reference_before_connection_without_echoing_input()
+    {
+        const string variableName = "requestVariableScopeSentinel";
+        const string value = "valueScopeSentinel9384";
+        var scope = Scope();
+        var handlers = new McpToolHandlers(scope, scope.CreateModule());
+
+        var result = await handlers.CompareAsync(
+            null!,
+            new McpSqlSourceArgument { Sql = $"SELECT @{variableName}" },
+            new McpSqlSourceArgument { Sql = "SELECT 1" },
+            setup: new McpSqlSourceArgument { Sql = $"DECLARE @{variableName} int = 47913; SELECT '{value}'" });
+
+        Assert.True(result.IsError == true);
+        var output = TextOf(result);
+        Assert.Contains(
+            "A variable declared in setup is referenced by a benchmark batch. Setup variables do not cross into benchmark batches.",
+            output,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(variableName, output, StringComparison.Ordinal);
+        Assert.DoesNotContain(value, output, StringComparison.Ordinal);
+        Assert.DoesNotContain("47913", output, StringComparison.Ordinal);
     }
 
     // The fixed-name clash is the last matrix check in Core and runs only
@@ -848,7 +905,7 @@ public sealed class McpMappingTests : IDisposable
         Directory.CreateDirectory(directory);
         File.WriteAllText(
             Path.Combine(directory, "manifest.json"),
-            "{\"manifestVersion\": 1, \"artifactKind\": \"compare\", \"reportFile\": \"report.json\", \"sections\": [\"summary\", \"metrics\", \"operators\"]"
+            "{\"manifestVersion\": 1, \"artifactKind\": \"compare\", \"reportFile\": \"report.json\", \"sections\": [\"summary\", \"metrics\", \"operators\", \"statements\"]"
             + (ownerJson is null ? string.Empty : ", \"owner\": " + ownerJson) + "}");
         var report = new SqlHarnessCompareReport(
             new SqlHarnessTargetIdentityReport("artifact-own.invalid", "artifactdb", "artifact-own.invalid", "artifactdb", "profile"),
@@ -873,6 +930,8 @@ public sealed class McpMappingTests : IDisposable
         File.WriteAllText(
             Path.Combine(directory, "report.json"),
             JsonSerializer.Serialize(report, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        File.WriteAllText(Path.Combine(directory, ArtifactReader.StatementsFileName),
+            "{\"artifactId\":\"fixture\",\"artifactKind\":\"compare\",\"statements\":[{\"variant\":\"baseline\",\"statementOrdinal\":0,\"statementHash\":\"" + new string('a', 64) + "\",\"cpuTimeMilliseconds\":10,\"elapsedTimeMilliseconds\":15,\"degreeOfParallelism\":2,\"topOperators\":[{\"nodeId\":0,\"physicalOp\":\"Index Seek\",\"object\":\"[dbo].[T]\",\"index\":\"[IX_T]\",\"estimatedRows\":2,\"actualRows\":4,\"executions\":1}]}],\"omittedStatements\":0}");
         return id;
     }
 
@@ -887,6 +946,23 @@ public sealed class McpMappingTests : IDisposable
         var result = await handlers.ArtifactAsync(null!, id, "summary");
 
         Assert.False(result.IsError == true);
+    }
+
+    [Fact]
+    public async Task Artifact_handler_returns_safe_statements_projection_for_own_scope()
+    {
+        WriteArtifactTargetsFile();
+        var scope = ArtifactScope(ArtifactScopeProfile);
+        var id = WriteMappingArtifact("handler-own-statements-artifact", ArtifactOwnerJson(scope));
+        var handlers = new McpToolHandlers(scope, new RecordingModule());
+
+        var result = await handlers.ArtifactAsync(null!, id, "statements");
+        var payload = string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text));
+
+        Assert.False(result.IsError == true);
+        Assert.Contains("statementHash", payload, StringComparison.Ordinal);
+        Assert.Contains("Index Seek", payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("StatementText", payload, StringComparison.Ordinal);
     }
 
     [Fact]

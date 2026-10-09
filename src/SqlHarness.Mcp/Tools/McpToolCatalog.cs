@@ -285,15 +285,17 @@ public sealed class McpToolHandlers(
         [Description("Artifact directory name from a saved report.")]
         string id,
         [Description("Safe section to read.")]
-        [AllowedValues("summary", "metrics", "operators")]
+        [AllowedValues("summary", "metrics", "operators", "statements", "matrix-cells")]
         string section,
+        [Description("Optional zero-based continuation cursor for matrix-cells pages.")]
+        int? cursor = null,
         CancellationToken ct = default) =>
         RunAsync("sqlharness_artifact", _ =>
         {
-            ThrowIfUnknown(ctx, ["id", "section"]);
+            ThrowIfUnknown(ctx, ["id", "section", "cursor"]);
             return Task.FromResult(new SqlHarnessOutcome(
                 SqlHarnessExitCode.Success,
-                McpOperationMapper.ReadArtifactSection(scope, id, section),
+                McpOperationMapper.ReadArtifactSection(scope, id, section, cursor),
                 null));
         }, ct);
 
@@ -581,7 +583,7 @@ public static class McpToolCatalog
             Tool(ToolNames[6], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
             Tool(ToolNames[7], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it. No force flag.", null, false, null, true),
             Tool(ToolNames[8], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. Sanitized projection only: no statement text or literal predicates.", true, false, true, false),
-            Tool(ToolNames[9], nameof(McpToolHandlers.ArtifactAsync), "Read one safe section (summary, metrics, operators) of a saved benchmark artifact.", true, false, true, false),
+            Tool(ToolNames[9], nameof(McpToolHandlers.ArtifactAsync), "Read one safe section (summary, metrics, operators, statements, matrix-cells) of a saved benchmark artifact.", true, false, true, false),
             Tool(ToolNames[10], nameof(McpToolHandlers.GainAsync), "Report the local output-savings aggregate.", null, false, null, false),
         };
         if (tools.Count != McpLimits.MaxTools)

@@ -8,7 +8,7 @@ namespace SqlHarness.Tests;
 
 public sealed class MeasureParameterSetExecutionTests
 {
-    private const string SetupSql = "SELECT Id INTO #ids FROM dbo.Clients WHERE Id = @id";
+    private const string SetupSql = "CREATE TABLE #ids (Id int); INSERT #ids (Id) SELECT Id FROM dbo.Clients WHERE Id = @id";
     private const string QuerySql = "SELECT Value FROM dbo.Clients WHERE Id = @id";
     private const string Plan = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></BatchSequence></ShowPlanXML>";
     private const string MeasuredOrderRule =
@@ -45,7 +45,7 @@ public sealed class MeasureParameterSetExecutionTests
             Assert.Equal(30, call.TimeoutSeconds);
             Assert.Same(session, call.Session);
         });
-        Assert.Equal(11, ParameterId(Assert.Single(session.Commands, command => command.Sql == SetupSql)));
+        Assert.Equal(11, ParameterId(Assert.Single(session.Commands, command => command.Sql.Contains("INSERT #ids", StringComparison.Ordinal))));
         AssertNoCacheControl(session.Commands);
     }
 
@@ -128,7 +128,7 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.Equal(0, session.SetupCount);
         Assert.Empty(session.WarmupSetNames);
         Assert.Empty(session.MeasuredSetNames);
-        Assert.Contains(session.Commands, command => command.Sql == SetupSql);
+        Assert.Contains(session.Commands, command => command.Sql.Contains("#ids", StringComparison.Ordinal));
         Assert.DoesNotContain(session.Commands, command => command.Sql == QuerySql);
     }
 
@@ -236,7 +236,9 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.IsType<SqlHarnessMeasureReport>(outcome.Report);
         Assert.Equal(1, session.ConnectionCount);
         Assert.Equal(1, session.SetupCount);
-        Assert.All(session.Commands.Where(command => command.Sql is SetupSql or QuerySql), command =>
+        Assert.All(session.Commands.Where(command =>
+                command.Sql == QuerySql ||
+                command.Sql.Contains("INSERT #ids", StringComparison.Ordinal)), command =>
             Assert.Equal(42, Assert.IsType<int>(Assert.Single(command.Parameters).Value)));
     }
 
@@ -247,7 +249,7 @@ public sealed class MeasureParameterSetExecutionTests
         var session = RecordingSession.Create(
             setCount: 2,
             resultRowCount: 3,
-            setupSql: "SELECT Id INTO #ids FROM dbo.Clients WHERE Id = @id AND Tenant = @tenant",
+            setupSql: "CREATE TABLE #ids (Id int); INSERT #ids (Id) SELECT Id FROM dbo.Clients WHERE Id = @id AND Tenant = @tenant",
             querySql: "SELECT Value FROM dbo.Clients WHERE Id = @id AND Tenant = @tenant");
         var writer = new CapturingWriter();
         var gain = new FakeGainStore();
@@ -273,7 +275,7 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.Equal(1, session.SetupCount);
         Assert.Equal(["A", "B"], session.WarmupSetNames);
         Assert.Equal(["B", "A", "A", "B"], session.MeasuredSetNames);
-        var setup = Assert.Single(session.Commands, command => command.Sql == session.SetupSql);
+        var setup = Assert.Single(session.Commands, command => command.Sql.Contains("INSERT #ids", StringComparison.Ordinal));
         Assert.Equal(["@tenant", "@id"], setup.Parameters.Select(parameter => parameter.Name));
         Assert.Equal(tenant, setup.Parameters[0].Value);
         Assert.Equal(11, setup.Parameters[1].Value);
@@ -375,7 +377,7 @@ public sealed class MeasureParameterSetExecutionTests
         const string fixedSecret = "fixed-secret-884422";
         const string setSecret = "set-secret-991991";
         var session = RecordingSession.Create(
-            setupSql: "SELECT Id INTO #ids FROM dbo.Clients WHERE Id = @id AND Tenant = @tenant AND Label = @label",
+            setupSql: "CREATE TABLE #ids (Id int); INSERT #ids (Id) SELECT Id FROM dbo.Clients WHERE Id = @id AND Tenant = @tenant AND Label = @label",
             querySql: "SELECT Value FROM dbo.Clients WHERE Id = @id AND Tenant = @tenant AND Label = @label",
             failSetup: true,
             failure: new TimeoutException(
@@ -410,13 +412,13 @@ public sealed class MeasureParameterSetExecutionTests
     {
         var bytes = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF };
         var base64 = Convert.ToBase64String(bytes);
-        const string setupSql = "SELECT Id INTO #ids FROM dbo.Clients WHERE Id = @n AND Payload = @blob";
+        const string setupSql = "CREATE TABLE #ids (Id int); INSERT #ids (Id) SELECT Id FROM dbo.Clients WHERE Id = @n AND Payload = @blob";
         const string querySql = "SELECT Value FROM dbo.Clients WHERE Id = @n AND Payload = @blob";
         var session = RecordingSession.Create(
             setupSql: setupSql,
             querySql: querySql,
             failSetup: true,
-            failure: new TimeoutException($"failed 1 and 100 and {base64}"));
+            failure: new TimeoutException($"failed 1000 and 10000 and {base64}"));
         var operation = new SqlHarnessMeasureOperation(
             Target(),
             setupSql,
@@ -425,16 +427,16 @@ public sealed class MeasureParameterSetExecutionTests
             30,
             1,
             [
-                new("A", ["n:int=1", $"blob:varbinary={base64}"]),
-                new("B", ["n:int=100", $"blob:varbinary={base64}"]),
+                new("A", ["n:int=1000", $"blob:varbinary={base64}"]),
+                new("B", ["n:int=10000", $"blob:varbinary={base64}"]),
             ]);
 
         var outcome = await Module(session).ExecuteAsync(operation);
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
         Assert.Null(outcome.Report);
-        Assert.DoesNotContain("100", outcome.SafeError, StringComparison.Ordinal);
-        Assert.DoesNotContain("[REDACTED]00", outcome.SafeError, StringComparison.Ordinal);
+        Assert.DoesNotContain("10000", outcome.SafeError, StringComparison.Ordinal);
+        Assert.DoesNotContain("[REDACTED]000", outcome.SafeError, StringComparison.Ordinal);
         Assert.DoesNotContain(base64, outcome.SafeError, StringComparison.Ordinal);
         Assert.DoesNotContain("System.Byte[]", outcome.SafeError, StringComparison.Ordinal);
         Assert.Contains("[REDACTED]", outcome.SafeError, StringComparison.Ordinal);
@@ -787,11 +789,18 @@ public sealed class MeasureParameterSetExecutionTests
             if (command.Sql.Contains("STATISTICS", StringComparison.Ordinal))
                 return Task.FromResult<ISqlReader>(FakeReader.Empty());
 
-            if (string.Equals(command.Sql, _setupSql, StringComparison.Ordinal))
+            if (command.Sql.Contains("CREATE TABLE #ids", StringComparison.Ordinal))
             {
                 if (_failSetup)
                     return Task.FromException<ISqlReader>(_failure ?? new TimeoutException("setup failed"));
                 SetupCount++;
+                return Task.FromResult<ISqlReader>(FakeReader.Empty());
+            }
+
+            if (command.Sql.Contains("INSERT #ids", StringComparison.Ordinal))
+            {
+                if (_failSetup)
+                    return Task.FromException<ISqlReader>(_failure ?? new TimeoutException("setup failed"));
                 return Task.FromResult<ISqlReader>(FakeReader.Empty());
             }
 

@@ -187,7 +187,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         var rawFootprint = new OutputFootprint(0, 0);
         CanonicalResultAccumulator? raw = null;
         var knownSecrets = new List<string> { query.Sql };
-        knownSecrets.AddRange(query.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+        SqlParameterSecrets.AddValues(knownSecrets, query.Parameters);
         SqlParameterSecrets.AddValues(knownSecrets, query.TypedParameters);
 
         try
@@ -211,7 +211,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             foreach (var parameter in parameters)
             {
                 if (parameter.Value is not DBNull)
-                    knownSecrets.Add(Convert.ToString(parameter.Value, CultureInfo.InvariantCulture) ?? string.Empty);
+                    SqlParameterSecrets.AddParameterValue(knownSecrets, Convert.ToString(parameter.Value, CultureInfo.InvariantCulture));
             }
 
             phase = OperationPhase.Authentication;
@@ -293,7 +293,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         var knownSecrets = new List<string> { compare.BaselineSql, compare.CandidateSql };
         if (!string.IsNullOrWhiteSpace(compare.SetupSql))
             knownSecrets.Add(compare.SetupSql);
-        knownSecrets.AddRange(compare.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+        SqlParameterSecrets.AddValues(knownSecrets, compare.Parameters);
         SqlParameterSecrets.AddValues(knownSecrets, compare.TypedParameters);
 
         try
@@ -312,7 +312,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             foreach (var parameter in prepared.FixedParameters)
             {
                 if (parameter.Value is not DBNull)
-                    knownSecrets.Add(Convert.ToString(parameter.Value, CultureInfo.InvariantCulture) ?? string.Empty);
+                    SqlParameterSecrets.AddParameterValue(knownSecrets, Convert.ToString(parameter.Value, CultureInfo.InvariantCulture));
             }
 
             CompareOperationPreparer.ValidateVariants(
@@ -388,7 +388,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         var knownSecrets = new List<string> { operation.BaselineSql, operation.CandidateSql, operation.Matrix };
         if (!string.IsNullOrWhiteSpace(operation.SetupSql))
             knownSecrets.Add(operation.SetupSql);
-        knownSecrets.AddRange(operation.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+        SqlParameterSecrets.AddValues(knownSecrets, operation.Parameters);
         SqlParameterSecrets.AddValues(knownSecrets, operation.TypedParameters);
         SqlParameterSecrets.AddMatrixValues(knownSecrets, operation.TypedMatrix);
 
@@ -413,8 +413,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 prepared.FixedParameters.Select(parameter => parameter.Name));
             foreach (var displayValue in matrix.DisplayValues)
             {
-                if (!string.IsNullOrEmpty(displayValue))
-                    knownSecrets.Add(displayValue);
+                SqlParameterSecrets.AddParameterValue(knownSecrets, displayValue);
             }
 
             var fixedParameters = prepared.FixedParameters;
@@ -480,6 +479,26 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     _ => OperationPhase.Sql,
                 };
                 rawFootprint = failed.RawFootprint;
+                if (failed.PartialReport is { } partialReport)
+                {
+                    try
+                    {
+                        phase = OperationPhase.Artifact;
+                        _artifactWriter.WriteMatrixIndex(partialReport.Cells);
+                    }
+                    catch (Exception exception)
+                    {
+                        return WithReceipt(
+                            new SqlHarnessOutcome(SqlHarnessExitCode.LocalStorage, partialReport, SecretRedactor.Redact(exception, knownSecrets)),
+                            rawFootprint);
+                    }
+                    phase = failed.Phase switch
+                    {
+                        CompareCellPhase.Authentication => OperationPhase.Authentication,
+                        CompareCellPhase.Artifact => OperationPhase.Artifact,
+                        _ => OperationPhase.Sql,
+                    };
+                }
                 var exitCode = phase == OperationPhase.Artifact
                     ? SqlHarnessExitCode.LocalStorage
                     : OperationFailureMapper.Map(failed.InnerException ?? failed, phase);
@@ -489,6 +508,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             }
 
             rawFootprint = result.RawFootprint;
+            phase = OperationPhase.Artifact;
+            _artifactWriter.WriteMatrixIndex(result.Report.Cells);
             var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, result.Report, null)
             {
                 BenchmarkRuns = result.Runs,
@@ -514,11 +535,11 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         // Convert.ToString(byte[]) is "System.Byte[]", which does not match a server-quoted Base64 value.
         if (parameter.Value is byte[] bytes)
         {
-            knownSecrets.Add(Convert.ToBase64String(bytes));
+            SqlParameterSecrets.AddParameterValue(knownSecrets, Convert.ToBase64String(bytes));
             return;
         }
 
-        knownSecrets.Add(Convert.ToString(parameter.Value, CultureInfo.InvariantCulture) ?? string.Empty);
+        SqlParameterSecrets.AddParameterValue(knownSecrets, Convert.ToString(parameter.Value, CultureInfo.InvariantCulture));
     }
 
     private static string MatrixParameterName(ParsedParameterMatrix matrix)
@@ -551,7 +572,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         var knownSecrets = new List<string> { measure.QuerySql };
         if (!string.IsNullOrWhiteSpace(measure.SetupSql))
             knownSecrets.Add(measure.SetupSql);
-        knownSecrets.AddRange(measure.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+        SqlParameterSecrets.AddValues(knownSecrets, measure.Parameters);
         SqlParameterSecrets.AddValues(knownSecrets, measure.TypedParameters);
 
         try
@@ -562,7 +583,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 {
                     if (set?.Parameters is null)
                         continue;
-                    knownSecrets.AddRange(set.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+                    SqlParameterSecrets.AddValues(knownSecrets, set.Parameters);
                 }
             }
 
@@ -590,13 +611,16 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             }
 
             var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(measure.Parameters, measure.TypedParameters));
+            if (dialect.Engine == SqlEngine.SqlServer && measure.ParameterSets is not { Count: > 0 })
+                SqlSetupVariableReferenceValidator.Validate(measure.SetupSql, parameters, measure.QuerySql);
             dialect.ValidateParameterReferences(parameters, measure.SetupSql, measure.QuerySql);
+            SetupSqlExecution.Validate(dialect.Engine, measure.SetupSql, parameters);
             dialect.ValidateMeasuredBatch(measure.QuerySql);
 
             foreach (var parameter in parameters)
             {
                 if (parameter.Value is not DBNull)
-                    knownSecrets.Add(Convert.ToString(parameter.Value, CultureInfo.InvariantCulture) ?? string.Empty);
+                    SqlParameterSecrets.AddParameterValue(knownSecrets, Convert.ToString(parameter.Value, CultureInfo.InvariantCulture));
             }
 
             if (measure.ParameterSets is { Count: > 0 } parameterSets)
@@ -641,8 +665,14 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             phase = OperationPhase.Sql;
 
             raw = new CanonicalResultAccumulator();
-            if (!string.IsNullOrWhiteSpace(measure.SetupSql))
-                await BenchmarkRunner.ExecuteRawAsync(session, new SqlExecutionCommand(measure.SetupSql, parameters, measure.TimeoutSeconds), raw, ct);
+            await SetupSqlExecution.ExecuteSetupAsync(
+                dialect.Engine,
+                measure.SetupSql,
+                parameters,
+                measure.TimeoutSeconds,
+                session,
+                raw,
+                ct);
 
             // Measure never runs ResultComparer; skip fingerprint retention and the 1M row comparison cap.
             await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, 0, "measure", raw, captureComparison: false, ct);
@@ -803,7 +833,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
         var knownSecrets = new List<string> { watch.Sql };
-        knownSecrets.AddRange(watch.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+        SqlParameterSecrets.AddValues(knownSecrets, watch.Parameters);
         SqlParameterSecrets.AddValues(knownSecrets, watch.TypedParameters);
         if (watch.Until is not null)
             knownSecrets.Add(watch.Until);
@@ -832,7 +862,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             foreach (var parameter in parameters)
             {
                 if (parameter.Value is not DBNull)
-                    knownSecrets.Add(Convert.ToString(parameter.Value, CultureInfo.InvariantCulture) ?? string.Empty);
+                    SqlParameterSecrets.AddParameterValue(knownSecrets, Convert.ToString(parameter.Value, CultureInfo.InvariantCulture));
             }
 
             phase = OperationPhase.Authentication;
@@ -878,7 +908,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
         var knownSecrets = new List<string> { watch.Sql };
-        knownSecrets.AddRange(watch.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+        SqlParameterSecrets.AddValues(knownSecrets, watch.Parameters);
         SqlParameterSecrets.AddValues(knownSecrets, watch.TypedParameters);
         if (watch.Until is not null)
             knownSecrets.Add(watch.Until);
@@ -907,7 +937,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             foreach (var parameter in parameters)
             {
                 if (parameter.Value is not DBNull)
-                    knownSecrets.Add(Convert.ToString(parameter.Value, CultureInfo.InvariantCulture) ?? string.Empty);
+                    SqlParameterSecrets.AddParameterValue(knownSecrets, Convert.ToString(parameter.Value, CultureInfo.InvariantCulture));
             }
 
             phase = OperationPhase.Authentication;
@@ -987,7 +1017,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
         var knownSecrets = new List<string> { snapshot.Sql };
-        knownSecrets.AddRange(snapshot.Parameters.Where(value => !string.IsNullOrEmpty(value)));
+        SqlParameterSecrets.AddValues(knownSecrets, snapshot.Parameters);
         SqlParameterSecrets.AddValues(knownSecrets, snapshot.TypedParameters);
 
         try
@@ -1011,7 +1041,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             foreach (var parameter in parameters)
             {
                 if (parameter.Value is not DBNull)
-                    knownSecrets.Add(Convert.ToString(parameter.Value, CultureInfo.InvariantCulture) ?? string.Empty);
+                    SqlParameterSecrets.AddParameterValue(knownSecrets, Convert.ToString(parameter.Value, CultureInfo.InvariantCulture));
             }
 
             phase = OperationPhase.Authentication;

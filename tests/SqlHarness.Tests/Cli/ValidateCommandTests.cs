@@ -95,6 +95,34 @@ public sealed class ValidateCommandTests
         Assert.Empty(result.MissingParameters);
     }
 
+    [Fact]
+    public void Sql_server_setup_shape_rejection_preserves_actionable_detail_without_leaking_sql_or_identifiers()
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("sqlserver") };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+        var setupSql = "SELECT @id; CREATE TABLE #t (Id int);";
+        var querySql = "SELECT Id FROM #t;";
+
+        var report = SqlValidation.Validate(
+            request,
+            querySql,
+            ["id:int=42"],
+            profiles,
+            new ValidationOptions(ValidationUsage.Benchmark, setupSql));
+
+        Assert.False(report.Allowed);
+        Assert.Equal("parameter_validation_failed", report.Reason);
+        Assert.Equal("rejected", report.Classification);
+        Assert.NotNull(report.Detail);
+        Assert.Contains("session-local temp table", report.Detail, StringComparison.Ordinal);
+        Assert.Contains("before any statement that references a parameter", report.Detail, StringComparison.Ordinal);
+        var serialized = JsonSerializer.Serialize(report);
+        Assert.DoesNotContain(setupSql, serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("#t", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("@id", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("42", serialized, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("sqlserver", "SELECT @id;", "id:int=42", true)]
     [InlineData("postgres", "SELECT @id::int LIMIT 1;", "id:int=42", true)]
@@ -347,6 +375,73 @@ public sealed class ValidateCommandTests
         Assert.True(report.Allowed, JsonSerializer.Serialize(report));
         Assert.Empty(report.RequiredParameters);
         Assert.Empty(report.MissingParameters);
+    }
+
+    [Fact]
+    public void Setup_only_scalar_reference_is_rejected_offline_without_echoing_names_or_values()
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("sqlserver") };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+        const string setup = "DECLARE @privateSetupValue int = 73195; SELECT @privateSetupValue;";
+        const string query = "SELECT @privateSetupValue;";
+
+        var report = SqlValidation.Validate(
+            request, query, [], profiles,
+            new ValidationOptions(ValidationUsage.Benchmark, SetupSql: setup));
+
+        Assert.False(report.Allowed);
+        Assert.Equal("parameter_validation_failed", report.Reason);
+        Assert.Equal(
+            "A variable declared in setup is referenced by a benchmark batch. Setup variables do not cross into benchmark batches.",
+            report.Detail);
+        var json = JsonSerializer.Serialize(report);
+        Assert.DoesNotContain("73195", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("setup =", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Setup_only_scalar_reference_is_allowed_when_variant_binds_typed_parameter()
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("sqlserver") };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+
+        var report = SqlValidation.Validate(
+            request, "SELECT @inputValue;", ["inputValue:int=19"], profiles,
+            new ValidationOptions(ValidationUsage.Benchmark, SetupSql: "DECLARE @inputValue int = 2; SELECT @inputValue;"));
+
+        Assert.True(report.Allowed, JsonSerializer.Serialize(report));
+    }
+
+    [Fact]
+    public void Variant_local_declaration_shadows_setup_only_name()
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("sqlserver") };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+
+        var report = SqlValidation.Validate(
+            request, "DECLARE @localValue int = 2; SELECT @localValue;", [], profiles,
+            new ValidationOptions(ValidationUsage.Benchmark, SetupSql: "DECLARE @localValue int = 1; SELECT @localValue;"));
+
+        Assert.True(report.Allowed, JsonSerializer.Serialize(report));
+    }
+
+    [Fact]
+    public void Setup_only_reference_before_late_variant_declaration_is_rejected_offline()
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("sqlserver") };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+        const string setup = "DECLARE @sharedValue int = 1; SELECT @sharedValue;";
+        const string query = "SELECT @sharedValue; DECLARE @sharedValue int = 2;";
+
+        var report = SqlValidation.Validate(
+            request, query, [], profiles,
+            new ValidationOptions(ValidationUsage.Benchmark, SetupSql: setup));
+
+        Assert.False(report.Allowed);
+        Assert.Equal("parameter_validation_failed", report.Reason);
+        Assert.Equal(
+            "A variable declared in setup is referenced by a benchmark batch. Setup variables do not cross into benchmark batches.",
+            report.Detail);
     }
 
     private static TargetProfile Profile(string engine) => new(
