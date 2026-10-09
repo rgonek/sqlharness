@@ -811,6 +811,26 @@ public sealed class ValidateCommandTests
     }
 
     [Fact]
+    public async Task Validate_cli_json_rejects_two_nonempty_go_batches()
+    {
+        // 023: two non-empty batches are UnsupportedStatement. The JSON code is
+        // the same safe reason the other validate tests read.
+        using var home = new TempHome();
+        var path = home.WriteSql("batches.sql", "SELECT 1\nGO\nSELECT 2");
+        var module = new RecordingModule();
+        var output = new StringWriter();
+
+        var exitCode = await SqlHarnessCli.Create(module, output)
+            .RunAsync(["validate", TempHome.Profile, "--file", path, "--json"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Success, exitCode);
+        Assert.Empty(module.Operations);
+        var result = Result(output.ToString());
+        Assert.False(result.GetProperty("allowed").GetBoolean());
+        Assert.Equal("unsupported_statement", result.GetProperty("reason").GetString());
+    }
+
+    [Fact]
     public async Task Validate_cli_json_carries_object_and_permission_status_for_query_usage()
     {
         // 009/T3 closes the T1/T2 deferred minor: query-usage CLI JSON
