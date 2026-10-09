@@ -149,6 +149,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         // A live-filtered page keeps scanning older batches until it has limit + 1 matches
         // or the rows run out, so dead rows never yield an empty page with a cursor.
         var liveFiltered = query.Status is "running" or "abandoned";
+        var variableFiltered = query.Dimensions is { Count: > 0 };
         var storedStatus = liveFiltered ? "running" : query.Status;
         var liveness = new ProcessLiveness(processes, _dead);
         var matches = new List<OperationSummary>();
@@ -160,27 +161,34 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 ("$session", query.SessionId),
                 ("$status", storedStatus),
                 ("$operation", query.Operation),
+                ("$profile", query.Profile),
                 ("$from", Iso(query.From)),
                 ("$to", Iso(query.To)),
                 ("$cursor", cursor),
                 ("$limit", limit + 1),
             ];
             var rows = Query(connection, $"""
-                SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id
+                SELECT {OperationColumns}, o.vars_json FROM operations o JOIN sessions s ON s.id = o.session_id
                 WHERE ($session IS NULL OR o.session_id = $session)
                   AND ($status IS NULL OR o.status = $status)
                   AND ($operation IS NULL OR o.operation = $operation)
+                  AND ($profile IS NULL OR o.profile = $profile)
                   AND ($from IS NULL OR o.started_at >= $from)
                   AND ($to IS NULL OR o.started_at < $to)
                   AND ($cursor IS NULL OR o.id < $cursor)
                 ORDER BY o.id DESC LIMIT $limit;
                 """,
                 parameters,
-                reader => ReadOperation(reader, liveness));
-            matches.AddRange(liveFiltered ? rows.Where(row => row.Status == query.Status) : rows);
+                reader => (Operation: ReadOperation(reader, liveness),
+                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 26))));
+            var filteredRows = rows.Where(row => !variableFiltered
+                || OperationDimensionResolver.Matches(query.Dimensions, row.Variables));
+            matches.AddRange(liveFiltered
+                ? filteredRows.Where(row => row.Operation.Status == query.Status).Select(row => row.Operation)
+                : filteredRows.Select(row => row.Operation));
             if (matches.Count > limit || rows.Count <= limit)
                 break;
-            cursor = rows[^1].Id;
+            cursor = rows[^1].Operation.Id;
         }
 
         var page = matches.Take(limit).ToArray();
@@ -188,7 +196,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         return new Page<OperationSummary>(page, next);
     }
 
-    public OperationDetail? Operation(long id)
+    public OperationDetail? Operation(
+        long id,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? profileDimensions = null)
     {
         using var connection = OpenSnapshot();
         if (connection is null)
@@ -204,7 +214,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             SELECT vars_json, candidate_sql_hash, sql_text, candidate_sql_text, raw_tokens, emitted_tokens, artifact_dir, summary_json
             FROM operations WHERE id = $id;
             """, [("$id", id)], reader => (
-                Vars: Vars(NullableString(reader, 0)),
+                VarsJson: NullableString(reader, 0),
                 CandidateHash: NullableString(reader, 1),
                 SqlText: NullableString(reader, 2),
                 CandidateText: NullableString(reader, 3),
@@ -215,10 +225,21 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var session = Query(connection, $"SELECT {SessionColumns} FROM sessions s WHERE s.id = $id;",
             [("$id", summary.SessionId)], ReadSessionRow).Single();
 
+        var recordedDimensions = OperationDimensionResolver.ReadRecordedValues(extra.VarsJson);
+        var dimensionNames = (summary.Profile is not null && profileDimensions is not null
+                              && profileDimensions.TryGetValue(summary.Profile, out var configuredDimensions)
+            ? configuredDimensions
+            : Array.Empty<string>())
+            .Concat(OperationDimensionResolver.ReadDimensionNames(extra.VarsJson))
+            .Distinct(StringComparer.Ordinal);
+        var dimensions = new OperationDimensions(OperationDimensionResolver.Resolve(
+            dimensionNames,
+            recordedDimensions));
+
         return new OperationDetail(
             summary,
             WithRunning(connection, [session])[0],
-            extra.Vars,
+            Vars(extra.VarsJson),
             extra.CandidateHash,
             extra.SqlText,
             extra.CandidateText,
@@ -226,7 +247,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             extra.Emitted,
             extra.Artifact,
             extra.Summary,
-            Variants(connection, id));
+            Variants(connection, id),
+            dimensions);
     }
 
     public StoredPlan? Plan(string hash)
@@ -242,11 +264,15 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         }).FirstOrDefault();
     }
 
-    public DashboardStats Stats(StatsQuery query)
+    public DashboardStats Stats(
+        StatsQuery query,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? profileDimensions = null)
     {
         using var connection = OpenSnapshot();
         if (connection is null)
-            return new DashboardStats([], [], [], [], [], [], [], [], [], new TokenStat(0, 0), 0, 0);
+            return new DashboardStats([], [], [], [], [], [], [], [], [], new TokenStat(0, 0), 0, 0, [],
+                new ProfileDimensionStats(query.Profile,
+                    query.Profile is not null && profileDimensions?.ContainsKey(query.Profile) == true, 0, [], []));
         (string, object?)[] window = [("$from", Iso(query.From)), ("$to", Iso(query.To))];
         const string inWindow = "($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to)";
 
@@ -310,9 +336,25 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         }
 
         var targets = Query(connection, $"""
-            SELECT o.profile, o.database, COUNT(*) FROM operations o WHERE {inWindow}
-            GROUP BY o.profile, o.database ORDER BY COUNT(*) DESC, o.profile, o.database LIMIT {TopLimit};
-            """, window, r => new TargetStat(NullableString(r, 0), NullableString(r, 1), r.GetInt32(2)));
+            SELECT o.profile, o.database, COUNT(*), o.engine, o.server FROM operations o WHERE {inWindow}
+            GROUP BY o.profile, o.database, o.engine, o.server ORDER BY COUNT(*) DESC, o.profile, o.engine, o.server, o.database LIMIT {TopLimit};
+            """, window, r => new TargetStat(NullableString(r, 0), NullableString(r, 1), r.GetInt32(2), NullableString(r, 3), NullableString(r, 4)));
+
+        // These aggregates intentionally read every operation in the requested window.
+        // The bounded Targets list above is presentation data and cannot back dimension totals.
+        var profileOperations = Query(connection, $"""
+            SELECT o.profile, COUNT(*) FROM operations o WHERE {inWindow}
+            GROUP BY o.profile ORDER BY COUNT(*) DESC, o.profile;
+            """, window, r => new ProfileOperationCount(NullableString(r, 0), r.GetInt32(1)));
+        (string, object?)[] dimensionWindow = [.. window, ("$profile", query.Profile)];
+        var dimensionRows = Query(connection, $"""
+            SELECT o.profile, o.engine, o.server, o.database, o.status, o.duration_ms, o.vars_json
+            FROM operations o WHERE {inWindow} AND ($profile IS NOT NULL AND o.profile = $profile);
+            """, dimensionWindow, r => new DimensionOperation(
+                NullableString(r, 0), NullableString(r, 1), NullableString(r, 2), NullableString(r, 3),
+                r.GetString(4), NullableLong(r, 5), NullableString(r, 6),
+                OperationDimensionResolver.ReadRecordedValues(NullableString(r, 6))));
+        var dimensionStats = AggregateProfileDimensions(query, dimensionRows, profileDimensions);
         var tokens = Query(connection, $"""
             SELECT COALESCE(SUM(o.raw_tokens), 0), COALESCE(SUM(o.emitted_tokens), 0) FROM operations o
             WHERE {inWindow} AND o.raw_tokens IS NOT NULL AND o.emitted_tokens IS NOT NULL;
@@ -339,7 +381,73 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             targets,
             tokens,
             (int)spills,
-            (int)cold);
+            (int)cold,
+            profileOperations,
+            dimensionStats);
+    }
+
+    private static ProfileDimensionStats AggregateProfileDimensions(
+        StatsQuery query,
+        IReadOnlyList<DimensionOperation> operations,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? profileDimensions)
+    {
+        var selectedProfileOperations = query.Profile is null
+            ? Array.Empty<DimensionOperation>()
+            : operations.Where(operation => string.Equals(operation.Profile, query.Profile, StringComparison.Ordinal)).ToArray();
+        var knownNames = query.Profile is not null && profileDimensions is not null
+                         && profileDimensions.TryGetValue(query.Profile, out var configured)
+            ? configured
+            : Array.Empty<string>();
+        var profileDefinitionAvailable = query.Profile is not null && profileDimensions?.ContainsKey(query.Profile) == true;
+        var dimensions = selectedProfileOperations.SelectMany(operation => operation.VariableNames)
+            .Concat(knownNames).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var filtered = selectedProfileOperations.Where(operation =>
+            OperationDimensionResolver.Matches(query.Dimensions, operation.Variables)).ToArray();
+        var valueStats = new List<DimensionStat>(dimensions.Length);
+        foreach (var dimension in dimensions)
+        {
+            var groups = filtered.GroupBy(operation => operation.Variables.TryGetValue(dimension, out var value)
+                ? (IsUnknown: false, Value: value)
+                : (IsUnknown: true, Value: OperationDimensionResolver.UnknownLabel));
+            var values = groups.Select(group =>
+            {
+                var durations = group.Where(operation => operation.DurationMs.HasValue).Select(operation => operation.DurationMs!.Value).ToArray();
+                var count = group.Count();
+                return new DimensionValueStat(
+                    group.Key.Value,
+                    group.Key.IsUnknown,
+                    group.Key.IsUnknown ? OperationDimensionResolver.UnknownSource : OperationDimensionResolver.RecordedSource,
+                    count,
+                    filtered.Length == 0 ? 0 : 100d * count / filtered.Length,
+                    durations.Length == 0 ? null : durations.Sum(),
+                    durations.Length,
+                    count - durations.Length,
+                    group.Count(operation => operation.Status == "failed"),
+                    group.Count(operation => operation.Status == "rejected"));
+            }).OrderBy(value => value.IsUnknown ? 1 : 0)
+              .ThenBy(value => value.Value, StringComparer.Ordinal)
+              .ToArray();
+            valueStats.Add(new DimensionStat(dimension, values));
+        }
+
+        var targets = filtered.GroupBy(operation =>
+                (operation.Profile, operation.Database, operation.Engine, operation.Server))
+            .Select(group => new TargetStat(group.Key.Profile, group.Key.Database, group.Count(), group.Key.Engine, group.Key.Server))
+            .OrderByDescending(target => target.Count)
+            .ThenBy(target => target.Profile, StringComparer.Ordinal)
+            .ThenBy(target => target.Engine, StringComparer.Ordinal)
+            .ThenBy(target => target.Server, StringComparer.Ordinal)
+            .ThenBy(target => target.Database, StringComparer.Ordinal)
+            .Take(TopLimit)
+            .ToArray();
+        return new ProfileDimensionStats(query.Profile, profileDefinitionAvailable, filtered.Length, valueStats, targets);
+    }
+
+    private sealed record DimensionOperation(
+        string? Profile, string? Engine, string? Server, string? Database, string Status, long? DurationMs,
+        string? VariablesJson, IReadOnlyDictionary<string, string> Variables)
+    {
+        public IReadOnlyList<string> VariableNames => OperationDimensionResolver.ReadDimensionNames(VariablesJson);
     }
 
     /// <summary>Keyset page of operations after (updatedAt, id), oldest first, on the caller's snapshot.</summary>

@@ -10,9 +10,11 @@ public sealed record SessionQuery(
 
 public sealed record OperationQuery(
     long? SessionId = null, string? Status = null, string? Operation = null, DateTimeOffset? From = null,
-    DateTimeOffset? To = null, long? Cursor = null, int Limit = JournalReader.DefaultLimit);
+    DateTimeOffset? To = null, long? Cursor = null, int Limit = JournalReader.DefaultLimit,
+    string? Profile = null, IReadOnlyDictionary<string, string?>? Dimensions = null);
 
-public sealed record StatsQuery(DateTimeOffset? From = null, DateTimeOffset? To = null);
+public sealed record StatsQuery(DateTimeOffset? From = null, DateTimeOffset? To = null, string? Profile = null,
+    IReadOnlyDictionary<string, string?>? Dimensions = null);
 
 public sealed record SessionSummary(
     long Id, string SessionKey, string AgentKind, string Transport, string Source, string? ClientName,
@@ -48,7 +50,8 @@ public sealed record VariantDetail(
 public sealed record OperationDetail(
     OperationSummary Operation, SessionSummary Session, IReadOnlyDictionary<string, string>? Vars,
     string? CandidateSqlHash, string? SqlText, string? CandidateSqlText, long? RawTokens, long? EmittedTokens,
-    string? ArtifactDirectory, JsonElement? Summary, IReadOnlyList<VariantDetail> Variants);
+    string? ArtifactDirectory, JsonElement? Summary, IReadOnlyList<VariantDetail> Variants,
+    OperationDimensions Dimensions);
 
 public sealed record StoredPlan(string Hash, string Format, string Document);
 
@@ -62,7 +65,28 @@ public sealed record TableReadStat(string Table, long LogicalReads, int Operatio
 
 public sealed record WaitStat(string WaitType, double TotalWaitMs);
 
-public sealed record TargetStat(string? Profile, string? Database, int Count);
+public sealed record TargetStat(string? Profile, string? Database, int Count, string? Engine = null, string? Server = null);
+
+/// <summary>One profile's complete operation count in the selected time window.</summary>
+public sealed record ProfileOperationCount(string? Profile, int Operations);
+
+/// <summary>
+/// A recorded dimension value, or a missing value. A missing value is represented
+/// internally by IsUnknown; its display label can therefore equal a literal "Unknown".
+/// </summary>
+public sealed record DimensionAttribution(string Name, string Value, bool IsUnknown, string Source);
+
+public sealed record OperationDimensions(IReadOnlyList<DimensionAttribution> Values);
+
+public sealed record DimensionValueStat(
+    string Value, bool IsUnknown, string Source, int Operations, double Percentage, long? TotalDurationMs,
+    int DurationAvailableOperations, int DurationUnavailableOperations, int Failed, int Rejected);
+
+public sealed record DimensionStat(string Name, IReadOnlyList<DimensionValueStat> Values);
+
+public sealed record ProfileDimensionStats(
+    string? Profile, bool ProfileDefinitionAvailable, int Operations, IReadOnlyList<DimensionStat> Dimensions,
+    IReadOnlyList<TargetStat> Targets);
 
 /// <summary>Token totals over operations that carry both a raw and an emitted count (MCP rows carry raw only).</summary>
 public sealed record TokenStat(long Raw, long Emitted);
@@ -79,4 +103,6 @@ public sealed record DashboardStats(
     IReadOnlyList<TargetStat> Targets,
     TokenStat Tokens,
     int SpillOperations,
-    int ColdCacheOperations);
+    int ColdCacheOperations,
+    IReadOnlyList<ProfileOperationCount> ProfileOperations,
+    ProfileDimensionStats ProfileDimensions);

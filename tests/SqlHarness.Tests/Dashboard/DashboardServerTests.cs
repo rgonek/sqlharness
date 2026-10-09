@@ -156,6 +156,39 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
+    public async Task Stats_and_operation_list_share_profile_and_dimension_filter_contract()
+    {
+        using var home = new TempHome();
+        File.WriteAllText(Path.Combine(home.Path, "targets.json"), """
+            {"app":{"server":"srv","database":"db-{region}","vars":{"region":".*"},"auth":"sql"}}
+            """);
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:matching"), profile: "app",
+            variables: new Dictionary<string, string> { ["region"] = "eu:west" });
+        seed.Operation(JournalSeed.Session("cli:other"), profile: "app",
+            variables: new Dictionary<string, string> { ["region"] = "us" });
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+        var encodedDimensions = Uri.EscapeDataString("""{"region":"eu:west"}""");
+
+        using var stats = JsonDocument.Parse(await client.GetStringAsync("/api/stats?profile=app"));
+        using var operations = JsonDocument.Parse(await client.GetStringAsync($"/api/operations?profile=app&dimensions={encodedDimensions}"));
+
+        Assert.Equal(2, stats.RootElement.GetProperty("profileDimensions").GetProperty("operations").GetInt32());
+        Assert.Equal("region", stats.RootElement.GetProperty("profileDimensions").GetProperty("dimensions")[0].GetProperty("name").GetString());
+        Assert.Single(operations.RootElement.GetProperty("items").EnumerateArray());
+        var operation = operations.RootElement.GetProperty("items")[0];
+        Assert.Equal("db", operation.GetProperty("database").GetString());
+        var operationId = operation.GetProperty("id").GetInt64();
+        using var detail = JsonDocument.Parse(await client.GetStringAsync($"/api/operations/{operationId}"));
+        var dimension = detail.RootElement.GetProperty("dimensions").GetProperty("values")[0];
+        Assert.Equal("region", dimension.GetProperty("name").GetString());
+        Assert.Equal("eu:west", dimension.GetProperty("value").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await client.GetAsync("/api/operations?dimensions=%7B%22region%22%3A42%7D")).StatusCode);
+    }
+
+    [Fact]
     public async Task Unknown_non_api_paths_serve_the_spa_entry_and_unknown_api_paths_are_404()
     {
         using var home = new TempHome();

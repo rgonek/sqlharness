@@ -338,6 +338,95 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Dimension_stats_are_complete_filtered_and_keep_missing_values_separate_from_unknown_text()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        for (var i = 0; i < 25; i++)
+            seed.Operation(JournalSeed.Session($"cli:profile-{i}"), profile: $"profile-{i:D2}");
+        seed.Operation(JournalSeed.Session("cli:literal"), profile: "app", variables: new Dictionary<string, string>
+        {
+            ["region"] = "Unknown",
+            ["component"] = "worker",
+        }, durationMs: 30);
+        seed.Operation(JournalSeed.Session("cli:missing"), profile: "app", status: "failed", exitCode: 5,
+            variables: new Dictionary<string, string> { ["component"] = "worker" }, durationMs: 20);
+        seed.Operation(JournalSeed.Session("cli:running", hostPid: 100), profile: "app", complete: false,
+            variables: new Dictionary<string, string> { ["component"] = "worker" });
+        seed.Operation(JournalSeed.Session("cli:deleted-profile"), profile: "deleted",
+            variables: new Dictionary<string, string> { ["historical"] = "kept" });
+        var definitions = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+        {
+            ["app"] = ["region", "component"],
+            ["empty-profile"] = ["scope"],
+        };
+
+        var reader = Reader(home, new FakeProcesses());
+        var all = reader.Stats(new StatsQuery(Profile: "app"), definitions);
+        var filtered = reader.Stats(new StatsQuery(Profile: "app", Dimensions: new Dictionary<string, string?> { ["region"] = null }), definitions);
+        var empty = reader.Stats(new StatsQuery(Profile: "empty-profile",
+            To: new DateTimeOffset(2026, 10, 7, 0, 0, 0, TimeSpan.Zero)), definitions);
+        var deletedProfile = reader.Stats(new StatsQuery(Profile: "deleted"), definitions);
+
+        Assert.Equal(27, all.ProfileOperations.Count);
+        Assert.Equal(29, all.ProfileOperations.Sum(item => item.Operations));
+        Assert.Equal("app", all.ProfileOperations[0].Profile);
+        Assert.Equal("deleted", all.ProfileOperations[1].Profile);
+        Assert.True(all.ProfileDimensions.ProfileDefinitionAvailable);
+        Assert.Equal(3, all.ProfileDimensions.Operations);
+        var region = Assert.Single(all.ProfileDimensions.Dimensions, item => item.Name == "region");
+        Assert.Equal(2, region.Values.Count);
+        var literal = Assert.Single(region.Values, item => !item.IsUnknown);
+        var missing = Assert.Single(region.Values, item => item.IsUnknown);
+        Assert.Equal(("Unknown", 1), (literal.Value, literal.Operations));
+        Assert.Equal(100d / 3, literal.Percentage, 3);
+        Assert.Equal(("Unknown", 2, 20L, 1, 1, 1),
+            (missing.Value, missing.Operations, missing.TotalDurationMs, missing.DurationAvailableOperations,
+                missing.DurationUnavailableOperations, missing.Failed));
+        Assert.Equal(2, filtered.ProfileDimensions.Operations);
+        Assert.Equal(all.ProfileOperations, filtered.ProfileOperations);
+        Assert.Equal(2, Assert.Single(filtered.ProfileDimensions.Dimensions, item => item.Name == "region").Values.Single().Operations);
+        Assert.Equal(0, empty.ProfileDimensions.Operations);
+        Assert.True(empty.ProfileDimensions.ProfileDefinitionAvailable);
+        Assert.Empty(Assert.Single(empty.ProfileDimensions.Dimensions).Values);
+        Assert.False(deletedProfile.ProfileDimensions.ProfileDefinitionAvailable);
+        Assert.Equal("kept", Assert.Single(Assert.Single(deletedProfile.ProfileDimensions.Dimensions).Values).Value);
+    }
+
+    [Fact]
+    public void Operation_pages_filter_by_profile_and_multiple_dimensions_without_losing_cursor_matches()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:filters");
+        for (var i = 0; i < 5; i++)
+        {
+            seed.Operation(session, profile: i % 2 == 0 ? "app" : "other", variables: new Dictionary<string, string>
+            {
+                ["region"] = i % 2 == 0 ? "eu:west" : "us",
+                ["component"] = i < 3 ? "api" : "portal",
+            });
+        }
+
+        var reader = Reader(home);
+        var first = reader.Operations(new OperationQuery(Profile: "app", Dimensions: new Dictionary<string, string?>
+        {
+            ["region"] = "eu:west",
+            ["component"] = "api",
+        }, Limit: 1));
+        var rest = reader.Operations(new OperationQuery(Profile: "app", Dimensions: new Dictionary<string, string?>
+        {
+            ["region"] = "eu:west",
+            ["component"] = "api",
+        }, Cursor: first.NextCursor, Limit: 1));
+
+        Assert.NotNull(first.NextCursor);
+        Assert.Null(rest.NextCursor);
+        Assert.Equal(2, first.Items.Count + rest.Items.Count);
+        Assert.All(first.Items.Concat(rest.Items), operation => Assert.Equal("app", operation.Profile));
+    }
+
+    [Fact]
     public void Newer_schema_is_reported()
     {
         using var home = new TempHome();
