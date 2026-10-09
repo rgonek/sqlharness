@@ -8,7 +8,7 @@ using SqlHarness.Core.Dialect;
 namespace SqlHarness.Tests;
 
 // 018: every concrete ScriptDom table source and external call is classified.
-// The parser-generation fact stays red until Step 6.
+// ParserType is the highest TSql<digits>Parser in the ScriptDom package.
 public class SqlSafetyNodeCoverageTests
 {
     // 018: concrete TableReference types absent from AllowedTableReferenceTypes.
@@ -67,7 +67,7 @@ public class SqlSafetyNodeCoverageTests
             "AI or external call expression types not in DeniedExpressionTypes: " + string.Join(", ", missing));
     }
 
-    // 018: red on purpose until Step 6. ParserType stays typeof(TSql170Parser).
+    // 018: ParserType must be the highest TSql<digits>Parser in the package.
     [Fact]
     public void The_parser_is_the_newest_in_the_package()
     {

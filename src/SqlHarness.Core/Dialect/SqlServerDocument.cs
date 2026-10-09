@@ -22,12 +22,11 @@ internal sealed class SqlServerDocument
     internal bool HasErrors => Errors.Count > 0;
 
     // 018: the node-coverage test reads the parser generation from here.
-    // Parse still constructs TSql170Parser until Step 6.
-    internal static Type ParserType => typeof(TSql170Parser);
+    internal static Type ParserType => typeof(TSql180Parser);
 
     internal static SqlServerDocument Parse(string sql)
     {
-        var parser = new TSql170Parser(initialQuotedIdentifiers: true);
+        var parser = new TSql180Parser(initialQuotedIdentifiers: true);
         var fragment = parser.Parse(new StringReader(sql), out var errors);
         return new SqlServerDocument(fragment, errors);
     }
