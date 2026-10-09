@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDuration, formatNumber, formatPercent, shortHash } from "@/lib/format"
 import { pivotPerDay, tokenSavings } from "@/lib/stats"
-import { ProfileDimensionsPanel, type DimensionCellScope } from "./ProfileDimensionsPanel"
+import { ProfileDimensionsPanel, type DimensionAxes, type DimensionCellScope } from "./ProfileDimensionsPanel"
 
 const ranges: { value: StatsRange; label: string }[] = [
   { value: "24h", label: "24 hours" },
@@ -64,6 +64,8 @@ function CountChart({ rows, label }: { rows: KeyCount[]; label: string }) {
 export function StatsPage({ onDimensionCellSelect }: { onDimensionCellSelect?: (scope: DimensionCellScope) => void } = {}) {
   const [range, setRange] = useState<StatsRange>("7d")
   const [manualProfile, setManualProfile] = useState<{ value: string | null } | undefined>()
+  const [dimensionFilters, setDimensionFilters] = useState<Record<string, string | null>>({})
+  const [axisChoice, setAxisChoice] = useState<DimensionAxes | null>(null)
   const overview = useStats(range)
   const profilesQuery = useProfiles()
   const profiles = profilesQuery.data?.profiles ?? []
@@ -91,7 +93,11 @@ export function StatsPage({ onDimensionCellSelect }: { onDimensionCellSelect?: (
             aria-label="Statistics profile"
             className="h-8 rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted"
             value={selectedProfile === null ? "unprofiled" : `profile:${selectedProfile}`}
-            onChange={event => setManualProfile({ value: event.target.value === "unprofiled" ? null : event.target.value.slice("profile:".length) })}
+            onChange={event => {
+              setManualProfile({ value: event.target.value === "unprofiled" ? null : event.target.value.slice("profile:".length) })
+              setDimensionFilters({})
+              setAxisChoice(null)
+            }}
           >
             {profileOptions.map(name => <option key={name} value={`profile:${name}`}>{name}</option>)}
             <option value="unprofiled">No profile</option>
@@ -115,7 +121,8 @@ export function StatsPage({ onDimensionCellSelect }: { onDimensionCellSelect?: (
         <Skeleton className="h-64 w-full" />
       ) : (
         <StatsContent stats={query.data} range={range} profile={selectedProfile} profileView={selectedProfileView}
-          onDimensionCellSelect={onDimensionCellSelect} />
+          dimensionFilters={dimensionFilters} onDimensionFiltersChange={setDimensionFilters}
+          axisChoice={axisChoice} onAxisChoiceChange={setAxisChoice} onDimensionCellSelect={onDimensionCellSelect} />
       )}
     </div>
   )
@@ -126,12 +133,20 @@ function StatsContent({
   range,
   profile,
   profileView,
+  dimensionFilters,
+  onDimensionFiltersChange,
+  axisChoice,
+  onAxisChoiceChange,
   onDimensionCellSelect,
 }: {
   stats: DashboardStats
   range: StatsRange
   profile: string | null
   profileView: ProfileView | undefined
+  dimensionFilters: Record<string, string | null>
+  onDimensionFiltersChange: (filters: Record<string, string | null>) => void
+  axisChoice: DimensionAxes | null
+  onAxisChoiceChange: (axes: DimensionAxes | null) => void
   onDimensionCellSelect?: (scope: DimensionCellScope) => void
 }) {
   const perDay = pivotPerDay(stats.operationsPerDay)
@@ -267,6 +282,10 @@ function StatsContent({
         dimensions={stats.profileDimensions.dimensions}
         filterOptions={stats.profileDimensions.dimensions}
         targets={stats.profileDimensions.targets}
+        dimensionFilters={dimensionFilters}
+        onDimensionFiltersChange={onDimensionFiltersChange}
+        axisChoice={axisChoice}
+        onAxisChoiceChange={onAxisChoiceChange}
         onCellSelect={onDimensionCellSelect}
       />
     </div>

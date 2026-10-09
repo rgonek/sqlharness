@@ -1,9 +1,12 @@
-import { screen, waitFor } from "@testing-library/react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test, vi } from "vitest"
 import type { DimensionValueSummary } from "@/api/types"
 import { stats } from "@/test/fixtures"
 import { renderApp, stubFetch } from "@/test/render"
+import { Matrix } from "./ProfileDimensionsPanel"
+import { StatsPage } from "./StatsPage"
 
 test("shows KPIs, charts and top lists, and switches range", async () => {
   const calls = stubFetch({ "/api/stats": stats(), "/api/profiles": profilesResponse() })
@@ -62,6 +65,50 @@ test("selects a profile and shows filtered, searchable dimension matrix totals",
   expect(screen.getByRole("heading", { name: "Databases in this scope" })).toBeInTheDocument()
 })
 
+test("marks search-hidden cross-intersections and excludes them from visible totals", async () => {
+  const matchRow = dimensionValue("row", "match-row", 1, 10)
+  const beta = dimensionValue("row", "beta", 2, 20)
+  const alpha = dimensionValue("column", "alpha", 4, 40)
+  const matchColumn = dimensionValue("column", "match-column", 2, 20)
+  const cells = [
+    { row: matchRow, column: alpha, metrics: matrixMetrics(1, 10) },
+    { row: beta, column: matchColumn, metrics: matrixMetrics(2, 20) },
+    { row: beta, column: alpha, metrics: matrixMetrics(3, 30) },
+  ]
+  render(<Matrix cells={cells} totals={matrixMetrics(6, 60)} rowName="row" columnName="column"
+    metric="operations" profile="app" range="7d" filters={{}} />)
+
+  await userEvent.type(screen.getByRole("textbox", { name: "Search row and column values" }), "match")
+
+  expect(screen.getByLabelText("Operations hidden by matrix search")).toBeInTheDocument()
+  expect(screen.getByText(/Visible total: 3 \(3 operations\)/)).toBeInTheDocument()
+  expect(screen.getByText(/Full-scope total: 6 \(6 operations\)/)).toBeInTheDocument()
+})
+
+test("preserves a non-axis filter in cell scope across a time-range change", async () => {
+  const calls = stubFetch({ "/api/stats": (url: URL) => jsonResponse(filteredProfileStats(url)), "/api/profiles": profilesResponse() })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
+  const onCellSelect = vi.fn()
+  render(<QueryClientProvider client={client}><StatsPage onDimensionCellSelect={onCellSelect} /></QueryClientProvider>)
+
+  const profile = await screen.findByRole("combobox", { name: "Statistics profile" })
+  expect(await screen.findByRole("combobox", { name: "region" })).toBeInTheDocument()
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: "region" }), "value:west")
+  const matrixCell = await screen.findByRole("button", { name: /component api, project alpha:/ })
+  await userEvent.click(matrixCell)
+  expect(onCellSelect).toHaveBeenLastCalledWith({ profile: "app", range: "7d", dimensions: { region: "west", component: "api", project: "alpha" } })
+  expect(calls.some(call => call.includes("dimensions=%7B%22region%22%3A%22west%22%7D")
+    && call.includes("rowDimension=component") && call.includes("columnDimension=project"))).toBe(true)
+
+  await userEvent.click(screen.getByRole("tab", { name: "All time" }))
+  await waitFor(() => expect(profile).toHaveValue("profile:app"))
+  await waitFor(() => expect(screen.getByRole("combobox", { name: "region" })).toHaveValue("value:west"))
+  await userEvent.click(await screen.findByRole("button", { name: /component api, project alpha:/ }))
+  expect(onCellSelect).toHaveBeenLastCalledWith({ profile: "app", range: "all", dimensions: { region: "west", component: "api", project: "alpha" } })
+  expect(calls.some(call => !call.includes("from=") && call.includes("dimensions=%7B%22region%22%3A%22west%22%7D")
+    && call.includes("rowDimension=component") && call.includes("columnDimension=project"))).toBe(true)
+})
+
 function jsonResponse(value: unknown) {
   return new Response(JSON.stringify(value), { status: 200, headers: { "Content-Type": "application/json" } })
 }
@@ -72,7 +119,7 @@ function profilesResponse() {
       name, engine: "sqlserver", server: "server-{region}", database: name === "app" ? "{project}.{component}" : "db",
       auth: "sql", sqlUser: null, passwordEnvVar: null, sslMode: null, trustServerCertificate: false,
       tls: "verify", rootCertificate: null,
-      vars: name === "app" ? [{ name: "project", rule: ".*" }, { name: "component", rule: ".*" }]
+      vars: name === "app" ? [{ name: "project", rule: ".*" }, { name: "component", rule: ".*" }, { name: "region", rule: ".*" }]
         : name === "solo" ? [{ name: "region", rule: ".*" }] : [],
     })),
   }
@@ -101,6 +148,7 @@ function profileStats(profile: string | null) {
       dimensions: [
         { name: "component", values: [api, web] },
         { name: "project", values: [alpha, beta] },
+        { name: "region", values: [dimensionValue("region", "west", 2, 20), dimensionValue("region", "east", 1, 10)] },
       ],
       targets: [{ profile: "app", database: "alpha.api", engine: "sqlserver", server: "server-eu", count: 3 }],
       matrix: {
@@ -152,4 +200,8 @@ function dimensionValue(name: string, value: string, operations: number, totalDu
   return { name, value, isUnknown: false, source: "recorded", operations, percentage: operations / 3 * 100,
     totalDurationMs, durationAvailableOperations: totalDurationMs === null ? 0 : operations,
     durationUnavailableOperations: totalDurationMs === null ? operations : 0, failed, rejected }
+}
+
+function matrixMetrics(operations: number, totalDurationMs: number) {
+  return { operations, totalDurationMs, durationAvailableOperations: operations, durationUnavailableOperations: 0, failed: 0, rejected: 0 }
 }

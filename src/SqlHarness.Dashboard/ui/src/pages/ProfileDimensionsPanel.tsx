@@ -14,8 +14,8 @@ export type DimensionCellScope = {
   dimensions: Record<string, string | null>
 }
 
-type Metric = "operations" | "duration" | "failed" | "rejected"
-type Axes = { row: string; column: string }
+export type Metric = "operations" | "duration" | "failed" | "rejected"
+export type DimensionAxes = { row: string; column: string }
 
 const metricLabels: Record<Metric, string> = {
   operations: "Operations",
@@ -150,17 +150,7 @@ function aggregateCells(cells: DimensionMatrixCell[]): DimensionAggregate {
   }
 }
 
-function Matrix({
-  cells,
-  totals,
-  rowName,
-  columnName,
-  metric,
-  profile,
-  range,
-  filters,
-  onCellSelect,
-}: {
+export type MatrixProps = {
   cells: DimensionMatrixCell[]
   totals: DimensionAggregate
   rowName: string
@@ -170,7 +160,19 @@ function Matrix({
   range: StatsRange
   filters: Record<string, string | null>
   onCellSelect?: (scope: DimensionCellScope) => void
-}) {
+}
+
+export function Matrix({
+  cells,
+  totals,
+  rowName,
+  columnName,
+  metric,
+  profile,
+  range,
+  filters,
+  onCellSelect,
+}: MatrixProps) {
   const [search, setSearch] = useState("")
   const [limit, setLimit] = useState(25)
   const match = search.trim().toLocaleLowerCase()
@@ -184,8 +186,10 @@ function Matrix({
   const visibleColumns = columns.slice(0, limit)
   const visibleCells = matchingCells.filter(cell => visibleRows.some(row => identityKey(row) === identityKey(cell.row))
     && visibleColumns.some(column => identityKey(column) === identityKey(cell.column)))
-  const lookup = new Map(cells.map(cell => [`${identityKey(cell.row)}|${identityKey(cell.column)}`, cell]))
-  const max = Math.max(0, ...cells.map(cell => metricValue(cell.metrics, metric) ?? 0))
+  const cellKey = (cell: DimensionMatrixCell) => `${identityKey(cell.row)}|${identityKey(cell.column)}`
+  const lookup = new Map(visibleCells.map(cell => [cellKey(cell), cell]))
+  const fullLookup = new Map(cells.map(cell => [cellKey(cell), cell]))
+  const max = cells.reduce((maximum, cell) => Math.max(maximum, metricValue(cell.metrics, metric) ?? 0), 0)
   const visibleMetrics = aggregateCells(visibleCells)
   const rowTotals = new Map(visibleRows.map(row => [identityKey(row), aggregateCells(visibleCells.filter(cell => identityKey(cell.row) === identityKey(row)))]))
   const columnTotals = new Map(visibleColumns.map(column => [identityKey(column), aggregateCells(visibleCells.filter(cell => identityKey(cell.column) === identityKey(column)))]))
@@ -228,7 +232,9 @@ function Matrix({
               <tr key={identityKey(row)}>
                 <th scope="row" className="sticky start-0 z-10 border-t bg-background p-2 text-start">{dimensionLabel(row)}</th>
                 {visibleColumns.map(column => {
-                  const cell = lookup.get(`${identityKey(row)}|${identityKey(column)}`)
+                  const key = `${identityKey(row)}|${identityKey(column)}`
+                  const cell = lookup.get(key)
+                  const searchHidden = !cell && fullLookup.has(key)
                   const value = cell ? metricValue(cell.metrics, metric) : null
                   const shade = value !== null && max > 0 ? Math.round(22 * value / max) : 0
                   return <td key={identityKey(column)} className="border-t p-1 text-end">
@@ -239,7 +245,9 @@ function Matrix({
                       aria-label={`${rowName} ${dimensionLabel(row)}, ${columnName} ${dimensionLabel(column)}: ${matrixMetric(cell.metrics, metric)}; ${formatNumber(cell.metrics.operations)} operations, ${formatNumber(cell.metrics.failed)} failed, ${formatNumber(cell.metrics.rejected)} rejected${cell.metrics.durationUnavailableOperations ? `, ${formatNumber(cell.metrics.durationUnavailableOperations)} durations unavailable` : ""}`}
                       disabled={!onCellSelect}
                       onClick={() => cellClick(cell)}
-                    >{matrixMetric(cell.metrics, metric)}</button> : <span className="inline-block min-w-20 px-2 py-1 text-muted-foreground" aria-label="No operations">—</span>}
+                    >{matrixMetric(cell.metrics, metric)}</button> : searchHidden
+                      ? <span className="inline-block min-w-20 px-2 py-1 text-muted-foreground" aria-label="Operations hidden by matrix search">…</span>
+                      : <span className="inline-block min-w-20 px-2 py-1 text-muted-foreground" aria-label="No operations">—</span>}
                   </td>
                 })}
                 <td className="border-t p-2 text-end font-medium">{matrixMetric(rowTotals.get(identityKey(row))!, metric)}</td>
@@ -267,6 +275,10 @@ export function ProfileDimensionsPanel({
   dimensions,
   filterOptions,
   targets,
+  dimensionFilters,
+  onDimensionFiltersChange,
+  axisChoice,
+  onAxisChoiceChange,
   onCellSelect,
 }: {
   range: StatsRange
@@ -277,10 +289,14 @@ export function ProfileDimensionsPanel({
   dimensions: DimensionStat[]
   filterOptions?: DimensionStat[]
   targets: TargetStat[]
+  dimensionFilters: Record<string, string | null>
+  onDimensionFiltersChange: (filters: Record<string, string | null>) => void
+  axisChoice: DimensionAxes | null
+  onAxisChoiceChange: (axes: DimensionAxes | null) => void
   onCellSelect?: (scope: DimensionCellScope) => void
 }) {
-  const [filters, setFilters] = useState<Record<string, string | null>>({})
-  const [axisChoice, setAxisChoice] = useState<Axes | null>(null)
+  const filters = dimensionFilters
+  const setFilters = onDimensionFiltersChange
   const [metric, setMetric] = useState<Metric>("operations")
   const names = dimensions.map(dimension => dimension.name)
   const defaultAxes = { row: names[0] ?? "", column: names.find(name => name !== names[0]) ?? "" }
@@ -297,16 +313,14 @@ export function ProfileDimensionsPanel({
   const dimensionFilterOptions = filterOptions ?? dimensions
 
   function setDimensionFilter(name: string, value: string | null | undefined) {
-    setFilters(current => {
-      const next = { ...current }
-      if (value === undefined) delete next[name]
-      else next[name] = value
-      return next
-    })
+    const next = { ...filters }
+    if (value === undefined) delete next[name]
+    else next[name] = value
+    setFilters(next)
   }
 
-  function chooseAxes(next: Axes) {
-    setAxisChoice(next)
+  function chooseAxes(next: DimensionAxes) {
+    onAxisChoiceChange(next)
   }
 
   const matrix = scope?.matrix
