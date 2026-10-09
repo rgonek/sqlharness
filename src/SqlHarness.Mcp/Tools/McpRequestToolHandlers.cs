@@ -179,7 +179,7 @@ public sealed class McpRequestToolHandlers(
         {
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, hostShutdown);
             linked.CancelAfter(TimeSpan.FromSeconds(process.MaxOperationSeconds));
-            return McpResultAdapter.Adapt(await run(linked.Token), command, budget);
+            return await McpResultAdapter.AdaptAndCompleteAsync(await run(linked.Token), command, budget);
         }
         catch (OperationCanceledException) { return McpExecutionGate.CancelledResult(command, budget); }
         catch (Exception exception) when (exception is McpMappingException or McpInputException or ParameterSetFileException)

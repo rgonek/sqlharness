@@ -245,6 +245,23 @@ public static class McpResultAdapter
     }
 
     /// <summary>
+    /// Builds the final budgeted MCP result and completes its operation
+    /// emission receipt once the complete CallToolResult representation is
+    /// known. Receipt completion is best-effort for journaling; the result
+    /// remains the outcome produced by Core.
+    /// </summary>
+    internal static async Task<CallToolResult> AdaptAndCompleteAsync(
+        SqlHarnessOutcome outcome,
+        string command,
+        McpResultBudget? budget = null)
+    {
+        var result = Adapt(outcome, command, budget);
+        if (outcome.EmissionReceipt is { } receipt)
+            await receipt.CompleteAsync(EmittedFootprint(result), CancellationToken.None).ConfigureAwait(false);
+        return result;
+    }
+
+    /// <summary>
     /// Validates a parsed envelope against <see cref="OutputSchema"/>.
     /// Returns human-readable violations; empty means the envelope conforms.
     /// A focused structural check, not a general schema evaluator: it covers

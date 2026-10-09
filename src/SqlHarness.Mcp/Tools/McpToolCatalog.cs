@@ -347,7 +347,7 @@ public sealed class McpToolHandlers(
             // still bounded by the process time budget through this token.
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _hostShutdown);
             linked.CancelAfter(TimeSpan.FromSeconds(scope.MaxOperationSeconds));
-            return McpResultAdapter.Adapt(await run(linked.Token), command, budget);
+            return await McpResultAdapter.AdaptAndCompleteAsync(await run(linked.Token), command, budget);
         }
         catch (OperationCanceledException)
         {
@@ -428,7 +428,7 @@ public sealed class McpToolHandlers(
             // checking the linked request budget before adapting that outcome.
             linked.Token.ThrowIfCancellationRequested();
             await progress.ReportAsync(context, command, McpProgressReporter.Finished, linked.Token);
-            return McpResultAdapter.Adapt(outcome, command, budget);
+            return await McpResultAdapter.AdaptAndCompleteAsync(outcome, command, budget);
         }
         catch (OperationCanceledException)
         {
