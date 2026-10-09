@@ -1447,6 +1447,25 @@ public class SqlSafetyTests
         Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
     }
 
+    // 018: two-part server-filesystem TVFs. The table-source type itself stays allowed.
+    [Theory]
+    [InlineData("SELECT * FROM sys.fn_get_audit_file(N'a', DEFAULT, DEFAULT)", false)]
+    [InlineData("SELECT * FROM sys.fn_get_audit_file(N'a', DEFAULT, DEFAULT)", true)]
+    [InlineData("SELECT * FROM sys.fn_xe_file_target_read_file(N'a', NULL, NULL, NULL)", false)]
+    [InlineData("SELECT * FROM sys.fn_xe_file_target_read_file(N'a', NULL, NULL, NULL)", true)]
+    [InlineData("SELECT * FROM sys.fn_trace_gettable(N'a', DEFAULT)", false)]
+    [InlineData("SELECT * FROM sys.fn_trace_gettable(N'a', DEFAULT)", true)]
+    [InlineData("SELECT * FROM sys.dm_os_enumerate_filesystem(N'a', N'*')", false)]
+    [InlineData("SELECT * FROM sys.dm_os_enumerate_filesystem(N'a', N'*')", true)]
+    public void Server_filesystem_tvfs_are_denied(string sql, bool compareSetup)
+    {
+        var usage = compareSetup ? SqlUsage.CompareSetup : SqlUsage.Query;
+        var decision = _classifier.Classify(sql, usage, "db", false, null);
+
+        Assert.False(decision.Allowed, decision.Reason.ToString());
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
     // 018: otherdb.dbo.fn(...) and otherdb..fn(...) put the database on the
     // scalar call target, not on a SchemaObjectName the cross-database check sees.
     [Theory]

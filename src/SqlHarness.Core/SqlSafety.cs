@@ -217,6 +217,21 @@ internal sealed class SqlSafetyClassifier
         typeof(VariableMethodCallTableReference),
     };
 
+    // 018: concrete ScriptDom calls named here, not discovered at runtime.
+    // Narrowest common base is PrimaryExpression.
+    internal static readonly IReadOnlySet<Type> DeniedExpressionTypes = new HashSet<Type>
+    {
+        typeof(AIAnalyzeSentimentFunctionCall),
+        typeof(AIClassifyFunctionCall),
+        typeof(AIExtractFunctionCall),
+        typeof(AIFixGrammarFunctionCall),
+        typeof(AIGenerateEmbeddingsFunctionCall),
+        typeof(AIGenerateResponseFunctionCall),
+        typeof(AISummarizeFunctionCall),
+        typeof(AITranslateFunctionCall),
+        typeof(InvokeExternalApiFunctionCall),
+    };
+
     internal SqlSafetyDecision Classify(
         string sql,
         SqlUsage usage,
@@ -918,6 +933,15 @@ internal sealed class SqlSafetyClassifier
         private readonly Stack<HashSet<string>> _queryAliases = new();
         private readonly Stack<SchemaObjectName> _xmlMethodNames = new();
 
+        // 018: two-part only. Schema and base are compared OrdinalIgnoreCase.
+        private static readonly (string Schema, string Name)[] ServerFilesystemFunctions =
+        {
+            ("sys", "fn_get_audit_file"),
+            ("sys", "fn_xe_file_target_read_file"),
+            ("sys", "fn_trace_gettable"),
+            ("sys", "dm_os_enumerate_filesystem"),
+        };
+
         internal bool HasCrossDatabaseReference { get; private set; }
         internal bool HasExternalAccess { get; private set; }
         internal bool HasStatefulExpression { get; private set; }
@@ -988,10 +1012,33 @@ internal sealed class SqlSafetyClassifier
             if (isXmlNodesMethod)
                 _xmlMethodNames.Push(name!);
 
+            // 018: server-filesystem TVFs. Push/pop of the XML .nodes() name stays around the walk.
+            if (IsServerFilesystemFunction(name))
+                HasExternalAccess = true;
+
             base.ExplicitVisit(node);
 
             if (isXmlNodesMethod)
                 _xmlMethodNames.Pop();
+        }
+
+        private static bool IsServerFilesystemFunction(SchemaObjectName? name)
+        {
+            if (name is null || name.Identifiers.Count != 2 || name.SchemaIdentifier is null)
+                return false;
+
+            var schema = name.SchemaIdentifier.Value;
+            var baseName = name.BaseIdentifier.Value;
+            foreach (var (functionSchema, functionName) in ServerFilesystemFunctions)
+            {
+                if (string.Equals(schema, functionSchema, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(baseName, functionName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public override void ExplicitVisit(SchemaObjectName node)
@@ -1013,6 +1060,14 @@ internal sealed class SqlSafetyClassifier
             if (node.CallTarget is MultiPartIdentifierCallTarget { MultiPartIdentifier.Identifiers.Count: >= 2 })
                 HasCrossDatabaseReference = true;
             base.ExplicitVisit(node);
+        }
+
+        // 018: AI_* and INVOKE_EXTERNAL_API share PrimaryExpression. Ordinary calls are not in the set.
+        public override void Visit(PrimaryExpression node)
+        {
+            if (DeniedExpressionTypes.Contains(node.GetType()))
+                HasExternalAccess = true;
+            base.Visit(node);
         }
 
         // 018: table sources are an allow-list. A type ScriptDom adds later is
