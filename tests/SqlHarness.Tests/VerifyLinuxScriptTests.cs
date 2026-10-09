@@ -49,6 +49,7 @@ public sealed class VerifyLinuxScriptTests
         var script = Script();
 
         Assert.Contains("git fetch", script, StringComparison.Ordinal);
+        Assert.Contains("--git-common-dir", script, StringComparison.Ordinal);
         Assert.Contains("git reset --hard FETCH_HEAD", script, StringComparison.Ordinal);
         Assert.DoesNotMatch(@"(?m)Set-Content|Out-File", script);
         Assert.DoesNotContain("SQLHARNESS_HOME", script, StringComparison.Ordinal);
