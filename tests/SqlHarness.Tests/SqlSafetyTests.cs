@@ -1387,6 +1387,53 @@ public class SqlSafetyTests
         Assert.Equal(SqlSafetyReason.MutationNotAllowed, decision.Reason);
     }
 
+    [Theory]
+    [InlineData("WITH [#x] AS (SELECT Id, Active FROM dbo.Clients) UPDATE [#x] SET Active = 0")]
+    [InlineData("WITH #x AS (SELECT Id, Active FROM dbo.Clients) UPDATE #x SET Active = 0")]
+    [InlineData("WITH #x AS (SELECT Id FROM dbo.Clients) DELETE #x")]
+    [InlineData("WITH #x AS (SELECT TOP (10) Id FROM dbo.Clients) DELETE TOP (1) FROM #x")]
+    [InlineData("WITH #x AS (SELECT Id FROM dbo.Clients) INSERT INTO #x (Id) VALUES (1)")]
+    [InlineData("WITH #x AS (SELECT Id, Active FROM dbo.Clients) MERGE #x AS t USING (SELECT 1 AS Id) AS s ON t.Id = s.Id WHEN MATCHED THEN UPDATE SET Active = 0;")]
+    [InlineData("WITH #x AS (SELECT Id FROM dbo.Clients) SELECT Id FROM #x")]
+    [InlineData("CREATE TABLE #log (Id int); WITH #x AS (SELECT Id FROM dbo.Clients) INSERT #log (Id) SELECT d.Id FROM (DELETE #x OUTPUT deleted.Id) AS d (Id)")]
+    public void HashNamedCteCannotStandInForTempTable(string sql)
+    {
+        var denied = ClassifyQuery(sql);
+        Assert.False(denied.Allowed, denied.RejectionDescription);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, denied.Reason);
+
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.False(approved.Allowed, approved.RejectionDescription);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, approved.Reason);
+
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Fact]
+    public void OrdinarilyNamedCteUpdateStillRequiresApproval()
+    {
+        const string sql = "WITH x AS (SELECT Id, Active FROM dbo.Clients) UPDATE x SET Active = 0";
+
+        var denied = ClassifyQuery(sql);
+        Assert.False(denied.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, denied.Reason);
+        Assert.False(denied.HasMutation);
+
+        var allowed = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.True(allowed.Allowed, allowed.RejectionDescription);
+        Assert.True(allowed.HasMutation);
+    }
+
+    [Theory]
+    [InlineData("DECLARE @c CURSOR")]
+    [InlineData("DECLARE @c CURSOR; SELECT 1")]
+    public void CursorDeclarationIsNotScalar(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+        Assert.False(decision.Allowed, decision.RejectionDescription);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
     private SqlSafetyDecision ClassifyQuery(string sql) =>
         _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: false, confirmDatabase: null);
 }
