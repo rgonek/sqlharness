@@ -413,17 +413,18 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             {
                 var durations = group.Where(operation => operation.DurationMs.HasValue).Select(operation => operation.DurationMs!.Value).ToArray();
                 var count = group.Count();
-                return new DimensionValueStat(
-                    group.Key.Value,
-                    group.Key.IsUnknown,
-                    group.Key.IsUnknown ? OperationDimensionResolver.UnknownSource : OperationDimensionResolver.RecordedSource,
-                    count,
-                    filtered.Length == 0 ? 0 : 100d * count / filtered.Length,
-                    durations.Length == 0 ? null : durations.Sum(),
-                    durations.Length,
-                    count - durations.Length,
-                    group.Count(operation => operation.Status == "failed"),
-                    group.Count(operation => operation.Status == "rejected"));
+                return OperationDimensionResolver.ResolveValue(
+                    dimension,
+                    group.Key.IsUnknown ? null : group.Key.Value) with
+                {
+                    Operations = count,
+                    Percentage = filtered.Length == 0 ? 0 : 100d * count / filtered.Length,
+                    TotalDurationMs = durations.Length == 0 ? null : durations.Sum(),
+                    DurationAvailableOperations = durations.Length,
+                    DurationUnavailableOperations = count - durations.Length,
+                    Failed = group.Count(operation => operation.Status == "failed"),
+                    Rejected = group.Count(operation => operation.Status == "rejected"),
+                };
             }).OrderBy(value => value.IsUnknown ? 1 : 0)
               .ThenBy(value => value.Value, StringComparer.Ordinal)
               .ToArray();

@@ -379,7 +379,8 @@ public sealed class JournalReaderTests
         var literal = Assert.Single(region.Values, item => !item.IsUnknown);
         var missing = Assert.Single(region.Values, item => item.IsUnknown);
         Assert.Equal(("Unknown", 1), (literal.Value, literal.Operations));
-        Assert.Equal(100d / 3, literal.Percentage, 3);
+        Assert.NotNull(literal.Percentage);
+        Assert.Equal(100d / 3, literal.Percentage.Value, 3);
         Assert.Equal(("Unknown", 2, 20L, 1, 1, 1),
             (missing.Value, missing.Operations, missing.TotalDurationMs, missing.DurationAvailableOperations,
                 missing.DurationUnavailableOperations, missing.Failed));

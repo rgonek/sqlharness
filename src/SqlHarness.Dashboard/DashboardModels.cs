@@ -71,18 +71,17 @@ public sealed record TargetStat(string? Profile, string? Database, int Count, st
 public sealed record ProfileOperationCount(string? Profile, int Operations);
 
 /// <summary>
-/// A recorded dimension value, or a missing value. A missing value is represented
-/// internally by IsUnknown; its display label can therefore equal a literal "Unknown".
+/// A resolved scope value, or a missing value. IsUnknown keeps a missing value distinct
+/// from literal "Unknown"; aggregate metrics are populated when the summary is grouped.
 /// </summary>
-public sealed record DimensionAttribution(string Name, string Value, bool IsUnknown, string Source);
+public sealed record DimensionValueSummary(
+    string Name, string Value, bool IsUnknown, string Source, int? Operations = null, double? Percentage = null,
+    long? TotalDurationMs = null, int? DurationAvailableOperations = null, int? DurationUnavailableOperations = null,
+    int? Failed = null, int? Rejected = null);
 
-public sealed record OperationDimensions(IReadOnlyList<DimensionAttribution> Values);
+public sealed record OperationDimensions(IReadOnlyList<DimensionValueSummary> Values);
 
-public sealed record DimensionValueStat(
-    string Value, bool IsUnknown, string Source, int Operations, double Percentage, long? TotalDurationMs,
-    int DurationAvailableOperations, int DurationUnavailableOperations, int Failed, int Rejected);
-
-public sealed record DimensionStat(string Name, IReadOnlyList<DimensionValueStat> Values);
+public sealed record DimensionStat(string Name, IReadOnlyList<DimensionValueSummary> Values);
 
 public sealed record ProfileDimensionStats(
     string? Profile, bool ProfileDefinitionAvailable, int Operations, IReadOnlyList<DimensionStat> Dimensions,

@@ -68,16 +68,19 @@ public static class OperationDimensionResolver
     }
 
     /// <summary>Builds stable labels for configured and historically recorded dimensions.</summary>
-    public static IReadOnlyList<DimensionAttribution> Resolve(
+    public static IReadOnlyList<DimensionValueSummary> Resolve(
         IEnumerable<string> dimensionNames,
         IReadOnlyDictionary<string, string> recordedValues)
     {
         return dimensionNames.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)
-            .Select(name => recordedValues.TryGetValue(name, out var value)
-                ? new DimensionAttribution(name, value, false, RecordedSource)
-                : new DimensionAttribution(name, UnknownLabel, true, UnknownSource))
+            .Select(name => ResolveValue(name, recordedValues.TryGetValue(name, out var value) ? value : null))
             .ToArray();
     }
+
+    /// <summary>Creates the shared dimension value summary; null represents missing attribution.</summary>
+    public static DimensionValueSummary ResolveValue(string name, string? value) => value is null
+        ? new DimensionValueSummary(name, UnknownLabel, true, UnknownSource)
+        : new DimensionValueSummary(name, value, false, RecordedSource);
 
     public static bool Matches(
         IReadOnlyDictionary<string, string?>? filters,
