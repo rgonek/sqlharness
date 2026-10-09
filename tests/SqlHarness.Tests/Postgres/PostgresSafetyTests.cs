@@ -113,6 +113,100 @@ public sealed class PostgresSafetyTests
         Assert.False(decision.Allowed);
     }
 
+    // 019: SQL-text executors and the remaining admin/WAL siblings. Each name
+    // lives in pg_catalog, so the qualified twin is the same call.
+    [Theory]
+    [InlineData("Query", "SELECT query_to_xml('select 1', true, false, '')")]
+    [InlineData("CompareSetup", "SELECT query_to_xml('select 1', true, false, '')")]
+    [InlineData("Query", "SELECT pg_catalog.query_to_xml('select 1', true, false, '')")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.query_to_xml('select 1', true, false, '')")]
+    [InlineData("Query", "SELECT query_to_xmlschema('select 1', true, false, '')")]
+    [InlineData("CompareSetup", "SELECT query_to_xmlschema('select 1', true, false, '')")]
+    [InlineData("Query", "SELECT pg_catalog.query_to_xmlschema('select 1', true, false, '')")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.query_to_xmlschema('select 1', true, false, '')")]
+    [InlineData("Query", "SELECT query_to_xml_and_xmlschema('select 1', true, false, '')")]
+    [InlineData("CompareSetup", "SELECT query_to_xml_and_xmlschema('select 1', true, false, '')")]
+    [InlineData("Query", "SELECT pg_catalog.query_to_xml_and_xmlschema('select 1', true, false, '')")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.query_to_xml_and_xmlschema('select 1', true, false, '')")]
+    [InlineData("Query", "SELECT cursor_to_xml('c', 1, true, false, '')")]
+    [InlineData("CompareSetup", "SELECT cursor_to_xml('c', 1, true, false, '')")]
+    [InlineData("Query", "SELECT pg_catalog.cursor_to_xml('c', 1, true, false, '')")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.cursor_to_xml('c', 1, true, false, '')")]
+    [InlineData("Query", "SELECT cursor_to_xmlschema('c', true, false, '')")]
+    [InlineData("CompareSetup", "SELECT cursor_to_xmlschema('c', true, false, '')")]
+    [InlineData("Query", "SELECT pg_catalog.cursor_to_xmlschema('c', true, false, '')")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.cursor_to_xmlschema('c', true, false, '')")]
+    [InlineData("Query", "SELECT * FROM ts_stat('select v from docs')")]
+    [InlineData("CompareSetup", "SELECT * FROM ts_stat('select v from docs')")]
+    [InlineData("Query", "SELECT * FROM pg_catalog.ts_stat('select v from docs')")]
+    [InlineData("CompareSetup", "SELECT * FROM pg_catalog.ts_stat('select v from docs')")]
+    [InlineData("Query", "SELECT pg_sleep_for('1 second')")]
+    [InlineData("CompareSetup", "SELECT pg_sleep_for('1 second')")]
+    [InlineData("Query", "SELECT pg_catalog.pg_sleep_for('1 second')")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.pg_sleep_for('1 second')")]
+    [InlineData("Query", "SELECT pg_sleep_until(now())")]
+    [InlineData("CompareSetup", "SELECT pg_sleep_until(now())")]
+    [InlineData("Query", "SELECT pg_catalog.pg_sleep_until(now())")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.pg_sleep_until(now())")]
+    [InlineData("Query", "SELECT pg_notify('c', 'x')")]
+    [InlineData("CompareSetup", "SELECT pg_notify('c', 'x')")]
+    [InlineData("Query", "SELECT pg_catalog.pg_notify('c', 'x')")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.pg_notify('c', 'x')")]
+    [InlineData("Query", "SELECT * FROM pg_stat_file('postgresql.conf')")]
+    [InlineData("CompareSetup", "SELECT * FROM pg_stat_file('postgresql.conf')")]
+    [InlineData("Query", "SELECT * FROM pg_catalog.pg_stat_file('postgresql.conf')")]
+    [InlineData("CompareSetup", "SELECT * FROM pg_catalog.pg_stat_file('postgresql.conf')")]
+    [InlineData("Query", "SELECT pg_reload_conf()")]
+    [InlineData("CompareSetup", "SELECT pg_reload_conf()")]
+    [InlineData("Query", "SELECT pg_catalog.pg_reload_conf()")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.pg_reload_conf()")]
+    [InlineData("Query", "SELECT pg_rotate_logfile()")]
+    [InlineData("CompareSetup", "SELECT pg_rotate_logfile()")]
+    [InlineData("Query", "SELECT pg_catalog.pg_rotate_logfile()")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.pg_rotate_logfile()")]
+    [InlineData("Query", "SELECT pg_switch_wal()")]
+    [InlineData("CompareSetup", "SELECT pg_switch_wal()")]
+    [InlineData("Query", "SELECT pg_catalog.pg_switch_wal()")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.pg_switch_wal()")]
+    [InlineData("Query", "SELECT pg_create_restore_point('x')")]
+    [InlineData("CompareSetup", "SELECT pg_create_restore_point('x')")]
+    [InlineData("Query", "SELECT pg_catalog.pg_create_restore_point('x')")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.pg_create_restore_point('x')")]
+    [InlineData("Query", "SELECT pg_stat_reset()")]
+    [InlineData("CompareSetup", "SELECT pg_stat_reset()")]
+    [InlineData("Query", "SELECT pg_catalog.pg_stat_reset()")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.pg_stat_reset()")]
+    [InlineData("Query", "SELECT pg_stat_reset_shared('bgwriter')")]
+    [InlineData("CompareSetup", "SELECT pg_stat_reset_shared('bgwriter')")]
+    [InlineData("Query", "SELECT pg_catalog.pg_stat_reset_shared('bgwriter')")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.pg_stat_reset_shared('bgwriter')")]
+    [InlineData("Query", "SELECT pg_create_physical_replication_slot('s')")]
+    [InlineData("CompareSetup", "SELECT pg_create_physical_replication_slot('s')")]
+    [InlineData("Query", "SELECT pg_catalog.pg_create_physical_replication_slot('s')")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.pg_create_physical_replication_slot('s')")]
+    [InlineData("Query", "SELECT pg_create_logical_replication_slot('s','pgoutput')")]
+    [InlineData("CompareSetup", "SELECT pg_create_logical_replication_slot('s','pgoutput')")]
+    [InlineData("Query", "SELECT pg_catalog.pg_create_logical_replication_slot('s','pgoutput')")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.pg_create_logical_replication_slot('s','pgoutput')")]
+    [InlineData("Query", "SELECT pg_drop_replication_slot('s')")]
+    [InlineData("CompareSetup", "SELECT pg_drop_replication_slot('s')")]
+    [InlineData("Query", "SELECT pg_catalog.pg_drop_replication_slot('s')")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.pg_drop_replication_slot('s')")]
+    [InlineData("Query", "SELECT pg_logical_emit_message(true, 'p', 'x')")]
+    [InlineData("CompareSetup", "SELECT pg_logical_emit_message(true, 'p', 'x')")]
+    [InlineData("Query", "SELECT pg_catalog.pg_logical_emit_message(true, 'p', 'x')")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.pg_logical_emit_message(true, 'p', 'x')")]
+    [InlineData("Query", "SELECT pg_replication_origin_create('o')")]
+    [InlineData("CompareSetup", "SELECT pg_replication_origin_create('o')")]
+    [InlineData("Query", "SELECT pg_catalog.pg_replication_origin_create('o')")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.pg_replication_origin_create('o')")]
+    public void Sql_string_executors_and_deny_list_siblings_are_unsupported(string usage, string sql)
+    {
+        var decision = _classifier.Classify(sql, ParseUsage(usage), "appdb", false, null, Empty);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.False(decision.Allowed);
+    }
+
     [Theory]
     [InlineData("SELECT pg_read_binary_file('/secret-token-path')")]
     [InlineData("SELECT * FROM pg_ls_logdir()")]
@@ -569,6 +663,47 @@ public sealed class PostgresSafetyTests
         Assert.True(approved.Allowed, approved.RejectionDescription);
         Assert.True(approved.HasMutation);
         Assert.True(approved.HasSessionLocalWork);
+    }
+
+    // 019: PostgreSQL resolves the CTE write before this statement's new temp exists.
+    [Theory]
+    [InlineData("Query", "WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id INTO TEMP TABLE t FROM w")]
+    [InlineData("CompareSetup", "WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id INTO TEMP TABLE t FROM w")]
+    [InlineData("Query", "CREATE TEMP TABLE t AS WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id FROM w")]
+    [InlineData("CompareSetup", "CREATE TEMP TABLE t AS WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id FROM w")]
+    public void Self_named_temp_cte_write_is_a_persistent_mutation(string usage, string sql)
+    {
+        var decision = _classifier.Classify(sql, ParseUsage(usage), "appdb", false, null, Empty);
+        var reason = ParseUsage(usage) == SqlUsage.Query
+            ? SqlSafetyReason.MutationNotAllowed
+            : SqlSafetyReason.NonTemporaryWrite;
+        Assert.Equal(reason, decision.Reason);
+        Assert.False(decision.Allowed);
+    }
+
+    [Theory]
+    [InlineData("WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id INTO TEMP TABLE t FROM w")]
+    [InlineData("CREATE TEMP TABLE t AS WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id FROM w")]
+    public void Self_named_temp_cte_write_with_query_approval_is_a_mutation(string sql)
+    {
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.True(approved.Allowed, approved.RejectionDescription);
+        Assert.True(approved.HasMutation, $"Reason={approved.Reason}, HasMutation={approved.HasMutation}.");
+        Assert.True(approved.HasSessionLocalWork);
+    }
+
+    // 019: a temp proven by an earlier statement is already visible to the CTE write.
+    [Theory]
+    [InlineData("Query")]
+    [InlineData("CompareSetup")]
+    public void Cte_write_to_an_already_proven_temp_stays_session_local(string usage)
+    {
+        var decision = _classifier.Classify(
+            "CREATE TEMP TABLE t (id int); WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id INTO TEMP TABLE u FROM w",
+            ParseUsage(usage), "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+        Assert.True(decision.HasSessionLocalWork);
     }
 
     [Fact]
