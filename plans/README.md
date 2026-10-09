@@ -100,7 +100,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [019](019-pg-classifier-holes.md) | The PG classifier denies self-named temp CTE writes, SQL-string executors and deny-list gaps | P1 | S | 016 | TODO |
 | [020](020-azure-cli-process-hardening.md) | The Azure CLI token fetch no longer runs binaries from the CWD, hangs, or reads MCP stdin | P1 | S | 016 | TODO |
 | [021](021-unrecognized-statistics-unavailable.md) | Non-English STATISTICS output is reported as unavailable, not as measured zeros | P1 | M | 016 | TODO |
-| [022](022-dotnet10-and-npgsql-migration.md) | .NET 10 LTS plus a supported Npgsql before the 2026-11-10 end of support | P1 | M | 016 | TODO |
+| [022](022-dotnet10-and-npgsql-migration.md) | .NET 10 LTS plus a supported Npgsql before the 2026-11-10 end of support | P1 | M | 016 | DONE (branch chore/plan-022-net10; SDK 10.0.303; Npgsql 10.0.3; scripts/verify.ps1 OK; Linux gate not run; live PG not run) |
 | [023](023-tsql-reject-multi-batch-go.md) | `GO`-separated T-SQL is rejected instead of misclassified | P2 | S | 016, after 017/018 | TODO |
 | [024](024-canonical-results-common-types.md) | Arrays/inet/NaN/spatial/hierarchyid results no longer fail whole operations | P2 | M | 016 (coordinate with 022) | TODO |
 | [025](025-redaction-consistency.md) | Consistent secret sets, password value registered, byte[] fixed, no word corruption | P2 | M | 016 | TODO |

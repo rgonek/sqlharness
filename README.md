@@ -30,7 +30,7 @@ and [the audit roadmap](docs/superpowers/plans/2026-09-26-audit-roadmap.md).
 
 ## Install a release binary
 
-SQLHarness is distributed only as self-contained, single-file, untrimmed GitHub Release binaries. Download the archive matching your platform (`win-x64`, `linux-x64`, or `osx-arm64`) and the accompanying `SHA256SUMS` from the [GitHub Releases page](https://github.com/rgonek/sqlharness/releases). Verify the archive before extracting it, then put `sqlharness.exe` on `PATH` for Windows or `sqlharness` on `PATH` for Linux/macOS.
+SQLHarness is distributed only as self-contained, single-file, untrimmed GitHub Release binaries. Those binaries embed the .NET 10 runtime. Download the archive matching your platform (`win-x64`, `linux-x64`, or `osx-arm64`) and the accompanying `SHA256SUMS` from the [GitHub Releases page](https://github.com/rgonek/sqlharness/releases). Verify the archive before extracting it, then put `sqlharness.exe` on `PATH` for Windows or `sqlharness` on `PATH` for Linux/macOS.
 
 Example for Windows PowerShell:
 
@@ -344,7 +344,7 @@ Linux-only behaviour before pushing — provision it once with `pwsh ./scripts/s
 (installs the `global.json` SDK in the distro and creates a disposable clone under `~/src`; the gate
 clone never lives under `/mnt/d`). Neither gate replaces CI, and CI itself currently runs
 only ubuntu-latest with an unfiltered test step. A change is not done until both gates are green.
-The .NET SDK version comes from `global.json` (currently `9.0.316`, `rollForward: latestPatch`).
+The .NET SDK version comes from `global.json` (currently `10.0.303`, `rollForward: latestPatch`). Re-release after .NET runtime security patches.
 
 ```powershell
 pwsh ./scripts/verify.ps1
