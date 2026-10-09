@@ -429,6 +429,7 @@ public sealed class JournalReaderTests
             {
                 ["region"] = i % 2 == 0 ? "eu:west" : "us",
                 ["component"] = i < 3 ? "api" : "portal",
+                ["tenant"] = "acme",
             });
         }
 
@@ -437,17 +438,66 @@ public sealed class JournalReaderTests
         {
             ["region"] = "eu:west",
             ["component"] = "api",
+            ["tenant"] = "acme",
         }, Limit: 1));
         var rest = reader.Operations(new OperationQuery(Profile: "app", Dimensions: new Dictionary<string, string?>
         {
             ["region"] = "eu:west",
             ["component"] = "api",
+            ["tenant"] = "acme",
         }, Cursor: first.NextCursor, Limit: 1));
 
         Assert.NotNull(first.NextCursor);
         Assert.Null(rest.NextCursor);
         Assert.Equal(2, first.Items.Count + rest.Items.Count);
         Assert.All(first.Items.Concat(rest.Items), operation => Assert.Equal("app", operation.Profile));
+    }
+
+    [Fact]
+    public void Unprofiled_scope_and_minute_bounds_match_statistics_and_drilldown()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:unprofiled");
+        seed.Operation(session, profile: null, variables: new Dictionary<string, string> { ["region"] = "Unknown", ["component"] = "api" },
+            server: "unprofiled-server", database: "unprofiled-db", engine: "postgres");
+        seed.Operation(session, profile: "app", variables: new Dictionary<string, string> { ["region"] = "west", ["component"] = "api" });
+        var last = seed.Operation(session, profile: null,
+            variables: new Dictionary<string, string> { ["region"] = "Unknown", ["component"] = "portal" },
+            server: "unprofiled-server", database: "unprofiled-db", engine: "postgres");
+
+        var from = new DateTimeOffset(2026, 10, 7, 9, 0, 2, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 10, 7, 9, 0, 5, TimeSpan.Zero);
+        var dimensions = new Dictionary<string, string?> { ["region"] = "Unknown" };
+        var stats = Reader(home).Stats(new StatsQuery(from, to, Dimensions: dimensions, RowDimension: "region", ColumnDimension: "component",
+            UnprofiledOnly: true));
+        var page = Reader(home).Operations(new OperationQuery(From: from, To: to, Dimensions: dimensions, UnprofiledOnly: true));
+
+        Assert.Equal(1, stats.ProfileDimensions.Operations);
+        Assert.False(stats.ProfileDimensions.ProfileDefinitionAvailable);
+        Assert.Equal(("postgres", "unprofiled-server", "unprofiled-db", 1),
+            (Assert.Single(stats.ProfileDimensions.Targets).Engine, stats.ProfileDimensions.Targets[0].Server,
+                stats.ProfileDimensions.Targets[0].Database, stats.ProfileDimensions.Targets[0].Count));
+        Assert.Equal(last.OperationId, Assert.Single(page.Items).Id);
+        Assert.Equal(1, stats.ProfileDimensions.Matrix!.Totals.Operations);
+    }
+
+    [Fact]
+    public void Token_coverage_counts_raw_only_emitted_only_missing_and_paired_rows()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:coverage");
+        seed.Operation(session, tokens: SeedTokens.RawOnly);
+        seed.Operation(session, tokens: SeedTokens.EmittedOnly);
+        seed.Operation(session, tokens: SeedTokens.None);
+        seed.Operation(session, tokens: SeedTokens.Both);
+
+        var tokens = Reader(home).Stats(new StatsQuery()).Tokens;
+
+        Assert.Equal((4, 1, 1, 1, 1), (tokens.TotalOperations, tokens.PairedOperations, tokens.RawOnlyOperations,
+            tokens.EmittedOnlyOperations, tokens.MissingBothOperations));
+        Assert.Equal((100L, 10L), (tokens.Raw, tokens.Emitted));
     }
 
     [Fact]

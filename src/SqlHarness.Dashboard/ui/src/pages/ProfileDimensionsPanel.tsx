@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { useStats, type StatsRange } from "@/api/queries"
+import { useStats, type StatsRange, type StatsWindow } from "@/api/queries"
 import type { DimensionAggregate, DimensionMatrixCell, DimensionStat, DimensionValueSummary, TargetStat } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,7 +10,10 @@ import { formatDuration, formatNumber, formatPercent } from "@/lib/format"
 
 export type DimensionCellScope = {
   profile: string | null
+  unprofiled: boolean
   range: StatsRange
+  from?: string
+  to?: string
   dimensions: Record<string, string | null>
 }
 
@@ -158,6 +161,8 @@ export type MatrixProps = {
   metric: Metric
   profile: string | null
   range: StatsRange
+  window: StatsWindow
+  unprofiled: boolean
   filters: Record<string, string | null>
   onCellSelect?: (scope: DimensionCellScope) => void
 }
@@ -170,6 +175,8 @@ export function Matrix({
   metric,
   profile,
   range,
+  window,
+  unprofiled,
   filters,
   onCellSelect,
 }: MatrixProps) {
@@ -198,7 +205,7 @@ export function Matrix({
     if (!onCellSelect) return
     const dimensions = { ...filters, [rowName]: cell.row.isUnknown ? null : cell.row.value,
       [columnName]: cell.column.isUnknown ? null : cell.column.value }
-    onCellSelect({ profile, range, dimensions })
+    onCellSelect({ profile, unprofiled, range, ...window, dimensions })
   }
 
   return (
@@ -268,6 +275,8 @@ export function Matrix({
 
 export function ProfileDimensionsPanel({
   range,
+  window,
+  unprofiled,
   profile,
   profileName,
   databaseTemplate,
@@ -282,6 +291,8 @@ export function ProfileDimensionsPanel({
   onCellSelect,
 }: {
   range: StatsRange
+  window: StatsWindow
+  unprofiled: boolean
   profile: string | null
   profileName: string
   databaseTemplate: string | undefined
@@ -304,7 +315,7 @@ export function ProfileDimensionsPanel({
     ? axisChoice
     : defaultAxes
   const scopedFilters = Object.fromEntries(Object.entries(filters).filter(([name]) => names.includes(name)))
-  const query = useStats(range, profile, scopedFilters, axes.row || undefined, axes.column || undefined)
+  const query = useStats(range, window, profile, scopedFilters, axes.row || undefined, axes.column || undefined, unprofiled)
   const scope = query.data?.profileDimensions
   const displayedDimensions = scope?.dimensions ?? dimensions
   const displayedTargets = scope?.targets ?? targets
@@ -375,7 +386,7 @@ export function ProfileDimensionsPanel({
               </div>
             </div>
             {matrix && <Matrix cells={matrix.cells} totals={matrix.totals} rowName={matrix.rowDimension} columnName={matrix.columnDimension} metric={metric}
-              profile={profile} range={range} filters={scopedFilters} onCellSelect={onCellSelect} />}
+              profile={profile} range={range} window={window} unprofiled={unprofiled} filters={scopedFilters} onCellSelect={onCellSelect} />}
           </section>
           <section className="grid gap-4">
             <h2 className="text-base font-semibold">Dimension breakdowns</h2>

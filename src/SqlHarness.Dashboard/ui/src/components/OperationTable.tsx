@@ -40,8 +40,8 @@ export function OperationTable({ operations, now }: { operations: OperationSumma
               <TableCell>
                 <StatusBadge operation={operation} />
               </TableCell>
-              <TableCell className="max-w-48 truncate">
-                {[operation.profile, operation.database].filter(Boolean).join(" / ") || "—"}
+              <TableCell className="max-w-48 truncate" title={[operation.profile, operation.engine, operation.server, operation.database].filter(Boolean).join(" / ")}>
+                {[operation.profile, operation.engine, operation.server, operation.database].filter(Boolean).join(" / ") || "—"}
               </TableCell>
               <TableCell className="text-right whitespace-nowrap">
                 {operation.status === "running" && now !== undefined

@@ -57,6 +57,7 @@ internal sealed class JournalSeed
 /// <summary>Which token counts a seeded operation carries: both, raw only (MCP-style), or emitted only.</summary>
 internal enum SeedTokens
 {
+    None,
     Both,
     RawOnly,
     EmittedOnly,

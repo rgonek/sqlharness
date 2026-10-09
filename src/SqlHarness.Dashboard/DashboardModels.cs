@@ -11,10 +11,11 @@ public sealed record SessionQuery(
 public sealed record OperationQuery(
     long? SessionId = null, string? Status = null, string? Operation = null, DateTimeOffset? From = null,
     DateTimeOffset? To = null, long? Cursor = null, int Limit = JournalReader.DefaultLimit,
-    string? Profile = null, IReadOnlyDictionary<string, string?>? Dimensions = null);
+    string? Profile = null, IReadOnlyDictionary<string, string?>? Dimensions = null, bool UnprofiledOnly = false);
 
 public sealed record StatsQuery(DateTimeOffset? From = null, DateTimeOffset? To = null, string? Profile = null,
-    IReadOnlyDictionary<string, string?>? Dimensions = null, string? RowDimension = null, string? ColumnDimension = null);
+    IReadOnlyDictionary<string, string?>? Dimensions = null, string? RowDimension = null, string? ColumnDimension = null,
+    bool UnprofiledOnly = false);
 
 public sealed record SessionSummary(
     long Id, string SessionKey, string AgentKind, string Transport, string Source, string? ClientName,
@@ -99,7 +100,8 @@ public sealed record ProfileDimensionStats(
     IReadOnlyList<TargetStat> Targets, DimensionMatrixStats? Matrix = null);
 
 /// <summary>Token totals over operations that carry both a raw and an emitted count.</summary>
-public sealed record TokenStat(long Raw, long Emitted);
+public sealed record TokenStat(long Raw, long Emitted, int TotalOperations = 0, int PairedOperations = 0,
+    int RawOnlyOperations = 0, int EmittedOnlyOperations = 0, int MissingBothOperations = 0);
 
 public sealed record DashboardStats(
     IReadOnlyList<DayAgentCount> OperationsPerDay,

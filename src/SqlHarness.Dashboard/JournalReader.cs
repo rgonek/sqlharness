@@ -162,6 +162,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 ("$status", storedStatus),
                 ("$operation", query.Operation),
                 ("$profile", query.Profile),
+                ("$unprofiled", query.UnprofiledOnly ? 1 : 0),
                 ("$from", Iso(query.From)),
                 ("$to", Iso(query.To)),
                 ("$cursor", cursor),
@@ -172,7 +173,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 WHERE ($session IS NULL OR o.session_id = $session)
                   AND ($status IS NULL OR o.status = $status)
                   AND ($operation IS NULL OR o.operation = $operation)
-                  AND ($profile IS NULL OR o.profile = $profile)
+                  AND (($unprofiled = 1 AND o.profile IS NULL) OR ($unprofiled = 0 AND ($profile IS NULL OR o.profile = $profile)))
                   AND ($from IS NULL OR o.started_at >= $from)
                   AND ($to IS NULL OR o.started_at < $to)
                   AND ($cursor IS NULL OR o.id < $cursor)
@@ -346,19 +347,27 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             SELECT o.profile, COUNT(*) FROM operations o WHERE {inWindow}
             GROUP BY o.profile ORDER BY COUNT(*) DESC, o.profile;
             """, window, r => new ProfileOperationCount(NullableString(r, 0), r.GetInt32(1)));
-        (string, object?)[] dimensionWindow = [.. window, ("$profile", query.Profile)];
+        (string, object?)[] dimensionWindow = [.. window, ("$profile", query.Profile), ("$unprofiled", query.UnprofiledOnly ? 1 : 0)];
         var dimensionRows = Query(connection, $"""
             SELECT o.profile, o.engine, o.server, o.database, o.status, o.duration_ms, o.vars_json
-            FROM operations o WHERE {inWindow} AND ($profile IS NOT NULL AND o.profile = $profile);
+            FROM operations o WHERE {inWindow}
+              AND (($unprofiled = 1 AND o.profile IS NULL) OR ($unprofiled = 0 AND $profile IS NOT NULL AND o.profile = $profile));
             """, dimensionWindow, r => new DimensionOperation(
                 NullableString(r, 0), NullableString(r, 1), NullableString(r, 2), NullableString(r, 3),
                 r.GetString(4), NullableLong(r, 5), NullableString(r, 6),
                 OperationDimensionResolver.ReadRecordedValues(NullableString(r, 6))));
         var dimensionStats = AggregateProfileDimensions(query, dimensionRows, profileDimensions);
         var tokens = Query(connection, $"""
-            SELECT COALESCE(SUM(o.raw_tokens), 0), COALESCE(SUM(o.emitted_tokens), 0) FROM operations o
-            WHERE {inWindow} AND o.raw_tokens IS NOT NULL AND o.emitted_tokens IS NOT NULL;
-            """, window, r => new TokenStat(r.GetInt64(0), r.GetInt64(1))).Single();
+            SELECT COALESCE(SUM(CASE WHEN o.raw_tokens IS NOT NULL AND o.emitted_tokens IS NOT NULL THEN o.raw_tokens ELSE 0 END), 0),
+                   COALESCE(SUM(CASE WHEN o.raw_tokens IS NOT NULL AND o.emitted_tokens IS NOT NULL THEN o.emitted_tokens ELSE 0 END), 0),
+                   COUNT(*),
+                   COALESCE(SUM(CASE WHEN o.raw_tokens IS NOT NULL AND o.emitted_tokens IS NOT NULL THEN 1 ELSE 0 END), 0),
+                   COALESCE(SUM(CASE WHEN o.raw_tokens IS NOT NULL AND o.emitted_tokens IS NULL THEN 1 ELSE 0 END), 0),
+                   COALESCE(SUM(CASE WHEN o.raw_tokens IS NULL AND o.emitted_tokens IS NOT NULL THEN 1 ELSE 0 END), 0),
+                   COALESCE(SUM(CASE WHEN o.raw_tokens IS NULL AND o.emitted_tokens IS NULL THEN 1 ELSE 0 END), 0)
+            FROM operations o WHERE {inWindow};
+            """, window, r => new TokenStat(r.GetInt64(0), r.GetInt64(1), r.GetInt32(2), r.GetInt32(3),
+                r.GetInt32(4), r.GetInt32(5), r.GetInt32(6))).Single();
         var spills = Scalar<long>(connection, $"""
             SELECT COUNT(DISTINCT o.id) FROM operations o JOIN operation_metrics m ON m.operation_id = o.id
             WHERE {inWindow} AND m.spill_count > 0;
@@ -391,14 +400,16 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         IReadOnlyList<DimensionOperation> operations,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? profileDimensions)
     {
-        var selectedProfileOperations = query.Profile is null
-            ? Array.Empty<DimensionOperation>()
-            : operations.Where(operation => string.Equals(operation.Profile, query.Profile, StringComparison.Ordinal)).ToArray();
+        var selectedProfileOperations = query.UnprofiledOnly
+            ? operations.Where(operation => operation.Profile is null).ToArray()
+            : query.Profile is null
+                ? Array.Empty<DimensionOperation>()
+                : operations.Where(operation => string.Equals(operation.Profile, query.Profile, StringComparison.Ordinal)).ToArray();
         var knownNames = query.Profile is not null && profileDimensions is not null
                          && profileDimensions.TryGetValue(query.Profile, out var configured)
             ? configured
             : Array.Empty<string>();
-        var profileDefinitionAvailable = query.Profile is not null && profileDimensions?.ContainsKey(query.Profile) == true;
+        var profileDefinitionAvailable = !query.UnprofiledOnly && query.Profile is not null && profileDimensions?.ContainsKey(query.Profile) == true;
         var dimensions = selectedProfileOperations.SelectMany(operation => operation.VariableNames)
             .Concat(knownNames).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var filtered = selectedProfileOperations.Where(operation =>

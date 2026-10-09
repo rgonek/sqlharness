@@ -119,6 +119,7 @@ export type OperationDetail = {
   artifactDirectory: string | null
   summary: Record<string, unknown> | null
   variants: VariantDetail[]
+  dimensions: { values: DimensionValueSummary[] }
 }
 
 export type KeyCount = { key: string; count: number }
@@ -146,7 +147,10 @@ export type ProfileDimensionStats = {
   profile: string | null; profileDefinitionAvailable: boolean; operations: number
   dimensions: DimensionStat[]; targets: TargetStat[]; matrix: DimensionMatrixStats | null
 }
-export type TokenStat = { raw: number; emitted: number }
+export type TokenStat = {
+  raw: number; emitted: number; totalOperations: number; pairedOperations: number
+  rawOnlyOperations: number; emittedOnlyOperations: number; missingBothOperations: number
+}
 
 export type DashboardStats = {
   operationsPerDay: DayAgentCount[]

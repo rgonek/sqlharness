@@ -1,6 +1,7 @@
 import { useState } from "react"
+import { useNavigate } from "@tanstack/react-router"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { type StatsRange, useProfiles, useStats } from "@/api/queries"
+import { rangeWindow, type StatsRange, useProfiles, useStats, type StatsWindow } from "@/api/queries"
 import type { DashboardStats, KeyCount, ProfileView, SqlHashStat } from "@/api/types"
 import { ErrorState } from "@/components/ErrorState"
 import { Kpi } from "@/components/Kpi"
@@ -61,12 +62,46 @@ function CountChart({ rows, label }: { rows: KeyCount[]; label: string }) {
   )
 }
 
-export function StatsPage({ onDimensionCellSelect }: { onDimensionCellSelect?: (scope: DimensionCellScope) => void } = {}) {
+function gainLabel(stats: DashboardStats): string {
+  const tokens = stats.tokens
+  if (tokens.totalOperations === 0) return "No activity"
+  if (tokens.pairedOperations === 0) return "Unavailable"
+  const savings = tokenSavings(tokens)
+  return savings === null ? "Unavailable" : formatPercent(savings)
+}
+
+function gainHint(stats: DashboardStats): string {
+  const tokens = stats.tokens
+  const coverage = `${formatNumber(tokens.pairedOperations)} of ${formatNumber(tokens.totalOperations)} operations have both estimates; ${formatNumber(tokens.rawOnlyOperations)} raw only, ${formatNumber(tokens.emittedOnlyOperations)} emitted only, ${formatNumber(tokens.missingBothOperations)} missing both.`
+  if (tokens.totalOperations === 0) return `No operations in this time range. ${coverage}`
+  if (tokens.pairedOperations === 0) return `Gain unavailable because no operation has both estimates. ${coverage} Estimates use output bytes, not actual model usage.`
+  if (tokens.raw === 0) return `Gain unavailable because paired raw output is zero. ${coverage} Paired totals: ${formatNumber(tokens.raw)} raw → ${formatNumber(tokens.emitted)} emitted. Estimates use output bytes, not actual model usage.`
+  return `${coverage} Paired totals: ${formatNumber(tokens.raw)} raw → ${formatNumber(tokens.emitted)} emitted. Estimates use output bytes, not actual model usage.`
+}
+
+type StatsPageProps = { onDimensionCellSelect?: (scope: DimensionCellScope) => void }
+
+export function StatsPage(props: StatsPageProps = {}) {
+  return props.onDimensionCellSelect
+    ? <StatsPageContent onDimensionCellSelect={props.onDimensionCellSelect} />
+    : <StatsPageRoute />
+}
+
+function StatsPageRoute() {
+  const navigate = useNavigate()
+  return <StatsPageContent onDimensionCellSelect={scope => void navigate({ to: "/operations", search: {
+    from: scope.from, to: scope.to, profile: scope.unprofiled ? undefined : scope.profile ?? undefined,
+    unprofiled: scope.unprofiled || undefined, dimensions: JSON.stringify(scope.dimensions),
+  } })} />
+}
+
+function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
   const [range, setRange] = useState<StatsRange>("7d")
+  const [window, setWindow] = useState<StatsWindow>(() => rangeWindow("7d", Date.now()))
   const [manualProfile, setManualProfile] = useState<{ value: string | null } | undefined>()
   const [dimensionFilters, setDimensionFilters] = useState<Record<string, string | null>>({})
   const [axisChoice, setAxisChoice] = useState<DimensionAxes | null>(null)
-  const overview = useStats(range)
+  const overview = useStats(range, window)
   const profilesQuery = useProfiles()
   const profiles = profilesQuery.data?.profiles ?? []
   const selectedProfile = manualProfile
@@ -74,7 +109,9 @@ export function StatsPage({ onDimensionCellSelect }: { onDimensionCellSelect?: (
     : overview.data?.profileOperations.length
       ? overview.data.profileOperations[0].profile
       : profiles[0]?.name ?? null
-  const query = useStats(range, selectedProfile)
+  const selectedUnprofiled = manualProfile ? manualProfile.value === null
+    : overview.data?.profileOperations[0]?.profile === null && overview.data.profileOperations.length > 0
+  const query = useStats(range, window, selectedProfile, {}, undefined, undefined, selectedUnprofiled)
   const profileOptions = [...new Set([
     ...profiles.map(profile => profile.name),
     ...(overview.data?.profileOperations ?? []).flatMap(item => item.profile === null ? [] : [item.profile]),
@@ -103,7 +140,11 @@ export function StatsPage({ onDimensionCellSelect }: { onDimensionCellSelect?: (
             <option value="unprofiled">No profile</option>
           </select>
         </div>
-        <Tabs value={range} onValueChange={value => setRange(String(value) as StatsRange)}>
+        <Tabs value={range} onValueChange={value => {
+          const nextRange = String(value) as StatsRange
+          setRange(nextRange)
+          setWindow(rangeWindow(nextRange, Date.now()))
+        }}>
           <TabsList>
             {ranges.map(item => (
               <TabsTrigger key={item.value} value={item.value}>
@@ -120,7 +161,7 @@ export function StatsPage({ onDimensionCellSelect }: { onDimensionCellSelect?: (
       ) : overview.isPending || query.isPending ? (
         <Skeleton className="h-64 w-full" />
       ) : (
-        <StatsContent stats={query.data} range={range} profile={selectedProfile} profileView={selectedProfileView}
+        <StatsContent stats={query.data} range={range} window={window} profile={selectedProfile} unprofiled={selectedUnprofiled} profileView={selectedProfileView}
           dimensionFilters={dimensionFilters} onDimensionFiltersChange={setDimensionFilters}
           axisChoice={axisChoice} onAxisChoiceChange={setAxisChoice} onDimensionCellSelect={onDimensionCellSelect} />
       )}
@@ -131,7 +172,9 @@ export function StatsPage({ onDimensionCellSelect }: { onDimensionCellSelect?: (
 function StatsContent({
   stats,
   range,
+  window,
   profile,
+  unprofiled,
   profileView,
   dimensionFilters,
   onDimensionFiltersChange,
@@ -141,7 +184,9 @@ function StatsContent({
 }: {
   stats: DashboardStats
   range: StatsRange
+  window: StatsWindow
   profile: string | null
+  unprofiled: boolean
   profileView: ProfileView | undefined
   dimensionFilters: Record<string, string | null>
   onDimensionFiltersChange: (filters: Record<string, string | null>) => void
@@ -159,7 +204,7 @@ function StatsContent({
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Kpi label="Operations" value={formatNumber(total)} />
-        <Kpi label="Tokens saved" value={formatPercent(tokenSavings(stats.tokens))} hint={`${formatNumber(stats.tokens.raw)} raw → ${formatNumber(stats.tokens.emitted)} emitted`} />
+        <Kpi label="Tokens saved (estimated)" value={gainLabel(stats)} hint={gainHint(stats)} />
         <Kpi label="Operations with spills" value={formatNumber(stats.spillOperations)} />
         <Kpi label="Operations on a cold cache" value={formatNumber(stats.coldCacheOperations)} />
       </div>
@@ -275,7 +320,9 @@ function StatsContent({
       <ProfileDimensionsPanel
         key={profile ?? "unprofiled"}
         range={range}
+        window={window}
         profile={profile}
+        unprofiled={unprofiled}
         profileName={profile ?? "No profile"}
         databaseTemplate={profileView?.database}
         profileDefinitionAvailable={stats.profileDimensions.profileDefinitionAvailable}

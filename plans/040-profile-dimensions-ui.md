@@ -1,6 +1,6 @@
 # Dynamic profile dimensions and target matrix
 
-Status: accepted UI plan; implementation pending.
+Status: implementation complete; Windows gate verified; Linux verification outstanding.
 
 ## Goal
 
