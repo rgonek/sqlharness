@@ -215,7 +215,8 @@ internal sealed class SqlSafetyClassifier
         if (inspection.HasExternalAccess ||
             inspection.HasStatefulExpression ||
             inspection.HasStatefulTableSource ||
-            inspection.HasExecuteInsertSource)
+            inspection.HasExecuteInsertSource ||
+            inspection.HasHashNamedCommonTableExpression)
         {
             return Denied(SqlSafetyReason.UnsupportedStatement);
         }
@@ -896,6 +897,7 @@ internal sealed class SqlSafetyClassifier
         internal bool HasStatefulExpression { get; private set; }
         internal bool HasStatefulTableSource { get; private set; }
         internal bool HasExecuteInsertSource { get; private set; }
+        internal bool HasHashNamedCommonTableExpression { get; private set; }
         internal bool HasSelectInto { get; private set; }
         internal bool HasNonLocalSelectInto { get; private set; }
         internal bool HasNonLocalOutputInto { get; private set; }
@@ -1017,6 +1019,16 @@ internal sealed class SqlSafetyClassifier
         public override void ExplicitVisit(ExecuteInsertSource node)
         {
             HasExecuteInsertSource = true;
+            base.ExplicitVisit(node);
+        }
+
+        // 017: a CTE named like a temp table could stand in for one as a DML
+        // target and write through to its base table. No session-local
+        // workflow needs such a name, so the shape is denied outright.
+        public override void ExplicitVisit(CommonTableExpression node)
+        {
+            if (node.ExpressionName?.Value is { } name && name.StartsWith('#'))
+                HasHashNamedCommonTableExpression = true;
             base.ExplicitVisit(node);
         }
 
