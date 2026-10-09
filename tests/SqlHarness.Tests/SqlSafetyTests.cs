@@ -1341,14 +1341,9 @@ public class SqlSafetyTests
     }
 
     [Theory]
-    [InlineData("SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM dbo.Items AS item")]
-    [InlineData("SELECT item.XmlCol.query('/root/item') FROM dbo.Items AS item")]
-    [InlineData("SELECT item.XmlCol.exist('/root/item') FROM dbo.Items AS item")]
-    [InlineData("SELECT node.XmlCol.value('(/root/@id)[1]', 'int') FROM dbo.Items AS item CROSS APPLY item.XmlCol.nodes('/root/item') AS node(XmlCol)")]
     [InlineData("DECLARE @xml xml = '<root><item id=\"1\" /></root>'; SELECT @xml.value('(/root/item/@id)[1]', 'int')")]
     [InlineData("DECLARE @xml xml = '<root><item /></root>'; SELECT @xml.query('/root/item')")]
     [InlineData("DECLARE @xml xml = '<root><item /></root>'; SELECT @xml.exist('/root/item')")]
-    [InlineData("DECLARE @xml xml = '<root><item id=\"1\" /></root>'; SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM @xml.nodes('/root/item') AS item(XmlCol)")]
     public void Query_allows_read_only_XML_methods_on_columns_and_variables(string sql)
     {
         var decision = ClassifyQuery(sql);
@@ -1504,6 +1499,27 @@ public class SqlSafetyTests
         var decision = _classifier.Classify(sql, SqlUsage.Query, "db", false, null);
 
         Assert.True(decision.Allowed, decision.RejectionDescription);
+    }
+
+    // 018: alias.column.value/query/exist is the same call-target shape as db.schema.fn.
+    [Theory]
+    [InlineData("SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM dbo.Items AS item", false)]
+    [InlineData("SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM dbo.Items AS item", true)]
+    [InlineData("SELECT item.XmlCol.query('/root/item') FROM dbo.Items AS item", false)]
+    [InlineData("SELECT item.XmlCol.query('/root/item') FROM dbo.Items AS item", true)]
+    [InlineData("SELECT item.XmlCol.exist('/root/item') FROM dbo.Items AS item", false)]
+    [InlineData("SELECT item.XmlCol.exist('/root/item') FROM dbo.Items AS item", true)]
+    [InlineData("SELECT node.XmlCol.value('(/root/@id)[1]', 'int') FROM dbo.Items AS item CROSS APPLY item.XmlCol.nodes('/root/item') AS node(XmlCol)", false)]
+    [InlineData("SELECT node.XmlCol.value('(/root/@id)[1]', 'int') FROM dbo.Items AS item CROSS APPLY item.XmlCol.nodes('/root/item') AS node(XmlCol)", true)]
+    [InlineData("DECLARE @xml xml = '<root><item id=\"1\" /></root>'; SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM @xml.nodes('/root/item') AS item(XmlCol)", false)]
+    [InlineData("DECLARE @xml xml = '<root><item id=\"1\" /></root>'; SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM @xml.nodes('/root/item') AS item(XmlCol)", true)]
+    public void Alias_qualified_xml_methods_are_denied_as_cross_database(string sql, bool compareSetup)
+    {
+        var usage = compareSetup ? SqlUsage.CompareSetup : SqlUsage.Query;
+        var decision = _classifier.Classify(sql, usage, "db", false, null);
+
+        Assert.False(decision.Allowed, decision.Reason.ToString());
+        Assert.Equal(SqlSafetyReason.CrossDatabaseReference, decision.Reason);
     }
 
     private SqlSafetyDecision ClassifyQuery(string sql) =>
