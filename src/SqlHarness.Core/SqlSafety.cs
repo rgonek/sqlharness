@@ -515,7 +515,8 @@ internal sealed class SqlSafetyClassifier
     private static bool IsScalarDeclaration(DeclareVariableStatement declare) =>
         declare.Declarations.All(d =>
             d is DeclareVariableElement element &&
-            element.DataType is SqlDataTypeReference or UserDataTypeReference or XmlDataTypeReference);
+            element.DataType is (SqlDataTypeReference or UserDataTypeReference or XmlDataTypeReference) and
+                not SqlDataTypeReference { SqlDataTypeOption: SqlDataTypeOption.Cursor });
 
     private static BatchVariableScope CollectBatchScope(TSqlBatch batch)
     {
