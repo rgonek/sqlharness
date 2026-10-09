@@ -681,15 +681,27 @@ public sealed class PostgresSafetyTests
         Assert.False(decision.Allowed);
     }
 
-    [Theory]
-    [InlineData("WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id INTO TEMP TABLE t FROM w")]
-    [InlineData("CREATE TEMP TABLE t AS WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id FROM w")]
-    public void Self_named_temp_cte_write_with_query_approval_is_a_mutation(string sql)
+    [Fact]
+    public void Self_named_select_into_temp_cte_write_with_query_approval_is_a_mutation()
     {
-        var approved = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        // ClassifySelect reports SessionLocalMutation, so the new temp stays session-local.
+        var approved = _classifier.Classify(
+            "WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id INTO TEMP TABLE t FROM w",
+            SqlUsage.Query, "appdb", true, "appdb", Empty);
         Assert.True(approved.Allowed, approved.RejectionDescription);
         Assert.True(approved.HasMutation, $"Reason={approved.Reason}, HasMutation={approved.HasMutation}.");
         Assert.True(approved.HasSessionLocalWork);
+    }
+
+    [Fact]
+    public void Self_named_ctas_cte_write_with_query_approval_is_a_mutation()
+    {
+        // CREATE TEMP returns FromWrites' Mutation, which sets HasMutation only.
+        var approved = _classifier.Classify(
+            "CREATE TEMP TABLE t AS WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id FROM w",
+            SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.True(approved.Allowed, approved.RejectionDescription);
+        Assert.True(approved.HasMutation, $"Reason={approved.Reason}, HasMutation={approved.HasMutation}.");
     }
 
     // 019: a temp proven by an earlier statement is already visible to the CTE write.
