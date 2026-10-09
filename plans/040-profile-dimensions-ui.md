@@ -128,9 +128,11 @@ than assign one scope to a session containing several targets.
 1. Add shared dimension resolution and complete backend aggregates, including
    profile totals, attribution, metric availability, and time-range filtering.
 2. Add the profile selector, dynamic filters/breakdowns, and matrix to Targets.
-3. Add cell drill-down to a paginated operation list with matching backend
+3. Add emitted footprint accounting for new MCP responses and its journal/gain
+   coverage tests.
+4. Add cell drill-down to a paginated operation list with matching backend
    filters; reuse labels in operation details where practical.
-4. Extend the same presentation to sessions and Profiles as a follow-up.
+5. Extend the same presentation to sessions and Profiles as a follow-up.
 
 Likely touchpoints: `DashboardModels.cs`, `JournalReader.cs`,
 `DashboardProfiles.cs`, dashboard route wiring, UI API types/queries,
