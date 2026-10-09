@@ -1,5 +1,7 @@
 # Database Space Inspection Implementation Plan
 
+**Status (2026-10-08):** DONE — `space` shipped on main (6f49aa8..f14dd4a, `src/SqlHarness.Core/Space.cs`). Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a compact read-only `space` command reporting database files, aggregate allocation, top tables, and optional per-index storage for one exact object.

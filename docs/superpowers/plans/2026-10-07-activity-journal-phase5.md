@@ -1,5 +1,7 @@
 # Activity Journal — Phase 5 (gain from the journal, retention, idle shutdown, autostart) Implementation Plan
 
+**Status (2026-10-08):** DONE — merge 7da9423, review gaps 034d5df; retention dd489e1, autostart b8490d4/a49edf9, docs 49048fe. Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the activity journal the only local statistics store and make the dashboard self-managing:

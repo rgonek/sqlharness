@@ -169,18 +169,7 @@ public static class McpResultAdapter
         var exitCode = (int)outcome.ExitCode;
 
         var sanitized = McpResultSanitizer.Sanitize(outcome.Report);
-        var level = AgentOutputProjection.CalculateDetailLimit(maximumBytes, maximumCellCharacters);
-        var levels = new List<int>();
-        while (level > 0)
-        {
-            levels.Add(level);
-            if (level == 1)
-                break;
-            level = Math.Max(1, level / 2);
-        }
-
-        levels.Add(0);
-        foreach (var detailLimit in levels.Distinct())
+        foreach (var detailLimit in AgentOutputProjection.GetCandidateDetailLimits(maximumBytes, maximumCellCharacters).Distinct())
         {
             var projected = AgentOutputProjection.Project(
                 sanitized, maximumCellCharacters, detailLimit, out var omitted, maximumBytes);

@@ -1,5 +1,7 @@
 # Session, Safety, and Parameters Implementation Plan
 
+**Status (2026-10-08):** DONE — on main: f07b610 (rejection diagnostics), 8df0ad4 (local temp setup), 874deb9/0e05707/41f0636 (parameter types), 1605de8 (`#temp` session proof). Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Prove the single-session `#temp` contract, safely accept practical temporary-table and window syntax, improve rejection diagnostics, and complete SQL parameter binding.

@@ -1,5 +1,7 @@
 # Index Overlap Analysis Implementation Plan
 
+**Status (2026-10-08):** DONE — `indexes` shipped on main (15f2c19 and neighbours, 2026-09-23..24; `IndexOverlapClassifier.cs`, `IndexesCommand.cs`). Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a read-only `indexes` command that ranks missing-index telemetry and classifies each candidate against existing indexes without generating DDL.

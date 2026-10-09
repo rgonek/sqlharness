@@ -95,12 +95,12 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | Plan | Title | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|---|
 | [016](016-restore-green-ci.md) | Main is green again in CI; one local command reproduces the gate | P1 | S | — | DONE (branch fix/plan-016-green-ci; Linux proof pending first CI run) |
-| [017](017-tsql-hash-named-cte-bypass.md) | A `#`-named CTE can no longer pass off persistent DML as `#temp` work | P1 | S | 016 | TODO |
+| [017](017-tsql-hash-named-cte-bypass.md) | A `#`-named CTE can no longer pass off persistent DML as `#temp` work | P1 | S | 016 | DONE (branch fix/plan-017-hash-cte; Windows verify.ps1 and Linux verify-linux.ps1 OK) |
 | [018](018-tsql-external-access-fail-closed.md) | T-SQL external-access and cross-database checks fail closed; parser to TSql180 | P1 | M | 016, 017 | TODO |
 | [019](019-pg-classifier-holes.md) | The PG classifier denies self-named temp CTE writes, SQL-string executors and deny-list gaps | P1 | S | 016 | TODO |
 | [020](020-azure-cli-process-hardening.md) | The Azure CLI token fetch no longer runs binaries from the CWD, hangs, or reads MCP stdin | P1 | S | 016 | TODO |
 | [021](021-unrecognized-statistics-unavailable.md) | Non-English STATISTICS output is reported as unavailable, not as measured zeros | P1 | M | 016 | TODO |
-| [022](022-dotnet10-and-npgsql-migration.md) | .NET 10 LTS plus a supported Npgsql before the 2026-11-10 end of support | P1 | M | 016 | TODO |
+| [022](022-dotnet10-and-npgsql-migration.md) | .NET 10 LTS plus a supported Npgsql before the 2026-11-10 end of support | P1 | M | 016 | DONE (branch chore/plan-022-net10; SDK 10.0.303; Npgsql 10.0.3; scripts/verify.ps1 OK; scripts/verify-linux.ps1 OK; live PG not run). Stored snapshots that contain cidr values need a one-time recapture because Npgsql 10 returns IPNetwork. |
 | [023](023-tsql-reject-multi-batch-go.md) | `GO`-separated T-SQL is rejected instead of misclassified | P2 | S | 016, after 017/018 | TODO |
 | [024](024-canonical-results-common-types.md) | Arrays/inet/NaN/spatial/hierarchyid results no longer fail whole operations | P2 | M | 016 (coordinate with 022) | TODO |
 | [025](025-redaction-consistency.md) | Consistent secret sets, password value registered, byte[] fixed, no word corruption | P2 | M | 016 | TODO |
@@ -116,8 +116,8 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [035](035-implement-regress-decider.md) | Direction: implement plan 013 `regress`, Phase A (`MeasuredRunCount`) first | P2 | M–L | 016 | TODO |
 | [036](036-live-database-ci-lane.md) | Direction: opt-in CI lane against throwaway PG/SQL Server containers | P2 | M | 016 (028 for pins) | TODO |
 | [037](037-rescope-pgstop-current-pg-versions.md) | Direction: extend the `pgstop` design to PostgreSQL 17/18 before implementing it | P2 | S–M | — | TODO |
-| [038](038-agent-session-friction-fixes.md) | Live-session friction: one-item/matrix/artifact truncation, setup `#temp` scope, variable diagnostics/batch guard, redaction, input-path hint, per-statement metrics, token guard, XML false positives | P1–P3 | S–M per item | — | TODO (extended by accepted session retros P1–P3 and 2026-10-08 W1/W4) |
-| [039](039-busy-result-hint.md) | BUSY rejection carries a hint naming the running tool; gate stays non-blocking | P2 | S | — | TODO |
+| [038](038-agent-session-friction-fixes.md) | Live-session friction: one-item/matrix/artifact truncation, setup `#temp` scope, variable diagnostics/batch guard, redaction, input-path hint, per-statement metrics, token guard, XML false positives | P1–P3 | S–M per item | — | DONE (merged locally; Windows and Linux verify gates green after MCP host log synchronization) |
+| [039](039-busy-result-hint.md) | BUSY rejection carries a hint naming the running tool; gate stays non-blocking | P2 | S | — | DONE (branch fix/plan-039-busy-hint) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
 

@@ -80,9 +80,24 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($branch)) {
 
 Assert-WslDistroVersion2 -Distro $Distro
 
-$windowsRepo = (& wsl -d $Distro -- wslpath -a ($repoRoot -replace '\\', '/')).Trim()
+# Branch tips live in the common git directory. A linked worktree's .git file
+# stores a Windows absolute gitdir (`D:/...`). WSL git treats that as a relative
+# path and cannot fetch the worktree. Fetch the main checkout instead.
+$commonDir = (& git -C $repoRoot rev-parse --git-common-dir).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($commonDir)) {
+    throw 'Could not determine the common git directory.'
+}
+if (-not [System.IO.Path]::IsPathRooted($commonDir)) {
+    $commonDir = Join-Path $repoRoot $commonDir
+}
+$fetchRoot = Split-Path ([System.IO.Path]::GetFullPath($commonDir)) -Parent
+if ([string]::IsNullOrWhiteSpace($fetchRoot)) {
+    throw 'Could not determine the checkout to sync into the Linux gate.'
+}
+
+$windowsRepo = (& wsl -d $Distro -- wslpath -a ($fetchRoot -replace '\\', '/')).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($windowsRepo)) {
-    throw "Could not translate the repository path '$repoRoot' into a WSL path."
+    throw "Could not translate the repository path '$fetchRoot' into a WSL path."
 }
 
 $wslHome = (& wsl -d $Distro -- bash -lc 'printf %s "$HOME"').Trim()

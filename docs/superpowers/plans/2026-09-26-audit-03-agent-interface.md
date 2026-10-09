@@ -1,5 +1,7 @@
 # Agent interface and token economy Implementation Plan
 
+**Status (2026-10-08):** DONE — T1 8f83448/bd1d72d, T2 c798c1a/0d67946, T3 eb72d97/6a9eb8b/91fa861, T4 ca51814/b5daea0/4c3a1d8/329df03. Checkboxy poniżej nie były odhaczane w trakcie wykonania.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Zapewnić agentowi przewidywalny format, krótkie odpowiedzi i możliwość rozpoznania błędu bez kolejnych prób na bazie.

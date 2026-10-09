@@ -17,7 +17,58 @@ internal static class JournalBenchmarkBuilder
             .GroupBy(run => (run.Variant, run.ParameterSet, run.MatrixCell))
             .Select(group => BuildVariant(group.Key.Variant, group.Key.ParameterSet, group.Key.MatrixCell, group.ToArray(), documents))
             .ToArray();
-        return new BenchmarkJournalRecord(variants, documents.Values.ToArray());
+        return new BenchmarkJournalRecord(variants, documents.Values.ToArray())
+        {
+            Statements = BuildStatements(runs),
+        };
+    }
+
+    private static IReadOnlyList<JournalStatementMetrics> BuildStatements(IReadOnlyList<CompareRunArtifact> runs)
+    {
+        var extracted = new List<(CompareRunArtifact Run, StatementMetrics Metric)>();
+        foreach (var run in runs)
+        {
+            var ordinalOffset = 0;
+            foreach (var plan in run.PlanXmls)
+            {
+                var statements = StatementMetricsExtractor.Extract(plan, out var omitted);
+                extracted.AddRange(statements.Select(statement => (run, statement with
+                {
+                    StatementOrdinal = statement.StatementOrdinal + ordinalOffset,
+                })));
+                ordinalOffset += statements.Count + omitted;
+            }
+        }
+
+        return extracted
+            .GroupBy(item => (item.Run.Variant, item.Run.ParameterSet, item.Run.MatrixCell, item.Metric.StatementOrdinal))
+            .Select(group =>
+            {
+                var samples = group.ToArray();
+                var first = samples[0].Metric;
+                var dops = samples.Select(sample => sample.Metric.DegreeOfParallelism).OfType<int>().ToArray();
+                return new JournalStatementMetrics(
+                    group.Key.Variant,
+                    group.Key.ParameterSet,
+                    group.Key.MatrixCell,
+                    group.Key.StatementOrdinal,
+                    first.StatementHash,
+                    StatementMedian(samples.Select(sample => sample.Metric.CpuTimeMilliseconds)),
+                    StatementMedian(samples.Select(sample => sample.Metric.ElapsedTimeMilliseconds)),
+                    dops.Length == 0 ? null : dops.Max(),
+                    first.TopOperators);
+            })
+            .OrderBy(statement => statement.Variant, StringComparer.Ordinal)
+            .ThenBy(statement => statement.MatrixCell)
+            .ThenBy(statement => statement.ParameterSet, StringComparer.Ordinal)
+            .ThenBy(statement => statement.StatementOrdinal)
+            .ToArray();
+    }
+
+    private static long? StatementMedian(IEnumerable<long?> values)
+    {
+        var present = values.OfType<long>().ToArray();
+        return present.Length == 0 ? null : Distribution.From(present).Median;
     }
 
     private static JournalVariantMetrics BuildVariant(

@@ -120,7 +120,11 @@ public sealed class Renderer
         else if (mode == OutputMode.Text && outcome.Report is SqlHarnessCapabilities capabilities)
             output.WriteLine($"SQLHarness {capabilities.Version} ({capabilities.BuildId}); contract {capabilities.ContractVersion}; commands: {string.Join(", ", capabilities.Commands.Select(c => c.Name))}");
         else if (mode == OutputMode.Text && outcome.Report is SqlValidationReport validation)
+        {
             output.WriteLine($"{validation.Engine}: {validation.Classification}; executed: {validation.Executed}; reason: {validation.Reason ?? "none"}");
+            if (!string.IsNullOrWhiteSpace(validation.Detail))
+                output.WriteLine($"Detail: {validation.Detail}");
+        }
         if (!string.IsNullOrWhiteSpace(outcome.SafeError))
             output.WriteLine($"SQLHarness {outcome.ExitCode}: {SecretRedactor.Redact(outcome.SafeError, [])}");
     }
@@ -173,16 +177,7 @@ public sealed class Renderer
             : outcome.Report is SqlHarnessCompareMatrixReport
                 ? "partial"
                 : "error";
-        var level = AgentOutputProjection.CalculateDetailLimit(requestedBytes, requestedCellChars);
-        var levels = new List<int>();
-        while (level > 0)
-        {
-            levels.Add(level);
-            if (level == 1) break;
-            level = Math.Max(1, level / 2);
-        }
-        levels.Add(0);
-        foreach (var detailLimit in levels.Distinct())
+        foreach (var detailLimit in AgentOutputProjection.GetCandidateDetailLimits(requestedBytes, requestedCellChars).Distinct())
         {
             var result = AgentOutputProjection.Project(outcome.Report, requestedCellChars, detailLimit, out var omitted, requestedBytes);
             omitted += errorOmitted;

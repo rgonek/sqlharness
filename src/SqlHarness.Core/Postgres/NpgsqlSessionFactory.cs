@@ -13,6 +13,17 @@ internal sealed class NpgsqlSessionFactory : ISqlSessionFactory
     private const int MaximumConnectTimeoutSeconds = 30;
     private readonly int _connectTimeoutSeconds;
 
+    // Once per process, before the first connection. Npgsql 10 reads date/time as
+    // DateOnly/TimeOnly from GetValue; this keeps snapshot and canonical reads on DateTime/TimeSpan.
+    // CS0618: GlobalTypeMapper is obsolete but still the documented registration when the app does not use NpgsqlDataSource.
+    // NPG9001: AddTypeInfoResolverFactory is the public experimental hook for that resolver.
+    static NpgsqlSessionFactory()
+    {
+#pragma warning disable CS0618, NPG9001
+        NpgsqlConnection.GlobalTypeMapper.AddTypeInfoResolverFactory(new LegacyDateAndTimeResolverFactory());
+#pragma warning restore CS0618, NPG9001
+    }
+
     internal NpgsqlSessionFactory(int connectTimeoutSeconds = 15)
     {
         if (connectTimeoutSeconds is < 1 or > MaximumConnectTimeoutSeconds)

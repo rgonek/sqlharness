@@ -216,4 +216,185 @@ public sealed class McpOutputTests
         AssertValidEnvelope(envelope);
         Assert.Equal("safety_rejected", envelope.GetProperty("error").GetProperty("code").GetString());
     }
+
+    [Fact]
+    public void Small_query_projection_fits_budget_without_truncation()
+    {
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        var columns = new[]
+        {
+            new SqlHarnessColumnReport(0, "a", "int", true),
+            new SqlHarnessColumnReport(1, "b", "int", true),
+            new SqlHarnessColumnReport(2, "c", "int", true),
+        };
+        var rows = Enumerable.Range(1, 3)
+            .Select(i => new object?[] { i, i * 10, i * 100 })
+            .ToArray();
+        var set = new SqlHarnessResultSetReport(columns, rows, rows.Length, 0);
+        var report = new SqlHarnessQueryReport(target, "read-only", [set], [], 0, 1, "raw-hash", new OutputFootprint(2151, 1));
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
+
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_query");
+
+        Assert.False(result.IsError == true);
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.CallToolResultBudgetBytes,
+            "Small query result must fit the default wire budget.");
+        var envelope = EnvelopeOf(result);
+        AssertValidEnvelope(envelope);
+        Assert.Equal(JsonValueKind.Null, envelope.GetProperty("truncation").ValueKind);
+        var resultSets = envelope.GetProperty("result").GetProperty("resultSets");
+        Assert.Equal(1, resultSets.GetArrayLength());
+        Assert.Equal(3, resultSets[0].GetProperty("rows").GetArrayLength());
+    }
+
+    [Fact]
+    public void Large_query_projection_truncates_within_real_wire_budget()
+    {
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        var columns = new[]
+        {
+            new SqlHarnessColumnReport(0, "a", "int", true),
+            new SqlHarnessColumnReport(1, "b", "int", true),
+            new SqlHarnessColumnReport(2, "c", "int", true),
+        };
+        var rows = Enumerable.Range(1, 1000)
+            .Select(i => new object?[] { i, i * 10, i * 100 })
+            .ToArray();
+        var set = new SqlHarnessResultSetReport(columns, rows, rows.Length, 0);
+        var report = new SqlHarnessQueryReport(target, "read-only", [set], [], 0, 1, "raw-hash", new OutputFootprint(50000, 1));
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
+
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_query");
+
+        Assert.False(result.IsError == true);
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.CallToolResultBudgetBytes,
+            "Large query projection must still fit the real wire budget.");
+        var envelope = EnvelopeOf(result);
+        AssertValidEnvelope(envelope);
+        Assert.Equal(JsonValueKind.Object, envelope.GetProperty("truncation").ValueKind);
+        Assert.True(envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+    }
+
+    [Fact]
+    public void Matrix_omitted_cells_are_reachable_through_artifact_scope()
+    {
+        var owner = new ArtifactOwner("profile", new Dictionary<string, string>(), "sqlserver", "server", "db");
+        var root = Path.Combine(Path.GetTempPath(), $"sqlharness-mcp-matrix-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var cells = Enumerable.Range(0, 100)
+                .Select(i =>
+                {
+                    var id = $"matrixcell{i:D3}";
+                    var directory = Path.Combine(root, id);
+                    Directory.CreateDirectory(directory);
+                    File.WriteAllText(Path.Combine(directory, "manifest.json"),
+                        "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"summary\",\"metrics\",\"operators\"],\"owner\":"
+                        + JsonSerializer.Serialize(owner, new JsonSerializerOptions(JsonSerializerDefaults.Web)) + "}");
+                    File.WriteAllText(Path.Combine(directory, "report.json"),
+                        JsonSerializer.Serialize(BuildCompareReport($"cell-{i}"), new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+                    return new CompareMatrixCellReport(i, i.ToString(), BuildCompareReport(new string('w', 5000), directory));
+                })
+                .ToArray();
+            var matrix = new SqlHarnessCompareMatrixReport("batch", "int", cells);
+            new CompareArtifactWriter(root, () => DateTimeOffset.UnixEpoch).WriteMatrixIndex(cells);
+            var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, matrix, null);
+            var zeroProjection = AgentOutputProjection.Project(matrix, 128, 0, out _, 16384);
+            var zeroProjectionBytes = JsonSerializer.SerializeToUtf8Bytes(zeroProjection, new JsonSerializerOptions(JsonSerializerDefaults.Web)).Length;
+            Assert.True(zeroProjectionBytes < 16384, $"Zero-detail projection unexpectedly serializes to {zeroProjectionBytes} bytes.");
+
+            var result = McpResultAdapter.Adapt(outcome, "sqlharness_compare", new McpResultBudget(16384, 128));
+
+            Assert.False(result.IsError == true, Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+            Assert.True(McpResultAdapter.MeasureBytes(result) <= 16384,
+                "Oversized matrix projection must fit the requested wire budget.");
+            var envelope = EnvelopeOf(result);
+            AssertValidEnvelope(envelope);
+            var projected = envelope.GetProperty("result");
+            Assert.DoesNotContain(root, envelope.GetRawText(), StringComparison.OrdinalIgnoreCase);
+            var projectedCells = projected.GetProperty("cells");
+            var references = projected.GetProperty("omittedCellReferences");
+            Assert.All(references.EnumerateArray(), reference =>
+                Assert.Equal(JsonValueKind.Null, reference.GetProperty("parameterValue").ValueKind));
+            Assert.True(projectedCells.GetArrayLength() < 100 || references.GetArrayLength() > 0,
+                "An oversized matrix should either project fewer than 100 full cells or emit references for omitted cells.");
+            Assert.True(envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+            var matrixArtifactId = projected.GetProperty("matrixArtifactId").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(matrixArtifactId), "Paged recovery must identify the scope-owned matrix index artifact.");
+            Assert.Equal(JsonValueKind.Number, projected.GetProperty("continuation").ValueKind);
+            var foreign = Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(
+                root, matrixArtifactId!, "matrix-cells", owner with { Profile = "foreign-profile" }, projected.GetProperty("continuation").GetInt32()));
+            Assert.Equal("The artifact is not available in the current scope.", foreign.Message);
+            var recovered = new List<int>();
+            foreach (var reference in references.EnumerateArray())
+            {
+                var id = reference.GetProperty("artifactId").GetString();
+                Assert.False(string.IsNullOrEmpty(id));
+                var section = ArtifactReader.ReadSection(root, id, "metrics", owner);
+                Assert.IsType<ArtifactMetricsSection>(section);
+                recovered.Add(reference.GetProperty("index").GetInt32());
+            }
+
+            var cursor = projected.TryGetProperty("continuation", out var continuation) && continuation.ValueKind == JsonValueKind.Number
+                ? continuation.GetInt32()
+                : (int?)null;
+            while (cursor is { } pageCursor)
+            {
+                var page = Assert.IsType<ArtifactMatrixCellsSection>(ArtifactReader.ReadSection(
+                    root, matrixArtifactId!, "matrix-cells", owner, pageCursor));
+                var pageOutcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, page, null);
+                var pageResult = McpResultAdapter.Adapt(pageOutcome, "sqlharness_artifact", new McpResultBudget(16384, 128));
+                Assert.True(McpResultAdapter.MeasureBytes(pageResult) <= 16384);
+                var pageEnvelope = EnvelopeOf(pageResult);
+                foreach (var cellReference in pageEnvelope.GetProperty("result").GetProperty("cells").EnumerateArray())
+                {
+                    var artifactId = cellReference.GetProperty("artifactId").GetString()!;
+                    var section = ArtifactReader.ReadSection(root, artifactId, "metrics", owner);
+                    Assert.IsType<ArtifactMetricsSection>(section);
+                    recovered.Add(cellReference.GetProperty("index").GetInt32());
+                }
+                cursor = pageEnvelope.GetProperty("result").TryGetProperty("continuation", out var next) && next.ValueKind == JsonValueKind.Number
+                    ? next.GetInt32()
+                    : null;
+            }
+
+            Assert.Equal(Enumerable.Range(0, 100).Where(index => !projectedCells.EnumerateArray().Any(cell => cell.GetProperty("index").GetInt32() == index)), recovered.Order());
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(4096)]
+    [InlineData(16384)]
+    public void All_adapted_results_fit_real_wire_bytes(int maximumBytes)
+    {
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        var text = string.Concat(Enumerable.Repeat("x", maximumBytes));
+        var set = new SqlHarnessResultSetReport([new SqlHarnessColumnReport(0, "value", "text", true)], [[text]], 1, 0);
+        var report = new SqlHarnessQueryReport(target, "read-only", [set], [], 0, 1, "raw-hash", new OutputFootprint(maximumBytes, 1));
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
+
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_query", new McpResultBudget(maximumBytes));
+
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= maximumBytes,
+            $"Adapted result must fit the {maximumBytes} byte wire budget.");
+        var envelope = EnvelopeOf(result);
+        AssertValidEnvelope(envelope);
+        Assert.True(envelope.TryGetProperty("result", out _));
+    }
+
+    private static SqlHarnessCompareReport BuildCompareReport(string marker, string? artifactDirectory = null) => new(
+        new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile"),
+        1, 1, true,
+        new CompareVariantReport("baseline", new(1, 1, 1), new(1, 1, 1), new(1, 1, 1), new Dictionary<string, long>(), [], [marker]),
+        new CompareVariantReport("candidate", new(1, 1, 1), new(1, 1, 1), new(1, 1, 1), new Dictionary<string, long>(), [], []),
+        artifactDirectory)
+    {
+        Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Multiset, true, null, 0, 0),
+        Classification = new CompareClassificationReport("none", "read-only", "read-only"),
+    };
 }

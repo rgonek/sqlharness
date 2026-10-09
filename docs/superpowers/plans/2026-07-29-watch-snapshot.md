@@ -1,5 +1,7 @@
 # Watch and Snapshot Implementation Plan
 
+**Status (2026-10-08):** DONE — `watch` and `snapshot` shipped on main (0913a78, 74b69ba and neighbours, 2026-07-30). Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add bounded read-only `watch` polling and named `snapshot` comparison commands that reduce repetitive agent output while preserving SQLHarness target, safety, redaction, and gain-accounting contracts.

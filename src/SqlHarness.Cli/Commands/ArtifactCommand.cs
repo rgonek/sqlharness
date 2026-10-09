@@ -21,8 +21,12 @@ public sealed class ArtifactCommand(OutputContext output, Renderer renderer) : A
         public string? Id { get; set; }
 
         [CommandOption("--section <SECTION>")]
-        [Description("Safe section to read: summary, metrics, or operators.")]
+        [Description("Safe section to read: summary, metrics, operators, statements, or matrix-cells.")]
         public string? Section { get; set; }
+
+        [CommandOption("--cursor <INDEX>")]
+        [Description("Optional zero-based continuation cursor for matrix-cells pages.")]
+        public int? Cursor { get; set; }
 
         [CommandOption("--json")]
         [Description("Write the safe section as JSON.")]
@@ -69,12 +73,14 @@ public sealed class ArtifactCommand(OutputContext output, Renderer renderer) : A
         }
 
         if (string.IsNullOrWhiteSpace(settings.Id) || string.IsNullOrWhiteSpace(settings.Section))
-            return Invalid("artifact requires an artifact id and --section summary|metrics|operators.", mode);
+            return Invalid("artifact requires an artifact id and --section summary|metrics|operators|statements|matrix-cells.", mode);
+        if (settings.Cursor is < 0 || settings.Cursor is not null && !string.Equals(settings.Section, ArtifactReader.MatrixCellsSection, StringComparison.Ordinal))
+            return Invalid("--cursor is a nonnegative offset available only with --section matrix-cells.", mode);
 
         object result;
         try
         {
-            result = ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, settings.Id, settings.Section);
+            result = ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, settings.Id, settings.Section, cursor: settings.Cursor);
         }
         catch (ArtifactReadException exception)
         {

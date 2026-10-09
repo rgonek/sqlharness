@@ -335,11 +335,14 @@ internal interface ICompareArtifactWriter
     // to stamp the manifest. Callers always use this overload.
     string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target, ArtifactOwner? owner) =>
         Write(report, runs, target);
+
+    void WriteMatrixIndex(IReadOnlyList<CompareMatrixCellReport> cells) { }
 }
 
 internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
 {
     private readonly ArtifactDirectoryPublisher _publisher;
+    private readonly string _root;
 
     internal CompareArtifactWriter() : this(SqlHarnessPaths.CompareDir, () => DateTimeOffset.UtcNow) { }
 
@@ -358,11 +361,61 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
         Action<string, string>? moveDirectory = null,
         Action<string, string>? moveFile = null)
     {
+        _root = Path.GetFullPath(root);
         _publisher = new ArtifactDirectoryPublisher(
             root, utcNow, writeText, moveDirectory, moveFile, deleteFile, deleteDirectory);
     }
 
     public void CheckStorage() => _publisher.CheckStorage();
+
+    public void WriteMatrixIndex(IReadOnlyList<CompareMatrixCellReport> cells)
+    {
+        ArgumentNullException.ThrowIfNull(cells);
+        if (cells.Count == 0 || cells.Any(cell => string.IsNullOrWhiteSpace(cell.Compare.ArtifactDirectory)))
+            return;
+
+        var directories = cells.Select(cell => Path.GetFullPath(cell.Compare.ArtifactDirectory!)).ToArray();
+        foreach (var directory in directories)
+        {
+            if (!string.Equals(Path.GetDirectoryName(directory), _root, StringComparison.Ordinal)
+                || !Directory.Exists(directory)
+                || (File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Matrix artifact storage is unavailable.");
+        }
+
+        var firstDirectory = directories[0];
+        var manifestPath = Path.Combine(firstDirectory, "manifest.json");
+        var manifest = JsonSerializer.Deserialize<ArtifactManifest>(File.ReadAllText(manifestPath), ArtifactDirectoryPublisher.JsonOptions)
+            ?? throw new IOException("Matrix artifact storage is unavailable.");
+        var updatedManifest = manifest with
+        {
+            Sections = manifest.Sections.Append(ArtifactReader.MatrixCellsSection).Distinct(StringComparer.Ordinal).ToArray(),
+        };
+        var index = new
+        {
+            cells = cells.Select((cell, position) => new
+            {
+                index = cell.Index,
+                artifactId = Path.GetFileName(directories[position]),
+            }).ToArray(),
+        };
+
+        var indexPath = Path.Combine(firstDirectory, "matrix-cells.json");
+        var indexTemp = indexPath + ".tmp";
+        var manifestTemp = manifestPath + ".tmp";
+        try
+        {
+            _publisher.WriteText(indexTemp, JsonSerializer.Serialize(index, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
+            _publisher.WriteText(manifestTemp, JsonSerializer.Serialize(updatedManifest, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
+            File.Move(indexTemp, indexPath, overwrite: true);
+            File.Move(manifestTemp, manifestPath, overwrite: true);
+        }
+        finally
+        {
+            try { File.Delete(indexTemp); } catch (IOException) { }
+            try { File.Delete(manifestTemp); } catch (IOException) { }
+        }
+    }
 
     public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target) =>
         Write(report, runs, target, owner: null);
@@ -385,6 +438,16 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
                 JsonSerializer.Serialize(persistedReport, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
             _publisher.WriteText(Path.Combine(staging, "manifest.json"),
                 JsonSerializer.Serialize(ArtifactManifest.ForReport(persistedReport, owner), ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
+            var artifactKind = persistedReport switch
+            {
+                SqlHarnessCompareReport => ArtifactReader.CompareKind,
+                SqlHarnessMeasureReport => ArtifactReader.MeasureKind,
+                SqlHarnessMeasureSetReport => ArtifactReader.MeasureSetKind,
+                _ => throw new ArgumentOutOfRangeException(nameof(persistedReport)),
+            };
+            var statements = ArtifactStatementProjector.Project(artifactKind, runs);
+            _publisher.WriteText(Path.Combine(staging, ArtifactReader.StatementsFileName),
+                JsonSerializer.Serialize(statements, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
             for (var index = 0; index < runs.Count; index++)
             {
                 var run = runs[index];

@@ -1,5 +1,7 @@
 # Local Linux Gate and Windows+Linux CI Matrix Implementation Plan
 
+**Status (2026-10-08):** PARTIAL — Tasks 1, 2, 4 and the Task 3 parity guard are on main (merge de75431, af5cecc, bc6ffa0); the Windows+Linux matrix in `ci.yml` is withheld because of the flaky MCP host tests. The remainder is owned by `plans/032`. Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give the repository a local gate that runs the CI stages on a real case-sensitive Linux filesystem, and make GitHub Actions gate on both `ubuntu-latest` and `windows-latest`.

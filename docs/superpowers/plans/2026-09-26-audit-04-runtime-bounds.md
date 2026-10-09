@@ -1,5 +1,7 @@
 # Runtime bounds and watch Implementation Plan
 
+**Status (2026-10-08):** DONE — T1 3865a60, T2 0bc4d62/b13ed7c, T3 f0ea5ce/e304d93, T4 015d202. Niestabilność testów hosta MCP przeszła do `plans/005` (wciąż obserwowana). Checkboxy poniżej nie były odhaczane w trakcie wykonania.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Egzekwować deadline watch, ograniczyć historię i pamięć pomocniczą oraz wyjaśnić niestabilność testu procesów.

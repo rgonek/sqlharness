@@ -81,7 +81,7 @@ public static partial class McpOperationMapper
     private static readonly HashSet<string> SnapshotActions = new(StringComparer.OrdinalIgnoreCase)
         { "capture", "diff" };
     private static readonly HashSet<string> ArtifactSections = new(StringComparer.OrdinalIgnoreCase)
-        { "summary", "metrics", "operators" };
+        { "summary", "metrics", "operators", "statements", "matrix-cells" };
 
     private static readonly TimeSpan DefaultWatchInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan DefaultWatchMaxDuration = TimeSpan.FromMinutes(15);
@@ -568,15 +568,15 @@ public static partial class McpOperationMapper
         return new SqlHarnessPlanOperation(text, new OutputFootprint(bytes, lines));
     }
 
-    public static object ReadArtifactSection(McpScope scope, string? id, string? section)
+    public static object ReadArtifactSection(McpScope scope, string? id, string? section, int? cursor = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         if (section is null || !ArtifactSections.Contains(section))
-            throw new McpMappingException("Unknown artifact section. Supported sections: summary, metrics, operators.");
+            throw new McpMappingException("Unknown artifact section. Supported sections: summary, metrics, operators, statements, matrix-cells.");
         // The shared manifest reader pins ids to single directory names under
-        // the artifact root and serves only the three safe sections: no raw
+        // the artifact root and serves only scope-owned safe sections: no raw
         // plans, queries.jsonl, SQL, or snapshot cells can leave through it.
-        return ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id ?? string.Empty, section, scope.Owner);
+        return ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id ?? string.Empty, section, scope.Owner, cursor);
     }
 
     /// <summary>

@@ -1,5 +1,7 @@
 # Safe extensions and follow-up design Implementation Plan
 
+**Status (2026-10-08):** DONE — T1 b3b2d06/814267c/5b3ddd9/5ed9970/141f497/0d98173 (dalej `plans/011`), T2 845570c, T3 e268c38, T4 50ba1db/e363e3b (tylko specyfikacja; implementacja = `plans/035`), T5 be70c8f (tylko specyfikacja; implementacja = `plans/037`). Checkboxy poniżej nie były odhaczane w trakcie wykonania.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Zmniejszyć nadmiarowe blokady oraz przygotować funkcje skracające pracę agenta bez rozszerzania niejawnie uprawnień.

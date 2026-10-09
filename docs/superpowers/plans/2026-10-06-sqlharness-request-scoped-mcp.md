@@ -1,5 +1,7 @@
 # SQLHarness Request-Scoped MCP Implementation Plan
 
+**Status (2026-10-08):** DONE — request-scoped MCP on main (7f810d7, cc49f67, c2d4359; merge a0889b6). Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** Use `superpowers:executing-plans` for inline implementation, or `superpowers:subagent-driven-development` if the user chooses delegated execution. Track steps with checkboxes. This document authorizes planning only; do not commit, push, or alter clients during planning.
 
 **Goal:** A general SQL Server MCP in Codex CLI and Claude Code, with an explicitly supplied closed profile and variables per operation.

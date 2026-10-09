@@ -327,7 +327,7 @@ public class SqlParameterParserTests
         SqlParameterSecrets.AddMatrixValues(secrets, "amount:decimal(19,4)=private-audit-value,1.00");
 
         Assert.Contains("private-audit-value", secrets);
-        Assert.Contains("1", secrets);
+        Assert.DoesNotContain("1", secrets);
         Assert.Contains("1.00", secrets);
         Assert.DoesNotContain("n:int=private-audit-value", secrets);
         Assert.DoesNotContain("null", secrets);

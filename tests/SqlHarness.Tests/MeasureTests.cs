@@ -71,7 +71,7 @@ public class SqlHarnessMeasureTests
             });
         var operation = Measure(3) with
         {
-            SetupSql = "SELECT Id INTO #ids FROM dbo.Clients WHERE Created <= @AsOfDate",
+            SetupSql = "CREATE TABLE #ids (Id int); INSERT #ids (Id) SELECT Id FROM dbo.Clients WHERE Created <= @AsOfDate",
             QuerySql = "SELECT Value FROM dbo.Clients WHERE AsOf <= @AsOfDate",
             Parameters = ["AsOfDate:datetime2=2026-07-29T12:00:00"],
         };
@@ -217,14 +217,16 @@ public class SqlHarnessMeasureTests
         var session = FakeMeasureSession.Create();
         var operation = Measure(1) with
         {
-            SetupSql = "SELECT @clientid AS Id INTO #ids FROM dbo.Clients",
+            SetupSql = "CREATE TABLE #ids (Id int); INSERT #ids (Id) VALUES (@clientid)",
             Parameters = ["CLIENTID:int=42"],
         };
 
         var outcome = await Module(session).ExecuteAsync(operation);
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
-        Assert.All(session.Commands.Where(command => command.Sql == operation.SetupSql || command.Sql == operation.QuerySql),
+        Assert.All(session.Commands.Where(command =>
+                command.Sql.Contains("INSERT #ids", StringComparison.Ordinal) ||
+                command.Sql == operation.QuerySql),
             command => Assert.Equal("@CLIENTID", Assert.Single(command.Parameters).Name));
     }
 
@@ -672,9 +674,12 @@ public class SqlHarnessMeasureTests
                 StatisticsCleanupTokens.Add(ct);
                 return Task.FromResult<ISqlReader>(FakeReader.Empty());
             }
-            if (command.Sql.Contains("INTO #ids", StringComparison.Ordinal))
+            if (command.Sql.Contains("CREATE TABLE #ids", StringComparison.Ordinal) ||
+                command.Sql.Contains("INSERT #ids", StringComparison.Ordinal) ||
+                command.Sql.Contains("INTO #ids", StringComparison.Ordinal))
             {
-                Labels.Add("setup");
+                if (!command.Sql.Contains("INSERT #ids", StringComparison.Ordinal))
+                    Labels.Add("setup");
                 if (_failSetup)
                 {
                     _messages.Add("diagnostic before setup failure");

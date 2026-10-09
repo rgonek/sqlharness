@@ -58,6 +58,91 @@ public class ArtifactReaderTests
     }
 
     [Fact]
+    public void Statements_section_returns_per_statement_metrics_without_sql_text()
+    {
+        using var temp = new TempDirectory();
+        var report = CompareReport();
+        var runs = new[]
+        {
+            new CompareRunArtifact("baseline", 1, 30, 40, 0,
+                new Dictionary<string, long>(), "hash", [MultiStatementPlan()], 0),
+        };
+
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(report, runs, "wind");
+        var section = ArtifactReader.ReadSection(temp.Path, Path.GetFileName(directory), "statements");
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(section, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var statements = json.RootElement.GetProperty("statements").EnumerateArray().ToArray();
+
+        Assert.Equal(2, statements.Length);
+        Assert.Equal([0, 1], statements.Select(item => item.GetProperty("statementOrdinal").GetInt32()).ToArray());
+        Assert.Equal(30, statements.Sum(item => item.GetProperty("cpuTimeMilliseconds").GetInt64()));
+        Assert.Equal(40, statements.Sum(item => item.GetProperty("elapsedTimeMilliseconds").GetInt64()));
+        Assert.All(statements, item => Assert.Equal(64, item.GetProperty("statementHash").GetString()!.Length));
+        Assert.Equal(2, statements[0].GetProperty("degreeOfParallelism").GetInt32());
+        var statementPayload = JsonSerializer.Serialize(section);
+        Assert.Contains("Index Seek", statementPayload, StringComparison.Ordinal);
+        Assert.DoesNotContain("UPDATE dbo.SecretTable", statementPayload, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Matrix_cell_index_pages_return_safe_ids_and_a_consumable_cursor()
+    {
+        using var temp = new TempDirectory();
+        const string id = "matrix-index";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"matrix-cells\"]}");
+        File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), JsonSerializer.Serialize(new
+        {
+            cells = Enumerable.Range(0, 40).Select(index => new { index, artifactId = $"cell-{index:D3}" }).ToArray(),
+        }));
+
+        var first = ArtifactReader.ReadSection(temp.Path, id, "matrix-cells");
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(first, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        Assert.Equal(32, json.RootElement.GetProperty("cells").GetArrayLength());
+        Assert.Equal(32, json.RootElement.GetProperty("continuation").GetInt32());
+        var second = Assert.IsType<ArtifactMatrixCellsSection>(ArtifactReader.ReadSection(temp.Path, id, "matrix-cells", cursor: 32));
+        Assert.Equal(8, second.Cells.Count);
+        Assert.Null(second.Continuation);
+        Assert.Equal(Enumerable.Range(32, 8), second.Cells.Select(cell => cell.Index));
+    }
+
+    [Fact]
+    public void Statement_metrics_keep_nested_relop_counters_and_objects_with_their_owner()
+    {
+        const string plan = """
+            <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan">
+              <BatchSequence><Batch><Statements><StmtSimple StatementText="safe">
+                <QueryPlan>
+                  <RelOp NodeId="0" PhysicalOp="Nested Loops" EstimateRows="2">
+                    <RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualRows="2" ActualExecutions="1" /></RunTimeInformation>
+                    <NestedLoops>
+                      <RelOp NodeId="1" PhysicalOp="Index Seek" EstimateRows="3">
+                        <RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualRows="7" ActualExecutions="4" /></RunTimeInformation>
+                        <IndexScan><Object Table="[dbo].[Child]" Index="[IX_Child]" /></IndexScan>
+                      </RelOp>
+                    </NestedLoops>
+                  </RelOp>
+                </QueryPlan>
+              </StmtSimple></Statements></Batch></BatchSequence>
+            </ShowPlanXML>
+            """;
+
+        var statements = StatementMetricsExtractor.Extract(plan, out _);
+        var operators = Assert.Single(statements).TopOperators.ToDictionary(item => item.NodeId);
+
+        Assert.Equal(2, operators[0].ActualRows);
+        Assert.Equal(1, operators[0].Executions);
+        Assert.Null(operators[0].Object);
+        Assert.Equal(7, operators[1].ActualRows);
+        Assert.Equal(4, operators[1].Executions);
+        Assert.Equal("[dbo].[Child]", operators[1].Object);
+        Assert.Equal("[IX_Child]", operators[1].Index);
+    }
+
+    [Fact]
     public void MeasureAndMeasureSet_AllSectionsRead()
     {
         using var temp = new TempDirectory();
@@ -426,6 +511,13 @@ public class ArtifactReaderTests
 
     private static string FixturePlan() => File.ReadAllText(
         Path.Combine(AppContext.BaseDirectory, "Fixtures", "distiller-sample.sqlplan"));
+
+    private static string MultiStatementPlan() => """
+        <ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"><BatchSequence><Batch><Statements>
+        <StmtSimple StatementText="UPDATE dbo.SecretTable SET A = 1"><QueryPlan DegreeOfParallelism="2"><QueryTimeStats CpuTime="10" ElapsedTime="15"/><RelOp NodeId="0" PhysicalOp="Index Seek" EstimateRows="2"><RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualRows="4" ActualExecutions="1"/></RunTimeInformation><IndexScan><Object Table="[dbo].[SecretTable]" Index="[IX_A]"/></IndexScan></RelOp></QueryPlan></StmtSimple>
+        <StmtSimple StatementText="UPDATE dbo.SecretTable SET B = 2"><QueryPlan DegreeOfParallelism="1"><QueryTimeStats CpuTime="20" ElapsedTime="25"/><RelOp NodeId="0" PhysicalOp="Table Scan" EstimateRows="3"><RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualRows="6" ActualExecutions="2"/></RunTimeInformation><TableScan><Object Table="[dbo].[SecretTable]"/></TableScan></RelOp></QueryPlan></StmtSimple>
+        </Statements></Batch></BatchSequence></ShowPlanXML>
+        """;
 
     private static IReadOnlyDictionary<string, string> FileHashes(string directory)
     {

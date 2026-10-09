@@ -132,6 +132,6 @@ internal static class PostgresTransportPolicy
         if (text.Contains("BEGIN CERTIFICATE", StringComparison.Ordinal))
             return X509Certificate2.CreateFromPem(text);
 
-        return new X509Certificate2(bytes);
+        return X509CertificateLoader.LoadCertificate(bytes);
     }
 }

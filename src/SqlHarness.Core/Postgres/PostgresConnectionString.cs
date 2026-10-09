@@ -39,6 +39,8 @@ internal static class PostgresConnectionString
             Password = password,
             Timeout = connectTimeoutSeconds,
             SslMode = ToNpgsqlSslMode(mode),
+            // Npgsql 10 defaults this to Prefer, which can finish before the TLS handshake.
+            GssEncryptionMode = GssEncryptionMode.Disable,
         };
         if (target.Transport?.RootCertificate is { } rootCertificate)
             builder.RootCertificate = rootCertificate;

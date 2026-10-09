@@ -873,6 +873,22 @@ public class SqlSafetyTests
         Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
     }
 
+    [Fact]
+    public void T3_Compare_setup_explains_unproven_named_table_variable_without_echoing_sql_names()
+    {
+        const string sql = "DECLARE @agentInput dbo.PrivateType; INSERT @agentInput (Id) VALUES (1)";
+
+        var decision = _classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, decision.Reason);
+        Assert.Equal(
+            "NonTemporaryWrite. Table-position variables require an earlier inline TABLE declaration in the same batch. Named user-defined types are not proven as table variables. Setup variables do not cross into benchmark batches.",
+            decision.RejectionDescription);
+        Assert.DoesNotContain("agentInput", decision.RejectionDescription, StringComparison.Ordinal);
+        Assert.DoesNotContain("PrivateType", decision.RejectionDescription, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("DECLARE @v int = 1; INSERT @v (Id) VALUES (1)")]
     [InlineData("DECLARE @v int = 1; UPDATE @v SET Id = 2")]
@@ -1322,6 +1338,100 @@ public class SqlSafetyTests
             Assert.False(decision.Allowed);
             Assert.Equal(SqlSafetyReason.ParseError, decision.Reason);
         }
+    }
+
+    [Theory]
+    [InlineData("SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM dbo.Items AS item")]
+    [InlineData("SELECT item.XmlCol.query('/root/item') FROM dbo.Items AS item")]
+    [InlineData("SELECT item.XmlCol.exist('/root/item') FROM dbo.Items AS item")]
+    [InlineData("SELECT node.XmlCol.value('(/root/@id)[1]', 'int') FROM dbo.Items AS item CROSS APPLY item.XmlCol.nodes('/root/item') AS node(XmlCol)")]
+    [InlineData("DECLARE @xml xml = '<root><item id=\"1\" /></root>'; SELECT @xml.value('(/root/item/@id)[1]', 'int')")]
+    [InlineData("DECLARE @xml xml = '<root><item /></root>'; SELECT @xml.query('/root/item')")]
+    [InlineData("DECLARE @xml xml = '<root><item /></root>'; SELECT @xml.exist('/root/item')")]
+    [InlineData("DECLARE @xml xml = '<root><item id=\"1\" /></root>'; SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM @xml.nodes('/root/item') AS item(XmlCol)")]
+    public void Query_allows_read_only_XML_methods_on_columns_and_variables(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.False(decision.HasMutation);
+        Assert.False(decision.HasSessionLocalWork);
+    }
+
+    [Fact]
+    public void XML_method_resolution_does_not_hide_three_part_database_references()
+    {
+        var decision = ClassifyQuery("SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM otherdb.dbo.Items AS item");
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.CrossDatabaseReference, decision.Reason);
+    }
+
+    [Theory]
+    [InlineData("WITH Cte AS (SELECT 1 AS Id FROM dbo.Items AS otherdb) SELECT 1 FROM Cte CROSS APPLY otherdb.dbo.nodes('/root/item') AS n(x)")]
+    [InlineData("SELECT otherdb.Id FROM dbo.Items AS otherdb UNION ALL SELECT 1 FROM otherdb.dbo.nodes('/root/item') AS n(x)")]
+    public void XML_nodes_resolution_does_not_reuse_aliases_from_other_query_blocks(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.CrossDatabaseReference, decision.Reason);
+    }
+
+    [Fact]
+    public void XML_method_support_does_not_allow_persistent_writes()
+    {
+        var decision = ClassifyQuery("UPDATE dbo.Items SET XmlCol = XmlCol.query('/root/item')");
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, decision.Reason);
+    }
+
+    [Theory]
+    [InlineData("WITH [#x] AS (SELECT Id, Active FROM dbo.Clients) UPDATE [#x] SET Active = 0")]
+    [InlineData("WITH #x AS (SELECT Id, Active FROM dbo.Clients) UPDATE #x SET Active = 0")]
+    [InlineData("WITH #x AS (SELECT Id FROM dbo.Clients) DELETE #x")]
+    [InlineData("WITH #x AS (SELECT TOP (10) Id FROM dbo.Clients) DELETE TOP (1) FROM #x")]
+    [InlineData("WITH #x AS (SELECT Id FROM dbo.Clients) INSERT INTO #x (Id) VALUES (1)")]
+    [InlineData("WITH #x AS (SELECT Id, Active FROM dbo.Clients) MERGE #x AS t USING (SELECT 1 AS Id) AS s ON t.Id = s.Id WHEN MATCHED THEN UPDATE SET Active = 0;")]
+    [InlineData("WITH #x AS (SELECT Id FROM dbo.Clients) SELECT Id FROM #x")]
+    [InlineData("CREATE TABLE #log (Id int); WITH #x AS (SELECT Id FROM dbo.Clients) INSERT #log (Id) SELECT d.Id FROM (DELETE #x OUTPUT deleted.Id) AS d (Id)")]
+    public void HashNamedCteCannotStandInForTempTable(string sql)
+    {
+        var denied = ClassifyQuery(sql);
+        Assert.False(denied.Allowed, denied.RejectionDescription);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, denied.Reason);
+
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.False(approved.Allowed, approved.RejectionDescription);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, approved.Reason);
+
+        Assert.False(_classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null).Allowed);
+    }
+
+    [Fact]
+    public void OrdinarilyNamedCteUpdateStillRequiresApproval()
+    {
+        const string sql = "WITH x AS (SELECT Id, Active FROM dbo.Clients) UPDATE x SET Active = 0";
+
+        var denied = ClassifyQuery(sql);
+        Assert.False(denied.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, denied.Reason);
+        Assert.False(denied.HasMutation);
+
+        var allowed = _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: true, confirmDatabase: "db");
+        Assert.True(allowed.Allowed, allowed.RejectionDescription);
+        Assert.True(allowed.HasMutation);
+    }
+
+    [Theory]
+    [InlineData("DECLARE @c CURSOR")]
+    [InlineData("DECLARE @c CURSOR; SELECT 1")]
+    public void CursorDeclarationIsNotScalar(string sql)
+    {
+        var decision = ClassifyQuery(sql);
+        Assert.False(decision.Allowed, decision.RejectionDescription);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
     }
 
     private SqlSafetyDecision ClassifyQuery(string sql) =>

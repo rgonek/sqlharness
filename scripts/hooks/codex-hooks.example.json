@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.codex/hooks/protect_sqlharness_config.py --client codex",
+            "commandWindows": "py -3 \"%USERPROFILE%\\.codex\\hooks\\protect_sqlharness_config.py\" --client codex",
+            "timeout": 5,
+            "statusMessage": "Checking SQLHarness config read"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 # SQLHarness — plan realizacji audytu 2026-09-26
 
-**Status:** plany zapisane; implementacja nierozpoczęta. Zapis planów nie oznacza wykonania napraw ani zgody na operacje na bazach.
+**Status (2026-10-08):** plany 01–07 wykonane (szczegóły i commity w nagłówku każdego planu); 08 TODO. Pierwotny status: plany zapisane; implementacja nierozpoczęta. Zapis planów nie oznacza wykonania napraw ani zgody na operacje na bazach.
 
 **Źródło:** [pełny audyt i archiwum prób offline](../specs/2026-09-26-project-audit.md), commit `5e655942f4f99f6c84ae47a86ac210c19434b541`.
 

@@ -1,5 +1,7 @@
 # Parameter Matrix Implementation Plan
 
+**Status (2026-10-08):** DONE — `compare --matrix` shipped on main (0164089..062d025, 2026-09-23); typed model reworked by `plans/012`. Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Run one `compare` operation sequentially across several typed values of one parameter, with a fresh SQL session and setup per value.

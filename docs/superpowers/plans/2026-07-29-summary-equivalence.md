@@ -1,5 +1,7 @@
 # Summary and Equivalence Implementation Plan
 
+**Status (2026-10-08):** DONE — `--compare-results` modes and `--json-summary` shipped on main (4c44957, 7e7b8b4 and neighbours). Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add explicit technical-equivalence modes and a bounded JSON summary while preserving full JSON and artifact detail.

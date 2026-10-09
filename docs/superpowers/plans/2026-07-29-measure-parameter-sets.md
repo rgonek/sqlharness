@@ -1,5 +1,7 @@
 # Measure Parameter Sets Implementation Plan
 
+**Status (2026-10-08):** DONE — `measure --param-set` shipped on main (266272b, 2026-09-25; later hardening b2090bb). Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Extend `measure` to execute at least two named multi-parameter sets in one verified session with setup once, rotated measured order, per-set stability, and no copied parameter values.

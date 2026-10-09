@@ -216,6 +216,12 @@ public sealed class McpLifecycleTests
         var queryError = Envelope(busyQuery).GetProperty("error").GetRawText();
         Assert.Equal(measureError, queryError);
 
+        // The hint names the tool that holds the slot, not the rejected one.
+        const string expectedHint =
+            "One database operation runs per process. Wait for the running sqlharness_query call to return, then send the next call.";
+        Assert.Equal(expectedHint, Envelope(busyMeasure).GetProperty("error").GetProperty("hint").GetString());
+        Assert.Equal(expectedHint, Envelope(busyQuery).GetProperty("error").GetProperty("hint").GetString());
+
         release.TrySetResult();
         Assert.False((await first).IsError == true);
 
@@ -223,6 +229,26 @@ public sealed class McpLifecycleTests
         var next = await handlers.QueryAsync(null!, "SELECT 4", ct: cts.Token);
         Assert.False(next.IsError == true, Text(next));
         Assert.Equal(2, module.Operations.Count);
+    }
+
+    [Fact]
+    public void Busy_hint_falls_back_to_generic_text_when_no_holder_is_recorded()
+    {
+        var gate = new McpExecutionGate();
+        Assert.True(gate.TryEnterDb());
+        Assert.Null(gate.RunningTool);
+
+        var result = McpExecutionGate.BusyResult("sqlharness_query", runningTool: gate.RunningTool);
+        Assert.Equal(
+            "One database operation runs per process. Wait for the running database call to return, then send the next call.",
+            Envelope(result).GetProperty("error").GetProperty("hint").GetString());
+
+        gate.ExitDb();
+        Assert.Null(gate.RunningTool);
+        Assert.True(gate.TryEnterDb("sqlharness_watch"));
+        Assert.Equal("sqlharness_watch", gate.RunningTool);
+        gate.ExitDb();
+        Assert.Null(gate.RunningTool);
     }
 
     [Fact]

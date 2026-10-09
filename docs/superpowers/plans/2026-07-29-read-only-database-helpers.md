@@ -1,5 +1,7 @@
 # Read-Only Database Helpers Implementation Plan
 
+**Status (2026-10-08):** DONE — `ping`, `counts`, `schema --object` shipped on main (f5d873d..6193de2). Checkboxes below were not maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add `ping`, approximate-or-exact `counts`, and exact `schema --object` inspection as compact read-only alternatives to recurring agent-authored SQL.

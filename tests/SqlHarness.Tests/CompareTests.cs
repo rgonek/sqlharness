@@ -123,7 +123,7 @@ public class SqlHarnessCompareTests
             });
         var operation = Compare(repeat: 3) with
         {
-            SetupSql = "SELECT Id INTO #ids FROM dbo.Clients WHERE Created <= @AsOfDate",
+            SetupSql = "CREATE TABLE #ids (Id int); INSERT #ids (Id) SELECT Id FROM dbo.Clients WHERE Created <= @AsOfDate",
             BaselineSql = "SELECT Value FROM dbo.Clients WHERE AsOf <= @AsOfDate",
             CandidateSql = "SELECT Value FROM dbo.Clients WHERE AsOf <= @AsOfDate -- candidate",
             Parameters = ["AsOfDate:datetime2=2026-07-29T12:00:00"],
@@ -367,15 +367,14 @@ public class SqlHarnessCompareTests
         var session = FakeCompareSession.Create();
         var operation = Compare(repeat: 1) with
         {
-            SetupSql = "SELECT @clientid AS Id INTO #ids FROM dbo.Clients",
+            SetupSql = "CREATE TABLE #ids (Id int); INSERT #ids (Id) VALUES (@clientid)",
             Parameters = ["CLIENTID:int=42"],
         };
 
         var outcome = await Module(session).ExecuteAsync(operation);
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
-        var setup = Assert.Single(session.Commands, command => command.Sql == operation.SetupSql);
-        Assert.Equal(operation.SetupSql, setup.Sql);
+        var setup = Assert.Single(session.Commands, command => command.Sql.Contains("INSERT #ids", StringComparison.Ordinal));
         Assert.Equal("@CLIENTID", Assert.Single(setup.Parameters).Name);
     }
 
@@ -548,6 +547,33 @@ public class SqlHarnessCompareTests
             "Invalid value for SQL parameter 'n' of type 'int'.",
             "private-audit-value",
             "n:int=private-audit-value");
+    }
+
+    [Fact]
+    public async Task Compare_rejects_setup_only_variable_before_connect_with_generic_diagnostic()
+    {
+        var session = FakeCompareSession.Create();
+        const string variable = "privateSetupVariableSentinel";
+        const string value = "privateSetupValueSentinel";
+        var operation = Compare(1) with
+        {
+            SetupSql = $"DECLARE @{variable} int = 73195; SELECT '{value}'",
+            BaselineSql = $"SELECT @{variable}; DECLARE @{variable} int = 2;",
+            CandidateSql = "SELECT 1",
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal(0, session.FactoryOpenCount);
+        Assert.Contains(
+            "A variable declared in setup is referenced by a benchmark batch. Setup variables do not cross into benchmark batches.",
+            outcome.SafeError,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(variable, outcome.SafeError, StringComparison.Ordinal);
+        Assert.DoesNotContain(value, outcome.SafeError, StringComparison.Ordinal);
+        Assert.DoesNotContain("73195", outcome.SafeError, StringComparison.Ordinal);
+        Assert.DoesNotContain("SELECT", outcome.SafeError, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -880,9 +906,12 @@ public class SqlHarnessCompareTests
                 StatisticsCleanupTokens.Add(ct);
                 return Task.FromResult<ISqlReader>(FakeReader.Empty());
             }
-            if (command.Sql.Contains("INTO #ids", StringComparison.Ordinal))
+            if (command.Sql.Contains("CREATE TABLE #ids", StringComparison.Ordinal) ||
+                command.Sql.Contains("INSERT #ids", StringComparison.Ordinal) ||
+                command.Sql.Contains("INTO #ids", StringComparison.Ordinal))
             {
-                Labels.Add("setup");
+                if (!command.Sql.Contains("INSERT #ids", StringComparison.Ordinal))
+                    Labels.Add("setup");
                 return Task.FromResult<ISqlReader>(_includeSetupResult
                     ? FakeReader.Single(["SetupValue"], ["setup-result-value"])
                     : FakeReader.Empty());

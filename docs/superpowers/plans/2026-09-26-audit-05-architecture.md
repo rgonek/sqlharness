@@ -1,5 +1,7 @@
 # Architecture consolidation Implementation Plan
 
+**Status (2026-10-08):** DONE — T1 1db723e, T2 c3ecffa + [ADR T2](2026-09-26-audit-05-architecture-adr-t2-typed-result.md), T3 4710313. Checkboxy poniżej nie były odhaczane w trakcie wykonania.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Usunąć rozproszone reguły i powtarzalną infrastrukturę bez mnożenia abstrakcji ani zmiany semantyki komend.
