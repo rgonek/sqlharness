@@ -266,6 +266,14 @@ internal sealed class SqlSafetyClassifier
             return Denied(SqlSafetyReason.UnsupportedStatement);
         }
 
+        // 023: GO is a client-tool separator; SQLHarness sends the text as one
+        // batch, so classifying it as several batches would describe SQL the
+        // server never runs.
+        if (script.Batches.Count(batch => batch.Statements.Count > 0) > 1)
+        {
+            return Denied(SqlSafetyReason.UnsupportedStatement, "Batch separators (GO) are not supported; send a single batch.");
+        }
+
         return usage switch
         {
             SqlUsage.Query => ClassifyQuery(script.Batches, inspection, database, allowMutation, confirmDatabase),

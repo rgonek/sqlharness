@@ -122,20 +122,24 @@ public class SqlParameterReferenceValidatorTests
     [Fact]
     public void T3b_Validation_report_requires_a_parameter_named_like_another_batch_table_variable()
     {
+        // 023: two non-empty batches are unsupported before the missing-parameter check.
         const string sql = "DECLARE @t TABLE (Id int);\nGO\nSELECT Id FROM dbo.Clients WHERE Id = @t";
 
         var missing = ValidateOffline(sql);
 
         Assert.False(missing.Allowed);
-        Assert.Equal("missing_parameters", missing.Reason);
-        Assert.Equal(["t"], missing.RequiredParameters);
-        Assert.Equal(["t"], missing.MissingParameters);
+        Assert.Equal("rejected", missing.Classification);
+        Assert.Equal("unsupported_statement", missing.Reason);
+        Assert.Empty(missing.MissingParameters);
+        Assert.False(missing.Executed);
 
         var supplied = ValidateOffline(sql, "t:int=1");
 
-        Assert.True(supplied.Allowed, supplied.Reason);
-        Assert.Equal(["t"], supplied.RequiredParameters);
+        Assert.False(supplied.Allowed);
+        Assert.Equal("rejected", supplied.Classification);
+        Assert.Equal("unsupported_statement", supplied.Reason);
         Assert.Empty(supplied.MissingParameters);
+        Assert.False(supplied.Executed);
     }
 
     [Fact]
