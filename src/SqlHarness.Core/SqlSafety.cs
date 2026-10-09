@@ -192,6 +192,46 @@ internal sealed class SqlSafetyClassifier
     private const string UnprovenTableVariableDetail =
         "Table-position variables require an earlier inline TABLE declaration in the same batch. Named user-defined types are not proven as table variables. Setup variables do not cross into benchmark batches.";
 
+    // 018: concrete table sources that stay inside a read-only statement.
+    internal static readonly IReadOnlySet<Type> AllowedTableReferenceTypes = new HashSet<Type>
+    {
+        typeof(NamedTableReference),
+        typeof(VariableTableReference),
+        typeof(QueryDerivedTable),
+        typeof(InlineDerivedTable),
+        typeof(QualifiedJoin),
+        typeof(UnqualifiedJoin),
+        typeof(JoinParenthesisTableReference),
+        typeof(OdbcQualifiedJoinTableReference),
+        typeof(PivotedTableReference),
+        typeof(UnpivotedTableReference),
+        typeof(SchemaObjectFunctionTableReference),
+        typeof(BuiltInFunctionTableReference),
+        typeof(GlobalFunctionTableReference),
+        typeof(OpenJsonTableReference),
+        typeof(FullTextTableReference),
+        typeof(SemanticTableReference),
+        typeof(ChangeTableChangesTableReference),
+        typeof(ChangeTableVersionTableReference),
+        typeof(DataModificationTableReference),
+        typeof(VariableMethodCallTableReference),
+    };
+
+    // 018: concrete ScriptDom calls named here, not discovered at runtime.
+    // Narrowest common base is PrimaryExpression.
+    internal static readonly IReadOnlySet<Type> DeniedExpressionTypes = new HashSet<Type>
+    {
+        typeof(AIAnalyzeSentimentFunctionCall),
+        typeof(AIClassifyFunctionCall),
+        typeof(AIExtractFunctionCall),
+        typeof(AIFixGrammarFunctionCall),
+        typeof(AIGenerateEmbeddingsFunctionCall),
+        typeof(AIGenerateResponseFunctionCall),
+        typeof(AISummarizeFunctionCall),
+        typeof(AITranslateFunctionCall),
+        typeof(InvokeExternalApiFunctionCall),
+    };
+
     internal SqlSafetyDecision Classify(
         string sql,
         SqlUsage usage,
@@ -893,6 +933,17 @@ internal sealed class SqlSafetyClassifier
         private readonly Stack<HashSet<string>> _queryAliases = new();
         private readonly Stack<SchemaObjectName> _xmlMethodNames = new();
 
+        // 018: two-part sys.<name> stays the tuple match. The same four base names,
+        // compared OrdinalIgnoreCase, also deny a one-part reference and a
+        // built-in or global ::<name>. Any other schema, including dbo, stays allowed.
+        private static readonly (string Schema, string Name)[] ServerFilesystemFunctions =
+        {
+            ("sys", "fn_get_audit_file"),
+            ("sys", "fn_xe_file_target_read_file"),
+            ("sys", "fn_trace_gettable"),
+            ("sys", "dm_os_enumerate_filesystem"),
+        };
+
         internal bool HasCrossDatabaseReference { get; private set; }
         internal bool HasExternalAccess { get; private set; }
         internal bool HasStatefulExpression { get; private set; }
@@ -963,10 +1014,72 @@ internal sealed class SqlSafetyClassifier
             if (isXmlNodesMethod)
                 _xmlMethodNames.Push(name!);
 
+            // 018: server-filesystem TVFs. Push/pop of the XML .nodes() name stays around the walk.
+            if (IsServerFilesystemFunction(name))
+                HasExternalAccess = true;
+
             base.ExplicitVisit(node);
 
             if (isXmlNodesMethod)
                 _xmlMethodNames.Pop();
+        }
+
+        // 018: ::fn_trace_gettable(...) is a BuiltInFunctionTableReference. The type stays
+        // on the table-source allow-list; only the four filesystem names are external.
+        public override void ExplicitVisit(BuiltInFunctionTableReference node)
+        {
+            if (IsServerFilesystemBaseName(node.Name?.Value))
+                HasExternalAccess = true;
+
+            base.ExplicitVisit(node);
+        }
+
+        public override void ExplicitVisit(GlobalFunctionTableReference node)
+        {
+            if (IsServerFilesystemBaseName(node.Name?.Value))
+                HasExternalAccess = true;
+
+            base.ExplicitVisit(node);
+        }
+
+        private static bool IsServerFilesystemFunction(SchemaObjectName? name)
+        {
+            if (name is null)
+                return false;
+
+            // One-part has no schema. dbo.fn_trace_gettable is two-part and is not this branch.
+            if (name.Identifiers.Count == 1)
+                return IsServerFilesystemBaseName(name.BaseIdentifier.Value);
+
+            if (name.Identifiers.Count != 2 || name.SchemaIdentifier is null)
+                return false;
+
+            var schema = name.SchemaIdentifier.Value;
+            var baseName = name.BaseIdentifier.Value;
+            foreach (var (functionSchema, functionName) in ServerFilesystemFunctions)
+            {
+                if (string.Equals(schema, functionSchema, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(baseName, functionName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsServerFilesystemBaseName(string? baseName)
+        {
+            if (baseName is null)
+                return false;
+
+            foreach (var (_, functionName) in ServerFilesystemFunctions)
+            {
+                if (string.Equals(baseName, functionName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
         }
 
         public override void ExplicitVisit(SchemaObjectName node)
@@ -979,6 +1092,32 @@ internal sealed class SqlSafetyClassifier
             }
 
             base.ExplicitVisit(node);
+        }
+
+        // 018: a scalar call db.schema.fn(...) carries its database in the call
+        // target, not in a SchemaObjectName.
+        public override void ExplicitVisit(FunctionCall node)
+        {
+            if (node.CallTarget is MultiPartIdentifierCallTarget { MultiPartIdentifier.Identifiers.Count: >= 2 })
+                HasCrossDatabaseReference = true;
+            base.ExplicitVisit(node);
+        }
+
+        // 018: AI_* and INVOKE_EXTERNAL_API share PrimaryExpression. Ordinary calls are not in the set.
+        public override void Visit(PrimaryExpression node)
+        {
+            if (DeniedExpressionTypes.Contains(node.GetType()))
+                HasExternalAccess = true;
+            base.Visit(node);
+        }
+
+        // 018: table sources are an allow-list. A type ScriptDom adds later is
+        // external until someone classifies it (see SqlSafetyNodeCoverageTests).
+        public override void Visit(TableReference node)
+        {
+            if (!AllowedTableReferenceTypes.Contains(node.GetType()))
+                HasExternalAccess = true;
+            base.Visit(node);
         }
 
         public override void ExplicitVisit(OpenRowsetTableReference node)

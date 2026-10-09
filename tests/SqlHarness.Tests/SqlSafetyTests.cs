@@ -1341,14 +1341,9 @@ public class SqlSafetyTests
     }
 
     [Theory]
-    [InlineData("SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM dbo.Items AS item")]
-    [InlineData("SELECT item.XmlCol.query('/root/item') FROM dbo.Items AS item")]
-    [InlineData("SELECT item.XmlCol.exist('/root/item') FROM dbo.Items AS item")]
-    [InlineData("SELECT node.XmlCol.value('(/root/@id)[1]', 'int') FROM dbo.Items AS item CROSS APPLY item.XmlCol.nodes('/root/item') AS node(XmlCol)")]
     [InlineData("DECLARE @xml xml = '<root><item id=\"1\" /></root>'; SELECT @xml.value('(/root/item/@id)[1]', 'int')")]
     [InlineData("DECLARE @xml xml = '<root><item /></root>'; SELECT @xml.query('/root/item')")]
     [InlineData("DECLARE @xml xml = '<root><item /></root>'; SELECT @xml.exist('/root/item')")]
-    [InlineData("DECLARE @xml xml = '<root><item id=\"1\" /></root>'; SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM @xml.nodes('/root/item') AS item(XmlCol)")]
     public void Query_allows_read_only_XML_methods_on_columns_and_variables(string sql)
     {
         var decision = ClassifyQuery(sql);
@@ -1432,6 +1427,145 @@ public class SqlSafetyTests
         var decision = ClassifyQuery(sql);
         Assert.False(decision.Allowed, decision.RejectionDescription);
         Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    // 018: OpenRowsetCosmos and the AI calls TSql170 builds sit outside the
+    // four external table-source overrides.
+    [Theory]
+    [InlineData("SELECT * FROM OPENROWSET(PROVIDER = 'CosmosDB', CONNECTION = 'Account=x;Database=y', OBJECT = 'c') AS r", false)]
+    [InlineData("SELECT * FROM OPENROWSET(PROVIDER = 'CosmosDB', CONNECTION = 'Account=x;Database=y', OBJECT = 'c') AS r", true)]
+    [InlineData("SELECT AI_GENERATE_EMBEDDINGS(N'text' USE MODEL MyModel)", false)]
+    [InlineData("SELECT AI_GENERATE_EMBEDDINGS(N'text' USE MODEL MyModel)", true)]
+    [InlineData("SELECT * FROM AI_GENERATE_CHUNKS(SOURCE = N'text', CHUNK_TYPE = FIXED, CHUNK_SIZE = 10) AS c", false)]
+    [InlineData("SELECT * FROM AI_GENERATE_CHUNKS(SOURCE = N'text', CHUNK_TYPE = FIXED, CHUNK_SIZE = 10) AS c", true)]
+    public void External_sources_outside_the_classic_four_are_denied(string sql, bool compareSetup)
+    {
+        var usage = compareSetup ? SqlUsage.CompareSetup : SqlUsage.Query;
+        var decision = _classifier.Classify(sql, usage, "db", false, null);
+
+        Assert.False(decision.Allowed, decision.Reason.ToString());
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    // 018: server-filesystem TVFs. Two-part sys.<name>, one-part <name>, and ::<name>.
+    // The table-source type itself stays allowed. :: parses as BuiltInFunctionTableReference.
+    [Theory]
+    [InlineData("SELECT * FROM sys.fn_get_audit_file(N'a', DEFAULT, DEFAULT)", false)]
+    [InlineData("SELECT * FROM sys.fn_get_audit_file(N'a', DEFAULT, DEFAULT)", true)]
+    [InlineData("SELECT * FROM sys.fn_xe_file_target_read_file(N'a', NULL, NULL, NULL)", false)]
+    [InlineData("SELECT * FROM sys.fn_xe_file_target_read_file(N'a', NULL, NULL, NULL)", true)]
+    [InlineData("SELECT * FROM sys.fn_trace_gettable(N'a', DEFAULT)", false)]
+    [InlineData("SELECT * FROM sys.fn_trace_gettable(N'a', DEFAULT)", true)]
+    [InlineData("SELECT * FROM sys.dm_os_enumerate_filesystem(N'a', N'*')", false)]
+    [InlineData("SELECT * FROM sys.dm_os_enumerate_filesystem(N'a', N'*')", true)]
+    [InlineData("SELECT * FROM fn_get_audit_file(N'a', DEFAULT, DEFAULT)", false)]
+    [InlineData("SELECT * FROM fn_get_audit_file(N'a', DEFAULT, DEFAULT)", true)]
+    [InlineData("SELECT * FROM ::fn_get_audit_file(N'a', DEFAULT, DEFAULT)", false)]
+    [InlineData("SELECT * FROM ::fn_get_audit_file(N'a', DEFAULT, DEFAULT)", true)]
+    [InlineData("SELECT * FROM fn_xe_file_target_read_file(N'a', NULL, NULL, NULL)", false)]
+    [InlineData("SELECT * FROM fn_xe_file_target_read_file(N'a', NULL, NULL, NULL)", true)]
+    [InlineData("SELECT * FROM ::fn_xe_file_target_read_file(N'a', NULL, NULL, NULL)", false)]
+    [InlineData("SELECT * FROM ::fn_xe_file_target_read_file(N'a', NULL, NULL, NULL)", true)]
+    [InlineData("SELECT * FROM fn_trace_gettable(N'c:\\t.trc', DEFAULT)", false)]
+    [InlineData("SELECT * FROM fn_trace_gettable(N'c:\\t.trc', DEFAULT)", true)]
+    [InlineData("SELECT * FROM ::fn_trace_gettable(N'c:\\t.trc', DEFAULT)", false)]
+    [InlineData("SELECT * FROM ::fn_trace_gettable(N'c:\\t.trc', DEFAULT)", true)]
+    [InlineData("SELECT * FROM dm_os_enumerate_filesystem(N'a', N'*')", false)]
+    [InlineData("SELECT * FROM dm_os_enumerate_filesystem(N'a', N'*')", true)]
+    [InlineData("SELECT * FROM ::dm_os_enumerate_filesystem(N'a', N'*')", false)]
+    [InlineData("SELECT * FROM ::dm_os_enumerate_filesystem(N'a', N'*')", true)]
+    public void Server_filesystem_tvfs_are_denied(string sql, bool compareSetup)
+    {
+        var usage = compareSetup ? SqlUsage.CompareSetup : SqlUsage.Query;
+        var decision = _classifier.Classify(sql, usage, "db", false, null);
+
+        Assert.False(decision.Allowed, decision.Reason.ToString());
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    // 018: a schema other than sys is not the filesystem deny. Query only.
+    [Fact]
+    public void Dbo_qualified_fn_trace_gettable_stays_allowed()
+    {
+        const string sql = "SELECT * FROM dbo.fn_trace_gettable(N'c:\\t.trc', DEFAULT)";
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "db", false, null);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+    }
+
+    // 018: otherdb.dbo.fn(...) and otherdb..fn(...) put the database on the
+    // scalar call target, not on a SchemaObjectName the cross-database check sees.
+    [Theory]
+    [InlineData("SELECT otherdb.dbo.fn_x(1)", false)]
+    [InlineData("SELECT otherdb.dbo.fn_x(1)", true)]
+    [InlineData("SELECT Id FROM dbo.Clients WHERE otherdb.dbo.fn_x(Id) = 1", false)]
+    [InlineData("SELECT Id FROM dbo.Clients WHERE otherdb.dbo.fn_x(Id) = 1", true)]
+    [InlineData("SELECT otherdb..fn_x(1)", false)]
+    [InlineData("SELECT otherdb..fn_x(1)", true)]
+    public void Three_part_scalar_function_calls_are_cross_database(string sql, bool compareSetup)
+    {
+        var usage = compareSetup ? SqlUsage.CompareSetup : SqlUsage.Query;
+        var decision = _classifier.Classify(sql, usage, "db", false, null);
+
+        Assert.False(decision.Allowed, decision.Reason.ToString());
+        Assert.Equal(SqlSafetyReason.CrossDatabaseReference, decision.Reason);
+    }
+
+    // 018: two-part and built-in scalar calls stay local. Query only.
+    [Theory]
+    [InlineData("SELECT dbo.fn_x(1)")]
+    [InlineData("SELECT LEN(N'x')")]
+    [InlineData("SELECT Id FROM dbo.Clients WHERE dbo.fn_x(Id) = 1")]
+    public void Two_part_and_builtin_function_calls_stay_allowed(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "db", false, null);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+    }
+
+    // 018: alias-qualified CLR UDT methods share the two-part call target
+    // with db.schema.fn(...), so they are denied as cross-database.
+    [Theory]
+    [InlineData("SELECT t.Shape.STArea() FROM dbo.Places AS t", false)]
+    [InlineData("SELECT t.Shape.STArea() FROM dbo.Places AS t", true)]
+    public void Alias_qualified_udt_method_calls_are_denied_as_cross_database(string sql, bool compareSetup)
+    {
+        var usage = compareSetup ? SqlUsage.CompareSetup : SqlUsage.Query;
+        var decision = _classifier.Classify(sql, usage, "db", false, null);
+
+        Assert.False(decision.Allowed, decision.Reason.ToString());
+        Assert.Equal(SqlSafetyReason.CrossDatabaseReference, decision.Reason);
+    }
+
+    // 018: an unqualified UDT method is a one-part call and stays allowed.
+    [Fact]
+    public void Unqualified_udt_method_calls_stay_allowed()
+    {
+        const string sql = "SELECT Shape.STArea() FROM dbo.Places";
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "db", false, null);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+    }
+
+    // 018: alias.column.value/query/exist is the same call-target shape as db.schema.fn.
+    [Theory]
+    [InlineData("SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM dbo.Items AS item", false)]
+    [InlineData("SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM dbo.Items AS item", true)]
+    [InlineData("SELECT item.XmlCol.query('/root/item') FROM dbo.Items AS item", false)]
+    [InlineData("SELECT item.XmlCol.query('/root/item') FROM dbo.Items AS item", true)]
+    [InlineData("SELECT item.XmlCol.exist('/root/item') FROM dbo.Items AS item", false)]
+    [InlineData("SELECT item.XmlCol.exist('/root/item') FROM dbo.Items AS item", true)]
+    [InlineData("SELECT node.XmlCol.value('(/root/@id)[1]', 'int') FROM dbo.Items AS item CROSS APPLY item.XmlCol.nodes('/root/item') AS node(XmlCol)", false)]
+    [InlineData("SELECT node.XmlCol.value('(/root/@id)[1]', 'int') FROM dbo.Items AS item CROSS APPLY item.XmlCol.nodes('/root/item') AS node(XmlCol)", true)]
+    [InlineData("DECLARE @xml xml = '<root><item id=\"1\" /></root>'; SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM @xml.nodes('/root/item') AS item(XmlCol)", false)]
+    [InlineData("DECLARE @xml xml = '<root><item id=\"1\" /></root>'; SELECT item.XmlCol.value('(/root/@id)[1]', 'int') FROM @xml.nodes('/root/item') AS item(XmlCol)", true)]
+    public void Alias_qualified_xml_methods_are_denied_as_cross_database(string sql, bool compareSetup)
+    {
+        var usage = compareSetup ? SqlUsage.CompareSetup : SqlUsage.Query;
+        var decision = _classifier.Classify(sql, usage, "db", false, null);
+
+        Assert.False(decision.Allowed, decision.Reason.ToString());
+        Assert.Equal(SqlSafetyReason.CrossDatabaseReference, decision.Reason);
     }
 
     private SqlSafetyDecision ClassifyQuery(string sql) =>
