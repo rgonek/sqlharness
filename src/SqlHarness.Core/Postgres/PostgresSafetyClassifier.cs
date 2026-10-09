@@ -12,13 +12,27 @@ internal sealed class PostgresSafetyClassifier
     {
         "nextval",
         "setval",
-        "pg_sleep",
         "pg_read_file",
         "pg_ls_dir",
         "lo_import",
         "set_config",
         "pg_cancel_backend",
         "pg_terminate_backend",
+        // 019: SQL-string executors run unclassified text; the other names are admin and WAL calls.
+        "query_to_xml",
+        "query_to_xmlschema",
+        "query_to_xml_and_xmlschema",
+        "cursor_to_xml",
+        "cursor_to_xmlschema",
+        "ts_stat",
+        "pg_notify",
+        "pg_stat_file",
+        "pg_reload_conf",
+        "pg_rotate_logfile",
+        "pg_switch_wal",
+        "pg_create_restore_point",
+        "pg_drop_replication_slot",
+        "pg_logical_emit_message",
     };
 
     internal SqlSafetyDecision Classify(
@@ -913,12 +927,19 @@ internal sealed class PostgresSafetyClassifier
             if (DeniedExactFunctions.Contains(functionName))
                 return true;
 
-            return functionName.StartsWith("dblink", StringComparison.OrdinalIgnoreCase)
-                || functionName.StartsWith("pg_read_", StringComparison.OrdinalIgnoreCase)
-                || functionName.StartsWith("pg_ls_", StringComparison.OrdinalIgnoreCase)
-                || functionName.StartsWith("lo_", StringComparison.OrdinalIgnoreCase)
-                || functionName.StartsWith("pg_advisory_", StringComparison.OrdinalIgnoreCase)
-                || functionName.StartsWith("pg_try_advisory_", StringComparison.OrdinalIgnoreCase);
+            return HasDeniedPrefix(functionName, "dblink")
+                || HasDeniedPrefix(functionName, "pg_read_")
+                || HasDeniedPrefix(functionName, "pg_ls_")
+                || HasDeniedPrefix(functionName, "lo_")
+                || HasDeniedPrefix(functionName, "pg_advisory_")
+                || HasDeniedPrefix(functionName, "pg_try_advisory_")
+                || HasDeniedPrefix(functionName, "pg_sleep")
+                || HasDeniedPrefix(functionName, "pg_stat_reset")
+                || HasDeniedPrefix(functionName, "pg_create_")
+                || HasDeniedPrefix(functionName, "pg_replication_origin_");
+
+            static bool HasDeniedPrefix(string functionName, string prefix) =>
+                functionName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
         }
     }
 }
