@@ -112,6 +112,10 @@ public static class OperationLimits
         {
             return false;
         }
+        catch (ArgumentOutOfRangeException)
+        {
+            return false;
+        }
 
         if (!IsWatchDuration(duration))
         {
