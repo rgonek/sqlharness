@@ -112,6 +112,7 @@ public static class OperationLimits
         {
             return false;
         }
+        // .NET 10's long TimeSpan.FromSeconds / FromMinutes / FromHours overloads throw ArgumentOutOfRangeException instead of OverflowException.
         catch (ArgumentOutOfRangeException)
         {
             return false;

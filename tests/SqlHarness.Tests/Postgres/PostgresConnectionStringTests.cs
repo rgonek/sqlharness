@@ -69,6 +69,7 @@ public sealed class PostgresConnectionStringTests
     {
         var built = Build(false, new PostgresTransport(PostgresSslMode.VerifyFull, null));
         Assert.Equal(SslMode.VerifyFull, built.SslMode);
+        Assert.Equal(GssEncryptionMode.Disable, built.GssEncryptionMode);
         Assert.True(string.IsNullOrEmpty(built.RootCertificate));
     }
 
@@ -80,6 +81,7 @@ public sealed class PostgresConnectionStringTests
         {
             var built = Build(false, new PostgresTransport(PostgresSslMode.VerifyFull, pem));
             Assert.Equal(SslMode.VerifyFull, built.SslMode);
+            Assert.Equal(GssEncryptionMode.Disable, built.GssEncryptionMode);
             Assert.Equal(pem, built.RootCertificate);
         }
         finally { File.Delete(pem); }
@@ -93,6 +95,7 @@ public sealed class PostgresConnectionStringTests
         {
             var built = Build(false, new PostgresTransport(PostgresSslMode.VerifyCa, pem));
             Assert.Equal(SslMode.VerifyCA, built.SslMode);
+            Assert.Equal(GssEncryptionMode.Disable, built.GssEncryptionMode);
             Assert.Equal(pem, built.RootCertificate);
         }
         finally { File.Delete(pem); }
@@ -101,8 +104,12 @@ public sealed class PostgresConnectionStringTests
     [Fact]
     public void Explicit_require_and_disable_map_to_those_ssl_modes()
     {
-        Assert.Equal(SslMode.Require, Build(false, new PostgresTransport(PostgresSslMode.Require, null)).SslMode);
-        Assert.Equal(SslMode.Disable, Build(true, new PostgresTransport(PostgresSslMode.Disable, null)).SslMode);
+        var require = Build(false, new PostgresTransport(PostgresSslMode.Require, null));
+        var disable = Build(true, new PostgresTransport(PostgresSslMode.Disable, null));
+        Assert.Equal(SslMode.Require, require.SslMode);
+        Assert.Equal(GssEncryptionMode.Disable, require.GssEncryptionMode);
+        Assert.Equal(SslMode.Disable, disable.SslMode);
+        Assert.Equal(GssEncryptionMode.Disable, disable.GssEncryptionMode);
     }
 
     [Fact]
