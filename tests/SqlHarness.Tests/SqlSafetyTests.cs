@@ -1482,6 +1482,30 @@ public class SqlSafetyTests
         Assert.True(decision.Allowed, decision.RejectionDescription);
     }
 
+    // 018: alias-qualified CLR UDT methods share the two-part call target
+    // with db.schema.fn(...), so they are denied as cross-database.
+    [Theory]
+    [InlineData("SELECT t.Shape.STArea() FROM dbo.Places AS t", false)]
+    [InlineData("SELECT t.Shape.STArea() FROM dbo.Places AS t", true)]
+    public void Alias_qualified_udt_method_calls_are_denied_as_cross_database(string sql, bool compareSetup)
+    {
+        var usage = compareSetup ? SqlUsage.CompareSetup : SqlUsage.Query;
+        var decision = _classifier.Classify(sql, usage, "db", false, null);
+
+        Assert.False(decision.Allowed, decision.Reason.ToString());
+        Assert.Equal(SqlSafetyReason.CrossDatabaseReference, decision.Reason);
+    }
+
+    // 018: an unqualified UDT method is a one-part call and stays allowed.
+    [Fact]
+    public void Unqualified_udt_method_calls_stay_allowed()
+    {
+        const string sql = "SELECT Shape.STArea() FROM dbo.Places";
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "db", false, null);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+    }
+
     private SqlSafetyDecision ClassifyQuery(string sql) =>
         _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: false, confirmDatabase: null);
 }

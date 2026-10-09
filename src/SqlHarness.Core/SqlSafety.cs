@@ -891,6 +891,7 @@ internal sealed class SqlSafetyClassifier
         private BatchVariableScope _scope = BatchVariableScope.Empty;
         private readonly Dictionary<TSqlBatch, BatchVariableScope> _scopes = [];
         private readonly Stack<HashSet<string>> _queryAliases = new();
+        private readonly Stack<HashSet<string>> _fromAliases = new();
         private readonly Stack<SchemaObjectName> _xmlMethodNames = new();
 
         internal bool HasCrossDatabaseReference { get; private set; }
@@ -928,6 +929,18 @@ internal sealed class SqlSafetyClassifier
 
         public override void ExplicitVisit(QuerySpecification node)
         {
+            // Select-list calls are visited before FROM. Record from-clause aliases
+            // first so alias.column.value/query/exist is not read as db.schema.fn.
+            // Kept off _queryAliases: filling that stack early would change which
+            // three-part names the .nodes() exemption recognizes.
+            var fromAliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (node.FromClause is { } from)
+            {
+                foreach (var table in from.TableReferences)
+                    CollectFromAliases(table, fromAliases);
+            }
+
+            _fromAliases.Push(fromAliases);
             _queryAliases.Push(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
             try
             {
@@ -936,6 +949,7 @@ internal sealed class SqlSafetyClassifier
             finally
             {
                 _queryAliases.Pop();
+                _fromAliases.Pop();
             }
         }
 
@@ -979,6 +993,65 @@ internal sealed class SqlSafetyClassifier
             }
 
             base.ExplicitVisit(node);
+        }
+
+        // 018: a scalar call db.schema.fn(...) carries its database in the call
+        // target, not in a SchemaObjectName. Alias-qualified XML methods
+        // (item.XmlCol.value/query/exist) share that two-part shape and stay allowed.
+        public override void ExplicitVisit(FunctionCall node)
+        {
+            if (node.CallTarget is MultiPartIdentifierCallTarget { MultiPartIdentifier: { } name }
+                && name.Identifiers.Count >= 2
+                && !IsAliasQualifiedXmlMethod(node, name))
+                HasCrossDatabaseReference = true;
+            base.ExplicitVisit(node);
+        }
+
+        private bool IsAliasQualifiedXmlMethod(FunctionCall node, MultiPartIdentifier name)
+        {
+            if (name.Identifiers.Count != 2
+                || node.FunctionName?.Value is not { } method
+                || !IsReadOnlyXmlMethod(method)
+                || !_fromAliases.TryPeek(out var aliases))
+                return false;
+
+            return aliases.Contains(name.Identifiers[0].Value);
+        }
+
+        private static bool IsReadOnlyXmlMethod(string name) =>
+            name.Equals("value", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("query", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("exist", StringComparison.OrdinalIgnoreCase);
+
+        private static void CollectFromAliases(TableReference? table, HashSet<string> aliases)
+        {
+            switch (table)
+            {
+                case null:
+                    return;
+                case JoinTableReference join:
+                    CollectFromAliases(join.FirstTableReference, aliases);
+                    CollectFromAliases(join.SecondTableReference, aliases);
+                    break;
+                case JoinParenthesisTableReference parenthesis:
+                    CollectFromAliases(parenthesis.Join, aliases);
+                    break;
+                case OdbcQualifiedJoinTableReference odbc:
+                    CollectFromAliases(odbc.TableReference, aliases);
+                    break;
+                case NamedTableReference named:
+                    AddFromAlias(aliases, named.Alias?.Value ?? named.SchemaObject.BaseIdentifier.Value);
+                    break;
+                case TableReferenceWithAlias aliased:
+                    AddFromAlias(aliases, aliased.Alias?.Value);
+                    break;
+            }
+        }
+
+        private static void AddFromAlias(HashSet<string> aliases, string? alias)
+        {
+            if (!string.IsNullOrEmpty(alias))
+                aliases.Add(alias);
         }
 
         public override void ExplicitVisit(OpenRowsetTableReference node)
