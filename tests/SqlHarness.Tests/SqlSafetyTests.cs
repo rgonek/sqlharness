@@ -1340,6 +1340,33 @@ public class SqlSafetyTests
         }
     }
 
+    // 023: the expected verdict is ScriptDom's non-empty batch count.
+    // Two non-empty batches are UnsupportedStatement in Query and CompareSetup.
+    // Trailing GO and GO inside a string literal are each one non-empty batch.
+    [Theory]
+    [InlineData("SELECT 1\nGO\nSELECT 2", false, false)]
+    [InlineData("SELECT 1\nGO\nSELECT 2", true, false)]
+    [InlineData("CREATE TABLE #t (Id int)\nGO\nINSERT #t VALUES (1)", false, false)]
+    [InlineData("CREATE TABLE #t (Id int)\nGO\nINSERT #t VALUES (1)", true, false)]
+    [InlineData("SELECT 1\nGO", false, true)]
+    [InlineData("SELECT 1\nGO", true, true)]
+    [InlineData("SELECT 'a\nGO\nb'", false, true)]
+    [InlineData("SELECT 'a\nGO\nb'", true, true)]
+    public void Multi_batch_scripts_are_rejected(string sql, bool compareSetup, bool singleNonEmptyBatch)
+    {
+        var usage = compareSetup ? SqlUsage.CompareSetup : SqlUsage.Query;
+        var decision = _classifier.Classify(sql, usage, "db", allowMutation: false, confirmDatabase: null);
+
+        if (singleNonEmptyBatch)
+        {
+            Assert.True(decision.Allowed, decision.RejectionDescription);
+            return;
+        }
+
+        Assert.False(decision.Allowed, decision.Reason.ToString());
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
     [Theory]
     [InlineData("DECLARE @xml xml = '<root><item id=\"1\" /></root>'; SELECT @xml.value('(/root/item/@id)[1]', 'int')")]
     [InlineData("DECLARE @xml xml = '<root><item /></root>'; SELECT @xml.query('/root/item')")]
