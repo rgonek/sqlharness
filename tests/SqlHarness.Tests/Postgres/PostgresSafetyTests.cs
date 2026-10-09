@@ -207,6 +207,36 @@ public sealed class PostgresSafetyTests
         Assert.False(decision.Allowed);
     }
 
+    // 019: mutation approval does not unlock these names. CompareSetup has no approval flag.
+    [Theory]
+    [InlineData("SELECT query_to_xml('select 1', true, false, '')")]
+    [InlineData("SELECT query_to_xmlschema('select 1', true, false, '')")]
+    [InlineData("SELECT query_to_xml_and_xmlschema('select 1', true, false, '')")]
+    [InlineData("SELECT cursor_to_xml('c', 1, true, false, '')")]
+    [InlineData("SELECT cursor_to_xmlschema('c', true, false, '')")]
+    [InlineData("SELECT * FROM ts_stat('select v from docs')")]
+    [InlineData("SELECT pg_sleep_for('1 second')")]
+    [InlineData("SELECT pg_sleep_until(now())")]
+    [InlineData("SELECT pg_notify('c', 'x')")]
+    [InlineData("SELECT * FROM pg_stat_file('postgresql.conf')")]
+    [InlineData("SELECT pg_reload_conf()")]
+    [InlineData("SELECT pg_rotate_logfile()")]
+    [InlineData("SELECT pg_switch_wal()")]
+    [InlineData("SELECT pg_create_restore_point('x')")]
+    [InlineData("SELECT pg_stat_reset()")]
+    [InlineData("SELECT pg_stat_reset_shared('bgwriter')")]
+    [InlineData("SELECT pg_create_physical_replication_slot('s')")]
+    [InlineData("SELECT pg_create_logical_replication_slot('s','pgoutput')")]
+    [InlineData("SELECT pg_drop_replication_slot('s')")]
+    [InlineData("SELECT pg_logical_emit_message(true, 'p', 'x')")]
+    [InlineData("SELECT pg_replication_origin_create('o')")]
+    public void Sql_string_executors_and_deny_list_siblings_stay_unsupported_with_query_approval(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.False(decision.Allowed);
+    }
+
     [Theory]
     [InlineData("SELECT pg_read_binary_file('/secret-token-path')")]
     [InlineData("SELECT * FROM pg_ls_logdir()")]
@@ -691,6 +721,20 @@ public sealed class PostgresSafetyTests
         Assert.True(approved.Allowed, approved.RejectionDescription);
         Assert.True(approved.HasMutation, $"Reason={approved.Reason}, HasMutation={approved.HasMutation}.");
         Assert.True(approved.HasSessionLocalWork);
+    }
+
+    // 019: Record still runs after the CTE write is judged, so the next insert sees t.
+    [Fact]
+    public void Approved_self_named_temp_cte_write_keeps_t_for_the_next_insert()
+    {
+        var decision = _classifier.Classify("""
+            WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id INTO TEMP TABLE t FROM w;
+            INSERT INTO t (id) VALUES (2)
+            """, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasMutation);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.Contains("t", decision.SessionTempTables);
     }
 
     [Fact]
