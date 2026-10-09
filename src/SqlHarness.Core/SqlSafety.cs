@@ -933,7 +933,9 @@ internal sealed class SqlSafetyClassifier
         private readonly Stack<HashSet<string>> _queryAliases = new();
         private readonly Stack<SchemaObjectName> _xmlMethodNames = new();
 
-        // 018: two-part only. Schema and base are compared OrdinalIgnoreCase.
+        // 018: two-part sys.<name> stays the tuple match. The same four base names,
+        // compared OrdinalIgnoreCase, also deny a one-part reference and a
+        // built-in or global ::<name>. Any other schema, including dbo, stays allowed.
         private static readonly (string Schema, string Name)[] ServerFilesystemFunctions =
         {
             ("sys", "fn_get_audit_file"),
@@ -1022,9 +1024,34 @@ internal sealed class SqlSafetyClassifier
                 _xmlMethodNames.Pop();
         }
 
+        // 018: ::fn_trace_gettable(...) is a BuiltInFunctionTableReference. The type stays
+        // on the table-source allow-list; only the four filesystem names are external.
+        public override void ExplicitVisit(BuiltInFunctionTableReference node)
+        {
+            if (IsServerFilesystemBaseName(node.Name?.Value))
+                HasExternalAccess = true;
+
+            base.ExplicitVisit(node);
+        }
+
+        public override void ExplicitVisit(GlobalFunctionTableReference node)
+        {
+            if (IsServerFilesystemBaseName(node.Name?.Value))
+                HasExternalAccess = true;
+
+            base.ExplicitVisit(node);
+        }
+
         private static bool IsServerFilesystemFunction(SchemaObjectName? name)
         {
-            if (name is null || name.Identifiers.Count != 2 || name.SchemaIdentifier is null)
+            if (name is null)
+                return false;
+
+            // One-part has no schema. dbo.fn_trace_gettable is two-part and is not this branch.
+            if (name.Identifiers.Count == 1)
+                return IsServerFilesystemBaseName(name.BaseIdentifier.Value);
+
+            if (name.Identifiers.Count != 2 || name.SchemaIdentifier is null)
                 return false;
 
             var schema = name.SchemaIdentifier.Value;
@@ -1036,6 +1063,20 @@ internal sealed class SqlSafetyClassifier
                 {
                     return true;
                 }
+            }
+
+            return false;
+        }
+
+        private static bool IsServerFilesystemBaseName(string? baseName)
+        {
+            if (baseName is null)
+                return false;
+
+            foreach (var (_, functionName) in ServerFilesystemFunctions)
+            {
+                if (string.Equals(baseName, functionName, StringComparison.OrdinalIgnoreCase))
+                    return true;
             }
 
             return false;

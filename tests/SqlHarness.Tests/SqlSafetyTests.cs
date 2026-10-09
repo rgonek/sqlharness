@@ -1447,7 +1447,8 @@ public class SqlSafetyTests
         Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
     }
 
-    // 018: two-part server-filesystem TVFs. The table-source type itself stays allowed.
+    // 018: server-filesystem TVFs. Two-part sys.<name>, one-part <name>, and ::<name>.
+    // The table-source type itself stays allowed. :: parses as BuiltInFunctionTableReference.
     [Theory]
     [InlineData("SELECT * FROM sys.fn_get_audit_file(N'a', DEFAULT, DEFAULT)", false)]
     [InlineData("SELECT * FROM sys.fn_get_audit_file(N'a', DEFAULT, DEFAULT)", true)]
@@ -1457,6 +1458,22 @@ public class SqlSafetyTests
     [InlineData("SELECT * FROM sys.fn_trace_gettable(N'a', DEFAULT)", true)]
     [InlineData("SELECT * FROM sys.dm_os_enumerate_filesystem(N'a', N'*')", false)]
     [InlineData("SELECT * FROM sys.dm_os_enumerate_filesystem(N'a', N'*')", true)]
+    [InlineData("SELECT * FROM fn_get_audit_file(N'a', DEFAULT, DEFAULT)", false)]
+    [InlineData("SELECT * FROM fn_get_audit_file(N'a', DEFAULT, DEFAULT)", true)]
+    [InlineData("SELECT * FROM ::fn_get_audit_file(N'a', DEFAULT, DEFAULT)", false)]
+    [InlineData("SELECT * FROM ::fn_get_audit_file(N'a', DEFAULT, DEFAULT)", true)]
+    [InlineData("SELECT * FROM fn_xe_file_target_read_file(N'a', NULL, NULL, NULL)", false)]
+    [InlineData("SELECT * FROM fn_xe_file_target_read_file(N'a', NULL, NULL, NULL)", true)]
+    [InlineData("SELECT * FROM ::fn_xe_file_target_read_file(N'a', NULL, NULL, NULL)", false)]
+    [InlineData("SELECT * FROM ::fn_xe_file_target_read_file(N'a', NULL, NULL, NULL)", true)]
+    [InlineData("SELECT * FROM fn_trace_gettable(N'c:\\t.trc', DEFAULT)", false)]
+    [InlineData("SELECT * FROM fn_trace_gettable(N'c:\\t.trc', DEFAULT)", true)]
+    [InlineData("SELECT * FROM ::fn_trace_gettable(N'c:\\t.trc', DEFAULT)", false)]
+    [InlineData("SELECT * FROM ::fn_trace_gettable(N'c:\\t.trc', DEFAULT)", true)]
+    [InlineData("SELECT * FROM dm_os_enumerate_filesystem(N'a', N'*')", false)]
+    [InlineData("SELECT * FROM dm_os_enumerate_filesystem(N'a', N'*')", true)]
+    [InlineData("SELECT * FROM ::dm_os_enumerate_filesystem(N'a', N'*')", false)]
+    [InlineData("SELECT * FROM ::dm_os_enumerate_filesystem(N'a', N'*')", true)]
     public void Server_filesystem_tvfs_are_denied(string sql, bool compareSetup)
     {
         var usage = compareSetup ? SqlUsage.CompareSetup : SqlUsage.Query;
@@ -1464,6 +1481,16 @@ public class SqlSafetyTests
 
         Assert.False(decision.Allowed, decision.Reason.ToString());
         Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    // 018: a schema other than sys is not the filesystem deny. Query only.
+    [Fact]
+    public void Dbo_qualified_fn_trace_gettable_stays_allowed()
+    {
+        const string sql = "SELECT * FROM dbo.fn_trace_gettable(N'c:\\t.trc', DEFAULT)";
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "db", false, null);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
     }
 
     // 018: otherdb.dbo.fn(...) and otherdb..fn(...) put the database on the
