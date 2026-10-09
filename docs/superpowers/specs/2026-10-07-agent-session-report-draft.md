@@ -129,3 +129,34 @@ called, and what the API lacked or did not need. Record API edits here with thei
 - Not needed: matrix cellIndex, phase 2 comments, plan or operator evidence.
 - **API edits:** let a report cover a set of scopes (scope per attached operation, validated against a list fixed
   at create); add verification verdicts `pass`/`fail`/`partial`. This entry is not API unchanged.
+
+### Evidence: sync-delay diagnosis across five isolated database scopes
+
+- Report shape: a diagnosis. Question "why has System2 not received the latest entity dump"; six read-only catalog
+  queries over five scopes (job schedule and status per scope) and one row check confirming a stored value. Finding:
+  the publish job's last run is days old in four scopes while a sibling job runs nightly. Hypothesis (unverified): an
+  in-memory running flag in the job host blocks the job.
+- Would have called: create x1, attach x6, annotate x2 (finding, hypothesis), claim x5, conclude x1: 15 calls
+  singular, 5 batched.
+- Needed: a report spanning several scopes and a non-optimization verdict, both already proposed by the previous
+  entry. Not needed: matrix cells, metrics, plans or operator evidence.
+- **API unchanged.**
+
+### Evidence: full-import recalculation diagnosis
+
+- Report shape: diagnosis in System2 after a full import from System1. Source code showed that the full-import
+  path did not enqueue recalculation, while incremental updates did. Read-only queries confirmed a mismatch
+  between imported assignments and derived data. The queue state and the specific job execution remained
+  unverified; the code gap alone does not prove what happened in that particular run.
+- Investigation calls: capabilities x1, ping x1, query x4. One query was obstructively truncated and one failed
+  because the agent used an incorrect object name. Two successful follow-up queries recovered an aggregate
+  and a bounded example. No persistent database writes. Retro capability checks are excluded from these counts.
+- Modeled report actions: create, attach, annotate, claim, conclude and get once each, six calls with batching.
+  These actions were not executed. Attach available operation references; keep source-code conclusions and
+  unverified runtime explanations distinct from journal-backed evidence. Claim only supported operation outcomes,
+  without copying numerical query findings into metric paths that the journal does not resolve.
+- Needed: the existing operationRef prerequisite and finding/hypothesis annotations. Missing operation references
+  remain a prerequisite, not references the agent may invent. Non-optimization verdicts are already an observed
+  requirement in earlier entries. This diagnosis adds no new API requirement.
+- Not needed: matrix cells, benchmark metrics, plans, operator evidence or additional report actions.
+- **API unchanged.**
