@@ -59,6 +59,11 @@ public static class McpHost
         ArgumentNullException.ThrowIfNull(log);
         ArgumentNullException.ThrowIfNull(loadProfiles);
 
+        // SDK events can arrive from several transport and handler tasks. The
+        // caller may supply a StringWriter, whose StringBuilder is not safe for
+        // concurrent writes.
+        log = TextWriter.Synchronized(log);
+
         McpProcessContext process;
         try
         {
@@ -141,7 +146,7 @@ public static class McpHost
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            log.WriteLine("sqlharness-mcp: the MCP server stopped unexpectedly.");
+            log.WriteLine($"sqlharness-mcp: the MCP server stopped unexpectedly ({exception.GetType().Name}).");
             return 1;
         }
     }

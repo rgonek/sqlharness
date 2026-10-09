@@ -759,7 +759,8 @@ public sealed class McpStdioProcessTests
             SeamProfiles,
             ct);
 
-        Assert.Equal((int)SqlHarnessExitCode.Success, await hostTask.WaitAsync(SeamBudget, ct));
+        var exitCode = await hostTask.WaitAsync(SeamBudget, ct);
+        Assert.True(exitCode == (int)SqlHarnessExitCode.Success, $"Host exited {exitCode}. {log}");
         Assert.Equal(0, output.Length);
     }
 
