@@ -1434,6 +1434,54 @@ public class SqlSafetyTests
         Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
     }
 
+    // 018: OpenRowsetCosmos and the AI calls TSql170 builds sit outside the
+    // four external table-source overrides.
+    [Theory]
+    [InlineData("SELECT * FROM OPENROWSET(PROVIDER = 'CosmosDB', CONNECTION = 'Account=x;Database=y', OBJECT = 'c') AS r", false)]
+    [InlineData("SELECT * FROM OPENROWSET(PROVIDER = 'CosmosDB', CONNECTION = 'Account=x;Database=y', OBJECT = 'c') AS r", true)]
+    [InlineData("SELECT AI_GENERATE_EMBEDDINGS(N'text' USE MODEL MyModel)", false)]
+    [InlineData("SELECT AI_GENERATE_EMBEDDINGS(N'text' USE MODEL MyModel)", true)]
+    [InlineData("SELECT * FROM AI_GENERATE_CHUNKS(SOURCE = N'text', CHUNK_TYPE = FIXED, CHUNK_SIZE = 10) AS c", false)]
+    [InlineData("SELECT * FROM AI_GENERATE_CHUNKS(SOURCE = N'text', CHUNK_TYPE = FIXED, CHUNK_SIZE = 10) AS c", true)]
+    public void External_sources_outside_the_classic_four_are_denied(string sql, bool compareSetup)
+    {
+        var usage = compareSetup ? SqlUsage.CompareSetup : SqlUsage.Query;
+        var decision = _classifier.Classify(sql, usage, "db", false, null);
+
+        Assert.False(decision.Allowed, decision.Reason.ToString());
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
+    // 018: otherdb.dbo.fn(...) and otherdb..fn(...) put the database on the
+    // scalar call target, not on a SchemaObjectName the cross-database check sees.
+    [Theory]
+    [InlineData("SELECT otherdb.dbo.fn_x(1)", false)]
+    [InlineData("SELECT otherdb.dbo.fn_x(1)", true)]
+    [InlineData("SELECT Id FROM dbo.Clients WHERE otherdb.dbo.fn_x(Id) = 1", false)]
+    [InlineData("SELECT Id FROM dbo.Clients WHERE otherdb.dbo.fn_x(Id) = 1", true)]
+    [InlineData("SELECT otherdb..fn_x(1)", false)]
+    [InlineData("SELECT otherdb..fn_x(1)", true)]
+    public void Three_part_scalar_function_calls_are_cross_database(string sql, bool compareSetup)
+    {
+        var usage = compareSetup ? SqlUsage.CompareSetup : SqlUsage.Query;
+        var decision = _classifier.Classify(sql, usage, "db", false, null);
+
+        Assert.False(decision.Allowed, decision.Reason.ToString());
+        Assert.Equal(SqlSafetyReason.CrossDatabaseReference, decision.Reason);
+    }
+
+    // 018: two-part and built-in scalar calls stay local. Query only.
+    [Theory]
+    [InlineData("SELECT dbo.fn_x(1)")]
+    [InlineData("SELECT LEN(N'x')")]
+    [InlineData("SELECT Id FROM dbo.Clients WHERE dbo.fn_x(Id) = 1")]
+    public void Two_part_and_builtin_function_calls_stay_allowed(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "db", false, null);
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+    }
+
     private SqlSafetyDecision ClassifyQuery(string sql) =>
         _classifier.Classify(sql, SqlUsage.Query, "db", allowMutation: false, confirmDatabase: null);
 }
