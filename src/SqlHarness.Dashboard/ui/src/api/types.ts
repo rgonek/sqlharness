@@ -119,6 +119,7 @@ export type OperationDetail = {
   artifactDirectory: string | null
   summary: Record<string, unknown> | null
   variants: VariantDetail[]
+  dimensions: { values: DimensionValueSummary[] }
 }
 
 export type KeyCount = { key: string; count: number }
@@ -126,8 +127,30 @@ export type DayAgentCount = { day: string; agentKind: string; count: number }
 export type SqlHashStat = { sqlHash: string; count: number; totalDurationMs: number; maxDurationMs: number }
 export type TableReadStat = { table: string; logicalReads: number; operations: number }
 export type WaitStat = { waitType: string; totalWaitMs: number }
-export type TargetStat = { profile: string | null; database: string | null; count: number }
-export type TokenStat = { raw: number; emitted: number }
+export type TargetStat = { profile: string | null; database: string | null; count: number; engine?: string | null; server?: string | null }
+export type ProfileOperationCount = { profile: string | null; operations: number }
+export type DimensionValueSummary = {
+  name: string; value: string; isUnknown: boolean; source: string; operations: number | null; percentage: number | null
+  totalDurationMs: number | null; durationAvailableOperations: number | null; durationUnavailableOperations: number | null
+  failed: number | null; rejected: number | null
+}
+export type DimensionStat = { name: string; values: DimensionValueSummary[] }
+export type DimensionAggregate = {
+  operations: number; totalDurationMs: number | null; durationAvailableOperations: number
+  durationUnavailableOperations: number; failed: number; rejected: number
+}
+export type DimensionMatrixCell = { row: DimensionValueSummary; column: DimensionValueSummary; metrics: DimensionAggregate }
+export type DimensionMatrixStats = {
+  rowDimension: string; columnDimension: string; cells: DimensionMatrixCell[]; totals: DimensionAggregate
+}
+export type ProfileDimensionStats = {
+  profile: string | null; profileDefinitionAvailable: boolean; operations: number
+  dimensions: DimensionStat[]; targets: TargetStat[]; targetCount: number; matrix: DimensionMatrixStats | null
+}
+export type TokenStat = {
+  raw: number; emitted: number; totalOperations: number; pairedOperations: number
+  rawOnlyOperations: number; emittedOnlyOperations: number; missingBothOperations: number
+}
 
 export type DashboardStats = {
   operationsPerDay: DayAgentCount[]
@@ -142,6 +165,8 @@ export type DashboardStats = {
   tokens: TokenStat
   spillOperations: number
   coldCacheOperations: number
+  profileOperations: ProfileOperationCount[]
+  profileDimensions: ProfileDimensionStats
 }
 
 // GET /api/plans/{hash}?view=distilled (PlanDistiller / PostgresPlanDistiller, camelCase).

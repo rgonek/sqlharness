@@ -167,17 +167,28 @@ public static partial class DashboardServer
                 : BadRequest("from/to must be ISO-8601 timestamps."));
         MapRead(api, "/sessions/{id:long}", (long id) =>
             reader.Session(id) is { } detail ? Results.Json(detail, Json) : Results.NotFound());
-        MapRead(api, "/operations", (long? session, string? status, string? operation, string? from, string? to, long? cursor, int? limit) =>
-            TryWindow(from, to, out var window)
-                ? Results.Json(reader.Operations(new OperationQuery(session, status, operation, window.From, window.To, cursor, limit ?? JournalReader.DefaultLimit)), Json)
-                : BadRequest("from/to must be ISO-8601 timestamps."));
+        MapRead(api, "/operations", (long? session, string? status, string? operation, string? from, string? to, long? cursor, int? limit,
+            string? profile, string? dimensions, bool? unprofiled) =>
+            !TryWindow(from, to, out var window)
+                ? BadRequest("from/to must be ISO-8601 timestamps.")
+                : !TryDimensions(dimensions, out var dimensionFilters)
+                    ? BadRequest("dimensions must be a JSON object with string or null values.")
+                    : Results.Json(reader.Operations(new OperationQuery(session, status, operation, window.From, window.To, cursor,
+                        limit ?? JournalReader.DefaultLimit, profile, dimensionFilters, unprofiled ?? false)), Json));
         MapRead(api, "/operations/{id:long}", (long id) =>
-            reader.Operation(id) is { } detail ? Results.Json(detail, Json) : Results.NotFound());
+            reader.Operation(id, DashboardProfiles.DimensionNames(options.TargetsPath)) is { } detail
+                ? Results.Json(detail, Json)
+                : Results.NotFound());
         MapRead(api, "/plans/{hash}", (string hash, string? view) => Plan(reader, hash, view));
-        MapRead(api, "/stats", (string? from, string? to) =>
-            TryWindow(from, to, out var window)
-                ? Results.Json(reader.Stats(new StatsQuery(window.From, window.To)), Json)
-                : BadRequest("from/to must be ISO-8601 timestamps."));
+        MapRead(api, "/stats", (string? from, string? to, string? profile, string? dimensions,
+            string? rowDimension, string? columnDimension, bool? unprofiled) =>
+            !TryWindow(from, to, out var window)
+                ? BadRequest("from/to must be ISO-8601 timestamps.")
+                : !TryDimensions(dimensions, out var dimensionFilters)
+                    ? BadRequest("dimensions must be a JSON object with string or null values.")
+                    : Results.Json(reader.Stats(new StatsQuery(window.From, window.To, profile, dimensionFilters,
+                            rowDimension, columnDimension, unprofiled ?? false),
+                        DashboardProfiles.DimensionNames(options.TargetsPath)), Json));
         MapRead(api, "/live", async (HttpContext context) =>
         {
             // Stopping ends open streams, so a connected browser never holds up shutdown.
@@ -246,6 +257,37 @@ public static partial class DashboardServer
     }
 
     private static IResult BadRequest(string message) => Results.Json(new { error = message }, Json, statusCode: StatusCodes.Status400BadRequest);
+
+    private static bool TryDimensions(string? json, out IReadOnlyDictionary<string, string?> dimensions)
+    {
+        dimensions = new Dictionary<string, string?>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(json))
+            return true;
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+                return false;
+            var parsed = new Dictionary<string, string?>(StringComparer.Ordinal);
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (parsed.ContainsKey(property.Name))
+                    return false;
+                if (property.Value.ValueKind == JsonValueKind.String)
+                    parsed.Add(property.Name, property.Value.GetString());
+                else if (property.Value.ValueKind == JsonValueKind.Null)
+                    parsed.Add(property.Name, null);
+                else
+                    return false;
+            }
+            dimensions = parsed;
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 
     private static bool TryWindow(string? from, string? to, out (DateTimeOffset? From, DateTimeOffset? To) window)
     {

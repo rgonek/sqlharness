@@ -31,7 +31,9 @@ export const operationDetail = (over: Partial<OperationDetail> = {}): OperationD
   operation: operation({ operation: "measure", logicalReadsMedian: 50, hasSpill: true, coldCache: true, overGranted: true }),
   session: session(), vars: { tenant: "acme" }, candidateSqlHash: null, sqlText: null, candidateSqlText: null,
   rawTokens: 100, emittedTokens: 10, artifactDirectory: "/artifacts/m1", summary: { kind: "measure", resultsStable: true },
-  variants: [variant()], ...over,
+  variants: [variant()], dimensions: { values: [{ name: "tenant", value: "acme", isUnknown: false, source: "recorded",
+    operations: null, percentage: null, totalDurationMs: null, durationAvailableOperations: null,
+    durationUnavailableOperations: null, failed: null, rejected: null }] }, ...over,
 })
 
 export const stats = (over: Partial<DashboardStats> = {}): DashboardStats => ({
@@ -47,6 +49,14 @@ export const stats = (over: Partial<DashboardStats> = {}): DashboardStats => ({
   topSqlByDuration: [{ sqlHash: "sha256:bbbbbbbbbbbbbbbb", count: 1, totalDurationMs: 9000, maxDurationMs: 9000 }],
   topTablesByLogicalReads: [{ table: "Orders", logicalReads: 210, operations: 1 }],
   topWaits: [{ waitType: "PAGEIOLATCH_SH", totalWaitMs: 120 }],
-  targets: [{ profile: "local", database: "db", count: 6 }],
-  tokens: { raw: 400, emitted: 40 }, spillOperations: 1, coldCacheOperations: 1, ...over,
+  targets: [{ profile: "local", database: "db", count: 6, engine: "sqlserver", server: "srv" }],
+  tokens: { raw: 400, emitted: 40, totalOperations: 6, pairedOperations: 5, rawOnlyOperations: 1,
+    emittedOnlyOperations: 0, missingBothOperations: 0 }, spillOperations: 1, coldCacheOperations: 1,
+  profileOperations: [{ profile: "local", operations: 6 }],
+  profileDimensions: {
+    profile: "local", profileDefinitionAvailable: true, operations: 6,
+    dimensions: [{ name: "tenant", values: [{ name: "tenant", value: "acme", isUnknown: false, source: "recorded",
+      operations: 6, percentage: 100, totalDurationMs: 7200, durationAvailableOperations: 6, durationUnavailableOperations: 0, failed: 0, rejected: 0 }] }],
+    targets: [{ profile: "local", database: "db", count: 6, engine: "sqlserver", server: "srv" }], targetCount: 1, matrix: null,
+  }, ...over,
 })

@@ -19,15 +19,17 @@ internal sealed class JournalSeed
     public JournalHandle Operation(
         SessionIdentity session, string operation = "query", string status = "succeeded", int exitCode = 0,
         string sql = "SELECT 1", long durationMs = 10, BenchmarkJournalRecord? benchmark = null, bool complete = true,
-        SeedTokens tokens = SeedTokens.Both)
+        SeedTokens tokens = SeedTokens.Both, string? profile = "local", IReadOnlyDictionary<string, string>? variables = null,
+        string engine = "sqlserver", string server = "srv", string database = "db")
     {
-        var handle = _journal.Begin(session, new OperationStart(operation, "local", new Dictionary<string, string> { ["tenant"] = "acme" },
+        variables ??= new Dictionary<string, string> { ["tenant"] = "acme" };
+        var handle = _journal.Begin(session, new OperationStart(operation, profile, variables,
             false, OperationJournalDescriber.SqlHash(sql), null, sql, null))!;
         _time.Now = _time.Now.AddSeconds(1);
         if (complete)
         {
             _journal.Complete(handle, new OperationEnd(status, exitCode, status == "rejected" ? "safety" : null, durationMs,
-                "sqlserver", "srv", "db", 1, 3, tokens == SeedTokens.RawOnly ? 500 : null, null, null));
+                engine, server, database, 1, 3, tokens == SeedTokens.RawOnly ? 500 : null, null, null));
             if (tokens == SeedTokens.Both)
                 _journal.RecordEmission(handle, new OutputFootprint(400, 1), new OutputFootprint(40, 1));
             else if (tokens == SeedTokens.EmittedOnly)
@@ -55,6 +57,7 @@ internal sealed class JournalSeed
 /// <summary>Which token counts a seeded operation carries: both, raw only (MCP-style), or emitted only.</summary>
 internal enum SeedTokens
 {
+    None,
     Both,
     RawOnly,
     EmittedOnly,

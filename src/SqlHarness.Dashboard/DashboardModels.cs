@@ -10,9 +10,12 @@ public sealed record SessionQuery(
 
 public sealed record OperationQuery(
     long? SessionId = null, string? Status = null, string? Operation = null, DateTimeOffset? From = null,
-    DateTimeOffset? To = null, long? Cursor = null, int Limit = JournalReader.DefaultLimit);
+    DateTimeOffset? To = null, long? Cursor = null, int Limit = JournalReader.DefaultLimit,
+    string? Profile = null, IReadOnlyDictionary<string, string?>? Dimensions = null, bool UnprofiledOnly = false);
 
-public sealed record StatsQuery(DateTimeOffset? From = null, DateTimeOffset? To = null);
+public sealed record StatsQuery(DateTimeOffset? From = null, DateTimeOffset? To = null, string? Profile = null,
+    IReadOnlyDictionary<string, string?>? Dimensions = null, string? RowDimension = null, string? ColumnDimension = null,
+    bool UnprofiledOnly = false);
 
 public sealed record SessionSummary(
     long Id, string SessionKey, string AgentKind, string Transport, string Source, string? ClientName,
@@ -48,7 +51,8 @@ public sealed record VariantDetail(
 public sealed record OperationDetail(
     OperationSummary Operation, SessionSummary Session, IReadOnlyDictionary<string, string>? Vars,
     string? CandidateSqlHash, string? SqlText, string? CandidateSqlText, long? RawTokens, long? EmittedTokens,
-    string? ArtifactDirectory, JsonElement? Summary, IReadOnlyList<VariantDetail> Variants);
+    string? ArtifactDirectory, JsonElement? Summary, IReadOnlyList<VariantDetail> Variants,
+    OperationDimensions Dimensions);
 
 public sealed record StoredPlan(string Hash, string Format, string Document);
 
@@ -62,10 +66,42 @@ public sealed record TableReadStat(string Table, long LogicalReads, int Operatio
 
 public sealed record WaitStat(string WaitType, double TotalWaitMs);
 
-public sealed record TargetStat(string? Profile, string? Database, int Count);
+public sealed record TargetStat(string? Profile, string? Database, int Count, string? Engine = null, string? Server = null);
 
-/// <summary>Token totals over operations that carry both a raw and an emitted count (MCP rows carry raw only).</summary>
-public sealed record TokenStat(long Raw, long Emitted);
+/// <summary>One profile's complete operation count in the selected time window.</summary>
+public sealed record ProfileOperationCount(string? Profile, int Operations);
+
+/// <summary>
+/// A resolved scope value, or a missing value. IsUnknown keeps a missing value distinct
+/// from literal "Unknown"; aggregate metrics are populated when the summary is grouped.
+/// </summary>
+public sealed record DimensionValueSummary(
+    string Name, string Value, bool IsUnknown, string Source, int? Operations = null, double? Percentage = null,
+    long? TotalDurationMs = null, int? DurationAvailableOperations = null, int? DurationUnavailableOperations = null,
+    int? Failed = null, int? Rejected = null);
+
+public sealed record OperationDimensions(IReadOnlyList<DimensionValueSummary> Values);
+
+public sealed record DimensionStat(string Name, IReadOnlyList<DimensionValueSummary> Values);
+
+public sealed record DimensionAggregate(
+    int Operations, long? TotalDurationMs, int DurationAvailableOperations, int DurationUnavailableOperations,
+    int Failed, int Rejected);
+
+public sealed record DimensionMatrixCell(
+    DimensionValueSummary Row, DimensionValueSummary Column, DimensionAggregate Metrics);
+
+public sealed record DimensionMatrixStats(
+    string RowDimension, string ColumnDimension, IReadOnlyList<DimensionMatrixCell> Cells,
+    DimensionAggregate Totals);
+
+public sealed record ProfileDimensionStats(
+    string? Profile, bool ProfileDefinitionAvailable, int Operations, IReadOnlyList<DimensionStat> Dimensions,
+    IReadOnlyList<TargetStat> Targets, int TargetCount, DimensionMatrixStats? Matrix = null);
+
+/// <summary>Token totals over operations that carry both a raw and an emitted count.</summary>
+public sealed record TokenStat(long Raw, long Emitted, int TotalOperations = 0, int PairedOperations = 0,
+    int RawOnlyOperations = 0, int EmittedOnlyOperations = 0, int MissingBothOperations = 0);
 
 public sealed record DashboardStats(
     IReadOnlyList<DayAgentCount> OperationsPerDay,
@@ -79,4 +115,6 @@ public sealed record DashboardStats(
     IReadOnlyList<TargetStat> Targets,
     TokenStat Tokens,
     int SpillOperations,
-    int ColdCacheOperations);
+    int ColdCacheOperations,
+    IReadOnlyList<ProfileOperationCount> ProfileOperations,
+    ProfileDimensionStats ProfileDimensions);
