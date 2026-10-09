@@ -47,6 +47,13 @@ export const stats = (over: Partial<DashboardStats> = {}): DashboardStats => ({
   topSqlByDuration: [{ sqlHash: "sha256:bbbbbbbbbbbbbbbb", count: 1, totalDurationMs: 9000, maxDurationMs: 9000 }],
   topTablesByLogicalReads: [{ table: "Orders", logicalReads: 210, operations: 1 }],
   topWaits: [{ waitType: "PAGEIOLATCH_SH", totalWaitMs: 120 }],
-  targets: [{ profile: "local", database: "db", count: 6 }],
-  tokens: { raw: 400, emitted: 40 }, spillOperations: 1, coldCacheOperations: 1, ...over,
+  targets: [{ profile: "local", database: "db", count: 6, engine: "sqlserver", server: "srv" }],
+  tokens: { raw: 400, emitted: 40 }, spillOperations: 1, coldCacheOperations: 1,
+  profileOperations: [{ profile: "local", operations: 6 }],
+  profileDimensions: {
+    profile: "local", profileDefinitionAvailable: true, operations: 6,
+    dimensions: [{ name: "tenant", values: [{ name: "tenant", value: "acme", isUnknown: false, source: "recorded",
+      operations: 6, percentage: 100, totalDurationMs: 7200, durationAvailableOperations: 6, durationUnavailableOperations: 0, failed: 0, rejected: 0 }] }],
+    targets: [{ profile: "local", database: "db", count: 6, engine: "sqlserver", server: "srv" }], matrix: null,
+  }, ...over,
 })

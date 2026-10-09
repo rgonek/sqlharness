@@ -411,19 +411,18 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 : (IsUnknown: true, Value: OperationDimensionResolver.UnknownLabel));
             var values = groups.Select(group =>
             {
-                var durations = group.Where(operation => operation.DurationMs.HasValue).Select(operation => operation.DurationMs!.Value).ToArray();
-                var count = group.Count();
+                var metrics = AggregateDimensionMetrics(group);
                 return OperationDimensionResolver.ResolveValue(
                     dimension,
                     group.Key.IsUnknown ? null : group.Key.Value) with
                 {
-                    Operations = count,
-                    Percentage = filtered.Length == 0 ? 0 : 100d * count / filtered.Length,
-                    TotalDurationMs = durations.Length == 0 ? null : durations.Sum(),
-                    DurationAvailableOperations = durations.Length,
-                    DurationUnavailableOperations = count - durations.Length,
-                    Failed = group.Count(operation => operation.Status == "failed"),
-                    Rejected = group.Count(operation => operation.Status == "rejected"),
+                    Operations = metrics.Operations,
+                    Percentage = filtered.Length == 0 ? 0 : 100d * metrics.Operations / filtered.Length,
+                    TotalDurationMs = metrics.TotalDurationMs,
+                    DurationAvailableOperations = metrics.DurationAvailableOperations,
+                    DurationUnavailableOperations = metrics.DurationUnavailableOperations,
+                    Failed = metrics.Failed,
+                    Rejected = metrics.Rejected,
                 };
             }).OrderBy(value => value.IsUnknown ? 1 : 0)
               .ThenBy(value => value.Value, StringComparer.Ordinal)
@@ -441,7 +440,50 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             .ThenBy(target => target.Database, StringComparer.Ordinal)
             .Take(TopLimit)
             .ToArray();
-        return new ProfileDimensionStats(query.Profile, profileDefinitionAvailable, filtered.Length, valueStats, targets);
+        var matrix = BuildDimensionMatrix(query, dimensions, filtered);
+        return new ProfileDimensionStats(query.Profile, profileDefinitionAvailable, filtered.Length, valueStats, targets, matrix);
+    }
+
+    private static DimensionAggregate AggregateDimensionMetrics(IEnumerable<DimensionOperation> operations)
+    {
+        var rows = operations.ToArray();
+        var durations = rows.Where(operation => operation.DurationMs.HasValue)
+            .Select(operation => operation.DurationMs!.Value).ToArray();
+        return new DimensionAggregate(rows.Length, durations.Length == 0 ? null : durations.Sum(), durations.Length,
+            rows.Length - durations.Length, rows.Count(operation => operation.Status == "failed"),
+            rows.Count(operation => operation.Status == "rejected"));
+    }
+
+    private static DimensionMatrixStats? BuildDimensionMatrix(
+        StatsQuery query, IReadOnlyList<string> dimensions, IReadOnlyList<DimensionOperation> filtered)
+    {
+        if (string.IsNullOrEmpty(query.RowDimension) || string.IsNullOrEmpty(query.ColumnDimension)
+            || string.Equals(query.RowDimension, query.ColumnDimension, StringComparison.Ordinal)
+            || !dimensions.Contains(query.RowDimension, StringComparer.Ordinal)
+            || !dimensions.Contains(query.ColumnDimension, StringComparer.Ordinal))
+            return null;
+
+        static (bool IsUnknown, string Value) ValueFor(DimensionOperation operation, string name) =>
+            operation.Variables.TryGetValue(name, out var value)
+                ? (false, value)
+                : (true, OperationDimensionResolver.UnknownLabel);
+
+        var cells = filtered.GroupBy(operation => (Row: ValueFor(operation, query.RowDimension),
+                Column: ValueFor(operation, query.ColumnDimension)))
+            .Select(group => new DimensionMatrixCell(
+                OperationDimensionResolver.ResolveValue(query.RowDimension,
+                    group.Key.Row.IsUnknown ? null : group.Key.Row.Value),
+                OperationDimensionResolver.ResolveValue(query.ColumnDimension,
+                    group.Key.Column.IsUnknown ? null : group.Key.Column.Value),
+                AggregateDimensionMetrics(group)))
+            .OrderBy(cell => cell.Row.IsUnknown ? 1 : 0)
+            .ThenBy(cell => cell.Row.Value, StringComparer.Ordinal)
+            .ThenBy(cell => cell.Column.IsUnknown ? 1 : 0)
+            .ThenBy(cell => cell.Column.Value, StringComparer.Ordinal)
+            .ToArray();
+
+        return new DimensionMatrixStats(query.RowDimension, query.ColumnDimension, cells,
+            AggregateDimensionMetrics(filtered));
     }
 
     private sealed record DimensionOperation(

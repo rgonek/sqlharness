@@ -180,12 +180,14 @@ public static partial class DashboardServer
                 ? Results.Json(detail, Json)
                 : Results.NotFound());
         MapRead(api, "/plans/{hash}", (string hash, string? view) => Plan(reader, hash, view));
-        MapRead(api, "/stats", (string? from, string? to, string? profile, string? dimensions) =>
+        MapRead(api, "/stats", (string? from, string? to, string? profile, string? dimensions,
+            string? rowDimension, string? columnDimension) =>
             !TryWindow(from, to, out var window)
                 ? BadRequest("from/to must be ISO-8601 timestamps.")
                 : !TryDimensions(dimensions, out var dimensionFilters)
                     ? BadRequest("dimensions must be a JSON object with string or null values.")
-                    : Results.Json(reader.Stats(new StatsQuery(window.From, window.To, profile, dimensionFilters),
+                    : Results.Json(reader.Stats(new StatsQuery(window.From, window.To, profile, dimensionFilters,
+                            rowDimension, columnDimension),
                         DashboardProfiles.DimensionNames(options.TargetsPath)), Json));
         MapRead(api, "/live", async (HttpContext context) =>
         {

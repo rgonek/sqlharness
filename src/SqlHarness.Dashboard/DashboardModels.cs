@@ -14,7 +14,7 @@ public sealed record OperationQuery(
     string? Profile = null, IReadOnlyDictionary<string, string?>? Dimensions = null);
 
 public sealed record StatsQuery(DateTimeOffset? From = null, DateTimeOffset? To = null, string? Profile = null,
-    IReadOnlyDictionary<string, string?>? Dimensions = null);
+    IReadOnlyDictionary<string, string?>? Dimensions = null, string? RowDimension = null, string? ColumnDimension = null);
 
 public sealed record SessionSummary(
     long Id, string SessionKey, string AgentKind, string Transport, string Source, string? ClientName,
@@ -83,9 +83,20 @@ public sealed record OperationDimensions(IReadOnlyList<DimensionValueSummary> Va
 
 public sealed record DimensionStat(string Name, IReadOnlyList<DimensionValueSummary> Values);
 
+public sealed record DimensionAggregate(
+    int Operations, long? TotalDurationMs, int DurationAvailableOperations, int DurationUnavailableOperations,
+    int Failed, int Rejected);
+
+public sealed record DimensionMatrixCell(
+    DimensionValueSummary Row, DimensionValueSummary Column, DimensionAggregate Metrics);
+
+public sealed record DimensionMatrixStats(
+    string RowDimension, string ColumnDimension, IReadOnlyList<DimensionMatrixCell> Cells,
+    DimensionAggregate Totals);
+
 public sealed record ProfileDimensionStats(
     string? Profile, bool ProfileDefinitionAvailable, int Operations, IReadOnlyList<DimensionStat> Dimensions,
-    IReadOnlyList<TargetStat> Targets);
+    IReadOnlyList<TargetStat> Targets, DimensionMatrixStats? Matrix = null);
 
 /// <summary>Token totals over operations that carry both a raw and an emitted count (MCP rows carry raw only).</summary>
 public sealed record TokenStat(long Raw, long Emitted);

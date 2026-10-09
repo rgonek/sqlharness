@@ -164,24 +164,28 @@ public sealed class DashboardServerTests
             """);
         var seed = new JournalSeed(home.DatabasePath);
         seed.Operation(JournalSeed.Session("cli:matching"), profile: "app",
-            variables: new Dictionary<string, string> { ["region"] = "eu:west" });
+            variables: new Dictionary<string, string> { ["region"] = "eu:west", ["component"] = "api" });
         seed.Operation(JournalSeed.Session("cli:other"), profile: "app",
-            variables: new Dictionary<string, string> { ["region"] = "us" });
+            variables: new Dictionary<string, string> { ["region"] = "us", ["component"] = "portal" });
         await using var dashboard = await StartAuthenticated(home);
         var (_, client) = dashboard;
         var encodedDimensions = Uri.EscapeDataString("""{"region":"eu:west"}""");
 
-        using var stats = JsonDocument.Parse(await client.GetStringAsync("/api/stats?profile=app"));
+        using var stats = JsonDocument.Parse(await client.GetStringAsync("/api/stats?profile=app&rowDimension=region&columnDimension=component"));
         using var operations = JsonDocument.Parse(await client.GetStringAsync($"/api/operations?profile=app&dimensions={encodedDimensions}"));
 
         Assert.Equal(2, stats.RootElement.GetProperty("profileDimensions").GetProperty("operations").GetInt32());
-        Assert.Equal("region", stats.RootElement.GetProperty("profileDimensions").GetProperty("dimensions")[0].GetProperty("name").GetString());
+        var matrix = stats.RootElement.GetProperty("profileDimensions").GetProperty("matrix");
+        Assert.Equal("region", matrix.GetProperty("rowDimension").GetString());
+        Assert.Equal(2, matrix.GetProperty("cells").GetArrayLength());
+        Assert.Equal(2, matrix.GetProperty("totals").GetProperty("operations").GetInt32());
         Assert.Single(operations.RootElement.GetProperty("items").EnumerateArray());
         var operation = operations.RootElement.GetProperty("items")[0];
         Assert.Equal("db", operation.GetProperty("database").GetString());
         var operationId = operation.GetProperty("id").GetInt64();
         using var detail = JsonDocument.Parse(await client.GetStringAsync($"/api/operations/{operationId}"));
-        var dimension = detail.RootElement.GetProperty("dimensions").GetProperty("values")[0];
+        var dimension = detail.RootElement.GetProperty("dimensions").GetProperty("values").EnumerateArray()
+            .Single(value => value.GetProperty("name").GetString() == "region");
         Assert.Equal("region", dimension.GetProperty("name").GetString());
         Assert.Equal("eu:west", dimension.GetProperty("value").GetString());
         Assert.Equal(HttpStatusCode.BadRequest,

@@ -353,6 +353,12 @@ public sealed class JournalReaderTests
             variables: new Dictionary<string, string> { ["component"] = "worker" }, durationMs: 20);
         seed.Operation(JournalSeed.Session("cli:running", hostPid: 100), profile: "app", complete: false,
             variables: new Dictionary<string, string> { ["component"] = "worker" });
+        seed.Operation(JournalSeed.Session("cli:eu-api-1"), profile: "app",
+            variables: new Dictionary<string, string> { ["region"] = "eu", ["component"] = "api" }, durationMs: 5);
+        seed.Operation(JournalSeed.Session("cli:eu-api-2"), profile: "app",
+            variables: new Dictionary<string, string> { ["region"] = "eu", ["component"] = "api" }, durationMs: 7);
+        seed.Operation(JournalSeed.Session("cli:us-portal"), profile: "app", status: "rejected", exitCode: 2,
+            variables: new Dictionary<string, string> { ["region"] = "us", ["component"] = "portal" }, durationMs: 11);
         seed.Operation(JournalSeed.Session("cli:deleted-profile"), profile: "deleted",
             variables: new Dictionary<string, string> { ["historical"] = "kept" });
         var definitions = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
@@ -362,29 +368,46 @@ public sealed class JournalReaderTests
         };
 
         var reader = Reader(home, new FakeProcesses());
-        var all = reader.Stats(new StatsQuery(Profile: "app"), definitions);
-        var filtered = reader.Stats(new StatsQuery(Profile: "app", Dimensions: new Dictionary<string, string?> { ["region"] = null }), definitions);
+        var all = reader.Stats(new StatsQuery(Profile: "app", RowDimension: "region", ColumnDimension: "component"), definitions);
+        var filtered = reader.Stats(new StatsQuery(Profile: "app",
+            Dimensions: new Dictionary<string, string?> { ["region"] = null },
+            RowDimension: "region", ColumnDimension: "component"), definitions);
         var empty = reader.Stats(new StatsQuery(Profile: "empty-profile",
             To: new DateTimeOffset(2026, 10, 7, 0, 0, 0, TimeSpan.Zero)), definitions);
         var deletedProfile = reader.Stats(new StatsQuery(Profile: "deleted"), definitions);
 
         Assert.Equal(27, all.ProfileOperations.Count);
-        Assert.Equal(29, all.ProfileOperations.Sum(item => item.Operations));
+        Assert.Equal(32, all.ProfileOperations.Sum(item => item.Operations));
         Assert.Equal("app", all.ProfileOperations[0].Profile);
         Assert.Equal("deleted", all.ProfileOperations[1].Profile);
         Assert.True(all.ProfileDimensions.ProfileDefinitionAvailable);
-        Assert.Equal(3, all.ProfileDimensions.Operations);
+        Assert.Equal(6, all.ProfileDimensions.Operations);
         var region = Assert.Single(all.ProfileDimensions.Dimensions, item => item.Name == "region");
-        Assert.Equal(2, region.Values.Count);
-        var literal = Assert.Single(region.Values, item => !item.IsUnknown);
+        Assert.Equal(4, region.Values.Count);
+        var literal = Assert.Single(region.Values, item => !item.IsUnknown && item.Value == "Unknown");
         var missing = Assert.Single(region.Values, item => item.IsUnknown);
         Assert.Equal(("Unknown", 1), (literal.Value, literal.Operations));
         Assert.NotNull(literal.Percentage);
-        Assert.Equal(100d / 3, literal.Percentage.Value, 3);
+        Assert.Equal(100d / 6, literal.Percentage.Value, 3);
         Assert.Equal(("Unknown", 2, 20L, 1, 1, 1),
             (missing.Value, missing.Operations, missing.TotalDurationMs, missing.DurationAvailableOperations,
                 missing.DurationUnavailableOperations, missing.Failed));
+        var matrix = Assert.IsType<DimensionMatrixStats>(all.ProfileDimensions.Matrix);
+        Assert.Equal(("region", "component", 6), (matrix.RowDimension, matrix.ColumnDimension, matrix.Totals.Operations));
+        Assert.Equal(6, matrix.Cells.Sum(cell => cell.Metrics.Operations));
+        Assert.Equal((1, 1), (matrix.Totals.Failed, matrix.Totals.Rejected));
+        Assert.Equal(2, Assert.Single(matrix.Cells, cell => !cell.Row.IsUnknown && cell.Row.Value == "eu"
+            && !cell.Column.IsUnknown && cell.Column.Value == "api").Metrics.Operations);
+        var literalUnknown = Assert.Single(matrix.Cells, cell => !cell.Row.IsUnknown && cell.Row.Value == "Unknown"
+            && cell.Column.Value == "worker");
+        var missingRegion = Assert.Single(matrix.Cells, cell => cell.Row.IsUnknown && cell.Column.Value == "worker");
+        Assert.Equal((1, 30L, 0), (literalUnknown.Metrics.Operations, literalUnknown.Metrics.TotalDurationMs,
+            literalUnknown.Metrics.DurationUnavailableOperations));
+        Assert.Equal((2, 20L, 1, 1), (missingRegion.Metrics.Operations, missingRegion.Metrics.TotalDurationMs,
+            missingRegion.Metrics.DurationUnavailableOperations, missingRegion.Metrics.Failed));
         Assert.Equal(2, filtered.ProfileDimensions.Operations);
+        Assert.Equal(2, filtered.ProfileDimensions.Matrix!.Totals.Operations);
+        Assert.Equal(2, Assert.Single(filtered.ProfileDimensions.Matrix.Cells).Metrics.Operations);
         Assert.Equal(all.ProfileOperations, filtered.ProfileOperations);
         Assert.Equal(2, Assert.Single(filtered.ProfileDimensions.Dimensions, item => item.Name == "region").Values.Single().Operations);
         Assert.Equal(0, empty.ProfileDimensions.Operations);

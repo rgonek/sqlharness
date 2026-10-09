@@ -9,7 +9,8 @@ export const queryKeys = {
   sessions: (filters: SessionFilters) => ["sessions", filters] as const,
   session: (id: number) => ["session", id] as const,
   operation: (id: number) => ["operation", id] as const,
-  stats: (range: StatsRange) => ["stats", range] as const,
+  stats: (range: StatsRange, profile?: string | null, dimensions?: Record<string, string | null>, rowDimension?: string, columnDimension?: string) =>
+    ["stats", range, profile, dimensions, rowDimension, columnDimension] as const,
   settings: () => ["settings"] as const,
   profiles: () => ["profiles"] as const,
   plan: (hash: string) => ["plan", hash] as const,
@@ -57,10 +58,19 @@ export function rangeStart(range: StatsRange, now: number): string | undefined {
   return new Date(start).toISOString()
 }
 
-export function useStats(range: StatsRange) {
+export function useStats(
+  range: StatsRange, profile?: string | null, dimensions: Record<string, string | null> = {},
+  rowDimension?: string, columnDimension?: string,
+) {
   return useQuery({
-    queryKey: queryKeys.stats(range),
-    queryFn: () => getJson<DashboardStats>("/api/stats", { from: rangeStart(range, Date.now()) }),
+    queryKey: queryKeys.stats(range, profile, dimensions, rowDimension, columnDimension),
+    queryFn: () => getJson<DashboardStats>("/api/stats", {
+      from: rangeStart(range, Date.now()),
+      profile,
+      dimensions: Object.keys(dimensions).length ? JSON.stringify(dimensions) : undefined,
+      rowDimension,
+      columnDimension,
+    }),
   })
 }
 
