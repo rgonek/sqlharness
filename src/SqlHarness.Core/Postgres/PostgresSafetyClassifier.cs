@@ -177,6 +177,8 @@ internal sealed class PostgresSafetyClassifier
                     // temp, except a pg_temp_<N> that cannot be told offline from
                     // another session's.
                     var declared = create.Element.Name.Values;
+                    // 019: the statement's own CTE writes resolve before this temp relation exists.
+                    var writes = FromWrites(effect.Targets, knownTemps, emptyIsSessionLocal: true);
                     knownTemps.Record(
                         key,
                         declared[^1],
@@ -184,7 +186,7 @@ internal sealed class PostgresSafetyClassifier
                         ifNotExists: create.Element.IfNotExists,
                         provesName: declared.Count == 1 ||
                             (declared.Count == 2 && IsPgTempAlias(declared[0])));
-                    return FromWrites(effect.Targets, knownTemps, emptyIsSessionLocal: true);
+                    return writes;
                 }
 
             case Statement.CreateIndex createIndex:
@@ -367,8 +369,10 @@ internal sealed class PostgresSafetyClassifier
         var key = ObjectKey(into.Name);
         if (key is null)
             return StatementOutcome.Unsupported;
+        // 019: the statement's own CTE writes resolve before its INTO relation exists.
+        var writes = FromWrites(effect.Targets, knownTemps);
         knownTemps.Record(key, into.Name.Values[^1], survivesCommit: true, ifNotExists: false, provesName: true);
-        if (FromWrites(effect.Targets, knownTemps).Kind == StatementKind.Mutation)
+        if (writes.Kind == StatementKind.Mutation)
             return StatementOutcome.SessionLocalMutation;
         return StatementOutcome.SessionLocal;
     }
