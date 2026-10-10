@@ -943,7 +943,7 @@ git commit -m "fix(mcp): keep only SDK warnings and errors on stderr"
 - Create: `scripts/mcp-client-acceptance-tap.py`
 
 **Interfaces:**
-- Produces: `pwsh ./scripts/mcp-client-acceptance.ps1 [-Sqlharness <path>] [-Profile <name>] [-SkipClaude] [-SkipCodex]`; exit 0 when every executed check passes, 1 otherwise.
+- Produces: `pwsh ./scripts/mcp-client-acceptance.ps1 -Sqlharness ./artifacts/task7-local/sqlharness.exe [-Profile <name>] [-SkipClaude] [-SkipCodex]`; `-Sqlharness` is required and must point to the worktree-local published executable. Exit 0 when every executed check passes, 1 otherwise.
 
 - [ ] **Step 1: Write the tap**
 
@@ -1096,7 +1096,7 @@ The exact `_meta` key under which a `2026-07-28` client sends its protocol versi
 
 - [ ] **Step 3: Run it once against a local publish**
 
-Run: `pwsh ./scripts/publish-local.ps1 -SkipTests` (installs the branch build; the previous binary is kept as `sqlharness.previous-<timestamp>.exe`), then `pwsh ./scripts/mcp-client-acceptance.ps1`.
+Run: `dotnet publish ./src/SqlHarness.Cli -c Release -p:PublishTrimmed=false -o ./artifacts/task7-local`, then `pwsh ./scripts/mcp-client-acceptance.ps1 -Sqlharness ./artifacts/task7-local/sqlharness.exe`.
 Expected: all rows `Pass = True`; exit 0. Paste the table into the PR description. If Claude Code or Codex is not logged in, run with `-SkipClaude` / `-SkipCodex` and say so in the PR.
 
 - [ ] **Step 4: Commit**
