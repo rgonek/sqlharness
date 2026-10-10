@@ -150,7 +150,8 @@ public static class McpHost
                 clientIdentity.Name ?? running?.ClientInfo?.Name,
                 clientIdentity.Version ?? running?.ClientInfo?.Version,
                 clientIdentity.Title ?? running?.ClientInfo?.Title)
-            with { ProtocolVersion = clientIdentity.ProtocolVersion ?? running?.NegotiatedProtocolVersion };
+            with
+        { ProtocolVersion = clientIdentity.ProtocolVersion ?? running?.NegotiatedProtocolVersion };
         // Handshake revisions only: 2026-07-28 has no initialized notification, and its
         // request-scoped roots/list answers only while the tool call awaits it, so roots
         // stay NULL there rather than blocking a call.
