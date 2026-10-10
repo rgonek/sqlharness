@@ -60,8 +60,8 @@ internal static class OperationJournalDescriber
             ErrorMessage: status is "failed" or "rejected" ? Message(outcome.MachineError) : null);
     }
 
-    internal static OperationEnd Cancelled(long durationMilliseconds) =>
-        new("failed", -1, "cancelled", Math.Max(durationMilliseconds, 0), null, null, null, null, null);
+    internal static OperationEnd Cancelled(long durationMilliseconds, string? reason = null) =>
+        new("failed", -1, "cancelled", Math.Max(durationMilliseconds, 0), null, null, null, null, null, CancelReason: reason);
 
     internal static OperationEnd Crashed(long durationMilliseconds) =>
         new("failed", -1, "unhandled_exception", Math.Max(durationMilliseconds, 0), null, null, null, null, null);

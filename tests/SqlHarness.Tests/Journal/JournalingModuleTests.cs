@@ -22,11 +22,148 @@ public sealed class JournalingModuleTests
             TypedParameters = [new SqlHarnessParameterInput("other", "nvarchar", "SQLH_PARAM_MARKER")],
         };
 
-    private static (JournalingModule Module, JournalTempDirectory Temp) Create(FakeModule inner, bool storeSensitive = false)
+    private static (JournalingModule Module, JournalTempDirectory Temp) Create(
+        FakeModule inner,
+        bool storeSensitive = false,
+        Func<CancellationToken, string?>? cancelReason = null,
+        Func<string?>? rootsJson = null)
     {
         var temp = new JournalTempDirectory();
         var journal = ActivityJournal.Open(temp.DatabasePath, new JournalConfig { StoreSensitive = storeSensitive }, TextWriter.Null, TimeProvider.System);
-        return (new JournalingModule(inner, () => journal, () => JournalTestData.Session()), temp);
+        return (new JournalingModule(inner, () => journal, () => JournalTestData.Session(), cancelReason, rootsJson), temp);
+    }
+
+    [Theory]
+    [InlineData("client")]
+    [InlineData("shutdown")]
+    [InlineData("deadline")]
+    [InlineData(null)]
+    public async Task Thrown_cancellation_records_the_provider_reason(string? reason)
+    {
+        CancellationToken seen = default;
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        var (module, temp) = Create(
+            new FakeModule((_, ct) => Task.FromCanceled<SqlHarnessOutcome>(ct)),
+            cancelReason: token => { seen = token; return reason; });
+        using (temp)
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => module.ExecuteAsync(Query(), cts.Token));
+
+            Assert.Equal(cts.Token, seen);
+            var row = JournalDb.Rows(temp.DatabasePath, "SELECT error_kind, cancel_reason FROM operations").Single();
+            Assert.Equal("cancelled", row["error_kind"]);
+            Assert.Equal(reason, row["cancel_reason"]);
+        }
+    }
+
+    [Fact]
+    public async Task Throwing_reason_provider_records_null_and_rethrows_the_cancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        var (module, temp) = Create(
+            new FakeModule((_, ct) => Task.FromCanceled<SqlHarnessOutcome>(ct)),
+            cancelReason: _ => throw new InvalidOperationException("provider"));
+        using (temp)
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => module.ExecuteAsync(Query(), cts.Token));
+            Assert.Null(JournalDb.Rows(temp.DatabasePath, "SELECT cancel_reason FROM operations").Single()["cancel_reason"]);
+        }
+    }
+
+    [Fact]
+    public async Task Translated_sql_failure_with_cancelled_token_is_recorded_as_cancelled()
+    {
+        using var cts = new CancellationTokenSource();
+        var failure = new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, null, "The operation was canceled.");
+        var (module, temp) = Create(
+            new FakeModule(async (_, _) => { await cts.CancelAsync(); return failure; }),
+            cancelReason: _ => "client");
+        using (temp)
+        {
+            var outcome = await module.ExecuteAsync(Query(), cts.Token);
+
+            Assert.Same(failure, outcome);
+            var row = JournalDb.Rows(temp.DatabasePath, "SELECT status, exit_code, error_kind, cancel_reason FROM operations").Single();
+            Assert.Equal("failed", row["status"]);
+            Assert.Equal(-1L, row["exit_code"]);
+            Assert.Equal("cancelled", row["error_kind"]);
+            Assert.Equal("client", row["cancel_reason"]);
+        }
+    }
+
+    [Fact]
+    public async Task Rejected_outcome_with_cancelled_token_is_recorded_as_cancelled()
+    {
+        using var cts = new CancellationTokenSource();
+        var (module, temp) = Create(
+            new FakeModule(async (_, _) =>
+            {
+                await cts.CancelAsync();
+                return new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, "SQL safety rejection: nope");
+            }),
+            cancelReason: _ => "shutdown");
+        using (temp)
+        {
+            await module.ExecuteAsync(Query(), cts.Token);
+            var row = JournalDb.Rows(temp.DatabasePath, "SELECT error_kind, cancel_reason FROM operations").Single();
+            Assert.Equal("cancelled", row["error_kind"]);
+            Assert.Equal("shutdown", row["cancel_reason"]);
+        }
+    }
+
+    [Fact]
+    public async Task Sql_failure_without_cancellation_stays_an_sql_failure()
+    {
+        var (module, temp) = Create(
+            new FakeModule((_, _) => Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, null, "boom"))),
+            cancelReason: _ => "client");
+        using (temp)
+        {
+            await module.ExecuteAsync(Query(), CancellationToken.None);
+            var row = JournalDb.Rows(temp.DatabasePath, "SELECT exit_code, error_kind, cancel_reason FROM operations").Single();
+            Assert.Equal(5L, row["exit_code"]);
+            Assert.NotEqual("cancelled", row["error_kind"]);
+            Assert.Null(row["cancel_reason"]);
+        }
+    }
+
+    [Theory]
+    [InlineData(SqlHarnessExitCode.Success)]
+    [InlineData(SqlHarnessExitCode.WatchMaxDuration)]
+    [InlineData(SqlHarnessExitCode.SnapshotDifferences)]
+    public async Task Controlled_success_with_cancelled_token_is_not_rewritten(SqlHarnessExitCode exitCode)
+    {
+        using var cts = new CancellationTokenSource();
+        var (module, temp) = Create(
+            new FakeModule(async (_, _) => { await cts.CancelAsync(); return new SqlHarnessOutcome(exitCode, null, null); }),
+            cancelReason: _ => "client");
+        using (temp)
+        {
+            await module.ExecuteAsync(Query(), cts.Token);
+            var row = JournalDb.Rows(temp.DatabasePath, "SELECT status, cancel_reason FROM operations").Single();
+            Assert.Equal("succeeded", row["status"]);
+            Assert.Null(row["cancel_reason"]);
+        }
+    }
+
+    [Fact]
+    public async Task Roots_provider_is_read_at_each_begin()
+    {
+        var roots = (string?)null;
+        var (module, temp) = Create(
+            new FakeModule((_, _) => Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null))),
+            rootsJson: () => roots);
+        using (temp)
+        {
+            await module.ExecuteAsync(Query());
+            Assert.Null(JournalDb.Rows(temp.DatabasePath, "SELECT roots_json FROM sessions").Single()["roots_json"]);
+
+            roots = """[{"uri":"file:///w"}]""";
+            await module.ExecuteAsync(Query());
+            Assert.Equal(roots, JournalDb.Rows(temp.DatabasePath, "SELECT roots_json FROM sessions").Single()["roots_json"]);
+        }
     }
 
     [Fact]
