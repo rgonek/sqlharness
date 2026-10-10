@@ -12,6 +12,7 @@ public static class SessionIdentities
 {
     internal const int MaximumDepth = 16;
     internal const int MaximumTitleLength = 256;
+    internal const int MaximumAgentKindLength = 64;
 
     public static SessionIdentity Cli(IProcessInfo processes)
     {
@@ -78,7 +79,15 @@ public static class SessionIdentities
             return "claude";
         if (clientName.Contains("codex", StringComparison.OrdinalIgnoreCase))
             return "codex";
-        return "other";
+        if (clientName.Contains("copilot", StringComparison.OrdinalIgnoreCase))
+            return "copilot";
+        if (clientName.Contains("opencode", StringComparison.OrdinalIgnoreCase))
+            return "opencode";
+        if (clientName.Contains("grok", StringComparison.OrdinalIgnoreCase))
+            return "grok";
+        // No "other" bucket: an unrecognised client is its own kind, so the dashboard filter lists it by name.
+        var kind = clientName.Trim().ToLowerInvariant();
+        return kind.Length <= MaximumAgentKindLength ? kind : kind[..MaximumAgentKindLength];
     }
 
     internal static string? Classify(ProcessSnapshot process)
@@ -105,12 +114,23 @@ public static class SessionIdentities
                 return "claude";
             case "codex":
                 return "codex";
+            case "copilot":
+                return "copilot";
+            case "opencode":
+                return "opencode";
+            case "grok":
+                return "grok";
             case "node" or "bun" when commandLine is not null:
                 var normalized = commandLine.Replace('\\', '/');
                 if (normalized.Contains("@anthropic-ai/claude-code", StringComparison.OrdinalIgnoreCase))
                     return "claude";
                 if (normalized.Contains("@openai/codex", StringComparison.OrdinalIgnoreCase))
                     return "codex";
+                if (normalized.Contains("@github/copilot", StringComparison.OrdinalIgnoreCase))
+                    return "copilot";
+                if (normalized.Contains("opencode-ai", StringComparison.OrdinalIgnoreCase)
+                    || normalized.Contains("@opencode/cli", StringComparison.OrdinalIgnoreCase))
+                    return "opencode";
                 return null;
             default:
                 // Native codex release binaries carry a target-triple suffix (codex-x86_64-unknown-linux-musl).

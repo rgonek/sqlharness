@@ -3,6 +3,7 @@ import type { OperationSummary } from "@/api/types"
 import { FlagBadges } from "@/components/FlagBadges"
 import { StatusBadge } from "@/components/StatusBadge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { agentLabel } from "@/lib/agents"
 import { formatDuration, formatNumber, formatTimestamp } from "@/lib/format"
 
 /** Live elapsed time for running rows when `now` is given; recorded duration otherwise. */
@@ -33,7 +34,7 @@ export function OperationTable({ operations, now }: { operations: OperationSumma
               </TableCell>
               <TableCell className="whitespace-nowrap">{formatTimestamp(operation.startedAt)}</TableCell>
               <TableCell>
-                {operation.agentKind}
+                {agentLabel(operation.agentKind)}
                 {operation.agentModel && <div className="text-sm text-muted-foreground">{operation.agentModel}</div>}
               </TableCell>
               <TableCell>

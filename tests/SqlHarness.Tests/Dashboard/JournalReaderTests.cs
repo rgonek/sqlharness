@@ -9,6 +9,27 @@ public sealed class JournalReaderTests
         new(home.DatabasePath, processes ?? new FakeProcesses());
 
     [Fact]
+    public void Agent_kinds_list_only_kinds_present_with_session_counts()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:a", "codex"));
+        seed.Operation(JournalSeed.Session("cli:b", "codex"));
+        seed.Operation(JournalSeed.Session("cli:c", "copilot"));
+
+        var kinds = Reader(home).AgentKinds();
+
+        Assert.Equal([new KeyCount("codex", 2), new KeyCount("copilot", 1)], kinds);
+    }
+
+    [Fact]
+    public void Agent_kinds_of_a_missing_journal_are_empty()
+    {
+        using var home = new TempHome();
+        Assert.Empty(Reader(home).AgentKinds());
+    }
+
+    [Fact]
     public void Missing_database_reads_as_empty()
     {
         using var home = new TempHome();

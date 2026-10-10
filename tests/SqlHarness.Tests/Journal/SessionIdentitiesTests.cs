@@ -151,11 +151,53 @@ public sealed class SessionIdentitiesTests
     [InlineData("claude-code", "claude")]
     [InlineData("Claude Desktop", "claude")]
     [InlineData("codex-mcp-client", "codex")]
-    [InlineData("sqlharness-mcp-tests", "other")]
+    [InlineData("copilot-cli", "copilot")]
+    [InlineData("GitHub Copilot", "copilot")]
+    [InlineData("opencode", "opencode")]
+    [InlineData("grok-shell-acc", "grok")]
+    [InlineData("grok-shell-sqlharness", "grok")]
+    [InlineData("cursor", "cursor")]
+    [InlineData("  Some Client  ", "some client")]
+    [InlineData("sqlharness-mcp-tests", "sqlharness-mcp-tests")]
+    [InlineData("  ", "unknown")]
     [InlineData("", "unknown")]
     [InlineData(null, "unknown")]
     public void Client_names_map_to_agent_kinds(string? clientName, string expected) =>
         Assert.Equal(expected, SessionIdentities.AgentKindFromClientName(clientName));
+
+    [Fact]
+    public void Unrecognised_client_name_is_capped() =>
+        Assert.Equal(SessionIdentities.MaximumAgentKindLength, SessionIdentities.AgentKindFromClientName(new string('x', 200)).Length);
+
+    [Fact]
+    public void Cli_finds_copilot_through_node_loader()
+    {
+        var processes = new FakeProcesses(30,
+            P(30, 20, "sqlharness.exe"), P(20, 10, "pwsh.exe"),
+            P(10, 1, "node.exe", @"node C:	ools
+ode_modules\@github\copilot
+pm-loader.js -p x"), P(1, null, "explorer.exe"));
+
+        Assert.Equal("copilot", SessionIdentities.Cli(processes).AgentKind);
+    }
+
+    [Fact]
+    public void Cli_finds_native_grok()
+    {
+        var processes = new FakeProcesses(30,
+            P(30, 20, "sqlharness.exe"), P(20, 10, "grok.exe"), P(10, null, "explorer.exe"));
+
+        Assert.Equal("grok", SessionIdentities.Cli(processes).AgentKind);
+    }
+
+    [Fact]
+    public void Cli_finds_native_opencode()
+    {
+        var processes = new FakeProcesses(30,
+            P(30, 20, "sqlharness.exe"), P(20, 10, "opencode.exe"), P(10, null, "explorer.exe"));
+
+        Assert.Equal("opencode", SessionIdentities.Cli(processes).AgentKind);
+    }
 
     [Fact]
     public void Mcp_identity_uses_client_info_and_records_agent_ancestor()

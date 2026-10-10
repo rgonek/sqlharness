@@ -93,6 +93,15 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         }
     }
 
+    public IReadOnlyList<KeyCount> AgentKinds()
+    {
+        using var connection = OpenSnapshot();
+        if (connection is null)
+            return [];
+        return Query(connection, "SELECT agent_kind, COUNT(*) FROM sessions GROUP BY agent_kind ORDER BY agent_kind;", [],
+            r => new KeyCount(r.GetString(0), r.GetInt32(1)));
+    }
+
     public Page<SessionSummary> Sessions(SessionQuery query)
     {
         using var connection = OpenSnapshot();

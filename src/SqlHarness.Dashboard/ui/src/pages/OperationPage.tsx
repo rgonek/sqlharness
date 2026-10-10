@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { comparePairs, compareRows, formatChange, variantLabel } from "@/lib/compare"
 import { formatDuration, formatNumber, formatTimestamp, shortHash } from "@/lib/format"
+import { agentLabel } from "@/lib/agents"
 import { parseRouteId } from "@/lib/routeId"
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
@@ -118,7 +119,7 @@ function OperationView({ id }: { id: number }) {
             <FlagBadges operation={op} />
           </div>
           <CardDescription>
-            {op.operation} by {op.agentKind} in{" "}
+            {op.operation} by {agentLabel(op.agentKind)} in{" "}
             <Link to="/sessions/$id" params={{ id: String(op.sessionId) }}>
               {detail.session.sessionKey}
             </Link>

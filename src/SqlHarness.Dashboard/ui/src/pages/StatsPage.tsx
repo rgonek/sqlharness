@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { rangeWindow, type StatsRange, useProfiles, useStats, type StatsWindow } from "@/api/queries"
 import type { DashboardStats, KeyCount, ProfileView, SqlHashStat } from "@/api/types"
+import { agentLabel } from "@/lib/agents"
 import { ErrorState } from "@/components/ErrorState"
 import { Kpi } from "@/components/Kpi"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -196,7 +197,7 @@ function StatsContent({
 }) {
   const perDay = pivotPerDay(stats.operationsPerDay)
   const perDayConfig = Object.fromEntries(
-    perDay.agents.map((agent, index) => [agent, { label: agent, color: `var(--chart-${(index % 5) + 1})` }]),
+    perDay.agents.map((agent, index) => [agent, { label: agentLabel(agent), color: `var(--chart-${(index % 5) + 1})` }]),
   ) satisfies ChartConfig
   const total = stats.operations.reduce((sum, row) => sum + row.count, 0)
 

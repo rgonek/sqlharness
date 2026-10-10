@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatTimestamp } from "@/lib/format"
 import { clientLabel, rootLabel } from "@/lib/roots"
+import { agentLabel } from "@/lib/agents"
 import { parseRouteId } from "@/lib/routeId"
 
 const unknownRootsHint =
@@ -44,7 +45,7 @@ function SessionView({ id }: { id: number }) {
           </CardTitle>
           <div className="font-mono">{session.sessionKey}</div>
           <CardDescription>
-            {session.agentKind} via {session.transport} ({session.source})
+            {agentLabel(session.agentKind)} via {session.transport} ({session.source})
           </CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-4 md:grid-cols-4">
