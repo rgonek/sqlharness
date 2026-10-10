@@ -16,11 +16,40 @@ public static class McpHost
 {
     public const string ServerName = "sqlharness-mcp";
 
-    /// <summary>Pinned, tested protocol revision (spec bindings, T1).</summary>
+    /// <summary>Tested revisions SQLHarness offers, newest last.</summary>
+    public static readonly IReadOnlyList<string> SupportedProtocolVersions = ["2025-06-18", "2025-11-25", "2026-07-28"];
+
+    /// <summary>Offered revisions that use the initialize handshake.</summary>
+    public static readonly IReadOnlyList<string> HandshakeProtocolVersions = ["2025-06-18", "2025-11-25"];
+
+    /// <summary>Answer to an initialize for a revision SQLHarness does not offer.</summary>
+    public const string FallbackProtocolVersion = "2025-11-25";
+
+    // Retained until Task 2 migrates the operation mapper and existing tests.
     public const string PinnedProtocolVersion = "2025-11-25";
 
     public static readonly string ServerVersion =
         typeof(McpHost).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+    /// <summary>
+    /// SDK server options shared by the host and protocol tests. Historical
+    /// initialize revisions are normalized by the transport input wrapper before
+    /// SDK parsing. The identity parameter is accepted for Task 3 and ignored here.
+    /// </summary>
+    public static ModelContextProtocol.Server.McpServerOptions CreateServerOptions(McpClientIdentity? identity = null)
+    {
+        _ = identity;
+        var options = new ModelContextProtocol.Server.McpServerOptions
+        {
+            ServerInfo = new ModelContextProtocol.Protocol.Implementation
+            {
+                Name = ServerName,
+                Version = ServerVersion,
+            },
+            ProtocolVersion = null,
+        };
+        return options;
+    }
 
     /// <summary>
     /// Serves the frozen startup scope over process stdio.
@@ -82,15 +111,7 @@ public static class McpHost
         // request scope.
 
         var loggerFactory = new McpStderrLoggerFactory(log);
-        var serverOptions = new ModelContextProtocol.Server.McpServerOptions
-        {
-            ServerInfo = new ModelContextProtocol.Protocol.Implementation
-            {
-                Name = ServerName,
-                Version = ServerVersion,
-            },
-            ProtocolVersion = PinnedProtocolVersion,
-        };
+        var serverOptions = CreateServerOptions();
         // Explicit EOF binding (T5 fix R1): the SDK does not propagate stdin
         // EOF to in-flight handler tokens, so the host watches the
         // transport's own reads and folds EOF into the shutdown token every
@@ -99,6 +120,7 @@ public static class McpHost
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct, eofShutdown.Token);
         using var eofInput = new EofShutdownInput(input, eofShutdown);
         using var guardedInput = process.RequestScope ? new McpDuplicateJsonFieldGuardInput(eofInput) : null;
+        using var rewrittenInput = new McpProtocolVersionRewriteInput((Stream?)guardedInput ?? eofInput);
         // Activity journal: content-free stderr diagnostics only; stdout stays protocol-only.
         var config = SqlHarnessConfigLoader.Load();
         if (config.Warning is not null)
@@ -132,7 +154,7 @@ public static class McpHost
         {
             // Tools come only from the explicit catalog wired above.
             await using var server = ModelContextProtocol.Server.McpServer.Create(
-                new ModelContextProtocol.Server.StreamServerTransport((Stream?)guardedInput ?? eofInput, output, ServerName, loggerFactory),
+                new ModelContextProtocol.Server.StreamServerTransport(rewrittenInput, output, ServerName, loggerFactory),
                 serverOptions,
                 loggerFactory,
                 serviceProvider: null);
