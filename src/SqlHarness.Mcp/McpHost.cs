@@ -195,10 +195,10 @@ public static class McpHost
         {
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
-            // Always enabled: the level gate is not the protection. Safety
-            // comes from Log never rendering state, exception, or formatter
-            // output, so any enabled event is content-free by construction.
-            public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
+            // Noise reduction only: SDK Trace/Debug/Information events carry no text here and
+            // only fill client logs. The leak protection is that Log never renders state,
+            // exception, or formatter output, at any level.
+            public bool IsEnabled(LogLevel logLevel) => logLevel is LogLevel.Warning or LogLevel.Error or LogLevel.Critical;
 
             public void Log<TState>(
                 LogLevel logLevel,
@@ -207,6 +207,9 @@ public static class McpHost
                 Exception? exception,
                 Func<TState, Exception?, string> formatter)
             {
+                if (!IsEnabled(logLevel))
+                    return;
+
                 // SDK-side diagnostics only. This logger emits
                 // only safe primitives, so no SQL, parameters, or connection details
                 // can reach stderr through it: category, level, numeric event id. Never call

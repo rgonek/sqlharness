@@ -207,4 +207,57 @@ public sealed class McpStderrLeakRegressionTests
             McpStdioProcessHarness.DeleteHome(home);
         }
     }
+
+    [Theory]
+    [InlineData("2025-06-18")]
+    [InlineData("2025-11-25")]
+    [InlineData("2026-07-28")]
+    public async Task Process_stderr_has_no_trace_debug_or_information_lines(string revision)
+    {
+        using var cts = new CancellationTokenSource(LeakBudget);
+        var ct = cts.Token;
+        var exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
+        var home = McpStdioProcessHarness.CreateSyntheticHome(
+            McpStdioProcessHarness.ProfileName,
+            """{"mcp-stdio": {"server": "mcp-unreachable.invalid", "database": "mcp-stdio-db", "vars": {}, "auth": "integrated"}}""");
+        McpStdioProcessHarness.StdioChild? child = null;
+        try
+        {
+            child = McpStdioProcessHarness.StartServer(exe, home, "mcp serve mcp-stdio");
+            var stdin = child.Process.StandardInput.BaseStream;
+            var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct, revision);
+            Assert.Equal(revision, client.NegotiatedProtocolVersion);
+            var gain = await client.CallToolAsync("sqlharness_gain", new Dictionary<string, object?>(), cancellationToken: ct);
+            Assert.NotEqual(true, gain.IsError);
+            await client.DisposeAsync();
+            child.Process.StandardInput.Close();
+            Assert.True(child.Process.WaitForExit(30_000), "The published server did not exit after stdin EOF.");
+            Assert.Equal(0, child.Process.ExitCode);
+            await child.StdoutTee.DrainRemainingAsync(TimeSpan.FromSeconds(10), ct);
+            McpStdioProcessHarness.AssertStdoutIsPureProtocol(child.StdoutTee.Recorded);
+
+            var stderr = await child.Stderr.WaitAsync(TimeSpan.FromSeconds(10), ct);
+            Assert.DoesNotContain(": Trace (event", stderr, StringComparison.Ordinal);
+            Assert.DoesNotContain(": Debug (event", stderr, StringComparison.Ordinal);
+            Assert.DoesNotContain(": Information (event", stderr, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (child is not null && !child.Process.HasExited)
+            {
+                try
+                {
+                    child.Process.Kill(entireProcessTree: true);
+                }
+                catch (InvalidOperationException)
+                {
+                }
+
+                child.Process.WaitForExit(10_000);
+            }
+
+            child?.Process.Dispose();
+            McpStdioProcessHarness.DeleteHome(home);
+        }
+    }
 }
