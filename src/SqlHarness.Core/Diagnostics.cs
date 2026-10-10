@@ -125,7 +125,7 @@ internal static class StatisticsIoDetailParser
     }
 }
 
-internal sealed record StatisticsTime(long CpuTimeMs, long ElapsedTimeMs);
+internal sealed record StatisticsTime(long CpuTimeMs, long ElapsedTimeMs, int RecognizedBlocks);
 
 internal static class StatisticsTimeParser
 {
@@ -137,14 +137,15 @@ internal static class StatisticsTimeParser
     {
         long cpuTimeMs = 0;
         long elapsedTimeMs = 0;
+        var matches = ExecutionTime.Matches(text);
 
-        foreach (Match match in ExecutionTime.Matches(text))
+        foreach (Match match in matches)
         {
             cpuTimeMs += long.Parse(match.Groups["cpu"].Value, NumberStyles.None, CultureInfo.InvariantCulture);
             elapsedTimeMs += long.Parse(match.Groups["elapsed"].Value, NumberStyles.None, CultureInfo.InvariantCulture);
         }
 
-        return new StatisticsTime(cpuTimeMs, elapsedTimeMs);
+        return new StatisticsTime(cpuTimeMs, elapsedTimeMs, matches.Count);
     }
 }
 

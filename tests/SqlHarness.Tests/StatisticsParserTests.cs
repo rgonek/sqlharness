@@ -39,5 +39,24 @@ public class StatisticsParserTests
 
         Assert.Equal(15, parsed.CpuTimeMs);
         Assert.Equal(25, parsed.ElapsedTimeMs);
+        Assert.Equal(2, parsed.RecognizedBlocks);
+    }
+
+    [Fact]
+    public void Time_parser_counts_no_blocks_for_localized_output()
+    {
+        var parsed = StatisticsTimeParser.Parse(
+            "SQL Server-Ausführungszeiten:\n   CPU-Zeit = 12 ms, verstrichene Zeit = 20 ms.");
+
+        Assert.Equal(0, parsed.RecognizedBlocks);
+        Assert.Equal(0, parsed.CpuTimeMs);
+    }
+
+    [Fact]
+    public void Time_parser_counts_no_blocks_for_empty_input()
+    {
+        var parsed = StatisticsTimeParser.Parse("");
+
+        Assert.Equal(0, parsed.RecognizedBlocks);
     }
 }
