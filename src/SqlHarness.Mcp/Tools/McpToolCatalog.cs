@@ -346,6 +346,7 @@ public sealed class McpToolHandlers(
             // Discovery and local tools share no gate, but every execution is
             // still bounded by the process time budget through this token.
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _hostShutdown);
+            using var reason = McpCallRegistry.Track(linked, ct, _hostShutdown);
             linked.CancelAfter(TimeSpan.FromSeconds(scope.MaxOperationSeconds));
             return await McpResultAdapter.AdaptAndCompleteAsync(await run(linked.Token), command, budget);
         }
@@ -403,6 +404,7 @@ public sealed class McpToolHandlers(
         try
         {
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _hostShutdown);
+            using var reason = McpCallRegistry.Track(linked, ct, _hostShutdown);
             linked.CancelAfter(callBudget);
             var progress = new McpProgressReporter(_clock);
             await progress.ReportAsync(context, command, McpProgressReporter.Started, linked.Token);

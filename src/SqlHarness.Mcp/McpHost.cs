@@ -150,7 +150,8 @@ public static class McpHost
         process.DecorateModules(module => new JournalingModule(
             module,
             () => journal.Value,
-            identity));
+            identity,
+            McpCallRegistry.Classify));
         Tools.McpToolCatalog.Wire(serverOptions, process, hostShutdown: lifetime.Token);
         try
         {

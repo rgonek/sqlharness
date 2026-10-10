@@ -178,6 +178,7 @@ public sealed class McpRequestToolHandlers(
         try
         {
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, hostShutdown);
+            using var reason = McpCallRegistry.Track(linked, ct, hostShutdown);
             linked.CancelAfter(TimeSpan.FromSeconds(process.MaxOperationSeconds));
             return await McpResultAdapter.AdaptAndCompleteAsync(await run(linked.Token), command, budget);
         }
