@@ -508,7 +508,9 @@ public sealed class McpStdioProcessTests
                     ["scope"] = Scope("sample-country"),
                     ["repeat"] = 1,
                     ["timeout"] = 1,
-                    ["maxOperationSeconds"] = 2,
+                    // 2s expires while the Linux suite saturates the CPU. That
+                    // cancellation is exit 5, which hides the storage denial.
+                    ["maxOperationSeconds"] = 30,
                 };
                 if (toolName == "sqlharness_measure")
                     arguments["query"] = new Dictionary<string, object?> { ["sql"] = "SELECT 1" };
