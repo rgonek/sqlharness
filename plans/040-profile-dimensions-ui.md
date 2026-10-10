@@ -1,6 +1,6 @@
 # Dynamic profile dimensions and target matrix
 
-Status: implementation complete; Windows gate verified; Linux verification outstanding.
+Status: DONE — implementation complete; Windows and Linux verification confirmed by the user on 2026-10-10.
 
 ## Goal
 

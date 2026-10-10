@@ -118,6 +118,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [037](037-rescope-pgstop-current-pg-versions.md) | Direction: extend the `pgstop` design to PostgreSQL 17/18 before implementing it | P2 | S–M | — | TODO |
 | [038](038-agent-session-friction-fixes.md) | Live-session friction: one-item/matrix/artifact truncation, setup `#temp` scope, variable diagnostics/batch guard, redaction, input-path hint, per-statement metrics, token guard, XML false positives | P1–P3 | S–M per item | — | DONE (merged locally; Windows and Linux verify gates green after MCP host log synchronization) |
 | [039](039-busy-result-hint.md) | BUSY rejection carries a hint naming the running tool; gate stays non-blocking | P2 | S | — | DONE (branch fix/plan-039-busy-hint) |
+| [040](040-profile-dimensions-ui.md) | Dynamic profile dimensions, target matrix, and MCP emitted estimates | P2 | L | — | DONE (implementation complete; Windows and Linux verification confirmed by the user on 2026-10-10) |
 | [041](041-query-projection-preserve-shape.md) | Oversized query projections preserve useful result-set and row/schema structure | P2 | M | 038/W1 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
