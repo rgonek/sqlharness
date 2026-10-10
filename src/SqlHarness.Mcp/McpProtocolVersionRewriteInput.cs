@@ -13,7 +13,6 @@ internal sealed class McpProtocolVersionRewriteInput(Stream inner) : Stream
     private readonly byte[] _readBuffer = new byte[8192];
     private readonly Queue<byte> _output = new();
     private readonly List<byte> _frame = [];
-    private bool _passthroughOversized;
 
     public override bool CanRead => _inner.CanRead;
     public override bool CanSeek => false;
@@ -81,13 +80,6 @@ internal sealed class McpProtocolVersionRewriteInput(Stream inner) : Stream
     {
         foreach (var value in bytes)
         {
-            if (_passthroughOversized)
-            {
-                _output.Enqueue(value);
-                if (value == (byte)'\n') _passthroughOversized = false;
-                continue;
-            }
-
             if (value == (byte)'\n')
             {
                 EmitFrame(includeNewline: true);
@@ -96,15 +88,10 @@ internal sealed class McpProtocolVersionRewriteInput(Stream inner) : Stream
 
             if (_frame.Count >= MaxFrameBytes)
             {
-                foreach (var buffered in _frame) _output.Enqueue(buffered);
-                _frame.Clear();
-                _output.Enqueue(value);
-                _passthroughOversized = true;
+                throw new InvalidDataException("MCP frame exceeds the 16 MiB input limit.");
             }
-            else
-            {
-                _frame.Add(value);
-            }
+
+            _frame.Add(value);
         }
     }
 

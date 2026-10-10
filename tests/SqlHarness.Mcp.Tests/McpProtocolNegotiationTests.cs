@@ -84,6 +84,27 @@ public sealed class McpProtocolNegotiationTests
     }
 
     [Fact]
+    public async Task Initialize_without_protocol_version_is_left_alone()
+    {
+        const string frame = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"capabilities\":{},\"clientInfo\":{\"name\":\"x\",\"version\":\"1\"}}}\n";
+
+        Assert.Equal(frame, await RewriteAsync(frame));
+    }
+
+    [Fact]
+    public async Task Oversized_frame_is_rejected_before_any_bytes_are_forwarded()
+    {
+        var input = new string(' ', 16 * 1024 * 1024 + 1);
+
+        await using var source = new MemoryStream(Encoding.UTF8.GetBytes(input));
+        await using var rewritten = new McpProtocolVersionRewriteInput(source);
+        await using var destination = new MemoryStream();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => rewritten.CopyToAsync(destination));
+        Assert.Empty(destination.ToArray());
+    }
+
+    [Fact]
     public async Task Rewrite_changes_only_unoffered_initialize_versions()
     {
         static string Initialize(string version) => "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"" + version + "\",\"capabilities\":{},\"clientInfo\":{\"name\":\"x\",\"version\":\"1\"}}}\n";
