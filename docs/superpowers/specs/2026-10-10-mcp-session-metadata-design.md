@@ -1,16 +1,22 @@
 # MCP session metadata: client title, workspace roots, cancellation reason, call metadata
 
 Status: approved design and plan. **Implement after the MCP protocol upgrade
-plan** (protocol `2026-07-28`): that revision may move `clientInfo` and change
-`_meta`, so the title, roots and call-metadata read paths must be re-checked
-against the upgraded host before implementation. Known risk: `2026-07-28` has no `notifications/initialized` and may not allow a server-initiated `roots/list` over stdio outside MRTR; if so, roots stay NULL for `2026-07-28` sessions (which includes Claude Code after the upgrade). The plan's "Post-upgrade adjustments" section says how to check and what to do.
+plan merges.** The upgraded host negotiates `2026-07-28` with Claude Code and
+`2025-06-18` with Codex. On `2026-07-28`, `clientInfo` and client capabilities
+come from the request-scoped server, and `tools/call._meta` contains protocol
+keys alongside client labels. The title and roots read paths must use that
+context. `2026-07-28` has no `notifications/initialized`; whether a
+request-scoped `roots/list` works over stdio remains unproven. If the Task 5
+probe fails, roots stay NULL for `2026-07-28` sessions. The plan's
+"Post-upgrade adjustments" section defines that decision.
 
 ## Goal
 
 Record facts the MCP protocol already offers but the activity journal does not
 keep, and show them in the dashboard:
 
-1. `clientInfo.title` from `initialize`;
+1. `clientInfo.title` from the first request that carries a non-blank title
+   (or `initialize` on handshake revisions);
 2. the client's workspace roots (`roots/list`);
 3. who cancelled an operation that ended with `error_kind = 'cancelled'`;
 4. allowlisted per-call metadata from `tools/call._meta` (Claude Code tool-use
@@ -132,20 +138,30 @@ Allowlist, read from `tools/call` `params._meta` only:
 
 ### Client title
 
-`SessionIdentities.Mcp` receives `running?.ClientInfo?.Title` alongside name and
-version and puts it on `SessionIdentity` (new `ClientTitle` member). The session
-upsert in `ActivityJournal` writes it. The identity stays one lazy value per
-serve process.
+The `tools/call` request filter records `context.Server.ClientInfo` in
+`McpClientIdentity`; name and version keep the first non-null client info.
+Record title independently as the first non-blank title so an earlier client
+info object without a usable title cannot suppress a later one. Pass that
+title, falling back to `running?.ClientInfo?.Title` on handshake revisions,
+to `SessionIdentities.Mcp`. The session key stays fixed
+for the serve process, but `JournalingModule` resolves the session identity
+for each operation so a later request can fill a previously NULL title.
+`ActivityJournal` keeps the first non-NULL title. A first `2026-07-28` call
+without client info must not prevent a later call from supplying it.
 
 ### Roots snapshot
 
 A new MCP-layer unit (working name `McpRootsTracker`) owns the in-memory
 snapshot:
 
-- It starts after `notifications/initialized` when the client declared
-  `capabilities.roots`, and again on every `notifications/roots/list_changed`
-  when the client declared `roots.listChanged`. A `list_changed` from a client
-  that did not declare it is ignored.
+- On handshake revisions it starts after `notifications/initialized` when the
+  client declared `capabilities.roots`, and again on
+  `notifications/roots/list_changed` when the client declared
+  `roots.listChanged`. A `list_changed` from a client that did not declare it
+  is ignored. For `2026-07-28`, first prove request-scoped `roots/list` over
+  stdio in Task 5. If it works, start a fetch from the first eligible
+  `tools/call`; `subscriptions/listen` refresh stays out of scope. If it fails,
+  keep roots NULL on that revision and document the limitation.
 - Each fetch calls `McpServer.RequestRootsAsync` with a 5 second timeout, linked
   to the host lifetime token. Starting a new fetch cancels the previous one, so
   a slow older response can never overwrite a newer one.
@@ -234,10 +250,10 @@ The journal rule holds: nothing here changes output or exit codes.
 - `AGENTS.md`, journal paragraph: MCP sessions also record `clientInfo.title`
   and the client's workspace roots; cancelled operations record whether the
   client or a host shutdown cancelled them.
-- `docs/mcp.md`: the server requests `roots/list` itself when the client
-  declares `roots`, and refreshes on `roots/list_changed`; nothing is required
-  from the client or agent. Client roots are recorded only: they never widen
-  `--input-root` and never authorize a file input.
+- `docs/mcp.md`: describe the handshake root requests and refreshes. Describe
+  `2026-07-28` roots according to the Task 5 probe outcome; a capability
+  declaration alone does not prove a snapshot can be fetched. Client roots
+  never widen `--input-root` and never authorize a file input.
 
 ## Testing
 
@@ -277,13 +293,10 @@ expectations for what the dashboard will show.
 
 ## Follow-ups (separate specs, in this order)
 
-1. **MCP protocol upgrade and stderr noise** — first, because it may change
-   behaviour this spec depends on. SDK 2.2.0 (the latest on NuGet) already
-   supports `2026-07-28`; the host pins `2025-11-25`, so Claude Code's
-   `server/discover` probe is rejected and Codex's `2025-06-18` request is
-   answered with `2025-11-25`. The same work lowers the stderr logger to
-   `Warning` and above (today every SDK Trace/Debug event becomes a content-free
-   line; it costs no model tokens but is noise in client logs).
+1. **MCP protocol upgrade and stderr noise** — implemented on
+   `feat/mcp-protocol-upgrade`; merge it before this design. The host now
+   negotiates Claude Code's `2026-07-28` and Codex's `2025-06-18`, records
+   request-scoped client identity, and keeps SDK stderr at `Warning` and above.
 2. **Claude Code transcript matcher (opt-in, default off)** — resolve
    `message.model` by `client_call_id` in
    `~/.claude/projects/<escaped cwd>/*.jsonl`, also retroactively. Possibly
