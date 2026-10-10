@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using SqlHarness.Core;
@@ -31,11 +32,10 @@ public static class McpHost
     /// <summary>
     /// SDK server options shared by the host and protocol tests. Historical
     /// initialize revisions are normalized by the transport input wrapper before
-    /// SDK parsing. The identity parameter is accepted for Task 3 and ignored here.
+    /// SDK parsing. Tool-call identity is recorded from the request-scoped server.
     /// </summary>
     public static ModelContextProtocol.Server.McpServerOptions CreateServerOptions(McpClientIdentity? identity = null)
     {
-        _ = identity;
         var options = new ModelContextProtocol.Server.McpServerOptions
         {
             ServerInfo = new ModelContextProtocol.Protocol.Implementation
@@ -45,6 +45,14 @@ public static class McpHost
             },
             ProtocolVersion = null,
         };
+        if (identity is not null)
+        {
+            options.Filters.Request.CallToolFilters.Add(next => (context, ct) =>
+            {
+                identity.Record(context.Server?.ClientInfo);
+                return next(context, ct);
+            });
+        }
         return options;
     }
 
@@ -108,7 +116,8 @@ public static class McpHost
         // request scope.
 
         var loggerFactory = new McpStderrLoggerFactory(log);
-        var serverOptions = CreateServerOptions();
+        var clientIdentity = new McpClientIdentity();
+        var serverOptions = CreateServerOptions(clientIdentity);
         // Explicit EOF binding (T5 fix R1): the SDK does not propagate stdin
         // EOF to in-flight handler tokens, so the host watches the
         // transport's own reads and folds EOF into the shutdown token every
@@ -128,10 +137,16 @@ public static class McpHost
         var sessionKey = "mcp:" + Guid.NewGuid().ToString("N");
         var mcpMode = process.RequestScope ? "request" : "fixed";
         ModelContextProtocol.Server.McpServer? running = null;
-        // One identity per serve process: resolved lazily on the first journaled call
-        // (after initialize, so ClientInfo is set) and shared by every per-call decorator.
+        // One identity per serve process: resolved lazily on the first journaled call.
+        // Client info comes from the request-scoped server (2026-07-28 has no initialize);
+        // the root server's value covers handshake revisions when no call recorded one.
         var identity = new Lazy<SessionIdentity>(
-            () => SessionIdentities.Mcp(ProcessInfo.Current, sessionKey, running?.ClientInfo?.Name, running?.ClientInfo?.Version, mcpMode),
+            () => SessionIdentities.Mcp(
+                ProcessInfo.Current,
+                sessionKey,
+                clientIdentity.Name ?? running?.ClientInfo?.Name,
+                clientIdentity.Version ?? running?.ClientInfo?.Version,
+                mcpMode),
             LazyThreadSafetyMode.ExecutionAndPublication);
         process.DecorateModules(module => new JournalingModule(
             module,
