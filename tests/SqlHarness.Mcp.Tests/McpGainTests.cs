@@ -359,7 +359,7 @@ public sealed class McpGainTests : IDisposable
         var serverOptions = new ModelContextProtocol.Server.McpServerOptions
         {
             ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "t4-test" },
-            ProtocolVersion = McpHost.PinnedProtocolVersion,
+            ProtocolVersion = McpHost.FallbackProtocolVersion,
         };
         McpToolCatalog.Wire(serverOptions, scope, scope.CreateModule());
         await using var server = McpServer.Create(
@@ -373,7 +373,7 @@ public sealed class McpGainTests : IDisposable
             new McpClientOptions
             {
                 ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
-                ProtocolVersion = McpHost.PinnedProtocolVersion,
+                ProtocolVersion = McpHost.FallbackProtocolVersion,
             },
             NullLoggerFactory.Instance, cts.Token);
 

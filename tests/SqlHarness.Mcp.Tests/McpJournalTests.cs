@@ -57,7 +57,7 @@ public sealed class McpJournalTests : IDisposable
             new McpClientOptions
             {
                 ClientInfo = new Implementation { Name = "claude-code", Version = "9.9.9" },
-                ProtocolVersion = McpHost.PinnedProtocolVersion,
+                ProtocolVersion = McpHost.FallbackProtocolVersion,
             },
             NullLoggerFactory.Instance,
             cts.Token))

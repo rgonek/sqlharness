@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using SqlHarness.Core;
@@ -16,11 +17,44 @@ public static class McpHost
 {
     public const string ServerName = "sqlharness-mcp";
 
-    /// <summary>Pinned, tested protocol revision (spec bindings, T1).</summary>
-    public const string PinnedProtocolVersion = "2025-11-25";
+    /// <summary>Tested revisions SQLHarness offers, newest last.</summary>
+    public static readonly IReadOnlyList<string> SupportedProtocolVersions = ["2025-06-18", "2025-11-25", "2026-07-28"];
+
+    /// <summary>Offered revisions that use the initialize handshake.</summary>
+    public static readonly IReadOnlyList<string> HandshakeProtocolVersions = ["2025-06-18", "2025-11-25"];
+
+    /// <summary>Answer to an initialize for a revision SQLHarness does not offer.</summary>
+    public const string FallbackProtocolVersion = "2025-11-25";
 
     public static readonly string ServerVersion =
         typeof(McpHost).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+    /// <summary>
+    /// SDK server options shared by the host and protocol tests. Historical
+    /// initialize revisions are normalized by the transport input wrapper before
+    /// SDK parsing. Tool-call identity is recorded from the request-scoped server.
+    /// </summary>
+    public static ModelContextProtocol.Server.McpServerOptions CreateServerOptions(McpClientIdentity? identity = null)
+    {
+        var options = new ModelContextProtocol.Server.McpServerOptions
+        {
+            ServerInfo = new ModelContextProtocol.Protocol.Implementation
+            {
+                Name = ServerName,
+                Version = ServerVersion,
+            },
+            ProtocolVersion = null,
+        };
+        if (identity is not null)
+        {
+            options.Filters.Request.CallToolFilters.Add(next => (context, ct) =>
+            {
+                identity.Record(context.Server?.ClientInfo);
+                return next(context, ct);
+            });
+        }
+        return options;
+    }
 
     /// <summary>
     /// Serves the frozen startup scope over process stdio.
@@ -82,15 +116,8 @@ public static class McpHost
         // request scope.
 
         var loggerFactory = new McpStderrLoggerFactory(log);
-        var serverOptions = new ModelContextProtocol.Server.McpServerOptions
-        {
-            ServerInfo = new ModelContextProtocol.Protocol.Implementation
-            {
-                Name = ServerName,
-                Version = ServerVersion,
-            },
-            ProtocolVersion = PinnedProtocolVersion,
-        };
+        var clientIdentity = new McpClientIdentity();
+        var serverOptions = CreateServerOptions(clientIdentity);
         // Explicit EOF binding (T5 fix R1): the SDK does not propagate stdin
         // EOF to in-flight handler tokens, so the host watches the
         // transport's own reads and folds EOF into the shutdown token every
@@ -99,6 +126,7 @@ public static class McpHost
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct, eofShutdown.Token);
         using var eofInput = new EofShutdownInput(input, eofShutdown);
         using var guardedInput = process.RequestScope ? new McpDuplicateJsonFieldGuardInput(eofInput) : null;
+        using var rewrittenInput = new McpProtocolVersionRewriteInput((Stream?)guardedInput ?? eofInput);
         // Activity journal: content-free stderr diagnostics only; stdout stays protocol-only.
         var config = SqlHarnessConfigLoader.Load();
         if (config.Warning is not null)
@@ -109,15 +137,19 @@ public static class McpHost
         var sessionKey = "mcp:" + Guid.NewGuid().ToString("N");
         var mcpMode = process.RequestScope ? "request" : "fixed";
         ModelContextProtocol.Server.McpServer? running = null;
-        // One identity per serve process: resolved lazily on the first journaled call
-        // (after initialize, so ClientInfo is set) and shared by every per-call decorator.
-        var identity = new Lazy<SessionIdentity>(
-            () => SessionIdentities.Mcp(ProcessInfo.Current, sessionKey, running?.ClientInfo?.Name, running?.ClientInfo?.Version, mcpMode),
-            LazyThreadSafetyMode.ExecutionAndPublication);
+        // The session key stays fixed for this serve process, while client info can first
+        // arrive on a later request (2026-07-28 has no initialize handshake).
+        // Resolve each journaled call so ActivityJournal can fill its first non-null fields.
+        Func<SessionIdentity> identity = () => SessionIdentities.Mcp(
+                ProcessInfo.Current,
+                sessionKey,
+                clientIdentity.Name ?? running?.ClientInfo?.Name,
+                clientIdentity.Version ?? running?.ClientInfo?.Version,
+                mcpMode);
         process.DecorateModules(module => new JournalingModule(
             module,
             () => journal.Value,
-            () => identity.Value));
+            identity));
         Tools.McpToolCatalog.Wire(serverOptions, process, hostShutdown: lifetime.Token);
         try
         {
@@ -132,7 +164,7 @@ public static class McpHost
         {
             // Tools come only from the explicit catalog wired above.
             await using var server = ModelContextProtocol.Server.McpServer.Create(
-                new ModelContextProtocol.Server.StreamServerTransport((Stream?)guardedInput ?? eofInput, output, ServerName, loggerFactory),
+                new ModelContextProtocol.Server.StreamServerTransport(rewrittenInput, output, ServerName, loggerFactory),
                 serverOptions,
                 loggerFactory,
                 serviceProvider: null);
@@ -163,10 +195,10 @@ public static class McpHost
         {
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
-            // Always enabled: the level gate is not the protection. Safety
-            // comes from Log never rendering state, exception, or formatter
-            // output, so any enabled event is content-free by construction.
-            public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
+            // Noise reduction only: SDK Trace/Debug/Information events carry no text here and
+            // only fill client logs. The leak protection is that Log never renders state,
+            // exception, or formatter output, at any level.
+            public bool IsEnabled(LogLevel logLevel) => logLevel is LogLevel.Warning or LogLevel.Error or LogLevel.Critical;
 
             public void Log<TState>(
                 LogLevel logLevel,
@@ -175,6 +207,9 @@ public static class McpHost
                 Exception? exception,
                 Func<TState, Exception?, string> formatter)
             {
+                if (!IsEnabled(logLevel))
+                    return;
+
                 // SDK-side diagnostics only. This logger emits
                 // only safe primitives, so no SQL, parameters, or connection details
                 // can reach stderr through it: category, level, numeric event id. Never call

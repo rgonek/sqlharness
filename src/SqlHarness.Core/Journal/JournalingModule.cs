@@ -12,7 +12,8 @@ public sealed class JournalingModule : ISqlHarnessModule
 {
     private readonly ISqlHarnessModule _inner;
     private readonly Lazy<IActivityJournal?> _journal;
-    private readonly Lazy<SessionIdentity?> _session;
+    // Resolve per operation so MCP client info can fill in after an early call omitted it.
+    private readonly Func<SessionIdentity?> _session;
 
     public JournalingModule(ISqlHarnessModule inner, Func<IActivityJournal> journal, Func<SessionIdentity> session)
     {
@@ -20,7 +21,7 @@ public sealed class JournalingModule : ISqlHarnessModule
         ArgumentNullException.ThrowIfNull(journal);
         ArgumentNullException.ThrowIfNull(session);
         _journal = new Lazy<IActivityJournal?>(() => Try(journal), LazyThreadSafetyMode.ExecutionAndPublication);
-        _session = new Lazy<SessionIdentity?>(() => Try(session), LazyThreadSafetyMode.ExecutionAndPublication);
+        _session = () => Try(session);
     }
 
     public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default) =>
@@ -88,7 +89,7 @@ public sealed class JournalingModule : ISqlHarnessModule
     private JournalHandle? Begin(IActivityJournal? journal, SqlHarnessOperation operation)
     {
         // A disabled journal records nothing, so the process tree is not walked at all.
-        if (journal is null or NullActivityJournal || _session.Value is not { } session)
+        if (journal is null or NullActivityJournal || _session() is not { } session)
             return null;
         try
         {

@@ -154,12 +154,17 @@ JSON field guard, dashboard autostart, retention.
 - Runs the built `sqlharness` behind a logging stdio tap, through
   `claude -p --mcp-config <temp> --strict-mcp-config` and `codex exec -c
   mcp_servers.<name>...`; never edits client configuration files.
-- Each client calls `sqlharness_capabilities` once.
+- Each client calls `sqlharness_capabilities` once and the target-free
+  `sqlharness_gain` operation once. Capabilities stays outside the journal;
+  `gain` creates the operation row used to verify the session identity.
 - Checks: Claude Code negotiated `2026-07-28` (via `server/discover`), Codex
   negotiated `2025-06-18`; each capabilities result reports its negotiated
-  version; each journal session row has `client_name`.
-- Prints a short pass/fail table for the PR description. Frames and journal
-  rows stay local (frames contain tool results).
+  version; the `gain` operation joins to an isolated session with matching
+  non-empty `client_name` and `client_version` from that client's `clientInfo`.
+- Each server receives its own `SQLHARNESS_HOME` and synthetic profile so the
+  acceptance run does not inspect the user's journal, profiles or credentials.
+- Prints a short pass/fail table. Frames and journal rows stay local, and their
+  paths and contents are not printed (frames contain tool results).
 
 ## Out of scope
 

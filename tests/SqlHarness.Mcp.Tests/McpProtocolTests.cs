@@ -14,7 +14,7 @@ namespace SqlHarness.Mcp.Tests;
 
 public sealed class McpProtocolTests
 {
-    private const string PinnedProtocolVersion = "2025-11-25";
+    private const string HandshakeVersion = "2025-11-25";
 
     [Fact]
     public async Task Initialize_handshake_negotiates_pinned_protocol_version()
@@ -26,7 +26,7 @@ public sealed class McpProtocolTests
         var serverOptions = new ModelContextProtocol.Server.McpServerOptions
         {
             ServerInfo = new Implementation { Name = "sqlharness-mcp", Version = "1.0.0" },
-            ProtocolVersion = PinnedProtocolVersion,
+            ProtocolVersion = HandshakeVersion,
         };
         await using var server = McpServer.Create(
             new StreamServerTransport(
@@ -42,7 +42,7 @@ public sealed class McpProtocolTests
         var clientOptions = new McpClientOptions
         {
             ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
-            ProtocolVersion = PinnedProtocolVersion,
+            ProtocolVersion = HandshakeVersion,
         };
         await using var client = await McpClient.CreateAsync(
             new StreamClientTransport(
@@ -53,8 +53,8 @@ public sealed class McpProtocolTests
             NullLoggerFactory.Instance,
             cts.Token);
 
-        Assert.Equal(PinnedProtocolVersion, client.NegotiatedProtocolVersion);
-        Assert.Equal(PinnedProtocolVersion, server.NegotiatedProtocolVersion);
+        Assert.Equal(HandshakeVersion, client.NegotiatedProtocolVersion);
+        Assert.Equal(HandshakeVersion, server.NegotiatedProtocolVersion);
         Assert.Equal("sqlharness-mcp", client.ServerInfo.Name);
         Assert.NotNull(server.ClientInfo);
         Assert.Equal("sqlharness-mcp-tests", server.ClientInfo.Name);
@@ -102,7 +102,7 @@ public sealed class McpProtocolTests
         var serverOptions = new ModelContextProtocol.Server.McpServerOptions
         {
             ServerInfo = new Implementation { Name = "sqlharness-mcp", Version = "1.0.0" },
-            ProtocolVersion = PinnedProtocolVersion,
+            ProtocolVersion = HandshakeVersion,
         };
         McpToolCatalog.Wire(serverOptions, process);
         await using var guard = new McpDuplicateJsonFieldGuardInput(clientToServer.Reader.AsStream());
@@ -115,7 +115,7 @@ public sealed class McpProtocolTests
             new McpClientOptions
             {
                 ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
-                ProtocolVersion = PinnedProtocolVersion,
+                ProtocolVersion = HandshakeVersion,
             }, NullLoggerFactory.Instance, cts.Token);
 
         const string sentinel = "outer-scope-duplicate-secret";

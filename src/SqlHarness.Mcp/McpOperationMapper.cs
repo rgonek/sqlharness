@@ -23,7 +23,8 @@ public sealed record McpCapabilitiesDocument(
     IReadOnlyDictionary<string, string>? Diagnostics,
     SqlHarnessSafetyAnalysis SafetyAnalysis,
     string ScopeMode = "fixed",
-    IReadOnlyList<string>? AllowedProfiles = null);
+    IReadOnlyList<string>? AllowedProfiles = null,
+    IReadOnlyList<string>? SupportedProtocolVersions = null);
 
 /// <summary>
 /// Shared projection sanitizer for plan and artifact results. Distilled plans
@@ -90,7 +91,7 @@ public static partial class McpOperationMapper
     private const int DefaultQueryMaxRows = 50;
     private const int DefaultRepeat = 5;
 
-    public static McpCapabilitiesDocument BuildCapabilities(McpScope scope, bool includeDiagnostics)
+    public static McpCapabilitiesDocument BuildCapabilities(McpScope scope, bool includeDiagnostics, string? protocolVersion = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         var engine = scope.ResolvedTarget.Engine switch
@@ -103,7 +104,7 @@ public static partial class McpOperationMapper
         return new McpCapabilitiesDocument(
             McpHost.ServerName,
             McpHost.ServerVersion,
-            McpHost.PinnedProtocolVersion,
+            protocolVersion ?? McpHost.FallbackProtocolVersion,
             engine,
             McpToolCatalog.ToolNames,
             new Dictionary<string, long>(StringComparer.Ordinal)
@@ -128,14 +129,15 @@ public static partial class McpOperationMapper
                 SqlSafetyAnalysis.AnalysisKind,
                 SqlSafetyAnalysis.ContractVersion,
                 SqlSafetyAnalysis.HiddenEffectsVerified,
-                SqlSafetyAnalysis.ObjectAndPermissionStatus));
+                SqlSafetyAnalysis.ObjectAndPermissionStatus),
+            SupportedProtocolVersions: McpHost.SupportedProtocolVersions);
     }
 
-    public static McpCapabilitiesDocument BuildCapabilities(McpProcessContext context, bool includeDiagnostics)
+    public static McpCapabilitiesDocument BuildCapabilities(McpProcessContext context, bool includeDiagnostics, string? protocolVersion = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         if (!context.RequestScope)
-            return BuildCapabilities(context.FixedScope!, includeDiagnostics);
+            return BuildCapabilities(context.FixedScope!, includeDiagnostics, protocolVersion);
 
         var diagnostics = includeDiagnostics
             ? LocalDiagnostics(context.InputRoots)
@@ -143,7 +145,7 @@ public static partial class McpOperationMapper
         return new McpCapabilitiesDocument(
             McpHost.ServerName,
             McpHost.ServerVersion,
-            McpHost.PinnedProtocolVersion,
+            protocolVersion ?? McpHost.FallbackProtocolVersion,
             "sqlserver",
             McpToolCatalog.ToolNames,
             new Dictionary<string, long>(StringComparer.Ordinal)
@@ -170,7 +172,8 @@ public static partial class McpOperationMapper
                 SqlSafetyAnalysis.HiddenEffectsVerified,
                 SqlSafetyAnalysis.ObjectAndPermissionStatus),
             ScopeMode: "request",
-            AllowedProfiles: context.AllowedProfiles);
+            AllowedProfiles: context.AllowedProfiles,
+            SupportedProtocolVersions: McpHost.SupportedProtocolVersions);
     }
 
     private static IReadOnlyDictionary<string, string> LocalDiagnostics(McpScope scope)

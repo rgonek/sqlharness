@@ -26,7 +26,7 @@ public sealed class McpStdioProcessCollection;
 /// </summary>
 internal static class McpStdioProcessHarness
 {
-    internal const string PinnedProtocolVersion = "2025-11-25";
+    internal const string DefaultProtocolVersion = "2025-11-25";
     internal const string ProfileName = "mcp-stdio";
 
     internal static string CurrentRid =>
@@ -235,13 +235,13 @@ internal static class McpStdioProcessHarness
         return new StdioChild(process, tee, stderr);
     }
 
-    internal static async Task<McpClient> ConnectAsync(StdioChild child, Stream stdin, CancellationToken ct) =>
+    internal static async Task<McpClient> ConnectAsync(StdioChild child, Stream stdin, CancellationToken ct, string protocolVersion = DefaultProtocolVersion) =>
         await McpClient.CreateAsync(
             new StreamClientTransport(stdin, child.StdoutTee, NullLoggerFactory.Instance),
             new McpClientOptions
             {
                 ClientInfo = new Implementation { Name = "sqlharness-mcp-stdio-tests", Version = "1.0.0" },
-                ProtocolVersion = PinnedProtocolVersion,
+                ProtocolVersion = protocolVersion,
             },
             NullLoggerFactory.Instance,
             ct);
@@ -438,7 +438,7 @@ public sealed class McpStdioProcessTests
             var stdin = child.Process.StandardInput.BaseStream;
             await using var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct);
 
-            Assert.Equal(McpStdioProcessHarness.PinnedProtocolVersion, client.NegotiatedProtocolVersion);
+            Assert.Equal(McpStdioProcessHarness.DefaultProtocolVersion, client.NegotiatedProtocolVersion);
             Assert.Equal(McpHost.ServerName, client.ServerInfo.Name);
 
             var tools = await client.ListToolsAsync(cancellationToken: ct);
@@ -588,7 +588,7 @@ public sealed class McpStdioProcessTests
             var stdin = child.Process.StandardInput.BaseStream;
             await using var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct);
 
-            Assert.Equal(McpStdioProcessHarness.PinnedProtocolVersion, client.NegotiatedProtocolVersion);
+            Assert.Equal(McpStdioProcessHarness.DefaultProtocolVersion, client.NegotiatedProtocolVersion);
             Assert.Equal(McpHost.ServerName, client.ServerInfo.Name);
 
             var tools = await client.ListToolsAsync(cancellationToken: ct);
@@ -711,12 +711,12 @@ public sealed class McpStdioProcessTests
                 new McpClientOptions
                 {
                     ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
-                    ProtocolVersion = McpStdioProcessHarness.PinnedProtocolVersion,
+                    ProtocolVersion = McpStdioProcessHarness.DefaultProtocolVersion,
                 },
                 NullLoggerFactory.Instance,
                 ct))
             {
-                Assert.Equal(McpStdioProcessHarness.PinnedProtocolVersion, client.NegotiatedProtocolVersion);
+                Assert.Equal(McpStdioProcessHarness.DefaultProtocolVersion, client.NegotiatedProtocolVersion);
                 var validate = await client.CallToolAsync(
                     "sqlharness_validate",
                     new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
@@ -856,7 +856,7 @@ public sealed class McpStdioLiveTests
             child = McpStdioProcessHarness.StartServer(exe, home, "mcp serve mcp-live");
             var stdin = child.Process.StandardInput.BaseStream;
             await using var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct);
-            Assert.Equal(McpStdioProcessHarness.PinnedProtocolVersion, client.NegotiatedProtocolVersion);
+            Assert.Equal(McpStdioProcessHarness.DefaultProtocolVersion, client.NegotiatedProtocolVersion);
 
             var ping = await client.CallToolAsync(
                 "sqlharness_inspect",

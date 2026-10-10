@@ -22,7 +22,7 @@ namespace SqlHarness.Mcp.Tests;
 [Collection("McpScopeHome")]
 public sealed class McpStartupTests
 {
-    private const string PinnedProtocolVersion = "2025-11-25";
+    private const string HandshakeVersion = "2025-11-25";
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
 
     private static IReadOnlyDictionary<string, TargetProfile> StartupProfiles() =>
@@ -70,7 +70,7 @@ public sealed class McpStartupTests
         var clientOptions = new McpClientOptions
         {
             ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
-            ProtocolVersion = PinnedProtocolVersion,
+            ProtocolVersion = HandshakeVersion,
         };
         await using var client = await McpClient.CreateAsync(
             new StreamClientTransport(
@@ -83,7 +83,7 @@ public sealed class McpStartupTests
 
         // A stdout banner or any non-protocol bytes would break framing and
         // fail this handshake; success proves stdout carries only frames.
-        Assert.Equal(PinnedProtocolVersion, client.NegotiatedProtocolVersion);
+        Assert.Equal(HandshakeVersion, client.NegotiatedProtocolVersion);
         Assert.Equal(McpHost.ServerName, client.ServerInfo.Name);
 
         // T3 wires the explicit 11-tool catalog on the frozen scope: tools/list
@@ -125,7 +125,7 @@ public sealed class McpStartupTests
             var clientOptions = new McpClientOptions
             {
                 ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
-                ProtocolVersion = PinnedProtocolVersion,
+                ProtocolVersion = HandshakeVersion,
             };
             await using var client = await McpClient.CreateAsync(
                 new StreamClientTransport(

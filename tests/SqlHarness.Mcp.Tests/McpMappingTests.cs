@@ -100,6 +100,17 @@ public sealed class McpMappingTests : IDisposable
         Assert.DoesNotContain(PgProfileName, json, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Capabilities_carry_negotiated_and_supported_versions()
+    {
+        var negotiated = McpOperationMapper.BuildCapabilities(Scope(), includeDiagnostics: false, protocolVersion: "2026-07-28");
+        var unknown = McpOperationMapper.BuildCapabilities(Scope(), includeDiagnostics: false);
+
+        Assert.Equal("2026-07-28", negotiated.ProtocolVersion);
+        Assert.Equal(McpHost.FallbackProtocolVersion, unknown.ProtocolVersion);
+        Assert.Equal(McpHost.SupportedProtocolVersions, negotiated.SupportedProtocolVersions);
+    }
+
     private sealed class RecordingModule : ISqlHarnessModule
     {
         public List<SqlHarnessOperation> Operations { get; } = [];

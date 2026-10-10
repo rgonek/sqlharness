@@ -563,8 +563,11 @@ public sealed class McpLifecycleTests
         Assert.Equal([new SqlHarnessParameterInput("otherId", "int", "7")], secondOperation.TypedParameters);
     }
 
-    [Fact]
-    public async Task Eof_on_stdin_shuts_the_host_down_cleanly()
+    [Theory]
+    [InlineData("2025-06-18")]
+    [InlineData("2025-11-25")]
+    [InlineData("2026-07-28")]
+    public async Task Eof_on_stdin_shuts_the_host_down_cleanly(string revision)
     {
         using var cts = new CancellationTokenSource(Budget);
         var clientToServer = new Pipe();
@@ -588,12 +591,12 @@ public sealed class McpLifecycleTests
             new McpClientOptions
             {
                 ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
-                ProtocolVersion = McpHost.PinnedProtocolVersion,
+                ProtocolVersion = revision,
             },
             NullLoggerFactory.Instance,
             cts.Token))
         {
-            Assert.Equal(McpHost.PinnedProtocolVersion, client.NegotiatedProtocolVersion);
+            Assert.Equal(revision, client.NegotiatedProtocolVersion);
         }
 
         // EOF on stdin: the server loop ends and the process exits cleanly.
@@ -676,7 +679,7 @@ public sealed class McpLifecycleTests
         var serverOptions = new ModelContextProtocol.Server.McpServerOptions
         {
             ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "t5-test" },
-            ProtocolVersion = McpHost.PinnedProtocolVersion,
+            ProtocolVersion = McpHost.FallbackProtocolVersion,
         };
         // Same composition as McpHost.RunAsync: one process gate, one
         // EOF-bound shutdown token, the real stream transport.
@@ -693,7 +696,7 @@ public sealed class McpLifecycleTests
             new McpClientOptions
             {
                 ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
-                ProtocolVersion = McpHost.PinnedProtocolVersion,
+                ProtocolVersion = McpHost.FallbackProtocolVersion,
             },
             NullLoggerFactory.Instance, guard.Token);
 
@@ -758,7 +761,7 @@ public sealed class McpLifecycleTests
         var serverOptions = new ModelContextProtocol.Server.McpServerOptions
         {
             ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "t5-test" },
-            ProtocolVersion = McpHost.PinnedProtocolVersion,
+            ProtocolVersion = McpHost.FallbackProtocolVersion,
         };
         McpToolCatalog.Wire(serverOptions, process, hostShutdown: lifetime.Token, moduleFactory: _ => module);
         using var eofInput = new EofShutdownInput(clientToServer.Reader.AsStream(), eofShutdown);
@@ -771,7 +774,7 @@ public sealed class McpLifecycleTests
             new McpClientOptions
             {
                 ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
-                ProtocolVersion = McpHost.PinnedProtocolVersion,
+                ProtocolVersion = McpHost.FallbackProtocolVersion,
             }, NullLoggerFactory.Instance, guard.Token);
 
         static Dictionary<string, object?> WatchArgs(string profile, string tenant) => new()
@@ -818,7 +821,7 @@ public sealed class McpLifecycleTests
         var serverOptions = new ModelContextProtocol.Server.McpServerOptions
         {
             ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "t5-test" },
-            ProtocolVersion = McpHost.PinnedProtocolVersion,
+            ProtocolVersion = McpHost.FallbackProtocolVersion,
         };
         McpToolCatalog.Wire(serverOptions, TestScope(), module, new McpExecutionGate());
         await using var server = McpServer.Create(
@@ -832,7 +835,7 @@ public sealed class McpLifecycleTests
             new McpClientOptions
             {
                 ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
-                ProtocolVersion = McpHost.PinnedProtocolVersion,
+                ProtocolVersion = McpHost.FallbackProtocolVersion,
             },
             NullLoggerFactory.Instance, cts.Token);
 
@@ -880,7 +883,7 @@ public sealed class McpLifecycleTests
         var serverOptions = new ModelContextProtocol.Server.McpServerOptions
         {
             ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "t5-test" },
-            ProtocolVersion = McpHost.PinnedProtocolVersion,
+            ProtocolVersion = McpHost.FallbackProtocolVersion,
         };
         McpToolCatalog.Wire(serverOptions, TestScope(), module, new McpExecutionGate(), clock);
         await using var server = McpServer.Create(
@@ -894,7 +897,7 @@ public sealed class McpLifecycleTests
             new McpClientOptions
             {
                 ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
-                ProtocolVersion = McpHost.PinnedProtocolVersion,
+                ProtocolVersion = McpHost.FallbackProtocolVersion,
             },
             NullLoggerFactory.Instance, cts.Token);
 

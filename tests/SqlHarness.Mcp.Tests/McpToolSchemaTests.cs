@@ -103,7 +103,7 @@ public sealed class McpToolSchemaTests : IDisposable
             var serverOptions = new ModelContextProtocol.Server.McpServerOptions
             {
                 ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "t3-test" },
-                ProtocolVersion = McpHost.PinnedProtocolVersion,
+                ProtocolVersion = McpHost.FallbackProtocolVersion,
             };
             McpToolCatalog.Wire(serverOptions, scope, module);
             var server = McpServer.Create(
@@ -124,7 +124,7 @@ public sealed class McpToolSchemaTests : IDisposable
                 new McpClientOptions
                 {
                     ClientInfo = new Implementation { Name = "t3-test-client", Version = "1.0.0" },
-                    ProtocolVersion = McpHost.PinnedProtocolVersion,
+                    ProtocolVersion = McpHost.FallbackProtocolVersion,
                 },
                 NullLoggerFactory.Instance,
                 catalog._cts.Token);
@@ -137,7 +137,7 @@ public sealed class McpToolSchemaTests : IDisposable
             var serverOptions = new ModelContextProtocol.Server.McpServerOptions
             {
                 ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "t3-test" },
-                ProtocolVersion = McpHost.PinnedProtocolVersion,
+                ProtocolVersion = McpHost.FallbackProtocolVersion,
             };
             McpToolCatalog.Wire(serverOptions, process);
             var server = McpServer.Create(
@@ -146,7 +146,7 @@ public sealed class McpToolSchemaTests : IDisposable
             catalog._serverTask = server.RunAsync(catalog._cts.Token);
             catalog.Client = await McpClient.CreateAsync(
                 new StreamClientTransport(catalog._clientToServer.Writer.AsStream(), catalog._serverToClient.Reader.AsStream(), NullLoggerFactory.Instance),
-                new McpClientOptions { ClientInfo = new Implementation { Name = "t3-test-client", Version = "1.0.0" }, ProtocolVersion = McpHost.PinnedProtocolVersion },
+                new McpClientOptions { ClientInfo = new Implementation { Name = "t3-test-client", Version = "1.0.0" }, ProtocolVersion = McpHost.FallbackProtocolVersion },
                 NullLoggerFactory.Instance, catalog._cts.Token);
             return catalog;
         }

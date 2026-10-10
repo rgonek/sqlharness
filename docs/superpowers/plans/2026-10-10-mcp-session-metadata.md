@@ -4,9 +4,9 @@
 
 **Goal:** Record the MCP client's `clientInfo.title`, its workspace roots, why a cancelled operation was cancelled, and allowlisted `tools/call._meta` labels (Claude Code tool-use id; Codex call id, model, effort, agent session, turn, trigger, thread source), and show them in the dashboard.
 
-**Sequencing:** execute only after the MCP protocol upgrade plan (`2026-07-28`) has merged. Before Task 2, Task 5 and Task 8, re-check against the upgraded host where `clientInfo`, client capabilities, `roots/list` and `tools/call._meta` arrive; adjust the read paths, not the stored shape.
+**Sequencing:** execute only after the MCP protocol upgrade branch has merged. Its real-client acceptance observed Claude Code on `2026-07-28` and Codex on `2025-06-18`. Before Task 5, prove whether request-scoped `roots/list` works on `2026-07-28`; adjust the read path or document NULL roots according to the result. The stored shape is unchanged.
 
-**Architecture:** Journal schema v6 adds three nullable columns. Core (`SessionIdentity`, `OperationEnd`, `JournalingModule`) carries the values; the MCP layer supplies them — title from `ClientInfo`, roots from a background `McpRootsTracker` that answers `initialized` / `roots/list_changed`, and the cancellation reason from a token-keyed registry the three MCP run sites fill. The dashboard reads and renders the new fields.
+**Architecture:** Journal schema v6 adds three nullable columns. Core (`SessionIdentity`, `OperationEnd`, `JournalingModule`) carries the values; the MCP layer supplies them — title from the request-scoped `ClientInfo` holder, roots from a background `McpRootsTracker` that handles handshake notifications and, if the Task 5 probe succeeds, the first eligible `2026-07-28` call, and the cancellation reason from a token-keyed registry the three MCP run sites fill. The dashboard reads and renders the new fields.
 
 **Tech Stack:** .NET (net8/net10), xUnit, Microsoft.Data.Sqlite, ModelContextProtocol 2.2.0, React + TypeScript + vitest (dashboard UI).
 
@@ -39,21 +39,28 @@
 
 ## Post-upgrade adjustments (read before Task 1)
 
-This plan was written against the host before the MCP protocol upgrade
-(`2026-10-10-mcp-protocol-upgrade.md`). That upgrade removes
-`McpHost.PinnedProtocolVersion` (this plan already uses
-`McpHost.FallbackProtocolVersion`), adds `McpHost.CreateServerOptions` and
-`McpClientIdentity`, and enables `2026-07-28`, which has no `initialize` /
+This plan predates the MCP protocol upgrade
+(`2026-10-10-mcp-protocol-upgrade.md`). That branch removed
+`McpHost.PinnedProtocolVersion`, added `McpHost.CreateServerOptions` and
+`McpClientIdentity`, and enabled `2026-07-28`, which has no `initialize` /
 `notifications/initialized` and carries client info and capabilities per
-request. Start from current `main` and apply these changes to the tasks below:
+request. It also changed the journal session supplier from a lazy identity
+snapshot to a per-operation function with a fixed session key. After the
+upgrade merges, start from current `main` and apply these changes below:
 
 - **Task 2 (title):** the host builds identity from `McpClientIdentity`. Add
-  `public string? Title => Volatile.Read(ref _client)?.Title;` to
-  `McpClientIdentity` and pass `clientIdentity.Title ?? running?.ClientInfo?.Title`
-  (not `running?.ClientInfo?.Title`) to `SessionIdentities.Mcp`. Extend the
+  a separate first-non-blank `Title` holder to `McpClientIdentity` (a first
+  non-null client info object may lack title). Pass
+  `clientIdentity.Title ?? running?.ClientInfo?.Title`
+  (not `running?.ClientInfo?.Title`) to `SessionIdentities.Mcp` inside the
+  existing per-operation `Func<SessionIdentity> identity`. Extend the
   upgrade's `McpClientIdentityTests.Journal_session_has_client_info_on_every_revision`
   to send `Title = "Claude Code"` and assert `sessions.client_title` on all three
-  revisions, instead of only the single-revision `McpJournalTests` assertion.
+  revisions. Extend its late-identity test so a first `2026-07-28` call without
+  `clientInfo` is followed by one with `Title`, and assert the same journal
+  session gains `client_title`. Add a holder test where the first client info
+  has no title and a later one supplies it. Keep the single-revision
+  `McpJournalTests` assertion as a focused regression.
 - **Task 5 (roots):** keep the `initialized` / `roots/list_changed` triggers for
   the handshake revisions. For `2026-07-28`, first verify with a throwaway test
   whether `context.Server.RequestRootsAsync` (the request-scoped server inside a
@@ -68,12 +75,22 @@ request. Start from current `main` and apply these changes to the tasks below:
   implement MRTR here. `roots/list_changed` on `2026-07-28` travels over
   `subscriptions/listen`, which stays out of scope. Claude Code negotiates
   `2026-07-28` after the upgrade, so Claude roots depend on this check.
+  Do not describe a declared `roots` capability as a stored snapshot until
+  that request/response is proven; keep the Task 9 text conditional.
 - **Task 8 (`_meta`):** on `2026-07-28` `_meta` also carries
-  `io.modelcontextprotocol/*` keys; the allowlist ignores them. Run
-  `pwsh ./scripts/mcp-client-acceptance.ps1` once and confirm in its frame logs
-  that `claudecode/toolUseId` and `x-codex-turn-metadata` are still sent.
+  `io.modelcontextprotocol/*` keys; the allowlist ignores them. The upgrade's
+  real-client frame logs confirm `claudecode/toolUseId` and
+  `x-codex-turn-metadata` are still sent. If refreshing that check, publish a
+  worktree-local build and pass its absolute path with `-Sqlharness` to
+  `scripts/mcp-client-acceptance.ps1`; never assume the PATH binary is current.
 - **All host tests in this plan:** run them on `2025-11-25` as written; add
   `2026-07-28` cases where the task above says so.
+
+The upgrade's real-client frames already establish the Task 0 observations:
+Claude Code supplied `title`, declared `roots` with `listChanged`, and sent
+`claudecode/toolUseId`; Codex supplied `title`, declared no `roots`, and sent
+`x-codex-turn-metadata`. These observations do not prove that a
+`2026-07-28` `roots/list` request succeeds.
 
 ---
 
@@ -332,6 +349,13 @@ In `McpJournalTests.Tool_call_records_session_from_client_info`: set `ClientInfo
         Assert.Equal("Claude Code", reader.GetString(9));
 ```
 
+Also extend `McpClientIdentityTests.Journal_session_has_client_info_on_every_revision`
+with the title assertion on each revision. In its `2026-07-28` late-identity
+case, strip `clientInfo` through the first tool call, supply a title on the
+later call, and assert `client_title` becomes non-NULL in that same session.
+Assert the holder separately accepts a title from later client info even when
+the first non-null client info lacked one.
+
 - [ ] **Step 2: Run to verify failure**
 
 Run: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~SessionIdentitiesTests"` and `dotnet test tests/SqlHarness.Mcp.Tests --filter "FullyQualifiedName~McpJournalTests"`
@@ -372,11 +396,27 @@ and add:
     }
 ```
 
-`McpHost.cs:115`:
+`McpHost.cs` — keep the fixed session key and existing per-operation identity
+function. Add the title as its final `SessionIdentities.Mcp` argument:
 
 ```csharp
-            () => SessionIdentities.Mcp(ProcessInfo.Current, sessionKey, running?.ClientInfo?.Name, running?.ClientInfo?.Version, mcpMode, running?.ClientInfo?.Title),
+        Func<SessionIdentity> identity = () => SessionIdentities.Mcp(
+            ProcessInfo.Current,
+            sessionKey,
+            clientIdentity.Name ?? running?.ClientInfo?.Name,
+            clientIdentity.Version ?? running?.ClientInfo?.Version,
+            mcpMode,
+            clientIdentity.Title ?? running?.ClientInfo?.Title);
 ```
+
+In `McpClientIdentity`, add a separate `private string? _title;`. When
+`clientInfo.Title` is not null or whitespace, record it with
+`Interlocked.CompareExchange(ref _title, clientInfo.Title, null)` even when
+`_client` was already set, and expose it
+through `public string? Title => Volatile.Read(ref _title);`. This preserves
+the existing first-client-info rule for name and version while allowing a
+later title to fill NULL. Keep passing `identity` to `JournalingModule`; do
+not reintroduce a lazy `SessionIdentity` snapshot.
 
 - [ ] **Step 4: Run the tests**
 
@@ -385,7 +425,7 @@ Same commands as Step 2. Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/SqlHarness.Core/Journal/SessionIdentities.cs src/SqlHarness.Mcp/McpHost.cs tests/SqlHarness.Tests/Journal/SessionIdentitiesTests.cs tests/SqlHarness.Mcp.Tests/McpJournalTests.cs
+git add src/SqlHarness.Core/Journal/SessionIdentities.cs src/SqlHarness.Mcp/McpClientIdentity.cs src/SqlHarness.Mcp/McpHost.cs tests/SqlHarness.Tests/Journal/SessionIdentitiesTests.cs tests/SqlHarness.Mcp.Tests/McpJournalTests.cs tests/SqlHarness.Mcp.Tests/McpClientIdentityTests.cs
 git commit -m "feat(mcp): record clientInfo.title on MCP sessions"
 ```
 
@@ -926,7 +966,7 @@ In each of the three run sites, right after `using var linked = CancellationToke
         process.DecorateModules(module => new JournalingModule(
             module,
             () => journal.Value,
-            () => identity.Value,
+            identity,
             McpCallRegistry.Classify));
 ```
 
@@ -1386,7 +1426,10 @@ internal sealed class McpRootsTracker(TextWriter log, CancellationToken lifetime
 
 - [ ] **Step 4: Wire the host**
 
-In `McpHost.RunAsync`, after `lifetime` is created and before `process.DecorateModules(...)`:
+In `McpHost.RunAsync`, after `lifetime` is created and before `process.DecorateModules(...)`,
+register these notification handlers for handshake revisions. The `2026-07-28`
+request-filter path remains conditional on the probe in "Post-upgrade
+adjustments"; it has no `initialized` notification:
 
 ```csharp
         var roots = new McpRootsTracker(log, lifetime.Token);
@@ -1415,7 +1458,7 @@ In `McpHost.RunAsync`, after `lifetime` is created and before `process.DecorateM
         process.DecorateModules(module => new JournalingModule(
             module,
             () => journal.Value,
-            () => identity.Value,
+            identity,
             McpCallRegistry.Classify,
             () => roots.Current));
 ```
@@ -2197,7 +2240,7 @@ Run sites:
         process.DecorateModules(module => new JournalingModule(
             module,
             () => journal.Value,
-            () => identity.Value,
+            identity,
             McpCallRegistry.Classify,
             () => roots.Current,
             McpCallRegistry.Metadata));
@@ -2244,7 +2287,7 @@ git commit -m "feat(mcp): record allowlisted tools/call metadata (call id, Codex
 In the journal bullet, after the sentence that begins "Session identity is implicit (MCP `clientInfo`, ...); agents send nothing extra.", insert:
 
 ```markdown
-MCP sessions also record `clientInfo.title` and, when the client declares the `roots` capability, the client's workspace roots (`roots/list`, refreshed on `roots/list_changed`; at most 32 roots, stored like `cwd`; client roots never widen `--input-root`). A cancelled operation records `error_kind = cancelled` with `cancel_reason` `client`, `shutdown`, or `deadline`, including a cancellation Core reported as an SQL failure. Each operation also records allowlisted `tools/call._meta` labels: the client's call id (Claude Code `claudecode/toolUseId`, Codex `callId`) and, from Codex `x-codex-turn-metadata`, model, reasoning effort, agent session id, turn id, turn trigger and thread source; other `_meta` keys are never stored.
+MCP sessions also record `clientInfo.title` and, when a `roots/list` request succeeds, the client's workspace roots (at most 32 roots, stored like `cwd`; client roots never widen `--input-root`). Handshake revisions request roots after `initialized` and refresh on `roots/list_changed`; `2026-07-28` support depends on the Task 5 request-scoped probe. A cancelled operation records `error_kind = cancelled` with `cancel_reason` `client`, `shutdown`, or `deadline`, including a cancellation Core reported as an SQL failure. Each operation also records allowlisted `tools/call._meta` labels: the client's call id (Claude Code `claudecode/toolUseId`, Codex `callId`) and, from Codex `x-codex-turn-metadata`, model, reasoning effort, agent session id, turn id, turn trigger and thread source; other `_meta` keys are never stored.
 ```
 
 - [ ] **Step 2: Edit `docs/mcp.md`**
@@ -2254,12 +2297,16 @@ After the "Input roots and file inputs" section add:
 ```markdown
 ## Client workspace roots
 
-When the client declares the `roots` capability, SQLHarness requests `roots/list`
-after `initialized` and again on `roots/list_changed` (only if the client declared
-`listChanged`). The answer is recorded in the local activity journal for the
-dashboard and nothing else: client roots never widen `--input-root`, never
-authorize a file input, and never change a tool result. A failed or slow
-(5 s) request keeps the previous snapshot; stderr names only the failure class.
+On handshake revisions, when the client declares the `roots` capability,
+SQLHarness requests `roots/list` after `initialized` and again on
+`roots/list_changed` (only if the client declared `listChanged`). For
+`2026-07-28`, state the Task 5 probe result here: either the first eligible
+`tools/call` fetches roots through the request-scoped server, or roots remain
+unknown (NULL) on that revision. A successful answer is recorded in the local
+activity journal for the dashboard and nothing else: client roots never widen
+`--input-root`, never authorize a file input, and never change a tool result.
+A failed or slow (5 s) request keeps the previous snapshot; stderr names only
+the failure class.
 ```
 
 In "Concurrency, deadline, cancellation, and progress" append:

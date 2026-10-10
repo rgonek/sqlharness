@@ -59,7 +59,7 @@ public sealed class McpToolHandlers(
             ThrowIfUnknown(ctx, ["includeDiagnostics"]);
             return Task.FromResult(new SqlHarnessOutcome(
                 SqlHarnessExitCode.Success,
-                McpOperationMapper.BuildCapabilities(scope, includeDiagnostics),
+                McpOperationMapper.BuildCapabilities(scope, includeDiagnostics, ctx?.Server?.NegotiatedProtocolVersion),
                 null));
         }, ct);
 
