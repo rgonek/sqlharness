@@ -1,6 +1,7 @@
 ﻿using System.Data;
 using System.Text.Json;
 
+using SqlHarness.Cli;
 using SqlHarness.Cli.Commands;
 using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
@@ -461,6 +462,50 @@ public class SqlHarnessCompareTests
         Assert.All(runs, run => Assert.NotEmpty(run.TableIo));
     }
 
+    [Fact]
+    public async Task Compare_json_summary_marks_unrecognized_statistics_unavailable()
+    {
+        var baseline = Path.GetTempFileName();
+        var candidate = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(baseline, "SELECT Value FROM dbo.Clients");
+            File.WriteAllText(candidate, "SELECT Value FROM dbo.Clients -- candidate");
+            var session = FakeCompareSession.Create();
+            // Same localized fixture as the dialect run: no English TIME block.
+            session.StatisticsMessages =
+            [
+                "Tabelle 'X'. Scananzahl 1, logische Lesevorgänge 5",
+                "SQL Server-Ausführungszeiten:\n   CPU-Zeit = 12 ms, verstrichene Zeit = 20 ms.",
+            ];
+            var output = new StringWriter();
+            var exit = await SqlHarnessCli.Create(Module(session), output).RunAsync([
+                "compare", "test", "--var", "env=a",
+                "--baseline", baseline,
+                "--candidate", candidate,
+                "--repeat", "1",
+                "--json-summary"]);
+
+            Assert.True(exit == 0, output.ToString());
+            using var summary = JsonDocument.Parse(output.ToString());
+            foreach (var side in new[] { "baseline", "candidate" })
+            {
+                var metric = summary.RootElement.GetProperty(side).GetProperty("metricReport");
+                Assert.Equal(BenchmarkMetricReport.Unavailable, metric.GetProperty("cpuTimeAvailability").GetString());
+                Assert.Equal(BenchmarkMetricReport.Unavailable, metric.GetProperty("logicalReadsAvailability").GetString());
+                Assert.Contains(
+                    "was not recognized",
+                    string.Join('\n', metric.GetProperty("warnings").EnumerateArray().Select(item => item.GetString())),
+                    StringComparison.Ordinal);
+            }
+        }
+        finally
+        {
+            File.Delete(baseline);
+            File.Delete(candidate);
+        }
+    }
+
     private static void AddResult(
         CanonicalResultAccumulator accumulator,
         string name,
@@ -834,6 +879,10 @@ public class SqlHarnessCompareTests
         public int FactoryOpenCount { get; private set; }
         public List<CancellationToken> StatisticsCleanupTokens { get; } = [];
         public IReadOnlyList<string> Messages => _messages;
+
+        // When set, benchmark commands emit these messages instead of English STATISTICS text.
+        public IReadOnlyList<string>? StatisticsMessages { get; set; }
+
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("test-server", "testdb-a", "test-server", "testdb-a", "profile");
 
@@ -930,17 +979,25 @@ public class SqlHarnessCompareTests
                 return Task.FromException<ISqlReader>(new TimeoutException("measured run failed"));
             var measured = Math.Max(count - 1, 1);
             Labels.Add(count == 1 ? $"warmup-{(baseline ? "A" : "B")}" : baseline ? "A" : "B");
-            var cpu = measured * 10;
-            var elapsed = cpu + 2;
-            var reads = _tableReadsForMeasured?.Invoke(measured) ?? measured * 5L;
-            var message = StatisticsMessage(reads, cpu, elapsed, _ioTable);
-            if (_secondaryIoTable is not null)
+            if (StatisticsMessages is not null)
             {
-                var secondaryReads = _secondaryTableReadsForMeasured?.Invoke(measured) ?? 0L;
-                if (secondaryReads > 0)
-                    message = TableIoLine(_secondaryIoTable, secondaryReads) + "\n" + message;
+                foreach (var statisticsMessage in StatisticsMessages)
+                    _messages.Add(statisticsMessage);
             }
-            _messages.Add(message);
+            else
+            {
+                var cpu = measured * 10;
+                var elapsed = cpu + 2;
+                var reads = _tableReadsForMeasured?.Invoke(measured) ?? measured * 5L;
+                var message = StatisticsMessage(reads, cpu, elapsed, _ioTable);
+                if (_secondaryIoTable is not null)
+                {
+                    var secondaryReads = _secondaryTableReadsForMeasured?.Invoke(measured) ?? 0L;
+                    if (secondaryReads > 0)
+                        message = TableIoLine(_secondaryIoTable, secondaryReads) + "\n" + message;
+                }
+                _messages.Add(message);
+            }
             if (_includeExtraMessage)
                 _messages.Add("ordinary diagnostic message");
             var plans = _plan is not null ? new[] { _plan } : _includeSecondPlan ? new[] { PlanA, PlanB } : new[] { baseline ? PlanA : PlanB };
