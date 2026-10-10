@@ -4,8 +4,12 @@ using System.Text.Json;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
+using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+
+using SqlHarness.Core.Targets;
+using SqlHarness.Mcp.Tools;
 
 namespace SqlHarness.Mcp.Tests;
 
@@ -73,6 +77,48 @@ public sealed class McpProtocolNegotiationTests
         Assert.Equal(["2025-06-18", "2025-11-25"], McpHost.HandshakeProtocolVersions);
         Assert.Equal("2025-11-25", McpHost.FallbackProtocolVersion);
         Assert.Null(McpHost.CreateServerOptions().ProtocolVersion);
+    }
+
+    [Theory]
+    [InlineData("2025-06-18")]
+    [InlineData("2025-11-25")]
+    [InlineData("2026-07-28")]
+    public async Task Capabilities_tool_reports_the_negotiated_revision(string revision)
+    {
+        using var cts = new CancellationTokenSource(Budget);
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+        var options = McpHost.CreateServerOptions();
+        var scope = McpScope.Create(
+            new McpServerOptions { Profile = "mcp-t5" },
+            new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+            {
+                ["mcp-t5"] = new("mcp-unreachable.invalid", "reportdb", new Dictionary<string, string>(), "integrated"),
+            });
+        McpToolCatalog.Wire(options, scope, scope.CreateModule());
+        await using var server = McpServer.Create(
+            new StreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream(), "caps", NullLoggerFactory.Instance),
+            options, NullLoggerFactory.Instance, serviceProvider: null);
+        var serverTask = server.RunAsync(cts.Token);
+        try
+        {
+            await using var client = await McpClient.CreateAsync(
+                new StreamClientTransport(clientToServer.Writer.AsStream(), serverToClient.Reader.AsStream(), NullLoggerFactory.Instance),
+                new McpClientOptions { ClientInfo = new Implementation { Name = "caps", Version = "1" }, ProtocolVersion = revision },
+                NullLoggerFactory.Instance, cts.Token);
+            var result = await client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: cts.Token);
+            var envelope = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text).RootElement;
+            var document = envelope.GetProperty("result");
+
+            Assert.Equal(revision, document.GetProperty("protocolVersion").GetString());
+            Assert.Equal(McpHost.SupportedProtocolVersions,
+                document.GetProperty("supportedProtocolVersions").EnumerateArray().Select(v => v.GetString()!).ToArray());
+        }
+        finally
+        {
+            await cts.CancelAsync();
+            try { await serverTask; } catch (OperationCanceledException) { }
+        }
     }
 
     [Fact]

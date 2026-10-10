@@ -28,7 +28,7 @@ public sealed class McpRequestToolHandlers(
     {
         ThrowUnknown(ctx, ["includeDiagnostics"]);
         return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success,
-            McpOperationMapper.BuildCapabilities(process, includeDiagnostics), null));
+            McpOperationMapper.BuildCapabilities(process, includeDiagnostics, ctx?.Server?.NegotiatedProtocolVersion), null));
     });
 
     public Task<CallToolResult> InspectAsync(RequestContext<CallToolRequestParams> ctx,
