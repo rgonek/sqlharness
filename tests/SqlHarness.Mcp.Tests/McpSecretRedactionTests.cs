@@ -66,7 +66,7 @@ public sealed class McpSecretRedactionTests
     }
 
     [Fact]
-    public async Task Request_scope_core_error_redacts_SQL_scope_and_typed_parameter_sentinels()
+    public async Task Request_scope_core_error_does_not_echo_SQL_scope_or_typed_parameter_sentinels()
     {
         const string SqlSentinel = "request-sql-sentinel-7741";
         const string VariableSentinel = "request-var-secret-5528";

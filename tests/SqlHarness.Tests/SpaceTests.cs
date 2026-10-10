@@ -214,7 +214,7 @@ public sealed class SpaceTests
     }
 
     [Fact]
-    public async Task Space_sql_and_errors_never_include_profile_variables_or_passwords()
+    public async Task Space_sql_never_includes_profile_variables_and_errors_keep_them_but_redact_password_fragments()
     {
         Assert.DoesNotContain(ProfileSecret, SpaceQuery.Sql, StringComparison.Ordinal);
         Assert.DoesNotContain("Password", SpaceQuery.Sql, StringComparison.OrdinalIgnoreCase);
@@ -230,13 +230,13 @@ public sealed class SpaceTests
             new SqlHarnessSpaceOperation(target, 25, null, 30));
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
-        Assert.DoesNotContain(ProfileSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(ProfileSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.DoesNotContain(PasswordSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.Contains("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Space_object_name_is_redacted_from_errors()
+    public async Task Space_object_name_is_not_redacted_from_errors()
     {
         const string secretObject = "secret-table-name-xyz";
         var session = SpaceFixture.Session(objectMatches: 0);
@@ -246,8 +246,8 @@ public sealed class SpaceTests
             new SqlHarnessSpaceOperation(Target(), 25, secretObject, 30));
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
-        Assert.DoesNotContain(secretObject, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-        Assert.Contains("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(secretObject, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]

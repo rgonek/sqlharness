@@ -70,6 +70,72 @@ public sealed class CredentialRedactionTests
         Assert.Empty(secrets);
     }
 
+    [Fact]
+    public async Task Short_parameter_value_does_not_corrupt_identifiers_in_the_error()
+    {
+        var outcome = await RunWithFailureAsync(
+            new SqlHarnessQueryOperation(
+                VarTarget("dev"), "SELECT @code AS Code", ["code:nvarchar=C"], 5, 10, false, null),
+            "Invalid column name 'ClientID'. Line 1");
+
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
+        Assert.Equal("Invalid column name 'ClientID'. Line 1", outcome.SafeError);
+    }
+
+    [Fact]
+    public async Task Short_var_value_does_not_corrupt_words_in_the_error()
+    {
+        var outcome = await RunWithFailureAsync(
+            new SqlHarnessQueryOperation(VarTarget("dev"), "SELECT 1 AS One", [], 5, 10, false, null),
+            "device not ready");
+
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
+        Assert.Equal("device not ready", outcome.SafeError);
+    }
+
+    [Fact]
+    public async Task Short_values_are_kept_while_the_password_in_the_same_error_is_redacted()
+    {
+        var outcome = await RunWithFailureAsync(
+            new SqlHarnessQueryOperation(
+                VarTarget("dev"), "SELECT @code AS Code", ["code:nvarchar=C"], 5, 10, false, null),
+            $"device ClientID Line 1 {Password}");
+
+        Assert.Equal("device ClientID Line 1 [REDACTED]", outcome.SafeError);
+    }
+
+    private static SqlTargetRequest VarTarget(string env) =>
+        new("v", new Dictionary<string, string> { ["env"] = env });
+
+    private static async Task<SqlHarnessOutcome> RunWithFailureAsync(SqlHarnessOperation op, string message)
+    {
+        var session = new ThrowingSession(new InvalidOperationException(message));
+        var module = new SqlHarnessModule(session, new NoGain(), VarProfiles);
+        var previous = Environment.GetEnvironmentVariable(EnvVar);
+        try
+        {
+            Environment.SetEnvironmentVariable(EnvVar, Password);
+            return await module.ExecuteAsync(op);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(EnvVar, previous);
+        }
+    }
+
+    private static IReadOnlyDictionary<string, TargetProfile> VarProfiles() =>
+        new Dictionary<string, TargetProfile>
+        {
+            ["v"] = new(
+                "server",
+                "db-{env}",
+                new Dictionary<string, string> { ["env"] = "^.+$" },
+                "sql",
+                SqlUser: "sqlharness",
+                PasswordEnvVar: EnvVar,
+                TrustServerCertificate: true),
+        };
+
     private static void AssertRedacted(SqlHarnessOutcome outcome, string password)
     {
         Assert.NotEqual(SqlHarnessExitCode.Success, outcome.ExitCode);

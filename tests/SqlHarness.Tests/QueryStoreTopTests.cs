@@ -196,7 +196,7 @@ public sealed class QueryStoreTopTests
     }
 
     [Fact]
-    public async Task Qstop_redacts_secrets_and_omits_query_sql_from_safe_error()
+    public async Task Qstop_omits_query_sql_but_keeps_profile_variables_in_safe_error()
     {
         var session = Fixture.Session();
         session.ExecuteFailure = new InvalidOperationException(
@@ -207,7 +207,7 @@ public sealed class QueryStoreTopTests
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
         Assert.Null(outcome.Report);
-        Assert.DoesNotContain(ProfileSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(ProfileSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.Contains("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         AssertNoQuerySql(outcome.SafeError);
         Assert.Equal(0, artifacts.WriteCalls);

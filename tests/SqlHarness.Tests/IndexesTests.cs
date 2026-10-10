@@ -354,7 +354,7 @@ public sealed class IndexesTests
     }
 
     [Fact]
-    public async Task Indexes_writer_failure_returns_six_and_redacts_filters_and_sql()
+    public async Task Indexes_writer_failure_returns_six_and_redacts_filters_but_keeps_profile_variables()
     {
         var session = Fixture.Session(
             filter: FilterA,
@@ -370,7 +370,7 @@ public sealed class IndexesTests
         Assert.Contains(FilterB, artifacts.Leaked, StringComparison.Ordinal);
         Assert.DoesNotContain(FilterA, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.DoesNotContain(FilterB, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-        Assert.DoesNotContain(ProfileSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(ProfileSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.Contains("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         AssertNoQueryOrDdl(outcome.SafeError);
     }
@@ -394,7 +394,7 @@ public sealed class IndexesTests
     }
 
     [Fact]
-    public async Task Indexes_redacts_secrets_and_omits_query_sql_from_safe_error()
+    public async Task Indexes_redacts_server_filters_and_omits_query_sql_but_keeps_profile_variables_in_safe_error()
     {
         var session = Fixture.Session();
         session.ExecuteFailure = new InvalidOperationException(
@@ -405,7 +405,7 @@ public sealed class IndexesTests
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
         Assert.Null(outcome.Report);
-        Assert.DoesNotContain(ProfileSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(ProfileSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.Contains("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         AssertNoQueryOrDdl(outcome.SafeError);
         Assert.Equal(0, artifacts.WriteCalls);

@@ -372,7 +372,7 @@ public sealed class MeasureParameterSetExecutionTests
     }
 
     [Fact]
-    public async Task Module_setup_failure_redacts_parameter_values_and_does_not_succeed()
+    public async Task Module_setup_failure_keeps_parameter_values_and_does_not_succeed()
     {
         const string fixedSecret = "fixed-secret-884422";
         const string setSecret = "set-secret-991991";
@@ -401,14 +401,14 @@ public sealed class MeasureParameterSetExecutionTests
         Assert.Equal(1, session.ConnectionCount);
         Assert.Empty(session.WarmupSetNames);
         Assert.Empty(session.MeasuredSetNames);
-        Assert.DoesNotContain(fixedSecret, outcome.SafeError, StringComparison.Ordinal);
-        Assert.DoesNotContain(setSecret, outcome.SafeError, StringComparison.Ordinal);
-        Assert.DoesNotContain($"tenant:nvarchar={fixedSecret}", outcome.SafeError, StringComparison.Ordinal);
-        Assert.Contains("[REDACTED]", outcome.SafeError, StringComparison.Ordinal);
+        Assert.Contains(fixedSecret, outcome.SafeError, StringComparison.Ordinal);
+        Assert.Contains(setSecret, outcome.SafeError, StringComparison.Ordinal);
+        Assert.Contains($"tenant:nvarchar={fixedSecret}", outcome.SafeError, StringComparison.Ordinal);
+        Assert.DoesNotContain("[REDACTED]", outcome.SafeError, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Module_failure_redacts_longer_prefix_and_varbinary_base64()
+    public async Task Module_failure_keeps_numeric_prefix_values_and_varbinary_base64()
     {
         var bytes = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF };
         var base64 = Convert.ToBase64String(bytes);
@@ -435,11 +435,7 @@ public sealed class MeasureParameterSetExecutionTests
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
         Assert.Null(outcome.Report);
-        Assert.DoesNotContain("10000", outcome.SafeError, StringComparison.Ordinal);
-        Assert.DoesNotContain("[REDACTED]000", outcome.SafeError, StringComparison.Ordinal);
-        Assert.DoesNotContain(base64, outcome.SafeError, StringComparison.Ordinal);
-        Assert.DoesNotContain("System.Byte[]", outcome.SafeError, StringComparison.Ordinal);
-        Assert.Contains("[REDACTED]", outcome.SafeError, StringComparison.Ordinal);
+        Assert.Equal($"failed 1000 and 10000 and {base64}", outcome.SafeError);
     }
 
     [Fact]

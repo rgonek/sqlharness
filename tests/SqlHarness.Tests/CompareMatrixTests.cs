@@ -220,7 +220,7 @@ public class CompareMatrixTests
         Assert.Contains("cell 1", error, StringComparison.Ordinal);
         Assert.Contains("@BatchSize", error, StringComparison.Ordinal);
         Assert.Contains("measured-run-failed", error, StringComparison.Ordinal);
-        Assert.DoesNotContain("20000", error, StringComparison.Ordinal);
+        Assert.Contains("20000", error, StringComparison.Ordinal);
         Assert.Equal([1000], factory.Sessions[0].BatchSizes);
         Assert.Equal([20000], factory.Sessions[1].BatchSizes);
         var kept = Assert.Single(artifacts.Directories);
@@ -228,7 +228,7 @@ public class CompareMatrixTests
     }
 
     [Fact]
-    public async Task Matrix_failure_redacts_a_longer_value_that_starts_with_an_earlier_value()
+    public async Task Matrix_failure_keeps_a_longer_value_that_starts_with_an_earlier_value()
     {
         using var artifacts = new DirectoryArtifactWriter();
         var factory = new MatrixSessionFactory(failSqlAt: 2);
@@ -243,8 +243,8 @@ public class CompareMatrixTests
         Assert.Contains("cell 2", error, StringComparison.Ordinal);
         Assert.Contains("@BatchSize", error, StringComparison.Ordinal);
         Assert.Contains("measured-run-failed", error, StringComparison.Ordinal);
-        Assert.DoesNotContain("100000", error, StringComparison.Ordinal);
-        Assert.DoesNotContain("0000", error, StringComparison.Ordinal);
+        Assert.Contains("100000", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("[REDACTED]", error, StringComparison.Ordinal);
         Assert.Equal([100000], factory.Sessions[2].BatchSizes);
     }
 
@@ -373,7 +373,7 @@ public class CompareMatrixTests
     // and a typed NULL among the *completed* cells, not just plain integers
     // (Matrix_stops_on_sql_failure_and_keeps_the_earlier_artifact_directory,
     // above) or a single comma cell that fails before any cell completes
-    // (Typed_matrix_failure_redacts_a_value_that_contains_a_comma, below).
+    // (Typed_matrix_failure_keeps_a_value_that_contains_a_comma, below).
     [Fact]
     public async Task Typed_matrix_failure_stops_the_run_after_comma_and_empty_cells_and_keeps_only_their_artifacts()
     {
@@ -405,16 +405,16 @@ public class CompareMatrixTests
         // No DoesNotContain("se,cret"/"x4"/"x5") here (012/final F4): the failing cell
         // (index 2) is the typed NULL, whose value never reaches the message text, and
         // cells 3/4 never connect -- none of those three strings could ever appear in
-        // this scenario's error, so the assertion could not fail. Redaction of a value
-        // that genuinely would be echoed is covered by
-        // Typed_matrix_failure_redacts_a_value_that_contains_a_comma below.
+        // this scenario's error, so the assertion could not fail. Echoing of a value
+        // that genuinely would appear in a message is covered by
+        // Typed_matrix_failure_keeps_a_value_that_contains_a_comma below.
         var error = outcome.SafeError ?? string.Empty;
         Assert.Contains("cell 2", error, StringComparison.Ordinal);
         Assert.Contains("@BatchSize", error, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Typed_matrix_failure_redacts_a_value_that_contains_a_comma()
+    public async Task Typed_matrix_failure_keeps_a_value_that_contains_a_comma()
     {
         using var artifacts = new DirectoryArtifactWriter();
         var factory = new MatrixSessionFactory(failSqlAt: 0);
@@ -425,8 +425,8 @@ public class CompareMatrixTests
         var error = outcome.SafeError ?? string.Empty;
         Assert.Contains("cell 0", error, StringComparison.Ordinal);
         Assert.Contains("measured-run-failed", error, StringComparison.Ordinal);
-        Assert.DoesNotContain("se,", error, StringComparison.Ordinal);
-        Assert.DoesNotContain("cret", error, StringComparison.Ordinal);
+        Assert.Contains("se,cret", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("[REDACTED]", error, StringComparison.Ordinal);
     }
 
     // 012/final F6: the test above echoes the typed MATRIX value at execution phase; no
@@ -435,7 +435,7 @@ public class CompareMatrixTests
     // matrix parameter, so a comma in the fixed @Tenant value reaches the fake session's
     // failure message exactly as a comma in the matrix value does above.
     [Fact]
-    public async Task Typed_fixed_parameter_failure_redacts_a_value_that_contains_a_comma()
+    public async Task Typed_fixed_parameter_failure_keeps_a_value_that_contains_a_comma()
     {
         using var artifacts = new DirectoryArtifactWriter();
         var factory = new MatrixSessionFactory(failSqlAt: 0, echoParameterName: "@Tenant");
@@ -450,8 +450,8 @@ public class CompareMatrixTests
         var error = outcome.SafeError ?? string.Empty;
         Assert.Contains("cell 0", error, StringComparison.Ordinal);
         Assert.Contains("measured-run-failed", error, StringComparison.Ordinal);
-        Assert.DoesNotContain("se,", error, StringComparison.Ordinal);
-        Assert.DoesNotContain("cret", error, StringComparison.Ordinal);
+        Assert.Contains("se,cret", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("[REDACTED]", error, StringComparison.Ordinal);
     }
 
     [Fact]
