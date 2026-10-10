@@ -563,8 +563,11 @@ public sealed class McpLifecycleTests
         Assert.Equal([new SqlHarnessParameterInput("otherId", "int", "7")], secondOperation.TypedParameters);
     }
 
-    [Fact]
-    public async Task Eof_on_stdin_shuts_the_host_down_cleanly()
+    [Theory]
+    [InlineData("2025-06-18")]
+    [InlineData("2025-11-25")]
+    [InlineData("2026-07-28")]
+    public async Task Eof_on_stdin_shuts_the_host_down_cleanly(string revision)
     {
         using var cts = new CancellationTokenSource(Budget);
         var clientToServer = new Pipe();
@@ -588,12 +591,12 @@ public sealed class McpLifecycleTests
             new McpClientOptions
             {
                 ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
-                ProtocolVersion = McpHost.FallbackProtocolVersion,
+                ProtocolVersion = revision,
             },
             NullLoggerFactory.Instance,
             cts.Token))
         {
-            Assert.Equal(McpHost.FallbackProtocolVersion, client.NegotiatedProtocolVersion);
+            Assert.Equal(revision, client.NegotiatedProtocolVersion);
         }
 
         // EOF on stdin: the server loop ends and the process exits cleanly.
