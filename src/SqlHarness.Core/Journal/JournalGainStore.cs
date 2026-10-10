@@ -3,10 +3,11 @@ using Microsoft.Data.Sqlite;
 namespace SqlHarness.Core;
 
 /// <summary>
-/// Gain statistics from the activity journal: every operation of a counted kind whose
-/// emission receipt completed (raw and emitted byte counts present). This includes
-/// newly completed MCP results; historical raw-only rows remain unavailable.
-/// plan and schema count only toward the total.
+/// Gain statistics from the activity journal: every completed emission except
+/// operation gain (raw and emitted byte counts present). This includes newly
+/// completed MCP results; historical raw-only rows remain unavailable.
+/// Names in <see cref="CountedOperations"/> also fill that bucket; plan and schema
+/// count only toward the total. An unreadable or negative row is skipped.
 /// </summary>
 internal sealed class JournalGainStore(string databasePath, Func<bool> journalEnabled) : IGainSource
 {
@@ -43,18 +44,37 @@ internal sealed class JournalGainStore(string databasePath, Func<bool> journalEn
         using var reader = command.ExecuteReader();
         while (reader.Read())
         {
-            var operation = reader.GetString(0);
-            if (!buckets.TryGetValue(operation, out var bucket))
+            // 027: one unreadable or negative row is skipped. It must not fail Aggregate or be clamped into the totals.
+            string operation;
+            Row row;
+            try
+            {
+                operation = reader.GetString(0);
+                var duration = ReadStoredInt64(reader, 2);
+                var rawBytes = ReadStoredInt64(reader, 3);
+                var rawLines = reader.IsDBNull(4) ? 0 : ReadStoredInt64(reader, 4);
+                var emittedBytes = ReadStoredInt64(reader, 5);
+                var emittedLines = reader.IsDBNull(6) ? 0 : ReadStoredInt64(reader, 6);
+                if (duration < 0 || rawBytes < 0 || rawLines < 0 || emittedBytes < 0 || emittedLines < 0)
+                    continue;
+                row = new Row(
+                    reader.GetString(1) == "succeeded",
+                    duration,
+                    rawBytes,
+                    rawLines,
+                    emittedBytes,
+                    emittedLines);
+            }
+            catch (Exception ex) when (ex is InvalidCastException or FormatException or OverflowException or InvalidOperationException)
+            {
                 continue;
-            var row = new Row(
-                reader.GetString(1) == "succeeded",
-                reader.GetInt64(2),
-                reader.GetInt64(3),
-                reader.IsDBNull(4) ? 0 : reader.GetInt64(4),
-                reader.GetInt64(5),
-                reader.IsDBNull(6) ? 0 : reader.GetInt64(6));
+            }
+
+            if (string.Equals(operation, "gain", StringComparison.Ordinal))
+                continue;
             total.Add(row);
-            bucket.Add(row);
+            if (buckets.TryGetValue(operation, out var bucket))
+                bucket.Add(row);
         }
 
         return new SqlHarnessGainReport(total.ToSummary(), buckets["query"].ToSummary(), buckets["compare"].ToSummary())
@@ -89,6 +109,12 @@ internal sealed class JournalGainStore(string databasePath, Func<bool> journalEn
 
     private static SqlHarnessGainReport Empty() =>
         new(SqlHarnessGainReport.Empty, SqlHarnessGainReport.Empty, SqlHarnessGainReport.Empty);
+
+    /// <summary>
+    /// <see cref="SqliteDataReader.GetInt64"/> coerces non-numeric text to 0. Only an integer storage class counts.
+    /// </summary>
+    private static long ReadStoredInt64(SqliteDataReader reader, int ordinal) =>
+        reader.GetValue(ordinal) is long value ? value : throw new InvalidCastException();
 
     private sealed record Row(bool Success, long DurationMilliseconds, long RawBytes, long RawLines, long EmittedBytes, long EmittedLines);
 

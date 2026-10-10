@@ -20,6 +20,17 @@ public sealed class JournalGainStoreTests
         return (temp, ActivityJournal.Open(temp.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System));
     }
 
+    private static void SetRawBytes(string databasePath, long fromValue, object rawBytes)
+    {
+        using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE operations SET raw_bytes = $raw WHERE raw_bytes = $from;";
+        command.Parameters.AddWithValue("$from", fromValue);
+        command.Parameters.AddWithValue("$raw", rawBytes);
+        Assert.Equal(1, command.ExecuteNonQuery());
+    }
+
     [Fact]
     public void Gain_buckets_match_the_previous_semantics()
     {
@@ -60,11 +71,79 @@ public sealed class JournalGainStoreTests
             Run(journal, "query", "succeeded", raw: 400, emitted: 40);
             Run(journal, "query", "succeeded", raw: 400, emitted: 40, emit: false);
             Run(journal, "gain", "succeeded", raw: 4, emitted: 4);
-            Run(journal, "validate", "succeeded", raw: 4, emitted: 4);
 
             var report = new JournalGainStore(temp.DatabasePath, () => true).Aggregate();
 
             Assert.Equal(1, report.Total.Executions);
+        }
+    }
+
+    [Fact]
+    public void Unreadable_row_is_skipped_and_neighbors_still_count()
+    {
+        var (temp, journal) = Open();
+        using (temp)
+        {
+            Run(journal, "query", "succeeded", raw: 400, emitted: 40);
+            Run(journal, "query", "succeeded", raw: 100, emitted: 20);
+            Run(journal, "query", "succeeded", raw: 999, emitted: 77);
+            SetRawBytes(temp.DatabasePath, 999, "not-a-number");
+            Assert.Equal("text", (string)JournalDb.Rows(
+                temp.DatabasePath,
+                "SELECT typeof(raw_bytes) AS kind FROM operations WHERE typeof(raw_bytes) = 'text'").Single()["kind"]!);
+
+            var report = new JournalGainStore(temp.DatabasePath, () => true).Aggregate();
+
+            Assert.Equal(2, report.Total.Executions);
+            Assert.Equal(2, report.Query.Executions);
+            Assert.Equal(500, report.Total.RawBytes);
+            Assert.Equal(500, report.Query.RawBytes);
+            Assert.Equal(60, report.Total.EmittedBytes);
+            Assert.Equal(60, report.Query.EmittedBytes);
+        }
+    }
+
+    [Fact]
+    public void Unknown_operation_counts_in_the_total_only()
+    {
+        var (temp, journal) = Open();
+        using (temp)
+        {
+            Run(journal, "query", "succeeded", raw: 400, emitted: 40);
+            Run(journal, "pgstop", "succeeded", raw: 40, emitted: 4);
+            Run(journal, "validate", "succeeded", raw: 4, emitted: 4);
+
+            var report = new JournalGainStore(temp.DatabasePath, () => true).Aggregate();
+
+            Assert.Equal(3, report.Total.Executions);
+            Assert.Equal(1, report.Query.Executions);
+            Assert.Equal(0, report.Compare.Executions);
+            Assert.Equal(0, report.Measure.Executions);
+            Assert.Equal(0, report.Ping.Executions);
+            Assert.Equal(0, report.Counts.Executions);
+            Assert.Equal(0, report.Space.Executions);
+            Assert.Equal(0, report.Watch.Executions);
+            Assert.Equal(0, report.Snapshot.Executions);
+            Assert.Equal(0, report.QueryStoreTop.Executions);
+            Assert.Equal(0, report.Indexes.Executions);
+        }
+    }
+
+    [Fact]
+    public void Negative_footprint_is_skipped()
+    {
+        var (temp, journal) = Open();
+        using (temp)
+        {
+            Run(journal, "query", "succeeded", raw: 400, emitted: 40);
+            Run(journal, "query", "succeeded", raw: 999, emitted: 77);
+            SetRawBytes(temp.DatabasePath, 999, -1L);
+
+            var report = new JournalGainStore(temp.DatabasePath, () => true).Aggregate();
+
+            Assert.Equal(1, report.Total.Executions);
+            Assert.Equal(400, report.Total.RawBytes);
+            Assert.Equal(40, report.Total.EmittedBytes);
         }
     }
 
