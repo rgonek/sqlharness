@@ -17,17 +17,20 @@ public sealed record StatsQuery(DateTimeOffset? From = null, DateTimeOffset? To 
     IReadOnlyDictionary<string, string?>? Dimensions = null, string? RowDimension = null, string? ColumnDimension = null,
     bool UnprofiledOnly = false);
 
+public sealed record SessionRoot(string Uri, string? Name);
+
 public sealed record SessionSummary(
     long Id, string SessionKey, string AgentKind, string Transport, string Source, string? ClientName,
     string? ClientVersion, string? McpMode, string? Cwd, string FirstSeen, string LastSeen,
-    int Operations, int Failed, int Rejected, int Running, int Abandoned);
+    int Operations, int Failed, int Rejected, int Running, int Abandoned,
+    string? ClientTitle, IReadOnlyList<SessionRoot>? Roots);
 
 public sealed record OperationSummary(
     long Id, long SessionId, string AgentKind, string Operation, string Status, int? ExitCode, string? ErrorKind,
     string StartedAt, string UpdatedAt, string? FinishedAt, long? DurationMs, string? Profile, string? Engine,
     string? Server, string? Database, bool MutationRequested, string? SqlHash, long? RowsReturned,
     long? LogicalReadsMedian, bool HasSpill, bool ColdCache, bool OverGranted, JsonElement? Progress,
-    string? ErrorMessage);
+    string? ErrorMessage, string? CancelReason);
 
 public sealed record SessionDetail(SessionSummary Session, IReadOnlyList<OperationSummary> Operations);
 

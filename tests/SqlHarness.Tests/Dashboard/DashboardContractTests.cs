@@ -19,23 +19,23 @@ public sealed class DashboardContractTests
     public void Operation_summary_names_match_the_ui()
     {
         var summary = new OperationSummary(1, 2, "claude", "query", "running", null, null, "s", "u", null, null, null, null,
-            null, null, false, null, null, null, false, false, false, null, null);
+            null, null, false, null, null, null, false, false, false, null, null, null);
 
         Assert.Equal(
             ["id", "sessionId", "agentKind", "operation", "status", "exitCode", "errorKind", "startedAt", "updatedAt",
              "finishedAt", "durationMs", "profile", "engine", "server", "database", "mutationRequested", "sqlHash",
-             "rowsReturned", "logicalReadsMedian", "hasSpill", "coldCache", "overGranted", "progress", "errorMessage"],
+             "rowsReturned", "logicalReadsMedian", "hasSpill", "coldCache", "overGranted", "progress", "errorMessage", "cancelReason"],
             Names(summary));
     }
 
     [Fact]
     public void Session_summary_names_match_the_ui()
     {
-        var session = new SessionSummary(1, "k", "claude", "cli", "process-tree", null, null, null, null, "f", "l", 0, 0, 0, 0, 0);
+        var session = new SessionSummary(1, "k", "claude", "cli", "process-tree", null, null, null, null, "f", "l", 0, 0, 0, 0, 0, null, null);
 
         Assert.Equal(
             ["id", "sessionKey", "agentKind", "transport", "source", "clientName", "clientVersion", "mcpMode", "cwd",
-             "firstSeen", "lastSeen", "operations", "failed", "rejected", "running", "abandoned"],
+             "firstSeen", "lastSeen", "operations", "failed", "rejected", "running", "abandoned", "clientTitle", "roots"],
             Names(session));
     }
 

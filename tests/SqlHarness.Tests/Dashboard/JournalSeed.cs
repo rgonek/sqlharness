@@ -20,7 +20,8 @@ internal sealed class JournalSeed
         SessionIdentity session, string operation = "query", string status = "succeeded", int exitCode = 0,
         string sql = "SELECT 1", long durationMs = 10, BenchmarkJournalRecord? benchmark = null, bool complete = true,
         SeedTokens tokens = SeedTokens.Both, string? profile = "local", IReadOnlyDictionary<string, string>? variables = null,
-        string engine = "sqlserver", string server = "srv", string database = "db")
+        string engine = "sqlserver", string server = "srv", string database = "db",
+        string? errorKind = null, string? cancelReason = null)
     {
         variables ??= new Dictionary<string, string> { ["tenant"] = "acme" };
         var handle = _journal.Begin(session, new OperationStart(operation, profile, variables,
@@ -28,8 +29,8 @@ internal sealed class JournalSeed
         _time.Now = _time.Now.AddSeconds(1);
         if (complete)
         {
-            _journal.Complete(handle, new OperationEnd(status, exitCode, status == "rejected" ? "safety" : null, durationMs,
-                engine, server, database, 1, 3, tokens == SeedTokens.RawOnly ? 500 : null, null, null));
+            _journal.Complete(handle, new OperationEnd(status, exitCode, errorKind ?? (status == "rejected" ? "safety" : null), durationMs,
+                engine, server, database, 1, 3, tokens == SeedTokens.RawOnly ? 500 : null, null, null, CancelReason: cancelReason));
             if (tokens == SeedTokens.Both)
                 _journal.RecordEmission(handle, new OutputFootprint(400, 1), new OutputFootprint(40, 1));
             else if (tokens == SeedTokens.EmittedOnly)

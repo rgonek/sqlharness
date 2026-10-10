@@ -21,6 +21,57 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Session_and_operation_carry_title_roots_and_cancel_reason()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("mcp:r") with
+        {
+            ClientTitle = "Claude Code",
+            RootsJson = """[{"uri":"file:///w","name":"w"},{"uri":"file:///x"}]""",
+        };
+        seed.Operation(session, status: "failed", exitCode: -1, errorKind: "cancelled", cancelReason: "client");
+
+        var reader = Reader(home);
+        var id = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
+        var detail = reader.Session(id)!;
+
+        Assert.Equal("Claude Code", detail.Session.ClientTitle);
+        Assert.Equal([new SessionRoot("file:///w", "w"), new SessionRoot("file:///x", null)], detail.Session.Roots);
+        Assert.Equal("client", Assert.Single(detail.Operations).CancelReason);
+    }
+
+    // The reader never migrates (the dashboard host opens the journal first and refuses an older
+    // schema), so "unknown" is a v6 row whose metadata columns were never written.
+    [Fact]
+    public void Rows_without_recorded_metadata_read_as_null()
+    {
+        using var home = new TempHome();
+        new JournalSeed(home.DatabasePath).Operation(JournalSeed.Session("cli:old"));
+
+        var reader = Reader(home);
+        var detail = reader.Session(Assert.Single(reader.Sessions(new SessionQuery()).Items).Id)!;
+
+        Assert.Null(detail.Session.ClientTitle);
+        Assert.Null(detail.Session.Roots);
+        Assert.Null(Assert.Single(detail.Operations).CancelReason);
+    }
+
+    [Fact]
+    public void Empty_and_malformed_roots_are_distinct()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("mcp:empty") with { RootsJson = "[]" });
+        seed.Operation(JournalSeed.Session("mcp:bad") with { RootsJson = "not json" });
+
+        var sessions = Reader(home).Sessions(new SessionQuery()).Items.ToDictionary(s => s.SessionKey);
+
+        Assert.Empty(sessions["mcp:empty"].Roots!);
+        Assert.Null(sessions["mcp:bad"].Roots);
+    }
+
+    [Fact]
     public void Sessions_are_newest_first_with_counts_and_keyset_paging()
     {
         using var home = new TempHome();

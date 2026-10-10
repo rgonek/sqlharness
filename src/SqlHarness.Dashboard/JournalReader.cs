@@ -35,7 +35,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 WHERE m.operation_id = o.id AND t.cold_runs > 0) AS cold_cache,
         EXISTS (SELECT 1 FROM operation_metrics m WHERE m.operation_id = o.id AND m.grant_granted_kb >= {OverGrantMinimumKb}
                 AND m.grant_max_used_kb IS NOT NULL AND m.grant_max_used_kb * 4 < m.grant_granted_kb) AS over_granted,
-        o.error_message
+        o.error_message, o.cancel_reason
         """;
 
     private const string SessionColumns = """
@@ -43,7 +43,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         s.first_seen, s.last_seen,
         (SELECT COUNT(*) FROM operations o WHERE o.session_id = s.id) AS ops,
         (SELECT COUNT(*) FROM operations o WHERE o.session_id = s.id AND o.status = 'failed') AS failed,
-        (SELECT COUNT(*) FROM operations o WHERE o.session_id = s.id AND o.status = 'rejected') AS rejected
+        (SELECT COUNT(*) FROM operations o WHERE o.session_id = s.id AND o.status = 'rejected') AS rejected,
+        s.client_title, s.roots_json
         """;
 
     public long? SchemaVersion()
@@ -181,7 +182,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 """,
                 parameters,
                 reader => (Operation: ReadOperation(reader, liveness),
-                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 26))));
+                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 27))));
             var filteredRows = rows.Where(row => !variableFiltered
                 || OperationDimensionResolver.Matches(query.Dimensions, row.Variables));
             matches.AddRange(liveFiltered
@@ -596,7 +597,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     private static SessionSummary ReadSessionRow(SqliteDataReader r) => new(
         r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetString(4), NullableString(r, 5),
         NullableString(r, 6), NullableString(r, 7), NullableString(r, 8), r.GetString(9), r.GetString(10),
-        r.GetInt32(11), r.GetInt32(12), r.GetInt32(13), 0, 0);
+        r.GetInt32(11), r.GetInt32(12), r.GetInt32(13), 0, 0,
+        NullableString(r, 14), Roots(NullableString(r, 15)));
 
     private static OperationSummary ReadOperation(SqliteDataReader r, ProcessLiveness liveness) => new(
         r.GetInt64(0), r.GetInt64(1), r.GetString(2), r.GetString(3),
@@ -605,7 +607,28 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         NullableLong(r, 10), NullableString(r, 11), NullableString(r, 12), NullableString(r, 13), NullableString(r, 14),
         r.GetInt64(15) != 0, NullableString(r, 16), NullableLong(r, 17), NullableLong(r, 21),
         r.GetInt64(22) != 0, r.GetInt64(23) != 0, r.GetInt64(24) != 0, Json(NullableString(r, 18)),
-        NullableString(r, 25));
+        NullableString(r, 25), NullableString(r, 26));
+
+    private static IReadOnlyList<SessionRoot>? Roots(string? json)
+    {
+        if (json is null)
+            return null;
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+                return null;
+            return document.RootElement.EnumerateArray()
+                .Select(item => new SessionRoot(
+                    item.GetProperty("uri").GetString() ?? string.Empty,
+                    item.TryGetProperty("name", out var name) ? name.GetString() : null))
+                .ToArray();
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            return null;
+        }
+    }
 
     private static VariantDetail ReadVariant(SqliteDataReader r) => new(
         r.GetInt32(1), r.GetString(2), NullableString(r, 3), r.IsDBNull(4) ? null : r.GetInt32(4), r.GetInt32(5),
