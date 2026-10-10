@@ -35,5 +35,7 @@ export default defineConfig({
     css: false,
     restoreMocks: true,
     maxWorkers: 4,
+    // StatsPage interactions exceed Vitest's 5s default on the Linux gate.
+    testTimeout: 20_000,
   },
 })

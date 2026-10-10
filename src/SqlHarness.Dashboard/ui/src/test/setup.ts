@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest"
-import { cleanup } from "@testing-library/react"
+import { cleanup, configure } from "@testing-library/react"
 import { afterEach } from "vitest"
 
 // Recharts' ResponsiveContainer and Base UI measure elements; jsdom has no ResizeObserver.
@@ -24,5 +24,8 @@ window.matchMedia ??= ((query: string) => ({
 
 // TanStack Router restores scroll on navigation; jsdom logs "Not implemented" for scrollTo.
 window.scrollTo = (() => {}) as typeof window.scrollTo
+
+// The Linux gate's jsdom renders the stats page slower than findBy's 1s default.
+configure({ asyncUtilTimeout: 5_000 })
 
 afterEach(() => cleanup())

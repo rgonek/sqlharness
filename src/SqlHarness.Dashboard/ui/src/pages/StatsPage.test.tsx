@@ -114,7 +114,7 @@ test("selects a profile and shows filtered, searchable dimension matrix totals",
   expect(await screen.findByRole("button", { name: /component api, project alpha: 2/ })).toBeInTheDocument()
   expect(screen.getByText(/Full-scope total: 3 \(3 operations\)/)).toBeInTheDocument()
 
-  await userEvent.type(screen.getByRole("textbox", { name: "Search row and column values" }), "beta")
+  setMatrixSearch("beta")
   expect(screen.getByText(/Visible total: 1 \(1 operations\)/)).toBeInTheDocument()
   expect(screen.getByText(/Full-scope total: 3 \(3 operations\)/)).toBeInTheDocument()
 
@@ -191,7 +191,7 @@ test("switching from a profile named unprofiled to no-profile resets matrix cont
   await screen.findByText(/Showing 25 of 30 row values/)
   expect(profile).toHaveValue("profile:unprofiled")
   await userEvent.selectOptions(screen.getByRole("combobox", { name: "Metric" }), "failed")
-  await userEvent.type(screen.getByRole("textbox", { name: "Search row and column values" }), "profile-value-29")
+  setMatrixSearch("profile-value-29")
   await userEvent.selectOptions(screen.getByRole("combobox", { name: "Display limit per axis" }), "10")
 
   fireEvent.change(profile, { target: { value: "unprofiled" } })
@@ -219,7 +219,7 @@ test("marks search-hidden cross-intersections and excludes them from visible tot
     metric="operations" profile="app" range="7d" window={{ from: "2026-10-01T00:00:00.000Z", to: "2026-10-08T00:00:00.000Z" }}
     unprofiled={false} filters={{}} />)
 
-  await userEvent.type(screen.getByRole("textbox", { name: "Search row and column values" }), "match")
+  setMatrixSearch("match")
 
   expect(screen.getByLabelText("Operations hidden by matrix search")).toBeInTheDocument()
   expect(screen.getByText(/Visible total: 3 \(3 operations\)/)).toBeInTheDocument()
@@ -284,6 +284,12 @@ test("cell navigation keeps the exact stats window across a minute boundary", as
     vi.restoreAllMocks()
   }
 })
+
+// The default userEvent keyboard is shared by the file. Per-keystroke typing
+// keeps going after a 5s timeout and lands in the next test's input.
+function setMatrixSearch(value: string) {
+  fireEvent.change(screen.getByRole("textbox", { name: "Search row and column values" }), { target: { value } })
+}
 
 function jsonResponse(value: unknown) {
   return new Response(JSON.stringify(value), { status: 200, headers: { "Content-Type": "application/json" } })
