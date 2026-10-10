@@ -1,15 +1,19 @@
 import { QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ConflictError, getJson, NotFoundError, putJson, UnauthorizedError } from "./client"
-import type { DashboardStats, DistilledPlan, OperationDetail, Page, ProfilesResponse, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
+import type { DashboardStats, DistilledPlan, OperationDetail, OperationSummary, Page, ProfilesResponse, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string }
+export type OperationFilters = { from?: string; to?: string; profile?: string; unprofiled?: boolean; dimensions?: Record<string, string | null>; status?: string; operation?: string }
 export type StatsRange = "24h" | "7d" | "30d" | "all"
+export type StatsWindow = { from?: string; to?: string }
 
 export const queryKeys = {
   sessions: (filters: SessionFilters) => ["sessions", filters] as const,
   session: (id: number) => ["session", id] as const,
   operation: (id: number) => ["operation", id] as const,
-  stats: (range: StatsRange) => ["stats", range] as const,
+  operations: (filters: OperationFilters) => ["operations", filters] as const,
+  stats: (range: StatsRange, window: StatsWindow, profile?: string | null, dimensions?: Record<string, string | null>, rowDimension?: string, columnDimension?: string, unprofiled?: boolean) =>
+    ["stats", range, window, profile, dimensions, rowDimension, columnDimension, unprofiled] as const,
   settings: () => ["settings"] as const,
   profiles: () => ["profiles"] as const,
   plan: (hash: string) => ["plan", hash] as const,
@@ -47,6 +51,21 @@ export function useOperation(id: number) {
   return useQuery({ queryKey: queryKeys.operation(id), queryFn: () => getJson<OperationDetail>(`/api/operations/${id}`) })
 }
 
+export function useOperations(filters: OperationFilters) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.operations(filters),
+    queryFn: ({ pageParam }) => getJson<Page<OperationSummary>>("/api/operations", {
+      from: filters.from, to: filters.to, profile: filters.profile,
+      unprofiled: filters.unprofiled ? "true" : undefined, status: filters.status, operation: filters.operation,
+      dimensions: filters.dimensions && Object.keys(filters.dimensions).length ? JSON.stringify(filters.dimensions) : undefined,
+      cursor: pageParam,
+      limit: 50,
+    }),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: page => page.nextCursor ?? undefined,
+  })
+}
+
 const rangeHours: Record<StatsRange, number | null> = { "24h": 24, "7d": 24 * 7, "30d": 24 * 30, all: null }
 
 /** Start of the range, rounded down to the minute so the request is stable while the view is open. */
@@ -57,10 +76,25 @@ export function rangeStart(range: StatsRange, now: number): string | undefined {
   return new Date(start).toISOString()
 }
 
-export function useStats(range: StatsRange) {
+export function rangeWindow(range: StatsRange, now: number): StatsWindow {
+  const to = new Date(Math.floor(now / 60_000) * 60_000).toISOString()
+  return { from: rangeStart(range, now), to }
+}
+
+export function useStats(
+  range: StatsRange, window: StatsWindow, profile?: string | null, dimensions: Record<string, string | null> = {},
+  rowDimension?: string, columnDimension?: string, unprofiled = false,
+) {
   return useQuery({
-    queryKey: queryKeys.stats(range),
-    queryFn: () => getJson<DashboardStats>("/api/stats", { from: rangeStart(range, Date.now()) }),
+    queryKey: queryKeys.stats(range, window, profile, dimensions, rowDimension, columnDimension, unprofiled),
+    queryFn: () => getJson<DashboardStats>("/api/stats", {
+      ...window,
+      profile,
+      unprofiled: unprofiled ? "true" : undefined,
+      dimensions: Object.keys(dimensions).length ? JSON.stringify(dimensions) : undefined,
+      rowDimension,
+      columnDimension,
+    }),
   })
 }
 

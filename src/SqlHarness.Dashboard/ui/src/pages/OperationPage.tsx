@@ -148,6 +148,17 @@ function OperationView({ id }: { id: number }) {
               ))}
             </div>
           )}
+          {detail.dimensions.values.length > 0 && <div className="flex flex-wrap gap-2" aria-label="Scope dimensions">
+            {detail.dimensions.values.map(value => {
+              const filters = { [value.name]: value.isUnknown ? null : value.value }
+              return <Link key={`${value.name}:${value.isUnknown ? "missing" : value.value}`} to="/operations" search={{
+                profile: op.profile ?? undefined, unprofiled: op.profile === null || undefined,
+                dimensions: JSON.stringify(filters),
+              }} className="rounded-md border px-2 py-1 text-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+                {value.name} = {value.isUnknown ? "Unknown (missing)" : value.value}{value.source === "inferred" ? " (inferred)" : ""}
+              </Link>
+            })}
+          </div>}
           {detail.summary && <SummaryFacts summary={detail.summary} />}
         </CardContent>
       </Card>

@@ -1,6 +1,6 @@
 # Dynamic profile dimensions and target matrix
 
-Status: accepted UI plan; implementation pending.
+Status: implementation complete; Windows gate verified; Linux verification outstanding.
 
 ## Goal
 
@@ -73,6 +73,48 @@ Example (operation count):
   and later consumers. Keep reads local: no database probes, profile writes,
   or parameter-value collection are needed.
 
+## Gain visibility and data coverage
+
+The Statistics Tokens saved card must explain which operations contribute to
+its estimated gain. Keep gain scoped to the selected time range, like the
+other Statistics cards; Targets profile/dimension filters do not alter it.
+
+- Report the count of operations with both raw and emitted estimates against
+  the total operation count, and identify operations lacking one or both.
+- Compute estimated savings only from paired raw/emitted data. MCP operations
+  historically have raw estimates without emitted estimates and cannot contribute
+  a measured savings ratio. Do not invent emitted values or backfill history.
+- When no paired data is available, show gain unavailable and a clear reason,
+  rather than a dash accompanied by misleading zero raw/emitted totals. Empty
+  activity and incomplete coverage must remain distinguishable.
+- Label tokens as estimates derived from output bytes, not actual model usage.
+  Preserve negative net savings when emitted output exceeds raw output.
+- Verify all-MCP/raw-only activity, mixed CLI/MCP coverage, empty activity,
+  complete pairs, and negative savings with backend and UI tests.
+
+## MCP emitted estimates
+
+Record emitted output footprints for new MCP executions after the final
+budgeted CallToolResult has been built, using its SDK-serialized UTF-8 bytes
+and the existing ceil(bytes / 4) estimator. This is an estimate of the tool
+result representation, not actual model token usage or the full JSON-RPC
+transport envelope. Include the complete returned result representation.
+
+- Cover fixed-profile handlers and request-scoped target-free/target-dependent
+  handlers. Complete each logical operation's emission receipt once and only
+  once; keep execution gates, cancellation and response byte budgets intact.
+- Use the existing journal emission pipeline. Storage/accounting failures must
+  not alter valid tool output or leak sensitive values. Respect any existing
+  receipt semantics for genuine artifact-finalization failures.
+- Gain and Statistics may include CLI and new MCP operations with paired raw
+  and emitted footprints. Preserve negative net savings and document the
+  estimation method and coverage. Historical raw-only rows stay unavailable.
+- Update AGENTS.md, relevant MCP/gain documentation and tests to remove the
+  old promise that MCP emitted counts are never recorded. No sensitive text,
+  values or secrets are added to journal fields; store counts only.
+- Test fixed/request execution, errors, budgeted output, single-use receipts,
+  cancellation/busy paths and journal failure behavior without live databases.
+
 ## Reuse elsewhere
 
 After the Statistics flow, reuse the same dimension labels and attribution
@@ -86,9 +128,11 @@ than assign one scope to a session containing several targets.
 1. Add shared dimension resolution and complete backend aggregates, including
    profile totals, attribution, metric availability, and time-range filtering.
 2. Add the profile selector, dynamic filters/breakdowns, and matrix to Targets.
-3. Add cell drill-down to a paginated operation list with matching backend
+3. Add emitted footprint accounting for new MCP responses and its journal/gain
+   coverage tests.
+4. Add cell drill-down to a paginated operation list with matching backend
    filters; reuse labels in operation details where practical.
-4. Extend the same presentation to sessions and Profiles as a follow-up.
+5. Extend the same presentation to sessions and Profiles as a follow-up.
 
 Likely touchpoints: `DashboardModels.cs`, `JournalReader.cs`,
 `DashboardProfiles.cs`, dashboard route wiring, UI API types/queries,

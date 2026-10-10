@@ -13,6 +13,6 @@ export function pivotPerDay(rows: DayAgentCount[]): { rows: Record<string, strin
   }
 }
 
-export function tokenSavings(tokens: TokenStat): number | null {
+export function tokenSavings(tokens: Pick<TokenStat, "raw" | "emitted">): number | null {
   return tokens.raw > 0 ? (tokens.raw - tokens.emitted) / tokens.raw : null
 }

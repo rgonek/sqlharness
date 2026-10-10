@@ -243,7 +243,7 @@ public sealed class JournalingModuleTests
             Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null, receipt))));
         using (temp)
         {
-            // MCP never completes the receipt; raw tokens must still land.
+            // Raw tokens are recorded when the operation completes, before MCP builds its response.
             await module.ExecuteAsync(Query());
 
             var row = JournalDb.Rows(temp.DatabasePath, "SELECT raw_tokens, emitted_tokens FROM operations").Single();

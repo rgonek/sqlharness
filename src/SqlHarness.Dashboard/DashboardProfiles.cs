@@ -40,6 +40,23 @@ internal static class DashboardProfiles
             .ToArray(), null);
     }
 
+    /// <summary>Reads only profile names and variable definitions for Statistics aggregation.</summary>
+    internal static IReadOnlyDictionary<string, IReadOnlyList<string>> DimensionNames(string path)
+    {
+        try
+        {
+            return ProfileStore.Load(path).ToDictionary(
+                pair => pair.Key,
+                pair => (IReadOnlyList<string>)pair.Value.Vars.Keys.Order(StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
+        }
+        catch (Exception exception) when (exception is SqlHarnessSafetyException or IOException or UnauthorizedAccessException)
+        {
+            // Profile metadata is optional for journal history and must never hide its totals.
+            return new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        }
+    }
+
     private static string EngineOf(TargetProfile profile) =>
         string.IsNullOrWhiteSpace(profile.Engine) ? "sqlserver" : profile.Engine.Trim().ToLowerInvariant();
 

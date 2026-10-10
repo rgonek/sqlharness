@@ -1,16 +1,19 @@
 import { useState } from "react"
+import { useNavigate } from "@tanstack/react-router"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { type StatsRange, useStats } from "@/api/queries"
-import type { DashboardStats, KeyCount, SqlHashStat } from "@/api/types"
+import { rangeWindow, type StatsRange, useProfiles, useStats, type StatsWindow } from "@/api/queries"
+import type { DashboardStats, KeyCount, ProfileView, SqlHashStat } from "@/api/types"
 import { ErrorState } from "@/components/ErrorState"
 import { Kpi } from "@/components/Kpi"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDuration, formatNumber, formatPercent, shortHash } from "@/lib/format"
 import { pivotPerDay, tokenSavings } from "@/lib/stats"
+import { ProfileDimensionsPanel, type DimensionAxes, type DimensionCellScope } from "./ProfileDimensionsPanel"
 
 const ranges: { value: StatsRange; label: string }[] = [
   { value: "24h", label: "24 hours" },
@@ -59,15 +62,89 @@ function CountChart({ rows, label }: { rows: KeyCount[]; label: string }) {
   )
 }
 
-export function StatsPage() {
+function gainLabel(stats: DashboardStats): string {
+  const tokens = stats.tokens
+  if (tokens.totalOperations === 0) return "No activity"
+  if (tokens.pairedOperations === 0) return "Unavailable"
+  const savings = tokenSavings(tokens)
+  return savings === null ? "Unavailable" : formatPercent(savings)
+}
+
+function gainHint(stats: DashboardStats): string {
+  const tokens = stats.tokens
+  const coverage = `${formatNumber(tokens.pairedOperations)} of ${formatNumber(tokens.totalOperations)} operations have both estimates; ${formatNumber(tokens.rawOnlyOperations)} raw only, ${formatNumber(tokens.emittedOnlyOperations)} emitted only, ${formatNumber(tokens.missingBothOperations)} missing both.`
+  if (tokens.totalOperations === 0) return `No operations in this time range. ${coverage}`
+  if (tokens.pairedOperations === 0) return `Gain unavailable because no operation has both estimates. ${coverage} Estimates use output bytes, not actual model usage.`
+  if (tokens.raw === 0) return `Gain unavailable because paired raw output is zero. ${coverage} Paired totals: ${formatNumber(tokens.raw)} raw → ${formatNumber(tokens.emitted)} emitted. Estimates use output bytes, not actual model usage.`
+  return `${coverage} Paired totals: ${formatNumber(tokens.raw)} raw → ${formatNumber(tokens.emitted)} emitted. Estimates use output bytes, not actual model usage.`
+}
+
+type StatsPageProps = { onDimensionCellSelect?: (scope: DimensionCellScope) => void }
+
+export function StatsPage(props: StatsPageProps = {}) {
+  return props.onDimensionCellSelect
+    ? <StatsPageContent onDimensionCellSelect={props.onDimensionCellSelect} />
+    : <StatsPageRoute />
+}
+
+function StatsPageRoute() {
+  const navigate = useNavigate()
+  return <StatsPageContent onDimensionCellSelect={scope => void navigate({ to: "/operations", search: {
+    from: scope.from, to: scope.to, profile: scope.unprofiled ? undefined : scope.profile ?? undefined,
+    unprofiled: scope.unprofiled || undefined, dimensions: JSON.stringify(scope.dimensions),
+  } })} />
+}
+
+function StatsPageContent({ onDimensionCellSelect }: Required<StatsPageProps>) {
   const [range, setRange] = useState<StatsRange>("7d")
-  const query = useStats(range)
+  const [window, setWindow] = useState<StatsWindow>(() => rangeWindow("7d", Date.now()))
+  const [manualProfile, setManualProfile] = useState<{ value: string | null } | undefined>()
+  const [dimensionFilters, setDimensionFilters] = useState<Record<string, string | null>>({})
+  const [axisChoice, setAxisChoice] = useState<DimensionAxes | null>(null)
+  const overview = useStats(range, window)
+  const profilesQuery = useProfiles()
+  const profiles = profilesQuery.data?.profiles ?? []
+  const selectedProfile = manualProfile
+    ? manualProfile.value
+    : overview.data?.profileOperations.length
+      ? overview.data.profileOperations[0].profile
+      : profiles[0]?.name ?? null
+  const selectedUnprofiled = manualProfile ? manualProfile.value === null
+    : overview.data?.profileOperations[0]?.profile === null && overview.data.profileOperations.length > 0
+  const query = useStats(range, window, selectedProfile, {}, undefined, undefined, selectedUnprofiled)
+  const profileOptions = [...new Set([
+    ...profiles.map(profile => profile.name),
+    ...(overview.data?.profileOperations ?? []).flatMap(item => item.profile === null ? [] : [item.profile]),
+    ...(manualProfile?.value ? [manualProfile.value] : []),
+  ])].sort((left, right) => left.localeCompare(right))
+  const selectedProfileView = profiles.find(profile => profile.name === selectedProfile)
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-4">
         <h1>Statistics</h1>
-        <Tabs value={range} onValueChange={value => setRange(String(value) as StatsRange)}>
+        <div className="grid min-w-52 gap-1.5">
+          <Label htmlFor="stats-profile">Profile</Label>
+          <select
+            id="stats-profile"
+            aria-label="Statistics profile"
+            className="h-8 rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted"
+            value={selectedProfile === null ? "unprofiled" : `profile:${selectedProfile}`}
+            onChange={event => {
+              setManualProfile({ value: event.target.value === "unprofiled" ? null : event.target.value.slice("profile:".length) })
+              setDimensionFilters({})
+              setAxisChoice(null)
+            }}
+          >
+            {profileOptions.map(name => <option key={name} value={`profile:${name}`}>{name}</option>)}
+            <option value="unprofiled">No profile</option>
+          </select>
+        </div>
+        <Tabs value={range} onValueChange={value => {
+          const nextRange = String(value) as StatsRange
+          setRange(nextRange)
+          setWindow(rangeWindow(nextRange, Date.now()))
+        }}>
           <TabsList>
             {ranges.map(item => (
               <TabsTrigger key={item.value} value={item.value}>
@@ -77,18 +154,46 @@ export function StatsPage() {
           </TabsList>
         </Tabs>
       </div>
-      {query.error ? (
+      {overview.error ? (
+        <ErrorState error={overview.error} />
+      ) : query.error ? (
         <ErrorState error={query.error} />
-      ) : query.isPending ? (
+      ) : overview.isPending || query.isPending ? (
         <Skeleton className="h-64 w-full" />
       ) : (
-        <StatsContent stats={query.data} />
+        <StatsContent stats={query.data} range={range} window={window} profile={selectedProfile} unprofiled={selectedUnprofiled} profileView={selectedProfileView}
+          dimensionFilters={dimensionFilters} onDimensionFiltersChange={setDimensionFilters}
+          axisChoice={axisChoice} onAxisChoiceChange={setAxisChoice} onDimensionCellSelect={onDimensionCellSelect} />
       )}
     </div>
   )
 }
 
-function StatsContent({ stats }: { stats: DashboardStats }) {
+function StatsContent({
+  stats,
+  range,
+  window,
+  profile,
+  unprofiled,
+  profileView,
+  dimensionFilters,
+  onDimensionFiltersChange,
+  axisChoice,
+  onAxisChoiceChange,
+  onDimensionCellSelect,
+}: {
+  stats: DashboardStats
+  range: StatsRange
+  window: StatsWindow
+  profile: string | null
+  unprofiled: boolean
+  profileView: ProfileView | undefined
+  dimensionFilters: Record<string, string | null>
+  onDimensionFiltersChange: (filters: Record<string, string | null>) => void
+  axisChoice: DimensionAxes | null
+  onAxisChoiceChange: (axes: DimensionAxes | null) => void
+  onDimensionCellSelect?: (scope: DimensionCellScope) => void
+}) {
   const perDay = pivotPerDay(stats.operationsPerDay)
   const perDayConfig = Object.fromEntries(
     perDay.agents.map((agent, index) => [agent, { label: agent, color: `var(--chart-${(index % 5) + 1})` }]),
@@ -99,7 +204,7 @@ function StatsContent({ stats }: { stats: DashboardStats }) {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Kpi label="Operations" value={formatNumber(total)} />
-        <Kpi label="Tokens saved" value={formatPercent(tokenSavings(stats.tokens))} hint={`${formatNumber(stats.tokens.raw)} raw → ${formatNumber(stats.tokens.emitted)} emitted`} />
+        <Kpi label="Tokens saved (estimated)" value={gainLabel(stats)} hint={gainHint(stats)} />
         <Kpi label="Operations with spills" value={formatNumber(stats.spillOperations)} />
         <Kpi label="Operations on a cold cache" value={formatNumber(stats.coldCacheOperations)} />
       </div>
@@ -205,31 +310,6 @@ function StatsContent({ stats }: { stats: DashboardStats }) {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Targets</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Profile</TableHead>
-                  <TableHead>Database</TableHead>
-                  <TableHead className="text-right">Operations</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {stats.targets.map(row => (
-                  <TableRow key={`${row.profile}/${row.database}`}>
-                    <TableCell>{row.profile ?? "—"}</TableCell>
-                    <TableCell>{row.database ?? "—"}</TableCell>
-                    <TableCell className="text-right">{formatNumber(row.count)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
             <CardTitle>Operations by kind</CardTitle>
           </CardHeader>
           <CardContent>
@@ -237,6 +317,24 @@ function StatsContent({ stats }: { stats: DashboardStats }) {
           </CardContent>
         </Card>
       </div>
+      <ProfileDimensionsPanel
+        key={profile === null ? `scope:${unprofiled ? "unprofiled" : "all"}` : `profile:${profile}`}
+        range={range}
+        window={window}
+        profile={profile}
+        unprofiled={unprofiled}
+        profileName={profile ?? "No profile"}
+        databaseTemplate={profileView?.database}
+        profileDefinitionAvailable={stats.profileDimensions.profileDefinitionAvailable}
+        dimensions={stats.profileDimensions.dimensions}
+        filterOptions={stats.profileDimensions.dimensions}
+        targets={stats.profileDimensions.targets}
+        dimensionFilters={dimensionFilters}
+        onDimensionFiltersChange={onDimensionFiltersChange}
+        axisChoice={axisChoice}
+        onAxisChoiceChange={onAxisChoiceChange}
+        onCellSelect={onDimensionCellSelect}
+      />
     </div>
   )
 }

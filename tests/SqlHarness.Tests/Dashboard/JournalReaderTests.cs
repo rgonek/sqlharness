@@ -338,6 +338,196 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Dimension_stats_are_complete_filtered_and_keep_missing_values_separate_from_unknown_text()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        for (var i = 0; i < 25; i++)
+            seed.Operation(JournalSeed.Session($"cli:profile-{i}"), profile: $"profile-{i:D2}");
+        seed.Operation(JournalSeed.Session("cli:literal"), profile: "app", variables: new Dictionary<string, string>
+        {
+            ["region"] = "Unknown",
+            ["component"] = "worker",
+        }, durationMs: 30);
+        seed.Operation(JournalSeed.Session("cli:missing"), profile: "app", status: "failed", exitCode: 5,
+            variables: new Dictionary<string, string> { ["component"] = "worker" }, durationMs: 20);
+        seed.Operation(JournalSeed.Session("cli:running", hostPid: 100), profile: "app", complete: false,
+            variables: new Dictionary<string, string> { ["component"] = "worker" });
+        seed.Operation(JournalSeed.Session("cli:eu-api-1"), profile: "app",
+            variables: new Dictionary<string, string> { ["region"] = "eu", ["component"] = "api" }, durationMs: 5);
+        seed.Operation(JournalSeed.Session("cli:eu-api-2"), profile: "app",
+            variables: new Dictionary<string, string> { ["region"] = "eu", ["component"] = "api" }, durationMs: 7);
+        seed.Operation(JournalSeed.Session("cli:us-portal"), profile: "app", status: "rejected", exitCode: 2,
+            variables: new Dictionary<string, string> { ["region"] = "us", ["component"] = "portal" }, durationMs: 11);
+        seed.Operation(JournalSeed.Session("cli:deleted-profile"), profile: "deleted",
+            variables: new Dictionary<string, string> { ["historical"] = "kept" });
+        var definitions = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+        {
+            ["app"] = ["region", "component"],
+            ["empty-profile"] = ["scope"],
+        };
+
+        var reader = Reader(home, new FakeProcesses());
+        var all = reader.Stats(new StatsQuery(Profile: "app", RowDimension: "region", ColumnDimension: "component"), definitions);
+        var filtered = reader.Stats(new StatsQuery(Profile: "app",
+            Dimensions: new Dictionary<string, string?> { ["region"] = null },
+            RowDimension: "region", ColumnDimension: "component"), definitions);
+        var empty = reader.Stats(new StatsQuery(Profile: "empty-profile",
+            To: new DateTimeOffset(2026, 10, 7, 0, 0, 0, TimeSpan.Zero)), definitions);
+        var deletedProfile = reader.Stats(new StatsQuery(Profile: "deleted"), definitions);
+
+        Assert.Equal(27, all.ProfileOperations.Count);
+        Assert.Equal(32, all.ProfileOperations.Sum(item => item.Operations));
+        Assert.Equal("app", all.ProfileOperations[0].Profile);
+        Assert.Equal("deleted", all.ProfileOperations[1].Profile);
+        Assert.True(all.ProfileDimensions.ProfileDefinitionAvailable);
+        Assert.Equal(6, all.ProfileDimensions.Operations);
+        var region = Assert.Single(all.ProfileDimensions.Dimensions, item => item.Name == "region");
+        Assert.Equal(4, region.Values.Count);
+        var literal = Assert.Single(region.Values, item => !item.IsUnknown && item.Value == "Unknown");
+        var missing = Assert.Single(region.Values, item => item.IsUnknown);
+        Assert.Equal(("Unknown", 1), (literal.Value, literal.Operations));
+        Assert.NotNull(literal.Percentage);
+        Assert.Equal(100d / 6, literal.Percentage.Value, 3);
+        Assert.Equal(("Unknown", 2, 20L, 1, 1, 1),
+            (missing.Value, missing.Operations, missing.TotalDurationMs, missing.DurationAvailableOperations,
+                missing.DurationUnavailableOperations, missing.Failed));
+        var matrix = Assert.IsType<DimensionMatrixStats>(all.ProfileDimensions.Matrix);
+        Assert.Equal(("region", "component", 6), (matrix.RowDimension, matrix.ColumnDimension, matrix.Totals.Operations));
+        Assert.Equal(6, matrix.Cells.Sum(cell => cell.Metrics.Operations));
+        Assert.Equal((1, 1), (matrix.Totals.Failed, matrix.Totals.Rejected));
+        Assert.Equal(2, Assert.Single(matrix.Cells, cell => !cell.Row.IsUnknown && cell.Row.Value == "eu"
+            && !cell.Column.IsUnknown && cell.Column.Value == "api").Metrics.Operations);
+        var literalUnknown = Assert.Single(matrix.Cells, cell => !cell.Row.IsUnknown && cell.Row.Value == "Unknown"
+            && cell.Column.Value == "worker");
+        var missingRegion = Assert.Single(matrix.Cells, cell => cell.Row.IsUnknown && cell.Column.Value == "worker");
+        Assert.Equal((1, 30L, 0), (literalUnknown.Metrics.Operations, literalUnknown.Metrics.TotalDurationMs,
+            literalUnknown.Metrics.DurationUnavailableOperations));
+        Assert.Equal((2, 20L, 1, 1), (missingRegion.Metrics.Operations, missingRegion.Metrics.TotalDurationMs,
+            missingRegion.Metrics.DurationUnavailableOperations, missingRegion.Metrics.Failed));
+        Assert.Equal(2, filtered.ProfileDimensions.Operations);
+        Assert.Equal(2, filtered.ProfileDimensions.Matrix!.Totals.Operations);
+        Assert.Equal(2, Assert.Single(filtered.ProfileDimensions.Matrix.Cells).Metrics.Operations);
+        Assert.Equal(all.ProfileOperations, filtered.ProfileOperations);
+        Assert.Equal(2, Assert.Single(filtered.ProfileDimensions.Dimensions, item => item.Name == "region").Values.Single().Operations);
+        Assert.Equal(0, empty.ProfileDimensions.Operations);
+        Assert.True(empty.ProfileDimensions.ProfileDefinitionAvailable);
+        Assert.Empty(Assert.Single(empty.ProfileDimensions.Dimensions).Values);
+        Assert.False(deletedProfile.ProfileDimensions.ProfileDefinitionAvailable);
+        Assert.Equal("kept", Assert.Single(Assert.Single(deletedProfile.ProfileDimensions.Dimensions).Values).Value);
+    }
+
+    [Fact]
+    public void Dimension_target_limit_reports_full_filtered_target_count_without_changing_totals()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        for (var i = 0; i < 23; i++)
+            seed.Operation(JournalSeed.Session($"cli:selected-{i}"), profile: "app",
+                variables: new Dictionary<string, string> { ["tenant"] = "selected", ["component"] = "api" },
+                server: $"server-{i}", database: $"db-{i}");
+        for (var i = 0; i < 3; i++)
+            seed.Operation(JournalSeed.Session($"cli:other-{i}"), profile: "app",
+                variables: new Dictionary<string, string> { ["tenant"] = "other", ["component"] = "api" },
+                server: $"other-server-{i}", database: $"other-db-{i}");
+
+        var stats = Reader(home).Stats(new StatsQuery(Profile: "app",
+            Dimensions: new Dictionary<string, string?> { ["tenant"] = "selected" },
+            RowDimension: "tenant", ColumnDimension: "component"),
+            new Dictionary<string, IReadOnlyList<string>> { ["app"] = ["tenant", "component"] });
+
+        Assert.Equal(23, stats.ProfileDimensions.Operations);
+        Assert.Equal(23, stats.ProfileDimensions.TargetCount);
+        Assert.Equal(20, stats.ProfileDimensions.Targets.Count);
+        Assert.Equal(23, stats.ProfileDimensions.Matrix!.Totals.Operations);
+        Assert.Equal(20, stats.ProfileDimensions.Targets.Sum(target => target.Count));
+        Assert.Equal(20, stats.ProfileDimensions.Targets.Select(target => (target.Engine, target.Server, target.Database)).Distinct().Count());
+    }
+
+    [Fact]
+    public void Operation_pages_filter_by_profile_and_multiple_dimensions_without_losing_cursor_matches()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:filters");
+        for (var i = 0; i < 5; i++)
+        {
+            seed.Operation(session, profile: i % 2 == 0 ? "app" : "other", variables: new Dictionary<string, string>
+            {
+                ["region"] = i % 2 == 0 ? "eu:west" : "us",
+                ["component"] = i < 3 ? "api" : "portal",
+                ["tenant"] = "acme",
+            });
+        }
+
+        var reader = Reader(home);
+        var first = reader.Operations(new OperationQuery(Profile: "app", Dimensions: new Dictionary<string, string?>
+        {
+            ["region"] = "eu:west",
+            ["component"] = "api",
+            ["tenant"] = "acme",
+        }, Limit: 1));
+        var rest = reader.Operations(new OperationQuery(Profile: "app", Dimensions: new Dictionary<string, string?>
+        {
+            ["region"] = "eu:west",
+            ["component"] = "api",
+            ["tenant"] = "acme",
+        }, Cursor: first.NextCursor, Limit: 1));
+
+        Assert.NotNull(first.NextCursor);
+        Assert.Null(rest.NextCursor);
+        Assert.Equal(2, first.Items.Count + rest.Items.Count);
+        Assert.All(first.Items.Concat(rest.Items), operation => Assert.Equal("app", operation.Profile));
+    }
+
+    [Fact]
+    public void Unprofiled_scope_and_minute_bounds_match_statistics_and_drilldown()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:unprofiled");
+        seed.Operation(session, profile: null, variables: new Dictionary<string, string> { ["region"] = "Unknown", ["component"] = "api" },
+            server: "unprofiled-server", database: "unprofiled-db", engine: "postgres");
+        seed.Operation(session, profile: "app", variables: new Dictionary<string, string> { ["region"] = "west", ["component"] = "api" });
+        var last = seed.Operation(session, profile: null,
+            variables: new Dictionary<string, string> { ["region"] = "Unknown", ["component"] = "portal" },
+            server: "unprofiled-server", database: "unprofiled-db", engine: "postgres");
+
+        var from = new DateTimeOffset(2026, 10, 7, 9, 0, 2, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 10, 7, 9, 0, 5, TimeSpan.Zero);
+        var dimensions = new Dictionary<string, string?> { ["region"] = "Unknown" };
+        var stats = Reader(home).Stats(new StatsQuery(from, to, Dimensions: dimensions, RowDimension: "region", ColumnDimension: "component",
+            UnprofiledOnly: true));
+        var page = Reader(home).Operations(new OperationQuery(From: from, To: to, Dimensions: dimensions, UnprofiledOnly: true));
+
+        Assert.Equal(1, stats.ProfileDimensions.Operations);
+        Assert.False(stats.ProfileDimensions.ProfileDefinitionAvailable);
+        Assert.Equal(("postgres", "unprofiled-server", "unprofiled-db", 1),
+            (Assert.Single(stats.ProfileDimensions.Targets).Engine, stats.ProfileDimensions.Targets[0].Server,
+                stats.ProfileDimensions.Targets[0].Database, stats.ProfileDimensions.Targets[0].Count));
+        Assert.Equal(last.OperationId, Assert.Single(page.Items).Id);
+        Assert.Equal(1, stats.ProfileDimensions.Matrix!.Totals.Operations);
+    }
+
+    [Fact]
+    public void Token_coverage_counts_raw_only_emitted_only_missing_and_paired_rows()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:coverage");
+        seed.Operation(session, tokens: SeedTokens.RawOnly);
+        seed.Operation(session, tokens: SeedTokens.EmittedOnly);
+        seed.Operation(session, tokens: SeedTokens.None);
+        seed.Operation(session, tokens: SeedTokens.Both);
+
+        var tokens = Reader(home).Stats(new StatsQuery()).Tokens;
+
+        Assert.Equal((4, 1, 1, 1, 1), (tokens.TotalOperations, tokens.PairedOperations, tokens.RawOnlyOperations,
+            tokens.EmittedOnlyOperations, tokens.MissingBothOperations));
+        Assert.Equal((100L, 10L), (tokens.Raw, tokens.Emitted));
+    }
+
+    [Fact]
     public void Newer_schema_is_reported()
     {
         using var home = new TempHome();
