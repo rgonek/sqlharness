@@ -111,6 +111,10 @@ internal sealed class McpProtocolVersionRewriteInput(Stream inner) : Stream
 
     private static byte[]? TryRewrite(byte[] frame)
     {
+        // Only an initialize request can need a rewrite; skip JSON parsing for every other frame.
+        if (frame.AsSpan().IndexOf("\"initialize\""u8) < 0)
+            return null;
+
         try
         {
             var message = JsonNode.Parse(frame);

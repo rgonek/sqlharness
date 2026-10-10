@@ -63,6 +63,25 @@ public static class SessionIdentities
             ClientTitle: Title(clientTitle));
     }
 
+    /// <summary>
+    /// Applies MCP client info to an identity whose process facts were walked once.
+    /// Client info, when it names a known agent, overrides the process-tree kind.
+    /// </summary>
+    public static SessionIdentity WithMcpClient(SessionIdentity processIdentity, string? clientName, string? clientVersion, string? clientTitle)
+    {
+        ArgumentNullException.ThrowIfNull(processIdentity);
+        var fromClient = AgentKindFromClientName(clientName);
+        var useClient = fromClient != "unknown";
+        return processIdentity with
+        {
+            AgentKind = useClient ? fromClient : processIdentity.AgentKind,
+            Source = useClient ? "mcp-clientinfo" : processIdentity.Source,
+            ClientName = string.IsNullOrWhiteSpace(clientName) ? null : clientName,
+            ClientVersion = string.IsNullOrWhiteSpace(clientVersion) ? null : clientVersion,
+            ClientTitle = Title(clientTitle),
+        };
+    }
+
     private static string? Title(string? clientTitle)
     {
         var trimmed = clientTitle?.Trim();

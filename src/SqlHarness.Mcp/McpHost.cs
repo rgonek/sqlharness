@@ -141,12 +141,14 @@ public static class McpHost
         // The session key stays fixed for this serve process, while client info can first
         // arrive on a later request (2026-07-28 has no initialize handshake).
         // Resolve each journaled call so ActivityJournal can fill its first non-null fields.
-        Func<SessionIdentity> identity = () => SessionIdentities.Mcp(
-                ProcessInfo.Current,
-                sessionKey,
+        // Process facts do not change during a serve process, so the tree is walked once.
+        var processIdentity = new Lazy<SessionIdentity>(
+            () => SessionIdentities.Mcp(ProcessInfo.Current, sessionKey, null, null, mcpMode),
+            LazyThreadSafetyMode.ExecutionAndPublication);
+        Func<SessionIdentity> identity = () => SessionIdentities.WithMcpClient(
+                processIdentity.Value,
                 clientIdentity.Name ?? running?.ClientInfo?.Name,
                 clientIdentity.Version ?? running?.ClientInfo?.Version,
-                mcpMode,
                 clientIdentity.Title ?? running?.ClientInfo?.Title)
             with { ProtocolVersion = clientIdentity.ProtocolVersion ?? running?.NegotiatedProtocolVersion };
         // Handshake revisions only: 2026-07-28 has no initialized notification, and its

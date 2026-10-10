@@ -16,6 +16,31 @@ public sealed class SessionIdentitiesTests
     private static ProcessSnapshot P(int pid, int? parent, string name, string? cmd = null) =>
         new(pid, parent, name, T.AddMinutes(pid), cmd);
 
+    private sealed class CountingProcesses(IProcessInfo inner) : IProcessInfo
+    {
+        public int Gets;
+        public int CurrentPid => inner.CurrentPid;
+        public ProcessSnapshot? Get(int pid) { Gets++; return inner.Get(pid); }
+    }
+
+    [Fact]
+    public void With_mcp_client_reuses_the_process_walk_and_applies_client_info()
+    {
+        var processes = new CountingProcesses(new FakeProcesses(30,
+            P(30, 20, "sqlharness.exe"), P(20, 10, "claude.exe"), P(10, null, "explorer.exe")));
+        var processIdentity = SessionIdentities.Mcp(processes, "mcp:abc", null, null, "fixed");
+        var walked = processes.Gets;
+
+        var unnamed = SessionIdentities.WithMcpClient(processIdentity, null, null, null);
+        var named = SessionIdentities.WithMcpClient(processIdentity, "copilot-cli", "1.0.95", "Copilot");
+
+        Assert.Equal(walked, processes.Gets);
+        Assert.Equal(("claude", "process-tree"), (unnamed.AgentKind, unnamed.Source));
+        Assert.Equal(("copilot", "mcp-clientinfo", "copilot-cli", "1.0.95"), (named.AgentKind, named.Source, named.ClientName, named.ClientVersion));
+        Assert.Equal("Copilot", named.ClientTitle);
+        Assert.Equal(processIdentity.AgentPid, named.AgentPid);
+    }
+
     [Fact]
     public void Cli_finds_claude_ancestor_through_shells()
     {
