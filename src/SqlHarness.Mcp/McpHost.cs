@@ -147,11 +147,36 @@ public static class McpHost
                 clientIdentity.Version ?? running?.ClientInfo?.Version,
                 mcpMode,
                 clientIdentity.Title ?? running?.ClientInfo?.Title);
+        // Handshake revisions only: 2026-07-28 has no initialized notification, and its
+        // request-scoped roots/list answers only while the tool call awaits it, so roots
+        // stay NULL there rather than blocking a call.
+#pragma warning disable MCP9005 // Roots is deprecated as of 2026-07-28; handshake revisions still use it.
+        var roots = new McpRootsTracker(log, lifetime.Token);
+        void RefreshRoots(bool listChanged)
+        {
+            // Roots are recorded only; they never widen --input-root.
+            var server = running;
+            var capability = server?.ClientCapabilities?.Roots;
+            if (server is null || capability is null || (listChanged && capability.ListChanged != true))
+                return;
+            _ = roots.Refresh(token => server.RequestRootsAsync(new ModelContextProtocol.Protocol.ListRootsRequestParams(), token));
+        }
+
+        serverOptions.Handlers ??= new ModelContextProtocol.Server.McpServerHandlers();
+        serverOptions.Handlers.NotificationHandlers =
+        [
+            new(ModelContextProtocol.Protocol.NotificationMethods.InitializedNotification,
+                (_, _) => { RefreshRoots(listChanged: false); return ValueTask.CompletedTask; }),
+            new(ModelContextProtocol.Protocol.NotificationMethods.RootsListChangedNotification,
+                (_, _) => { RefreshRoots(listChanged: true); return ValueTask.CompletedTask; }),
+        ];
+#pragma warning restore MCP9005
         process.DecorateModules(module => new JournalingModule(
             module,
             () => journal.Value,
             identity,
-            McpCallRegistry.Classify));
+            McpCallRegistry.Classify,
+            () => roots.Current));
         Tools.McpToolCatalog.Wire(serverOptions, process, hostShutdown: lifetime.Token);
         try
         {
