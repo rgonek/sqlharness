@@ -2399,7 +2399,6 @@ test("known kinds have product labels and unknown kinds are shown raw", () => {
   expect(agentLabel("copilot")).toBe("Copilot")
   expect(agentLabel("opencode")).toBe("opencode")
   expect(agentLabel("grok")).toBe("Grok")
-  expect(agentLabel("other")).toBe("Other")
   expect(agentLabel("unknown")).toBe("Unknown")
   expect(agentLabel("cursor")).toBe("cursor")
 })
@@ -2512,8 +2511,6 @@ const labels: Record<string, string> = {
   copilot: "Copilot",
   opencode: "opencode",
   grok: "Grok",
-  // Historical rows from before the "other" bucket was retired.
-  other: "Other",
   unknown: "Unknown",
 }
 

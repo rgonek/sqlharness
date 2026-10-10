@@ -308,7 +308,7 @@ expectations for what the dashboard will show.
   counts. The Sessions page shows "All" plus only those kinds (known kinds
   first, then other client names alphabetically, then `unknown`), resetting to "All"
   when the selected kind disappears. Labels: Claude Code, Codex, Copilot,
-  opencode, Grok, Other, Unknown; unrecognised kinds show raw. The same labels are
+  opencode, Grok, Unknown; unrecognised kinds show raw. The same labels are
   used wherever the dashboard prints an agent kind.
 
 ## Upgrade overhead fixes
