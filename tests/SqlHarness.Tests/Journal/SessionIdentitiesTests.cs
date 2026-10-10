@@ -174,11 +174,19 @@ public sealed class SessionIdentitiesTests
     {
         var processes = new FakeProcesses(30,
             P(30, 20, "sqlharness.exe"), P(20, 10, "pwsh.exe"),
-            P(10, 1, "node.exe", @"node C:	ools
-ode_modules\@github\copilot
-pm-loader.js -p x"), P(1, null, "explorer.exe"));
+            P(10, 1, "node.exe", @"node C:\tools\node_modules\@github\copilot\npm-loader.js -p x"), P(1, null, "explorer.exe"));
 
         Assert.Equal("copilot", SessionIdentities.Cli(processes).AgentKind);
+    }
+
+    [Fact]
+    public void Cli_finds_opencode_through_node_loader()
+    {
+        var processes = new FakeProcesses(30,
+            P(30, 20, "sqlharness.exe"), P(20, 10, "pwsh.exe"),
+            P(10, 1, "node.exe", @"node C:\tools\node_modules\opencode-ai\bin\opencode -p x"), P(1, null, "explorer.exe"));
+
+        Assert.Equal("opencode", SessionIdentities.Cli(processes).AgentKind);
     }
 
     [Fact]
