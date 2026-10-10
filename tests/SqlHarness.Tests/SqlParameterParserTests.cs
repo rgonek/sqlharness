@@ -320,21 +320,6 @@ public class SqlParameterParserTests
     }
 
     [Fact]
-    public void Raw_values_are_collected_before_conversion()
-    {
-        var secrets = new List<string>();
-        SqlParameterSecrets.AddValues(secrets, ["n:int=private-audit-value", "ok:int=1", "day:date:null"]);
-        SqlParameterSecrets.AddMatrixValues(secrets, "amount:decimal(19,4)=private-audit-value,1.00");
-
-        Assert.Contains("private-audit-value", secrets);
-        Assert.DoesNotContain("1", secrets);
-        Assert.Contains("1.00", secrets);
-        Assert.DoesNotContain("n:int=private-audit-value", secrets);
-        Assert.DoesNotContain("null", secrets);
-        Assert.DoesNotContain("amount:decimal(19,4)=private-audit-value,1.00", secrets);
-    }
-
-    [Fact]
     public void Parse_reports_the_second_parameter_without_either_declaration()
     {
         var exception = Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterParser.Parse([

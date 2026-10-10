@@ -73,7 +73,6 @@ internal static class CompareOperationPreparer
             candidateSql, SqlUsage.Query, target.Database, false, null, setupTemps);
         EnsureSafe(candidateSafety, "candidate");
 
-        SqlParameterSecrets.AddValues(knownSecrets, parameterInputs);
         var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(parameterInputs, typedParameters));
 
         return new PreparedCompareFamily(

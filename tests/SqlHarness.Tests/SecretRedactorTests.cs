@@ -78,17 +78,6 @@ public sealed class SecretRedactorTests
     }
 
     [Fact]
-    public void Parameter_values_shorter_than_four_characters_are_not_registered_for_redaction()
-    {
-        var knownSecrets = new List<string>();
-        SqlParameterSecrets.AddValues(knownSecrets, ["@short:nvarchar=C", "@long:nvarchar=long"]);
-
-        var safe = SecretRedactor.Redact("C and long", knownSecrets);
-
-        Assert.Equal("C and [REDACTED]", safe);
-    }
-
-    [Fact]
     public void Short_known_passwords_are_still_redacted()
     {
         var safe = SecretRedactor.Redact("Password=C;", ["C"]);

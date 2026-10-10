@@ -1,6 +1,6 @@
-using SqlHarness.Core.Targets;
-
 using System.Text.RegularExpressions;
+
+using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Core;
 
