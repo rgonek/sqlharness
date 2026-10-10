@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Record the MCP client's `clientInfo.title`, its workspace roots, why a cancelled operation was cancelled, and allowlisted `tools/call._meta` labels (Claude Code tool-use id; Codex call id, model, effort, agent session, turn, trigger, thread source), and show them in the dashboard. Also: recognise Copilot and opencode as agent kinds with a dashboard agent filter that lists only kinds present, and remove two per-call overheads the protocol upgrade introduced.
+**Goal:** Record the MCP client's `clientInfo.title`, its workspace roots, why a cancelled operation was cancelled, and allowlisted `tools/call._meta` labels (Claude Code tool-use id; Codex call id, model, effort, agent session, turn, trigger, thread source), and show them in the dashboard. Also: recognise Copilot and opencode as agent kinds with a dashboard agent filter that lists only kinds present, remove two per-call overheads the protocol upgrade introduced, and extend the real-client acceptance script to Copilot CLI, opencode and Grok Build.
 
 **Sequencing:** execute only after the MCP protocol upgrade branch has merged. Its real-client acceptance observed Claude Code on `2026-07-28` and Codex on `2025-06-18`. Before Task 5, prove whether request-scoped `roots/list` works on `2026-07-28`; adjust the read path or document NULL roots according to the result. The stored shape is unchanged.
 
@@ -2693,7 +2693,139 @@ git commit -m "perf(mcp): walk the process tree once per serve process; skip JSO
 
 ---
 
-### Task 11: Documentation and gates
+### Task 11: Acceptance script covers Copilot CLI, opencode and Grok Build
+
+**Files:**
+- Modify: `scripts/mcp-client-acceptance.ps1`
+
+**Interfaces:**
+- Produces: new switches `-SkipCopilot`, `-SkipOpencode`, `-SkipGrok` and an optional `-OpencodeModel <provider/model>`; existing `-Sqlharness`, `-Profile`, `-SkipClaude`, `-SkipCodex` unchanged.
+
+Evidence (`2026-10-10-mcp-client-spike.md`, post-upgrade matrix): Copilot CLI 1.0.95 negotiates `2026-07-28`; opencode 2.0.26 and Grok Build 1.0.50 negotiate `2025-11-25`. One-off configuration per client: Copilot `--additional-mcp-config @<file>`; opencode `OPENCODE_CONFIG=<file>` with `opencode run --standalone`; Grok Build has no one-off flag and loads `./.grok/config.toml` (written by `grok mcp add --scope project`) only in a folder listed in `~/.grok/trusted_folders.toml`. opencode's default model can fail on a plan usage limit; free models such as `opencode/step-5-preview-free` work.
+
+- [ ] **Step 1: Generalise the shared parts**
+
+- Prompt: prefix it with `Do not change any configuration or trust settings. ` (during the spike, the Grok agent tried to trust its folder on its own when it could not see the server).
+- `Test-Client`: the `'initialize response present'` check runs for every expected revision other than `2026-07-28` (today only for `2025-06-18`).
+- The "no clients selected" message runs when all five skip switches are set.
+
+- [ ] **Step 2: Add the three client blocks after the Codex block**
+
+```powershell
+if (-not $SkipCopilot) {
+    $copilot = Get-Command copilot -ErrorAction Stop | Select-Object -First 1
+    $logPath = Join-Path $work 'copilot-frames.log'
+    $clientHome = Join-Path $work 'copilot-home'
+    New-Item -ItemType Directory -Path $clientHome | Out-Null
+    New-IsolatedTarget $clientHome $Profile
+    $config = @{ mcpServers = @{ acceptance = @{ type = 'local'; command = $python; args = @('-I', $tap, $logPath, $clientHome, $Sqlharness, 'mcp', 'serve', $Profile); tools = @('*') } } } |
+        ConvertTo-Json -Depth 8
+    $configPath = Join-Path $work 'copilot-mcp.json'
+    Set-Content -LiteralPath $configPath -Value $config -Encoding utf8NoBOM
+    Push-Location $work
+    try {
+        # No --model: Copilot picks its default model.
+        & $copilot.Source -p $prompt --additional-mcp-config "@$configPath" --disable-builtin-mcps --allow-tool 'acceptance' --no-color 2>$null | Out-Null
+        $clientExit = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    Add-Check 'Copilot CLI' 'client exit code' '0' $clientExit ($clientExit -eq 0)
+    Test-Client 'Copilot CLI' $logPath '2026-07-28' $clientHome
+}
+
+if (-not $SkipOpencode) {
+    $opencode = Get-Command opencode -ErrorAction Stop | Select-Object -First 1
+    $logPath = Join-Path $work 'opencode-frames.log'
+    $clientHome = Join-Path $work 'opencode-home'
+    New-Item -ItemType Directory -Path $clientHome | Out-Null
+    New-IsolatedTarget $clientHome $Profile
+    $config = @{
+        '$schema' = 'https://opencode.ai/config.json'
+        mcp = @{ acceptance = @{ type = 'local'; enabled = $true; command = @($python, '-I', $tap, $logPath, $clientHome, $Sqlharness, 'mcp', 'serve', $Profile) } }
+    } | ConvertTo-Json -Depth 8
+    $configPath = Join-Path $work 'opencode.json'
+    Set-Content -LiteralPath $configPath -Value $config -Encoding utf8NoBOM
+    Push-Location $work
+    $savedOpencodeConfig = $env:OPENCODE_CONFIG
+    try {
+        $env:OPENCODE_CONFIG = $configPath
+        $modelArgs = if ($OpencodeModel) { @('-m', $OpencodeModel) } else { @() }
+        & $opencode.Source run --standalone --auto @modelArgs $prompt 2>$null | Out-Null
+        $clientExit = $LASTEXITCODE
+    } finally {
+        $env:OPENCODE_CONFIG = $savedOpencodeConfig
+        Pop-Location
+    }
+    Add-Check 'opencode' 'client exit code' '0' $clientExit ($clientExit -eq 0)
+    Test-Client 'opencode' $logPath '2025-11-25' $clientHome
+}
+
+if (-not $SkipGrok) {
+    $grok = Get-Command grok -ErrorAction Stop | Select-Object -First 1
+    $logPath = Join-Path $work 'grok-frames.log'
+    $clientHome = Join-Path $work 'grok-home'
+    $grokProject = Join-Path $work 'grok-project'
+    New-Item -ItemType Directory -Path $clientHome, $grokProject | Out-Null
+    New-IsolatedTarget $clientHome $Profile
+    $trusted = Join-Path $HOME '.grok/trusted_folders.toml'
+    $trustedExisted = Test-Path -LiteralPath $trusted
+    $trustedBefore = if ($trustedExisted) { [IO.File]::ReadAllBytes($trusted) } else { $null }
+    Push-Location $grokProject
+    try {
+        & $grok.Source mcp add --scope project acceptance $python -- -I $tap $logPath $clientHome $Sqlharness mcp serve $Profile 2>$null | Out-Null
+        # Grok loads project MCP config only in a trusted folder and has no one-off flag:
+        # trust this scratch folder for the run and restore the file byte for byte afterwards.
+        $entry = "`n[folders.'$grokProject']`ntrusted = true`ndecided_at = $([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())`n"
+        [IO.File]::AppendAllText($trusted, $entry)
+        # No model flag: Grok picks its default model.
+        & $grok.Source -p $prompt --always-approve 2>$null | Out-Null
+        $clientExit = $LASTEXITCODE
+    } finally {
+        Pop-Location
+        if ($trustedExisted) { [IO.File]::WriteAllBytes($trusted, $trustedBefore) } else { Remove-Item -LiteralPath $trusted -ErrorAction SilentlyContinue }
+    }
+    $restored = if ($trustedExisted) {
+        [Linq.Enumerable]::SequenceEqual([byte[]][IO.File]::ReadAllBytes($trusted), [byte[]]$trustedBefore)
+    } else { -not (Test-Path -LiteralPath $trusted) }
+    Add-Check 'Grok Build' 'trusted_folders.toml restored' 'yes' $restored $restored
+    Add-Check 'Grok Build' 'client exit code' '0' $clientExit ($clientExit -eq 0)
+    Test-Client 'Grok Build' $logPath '2025-11-25' $clientHome
+}
+```
+
+Add the parameters to the `param(...)` block:
+
+```powershell
+    [switch]$SkipCopilot,
+    [switch]$SkipOpencode,
+    [switch]$SkipGrok,
+    # opencode's default model may hit a plan usage limit; pass a free model such as opencode/step-5-preview-free.
+    [string]$OpencodeModel
+```
+
+and extend the `.DESCRIPTION` with the three clients, the Grok trust step and its byte-for-byte restore, and the `-OpencodeModel` note.
+
+Check while running: `$grokProject` must use the same path spelling Grok records (backslashes on Windows, as in the existing entries of `trusted_folders.toml`); `Join-Path` on Windows already produces backslashes. If `grok mcp add` writes the config somewhere other than `$grokProject/.grok/config.toml`, stop and report instead of trusting a different folder.
+
+- [ ] **Step 3: Smoke-test startup and run it once**
+
+Run: `pwsh ./scripts/mcp-client-acceptance.ps1 -Sqlharness <worktree build> -SkipClaude -SkipCodex -SkipCopilot -SkipOpencode -SkipGrok`
+Expected: the "no clients selected" message, exit 0.
+
+Run: `pwsh ./scripts/mcp-client-acceptance.ps1 -Sqlharness <worktree build> -OpencodeModel opencode/step-5-preview-free`
+Expected: every row `Pass = True` (Copilot `2026-07-28`; opencode and Grok `2025-11-25`; Grok `trusted_folders.toml restored = yes`). A client that is not installed or not logged in: rerun with its skip switch and say so in the PR.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add scripts/mcp-client-acceptance.ps1
+git commit -m "test(mcp): extend real-client acceptance to Copilot CLI, opencode and Grok Build"
+```
+
+---
+
+### Task 12: Documentation and gates
 
 **Files:**
 - Modify: `AGENTS.md` (journal paragraph in "Safety contract", the bullet starting "Every operation that reaches the SQLHarness module")
@@ -2732,6 +2864,14 @@ In "Concurrency, deadline, cancellation, and progress" append:
 The activity journal records why a call was cancelled: `client` (the client sent
 `notifications/cancelled`), `shutdown` (stdin closed or the host stopped), or
 `deadline` (the call time budget ran out).
+```
+
+- [ ] **Step 2b: Update the acceptance line in `docs/mcp.md`**
+
+Replace the "Real-client check before release" bullet in "Versions" with:
+
+```markdown
+- Real-client check before release: `pwsh ./scripts/mcp-client-acceptance.ps1 -Sqlharness <worktree build>` (manual; covers Claude Code, Codex, Copilot CLI, opencode and Grok Build, each skippable with `-Skip<Client>`; `-OpencodeModel` picks a free opencode model when the default hits a usage limit; the Grok run trusts its scratch folder in `~/.grok/trusted_folders.toml` for the duration and restores the file byte for byte).
 ```
 
 - [ ] **Step 3: Run the gates, one after the other**

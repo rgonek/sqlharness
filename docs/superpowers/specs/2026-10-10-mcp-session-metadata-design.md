@@ -321,6 +321,18 @@ expectations for what the dashboard will show.
 - Accepted as is: a frame above 16 MiB ends the transport instead of rejecting
   one request (inline payloads above 1 MiB already must be files).
 
+## Real-client acceptance coverage
+
+`scripts/mcp-client-acceptance.ps1` (manual, before merge) also drives Copilot
+CLI (`--additional-mcp-config`, expects `2026-07-28`), opencode
+(`OPENCODE_CONFIG` + `run --standalone`, expects `2025-11-25`, optional
+`-OpencodeModel` for a free model) and Grok Build (project config in a scratch
+folder, expects `2025-11-25`). Grok loads project MCP config only in a trusted
+folder, so the script trusts the scratch folder in
+`~/.grok/trusted_folders.toml` for the run, restores the file byte for byte in
+a `finally`, and reports the restore as a check. No client configuration file
+is otherwise changed, and no model is pinned except the optional opencode one.
+
 ## Follow-ups (separate specs, in this order)
 
 1. **MCP protocol upgrade and stderr noise** — merged to `main`
