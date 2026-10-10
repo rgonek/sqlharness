@@ -293,8 +293,8 @@ expectations for what the dashboard will show.
 
 ## Follow-ups (separate specs, in this order)
 
-1. **MCP protocol upgrade and stderr noise** — implemented on
-   `feat/mcp-protocol-upgrade`; merge it before this design. The host now
+1. **MCP protocol upgrade and stderr noise** — merged to `main`
+   in `dd697de`. The host now
    negotiates Claude Code's `2026-07-28` and Codex's `2025-06-18`, records
    request-scoped client identity, and keeps SDK stderr at `Warning` and above.
 2. **Claude Code transcript matcher (opt-in, default off)** — resolve

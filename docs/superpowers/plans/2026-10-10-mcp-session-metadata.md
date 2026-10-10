@@ -631,7 +631,8 @@ Expected: compile error (constructor has no 4th/5th parameter).
         ArgumentNullException.ThrowIfNull(journal);
         ArgumentNullException.ThrowIfNull(session);
         _journal = new Lazy<IActivityJournal?>(() => Try(journal), LazyThreadSafetyMode.ExecutionAndPublication);
-        _session = new Lazy<SessionIdentity?>(() => Try(session), LazyThreadSafetyMode.ExecutionAndPublication);
+        // Per operation, as the upgrade made it: a later request may supply client info.
+        _session = () => Try(session);
         _cancelReason = cancelReason;
         _rootsJson = rootsJson;
     }

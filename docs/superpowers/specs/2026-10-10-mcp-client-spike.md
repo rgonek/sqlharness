@@ -47,3 +47,23 @@ no client configuration file was changed.
   `_meta["claudecode/toolUseId"]`.
 - `_meta` must be read through an allowlist; Codex metadata also carries
   session, sandbox and account-adjacent fields that should not be stored.
+
+## Post-upgrade client matrix (2026-10-10, build `dd697de`)
+
+Same tap method, isolated `SQLHARNESS_HOME`, each client calling
+`sqlharness_capabilities` and `sqlharness_gain` once.
+
+| Client | Negotiated | `clientInfo` (name / title) | Capabilities | `tools/call._meta` (besides `progressToken`) | Journal `agent_kind` |
+|---|---|---|---|---|---|
+| Claude Code 2.1.296 | `2026-07-28` via `server/discover`; also opens `subscriptions/listen` | `claude-code` / `Claude Code` | `roots {listChanged}`, `elicitation` | `claudecode/toolUseId` + `io.modelcontextprotocol/*` | `claude` |
+| Codex 0.162.1 | `2025-06-18` (`initialize`) | `codex-mcp-client` / `Codex` | `experimental.codex/auth-change`, `elicitation` | `callId`, `x-codex-turn-metadata` (model, effort, …), ids | `codex` |
+| Codex 0.162.1 + `features.mcp_2026_07_28=true` | still `2025-06-18`: the flag is recognised ("under development") but does not change the stdio handshake | same | same | same | `codex` |
+| Copilot CLI 1.0.95 | `2026-07-28` via `server/discover`; opens `subscriptions/listen` | `copilot-cli` / none | `sampling`, `elicitation` | `io.modelcontextprotocol/*` only, no model | `other` |
+| opencode 2.0.26 | `2025-11-25` (`initialize`) | `opencode` / none | `roots {}` (no `listChanged`), `elicitation` | `ai.opencode/sessionID` | `other` |
+
+`sqlharness_capabilities` reported the negotiated revision and the three
+supported revisions for every client. Stderr: no lines, except one content-free
+`Warning` when Claude Code ended its `subscriptions/listen` stream at shutdown.
+opencode's default model (`claude-haiku-5-5` on the Go plan) failed with a
+usage limit; free models `opencode/nemotron-3-ultra-free` and
+`opencode/step-5-preview-free` completed the run.
