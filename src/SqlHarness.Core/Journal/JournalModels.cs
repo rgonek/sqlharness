@@ -23,7 +23,9 @@ public sealed record SessionIdentity(
     DateTimeOffset? AgentStartedAt,
     int HostPid,
     DateTimeOffset? HostStartedAt,
-    string? Cwd);
+    string? Cwd,
+    string? ClientTitle = null,
+    string? RootsJson = null);
 
 /// <summary>Operation metadata known before execution. SQL text is dropped by the journal unless storeSensitive.</summary>
 public sealed record OperationStart(
@@ -49,7 +51,8 @@ public sealed record OperationEnd(
     long? RawTokens = null,
     string? ArtifactDirectory = null,
     string? SummaryJson = null,
-    string? ErrorMessage = null);
+    string? ErrorMessage = null,
+    string? CancelReason = null);
 
 public sealed record JournalHandle(long OperationId);
 

@@ -122,7 +122,7 @@ public sealed class ActivityJournal : IActivityJournal
             update.CommandText = """
                 UPDATE operations SET status = $status, exit_code = $exit, error_kind = $error, error_message = $message, duration_ms = $duration,
                     engine = $engine, server = $server, database = $database, result_sets = $sets, rows_returned = $rows,
-                    raw_tokens = COALESCE($raw, raw_tokens), artifact_dir = $artifact, summary_json = $summary, finished_at = $now, updated_at = $now
+                    raw_tokens = COALESCE($raw, raw_tokens), artifact_dir = $artifact, summary_json = $summary, cancel_reason = $cancel, finished_at = $now, updated_at = $now
                 WHERE id = $id;
                 UPDATE sessions SET last_seen = $now
                 WHERE id = (SELECT session_id FROM operations WHERE id = $id);
@@ -132,6 +132,7 @@ public sealed class ActivityJournal : IActivityJournal
             update.Parameters.AddWithValue("$exit", end.ExitCode);
             update.Parameters.AddWithValue("$error", (object?)end.ErrorKind ?? DBNull.Value);
             update.Parameters.AddWithValue("$message", _storeSensitive ? (object?)TruncateErrorMessage(end.ErrorMessage) ?? DBNull.Value : DBNull.Value);
+            update.Parameters.AddWithValue("$cancel", (object?)end.CancelReason ?? DBNull.Value);
             update.Parameters.AddWithValue("$duration", end.DurationMilliseconds);
             update.Parameters.AddWithValue("$engine", (object?)end.Engine ?? DBNull.Value);
             update.Parameters.AddWithValue("$server", (object?)end.Server ?? DBNull.Value);
@@ -336,6 +337,8 @@ public sealed class ActivityJournal : IActivityJournal
                 Execute(connection, JournalSchema.Version4);
             if (locked < 5)
                 Execute(connection, JournalSchema.Version5);
+            if (locked < 6)
+                Execute(connection, JournalSchema.Version6);
             Execute(connection, $"PRAGMA user_version = {JournalSchema.CurrentVersion};");
             Execute(connection, "COMMIT;");
         }
@@ -388,14 +391,16 @@ public sealed class ActivityJournal : IActivityJournal
         using var upsert = connection.CreateCommand();
         upsert.Transaction = transaction;
         upsert.CommandText = """
-            INSERT INTO sessions (session_key, agent_kind, transport, source, client_name, client_version, mcp_mode,
-                agent_pid, agent_started_at, host_pid, host_started_at, cwd, first_seen, last_seen)
-            VALUES ($key, $kind, $transport, $source, $clientName, $clientVersion, $mcpMode,
-                $agentPid, $agentStarted, $hostPid, $hostStarted, $cwd, $now, $now)
+            INSERT INTO sessions (session_key, agent_kind, transport, source, client_name, client_version, client_title, mcp_mode,
+                agent_pid, agent_started_at, host_pid, host_started_at, cwd, roots_json, first_seen, last_seen)
+            VALUES ($key, $kind, $transport, $source, $clientName, $clientVersion, $clientTitle, $mcpMode,
+                $agentPid, $agentStarted, $hostPid, $hostStarted, $cwd, $roots, $now, $now)
             ON CONFLICT(session_key) DO UPDATE SET
                 last_seen = excluded.last_seen,
                 client_name = COALESCE(sessions.client_name, excluded.client_name),
-                client_version = COALESCE(sessions.client_version, excluded.client_version)
+                client_version = COALESCE(sessions.client_version, excluded.client_version),
+                client_title = COALESCE(sessions.client_title, excluded.client_title),
+                roots_json = COALESCE(excluded.roots_json, sessions.roots_json)
             RETURNING id;
             """;
         upsert.Parameters.AddWithValue("$key", session.SessionKey);
@@ -404,12 +409,14 @@ public sealed class ActivityJournal : IActivityJournal
         upsert.Parameters.AddWithValue("$source", session.Source);
         upsert.Parameters.AddWithValue("$clientName", (object?)session.ClientName ?? DBNull.Value);
         upsert.Parameters.AddWithValue("$clientVersion", (object?)session.ClientVersion ?? DBNull.Value);
+        upsert.Parameters.AddWithValue("$clientTitle", (object?)session.ClientTitle ?? DBNull.Value);
         upsert.Parameters.AddWithValue("$mcpMode", (object?)session.McpMode ?? DBNull.Value);
         upsert.Parameters.AddWithValue("$agentPid", (object?)session.AgentPid ?? DBNull.Value);
         upsert.Parameters.AddWithValue("$agentStarted", Nullable(session.AgentStartedAt));
         upsert.Parameters.AddWithValue("$hostPid", session.HostPid);
         upsert.Parameters.AddWithValue("$hostStarted", Nullable(session.HostStartedAt));
         upsert.Parameters.AddWithValue("$cwd", (object?)session.Cwd ?? DBNull.Value);
+        upsert.Parameters.AddWithValue("$roots", (object?)session.RootsJson ?? DBNull.Value);
         upsert.Parameters.AddWithValue("$now", now);
         return (long)upsert.ExecuteScalar()!;
     }
