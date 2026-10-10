@@ -297,12 +297,16 @@ expectations for what the dashboard will show.
   e.g. `copilot-cli`), `opencode` and `grok` (Grok Build sends
   `grok-shell-<server name>`); process-tree classification recognises
   `copilot` (native, or node with `@github/copilot`) and `opencode` (native, or
-  node/bun with `opencode-ai` / `@opencode/cli`) and `grok` (native). Other
-  names stay `other`.
+  node/bun with `opencode-ai` / `@opencode/cli`) and `grok` (native). The
+  `other` bucket is retired: any other client name becomes the kind itself
+  (trimmed, lower-case, at most 64 characters), so the dynamic filter lists a
+  new client by name; `unknown` remains only for a missing name. A client that
+  appends variable parts to its name (as Grok does) fragments until it is added
+  to the known list.
   Existing `other` rows are not rewritten (single-user journal).
 - Dashboard: `GET /api/agents` returns the agent kinds present with session
   counts. The Sessions page shows "All" plus only those kinds (known kinds
-  first, then other names, then `other`, then `unknown`), resetting to "All"
+  first, then other client names alphabetically, then `unknown`), resetting to "All"
   when the selected kind disappears. Labels: Claude Code, Codex, Copilot,
   opencode, Grok, Other, Unknown; unrecognised kinds show raw. The same labels are
   used wherever the dashboard prints an agent kind.

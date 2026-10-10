@@ -2299,7 +2299,7 @@ git commit -m "feat(mcp): record allowlisted tools/call metadata (call id, Codex
 
 **Interfaces:**
 - Produces:
-  - `SessionIdentities.AgentKindFromClientName(string?)` returns `claude`, `codex`, `copilot`, `opencode`, `grok`, `other` or `unknown`.
+  - `SessionIdentities.AgentKindFromClientName(string?)` returns `claude`, `codex`, `copilot`, `opencode`, `grok`, otherwise the client name itself (trimmed, lower-case invariant, at most `SessionIdentities.MaximumAgentKindLength = 64` characters), or `unknown` when the name is blank. The `other` bucket is retired (decided 2026-10-10): an unrecognised client shows up under its own name, and adding it to the known list only improves its label.
   - Process-tree classification also returns `copilot` / `opencode` / `grok`.
   - `JournalReader.AgentKinds() : IReadOnlyList<KeyCount>` (existing `KeyCount(string Key, int Count)` record) — every `sessions.agent_kind` present, with its session count.
   - `GET /api/agents` → `KeyCount[]` (JSON `{ key, count }`).
@@ -2320,11 +2320,18 @@ Evidence (`2026-10-10-mcp-client-spike.md`, post-upgrade matrix): Copilot CLI se
     [InlineData("opencode", "opencode")]
     [InlineData("grok-shell-acc", "grok")]
     [InlineData("grok-shell-sqlharness", "grok")]
-    [InlineData("cursor", "other")]
+    [InlineData("cursor", "cursor")]
+    [InlineData("  Some Client  ", "some client")]
     [InlineData(null, "unknown")]
     [InlineData("  ", "unknown")]
     public void Agent_kind_from_client_name(string? name, string expected) =>
         Assert.Equal(expected, SessionIdentities.AgentKindFromClientName(name));
+
+    [Fact]
+    public void Unrecognised_client_name_is_capped()
+    {
+        Assert.Equal(SessionIdentities.MaximumAgentKindLength, SessionIdentities.AgentKindFromClientName(new string('x', 200)).Length);
+    }
 
     [Fact]
     public void Cli_finds_copilot_through_node_loader()
@@ -2397,10 +2404,10 @@ test("known kinds have product labels and unknown kinds are shown raw", () => {
   expect(agentLabel("cursor")).toBe("cursor")
 })
 
-test("tabs list All plus only present kinds, known first, unknown last", () => {
+test("tabs list All plus only present kinds, known first, client names next, unknown last", () => {
   expect(agentTabs(["codex"]).map(t => t.label)).toEqual(["All", "Codex"])
   expect(agentTabs(["copilot", "claude"]).map(t => t.label)).toEqual(["All", "Claude Code", "Copilot"])
-  expect(agentTabs(["unknown", "other", "zed", "codex"]).map(t => t.value)).toEqual(["all", "codex", "zed", "other", "unknown"])
+  expect(agentTabs(["unknown", "zed", "cursor", "codex"]).map(t => t.value)).toEqual(["all", "codex", "cursor", "zed", "unknown"])
   expect(agentTabs([]).map(t => t.value)).toEqual(["all"])
 })
 ```
@@ -2439,7 +2446,12 @@ Expected: failures (`copilot`/`opencode` classified as `other`/null, `AgentKinds
             return "opencode";
         if (clientName.Contains("grok", StringComparison.OrdinalIgnoreCase))
             return "grok";
+        // No "other" bucket: an unrecognised client is its own kind, so the dashboard filter lists it by name.
+        var kind = clientName.Trim().ToLowerInvariant();
+        return kind.Length <= MaximumAgentKindLength ? kind : kind[..MaximumAgentKindLength];
 ```
+
+replacing the final `return "other";`, and add `internal const int MaximumAgentKindLength = 64;` next to `MaximumTitleLength`. Change the existing `[InlineData("sqlharness-mcp-tests", "other")]` in `SessionIdentitiesTests` to expect `"sqlharness-mcp-tests"`. Search the test projects for other assertions that expect agent kind `other` for an SDK test client name and update them the same way.
 
 `ClassifyName` switch:
 
@@ -2500,6 +2512,7 @@ const labels: Record<string, string> = {
   copilot: "Copilot",
   opencode: "opencode",
   grok: "Grok",
+  // Historical rows from before the "other" bucket was retired.
   other: "Other",
   unknown: "Unknown",
 }
@@ -2510,11 +2523,11 @@ export function agentLabel(kind: string): string {
   return labels[kind] ?? kind
 }
 
-/** "All" plus the kinds present: known kinds first, then others alphabetically, then "other", then "unknown". */
+/** "All" plus the kinds present: known kinds first, then other client names alphabetically, then "unknown". */
 export function agentTabs(kinds: string[]): { value: string; label: string }[] {
   const present = new Set(kinds)
   const rank = (kind: string) =>
-    knownOrder.includes(kind) ? knownOrder.indexOf(kind) : kind === "unknown" ? 1002 : kind === "other" ? 1001 : 1000
+    knownOrder.includes(kind) ? knownOrder.indexOf(kind) : kind === "unknown" ? 1001 : 1000
   const ordered = [...present].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
   return [{ value: "all", label: "All" }, ...ordered.map(kind => ({ value: kind, label: agentLabel(kind) }))]
 }
@@ -2694,7 +2707,7 @@ git commit -m "perf(mcp): walk the process tree once per serve process; skip JSO
 In the journal bullet, after the sentence that begins "Session identity is implicit (MCP `clientInfo`, ...); agents send nothing extra.", insert:
 
 ```markdown
-MCP sessions also record `clientInfo.title` and, when a `roots/list` request succeeds, the client's workspace roots (at most 32 roots, stored like `cwd`; client roots never widen `--input-root`). Handshake revisions request roots after `initialized` and refresh on `roots/list_changed`; `2026-07-28` support depends on the Task 5 request-scoped probe. A cancelled operation records `error_kind = cancelled` with `cancel_reason` `client`, `shutdown`, or `deadline`, including a cancellation Core reported as an SQL failure. Each operation also records allowlisted `tools/call._meta` labels: the client's call id (Claude Code `claudecode/toolUseId`, Codex `callId`) and, from Codex `x-codex-turn-metadata`, model, reasoning effort, agent session id, turn id, turn trigger and thread source; other `_meta` keys are never stored (opencode: `ai.opencode/sessionID` as the agent session id). Agent kinds are `claude`, `codex`, `copilot`, `opencode`, `grok`, `other` or `unknown`.
+MCP sessions also record `clientInfo.title` and, when a `roots/list` request succeeds, the client's workspace roots (at most 32 roots, stored like `cwd`; client roots never widen `--input-root`). Handshake revisions request roots after `initialized` and refresh on `roots/list_changed`; `2026-07-28` support depends on the Task 5 request-scoped probe. A cancelled operation records `error_kind = cancelled` with `cancel_reason` `client`, `shutdown`, or `deadline`, including a cancellation Core reported as an SQL failure. Each operation also records allowlisted `tools/call._meta` labels: the client's call id (Claude Code `claudecode/toolUseId`, Codex `callId`) and, from Codex `x-codex-turn-metadata`, model, reasoning effort, agent session id, turn id, turn trigger and thread source; other `_meta` keys are never stored (opencode: `ai.opencode/sessionID` as the agent session id). Agent kinds are `claude`, `codex`, `copilot`, `opencode`, `grok`, the lower-cased client name for any other MCP client (at most 64 characters), or `unknown` when no client name is known.
 ```
 
 - [ ] **Step 2: Edit `docs/mcp.md`**
