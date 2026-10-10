@@ -56,7 +56,7 @@ public sealed class McpJournalTests : IDisposable
             new StreamClientTransport(clientToServer.Writer.AsStream(), serverToClient.Reader.AsStream(), NullLoggerFactory.Instance),
             new McpClientOptions
             {
-                ClientInfo = new Implementation { Name = "claude-code", Version = "9.9.9" },
+                ClientInfo = new Implementation { Name = "claude-code", Version = "9.9.9", Title = "Claude Code" },
                 ProtocolVersion = McpHost.FallbackProtocolVersion,
             },
             NullLoggerFactory.Instance,
@@ -74,7 +74,7 @@ public sealed class McpJournalTests : IDisposable
         connection.Open();
         using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT s.agent_kind, s.transport, s.source, s.client_name, s.client_version, s.mcp_mode, s.session_key, o.operation, o.status
+            SELECT s.agent_kind, s.transport, s.source, s.client_name, s.client_version, s.mcp_mode, s.session_key, o.operation, o.status, s.client_title
             FROM operations o JOIN sessions s ON s.id = o.session_id
             """;
         using var reader = command.ExecuteReader();
@@ -88,6 +88,7 @@ public sealed class McpJournalTests : IDisposable
         Assert.StartsWith("mcp:", reader.GetString(6));
         Assert.Equal("gain", reader.GetString(7));
         Assert.Equal("succeeded", reader.GetString(8));
+        Assert.Equal("Claude Code", reader.GetString(9));
         Assert.False(reader.Read());
         Assert.DoesNotContain("activity journal", log.ToString());
     }

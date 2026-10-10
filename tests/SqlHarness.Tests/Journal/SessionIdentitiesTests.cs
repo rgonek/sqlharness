@@ -183,4 +183,27 @@ public sealed class SessionIdentitiesTests
         Assert.Equal("codex", identity.AgentKind);
         Assert.Equal("process-tree", identity.Source);
     }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("   ", null)]
+    [InlineData("  Claude Code  ", "Claude Code")]
+    public void Mcp_normalizes_client_title(string? supplied, string? expected)
+    {
+        var processes = new FakeProcesses(30, P(30, null, "sqlharness.exe"));
+
+        var identity = SessionIdentities.Mcp(processes, "mcp:abc", "claude-code", "2.1.0", "fixed", supplied);
+
+        Assert.Equal(expected, identity.ClientTitle);
+    }
+
+    [Fact]
+    public void Mcp_caps_client_title_length()
+    {
+        var processes = new FakeProcesses(30, P(30, null, "sqlharness.exe"));
+
+        var identity = SessionIdentities.Mcp(processes, "mcp:abc", "x", "1", "fixed", new string('t', 300));
+
+        Assert.Equal(SessionIdentities.MaximumTitleLength, identity.ClientTitle!.Length);
+    }
 }

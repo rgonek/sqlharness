@@ -145,7 +145,8 @@ public static class McpHost
                 sessionKey,
                 clientIdentity.Name ?? running?.ClientInfo?.Name,
                 clientIdentity.Version ?? running?.ClientInfo?.Version,
-                mcpMode);
+                mcpMode,
+                clientIdentity.Title ?? running?.ClientInfo?.Title);
         process.DecorateModules(module => new JournalingModule(
             module,
             () => journal.Value,

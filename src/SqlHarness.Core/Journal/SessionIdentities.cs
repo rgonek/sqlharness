@@ -11,6 +11,7 @@ namespace SqlHarness.Core;
 public static class SessionIdentities
 {
     internal const int MaximumDepth = 16;
+    internal const int MaximumTitleLength = 256;
 
     public static SessionIdentity Cli(IProcessInfo processes)
     {
@@ -39,7 +40,7 @@ public static class SessionIdentities
             CurrentDirectory());
     }
 
-    public static SessionIdentity Mcp(IProcessInfo processes, string sessionKey, string? clientName, string? clientVersion, string mcpMode)
+    public static SessionIdentity Mcp(IProcessInfo processes, string sessionKey, string? clientName, string? clientVersion, string mcpMode, string? clientTitle = null)
     {
         ArgumentNullException.ThrowIfNull(processes);
         var walk = Walk(processes);
@@ -57,7 +58,16 @@ public static class SessionIdentities
             walk.Agent?.StartedAt,
             processes.CurrentPid,
             walk.Self?.StartedAt,
-            CurrentDirectory());
+            CurrentDirectory(),
+            ClientTitle: Title(clientTitle));
+    }
+
+    private static string? Title(string? clientTitle)
+    {
+        var trimmed = clientTitle?.Trim();
+        if (string.IsNullOrEmpty(trimmed))
+            return null;
+        return trimmed.Length <= MaximumTitleLength ? trimmed : trimmed[..MaximumTitleLength];
     }
 
     public static string AgentKindFromClientName(string? clientName)
