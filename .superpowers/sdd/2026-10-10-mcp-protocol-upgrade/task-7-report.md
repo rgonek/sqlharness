@@ -92,3 +92,17 @@ Commands and observed output:
 | Codex | capabilities call error | false | false | true |
 
 The passing review run's frame logs are in `D:\temp\sqlharness-mcp-acceptance-58ede467cff848ec8f5a1eee02c5c511`; they contain tool results and remain local.
+
+## Plan interface reconciliation
+
+Controller ruling: the plan's optional `-Sqlharness` and no-argument invocation could select a stale globally installed binary. Task 7's interface now requires `-Sqlharness` with `./artifacts/task7-local/sqlharness.exe`, and Step 3 publishes into that worktree-local directory before invoking the script. This adds one local publish command and an explicit path to acceptance; it avoids installing or replacing the global executable. No other plan content was changed.
+
+Verified the revised commands:
+
+| Command | Observed output |
+| --- | --- |
+| `dotnet publish ./src/SqlHarness.Cli -c Release -p:PublishTrimmed=false -o ./artifacts/task7-local` | Exit 0; restore up-to-date; CLI published to `artifacts\task7-local\`. |
+| `pwsh ./scripts/mcp-client-acceptance.ps1 -Sqlharness ./artifacts/task7-local/sqlharness.exe` | Exit 0; Claude 8/8 checks passed and Codex 8/8 checks passed. |
+| `git diff --check` | Pass. |
+
+Acceptance frames from this command are in `D:\temp\sqlharness-mcp-acceptance-8bd802be224b45e99471fcbad760f7c8`; they contain tool results and remain local.
