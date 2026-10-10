@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { describeError } from "@/lib/errors"
 import { statusVariant } from "@/lib/flags"
 
-type StatusFields = Pick<OperationSummary, "status" | "exitCode" | "errorKind" | "errorMessage">
+type StatusFields = Pick<OperationSummary, "status" | "exitCode" | "errorKind" | "errorMessage" | "cancelReason">
 
 export function StatusBadge({ operation }: { operation: StatusFields }) {
   const [open, setOpen] = useState(false)
@@ -16,7 +16,7 @@ export function StatusBadge({ operation }: { operation: StatusFields }) {
   const heading = [operation.errorKind ?? "error", operation.exitCode !== null ? `exit ${operation.exitCode}` : null]
     .filter(Boolean)
     .join(" · ")
-  const sentence = describeError(operation.exitCode, operation.errorKind)
+  const sentence = describeError(operation.exitCode, operation.errorKind, operation.cancelReason)
   return (
     <>
       <Tooltip>

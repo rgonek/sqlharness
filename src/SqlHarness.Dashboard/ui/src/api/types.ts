@@ -5,6 +5,8 @@ export type OperationStatus = "running" | "succeeded" | "failed" | "rejected" | 
 
 export type WatchProgress = { polls: number; changedPolls: number; elapsedMs: number }
 
+export type SessionRoot = { uri: string; name: string | null }
+
 export type SessionSummary = {
   id: number
   sessionKey: string
@@ -22,6 +24,9 @@ export type SessionSummary = {
   rejected: number
   running: number
   abandoned: number
+  clientTitle: string | null
+  /** null = unknown (client lacks roots or has not answered); [] = client reported none. */
+  roots: SessionRoot[] | null
 }
 
 export type OperationSummary = {
@@ -50,6 +55,8 @@ export type OperationSummary = {
   progress: WatchProgress | null
   /** Full error text; stored only with journal.storeSensitive. */
   errorMessage: string | null
+  /** "client" | "shutdown" | "deadline" when errorKind is "cancelled"; otherwise null. */
+  cancelReason: string | null
 }
 
 export type SessionDetail = { session: SessionSummary; operations: OperationSummary[] }

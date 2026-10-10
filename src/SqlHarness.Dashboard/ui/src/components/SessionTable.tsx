@@ -3,6 +3,7 @@ import type { SessionSummary } from "@/api/types"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatAge, formatTimestamp } from "@/lib/format"
+import { clientLabel } from "@/lib/roots"
 
 export function SessionTable({ sessions, now }: { sessions: SessionSummary[]; now: number }) {
   return (
@@ -30,7 +31,7 @@ export function SessionTable({ sessions, now }: { sessions: SessionSummary[]; no
               </TableCell>
               <TableCell>
                 {session.agentKind}
-                {session.clientName && <div className="text-sm text-muted-foreground">{session.clientName} {session.clientVersion}</div>}
+                {clientLabel(session) && <div className="text-sm text-muted-foreground">{clientLabel(session)}</div>}
               </TableCell>
               <TableCell>{session.transport}{session.mcpMode ? ` (${session.mcpMode})` : ""}</TableCell>
               <TableCell className="max-w-64 truncate font-mono">{session.cwd ?? "—"}</TableCell>

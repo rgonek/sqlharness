@@ -17,7 +17,14 @@ const byExitCode: Record<number, string> = {
   6: byKind.local_storage_failed,
 }
 
+const byCancelReason: Record<string, string> = {
+  client: "Cancelled by the client.",
+  shutdown: "Cancelled because the MCP host shut down.",
+  deadline: "Cancelled when the call time budget ran out.",
+}
+
 /** A fixed, data-free sentence for an error kind; the stored message (if any) carries the details. */
-export function describeError(exitCode: number | null, errorKind: string | null): string {
+export function describeError(exitCode: number | null, errorKind: string | null, cancelReason: string | null = null): string {
+  if (errorKind === "cancelled" && cancelReason && byCancelReason[cancelReason]) return byCancelReason[cancelReason]
   return (errorKind && byKind[errorKind]) || (exitCode !== null && byExitCode[exitCode]) || byKind.operation_failed
 }

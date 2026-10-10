@@ -38,3 +38,9 @@ test("hover shows the error kind in a tooltip", async () => {
   await userEvent.hover(screen.getByRole("button", { name: /failed/ }))
   expect(await screen.findByText(/database returned an error/)).toBeInTheDocument()
 })
+
+test("a cancellation names who cancelled", async () => {
+  render(<StatusBadge operation={operation({ status: "failed", exitCode: -1, errorKind: "cancelled", cancelReason: "client" })} />)
+  await userEvent.click(screen.getByRole("button", { name: /failed/ }))
+  expect(await screen.findByRole("dialog")).toHaveTextContent("Cancelled by the client.")
+})

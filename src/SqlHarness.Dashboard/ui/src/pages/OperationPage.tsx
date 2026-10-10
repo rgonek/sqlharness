@@ -129,7 +129,7 @@ function OperationView({ id }: { id: number }) {
             <Fact label="Started">{formatTimestamp(op.startedAt)}</Fact>
             <Fact label="Finished">{formatTimestamp(op.finishedAt)}</Fact>
             <Fact label="Duration">{formatDuration(op.durationMs)}</Fact>
-            <Fact label="Exit code">{op.exitCode ?? "—"}{op.errorKind ? ` (${op.errorKind})` : ""}</Fact>
+            <Fact label="Exit code">{op.exitCode ?? "—"}{op.errorKind ? ` (${op.errorKind}${op.cancelReason ? `: ${op.cancelReason}` : ""})` : ""}</Fact>
             <Fact label="Profile">{op.profile ?? "—"}</Fact>
             <Fact label="Engine">{op.engine ?? "—"}</Fact>
             <Fact label="Server / database">{[op.server, op.database].filter(Boolean).join(" / ") || "—"}</Fact>
