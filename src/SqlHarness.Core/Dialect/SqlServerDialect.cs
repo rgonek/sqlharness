@@ -7,6 +7,9 @@ internal sealed class SqlServerDialect : ISqlDialect
     private const string StatisticsTruncatedWarning =
         "SQL Server informational messages exceeded the per-command limit and {0} messages were omitted. CPU time, elapsed time and logicalReads parsed from STATISTICS output are unavailable; logicalReads 0 is not a measured zero.";
 
+    private const string StatisticsUnrecognizedWarning =
+        "SQL Server STATISTICS TIME output was not recognized (the session language may not be English). CPU time, elapsed time and logicalReads parsed from STATISTICS output are unavailable; 0 is not a measured zero.";
+
     private readonly SqlSafetyClassifier _classifier = new();
 
     public SqlEngine Engine => SqlEngine.SqlServer;
@@ -92,7 +95,7 @@ internal sealed class SqlServerDialect : ISqlDialect
                 result.Canonical.Hash,
                 result.PlanXmls,
                 messages.Length,
-                Metrics: TruncatedMetricsOrNull(consumed.OmittedMessageCount))
+                Metrics: UnavailableMetricsOrNull(consumed.OmittedMessageCount, time.RecognizedBlocks))
             {
                 // Truncated message windows make the counters partial; the journal then records none.
                 TableIo = consumed.OmittedMessageCount > 0 ? [] : StatisticsIoDetailParser.Parse(statistics),
@@ -143,29 +146,33 @@ internal sealed class SqlServerDialect : ISqlDialect
     }
 
     /// <summary>
-    /// Explicit incomplete metrics after the per-command message bound dropped
-    /// arrivals: STATISTICS IO/TIME text may be partial, so parsed zeros are
-    /// reported as unavailable instead of silently measured zeros.
+    /// Incomplete STATISTICS metrics. Omitted messages may have dropped IO/TIME
+    /// text; zero recognized English TIME blocks means the output was not
+    /// understood. Parsed zeros are unavailable, not measured zeros. Omitted
+    /// messages take precedence over unrecognized text.
     /// </summary>
-    private static BenchmarkRunMetrics? TruncatedMetricsOrNull(int omittedMessageCount) =>
-        omittedMessageCount <= 0
-            ? null
-            : new BenchmarkRunMetrics(
-                BenchmarkMetricReport.Unavailable,
-                BenchmarkMetricReport.Unavailable,
-                null,
-                false,
-                null,
-                null,
-                BenchmarkMetricReport.Unavailable,
-                null,
-                null,
-                null,
-                BenchmarkMetricReport.ResultStatement,
-                BenchmarkMetricText.StatementRows,
-                [string.Format(
-                    CultureInfo.InvariantCulture,
-                    StatisticsTruncatedWarning,
-                    omittedMessageCount)]);
+    private static BenchmarkRunMetrics? UnavailableMetricsOrNull(int omittedMessageCount, int recognizedTimeBlocks)
+    {
+        if (omittedMessageCount <= 0 && recognizedTimeBlocks > 0)
+            return null;
+
+        var warning = omittedMessageCount > 0
+            ? string.Format(CultureInfo.InvariantCulture, StatisticsTruncatedWarning, omittedMessageCount)
+            : StatisticsUnrecognizedWarning;
+        return new BenchmarkRunMetrics(
+            BenchmarkMetricReport.Unavailable,
+            BenchmarkMetricReport.Unavailable,
+            null,
+            false,
+            null,
+            null,
+            BenchmarkMetricReport.Unavailable,
+            null,
+            null,
+            null,
+            BenchmarkMetricReport.ResultStatement,
+            BenchmarkMetricText.StatementRows,
+            [warning]);
+    }
 
 }

@@ -109,6 +109,41 @@ public sealed class DialectMessageBudgetTests
     }
 
     [Fact]
+    public async Task SqlServer_unrecognized_statistics_time_marks_run_metrics_unavailable()
+    {
+        var session = new DrainingSession(command =>
+            command.Sql.StartsWith("SET", StringComparison.Ordinal) ? Empty() : SingleRow());
+        session.OnExecute = command =>
+        {
+            if (command.Sql.StartsWith("SET", StringComparison.Ordinal))
+                return;
+            // Localized STATISTICS text contains no English TIME block. A real
+            // server still sent one; the zeros below are not measured zeros.
+            session.Emit("Tabelle 'X'. Scananzahl 1, logische Lesevorgänge 5");
+            session.Emit("SQL Server-Ausführungszeiten:\n   CPU-Zeit = 12 ms, verstrichene Zeit = 20 ms.");
+        };
+        var dialect = new SqlServerDialect();
+        using var raw = new CanonicalResultAccumulator();
+
+        var run = await dialect.ExecuteBenchmarkRunAsync(
+            session, "SELECT Value", [], 30, 1, "measure", raw,
+            captureComparison: true, comparisonMaximumRows: 1000, CancellationToken.None);
+
+        Assert.Equal(0, run.Artifact.LogicalReads);
+        Assert.Equal(0, run.Artifact.CpuTimeMilliseconds);
+        Assert.Equal(0, run.Artifact.ElapsedTimeMilliseconds);
+        Assert.NotNull(run.Artifact.Metrics);
+        var metrics = run.Artifact.Metrics!;
+        Assert.Equal(BenchmarkMetricReport.Unavailable, metrics.CpuTimeAvailability);
+        Assert.Equal(BenchmarkMetricReport.Unavailable, metrics.LogicalReadsAvailability);
+        Assert.Equal(BenchmarkMetricReport.Unavailable, metrics.ElapsedTimeAvailability);
+        var warning = Assert.Single(metrics.Warnings);
+        Assert.Contains("was not recognized", warning, StringComparison.Ordinal);
+        Assert.NotEmpty(run.Artifact.ResultHash);
+        Assert.Empty(session.Messages);
+    }
+
+    [Fact]
     public async Task Postgres_truncated_notices_warn_without_changing_explain_metrics()
     {
         const string planJson = """[{"Plan":{"Node Type":"Seq Scan","Relation Name":"foo","Schema":"public","Shared Hit Blocks":2},"Planning Time":1.25,"Execution Time":9.5}]""";
