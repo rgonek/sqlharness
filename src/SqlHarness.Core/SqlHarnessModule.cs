@@ -194,6 +194,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             ValidateBounds(query);
             var target = TargetResolver.Resolve(query.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             var safety = dialect.Classify(
                 query.Sql,
@@ -589,6 +590,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
             ValidateMeasure(measure);
             var target = TargetResolver.Resolve(measure.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             SqlSafetyDecision? setupSafety = null;
             IReadOnlySet<string> setupTemps = NoSessionTemps;
@@ -805,6 +807,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             if (schema.MaxObjects is < 1 or > 500) throw new SqlHarnessSafetyException("Schema object limit must be between 1 and 500.");
             var selection = SchemaReader.ParseObjectSelection(schema.Object);
             var target = TargetResolver.Resolve(schema.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct); phase = OperationPhase.Sql;
@@ -842,6 +845,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             ValidateWatch(watch);
             var target = TargetResolver.Resolve(watch.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             var safety = dialect.Classify(
                 watch.Sql,
@@ -917,6 +921,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             ValidateWatch(watch);
             var target = TargetResolver.Resolve(watch.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             var safety = dialect.Classify(
                 watch.Sql,
@@ -1024,6 +1029,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             ValidateSnapshot(snapshot);
             var target = TargetResolver.Resolve(snapshot.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             var safety = dialect.Classify(
                 snapshot.Sql,
@@ -1097,6 +1103,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
 
             var target = TargetResolver.Resolve(ping.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
             phase = OperationPhase.Sql;
@@ -1143,6 +1150,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             ArgumentNullException.ThrowIfNull(counts.Tables);
 
             var target = TargetResolver.Resolve(counts.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
@@ -1221,6 +1229,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             // Parse object before target resolution: name, schema.name, or null (no object).
             var (objectSchema, objectName) = ParseSpaceObject(space.Object);
             var target = TargetResolver.Resolve(space.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
@@ -1277,6 +1286,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 throw new SqlHarnessSafetyException("Query Store window must be between 1 and 44640 minutes.");
 
             var target = TargetResolver.Resolve(operation.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
             phase = OperationPhase.Sql;
@@ -1346,6 +1356,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 throw new SqlHarnessSafetyException(objectError);
 
             var target = TargetResolver.Resolve(operation.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
             phase = OperationPhase.Sql;
@@ -1447,7 +1458,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         }
     }
 
-    private static IReadOnlyList<string> CollectTargetSecrets(SqlTargetRequest target)
+    private static List<string> CollectTargetSecrets(SqlTargetRequest target)
     {
         var secrets = new List<string>();
         foreach (var value in target.Vars.Values)

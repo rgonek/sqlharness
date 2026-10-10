@@ -1,3 +1,5 @@
+using SqlHarness.Core.Targets;
+
 using System.Text.RegularExpressions;
 
 namespace SqlHarness.Core;
@@ -104,4 +106,13 @@ public static partial class SecretRedactor
 
     [GeneratedRegex("\\b[A-Za-z0-9_-]*access-token[A-Za-z0-9_-]*\\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex TokenLikePattern();
+}
+/// <summary>Registers operator-held credentials for error redaction once a target is resolved.</summary>
+internal static class OperationSecrets
+{
+    internal static void AddCredentials(List<string> knownSecrets, ResolvedTarget target)
+    {
+        if (target.Auth.PasswordForRedaction() is { Length: > 0 } password)
+            knownSecrets.Add(password);
+    }
 }
