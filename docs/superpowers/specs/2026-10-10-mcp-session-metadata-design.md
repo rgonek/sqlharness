@@ -119,7 +119,7 @@ Allowlist, read from `tools/call` `params._meta` only:
 | `client_call_id` | `claudecode/toolUseId` | `callId` |
 | `agent_model` | — | `x-codex-turn-metadata.model` |
 | `agent_reasoning_effort` | — | `x-codex-turn-metadata.reasoning_effort` |
-| `agent_session_id` | — | `x-codex-turn-metadata.session_id` |
+| `agent_session_id` | — | `x-codex-turn-metadata.session_id` (opencode: `ai.opencode/sessionID`) |
 | `agent_turn_id` | — | `x-codex-turn-metadata.turn_id` |
 | `agent_turn_trigger` | — | `x-codex-turn-metadata.turn_trigger` |
 | `agent_thread_source` | — | `x-codex-turn-metadata.thread_source` |
@@ -290,6 +290,30 @@ Before implementation, start `mcp serve` under Claude Code and under Codex and
 record whether each sends `clientInfo.title` and declares `capabilities.roots`
 (and `listChanged`). The result does not change the design; it sets
 expectations for what the dashboard will show.
+
+## Agent kinds and dashboard agent filter
+
+- `AgentKindFromClientName` also returns `copilot` (name contains "copilot",
+  e.g. `copilot-cli`) and `opencode`; process-tree classification recognises
+  `copilot` (native, or node with `@github/copilot`) and `opencode` (native, or
+  node/bun with `opencode-ai` / `@opencode/cli`). Other names stay `other`.
+  Existing `other` rows are not rewritten (single-user journal).
+- Dashboard: `GET /api/agents` returns the agent kinds present with session
+  counts. The Sessions page shows "All" plus only those kinds (known kinds
+  first, then other names, then `other`, then `unknown`), resetting to "All"
+  when the selected kind disappears. Labels: Claude Code, Codex, Copilot,
+  opencode, Other, Unknown; unrecognised kinds show raw. The same labels are
+  used wherever the dashboard prints an agent kind.
+
+## Upgrade overhead fixes
+
+- The session identity is resolved per operation (protocol upgrade), but the
+  process tree is walked once per serve process; client info is applied on top
+  (`SessionIdentities.WithMcpClient`).
+- `McpProtocolVersionRewriteInput` skips JSON parsing for frames that do not
+  contain `"initialize"`.
+- Accepted as is: a frame above 16 MiB ends the transport instead of rejecting
+  one request (inline payloads above 1 MiB already must be files).
 
 ## Follow-ups (separate specs, in this order)
 

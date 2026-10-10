@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Record the MCP client's `clientInfo.title`, its workspace roots, why a cancelled operation was cancelled, and allowlisted `tools/call._meta` labels (Claude Code tool-use id; Codex call id, model, effort, agent session, turn, trigger, thread source), and show them in the dashboard.
+**Goal:** Record the MCP client's `clientInfo.title`, its workspace roots, why a cancelled operation was cancelled, and allowlisted `tools/call._meta` labels (Claude Code tool-use id; Codex call id, model, effort, agent session, turn, trigger, thread source), and show them in the dashboard. Also: recognise Copilot and opencode as agent kinds with a dashboard agent filter that lists only kinds present, and remove two per-call overheads the protocol upgrade introduced.
 
 **Sequencing:** execute only after the MCP protocol upgrade branch has merged. Its real-client acceptance observed Claude Code on `2026-07-28` and Codex on `2025-06-18`. Before Task 5, prove whether request-scoped `roots/list` works on `2026-07-28`; adjust the read path or document NULL roots according to the result. The stored shape is unchanged.
 
@@ -23,7 +23,7 @@
 - Outcomes with exit `0`, `7`, `8` are never rewritten as cancellations.
 - Roots fetch timeout 5 s; a newer fetch cancels the older one.
 - Client roots never widen `--input-root` and never authorize a file input.
-- `_meta` is read through the allowlist only (`claudecode/toolUseId`, `callId`, and `x-codex-turn-metadata.{model, reasoning_effort, session_id, turn_id, turn_trigger, thread_source}`); string values only, each ≤ 256 characters; parsing never throws.
+- `_meta` is read through the allowlist only (`claudecode/toolUseId`, `callId`, `ai.opencode/sessionID`, and `x-codex-turn-metadata.{model, reasoning_effort, session_id, turn_id, turn_trigger, thread_source}`); string values only, each ≤ 256 characters; parsing never throws.
 - Both gates must pass, run one after the other: `pwsh ./scripts/verify.ps1`, then `pwsh ./scripts/verify-linux.ps1`.
 
 ## Review Focus
@@ -1953,6 +1953,14 @@ public sealed class McpCallMetadataTests
     }
 
     [Fact]
+    public void Opencode_meta_yields_its_session_id()
+    {
+        var meta = JsonNode.Parse("""{"ai.opencode/sessionID":"ses_123","progressToken":1}""")!.AsObject();
+
+        Assert.Equal(new AgentCallMetadata(null, null, null, "ses_123", null, null, null), McpCallMetadata.Read(meta));
+    }
+
+    [Fact]
     public void Nothing_allowlisted_or_no_meta_is_null()
     {
         Assert.Null(McpCallMetadata.Read(null));
@@ -2187,7 +2195,7 @@ internal static class McpCallMetadata
                 Text(meta, "claudecode/toolUseId") ?? Text(meta, "callId"),
                 Text(turn, "model"),
                 Text(turn, "reasoning_effort"),
-                Text(turn, "session_id"),
+                Text(turn, "session_id") ?? Text(meta, "ai.opencode/sessionID"),
                 Text(turn, "turn_id"),
                 Text(turn, "turn_trigger"),
                 Text(turn, "thread_source"));
@@ -2277,7 +2285,388 @@ git commit -m "feat(mcp): record allowlisted tools/call metadata (call id, Codex
 
 ---
 
-### Task 9: Documentation and gates
+### Task 9: Agent kinds for Copilot and opencode, dynamic agent filter
+
+**Files:**
+- Modify: `src/SqlHarness.Core/Journal/SessionIdentities.cs` (`AgentKindFromClientName`, `ClassifyName`)
+- Modify: `src/SqlHarness.Dashboard/JournalReader.cs` (new `AgentKinds`)
+- Modify: `src/SqlHarness.Dashboard/DashboardServer.cs` (new `/agents` read endpoint next to `/sessions`)
+- Create: `src/SqlHarness.Dashboard/ui/src/lib/agents.ts`, `src/SqlHarness.Dashboard/ui/src/lib/agents.test.ts`
+- Modify: `src/SqlHarness.Dashboard/ui/src/api/queries.ts` (query key + `useAgentKinds`)
+- Modify: `src/SqlHarness.Dashboard/ui/src/pages/SessionsPage.tsx` (tabs from data), `pages/SessionsPage.test.tsx`
+- Modify: every UI place that prints `agentKind` (`components/SessionTable.tsx:32`, `components/OperationTable.tsx:35`, `pages/OperationPage.tsx:121`, `pages/SessionPage.tsx:43`, and the per-day agent series in `pages/StatsPage.tsx`) to print `agentLabel(agentKind)`
+- Test: `tests/SqlHarness.Tests/Journal/SessionIdentitiesTests.cs`, `tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs`
+
+**Interfaces:**
+- Produces:
+  - `SessionIdentities.AgentKindFromClientName(string?)` returns `claude`, `codex`, `copilot`, `opencode`, `other` or `unknown`.
+  - Process-tree classification also returns `copilot` / `opencode`.
+  - `JournalReader.AgentKinds() : IReadOnlyList<KeyCount>` (existing `KeyCount(string Key, int Count)` record) — every `sessions.agent_kind` present, with its session count.
+  - `GET /api/agents` → `KeyCount[]` (JSON `{ key, count }`).
+  - UI: `agentLabel(kind: string): string`, `agentTabs(kinds: string[]): { value: string; label: string }[]`, `useAgentKinds()`.
+
+Evidence (`2026-10-10-mcp-client-spike.md`, post-upgrade matrix): Copilot CLI sends `clientInfo.name = "copilot-cli"`, opencode sends `"opencode"`; both landed as `other`. Installed launchers: Copilot runs `node …/node_modules/@github/copilot/npm-loader.js`; opencode runs the native `…/node_modules/@opencode/cli/bin/opencode.exe`. Historical `other` rows are not rewritten (single-user journal; decided 2026-10-10).
+
+- [ ] **Step 1: Write the failing tests**
+
+`SessionIdentitiesTests`:
+
+```csharp
+    [Theory]
+    [InlineData("claude-code", "claude")]
+    [InlineData("codex-mcp-client", "codex")]
+    [InlineData("copilot-cli", "copilot")]
+    [InlineData("GitHub Copilot", "copilot")]
+    [InlineData("opencode", "opencode")]
+    [InlineData("cursor", "other")]
+    [InlineData(null, "unknown")]
+    [InlineData("  ", "unknown")]
+    public void Agent_kind_from_client_name(string? name, string expected) =>
+        Assert.Equal(expected, SessionIdentities.AgentKindFromClientName(name));
+
+    [Fact]
+    public void Cli_finds_copilot_through_node_loader()
+    {
+        var processes = new FakeProcesses(30,
+            P(30, 20, "sqlharness.exe"), P(20, 10, "pwsh.exe"),
+            P(10, 1, "node.exe", @"node C:\tools\node_modules\@github\copilot\npm-loader.js -p x"), P(1, null, "explorer.exe"));
+
+        Assert.Equal("copilot", SessionIdentities.Cli(processes).AgentKind);
+    }
+
+    [Fact]
+    public void Cli_finds_native_opencode()
+    {
+        var processes = new FakeProcesses(30,
+            P(30, 20, "sqlharness.exe"), P(20, 10, "opencode.exe"), P(10, null, "explorer.exe"));
+
+        Assert.Equal("opencode", SessionIdentities.Cli(processes).AgentKind);
+    }
+```
+
+`JournalReaderTests`:
+
+```csharp
+    [Fact]
+    public void Agent_kinds_list_only_kinds_present_with_session_counts()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:a", "codex"));
+        seed.Operation(JournalSeed.Session("cli:b", "codex"));
+        seed.Operation(JournalSeed.Session("cli:c", "copilot"));
+
+        var kinds = Reader(home).AgentKinds();
+
+        Assert.Equal([new KeyCount("codex", 2), new KeyCount("copilot", 1)], kinds);
+    }
+
+    [Fact]
+    public void Agent_kinds_of_a_missing_journal_are_empty()
+    {
+        using var home = new TempHome();
+        Assert.Empty(Reader(home).AgentKinds());
+    }
+```
+
+`ui/src/lib/agents.test.ts`:
+
+```ts
+import { expect, test } from "vitest"
+import { agentLabel, agentTabs } from "@/lib/agents"
+
+test("known kinds have product labels and unknown kinds are shown raw", () => {
+  expect(agentLabel("claude")).toBe("Claude Code")
+  expect(agentLabel("codex")).toBe("Codex")
+  expect(agentLabel("copilot")).toBe("Copilot")
+  expect(agentLabel("opencode")).toBe("opencode")
+  expect(agentLabel("other")).toBe("Other")
+  expect(agentLabel("unknown")).toBe("Unknown")
+  expect(agentLabel("cursor")).toBe("cursor")
+})
+
+test("tabs list All plus only present kinds, known first, unknown last", () => {
+  expect(agentTabs(["codex"]).map(t => t.label)).toEqual(["All", "Codex"])
+  expect(agentTabs(["copilot", "claude"]).map(t => t.label)).toEqual(["All", "Claude Code", "Copilot"])
+  expect(agentTabs(["unknown", "other", "zed", "codex"]).map(t => t.value)).toEqual(["all", "codex", "zed", "other", "unknown"])
+  expect(agentTabs([]).map(t => t.value)).toEqual(["all"])
+})
+```
+
+`pages/SessionsPage.test.tsx` — add (follow the file's `stubFetch` / `renderApp` pattern; `/api/agents` returns `KeyCount[]`):
+
+```ts
+test("agent tabs follow the kinds present in the journal", async () => {
+  stubFetch({
+    "/api/agents": [{ key: "copilot", count: 1 }, { key: "claude", count: 2 }],
+    "/api/sessions": { items: [], nextCursor: null },
+  })
+  renderApp("/sessions")
+  expect(await screen.findByRole("tab", { name: "Claude Code" })).toBeInTheDocument()
+  expect(screen.getByRole("tab", { name: "Copilot" })).toBeInTheDocument()
+  expect(screen.queryByRole("tab", { name: "Codex" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("tab", { name: "Unknown" })).not.toBeInTheDocument()
+})
+```
+
+If `stubFetch` matches URLs including query strings, key the sessions stub the way the existing SessionsPage tests do.
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~SessionIdentitiesTests|FullyQualifiedName~JournalReaderTests"` and `npm run check --prefix src/SqlHarness.Dashboard/ui`
+Expected: failures (`copilot`/`opencode` classified as `other`/null, `AgentKinds` and `@/lib/agents` missing).
+
+- [ ] **Step 3: Implement Core**
+
+`AgentKindFromClientName`, after the codex check:
+
+```csharp
+        if (clientName.Contains("copilot", StringComparison.OrdinalIgnoreCase))
+            return "copilot";
+        if (clientName.Contains("opencode", StringComparison.OrdinalIgnoreCase))
+            return "opencode";
+```
+
+`ClassifyName` switch:
+
+```csharp
+            case "copilot":
+                return "copilot";
+            case "opencode":
+                return "opencode";
+            case "node" or "bun" when commandLine is not null:
+                var normalized = commandLine.Replace('\\', '/');
+                if (normalized.Contains("@anthropic-ai/claude-code", StringComparison.OrdinalIgnoreCase))
+                    return "claude";
+                if (normalized.Contains("@openai/codex", StringComparison.OrdinalIgnoreCase))
+                    return "codex";
+                if (normalized.Contains("@github/copilot", StringComparison.OrdinalIgnoreCase))
+                    return "copilot";
+                if (normalized.Contains("opencode-ai", StringComparison.OrdinalIgnoreCase)
+                    || normalized.Contains("@opencode/cli", StringComparison.OrdinalIgnoreCase))
+                    return "opencode";
+                return null;
+```
+
+`SessionIdentities.Walk` accepts any kind `Classify` returns, so no other change is needed there.
+
+- [ ] **Step 4: Implement dashboard API**
+
+`JournalReader`:
+
+```csharp
+    public IReadOnlyList<KeyCount> AgentKinds()
+    {
+        using var connection = OpenReadOnly();
+        if (connection is null)
+            return [];
+        return Query(connection, "SELECT agent_kind, COUNT(*) FROM sessions GROUP BY agent_kind ORDER BY agent_kind;", [],
+            r => new KeyCount(r.GetString(0), r.GetInt32(1)));
+    }
+```
+
+(Use the same `Query` helper signature the reader's other methods use.)
+
+`DashboardServer.cs`, next to the `/sessions` mapping:
+
+```csharp
+        MapRead(api, "/agents", () => Results.Json(reader.AgentKinds(), Json));
+```
+
+- [ ] **Step 5: Implement UI**
+
+`ui/src/lib/agents.ts`:
+
+```ts
+const labels: Record<string, string> = {
+  claude: "Claude Code",
+  codex: "Codex",
+  copilot: "Copilot",
+  opencode: "opencode",
+  other: "Other",
+  unknown: "Unknown",
+}
+
+const knownOrder = ["claude", "codex", "copilot", "opencode"]
+
+export function agentLabel(kind: string): string {
+  return labels[kind] ?? kind
+}
+
+/** "All" plus the kinds present: known kinds first, then others alphabetically, then "other", then "unknown". */
+export function agentTabs(kinds: string[]): { value: string; label: string }[] {
+  const present = new Set(kinds)
+  const rank = (kind: string) =>
+    knownOrder.includes(kind) ? knownOrder.indexOf(kind) : kind === "unknown" ? 1002 : kind === "other" ? 1001 : 1000
+  const ordered = [...present].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+  return [{ value: "all", label: "All" }, ...ordered.map(kind => ({ value: kind, label: agentLabel(kind) }))]
+}
+```
+
+`ui/src/api/queries.ts`: add `agents: ["agents"] as const` to `queryKeys` and
+
+```ts
+export function useAgentKinds() {
+  return useQuery({ queryKey: queryKeys.agents, queryFn: () => getJson<KeyCount[]>("/api/agents") })
+}
+```
+
+(import `useQuery` and the `KeyCount` type the stats types already define; add `export type KeyCount = { key: string; count: number }` to `types.ts` if it is not exported yet).
+
+`pages/SessionsPage.tsx`: delete the hard-coded `agents` array; build tabs with `agentTabs((useAgentKinds().data ?? []).map(k => k.key))`; when the selected `agent` is not among the tab values (data changed), reset to `"all"`:
+
+```tsx
+  const tabs = agentTabs((agentKinds.data ?? []).map(item => item.key))
+  const selected = tabs.some(tab => tab.value === agent) ? agent : "all"
+```
+
+and use `selected` both for the `Tabs` value and the `useSessions` filter.
+
+Replace the raw `agentKind` prints listed under **Files** with `agentLabel(...)`. In `StatsPage.tsx`, map the per-day agent series names (from `operationsPerDay[].agentKind`) through `agentLabel` where legends/labels are rendered; keep the data keys unchanged.
+
+- [ ] **Step 6: Run the suites**
+
+Run: `dotnet test tests/SqlHarness.Tests` and `npm run check --prefix src/SqlHarness.Dashboard/ui`
+Expected: PASS. Update existing UI tests that asserted the literal text `claude` where a label now reads `Claude Code`.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src tests
+git commit -m "feat(dashboard): recognise Copilot and opencode and show only present agent kinds"
+```
+
+---
+
+### Task 10: Performance of per-operation identity and protocol rewrite
+
+**Files:**
+- Modify: `src/SqlHarness.Core/Journal/SessionIdentities.cs` (new `WithMcpClient`)
+- Modify: `src/SqlHarness.Mcp/McpHost.cs` (walk the process tree once per serve process)
+- Modify: `src/SqlHarness.Mcp/McpProtocolVersionRewriteInput.cs` (cheap pre-check before JSON parsing)
+- Test: `tests/SqlHarness.Tests/Journal/SessionIdentitiesTests.cs`, `tests/SqlHarness.Mcp.Tests/McpProtocolNegotiationTests.cs` (or the file that tests the rewrite input)
+
+**Interfaces:**
+- Produces: `public static SessionIdentity SessionIdentities.WithMcpClient(SessionIdentity processIdentity, string? clientName, string? clientVersion, string? clientTitle)`.
+
+Why: the upgrade resolves the session identity on every journaled operation (so late client info can fill in). Each resolution walks the process tree, and on Windows every step takes a full `CreateToolhelp32Snapshot` (up to 16 per call). The process facts (agent pid, host pid, start times, cwd, process-tree kind) do not change during a serve process; only client info can. The rewrite input parses every frame as JSON, including large `tools/call` payloads, to find the rare `initialize`.
+
+- [ ] **Step 1: Write the failing tests**
+
+`SessionIdentitiesTests`:
+
+```csharp
+    private sealed class CountingProcesses(IProcessInfo inner) : IProcessInfo
+    {
+        public int Gets;
+        public int CurrentPid => inner.CurrentPid;
+        public ProcessSnapshot? Get(int pid) { Gets++; return inner.Get(pid); }
+    }
+
+    [Fact]
+    public void With_mcp_client_reuses_the_process_walk_and_applies_client_info()
+    {
+        var processes = new CountingProcesses(new FakeProcesses(30,
+            P(30, 20, "sqlharness.exe"), P(20, 10, "claude.exe"), P(10, null, "explorer.exe")));
+        var processIdentity = SessionIdentities.Mcp(processes, "mcp:abc", null, null, "fixed");
+        var walked = processes.Gets;
+
+        var unnamed = SessionIdentities.WithMcpClient(processIdentity, null, null, null);
+        var named = SessionIdentities.WithMcpClient(processIdentity, "copilot-cli", "1.0.95", "Copilot");
+
+        Assert.Equal(walked, processes.Gets);
+        Assert.Equal(("claude", "process-tree"), (unnamed.AgentKind, unnamed.Source));
+        Assert.Equal(("copilot", "mcp-clientinfo", "copilot-cli", "1.0.95"), (named.AgentKind, named.Source, named.ClientName, named.ClientVersion));
+        Assert.Equal("Copilot", named.ClientTitle);
+        Assert.Equal(processIdentity.AgentPid, named.AgentPid);
+    }
+```
+
+Rewrite input — add next to the existing rewrite-input tests (same `MemoryStream` driving helper they use):
+
+```csharp
+    [Fact]
+    public async Task Frames_without_initialize_pass_through_byte_for_byte()
+    {
+        // Deliberately not canonical JSON (spacing, key order): any parse/re-serialize would change it.
+        var frame = "{ \"jsonrpc\":\"2.0\", \"method\" : \"tools/call\", \"id\":7, \"params\":{\"name\":\"x\",\"arguments\":{\"sql\":\"SELECT  1\"}} }\n";
+        await using var input = new McpProtocolVersionRewriteInput(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(frame)));
+        using var output = new MemoryStream();
+        await input.CopyToAsync(output);
+        Assert.Equal(frame, System.Text.Encoding.UTF8.GetString(output.ToArray()));
+    }
+```
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~SessionIdentitiesTests"`
+Expected: compile error (`WithMcpClient` missing). The rewrite test may already pass (non-initialize frames are returned unchanged today); it pins the behaviour the pre-check must keep.
+
+- [ ] **Step 3: Implement**
+
+`SessionIdentities.cs`:
+
+```csharp
+    /// <summary>
+    /// Applies MCP client info to an identity whose process facts were walked once.
+    /// Client info, when it names a known agent, overrides the process-tree kind.
+    /// </summary>
+    public static SessionIdentity WithMcpClient(SessionIdentity processIdentity, string? clientName, string? clientVersion, string? clientTitle)
+    {
+        ArgumentNullException.ThrowIfNull(processIdentity);
+        var fromClient = AgentKindFromClientName(clientName);
+        var useClient = fromClient != "unknown";
+        return processIdentity with
+        {
+            AgentKind = useClient ? fromClient : processIdentity.AgentKind,
+            Source = useClient ? "mcp-clientinfo" : processIdentity.Source,
+            ClientName = string.IsNullOrWhiteSpace(clientName) ? null : clientName,
+            ClientVersion = string.IsNullOrWhiteSpace(clientVersion) ? null : clientVersion,
+            ClientTitle = Title(clientTitle),
+        };
+    }
+```
+
+(`Title` is the normaliser Task 2 added; `processIdentity` must come from `SessionIdentities.Mcp(..., clientName: null, clientVersion: null, ...)` so its kind and source are the process-tree ones.)
+
+`McpHost.RunAsync` — keep the per-operation function, but walk once:
+
+```csharp
+        var processIdentity = new Lazy<SessionIdentity>(
+            () => SessionIdentities.Mcp(ProcessInfo.Current, sessionKey, null, null, mcpMode),
+            LazyThreadSafetyMode.ExecutionAndPublication);
+        Func<SessionIdentity> identity = () => SessionIdentities.WithMcpClient(
+            processIdentity.Value,
+            clientIdentity.Name ?? running?.ClientInfo?.Name,
+            clientIdentity.Version ?? running?.ClientInfo?.Version,
+            clientIdentity.Title ?? running?.ClientInfo?.Title);
+```
+
+`McpProtocolVersionRewriteInput.TryRewrite` — first line:
+
+```csharp
+        // Only an initialize request can need a rewrite; skip JSON parsing for every other frame.
+        if (frame.AsSpan().IndexOf("\"initialize\""u8) < 0)
+            return null;
+```
+
+The 16 MiB frame limit, which ends the transport rather than rejecting one request, stays as it is: inline payloads above 1 MiB must already arrive as files.
+
+- [ ] **Step 4: Run the tests**
+
+Run: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~SessionIdentitiesTests"` and `dotnet test tests/SqlHarness.Mcp.Tests`
+Expected: PASS, including `McpClientIdentityTests` (late identity still fills in).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src tests
+git commit -m "perf(mcp): walk the process tree once per serve process; skip JSON parse for non-initialize frames"
+```
+
+---
+
+### Task 11: Documentation and gates
 
 **Files:**
 - Modify: `AGENTS.md` (journal paragraph in "Safety contract", the bullet starting "Every operation that reaches the SQLHarness module")
@@ -2288,7 +2677,7 @@ git commit -m "feat(mcp): record allowlisted tools/call metadata (call id, Codex
 In the journal bullet, after the sentence that begins "Session identity is implicit (MCP `clientInfo`, ...); agents send nothing extra.", insert:
 
 ```markdown
-MCP sessions also record `clientInfo.title` and, when a `roots/list` request succeeds, the client's workspace roots (at most 32 roots, stored like `cwd`; client roots never widen `--input-root`). Handshake revisions request roots after `initialized` and refresh on `roots/list_changed`; `2026-07-28` support depends on the Task 5 request-scoped probe. A cancelled operation records `error_kind = cancelled` with `cancel_reason` `client`, `shutdown`, or `deadline`, including a cancellation Core reported as an SQL failure. Each operation also records allowlisted `tools/call._meta` labels: the client's call id (Claude Code `claudecode/toolUseId`, Codex `callId`) and, from Codex `x-codex-turn-metadata`, model, reasoning effort, agent session id, turn id, turn trigger and thread source; other `_meta` keys are never stored.
+MCP sessions also record `clientInfo.title` and, when a `roots/list` request succeeds, the client's workspace roots (at most 32 roots, stored like `cwd`; client roots never widen `--input-root`). Handshake revisions request roots after `initialized` and refresh on `roots/list_changed`; `2026-07-28` support depends on the Task 5 request-scoped probe. A cancelled operation records `error_kind = cancelled` with `cancel_reason` `client`, `shutdown`, or `deadline`, including a cancellation Core reported as an SQL failure. Each operation also records allowlisted `tools/call._meta` labels: the client's call id (Claude Code `claudecode/toolUseId`, Codex `callId`) and, from Codex `x-codex-turn-metadata`, model, reasoning effort, agent session id, turn id, turn trigger and thread source; other `_meta` keys are never stored (opencode: `ai.opencode/sessionID` as the agent session id). Agent kinds are `claude`, `codex`, `copilot`, `opencode`, `other` or `unknown`.
 ```
 
 - [ ] **Step 2: Edit `docs/mcp.md`**
