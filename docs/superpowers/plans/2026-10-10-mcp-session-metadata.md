@@ -1875,6 +1875,141 @@ git commit -m "feat(dashboard-ui): show client title, workspace roots and cancel
 
 ---
 
+### Task 8a: Negotiated MCP protocol version on sessions
+
+Added 2026-10-10 while Tasks 1–6 were already implemented on `feat/mcp-session-metadata`; it extends the same unreleased `Version6` migration (as Task 8 does) instead of adding a `Version7`.
+
+**Files:**
+- Modify: `src/SqlHarness.Core/Journal/JournalModels.cs` (`SessionIdentity.ProtocolVersion`)
+- Modify: `src/SqlHarness.Core/Journal/JournalSchema.cs` (append to `Version6`)
+- Modify: `src/SqlHarness.Core/Journal/ActivityJournal.cs` (`UpsertSession`)
+- Modify: `src/SqlHarness.Mcp/McpClientIdentity.cs`, `src/SqlHarness.Mcp/McpHost.cs`
+- Modify: `src/SqlHarness.Dashboard/DashboardModels.cs`, `src/SqlHarness.Dashboard/JournalReader.cs`
+- Modify: `src/SqlHarness.Dashboard/ui/src/api/types.ts`, `ui/src/test/fixtures.ts`, `ui/src/pages/SessionPage.tsx`
+- Test: `tests/SqlHarness.Tests/Journal/ActivityJournalTests.cs`, `tests/SqlHarness.Mcp.Tests/McpClientIdentityTests.cs`, `tests/SqlHarness.Tests/Dashboard/DashboardContractTests.cs`, `tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs`, `ui/src/pages/SessionPage.test.tsx`
+
+**Interfaces:**
+- Produces: `SessionIdentity(..., string? RootsJson = null, string? ProtocolVersion = null)`; column `sessions.protocol_version`; `McpClientIdentity.ProtocolVersion`; `SessionSummary.ProtocolVersion` (JSON `protocolVersion`, appended after `roots`).
+
+Rule: the revision negotiated for the session (`2025-06-18`, `2025-11-25` or `2026-07-28`), first non-blank value wins, like `client_name`. Read from the request-scoped server (`context.Server.NegotiatedProtocolVersion`) in the existing `tools/call` filter; fall back to the root server's `NegotiatedProtocolVersion` on handshake revisions. CLI sessions keep NULL. In the real-client matrix the revision was constant within each session, so a per-operation column is not needed.
+
+- [ ] **Step 1: Write the failing tests**
+
+`ActivityJournalTests`:
+
+```csharp
+    [Fact]
+    public void Session_protocol_version_keeps_first_non_null_value()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, TextWriter.Null);
+        var session = JournalTestData.Session("mcp:proto");
+
+        journal.Begin(session with { ProtocolVersion = null }, JournalTestData.Start());
+        journal.Begin(session with { ProtocolVersion = "2026-07-28" }, JournalTestData.Start());
+        journal.Begin(session with { ProtocolVersion = "2025-11-25" }, JournalTestData.Start());
+
+        Assert.Equal("2026-07-28", JournalDb.Rows(temp.DatabasePath, "SELECT protocol_version FROM sessions").Single()["protocol_version"]);
+    }
+```
+
+`McpClientIdentityTests` — in `Journal_session_has_client_info_on_every_revision` add `protocol_version` to the selected columns and assert it equals `revision`; add a holder test:
+
+```csharp
+    [Fact]
+    public void Protocol_version_keeps_the_first_non_blank_value()
+    {
+        var identity = new McpClientIdentity();
+        identity.RecordProtocolVersion(null);
+        identity.RecordProtocolVersion(" ");
+        identity.RecordProtocolVersion("2026-07-28");
+        identity.RecordProtocolVersion("2025-11-25");
+
+        Assert.Equal("2026-07-28", identity.ProtocolVersion);
+    }
+```
+
+Dashboard: `DashboardContractTests.Session_summary_names_match_the_ui` — append one more `null` to the `SessionSummary` constructor and `"protocolVersion"` to the expected names. `JournalReaderTests` — seed `JournalSeed.Session("mcp:p") with { ProtocolVersion = "2025-06-18" }` and assert `reader.Session(id)!.Session.ProtocolVersion == "2025-06-18"`; a session seeded without it reads NULL.
+
+`SessionPage.test.tsx` — render `session({ id: 11, transport: "mcp", protocolVersion: "2026-07-28" })` and assert the text `2026-07-28` is shown under an "MCP protocol" fact; with `protocolVersion: null` the fact shows `—` (match how `Fact` renders NULL in that file).
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~ActivityJournalTests|FullyQualifiedName~Dashboard"` and `dotnet test tests/SqlHarness.Mcp.Tests --filter "FullyQualifiedName~McpClientIdentityTests"`
+Expected: compile errors (`ProtocolVersion`, `RecordProtocolVersion` missing).
+
+- [ ] **Step 3: Implement Core**
+
+`JournalModels.cs`: append `string? ProtocolVersion = null` after `RootsJson` in `SessionIdentity`.
+
+`JournalSchema.Version6`: append `ALTER TABLE sessions ADD COLUMN protocol_version TEXT;`
+
+`ActivityJournal.UpsertSession`: add `protocol_version` to the `INSERT` column list and `$protocol` to `VALUES`, add `protocol_version = COALESCE(sessions.protocol_version, excluded.protocol_version)` to the `ON CONFLICT ... DO UPDATE SET` list, and
+
+```csharp
+        upsert.Parameters.AddWithValue("$protocol", (object?)session.ProtocolVersion ?? DBNull.Value);
+```
+
+- [ ] **Step 4: Implement MCP**
+
+`McpClientIdentity.cs`:
+
+```csharp
+    private string? _protocolVersion;
+
+    /// <summary>Negotiated revision of a request; the first non-blank one wins.</summary>
+    public void RecordProtocolVersion(string? protocolVersion)
+    {
+        if (!string.IsNullOrWhiteSpace(protocolVersion))
+            Interlocked.CompareExchange(ref _protocolVersion, protocolVersion, null);
+    }
+
+    public string? ProtocolVersion => Volatile.Read(ref _protocolVersion);
+```
+
+`McpHost.CreateServerOptions` filter:
+
+```csharp
+                identity.Record(context.Server?.ClientInfo);
+                identity.RecordProtocolVersion(context.Server?.NegotiatedProtocolVersion);
+                return next(context, ct);
+```
+
+`McpHost.RunAsync` identity function — attach the version to whatever builds the identity (today `SessionIdentities.Mcp(...)`; after Task 10 `SessionIdentities.WithMcpClient(...)`):
+
+```csharp
+        Func<SessionIdentity> identity = () => SessionIdentities.Mcp(
+                ProcessInfo.Current,
+                sessionKey,
+                clientIdentity.Name ?? running?.ClientInfo?.Name,
+                clientIdentity.Version ?? running?.ClientInfo?.Version,
+                mcpMode,
+                clientIdentity.Title ?? running?.ClientInfo?.Title)
+            with { ProtocolVersion = clientIdentity.ProtocolVersion ?? running?.NegotiatedProtocolVersion };
+```
+
+Task 10 must keep this `with { ProtocolVersion = ... }` when it switches the function to `WithMcpClient`.
+
+- [ ] **Step 5: Implement dashboard**
+
+`DashboardModels.SessionSummary`: append `string? ProtocolVersion` after `Roots`. `JournalReader.SessionColumns`: append `, s.protocol_version` after `s.roots_json` and read it in `ReadSessionRow` as the next index with `NullableString`. Fix every `new SessionSummary(` the compiler reports.
+
+`types.ts` (`SessionSummary`): `protocolVersion: string | null`; `fixtures.ts`: `protocolVersion: null`. `SessionPage.tsx`: add `<Fact label="MCP protocol" value={session.protocolVersion} />` next to the "MCP mode" fact.
+
+- [ ] **Step 6: Run the suites**
+
+Run: `dotnet test tests/SqlHarness.Tests`, `dotnet test tests/SqlHarness.Mcp.Tests`, `npm run check --prefix src/SqlHarness.Dashboard/ui`
+Expected: PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src tests
+git commit -m "feat(mcp): record the negotiated protocol version on MCP sessions"
+```
+
+---
+
 ### Task 8: Allowlisted `tools/call` metadata
 
 **Files:**
@@ -2657,6 +2792,8 @@ Expected: compile error (`WithMcpClient` missing). The rewrite test may already 
 (`Title` is the normaliser Task 2 added; `processIdentity` must come from `SessionIdentities.Mcp(..., clientName: null, clientVersion: null, ...)` so its kind and source are the process-tree ones.)
 
 `McpHost.RunAsync` — keep the per-operation function, but walk once:
+
+(Keep Task 8a's `with { ProtocolVersion = clientIdentity.ProtocolVersion ?? running?.NegotiatedProtocolVersion }` on the result.)
 
 ```csharp
         var processIdentity = new Lazy<SessionIdentity>(

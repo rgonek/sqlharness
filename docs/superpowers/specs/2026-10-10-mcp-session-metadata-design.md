@@ -291,6 +291,15 @@ record whether each sends `clientInfo.title` and declares `capabilities.roots`
 (and `listChanged`). The result does not change the design; it sets
 expectations for what the dashboard will show.
 
+## Negotiated protocol version
+
+`sessions.protocol_version` (in `Version6`) records the MCP revision the session
+negotiated (`2025-06-18`, `2025-11-25`, `2026-07-28`), first non-blank value
+wins, read from the request-scoped server in the `tools/call` filter with the
+root server as handshake fallback. The session page shows it as "MCP protocol".
+CLI sessions keep NULL. Per-operation storage is not needed: the revision was
+constant within each session for all six clients tested.
+
 ## Agent kinds and dashboard agent filter
 
 - `AgentKindFromClientName` also returns `copilot` (name contains "copilot",
