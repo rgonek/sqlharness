@@ -2285,7 +2285,7 @@ git commit -m "feat(mcp): record allowlisted tools/call metadata (call id, Codex
 
 ---
 
-### Task 9: Agent kinds for Copilot and opencode, dynamic agent filter
+### Task 9: Agent kinds for Copilot, opencode and Grok, dynamic agent filter
 
 **Files:**
 - Modify: `src/SqlHarness.Core/Journal/SessionIdentities.cs` (`AgentKindFromClientName`, `ClassifyName`)
@@ -2299,13 +2299,13 @@ git commit -m "feat(mcp): record allowlisted tools/call metadata (call id, Codex
 
 **Interfaces:**
 - Produces:
-  - `SessionIdentities.AgentKindFromClientName(string?)` returns `claude`, `codex`, `copilot`, `opencode`, `other` or `unknown`.
-  - Process-tree classification also returns `copilot` / `opencode`.
+  - `SessionIdentities.AgentKindFromClientName(string?)` returns `claude`, `codex`, `copilot`, `opencode`, `grok`, `other` or `unknown`.
+  - Process-tree classification also returns `copilot` / `opencode` / `grok`.
   - `JournalReader.AgentKinds() : IReadOnlyList<KeyCount>` (existing `KeyCount(string Key, int Count)` record) — every `sessions.agent_kind` present, with its session count.
   - `GET /api/agents` → `KeyCount[]` (JSON `{ key, count }`).
   - UI: `agentLabel(kind: string): string`, `agentTabs(kinds: string[]): { value: string; label: string }[]`, `useAgentKinds()`.
 
-Evidence (`2026-10-10-mcp-client-spike.md`, post-upgrade matrix): Copilot CLI sends `clientInfo.name = "copilot-cli"`, opencode sends `"opencode"`; both landed as `other`. Installed launchers: Copilot runs `node …/node_modules/@github/copilot/npm-loader.js`; opencode runs the native `…/node_modules/@opencode/cli/bin/opencode.exe`. Historical `other` rows are not rewritten (single-user journal; decided 2026-10-10).
+Evidence (`2026-10-10-mcp-client-spike.md`, post-upgrade matrix): Copilot CLI sends `clientInfo.name = "copilot-cli"`, opencode sends `"opencode"`, Grok Build sends `"grok-shell-<server name>"` (the configured MCP server name is appended, e.g. `grok-shell-acc`); all landed as `other`. Grok Build is the native `~/.grok/bin/grok.exe`. Installed launchers: Copilot runs `node …/node_modules/@github/copilot/npm-loader.js`; opencode runs the native `…/node_modules/@opencode/cli/bin/opencode.exe`. Historical `other` rows are not rewritten (single-user journal; decided 2026-10-10).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2318,6 +2318,8 @@ Evidence (`2026-10-10-mcp-client-spike.md`, post-upgrade matrix): Copilot CLI se
     [InlineData("copilot-cli", "copilot")]
     [InlineData("GitHub Copilot", "copilot")]
     [InlineData("opencode", "opencode")]
+    [InlineData("grok-shell-acc", "grok")]
+    [InlineData("grok-shell-sqlharness", "grok")]
     [InlineData("cursor", "other")]
     [InlineData(null, "unknown")]
     [InlineData("  ", "unknown")]
@@ -2332,6 +2334,15 @@ Evidence (`2026-10-10-mcp-client-spike.md`, post-upgrade matrix): Copilot CLI se
             P(10, 1, "node.exe", @"node C:\tools\node_modules\@github\copilot\npm-loader.js -p x"), P(1, null, "explorer.exe"));
 
         Assert.Equal("copilot", SessionIdentities.Cli(processes).AgentKind);
+    }
+
+    [Fact]
+    public void Cli_finds_native_grok()
+    {
+        var processes = new FakeProcesses(30,
+            P(30, 20, "sqlharness.exe"), P(20, 10, "grok.exe"), P(10, null, "explorer.exe"));
+
+        Assert.Equal("grok", SessionIdentities.Cli(processes).AgentKind);
     }
 
     [Fact]
@@ -2380,6 +2391,7 @@ test("known kinds have product labels and unknown kinds are shown raw", () => {
   expect(agentLabel("codex")).toBe("Codex")
   expect(agentLabel("copilot")).toBe("Copilot")
   expect(agentLabel("opencode")).toBe("opencode")
+  expect(agentLabel("grok")).toBe("Grok")
   expect(agentLabel("other")).toBe("Other")
   expect(agentLabel("unknown")).toBe("Unknown")
   expect(agentLabel("cursor")).toBe("cursor")
@@ -2425,6 +2437,8 @@ Expected: failures (`copilot`/`opencode` classified as `other`/null, `AgentKinds
             return "copilot";
         if (clientName.Contains("opencode", StringComparison.OrdinalIgnoreCase))
             return "opencode";
+        if (clientName.Contains("grok", StringComparison.OrdinalIgnoreCase))
+            return "grok";
 ```
 
 `ClassifyName` switch:
@@ -2434,6 +2448,8 @@ Expected: failures (`copilot`/`opencode` classified as `other`/null, `AgentKinds
                 return "copilot";
             case "opencode":
                 return "opencode";
+            case "grok":
+                return "grok";
             case "node" or "bun" when commandLine is not null:
                 var normalized = commandLine.Replace('\\', '/');
                 if (normalized.Contains("@anthropic-ai/claude-code", StringComparison.OrdinalIgnoreCase))
@@ -2483,11 +2499,12 @@ const labels: Record<string, string> = {
   codex: "Codex",
   copilot: "Copilot",
   opencode: "opencode",
+  grok: "Grok",
   other: "Other",
   unknown: "Unknown",
 }
 
-const knownOrder = ["claude", "codex", "copilot", "opencode"]
+const knownOrder = ["claude", "codex", "copilot", "opencode", "grok"]
 
 export function agentLabel(kind: string): string {
   return labels[kind] ?? kind
@@ -2533,7 +2550,7 @@ Expected: PASS. Update existing UI tests that asserted the literal text `claude`
 
 ```bash
 git add src tests
-git commit -m "feat(dashboard): recognise Copilot and opencode and show only present agent kinds"
+git commit -m "feat(dashboard): recognise Copilot, opencode and Grok and show only present agent kinds"
 ```
 
 ---
@@ -2677,7 +2694,7 @@ git commit -m "perf(mcp): walk the process tree once per serve process; skip JSO
 In the journal bullet, after the sentence that begins "Session identity is implicit (MCP `clientInfo`, ...); agents send nothing extra.", insert:
 
 ```markdown
-MCP sessions also record `clientInfo.title` and, when a `roots/list` request succeeds, the client's workspace roots (at most 32 roots, stored like `cwd`; client roots never widen `--input-root`). Handshake revisions request roots after `initialized` and refresh on `roots/list_changed`; `2026-07-28` support depends on the Task 5 request-scoped probe. A cancelled operation records `error_kind = cancelled` with `cancel_reason` `client`, `shutdown`, or `deadline`, including a cancellation Core reported as an SQL failure. Each operation also records allowlisted `tools/call._meta` labels: the client's call id (Claude Code `claudecode/toolUseId`, Codex `callId`) and, from Codex `x-codex-turn-metadata`, model, reasoning effort, agent session id, turn id, turn trigger and thread source; other `_meta` keys are never stored (opencode: `ai.opencode/sessionID` as the agent session id). Agent kinds are `claude`, `codex`, `copilot`, `opencode`, `other` or `unknown`.
+MCP sessions also record `clientInfo.title` and, when a `roots/list` request succeeds, the client's workspace roots (at most 32 roots, stored like `cwd`; client roots never widen `--input-root`). Handshake revisions request roots after `initialized` and refresh on `roots/list_changed`; `2026-07-28` support depends on the Task 5 request-scoped probe. A cancelled operation records `error_kind = cancelled` with `cancel_reason` `client`, `shutdown`, or `deadline`, including a cancellation Core reported as an SQL failure. Each operation also records allowlisted `tools/call._meta` labels: the client's call id (Claude Code `claudecode/toolUseId`, Codex `callId`) and, from Codex `x-codex-turn-metadata`, model, reasoning effort, agent session id, turn id, turn trigger and thread source; other `_meta` keys are never stored (opencode: `ai.opencode/sessionID` as the agent session id). Agent kinds are `claude`, `codex`, `copilot`, `opencode`, `grok`, `other` or `unknown`.
 ```
 
 - [ ] **Step 2: Edit `docs/mcp.md`**

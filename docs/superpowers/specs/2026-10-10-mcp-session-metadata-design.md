@@ -294,15 +294,17 @@ expectations for what the dashboard will show.
 ## Agent kinds and dashboard agent filter
 
 - `AgentKindFromClientName` also returns `copilot` (name contains "copilot",
-  e.g. `copilot-cli`) and `opencode`; process-tree classification recognises
+  e.g. `copilot-cli`), `opencode` and `grok` (Grok Build sends
+  `grok-shell-<server name>`); process-tree classification recognises
   `copilot` (native, or node with `@github/copilot`) and `opencode` (native, or
-  node/bun with `opencode-ai` / `@opencode/cli`). Other names stay `other`.
+  node/bun with `opencode-ai` / `@opencode/cli`) and `grok` (native). Other
+  names stay `other`.
   Existing `other` rows are not rewritten (single-user journal).
 - Dashboard: `GET /api/agents` returns the agent kinds present with session
   counts. The Sessions page shows "All" plus only those kinds (known kinds
   first, then other names, then `other`, then `unknown`), resetting to "All"
   when the selected kind disappears. Labels: Claude Code, Codex, Copilot,
-  opencode, Other, Unknown; unrecognised kinds show raw. The same labels are
+  opencode, Grok, Other, Unknown; unrecognised kinds show raw. The same labels are
   used wherever the dashboard prints an agent kind.
 
 ## Upgrade overhead fixes
