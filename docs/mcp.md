@@ -162,6 +162,8 @@ With `dashboard.autoStart: true` in `~/.sqlharness/config.json`, a validated sta
 
 `sqlharness_gain` aggregates CLI operations and new MCP operations with paired raw and emitted footprints, and covers only operations the journal still holds (retention trims them). Historical MCP rows with raw counts only remain unavailable and are not backfilled. The report preserves signed net savings when emitted estimates exceed raw estimates. `gain.jsonl` is no longer written or read, and its data is not migrated. With `journal.enabled: false` the result reports zeros and `journalEnabled: false`.
 
+An operation name this process does not bucket still counts in the total. One unreadable journal row, or a row with a negative count, is skipped and does not fail `sqlharness_gain`.
+
 ## Versions
 
 - MCP SDK: `ModelContextProtocol` 2.2.0 (`ModelContextProtocol.Core` 2.2.0), pinned in `Directory.Packages.props`.
