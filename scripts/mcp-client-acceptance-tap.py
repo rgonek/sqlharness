@@ -1,18 +1,19 @@
 """Transparent stdio tap for an MCP server. Forwards bytes unchanged and appends
 each newline-delimited JSON-RPC frame to a log with its direction.
-Usage: python -I mcp-client-acceptance-tap.py <log-file> <server-command> [args...]
+Usage: python -I mcp-client-acceptance-tap.py <log-file> <sqlharness-home> <server-command> [args...]
 The log contains tool results; keep it local.
 """
 import subprocess
 import sys
 import threading
 import time
+import os
 
 
-if len(sys.argv) < 3:
-    raise SystemExit("usage: mcp-client-acceptance-tap.py <log-file> <server-command> [args...]")
+if len(sys.argv) < 4:
+    raise SystemExit("usage: mcp-client-acceptance-tap.py <log-file> <sqlharness-home> <server-command> [args...]")
 
-log_path, command = sys.argv[1], sys.argv[2:]
+log_path, sqlharness_home, command = sys.argv[1], sys.argv[2], sys.argv[3:]
 log = open(log_path, "a", encoding="utf-8")
 lock = threading.Lock()
 
@@ -23,7 +24,9 @@ def record(direction, line):
         log.flush()
 
 
-server = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+server_environment = os.environ.copy()
+server_environment["SQLHARNESS_HOME"] = sqlharness_home
+server = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=server_environment)
 
 
 def pump(source, sink, direction):

@@ -952,14 +952,15 @@ git commit -m "fix(mcp): keep only SDK warnings and errors on stderr"
 ```python
 """Transparent stdio tap for an MCP server. Forwards bytes unchanged and appends
 each newline-delimited JSON-RPC frame to a log with its direction.
-Usage: python -I mcp-client-acceptance-tap.py <log-file> <server-command> [args...]
+Usage: python -I mcp-client-acceptance-tap.py <log-file> <sqlharness-home> <server-command> [args...]
 The log contains tool results; keep it local."""
+import os
 import subprocess
 import sys
 import threading
 import time
 
-log_path, command = sys.argv[1], sys.argv[2:]
+log_path, sqlharness_home, command = sys.argv[1], sys.argv[2], sys.argv[3:]
 log = open(log_path, "a", encoding="utf-8")
 lock = threading.Lock()
 
@@ -970,7 +971,9 @@ def record(direction, line):
         log.flush()
 
 
-server = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+server_environment = os.environ.copy()
+server_environment["SQLHARNESS_HOME"] = sqlharness_home
+server = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=server_environment)
 
 
 def pump(source, sink, direction):
@@ -1006,11 +1009,13 @@ sys.exit(server.wait())
 .DESCRIPTION
     Runs sqlharness mcp serve behind a logging stdio tap through headless
     `claude -p` and `codex exec`, with one-off MCP configuration only: no client
-    configuration file is edited. Each client calls sqlharness_capabilities once.
+    configuration file is edited. Each client calls sqlharness_capabilities once
+    and the target-free sqlharness_gain operation once for the journal check.
     Checks the negotiated revision (Claude Code: 2026-07-28 via server/discover;
     Codex: 2025-06-18), the revision the capabilities result reports, and that the
-    session's clientInfo name was received. Frames contain tool results and stay
-    in a temporary directory that is printed at the end.
+    operation's isolated journal session persisted its clientInfo name and version.
+    Frames and journals remain in client-specific temporary homes; their paths and
+    contents are not printed.
 #>
 [CmdletBinding()]
 param(
@@ -1067,7 +1072,9 @@ function Test-Client([string]$name, [string]$log, [string]$expected) {
 
 if (-not $SkipClaude) {
     $log = Join-Path $work 'claude-frames.log'
-    $config = @{ mcpServers = @{ acceptance = @{ command = $python; args = @('-I', $tap, $log, $Sqlharness, 'mcp', 'serve', $Profile) } } } |
+    $clientHome = Join-Path $work 'claude-home'
+    New-Item -ItemType Directory -Path $clientHome | Out-Null
+    $config = @{ mcpServers = @{ acceptance = @{ command = $python; args = @('-I', $tap, $log, $clientHome, $Sqlharness, 'mcp', 'serve', $Profile) } } } |
         ConvertTo-Json -Depth 8
     $configPath = Join-Path $work 'claude-mcp.json'
     Set-Content -Path $configPath -Value $config -Encoding utf8NoBOM
@@ -1080,7 +1087,9 @@ if (-not $SkipClaude) {
 
 if (-not $SkipCodex) {
     $log = Join-Path $work 'codex-frames.log'
-    $argsToml = '[' + ((@('-I', $tap, $log, $Sqlharness, 'mcp', 'serve', $Profile) | ForEach-Object { '"' + ($_ -replace '\\', '/') + '"' }) -join ',') + ']'
+    $clientHome = Join-Path $work 'codex-home'
+    New-Item -ItemType Directory -Path $clientHome | Out-Null
+    $argsToml = '[' + ((@('-I', $tap, $log, $clientHome, $Sqlharness, 'mcp', 'serve', $Profile) | ForEach-Object { '"' + ($_ -replace '\\', '/') + '"' }) -join ',') + ']'
     Push-Location $work
     try {
         codex exec --skip-git-repo-check `
