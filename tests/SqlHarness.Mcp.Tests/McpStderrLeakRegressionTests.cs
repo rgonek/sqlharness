@@ -47,7 +47,7 @@ public sealed class McpStderrLeakRegressionTests
             };
 
             // Handshake oracle: pinned protocol revision and server identity.
-            Assert.Equal(McpStdioProcessHarness.PinnedProtocolVersion, client.NegotiatedProtocolVersion);
+            Assert.Equal(McpStdioProcessHarness.DefaultProtocolVersion, client.NegotiatedProtocolVersion);
             Assert.Equal(McpHost.ServerName, client.ServerInfo.Name);
 
             // Valid validate carrying the SQL and parameter markers. Offline

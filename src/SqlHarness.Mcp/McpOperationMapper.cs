@@ -103,7 +103,7 @@ public static partial class McpOperationMapper
         return new McpCapabilitiesDocument(
             McpHost.ServerName,
             McpHost.ServerVersion,
-            McpHost.PinnedProtocolVersion,
+            McpHost.FallbackProtocolVersion,
             engine,
             McpToolCatalog.ToolNames,
             new Dictionary<string, long>(StringComparer.Ordinal)
@@ -143,7 +143,7 @@ public static partial class McpOperationMapper
         return new McpCapabilitiesDocument(
             McpHost.ServerName,
             McpHost.ServerVersion,
-            McpHost.PinnedProtocolVersion,
+            McpHost.FallbackProtocolVersion,
             "sqlserver",
             McpToolCatalog.ToolNames,
             new Dictionary<string, long>(StringComparer.Ordinal)

@@ -25,9 +25,6 @@ public static class McpHost
     /// <summary>Answer to an initialize for a revision SQLHarness does not offer.</summary>
     public const string FallbackProtocolVersion = "2025-11-25";
 
-    // Retained until Task 2 migrates the operation mapper and existing tests.
-    public const string PinnedProtocolVersion = "2025-11-25";
-
     public static readonly string ServerVersion =
         typeof(McpHost).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
