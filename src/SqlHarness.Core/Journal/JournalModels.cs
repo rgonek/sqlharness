@@ -25,7 +25,8 @@ public sealed record SessionIdentity(
     DateTimeOffset? HostStartedAt,
     string? Cwd,
     string? ClientTitle = null,
-    string? RootsJson = null);
+    string? RootsJson = null,
+    string? ProtocolVersion = null);
 
 /// <summary>Operation metadata known before execution. SQL text is dropped by the journal unless storeSensitive.</summary>
 public sealed record OperationStart(

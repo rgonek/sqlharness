@@ -50,6 +50,7 @@ public static class McpHost
             options.Filters.Request.CallToolFilters.Add(next => (context, ct) =>
             {
                 identity.Record(context.Server?.ClientInfo);
+                identity.RecordProtocolVersion(context.Server?.NegotiatedProtocolVersion);
                 return next(context, ct);
             });
         }
@@ -146,7 +147,8 @@ public static class McpHost
                 clientIdentity.Name ?? running?.ClientInfo?.Name,
                 clientIdentity.Version ?? running?.ClientInfo?.Version,
                 mcpMode,
-                clientIdentity.Title ?? running?.ClientInfo?.Title);
+                clientIdentity.Title ?? running?.ClientInfo?.Title)
+            with { ProtocolVersion = clientIdentity.ProtocolVersion ?? running?.NegotiatedProtocolVersion };
         // Handshake revisions only: 2026-07-28 has no initialized notification, and its
         // request-scoped roots/list answers only while the tool call awaits it, so roots
         // stay NULL there rather than blocking a call.

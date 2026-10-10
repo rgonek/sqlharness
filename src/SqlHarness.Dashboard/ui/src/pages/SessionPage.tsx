@@ -50,6 +50,7 @@ function SessionView({ id }: { id: number }) {
         <CardContent className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <Fact label="Client" value={clientLabel(session)} />
           <Fact label="MCP mode" value={session.mcpMode} />
+          <Fact label="MCP protocol" value={session.protocolVersion} />
           <Fact label="Working directory" value={session.cwd} />
           <div className="min-w-0 md:col-span-2">
             <div className="text-sm text-muted-foreground">Workspace roots</div>

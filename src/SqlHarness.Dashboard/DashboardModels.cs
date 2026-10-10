@@ -23,7 +23,7 @@ public sealed record SessionSummary(
     long Id, string SessionKey, string AgentKind, string Transport, string Source, string? ClientName,
     string? ClientVersion, string? McpMode, string? Cwd, string FirstSeen, string LastSeen,
     int Operations, int Failed, int Rejected, int Running, int Abandoned,
-    string? ClientTitle, IReadOnlyList<SessionRoot>? Roots);
+    string? ClientTitle, IReadOnlyList<SessionRoot>? Roots, string? ProtocolVersion);
 
 public sealed record OperationSummary(
     long Id, long SessionId, string AgentKind, string Operation, string Status, int? ExitCode, string? ErrorKind,

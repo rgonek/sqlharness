@@ -27,6 +27,8 @@ export type SessionSummary = {
   clientTitle: string | null
   /** null = unknown (client lacks roots or has not answered); [] = client reported none. */
   roots: SessionRoot[] | null
+  /** Negotiated MCP revision; null for CLI sessions and unrecorded rows. */
+  protocolVersion: string | null
 }
 
 export type OperationSummary = {

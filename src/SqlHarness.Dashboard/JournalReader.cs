@@ -44,7 +44,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         (SELECT COUNT(*) FROM operations o WHERE o.session_id = s.id) AS ops,
         (SELECT COUNT(*) FROM operations o WHERE o.session_id = s.id AND o.status = 'failed') AS failed,
         (SELECT COUNT(*) FROM operations o WHERE o.session_id = s.id AND o.status = 'rejected') AS rejected,
-        s.client_title, s.roots_json
+        s.client_title, s.roots_json, s.protocol_version
         """;
 
     public long? SchemaVersion()
@@ -598,7 +598,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetString(4), NullableString(r, 5),
         NullableString(r, 6), NullableString(r, 7), NullableString(r, 8), r.GetString(9), r.GetString(10),
         r.GetInt32(11), r.GetInt32(12), r.GetInt32(13), 0, 0,
-        NullableString(r, 14), Roots(NullableString(r, 15)));
+        NullableString(r, 14), Roots(NullableString(r, 15)), NullableString(r, 16));
 
     private static OperationSummary ReadOperation(SqliteDataReader r, ProcessLiveness liveness) => new(
         r.GetInt64(0), r.GetInt64(1), r.GetString(2), r.GetString(3),

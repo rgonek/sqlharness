@@ -141,6 +141,7 @@ internal static class JournalSchema
     internal const string Version6 = """
         ALTER TABLE sessions ADD COLUMN client_title TEXT;
         ALTER TABLE sessions ADD COLUMN roots_json TEXT;
+        ALTER TABLE sessions ADD COLUMN protocol_version TEXT;
         ALTER TABLE operations ADD COLUMN cancel_reason TEXT;
         """;
 }

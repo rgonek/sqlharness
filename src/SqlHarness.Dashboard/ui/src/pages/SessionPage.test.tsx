@@ -65,3 +65,17 @@ test("an empty roots list shows none", async () => {
   renderApp("/sessions/10")
   expect(await screen.findByLabelText("Workspace roots")).toHaveTextContent("none")
 })
+
+test("shows the negotiated MCP protocol, or a dash when unknown", async () => {
+  stubFetch({
+    "/api/sessions/11": { session: session({ id: 11, transport: "mcp", protocolVersion: "2026-07-28" }), operations: [] },
+    "/api/sessions/12": { session: session({ id: 12, transport: "mcp", protocolVersion: null }), operations: [] },
+  })
+  const first = renderApp("/sessions/11")
+  const fact = (await screen.findByText("MCP protocol")).parentElement!
+  expect(fact).toHaveTextContent("2026-07-28")
+  first.unmount()
+
+  renderApp("/sessions/12")
+  expect((await screen.findByText("MCP protocol")).parentElement!).toHaveTextContent("—")
+})

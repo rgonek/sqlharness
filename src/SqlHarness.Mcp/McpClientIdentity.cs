@@ -10,6 +10,7 @@ public sealed class McpClientIdentity
 {
     private Implementation? _client;
     private string? _title;
+    private string? _protocolVersion;
 
     public void Record(Implementation? clientInfo)
     {
@@ -22,9 +23,18 @@ public sealed class McpClientIdentity
         }
     }
 
+    /// <summary>Negotiated revision of a request; the first non-blank one wins.</summary>
+    public void RecordProtocolVersion(string? protocolVersion)
+    {
+        if (!string.IsNullOrWhiteSpace(protocolVersion))
+            Interlocked.CompareExchange(ref _protocolVersion, protocolVersion, null);
+    }
+
     public string? Name => Volatile.Read(ref _client)?.Name;
 
     public string? Version => Volatile.Read(ref _client)?.Version;
 
     public string? Title => Volatile.Read(ref _title);
+
+    public string? ProtocolVersion => Volatile.Read(ref _protocolVersion);
 }

@@ -348,6 +348,20 @@ public sealed class ActivityJournalTests
     }
 
     [Fact]
+    public void Session_protocol_version_keeps_first_non_null_value()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, TextWriter.Null);
+        var session = JournalTestData.Session("mcp:proto");
+
+        journal.Begin(session with { ProtocolVersion = null }, JournalTestData.Start());
+        journal.Begin(session with { ProtocolVersion = "2026-07-28" }, JournalTestData.Start());
+        journal.Begin(session with { ProtocolVersion = "2025-11-25" }, JournalTestData.Start());
+
+        Assert.Equal("2026-07-28", JournalDb.Rows(temp.DatabasePath, "SELECT protocol_version FROM sessions").Single()["protocol_version"]);
+    }
+
+    [Fact]
     public void Cancel_reason_is_stored_with_the_end_row()
     {
         using var temp = new JournalTempDirectory();

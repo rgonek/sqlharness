@@ -4,7 +4,7 @@ export const session = (over: Partial<SessionSummary> = {}): SessionSummary => (
   id: 1, sessionKey: "cli:abc", agentKind: "claude", transport: "cli", source: "process-tree",
   clientName: null, clientVersion: null, mcpMode: null, cwd: "/work",
   firstSeen: "2026-10-07T09:00:00.000Z", lastSeen: "2026-10-07T09:05:00.000Z",
-  operations: 3, failed: 1, rejected: 0, running: 0, abandoned: 0, clientTitle: null, roots: null, ...over,
+  operations: 3, failed: 1, rejected: 0, running: 0, abandoned: 0, clientTitle: null, roots: null, protocolVersion: null, ...over,
 })
 
 export const operation = (over: Partial<OperationSummary> = {}): OperationSummary => ({

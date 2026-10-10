@@ -41,6 +41,19 @@ public sealed class JournalReaderTests
         Assert.Equal("client", Assert.Single(detail.Operations).CancelReason);
     }
 
+    [Fact]
+    public void Session_carries_the_protocol_version()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("mcp:p") with { ProtocolVersion = "2025-06-18" });
+
+        var reader = Reader(home);
+        var id = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
+
+        Assert.Equal("2025-06-18", reader.Session(id)!.Session.ProtocolVersion);
+    }
+
     // The reader never migrates (the dashboard host opens the journal first and refuses an older
     // schema), so "unknown" is a v6 row whose metadata columns were never written.
     [Fact]
@@ -54,6 +67,7 @@ public sealed class JournalReaderTests
 
         Assert.Null(detail.Session.ClientTitle);
         Assert.Null(detail.Session.Roots);
+        Assert.Null(detail.Session.ProtocolVersion);
         Assert.Null(Assert.Single(detail.Operations).CancelReason);
     }
 

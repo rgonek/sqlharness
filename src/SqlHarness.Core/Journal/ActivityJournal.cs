@@ -392,15 +392,16 @@ public sealed class ActivityJournal : IActivityJournal
         upsert.Transaction = transaction;
         upsert.CommandText = """
             INSERT INTO sessions (session_key, agent_kind, transport, source, client_name, client_version, client_title, mcp_mode,
-                agent_pid, agent_started_at, host_pid, host_started_at, cwd, roots_json, first_seen, last_seen)
+                agent_pid, agent_started_at, host_pid, host_started_at, cwd, roots_json, protocol_version, first_seen, last_seen)
             VALUES ($key, $kind, $transport, $source, $clientName, $clientVersion, $clientTitle, $mcpMode,
-                $agentPid, $agentStarted, $hostPid, $hostStarted, $cwd, $roots, $now, $now)
+                $agentPid, $agentStarted, $hostPid, $hostStarted, $cwd, $roots, $protocol, $now, $now)
             ON CONFLICT(session_key) DO UPDATE SET
                 last_seen = excluded.last_seen,
                 client_name = COALESCE(sessions.client_name, excluded.client_name),
                 client_version = COALESCE(sessions.client_version, excluded.client_version),
                 client_title = COALESCE(sessions.client_title, excluded.client_title),
-                roots_json = COALESCE(excluded.roots_json, sessions.roots_json)
+                roots_json = COALESCE(excluded.roots_json, sessions.roots_json),
+                protocol_version = COALESCE(sessions.protocol_version, excluded.protocol_version)
             RETURNING id;
             """;
         upsert.Parameters.AddWithValue("$key", session.SessionKey);
@@ -417,6 +418,7 @@ public sealed class ActivityJournal : IActivityJournal
         upsert.Parameters.AddWithValue("$hostStarted", Nullable(session.HostStartedAt));
         upsert.Parameters.AddWithValue("$cwd", (object?)session.Cwd ?? DBNull.Value);
         upsert.Parameters.AddWithValue("$roots", (object?)session.RootsJson ?? DBNull.Value);
+        upsert.Parameters.AddWithValue("$protocol", (object?)session.ProtocolVersion ?? DBNull.Value);
         upsert.Parameters.AddWithValue("$now", now);
         return (long)upsert.ExecuteScalar()!;
     }

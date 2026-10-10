@@ -103,11 +103,23 @@ public sealed class McpClientIdentityTests : IDisposable
         using var connection = new SqliteConnection($"Data Source={Path.Combine(_home, "data", "activity.db")};Mode=ReadOnly;Pooling=False");
         connection.Open();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT agent_kind, source, client_name, client_version, client_title FROM sessions";
+        command.CommandText = "SELECT agent_kind, source, client_name, client_version, client_title, protocol_version FROM sessions";
         using var reader = command.ExecuteReader();
         Assert.True(reader.Read());
-        Assert.Equal(("claude", "mcp-clientinfo", "claude-code", "9.9.9", "Claude Code"),
-            (reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4)));
+        Assert.Equal(("claude", "mcp-clientinfo", "claude-code", "9.9.9", "Claude Code", revision),
+            (reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetString(5)));
+    }
+
+    [Fact]
+    public void Protocol_version_keeps_the_first_non_blank_value()
+    {
+        var identity = new McpClientIdentity();
+        identity.RecordProtocolVersion(null);
+        identity.RecordProtocolVersion(" ");
+        identity.RecordProtocolVersion("2026-07-28");
+        identity.RecordProtocolVersion("2025-11-25");
+
+        Assert.Equal("2026-07-28", identity.ProtocolVersion);
     }
 
     [Fact]
