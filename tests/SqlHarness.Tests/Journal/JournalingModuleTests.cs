@@ -26,11 +26,12 @@ public sealed class JournalingModuleTests
         FakeModule inner,
         bool storeSensitive = false,
         Func<CancellationToken, string?>? cancelReason = null,
-        Func<string?>? rootsJson = null)
+        Func<string?>? rootsJson = null,
+        Func<CancellationToken, AgentCallMetadata?>? callMetadata = null)
     {
         var temp = new JournalTempDirectory();
         var journal = ActivityJournal.Open(temp.DatabasePath, new JournalConfig { StoreSensitive = storeSensitive }, TextWriter.Null, TimeProvider.System);
-        return (new JournalingModule(inner, () => journal, () => JournalTestData.Session(), cancelReason, rootsJson), temp);
+        return (new JournalingModule(inner, () => journal, () => JournalTestData.Session(), cancelReason, rootsJson, callMetadata), temp);
     }
 
     [Theory]
@@ -54,6 +55,37 @@ public sealed class JournalingModuleTests
             var row = JournalDb.Rows(temp.DatabasePath, "SELECT error_kind, cancel_reason FROM operations").Single();
             Assert.Equal("cancelled", row["error_kind"]);
             Assert.Equal(reason, row["cancel_reason"]);
+        }
+    }
+
+    [Fact]
+    public async Task Call_metadata_provider_receives_the_module_token()
+    {
+        CancellationToken seen = default;
+        using var cts = new CancellationTokenSource();
+        var (module, temp) = Create(
+            new FakeModule((_, _) => Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null))),
+            callMetadata: token => { seen = token; return new AgentCallMetadata("toolu_1", null, null, null, null, null, null); });
+        using (temp)
+        {
+            await module.ExecuteAsync(Query(), cts.Token);
+
+            Assert.Equal(cts.Token, seen);
+            Assert.Equal("toolu_1", JournalDb.Rows(temp.DatabasePath, "SELECT client_call_id FROM operations").Single()["client_call_id"]);
+        }
+    }
+
+    [Fact]
+    public async Task Throwing_call_metadata_provider_records_the_operation_without_labels()
+    {
+        var (module, temp) = Create(
+            new FakeModule((_, _) => Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null))),
+            callMetadata: _ => throw new InvalidOperationException("provider"));
+        using (temp)
+        {
+            await module.ExecuteAsync(Query());
+
+            Assert.Null(JournalDb.Rows(temp.DatabasePath, "SELECT client_call_id FROM operations").Single()["client_call_id"]);
         }
     }
 

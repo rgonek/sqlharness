@@ -32,7 +32,10 @@ export function OperationTable({ operations, now }: { operations: OperationSumma
                 </Link>
               </TableCell>
               <TableCell className="whitespace-nowrap">{formatTimestamp(operation.startedAt)}</TableCell>
-              <TableCell>{operation.agentKind}</TableCell>
+              <TableCell>
+                {operation.agentKind}
+                {operation.agentModel && <div className="text-sm text-muted-foreground">{operation.agentModel}</div>}
+              </TableCell>
               <TableCell>
                 <div>{operation.operation}</div>
                 {operation.progress && <div className="text-sm text-muted-foreground">{operation.progress.polls} polls</div>}

@@ -54,7 +54,7 @@ public sealed class McpToolHandlers(
         [Description("Include local counts and existence flags. Never secrets, paths, or profile lists.")]
         bool includeDiagnostics = false,
         CancellationToken ct = default) =>
-        RunAsync("sqlharness_capabilities", _ =>
+        RunAsync("sqlharness_capabilities", ctx, _ =>
         {
             ThrowIfUnknown(ctx, ["includeDiagnostics"]);
             return Task.FromResult(new SqlHarnessOutcome(
@@ -105,7 +105,7 @@ public sealed class McpToolHandlers(
         [Description("Parameters as {name, type, value}; value is a culture-invariant string or JSON null.")]
         McpParameterArgument[]? parameters = null,
         CancellationToken ct = default) =>
-        RunAsync("sqlharness_validate", async token =>
+        RunAsync("sqlharness_validate", ctx, async token =>
         {
             ThrowIfUnknown(ctx, ["usage", "sql", "file", "parameters"]);
             return new SqlHarnessOutcome(
@@ -271,7 +271,7 @@ public sealed class McpToolHandlers(
         [Description("Plan file under an operator input root. Exactly one of content or file.")]
         string? file = null,
         CancellationToken ct = default) =>
-        RunAsync("sqlharness_plan", async token =>
+        RunAsync("sqlharness_plan", ctx, async token =>
         {
             ThrowIfUnknown(ctx, ["content", "file"]);
             var outcome = await module.ExecuteAsync(await McpOperationMapper.MapPlanAsync(scope, content, file, token), token);
@@ -290,7 +290,7 @@ public sealed class McpToolHandlers(
         [Description("Optional zero-based continuation cursor for matrix-cells pages.")]
         int? cursor = null,
         CancellationToken ct = default) =>
-        RunAsync("sqlharness_artifact", _ =>
+        RunAsync("sqlharness_artifact", ctx, _ =>
         {
             ThrowIfUnknown(ctx, ["id", "section", "cursor"]);
             return Task.FromResult(new SqlHarnessOutcome(
@@ -302,7 +302,7 @@ public sealed class McpToolHandlers(
     public Task<CallToolResult> GainAsync(
         RequestContext<CallToolRequestParams> ctx,
         CancellationToken ct = default) =>
-        RunAsync("sqlharness_gain", async token =>
+        RunAsync("sqlharness_gain", ctx, async token =>
         {
             ThrowIfUnknown(ctx, []);
             return await module.ExecuteAsync(new SqlHarnessGainOperation(), token);
@@ -338,7 +338,7 @@ public sealed class McpToolHandlers(
         }
     }
 
-    private async Task<CallToolResult> RunAsync(string command, Func<CancellationToken, Task<SqlHarnessOutcome>> run, CancellationToken ct)
+    private async Task<CallToolResult> RunAsync(string command, RequestContext<CallToolRequestParams>? context, Func<CancellationToken, Task<SqlHarnessOutcome>> run, CancellationToken ct)
     {
         var budget = new McpResultBudget(scope.MaxResultBytes);
         try
@@ -346,7 +346,7 @@ public sealed class McpToolHandlers(
             // Discovery and local tools share no gate, but every execution is
             // still bounded by the process time budget through this token.
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _hostShutdown);
-            using var reason = McpCallRegistry.Track(linked, ct, _hostShutdown);
+            using var reason = McpCallRegistry.Track(linked, ct, _hostShutdown, McpCallMetadata.Read(context?.Params?.Meta));
             linked.CancelAfter(TimeSpan.FromSeconds(scope.MaxOperationSeconds));
             return await McpResultAdapter.AdaptAndCompleteAsync(await run(linked.Token), command, budget);
         }
@@ -404,7 +404,7 @@ public sealed class McpToolHandlers(
         try
         {
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _hostShutdown);
-            using var reason = McpCallRegistry.Track(linked, ct, _hostShutdown);
+            using var reason = McpCallRegistry.Track(linked, ct, _hostShutdown, McpCallMetadata.Read(context?.Params?.Meta));
             linked.CancelAfter(callBudget);
             var progress = new McpProgressReporter(_clock);
             await progress.ReportAsync(context, command, McpProgressReporter.Started, linked.Token);

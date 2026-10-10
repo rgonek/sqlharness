@@ -24,6 +24,27 @@ public sealed class ActivityJournalTests
     }
 
     [Fact]
+    public void Call_metadata_is_stored_with_the_start_row()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, TextWriter.Null);
+        var start = JournalTestData.Start() with
+        {
+            Agent = new AgentCallMetadata("exec-1", "gpt-6-sol", "low", "s", "turn-1", "exec", "user"),
+        };
+
+        journal.Begin(JournalTestData.Session(), start);
+
+        var row = JournalDb.Rows(temp.DatabasePath, """
+            SELECT client_call_id, agent_model, agent_reasoning_effort, agent_session_id, agent_turn_id,
+                   agent_turn_trigger, agent_thread_source FROM operations
+            """).Single();
+        Assert.Equal(
+            ["exec-1", "gpt-6-sol", "low", "s", "turn-1", "exec", "user"],
+            row.Values.Cast<string>().ToArray());
+    }
+
+    [Fact]
     public void Disabled_config_returns_null_journal_and_creates_no_file()
     {
         using var temp = new JournalTempDirectory();

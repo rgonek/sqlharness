@@ -112,3 +112,26 @@ test("compare-matrix summary shows the matrix parameter and equivalent cells", a
   expect(await screen.findByText("parameter: BatchSize (int)")).toBeInTheDocument()
   expect(screen.getByText("2/3 cells equivalent")).toBeInTheDocument()
 })
+
+test("agent call card shows the client-supplied labels and is absent without them", async () => {
+  stubFetch({
+    "/api/operations/10": operationDetail({
+      agent: { callId: "exec-1", model: "gpt-6-sol", reasoningEffort: "low", sessionId: "s", turnId: "turn-1", turnTrigger: "exec", threadSource: "user" },
+    }),
+  })
+  renderApp("/operations/10")
+
+  expect(await screen.findByRole("heading", { name: "Agent call" })).toBeInTheDocument()
+  expect(screen.getByText("gpt-6-sol")).toBeInTheDocument()
+  expect(screen.getByText("low")).toBeInTheDocument()
+  expect(screen.getByText("turn-1")).toBeInTheDocument()
+  expect(screen.getByText("exec-1")).toBeInTheDocument()
+})
+
+test("operations without call labels render no agent call card", async () => {
+  stubFetch({ "/api/operations/10": operationDetail({ agent: null }) })
+  renderApp("/operations/10")
+
+  expect(await screen.findByRole("heading", { level: 1, name: "Operation #10" })).toBeInTheDocument()
+  expect(screen.queryByRole("heading", { name: "Agent call" })).not.toBeInTheDocument()
+})

@@ -143,5 +143,12 @@ internal static class JournalSchema
         ALTER TABLE sessions ADD COLUMN roots_json TEXT;
         ALTER TABLE sessions ADD COLUMN protocol_version TEXT;
         ALTER TABLE operations ADD COLUMN cancel_reason TEXT;
+        ALTER TABLE operations ADD COLUMN client_call_id TEXT;
+        ALTER TABLE operations ADD COLUMN agent_model TEXT;
+        ALTER TABLE operations ADD COLUMN agent_reasoning_effort TEXT;
+        ALTER TABLE operations ADD COLUMN agent_session_id TEXT;
+        ALTER TABLE operations ADD COLUMN agent_turn_id TEXT;
+        ALTER TABLE operations ADD COLUMN agent_turn_trigger TEXT;
+        ALTER TABLE operations ADD COLUMN agent_thread_source TEXT;
         """;
 }

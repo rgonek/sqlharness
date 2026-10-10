@@ -35,7 +35,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 WHERE m.operation_id = o.id AND t.cold_runs > 0) AS cold_cache,
         EXISTS (SELECT 1 FROM operation_metrics m WHERE m.operation_id = o.id AND m.grant_granted_kb >= {OverGrantMinimumKb}
                 AND m.grant_max_used_kb IS NOT NULL AND m.grant_max_used_kb * 4 < m.grant_granted_kb) AS over_granted,
-        o.error_message, o.cancel_reason
+        o.error_message, o.cancel_reason, o.agent_model, o.agent_reasoning_effort
         """;
 
     private const string SessionColumns = """
@@ -182,7 +182,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 """,
                 parameters,
                 reader => (Operation: ReadOperation(reader, liveness),
-                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 27))));
+                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 29))));
             var filteredRows = rows.Where(row => !variableFiltered
                 || OperationDimensionResolver.Matches(query.Dimensions, row.Variables));
             matches.AddRange(liveFiltered
@@ -213,7 +213,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             return null;
 
         var extra = Query(connection, """
-            SELECT vars_json, candidate_sql_hash, sql_text, candidate_sql_text, raw_tokens, emitted_tokens, artifact_dir, summary_json
+            SELECT vars_json, candidate_sql_hash, sql_text, candidate_sql_text, raw_tokens, emitted_tokens, artifact_dir, summary_json,
+                   client_call_id, agent_model, agent_reasoning_effort, agent_session_id, agent_turn_id, agent_turn_trigger, agent_thread_source
             FROM operations WHERE id = $id;
             """, [("$id", id)], reader => (
                 VarsJson: NullableString(reader, 0),
@@ -223,7 +224,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 Raw: NullableLong(reader, 4),
                 Emitted: NullableLong(reader, 5),
                 Artifact: NullableString(reader, 6),
-                Summary: Json(NullableString(reader, 7)))).Single();
+                Summary: Json(NullableString(reader, 7)),
+                Agent: ReadAgent(reader))).Single();
         var session = Query(connection, $"SELECT {SessionColumns} FROM sessions s WHERE s.id = $id;",
             [("$id", summary.SessionId)], ReadSessionRow).Single();
 
@@ -250,7 +252,15 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             extra.Artifact,
             extra.Summary,
             Variants(connection, id),
-            dimensions);
+            dimensions,
+            extra.Agent);
+    }
+
+    private static AgentCall? ReadAgent(SqliteDataReader r)
+    {
+        var agent = new AgentCall(NullableString(r, 8), NullableString(r, 9), NullableString(r, 10), NullableString(r, 11),
+            NullableString(r, 12), NullableString(r, 13), NullableString(r, 14));
+        return agent == new AgentCall(null, null, null, null, null, null, null) ? null : agent;
     }
 
     public StoredPlan? Plan(string hash)
@@ -607,7 +617,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         NullableLong(r, 10), NullableString(r, 11), NullableString(r, 12), NullableString(r, 13), NullableString(r, 14),
         r.GetInt64(15) != 0, NullableString(r, 16), NullableLong(r, 17), NullableLong(r, 21),
         r.GetInt64(22) != 0, r.GetInt64(23) != 0, r.GetInt64(24) != 0, Json(NullableString(r, 18)),
-        NullableString(r, 25), NullableString(r, 26));
+        NullableString(r, 25), NullableString(r, 26), NullableString(r, 27), NullableString(r, 28));
 
     private static IReadOnlyList<SessionRoot>? Roots(string? json)
     {

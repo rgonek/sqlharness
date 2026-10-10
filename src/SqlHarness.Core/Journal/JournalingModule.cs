@@ -16,13 +16,15 @@ public sealed class JournalingModule : ISqlHarnessModule
     private readonly Func<SessionIdentity?> _session;
     private readonly Func<CancellationToken, string?>? _cancelReason;
     private readonly Func<string?>? _rootsJson;
+    private readonly Func<CancellationToken, AgentCallMetadata?>? _callMetadata;
 
     public JournalingModule(
         ISqlHarnessModule inner,
         Func<IActivityJournal> journal,
         Func<SessionIdentity> session,
         Func<CancellationToken, string?>? cancelReason = null,
-        Func<string?>? rootsJson = null)
+        Func<string?>? rootsJson = null,
+        Func<CancellationToken, AgentCallMetadata?>? callMetadata = null)
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         ArgumentNullException.ThrowIfNull(journal);
@@ -31,6 +33,7 @@ public sealed class JournalingModule : ISqlHarnessModule
         _session = () => Try(session);
         _cancelReason = cancelReason;
         _rootsJson = rootsJson;
+        _callMetadata = callMetadata;
     }
 
     public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default) =>
@@ -45,7 +48,7 @@ public sealed class JournalingModule : ISqlHarnessModule
     private async Task<SqlHarnessOutcome> RunAsync(SqlHarnessOperation operation, Func<SqlHarnessOperation, Task<SqlHarnessOutcome>> run, CancellationToken ct)
     {
         var journal = _journal.Value;
-        var handle = Begin(journal, operation);
+        var handle = Begin(journal, operation, ct);
         var effective = journal is not null && handle is not null && operation is SqlHarnessWatchOperation watch
             ? watch with { Progress = ProgressRecorder(journal, handle) }
             : operation;
@@ -103,15 +106,18 @@ public sealed class JournalingModule : ISqlHarnessModule
         return outcome with { EmissionReceipt = wrapped };
     }
 
-    private JournalHandle? Begin(IActivityJournal? journal, SqlHarnessOperation operation)
+    private JournalHandle? Begin(IActivityJournal? journal, SqlHarnessOperation operation, CancellationToken ct)
     {
         // A disabled journal records nothing, so the process tree is not walked at all.
         if (journal is null or NullActivityJournal || _session() is not { } session)
             return null;
         try
         {
+            var start = OperationJournalDescriber.DescribeStart(operation);
+            if (CallMetadata(ct) is { } agent)
+                start = start with { Agent = agent };
             var current = _rootsJson is null ? session : session with { RootsJson = Roots() };
-            return journal.Begin(current, OperationJournalDescriber.DescribeStart(operation));
+            return journal.Begin(current, start);
         }
         catch (Exception)
         {
@@ -129,6 +135,20 @@ public sealed class JournalingModule : ISqlHarnessModule
         try
         {
             return _cancelReason(ct);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private AgentCallMetadata? CallMetadata(CancellationToken ct)
+    {
+        if (_callMetadata is null)
+            return null;
+        try
+        {
+            return _callMetadata(ct);
         }
         catch (Exception)
         {

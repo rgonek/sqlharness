@@ -42,6 +42,25 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Operation_carries_the_agent_call_metadata()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("mcp:a");
+        seed.Operation(session, agent: new AgentCallMetadata("toolu_1", "m", "low", "s", "t", "exec", "user"));
+        seed.Operation(session);
+
+        var reader = Reader(home);
+        var items = reader.Operations(new OperationQuery()).Items;
+        var labelled = items.Single(o => o.AgentModel is not null);
+        var plain = items.Single(o => o.AgentModel is null);
+
+        Assert.Equal("low", labelled.AgentReasoningEffort);
+        Assert.Equal(new AgentCall("toolu_1", "m", "low", "s", "t", "exec", "user"), reader.Operation(labelled.Id)!.Agent);
+        Assert.Null(reader.Operation(plain.Id)!.Agent);
+    }
+
+    [Fact]
     public void Session_carries_the_protocol_version()
     {
         using var home = new TempHome();

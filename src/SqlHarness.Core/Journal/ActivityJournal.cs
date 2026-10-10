@@ -74,9 +74,11 @@ public sealed class ActivityJournal : IActivityJournal
             insert.Transaction = transaction;
             insert.CommandText = """
                 INSERT INTO operations (session_id, operation, host_pid, host_started_at, started_at, updated_at,
-                    status, profile, vars_json, mutation_requested, sql_hash, candidate_sql_hash, sql_text, candidate_sql_text)
+                    status, profile, vars_json, mutation_requested, sql_hash, candidate_sql_hash, sql_text, candidate_sql_text,
+                    client_call_id, agent_model, agent_reasoning_effort, agent_session_id, agent_turn_id, agent_turn_trigger, agent_thread_source)
                 VALUES ($session, $operation, $hostPid, $hostStarted, $now, $now,
-                    'running', $profile, $vars, $mutation, $sqlHash, $candidateHash, $sqlText, $candidateText)
+                    'running', $profile, $vars, $mutation, $sqlHash, $candidateHash, $sqlText, $candidateText,
+                    $callId, $agentModel, $agentEffort, $agentSession, $agentTurn, $agentTrigger, $agentSource)
                 RETURNING id;
                 """;
             insert.Parameters.AddWithValue("$session", sessionId);
@@ -91,6 +93,13 @@ public sealed class ActivityJournal : IActivityJournal
             insert.Parameters.AddWithValue("$candidateHash", (object?)start.CandidateSqlHash ?? DBNull.Value);
             insert.Parameters.AddWithValue("$sqlText", _storeSensitive ? (object?)start.SqlText ?? DBNull.Value : DBNull.Value);
             insert.Parameters.AddWithValue("$candidateText", _storeSensitive ? (object?)start.CandidateSqlText ?? DBNull.Value : DBNull.Value);
+            insert.Parameters.AddWithValue("$callId", (object?)start.Agent?.CallId ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$agentModel", (object?)start.Agent?.Model ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$agentEffort", (object?)start.Agent?.ReasoningEffort ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$agentSession", (object?)start.Agent?.SessionId ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$agentTurn", (object?)start.Agent?.TurnId ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$agentTrigger", (object?)start.Agent?.TurnTrigger ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$agentSource", (object?)start.Agent?.ThreadSource ?? DBNull.Value);
             var id = (long)insert.ExecuteScalar()!;
             transaction.Commit();
             return new JournalHandle(id);

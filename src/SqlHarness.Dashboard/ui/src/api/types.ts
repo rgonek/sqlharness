@@ -59,6 +59,15 @@ export type OperationSummary = {
   errorMessage: string | null
   /** "client" | "shutdown" | "deadline" when errorKind is "cancelled"; otherwise null. */
   cancelReason: string | null
+  /** Client-supplied model label from tools/call _meta (Codex); never verified. */
+  agentModel: string | null
+  agentReasoningEffort: string | null
+}
+
+/** Allowlisted, client-supplied labels from tools/call _meta; never verified, never content. */
+export type AgentCall = {
+  callId: string | null; model: string | null; reasoningEffort: string | null; sessionId: string | null
+  turnId: string | null; turnTrigger: string | null; threadSource: string | null
 }
 
 export type SessionDetail = { session: SessionSummary; operations: OperationSummary[] }
@@ -129,6 +138,7 @@ export type OperationDetail = {
   summary: Record<string, unknown> | null
   variants: VariantDetail[]
   dimensions: { values: DimensionValueSummary[] }
+  agent: AgentCall | null
 }
 
 export type KeyCount = { key: string; count: number }

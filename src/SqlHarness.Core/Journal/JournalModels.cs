@@ -37,7 +37,18 @@ public sealed record OperationStart(
     string? SqlHash,
     string? CandidateSqlHash,
     string? SqlText,
-    string? CandidateSqlText);
+    string? CandidateSqlText,
+    AgentCallMetadata? Agent = null);
+
+/// <summary>Allowlisted, client-supplied labels from tools/call _meta; never verified, never content.</summary>
+public sealed record AgentCallMetadata(
+    string? CallId,
+    string? Model,
+    string? ReasoningEffort,
+    string? SessionId,
+    string? TurnId,
+    string? TurnTrigger,
+    string? ThreadSource);
 
 public sealed record OperationEnd(
     string Status,

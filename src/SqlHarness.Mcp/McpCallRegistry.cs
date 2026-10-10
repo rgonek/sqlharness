@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 
+using SqlHarness.Core;
+
 namespace SqlHarness.Mcp;
 
 /// <summary>
@@ -13,15 +15,18 @@ internal static class McpCallRegistry
     internal const string Client = "client";
     internal const string Deadline = "deadline";
 
-    private static readonly ConcurrentDictionary<CancellationToken, (CancellationToken Request, CancellationToken Shutdown)> Calls = new();
+    private static readonly ConcurrentDictionary<CancellationToken, (CancellationToken Request, CancellationToken Shutdown, AgentCallMetadata? Metadata)> Calls = new();
 
-    internal static IDisposable Track(CancellationTokenSource linked, CancellationToken request, CancellationToken shutdown)
+    internal static IDisposable Track(CancellationTokenSource linked, CancellationToken request, CancellationToken shutdown, AgentCallMetadata? metadata = null)
     {
         ArgumentNullException.ThrowIfNull(linked);
         var token = linked.Token;
-        Calls[token] = (request, shutdown);
+        Calls[token] = (request, shutdown, metadata);
         return new Registration(token);
     }
+
+    internal static AgentCallMetadata? Metadata(CancellationToken moduleToken) =>
+        Calls.TryGetValue(moduleToken, out var call) ? call.Metadata : null;
 
     internal static string? Classify(CancellationToken moduleToken)
     {

@@ -30,7 +30,11 @@ public sealed record OperationSummary(
     string StartedAt, string UpdatedAt, string? FinishedAt, long? DurationMs, string? Profile, string? Engine,
     string? Server, string? Database, bool MutationRequested, string? SqlHash, long? RowsReturned,
     long? LogicalReadsMedian, bool HasSpill, bool ColdCache, bool OverGranted, JsonElement? Progress,
-    string? ErrorMessage, string? CancelReason);
+    string? ErrorMessage, string? CancelReason, string? AgentModel, string? AgentReasoningEffort);
+
+public sealed record AgentCall(
+    string? CallId, string? Model, string? ReasoningEffort, string? SessionId, string? TurnId,
+    string? TurnTrigger, string? ThreadSource);
 
 public sealed record SessionDetail(SessionSummary Session, IReadOnlyList<OperationSummary> Operations);
 
@@ -55,7 +59,8 @@ public sealed record OperationDetail(
     OperationSummary Operation, SessionSummary Session, IReadOnlyDictionary<string, string>? Vars,
     string? CandidateSqlHash, string? SqlText, string? CandidateSqlText, long? RawTokens, long? EmittedTokens,
     string? ArtifactDirectory, JsonElement? Summary, IReadOnlyList<VariantDetail> Variants,
-    OperationDimensions Dimensions);
+    OperationDimensions Dimensions,
+    AgentCall? Agent);
 
 public sealed record StoredPlan(string Hash, string Format, string Document);
 

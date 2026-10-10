@@ -163,6 +163,26 @@ function OperationView({ id }: { id: number }) {
         </CardContent>
       </Card>
 
+      {detail.agent && (
+        <Card>
+          <CardHeader>
+            <CardTitle><h2>Agent call</h2></CardTitle>
+            <CardDescription>Labels the client sent with this call; not verified.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <Fact label="Model">{detail.agent.model ?? "—"}</Fact>
+              <Fact label="Effort">{detail.agent.reasoningEffort ?? "—"}</Fact>
+              <Fact label="Agent session"><span className="font-mono">{detail.agent.sessionId ?? "—"}</span></Fact>
+              <Fact label="Turn"><span className="font-mono">{detail.agent.turnId ?? "—"}</span></Fact>
+              <Fact label="Trigger">{detail.agent.turnTrigger ?? "—"}</Fact>
+              <Fact label="Thread source">{detail.agent.threadSource ?? "—"}</Fact>
+              <Fact label="Call id"><span className="font-mono">{detail.agent.callId ?? "—"}</span></Fact>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Comparison detail={detail} />
 
       {detail.variants.length === 1 && <VariantPanel variant={detail.variants[0]} engine={op.engine} />}

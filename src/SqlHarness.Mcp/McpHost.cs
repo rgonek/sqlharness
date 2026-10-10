@@ -178,7 +178,8 @@ public static class McpHost
             () => journal.Value,
             identity,
             McpCallRegistry.Classify,
-            () => roots.Current));
+            () => roots.Current,
+            McpCallRegistry.Metadata));
         Tools.McpToolCatalog.Wire(serverOptions, process, hostShutdown: lifetime.Token);
         try
         {

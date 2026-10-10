@@ -12,7 +12,7 @@ export const operation = (over: Partial<OperationSummary> = {}): OperationSummar
   startedAt: "2026-10-07T09:00:00.000Z", updatedAt: "2026-10-07T09:00:01.000Z", finishedAt: "2026-10-07T09:00:01.000Z",
   durationMs: 1200, profile: "local", engine: "sqlserver", server: "srv", database: "db", mutationRequested: false,
   sqlHash: "sha256:0123456789abcdef", rowsReturned: 3, logicalReadsMedian: null, hasSpill: false, coldCache: false,
-  overGranted: false, progress: null, errorMessage: null, cancelReason: null, ...over,
+  overGranted: false, progress: null, errorMessage: null, cancelReason: null, agentModel: null, agentReasoningEffort: null, ...over,
 })
 
 export const variant = (over: Partial<VariantDetail> = {}): VariantDetail => ({
@@ -33,7 +33,7 @@ export const operationDetail = (over: Partial<OperationDetail> = {}): OperationD
   rawTokens: 100, emittedTokens: 10, artifactDirectory: "/artifacts/m1", summary: { kind: "measure", resultsStable: true },
   variants: [variant()], dimensions: { values: [{ name: "tenant", value: "acme", isUnknown: false, source: "recorded",
     operations: null, percentage: null, totalDurationMs: null, durationAvailableOperations: null,
-    durationUnavailableOperations: null, failed: null, rejected: null }] }, ...over,
+    durationUnavailableOperations: null, failed: null, rejected: null }] }, agent: null, ...over,
 })
 
 export const stats = (over: Partial<DashboardStats> = {}): DashboardStats => ({
