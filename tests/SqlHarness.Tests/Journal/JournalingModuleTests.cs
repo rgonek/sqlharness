@@ -146,7 +146,7 @@ public sealed class JournalingModuleTests
     }
 
     [Fact]
-    public async Task Journal_and_identity_are_resolved_once_per_module()
+    public async Task Journal_is_resolved_once_and_identity_is_refreshed_per_operation()
     {
         var journalOpens = 0;
         var identities = 0;
@@ -160,7 +160,7 @@ public sealed class JournalingModuleTests
         await module.ExecuteAsync(Query());
 
         Assert.Equal(1, journalOpens);
-        Assert.Equal(1, identities);
+        Assert.Equal(2, identities);
         Assert.Equal(2, journal.Begins);
     }
 

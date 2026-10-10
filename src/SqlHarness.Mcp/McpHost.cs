@@ -137,21 +137,19 @@ public static class McpHost
         var sessionKey = "mcp:" + Guid.NewGuid().ToString("N");
         var mcpMode = process.RequestScope ? "request" : "fixed";
         ModelContextProtocol.Server.McpServer? running = null;
-        // One identity per serve process: resolved lazily on the first journaled call.
-        // Client info comes from the request-scoped server (2026-07-28 has no initialize);
-        // the root server's value covers handshake revisions when no call recorded one.
-        var identity = new Lazy<SessionIdentity>(
-            () => SessionIdentities.Mcp(
+        // The session key stays fixed for this serve process, while client info can first
+        // arrive on a later request (2026-07-28 has no initialize handshake).
+        // Resolve each journaled call so ActivityJournal can fill its first non-null fields.
+        Func<SessionIdentity> identity = () => SessionIdentities.Mcp(
                 ProcessInfo.Current,
                 sessionKey,
                 clientIdentity.Name ?? running?.ClientInfo?.Name,
                 clientIdentity.Version ?? running?.ClientInfo?.Version,
-                mcpMode),
-            LazyThreadSafetyMode.ExecutionAndPublication);
+                mcpMode);
         process.DecorateModules(module => new JournalingModule(
             module,
             () => journal.Value,
-            () => identity.Value));
+            identity));
         Tools.McpToolCatalog.Wire(serverOptions, process, hostShutdown: lifetime.Token);
         try
         {

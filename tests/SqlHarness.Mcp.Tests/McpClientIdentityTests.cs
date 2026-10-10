@@ -1,4 +1,6 @@
 using System.IO.Pipelines;
+using System.Text;
+using System.Text.Json.Nodes;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -92,5 +94,68 @@ public sealed class McpClientIdentityTests : IDisposable
         Assert.True(reader.Read());
         Assert.Equal(("claude", "mcp-clientinfo", "claude-code", "9.9.9"),
             (reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)));
+    }
+
+    [Fact]
+    public async Task Journal_session_enriches_identity_when_a_later_request_supplies_it()
+    {
+        using var cts = new CancellationTokenSource(Budget);
+        var clientToServer = new Pipe();
+        var filteredInput = new Pipe();
+        var serverToClient = new Pipe();
+        var filterTask = StripClientInfoUntilFirstToolCallAsync(clientToServer.Reader.AsStream(), filteredInput.Writer.AsStream());
+        var hostTask = McpHost.RunAsync(
+            new McpServerOptions { Profile = "mcp-t5" },
+            filteredInput.Reader.AsStream(), serverToClient.Writer.AsStream(), new StringWriter(),
+            () => new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+            {
+                ["mcp-t5"] = new TargetProfile("mcp-unreachable.invalid", "reportdb", new Dictionary<string, string>(), "integrated"),
+            },
+            cts.Token);
+
+        await using (var client = await McpClient.CreateAsync(
+            new StreamClientTransport(clientToServer.Writer.AsStream(), serverToClient.Reader.AsStream(), NullLoggerFactory.Instance),
+            new McpClientOptions { ClientInfo = new Implementation { Name = "claude-code", Version = "9.9.9" }, ProtocolVersion = "2026-07-28" },
+            NullLoggerFactory.Instance, cts.Token))
+        {
+            var first = await client.CallToolAsync("sqlharness_gain", new Dictionary<string, object?>(), cancellationToken: cts.Token);
+            Assert.NotEqual(true, first.IsError);
+            var second = await client.CallToolAsync("sqlharness_gain", new Dictionary<string, object?>(), cancellationToken: cts.Token);
+            Assert.NotEqual(true, second.IsError);
+        }
+
+        await clientToServer.Writer.CompleteAsync();
+        Assert.Equal((int)SqlHarnessExitCode.Success, await hostTask.WaitAsync(Budget, cts.Token));
+        await filterTask.WaitAsync(Budget, cts.Token);
+
+        using var connection = new SqliteConnection($"Data Source={Path.Combine(_home, "data", "activity.db")};Mode=ReadOnly;Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT client_name, client_version, COUNT(*) OVER() FROM sessions";
+        using var reader = command.ExecuteReader();
+        Assert.True(reader.Read());
+        Assert.Equal(("claude-code", "9.9.9", 1),
+            (reader.GetString(0), reader.GetString(1), reader.GetInt32(2)));
+    }
+
+    private static async Task StripClientInfoUntilFirstToolCallAsync(Stream input, Stream output)
+    {
+        using var reader = new StreamReader(input, Encoding.UTF8, leaveOpen: true);
+        await using var writer = output;
+        var firstCallSeen = false;
+        while (await reader.ReadLineAsync() is { } line)
+        {
+            var message = JsonNode.Parse(line)?.AsObject();
+            if (!firstCallSeen && message?["params"] is JsonObject parameters)
+            {
+                if (parameters["_meta"] is JsonObject meta)
+                    meta.Remove("io.modelcontextprotocol/clientInfo");
+                firstCallSeen = message["method"]?.GetValue<string>() == "tools/call";
+            }
+
+            var bytes = Encoding.UTF8.GetBytes((message?.ToJsonString() ?? line) + "\n");
+            await writer.WriteAsync(bytes, CancellationToken.None);
+            await writer.FlushAsync(CancellationToken.None);
+        }
     }
 }
