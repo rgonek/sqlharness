@@ -1014,7 +1014,9 @@ sys.exit(server.wait())
 #>
 [CmdletBinding()]
 param(
-    [string]$Sqlharness = (Get-Command sqlharness -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source,
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$Sqlharness,
     [string]$Profile = 'local-playground',
     [switch]$SkipClaude,
     [switch]$SkipCodex
@@ -1022,6 +1024,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $python = (Get-Command python -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+if (-not (Test-Path -LiteralPath $Sqlharness -PathType Leaf)) {
+    throw "SQLHarness executable not found: $Sqlharness"
+}
+$Sqlharness = (Resolve-Path -LiteralPath $Sqlharness -ErrorAction Stop).Path
 $tap = Join-Path $PSScriptRoot 'mcp-client-acceptance-tap.py'
 $work = Join-Path ([IO.Path]::GetTempPath()) ("sqlharness-mcp-acceptance-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work | Out-Null
