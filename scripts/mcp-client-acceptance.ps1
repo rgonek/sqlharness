@@ -14,7 +14,9 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Sqlharness = (Get-Command sqlharness -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source,
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$Sqlharness,
     [string]$Profile = 'local-playground',
     [switch]$SkipClaude,
     [switch]$SkipCodex
@@ -25,6 +27,7 @@ $python = (Get-Command python -CommandType Application -ErrorAction Stop | Selec
 if (-not (Test-Path -LiteralPath $Sqlharness -PathType Leaf)) {
     throw "SQLHarness executable not found: $Sqlharness"
 }
+$Sqlharness = (Resolve-Path -LiteralPath $Sqlharness -ErrorAction Stop).Path
 $tap = Join-Path $PSScriptRoot 'mcp-client-acceptance-tap.py'
 $work = Join-Path ([IO.Path]::GetTempPath()) ("sqlharness-mcp-acceptance-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work | Out-Null
@@ -63,7 +66,9 @@ function Test-Client([string]$name, [string]$logPath, [string]$expected) {
     $fromServer = @($frames | Where-Object Direction -eq 'S->C')
     $initializes = @($toServer | Where-Object { $_.Message.method -eq 'initialize' })
     $discovers = @($toServer | Where-Object { $_.Message.method -eq 'server/discover' })
-    $calls = @($toServer | Where-Object { $_.Message.method -eq 'tools/call' })
+    $calls = @($toServer | Where-Object {
+        $_.Message.method -eq 'tools/call' -and $_.Message.params.name -eq 'sqlharness_capabilities'
+    })
     $init = $initializes | Select-Object -First 1
     $call = $calls | Select-Object -First 1
     $initializeResponse = if ($init) {
@@ -132,7 +137,7 @@ if (-not $SkipCodex) {
     $argsToml = '[' + ((@('-I', $tap, $logPath, $Sqlharness, 'mcp', 'serve', $Profile) | ForEach-Object { "'" + ($_ -replace '\\', '/') + "'" }) -join ',') + ']'
     Push-Location $work
     try {
-        & $codex.Source exec --skip-git-repo-check `
+        & $codex.Source exec --ignore-user-config --skip-git-repo-check `
             -c ("mcp_servers.acceptance.command='" + ($python -replace '\\', '/') + "'") `
             -c ('mcp_servers.acceptance.args=' + $argsToml) `
             -c "mcp_servers.acceptance.default_tools_approval_mode='approve'" `

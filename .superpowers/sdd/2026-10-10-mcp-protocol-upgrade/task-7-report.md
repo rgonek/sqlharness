@@ -51,3 +51,44 @@ Frame logs were written under `D:\temp\sqlharness-mcp-acceptance-ec33c80ada414ca
 - The live check used the closed `local-playground` profile and called only the target-free capabilities tool; it did not run a database operation.
 - This is a manual acceptance check of the installed client versions and does not replace CI or cross-platform verification.
 - Codex reported the ignored user-config setting warning described above; it did not affect the acceptance result.
+
+## Review follow-up
+
+Applied the review fixes:
+
+- `-Sqlharness` is mandatory; the script no longer resolves a potentially stale global executable by default.
+- The executable path is resolved to an absolute path before either client changes its working directory.
+- Codex runs with `--ignore-user-config`, which prevents loading configured user MCP servers while preserving authentication. `codex exec --help` documents that this flag skips `$CODEX_HOME/config.toml` and that authentication still uses `CODEX_HOME`.
+- The count includes only `tools/call` requests whose `params.name` is exactly `sqlharness_capabilities`.
+
+Commands and observed output:
+
+| Command | Observed result |
+| --- | --- |
+| PowerShell `Parser.ParseFile` on `scripts\mcp-client-acceptance.ps1` | `PowerShell parse: PASS` |
+| `pwsh -NonInteractive -File ./scripts/mcp-client-acceptance.ps1 -SkipClaude -SkipCodex` | Exit 1; `Cannot process command because of one or more missing mandatory parameters: Sqlharness.` |
+| `pwsh -File ./scripts/mcp-client-acceptance.ps1 -Sqlharness 'artifacts\task7-local\sqlharness.exe' -SkipClaude -SkipCodex` | Exit 0; printed no-clients smoke message. Relative path was accepted and normalized. |
+| `codex exec --help` | Documents `--ignore-user-config`: skips `$CODEX_HOME/config.toml`; authentication still uses `CODEX_HOME`. |
+| `pwsh -File ./scripts/mcp-client-acceptance.ps1 -Sqlharness 'artifacts\task7-local\sqlharness.exe' -Profile local-playground` | Exit 0; both clients passed every check below with Codex user config ignored. |
+| `git diff --check` | Pass. |
+
+| Client | Check | Expected | Actual | Pass |
+| --- | --- | --- | --- | --- |
+| Claude Code | client exit code | 0 | 0 | true |
+| Claude Code | capabilities tools/call count | 1 | 1 | true |
+| Claude Code | negotiated | 2026-07-28 | 2026-07-28 | true |
+| Claude Code | capabilities.protocolVersion | 2026-07-28 | 2026-07-28 | true |
+| Claude Code | clientInfo.name | non-empty | claude-code | true |
+| Claude Code | capabilities response | yes | yes | true |
+| Claude Code | capabilities call error | false | false | true |
+| Claude Code | server/discover used | yes | yes | true |
+| Codex | client exit code | 0 | 0 | true |
+| Codex | capabilities tools/call count | 1 | 1 | true |
+| Codex | initialize response | yes | yes | true |
+| Codex | negotiated | 2025-06-18 | 2025-06-18 | true |
+| Codex | capabilities.protocolVersion | 2025-06-18 | 2025-06-18 | true |
+| Codex | clientInfo.name | non-empty | codex-mcp-client | true |
+| Codex | capabilities response | yes | yes | true |
+| Codex | capabilities call error | false | false | true |
+
+The passing review run's frame logs are in `D:\temp\sqlharness-mcp-acceptance-58ede467cff848ec8f5a1eee02c5c511`; they contain tool results and remain local.
