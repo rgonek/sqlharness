@@ -129,6 +129,7 @@ values shorter than four characters; the existing "1 vs 100" ordering test still
 Parameter values shorter than four characters are excluded from redaction, as decided by the user on 2026-10-08;
 passwords and separately collected known secrets remain redacted regardless of length. Parameter declaration, typed,
 matrix, and bound-value registration all apply the threshold. `README.md` documents this disclosure policy.
+Threshold superseded by plan 025 (2026-10-10): caller-supplied values are no longer redacted at all.
 
 ## W4 — Invalid input path gives no hint (P2, ux)
 

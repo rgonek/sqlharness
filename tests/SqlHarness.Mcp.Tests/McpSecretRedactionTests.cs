@@ -105,12 +105,11 @@ public sealed class McpSecretRedactionTests
     /// regression guard: if either rejection ever started interpolating the
     /// value, this assertion would fail on the first changed character. The
     /// <c>DoesNotContain</c> lines below are a belt-and-suspenders check on
-    /// top of it, not an independent proof of redaction -- a message that
-    /// never contains a value to begin with trivially satisfies them.
-    /// Genuine redaction (a message that WOULD echo a value without secret
-    /// registration, only suppressed because of it) is proven separately by
-    /// <see cref="Execution_phase_failure_that_echoes_a_typed_matrix_value_is_redacted_only_when_collected_as_a_known_secret"/>,
-    /// closing the 012/T2 review carry-forward.
+    /// top of it. Parameter values are not redacted under the credential-only
+    /// policy (plan 025), so they prove nothing about redaction here; they only
+    /// show the constant message never interpolates a value. Credential
+    /// redaction (the SQL password and token patterns) is covered by the
+    /// password and <c>SecretRedactor</c> tests.
     /// </summary>
     [Fact]
     public async Task Typed_values_with_separator_characters_reach_core_whole_and_its_rejection_is_a_constant_message()

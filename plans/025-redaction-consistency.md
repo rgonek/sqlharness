@@ -222,13 +222,13 @@ Compare equivalence is unaffected because both variants run under the same polic
 
 ## Done criteria
 
-- [ ] Password value registered after every executing `TargetResolver.Resolve`, covered by tests for SQL
+- [x] Password value registered after every executing `TargetResolver.Resolve`, covered by tests for SQL
       Server and Postgres profiles
-- [ ] `grep -rn "SqlParameterSecrets\|AddTypedSecret\|CollectTargetSecrets" src` → no match
-- [ ] `ClientID` / `Line 1` / `device` regression tests pass
-- [ ] README/AGENTS/docs/mcp.md describe the credential-only policy; plan 038 W3 cross-referenced
+- [x] `grep -rn "SqlParameterSecrets\|AddTypedSecret\|CollectTargetSecrets" src` → no match
+- [x] `ClientID` / `Line 1` / `device` regression tests pass
+- [x] README/AGENTS/docs/mcp.md describe the credential-only policy; plan 038 W3 cross-referenced
 - [ ] Windows and Linux gates green; flipped/deleted tests listed in the Step 3 commit
-- [ ] `plans/README.md` row updated
+- [x] `plans/README.md` row updated
 
 ## STOP conditions
 
