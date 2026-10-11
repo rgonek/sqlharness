@@ -563,6 +563,172 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Equal("Hash Join", Text(hidden.Root, "physicalOp"));
     }
 
+    // Plan 048: wrapped, reversed, listed and compound credential columns in a synthetic Showplan. The predicate
+    // carries the OR-chain that Showplan expands IN into; the statement text carries the IN list itself.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_tool_masks_wrapped_reversed_and_listed_credential_literals_for_sqlserver(bool requestMode)
+    {
+        await using var served = await ServePlanModeAsync(requestMode);
+        // The distiller keeps at most 200 predicate characters, so the predicate stays short.
+        const string predicateText = "(CONVERT_IMPLICIT(nvarchar(4000),[Users].[Password],0)=N'sqs1' OR [Users].[Password]=N'sqs2')"
+            + " AND N'sqs3'=[Users].[PasswordHash] AND [PwdSalt]=N'sqs4' AND [Users].[Status]=N'ACTIVE'";
+        Assert.True(predicateText.Length <= 200);
+        var xml = ShowplanWithText("SELECT * FROM dbo.Users WHERE Password IN (N'sqs1', N'sqs2') AND PasswordHash = N'sqs3' AND Status = N'ACTIVE'")
+            .Replace("[dbo].[Orders].[Status]=N'ACTIVE' AND [Name]=&quot;x&quot;", predicateText, StringComparison.Ordinal);
+        Assert.Contains("sqs4", xml, StringComparison.Ordinal);
+        var result = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = xml }, cancellationToken: CancellationToken.None));
+
+        Assert.DoesNotContain("sqs", result.Raw, StringComparison.Ordinal);
+        var predicate = Text(result.Root, "predicate")!;
+        Assert.Contains("[Password],0)=N'[REDACTED]' OR [Users].[Password]=N'[REDACTED]')", predicate, StringComparison.Ordinal);
+        Assert.Contains("N'[REDACTED]'=[Users].[PasswordHash]", predicate, StringComparison.Ordinal);
+        Assert.Contains("[PwdSalt]=N'[REDACTED]'", predicate, StringComparison.Ordinal);
+        Assert.Contains("[Users].[Status]=N'ACTIVE'", predicate, StringComparison.Ordinal);
+        var sql = Text(result.Statement, "sql")!;
+        Assert.Contains("Password IN (N'[REDACTED]', N'[REDACTED]')", sql, StringComparison.Ordinal);
+        Assert.Contains("PasswordHash = N'[REDACTED]'", sql, StringComparison.Ordinal);
+        Assert.Contains("Status = N'ACTIVE'", sql, StringComparison.Ordinal);
+    }
+
+    // Synthetic EXPLAIN (FORMAT JSON): deparsed spellings follow PostgreSQL ruleutils (relabel casts as (col)::text,
+    // LIKE family as ~~ / ~~* / !~~ / !~~*, IN lists as = ANY ('{...}'::type[]), literals as '...'::type).
+    private const string PostgresCredentialPlan =
+        "[{\"Plan\":{\"Node Type\":\"Hash Join\",\"Join Type\":\"Inner\",\"Total Cost\":100.0,\"Plan Rows\":10,\"Actual Rows\":10,\"Actual Loops\":1,"
+        + "\"Hash Cond\":\"(a.id = b.id)\",\"Plans\":[{\"Node Type\":\"Seq Scan\",\"Relation Name\":\"users\",\"Total Cost\":40.0,\"Plan Rows\":100,\"Actual Rows\":100,"
+        + "\"Actual Loops\":1,\"Filter\":\"" + PostgresCredentialFilter + "\"}]},"
+        + "\"Planning Time\":10.4,\"Execution Time\":4.6}]";
+
+    // At most 200 characters: the distiller clips longer predicates.
+    private const string PostgresCredentialFilter =
+        "(((password)::text ~~ 'pgs1%'::text) AND (password_hash = ANY ('{pgs2,pgs3}'::text[]))"
+        + " AND ('pgs4'::text = (pwd)::text) AND (user_password !~~* 'pgs5'::text) AND (status = 'ACTIVE'::text))";
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_tool_masks_wrapped_reversed_and_listed_credential_literals_for_postgres(bool requestMode)
+    {
+        await using var served = await ServePlanModeAsync(requestMode);
+        var result = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = PostgresCredentialPlan }, cancellationToken: CancellationToken.None));
+
+        Assert.True(PostgresCredentialFilter.Length <= 200);
+        Assert.DoesNotContain("pgs", result.Raw, StringComparison.Ordinal);
+        var filter = Text(result.Root.GetProperty("children")[0], "predicate")!;
+        Assert.Contains("((password)::text ~~ '[REDACTED]'::text)", filter, StringComparison.Ordinal);
+        Assert.Contains("(password_hash = ANY ('[REDACTED]'::text[]))", filter, StringComparison.Ordinal);
+        Assert.Contains("('[REDACTED]'::text = (pwd)::text)", filter, StringComparison.Ordinal);
+        Assert.Contains("(user_password !~~* '[REDACTED]'::text)", filter, StringComparison.Ordinal);
+        Assert.Contains("(status = 'ACTIVE'::text)", filter, StringComparison.Ordinal);
+        Assert.Equal("(a.id = b.id)", Text(result.Root, "predicate"));
+    }
+
+    // SQL comments with odd quotes must not misalign the scan; a credential comparison inside a comment stays masked.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_tool_masks_credential_literals_around_and_inside_sql_comments(bool requestMode)
+    {
+        await using var served = await ServePlanModeAsync(requestMode);
+        var xml = ShowplanWithText("SELECT * FROM dbo.Users /* it's \"odd */ WHERE [Password] = N'zcm1' AND PasswordHash = N'zcm2'"
+            + " AND Status = N'ACTIVE' -- don't [Pwd]=N'zcm3'");
+        var result = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = xml }, cancellationToken: CancellationToken.None));
+
+        Assert.DoesNotContain("zcm", result.Raw, StringComparison.Ordinal);
+        var sql = Text(result.Statement, "sql")!;
+        Assert.Contains("[Password] = N'[REDACTED]'", sql, StringComparison.Ordinal);
+        Assert.Contains("PasswordHash = N'[REDACTED]'", sql, StringComparison.Ordinal);
+        Assert.Contains("[Pwd]=N'[REDACTED]'", sql, StringComparison.Ordinal);
+        Assert.Contains("Status = N'ACTIVE'", sql, StringComparison.Ordinal);
+    }
+
+    // Nested wrappers: SQL Server implicit-over-explicit conversion and PostgreSQL cast-over-cast, both operand orders.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_tool_masks_credential_literals_behind_nested_wrappers_for_both_engines(bool requestMode)
+    {
+        await using var served = await ServePlanModeAsync(requestMode);
+        const string sqlPredicate = "CONVERT_IMPLICIT(nvarchar(100),CONVERT(varchar(100),[Users].[Password],0),0)=N'zq9s1'"
+            + " AND N'zq9s2'=CONVERT_IMPLICIT(nvarchar(100),CONVERT(varchar(100),[PwdSalt],0),0) AND [Status]=N'ACTIVE'";
+        Assert.True(sqlPredicate.Length <= 200);
+        var xml = ShowplanWithText("SELECT 1")
+            .Replace("[dbo].[Orders].[Status]=N'ACTIVE' AND [Name]=&quot;x&quot;", sqlPredicate, StringComparison.Ordinal);
+        var sql = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = xml }, cancellationToken: CancellationToken.None));
+        Assert.DoesNotContain("zq9s", sql.Raw, StringComparison.Ordinal);
+        var sqlText = Text(sql.Root, "predicate")!;
+        Assert.Contains("[Users].[Password],0),0)=N'[REDACTED]'", sqlText, StringComparison.Ordinal);
+        Assert.Contains("N'[REDACTED]'=CONVERT_IMPLICIT(", sqlText, StringComparison.Ordinal);
+        Assert.Contains("[Status]=N'ACTIVE'", sqlText, StringComparison.Ordinal);
+
+        const string pgFilter = "((((password)::text)::character varying = 'zq9s3'::character varying)"
+            + " AND ('zq9s4'::text = ((pwd)::text)::text) AND (status = 'ACTIVE'::text))";
+        var pgPlan = PostgresCredentialPlan.Replace(PostgresCredentialFilter, pgFilter, StringComparison.Ordinal);
+        Assert.Contains("zq9s3", pgPlan, StringComparison.Ordinal);
+        var pg = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = pgPlan }, cancellationToken: CancellationToken.None));
+        Assert.DoesNotContain("zq9s", pg.Raw, StringComparison.Ordinal);
+        var filter = Text(pg.Root.GetProperty("children")[0], "predicate")!;
+        Assert.Contains("(((password)::text)::character varying = '[REDACTED]'::character varying)", filter, StringComparison.Ordinal);
+        Assert.Contains("('[REDACTED]'::text = ((pwd)::text)::text)", filter, StringComparison.Ordinal);
+        Assert.Contains("(status = 'ACTIVE'::text)", filter, StringComparison.Ordinal);
+    }
+
+    // Plan 048 task 2: a scan timeout fails the call with the generic failure and nothing from the plan. The injected
+    // pattern backtracks catastrophically on the statement text, so the timeout is deterministic.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_tool_fails_closed_with_a_content_free_result_when_the_text_scan_times_out(bool requestMode)
+    {
+        await using var served = await ServePlanModeAsync(requestMode);
+        var statementText = new string('a', 40) + "! WHERE Password = N'zq-timeout-secret' AND Status = N'ZQ-TIMEOUT-LITERAL'";
+        var xml = ShowplanWithText(statementText);
+        var path = WriteInput("timeout.sqlplan", xml);
+        McpPlanTextPolicy.CredentialLiteralPatternOverride = new System.Text.RegularExpressions.Regex("(a+)+$", System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromMilliseconds(50));
+        try
+        {
+            foreach (var args in new[]
+            {
+                new Dictionary<string, object?> { ["content"] = xml },
+                new Dictionary<string, object?> { ["file"] = path },
+            })
+            {
+                var result = await served.Client.CallToolAsync("sqlharness_plan", args, cancellationToken: CancellationToken.None);
+                Assert.True(result.IsError == true);
+                var raw = string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text));
+                foreach (var leaked in new[] { "zq-timeout-secret", "ZQ-TIMEOUT-LITERAL", "aaaaaaaa", "Status =", "WHERE", "ShowPlanXML", "Orders", "timeout.sqlplan", "Regex", "RegexMatchTimeout", "(a+)+" })
+                    Assert.DoesNotContain(leaked, raw, StringComparison.OrdinalIgnoreCase);
+                var envelope = JsonDocument.Parse(raw).RootElement;
+                Assert.True(envelope.TryGetProperty("command", out _), raw);
+                Assert.Equal("error", envelope.GetProperty("status").GetString());
+                Assert.True(!envelope.TryGetProperty("result", out var emitted) || emitted.ValueKind == JsonValueKind.Null, raw);
+                // The generic failure: a fixed message and no hint or location.
+                var error = envelope.GetProperty("error");
+                // Fixed mode reports an execution failure, request mode a safety rejection; both carry the same fixed message.
+                var (code, message) = requestMode
+                    ? ("safety_rejected", "The tool failed without a safe error.")
+                    : ("sql_execution_failed", "The tool failed without a safe error.");
+                Assert.Equal(code, error.GetProperty("code").GetString());
+                Assert.Equal(message, error.GetProperty("message").GetString());
+                Assert.Equal(JsonValueKind.Null, error.GetProperty("hint").ValueKind);
+                Assert.Equal(JsonValueKind.Null, error.GetProperty("location").ValueKind);
+            }
+
+            // includeText false never runs the scan, so metadata still comes back while the override is active.
+            var metadata = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = xml, ["includeText"] = false }, cancellationToken: CancellationToken.None));
+            Assert.Equal("Clustered Index Scan", Text(metadata.Root, "physicalOp"));
+        }
+        finally
+        {
+            McpPlanTextPolicy.CredentialLiteralPatternOverride = null;
+        }
+
+        var recovered = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = xml }, cancellationToken: CancellationToken.None));
+        Assert.DoesNotContain("zq-timeout-secret", recovered.Raw, StringComparison.Ordinal);
+        Assert.Contains("N'ZQ-TIMEOUT-LITERAL'", Text(recovered.Statement, "sql")!, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
