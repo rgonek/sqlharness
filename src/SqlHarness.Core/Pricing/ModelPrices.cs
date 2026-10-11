@@ -69,7 +69,7 @@ public static class ModelPrices
                     return refreshed;
             }
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or FormatException or InvalidOperationException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or FormatException or InvalidOperationException or ArgumentException)
         {
         }
 

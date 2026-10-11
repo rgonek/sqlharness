@@ -33,6 +33,26 @@ class ProtectSqlHarnessConfigHookTests(unittest.TestCase):
         self.assertEqual(0, code)
         self.assertEqual("block", output["decision"])
 
+    def test_blocks_posix_dashboard_token_read(self) -> None:
+        for client, key in (("claude", "hookSpecificOutput"), ("codex", "decision")):
+            with self.subTest(client=client):
+                code, output = self.run_hook(client, "cat ~/.sqlharness/dashboard-token")
+
+                self.assertEqual(0, code)
+                self.assertIn(key, output)
+
+    def test_blocks_windows_dashboard_token_read(self) -> None:
+        code, output = self.run_hook("codex", r"Get-Content $env:USERPROFILE\.sqlharness\dashboard-token")
+
+        self.assertEqual(0, code)
+        self.assertEqual("block", output["decision"])
+
+    def test_similarly_named_file_elsewhere_remains_allowed(self) -> None:
+        code, output = self.run_hook("claude", "cat docs/dashboard-token-notes.md")
+
+        self.assertEqual(0, code)
+        self.assertEqual({}, output)
+
     def test_explicit_targets_file_read_remains_allowed(self) -> None:
         for client in ("claude", "codex"):
             with self.subTest(client=client):

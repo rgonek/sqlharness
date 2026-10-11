@@ -81,6 +81,16 @@ public sealed class ModelPricesTests
     }
 
     [Fact]
+    public void Refresh_with_duplicate_model_key_falls_back_to_embedded()
+    {
+        using var temp = new Journal.JournalTempDirectory();
+        var path = Path.Combine(temp.Path, "model-prices.json");
+        File.WriteAllText(path, """{"source":"models.dev","fetchedAt":"2999-01-01T00:00:00Z","providers":{"openai":{"gpt-6-sol":{"input":1},"gpt-6-sol":{"input":2}}}}""");
+
+        Assert.Equal(ModelPrices.Embedded.FetchedAt, ModelPrices.Load(path).FetchedAt);
+    }
+
+    [Fact]
     public void Extract_keeps_only_cost_fields_and_models_with_cost()
     {
         var api = """
