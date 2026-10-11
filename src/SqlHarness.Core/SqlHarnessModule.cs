@@ -296,7 +296,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 prepared.FixedParameters,
                 compare.TimeoutSeconds,
                 compare.Repeat,
-                compare.CompareResults)
+                compare.CompareResults,
+                compare.CompareNullability)
             {
                 Classification = prepared.Classification,
                 Owner = ArtifactOwner.From(compare.Target, prepared.Target),
@@ -400,7 +401,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 fixedParameters,
                 operation.TimeoutSeconds,
                 operation.Repeat,
-                operation.CompareResults)
+                operation.CompareResults,
+                operation.CompareNullability)
             {
                 Classification = prepared.Classification,
                 Owner = ArtifactOwner.From(operation.Target, prepared.Target),

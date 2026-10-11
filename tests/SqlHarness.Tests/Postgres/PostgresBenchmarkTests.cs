@@ -349,6 +349,29 @@ public sealed class PostgresBenchmarkTests
     }
 
     [Fact]
+    public async Task Compare_reports_unknown_sidecar_nullability_as_unavailable()
+    {
+        var lenient = await Module(Unknown(FakeSession.Create()))
+            .ExecuteAsync(Compare("SELECT 1", "SELECT 1", repeat: 1));
+        var strict = await Module(Unknown(FakeSession.Create()))
+            .ExecuteAsync(Compare("SELECT 1", "SELECT 1", repeat: 1) with { CompareNullability = true });
+
+        var lenientReport = Assert.IsType<SqlHarnessCompareReport>(lenient.Report);
+        Assert.True(lenientReport.ResultsEquivalent);
+        Assert.Null(lenientReport.Equivalence.NullabilityEquivalent);
+        var strictReport = Assert.IsType<SqlHarnessCompareReport>(strict.Report);
+        Assert.False(strictReport.ResultsEquivalent);
+        Assert.Null(strictReport.Equivalence.NullabilityEquivalent);
+        Assert.Null(strictReport.Equivalence.MismatchReason);
+
+        static FakeSession Unknown(FakeSession session)
+        {
+            session.UnknownNullability = true;
+            return session;
+        }
+    }
+
+    [Fact]
     public async Task Compare_off_runs_explain_only()
     {
         var session = FakeSession.Create();
@@ -557,6 +580,9 @@ public sealed class PostgresBenchmarkTests
 
         public static FakeSession Create(int sidecarValue = 1, string? explain = null) => new(sidecarValue, explain ?? ExplainFixture);
 
+        // Simulates Npgsql reporting no AllowDBNull for the sidecar columns.
+        public bool UnknownNullability { get; set; }
+
         public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
         {
             FactoryOpenCount++;
@@ -568,7 +594,7 @@ public sealed class PostgresBenchmarkTests
             Commands.Add(command);
             if (command.Sql.StartsWith("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)", StringComparison.Ordinal))
                 return Task.FromResult<ISqlReader>(FakeReader.Rows(["QUERY PLAN"], [_explain]));
-            return Task.FromResult<ISqlReader>(FakeReader.Rows(["n"], [_sidecarValue]));
+            return Task.FromResult<ISqlReader>(new FakeReader(["n"], [[_sidecarValue]]) { UnknownNullability = UnknownNullability });
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -582,7 +608,9 @@ public sealed class PostgresBenchmarkTests
         public static FakeReader Rows(string[] names, params object?[][] rows) => new(names, rows);
         public string GetName(int ordinal) => names[ordinal];
         public Type GetFieldType(int ordinal) => rows.FirstOrDefault()?[ordinal]?.GetType() ?? typeof(object);
-        public bool GetAllowNull(int ordinal) => rows.Any(row => row[ordinal] is null or DBNull);
+        public bool UnknownNullability { get; init; }
+        public bool GetAllowNull(int ordinal) => UnknownNullability || rows.Any(row => row[ordinal] is null or DBNull);
+        public bool? GetReportedAllowNull(int ordinal) => UnknownNullability ? null : GetAllowNull(ordinal);
         public object GetValue(int ordinal) => rows[_position][ordinal] ?? DBNull.Value;
         public Task<bool> ReadAsync(CancellationToken ct) => Task.FromResult(++_position < rows.Length);
         public Task<bool> NextResultAsync(CancellationToken ct) => Task.FromResult(false);

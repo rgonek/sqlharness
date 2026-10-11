@@ -473,6 +473,8 @@ public sealed class BenchmarkSessionIntegrationTests
 
             public bool GetAllowNull(int ordinal) => inner.GetAllowNull(ordinal);
 
+            public bool? GetReportedAllowNull(int ordinal) => inner.GetReportedAllowNull(ordinal);
+
             public object GetValue(int ordinal) => inner.GetValue(ordinal);
 
             public Task<bool> ReadAsync(CancellationToken ct) => inner.ReadAsync(ct);

@@ -90,10 +90,11 @@ public sealed class McpRequestToolHandlers(
         [Description("SQL timeout 1..300 seconds.")] int? timeout = null,
         [Description("Result comparison mode.")][AllowedValues("ordered", "multiset", "set", "off")] string compareResults = "ordered",
         [Description("Optional single matrix dimension.")] McpMatrixArgument? matrix = null,
+        [Description("Also require matching column nullability (allowNull) for result equivalence. Default compares observed data only and reports nullability separately. Not allowed with compareResults off.")] bool compareNullability = false,
         [Description("Response cap 4096..1048576 bytes.")] int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds.")] int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
-        Invoke(ctx, "sqlharness_compare", scope, handler => handler.CompareAsync(ctx, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, maxResultBytes, maxOperationSeconds, ct));
+        Invoke(ctx, "sqlharness_compare", scope, handler => handler.CompareAsync(ctx, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, compareNullability, maxResultBytes, maxOperationSeconds, ct));
 
     public Task<CallToolResult> WatchAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Request target scope.")] McpRequestScopeArgument scope,

@@ -159,7 +159,8 @@ internal sealed class NpgsqlSessionReader : ISqlReader
     public int RecordsAffected => _reader.RecordsAffected;
     public string GetName(int ordinal) => _reader.GetName(ordinal);
     public Type GetFieldType(int ordinal) => _reader.GetFieldType(ordinal);
-    public bool GetAllowNull(int ordinal) => Columns[ordinal].AllowDBNull ?? true;
+    public bool GetAllowNull(int ordinal) => ProviderNullability.AllowNull(Columns[ordinal]);
+    public bool? GetReportedAllowNull(int ordinal) => ProviderNullability.Reported(Columns[ordinal]);
     public object GetValue(int ordinal) => _reader.GetValue(ordinal);
     public Task<bool> ReadAsync(CancellationToken ct) => _reader.ReadAsync(ct);
     public async Task<bool> NextResultAsync(CancellationToken ct)

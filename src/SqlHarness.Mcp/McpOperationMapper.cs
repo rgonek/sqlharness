@@ -551,7 +551,8 @@ public static partial class McpOperationMapper
         int? timeout,
         string? compareResults,
         McpMatrixArgument? matrix,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool compareNullability = false)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(baseline);
@@ -565,6 +566,8 @@ public static partial class McpOperationMapper
             "set" => ResultComparisonMode.Set,
             _ => ResultComparisonMode.Off,
         };
+        if (compareNullability && mode == ResultComparisonMode.Off)
+            throw new McpMappingException("compareNullability requires compareResults ordered, multiset, or set.");
         var baselineSql = await McpInputReader.ReadSqlAsync(baseline.Sql, baseline.File, scope, ct);
         var candidateSql = await McpInputReader.ReadSqlAsync(candidate.Sql, candidate.File, scope, ct);
         var setupSql = await ReadOptionalSourceAsync(setup, scope, "setup", ct);
@@ -574,13 +577,13 @@ public static partial class McpOperationMapper
         if (matrix is null)
             return new SqlHarnessCompareOperation(
                 scope.TargetRequest, setupSql, baselineSql, candidateSql,
-                [], validatedTimeout, validatedRepeat, mode)
+                [], validatedTimeout, validatedRepeat, mode, compareNullability)
             {
                 TypedParameters = typedParameters,
             };
         return new SqlHarnessCompareMatrixOperation(
             scope.TargetRequest, setupSql, baselineSql, candidateSql,
-            [], validatedTimeout, validatedRepeat, string.Empty, mode)
+            [], validatedTimeout, validatedRepeat, string.Empty, mode, compareNullability)
         {
             TypedParameters = typedParameters,
             TypedMatrix = MapMatrix(matrix),
