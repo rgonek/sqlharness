@@ -53,6 +53,13 @@ internal sealed record SnapshotResultSet(
 
 internal sealed record SnapshotScalar(string Type, bool IsNull, JsonElement Value)
 {
+    /// <summary>
+    /// Array shape from the canonical scalar envelope. Null for ordinary scalars
+    /// and legacy snapshots so their version-1 JSON stays byte-compatible.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<int>? Dimensions { get; init; }
+
     public static SnapshotScalar FromValue(object? value)
     {
         using var stream = new MemoryStream();
@@ -61,11 +68,15 @@ internal sealed record SnapshotScalar(string Type, bool IsNull, JsonElement Valu
 
         using var document = JsonDocument.Parse(stream.ToArray());
         var root = document.RootElement;
-        return new SnapshotScalar(
+        var scalar = new SnapshotScalar(
             root.GetProperty("type").GetString()
                 ?? throw new InvalidOperationException("Canonical scalar is missing type."),
             root.GetProperty("isNull").GetBoolean(),
             root.GetProperty("value").Clone());
+
+        return root.TryGetProperty("dimensions", out var dimensions)
+            ? scalar with { Dimensions = dimensions.EnumerateArray().Select(dimension => dimension.GetInt32()).ToArray() }
+            : scalar;
     }
 }
 

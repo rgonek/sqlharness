@@ -164,6 +164,7 @@ public class SnapshotStoreTests
         Assert.Contains("\"resultHash\": \"ABC123\"", json, StringComparison.Ordinal);
         Assert.Contains("\"type\": \"int32\"", json, StringComparison.Ordinal);
         Assert.Contains("\"type\": \"string\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"dimensions\"", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -216,6 +217,69 @@ public class SnapshotStoreTests
         Assert.True(row[2].Value.GetBoolean());
         Assert.Equal(12.5m, row[3].Value.GetDecimal());
         Assert.Equal("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", row[4].Value.GetString());
+    }
+
+    [Fact]
+    public void Round_trip_preserves_multidimensional_array_shape()
+    {
+        using var temp = new TempDirectory();
+        var store = new SnapshotStore(temp.Path);
+        var document = SnapshotDocument.Create(
+            new DateTimeOffset(2026, 7, 29, 15, 30, 0, TimeSpan.Zero),
+            [new SqlHarnessResultSetReport(
+                [new SqlHarnessColumnReport(0, "Value", "System.Int32[,]", false)],
+                [[new int[,] { { 1, 2, 3 }, { 4, 5, 6 } }]],
+                RowCount: 1,
+                OmittedRowCount: 0)],
+            resultHash: "ARRAY");
+
+        store.Save("array-shape", document, force: false);
+        var loaded = store.Load("array-shape");
+
+        var scalar = Assert.Single(Assert.Single(loaded.ResultSets).Rows).Single();
+        Assert.Equal([2, 3], scalar.Dimensions);
+        var json = File.ReadAllText(Path.Combine(temp.Path, "array-shape.json"));
+        Assert.Contains("\"dimensions\"", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Legacy_version_one_scalar_without_dimensions_remains_usable()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "legacy-scalar.json"), """
+            {
+              "version": 1,
+              "createdAt": "2026-07-29T12:00:00+00:00",
+              "resultSets": [
+                {
+                  "columns": [
+                    { "ordinal": 0, "name": "Value", "dataType": "System.Int32", "allowNull": true }
+                  ],
+                  "rows": [
+                    [ { "type": "int32", "isNull": false, "value": 1 } ]
+                  ],
+                  "rowCount": 1
+                }
+              ],
+              "resultHash": "LEGACY"
+            }
+            """);
+
+        var loaded = new SnapshotStore(temp.Path).Load("legacy-scalar");
+        var scalar = Assert.Single(Assert.Single(loaded.ResultSets).Rows).Single();
+
+        Assert.Null(scalar.Dimensions);
+        Assert.Equal(1, scalar.Value.GetInt32());
+        Assert.Equal(0, SnapshotDiffer.Compare(
+            loaded,
+            SnapshotDocument.Create(
+                loaded.CreatedAt,
+                [new SqlHarnessResultSetReport(
+                    [new SqlHarnessColumnReport(0, "Value", "System.Int32", true)],
+                    [[1]],
+                    RowCount: 1,
+                    OmittedRowCount: 0)],
+                loaded.ResultHash)).DifferenceCount);
     }
 
     [Fact]
