@@ -1,5 +1,5 @@
 import { QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ConflictError, getJson, NotFoundError, putJson, UnauthorizedError } from "./client"
+import { ConflictError, getJson, NetworkError, NotFoundError, putJson, UnauthorizedError } from "./client"
 import type { DashboardStats, DistilledPlan, KeyCount, OperationDetail, OperationSummary, Page, ProfilesResponse, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string }
@@ -23,13 +23,20 @@ export const queryKeys = {
   liveSessions: ["live", "sessions"] as const,
 }
 
+export const shouldRetry = (count: number, error: unknown) =>
+  error instanceof NetworkError ? true
+  : !(error instanceof UnauthorizedError || error instanceof NotFoundError) && count < 2
+
+export const retryDelay = (attempt: number) => Math.min(1000 * 2 ** attempt, 30_000)
+
 export function createQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
       queries: {
         staleTime: 10_000,
         refetchOnWindowFocus: false,
-        retry: (count, error) => !(error instanceof UnauthorizedError || error instanceof NotFoundError) && count < 2,
+        retry: shouldRetry,
+        retryDelay,
       },
     },
   })

@@ -1,4 +1,24 @@
+import { connection } from "./connection"
 import type { FieldError } from "./types"
+
+export class NetworkError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "NetworkError"
+  }
+}
+
+/** The one place fetches go through: reports connection state and turns transport failures into NetworkError. */
+async function send(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    const response = await fetch(url, init)
+    connection.reportSuccess()
+    return response
+  } catch {
+    connection.reportFailure()
+    throw new NetworkError(`Dashboard unreachable: ${url}`)
+  }
+}
 
 export class UnauthorizedError extends Error {
   constructor() {
@@ -27,7 +47,7 @@ export function withQuery(path: string, params: QueryParams = {}): string {
 
 export async function getJson<T>(path: string, params?: QueryParams): Promise<T> {
   const url = withQuery(path, params)
-  const response = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } })
+  const response = await send(url, { credentials: "same-origin", headers: { Accept: "application/json" } })
   if (response.status === 401) throw new UnauthorizedError()
   if (response.status === 404) throw new NotFoundError(url)
   if (!response.ok) throw new Error(`Request failed with ${response.status}: ${url}`)
@@ -53,7 +73,7 @@ export class ConflictError extends Error {
 /** The dashboard's only write; the custom header is what the server's write guard requires. */
 export async function putJson<T>(path: string, body: unknown, params?: QueryParams): Promise<T> {
   const url = withQuery(path, params)
-  const response = await fetch(url, {
+  const response = await send(url, {
     method: "PUT",
     credentials: "same-origin",
     headers: { Accept: "application/json", "Content-Type": "application/json", "X-SqlHarness-Dashboard": "1" },

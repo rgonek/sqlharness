@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { useEffect, useState } from "react"
+import { connection } from "@/api/connection"
 import { queryKeys } from "@/api/queries"
 import type { OperationSummary, SessionSummary } from "@/api/types"
 import { mergeOperation, mergeSession, pushRunning } from "./liveStore"
@@ -19,8 +20,8 @@ const liveLists = [queryKeys.liveOperations, queryKeys.liveRunning, queryKeys.li
  * live lists. `open` fires once per (re)connection and a refetch does not touch the
  * EventSource, so this cannot loop.
  *
- * When EventSource gives up (readyState CLOSED, e.g. a 401 after the dashboard restarted with a
- * new token), the live lists are refetched once so the reason surfaces through the queries'
+ * When EventSource gives up (readyState CLOSED, e.g. a 401: the dashboard token is persistent, so
+ * that now means it was rotated), the live lists are refetched once so the reason surfaces through the queries'
  * error (UnauthorizedError is not retried).
  */
 export function useLiveFeed(): LiveFeedState {
@@ -34,10 +35,12 @@ export function useLiveFeed(): LiveFeedState {
     const source = new EventSource("/api/live")
     source.onopen = () => {
       setState("connected")
+      connection.reportSuccess()
       refetchLists()
     }
     source.onerror = () => {
       setState("disconnected")
+      if (source.readyState !== EventSource.OPEN) connection.reportFailure()
       if (source.readyState === EventSource.CLOSED) refetchLists()
     }
     source.addEventListener("operation", event => {
