@@ -319,4 +319,29 @@ public sealed class DashboardHostTests
         Assert.False(File.Exists(Path.Combine(home.Path, "dashboard.json")));
         Assert.False(File.Exists(PagePath(home)));
     }
+
+    [Fact]
+    public void Token_file_is_created_once_and_reused()
+    {
+        using var home = new TempHome();
+
+        var first = DashboardToken.LoadOrCreate(home.Path);
+        var second = DashboardToken.LoadOrCreate(home.Path);
+
+        Assert.Equal(first, second);
+        Assert.True(first.Length >= 40);
+        Assert.Equal(first, File.ReadAllText(Path.Combine(home.Path, DashboardToken.FileName)).Trim());
+        if (!OperatingSystem.IsWindows())
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(home.Path, DashboardToken.FileName)));
+    }
+
+    [Fact]
+    public void Deleting_the_token_file_rotates_the_token()
+    {
+        using var home = new TempHome();
+        var first = DashboardToken.LoadOrCreate(home.Path);
+        File.Delete(Path.Combine(home.Path, DashboardToken.FileName));
+
+        Assert.NotEqual(first, DashboardToken.LoadOrCreate(home.Path));
+    }
 }

@@ -36,7 +36,7 @@ public sealed class DashboardServerTests
         try
         {
             using var exchange = await client.GetAsync($"/?t={server.Token}");
-            Assert.Equal(HttpStatusCode.Redirect, exchange.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, exchange.StatusCode);
             return dashboard;
         }
         catch
@@ -47,20 +47,49 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
-    public async Task Token_exchange_sets_a_strict_http_only_cookie_and_redirects_without_the_token()
+    public async Task Token_exchange_answers_a_same_origin_hand_off_page_with_a_long_lived_cookie()
     {
         using var home = new TempHome();
         await using var server = await DashboardServer.StartAsync(new DashboardServerOptions(home.DatabasePath, 0, new FakeProcesses()), CancellationToken.None);
         using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = server.BaseUri };
 
-        var response = await client.GetAsync($"/sessions?t={server.Token}");
+        var response = await client.GetAsync($"/sessions?t={server.Token}&x=1");
 
-        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        Assert.Equal("/sessions", response.Headers.Location!.OriginalString);
+        // Not a redirect: a redirect would continue the browser's cross-site navigation from the
+        // file:// launch page, and SameSite=Strict would withhold the cookie on it (401 today).
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("http-equiv=\"refresh\"", body);
+        Assert.Contains("url=/sessions?x=1", body);
+        Assert.DoesNotContain(server.Token, body);
+        Assert.DoesNotContain("<script", body, StringComparison.OrdinalIgnoreCase);
         var cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
         Assert.Contains(DashboardSecurity.CookieName + "=", cookie);
         Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("samesite=strict", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("max-age=34560000", cookie, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Supplied_token_is_used_and_survives_a_restart()
+    {
+        using var home = new TempHome();
+        var options = new DashboardServerOptions(home.DatabasePath, 0, new FakeProcesses()) { Token = "fixed-token-value-123" };
+        var cookies = new CookieContainer();
+        await using (var server = await DashboardServer.StartAsync(options, CancellationToken.None))
+        {
+            using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, CookieContainer = cookies }) { BaseAddress = server.BaseUri };
+            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/?t=fixed-token-value-123")).StatusCode);
+        }
+
+        await using (var restarted = await DashboardServer.StartAsync(options, CancellationToken.None))
+        {
+            // The cookie from the first run authenticates against the restarted server (new port, same token).
+            foreach (Cookie cookie in cookies.GetAllCookies())
+                cookies.Add(new Cookie(cookie.Name, cookie.Value, "/", restarted.BaseUri.Host));
+            using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, CookieContainer = cookies }) { BaseAddress = restarted.BaseUri };
+            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/sessions")).StatusCode);
+        }
     }
 
     [Fact]
@@ -283,8 +312,10 @@ public sealed class DashboardServerTests
 
         var response = await client.GetAsync($"/sessions?T={server.Token}&view=x");
 
-        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        Assert.Equal("/sessions?view=x", response.Headers.Location!.OriginalString);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("url=/sessions?view=x", body);
+        Assert.DoesNotContain(server.Token, body);
     }
 
     [Theory]
@@ -300,8 +331,11 @@ public sealed class DashboardServerTests
 
         var response = await client.GetAsync(new Uri($"http://127.0.0.1:{server.Port}{path}?t={server.Token}"));
 
-        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        var location = response.Headers.Location!.OriginalString;
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        var marker = "url=";
+        var start = body.IndexOf(marker, StringComparison.Ordinal) + marker.Length;
+        var location = System.Net.WebUtility.HtmlDecode(body[start..body.IndexOf('"', start)]);
         Assert.StartsWith("/", location);
         Assert.False(location.Length > 1 && location[1] is '/' or '\\', location);
         Assert.DoesNotContain("%5C", location[..Math.Min(4, location.Length)], StringComparison.OrdinalIgnoreCase);

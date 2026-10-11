@@ -20,6 +20,9 @@ namespace SqlHarness.Dashboard;
 
 public sealed record DashboardServerOptions(string DatabasePath, int PreferredPort, IProcessInfo Processes)
 {
+    /// <summary>The persistent token; null generates a fresh one (tests).</summary>
+    public string? Token { get; init; }
+
     public TimeSpan LivePollInterval { get; init; } = TimeSpan.FromSeconds(1);
 
     /// <summary>Records requests and open live streams; a new instance on the system clock when null.</summary>
@@ -91,7 +94,7 @@ public static partial class DashboardServer
         ArgumentNullException.ThrowIfNull(options);
         ArgumentOutOfRangeException.ThrowIfNegative(options.PreferredPort, nameof(options));
         ArgumentOutOfRangeException.ThrowIfGreaterThan(options.PreferredPort, IPEndPoint.MaxPort, nameof(options));
-        var token = DashboardSecurity.NewToken();
+        var token = options.Token ?? DashboardSecurity.NewToken();
         // The preferred port and the next ones, then an ephemeral loopback port as the last resort;
         // the caller publishes whatever port was actually bound.
         int[] candidates = options.PreferredPort == 0
