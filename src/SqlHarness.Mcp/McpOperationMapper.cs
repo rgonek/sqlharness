@@ -49,7 +49,7 @@ public sealed record McpCapabilitiesDocument(
 /// Length bounds stay with <see cref="AgentOutputProjection"/>. Non-plan
 /// reports, including manifest-read artifact sections, pass through unchanged.
 /// </summary>
-public static class McpPlanTextPolicy
+public static partial class McpPlanTextPolicy
 {
     public static object? Apply(object? report, bool includeText) =>
         report is DistilledPlan plan ? ApplyPlan(plan, includeText) : report;
@@ -76,8 +76,29 @@ public static class McpPlanTextPolicy
             Children = node.Children.Select(child => ApplyNode(child, includeText)).ToArray(),
         };
 
-    private static string? Text(string? value, bool includeText) =>
-        includeText && value is not null ? SecretRedactor.Redact(value, []) : null;
+    private static string? Text(string? value, bool includeText)
+    {
+        if (!includeText || value is null)
+            return null;
+
+        // The credential-column rule runs first and keeps its matches out of the shared redactor, whose bare
+        // password branch would otherwise mask the rest of the text after an N'...' literal.
+        var builder = new StringBuilder(value.Length);
+        var position = 0;
+        foreach (var match in CredentialLiteralPattern().Matches(value).Cast<Match>())
+        {
+            builder.Append(SecretRedactor.Redact(value[position..match.Index], []));
+            builder.Append(match.Groups[1].Value).Append("[REDACTED]").Append(match.Groups[3].Value);
+            position = match.Index + match.Length;
+        }
+        builder.Append(SecretRedactor.Redact(value[position..], []));
+        return builder.ToString();
+    }
+
+    // Masks only the string literal compared with a credential-named column (bracketed, quoted or bare, optionally
+    // qualified). Key names mirror SecretRedactor; other literals are plan data and stay readable.
+    [GeneratedRegex("""(?i)((?:password|pwd|access[_\s-]?token|client[_\s-]?secret|account[_\s-]?key|shared[_\s-]?access[_\s-]?key)[\]"]?\s*(?:=|<>|!=|like)\s*N?')((?:''|[^'])*)(')""", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex CredentialLiteralPattern();
 }
 
 /// <summary>

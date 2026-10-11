@@ -487,6 +487,22 @@ public sealed class McpToolSchemaTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task Plan_tool_masks_bracketed_credential_column_literals_in_predicates(bool requestMode)
+    {
+        await using var served = await ServePlanModeAsync(requestMode);
+        var xml = ShowplanWithText("SELECT * FROM dbo.Users WHERE Password = N'hunter2' AND Status = N'ACTIVE'")
+            .Replace("[Status]=N'ACTIVE'", "[Users].[Password]=N'hunter2' AND [dbo].[Users].[Status]=N'ACTIVE'", StringComparison.Ordinal);
+        var result = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = xml }, cancellationToken: CancellationToken.None));
+
+        Assert.DoesNotContain("hunter2", result.Raw, StringComparison.Ordinal);
+        Assert.Contains("[Password]=N'[REDACTED]'", Text(result.Root, "predicate")!, StringComparison.Ordinal);
+        Assert.Contains("[Status]=N'ACTIVE'", Text(result.Root, "predicate")!, StringComparison.Ordinal);
+        Assert.Contains("Status = N'ACTIVE'", Text(result.Statement, "sql")!, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task Plan_tool_include_text_false_omits_statement_text_and_predicates(bool requestMode)
     {
         await using var served = await ServePlanModeAsync(requestMode);

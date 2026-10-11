@@ -168,18 +168,18 @@ public static class McpResultAdapter
             SqlHarnessExitCode.SnapshotDifferences);
         var exitCode = (int)outcome.ExitCode;
 
-        var sanitized = outcome.Report;
-        foreach (var detailLimit in AgentOutputProjection.GetCandidateDetailLimits(sanitized, maximumBytes, maximumCellCharacters).Distinct())
+        var report = outcome.Report;
+        foreach (var detailLimit in AgentOutputProjection.GetCandidateDetailLimits(report, maximumBytes, maximumCellCharacters).Distinct())
         {
             var projected = AgentOutputProjection.Project(
-                sanitized, maximumCellCharacters, detailLimit, out var omitted, maximumBytes);
+                report, maximumCellCharacters, detailLimit, out var omitted, maximumBytes);
             var totalOmitted = omitted + errorOmitted;
 
             // Reports the shared projection does not know (capabilities,
             // validation) travel raw when they fit, instead of degrading to a
             // bounded placeholder while bytes remain.
-            if (projected is AgentBoundedOutput && sanitized is not null &&
-                TryEnvelopeBytes(boundedCommand, status, exitCode, sanitized, error, null, out var rawBytes) &&
+            if (projected is AgentBoundedOutput && report is not null &&
+                TryEnvelopeBytes(boundedCommand, status, exitCode, report, error, null, out var rawBytes) &&
                 TryBuildWithinBudget(rawBytes, isError, maximumBytes, out var rawResult))
                 return rawResult;
 

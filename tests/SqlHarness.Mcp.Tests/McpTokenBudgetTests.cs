@@ -102,7 +102,9 @@ public sealed class McpTokenBudgetTests
             var truncation = document.RootElement.GetProperty("truncation");
             Assert.Equal(JsonValueKind.Object, truncation.ValueKind);
             Assert.True(truncation.GetProperty("omittedItems").GetInt32() > 0);
-            if (document.RootElement.GetProperty("result").TryGetProperty("statements", out var statements))
+            var hasStatements = document.RootElement.GetProperty("result").TryGetProperty("statements", out var statements);
+            Assert.True(hasStatements || budget == 4096, $"statements missing at budget {budget}.");
+            if (hasStatements)
             {
                 var statementText = statements[0].GetProperty("sql").GetString()!;
                 Assert.True(statementText.Length <= cells);

@@ -1063,7 +1063,7 @@ public sealed class McpMappingTests : IDisposable
     [Fact]
     public void Plan_text_policy_filters_credentials_and_keeps_literals_when_text_is_included()
     {
-        var child = new PlanNode("Index Seek", "Index Seek", "dbo.T", "IX_T", 1, 1, 1, 0.1, "[Id]=(42) AND [Pwd]='x' AND password='hunter2-synthetic'", [], []);
+        var child = new PlanNode("Index Seek", "Index Seek", "dbo.T", "IX_T", 1, 1, 1, 0.1, "[Id]=(42) AND [Note]='x' AND password='hunter2-synthetic'", [], []);
         var root = new PlanNode("Nested Loops", "Inner Join", null, null, 2, 2, 1, 0.9, "OuterRefs", [], [child]);
         var plan = new DistilledPlan([new PlanStatement("SELECT * FROM dbo.T WHERE Id = 42 AND access_token=tok-synthetic", root, [])]);
 
@@ -1074,10 +1074,27 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal("OuterRefs", kept.Statements[0].Root.Predicate);
         var keptChild = kept.Statements[0].Root.Children[0];
         Assert.Contains("[Id]=(42)", keptChild.Predicate, StringComparison.Ordinal);
-        Assert.Contains("[Pwd]='x'", keptChild.Predicate, StringComparison.Ordinal);
+        Assert.Contains("[Note]='x'", keptChild.Predicate, StringComparison.Ordinal);
         Assert.DoesNotContain("hunter2-synthetic", keptChild.Predicate, StringComparison.Ordinal);
         Assert.Equal("dbo.T", keptChild.ObjectName);
         Assert.Equal(plan.Statements[0].Root.EstimatedRows, kept.Statements[0].Root.EstimatedRows);
+    }
+
+    [Theory]
+    [InlineData("[dbo].[Users].[Password]=N'hunter2' AND [dbo].[Users].[Status]=N'ACTIVE'", "[dbo].[Users].[Password]=N'[REDACTED]' AND [dbo].[Users].[Status]=N'ACTIVE'")]
+    [InlineData("Password = N'hunter2' AND Status = N'ACTIVE'", "Password = N'[REDACTED]' AND Status = N'ACTIVE'")]
+    [InlineData("(password = 'x'::text) AND (status = 'ACTIVE'::text)", "(password = '[REDACTED]'::text) AND (status = 'ACTIVE'::text)")]
+    [InlineData("(\"password\" = 'x'::text)", "(\"password\" = '[REDACTED]'::text)")]
+    [InlineData("[t].[Pwd] LIKE N'ab%' AND [t].[Access_Token]<>'z'", "[t].[Pwd] LIKE N'[REDACTED]' AND [t].[Access_Token]<>'[REDACTED]'")]
+    [InlineData("[Password]!=N'it''s secret' AND [Kind]=N'gold'", "[Password]!=N'[REDACTED]' AND [Kind]=N'gold'")]
+    [InlineData("[Note]=N'hunter2' AND [Status]=N'ACTIVE'", "[Note]=N'hunter2' AND [Status]=N'ACTIVE'")]
+    public void Plan_text_policy_masks_only_literals_compared_with_credential_columns(string input, string expected)
+    {
+        var node = new PlanNode("Scan", null, null, null, 1, 1, 1, 0.1, input, [], []);
+        var plan = new DistilledPlan([new PlanStatement(input, node, [])]);
+        var kept = Assert.IsType<DistilledPlan>(McpPlanTextPolicy.Apply(plan, includeText: true));
+        Assert.Equal(expected, kept.Statements[0].Root.Predicate);
+        Assert.Equal(expected, kept.Statements[0].StatementText);
     }
 
     [Fact]
