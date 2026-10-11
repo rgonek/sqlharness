@@ -77,6 +77,10 @@ The exception fails the **whole operation**, not just display. So `SELECT * FROM
 
 **Out of scope**: reader changes (`GetValue`), equivalence semantics (`ResultEquivalence.cs`), display/rendering of these values in the CLI (`Renderer.cs`; check it does not throw too, and if it does, record it as a follow-up rather than fixing it here), and Npgsql version (plan 022).
 
+### Authorized whole-branch final fix (2026-10-11)
+
+The controller authorized a narrow extension after whole-branch review found that snapshot persistence discarded multidimensional array dimensions. `SnapshotStore` may persist nullable dimensions as additive optional metadata, and `SnapshotDiffer` may compare them. Cover persistence/load, equal and different shapes with the same flattened elements, old version 1 snapshots without dimensions, and runner `Different` / exit 8 behavior. Preserve canonical scalar tags, legacy version 1 documents, and ordinary scalar persisted bytes; do not bump the document version. No changes to equivalence semantics, rendering, readers, lower-bound behavior, or live database behavior are authorized. The final-fix report and full-gate evidence are recorded in [the durable proof](024-canonical-results-proof.md); the controller's scoped re-review remains the next review step.
+
 ## Git workflow
 
 Branch `fix/plan-024-canonical-types`. Commits per step. Do NOT push.
@@ -139,10 +143,12 @@ New tests listed in Steps 1–3, about 15. The rewritten non-finite test is the 
 
 ## Done criteria
 
-- [ ] Canonical/equivalence/snapshot tests and full gate pass
-- [ ] `grep -n "Non-finite System.Double values are not supported" src` → no match
-- [ ] `git diff main -- tests/SqlHarness.Tests/CanonicalResultsTests.cs` changes only the non-finite test and adds new tests; `QueryResultCollectorTests.cs` only replaces its obsolete infinity fixture with an unsupported scalar and updates the error wording assertion
-- [ ] `plans/README.md` row updated (state that live PG/SQL Server reads of these types were not exercised unless they were)
+- [x] Canonical/equivalence/snapshot tests and Windows/Linux full gates pass
+- [x] `rg -n "Non-finite System.Double values are not supported" src` returns no match
+- [x] The canonical tests and `QueryResultCollectorTests.cs` changes stay within the listed phase requirements
+- [x] `plans/README.md` row updated and states that live PG/SQL Server reads were not exercised
+
+The snapshot-shape final fix is an additional branch-review requirement: version 1 snapshot diff must report different multidimensional shapes even when flattened elements match, while loading old documents and preserving ordinary scalar bytes.
 
 ## STOP conditions
 

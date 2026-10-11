@@ -85,3 +85,33 @@ Phase A evidence, including the initial Linux cancellation timing flake and its 
 Phase B changed `src/SqlHarness.Core/CanonicalResults.cs`, `tests/SqlHarness.Tests/CanonicalResultsTests.cs`, `README.md`, `AGENTS.md`, and the provider reconciliation in `plans/024-canonical-results-common-types.md`. The array arm is after the existing byte-array arm in `Write`; `Prepare` keeps `byte[]` on its primitive path, while every other array recursively prepares all elements before a writer can be mutated. Existing Phase A tags and envelopes were preserved.
 
 No unresolved concerns.
+
+---
+
+# Plan 024, whole-branch final fix report
+
+## Finding and bounded correction
+
+The whole-branch review found that the canonical array hash included multidimensional shape, while snapshot persistence stored only scalar type/null/value fields. Consequently, equal flattened elements with different shapes could produce an `Identical` snapshot verdict. The controller authorized a narrow extension to `SnapshotStore` and `SnapshotDiffer`, their regressions, and Plan 024 evidence/index updates.
+
+Commit `0b9f659` (`Preserve array dimensions in snapshot diffs`) adds optional `dimensions` metadata to `SnapshotScalar`, populated from the existing canonical array envelope and omitted when absent. `SnapshotDiffer` compares dimensions structurally. This preserves ordinary scalar persisted bytes and the version 1 format; old version 1 scalar documents load and diff successfully without a migration. Equal shapes remain identical, while a 2×3 and 3×2 array with the same row-major elements report one `cell-changed` location. `SnapshotRunner` reports `SnapshotVerdict.Different` and exit code 8 for the shape-only change.
+
+No canonical tags, result-equivalence rules, readers, renderer, lower-bound contract, or live behavior changed. No live database, dashboard, or API was used.
+
+## Regression evidence
+
+- RED: `dotnet test tests/SqlHarness.Tests --filter 'FullyQualifiedName~SnapshotDifferTests.Different_multidimensional_array_shapes_with_same_elements_are_different' --no-restore` exited 1 before implementation: expected one difference, actual zero.
+- GREEN: `dotnet test tests/SqlHarness.Tests --filter 'FullyQualifiedName~SnapshotStoreTests|FullyQualifiedName~SnapshotDifferTests|FullyQualifiedName~SnapshotTests' --no-restore` exited 0: 62 passed, 0 failed, 0 skipped.
+- Broader regression filter: `dotnet test tests/SqlHarness.Tests --filter 'FullyQualifiedName~CanonicalResults|FullyQualifiedName~ResultEquivalence|FullyQualifiedName~Snapshot' --no-restore` exited 0: 176 passed, 0 failed, 0 skipped.
+- Formatting: `dotnet format SqlHarness.sln --no-restore --verify-no-changes --include src/SqlHarness.Core/SnapshotStore.cs src/SqlHarness.Core/SnapshotDiffer.cs tests/SqlHarness.Tests/SnapshotStoreTests.cs tests/SqlHarness.Tests/SnapshotDifferTests.cs tests/SqlHarness.Tests/SnapshotTests.cs` exited 0; `git diff --check` exited 0.
+
+The store regression confirms array dimensions survive save/load and ordinary scalar JSON omits the optional property. A hand-authored legacy version 1 scalar document without dimensions remains readable and diffable.
+
+## Final-fix full gates
+
+The implementation commit was `0b9f659` before the final full gates.
+
+- Windows: `pwsh -NoProfile -File scripts/verify.ps1`, exit 0, literal `verify: OK`; build had 0 warnings/errors; Core 3569 passed; MCP 326 passed / 4 expected skips; UI 32 files / 148 tests passed. Log: `.superpowers/sdd/024-canonical-results-common-types/task-final-fix-windows-verify.log`.
+- Linux: `pwsh -NoProfile -File scripts/verify-linux.ps1`, exit 0, literal `verify-linux: OK`; build had 0 warnings/errors; Core 3569 passed; MCP 327 passed / 3 expected skips; UI 32 files / 148 tests passed. The ext4 clone synced to commit `0b9f659` before the gate. Log: `.superpowers/sdd/024-canonical-results-common-types/task-final-fix-linux-verify.log`.
+
+Scoped re-review of this one final-fix wave remains pending with the controller. No merge, push, or unrelated workspace cleanup was performed.
