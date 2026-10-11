@@ -32,3 +32,18 @@ The first Linux gate (`task-1-linux-verify.log`) had one failure: `ResultEquival
 The CLI renderer formats result cells with invariant `Convert.ToString`, so the new types have a string conversion path. MCP bounded projection retains non-string cell objects and serializes the projected report. No throw was identified by source inspection, and the full offline gates passed; however, no SQL Server/PostgreSQL live read or end-to-end CLI/MCP result containing these provider values was run. Provider-returned runtime assembly behavior and MCP serialization for actual provider UDT instances remain unproven follow-ups. No database, dashboard, or API was contacted.
 
 The plan index now marks Plan 024 `PARTIAL`, points to this report, records Phase B as pending, and states that no live SQL Server/PostgreSQL reads were exercised.
+
+## Review fix (round 1)
+
+The reviewer found that the initial null arm accepted every `INullable` implementation whose `IsNull` was true. Added a regression test using `SqlXml.Null`, an unsupported non-formattable provider value. Before the fix, the focused test failed because no `NotSupportedException` was thrown. Commit `8780fe0` removes the generic shortcut and recognizes null only for `SqlHierarchyId`, `SqlGeography`, and `SqlGeometry`; their existing null-envelope tests remain in the same canonical test group. Production no longer imports or depends on the generic `INullable` interface.
+
+Fix verification, all against commit `8780fe0`:
+
+- Red: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~Unsupported_sql_nullable_null_remains_rejected" --no-restore` exited 1 as expected before the fix: 1 failed, `Assert.Throws()` reported that no exception was thrown.
+- Green: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~CanonicalResults" --no-restore` exited 0: 33 passed, 0 failed, 0 skipped.
+- Focused regression set: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~CanonicalResults|FullyQualifiedName~ResultEquivalence|FullyQualifiedName~Snapshot" --no-restore` exited 0: 165 passed, 0 failed, 0 skipped.
+- Formatting: `dotnet format SqlHarness.sln --no-restore --include src/SqlHarness.Core/CanonicalResults.cs tests/SqlHarness.Tests/CanonicalResultsTests.cs` applied final-newline formatting after the first verify reported those two changed files. Then `dotnet format SqlHarness.sln --no-restore --verify-no-changes --include src/SqlHarness.Core/CanonicalResults.cs tests/SqlHarness.Tests/CanonicalResultsTests.cs` exited 0 with no diagnostics; `git diff --check` exited 0.
+- Windows: `pwsh -NoProfile -File scripts/verify.ps1` exited 0, literal `verify: OK`; build had 0 warnings/errors, Core 3558 passed, MCP 326 passed / 4 expected skips. Full fix log: `task-1-fix-windows-verify.log`.
+- Linux: `pwsh -NoProfile -File scripts/verify-linux.ps1` exited 0, literal `verify-linux: OK`; Core 3558 passed, MCP 327 passed / 3 expected skips. The new `Unsupported_sql_nullable_null_remains_rejected` test passed in this run. Full fix log: `task-1-fix-linux-verify.log`.
+
+The fix gates repeated no product behavior beyond narrowing null acceptance to the three explicitly supported SQL Server UDT types. No live database or provider-result operation was run.
