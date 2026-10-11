@@ -462,6 +462,46 @@ public sealed class McpToolSchemaTests : IDisposable
         var capabilities = schemas["sqlharness_capabilities"];
         Assert.Empty(Required(capabilities));
         Assert.True(Properties(capabilities).TryGetProperty("includeDiagnostics", out _));
+        Assert.Equal("integer", Properties(capabilities).GetProperty("inputRootCursor").GetProperty("type").GetString());
+        Assert.Equal(0, Properties(capabilities).GetProperty("inputRootCursor").GetProperty("default").GetInt32());
+    }
+
+    [Fact]
+    public async Task Served_capabilities_accept_the_input_root_cursor_and_still_reject_unknown_arguments_in_both_modes()
+    {
+        var scope = Scope();
+        var process = McpProcessContext.Create(new McpServerOptions
+        {
+            RequestScope = true,
+            AllowedProfiles = [ProfileName],
+        }, () => scope.Profiles);
+        await using var fixedServed = await ServedCatalog.CreateAsync(scope);
+        await using var requestServed = await ServedCatalog.CreateAsync(process);
+        foreach (var served in new[] { fixedServed, requestServed })
+        {
+            var tools = await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
+            var schema = ServedSchema(tools.Single(tool => tool.Name == "sqlharness_capabilities"));
+            Assert.True(Properties(schema).TryGetProperty("inputRootCursor", out _));
+
+            var paged = await served.Client.CallToolAsync(
+                "sqlharness_capabilities",
+                new Dictionary<string, object?> { ["inputRootCursor"] = 0, ["includeDiagnostics"] = true },
+                cancellationToken: CancellationToken.None);
+            Assert.False(paged.IsError == true);
+            var result = ServedEnvelope(paged, "sqlharness_capabilities").GetProperty("result");
+            Assert.Equal(0, result.GetProperty("inputRoots").GetArrayLength());
+            Assert.True(result.GetProperty("inputRootsComplete").GetBoolean());
+
+            var unknown = await served.Client.CallToolAsync(
+                "sqlharness_capabilities",
+                new Dictionary<string, object?> { ["inputRootCursor"] = 0, ["bogus"] = SecretValue },
+                cancellationToken: CancellationToken.None);
+            Assert.True(unknown.IsError == true);
+            var envelope = ServedEnvelope(unknown, "sqlharness_capabilities");
+            Assert.Equal("safety_rejected", envelope.GetProperty("error").GetProperty("code").GetString());
+            Assert.Contains("inputRootCursor", envelope.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+            Assert.DoesNotContain(SecretValue, envelope.GetRawText(), StringComparison.Ordinal);
+        }
     }
 
     // 012/T2: a matrix value is a string or JSON null (typed NULL); the

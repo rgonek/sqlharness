@@ -102,7 +102,11 @@ public sealed class McpInputReaderTests : IDisposable
     {
         var scope = ScopeWithoutRoots();
         Assert.Empty(scope.InputRoots);
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadSqlAsync(null, Path.Combine(_root, "q.sql"), scope, CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadSqlAsync(null, Path.Combine(_root, "q.sql"), scope, CancellationToken.None));
+        Assert.Contains("disabled", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("--input-root", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("sqlharness_capabilities inputRoots is empty", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("inline", exception.Message, StringComparison.Ordinal);
         await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync(["a.sqljson"], scope, CancellationToken.None));
     }
 
@@ -124,7 +128,7 @@ public sealed class McpInputReaderTests : IDisposable
     }
 
     [Fact]
-    public async Task Outside_root_error_hints_at_configured_roots_without_disclosing_them()
+    public async Task Outside_root_error_lists_configured_roots_points_to_capabilities_and_echoes_the_path()
     {
         var outside = Path.Combine(_home, "outside.sql");
         File.WriteAllText(outside, "SELECT 1;");
@@ -132,23 +136,180 @@ public sealed class McpInputReaderTests : IDisposable
         var exception = await Assert.ThrowsAsync<McpInputException>(
             () => McpInputReader.ReadSqlAsync(null, outside, _scope, CancellationToken.None));
 
-        Assert.Equal("The input path must be under a configured --input-root (1 roots configured).", exception.Message);
-        Assert.DoesNotContain(_root, exception.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(outside, exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("outside every configured input root", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("sqlharness_capabilities", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(Assert.Single(_scope.InputRoots), exception.Message, StringComparison.Ordinal);
+        Assert.Contains(outside, exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Relative_input_path_keeps_the_generic_invalid_path_error()
+    public async Task Outside_root_error_with_several_roots_lists_each_of_them()
+    {
+        var second = Path.Combine(_home, "inputs-b");
+        Directory.CreateDirectory(second);
+        var roots = new[] { _root, second };
+
+        var exception = await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadTextFileAsync(Path.Combine(_home, "outside.sql"), roots, McpLimits.MaxSqlBytes, CancellationToken.None));
+
+        foreach (var root in roots)
+            Assert.Contains(root, exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("First ", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Outside_root_error_with_too_many_roots_gives_count_and_paging_pointer_not_a_full_list()
+    {
+        var roots = Enumerable.Range(0, McpInputReader.MaxListedRoots + 4)
+            .Select(index => Path.Combine(Path.GetPathRoot(_home)!, "r" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+            .ToArray();
+
+        var exception = await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadTextFileAsync(Path.Combine(_home, "outside.sql"), roots, McpLimits.MaxSqlBytes, CancellationToken.None));
+
+        var total = roots.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Contains($"First {McpInputReader.MaxListedRoots} of {total}", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("inputRootCursor", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(roots[0], exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(roots[^1], exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Configured roots (", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Outside_root_error_with_long_roots_states_the_count_when_not_even_one_fits()
+    {
+        var roots = new[] { Path.Combine(_home, new string('a', McpInputReader.MaxListedRootCharacters)), _root };
+
+        var exception = await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadTextFileAsync(Path.Combine(_home, "outside.sql"), roots, McpLimits.MaxSqlBytes, CancellationToken.None));
+
+        Assert.Contains("2 input roots are configured", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("inputRootCursor", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(roots[0], exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Rejection_reasons_are_distinct_and_echo_the_caller_path()
+    {
+        async Task<string> Message(string path) =>
+            (await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadSqlAsync(null, path, _scope, CancellationToken.None))).Message;
+
+        var relative = await Message("relative.sql");
+        Assert.Contains("not an absolute path", relative, StringComparison.Ordinal);
+        Assert.Contains("relative.sql", relative, StringComparison.Ordinal);
+
+        var malformedPath = Path.Combine(_root, "bad\0name.sql");
+        var malformed = await Message(malformedPath);
+        Assert.Contains("not a valid path", malformed, StringComparison.Ordinal);
+
+        const string unc = @"\\mcp-unreachable.invalid\share\q.sql";
+        var uncMessage = await Message(unc);
+        Assert.Contains("UNC", uncMessage, StringComparison.Ordinal);
+        Assert.Contains(unc, uncMessage, StringComparison.Ordinal);
+
+        var ads = Path.Combine(_root, "q.sql:stream");
+        var adsMessage = await Message(ads);
+        Assert.Contains("alternate data streams", adsMessage, StringComparison.Ordinal);
+        Assert.Contains(ads, adsMessage, StringComparison.Ordinal);
+
+        var missing = Path.Combine(_root, "no-such-file.sql");
+        var missingMessage = await Message(missing);
+        Assert.Contains("cannot be read", missingMessage, StringComparison.Ordinal);
+        Assert.Contains(missing, missingMessage, StringComparison.Ordinal);
+
+        var blank = (await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadTextFileAsync("  ", _scope.InputRoots, McpLimits.MaxSqlBytes, CancellationToken.None))).Message;
+        Assert.Contains("blank", blank, StringComparison.Ordinal);
+
+        Assert.Equal(6, new[] { relative, malformed, uncMessage, adsMessage, missingMessage, blank }.Distinct().Count());
+    }
+
+    [Fact]
+    public async Task Echoed_path_is_credential_filtered()
+    {
+        var path = Path.Combine(_root, "Password=hunter2;x.sql:s");
+
+        var exception = await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadSqlAsync(null, path, _scope, CancellationToken.None));
+
+        Assert.DoesNotContain("hunter2", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Echoed_path_is_truncated_and_the_error_result_fits_the_minimum_budget()
+    {
+        var path = Path.Combine(_root, new string('p', 3000) + ".sql");
+
+        var exception = await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadSqlAsync(null, path, _scope, CancellationToken.None));
+
+        Assert.Contains("[truncated,", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(new string('p', McpInputReader.MaxEchoedPathCharacters + 50), exception.Message, StringComparison.Ordinal);
+        AssertFitsMinimumBudget(exception.Message);
+
+        // Worst case: the maximum number of listed roots plus a maximum-length path.
+        var roots = Enumerable.Range(0, McpInputReader.MaxListedRoots)
+            .Select(index => Path.Combine(Path.GetPathRoot(_home)!, "r" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+            .ToArray();
+        var outside = await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadTextFileAsync(Path.Combine(_home, new string('o', 3000) + ".sql"), roots, McpLimits.MaxSqlBytes, CancellationToken.None));
+        AssertFitsMinimumBudget(outside.Message);
+    }
+
+    [Theory]
+    [InlineData("//admin:S3cret@srv/share/q.sql")]
+    [InlineData(@"\\admin:S3cret@srv\share\q.sql")]
+    [InlineData("postgres://u:S3cret@h/db")]
+    public async Task Echoed_path_masks_url_and_unc_userinfo(string path)
     {
         var exception = await Assert.ThrowsAsync<McpInputException>(
-            () => McpInputReader.ReadSqlAsync(null, "relative.sql", _scope, CancellationToken.None));
+            () => McpInputReader.ReadSqlAsync(null, path, _scope, CancellationToken.None));
 
-        Assert.Equal("The input path is invalid.", exception.Message);
+        Assert.DoesNotContain("S3cret", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]@", exception.Message, StringComparison.Ordinal);
+    }
 
-        var malformed = await Assert.ThrowsAsync<McpInputException>(
-            () => McpInputReader.ReadSqlAsync(null, Path.Combine(_root, "bad\0name.sql"), _scope, CancellationToken.None));
+    [Fact]
+    public async Task Outside_root_message_masks_a_credential_in_the_caller_path()
+    {
+        var path = Path.Combine(_home, "Password=hunter2;outside.sql");
 
-        Assert.Equal("The input path is invalid.", malformed.Message);
+        var exception = await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadSqlAsync(null, path, _scope, CancellationToken.None));
+
+        Assert.Contains("outside every configured input root", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("hunter2", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Worst_case_rejection_messages_stay_within_the_default_cell_limit()
+    {
+        var longPath = Path.Combine(Path.GetPathRoot(_home)!, new string('o', 3000) + ".sql");
+        foreach (var count in new[] { 1, 3, McpInputReader.MaxListedRoots, McpInputReader.MaxListedRoots + 4 })
+        {
+            var roots = Enumerable.Range(0, count)
+                .Select(index => Path.Combine(Path.GetPathRoot(_home)!, new string('r', 17) + index.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+                .ToArray();
+            var exception = await Assert.ThrowsAsync<McpInputException>(
+                () => McpInputReader.ReadTextFileAsync(longPath, roots, McpLimits.MaxSqlBytes, CancellationToken.None));
+            Assert.True(exception.Message.Length <= McpLimits.DefaultMaximumCellCharacters, $"{count} roots: {exception.Message.Length}");
+            Assert.Contains("[truncated,", exception.Message, StringComparison.Ordinal);
+        }
+
+        var tooLongRoots = new[] { Path.Combine(_home, new string('a', 400)) };
+        var single = await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadTextFileAsync(longPath, tooLongRoots, McpLimits.MaxSqlBytes, CancellationToken.None));
+        Assert.True(single.Message.Length <= McpLimits.DefaultMaximumCellCharacters);
+    }
+
+    private static void AssertFitsMinimumBudget(string message)
+    {
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, message),
+            "sqlharness_query",
+            new McpResultBudget(McpLimits.MinCallToolResultBudgetBytes));
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.MinCallToolResultBudgetBytes);
     }
 
     [Fact]
@@ -181,7 +342,7 @@ public sealed class McpInputReaderTests : IDisposable
     }
 
     [Fact]
-    public async Task Directory_link_to_outside_root_reports_root_hint_without_disclosing_target()
+    public async Task Directory_link_to_outside_root_reports_roots_without_disclosing_target()
     {
         var outsideDir = Path.Combine(_home, "outside-dir");
         Directory.CreateDirectory(outsideDir);
@@ -193,9 +354,12 @@ public sealed class McpInputReaderTests : IDisposable
         var exception = await Assert.ThrowsAsync<McpInputException>(
             () => McpInputReader.ReadSqlAsync(null, Path.Combine(dirLink, "q.sql"), _scope, CancellationToken.None));
 
-        Assert.Equal("The input path must be under a configured --input-root (1 roots configured).", exception.Message);
+        Assert.Contains("outside every configured input root", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("sqlharness_capabilities", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(_root, exception.Message, StringComparison.Ordinal);
+        // The caller's own path is echoed; the resolved link target never is.
+        Assert.Contains(dirLink, exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(outsideDir, exception.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(dirLink, exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryCreateDirectoryLink(string link, string target)

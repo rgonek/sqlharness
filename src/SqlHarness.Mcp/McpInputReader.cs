@@ -1,10 +1,15 @@
 using System.Text;
+using System.Text.RegularExpressions;
 
 using SqlHarness.Core;
 
 namespace SqlHarness.Mcp;
 
-/// <summary>Safe rejection of an MCP file or inline input. Messages are constant and never echo values or SQL.</summary>
+/// <summary>
+/// Safe rejection of an MCP file or inline input. Messages name the reason and may echo the caller-supplied
+/// path (credential-filtered and length-bounded) and the configured input roots; they never echo SQL, file
+/// content, resolved link targets, or any other filesystem path.
+/// </summary>
 public sealed class McpInputException(string message) : Exception(message);
 
 /// <summary>
@@ -17,8 +22,17 @@ public sealed class McpInputException(string message) : Exception(message);
 /// once, reads at most the stated bound plus one byte, then re-validates the
 /// on-disk entry before accepting the bytes.
 /// </summary>
-public static class McpInputReader
+public static partial class McpInputReader
 {
+    /// <summary>Longest caller-supplied path echoed in a rejection message, in characters.</summary>
+    internal const int MaxEchoedPathCharacters = 120;
+
+    /// <summary>Most configured roots listed in an outside-root rejection.</summary>
+    internal const int MaxListedRoots = 8;
+
+    /// <summary>Largest total root-string length listed in an outside-root rejection.</summary>
+    internal const int MaxListedRootCharacters = 150;
+
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     /// <summary>Resolves exactly one of inline sql or a rooted file, for SQL tools.</summary>
@@ -132,17 +146,17 @@ public static class McpInputReader
     {
         ArgumentNullException.ThrowIfNull(roots);
         if (roots.Count == 0)
-            throw new McpInputException("File inputs are not enabled for this server process.");
+            throw new McpInputException("File inputs are disabled: no --input-root is configured (sqlharness_capabilities inputRoots is empty). Pass the content inline instead.");
         if (string.IsNullOrWhiteSpace(path))
-            throw new McpInputException("The input path is invalid.");
+            throw new McpInputException("The input path is blank. Provide an absolute path under a configured input root (see sqlharness_capabilities inputRoots).");
         if (path.StartsWith(@"\\", StringComparison.Ordinal) || path.StartsWith("//", StringComparison.Ordinal))
-            throw new McpInputException("The input path is invalid.");
+            throw Rejected("UNC and network paths are not accepted", path);
 
         string full;
         try
         {
             if (!Path.IsPathFullyQualified(path))
-                throw new McpInputException("The input path is invalid.");
+                throw Rejected("not an absolute path", path);
             full = Path.GetFullPath(path);
         }
         catch (McpInputException)
@@ -151,20 +165,20 @@ public static class McpInputReader
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            throw new McpInputException("The input path is invalid.");
+            throw Rejected("not a valid path", path);
         }
 
         // NTFS alternate data streams hide behind a colon in the file name.
         // The drive-letter colon lives in the directory portion, never here.
         if (Path.GetFileName(full).Contains(':', StringComparison.Ordinal))
-            throw new McpInputException("The input path is invalid.");
+            throw Rejected("alternate data streams are not accepted", path);
         if (!McpInputRoots.IsUnderAnyRoot(full, roots))
-            throw OutsideRootsException(roots);
+            throw OutsideRootsException(roots, path);
         if (IsLinkOrReparseChain(full))
         {
             if (LinkTargetIsOutsideRoots(full, roots))
-                throw OutsideRootsException(roots);
-            throw new McpInputException("The input path is invalid.");
+                throw OutsideRootsException(roots, path);
+            throw Rejected("resolves through a link or reparse point, which is not accepted", path);
         }
 
         FileStream stream;
@@ -183,7 +197,7 @@ public static class McpInputReader
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            throw new McpInputException("The input file cannot be read.");
+            throw Rejected("the file cannot be read", path);
         }
 
         await using (stream)
@@ -193,7 +207,7 @@ public static class McpInputReader
             afterOpen?.Invoke();
             var after = Snapshot(full);
             if (!before.Equals(after) || !McpInputRoots.IsUnderAnyRoot(full, roots) || IsLinkOrReparseChain(full))
-                throw new McpInputException("The input file changed while it was read.");
+                throw Rejected("the file changed while it was read", path);
             try
             {
                 return decode(bytes);
@@ -287,8 +301,47 @@ public static class McpInputReader
         return false;
     }
 
-    private static McpInputException OutsideRootsException(IReadOnlyList<string> roots) =>
-        new($"The input path must be under a configured --input-root ({roots.Count} roots configured).");
+    private static McpInputException Rejected(string reason, string path) =>
+        new($"The input path was rejected: {reason}. Path: {EchoPath(path)}");
+
+    private static McpInputException OutsideRootsException(IReadOnlyList<string> roots, string path) =>
+        new($"The input path is outside every configured input root. {DescribeRoots(roots)} Path: {EchoPath(path)}");
+
+    private static string DescribeRoots(IReadOnlyList<string> roots)
+    {
+        const string Pointer = "sqlharness_capabilities inputRoots lists them";
+        var listed = 0;
+        var characters = 0;
+        while (listed < roots.Count && listed < MaxListedRoots && characters + roots[listed].Length <= MaxListedRootCharacters)
+        {
+            characters += roots[listed].Length;
+            listed++;
+        }
+
+        if (listed == roots.Count)
+            return $"Configured roots ({Pointer}): {string.Join("; ", roots)}.";
+        if (listed == 0)
+            return $"{roots.Count} input roots are configured; page sqlharness_capabilities inputRoots (inputRootCursor) to list them.";
+        return $"First {listed} of {roots.Count} configured roots: {string.Join("; ", roots.Take(listed))}. Page sqlharness_capabilities inputRoots (inputRootCursor) for the rest.";
+    }
+
+    /// <summary>The caller's own path, credential-filtered, control characters flattened, and bounded.</summary>
+    [GeneratedRegex(@"(//|\\\\)[^/\\@\s]+@", RegexOptions.CultureInvariant)]
+    private static partial Regex UserInfoPattern();
+
+    private static string EchoPath(string path)
+    {
+        // URL/UNC userinfo (user:password@host) is masked first, before redaction and truncation.
+        var safe = SecretRedactor.Redact(UserInfoPattern().Replace(path, "$1[REDACTED]@"), []);
+        safe = string.Create(safe.Length, safe, static (span, source) =>
+        {
+            for (var i = 0; i < span.Length; i++)
+                span[i] = char.IsControl(source[i]) ? '?' : source[i];
+        });
+        return safe.Length <= MaxEchoedPathCharacters
+            ? safe
+            : $"{safe[..MaxEchoedPathCharacters]}... [truncated, {safe.Length} characters]";
+    }
 
     private static bool IsLinkOrReparse(string path)
     {
