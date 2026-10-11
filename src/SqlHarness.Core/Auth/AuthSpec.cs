@@ -83,4 +83,10 @@ public sealed record AuthSpec(
     }
 
     internal bool RequiresAccessToken => Strategy == AuthStrategy.AzureCli;
+
+    // The only operator-held secret the caller cannot already obtain; read per call, never cached.
+    internal string? PasswordForRedaction() =>
+        Strategy == AuthStrategy.Sql && !string.IsNullOrEmpty(PasswordEnvVar)
+            ? Environment.GetEnvironmentVariable(PasswordEnvVar)
+            : null;
 }

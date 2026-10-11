@@ -240,7 +240,7 @@ public class SqlHarnessQueryTests
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
         Assert.DoesNotContain(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-        Assert.DoesNotContain("SELECT 1", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("SELECT 1", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]

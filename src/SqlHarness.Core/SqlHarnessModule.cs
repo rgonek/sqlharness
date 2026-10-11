@@ -186,14 +186,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
         CanonicalResultAccumulator? raw = null;
-        var knownSecrets = new List<string> { query.Sql };
-        SqlParameterSecrets.AddValues(knownSecrets, query.Parameters);
-        SqlParameterSecrets.AddValues(knownSecrets, query.TypedParameters);
+        var knownSecrets = new List<string>();
 
         try
         {
             ValidateBounds(query);
             var target = TargetResolver.Resolve(query.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             var safety = dialect.Classify(
                 query.Sql,
@@ -204,15 +203,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
-            SqlParameterSecrets.AddValues(knownSecrets, query.Parameters);
             var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(query.Parameters, query.TypedParameters));
             dialect.ValidateParameterReferences(parameters, query.Sql);
-
-            foreach (var parameter in parameters)
-            {
-                if (parameter.Value is not DBNull)
-                    SqlParameterSecrets.AddParameterValue(knownSecrets, Convert.ToString(parameter.Value, CultureInfo.InvariantCulture));
-            }
 
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
@@ -290,11 +282,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     {
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
-        var knownSecrets = new List<string> { compare.BaselineSql, compare.CandidateSql };
-        if (!string.IsNullOrWhiteSpace(compare.SetupSql))
-            knownSecrets.Add(compare.SetupSql);
-        SqlParameterSecrets.AddValues(knownSecrets, compare.Parameters);
-        SqlParameterSecrets.AddValues(knownSecrets, compare.TypedParameters);
+        var knownSecrets = new List<string>();
 
         try
         {
@@ -309,11 +297,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 compare.Repeat,
                 knownSecrets,
                 compare.TypedParameters);
-            foreach (var parameter in prepared.FixedParameters)
-            {
-                if (parameter.Value is not DBNull)
-                    SqlParameterSecrets.AddParameterValue(knownSecrets, Convert.ToString(parameter.Value, CultureInfo.InvariantCulture));
-            }
 
             CompareOperationPreparer.ValidateVariants(
                 prepared,
@@ -385,12 +368,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     {
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
-        var knownSecrets = new List<string> { operation.BaselineSql, operation.CandidateSql, operation.Matrix };
-        if (!string.IsNullOrWhiteSpace(operation.SetupSql))
-            knownSecrets.Add(operation.SetupSql);
-        SqlParameterSecrets.AddValues(knownSecrets, operation.Parameters);
-        SqlParameterSecrets.AddValues(knownSecrets, operation.TypedParameters);
-        SqlParameterSecrets.AddMatrixValues(knownSecrets, operation.TypedMatrix);
+        var knownSecrets = new List<string>();
 
         try
         {
@@ -405,21 +383,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 operation.Repeat,
                 knownSecrets,
                 operation.TypedParameters);
-            SqlParameterSecrets.AddMatrixValues(knownSecrets, operation.Matrix);
 
             // The fixed parameters are already bound, so their names need no second parse.
             var matrix = SqlParameterMatrixParser.Bind(
                 SqlParameterInputs.ResolveMatrix(operation.Matrix, operation.TypedMatrix),
                 prepared.FixedParameters.Select(parameter => parameter.Name));
-            foreach (var displayValue in matrix.DisplayValues)
-            {
-                SqlParameterSecrets.AddParameterValue(knownSecrets, displayValue);
-            }
-
             var fixedParameters = prepared.FixedParameters;
             var dialect = prepared.Dialect;
-            foreach (var parameter in fixedParameters)
-                AddTypedSecret(knownSecrets, parameter);
 
             // Second bind through the dialect: the engine may reject a type the shared binder accepts.
             var matrixName = MatrixParameterName(matrix);
@@ -430,7 +400,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 if (bound.Count != 1)
                     throw new SqlHarnessSafetyException($"The --matrix option for SQL parameter '{matrix.Name}' is invalid.");
                 matrixParameters.Add(bound[0]);
-                AddTypedSecret(knownSecrets, bound[0]);
             }
 
             CompareOperationPreparer.ValidateVariants(
@@ -527,21 +496,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         }
     }
 
-    private static void AddTypedSecret(List<string> knownSecrets, SqlHarnessParameter parameter)
-    {
-        if (parameter.Value is DBNull)
-            return;
-
-        // Convert.ToString(byte[]) is "System.Byte[]", which does not match a server-quoted Base64 value.
-        if (parameter.Value is byte[] bytes)
-        {
-            SqlParameterSecrets.AddParameterValue(knownSecrets, Convert.ToBase64String(bytes));
-            return;
-        }
-
-        SqlParameterSecrets.AddParameterValue(knownSecrets, Convert.ToString(parameter.Value, CultureInfo.InvariantCulture));
-    }
-
     private static string MatrixParameterName(ParsedParameterMatrix matrix)
     {
         if (matrix.Name.Length < 2 || matrix.Name[0] != '@')
@@ -552,43 +506,23 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     private static string FormatMatrixCellError(CompareMatrixCellFailedException failed, IReadOnlyList<string> knownSecrets)
     {
         var original = failed.InnerException ?? failed;
-        // Longer secrets first, so "1" cannot split "100" into "[REDACTED]00".
-        // Prefix the cell label after redaction so a value of "1" cannot erase the index.
-        var detail = SecretRedactor.Redact(original, LongestFirst(knownSecrets));
+        // Prefix the cell label after redaction so a redacted value cannot erase the index.
+        var detail = SecretRedactor.Redact(original, knownSecrets);
         return $"Comparison matrix cell {failed.Index} for SQL parameter '{failed.ParameterName}' failed. {detail}";
     }
-
-    private static IReadOnlyList<string> LongestFirst(IReadOnlyList<string> secrets) =>
-        secrets
-            .Where(secret => !string.IsNullOrEmpty(secret))
-            .OrderByDescending(secret => secret.Length)
-            .ToArray();
 
     private async Task<SqlHarnessOutcome> ExecuteMeasureAsync(SqlHarnessMeasureOperation measure, CancellationToken ct)
     {
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
         CanonicalResultAccumulator? raw = null;
-        var knownSecrets = new List<string> { measure.QuerySql };
-        if (!string.IsNullOrWhiteSpace(measure.SetupSql))
-            knownSecrets.Add(measure.SetupSql);
-        SqlParameterSecrets.AddValues(knownSecrets, measure.Parameters);
-        SqlParameterSecrets.AddValues(knownSecrets, measure.TypedParameters);
+        var knownSecrets = new List<string>();
 
         try
         {
-            if (measure.ParameterSets is { Count: > 0 })
-            {
-                foreach (var set in measure.ParameterSets)
-                {
-                    if (set?.Parameters is null)
-                        continue;
-                    SqlParameterSecrets.AddValues(knownSecrets, set.Parameters);
-                }
-            }
-
             ValidateMeasure(measure);
             var target = TargetResolver.Resolve(measure.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             SqlSafetyDecision? setupSafety = null;
             IReadOnlySet<string> setupTemps = NoSessionTemps;
@@ -603,13 +537,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var querySafety = dialect.Classify(
                 measure.QuerySql, SqlUsage.Query, target.Database, false, null, setupTemps);
             CompareOperationPreparer.EnsureSafe(querySafety, "query");
-            SqlParameterSecrets.AddValues(knownSecrets, measure.Parameters);
-            if (measure.ParameterSets is { Count: > 0 } rawSets)
-            {
-                foreach (var set in rawSets)
-                    SqlParameterSecrets.AddValues(knownSecrets, set?.Parameters);
-            }
-
             var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(measure.Parameters, measure.TypedParameters));
             if (dialect.Engine == SqlEngine.SqlServer && measure.ParameterSets is not { Count: > 0 })
                 SqlSetupVariableReferenceValidator.Validate(measure.SetupSql, parameters, measure.QuerySql);
@@ -617,15 +544,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             SetupSqlExecution.Validate(dialect.Engine, measure.SetupSql, parameters);
             dialect.ValidateMeasuredBatch(measure.QuerySql);
 
-            foreach (var parameter in parameters)
-            {
-                if (parameter.Value is not DBNull)
-                    SqlParameterSecrets.AddParameterValue(knownSecrets, Convert.ToString(parameter.Value, CultureInfo.InvariantCulture));
-            }
-
             if (measure.ParameterSets is { Count: > 0 } parameterSets)
             {
-                var boundSets = BindMeasureParameterSets(dialect, measure, parameterSets, knownSecrets);
+                var boundSets = BindMeasureParameterSets(dialect, measure, parameterSets);
                 _artifactWriter.CheckStorage();
                 phase = OperationPhase.Authentication;
                 await using var multiSession = await _sessionFactory.ConnectAsync(target, ct);
@@ -712,7 +633,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var exitCode = phase == OperationPhase.Artifact
                 ? SqlHarnessExitCode.LocalStorage
                 : OperationFailureMapper.Map(exception, phase);
-            var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, LongestFirst(knownSecrets)),
+            var failure = new SqlHarnessOutcome(exitCode, null, SecretRedactor.Redact(exception, knownSecrets),
                 Error: (exception as ArtifactStoragePreflightException)?.ToError(knownSecrets));
             return WithReceipt(failure, rawFootprint);
         }
@@ -725,8 +646,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     private static IReadOnlyList<PreparedMeasureParameterSet> BindMeasureParameterSets(
         ISqlDialect dialect,
         SqlHarnessMeasureOperation measure,
-        IReadOnlyList<SqlHarnessParameterSetInput> parameterSets,
-        List<string> knownSecrets)
+        IReadOnlyList<SqlHarnessParameterSetInput> parameterSets)
     {
         var prepared = MeasureParameterSetValidator.Prepare(
             measure.Parameters,
@@ -738,14 +658,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         var bound = new PreparedMeasureParameterSet[prepared.Count];
         for (var index = 0; index < prepared.Count; index++)
         {
-            foreach (var parameter in prepared[index].Parameters)
-                AddTypedSecret(knownSecrets, parameter);
-
             var parsed = dialect.BindParameters(
                 SqlParameterInputs.Resolve(measure.Parameters, measure.TypedParameters)
                     .Concat(parameterSets[index].Parameters.Select(SqlParameterParser.ToInput)));
-            foreach (var parameter in parsed)
-                AddTypedSecret(knownSecrets, parameter);
             bound[index] = prepared[index] with { Parameters = parsed };
         }
 
@@ -797,14 +712,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     {
         var phase = OperationPhase.Validation; var raw = new OutputFootprint(0, 0);
         var knownSecrets = new List<string>();
-        if (schema.Filter is not null) knownSecrets.Add(schema.Filter);
-        if (schema.Object is not null) knownSecrets.Add(schema.Object);
         try
         {
             if (schema.TimeoutSeconds is < 1 or > 300) throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
             if (schema.MaxObjects is < 1 or > 500) throw new SqlHarnessSafetyException("Schema object limit must be between 1 and 500.");
             var selection = SchemaReader.ParseObjectSelection(schema.Object);
             var target = TargetResolver.Resolve(schema.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct); phase = OperationPhase.Sql;
@@ -832,16 +746,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     {
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
-        var knownSecrets = new List<string> { watch.Sql };
-        SqlParameterSecrets.AddValues(knownSecrets, watch.Parameters);
-        SqlParameterSecrets.AddValues(knownSecrets, watch.TypedParameters);
-        if (watch.Until is not null)
-            knownSecrets.Add(watch.Until);
+        var knownSecrets = new List<string>();
 
         try
         {
             ValidateWatch(watch);
             var target = TargetResolver.Resolve(watch.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             var safety = dialect.Classify(
                 watch.Sql,
@@ -852,18 +763,11 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
-            SqlParameterSecrets.AddValues(knownSecrets, watch.Parameters);
             var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(watch.Parameters, watch.TypedParameters));
             dialect.ValidateParameterReferences(parameters, watch.Sql);
             // Predicate syntax is validated before authentication so bad --until fails closed.
             if (watch.Until is not null)
                 _ = WatchCondition.Parse(watch.Until);
-
-            foreach (var parameter in parameters)
-            {
-                if (parameter.Value is not DBNull)
-                    SqlParameterSecrets.AddParameterValue(knownSecrets, Convert.ToString(parameter.Value, CultureInfo.InvariantCulture));
-            }
 
             phase = OperationPhase.Authentication;
             var runner = new WatchRunner(_sessionFactory, _watchClock);
@@ -907,16 +811,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
-        var knownSecrets = new List<string> { watch.Sql };
-        SqlParameterSecrets.AddValues(knownSecrets, watch.Parameters);
-        SqlParameterSecrets.AddValues(knownSecrets, watch.TypedParameters);
-        if (watch.Until is not null)
-            knownSecrets.Add(watch.Until);
+        var knownSecrets = new List<string>();
 
         try
         {
             ValidateWatch(watch);
             var target = TargetResolver.Resolve(watch.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             var safety = dialect.Classify(
                 watch.Sql,
@@ -927,18 +828,11 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
-            SqlParameterSecrets.AddValues(knownSecrets, watch.Parameters);
             var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(watch.Parameters, watch.TypedParameters));
             dialect.ValidateParameterReferences(parameters, watch.Sql);
             // Predicate syntax is validated before authentication so bad --until fails closed.
             if (watch.Until is not null)
                 _ = WatchCondition.Parse(watch.Until);
-
-            foreach (var parameter in parameters)
-            {
-                if (parameter.Value is not DBNull)
-                    SqlParameterSecrets.AddParameterValue(knownSecrets, Convert.ToString(parameter.Value, CultureInfo.InvariantCulture));
-            }
 
             phase = OperationPhase.Authentication;
             var stream = new WatchNdjsonWriter(writer);
@@ -958,7 +852,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             var exitCode = OperationFailureMapper.Map(exception, phase);
             var message = SecretRedactor.Redact(exception, knownSecrets);
-            EmitWatchNdjsonFailed(writer, exitCode, SqlHarnessError.From(exitCode, message, "validation"), knownSecrets);
+            EmitWatchNdjsonFailed(writer, exitCode, SqlHarnessError.From(exitCode, message, "validation"));
             var failure = new SqlHarnessOutcome(exitCode, null, message);
             return Checked(watch, WithReceipt(failure, rawFootprint));
         }
@@ -967,19 +861,18 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     private static void EmitWatchNdjsonFailed(
         TextWriter writer,
         SqlHarnessExitCode exitCode,
-        SqlHarnessError error,
-        IReadOnlyCollection<string> knownSecrets)
+        SqlHarnessError error)
     {
-        // Best effort: a dead transport cannot take a terminal record, but the
+        // The caller redacts error.Message exactly once. Best effort: a dead
+        // transport cannot take a terminal record, but the
         // returned outcome still reports the failure (never a success).
         try
         {
-            var secrets = knownSecrets as IReadOnlyList<string> ?? knownSecrets.ToArray();
             new WatchNdjsonWriter(writer).WriteFailed(
                 new
                 {
                     exitCode = (int)exitCode,
-                    error = error with { Message = SecretRedactor.Redact(error.Message, secrets) },
+                    error,
                 },
                 0);
         }
@@ -988,6 +881,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             // Swallowed: the outcome carries the failure.
         }
     }
+
     private static void ValidateWatch(SqlHarnessWatchOperation watch)
     {
         if (watch.TimeoutSeconds is < 1 or > 300)
@@ -1016,14 +910,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     {
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
-        var knownSecrets = new List<string> { snapshot.Sql };
-        SqlParameterSecrets.AddValues(knownSecrets, snapshot.Parameters);
-        SqlParameterSecrets.AddValues(knownSecrets, snapshot.TypedParameters);
+        var knownSecrets = new List<string>();
 
         try
         {
             ValidateSnapshot(snapshot);
             var target = TargetResolver.Resolve(snapshot.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             var safety = dialect.Classify(
                 snapshot.Sql,
@@ -1034,15 +927,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 NoSessionTemps);
             if (!safety.Allowed)
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
-            SqlParameterSecrets.AddValues(knownSecrets, snapshot.Parameters);
             var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(snapshot.Parameters, snapshot.TypedParameters));
             dialect.ValidateParameterReferences(parameters, snapshot.Sql);
-
-            foreach (var parameter in parameters)
-            {
-                if (parameter.Value is not DBNull)
-                    SqlParameterSecrets.AddParameterValue(knownSecrets, Convert.ToString(parameter.Value, CultureInfo.InvariantCulture));
-            }
 
             phase = OperationPhase.Authentication;
             var runner = new SnapshotRunner(_sessionFactory, _snapshotStore);
@@ -1090,13 +976,14 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         var stopwatch = Stopwatch.StartNew();
         var phase = OperationPhase.Validation;
         var raw = new OutputFootprint(0, 0);
-        var knownSecrets = CollectTargetSecrets(ping.Target);
+        var knownSecrets = new List<string>();
         try
         {
             if (ping.TimeoutSeconds is < 1 or > 300)
                 throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
 
             var target = TargetResolver.Resolve(ping.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
             phase = OperationPhase.Sql;
@@ -1130,9 +1017,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     {
         var phase = OperationPhase.Validation;
         var raw = new OutputFootprint(0, 0);
-        var knownSecrets = new List<string>(CollectTargetSecrets(counts.Target));
-        if (counts.Like is not null)
-            knownSecrets.Add(counts.Like);
+        var knownSecrets = new List<string>();
 
         try
         {
@@ -1143,6 +1028,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             ArgumentNullException.ThrowIfNull(counts.Tables);
 
             var target = TargetResolver.Resolve(counts.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
@@ -1207,9 +1093,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     {
         var phase = OperationPhase.Validation;
         var raw = new OutputFootprint(0, 0);
-        var knownSecrets = new List<string>(CollectTargetSecrets(space.Target));
-        if (space.Object is not null)
-            knownSecrets.Add(space.Object);
+        var knownSecrets = new List<string>();
 
         try
         {
@@ -1221,6 +1105,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             // Parse object before target resolution: name, schema.name, or null (no object).
             var (objectSchema, objectName) = ParseSpaceObject(space.Object);
             var target = TargetResolver.Resolve(space.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
@@ -1262,10 +1147,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     {
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
-        var knownSecrets = new List<string>(CollectTargetSecrets(operation.Target))
-        {
-            QueryStoreTopQuery.Sql,
-        };
+        var knownSecrets = new List<string> { QueryStoreTopQuery.Sql };
 
         try
         {
@@ -1277,6 +1159,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 throw new SqlHarnessSafetyException("Query Store window must be between 1 and 44640 minutes.");
 
             var target = TargetResolver.Resolve(operation.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
             phase = OperationPhase.Sql;
@@ -1320,7 +1203,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 new SqlHarnessOutcome(
                     exitCode,
                     null,
-                    SecretRedactor.Redact(exception, LongestFirst(knownSecrets))),
+                    SecretRedactor.Redact(exception, knownSecrets)),
                 rawFootprint);
         }
     }
@@ -1331,10 +1214,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     {
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
-        var knownSecrets = new List<string>(CollectTargetSecrets(operation.Target))
-        {
-            IndexAnalysisQuery.Sql,
-        };
+        var knownSecrets = new List<string> { IndexAnalysisQuery.Sql };
 
         try
         {
@@ -1346,6 +1226,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 throw new SqlHarnessSafetyException(objectError);
 
             var target = TargetResolver.Resolve(operation.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
             phase = OperationPhase.Sql;
@@ -1442,25 +1323,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 new SqlHarnessOutcome(
                     exitCode,
                     null,
-                    SecretRedactor.Redact(exception, LongestFirst(knownSecrets))),
+                    SecretRedactor.Redact(exception, knownSecrets)),
                 rawFootprint);
         }
-    }
-
-    private static IReadOnlyList<string> CollectTargetSecrets(SqlTargetRequest target)
-    {
-        var secrets = new List<string>();
-        foreach (var value in target.Vars.Values)
-        {
-            if (!string.IsNullOrEmpty(value))
-                secrets.Add(value);
-        }
-
-        if (!string.IsNullOrEmpty(target.SqlUser))
-            secrets.Add(target.SqlUser);
-        if (!string.IsNullOrEmpty(target.PasswordEnvVar))
-            secrets.Add(target.PasswordEnvVar);
-        return secrets;
     }
 
     /// <summary>

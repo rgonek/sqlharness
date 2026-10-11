@@ -53,6 +53,7 @@ internal static class CompareOperationPreparer
             throw new SqlHarnessSafetyException("Compare repetitions must be between 1 and 100.");
 
         var target = TargetResolver.Resolve(targetRequest, profiles);
+        OperationSecrets.AddCredentials(knownSecrets, target);
         var dialect = SqlDialects.For(target.Engine);
 
         SqlSafetyDecision? setupSafety = null;
@@ -72,7 +73,6 @@ internal static class CompareOperationPreparer
             candidateSql, SqlUsage.Query, target.Database, false, null, setupTemps);
         EnsureSafe(candidateSafety, "candidate");
 
-        SqlParameterSecrets.AddValues(knownSecrets, parameterInputs);
         var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(parameterInputs, typedParameters));
 
         return new PreparedCompareFamily(

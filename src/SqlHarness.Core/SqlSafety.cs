@@ -57,64 +57,6 @@ internal class SqlHarnessSafetyException(string message, Exception? innerExcepti
     }
 }
 
-internal static class SqlParameterSecrets
-{
-    private const int MinimumRedactionLength = 4;
-
-    internal static void AddParameterValue(ICollection<string> knownSecrets, string? value)
-    {
-        if (value is { Length: >= MinimumRedactionLength })
-            knownSecrets.Add(value);
-    }
-
-    internal static void AddValues(ICollection<string> knownSecrets, IEnumerable<string>? declarations)
-    {
-        if (declarations is null)
-            return;
-        foreach (var declaration in declarations)
-            AddValue(knownSecrets, declaration);
-    }
-
-    // Typed values are registered whole: a comma, '=' or ':' inside one is part of the secret.
-    internal static void AddValues(ICollection<string> knownSecrets, IEnumerable<SqlHarnessParameterInput>? inputs)
-    {
-        if (inputs is null)
-            return;
-        foreach (var input in inputs)
-            AddParameterValue(knownSecrets, input?.Value);
-    }
-
-    internal static void AddMatrixValues(ICollection<string> knownSecrets, SqlHarnessParameterMatrixInput? matrix)
-    {
-        if (matrix?.Values is null)
-            return;
-        foreach (var value in matrix.Values)
-            AddParameterValue(knownSecrets, value);
-    }
-
-    internal static void AddMatrixValues(ICollection<string> knownSecrets, string? matrix)
-    {
-        if (string.IsNullOrEmpty(matrix))
-            return;
-        var equals = matrix.IndexOf('=');
-        if (equals < 0 || equals >= matrix.Length - 1)
-            return;
-        foreach (var value in matrix[(equals + 1)..].Split(','))
-            AddParameterValue(knownSecrets, value);
-    }
-
-    private static void AddValue(ICollection<string> knownSecrets, string declaration)
-    {
-        if (string.IsNullOrEmpty(declaration))
-            return;
-        var equals = declaration.IndexOf('=');
-        if (equals < 0 || equals >= declaration.Length - 1)
-            return;
-        var value = declaration[(equals + 1)..];
-        AddParameterValue(knownSecrets, value);
-    }
-}
-
 /// <summary>
 /// Compatibility adapter (012): an operation carries declaration text or the typed model, never both.
 /// Legacy text is turned into the same model, so every caller ends in the one binder.
