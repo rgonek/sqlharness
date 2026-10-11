@@ -1306,7 +1306,7 @@ internal static partial class SqlParameterParser
             "date" => new($"@{name}", SqlDbType.Date, DateTime.ParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None), null),
             "time" => new($"@{name}", SqlDbType.Time, ParseTime(value), null),
             "datetime" => CreateDateTime(name, value),
-            "datetime2" => new($"@{name}", SqlDbType.DateTime2, DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind), null),
+            "datetime2" => new($"@{name}", SqlDbType.DateTime2, ParseOffsetlessDateTime(name, type, value), null),
             "smalldatetime" => CreateSmallDateTime(name, value),
             "datetimeoffset" => CreateDateTimeOffset(name, value),
             "uniqueidentifier" => new($"@{name}", SqlDbType.UniqueIdentifier, Guid.Parse(value), null),
@@ -1597,7 +1597,7 @@ internal static partial class SqlParameterParser
 
     private static SqlHarnessParameter CreateDateTime(string name, string value)
     {
-        var parsed = DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+        var parsed = ParseOffsetlessDateTime(name, "datetime", value);
         if (parsed < SqlDateTime.MinValue.Value || parsed > SqlDateTime.MaxValue.Value)
         {
             throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.");
@@ -1608,11 +1608,37 @@ internal static partial class SqlParameterParser
 
     private static SqlHarnessParameter CreateSmallDateTime(string name, string value)
     {
-        var parsed = DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+        var parsed = ParseOffsetlessDateTime(name, "smalldatetime", value);
         if (parsed < SmallDateTimeMin || parsed > SmallDateTimeMax)
             throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.");
 
         return new($"@{name}", SqlDbType.SmallDateTime, parsed, null);
+    }
+
+    private static DateTime ParseOffsetlessDateTime(string name, string type, string value)
+    {
+        if (OffsetlessDateTimeSuffixPattern().IsMatch(value.Trim()))
+        {
+            throw new SqlHarnessSafetyException(
+                "Offset-less date/time types do not accept a time-zone offset; use datetimeoffset.")
+            {
+                ParameterName = name,
+                ExpectedType = type,
+            };
+        }
+
+        var parsed = DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.None);
+        if (parsed.Kind != DateTimeKind.Unspecified)
+        {
+            throw new SqlHarnessSafetyException(
+                "Offset-less date/time types do not accept a time-zone offset; use datetimeoffset.")
+            {
+                ParameterName = name,
+                ExpectedType = type,
+            };
+        }
+
+        return parsed;
     }
 
     private static SqlHarnessParameter CreateDateTimeOffset(string name, string value)
@@ -1706,6 +1732,9 @@ internal static partial class SqlParameterParser
 
     [GeneratedRegex(@"[+-][0-9]{2}:[0-9]{2}$", RegexOptions.CultureInvariant)]
     private static partial Regex ExplicitOffsetPattern();
+
+    [GeneratedRegex(@"(Z|[+-][0-9]{2}:[0-9]{2})$", RegexOptions.CultureInvariant)]
+    private static partial Regex OffsetlessDateTimeSuffixPattern();
 }
 
 internal static class SqlParameterReferenceValidator
