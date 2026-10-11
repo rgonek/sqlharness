@@ -458,6 +458,34 @@ public sealed class McpOutputTests
         }
     }
 
+    [Fact]
+    public void Query_wide_first_set_then_summary_set_at_level_zero_fits_wire_budget_with_explicit_omissions()
+    {
+        const int budget = 4096;
+        var report = QueryShapeFixtures.Report(QueryShapeFixtures.Set(400, 3, width: 5000, nameLength: 60), QueryShapeFixtures.Set(2, 2));
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "sqlharness_query",
+            new McpResultBudget(budget));
+
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= budget);
+        var envelope = EnvelopeOf(result);
+        AssertValidEnvelope(envelope);
+        Assert.Equal(0, envelope.GetProperty("truncation").GetProperty("detailLimit").GetInt32());
+        var projected = envelope.GetProperty("result");
+        QueryShapeFixtures.AssertAccounted(projected, report);
+        var sets = projected.GetProperty("resultSets");
+        // The wide first schema takes the budget and is explicitly cut. The summary set
+        // is either counted as omitted or kept with its omitted columns and rows counted.
+        Assert.True(sets[0].GetProperty("omittedColumnCount").GetInt32() > 0);
+        Assert.Equal(0, sets[0].GetProperty("rows").GetArrayLength());
+        Assert.Equal(2, sets.GetArrayLength() + projected.GetProperty("omittedResultSetCount").GetInt32());
+        if (sets.GetArrayLength() == 2)
+        {
+            Assert.Equal(2, sets[1].GetProperty("columns").GetArrayLength() + sets[1].GetProperty("omittedColumnCount").GetInt32());
+            Assert.Equal(2, sets[1].GetProperty("omittedRowCount").GetInt64());
+        }
+    }
+
     private static SqlHarnessCompareReport BuildCompareReport(string marker, string? artifactDirectory = null) => new(
         new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile"),
         1, 1, true,
