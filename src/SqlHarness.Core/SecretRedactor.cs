@@ -96,7 +96,8 @@ public static partial class SecretRedactor
 
     // Only the value of an explicit key/value field is masked; a field name or descriptive word alone is not a credential.
     // Group 1 is the key and separator; group 2 is the whole value: escaped-JSON, double- or single-quoted (with doubled quotes), or bare.
-    [GeneratedRegex("""(?i)(\\?["']?(?:password|pwd|access[_\s-]?token|client[_\s-]?secret|account[_\s-]?key|shared[_\s-]?access[_\s-]?key)\\?["']?\s*[:=]\s*)(\\"[^"\\]*\\"|"(?:\\.|""|[^"\\])*"|'(?:''|[^'])*'|[^"';&,}\s]+)""", RegexOptions.CultureInvariant)]
+    // A quote that is never closed (a truncated diagnostic) masks the rest of the line rather than nothing.
+    [GeneratedRegex("""(?i)(\\?["']?(?:password|pwd|access[_\s-]?token|client[_\s-]?secret|account[_\s-]?key|shared[_\s-]?access[_\s-]?key)\\?["']?\s*[:=]\s*)(\\"[^"\\]*\\"|"(?:\\.|""|[^"\\])*"|'(?:''|[^'])*'|\\?["'][^\r\n]*|[^"';&,}\s]+)""", RegexOptions.CultureInvariant)]
     private static partial Regex SecretFieldPattern();
 
     private static string MaskFieldValue(Match match)
@@ -105,7 +106,8 @@ public static partial class SecretRedactor
         var quote = value.StartsWith("\\\"", StringComparison.Ordinal) ? "\\\""
             : value[0] is '"' or '\'' ? value[..1]
             : string.Empty;
-        return match.Groups[1].Value + quote + "[REDACTED]" + quote;
+        var closing = value.Length > quote.Length && value.EndsWith(quote, StringComparison.Ordinal) ? quote : string.Empty;
+        return match.Groups[1].Value + quote + "[REDACTED]" + closing;
     }
 
     // Server, database and user fields are target diagnostics and stay readable.

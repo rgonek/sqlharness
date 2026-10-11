@@ -131,6 +131,18 @@ public sealed class SecretRedactorTests
         Assert.DoesNotContain("abc123", safe, StringComparison.Ordinal);
     }
 
+    // A truncated diagnostic can cut a quoted value before its closing quote; the rest of the line is masked.
+    [Theory]
+    [InlineData("access_token=\"abc def", "access_token=\"[REDACTED]")]
+    [InlineData("password: \"abc", "password: \"[REDACTED]")]
+    [InlineData("client_secret='abc;def\nServer=s1", "client_secret='[REDACTED]\nServer=s1")]
+    [InlineData("{\\\"pwd\\\":\\\"abc", "{\\\"pwd\\\":\\\"[REDACTED]")]
+    [InlineData("{\\\"password\\\":\\\"a\\\\\\\"b\\\"}", "{\\\"password\\\":\\\"[REDACTED]")]
+    public void Redact_masks_an_unterminated_quoted_secret_field_value_to_the_end_of_the_line(string input, string expected)
+    {
+        Assert.Equal(expected, SecretRedactor.Redact(input, []));
+    }
+
     [Fact]
     public void Redact_masks_a_jwt_without_a_field_label()
     {
