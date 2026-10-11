@@ -76,6 +76,20 @@ public class WatchTests
     }
 
     [Fact]
+    public async Task Watch_condition_keeps_polling_after_empty_result_then_matches()
+    {
+        var clock = new FakeWatchClock();
+        var session = FakeSession.WithEmptyThenScalarPolls(true);
+        var outcome = await Module(session, clock).ExecuteAsync(
+            Watch(until: "Done = 1"));
+
+        var report = Assert.IsType<SqlHarnessWatchReport>(outcome.Report);
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(WatchExitReason.ConditionMet, report.ExitReason);
+        Assert.Equal(2, report.PollCount);
+    }
+
+    [Fact]
     public async Task Watch_unchanged_threshold_of_one_exits_after_first_repeat()
     {
         var clock = new FakeWatchClock();
@@ -679,6 +693,16 @@ public class WatchTests
             return new FakeSession(results);
         }
 
+        public static FakeSession WithEmptyThenScalarPolls(params object[] values)
+        {
+            var results = new List<Func<ISqlReader>>
+            {
+                () => new FakeEmptyReader(),
+            };
+            results.AddRange(values.Select(value => (Func<ISqlReader>)(() => FakeScalarReader.Create(value, "Done"))));
+            return new FakeSession(results);
+        }
+
         public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
         {
             Commands.Add(command);
@@ -696,15 +720,15 @@ public class WatchTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class FakeScalarReader(object value) : ISqlReader
+    private sealed class FakeScalarReader(object value, string name) : ISqlReader
     {
         private int _position = -1;
 
-        public static FakeScalarReader Create(object value) => new(value);
+        public static FakeScalarReader Create(object value, string name = "Value") => new(value, name);
 
         public int FieldCount => 1;
         public int RecordsAffected => -1;
-        public string GetName(int ordinal) => "Value";
+        public string GetName(int ordinal) => name;
         public Type GetFieldType(int ordinal) => value.GetType();
         public bool GetAllowNull(int ordinal) => false;
         public object GetValue(int ordinal) => value;
@@ -722,6 +746,19 @@ public class WatchTests
 
         public Task<bool> NextResultAsync(CancellationToken ct) => Task.FromResult(false);
 
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class FakeEmptyReader : ISqlReader
+    {
+        public int FieldCount => 1;
+        public int RecordsAffected => -1;
+        public string GetName(int ordinal) => "Done";
+        public Type GetFieldType(int ordinal) => typeof(bool);
+        public bool GetAllowNull(int ordinal) => false;
+        public object GetValue(int ordinal) => throw new InvalidOperationException("Empty result has no values.");
+        public Task<bool> ReadAsync(CancellationToken ct) => Task.FromResult(false);
+        public Task<bool> NextResultAsync(CancellationToken ct) => Task.FromResult(false);
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
