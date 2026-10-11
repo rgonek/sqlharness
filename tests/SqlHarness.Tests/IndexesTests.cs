@@ -354,7 +354,7 @@ public sealed class IndexesTests
     }
 
     [Fact]
-    public async Task Indexes_writer_failure_returns_six_and_redacts_filters_but_keeps_profile_variables()
+    public async Task Indexes_writer_failure_returns_six_and_keeps_filters_and_profile_variables()
     {
         var session = Fixture.Session(
             filter: FilterA,
@@ -368,11 +368,12 @@ public sealed class IndexesTests
         Assert.Equal(1, artifacts.WriteCalls);
         Assert.Contains(FilterA, artifacts.Leaked, StringComparison.Ordinal);
         Assert.Contains(FilterB, artifacts.Leaked, StringComparison.Ordinal);
-        Assert.DoesNotContain(FilterA, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-        Assert.DoesNotContain(FilterB, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        // Credential-only redaction (plan 025): filter definitions and probe SQL are not registered.
+        Assert.Contains(FilterA, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(FilterB, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.Contains(ProfileSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-        Assert.Contains("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-        AssertNoQueryOrDdl(outcome.SafeError);
+        Assert.Contains(IndexAnalysisQuery.Sql, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -394,7 +395,7 @@ public sealed class IndexesTests
     }
 
     [Fact]
-    public async Task Indexes_redacts_server_filters_and_omits_query_sql_but_keeps_profile_variables_in_safe_error()
+    public async Task Indexes_sql_failure_keeps_probe_sql_and_profile_variables_in_safe_error()
     {
         var session = Fixture.Session();
         session.ExecuteFailure = new InvalidOperationException(
@@ -406,8 +407,9 @@ public sealed class IndexesTests
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
         Assert.Null(outcome.Report);
         Assert.Contains(ProfileSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-        Assert.Contains("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-        AssertNoQueryOrDdl(outcome.SafeError);
+        // Credential-only redaction (plan 025): the fixed probe SQL is not registered.
+        Assert.Contains(IndexAnalysisQuery.Sql, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.Equal(0, artifacts.WriteCalls);
     }
 

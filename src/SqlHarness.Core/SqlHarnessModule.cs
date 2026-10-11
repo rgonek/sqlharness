@@ -1147,7 +1147,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     {
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
-        var knownSecrets = new List<string> { QueryStoreTopQuery.Sql };
+        var knownSecrets = new List<string>();
 
         try
         {
@@ -1175,11 +1175,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 ct);
             var collected = await QueryStoreTopQuery.ReadAsync(reader, ct);
             rawFootprint = collected.RawFootprint;
-            foreach (var text in collected.SensitiveTexts)
-            {
-                if (!string.IsNullOrEmpty(text.QuerySqlText))
-                    knownSecrets.Add(text.QuerySqlText);
-            }
 
             var report = new SqlHarnessQueryStoreTopReport(
                 session.Identity,
@@ -1214,7 +1209,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     {
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
-        var knownSecrets = new List<string> { IndexAnalysisQuery.Sql };
+        var knownSecrets = new List<string>();
 
         try
         {
@@ -1242,11 +1237,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 ct);
             var collected = await IndexAnalysisQuery.ReadAsync(reader, operation.Object is not null, ct);
             rawFootprint = collected.RawFootprint;
-            foreach (var sensitive in collected.SensitiveIndexes)
-            {
-                if (sensitive.FilterDefinition is not null)
-                    knownSecrets.Add(sensitive.FilterDefinition);
-            }
 
             var candidateReports = new List<IndexCandidateReport>(collected.Candidates.Count);
             foreach (var candidate in collected.Candidates)

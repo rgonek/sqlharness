@@ -162,7 +162,7 @@ public sealed class QueryStoreTopTests
     }
 
     [Fact]
-    public async Task Qstop_writer_failure_returns_six_and_null_report()
+    public async Task Qstop_writer_failure_returns_six_and_keeps_server_text_in_error()
     {
         var session = Fixture.Session();
         var artifacts = new ThrowingQueryStoreArtifactWriter();
@@ -172,9 +172,10 @@ public sealed class QueryStoreTopTests
         Assert.Equal(SqlHarnessExitCode.LocalStorage, outcome.ExitCode);
         Assert.Null(outcome.Report);
         Assert.Equal(1, artifacts.WriteCalls);
-        Assert.DoesNotContain(SecretSql, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-        AssertNoQuerySql(outcome.SafeError);
-        Assert.Contains("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        // Credential-only redaction (plan 025): server-side query text is not registered.
+        Assert.Contains(SecretSql, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(QueryStoreTopQuery.Sql, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -196,7 +197,7 @@ public sealed class QueryStoreTopTests
     }
 
     [Fact]
-    public async Task Qstop_omits_query_sql_but_keeps_profile_variables_in_safe_error()
+    public async Task Qstop_sql_failure_keeps_probe_sql_and_profile_variables_in_safe_error()
     {
         var session = Fixture.Session();
         session.ExecuteFailure = new InvalidOperationException(
@@ -208,8 +209,9 @@ public sealed class QueryStoreTopTests
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
         Assert.Null(outcome.Report);
         Assert.Contains(ProfileSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-        Assert.Contains("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-        AssertNoQuerySql(outcome.SafeError);
+        // Credential-only redaction (plan 025): the fixed probe SQL is not registered.
+        Assert.Contains(QueryStoreTopQuery.Sql, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.Equal(0, artifacts.WriteCalls);
     }
 
