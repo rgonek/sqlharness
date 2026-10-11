@@ -259,7 +259,7 @@ public sealed class McpInputReaderTests : IDisposable
 
     [Theory]
     [InlineData("//admin:S3cret@srv/share/q.sql")]
-    [InlineData(@"\admin:S3cret@srv\share\q.sql")]
+    [InlineData(@"\\admin:S3cret@srv\share\q.sql")]
     [InlineData("postgres://u:S3cret@h/db")]
     public async Task Echoed_path_masks_url_and_unc_userinfo(string path)
     {
