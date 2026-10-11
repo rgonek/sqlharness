@@ -20,6 +20,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\SqlHarness.Tests\QueryShapeFixtures.cs" Link="QueryShapeFixtures.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\SqlHarness.Mcp\SqlHarness.Mcp.csproj" />
     <ProjectReference Include="..\..\src\SqlHarness.Core\SqlHarness.Core.csproj" />
     <ProjectReference Include="..\..\src\SqlHarness.Cli\SqlHarness.Cli.csproj" />

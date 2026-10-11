@@ -322,8 +322,15 @@ public sealed class McpTokenBudgetTests
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
         using var document = JsonDocument.Parse(text);
         Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
+        // Level 0 drops the row (and the message) but keeps the result-set
+        // inventory and its column schema, with the omitted row counted.
+        Assert.Equal(0, document.RootElement.GetProperty("truncation").GetProperty("detailLimit").GetInt32());
         var resultSets = document.RootElement.GetProperty("result").GetProperty("resultSets");
-        Assert.Equal(0, resultSets.GetArrayLength());
+        var projectedSet = Assert.Single(resultSets.EnumerateArray());
+        Assert.Equal(0, projectedSet.GetProperty("rows").GetArrayLength());
+        Assert.Equal(1, projectedSet.GetProperty("columns").GetArrayLength());
+        Assert.Equal(1, projectedSet.GetProperty("omittedRowCount").GetInt64());
+        Assert.Equal(0, projectedSet.GetProperty("omittedColumnCount").GetInt32());
         Assert.True(document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
     }
 

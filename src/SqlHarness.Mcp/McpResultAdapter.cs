@@ -169,7 +169,7 @@ public static class McpResultAdapter
         var exitCode = (int)outcome.ExitCode;
 
         var sanitized = McpResultSanitizer.Sanitize(outcome.Report);
-        foreach (var detailLimit in AgentOutputProjection.GetCandidateDetailLimits(maximumBytes, maximumCellCharacters).Distinct())
+        foreach (var detailLimit in AgentOutputProjection.GetCandidateDetailLimits(sanitized, maximumBytes, maximumCellCharacters).Distinct())
         {
             var projected = AgentOutputProjection.Project(
                 sanitized, maximumCellCharacters, detailLimit, out var omitted, maximumBytes);

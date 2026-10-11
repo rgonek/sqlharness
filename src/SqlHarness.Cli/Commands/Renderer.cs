@@ -154,7 +154,7 @@ public sealed class Renderer
             : outcome.Report is SqlHarnessCompareMatrixReport
                 ? "partial"
                 : "error";
-        foreach (var detailLimit in AgentOutputProjection.GetCandidateDetailLimits(requestedBytes, requestedCellChars).Distinct())
+        foreach (var detailLimit in AgentOutputProjection.GetCandidateDetailLimits(outcome.Report, requestedBytes, requestedCellChars).Distinct())
         {
             var result = AgentOutputProjection.Project(outcome.Report, requestedCellChars, detailLimit, out var omitted, requestedBytes);
             omitted += errorOmitted;
