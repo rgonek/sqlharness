@@ -88,6 +88,81 @@ public sealed class AzureCliTests
     }
 
     [Fact]
+    public async Task Windows_uses_absolute_system_cmd_and_neutral_working_directory()
+    {
+        const string systemDirectory = @"C:\Windows\System32";
+        var runner = new RecordingProcessRunner(new ProcessResult(0, "{}", ""));
+        var locator = new AzureCliLocator(
+            () => systemDirectory,
+            () => null,
+            _ => false);
+        var cli = new AzureCli(runner, isWindows: true, locator, TimeSpan.FromSeconds(1));
+
+        await cli.RunJsonAsync(["account", "show"]);
+
+        Assert.Equal(@"C:\Windows\System32\cmd.exe", runner.FileName);
+        Assert.Equal(systemDirectory, runner.WorkingDirectory);
+    }
+
+    [Fact]
+    public async Task Unix_resolves_az_from_absolute_PATH_entries_only()
+    {
+        var runner = new RecordingProcessRunner(new ProcessResult(0, "{}", ""));
+        var locator = new AzureCliLocator(
+            () => "",
+            () => string.Join(Path.PathSeparator, "", ".", "relative/bin", "/opt/az/bin", "/usr/bin"),
+            path => path is "/opt/az/bin/az" or "./az");
+        var cli = new AzureCli(runner, isWindows: false, locator, TimeSpan.FromSeconds(1));
+
+        await cli.RunJsonAsync(["account", "show"]);
+
+        Assert.Equal("/opt/az/bin/az", runner.FileName);
+    }
+
+    [Fact]
+    public async Task Unix_missing_az_throws_AzureCliException()
+    {
+        var runner = new RecordingProcessRunner(new ProcessResult(0, "{}", ""));
+        var locator = new AzureCliLocator(() => "", () => "/opt/az/bin", _ => false);
+        var cli = new AzureCli(runner, isWindows: false, locator, TimeSpan.FromSeconds(1));
+
+        var exception = await Assert.ThrowsAsync<AzureCliException>(() =>
+            cli.RunJsonAsync(["account", "show"]));
+
+        Assert.Equal("Azure CLI executable was not found on PATH.", exception.Message);
+        Assert.Equal(0, runner.InvocationCount);
+    }
+
+    [Fact]
+    public async Task Timeout_kills_and_throws_AzureCliException()
+    {
+        var runner = new DelayingProcessRunner();
+        var locator = new AzureCliLocator(() => "", () => "/opt/az/bin", _ => true);
+        var cli = new AzureCli(runner, isWindows: false, locator, TimeSpan.FromMilliseconds(200));
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        var exception = await Assert.ThrowsAsync<AzureCliException>(() =>
+            cli.RunJsonAsync(["account", "show"]));
+
+        Assert.Equal("Azure CLI did not finish within the time limit.", exception.Message);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5));
+        Assert.True(runner.CancellationObserved);
+    }
+
+    [Fact]
+    public async Task Caller_cancellation_still_surfaces_as_OperationCanceledException()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var runner = new DelayingProcessRunner();
+        var locator = new AzureCliLocator(() => "", () => "/opt/az/bin", _ => true);
+        var cli = new AzureCli(runner, isWindows: false, locator, TimeSpan.FromSeconds(5));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            cli.RunJsonAsync(["account", "show"], cancellation.Token));
+    }
+
+    [Fact]
     public void BuildArguments_WindowsPreservesSafeTokenFlowValues()
     {
         string[] args =
@@ -128,6 +203,51 @@ public sealed class AzureCliTests
             FileName = fileName;
             Arguments = arguments.ToArray();
             return Task.FromResult(new ProcessResult(0, "{}", ""));
+        }
+    }
+
+    private sealed class RecordingProcessRunner(ProcessResult result) : IProcessRunner
+    {
+        public int InvocationCount { get; private set; }
+        public string? FileName { get; private set; }
+        public IReadOnlyList<string>? Arguments { get; private set; }
+        public string? WorkingDirectory { get; private set; }
+
+        public Task<ProcessResult> RunAsync(
+            string fileName,
+            IEnumerable<string> arguments,
+            string? workingDirectory = null,
+            CancellationToken cancellationToken = default)
+        {
+            InvocationCount++;
+            FileName = fileName;
+            Arguments = arguments.ToArray();
+            WorkingDirectory = workingDirectory;
+            return Task.FromResult(result);
+        }
+    }
+
+    private sealed class DelayingProcessRunner : IProcessRunner
+    {
+        public bool CancellationObserved { get; private set; }
+
+        public async Task<ProcessResult> RunAsync(
+            string fileName,
+            IEnumerable<string> arguments,
+            string? workingDirectory = null,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                CancellationObserved = true;
+                throw;
+            }
+
+            return new ProcessResult(0, "{}", "");
         }
     }
 }
