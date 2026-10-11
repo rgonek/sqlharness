@@ -1,5 +1,7 @@
 using System.Data.SqlTypes;
 using System.Globalization;
+using System.Net;
+using System.Net.NetworkInformation;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -168,6 +170,92 @@ public class CanonicalResultsTests
         AssertProviderNull(SqlHierarchyId.Null);
         AssertProviderNull(SqlGeography.Null);
         AssertProviderNull(SqlGeometry.Null);
+    }
+
+    [Fact]
+    public void Arrays_have_stable_ordered_canonical_encodings()
+    {
+        var values = new[] { 1, 2 };
+        var first = CanonicalFixture.ResultSet([values]);
+        var second = CanonicalFixture.ResultSet([new[] { 1, 2 }]);
+
+        Assert.Equal(first.Hash, second.Hash);
+        Assert.NotEqual(CanonicalFixture.ResultSet([new[] { 2, 1 }]).Hash, first.Hash);
+        Assert.Equal(
+            "{\"type\":\"array\",\"isNull\":false,\"length\":2,\"value\":[{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":1},{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":2}]}",
+            CanonicalScalarJson(values));
+    }
+
+    [Fact]
+    public void Arrays_encode_nulls_empty_arrays_and_multidimensional_shape()
+    {
+        Assert.Equal(
+            "{\"type\":\"array\",\"isNull\":false,\"length\":2,\"value\":[{\"type\":\"string\",\"isNull\":false,\"length\":1,\"value\":\"a\"},{\"type\":\"null\",\"isNull\":true,\"length\":0,\"value\":null}]}",
+            CanonicalScalarJson(new string?[] { "a", null }));
+        Assert.Equal(
+            "{\"type\":\"array\",\"isNull\":false,\"length\":0,\"value\":[]}",
+            CanonicalScalarJson(Array.Empty<int>()));
+        Assert.Equal(
+            "{\"type\":\"array\",\"isNull\":false,\"length\":4,\"dimensions\":[2,2],\"value\":[{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":1},{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":2},{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":3},{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":4}]}",
+            CanonicalScalarJson(new[,] { { 1, 2 }, { 3, 4 } }));
+    }
+
+    [Fact]
+    public void Byte_arrays_keep_the_existing_binary_scalar_encoding()
+    {
+        const string expected = "{\"type\":\"bytes\",\"isNull\":false,\"length\":3,\"value\":\"AAH/\"}";
+
+        Assert.Equal(expected, CanonicalScalarJson(new byte[] { 0, 1, 255 }));
+        Assert.Equal(SHA256.HashData(Encoding.UTF8.GetBytes(expected)), OneShotScalarHash(new byte[] { 0, 1, 255 }));
+    }
+
+    [Fact]
+    public void Unsupported_array_element_rejection_leaves_accumulator_clean_and_usable()
+    {
+        const string expected = "{\"events\":[{\"kind\":\"resultSetStart\",\"columns\":[{\"ordinal\":0,\"name\":\"Value\",\"dataType\":\"array\",\"allowNull\":false}]},{\"kind\":\"row\",\"values\":[{\"type\":\"array\",\"isNull\":false,\"length\":1,\"value\":[{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":1}]}]},{\"kind\":\"resultSetEnd\",\"rowCount\":1}]}";
+        using var accumulator = new CanonicalResultAccumulator();
+        accumulator.BeginResultSet([new CanonicalColumn(0, "Value", "array", false)]);
+
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            accumulator.AddRow([new object?[] { new object?[] { 1, new CultureDependentScalar() } }]));
+        accumulator.AddRow([new object?[] { 1 }]);
+        accumulator.EndResultSet();
+
+        Assert.Contains(typeof(CultureDependentScalar).FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.Equal(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(expected))), accumulator.Complete().Hash);
+    }
+
+    [Fact]
+    public void Postgres_network_and_bit_types_have_invariant_named_encodings()
+    {
+        AssertProviderValue(IPAddress.Parse("192.0.2.1"), "ipAddress", "192.0.2.1");
+        AssertProviderValue(PhysicalAddress.Parse("001122AABBCC"), "macAddress", "001122AABBCC");
+        AssertProviderValue(new System.Collections.BitArray([true, false, true, true]), "bits", "1011");
+    }
+
+    [Fact]
+    public void Npgsql_cidr_ipnetwork_keeps_its_invariant_formattable_encoding()
+    {
+        const string expected = "{\"type\":\"System.Net.IPNetwork\",\"isNull\":false,\"length\":12,\"value\":\"192.0.2.0/24\"}";
+        var expectedHash = SHA256.HashData(Encoding.UTF8.GetBytes(expected));
+        var value = IPNetwork.Parse("192.0.2.0/24");
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            foreach (var culture in new[] { "pl-PL", "en-US" })
+            {
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(culture);
+                CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
+                Assert.Equal(expected, CanonicalScalarJson(value));
+                Assert.Equal(expectedHash, OneShotScalarHash(value));
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
     }
 
     [Fact]

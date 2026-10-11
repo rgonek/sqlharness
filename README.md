@@ -123,7 +123,7 @@ Supported `--param` types (culture-invariant; date/time values use ISO 8601):
 
 `nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`, `nchar`, `int`, `bigint`, `smallint`, `tinyint`, `bit`, `decimal`, `decimal(p,s)`, `numeric`, `numeric(p,s)`, `float`, `real`, `money`, `smallmoney`, `date`, `time`, `datetime`, `datetime2`, `smalldatetime`, `datetimeoffset`, `uniqueidentifier`, `varbinary`, `varbinary(max)`, `hierarchyid`, `geography`, `geometry`
 
-Result hashing supports non-finite floats and SQL Server `hierarchyid`, `geography`, and `geometry` values. Other provider-specific result types fail with a clear `not supported as a result column` error; cast them to text in the query.
+Result hashing supports arrays, PostgreSQL `inet`/`cidr`/`macaddr`/`bit varying`, non-finite floats, and SQL Server `hierarchyid`, `geography`, and `geometry` values. Npgsql 10 `cidr` values use the existing invariant `System.Net.IPNetwork` encoding. Other provider-specific result types fail with a clear `not supported as a result column` error; cast them to text in the query.
 
 Notes:
 

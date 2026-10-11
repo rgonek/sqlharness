@@ -87,6 +87,7 @@ Branch `fix/plan-024-canonical-types`. Commits per step. Do NOT push.
 
 - **A, first: shared and SQL Server.** Step 1, the SqlHierarchyId/SqlGeography/SqlGeometry rows of Step 3, their tests and the matching Step 4 documentation. Shared scalar support remains engine-neutral; do not disable its use on PG.
 - **B, deferred: PostgreSQL-oriented result mappings.** Step 2 arrays and the IPAddress/PhysicalAddress/BitArray/cidr rows of Step 3, including the current Npgsql 10 IPNetwork mapping after inspecting the actual provider. Do not implement an obsolete NpgsqlCidr arm merely because the historical table names it.
+- **Phase B provider reconciliation:** Npgsql 10 maps PostgreSQL `cidr` to `System.Net.IPNetwork` by default (Npgsql 10.0 release notes: https://www.npgsql.org/doc/release-notes/10.0.html). The referenced Npgsql 10.0.3 assembly confirms `IPNetwork` implements `IFormattable`, so `CanonicalScalarCodec` already accepts it using the generic stable type tag `System.Net.IPNetwork` and invariant string. Preserve that existing representation and its hash; do not replace it with a new `cidr` tag or add an obsolete `NpgsqlCidr` arm. The result remains supported as `System.Net.IPNetwork`.
 - The stage selection changes scheduling, not canonical encoding compatibility. Keep existing encodings/hashes stable and run focused plus Windows/Linux gates for each implemented stage. After A, record PARTIAL with its evidence and B pending; whole-plan DONE still requires both stages. Do not describe deferred mappings as supported in capabilities or docs.
 
 ### Step 1: Non-finite floats get tagged encodings
@@ -116,7 +117,7 @@ Add an explicit arm set, matched by **runtime type full name** for provider type
 | `System.Collections.BitArray` | `bits` | `'0'`/`'1'` per bit, index order |
 | `Microsoft.SqlServer.Types.SqlHierarchyId` | `hierarchyId` | `ToString()` (canonical `/1/2/`) |
 | `Microsoft.SqlServer.Types.SqlGeography` / `SqlGeometry` | `geography` / `geometry` | `STSrid` + `;` + `STAsText().Value` |
-| `NpgsqlTypes.NpgsqlCidr` (if it exists in the referenced Npgsql) | `cidr` | `ToString()` |
+| Npgsql 10 default PostgreSQL `cidr` result (`System.Net.IPNetwork`) | existing `System.Net.IPNetwork` IFormattable tag | `ToString(null, CultureInfo.InvariantCulture)`; preserve the pre-existing generic encoding |
 
 For each, null instances (`INullable.IsNull == true`) must use the null envelope.
 

@@ -34,7 +34,12 @@ internal sealed record CanonicalResult(string Hash, OutputFootprint Footprint);
 
 internal static class CanonicalScalarCodec
 {
-    internal readonly record struct PreparedScalar(object? Value, string? InvariantValue, string? TypeName = null);
+    internal readonly record struct PreparedScalar(
+        object? Value,
+        string? InvariantValue,
+        string? TypeName = null,
+        PreparedScalar[]? ArrayElements = null,
+        int[]? Dimensions = null);
 
     public static PreparedScalar Prepare(object? value) => value switch
     {
@@ -53,6 +58,11 @@ internal static class CanonicalScalarCodec
             value,
             $"{geometry.STSrid.Value.ToString(CultureInfo.InvariantCulture)};{new string(geometry.STAsText().Value)}",
             "geometry"),
+        Array array when value is not byte[] => PrepareArray(array),
+        System.Net.IPAddress address => new PreparedScalar(value, address.ToString(), "ipAddress"),
+        System.Net.NetworkInformation.PhysicalAddress physicalAddress =>
+            new PreparedScalar(value, physicalAddress.ToString(), "macAddress"),
+        System.Collections.BitArray bits => new PreparedScalar(value, BitArrayText(bits), "bits"),
         null or DBNull or string or char or bool or byte[] or
             byte or sbyte or short or ushort or int or uint or long or ulong or
             decimal or float or double or Guid or DateTime or DateTimeOffset or
@@ -71,6 +81,27 @@ internal static class CanonicalScalarCodec
 
     private static string NonFiniteText(double number) =>
         double.IsNaN(number) ? "NaN" : double.IsPositiveInfinity(number) ? "Infinity" : "-Infinity";
+
+    private static PreparedScalar PrepareArray(Array array)
+    {
+        var elements = new PreparedScalar[array.Length];
+        var index = 0;
+        foreach (var element in array)
+            elements[index++] = Prepare(element);
+
+        var dimensions = array.Rank > 1
+            ? Enumerable.Range(0, array.Rank).Select(array.GetLength).ToArray()
+            : null;
+        return new PreparedScalar(array, null, "array", elements, dimensions);
+    }
+
+    private static string BitArrayText(System.Collections.BitArray bits)
+    {
+        var text = new char[bits.Length];
+        for (var index = 0; index < bits.Length; index++)
+            text[index] = bits[index] ? '1' : '0';
+        return new string(text);
+    }
 
     public static void Write(Utf8JsonWriter writer, PreparedScalar scalar)
     {
@@ -146,6 +177,22 @@ internal static class CanonicalScalarCodec
                 var base64 = Convert.ToBase64String(bytes);
                 WriteScalarHeader(writer, "bytes", false, bytes.LongLength);
                 writer.WriteString("value", base64);
+                break;
+            case Array array:
+                WriteScalarHeader(writer, "array", false, array.LongLength);
+                if (scalar.Dimensions is not null)
+                {
+                    writer.WritePropertyName("dimensions");
+                    writer.WriteStartArray();
+                    foreach (var dimension in scalar.Dimensions)
+                        writer.WriteNumberValue(dimension);
+                    writer.WriteEndArray();
+                }
+                writer.WritePropertyName("value");
+                writer.WriteStartArray();
+                foreach (var element in scalar.ArrayElements!)
+                    Write(writer, element);
+                writer.WriteEndArray();
                 break;
             case Guid guid:
                 WriteInvariantText(writer, "guid", guid.ToString("D"));
