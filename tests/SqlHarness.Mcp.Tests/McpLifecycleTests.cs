@@ -309,7 +309,7 @@ public sealed class McpLifecycleTests
         var blocked = handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
         await entered.Task.WaitAsync(Budget, cts.Token);
 
-        var capabilities = await handlers.CapabilitiesAsync(null!, false, cts.Token);
+        var capabilities = await handlers.CapabilitiesAsync(null!, false, ct: cts.Token);
         Assert.False(capabilities.IsError == true, Text(capabilities));
 
         release.TrySetResult();
@@ -508,7 +508,7 @@ public sealed class McpLifecycleTests
 
         // Offline local tools share no gate and stay available while a
         // database call holds it.
-        var capabilities = await localHandlers.CapabilitiesAsync(null!, false, localCts.Token);
+        var capabilities = await localHandlers.CapabilitiesAsync(null!, false, ct: localCts.Token);
         Assert.False(capabilities.IsError == true, Text(capabilities));
         var validate = await localHandlers.ValidateAsync(null!, "query", sql: "SELECT 1", ct: localCts.Token);
         Assert.False(validate.IsError == true, Text(validate));

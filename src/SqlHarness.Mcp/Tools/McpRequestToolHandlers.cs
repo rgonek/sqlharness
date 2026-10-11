@@ -23,12 +23,13 @@ public sealed class McpRequestToolHandlers(
     private readonly Func<McpScope, ISqlHarnessModule> _moduleFactory = moduleFactory ?? (scope => process.Decorate(scope.CreateModule()));
 
     public Task<CallToolResult> CapabilitiesAsync(RequestContext<CallToolRequestParams> ctx,
-        [Description("Include local counts and existence flags. Never secrets, paths, or profile lists.")] bool includeDiagnostics = false,
+        [Description("Include local counts and existence flags. Never secrets.")] bool includeDiagnostics = false,
+        [Description("Zero-based offset 0..inputRootCount into the configured input roots; default 0. Follow inputRootsNextCursor until it is null; inputRootsComplete is true only when one response holds every root.")] int inputRootCursor = 0,
         CancellationToken ct = default) => TargetFreeAsync("sqlharness_capabilities", ctx, ct, token =>
     {
-        ThrowUnknown(ctx, ["includeDiagnostics"]);
+        ThrowUnknown(ctx, ["includeDiagnostics", "inputRootCursor"]);
         return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success,
-            McpOperationMapper.BuildCapabilities(process, includeDiagnostics, ctx?.Server?.NegotiatedProtocolVersion), null));
+            McpOperationMapper.BuildCapabilities(process, includeDiagnostics, ctx?.Server?.NegotiatedProtocolVersion, inputRootCursor), null));
     });
 
     public Task<CallToolResult> InspectAsync(RequestContext<CallToolRequestParams> ctx,

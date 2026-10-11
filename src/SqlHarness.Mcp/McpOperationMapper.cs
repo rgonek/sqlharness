@@ -10,7 +10,16 @@ namespace SqlHarness.Mcp;
 /// <summary>Safe mapping failure: constant text, never parameter values or SQL.</summary>
 public sealed class McpMappingException(string message) : Exception(message);
 
-/// <summary>Capabilities document for the capabilities tool: versions, scope engine, tools, limits, and the static-analysis boundary.</summary>
+/// <summary>
+/// Capabilities document for the capabilities tool: versions, scope engine,
+/// tools, limits, the static-analysis boundary, and one page of the enforced
+/// input roots. <see cref="InputRoots"/> holds the normalized roots of this
+/// page in configured order; <see cref="InputRootCount"/> is the total;
+/// <see cref="InputRootsComplete"/> is true only when this single response
+/// carries the whole inventory; <see cref="InputRootsNextCursor"/> is the
+/// next page offset (null at the end); <see cref="InputRootsOmitted"/> counts
+/// roots on this page's range that cannot fit any page within the budget.
+/// </summary>
 public sealed record McpCapabilitiesDocument(
     string Server,
     string ServerVersion,
@@ -24,7 +33,12 @@ public sealed record McpCapabilitiesDocument(
     SqlHarnessSafetyAnalysis SafetyAnalysis,
     string ScopeMode = "fixed",
     IReadOnlyList<string>? AllowedProfiles = null,
-    IReadOnlyList<string>? SupportedProtocolVersions = null);
+    IReadOnlyList<string>? SupportedProtocolVersions = null,
+    IReadOnlyList<string>? InputRoots = null,
+    int InputRootCount = 0,
+    bool InputRootsComplete = true,
+    int? InputRootsNextCursor = null,
+    int InputRootsOmitted = 0);
 
 /// <summary>
 /// Shared projection sanitizer for plan and artifact results. Distilled plans
@@ -91,9 +105,10 @@ public static partial class McpOperationMapper
     private const int DefaultQueryMaxRows = 50;
     private const int DefaultRepeat = 5;
 
-    public static McpCapabilitiesDocument BuildCapabilities(McpScope scope, bool includeDiagnostics, string? protocolVersion = null)
+    public static McpCapabilitiesDocument BuildCapabilities(McpScope scope, bool includeDiagnostics, string? protocolVersion = null, int inputRootCursor = 0)
     {
         ArgumentNullException.ThrowIfNull(scope);
+        ThrowIfInvalidInputRootCursor(scope.InputRoots, inputRootCursor);
         var engine = scope.ResolvedTarget.Engine switch
         {
             SqlEngine.SqlServer => "sqlserver",
@@ -101,7 +116,7 @@ public static partial class McpOperationMapper
             _ => throw new McpMappingException("The scoped engine is not supported."),
         };
         var pg = string.Equals(engine, "postgres", StringComparison.Ordinal);
-        return new McpCapabilitiesDocument(
+        var document = new McpCapabilitiesDocument(
             McpHost.ServerName,
             McpHost.ServerVersion,
             protocolVersion ?? McpHost.FallbackProtocolVersion,
@@ -131,18 +146,20 @@ public static partial class McpOperationMapper
                 SqlSafetyAnalysis.HiddenEffectsVerified,
                 SqlSafetyAnalysis.ObjectAndPermissionStatus),
             SupportedProtocolVersions: McpHost.SupportedProtocolVersions);
+        return WithInputRootPage(document, scope.InputRoots, inputRootCursor, scope.MaxResultBytes);
     }
 
-    public static McpCapabilitiesDocument BuildCapabilities(McpProcessContext context, bool includeDiagnostics, string? protocolVersion = null)
+    public static McpCapabilitiesDocument BuildCapabilities(McpProcessContext context, bool includeDiagnostics, string? protocolVersion = null, int inputRootCursor = 0)
     {
         ArgumentNullException.ThrowIfNull(context);
         if (!context.RequestScope)
-            return BuildCapabilities(context.FixedScope!, includeDiagnostics, protocolVersion);
+            return BuildCapabilities(context.FixedScope!, includeDiagnostics, protocolVersion, inputRootCursor);
+        ThrowIfInvalidInputRootCursor(context.InputRoots, inputRootCursor);
 
         var diagnostics = includeDiagnostics
             ? LocalDiagnostics(context.InputRoots)
             : null;
-        return new McpCapabilitiesDocument(
+        var document = new McpCapabilitiesDocument(
             McpHost.ServerName,
             McpHost.ServerVersion,
             protocolVersion ?? McpHost.FallbackProtocolVersion,
@@ -174,11 +191,73 @@ public static partial class McpOperationMapper
             ScopeMode: "request",
             AllowedProfiles: context.AllowedProfiles,
             SupportedProtocolVersions: McpHost.SupportedProtocolVersions);
+        return WithInputRootPage(document, context.InputRoots, inputRootCursor, context.MaxResultBytes);
+    }
+
+    private static void ThrowIfInvalidInputRootCursor(IReadOnlyList<string> inputRoots, int cursor)
+    {
+        if (cursor < 0 || cursor > inputRoots.Count)
+            throw new McpMappingException("The input root cursor is invalid.");
+    }
+
+    /// <summary>
+    /// Fills one page of the enforced input roots, verbatim and in configured
+    /// order, starting at <paramref name="cursor"/>. Page size is derived from
+    /// the real wire cost: every candidate page is measured as the complete
+    /// serialized capabilities CallToolResult (diagnostics included) against
+    /// the result budget, so the page always travels whole. A leading root
+    /// that cannot fit even alone is counted in InputRootsOmitted and skipped,
+    /// so the cursor always advances and paging terminates.
+    /// </summary>
+    private static McpCapabilitiesDocument WithInputRootPage(
+        McpCapabilitiesDocument document, IReadOnlyList<string> roots, int cursor, int maximumBytes)
+    {
+        var command = McpToolCatalog.ToolNames[0];
+        var start = cursor;
+        var omitted = 0;
+        while (start < roots.Count && !Fits(1))
+        {
+            omitted++;
+            start++;
+        }
+
+        if (start == roots.Count)
+            return Page(0);
+
+        // Largest count whose page fits; one root is already known to fit.
+        var low = 1;
+        var high = roots.Count - start;
+        while (low < high)
+        {
+            var middle = low + ((high - low + 1) / 2);
+            if (Fits(middle))
+                low = middle;
+            else
+                high = middle - 1;
+        }
+
+        return Page(low);
+
+        bool Fits(int count) => McpResultAdapter.FitsRawSuccess(Page(count), command, maximumBytes);
+
+        McpCapabilitiesDocument Page(int count)
+        {
+            var end = start + count;
+            int? next = end < roots.Count ? end : null;
+            return document with
+            {
+                InputRoots = roots.Skip(start).Take(count).ToArray(),
+                InputRootCount = roots.Count,
+                InputRootsComplete = cursor == 0 && next is null && omitted == 0,
+                InputRootsNextCursor = next,
+                InputRootsOmitted = omitted,
+            };
+        }
     }
 
     private static IReadOnlyDictionary<string, string> LocalDiagnostics(McpScope scope)
     {
-        // Local counts and existence flags only: no profile list, no paths, no secrets.
+        // Local counts and existence flags only; never secrets.
         var diagnostics = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["inputRootCount"] = scope.InputRoots.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
