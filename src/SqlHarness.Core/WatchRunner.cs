@@ -203,8 +203,7 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
                     new SqlHarnessError(
                         "watch_max_duration",
                         "watch",
-                        "Watch reached its maximum duration before a stop condition was met."),
-                    knownSecrets);
+                        "Watch reached its maximum duration before a stop condition was met."));
                 return (new SqlHarnessOutcome(SqlHarnessExitCode.WatchMaxDuration, null, null), rawFootprint);
             }
             await using var session = connected;
@@ -245,7 +244,7 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
             var secrets = knownSecrets as IReadOnlyList<string> ?? knownSecrets.ToArray();
             var exitCode = OperationFailureMapper.Map(exception, phase);
             var message = SecretRedactor.Redact(exception, secrets);
-            EmitFailed(stream, start, exitCode, SqlHarnessError.From(exitCode, message, PhaseName(phase)), knownSecrets);
+            EmitFailed(stream, start, exitCode, SqlHarnessError.From(exitCode, message, PhaseName(phase)));
             return (new SqlHarnessOutcome(exitCode, null, message), rawFootprint);
         }
         finally
@@ -456,19 +455,19 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
         WatchNdjsonWriter stream,
         DateTimeOffset start,
         SqlHarnessExitCode exitCode,
-        SqlHarnessError error,
-        IReadOnlyCollection<string> knownSecrets)
+        SqlHarnessError error)
     {
-        // Best effort: a dead transport cannot take a terminal record, but the
-        // returned outcome still reports the failure (never a success).
+        // The caller redacts error.Message exactly once (a second pass would
+        // re-scan the [REDACTED] marker). Best effort: a dead transport cannot
+        // take a terminal record, but the returned outcome still reports the
+        // failure (never a success).
         try
         {
-            var secrets = knownSecrets as IReadOnlyList<string> ?? knownSecrets.ToArray();
             stream.WriteFailed(
                 new
                 {
                     exitCode = (int)exitCode,
-                    error = error with { Message = SecretRedactor.Redact(error.Message, secrets) },
+                    error,
                 },
                 ElapsedMilliseconds(start));
         }

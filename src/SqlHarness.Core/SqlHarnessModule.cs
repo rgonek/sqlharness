@@ -206,7 +206,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(query.Parameters, query.TypedParameters));
             dialect.ValidateParameterReferences(parameters, query.Sql);
 
-
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
             phase = OperationPhase.Sql;
@@ -545,7 +544,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             SetupSqlExecution.Validate(dialect.Engine, measure.SetupSql, parameters);
             dialect.ValidateMeasuredBatch(measure.QuerySql);
 
-
             if (measure.ParameterSets is { Count: > 0 } parameterSets)
             {
                 var boundSets = BindMeasureParameterSets(dialect, measure, parameterSets);
@@ -771,7 +769,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             if (watch.Until is not null)
                 _ = WatchCondition.Parse(watch.Until);
 
-
             phase = OperationPhase.Authentication;
             var runner = new WatchRunner(_sessionFactory, _watchClock);
             var (outcome, raw) = await runner.ExecuteAsync(
@@ -837,7 +834,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             if (watch.Until is not null)
                 _ = WatchCondition.Parse(watch.Until);
 
-
             phase = OperationPhase.Authentication;
             var stream = new WatchNdjsonWriter(writer);
             var runner = new WatchRunner(_sessionFactory, _watchClock);
@@ -856,7 +852,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         {
             var exitCode = OperationFailureMapper.Map(exception, phase);
             var message = SecretRedactor.Redact(exception, knownSecrets);
-            EmitWatchNdjsonFailed(writer, exitCode, SqlHarnessError.From(exitCode, message, "validation"), knownSecrets);
+            EmitWatchNdjsonFailed(writer, exitCode, SqlHarnessError.From(exitCode, message, "validation"));
             var failure = new SqlHarnessOutcome(exitCode, null, message);
             return Checked(watch, WithReceipt(failure, rawFootprint));
         }
@@ -865,19 +861,18 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     private static void EmitWatchNdjsonFailed(
         TextWriter writer,
         SqlHarnessExitCode exitCode,
-        SqlHarnessError error,
-        IReadOnlyCollection<string> knownSecrets)
+        SqlHarnessError error)
     {
-        // Best effort: a dead transport cannot take a terminal record, but the
+        // The caller redacts error.Message exactly once. Best effort: a dead
+        // transport cannot take a terminal record, but the
         // returned outcome still reports the failure (never a success).
         try
         {
-            var secrets = knownSecrets as IReadOnlyList<string> ?? knownSecrets.ToArray();
             new WatchNdjsonWriter(writer).WriteFailed(
                 new
                 {
                     exitCode = (int)exitCode,
-                    error = error with { Message = SecretRedactor.Redact(error.Message, secrets) },
+                    error,
                 },
                 0);
         }
@@ -886,6 +881,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             // Swallowed: the outcome carries the failure.
         }
     }
+
     private static void ValidateWatch(SqlHarnessWatchOperation watch)
     {
         if (watch.TimeoutSeconds is < 1 or > 300)
@@ -933,7 +929,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
             var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(snapshot.Parameters, snapshot.TypedParameters));
             dialect.ValidateParameterReferences(parameters, snapshot.Sql);
-
 
             phase = OperationPhase.Authentication;
             var runner = new SnapshotRunner(_sessionFactory, _snapshotStore);

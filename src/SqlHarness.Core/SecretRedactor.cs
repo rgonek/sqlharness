@@ -107,6 +107,7 @@ public static partial class SecretRedactor
     [GeneratedRegex("\\b[A-Za-z0-9_-]*access-token[A-Za-z0-9_-]*\\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex TokenLikePattern();
 }
+
 /// <summary>Registers operator-held credentials for error redaction once a target is resolved.</summary>
 internal static class OperationSecrets
 {

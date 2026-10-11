@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using SqlHarness.Core;
 using SqlHarness.Core.Targets;
 
@@ -102,6 +104,48 @@ public sealed class CredentialRedactionTests
             $"device ClientID Line 1 {Password}");
 
         Assert.Equal("device ClientID Line 1 [REDACTED]", outcome.SafeError);
+    }
+
+    // "ACT" is a substring of the "[REDACTED]" marker, so a second redaction pass would mangle it.
+    [Fact]
+    public async Task Watch_ndjson_runner_failure_redacts_once_and_keeps_the_marker_intact()
+    {
+        var transport = new StringWriter();
+        var outcome = await RunWatchNdjsonAsync(
+            WatchOperation(untilUnchanged: 3), new InvalidOperationException("boom ACT end"), "ACT", transport);
+
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
+        Assert.Equal("boom [REDACTED] end", outcome.SafeError);
+        Assert.Equal("boom [REDACTED] end", FailedRecordMessage(transport));
+    }
+
+    private static SqlHarnessWatchOperation WatchOperation(string? until = null, int? untilUnchanged = null) =>
+        new(
+            new SqlTargetRequest("p", new Dictionary<string, string>()),
+            "SELECT 1 AS One", [], 5, 10, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5), until, untilUnchanged);
+
+    private static async Task<SqlHarnessOutcome> RunWatchNdjsonAsync(
+        SqlHarnessWatchOperation op, Exception failure, string password, StringWriter transport)
+    {
+        var module = new SqlHarnessModule(new ThrowingSession(failure), new NoGain(), () => Profiles("sql", null));
+        var previous = Environment.GetEnvironmentVariable(EnvVar);
+        try
+        {
+            Environment.SetEnvironmentVariable(EnvVar, password);
+            return await module.ExecuteWatchNdjsonAsync(op, transport);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(EnvVar, previous);
+        }
+    }
+
+    private static string FailedRecordMessage(StringWriter transport)
+    {
+        var lines = transport.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        using var document = JsonDocument.Parse(lines[^1]);
+        Assert.Equal("failed", document.RootElement.GetProperty("event").GetString());
+        return document.RootElement.GetProperty("data").GetProperty("error").GetProperty("message").GetString()!;
     }
 
     private static SqlTargetRequest VarTarget(string env) =>
