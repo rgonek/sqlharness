@@ -31,7 +31,7 @@ public static class ResultMismatchReasons
 /// <summary>
 /// <see cref="SchemaHash"/> covers result-set ordinal, column ordinal, name and data type (no allowNull) and
 /// is the data-equivalence key. <see cref="NullabilityFingerprint"/> covers ordinals and allowNull only;
-/// null means the evidence is absent.
+/// null means the evidence is absent, including when the provider reported no nullability for any column.
 /// </summary>
 internal sealed record CanonicalComparisonResult(
     string SchemaHash,
@@ -407,6 +407,7 @@ internal sealed class CanonicalComparisonAccumulator : IDisposable
     private int _rowCount;
     private bool _inResultSet;
     private bool _completed;
+    private bool _nullabilityUnknown;
 
     public CanonicalComparisonAccumulator()
         : this(MaximumComparedRows)
@@ -419,7 +420,7 @@ internal sealed class CanonicalComparisonAccumulator : IDisposable
         _maximumRows = maximumRows;
     }
 
-    public void BeginResultSet(IReadOnlyList<CanonicalColumn> columns)
+    public void BeginResultSet(IReadOnlyList<CanonicalColumn> columns, bool nullabilityKnown = true)
     {
         EnsureActive();
         if (_inResultSet)
@@ -427,6 +428,10 @@ internal sealed class CanonicalComparisonAccumulator : IDisposable
 
         ArgumentNullException.ThrowIfNull(columns);
         _activeResultSetOrdinal = ++_resultSetOrdinal;
+        // Provider-unknown nullability (coerced to AllowNull = true elsewhere) is not
+        // evidence: the whole result's nullability fingerprint becomes unavailable.
+        if (!nullabilityKnown)
+            _nullabilityUnknown = true;
         AppendSchema(_activeResultSetOrdinal, columns);
         _inResultSet = true;
     }
@@ -465,7 +470,8 @@ internal sealed class CanonicalComparisonAccumulator : IDisposable
 
         _completed = true;
         var schemaHash = Convert.ToHexString(_schemaHash.GetHashAndReset());
-        var nullabilityFingerprint = Convert.ToHexString(_nullabilityHash.GetHashAndReset());
+        var nullabilityHash = Convert.ToHexString(_nullabilityHash.GetHashAndReset());
+        var nullabilityFingerprint = _nullabilityUnknown ? null : nullabilityHash;
         return new CanonicalComparisonResult(schemaHash, _orderedRows.ToArray(), nullabilityFingerprint);
     }
 

@@ -211,6 +211,29 @@ public class SqlHarnessCompareTests
     }
 
     [Fact]
+    public async Task Compare_reports_unknown_provider_nullability_as_unavailable()
+    {
+        var lenientSession = FakeCompareSession.Create();
+        lenientSession.UnknownNullability = true;
+        var strictSession = FakeCompareSession.Create();
+        strictSession.UnknownNullability = true;
+
+        var lenient = await Module(lenientSession).ExecuteAsync(Compare(repeat: 2));
+        var strict = await Module(strictSession).ExecuteAsync(Compare(repeat: 2) with { CompareNullability = true });
+
+        var lenientReport = Assert.IsType<SqlHarnessCompareReport>(lenient.Report);
+        Assert.True(lenientReport.ResultsEquivalent);
+        Assert.Null(lenientReport.Equivalence.NullabilityEquivalent);
+        Assert.Null(lenientReport.Equivalence.MismatchReason);
+        var strictReport = Assert.IsType<SqlHarnessCompareReport>(strict.Report);
+        Assert.False(strictReport.ResultsEquivalent);
+        Assert.Null(strictReport.Equivalence.NullabilityEquivalent);
+        Assert.Null(strictReport.Equivalence.MismatchReason);
+        Assert.Equal(0, strictReport.Equivalence.BaselineOnlyCount);
+        Assert.Equal(0, strictReport.Equivalence.CandidateOnlyCount);
+    }
+
+    [Fact]
     public async Task Compare_order_only_change_is_false_ordered_true_multiset_and_null_off()
     {
         var ordered = await Module(FakeCompareSession.Create(reorderCandidate: true))
@@ -894,6 +917,9 @@ public class SqlHarnessCompareTests
         // When set, benchmark commands emit these messages instead of English STATISTICS text.
         public IReadOnlyList<string>? StatisticsMessages { get; set; }
 
+        // Simulates SqlClient reporting no AllowDBNull for result columns.
+        public bool UnknownNullability { get; set; }
+
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("test-server", "testdb-a", "test-server", "testdb-a", "profile");
 
@@ -1017,7 +1043,7 @@ public class SqlHarnessCompareTests
                 object?[][] rows = baseline
                     ? [[1], [2]]
                     : [[2], [1]];
-                return Task.FromResult<ISqlReader>(FakeReader.WithPlans(["Value"], rows, plans));
+                return Task.FromResult<ISqlReader>(FakeReader.WithPlans(["Value"], rows, plans, UnknownNullability));
             }
 
             var baseValue = baseline ? 42 : _candidateValue;
@@ -1027,7 +1053,8 @@ public class SqlHarnessCompareTests
             return Task.FromResult<ISqlReader>(FakeReader.WithPlans(
                 ["Value"],
                 valueRows,
-                plans));
+                plans,
+                UnknownNullability));
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -1044,11 +1071,16 @@ public class SqlHarnessCompareTests
         public int RecordsAffected => -1;
         public static FakeReader Empty() => new([]);
         public static FakeReader Single(string[] names, object?[] row) => new([new(names, [row])]);
-        public static FakeReader WithPlans(string[] names, object?[][] rows, IReadOnlyList<string> plans) => new(
-            [new(names, rows), .. plans.Select(plan => new Result(["Microsoft SQL Server 2005 XML Showplan"], [[plan]]))]);
+        public static FakeReader WithPlans(string[] names, object?[][] rows, IReadOnlyList<string> plans, bool unknownNullability = false) => new(
+            [new(names, rows), .. plans.Select(plan => new Result(["Microsoft SQL Server 2005 XML Showplan"], [[plan]]))])
+        {
+            UnknownNullability = unknownNullability,
+        };
+        private bool UnknownNullability { get; init; }
         public string GetName(int ordinal) => Current.Names[ordinal];
         public Type GetFieldType(int ordinal) => Current.Rows[0][ordinal]?.GetType() ?? typeof(object);
-        public bool GetAllowNull(int ordinal) => false;
+        public bool GetAllowNull(int ordinal) => UnknownNullability;
+        public bool? GetReportedAllowNull(int ordinal) => UnknownNullability ? null : false;
         public object GetValue(int ordinal) => Current.Rows[_row][ordinal] ?? DBNull.Value;
         public Task<bool> ReadAsync(CancellationToken ct) => Task.FromResult(_results.Count > 0 && ++_row < Current.Rows.Length);
         public Task<bool> NextResultAsync(CancellationToken ct)

@@ -930,6 +930,77 @@ public class ResultEquivalenceTests
     }
 
     [Fact]
+    public void Provider_unknown_nullability_leaves_no_fingerprint_without_changing_the_data_key()
+    {
+        var known = Nullable(true, 1, 2);
+        var unknown = Unknown(1, 2);
+
+        using var mixedCapture = new CanonicalComparisonAccumulator();
+        mixedCapture.BeginResultSet([new CanonicalColumn(0, "Value", "System.Int32", true)]);
+        mixedCapture.AddRow([1]);
+        mixedCapture.EndResultSet();
+        mixedCapture.BeginResultSet([new CanonicalColumn(0, "Value", "System.Int32", true)], nullabilityKnown: false);
+        mixedCapture.EndResultSet();
+        var mixed = mixedCapture.Complete();
+
+        Assert.NotNull(known.NullabilityFingerprint);
+        Assert.Null(unknown.NullabilityFingerprint);
+        Assert.Null(mixed.NullabilityFingerprint);
+        Assert.Equal(known.SchemaHash, unknown.SchemaHash);
+        Assert.Equal(known.OrderedRows, unknown.OrderedRows);
+    }
+
+    [Theory]
+    [MemberData(nameof(DataModes))]
+    public void Unknown_versus_known_nullability_is_unavailable_and_fails_only_strict_mode(ResultComparisonMode mode)
+    {
+        foreach (var (baseline, candidate) in new[]
+        {
+            (Unknown(1, 2), Nullable(true, 1, 2)),
+            (Nullable(false, 1, 2), Unknown(1, 2)),
+        })
+        {
+            var lenient = ResultComparer.Compare(mode, [baseline], [candidate]);
+            var strict = ResultComparer.Compare(mode, [baseline], [candidate], compareNullability: true);
+
+            Assert.True(lenient.Equivalent);
+            Assert.Null(lenient.NullabilityEquivalent);
+            Assert.Null(lenient.MismatchReason);
+            Assert.False(strict.Equivalent);
+            Assert.Null(strict.NullabilityEquivalent);
+            Assert.Null(strict.MismatchReason);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(DataModes))]
+    public void Unknown_nullability_on_both_sides_is_unavailable_and_fails_only_strict_mode(ResultComparisonMode mode)
+    {
+        var lenient = ResultComparer.Compare(mode, [Unknown(1, 2), Unknown(1, 2)], [Unknown(1, 2)]);
+        var strict = ResultComparer.Compare(mode, [Unknown(1, 2)], [Unknown(1, 2)], compareNullability: true);
+        var differingRows = ResultComparer.Compare(mode, [Unknown(1, 2)], [Unknown(1, 3)]);
+
+        Assert.True(lenient.Equivalent);
+        Assert.Null(lenient.NullabilityEquivalent);
+        Assert.False(strict.Equivalent);
+        Assert.Null(strict.NullabilityEquivalent);
+        Assert.Null(strict.MismatchReason);
+        Assert.False(differingRows.Equivalent);
+        Assert.Null(differingRows.MismatchReason);
+    }
+
+    private static CanonicalComparisonResult Unknown(params object[] rows)
+    {
+        using var capture = new CanonicalComparisonAccumulator();
+        // Production coerces provider-unknown nullability to AllowNull = true.
+        capture.BeginResultSet([new CanonicalColumn(0, "Value", "System.Int32", true)], nullabilityKnown: false);
+        foreach (var row in rows)
+            capture.AddRow([row]);
+        capture.EndResultSet();
+        return capture.Complete();
+    }
+
+    [Fact]
     public void Legacy_equivalence_json_without_nullability_members_reads_as_unknown()
     {
         var current = System.Text.Json.JsonSerializer.SerializeToNode(
