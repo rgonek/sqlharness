@@ -253,3 +253,5 @@ export type ProfileView = {
   vars: ProfileVariable[]
 }
 export type ProfilesResponse = { status: "missing" | "valid" | "invalid"; profiles: ProfileView[]; message: string | null }
+
+export type PricesInfo = { source: string; fetchedAt: string; origin: "embedded" | "refreshed" }

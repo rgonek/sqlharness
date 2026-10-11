@@ -1,6 +1,6 @@
 import { QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ConflictError, getJson, NetworkError, NotFoundError, putJson, UnauthorizedError } from "./client"
-import type { DashboardStats, DistilledPlan, KeyCount, OperationDetail, OperationSummary, Page, ProfilesResponse, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
+import { ConflictError, getJson, NetworkError, NotFoundError, postJson, putJson, UnauthorizedError } from "./client"
+import type { DashboardStats, DistilledPlan, KeyCount, OperationDetail, OperationSummary, Page, PricesInfo, ProfilesResponse, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string }
 export type OperationFilters = { from?: string; to?: string; profile?: string; unprofiled?: boolean; dimensions?: Record<string, string | null>; status?: string; operation?: string }
@@ -17,6 +17,7 @@ export const queryKeys = {
     ["stats", range, window, profile, dimensions, rowDimension, columnDimension, unprofiled] as const,
   settings: () => ["settings"] as const,
   profiles: () => ["profiles"] as const,
+  prices: () => ["prices"] as const,
   plan: (hash: string) => ["plan", hash] as const,
   liveOperations: ["live", "operations"] as const,
   liveRunning: ["live", "running"] as const,
@@ -135,5 +136,20 @@ export function useSaveSettings() {
     onSuccess: data => client.setQueryData(queryKeys.settings(), data),
     // 409: the file became invalid after the page loaded; refetch so the page shows its invalid-file state.
     onError: error => { if (error instanceof ConflictError) void client.invalidateQueries({ queryKey: queryKeys.settings() }) },
+  })
+}
+
+export function usePrices() {
+  return useQuery({ queryKey: queryKeys.prices(), queryFn: () => getJson<PricesInfo>("/api/prices") })
+}
+
+export function useRefreshPrices() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => postJson<PricesInfo>("/api/prices/refresh", {}),
+    onSuccess: data => {
+      client.setQueryData(queryKeys.prices(), data)
+      void client.invalidateQueries({ queryKey: ["stats"] })
+    },
   })
 }

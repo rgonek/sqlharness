@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Text.Json;
 
@@ -21,14 +22,18 @@ public sealed class DashboardServerTests
         }
     }
 
-    internal static async Task<AuthenticatedDashboard> StartAuthenticated(TempHome home)
+    internal static Task<AuthenticatedDashboard> StartAuthenticated(TempHome home) =>
+        StartAuthenticated(home, options => options);
+
+    internal static async Task<AuthenticatedDashboard> StartAuthenticated(
+        TempHome home, Func<DashboardServerOptions, DashboardServerOptions> configure)
     {
         var server = await DashboardServer.StartAsync(
-            new DashboardServerOptions(home.DatabasePath, 0, new FakeProcesses())
+            configure(new DashboardServerOptions(home.DatabasePath, 0, new FakeProcesses())
             {
                 ConfigPath = Path.Combine(home.Path, "config.json"),
                 TargetsPath = Path.Combine(home.Path, "targets.json"),
-            },
+            }),
             CancellationToken.None);
         var handler = new HttpClientHandler { AllowAutoRedirect = false, CookieContainer = new CookieContainer() };
         var client = new HttpClient(handler) { BaseAddress = server.BaseUri };
@@ -43,6 +48,60 @@ public sealed class DashboardServerTests
         {
             await dashboard.DisposeAsync();
             throw;
+        }
+    }
+
+    [Fact]
+    public async Task Price_refresh_requires_the_write_protections()
+    {
+        using var home = new TempHome();
+        await using var dashboard = await StartAuthenticated(home);
+        var (server, client) = dashboard;
+
+        using var noHeader = new HttpRequestMessage(HttpMethod.Post, "/api/prices/refresh") { Content = JsonContent.Create(new { }) };
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(noHeader)).StatusCode);
+
+        using var foreign = new HttpRequestMessage(HttpMethod.Post, "/api/prices/refresh") { Content = JsonContent.Create(new { }) };
+        foreign.Headers.Add(DashboardSecurity.WriteHeader, "1");
+        foreign.Headers.Add("Origin", "http://attacker.example");
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(foreign)).StatusCode);
+
+        using var anonymous = new HttpClient { BaseAddress = server.BaseUri };
+        using var unauthenticated = new HttpRequestMessage(HttpMethod.Post, "/api/prices/refresh") { Content = JsonContent.Create(new { }) };
+        unauthenticated.Headers.Add(DashboardSecurity.WriteHeader, "1");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.SendAsync(unauthenticated)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Price_refresh_writes_the_reduced_table_and_failure_keeps_it()
+    {
+        using var home = new TempHome();
+        var pricesPath = Path.Combine(home.Path, "data", "model-prices.json");
+        var answer = """{"openai":{"models":{"gpt-6-sol":{"name":"n","cost":{"input":1.5,"output":9}}}}}""";
+        var fail = false;
+        await using var dashboard = await StartAuthenticated(home, options => options with
+        {
+            PricesPath = pricesPath,
+            PricesFetcher = _ => fail ? throw new HttpRequestException("down") : Task.FromResult<Stream>(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(answer))),
+        });
+        var (_, client) = dashboard;
+
+        Assert.Equal(HttpStatusCode.OK, (await Refresh(client)).StatusCode);
+        var written = File.ReadAllText(pricesPath);
+        Assert.Contains("\"gpt-6-sol\"", written);
+        Assert.DoesNotContain("\"name\"", written);
+
+        fail = true;
+        var failed = await Refresh(client);
+        Assert.Equal(HttpStatusCode.BadGateway, failed.StatusCode);
+        Assert.Equal(written, File.ReadAllText(pricesPath));
+        Assert.DoesNotContain("down", await failed.Content.ReadAsStringAsync());
+
+        static Task<HttpResponseMessage> Refresh(HttpClient client)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/prices/refresh") { Content = JsonContent.Create(new { }) };
+            request.Headers.Add(DashboardSecurity.WriteHeader, "1");
+            return client.SendAsync(request);
         }
     }
 
@@ -115,7 +174,7 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
-    public async Task Only_get_endpoints_and_the_settings_put_exist()
+    public async Task Only_get_endpoints_and_the_two_guarded_writes_exist()
     {
         using var home = new TempHome();
         await using var dashboard = await StartAuthenticated(home);
@@ -124,9 +183,11 @@ public sealed class DashboardServerTests
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PostAsync("/api/sessions", null)).StatusCode);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.DeleteAsync("/api/operations/1")).StatusCode);
         var writes = server.Endpoints.Where(endpoint => !endpoint.Methods.SequenceEqual(["GET", "HEAD"])).ToArray();
-        var settingsPut = Assert.Single(writes);
-        Assert.Equal("/api/settings", settingsPut.Route);
+        Assert.Equal(2, writes.Length);
+        var settingsPut = Assert.Single(writes, endpoint => endpoint.Route == "/api/settings");
         Assert.Equal(["PUT"], settingsPut.Methods);
+        var pricesRefresh = Assert.Single(writes, endpoint => endpoint.Route == "/api/prices/refresh");
+        Assert.Equal(["POST"], pricesRefresh.Methods);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PutAsync("/api/sessions", null)).StatusCode);
         Assert.Contains(server.Endpoints, endpoint => endpoint.Route == "/api/live");
     }

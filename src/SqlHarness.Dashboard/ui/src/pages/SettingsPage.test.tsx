@@ -79,3 +79,24 @@ test("port is read-only and an invalid file needs explicit replacement", async (
   await userEvent.click(screen.getByRole("button", { name: "Replace with these settings" }))
   expect(puts[0].search).toBe("?overwriteInvalid=true")
 })
+
+test("refreshing model prices updates the shown snapshot and reports failures", async () => {
+  let fail = false
+  stubFetch({
+    "/api/settings": response(),
+    "/api/prices": { source: "models.dev", fetchedAt: "2026-10-11T00:00:00Z", origin: "embedded" },
+    "/api/prices/refresh": () =>
+      fail
+        ? new Response(JSON.stringify({ error: "Model prices could not be refreshed." }), { status: 502 })
+        : new Response(JSON.stringify({ source: "models.dev", fetchedAt: "2026-10-20T08:00:00Z", origin: "refreshed" }), { status: 200 }),
+  })
+  renderApp("/settings")
+
+  expect(await screen.findByText("Model prices: models.dev, 2026-10-11 (built in)")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Refresh model prices" }))
+  expect(await screen.findByText("Model prices: models.dev, 2026-10-20 (refreshed)")).toBeInTheDocument()
+
+  fail = true
+  await userEvent.click(screen.getByRole("button", { name: "Refresh model prices" }))
+  expect(await screen.findByText("Model prices could not be refreshed.")).toBeInTheDocument()
+})

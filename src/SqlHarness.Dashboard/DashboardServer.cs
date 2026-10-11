@@ -36,6 +36,9 @@ public sealed record DashboardServerOptions(string DatabasePath, int PreferredPo
 
     /// <summary>The refreshed model price snapshot; the embedded table is used when it is missing or unusable.</summary>
     public string PricesPath { get; init; } = Path.Combine(SqlHarnessPaths.Home, "data", "model-prices.json");
+
+    /// <summary>Supplies the models.dev JSON on a refresh; null performs the HTTPS download. Tests inject this.</summary>
+    public Func<CancellationToken, Task<Stream>>? PricesFetcher { get; init; }
 }
 
 public sealed class RunningDashboard : IAsyncDisposable
@@ -214,6 +217,9 @@ public static partial class DashboardServer
         MapRead(api, "/profiles", () => Results.Json(DashboardProfiles.Read(options.TargetsPath), Json));
         // The only write route; DashboardSecurity admits PUT here alone, with its extra checks.
         api.MapMethods("/settings", [HttpMethods.Put], (Delegate)((HttpContext context) => DashboardSettings.PutAsync(context, options.ConfigPath, Json)));
+        MapRead(api, "/prices", () => Results.Json(DashboardPrices.Describe(options.PricesPath), Json));
+        api.MapMethods("/prices/refresh", [HttpMethods.Post], (Delegate)((HttpContext context) =>
+            DashboardPrices.RefreshAsync(options.PricesPath, options.PricesFetcher ?? DashboardPrices.FetchModelsDevAsync, Json, context.RequestAborted)));
         MapRead(api, "/{**rest}", () => Results.NotFound());
 
         var assets = DashboardAssets.Default;

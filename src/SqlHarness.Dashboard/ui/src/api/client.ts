@@ -85,3 +85,17 @@ export async function putJson<T>(path: string, body: unknown, params?: QueryPara
   if (!response.ok) throw new Error(`Request failed with ${response.status}: ${url}`)
   return (await response.json()) as T
 }
+
+/** The price refresh write; a 502 carries a fixed message that is safe to show. */
+export async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await send(path, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { Accept: "application/json", "Content-Type": "application/json", "X-SqlHarness-Dashboard": "1" },
+    body: JSON.stringify(body),
+  })
+  if (response.status === 401) throw new UnauthorizedError()
+  if (response.status === 502) throw new Error(((await response.json()) as { error: string }).error)
+  if (!response.ok) throw new Error(`Request failed with ${response.status}: ${path}`)
+  return (await response.json()) as T
+}

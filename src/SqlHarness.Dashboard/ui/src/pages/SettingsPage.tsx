@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { FieldErrorsError } from "@/api/client"
-import { useSaveSettings, useSettings } from "@/api/queries"
+import { usePrices, useRefreshPrices, useSaveSettings, useSettings } from "@/api/queries"
 import type { Settings } from "@/api/types"
 import { ErrorState } from "@/components/ErrorState"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -28,6 +28,28 @@ function NumberField({ id, label, value, error, onChange }: { id: string; label:
       <Input id={id} type="number" value={value} aria-invalid={error ? true : undefined} onChange={event => onChange(Number(event.target.value))} className="w-40" />
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
+  )
+}
+
+function ModelPricesCard() {
+  const prices = usePrices()
+  const refresh = useRefreshPrices()
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Model prices</CardTitle>
+        <CardDescription>Used to estimate savings in USD. Refreshing downloads current prices from models.dev.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        {prices.data && (
+          <p>Model prices: {prices.data.source}, {prices.data.fetchedAt.slice(0, 10)} ({prices.data.origin === "embedded" ? "built in" : "refreshed"})</p>
+        )}
+        <div>
+          <Button variant="outline" onClick={() => refresh.mutate()} disabled={refresh.isPending}>Refresh model prices</Button>
+        </div>
+        {refresh.error && <p className="text-sm text-destructive">{refresh.error.message}</p>}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -102,6 +124,7 @@ export function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      <ModelPricesCard />
       {query.data.status !== "invalid" && <Button onClick={() => submit()} disabled={save.isPending}>Save</Button>}
       {save.error && !(save.error instanceof FieldErrorsError) && <ErrorState error={save.error} />}
 
