@@ -161,7 +161,7 @@ public static class SqlValidation
                 if (dialect.Engine == SqlEngine.SqlServer)
                     SqlSetupVariableReferenceValidator.Validate(setupSql, parsedParameters, sql);
                 dialect.ValidateParameterReferences(parsedParameters, setupSql, sql);
-                SetupSqlExecution.Validate(dialect.Engine, setupSql, parsedParameters);
+                SetupSqlExecution.Validate(dialect.Engine, usage == ValidationUsage.Setup ? sql : setupSql, parsedParameters);
                 parameterValidationCompleted = true;
             }
             catch (SqlSetupVariableScopeException exception)

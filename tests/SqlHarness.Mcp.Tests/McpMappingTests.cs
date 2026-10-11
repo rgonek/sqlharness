@@ -916,6 +916,30 @@ public sealed class McpMappingTests : IDisposable
             Assert.False(mcp.Executed);
         }
     }
+    [Theory]
+    [InlineData("DECLARE @v int; SET @v = 2;", false, true)]
+    [InlineData("CREATE TABLE #t (Id int); DECLARE @v int = @id; SET @v = @v + 2; INSERT #t VALUES (@v);", true, true)]
+    [InlineData("DECLARE @v int; CREATE TABLE #t (Id int); SET @v = @id; INSERT #t VALUES (@v);", true, false)]
+    [InlineData("SET @v = 2;", false, false)]
+    [InlineData("DECLARE @v int; SET @v += 2;", false, false)]
+    [InlineData("DECLARE @v int; SET @v = (SELECT MAX(Id) FROM otherdb.dbo.T);", false, false)]
+    public async Task Plan045_Validate_setup_scalar_SET_matches_core(string sql, bool parameterized, bool expectedAllowed)
+    {
+        var scope = Scope();
+        var mcp = await McpOperationMapper.MapValidateAsync(
+            scope, sql, null, "setup", parameterized ? [P("id", "int", "42")] : null, CancellationToken.None);
+        var core = SqlValidation.Validate(scope.TargetRequest, sql,
+            parameterized ? ["id:int=42"] : [], scope.Profiles, new ValidationOptions(ValidationUsage.Setup));
+
+        Assert.Equal(expectedAllowed, mcp.Allowed);
+        Assert.Equal(core.Allowed, mcp.Allowed);
+        Assert.Equal(core.Reason, mcp.Reason);
+        Assert.Equal(core.Detail, mcp.Detail);
+        Assert.Equal(core.Classification, mcp.Classification);
+        Assert.False(mcp.Executed);
+        Assert.Equal("unknown", mcp.ObjectAndPermissionStatus);
+    }
+
     [Fact]
     public async Task Validate_reports_core_rejections_offline_without_echo()
     {

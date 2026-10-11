@@ -169,7 +169,7 @@ public class SqlHarnessMeasureTests
         var session = FakeMeasureSession.Create();
         var operation = Measure(repeat: 2) with
         {
-            SetupSql = "DECLARE @seed TABLE (Id int); INSERT @seed (Id) VALUES (1); SELECT Id INTO #ids FROM @seed",
+            SetupSql = "DECLARE @n int; SET @n = 1; DECLARE @seed TABLE (Id int); INSERT @seed (Id) VALUES (@n); SELECT Id INTO #ids FROM @seed",
             QuerySql = "DECLARE @n int; SET @n = 1; SELECT Value FROM dbo.Clients WHERE Id = @n",
         };
 
@@ -186,8 +186,8 @@ public class SqlHarnessMeasureTests
     }
 
     [Theory]
-    // SET is denied in setup.
-    [InlineData("DECLARE @n int; SET @n = 1; SELECT Id INTO #ids FROM dbo.Clients WHERE Id = @n", "SELECT Value FROM dbo.Clients", "setup")]
+    // An unproven SET target remains denied in setup.
+    [InlineData("SET @n = 1; SELECT Id INTO #ids FROM dbo.Clients WHERE Id = @n", "SELECT Value FROM dbo.Clients", "setup")]
     // A table variable declared in setup is another batch: the measured SQL cannot use it.
     [InlineData("DECLARE @seed TABLE (Id int); INSERT @seed (Id) VALUES (1); SELECT Id INTO #ids FROM @seed", "SELECT Id AS Value FROM @seed", "query")]
     // Undeclared table variable in setup; SET to an undeclared local in the measured SQL.

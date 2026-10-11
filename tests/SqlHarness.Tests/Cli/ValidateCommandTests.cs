@@ -556,6 +556,38 @@ public sealed class ValidateCommandTests
         Assert.False(Result(withoutSetupOutput.ToString()).GetProperty("allowed").GetBoolean());
     }
 
+    [Theory]
+    [InlineData("DECLARE @v int; SET @v = 2;", false, true)]
+    [InlineData("CREATE TABLE #t (Id int); DECLARE @v int = @id; SET @v = @v + 2; INSERT #t VALUES (@v);", true, true)]
+    [InlineData("DECLARE @v int; CREATE TABLE #t (Id int); SET @v = @id; INSERT #t VALUES (@v);", true, false)]
+    [InlineData("SET @v = 2;", false, false)]
+    [InlineData("DECLARE @v int; SET @v += 2;", false, false)]
+    public async Task Plan045_Validate_setup_scalar_SET_agrees_with_execution_preparation(string sql, bool parameterized, bool expectedAllowed)
+    {
+        using var home = new TempHome();
+        var setup = home.WriteSql("setup.sql", sql);
+        var module = new RecordingModule();
+        var output = new StringWriter();
+        var arguments = new List<string> { "validate", TempHome.Profile, "--file", setup, "--usage", "setup", "--json" };
+        if (parameterized) arguments.AddRange(["--param", "id:int=42"]);
+
+        var exitCode = await SqlHarnessCli.Create(module, output).RunAsync(arguments.ToArray());
+
+        Assert.Equal((int)SqlHarnessExitCode.Success, exitCode);
+        Assert.Empty(module.Operations);
+        var result = Result(output.ToString());
+        Assert.Equal(expectedAllowed, result.GetProperty("allowed").GetBoolean());
+        Assert.False(result.GetProperty("executed").GetBoolean());
+        var parameters = SqlParameterParser.Parse(parameterized ? ["id:int=42"] : []);
+        var decision = new SqlSafetyClassifier().Classify(sql, SqlUsage.CompareSetup, "t3db", false);
+        if (decision.Allowed && expectedAllowed)
+            Assert.NotEmpty(SetupSqlExecution.PrepareCommands(sql, parameters, 30));
+        else if (decision.Allowed)
+            Assert.Throws<SetupSqlShapeException>(() => SetupSqlExecution.PrepareCommands(sql, parameters, 30));
+        else
+            Assert.False(expectedAllowed);
+    }
+
     [Fact]
     public async Task Validate_setup_usage_classifies_the_batch_as_setup()
     {
