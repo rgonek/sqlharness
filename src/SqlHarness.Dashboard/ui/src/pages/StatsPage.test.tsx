@@ -25,6 +25,25 @@ test("shows KPIs, charts and top lists, and switches range", async () => {
   expect(calls.some(call => call.startsWith("/api/stats?from="))).toBe(true)
 })
 
+test("per-day chart keys series by index so agent kinds never reach CSS variable names", async () => {
+  const hostile = "my agent; } body { display:none"
+  stubFetch({
+    "/api/stats": stats({ operationsPerDay: [
+      { day: "2026-10-07", agentKind: "my agent", count: 2 },
+      { day: "2026-10-07", agentKind: hostile, count: 1 },
+    ] }),
+    "/api/profiles": profilesResponse(),
+  })
+  const { container } = renderApp("/stats")
+
+  await screen.findByText("Operations per day (UTC)")
+  const css = Array.from(container.querySelectorAll("style")).map(style => style.textContent ?? "").join("\n")
+  expect(css).toContain("--color-a0:")
+  expect(css).toContain("--color-a1:")
+  expect(css).not.toContain("my agent")
+  expect(css).not.toContain("display:none")
+})
+
 test("no-profile activity has a distinct scope and drills down without a profile filter", async () => {
   const requests: URL[] = []
   const calls = stubFetch({

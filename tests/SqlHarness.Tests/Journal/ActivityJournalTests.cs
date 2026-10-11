@@ -24,6 +24,27 @@ public sealed class ActivityJournalTests
     }
 
     [Fact]
+    public void Call_metadata_is_stored_with_the_start_row()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, TextWriter.Null);
+        var start = JournalTestData.Start() with
+        {
+            Agent = new AgentCallMetadata("exec-1", "gpt-6-sol", "low", "s", "turn-1", "exec", "user"),
+        };
+
+        journal.Begin(JournalTestData.Session(), start);
+
+        var row = JournalDb.Rows(temp.DatabasePath, """
+            SELECT client_call_id, agent_model, agent_reasoning_effort, agent_session_id, agent_turn_id,
+                   agent_turn_trigger, agent_thread_source FROM operations
+            """).Single();
+        Assert.Equal(
+            ["exec-1", "gpt-6-sol", "low", "s", "turn-1", "exec", "user"],
+            row.Values.Cast<string>().ToArray());
+    }
+
+    [Fact]
     public void Disabled_config_returns_null_journal_and_creates_no_file()
     {
         using var temp = new JournalTempDirectory();
@@ -285,9 +306,93 @@ public sealed class ActivityJournalTests
 
         Open(temp, TextWriter.Null);
 
-        Assert.Equal(5L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
         var row = JournalDb.Rows(temp.DatabasePath, "SELECT error_kind, error_message FROM operations")[0];
         Assert.Equal("sql_execution_failed", row["error_kind"]);
         Assert.Null(row["error_message"]);
+    }
+
+    [Fact]
+    public void Version_5_journal_migrates_to_current_with_null_metadata()
+    {
+        using var temp = new JournalTempDirectory();
+        Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
+        using (var connection = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = JournalSchema.Version1 + JournalSchema.Version2 + JournalSchema.Version3
+                + JournalSchema.Version4 + JournalSchema.Version5 + """
+                INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, first_seen, last_seen)
+                VALUES ('mcp:old', 'claude', 'mcp', 'mcp-clientinfo', 1, 't', 't');
+                INSERT INTO operations (session_id, operation, host_pid, started_at, updated_at, status, error_kind)
+                VALUES (1, 'query', 1, 't', 't', 'failed', 'cancelled');
+                PRAGMA user_version = 5;
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        Open(temp, TextWriter.Null);
+
+        Assert.Equal(6L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        var session = JournalDb.Rows(temp.DatabasePath, "SELECT client_title, roots_json FROM sessions")[0];
+        Assert.Null(session["client_title"]);
+        Assert.Null(session["roots_json"]);
+        Assert.Null(JournalDb.Rows(temp.DatabasePath, "SELECT cancel_reason FROM operations")[0]["cancel_reason"]);
+    }
+
+    [Fact]
+    public void Session_title_keeps_first_value_and_roots_keep_latest_non_null()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, TextWriter.Null);
+        var baseSession = JournalTestData.Session("mcp:meta");
+
+        journal.Begin(baseSession with { ClientTitle = null, RootsJson = null }, JournalTestData.Start());
+        AssertSession(null, null);
+
+        journal.Begin(baseSession with { ClientTitle = "Claude Code", RootsJson = "[]" }, JournalTestData.Start());
+        AssertSession("Claude Code", "[]");
+
+        journal.Begin(baseSession with { ClientTitle = "Other", RootsJson = """[{"uri":"file:///a"}]""" }, JournalTestData.Start());
+        AssertSession("Claude Code", """[{"uri":"file:///a"}]""");
+
+        journal.Begin(baseSession with { ClientTitle = null, RootsJson = null }, JournalTestData.Start());
+        AssertSession("Claude Code", """[{"uri":"file:///a"}]""");
+
+        void AssertSession(string? title, string? roots)
+        {
+            var row = JournalDb.Rows(temp.DatabasePath, "SELECT client_title, roots_json FROM sessions").Single();
+            Assert.Equal(title, row["client_title"]);
+            Assert.Equal(roots, row["roots_json"]);
+        }
+    }
+
+    [Fact]
+    public void Session_protocol_version_keeps_first_non_null_value()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, TextWriter.Null);
+        var session = JournalTestData.Session("mcp:proto");
+
+        journal.Begin(session with { ProtocolVersion = null }, JournalTestData.Start());
+        journal.Begin(session with { ProtocolVersion = "2026-07-28" }, JournalTestData.Start());
+        journal.Begin(session with { ProtocolVersion = "2025-11-25" }, JournalTestData.Start());
+
+        Assert.Equal("2026-07-28", JournalDb.Rows(temp.DatabasePath, "SELECT protocol_version FROM sessions").Single()["protocol_version"]);
+    }
+
+    [Fact]
+    public void Cancel_reason_is_stored_with_the_end_row()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, TextWriter.Null);
+        var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start());
+
+        Assert.True(journal.Complete(handle, new OperationEnd("failed", -1, "cancelled", 5, null, null, null, null, null, CancelReason: "client")));
+
+        var row = JournalDb.Rows(temp.DatabasePath, "SELECT error_kind, cancel_reason FROM operations").Single();
+        Assert.Equal("cancelled", row["error_kind"]);
+        Assert.Equal("client", row["cancel_reason"]);
     }
 }

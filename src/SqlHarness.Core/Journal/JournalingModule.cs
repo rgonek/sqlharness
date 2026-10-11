@@ -14,29 +14,41 @@ public sealed class JournalingModule : ISqlHarnessModule
     private readonly Lazy<IActivityJournal?> _journal;
     // Resolve per operation so MCP client info can fill in after an early call omitted it.
     private readonly Func<SessionIdentity?> _session;
+    private readonly Func<CancellationToken, string?>? _cancelReason;
+    private readonly Func<string?>? _rootsJson;
+    private readonly Func<CancellationToken, AgentCallMetadata?>? _callMetadata;
 
-    public JournalingModule(ISqlHarnessModule inner, Func<IActivityJournal> journal, Func<SessionIdentity> session)
+    public JournalingModule(
+        ISqlHarnessModule inner,
+        Func<IActivityJournal> journal,
+        Func<SessionIdentity> session,
+        Func<CancellationToken, string?>? cancelReason = null,
+        Func<string?>? rootsJson = null,
+        Func<CancellationToken, AgentCallMetadata?>? callMetadata = null)
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         ArgumentNullException.ThrowIfNull(journal);
         ArgumentNullException.ThrowIfNull(session);
         _journal = new Lazy<IActivityJournal?>(() => Try(journal), LazyThreadSafetyMode.ExecutionAndPublication);
         _session = () => Try(session);
+        _cancelReason = cancelReason;
+        _rootsJson = rootsJson;
+        _callMetadata = callMetadata;
     }
 
     public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default) =>
-        RunAsync(operation, effective => _inner.ExecuteAsync(effective, ct));
+        RunAsync(operation, effective => _inner.ExecuteAsync(effective, ct), ct);
 
     public Task<SqlHarnessOutcome> ExecuteWatchNdjsonAsync(
         SqlHarnessWatchOperation operation,
         TextWriter writer,
         CancellationToken ct = default) =>
-        RunAsync(operation, effective => _inner.ExecuteWatchNdjsonAsync((SqlHarnessWatchOperation)effective, writer, ct));
+        RunAsync(operation, effective => _inner.ExecuteWatchNdjsonAsync((SqlHarnessWatchOperation)effective, writer, ct), ct);
 
-    private async Task<SqlHarnessOutcome> RunAsync(SqlHarnessOperation operation, Func<SqlHarnessOperation, Task<SqlHarnessOutcome>> run)
+    private async Task<SqlHarnessOutcome> RunAsync(SqlHarnessOperation operation, Func<SqlHarnessOperation, Task<SqlHarnessOutcome>> run, CancellationToken ct)
     {
         var journal = _journal.Value;
-        var handle = Begin(journal, operation);
+        var handle = Begin(journal, operation, ct);
         var effective = journal is not null && handle is not null && operation is SqlHarnessWatchOperation watch
             ? watch with { Progress = ProgressRecorder(journal, handle) }
             : operation;
@@ -48,13 +60,21 @@ public sealed class JournalingModule : ISqlHarnessModule
         }
         catch (OperationCanceledException)
         {
-            Complete(journal, handle, () => OperationJournalDescriber.Cancelled(stopwatch.ElapsedMilliseconds));
+            Complete(journal, handle, () => OperationJournalDescriber.Cancelled(stopwatch.ElapsedMilliseconds, Reason(ct)));
             throw;
         }
         catch (Exception)
         {
             Complete(journal, handle, () => OperationJournalDescriber.Crashed(stopwatch.ElapsedMilliseconds));
             throw;
+        }
+
+        // Core maps a cancellation during SQL to an ordinary failed outcome after disposing
+        // its session; MCP reports such a call as cancelled, so the journal does too.
+        if (ct.IsCancellationRequested && IsCancellableFailure(outcome.ExitCode))
+        {
+            Complete(journal, handle, () => OperationJournalDescriber.Cancelled(stopwatch.ElapsedMilliseconds, Reason(ct)));
+            return outcome;
         }
 
         var completed = Complete(journal, handle, () => OperationJournalDescriber.DescribeEnd(outcome, stopwatch.ElapsedMilliseconds));
@@ -86,14 +106,63 @@ public sealed class JournalingModule : ISqlHarnessModule
         return outcome with { EmissionReceipt = wrapped };
     }
 
-    private JournalHandle? Begin(IActivityJournal? journal, SqlHarnessOperation operation)
+    private JournalHandle? Begin(IActivityJournal? journal, SqlHarnessOperation operation, CancellationToken ct)
     {
         // A disabled journal records nothing, so the process tree is not walked at all.
         if (journal is null or NullActivityJournal || _session() is not { } session)
             return null;
         try
         {
-            return journal.Begin(session, OperationJournalDescriber.DescribeStart(operation));
+            var start = OperationJournalDescriber.DescribeStart(operation);
+            if (CallMetadata(ct) is { } agent)
+                start = start with { Agent = agent };
+            var current = _rootsJson is null ? session : session with { RootsJson = Roots() };
+            return journal.Begin(current, start);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsCancellableFailure(SqlHarnessExitCode exitCode) =>
+        exitCode is not (SqlHarnessExitCode.Success or SqlHarnessExitCode.WatchMaxDuration or SqlHarnessExitCode.SnapshotDifferences);
+
+    private string? Reason(CancellationToken ct)
+    {
+        if (_cancelReason is null)
+            return null;
+        try
+        {
+            return _cancelReason(ct);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private AgentCallMetadata? CallMetadata(CancellationToken ct)
+    {
+        if (_callMetadata is null)
+            return null;
+        try
+        {
+            return _callMetadata(ct);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private string? Roots()
+    {
+        if (_rootsJson is null)
+            return null;
+        try
+        {
+            return _rootsJson();
         }
         catch (Exception)
         {

@@ -23,7 +23,10 @@ public sealed record SessionIdentity(
     DateTimeOffset? AgentStartedAt,
     int HostPid,
     DateTimeOffset? HostStartedAt,
-    string? Cwd);
+    string? Cwd,
+    string? ClientTitle = null,
+    string? RootsJson = null,
+    string? ProtocolVersion = null);
 
 /// <summary>Operation metadata known before execution. SQL text is dropped by the journal unless storeSensitive.</summary>
 public sealed record OperationStart(
@@ -34,7 +37,18 @@ public sealed record OperationStart(
     string? SqlHash,
     string? CandidateSqlHash,
     string? SqlText,
-    string? CandidateSqlText);
+    string? CandidateSqlText,
+    AgentCallMetadata? Agent = null);
+
+/// <summary>Allowlisted, client-supplied labels from tools/call _meta; never verified, never content.</summary>
+public sealed record AgentCallMetadata(
+    string? CallId,
+    string? Model,
+    string? ReasoningEffort,
+    string? SessionId,
+    string? TurnId,
+    string? TurnTrigger,
+    string? ThreadSource);
 
 public sealed record OperationEnd(
     string Status,
@@ -49,7 +63,8 @@ public sealed record OperationEnd(
     long? RawTokens = null,
     string? ArtifactDirectory = null,
     string? SummaryJson = null,
-    string? ErrorMessage = null);
+    string? ErrorMessage = null,
+    string? CancelReason = null);
 
 public sealed record JournalHandle(long OperationId);
 

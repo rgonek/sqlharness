@@ -17,17 +17,24 @@ public sealed record StatsQuery(DateTimeOffset? From = null, DateTimeOffset? To 
     IReadOnlyDictionary<string, string?>? Dimensions = null, string? RowDimension = null, string? ColumnDimension = null,
     bool UnprofiledOnly = false);
 
+public sealed record SessionRoot(string Uri, string? Name);
+
 public sealed record SessionSummary(
     long Id, string SessionKey, string AgentKind, string Transport, string Source, string? ClientName,
     string? ClientVersion, string? McpMode, string? Cwd, string FirstSeen, string LastSeen,
-    int Operations, int Failed, int Rejected, int Running, int Abandoned);
+    int Operations, int Failed, int Rejected, int Running, int Abandoned,
+    string? ClientTitle, IReadOnlyList<SessionRoot>? Roots, string? ProtocolVersion);
 
 public sealed record OperationSummary(
     long Id, long SessionId, string AgentKind, string Operation, string Status, int? ExitCode, string? ErrorKind,
     string StartedAt, string UpdatedAt, string? FinishedAt, long? DurationMs, string? Profile, string? Engine,
     string? Server, string? Database, bool MutationRequested, string? SqlHash, long? RowsReturned,
     long? LogicalReadsMedian, bool HasSpill, bool ColdCache, bool OverGranted, JsonElement? Progress,
-    string? ErrorMessage);
+    string? ErrorMessage, string? CancelReason, string? AgentModel, string? AgentReasoningEffort);
+
+public sealed record AgentCall(
+    string? CallId, string? Model, string? ReasoningEffort, string? SessionId, string? TurnId,
+    string? TurnTrigger, string? ThreadSource);
 
 public sealed record SessionDetail(SessionSummary Session, IReadOnlyList<OperationSummary> Operations);
 
@@ -52,7 +59,8 @@ public sealed record OperationDetail(
     OperationSummary Operation, SessionSummary Session, IReadOnlyDictionary<string, string>? Vars,
     string? CandidateSqlHash, string? SqlText, string? CandidateSqlText, long? RawTokens, long? EmittedTokens,
     string? ArtifactDirectory, JsonElement? Summary, IReadOnlyList<VariantDetail> Variants,
-    OperationDimensions Dimensions);
+    OperationDimensions Dimensions,
+    AgentCall? Agent);
 
 public sealed record StoredPlan(string Hash, string Format, string Document);
 

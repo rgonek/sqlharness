@@ -1,32 +1,28 @@
 import { useState } from "react"
-import { useSessions } from "@/api/queries"
+import { useAgentKinds, useSessions } from "@/api/queries"
 import { ErrorState } from "@/components/ErrorState"
 import { SessionTable } from "@/components/SessionTable"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { agentTabs } from "@/lib/agents"
 import { useNow } from "@/lib/useNow"
-
-const agents = [
-  { value: "all", label: "All" },
-  { value: "claude", label: "Claude" },
-  { value: "codex", label: "Codex" },
-  { value: "other", label: "Other" },
-  { value: "unknown", label: "Unknown" },
-]
 
 export function SessionsPage() {
   const [agent, setAgent] = useState("all")
   const now = useNow(30_000)
-  const sessions = useSessions(agent === "all" ? {} : { agent })
+  const agentKinds = useAgentKinds()
+  const tabs = agentTabs((agentKinds.data ?? []).map(item => item.key))
+  const selected = tabs.some(tab => tab.value === agent) ? agent : "all"
+  const sessions = useSessions(selected === "all" ? {} : { agent: selected })
 
   return (
     <div className="space-y-4">
       <h1>Sessions</h1>
-      <Tabs value={agent} onValueChange={value => setAgent(String(value))}>
+      <Tabs value={selected} onValueChange={value => setAgent(String(value))}>
         <TabsList>
-          {agents.map(item => (
+          {tabs.map(item => (
             <TabsTrigger key={item.value} value={item.value}>
               {item.label}
             </TabsTrigger>

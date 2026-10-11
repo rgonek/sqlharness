@@ -19,23 +19,23 @@ public sealed class DashboardContractTests
     public void Operation_summary_names_match_the_ui()
     {
         var summary = new OperationSummary(1, 2, "claude", "query", "running", null, null, "s", "u", null, null, null, null,
-            null, null, false, null, null, null, false, false, false, null, null);
+            null, null, false, null, null, null, false, false, false, null, null, null, null, null);
 
         Assert.Equal(
             ["id", "sessionId", "agentKind", "operation", "status", "exitCode", "errorKind", "startedAt", "updatedAt",
              "finishedAt", "durationMs", "profile", "engine", "server", "database", "mutationRequested", "sqlHash",
-             "rowsReturned", "logicalReadsMedian", "hasSpill", "coldCache", "overGranted", "progress", "errorMessage"],
+             "rowsReturned", "logicalReadsMedian", "hasSpill", "coldCache", "overGranted", "progress", "errorMessage", "cancelReason", "agentModel", "agentReasoningEffort"],
             Names(summary));
     }
 
     [Fact]
     public void Session_summary_names_match_the_ui()
     {
-        var session = new SessionSummary(1, "k", "claude", "cli", "process-tree", null, null, null, null, "f", "l", 0, 0, 0, 0, 0);
+        var session = new SessionSummary(1, "k", "claude", "cli", "process-tree", null, null, null, null, "f", "l", 0, 0, 0, 0, 0, null, null, null);
 
         Assert.Equal(
             ["id", "sessionKey", "agentKind", "transport", "source", "clientName", "clientVersion", "mcpMode", "cwd",
-             "firstSeen", "lastSeen", "operations", "failed", "rejected", "running", "abandoned"],
+             "firstSeen", "lastSeen", "operations", "failed", "rejected", "running", "abandoned", "clientTitle", "roots", "protocolVersion"],
             Names(session));
     }
 
@@ -57,5 +57,20 @@ public sealed class DashboardContractTests
              "topTablesByLogicalReads", "topWaits", "targets", "tokens", "spillOperations", "coldCacheOperations",
              "profileOperations", "profileDimensions"],
             Names(stats));
+    }
+
+    [Fact]
+    public void Agent_call_key_count_and_session_root_names_match_the_ui()
+    {
+        Assert.Equal(["callId", "model", "reasoningEffort", "sessionId", "turnId", "turnTrigger", "threadSource"],
+            Names(new AgentCall(null, null, null, null, null, null, null)));
+        Assert.Equal(["key", "count"], Names(new KeyCount("claude", 1)));
+        Assert.Equal(["uri", "name"], Names(new SessionRoot("file:///w", null)));
+    }
+
+    [Fact]
+    public void Operation_detail_exposes_the_agent_property()
+    {
+        Assert.Contains("agent", typeof(OperationDetail).GetProperties().Select(p => JsonNamingPolicy.CamelCase.ConvertName(p.Name)));
     }
 }

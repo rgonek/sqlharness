@@ -5,6 +5,8 @@ export type OperationStatus = "running" | "succeeded" | "failed" | "rejected" | 
 
 export type WatchProgress = { polls: number; changedPolls: number; elapsedMs: number }
 
+export type SessionRoot = { uri: string; name: string | null }
+
 export type SessionSummary = {
   id: number
   sessionKey: string
@@ -22,6 +24,11 @@ export type SessionSummary = {
   rejected: number
   running: number
   abandoned: number
+  clientTitle: string | null
+  /** null = unknown (client lacks roots or has not answered); [] = client reported none. */
+  roots: SessionRoot[] | null
+  /** Negotiated MCP revision; null for CLI sessions and unrecorded rows. */
+  protocolVersion: string | null
 }
 
 export type OperationSummary = {
@@ -50,6 +57,17 @@ export type OperationSummary = {
   progress: WatchProgress | null
   /** Full error text; stored only with journal.storeSensitive. */
   errorMessage: string | null
+  /** "client" | "shutdown" | "deadline" when errorKind is "cancelled"; otherwise null. */
+  cancelReason: string | null
+  /** Client-supplied model label from tools/call _meta (Codex); never verified. */
+  agentModel: string | null
+  agentReasoningEffort: string | null
+}
+
+/** Allowlisted, client-supplied labels from tools/call _meta; never verified, never content. */
+export type AgentCall = {
+  callId: string | null; model: string | null; reasoningEffort: string | null; sessionId: string | null
+  turnId: string | null; turnTrigger: string | null; threadSource: string | null
 }
 
 export type SessionDetail = { session: SessionSummary; operations: OperationSummary[] }
@@ -120,6 +138,7 @@ export type OperationDetail = {
   summary: Record<string, unknown> | null
   variants: VariantDetail[]
   dimensions: { values: DimensionValueSummary[] }
+  agent: AgentCall | null
 }
 
 export type KeyCount = { key: string; count: number }

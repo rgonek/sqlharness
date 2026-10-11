@@ -162,6 +162,14 @@ public sealed class McpProtocolNegotiationTests
         Assert.Equal(ping, await RewriteAsync(ping));
     }
 
+    [Fact]
+    public async Task Frames_without_initialize_pass_through_byte_for_byte()
+    {
+        // Deliberately not canonical JSON (spacing, key order): any parse/re-serialize would change it.
+        var frame = "{ \"jsonrpc\":\"2.0\", \"method\" : \"tools/call\", \"id\":7, \"params\":{\"name\":\"x\",\"arguments\":{\"sql\":\"SELECT  1\"}} }\n";
+        Assert.Equal(frame, await RewriteAsync(frame));
+    }
+
     private static async Task<string> RewriteAsync(string input)
     {
         await using var source = new MemoryStream(Encoding.UTF8.GetBytes(input));

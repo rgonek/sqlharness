@@ -11,6 +11,8 @@ namespace SqlHarness.Core;
 public static class SessionIdentities
 {
     internal const int MaximumDepth = 16;
+    internal const int MaximumTitleLength = 256;
+    internal const int MaximumAgentKindLength = 64;
 
     public static SessionIdentity Cli(IProcessInfo processes)
     {
@@ -39,7 +41,7 @@ public static class SessionIdentities
             CurrentDirectory());
     }
 
-    public static SessionIdentity Mcp(IProcessInfo processes, string sessionKey, string? clientName, string? clientVersion, string mcpMode)
+    public static SessionIdentity Mcp(IProcessInfo processes, string sessionKey, string? clientName, string? clientVersion, string mcpMode, string? clientTitle = null)
     {
         ArgumentNullException.ThrowIfNull(processes);
         var walk = Walk(processes);
@@ -57,7 +59,35 @@ public static class SessionIdentities
             walk.Agent?.StartedAt,
             processes.CurrentPid,
             walk.Self?.StartedAt,
-            CurrentDirectory());
+            CurrentDirectory(),
+            ClientTitle: Title(clientTitle));
+    }
+
+    /// <summary>
+    /// Applies MCP client info to an identity whose process facts were walked once.
+    /// Client info, when it names a known agent, overrides the process-tree kind.
+    /// </summary>
+    public static SessionIdentity WithMcpClient(SessionIdentity processIdentity, string? clientName, string? clientVersion, string? clientTitle)
+    {
+        ArgumentNullException.ThrowIfNull(processIdentity);
+        var fromClient = AgentKindFromClientName(clientName);
+        var useClient = fromClient != "unknown";
+        return processIdentity with
+        {
+            AgentKind = useClient ? fromClient : processIdentity.AgentKind,
+            Source = useClient ? "mcp-clientinfo" : processIdentity.Source,
+            ClientName = string.IsNullOrWhiteSpace(clientName) ? null : clientName,
+            ClientVersion = string.IsNullOrWhiteSpace(clientVersion) ? null : clientVersion,
+            ClientTitle = Title(clientTitle),
+        };
+    }
+
+    private static string? Title(string? clientTitle)
+    {
+        var trimmed = clientTitle?.Trim();
+        if (string.IsNullOrEmpty(trimmed))
+            return null;
+        return SafeTruncation.Cap(trimmed, MaximumTitleLength);
     }
 
     public static string AgentKindFromClientName(string? clientName)
@@ -68,7 +98,15 @@ public static class SessionIdentities
             return "claude";
         if (clientName.Contains("codex", StringComparison.OrdinalIgnoreCase))
             return "codex";
-        return "other";
+        if (clientName.Contains("copilot", StringComparison.OrdinalIgnoreCase))
+            return "copilot";
+        if (clientName.Contains("opencode", StringComparison.OrdinalIgnoreCase))
+            return "opencode";
+        if (clientName.Contains("grok", StringComparison.OrdinalIgnoreCase))
+            return "grok";
+        // No "other" bucket: an unrecognised client is its own kind, so the dashboard filter lists it by name.
+        var kind = clientName.Trim().ToLowerInvariant();
+        return SafeTruncation.Cap(kind, MaximumAgentKindLength).TrimEnd();
     }
 
     internal static string? Classify(ProcessSnapshot process)
@@ -95,12 +133,23 @@ public static class SessionIdentities
                 return "claude";
             case "codex":
                 return "codex";
+            case "copilot":
+                return "copilot";
+            case "opencode":
+                return "opencode";
+            case "grok":
+                return "grok";
             case "node" or "bun" when commandLine is not null:
                 var normalized = commandLine.Replace('\\', '/');
                 if (normalized.Contains("@anthropic-ai/claude-code", StringComparison.OrdinalIgnoreCase))
                     return "claude";
                 if (normalized.Contains("@openai/codex", StringComparison.OrdinalIgnoreCase))
                     return "codex";
+                if (normalized.Contains("@github/copilot", StringComparison.OrdinalIgnoreCase))
+                    return "copilot";
+                if (normalized.Contains("opencode-ai", StringComparison.OrdinalIgnoreCase)
+                    || normalized.Contains("@opencode/cli", StringComparison.OrdinalIgnoreCase))
+                    return "opencode";
                 return null;
             default:
                 // Native codex release binaries carry a target-triple suffix (codex-x86_64-unknown-linux-musl).

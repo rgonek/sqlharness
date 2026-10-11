@@ -2,7 +2,7 @@ namespace SqlHarness.Core;
 
 internal static class JournalSchema
 {
-    internal const int CurrentVersion = 5;
+    internal const int CurrentVersion = 6;
 
     internal const string Version1 = """
         CREATE TABLE sessions (
@@ -136,5 +136,19 @@ internal static class JournalSchema
         );
         CREATE INDEX ix_operation_statements_operation ON operation_statements(operation_id, ordinal);
         CREATE INDEX ix_operation_statements_hash ON operation_statements(statement_hash);
+        """;
+
+    internal const string Version6 = """
+        ALTER TABLE sessions ADD COLUMN client_title TEXT;
+        ALTER TABLE sessions ADD COLUMN roots_json TEXT;
+        ALTER TABLE sessions ADD COLUMN protocol_version TEXT;
+        ALTER TABLE operations ADD COLUMN cancel_reason TEXT;
+        ALTER TABLE operations ADD COLUMN client_call_id TEXT;
+        ALTER TABLE operations ADD COLUMN agent_model TEXT;
+        ALTER TABLE operations ADD COLUMN agent_reasoning_effort TEXT;
+        ALTER TABLE operations ADD COLUMN agent_session_id TEXT;
+        ALTER TABLE operations ADD COLUMN agent_turn_id TEXT;
+        ALTER TABLE operations ADD COLUMN agent_turn_trigger TEXT;
+        ALTER TABLE operations ADD COLUMN agent_thread_source TEXT;
         """;
 }

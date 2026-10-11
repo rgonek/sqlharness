@@ -55,6 +55,20 @@ public sealed class McpClientIdentityTests : IDisposable
         Assert.Equal("late", identity.Name);
     }
 
+    [Fact]
+    public void Title_is_accepted_from_later_client_info_when_the_first_lacked_one()
+    {
+        var identity = new McpClientIdentity();
+        identity.Record(new Implementation { Name = "claude-code", Version = "2.1.296" });
+        Assert.Null(identity.Title);
+        identity.Record(new Implementation { Name = "other", Version = "9", Title = "   " });
+        Assert.Null(identity.Title);
+        identity.Record(new Implementation { Name = "other", Version = "9", Title = "Claude Code" });
+        identity.Record(new Implementation { Name = "other", Version = "9", Title = "Second" });
+
+        Assert.Equal(("claude-code", "2.1.296", "Claude Code"), (identity.Name, identity.Version, identity.Title));
+    }
+
     [Theory]
     [InlineData("2025-06-18")]
     [InlineData("2025-11-25")]
@@ -75,7 +89,7 @@ public sealed class McpClientIdentityTests : IDisposable
 
         await using (var client = await McpClient.CreateAsync(
             new StreamClientTransport(clientToServer.Writer.AsStream(), serverToClient.Reader.AsStream(), NullLoggerFactory.Instance),
-            new McpClientOptions { ClientInfo = new Implementation { Name = "claude-code", Version = "9.9.9" }, ProtocolVersion = revision },
+            new McpClientOptions { ClientInfo = new Implementation { Name = "claude-code", Version = "9.9.9", Title = "Claude Code" }, ProtocolVersion = revision },
             NullLoggerFactory.Instance, cts.Token))
         {
             Assert.Equal(revision, client.NegotiatedProtocolVersion);
@@ -89,11 +103,23 @@ public sealed class McpClientIdentityTests : IDisposable
         using var connection = new SqliteConnection($"Data Source={Path.Combine(_home, "data", "activity.db")};Mode=ReadOnly;Pooling=False");
         connection.Open();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT agent_kind, source, client_name, client_version FROM sessions";
+        command.CommandText = "SELECT agent_kind, source, client_name, client_version, client_title, protocol_version FROM sessions";
         using var reader = command.ExecuteReader();
         Assert.True(reader.Read());
-        Assert.Equal(("claude", "mcp-clientinfo", "claude-code", "9.9.9"),
-            (reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)));
+        Assert.Equal(("claude", "mcp-clientinfo", "claude-code", "9.9.9", "Claude Code", revision),
+            (reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetString(5)));
+    }
+
+    [Fact]
+    public void Protocol_version_keeps_the_first_non_blank_value()
+    {
+        var identity = new McpClientIdentity();
+        identity.RecordProtocolVersion(null);
+        identity.RecordProtocolVersion(" ");
+        identity.RecordProtocolVersion("2026-07-28");
+        identity.RecordProtocolVersion("2025-11-25");
+
+        Assert.Equal("2026-07-28", identity.ProtocolVersion);
     }
 
     [Fact]
@@ -115,7 +141,7 @@ public sealed class McpClientIdentityTests : IDisposable
 
         await using (var client = await McpClient.CreateAsync(
             new StreamClientTransport(clientToServer.Writer.AsStream(), serverToClient.Reader.AsStream(), NullLoggerFactory.Instance),
-            new McpClientOptions { ClientInfo = new Implementation { Name = "claude-code", Version = "9.9.9" }, ProtocolVersion = "2026-07-28" },
+            new McpClientOptions { ClientInfo = new Implementation { Name = "claude-code", Version = "9.9.9", Title = "Claude Code" }, ProtocolVersion = "2026-07-28" },
             NullLoggerFactory.Instance, cts.Token))
         {
             var first = await client.CallToolAsync("sqlharness_gain", new Dictionary<string, object?>(), cancellationToken: cts.Token);
@@ -131,11 +157,11 @@ public sealed class McpClientIdentityTests : IDisposable
         using var connection = new SqliteConnection($"Data Source={Path.Combine(_home, "data", "activity.db")};Mode=ReadOnly;Pooling=False");
         connection.Open();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT client_name, client_version, COUNT(*) OVER() FROM sessions";
+        command.CommandText = "SELECT client_name, client_version, client_title, COUNT(*) OVER() FROM sessions";
         using var reader = command.ExecuteReader();
         Assert.True(reader.Read());
-        Assert.Equal(("claude-code", "9.9.9", 1),
-            (reader.GetString(0), reader.GetString(1), reader.GetInt32(2)));
+        Assert.Equal(("claude-code", "9.9.9", "Claude Code", 1),
+            (reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3)));
     }
 
     private static async Task StripClientInfoUntilFirstToolCallAsync(Stream input, Stream output)

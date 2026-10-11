@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { comparePairs, compareRows, formatChange, variantLabel } from "@/lib/compare"
 import { formatDuration, formatNumber, formatTimestamp, shortHash } from "@/lib/format"
+import { agentLabel } from "@/lib/agents"
 import { parseRouteId } from "@/lib/routeId"
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
@@ -118,7 +119,7 @@ function OperationView({ id }: { id: number }) {
             <FlagBadges operation={op} />
           </div>
           <CardDescription>
-            {op.operation} by {op.agentKind} in{" "}
+            {op.operation} by {agentLabel(op.agentKind)} in{" "}
             <Link to="/sessions/$id" params={{ id: String(op.sessionId) }}>
               {detail.session.sessionKey}
             </Link>
@@ -129,7 +130,7 @@ function OperationView({ id }: { id: number }) {
             <Fact label="Started">{formatTimestamp(op.startedAt)}</Fact>
             <Fact label="Finished">{formatTimestamp(op.finishedAt)}</Fact>
             <Fact label="Duration">{formatDuration(op.durationMs)}</Fact>
-            <Fact label="Exit code">{op.exitCode ?? "—"}{op.errorKind ? ` (${op.errorKind})` : ""}</Fact>
+            <Fact label="Exit code">{op.exitCode ?? "—"}{op.errorKind ? ` (${op.errorKind}${op.cancelReason ? `: ${op.cancelReason}` : ""})` : ""}</Fact>
             <Fact label="Profile">{op.profile ?? "—"}</Fact>
             <Fact label="Engine">{op.engine ?? "—"}</Fact>
             <Fact label="Server / database">{[op.server, op.database].filter(Boolean).join(" / ") || "—"}</Fact>
@@ -162,6 +163,26 @@ function OperationView({ id }: { id: number }) {
           {detail.summary && <SummaryFacts summary={detail.summary} />}
         </CardContent>
       </Card>
+
+      {detail.agent && (
+        <Card>
+          <CardHeader>
+            <CardTitle><h2>Agent call</h2></CardTitle>
+            <CardDescription>Labels the client sent with this call; not verified.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <Fact label="Model">{detail.agent.model ?? "—"}</Fact>
+              <Fact label="Effort">{detail.agent.reasoningEffort ?? "—"}</Fact>
+              <Fact label="Agent session"><span className="font-mono">{detail.agent.sessionId ?? "—"}</span></Fact>
+              <Fact label="Turn"><span className="font-mono">{detail.agent.turnId ?? "—"}</span></Fact>
+              <Fact label="Trigger">{detail.agent.turnTrigger ?? "—"}</Fact>
+              <Fact label="Thread source">{detail.agent.threadSource ?? "—"}</Fact>
+              <Fact label="Call id"><span className="font-mono">{detail.agent.callId ?? "—"}</span></Fact>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Comparison detail={detail} />
 

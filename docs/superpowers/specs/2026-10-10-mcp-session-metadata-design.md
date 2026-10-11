@@ -161,7 +161,11 @@ snapshot:
   is ignored. For `2026-07-28`, first prove request-scoped `roots/list` over
   stdio in Task 5. If it works, start a fetch from the first eligible
   `tools/call`; `subscriptions/listen` refresh stays out of scope. If it fails,
-  keep roots NULL on that revision and document the limitation.
+  keep roots NULL on that revision and document the limitation. Probe outcome
+  (SDK 2.2.0, stream transport): a request-scoped `RequestRootsAsync` succeeds
+  only while the tool handler awaits it, and a background request (one that
+  does not block the call) hangs until the 5 second timeout once the call
+  returns, so roots stay NULL on `2026-07-28` sessions.
 - Each fetch calls `McpServer.RequestRootsAsync` with a 5 second timeout, linked
   to the host lifetime token. Starting a new fetch cancels the previous one, so
   a slow older response can never overwrite a newer one.

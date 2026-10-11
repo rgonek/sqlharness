@@ -161,6 +161,7 @@ public static partial class DashboardServer
         app.UseRouting();
 
         var api = app.MapGroup("/api");
+        MapRead(api, "/agents", () => Results.Json(reader.AgentKinds(), Json));
         MapRead(api, "/sessions", (string? agent, string? transport, string? from, string? to, long? cursor, int? limit) =>
             TryWindow(from, to, out var window)
                 ? Results.Json(reader.Sessions(new SessionQuery(agent, transport, window.From, window.To, cursor, limit ?? JournalReader.DefaultLimit)), Json)

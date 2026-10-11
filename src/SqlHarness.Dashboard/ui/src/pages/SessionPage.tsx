@@ -6,7 +6,12 @@ import { OperationTable } from "@/components/OperationTable"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatTimestamp } from "@/lib/format"
+import { clientLabel, rootLabel } from "@/lib/roots"
+import { agentLabel } from "@/lib/agents"
 import { parseRouteId } from "@/lib/routeId"
+
+const unknownRootsHint =
+  "Unknown: the client did not declare roots, has not answered yet, or uses MCP 2026-07-28, where SQLHarness does not request roots."
 
 function Fact({ label, value }: { label: string; value: string | null | undefined }) {
   return (
@@ -40,13 +45,31 @@ function SessionView({ id }: { id: number }) {
           </CardTitle>
           <div className="font-mono">{session.sessionKey}</div>
           <CardDescription>
-            {session.agentKind} via {session.transport} ({session.source})
+            {agentLabel(session.agentKind)} via {session.transport} ({session.source})
           </CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <Fact label="Client" value={session.clientName ? `${session.clientName} ${session.clientVersion ?? ""}`.trim() : null} />
+          <Fact label="Client" value={clientLabel(session)} />
           <Fact label="MCP mode" value={session.mcpMode} />
+          <Fact label="MCP protocol" value={session.protocolVersion} />
           <Fact label="Working directory" value={session.cwd} />
+          <div className="min-w-0 md:col-span-2">
+            <div className="text-sm text-muted-foreground">Workspace roots</div>
+            {session.roots === null ? (
+              <div aria-label="Workspace roots" title={unknownRootsHint}>—</div>
+            ) : session.roots.length === 0 ? (
+              <div aria-label="Workspace roots">none</div>
+            ) : (
+              <ul aria-label="Workspace roots" className="font-mono text-sm">
+                {session.roots.map((root) => (
+                  <li key={root.uri} className="truncate">
+                    <span>{rootLabel(root.uri)}</span>
+                    {root.name && <> <span className="text-muted-foreground">({root.name})</span></>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <Fact label="Operations" value={String(session.operations)} />
           <Fact label="First seen" value={formatTimestamp(session.firstSeen)} />
           <Fact label="Last seen" value={formatTimestamp(session.lastSeen)} />

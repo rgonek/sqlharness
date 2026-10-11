@@ -1,6 +1,6 @@
 import { QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ConflictError, getJson, NotFoundError, putJson, UnauthorizedError } from "./client"
-import type { DashboardStats, DistilledPlan, OperationDetail, OperationSummary, Page, ProfilesResponse, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
+import type { DashboardStats, DistilledPlan, KeyCount, OperationDetail, OperationSummary, Page, ProfilesResponse, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string }
 export type OperationFilters = { from?: string; to?: string; profile?: string; unprofiled?: boolean; dimensions?: Record<string, string | null>; status?: string; operation?: string }
@@ -8,6 +8,7 @@ export type StatsRange = "24h" | "7d" | "30d" | "all"
 export type StatsWindow = { from?: string; to?: string }
 
 export const queryKeys = {
+  agents: ["agents"] as const,
   sessions: (filters: SessionFilters) => ["sessions", filters] as const,
   session: (id: number) => ["session", id] as const,
   operation: (id: number) => ["operation", id] as const,
@@ -32,6 +33,10 @@ export function createQueryClient(): QueryClient {
       },
     },
   })
+}
+
+export function useAgentKinds() {
+  return useQuery({ queryKey: queryKeys.agents, queryFn: () => getJson<KeyCount[]>("/api/agents") })
 }
 
 export function useSessions(filters: SessionFilters) {

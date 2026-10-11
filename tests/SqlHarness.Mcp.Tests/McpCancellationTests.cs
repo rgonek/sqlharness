@@ -116,6 +116,27 @@ public sealed class McpCancellationTests
         AssertCancelled(watch, "sqlharness_watch");
     }
 
+    private sealed class FailingAfterCancelModule(CancellationTokenSource cts) : ISqlHarnessModule
+    {
+        public async Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default)
+        {
+            // Core may translate a provider cancellation into a plain failure outcome.
+            await cts.CancelAsync();
+            return new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, null, "The operation failed.");
+        }
+    }
+
+    [Fact]
+    public async Task Target_free_failure_under_a_cancelled_token_reports_cancelled()
+    {
+        using var cts = new CancellationTokenSource(Budget);
+        var handlers = new McpToolHandlers(TestScope(), new FailingAfterCancelModule(cts), new McpExecutionGate());
+
+        var result = await handlers.GainAsync(null!, cts.Token);
+
+        AssertCancelled(result, "sqlharness_gain");
+    }
+
     [Fact]
     public async Task Midflight_cancel_reaches_the_module_and_releases_the_gate()
     {

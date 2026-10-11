@@ -16,6 +16,31 @@ public sealed class SessionIdentitiesTests
     private static ProcessSnapshot P(int pid, int? parent, string name, string? cmd = null) =>
         new(pid, parent, name, T.AddMinutes(pid), cmd);
 
+    private sealed class CountingProcesses(IProcessInfo inner) : IProcessInfo
+    {
+        public int Gets;
+        public int CurrentPid => inner.CurrentPid;
+        public ProcessSnapshot? Get(int pid) { Gets++; return inner.Get(pid); }
+    }
+
+    [Fact]
+    public void With_mcp_client_reuses_the_process_walk_and_applies_client_info()
+    {
+        var processes = new CountingProcesses(new FakeProcesses(30,
+            P(30, 20, "sqlharness.exe"), P(20, 10, "claude.exe"), P(10, null, "explorer.exe")));
+        var processIdentity = SessionIdentities.Mcp(processes, "mcp:abc", null, null, "fixed");
+        var walked = processes.Gets;
+
+        var unnamed = SessionIdentities.WithMcpClient(processIdentity, null, null, null);
+        var named = SessionIdentities.WithMcpClient(processIdentity, "copilot-cli", "1.0.95", "Copilot");
+
+        Assert.Equal(walked, processes.Gets);
+        Assert.Equal(("claude", "process-tree"), (unnamed.AgentKind, unnamed.Source));
+        Assert.Equal(("copilot", "mcp-clientinfo", "copilot-cli", "1.0.95"), (named.AgentKind, named.Source, named.ClientName, named.ClientVersion));
+        Assert.Equal("Copilot", named.ClientTitle);
+        Assert.Equal(processIdentity.AgentPid, named.AgentPid);
+    }
+
     [Fact]
     public void Cli_finds_claude_ancestor_through_shells()
     {
@@ -151,11 +176,61 @@ public sealed class SessionIdentitiesTests
     [InlineData("claude-code", "claude")]
     [InlineData("Claude Desktop", "claude")]
     [InlineData("codex-mcp-client", "codex")]
-    [InlineData("sqlharness-mcp-tests", "other")]
+    [InlineData("copilot-cli", "copilot")]
+    [InlineData("GitHub Copilot", "copilot")]
+    [InlineData("opencode", "opencode")]
+    [InlineData("grok-shell-acc", "grok")]
+    [InlineData("grok-shell-sqlharness", "grok")]
+    [InlineData("cursor", "cursor")]
+    [InlineData("  Some Client  ", "some client")]
+    [InlineData("sqlharness-mcp-tests", "sqlharness-mcp-tests")]
+    [InlineData("  ", "unknown")]
     [InlineData("", "unknown")]
     [InlineData(null, "unknown")]
     public void Client_names_map_to_agent_kinds(string? clientName, string expected) =>
         Assert.Equal(expected, SessionIdentities.AgentKindFromClientName(clientName));
+
+    [Fact]
+    public void Unrecognised_client_name_is_capped() =>
+        Assert.Equal(SessionIdentities.MaximumAgentKindLength, SessionIdentities.AgentKindFromClientName(new string('x', 200)).Length);
+
+    [Fact]
+    public void Cli_finds_copilot_through_node_loader()
+    {
+        var processes = new FakeProcesses(30,
+            P(30, 20, "sqlharness.exe"), P(20, 10, "pwsh.exe"),
+            P(10, 1, "node.exe", @"node C:\tools\node_modules\@github\copilot\npm-loader.js -p x"), P(1, null, "explorer.exe"));
+
+        Assert.Equal("copilot", SessionIdentities.Cli(processes).AgentKind);
+    }
+
+    [Fact]
+    public void Cli_finds_opencode_through_node_loader()
+    {
+        var processes = new FakeProcesses(30,
+            P(30, 20, "sqlharness.exe"), P(20, 10, "pwsh.exe"),
+            P(10, 1, "node.exe", @"node C:\tools\node_modules\opencode-ai\bin\opencode -p x"), P(1, null, "explorer.exe"));
+
+        Assert.Equal("opencode", SessionIdentities.Cli(processes).AgentKind);
+    }
+
+    [Fact]
+    public void Cli_finds_native_grok()
+    {
+        var processes = new FakeProcesses(30,
+            P(30, 20, "sqlharness.exe"), P(20, 10, "grok.exe"), P(10, null, "explorer.exe"));
+
+        Assert.Equal("grok", SessionIdentities.Cli(processes).AgentKind);
+    }
+
+    [Fact]
+    public void Cli_finds_native_opencode()
+    {
+        var processes = new FakeProcesses(30,
+            P(30, 20, "sqlharness.exe"), P(20, 10, "opencode.exe"), P(10, null, "explorer.exe"));
+
+        Assert.Equal("opencode", SessionIdentities.Cli(processes).AgentKind);
+    }
 
     [Fact]
     public void Mcp_identity_uses_client_info_and_records_agent_ancestor()
@@ -183,4 +258,46 @@ public sealed class SessionIdentitiesTests
         Assert.Equal("codex", identity.AgentKind);
         Assert.Equal("process-tree", identity.Source);
     }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("   ", null)]
+    [InlineData("  Claude Code  ", "Claude Code")]
+    public void Mcp_normalizes_client_title(string? supplied, string? expected)
+    {
+        var processes = new FakeProcesses(30, P(30, null, "sqlharness.exe"));
+
+        var identity = SessionIdentities.Mcp(processes, "mcp:abc", "claude-code", "2.1.0", "fixed", supplied);
+
+        Assert.Equal(expected, identity.ClientTitle);
+    }
+
+    [Fact]
+    public void Mcp_caps_client_title_length()
+    {
+        var processes = new FakeProcesses(30, P(30, null, "sqlharness.exe"));
+
+        var identity = SessionIdentities.Mcp(processes, "mcp:abc", "x", "1", "fixed", new string('t', 300));
+
+        Assert.Equal(SessionIdentities.MaximumTitleLength, identity.ClientTitle!.Length);
+    }
+
+    [Fact]
+    public void Title_and_agent_kind_caps_never_split_a_surrogate_pair()
+    {
+        var processes = new FakeProcesses(30, P(30, null, "sqlharness.exe"));
+        var titleInput = new string('t', SessionIdentities.MaximumTitleLength - 1) + "😀";
+        var kindInput = new string('x', SessionIdentities.MaximumAgentKindLength - 1) + "😀";
+
+        var identity = SessionIdentities.Mcp(processes, "mcp:abc", kindInput, "1", "fixed", titleInput);
+
+        Assert.Equal(SessionIdentities.MaximumTitleLength - 1, identity.ClientTitle!.Length);
+        Assert.Equal(SessionIdentities.MaximumAgentKindLength - 1, identity.AgentKind.Length);
+    }
+
+    [Fact]
+    public void Agent_kind_cap_is_trimmed_again_after_cutting() =>
+        Assert.Equal(
+            new string('x', SessionIdentities.MaximumAgentKindLength - 1),
+            SessionIdentities.AgentKindFromClientName(new string('x', SessionIdentities.MaximumAgentKindLength - 1) + " tail"));
 }

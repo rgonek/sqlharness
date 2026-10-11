@@ -50,6 +50,7 @@ public static class McpHost
             options.Filters.Request.CallToolFilters.Add(next => (context, ct) =>
             {
                 identity.Record(context.Server?.ClientInfo);
+                identity.RecordProtocolVersion(context.Server?.NegotiatedProtocolVersion);
                 return next(context, ct);
             });
         }
@@ -140,16 +141,48 @@ public static class McpHost
         // The session key stays fixed for this serve process, while client info can first
         // arrive on a later request (2026-07-28 has no initialize handshake).
         // Resolve each journaled call so ActivityJournal can fill its first non-null fields.
-        Func<SessionIdentity> identity = () => SessionIdentities.Mcp(
-                ProcessInfo.Current,
-                sessionKey,
+        // Process facts do not change during a serve process, so the tree is walked once.
+        var processIdentity = new Lazy<SessionIdentity>(
+            () => SessionIdentities.Mcp(ProcessInfo.Current, sessionKey, null, null, mcpMode),
+            LazyThreadSafetyMode.ExecutionAndPublication);
+        Func<SessionIdentity> identity = () => SessionIdentities.WithMcpClient(
+                processIdentity.Value,
                 clientIdentity.Name ?? running?.ClientInfo?.Name,
                 clientIdentity.Version ?? running?.ClientInfo?.Version,
-                mcpMode);
+                clientIdentity.Title ?? running?.ClientInfo?.Title)
+            with
+        { ProtocolVersion = clientIdentity.ProtocolVersion ?? running?.NegotiatedProtocolVersion };
+        // Handshake revisions only: 2026-07-28 has no initialized notification, and its
+        // request-scoped roots/list answers only while the tool call awaits it, so roots
+        // stay NULL there rather than blocking a call.
+#pragma warning disable MCP9005 // Roots is deprecated as of 2026-07-28; handshake revisions still use it.
+        var roots = new McpRootsTracker(log, lifetime.Token);
+        void RefreshRoots(bool listChanged)
+        {
+            // Roots are recorded only; they never widen --input-root.
+            var server = running;
+            var capability = server?.ClientCapabilities?.Roots;
+            if (server is null || capability is null || (listChanged && capability.ListChanged != true))
+                return;
+            _ = roots.Refresh(token => server.RequestRootsAsync(new ModelContextProtocol.Protocol.ListRootsRequestParams(), token));
+        }
+
+        serverOptions.Handlers ??= new ModelContextProtocol.Server.McpServerHandlers();
+        serverOptions.Handlers.NotificationHandlers =
+        [
+            new(ModelContextProtocol.Protocol.NotificationMethods.InitializedNotification,
+                (_, _) => { RefreshRoots(listChanged: false); return ValueTask.CompletedTask; }),
+            new(ModelContextProtocol.Protocol.NotificationMethods.RootsListChangedNotification,
+                (_, _) => { RefreshRoots(listChanged: true); return ValueTask.CompletedTask; }),
+        ];
+#pragma warning restore MCP9005
         process.DecorateModules(module => new JournalingModule(
             module,
             () => journal.Value,
-            identity));
+            identity,
+            McpCallRegistry.Classify,
+            () => roots.Current,
+            McpCallRegistry.Metadata));
         Tools.McpToolCatalog.Wire(serverOptions, process, hostShutdown: lifetime.Token);
         try
         {

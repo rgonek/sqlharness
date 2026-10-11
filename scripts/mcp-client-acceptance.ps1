@@ -1,17 +1,28 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Manual MCP acceptance against real Claude Code and Codex clients (not CI).
+    Manual MCP acceptance against real Claude Code, Codex, Copilot CLI, opencode and Grok Build clients (not CI).
 
 .DESCRIPTION
     Runs sqlharness mcp serve behind a logging stdio tap through headless
-    `claude -p` and `codex exec`, with one-off MCP configuration only: no client
-    configuration file is edited. Each client calls sqlharness_capabilities once
+    `claude -p`, `codex exec`, `copilot -p`, `opencode run --standalone` and
+    `grok -p`, with one-off MCP configuration only: no client configuration file
+    is edited. The one exception is Grok Build, which has no one-off flag: it loads
+    ./.grok/config.toml (written by `grok mcp add --scope project` in a scratch
+    folder) only for folders listed in ~/.grok/trusted_folders.toml, so the script
+    appends a trust entry for that scratch folder alone and restores the file byte
+    for byte (or removes it if it did not exist) afterwards. If the project config
+    is not where expected, the Grok run is skipped and fails a check instead of
+    trusting any other folder.
+    Each client calls sqlharness_capabilities once
     and the target-free sqlharness_gain operation once for the journal check.
-    Checks the negotiated revision (Claude Code: 2026-07-28 via server/discover;
-    Codex: 2025-06-18), the revision the capabilities result reports, and that the
+    Checks the negotiated revision (Claude Code and Copilot CLI: 2026-07-28 via
+    server/discover; Codex: 2025-06-18; opencode and Grok Build: 2025-11-25), the
+    revision the capabilities result reports, and that the
     journal session linked to the gain operation persisted clientInfo.
     Frames and journals stay in client-specific temporary homes and are not printed.
+    opencode's default model may hit a plan usage limit; pass -OpencodeModel with
+    a free model such as opencode/step-5-preview-free.
 #>
 [CmdletBinding()]
 param(
@@ -20,7 +31,12 @@ param(
     [string]$Sqlharness,
     [string]$Profile = 'local-playground',
     [switch]$SkipClaude,
-    [switch]$SkipCodex
+    [switch]$SkipCodex,
+    [switch]$SkipCopilot,
+    [switch]$SkipOpencode,
+    [switch]$SkipGrok,
+    # opencode's default model may hit a plan usage limit; pass a free model such as opencode/step-5-preview-free.
+    [string]$OpencodeModel
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,7 +48,7 @@ $Sqlharness = (Resolve-Path -LiteralPath $Sqlharness -ErrorAction Stop).Path
 $tap = Join-Path $PSScriptRoot 'mcp-client-acceptance-tap.py'
 $work = Join-Path ([IO.Path]::GetTempPath()) ("sqlharness-mcp-acceptance-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work | Out-Null
-$prompt = 'Call sqlharness_capabilities from the acceptance MCP server exactly once, then call sqlharness_gain exactly once, then reply with one word: done.'
+$prompt = 'Do not change any configuration or trust settings. Call sqlharness_capabilities from the acceptance MCP server exactly once, then call sqlharness_gain exactly once, then reply with one word: done.'
 $results = [System.Collections.Generic.List[object]]::new()
 
 function Add-Check([string]$client, [string]$check, [string]$expected, $actual, [bool]$pass) {
@@ -117,7 +133,7 @@ function Test-Client([string]$name, [string]$logPath, [string]$expected, [string
     }
 
     Add-Check $name 'tools/call count' '1' $calls.Count ($calls.Count -eq 1)
-    if ($expected -eq '2025-06-18') {
+    if ($expected -ne '2026-07-28') {
         Add-Check $name 'initialize response present' 'yes' ([bool]$initializeResponse) ([bool]$initializeResponse)
     }
     Add-Check $name 'negotiated' $expected $negotiated ($negotiated -eq $expected)
@@ -215,7 +231,98 @@ if (-not $SkipCodex) {
     Test-Client 'Codex' $logPath '2025-06-18' $clientHome
 }
 
-if ($SkipClaude -and $SkipCodex) {
+if (-not $SkipCopilot) {
+    $copilot = Get-Command copilot -ErrorAction Stop | Select-Object -First 1
+    $logPath = Join-Path $work 'copilot-frames.log'
+    $clientHome = Join-Path $work 'copilot-home'
+    New-Item -ItemType Directory -Path $clientHome | Out-Null
+    New-IsolatedTarget $clientHome $Profile
+    $config = @{ mcpServers = @{ acceptance = @{ type = 'local'; command = $python; args = @('-I', $tap, $logPath, $clientHome, $Sqlharness, 'mcp', 'serve', $Profile); tools = @('*') } } } |
+        ConvertTo-Json -Depth 8
+    $configPath = Join-Path $work 'copilot-mcp.json'
+    Set-Content -LiteralPath $configPath -Value $config -Encoding utf8NoBOM
+    Push-Location $work
+    try {
+        # No --model: Copilot picks its default model.
+        & $copilot.Source -p $prompt --additional-mcp-config "@$configPath" --disable-builtin-mcps --allow-tool 'acceptance' --no-color 2>$null | Out-Null
+        $clientExit = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    Add-Check 'Copilot CLI' 'client exit code' '0' $clientExit ($clientExit -eq 0)
+    Test-Client 'Copilot CLI' $logPath '2026-07-28' $clientHome
+}
+
+if (-not $SkipOpencode) {
+    $opencode = Get-Command opencode -ErrorAction Stop | Select-Object -First 1
+    $logPath = Join-Path $work 'opencode-frames.log'
+    $clientHome = Join-Path $work 'opencode-home'
+    New-Item -ItemType Directory -Path $clientHome | Out-Null
+    New-IsolatedTarget $clientHome $Profile
+    $config = @{
+        '$schema' = 'https://opencode.ai/config.json'
+        mcp = @{ acceptance = @{ type = 'local'; enabled = $true; command = @($python, '-I', $tap, $logPath, $clientHome, $Sqlharness, 'mcp', 'serve', $Profile) } }
+    } | ConvertTo-Json -Depth 8
+    $configPath = Join-Path $work 'opencode.json'
+    Set-Content -LiteralPath $configPath -Value $config -Encoding utf8NoBOM
+    Push-Location $work
+    $savedOpencodeConfig = $env:OPENCODE_CONFIG
+    try {
+        $env:OPENCODE_CONFIG = $configPath
+        $modelArgs = if ($OpencodeModel) { @('-m', $OpencodeModel) } else { @() }
+        & $opencode.Source run --standalone --auto @modelArgs $prompt 2>$null | Out-Null
+        $clientExit = $LASTEXITCODE
+    } finally {
+        $env:OPENCODE_CONFIG = $savedOpencodeConfig
+        Pop-Location
+    }
+    Add-Check 'opencode' 'client exit code' '0' $clientExit ($clientExit -eq 0)
+    Test-Client 'opencode' $logPath '2025-11-25' $clientHome
+}
+
+if (-not $SkipGrok) {
+    $grok = Get-Command grok -ErrorAction Stop | Select-Object -First 1
+    $logPath = Join-Path $work 'grok-frames.log'
+    $clientHome = Join-Path $work 'grok-home'
+    $grokProject = Join-Path $work 'grok-project'
+    New-Item -ItemType Directory -Path $clientHome, $grokProject | Out-Null
+    New-IsolatedTarget $clientHome $Profile
+    $trusted = Join-Path $HOME '.grok/trusted_folders.toml'
+    $trustedExisted = Test-Path -LiteralPath $trusted
+    $trustedBefore = if ($trustedExisted) { [IO.File]::ReadAllBytes($trusted) } else { $null }
+    $clientExit = $null
+    $grokRan = $false
+    Push-Location $grokProject
+    try {
+        & $grok.Source mcp add --scope project acceptance $python -- -I $tap $logPath $clientHome $Sqlharness mcp serve $Profile 2>$null | Out-Null
+        # Only trust the scratch folder when the project config landed inside it;
+        # otherwise stop rather than trusting a different folder.
+        if (Test-Path -LiteralPath (Join-Path $grokProject '.grok/config.toml') -PathType Leaf) {
+            # Grok loads project MCP config only in a trusted folder and has no one-off flag:
+            # trust this scratch folder for the run and restore the file byte for byte afterwards.
+            $entry = "`n[folders.'$grokProject']`ntrusted = true`ndecided_at = $([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())`n"
+            [IO.File]::AppendAllText($trusted, $entry)
+            # No model flag: Grok picks its default model.
+            & $grok.Source -p $prompt --always-approve 2>$null | Out-Null
+            $clientExit = $LASTEXITCODE
+            $grokRan = $true
+        }
+    } finally {
+        Pop-Location
+        if ($trustedExisted) { [IO.File]::WriteAllBytes($trusted, $trustedBefore) } else { Remove-Item -LiteralPath $trusted -ErrorAction SilentlyContinue }
+    }
+    $restored = if ($trustedExisted) {
+        [Linq.Enumerable]::SequenceEqual([byte[]][IO.File]::ReadAllBytes($trusted), [byte[]]$trustedBefore)
+    } else { -not (Test-Path -LiteralPath $trusted) }
+    Add-Check 'Grok Build' 'trusted_folders.toml restored' 'yes' $restored $restored
+    Add-Check 'Grok Build' 'project config written in scratch folder' 'yes' $grokRan $grokRan
+    if ($grokRan) {
+        Add-Check 'Grok Build' 'client exit code' '0' $clientExit ($clientExit -eq 0)
+        Test-Client 'Grok Build' $logPath '2025-11-25' $clientHome
+    }
+}
+
+if ($SkipClaude -and $SkipCodex -and $SkipCopilot -and $SkipOpencode -and $SkipGrok) {
     Write-Host 'No clients selected; use this mode to smoke-test script startup and argument handling.'
 }
 $results | Format-Table -AutoSize | Out-String | Write-Host

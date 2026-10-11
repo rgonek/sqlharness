@@ -89,6 +89,22 @@ A well-formed path outside every configured input root, including a path that re
 - Parameters travel as `{name, type, value}` triples with culture-invariant string values or JSON null. The adapter maps them onto the existing Core binder and keeps its name, duplicate, and type validation; there is no second SQL validator and no second type list.
 - A matrix argument carries a typed name and type plus a `values` array of at least two distinct elements, each a culture-invariant string or JSON null. Every element reaches the Core binder whole: a comma is an ordinary character, an empty string is a text value, and JSON null is a typed NULL of the matrix type (`null`, `""`, and the text `"null"` are three distinct values). Parameters and matrix values are never joined into or split from text on this path; the CLI `--matrix name:type=v1,v2` text grammar is unchanged. The same null carries through to the result: a compare-matrix cell's `parameterValue` is JSON null only for the cell that bound a typed NULL matrix value, and a plain string for every other cell.
 
+## Client workspace roots
+
+On the handshake revisions (`2025-06-18`, `2025-11-25`), when the client
+declares the `roots` capability, SQLHarness requests `roots/list` after
+`initialized`, and again on `roots/list_changed` only if the client declared
+`listChanged`. At most 32 roots are kept. On `2026-07-28` a server-to-client
+`roots/list` succeeds only while the originating `tools/call` is still waiting
+for it, and a background fetch hangs until the 5 s timeout. Because a roots
+fetch must never block a tool call, SQLHarness does not request roots on
+`2026-07-28` sessions: their roots stay unknown (NULL). MRTR and
+`subscriptions/listen` are not implemented. A successful answer is recorded in
+the local activity journal for the dashboard and nothing else: client roots
+never widen `--input-root`, never authorize a file input, and never change a
+tool result. A failed or slow (5 s) request keeps the previous snapshot; stderr
+names only the failure class.
+
 ## Tools
 
 Exactly 11 tools are registered explicitly by name. No assembly scanning is used, so adding a public method can never silently widen the surface.
@@ -147,6 +163,10 @@ Cancellation propagates to connection, execution, reads, delays, and artifact wr
 
 Progress notifications go out at most once per second per call, only when the client supplied a progress token, and carry only the command and stage: never SQL, parameters, or rows. Watch does not emit NDJSON on the MCP path; NDJSON stays a CLI-only surface.
 
+The activity journal records why a call was cancelled: `client` (the client sent
+`notifications/cancelled`), `shutdown` (stdin closed or the host stopped), or
+`deadline` (the call time budget ran out).
+
 ## Artifacts
 
 Benchmark and snapshot artifacts are read through the shared controlled reader with a scope-bound opaque id: a call can only address artifacts of its own scope, never arbitrary paths or other profiles' artifacts. The safe benchmark sections are `summary`, `metrics`, `operators`, `statements`, and `matrix-cells`. `statements` reports each variant's statement ordinal, SQL hash, CPU and elapsed time from SQL Server `QueryTimeStats`, degree of parallelism, and up to ten operators ranked by actual rows and executions. It omits statement text and carries an omitted-statement count when the bounded projection is truncated. PostgreSQL plans do not provide this SQL Server statement section, so it is empty for those artifacts. For an oversized compare matrix, the response gives scope-owned artifact ids and a `matrixArtifactId` with a continuation cursor; call `sqlharness_artifact` with that id, `section: "matrix-cells"`, and the cursor to fetch the next bounded page, then read each returned cell id through `summary`, `metrics`, `operators`, or `statements`. Every page repeats the same scope-owner check, and wire budgets apply to each response. There are no MCP resources in v1; the single artifact tool is the only detail surface. Raw plans, `queries.jsonl` contents, and snapshot cells are never exposed.
@@ -157,7 +177,7 @@ Every live publish stamps the frozen scope owner into versioned metadata written
 
 ## Stdout and stderr
 
-Stdout carries only protocol frames. All logging goes to stderr without arguments, SQL, parameter values, or secrets. SDK log entries sent to stderr are limited to `Warning`, `Error`, and `Critical` levels and contain only the category, level, and numeric event ID; message, state, and exception content are never written. SQLHarness may also write generic, content-free stderr lines for a pre-handshake startup failure (exit 2), an unexpected transport failure (exit 1), or a failed detached-dashboard launch. Clean shutdown on EOF or cancellation exits 0. Tool calls that reach the SQLHarness module (inspect, query, measure, compare, watch, snapshot, plan, gain) are recorded in the local activity journal with the client's `clientInfo` name and version and a raw token estimate. When the final budgeted `CallToolResult` is built, the MCP handler also records an emitted estimate from the SDK-serialized UTF-8 bytes of that complete result representation, including text, structured content, and metadata. The `ceil(bytes / 4)` value estimates this representation; it is not actual model tokenization or the full JSON-RPC transport frame. Historical raw-only MCP rows stay unavailable and are not backfilled. `sqlharness_capabilities`, `sqlharness_validate`, and `sqlharness_artifact` are not recorded; journal diagnostics go to stderr only, and journal failures never change a tool result.
+Stdout carries only protocol frames. All logging goes to stderr without arguments, SQL, parameter values, or secrets. SDK log entries sent to stderr are limited to `Warning`, `Error`, and `Critical` levels and contain only the category, level, and numeric event ID; message, state, and exception content are never written. SQLHarness may also write generic, content-free stderr lines for a pre-handshake startup failure (exit 2), an unexpected transport failure (exit 1), a failed detached-dashboard launch, or a roots diagnostic naming only a count (`kept N of M`) or a failure class (`roots/list timed out`, `roots/list failed (<ExceptionType>)`). Clean shutdown on EOF or cancellation exits 0. Tool calls that reach the SQLHarness module (inspect, query, measure, compare, watch, snapshot, plan, gain) are recorded in the local activity journal with the client's `clientInfo` name, version and title, the negotiated protocol revision, and a raw token estimate. When the final budgeted `CallToolResult` is built, the MCP handler also records an emitted estimate from the SDK-serialized UTF-8 bytes of that complete result representation, including text, structured content, and metadata. The `ceil(bytes / 4)` value estimates this representation; it is not actual model tokenization or the full JSON-RPC transport frame. Historical raw-only MCP rows stay unavailable and are not backfilled. `sqlharness_capabilities`, `sqlharness_validate`, and `sqlharness_artifact` are not recorded; journal diagnostics go to stderr only, and journal failures never change a tool result.
 
 With `dashboard.autoStart: true` in `~/.sqlharness/config.json`, a validated startup (an invalid startup configuration never launches anything) also launches `sqlharness dashboard --background` as a detached process that inherits none of the server's standard handles, with the SQLHarness home as working directory, when no dashboard is running for that home, and starts one journal retention pass in the background (it does anything only with `journal.retention.enabled: true`). Both happen before the transport starts, neither writes to stdout, and a failed launch writes one line to stderr and never changes the server's behavior. The MCP client still sees EOF when the server exits, while the dashboard keeps running until it idle-exits after `dashboard.idleShutdownHours` (default 8). Known limitation: the dashboard is not placed in a new session or process group, so Ctrl+C or SIGHUP delivered to the client's process group (or closing its console on Windows) also stops it; the next `mcp serve` relaunches it.
 
@@ -170,7 +190,7 @@ An operation name this process does not bucket still counts in the total. One un
 - MCP SDK: `ModelContextProtocol` 2.2.0 (`ModelContextProtocol.Core` 2.2.0), pinned in `Directory.Packages.props`.
 - Offered protocol revisions: `2025-06-18`, `2025-11-25`, `2026-07-28`. The server negotiates: an `initialize` for `2025-06-18` or `2025-11-25` gets that revision; an `initialize` for an older revision gets `2025-11-25`; a `2026-07-28` client uses `server/discover` and per-request `_meta`.
 - `sqlharness_capabilities` reports the revision negotiated for the current request and `supportedProtocolVersions`.
-- Real-client check before release: `pwsh ./scripts/mcp-client-acceptance.ps1 -Sqlharness ./artifacts/task7-local/sqlharness.exe` (manual; needs logged-in `claude` and `codex`).
+- Real-client check before release: `pwsh ./scripts/mcp-client-acceptance.ps1 -Sqlharness <worktree build>` (manual; covers Claude Code, Codex, Copilot CLI, opencode and Grok Build, each skippable with `-Skip<Client>`; `-OpencodeModel` picks a free opencode model when the default hits a usage limit; the Grok run trusts its scratch folder in `~/.grok/trusted_folders.toml` for the duration and restores the file byte for byte).
 
 ## Context cost
 

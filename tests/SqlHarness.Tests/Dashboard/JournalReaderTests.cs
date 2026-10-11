@@ -9,6 +9,27 @@ public sealed class JournalReaderTests
         new(home.DatabasePath, processes ?? new FakeProcesses());
 
     [Fact]
+    public void Agent_kinds_list_only_kinds_present_with_session_counts()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:a", "codex"));
+        seed.Operation(JournalSeed.Session("cli:b", "codex"));
+        seed.Operation(JournalSeed.Session("cli:c", "copilot"));
+
+        var kinds = Reader(home).AgentKinds();
+
+        Assert.Equal([new KeyCount("codex", 2), new KeyCount("copilot", 1)], kinds);
+    }
+
+    [Fact]
+    public void Agent_kinds_of_a_missing_journal_are_empty()
+    {
+        using var home = new TempHome();
+        Assert.Empty(Reader(home).AgentKinds());
+    }
+
+    [Fact]
     public void Missing_database_reads_as_empty()
     {
         using var home = new TempHome();
@@ -18,6 +39,90 @@ public sealed class JournalReaderTests
         Assert.Empty(reader.Sessions(new SessionQuery()).Items);
         Assert.Empty(reader.Operations(new OperationQuery()).Items);
         Assert.Equal(0, reader.Stats(new StatsQuery()).Statuses.Sum(s => s.Count));
+    }
+
+    [Fact]
+    public void Session_and_operation_carry_title_roots_and_cancel_reason()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("mcp:r") with
+        {
+            ClientTitle = "Claude Code",
+            RootsJson = """[{"uri":"file:///w","name":"w"},{"uri":"file:///x"}]""",
+        };
+        seed.Operation(session, status: "failed", exitCode: -1, errorKind: "cancelled", cancelReason: "client");
+
+        var reader = Reader(home);
+        var id = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
+        var detail = reader.Session(id)!;
+
+        Assert.Equal("Claude Code", detail.Session.ClientTitle);
+        Assert.Equal([new SessionRoot("file:///w", "w"), new SessionRoot("file:///x", null)], detail.Session.Roots);
+        Assert.Equal("client", Assert.Single(detail.Operations).CancelReason);
+    }
+
+    [Fact]
+    public void Operation_carries_the_agent_call_metadata()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("mcp:a");
+        seed.Operation(session, agent: new AgentCallMetadata("toolu_1", "m", "low", "s", "t", "exec", "user"));
+        seed.Operation(session);
+
+        var reader = Reader(home);
+        var items = reader.Operations(new OperationQuery()).Items;
+        var labelled = items.Single(o => o.AgentModel is not null);
+        var plain = items.Single(o => o.AgentModel is null);
+
+        Assert.Equal("low", labelled.AgentReasoningEffort);
+        Assert.Equal(new AgentCall("toolu_1", "m", "low", "s", "t", "exec", "user"), reader.Operation(labelled.Id)!.Agent);
+        Assert.Null(reader.Operation(plain.Id)!.Agent);
+    }
+
+    [Fact]
+    public void Session_carries_the_protocol_version()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("mcp:p") with { ProtocolVersion = "2025-06-18" });
+
+        var reader = Reader(home);
+        var id = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
+
+        Assert.Equal("2025-06-18", reader.Session(id)!.Session.ProtocolVersion);
+    }
+
+    // The reader never migrates (the dashboard host opens the journal first and refuses an older
+    // schema), so "unknown" is a v6 row whose metadata columns were never written.
+    [Fact]
+    public void Rows_without_recorded_metadata_read_as_null()
+    {
+        using var home = new TempHome();
+        new JournalSeed(home.DatabasePath).Operation(JournalSeed.Session("cli:old"));
+
+        var reader = Reader(home);
+        var detail = reader.Session(Assert.Single(reader.Sessions(new SessionQuery()).Items).Id)!;
+
+        Assert.Null(detail.Session.ClientTitle);
+        Assert.Null(detail.Session.Roots);
+        Assert.Null(detail.Session.ProtocolVersion);
+        Assert.Null(Assert.Single(detail.Operations).CancelReason);
+    }
+
+    [Fact]
+    public void Empty_and_malformed_roots_are_distinct()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("mcp:empty") with { RootsJson = "[]" });
+        seed.Operation(JournalSeed.Session("mcp:bad") with { RootsJson = "not json" });
+
+        var sessions = Reader(home).Sessions(new SessionQuery()).Items.ToDictionary(s => s.SessionKey);
+
+        Assert.Empty(sessions["mcp:empty"].Roots!);
+        Assert.Null(sessions["mcp:bad"].Roots);
     }
 
     [Fact]

@@ -24,7 +24,7 @@ public sealed class McpRequestToolHandlers(
 
     public Task<CallToolResult> CapabilitiesAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Include local counts and existence flags. Never secrets, paths, or profile lists.")] bool includeDiagnostics = false,
-        CancellationToken ct = default) => TargetFreeAsync("sqlharness_capabilities", ct, token =>
+        CancellationToken ct = default) => TargetFreeAsync("sqlharness_capabilities", ctx, ct, token =>
     {
         ThrowUnknown(ctx, ["includeDiagnostics"]);
         return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success,
@@ -127,7 +127,7 @@ public sealed class McpRequestToolHandlers(
     public Task<CallToolResult> PlanAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Inline plan document.")] string? content = null,
         [Description("Plan file under an operator input root.")] string? file = null,
-        CancellationToken ct = default) => TargetFreeAsync("sqlharness_plan", ct, async token =>
+        CancellationToken ct = default) => TargetFreeAsync("sqlharness_plan", ctx, ct, async token =>
         {
             ThrowUnknown(ctx, ["content", "file"]);
             var operation = await McpOperationMapper.MapPlanAsync(process.InputRoots, content, file, token);
@@ -146,7 +146,7 @@ public sealed class McpRequestToolHandlers(
         Invoke(ctx, "sqlharness_artifact", scope, handler => handler.ArtifactAsync(ctx, id, section, cursor, ct));
 
     public Task<CallToolResult> GainAsync(RequestContext<CallToolRequestParams> ctx, CancellationToken ct = default) =>
-        TargetFreeAsync("sqlharness_gain", ct, token =>
+        TargetFreeAsync("sqlharness_gain", ctx, ct, token =>
         {
             ThrowUnknown(ctx, []);
             return process.CreateModule().ExecuteAsync(new SqlHarnessGainOperation(), token);
@@ -168,18 +168,22 @@ public sealed class McpRequestToolHandlers(
         return invoke(handlers);
     }
 
-    private Task<CallToolResult> TargetFreeAsync(string command, CancellationToken ct,
-        Func<CancellationToken, Task<SqlHarnessOutcome>> run) => RunAsync(command, ct, run);
+    private Task<CallToolResult> TargetFreeAsync(string command, RequestContext<CallToolRequestParams>? context, CancellationToken ct,
+        Func<CancellationToken, Task<SqlHarnessOutcome>> run) => RunAsync(command, context, ct, run);
 
-    private async Task<CallToolResult> RunAsync(string command, CancellationToken ct,
+    private async Task<CallToolResult> RunAsync(string command, RequestContext<CallToolRequestParams>? context, CancellationToken ct,
         Func<CancellationToken, Task<SqlHarnessOutcome>> run)
     {
         var budget = new McpResultBudget(process.MaxResultBytes);
         try
         {
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, hostShutdown);
+            using var reason = McpCallRegistry.Track(linked, ct, hostShutdown, McpCallMetadata.Read(context?.Params?.Meta));
             linked.CancelAfter(TimeSpan.FromSeconds(process.MaxOperationSeconds));
-            return await McpResultAdapter.AdaptAndCompleteAsync(await run(linked.Token), command, budget);
+            var outcome = await run(linked.Token);
+            // Same rule as RunDbAsync: a non-success outcome under a cancelled token is a cancellation.
+            linked.Token.ThrowIfCancellationRequested();
+            return await McpResultAdapter.AdaptAndCompleteAsync(outcome, command, budget);
         }
         catch (OperationCanceledException) { return McpExecutionGate.CancelledResult(command, budget); }
         catch (Exception exception) when (exception is McpMappingException or McpInputException or ParameterSetFileException)
