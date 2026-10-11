@@ -229,6 +229,10 @@ This is not `compare --matrix`. Matrix mode varies one parameter across two quer
 | `set` | Same schema and distinct-row set; duplicates and order ignored. |
 | `off` | Skip result comparison; equivalence fields are null. |
 
+Equivalence compares data and column ordinal/name/type per result set; it ignores column nullability (`allowNull`) by default. Every report's equivalence object carries `compareNullability` (policy), `nullabilityEquivalent` (`true` when every measured run matches the first baseline measured run, `false` when a difference was observed, `null` when comparison is off, evidence is absent, or result shapes/types differ; never inferred `true`, and legacy artifacts without the field read as unavailable) and `mismatchReason` (`"nullability"` only when strict mode alone caused the mismatch, otherwise `null`). CLI text output appends `; nullability: True|False|unavailable` to the equivalence line. Snapshots (`snapshot --diff`) are unchanged.
+
+Add `--compare-nullability` (MCP: `compareNullability`, default `false`) to require matching nullability as well: Equivalent then needs data equivalence and `nullabilityEquivalent` true. It is rejected with exit `2` under `--compare-results off`.
+
 Every measured run participates; warm-ups do not. Directional counts (`baselineOnlyCount`, `candidateOnlyCount`, and for `ordered` also `differingPositions`) are the maximum over any baseline/candidate measured-run pair. Modes that retain directional fingerprints accept at most **1,000,000** row fingerprints per measured variant run; exceeding that bound fails the operation.
 
 Order-only mismatches: under `ordered`, `differingPositions` can be non-zero while multiset equivalence would still hold—use `--compare-results multiset` when order is not part of the contract. Technical equivalence is not domain/business equivalence: prove ticket-specific semantics separately (for example two-direction `EXCEPT` for set differences, or grouped counts when duplicates matter; check ordering ties and missing-history cases offline).
@@ -237,6 +241,10 @@ Order-only mismatches: under `ordered`, `differingPositions` can be non-zero whi
 sqlharness compare prod-eu --var tenant=acme --var env=uat `
   --baseline .\queries\before.sql --candidate .\queries\after.sql `
   --compare-results multiset --repeat 5 --json-summary
+
+sqlharness compare prod-eu --var tenant=acme --var env=uat `
+  --baseline .\queries\before.sql --candidate .\queries\after.sql `
+  --compare-results ordered --compare-nullability --repeat 5 --json-summary
 ```
 
 ## Commands
