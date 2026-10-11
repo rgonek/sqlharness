@@ -16,7 +16,7 @@ namespace SqlHarness.Mcp.Tools;
 /// SDK-injected (never part of the input schema); the context additionally
 /// carries the raw argument keys so unknown properties are rejected here even
 /// when the SDK binder only enforces them for scalar-only signatures.
-/// Argument faults surface as failed results with constant, value-free text;
+/// Argument faults surface as failed results with safe text (input-path rejections echo only the caller's bounded, credential-filtered path and configured roots);
 /// unexpected failures surface as a generic failed result. Every result goes
 /// through <see cref="McpResultAdapter"/>, so success, controlled outcomes,
 /// and failures all share the small budgeted agent envelope as both
@@ -354,7 +354,8 @@ public sealed class McpToolHandlers(
             or McpInputException
             or ParameterSetFileException)
         {
-            // Contract rejections carry constant, value-free messages.
+            // Contract rejections carry safe text; input-path rejections may echo the caller's own
+            // credential-filtered, length-bounded path and the configured input roots.
             return Fail(SqlHarnessExitCode.Safety, exception.Message, command, budget);
         }
         catch (ArtifactReadException exception)
@@ -413,7 +414,8 @@ public sealed class McpToolHandlers(
                 or McpInputException
                 or ParameterSetFileException)
             {
-                // Contract rejections carry constant, value-free messages.
+                // Contract rejections carry safe text; input-path rejections may echo the caller's own
+                // credential-filtered, length-bounded path and the configured input roots.
                 return Fail(SqlHarnessExitCode.Safety, exception.Message, command, budget);
             }
             catch (ArtifactReadException exception)
