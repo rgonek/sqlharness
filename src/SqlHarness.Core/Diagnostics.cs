@@ -198,7 +198,7 @@ internal static class ExecutionPlanParser
 
     private static ExecutionPlan ParseJson(string json)
     {
-        using var document = JsonDocument.Parse(json);
+        using var document = JsonDocument.Parse(json, Postgres.PostgresBenchmark.PlanJsonOptions);
         var root = document.RootElement.ValueKind == JsonValueKind.Array && document.RootElement.GetArrayLength() > 0
             ? document.RootElement[0]
             : document.RootElement;

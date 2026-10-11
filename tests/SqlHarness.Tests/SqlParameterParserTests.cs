@@ -78,6 +78,33 @@ public class SqlParameterParserTests
     }
 
     [Fact]
+    public void Parse_binds_offsetless_datetime2_as_unspecified_wall_clock_time()
+    {
+        var parameter = Assert.Single(SqlParameterParser.Parse(["d:datetime2=2026-07-29T12:00:00"]));
+
+        var value = Assert.IsType<DateTime>(parameter.Value);
+        Assert.Equal(DateTimeKind.Unspecified, value.Kind);
+        Assert.Equal(new DateTime(2026, 7, 29, 12, 0, 0), value);
+    }
+
+    [Theory]
+    [InlineData("d:datetime2=2026-07-29T12:00:00Z", "datetime2")]
+    [InlineData("d:datetime2=2026-07-29T12:00:00+02:00", "datetime2")]
+    [InlineData("d:datetime=2026-07-29T12:00:00Z", "datetime")]
+    [InlineData("d:datetime=2026-07-29T12:00:00+02:00", "datetime")]
+    [InlineData("d:smalldatetime=2026-07-29T12:00:00Z", "smalldatetime")]
+    [InlineData("d:smalldatetime=2026-07-29T12:00:00+02:00", "smalldatetime")]
+    public void Parse_rejects_offsets_for_offsetless_datetime_types(string input, string type)
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterParser.Parse([input]));
+
+        Assert.Contains("do not accept a time-zone offset", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("datetimeoffset", exception.Message, StringComparison.Ordinal);
+        Assert.Equal("d", exception.ParameterName);
+        Assert.Equal(type, exception.ExpectedType);
+    }
+
+    [Fact]
     public void Parse_binds_datetimeoffset_with_explicit_zulu()
     {
         var parameter = Assert.Single(SqlParameterParser.Parse(["at:datetimeoffset=2026-07-29T12:00:00Z"]));

@@ -281,6 +281,9 @@ public sealed class McpToolSchemaTests : IDisposable
             .ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
         Assert.Equal(["summary", "metrics", "operators", "statements", "matrix-cells"], EnumOf(requestSchemas["sqlharness_artifact"], "section"));
         Assert.Contains("cursor", Properties(requestSchemas["sqlharness_artifact"]).EnumerateObject().Select(property => property.Name));
+        var requestCompare = Properties(requestSchemas["sqlharness_compare"]).GetProperty("compareNullability");
+        Assert.Equal("boolean", requestCompare.GetProperty("type").GetString());
+        Assert.False(requestCompare.GetProperty("default").GetBoolean());
         var targetTools = new[] { "sqlharness_inspect", "sqlharness_validate", "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot", "sqlharness_artifact" };
         foreach (var tool in targetTools)
         {
@@ -379,6 +382,230 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.False(plan.IsError == true);
     }
 
+    // Synthetic Showplan: the predicate carries a plain literal, quotes and brackets; the statement text also
+    // carries credential syntax that the pattern filter must scrub.
+    private const string PlanLiteral = "N'ACTIVE'";
+    private const string PlanPasswordValue = "hunter2-synthetic";
+    private const string PlanTokenValue = "tok-synthetic-9f3";
+
+    private static string ShowplanWithText(string statementText) =>
+        "<ShowPlanXML xmlns=\"http://schemas.microsoft.com/sqlserver/2004/07/showplan\"><BatchSequence><Batch><Statements>"
+        + "<StmtSimple StatementText=\"" + System.Security.SecurityElement.Escape(statementText) + "\"><QueryPlan>"
+        + "<RelOp NodeId=\"0\" PhysicalOp=\"Clustered Index Scan\" LogicalOp=\"Clustered Index Scan\" EstimateRows=\"5\" EstimatedTotalSubtreeCost=\"1\">"
+        + "<IndexScan><Object Table=\"[dbo].[Orders]\" Index=\"[PK_Orders]\" />"
+        + "<Predicate><ScalarOperator ScalarString=\"[dbo].[Orders].[Status]=" + PlanLiteral + " AND [Name]=&quot;x&quot;\" /></Predicate>"
+        + "</IndexScan></RelOp></QueryPlan></StmtSimple></Statements></Batch></BatchSequence></ShowPlanXML>";
+
+    private static string DefaultStatementText =>
+        $"SELECT * FROM dbo.Orders WHERE Status = {PlanLiteral} AND password='{PlanPasswordValue}' AND access_token={PlanTokenValue}";
+
+    private const string PostgresPlan =
+        "[{\"Plan\":{\"Node Type\":\"Hash Join\",\"Join Type\":\"Inner\",\"Total Cost\":100.0,\"Plan Rows\":10,\"Actual Rows\":10,\"Actual Loops\":1,"
+        + "\"Hash Cond\":\"(a.id = b.id)\",\"Plans\":[{\"Node Type\":\"Seq Scan\",\"Relation Name\":\"foo\",\"Total Cost\":40.0,\"Plan Rows\":100,\"Actual Rows\":100,"
+        + "\"Actual Loops\":1,\"Filter\":\"((status = 'ACTIVE'::text) AND (password = 'hunter2-synthetic'))\"}]},\"Planning Time\":10.4,\"Execution Time\":4.6}]";
+
+    private static (JsonElement Statement, JsonElement Root, string Raw) PlanResult(CallToolResult result)
+    {
+        Assert.False(result.IsError == true, string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text)));
+        var envelope = ServedEnvelope(result, "sqlharness_plan");
+        var statement = envelope.GetProperty("result").GetProperty("statements")[0];
+        return (statement, statement.GetProperty("root"), Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+    }
+
+    private static string? Text(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    private string WriteInput(string name, string content)
+    {
+        var root = Path.Combine(_home, "plan-inputs");
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, name);
+        File.WriteAllText(path, content);
+        return path;
+    }
+
+    private McpScope ScopeWithInputRoot()
+    {
+        Directory.CreateDirectory(Path.Combine(_home, "plan-inputs"));
+        return McpScope.Create(
+            new McpServerOptions
+            {
+                Profile = ProfileName,
+                Vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["tenant"] = "frozen" },
+                InputRoots = [Path.Combine(_home, "plan-inputs")],
+            },
+            ProfileStore.Load(_targetsFile));
+    }
+
+    private async Task<ServedCatalog> ServePlanModeAsync(bool requestMode)
+    {
+        var scope = ScopeWithInputRoot();
+        if (!requestMode)
+            return await ServedCatalog.CreateAsync(scope);
+        var process = McpProcessContext.Create(new McpServerOptions
+        {
+            RequestScope = true,
+            AllowedProfiles = [ProfileName],
+            InputRoots = [Path.Combine(_home, "plan-inputs")],
+        }, () => scope.Profiles);
+        return await ServedCatalog.CreateAsync(process);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_tool_defaults_to_text_with_credentials_scrubbed_for_sqlserver(bool requestMode)
+    {
+        await using var served = await ServePlanModeAsync(requestMode);
+        var xml = ShowplanWithText(DefaultStatementText);
+        var inline = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = xml }, cancellationToken: CancellationToken.None));
+
+        var statementText = Text(inline.Statement, "sql");
+        Assert.NotNull(statementText);
+        Assert.Contains(PlanLiteral, statementText, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", statementText, StringComparison.Ordinal);
+        var predicate = Text(inline.Root, "predicate");
+        Assert.NotNull(predicate);
+        Assert.Contains("=" + PlanLiteral, predicate, StringComparison.Ordinal);
+        // JSON escaping round-trips quotes; brackets stay literal.
+        Assert.Contains("[Name]=\"x\"", predicate, StringComparison.Ordinal);
+        Assert.DoesNotContain("[Name]=\"x\"", inline.Raw, StringComparison.Ordinal);
+        Assert.DoesNotContain(PlanPasswordValue, inline.Raw, StringComparison.Ordinal);
+        Assert.DoesNotContain(PlanTokenValue, inline.Raw, StringComparison.Ordinal);
+        Assert.Contains("PK_Orders", Text(inline.Root, "indexName")!, StringComparison.Ordinal);
+        // The input document is never echoed.
+        Assert.DoesNotContain("ShowPlanXML", inline.Raw, StringComparison.Ordinal);
+
+        // Same behavior from an allowed file; the source file stays unchanged.
+        var path = WriteInput("sample.sqlplan", xml);
+        var fileResult = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["file"] = path }, cancellationToken: CancellationToken.None));
+        Assert.Contains(PlanLiteral, Text(fileResult.Root, "predicate")!, StringComparison.Ordinal);
+        Assert.DoesNotContain(PlanPasswordValue, fileResult.Raw, StringComparison.Ordinal);
+        Assert.DoesNotContain("ShowPlanXML", fileResult.Raw, StringComparison.Ordinal);
+        Assert.DoesNotContain("sample.sqlplan", fileResult.Raw, StringComparison.Ordinal);
+        Assert.Equal(xml, File.ReadAllText(path));
+        Assert.Equal([path], Directory.GetFiles(Path.GetDirectoryName(path)!));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_tool_masks_bracketed_credential_column_literals_in_predicates(bool requestMode)
+    {
+        await using var served = await ServePlanModeAsync(requestMode);
+        var xml = ShowplanWithText("SELECT * FROM dbo.Users WHERE Password = N'hunter2' AND Status = N'ACTIVE'")
+            .Replace("[Status]=N'ACTIVE'", "[Users].[Password]=N'hunter2' AND [dbo].[Users].[Status]=N'ACTIVE'", StringComparison.Ordinal);
+        var result = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = xml }, cancellationToken: CancellationToken.None));
+
+        Assert.DoesNotContain("hunter2", result.Raw, StringComparison.Ordinal);
+        Assert.Contains("[Password]=N'[REDACTED]'", Text(result.Root, "predicate")!, StringComparison.Ordinal);
+        Assert.Contains("[Status]=N'ACTIVE'", Text(result.Root, "predicate")!, StringComparison.Ordinal);
+        Assert.Contains("Status = N'ACTIVE'", Text(result.Statement, "sql")!, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_tool_include_text_false_omits_statement_text_and_predicates(bool requestMode)
+    {
+        await using var served = await ServePlanModeAsync(requestMode);
+        var xml = ShowplanWithText(DefaultStatementText);
+        var path = WriteInput("meta.sqlplan", xml);
+        foreach (var args in new[]
+        {
+            new Dictionary<string, object?> { ["content"] = xml, ["includeText"] = false },
+            new Dictionary<string, object?> { ["file"] = path, ["includeText"] = false },
+        })
+        {
+            var result = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", args, cancellationToken: CancellationToken.None));
+            Assert.Null(Text(result.Statement, "sql"));
+            Assert.Null(Text(result.Root, "predicate"));
+            Assert.DoesNotContain(PlanLiteral, result.Raw, StringComparison.Ordinal);
+            Assert.DoesNotContain("Status", result.Raw, StringComparison.Ordinal);
+            Assert.Equal("Clustered Index Scan", Text(result.Root, "physicalOp"));
+            Assert.Contains("PK_Orders", Text(result.Root, "indexName")!, StringComparison.Ordinal);
+        }
+
+        // Explicit true matches the default.
+        var explicitTrue = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = xml, ["includeText"] = true }, cancellationToken: CancellationToken.None));
+        Assert.Contains(PlanLiteral, Text(explicitTrue.Root, "predicate")!, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_tool_keeps_postgres_predicates_by_default_and_omits_them_when_false(bool requestMode)
+    {
+        await using var served = await ServePlanModeAsync(requestMode);
+        var path = WriteInput("pg.json", PostgresPlan);
+
+        foreach (var args in new[]
+        {
+            new Dictionary<string, object?> { ["content"] = PostgresPlan },
+            new Dictionary<string, object?> { ["file"] = path },
+        })
+        {
+            var result = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", args, cancellationToken: CancellationToken.None));
+            Assert.Equal("(a.id = b.id)", Text(result.Root, "predicate"));
+            var filter = Text(result.Root.GetProperty("children")[0], "predicate");
+            Assert.NotNull(filter);
+            Assert.Contains("'ACTIVE'", filter, StringComparison.Ordinal);
+            Assert.Contains("[REDACTED]", filter, StringComparison.Ordinal);
+            Assert.DoesNotContain(PlanPasswordValue, result.Raw, StringComparison.Ordinal);
+            Assert.DoesNotContain("Planning Time", result.Raw, StringComparison.Ordinal);
+        }
+        Assert.Equal(PostgresPlan, File.ReadAllText(path));
+
+        var hidden = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = PostgresPlan, ["includeText"] = false }, cancellationToken: CancellationToken.None));
+        Assert.Null(Text(hidden.Root, "predicate"));
+        Assert.Null(Text(hidden.Root.GetProperty("children")[0], "predicate"));
+        Assert.DoesNotContain("ACTIVE", hidden.Raw, StringComparison.Ordinal);
+        Assert.Equal("Hash Join", Text(hidden.Root, "physicalOp"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_tool_clips_long_statement_text_and_marks_truncation(bool requestMode)
+    {
+        await using var served = await ServePlanModeAsync(requestMode);
+        var longText = "SELECT " + new string('x', 5000) + $" FROM dbo.Orders WHERE Status = {PlanLiteral}";
+        var result = await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = ShowplanWithText(longText) }, cancellationToken: CancellationToken.None);
+        var parsed = PlanResult(result);
+
+        var clipped = Text(parsed.Statement, "sql");
+        Assert.NotNull(clipped);
+        Assert.True(clipped.Length <= McpLimits.DefaultMaximumCellCharacters, $"statement text is {clipped.Length} characters.");
+        Assert.True(clipped.Length < longText.Length);
+        var envelope = ServedEnvelope(result, "sqlharness_plan");
+        Assert.True(envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= (int)McpLimits.CallToolResultBudgetBytes);
+    }
+
+    [Fact]
+    public async Task Plan_tool_schema_declares_include_text_defaulting_to_true_in_both_modes()
+    {
+        var scope = ScopeWithInputRoot();
+        var process = McpProcessContext.Create(new McpServerOptions
+        {
+            RequestScope = true,
+            AllowedProfiles = [ProfileName],
+        }, () => scope.Profiles);
+        await using var fixedServed = await ServedCatalog.CreateAsync(scope);
+        await using var requestServed = await ServedCatalog.CreateAsync(process);
+        foreach (var served in new[] { fixedServed, requestServed })
+        {
+            var tools = await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
+            var plan = tools.Single(tool => tool.Name == "sqlharness_plan");
+            var include = Properties(ServedSchema(plan)).GetProperty("includeText");
+            Assert.Equal("boolean", include.GetProperty("type").GetString());
+            Assert.True(include.GetProperty("default").GetBoolean());
+            Assert.DoesNotContain("includeText", Required(ServedSchema(plan)));
+            Assert.Contains("includeText", plan.Description ?? string.Empty, StringComparison.Ordinal);
+            Assert.DoesNotContain("Sanitized projection only", plan.Description ?? string.Empty, StringComparison.Ordinal);
+        }
+    }
+
     [Theory]
     [InlineData("sqlharness_validate", "{\"sql\":\"SELECT 1\"}")]
     [InlineData("sqlharness_measure", "{\"setup\":{\"sql\":\"SELECT 1\"}}")]
@@ -436,6 +663,8 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Equal(["baseline", "candidate"], Required(compare).Order().ToArray());
         Assert.Equal(["ordered", "multiset", "set", "off"], EnumOf(compare, "compareResults"));
         Assert.Equal("ordered", Properties(compare).GetProperty("compareResults").GetProperty("default").GetString());
+        Assert.Equal("boolean", Properties(compare).GetProperty("compareNullability").GetProperty("type").GetString());
+        Assert.False(Properties(compare).GetProperty("compareNullability").GetProperty("default").GetBoolean());
         var matrix = Properties(compare).GetProperty("matrix");
         Assert.Equal(["name", "type", "values"], matrix.GetProperty("required").EnumerateArray().Select(item => item.GetString()!).Order().ToArray());
 
@@ -462,6 +691,46 @@ public sealed class McpToolSchemaTests : IDisposable
         var capabilities = schemas["sqlharness_capabilities"];
         Assert.Empty(Required(capabilities));
         Assert.True(Properties(capabilities).TryGetProperty("includeDiagnostics", out _));
+        Assert.Equal("integer", Properties(capabilities).GetProperty("inputRootCursor").GetProperty("type").GetString());
+        Assert.Equal(0, Properties(capabilities).GetProperty("inputRootCursor").GetProperty("default").GetInt32());
+    }
+
+    [Fact]
+    public async Task Served_capabilities_accept_the_input_root_cursor_and_still_reject_unknown_arguments_in_both_modes()
+    {
+        var scope = Scope();
+        var process = McpProcessContext.Create(new McpServerOptions
+        {
+            RequestScope = true,
+            AllowedProfiles = [ProfileName],
+        }, () => scope.Profiles);
+        await using var fixedServed = await ServedCatalog.CreateAsync(scope);
+        await using var requestServed = await ServedCatalog.CreateAsync(process);
+        foreach (var served in new[] { fixedServed, requestServed })
+        {
+            var tools = await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
+            var schema = ServedSchema(tools.Single(tool => tool.Name == "sqlharness_capabilities"));
+            Assert.True(Properties(schema).TryGetProperty("inputRootCursor", out _));
+
+            var paged = await served.Client.CallToolAsync(
+                "sqlharness_capabilities",
+                new Dictionary<string, object?> { ["inputRootCursor"] = 0, ["includeDiagnostics"] = true },
+                cancellationToken: CancellationToken.None);
+            Assert.False(paged.IsError == true);
+            var result = ServedEnvelope(paged, "sqlharness_capabilities").GetProperty("result");
+            Assert.Equal(0, result.GetProperty("inputRoots").GetArrayLength());
+            Assert.True(result.GetProperty("inputRootsComplete").GetBoolean());
+
+            var unknown = await served.Client.CallToolAsync(
+                "sqlharness_capabilities",
+                new Dictionary<string, object?> { ["inputRootCursor"] = 0, ["bogus"] = SecretValue },
+                cancellationToken: CancellationToken.None);
+            Assert.True(unknown.IsError == true);
+            var envelope = ServedEnvelope(unknown, "sqlharness_capabilities");
+            Assert.Equal("safety_rejected", envelope.GetProperty("error").GetProperty("code").GetString());
+            Assert.Contains("inputRootCursor", envelope.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+            Assert.DoesNotContain(SecretValue, envelope.GetRawText(), StringComparison.Ordinal);
+        }
     }
 
     // 012/T2: a matrix value is a string or JSON null (typed NULL); the

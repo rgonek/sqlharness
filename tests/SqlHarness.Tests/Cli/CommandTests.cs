@@ -437,6 +437,125 @@ public sealed class CommandTests
     }
 
     [Fact]
+    public async Task Compare_nullability_flag_defaults_false_and_reaches_compare_and_matrix_operations()
+    {
+        var query = TempFile("select 1");
+        var candidate = TempFile("select 2");
+        try
+        {
+            var module = new FakeModule(Success(CompareReport()));
+            Assert.Equal(0, await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(
+                ["compare", "dev", "--baseline", query, "--candidate", candidate]));
+            Assert.False(Assert.IsType<SqlHarnessCompareOperation>(module.Operations[^1]).CompareNullability);
+
+            Assert.Equal(0, await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(
+                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--compare-nullability"]));
+            Assert.True(Assert.IsType<SqlHarnessCompareOperation>(module.Operations[^1]).CompareNullability);
+
+            Assert.Equal(0, await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(
+                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--matrix", "N:int=1,2", "--compare-results", "set", "--compare-nullability"]));
+            var matrix = Assert.IsType<SqlHarnessCompareMatrixOperation>(module.Operations[^1]);
+            Assert.True(matrix.CompareNullability);
+            Assert.Equal(ResultComparisonMode.Set, matrix.CompareResults);
+        }
+        finally
+        {
+            File.Delete(query);
+            File.Delete(candidate);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Compare_nullability_with_compare_results_off_is_rejected_before_dispatch(bool matrix)
+    {
+        var query = TempFile("select 1");
+        var candidate = TempFile("select 2");
+        try
+        {
+            var module = new FakeModule(Success(CompareReport()));
+            var output = new StringWriter();
+            string[] args = matrix
+                ? ["compare", "dev", "--baseline", query, "--candidate", candidate, "--matrix", "N:int=1,2", "--compare-results", "off", "--compare-nullability"]
+                : ["compare", "dev", "--baseline", query, "--candidate", candidate, "--compare-results", "off", "--compare-nullability"];
+            var exit = await SqlHarnessCli.Create(module, output).RunAsync(args);
+
+            Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+            Assert.Empty(module.Operations);
+            Assert.Contains("--compare-nullability requires --compare-results ordered, multiset, or set.", output.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(query);
+            File.Delete(candidate);
+        }
+    }
+
+    public static TheoryData<ResultEquivalenceReport, string> NullabilityRenderings => new()
+    {
+        { new ResultEquivalenceReport(ResultComparisonMode.Ordered, true, 0, 0, 0, false, false), "Technical equivalence (ordered): True; baseline-only: 0; candidate-only: 0; differing positions: 0; nullability: False; artifacts:" },
+        { new ResultEquivalenceReport(ResultComparisonMode.Multiset, false, null, 0, 0, true, false, ResultMismatchReasons.Nullability), "Technical equivalence (multiset, strict nullability): False; baseline-only: 0; candidate-only: 0; nullability: False; mismatch reason: nullability; artifacts:" },
+        { new ResultEquivalenceReport(ResultComparisonMode.Set, true, null, 0, 0, false, null), "Technical equivalence (set): True; baseline-only: 0; candidate-only: 0; nullability: unavailable; artifacts:" },
+        { new ResultEquivalenceReport(ResultComparisonMode.Off, null, null, null, null, false, null), "Technical equivalence: off; artifacts:" },
+    };
+
+    [Theory]
+    [MemberData(nameof(NullabilityRenderings))]
+    public async Task Compare_text_renders_nullability_diagnostic(ResultEquivalenceReport equivalence, string expected)
+    {
+        var report = CompareReport() with { Equivalence = equivalence, ResultsEquivalent = equivalence.Equivalent };
+        var query = TempFile("select 1");
+        var candidate = TempFile("select 2");
+        try
+        {
+            var output = new StringWriter();
+            Assert.Equal(0, await SqlHarnessCli.Create(new FakeModule(Success(report)), output).RunAsync(
+                ["compare", "dev", "--baseline", query, "--candidate", candidate]));
+            Assert.Contains(expected, output.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(query);
+            File.Delete(candidate);
+        }
+    }
+
+    [Fact]
+    public async Task Compare_and_matrix_json_summary_carry_the_nullability_diagnostic()
+    {
+        var equivalence = new ResultEquivalenceReport(ResultComparisonMode.Ordered, false, 0, 0, 0, true, false, ResultMismatchReasons.Nullability);
+        var query = TempFile("select 1");
+        var candidate = TempFile("select 2");
+        try
+        {
+            var plain = new StringWriter();
+            Assert.Equal(0, await SqlHarnessCli.Create(new FakeModule(Success(CompareReport() with { Equivalence = equivalence })), plain).RunAsync(
+                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--json-summary"]));
+            using var plainJson = JsonDocument.Parse(plain.ToString());
+            var plainEquivalence = plainJson.RootElement.GetProperty("equivalence");
+            Assert.True(plainEquivalence.GetProperty("compareNullability").GetBoolean());
+            Assert.False(plainEquivalence.GetProperty("nullabilityEquivalent").GetBoolean());
+            Assert.Equal("nullability", plainEquivalence.GetProperty("mismatchReason").GetString());
+
+            var matrix = new SqlHarnessCompareMatrixReport("N", "int", [new CompareMatrixCellReport(0, "1", CompareReport() with { Equivalence = equivalence })]);
+            var matrixOutput = new StringWriter();
+            Assert.Equal(0, await SqlHarnessCli.Create(new FakeModule(Success(matrix)), matrixOutput).RunAsync(
+                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--matrix", "N:int=1,2", "--json-summary"]));
+            using var matrixJson = JsonDocument.Parse(matrixOutput.ToString());
+            var cell = matrixJson.RootElement.GetProperty("cells")[0].GetProperty("compare").GetProperty("equivalence");
+            Assert.True(cell.GetProperty("compareNullability").GetBoolean());
+            Assert.False(cell.GetProperty("nullabilityEquivalent").GetBoolean());
+            Assert.Equal("nullability", cell.GetProperty("mismatchReason").GetString());
+        }
+        finally
+        {
+            File.Delete(query);
+            File.Delete(candidate);
+        }
+    }
+
+    [Fact]
     public async Task Compare_text_renders_technical_equivalence_for_ordered_and_off()
     {
         var ordered = CompareReport() with
@@ -799,8 +918,8 @@ public sealed class CommandTests
             Assert.Equal(0, exit);
             Assert.Equal(
                 string.Join(Environment.NewLine, [
-                    "100\tTechnical equivalence (ordered): True; baseline-only: 0; candidate-only: 0; differing positions: 0\t5\t21\tC:\\artifacts\\cell-100",
-                    "20\tTechnical equivalence (multiset): False; baseline-only: 3; candidate-only: 1\t8\t9\tC:\\artifacts\\cell-20",
+                    "100\tTechnical equivalence (ordered): True; baseline-only: 0; candidate-only: 0; differing positions: 0; nullability: unavailable\t5\t21\tC:\\artifacts\\cell-100",
+                    "20\tTechnical equivalence (multiset): False; baseline-only: 3; candidate-only: 1; nullability: unavailable\t8\t9\tC:\\artifacts\\cell-20",
                     "1\tTechnical equivalence: off\t1\t2\tnone",
                     string.Empty,
                 ]),

@@ -116,7 +116,8 @@ internal sealed record CompareCellRequest(
     IReadOnlyList<SqlHarnessParameter> Parameters,
     int TimeoutSeconds,
     int Repeat,
-    ResultComparisonMode CompareResults)
+    ResultComparisonMode CompareResults,
+    bool CompareNullability = false)
 {
     internal CompareClassificationReport Classification { get; init; } =
         new("none", "read-only", "read-only");
@@ -207,7 +208,8 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
                 request.CompareResults,
                 baselineRuns.Select(run => run.Comparison).ToArray(),
                 candidateRuns.Select(run => run.Comparison).ToArray(),
-                ct);
+                ct,
+                request.CompareNullability);
             var report = new SqlHarnessCompareReport(
                 session.Identity,
                 request.Repeat,

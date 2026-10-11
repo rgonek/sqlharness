@@ -98,6 +98,10 @@ internal static class PostgresParameters
         if (value is DBNull)
             return (dbType, DBNull.Value);
 
+        // 030: timestamptz carries an instant; Npgsql accepts only offset-zero values.
+        if (value is DateTimeOffset offset)
+            value = offset.ToUniversalTime();
+
         if (parameter.Type == SqlDbType.TinyInt)
             value = Convert.ToInt16(value, CultureInfo.InvariantCulture);
 

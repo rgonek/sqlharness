@@ -81,6 +81,44 @@ public sealed class McpTokenBudgetTests
     }
 
     [Fact]
+    public void Plan_text_with_escaped_quotes_and_long_predicates_fits_small_budgets_and_marks_clipping()
+    {
+        var predicate = "[Name]=\"" + new string('q', 3000) + "\" AND [Code] IN ('a','b')";
+        var children = Enumerable.Range(0, 40)
+            .Select(i => new PlanNode("Index Seek", "Index Seek", $"dbo.T{i}", $"IX_{i}", 1, 1, 1, 0.01, predicate, [], []))
+            .ToArray();
+        var root = new PlanNode("Nested Loops", "Inner Join", null, null, 2, 2, 1, 0.9, predicate, [], children);
+        var plan = new DistilledPlan([new PlanStatement("SELECT '" + new string('s', 4000) + "'", root, [])]);
+        var applied = McpPlanTextPolicy.Apply(plan, includeText: true);
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, applied, null);
+
+        foreach (var (budget, cells) in new[] { (4096, 64), (16384, 512), (65536, 4096) })
+        {
+            var result = McpResultAdapter.Adapt(outcome, "sqlharness_plan", new McpResultBudget(budget, cells));
+            WireBytes(result, budget);
+            var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+            using var document = JsonDocument.Parse(text);
+            Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
+            var truncation = document.RootElement.GetProperty("truncation");
+            Assert.Equal(JsonValueKind.Object, truncation.ValueKind);
+            Assert.True(truncation.GetProperty("omittedItems").GetInt32() > 0);
+            var hasStatements = document.RootElement.GetProperty("result").TryGetProperty("statements", out var statements);
+            Assert.True(hasStatements || budget == 4096, $"statements missing at budget {budget}.");
+            if (hasStatements)
+            {
+                var statementText = statements[0].GetProperty("sql").GetString()!;
+                Assert.True(statementText.Length <= cells);
+            }
+        }
+
+        var hidden = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, McpPlanTextPolicy.Apply(plan, includeText: false), null),
+            "sqlharness_plan");
+        WireBytes(hidden, (int)McpLimits.CallToolResultBudgetBytes);
+        Assert.DoesNotContain("qqqq", Assert.Single(hidden.Content.OfType<TextContentBlock>()).Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Unicode_cells_fit_the_default_budget_with_escaping_counted()
     {
         var text = string.Concat(Enumerable.Repeat("語😀", 10000));
@@ -322,8 +360,15 @@ public sealed class McpTokenBudgetTests
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
         using var document = JsonDocument.Parse(text);
         Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
+        // Level 0 drops the row (and the message) but keeps the result-set
+        // inventory and its column schema, with the omitted row counted.
+        Assert.Equal(0, document.RootElement.GetProperty("truncation").GetProperty("detailLimit").GetInt32());
         var resultSets = document.RootElement.GetProperty("result").GetProperty("resultSets");
-        Assert.Equal(0, resultSets.GetArrayLength());
+        var projectedSet = Assert.Single(resultSets.EnumerateArray());
+        Assert.Equal(0, projectedSet.GetProperty("rows").GetArrayLength());
+        Assert.Equal(1, projectedSet.GetProperty("columns").GetArrayLength());
+        Assert.Equal(1, projectedSet.GetProperty("omittedRowCount").GetInt64());
+        Assert.Equal(0, projectedSet.GetProperty("omittedColumnCount").GetInt32());
         Assert.True(document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
     }
 

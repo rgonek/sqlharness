@@ -9,8 +9,10 @@
 >
 > **Drift check (run first)**: `git diff --stat 5280f78..HEAD -- src/SqlHarness.Core/SqlSafety.cs src/SqlHarness.Core/Postgres/PostgresParameters.cs src/SqlHarness.Core/Postgres/PostgresBenchmark.cs src/SqlHarness.Core/Diagnostics.cs src/SqlHarness.Core/PlanIdentity.cs tests/SqlHarness.Tests/Postgres/ tests/SqlHarness.Tests/SqlParameterParserTests.cs`
 > If any in-scope file changed since this plan was written, compare the
-> "Current state" excerpts against the live code before proceeding; on a
-> mismatch, treat it as a STOP condition.
+> "Current state" excerpts against the live code before proceeding. Adapt paths,
+> symbols and obsolete test expectations within the authorized intent and scope;
+> record the adjustment. Stop only for a substantive incompatible contract,
+> an unapproved safety change or work outside scope.
 
 ## Status
 
@@ -19,7 +21,7 @@
 - **Risk**: LOW–MED (Step 1 tightens an input contract)
 - **Depends on**: plans/016-restore-green-ci.md. Coordinate with plan 022, which changes the Npgsql version; run this plan's PG tests after 022 if both land.
 - **Category**: bug
-- **Planned at**: commit `5280f78`, 2026-10-03
+- **Planned at**: commit `5280f78`, 2026-10-03; revised against `729d88f`, 2026-10-11
 
 ## Why this matters
 
@@ -38,7 +40,7 @@
               "datetimeoffset" => CreateDateTimeOffset(name, value),
   ```
 
-  Read `CreateDateTime` and `CreateSmallDateTime` to see which `DateTimeStyles` they use. `CreateDateTimeOffset` requires an explicit offset (~`:1456-1464`). Parameter-value errors are thrown as `SqlHarnessSafetyException` with `IsParameterValue` semantics. Follow the existing invalid-value pattern in this file so the value is redacted (search `IsParameterValue` / `ParameterValueException` in the file and mirror an existing "invalid datetime" throw).
+  Read `CreateDateTime` and `CreateSmallDateTime` to see which `DateTimeStyles` they use. `CreateDateTimeOffset` requires an explicit offset (~`:1456-1464`). Parameter-value errors are thrown as `SqlHarnessSafetyException` with `IsParameterValue` semantics. Follow the existing invalid-value pattern in this file and mirror the existing invalid-datetime classification. Caller-provided date/time text may appear in bounded diagnostics; protect credentials through the shared secret filter rather than hiding all values.
 - `src/SqlHarness.Core/Postgres/PostgresParameters.cs:80-104` (`Map`):
 
   ```csharp
@@ -77,15 +79,21 @@ Branch `fix/plan-030-datetime-depth`. Commits per step. Do NOT push.
 
 ## Steps
 
+### Execution phases — user priority update, 2026-10-11
+
+- **A, complete: shared date/time parameter correctness.** Step 1 and the matching Step 4 documentation/tests. Shared parser changes apply to both engines and preserve PostgreSQL behavior.
+- **B, complete: PostgreSQL binding and deep plans.** The user explicitly un-deferred Steps 2 and 3 after A had been recorded as PARTIAL. B's focused tests and both platform gates are complete.
+- Historical sequencing: A ran after 026 and was coordinated with 045 because both edited `SqlSafety.cs`. The initial priority update deferred B and correctly left the plan PARTIAL; the later user decision resumed B. Focused checks must run the intended cases, not pass with zero selected tests.
+
 ### Step 1: Offset-less types reject offsets (validation, exit 2)
 
-Run the inventory grep first. If any test **intentionally** passes `Z` or `±hh:mm` to `datetime`/`datetime2`/`smalldatetime` and expects success, list them. More than 3 such tests means STOP: this is a contract change the operator must approve.
+Inventory existing offset-acceptance tests and explain the old behavior they pin. Apply the intended semantics below and update those expectations with regression evidence for the silent clock shift. The number of tests is not an approval threshold. Stop only for evidence of a separate supported public contract whose migration exceeds this scope.
 
-Change `datetime2` parsing to `DateTimeStyles.None` (and the same for `CreateDateTime`/`CreateSmallDateTime` if they use `RoundtripKind`/`AssumeLocal`/`AdjustToUniversal`). Explicitly reject input whose parsed `Kind != DateTimeKind.Unspecified`, or whose text contains a `Z`/offset suffix (check with a regex on the trimmed value: `(Z|[+-]\d{2}:\d{2})$`). Use the file's existing invalid-parameter-value error, with a message such as "Offset-less date/time types do not accept a time-zone offset; use datetimeoffset." The value must not appear in the message.
+Change `datetime2` parsing to `DateTimeStyles.None` (and the same for `CreateDateTime`/`CreateSmallDateTime` if they use `RoundtripKind`/`AssumeLocal`/`AdjustToUniversal`). Explicitly reject input whose parsed `Kind != DateTimeKind.Unspecified`, or whose text contains a `Z`/offset suffix (check with a regex on the trimmed value: `(Z|[+-]\d{2}:\d{2})$`). Use the file's existing invalid-parameter-value error, with a message such as "Offset-less date/time types do not accept a time-zone offset; use datetimeoffset." A bounded diagnostic may include caller-supplied date/time text; credentials must still be protected.
 
 Tests (in `SqlParameterParserTests.cs`, following an existing invalid-value test):
 - `d:datetime2=2026-07-29T12:00:00` → `Kind == Unspecified`, 12:00.
-- `d:datetime2=2026-07-29T12:00:00Z` → rejected; message contains no `2026`.
+- `d:datetime2=2026-07-29T12:00:00Z` → rejected; message explains the offset conflict and recommends `datetimeoffset`.
 - `d:datetime2=2026-07-29T12:00:00+02:00` → rejected.
 - Same two rejections for `datetime` and `smalldatetime`.
 
@@ -123,14 +131,18 @@ Six parser tests, one PG binding test and one deep-plan test, following the patt
 
 ## Done criteria
 
-- [ ] Focused tests and the full gate pass
-- [ ] `grep -n "DateTimeStyles.RoundtripKind" src/SqlHarness.Core/SqlSafety.cs` → no match on the datetime2 line (other uses, if any, are justified in a comment)
-- [ ] `grep -n "PlanJsonOptions" src/SqlHarness.Core` → defined and used twice
-- [ ] `plans/README.md` row updated
+- [x] Focused tests and the full gate pass. Windows `verify.ps1` and isolated ext4 Linux `verify-linux.ps1` both exited 0 at `bb78c87`; focused parser, PostgreSQL parameter, and deep-plan tests passed.
+- [x] `grep -n "DateTimeStyles.RoundtripKind" src/SqlHarness.Core/SqlSafety.cs` → no match on the offset-less datetime line. The sole remaining match is inside `CreateDateTimeOffset`, where parsing preserves an explicit offset for the offset-bearing type.
+- [x] `grep -n "PlanJsonOptions" src/SqlHarness.Core` → one definition and two uses, in `PostgresBenchmark.ParseStats` and `ExecutionPlanParser.ParseJson`.
+- [x] `plans/README.md` row updated.
+
+## Completion record — 2026-10-11
+
+Stage A implementation: `8feaf14`; documentation/format follow-up: `54224ff`. Stage B PostgreSQL `DateTimeOffset` UTC binding: `48ed3a1`; shared deep-plan JSON depth and regression: `bb78c87`. Windows `scripts/verify.ps1` and isolated ext4 Linux `scripts/verify-linux.ps1` both exited 0 at `bb78c87` (Core 3585 passed on each; MCP 333 passed/4 skipped on Windows and 334 passed/3 skipped on Linux). No live PostgreSQL tests were run. The branch was merged from main at `1128ce0`; controller-owned integration gates are tracked separately.
 
 ## STOP conditions
 
-- More than 3 existing tests rely on offsets for offset-less types (contract change; needs operator approval).
+- Evidence establishes a supported offset-conversion contract requiring a migration outside scope; report the evidence and a concrete migration proposal.
 - The deep-plan test shows another failure after the depth fix (e.g. a recursive operator walker overflows the stack). Report it; do not rewrite the walker here.
 
 ## Maintenance notes

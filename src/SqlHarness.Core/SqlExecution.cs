@@ -21,6 +21,14 @@ internal interface ISqlReader : IAsyncDisposable
     string GetName(int ordinal);
     Type GetFieldType(int ordinal);
     bool GetAllowNull(int ordinal);
+
+    /// <summary>
+    /// The nullability the provider reported, or null when it reported none. Only the
+    /// comparison path reads this (plan 046): every other surface keeps the coerced
+    /// <see cref="GetAllowNull"/> value. Readers that always know their nullability
+    /// inherit the coerced value.
+    /// </summary>
+    bool? GetReportedAllowNull(int ordinal) => GetAllowNull(ordinal);
     object GetValue(int ordinal);
     Task<bool> ReadAsync(CancellationToken ct);
     Task<bool> NextResultAsync(CancellationToken ct);
@@ -361,6 +369,18 @@ internal sealed class SqlClientSession(
     }
 }
 
+/// <summary>
+/// Maps provider column nullability. <see cref="AllowNull"/> is the long-standing coercion
+/// (unknown reads as nullable) used by every public surface; <see cref="Reported"/> keeps
+/// "unknown" so result comparison can treat it as unavailable evidence.
+/// </summary>
+internal static class ProviderNullability
+{
+    public static bool AllowNull(DbColumn column) => column.AllowDBNull ?? true;
+
+    public static bool? Reported(DbColumn column) => column.AllowDBNull;
+}
+
 internal sealed class SqlClientReader : ISqlReader
 {
     private readonly SqlCommand _command;
@@ -371,7 +391,8 @@ internal sealed class SqlClientReader : ISqlReader
     public int RecordsAffected => _reader.RecordsAffected;
     public string GetName(int ordinal) => _reader.GetName(ordinal);
     public Type GetFieldType(int ordinal) => _reader.GetFieldType(ordinal);
-    public bool GetAllowNull(int ordinal) => Columns[ordinal].AllowDBNull ?? true;
+    public bool GetAllowNull(int ordinal) => ProviderNullability.AllowNull(Columns[ordinal]);
+    public bool? GetReportedAllowNull(int ordinal) => ProviderNullability.Reported(Columns[ordinal]);
     public object GetValue(int ordinal) => _reader.GetValue(ordinal);
     public Task<bool> ReadAsync(CancellationToken ct) => _reader.ReadAsync(ct);
     public async Task<bool> NextResultAsync(CancellationToken ct)

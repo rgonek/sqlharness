@@ -11,7 +11,7 @@ namespace SqlHarness.Tests;
 
 public class WatchNdjsonTests
 {
-    private const string Token = "fake-access-token-never-emit";
+    private const string Token = "eyJsynthetic.access-never-emit.signature";
 
     [Fact]
     public void NdjsonWriter_flushes_after_every_event_with_strict_sequence()

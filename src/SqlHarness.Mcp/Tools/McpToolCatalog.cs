@@ -16,7 +16,7 @@ namespace SqlHarness.Mcp.Tools;
 /// SDK-injected (never part of the input schema); the context additionally
 /// carries the raw argument keys so unknown properties are rejected here even
 /// when the SDK binder only enforces them for scalar-only signatures.
-/// Argument faults surface as failed results with constant, value-free text;
+/// Argument faults surface as failed results with safe text (input-path rejections echo only the caller's bounded, credential-filtered path and configured roots);
 /// unexpected failures surface as a generic failed result. Every result goes
 /// through <see cref="McpResultAdapter"/>, so success, controlled outcomes,
 /// and failures all share the small budgeted agent envelope as both
@@ -51,15 +51,17 @@ public sealed class McpToolHandlers(
 
     public Task<CallToolResult> CapabilitiesAsync(
         RequestContext<CallToolRequestParams> ctx,
-        [Description("Include local counts and existence flags. Never secrets, paths, or profile lists.")]
+        [Description("Include local counts and existence flags. Never secrets.")]
         bool includeDiagnostics = false,
+        [Description("Zero-based offset 0..inputRootCount into the configured input roots; default 0. Follow inputRootsNextCursor until it is null; inputRootsComplete is true only when one response holds every root.")]
+        int inputRootCursor = 0,
         CancellationToken ct = default) =>
         RunAsync("sqlharness_capabilities", ctx, _ =>
         {
-            ThrowIfUnknown(ctx, ["includeDiagnostics"]);
+            ThrowIfUnknown(ctx, ["includeDiagnostics", "inputRootCursor"]);
             return Task.FromResult(new SqlHarnessOutcome(
                 SqlHarnessExitCode.Success,
-                McpOperationMapper.BuildCapabilities(scope, includeDiagnostics, ctx?.Server?.NegotiatedProtocolVersion),
+                McpOperationMapper.BuildCapabilities(scope, includeDiagnostics, ctx?.Server?.NegotiatedProtocolVersion, inputRootCursor),
                 null));
         }, ct);
 
@@ -185,6 +187,8 @@ public sealed class McpToolHandlers(
         string compareResults = "ordered",
         [Description("Optional single matrix dimension {name, type, values}: at least two distinct values, each a culture-invariant string or JSON null.")]
         McpMatrixArgument? matrix = null,
+        [Description("Also require matching column nullability (allowNull) for result equivalence. Default compares observed data only and reports nullability separately. Not allowed with compareResults off.")]
+        bool compareNullability = false,
         [Description("Response cap 4096..1048576 bytes; only lowers the process maximum.")]
         int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
@@ -192,9 +196,9 @@ public sealed class McpToolHandlers(
         CancellationToken ct = default) =>
         RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "repeat", "timeout", "compareResults", "matrix", "maxResultBytes", "maxOperationSeconds"]);
+            ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "repeat", "timeout", "compareResults", "matrix", "compareNullability", "maxResultBytes", "maxOperationSeconds"]);
             return await module.ExecuteAsync(
-                await McpOperationMapper.MapCompareAsync(scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token),
+                await McpOperationMapper.MapCompareAsync(scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability),
                 token);
         }, ct);
 
@@ -270,13 +274,15 @@ public sealed class McpToolHandlers(
         string? content = null,
         [Description("Plan file under an operator input root. Exactly one of content or file.")]
         string? file = null,
+        [Description("Keep statement text and predicates (credential patterns filtered). Imported plan text may contain data and you choose that surface; false returns metadata only.")]
+        bool includeText = true,
         CancellationToken ct = default) =>
         RunAsync("sqlharness_plan", ctx, async token =>
         {
-            ThrowIfUnknown(ctx, ["content", "file"]);
+            ThrowIfUnknown(ctx, ["content", "file", "includeText"]);
             var outcome = await module.ExecuteAsync(await McpOperationMapper.MapPlanAsync(scope, content, file, token), token);
             return outcome.ExitCode == SqlHarnessExitCode.Success
-                ? outcome with { Report = McpResultSanitizer.Sanitize(outcome.Report) }
+                ? outcome with { Report = McpPlanTextPolicy.Apply(outcome.Report, includeText) }
                 : outcome;
         }, ct);
 
@@ -352,7 +358,8 @@ public sealed class McpToolHandlers(
             or McpInputException
             or ParameterSetFileException)
         {
-            // Contract rejections carry constant, value-free messages.
+            // Contract rejections carry safe text; input-path rejections may echo the caller's own
+            // credential-filtered, length-bounded path and the configured input roots.
             return Fail(SqlHarnessExitCode.Safety, exception.Message, command, budget);
         }
         catch (ArtifactReadException exception)
@@ -411,7 +418,8 @@ public sealed class McpToolHandlers(
                 or McpInputException
                 or ParameterSetFileException)
             {
-                // Contract rejections carry constant, value-free messages.
+                // Contract rejections carry safe text; input-path rejections may echo the caller's own
+                // credential-filtered, length-bounded path and the configured input roots.
                 return Fail(SqlHarnessExitCode.Safety, exception.Message, command, budget);
             }
             catch (ArtifactReadException exception)
@@ -501,7 +509,7 @@ public static class McpToolCatalog
             });
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
-            Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), "Describe server versions, request-scope mode, permitted profiles, tools, and limits.", true, false, true, false),
+            Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), "Describe server versions, request-scope mode, allowlisted profiles, configured input roots (paged), tools, and limits. Never secrets or env values.", true, false, true, false),
             Tool(ToolNames[1], nameof(McpRequestToolHandlers.InspectAsync), "Run one catalog inspection against the supplied request scope.", true, false, null, true),
             Tool(ToolNames[2], nameof(McpRequestToolHandlers.ValidateAsync), "Static check of SQL effects visible in the text; never connects.", true, false, true, false),
             Tool(ToolNames[3], nameof(McpRequestToolHandlers.QueryAsync), "Run a bounded query against the supplied request scope.", true, false, null, true),
@@ -509,7 +517,7 @@ public static class McpToolCatalog
             Tool(ToolNames[5], nameof(McpRequestToolHandlers.CompareAsync), "Compare queries against the supplied request scope.", null, false, null, true),
             Tool(ToolNames[6], nameof(McpRequestToolHandlers.WatchAsync), "Poll a bounded query against the supplied request scope.", true, false, null, true),
             Tool(ToolNames[7], nameof(McpRequestToolHandlers.SnapshotAsync), "Capture or diff a snapshot against the supplied request scope.", null, false, null, true),
-            Tool(ToolNames[8], nameof(McpRequestToolHandlers.PlanAsync), "Distill a plan document offline.", true, false, true, false),
+            Tool(ToolNames[8], nameof(McpRequestToolHandlers.PlanAsync), "Distill a plan document offline. Keeps bounded statement text and predicates (credential patterns filtered; may contain data) unless includeText is false.", true, false, true, false),
             Tool(ToolNames[9], nameof(McpRequestToolHandlers.ArtifactAsync), "Read a safe section of an artifact against the supplied request scope.", true, false, true, false),
         };
         if (tools.Count != McpLimits.MaxTools)
@@ -568,7 +576,7 @@ public static class McpToolCatalog
                 });
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
-            Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), "Describe server versions, scope engine, tools, and limits. Optional local diagnostics; no secrets or profile lists.", true, false, true, false),
+            Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), "Describe server versions, scope engine, input roots, tools, and limits. Optional local diagnostics. Never secrets or env values.", true, false, true, false),
             Tool(ToolNames[1], nameof(McpToolHandlers.InspectAsync), "Run one catalog inspection with fixed internal probes: ping, schema, counts, space, qstop, or indexes. qstop/indexes are SQL Server only. No SQL input.", true, false, null, true),
             Tool(ToolNames[2], nameof(McpToolHandlers.ValidateAsync), "Static check of SQL effects visible in the text (see safetyAnalysis); never connects, object and permission status stays unknown. Exactly one of inline sql (at most 1 MiB) or a file under an input root.", true, false, true, false),
             Tool(ToolNames[3], nameof(McpToolHandlers.QueryAsync), "Run a bounded query passing the static visible-effects text check; no persistent-mutation flags are offered on this path. Hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. Exactly one of inline sql (at most 1 MiB) or a file under an input root.", true, false, null, true),
@@ -576,7 +584,7 @@ public static class McpToolCatalog
             Tool(ToolNames[5], nameof(McpToolHandlers.CompareAsync), "Compare baseline vs candidate with the CLI sessions and equivalence rules. Optional single matrix dimension.", null, false, null, true),
             Tool(ToolNames[6], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
             Tool(ToolNames[7], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it. No force flag.", null, false, null, true),
-            Tool(ToolNames[8], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. Sanitized projection only: no statement text or literal predicates.", true, false, true, false),
+            Tool(ToolNames[8], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. Keeps bounded statement text and predicates (credential patterns filtered; may contain data) unless includeText is false.", true, false, true, false),
             Tool(ToolNames[9], nameof(McpToolHandlers.ArtifactAsync), "Read one safe section (summary, metrics, operators, statements, matrix-cells) of a saved benchmark artifact.", true, false, true, false),
         };
         if (tools.Count != McpLimits.MaxTools)

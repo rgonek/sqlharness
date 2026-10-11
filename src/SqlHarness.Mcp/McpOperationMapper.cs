@@ -10,7 +10,16 @@ namespace SqlHarness.Mcp;
 /// <summary>Safe mapping failure: constant text, never parameter values or SQL.</summary>
 public sealed class McpMappingException(string message) : Exception(message);
 
-/// <summary>Capabilities document for the capabilities tool: versions, scope engine, tools, limits, and the static-analysis boundary.</summary>
+/// <summary>
+/// Capabilities document for the capabilities tool: versions, scope engine,
+/// tools, limits, the static-analysis boundary, and one page of the enforced
+/// input roots. <see cref="InputRoots"/> holds the normalized roots of this
+/// page in configured order; <see cref="InputRootCount"/> is the total;
+/// <see cref="InputRootsComplete"/> is true only when this single response
+/// carries the whole inventory; <see cref="InputRootsNextCursor"/> is the
+/// next page offset (null at the end); <see cref="InputRootsOmitted"/> counts
+/// roots on this page's range that cannot fit any page within the budget.
+/// </summary>
 public sealed record McpCapabilitiesDocument(
     string Server,
     string ServerVersion,
@@ -24,21 +33,28 @@ public sealed record McpCapabilitiesDocument(
     SqlHarnessSafetyAnalysis SafetyAnalysis,
     string ScopeMode = "fixed",
     IReadOnlyList<string>? AllowedProfiles = null,
-    IReadOnlyList<string>? SupportedProtocolVersions = null);
+    IReadOnlyList<string>? SupportedProtocolVersions = null,
+    IReadOnlyList<string>? InputRoots = null,
+    int InputRootCount = 0,
+    bool InputRootsComplete = true,
+    int? InputRootsNextCursor = null,
+    int InputRootsOmitted = 0);
 
 /// <summary>
-/// Shared projection sanitizer for plan and artifact results. Distilled plans
-/// lose statement text and literal predicates (both engines distill to the
-/// same Core shape); artifact sections from the manifest reader are already
-/// limited to summary/metrics/operators and carry no raw plans, SQL, or
-/// snapshot cells, so they pass through unchanged.
+/// Plan text policy for the offline plan tool. The caller supplies the plan
+/// document, so with <c>includeText</c> true statement text and predicates are
+/// kept after the credential-pattern filter (<see cref="SecretRedactor"/>
+/// without known secrets; ordinary SQL literals are not treated as secrets);
+/// with false both are omitted. Names, metrics and objects are never changed.
+/// Length bounds stay with <see cref="AgentOutputProjection"/>. Non-plan
+/// reports, including manifest-read artifact sections, pass through unchanged.
 /// </summary>
-public static class McpResultSanitizer
+public static partial class McpPlanTextPolicy
 {
-    public static object? Sanitize(object? report) =>
-        report is DistilledPlan plan ? StripPlan(plan) : report;
+    public static object? Apply(object? report, bool includeText) =>
+        report is DistilledPlan plan ? ApplyPlan(plan, includeText) : report;
 
-    internal static DistilledPlan StripPlan(DistilledPlan plan)
+    internal static DistilledPlan ApplyPlan(DistilledPlan plan, bool includeText)
     {
         ArgumentNullException.ThrowIfNull(plan);
         return plan with
@@ -46,19 +62,43 @@ public static class McpResultSanitizer
             Statements = plan.Statements
                 .Select(statement => statement with
                 {
-                    StatementText = null,
-                    Root = StripNode(statement.Root),
+                    StatementText = Text(statement.StatementText, includeText),
+                    Root = ApplyNode(statement.Root, includeText),
                 })
                 .ToArray(),
         };
     }
 
-    private static PlanNode StripNode(PlanNode node) =>
+    private static PlanNode ApplyNode(PlanNode node, bool includeText) =>
         node with
         {
-            Predicate = null,
-            Children = node.Children.Select(StripNode).ToArray(),
+            Predicate = Text(node.Predicate, includeText),
+            Children = node.Children.Select(child => ApplyNode(child, includeText)).ToArray(),
         };
+
+    private static string? Text(string? value, bool includeText)
+    {
+        if (!includeText || value is null)
+            return null;
+
+        // The credential-column rule runs first and keeps its matches out of the shared redactor, whose bare
+        // password branch would otherwise mask the rest of the text after an N'...' literal.
+        var builder = new StringBuilder(value.Length);
+        var position = 0;
+        foreach (var match in CredentialLiteralPattern().Matches(value).Cast<Match>())
+        {
+            builder.Append(SecretRedactor.Redact(value[position..match.Index], []));
+            builder.Append(match.Groups[1].Value).Append("[REDACTED]").Append(match.Groups[3].Value);
+            position = match.Index + match.Length;
+        }
+        builder.Append(SecretRedactor.Redact(value[position..], []));
+        return builder.ToString();
+    }
+
+    // Masks only the string literal compared with a credential-named column (bracketed, quoted or bare, optionally
+    // qualified). Key names mirror SecretRedactor; other literals are plan data and stay readable.
+    [GeneratedRegex("""(?i)((?:password|pwd|access[_\s-]?token|client[_\s-]?secret|account[_\s-]?key|shared[_\s-]?access[_\s-]?key)[\]"]?\s*(?:=|<>|!=|like)\s*N?')((?:''|[^'])*)(')""", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex CredentialLiteralPattern();
 }
 
 /// <summary>
@@ -91,9 +131,10 @@ public static partial class McpOperationMapper
     private const int DefaultQueryMaxRows = 50;
     private const int DefaultRepeat = 5;
 
-    public static McpCapabilitiesDocument BuildCapabilities(McpScope scope, bool includeDiagnostics, string? protocolVersion = null)
+    public static McpCapabilitiesDocument BuildCapabilities(McpScope scope, bool includeDiagnostics, string? protocolVersion = null, int inputRootCursor = 0)
     {
         ArgumentNullException.ThrowIfNull(scope);
+        ThrowIfInvalidInputRootCursor(scope.InputRoots, inputRootCursor);
         var engine = scope.ResolvedTarget.Engine switch
         {
             SqlEngine.SqlServer => "sqlserver",
@@ -101,7 +142,7 @@ public static partial class McpOperationMapper
             _ => throw new McpMappingException("The scoped engine is not supported."),
         };
         var pg = string.Equals(engine, "postgres", StringComparison.Ordinal);
-        return new McpCapabilitiesDocument(
+        var document = new McpCapabilitiesDocument(
             McpHost.ServerName,
             McpHost.ServerVersion,
             protocolVersion ?? McpHost.FallbackProtocolVersion,
@@ -131,18 +172,20 @@ public static partial class McpOperationMapper
                 SqlSafetyAnalysis.HiddenEffectsVerified,
                 SqlSafetyAnalysis.ObjectAndPermissionStatus),
             SupportedProtocolVersions: McpHost.SupportedProtocolVersions);
+        return WithInputRootPage(document, scope.InputRoots, inputRootCursor, scope.MaxResultBytes);
     }
 
-    public static McpCapabilitiesDocument BuildCapabilities(McpProcessContext context, bool includeDiagnostics, string? protocolVersion = null)
+    public static McpCapabilitiesDocument BuildCapabilities(McpProcessContext context, bool includeDiagnostics, string? protocolVersion = null, int inputRootCursor = 0)
     {
         ArgumentNullException.ThrowIfNull(context);
         if (!context.RequestScope)
-            return BuildCapabilities(context.FixedScope!, includeDiagnostics, protocolVersion);
+            return BuildCapabilities(context.FixedScope!, includeDiagnostics, protocolVersion, inputRootCursor);
+        ThrowIfInvalidInputRootCursor(context.InputRoots, inputRootCursor);
 
         var diagnostics = includeDiagnostics
             ? LocalDiagnostics(context.InputRoots)
             : null;
-        return new McpCapabilitiesDocument(
+        var document = new McpCapabilitiesDocument(
             McpHost.ServerName,
             McpHost.ServerVersion,
             protocolVersion ?? McpHost.FallbackProtocolVersion,
@@ -174,11 +217,73 @@ public static partial class McpOperationMapper
             ScopeMode: "request",
             AllowedProfiles: context.AllowedProfiles,
             SupportedProtocolVersions: McpHost.SupportedProtocolVersions);
+        return WithInputRootPage(document, context.InputRoots, inputRootCursor, context.MaxResultBytes);
+    }
+
+    private static void ThrowIfInvalidInputRootCursor(IReadOnlyList<string> inputRoots, int cursor)
+    {
+        if (cursor < 0 || cursor > inputRoots.Count)
+            throw new McpMappingException("The input root cursor is invalid.");
+    }
+
+    /// <summary>
+    /// Fills one page of the enforced input roots, verbatim and in configured
+    /// order, starting at <paramref name="cursor"/>. Page size is derived from
+    /// the real wire cost: every candidate page is measured as the complete
+    /// serialized capabilities CallToolResult (diagnostics included) against
+    /// the result budget, so the page always travels whole. A leading root
+    /// that cannot fit even alone is counted in InputRootsOmitted and skipped,
+    /// so the cursor always advances and paging terminates.
+    /// </summary>
+    private static McpCapabilitiesDocument WithInputRootPage(
+        McpCapabilitiesDocument document, IReadOnlyList<string> roots, int cursor, int maximumBytes)
+    {
+        var command = McpToolCatalog.ToolNames[0];
+        var start = cursor;
+        var omitted = 0;
+        while (start < roots.Count && !Fits(1))
+        {
+            omitted++;
+            start++;
+        }
+
+        if (start == roots.Count)
+            return Page(0);
+
+        // Largest count whose page fits; one root is already known to fit.
+        var low = 1;
+        var high = roots.Count - start;
+        while (low < high)
+        {
+            var middle = low + ((high - low + 1) / 2);
+            if (Fits(middle))
+                low = middle;
+            else
+                high = middle - 1;
+        }
+
+        return Page(low);
+
+        bool Fits(int count) => McpResultAdapter.FitsRawSuccess(Page(count), command, maximumBytes);
+
+        McpCapabilitiesDocument Page(int count)
+        {
+            var end = start + count;
+            int? next = end < roots.Count ? end : null;
+            return document with
+            {
+                InputRoots = roots.Skip(start).Take(count).ToArray(),
+                InputRootCount = roots.Count,
+                InputRootsComplete = cursor == 0 && next is null && omitted == 0,
+                InputRootsNextCursor = next,
+                InputRootsOmitted = omitted,
+            };
+        }
     }
 
     private static IReadOnlyDictionary<string, string> LocalDiagnostics(McpScope scope)
     {
-        // Local counts and existence flags only: no profile list, no paths, no secrets.
+        // Local counts and existence flags only; never secrets.
         var diagnostics = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["inputRootCount"] = scope.InputRoots.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
@@ -446,7 +551,8 @@ public static partial class McpOperationMapper
         int? timeout,
         string? compareResults,
         McpMatrixArgument? matrix,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool compareNullability = false)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(baseline);
@@ -460,6 +566,8 @@ public static partial class McpOperationMapper
             "set" => ResultComparisonMode.Set,
             _ => ResultComparisonMode.Off,
         };
+        if (compareNullability && mode == ResultComparisonMode.Off)
+            throw new McpMappingException("compareNullability requires compareResults ordered, multiset, or set.");
         var baselineSql = await McpInputReader.ReadSqlAsync(baseline.Sql, baseline.File, scope, ct);
         var candidateSql = await McpInputReader.ReadSqlAsync(candidate.Sql, candidate.File, scope, ct);
         var setupSql = await ReadOptionalSourceAsync(setup, scope, "setup", ct);
@@ -469,13 +577,13 @@ public static partial class McpOperationMapper
         if (matrix is null)
             return new SqlHarnessCompareOperation(
                 scope.TargetRequest, setupSql, baselineSql, candidateSql,
-                [], validatedTimeout, validatedRepeat, mode)
+                [], validatedTimeout, validatedRepeat, mode, compareNullability)
             {
                 TypedParameters = typedParameters,
             };
         return new SqlHarnessCompareMatrixOperation(
             scope.TargetRequest, setupSql, baselineSql, candidateSql,
-            [], validatedTimeout, validatedRepeat, string.Empty, mode)
+            [], validatedTimeout, validatedRepeat, string.Empty, mode, compareNullability)
         {
             TypedParameters = typedParameters,
             TypedMatrix = MapMatrix(matrix),

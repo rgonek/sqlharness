@@ -79,8 +79,8 @@ public sealed record McpTruncationInfo(int OmittedItems, int DetailLimit, int Ma
 ///
 /// Projection and secret handling reuse the shared Core pieces: reports go
 /// through <see cref="AgentOutputProjection"/> (never a second projector)
-/// after <see cref="McpResultSanitizer"/> strips plan statement text and
-/// literal predicates, and error text goes through
+/// (plan statement text and predicates are decided earlier, by the plan tool
+/// via <see cref="McpPlanTextPolicy"/>), and error text goes through
 /// <see cref="SecretRedactor"/> with caller-supplied secrets.
 ///
 /// Semantics: only failures set <c>IsError</c>. The controlled outcomes
@@ -168,18 +168,18 @@ public static class McpResultAdapter
             SqlHarnessExitCode.SnapshotDifferences);
         var exitCode = (int)outcome.ExitCode;
 
-        var sanitized = McpResultSanitizer.Sanitize(outcome.Report);
-        foreach (var detailLimit in AgentOutputProjection.GetCandidateDetailLimits(maximumBytes, maximumCellCharacters).Distinct())
+        var report = outcome.Report;
+        foreach (var detailLimit in AgentOutputProjection.GetCandidateDetailLimits(report, maximumBytes, maximumCellCharacters).Distinct())
         {
             var projected = AgentOutputProjection.Project(
-                sanitized, maximumCellCharacters, detailLimit, out var omitted, maximumBytes);
+                report, maximumCellCharacters, detailLimit, out var omitted, maximumBytes);
             var totalOmitted = omitted + errorOmitted;
 
             // Reports the shared projection does not know (capabilities,
             // validation) travel raw when they fit, instead of degrading to a
             // bounded placeholder while bytes remain.
-            if (projected is AgentBoundedOutput && sanitized is not null &&
-                TryEnvelopeBytes(boundedCommand, status, exitCode, sanitized, error, null, out var rawBytes) &&
+            if (projected is AgentBoundedOutput && report is not null &&
+                TryEnvelopeBytes(boundedCommand, status, exitCode, report, error, null, out var rawBytes) &&
                 TryBuildWithinBudget(rawBytes, isError, maximumBytes, out var rawResult))
                 return rawResult;
 
@@ -223,6 +223,19 @@ public static class McpResultAdapter
     {
         ArgumentNullException.ThrowIfNull(result);
         return JsonSerializer.SerializeToUtf8Bytes(result, McpJsonUtilities.DefaultOptions).Length;
+    }
+
+    /// <summary>
+    /// True when <paramref name="report"/> travels raw as a success result
+    /// within <paramref name="maximumBytes"/>: the same envelope and wire
+    /// measurement <see cref="Adapt"/> uses for its raw path, so a caller can
+    /// size a report (for example a capabilities page) before adapting it.
+    /// </summary>
+    internal static bool FitsRawSuccess(object report, string command, int maximumBytes)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        TryEnvelopeBytes(command, "success", (int)SqlHarnessExitCode.Success, report, null, null, out var bytes);
+        return TryBuildWithinBudget(bytes, isError: false, maximumBytes, out _);
     }
 
     /// <summary>

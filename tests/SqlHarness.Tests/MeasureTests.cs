@@ -10,7 +10,7 @@ namespace SqlHarness.Tests;
 
 public class SqlHarnessMeasureTests
 {
-    private const string Token = "measure-access-token-never-emit";
+    private const string Token = "eyJsynthetic.access-never-emit.signature";
     private const string Plan = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></BatchSequence></ShowPlanXML>";
 
     [Fact]

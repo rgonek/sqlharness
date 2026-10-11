@@ -10,7 +10,7 @@ namespace SqlHarness.Tests;
 
 public class SnapshotTests
 {
-    private const string Token = "fake-access-token-never-emit";
+    private const string Token = "eyJsynthetic.access-never-emit.signature";
     private const string Name = "before-import";
 
     [Fact]

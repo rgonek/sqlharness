@@ -188,7 +188,10 @@ The default is `ordered`.
 - `ordered` compares result sets, rows, duplicates, and row order. It reports
   the number of differing positions. It also reports multiset-based
   `baselineOnlyCount` and `candidateOnlyCount`; zero directional counts with a
-  failed ordered comparison means that only order differs.
+  failed ordered comparison means that only order differs, unless the failure
+  carries `mismatchReason` `"nullability"` under strict nullability
+  (`--compare-nullability`), or comes from a result schema difference, which
+  also fails with zero directional counts.
 - `multiset` ignores row order and preserves duplicate counts. Directional
   counts include duplicate multiplicity.
 - `set` ignores row order and duplicates. Directional counts count unique rows.

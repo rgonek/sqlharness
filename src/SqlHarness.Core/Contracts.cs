@@ -48,7 +48,8 @@ public sealed record SqlHarnessCompareOperation(
     IReadOnlyList<string> Parameters,
     int TimeoutSeconds,
     int Repeat,
-    ResultComparisonMode CompareResults = ResultComparisonMode.Ordered) : SqlHarnessOperation
+    ResultComparisonMode CompareResults = ResultComparisonMode.Ordered,
+    bool CompareNullability = false) : SqlHarnessOperation
 {
     /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
     public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
@@ -63,7 +64,8 @@ public sealed record SqlHarnessCompareMatrixOperation(
     int TimeoutSeconds,
     int Repeat,
     string Matrix,
-    ResultComparisonMode CompareResults = ResultComparisonMode.Ordered) : SqlHarnessOperation
+    ResultComparisonMode CompareResults = ResultComparisonMode.Ordered,
+    bool CompareNullability = false) : SqlHarnessOperation
 {
     /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
     public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }

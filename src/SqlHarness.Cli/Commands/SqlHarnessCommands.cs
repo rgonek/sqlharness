@@ -331,6 +331,9 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
         [CommandOption("--compare-results <MODE>")]
         [DefaultValue("ordered")]
         public string CompareResults { get; set; } = "ordered";
+        [Description("Also require matching column nullability (allowNull) for result equivalence. Default compares observed data only and reports nullability separately.")]
+        [CommandOption("--compare-nullability")]
+        public bool CompareNullability { get; set; }
         [CommandOption("--json-summary")] public bool JsonSummary { get; set; }
     }
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings s, CancellationToken ct)
@@ -343,14 +346,16 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
         if (s.Timeout is < 1 or > 300 || s.Repeat is < 1 or > 100) return Invalid("--timeout must be 1..300 and --repeat must be 1..100.");
         if (!TryParseCompareResults(s.CompareResults, out var compareResults))
             return Invalid("--compare-results must be ordered, multiset, set, or off.");
+        if (s.CompareNullability && compareResults == ResultComparisonMode.Off)
+            return Invalid("--compare-nullability requires --compare-results ordered, multiset, or set.");
         try
         {
             var setup = await Read(s.Setup, ct);
             var baseline = (await Read(s.Baseline, ct))!;
             var candidate = (await Read(s.Candidate, ct))!;
             SqlHarnessOperation operation = matrix.Length == 1
-                ? new SqlHarnessCompareMatrixOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, matrix[0], compareResults)
-                : new SqlHarnessCompareOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, compareResults);
+                ? new SqlHarnessCompareMatrixOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, matrix[0], compareResults, s.CompareNullability)
+                : new SqlHarnessCompareOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, compareResults, s.CompareNullability);
             return await Dispatch(operation, ResolveOutputMode(s.Json, s.JsonSummary, s.Output), ct, new AgentOutputOptions(s.MaxOutputBytes, s.MaxCellChars));
         }
         catch (OperationCanceledException) { throw; }

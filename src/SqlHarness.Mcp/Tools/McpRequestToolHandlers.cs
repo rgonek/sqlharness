@@ -23,12 +23,13 @@ public sealed class McpRequestToolHandlers(
     private readonly Func<McpScope, ISqlHarnessModule> _moduleFactory = moduleFactory ?? (scope => process.Decorate(scope.CreateModule()));
 
     public Task<CallToolResult> CapabilitiesAsync(RequestContext<CallToolRequestParams> ctx,
-        [Description("Include local counts and existence flags. Never secrets, paths, or profile lists.")] bool includeDiagnostics = false,
+        [Description("Include local counts and existence flags. Never secrets.")] bool includeDiagnostics = false,
+        [Description("Zero-based offset 0..inputRootCount into the configured input roots; default 0. Follow inputRootsNextCursor until it is null; inputRootsComplete is true only when one response holds every root.")] int inputRootCursor = 0,
         CancellationToken ct = default) => TargetFreeAsync("sqlharness_capabilities", ctx, ct, token =>
     {
-        ThrowUnknown(ctx, ["includeDiagnostics"]);
+        ThrowUnknown(ctx, ["includeDiagnostics", "inputRootCursor"]);
         return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success,
-            McpOperationMapper.BuildCapabilities(process, includeDiagnostics, ctx?.Server?.NegotiatedProtocolVersion), null));
+            McpOperationMapper.BuildCapabilities(process, includeDiagnostics, ctx?.Server?.NegotiatedProtocolVersion, inputRootCursor), null));
     });
 
     public Task<CallToolResult> InspectAsync(RequestContext<CallToolRequestParams> ctx,
@@ -89,10 +90,11 @@ public sealed class McpRequestToolHandlers(
         [Description("SQL timeout 1..300 seconds.")] int? timeout = null,
         [Description("Result comparison mode.")][AllowedValues("ordered", "multiset", "set", "off")] string compareResults = "ordered",
         [Description("Optional single matrix dimension.")] McpMatrixArgument? matrix = null,
+        [Description("Also require matching column nullability (allowNull) for result equivalence. Default compares observed data only and reports nullability separately. Not allowed with compareResults off.")] bool compareNullability = false,
         [Description("Response cap 4096..1048576 bytes.")] int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds.")] int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
-        Invoke(ctx, "sqlharness_compare", scope, handler => handler.CompareAsync(ctx, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, maxResultBytes, maxOperationSeconds, ct));
+        Invoke(ctx, "sqlharness_compare", scope, handler => handler.CompareAsync(ctx, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, compareNullability, maxResultBytes, maxOperationSeconds, ct));
 
     public Task<CallToolResult> WatchAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Request target scope.")] McpRequestScopeArgument scope,
@@ -127,13 +129,14 @@ public sealed class McpRequestToolHandlers(
     public Task<CallToolResult> PlanAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Inline plan document.")] string? content = null,
         [Description("Plan file under an operator input root.")] string? file = null,
+        [Description("Keep statement text and predicates (credential patterns filtered). Imported plan text may contain data and you choose that surface; false returns metadata only.")] bool includeText = true,
         CancellationToken ct = default) => TargetFreeAsync("sqlharness_plan", ctx, ct, async token =>
         {
-            ThrowUnknown(ctx, ["content", "file"]);
+            ThrowUnknown(ctx, ["content", "file", "includeText"]);
             var operation = await McpOperationMapper.MapPlanAsync(process.InputRoots, content, file, token);
             var outcome = await process.CreateModule().ExecuteAsync(operation, token);
             return outcome.ExitCode == SqlHarnessExitCode.Success
-                ? outcome with { Report = McpResultSanitizer.Sanitize(outcome.Report) }
+                ? outcome with { Report = McpPlanTextPolicy.Apply(outcome.Report, includeText) }
                 : outcome;
         });
 

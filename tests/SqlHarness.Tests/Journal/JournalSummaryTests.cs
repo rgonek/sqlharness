@@ -45,6 +45,23 @@ public sealed class JournalSummaryTests
     }
 
     [Fact]
+    public void Compare_summary_records_the_nullability_diagnostic()
+    {
+        var report = Compare(false) with
+        {
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Ordered, false, 0, 0, 0, true, false, ResultMismatchReasons.Nullability),
+        };
+
+        using var json = JsonDocument.Parse(JournalSummary.Build(report)!);
+        Assert.True(json.RootElement.GetProperty("compareNullability").GetBoolean());
+        Assert.False(json.RootElement.GetProperty("nullabilityEquivalent").GetBoolean());
+
+        using var unknown = JsonDocument.Parse(JournalSummary.Build(Compare(true))!);
+        Assert.False(unknown.RootElement.GetProperty("compareNullability").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, unknown.RootElement.GetProperty("nullabilityEquivalent").ValueKind);
+    }
+
+    [Fact]
     public void Matrix_summary_never_contains_matrix_values()
     {
         var report = new SqlHarnessCompareMatrixReport("Tenant", "nvarchar(20)",
@@ -60,6 +77,32 @@ public sealed class JournalSummaryTests
         Assert.Equal(2, json.RootElement.GetProperty("cells").GetInt32());
         Assert.Equal(1, json.RootElement.GetProperty("equivalentCells").GetInt32());
         Assert.Equal("Tenant", json.RootElement.GetProperty("parameterName").GetString());
+    }
+
+    [Fact]
+    public void Matrix_summary_records_the_nullability_policy()
+    {
+        static SqlHarnessCompareReport Strict(bool equivalent) => Compare(equivalent) with
+        {
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Ordered, equivalent, 0, 0, 0, true, equivalent),
+        };
+
+        var strict = new SqlHarnessCompareMatrixReport("Tenant", "int",
+        [
+            new CompareMatrixCellReport(0, "1", Strict(true)),
+            new CompareMatrixCellReport(1, "2", Strict(false)),
+        ]);
+        var lenient = new SqlHarnessCompareMatrixReport("Tenant", "int",
+        [
+            new CompareMatrixCellReport(0, "1", Compare(true)),
+            new CompareMatrixCellReport(1, "2", Compare(true)),
+        ]);
+
+        using var strictJson = JsonDocument.Parse(JournalSummary.Build(strict)!);
+        using var lenientJson = JsonDocument.Parse(JournalSummary.Build(lenient)!);
+
+        Assert.True(strictJson.RootElement.GetProperty("compareNullability").GetBoolean());
+        Assert.False(lenientJson.RootElement.GetProperty("compareNullability").GetBoolean());
     }
 
     [Fact]

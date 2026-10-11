@@ -3,6 +3,7 @@ using System.Text.Json;
 using ModelContextProtocol.Protocol;
 
 using SqlHarness.Core;
+using SqlHarness.TestFixtures;
 
 namespace SqlHarness.Mcp.Tests;
 
@@ -71,6 +72,23 @@ public sealed class McpOutputTests
         Assert.Equal(0, envelope.GetProperty("exitCode").GetInt32());
         Assert.Equal(JsonValueKind.Null, envelope.GetProperty("error").ValueKind);
         Assert.Equal("srv", envelope.GetProperty("result").GetProperty("server").GetString());
+    }
+
+    [Fact]
+    public void Compare_result_carries_the_nullability_diagnostic()
+    {
+        var report = BuildCompareReport("m") with
+        {
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Ordered, false, 0, 0, 0, true, false, ResultMismatchReasons.Nullability),
+        };
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
+
+        var envelope = EnvelopeOf(McpResultAdapter.Adapt(outcome, "sqlharness_compare"));
+
+        var equivalence = envelope.GetProperty("result").GetProperty("equivalence");
+        Assert.True(equivalence.GetProperty("compareNullability").GetBoolean());
+        Assert.False(equivalence.GetProperty("nullabilityEquivalent").GetBoolean());
+        Assert.Equal("nullability", equivalence.GetProperty("mismatchReason").GetString());
     }
 
     [Fact]
@@ -385,6 +403,133 @@ public sealed class McpOutputTests
         var envelope = EnvelopeOf(result);
         AssertValidEnvelope(envelope);
         Assert.True(envelope.TryGetProperty("result", out _));
+    }
+
+    [Fact]
+    public void Query_three_small_result_sets_stay_complete()
+    {
+        var report = QueryShapeFixtures.Report(QueryShapeFixtures.Set(2, 3), QueryShapeFixtures.Set(1, 1), QueryShapeFixtures.Set(3, 2));
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "sqlharness_query");
+
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.CallToolResultBudgetBytes);
+        var envelope = EnvelopeOf(result);
+        AssertValidEnvelope(envelope);
+        Assert.Equal(JsonValueKind.Null, envelope.GetProperty("truncation").ValueKind);
+        var projected = envelope.GetProperty("result");
+        QueryShapeFixtures.AssertAccounted(projected, report);
+        var sets = projected.GetProperty("resultSets");
+        Assert.Equal(3, sets.GetArrayLength());
+        for (var i = 0; i < 3; i++)
+            Assert.Equal(report.ResultSets[i].Rows.Count, sets[i].GetProperty("rows").GetArrayLength());
+    }
+
+    [Fact]
+    public void Query_large_detail_set_keeps_summary_sets_within_wire_budget()
+    {
+        var report = QueryShapeFixtures.Report(QueryShapeFixtures.Set(4, 1000, width: 40), QueryShapeFixtures.Set(2, 3), QueryShapeFixtures.Set(3, 2));
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "sqlharness_query");
+
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.CallToolResultBudgetBytes);
+        var envelope = EnvelopeOf(result);
+        AssertValidEnvelope(envelope);
+        var truncation = envelope.GetProperty("truncation");
+        Assert.Equal(JsonValueKind.Object, truncation.ValueKind);
+        Assert.True(truncation.GetProperty("detailLimit").GetInt32() > 1);
+        var projected = envelope.GetProperty("result");
+        QueryShapeFixtures.AssertAccounted(projected, report);
+        var sets = projected.GetProperty("resultSets");
+        Assert.Equal(3, sets.GetArrayLength());
+        var detailRows = sets[0].GetProperty("rows").GetArrayLength();
+        Assert.InRange(detailRows, 2, 999);
+        Assert.Equal(3, sets[1].GetProperty("rows").GetArrayLength());
+        Assert.Equal(2, sets[2].GetProperty("rows").GetArrayLength());
+        Assert.Equal(1000 - detailRows, truncation.GetProperty("omittedItems").GetInt32());
+    }
+
+    [Theory]
+    [InlineData(4096)]
+    [InlineData(16384)]
+    public void Query_wide_schema_and_many_sets_fall_back_within_wire_budget(int maximumBytes)
+    {
+        var wide = QueryShapeFixtures.Report(QueryShapeFixtures.Set(400, 3, width: 5000, nameLength: 60), QueryShapeFixtures.Set(2, 2));
+        var many = QueryShapeFixtures.Report(Enumerable.Range(0, 400).Select(_ => QueryShapeFixtures.Set(3, 50, width: 20)).ToArray());
+
+        foreach (var report in new[] { wide, many })
+        {
+            var before = JsonSerializer.Serialize(report);
+            var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "sqlharness_query",
+                new McpResultBudget(maximumBytes));
+
+            Assert.True(McpResultAdapter.MeasureBytes(result) <= maximumBytes);
+            Assert.Equal(before, JsonSerializer.Serialize(report));
+            var envelope = EnvelopeOf(result);
+            AssertValidEnvelope(envelope);
+            Assert.Equal("success", envelope.GetProperty("status").GetString());
+            Assert.Equal(0, envelope.GetProperty("truncation").GetProperty("detailLimit").GetInt32());
+            var projected = envelope.GetProperty("result");
+            Assert.Equal("raw-hash", projected.GetProperty("resultHash").GetString());
+            QueryShapeFixtures.AssertAccounted(projected, report);
+            Assert.True(projected.GetProperty("resultSets").GetArrayLength() > 0);
+        }
+    }
+
+    [Fact]
+    public void Query_wide_first_set_then_summary_set_at_level_zero_fits_wire_budget_with_explicit_omissions()
+    {
+        const int budget = 4096;
+        var report = QueryShapeFixtures.Report(QueryShapeFixtures.Set(400, 3, width: 5000, nameLength: 60), QueryShapeFixtures.Set(2, 2));
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "sqlharness_query",
+            new McpResultBudget(budget));
+
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= budget);
+        var envelope = EnvelopeOf(result);
+        AssertValidEnvelope(envelope);
+        Assert.Equal(0, envelope.GetProperty("truncation").GetProperty("detailLimit").GetInt32());
+        var projected = envelope.GetProperty("result");
+        QueryShapeFixtures.AssertAccounted(projected, report);
+        var sets = projected.GetProperty("resultSets");
+        // The summary set's complete schema and rows are allocated before the wide
+        // first schema's column prefix, which is explicitly cut and carries no rows.
+        Assert.Equal(0, projected.GetProperty("omittedResultSetCount").GetInt32());
+        Assert.Equal(2, sets.GetArrayLength());
+        Assert.True(sets[0].GetProperty("omittedColumnCount").GetInt32() > 0);
+        Assert.Equal(0, sets[0].GetProperty("rows").GetArrayLength());
+        Assert.Equal(3, sets[0].GetProperty("omittedRowCount").GetInt64());
+        QueryShapeFixtures.AssertSummariesComplete(projected, report, 1);
+    }
+
+    public static TheoryData<int, int, int> WideDetailShapes => new()
+    {
+        { 100, 200, 30 }, // SELECT * over ~100 columns: one row cannot fit
+        { 12, 5000, 20 }, // ~12 nvarchar(max) columns, clipped to the cell limit
+    };
+
+    [Theory]
+    [MemberData(nameof(WideDetailShapes))]
+    public void Query_wide_one_row_detail_keeps_both_summaries_complete_within_default_wire_budget(int columns, int width, int nameLength)
+    {
+        var report = QueryShapeFixtures.Report(
+            QueryShapeFixtures.Set(columns, 1, width: width, nameLength: nameLength),
+            QueryShapeFixtures.Set(1, 1),
+            QueryShapeFixtures.Set(2, 5));
+        var before = JsonSerializer.Serialize(report);
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "sqlharness_query");
+
+        Assert.Equal(16384, McpLimits.CallToolResultBudgetBytes);
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.CallToolResultBudgetBytes);
+        Assert.Equal(before, JsonSerializer.Serialize(report));
+        var envelope = EnvelopeOf(result);
+        AssertValidEnvelope(envelope);
+        var projected = envelope.GetProperty("result");
+        Assert.Equal("raw-hash", projected.GetProperty("resultHash").GetString());
+        QueryShapeFixtures.AssertAccounted(projected, report);
+        QueryShapeFixtures.AssertSummariesComplete(projected, report, 1, 2);
+        var detail = projected.GetProperty("resultSets")[0];
+        Assert.Equal(columns, detail.GetProperty("columns").GetArrayLength() + detail.GetProperty("omittedColumnCount").GetInt32());
     }
 
     private static SqlHarnessCompareReport BuildCompareReport(string marker, string? artifactDirectory = null) => new(

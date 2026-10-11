@@ -14,7 +14,7 @@ namespace SqlHarness.Mcp.Tests;
 /// (null, decimal, Unicode, '=', ',' and empty text preserved whole;
 /// duplicates and unknown types left to Core), PG
 /// gates fire before any connection, Core safety stays authoritative offline,
-/// and plan results lose statement text and literal predicates. Only synthetic
+/// and plan results keep credential-filtered statement text and predicates unless includeText is false. Only synthetic
 /// HOME directories and an unreachable profile target are used; no test opens
 /// a real database connection.
 /// </summary>
@@ -109,6 +109,232 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal("2026-07-28", negotiated.ProtocolVersion);
         Assert.Equal(McpHost.FallbackProtocolVersion, unknown.ProtocolVersion);
         Assert.Equal(McpHost.SupportedProtocolVersions, negotiated.SupportedProtocolVersions);
+    }
+
+    private McpScope ScopeWithRoots(IReadOnlyList<string> roots, int maxResultBytes = (int)McpLimits.CallToolResultBudgetBytes) =>
+        McpScope.Create(
+            new McpServerOptions
+            {
+                Profile = ProfileName,
+                Vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["tenant"] = "frozen" },
+                InputRoots = roots,
+                MaxResultBytes = maxResultBytes,
+            },
+            ProfileStore.Load(_targetsFile));
+
+    private McpProcessContext RequestProcessWithRoots(IReadOnlyList<string> roots, int maxResultBytes = (int)McpLimits.CallToolResultBudgetBytes) =>
+        McpProcessContext.Create(
+            new McpServerOptions
+            {
+                RequestScope = true,
+                AllowedProfiles = [ProfileName],
+                InputRoots = roots,
+                MaxResultBytes = maxResultBytes,
+            },
+            () => ProfileStore.Load(_targetsFile));
+
+    private string CreateRoot(string name)
+    {
+        var path = Path.Combine(_home, "input-roots", name);
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private string[] CreateRoots(int count, int nameLength) =>
+        Enumerable.Range(0, count)
+            .Select(index => CreateRoot(index.ToString("D3", System.Globalization.CultureInfo.InvariantCulture) + new string('r', nameLength)))
+            .ToArray();
+
+    private Func<int, Task<CallToolResult>> CapabilitiesCall(bool requestMode, IReadOnlyList<string> roots, int maxResultBytes)
+    {
+        if (requestMode)
+        {
+            var handlers = new McpRequestToolHandlers(RequestProcessWithRoots(roots, maxResultBytes));
+            return cursor => handlers.CapabilitiesAsync(null!, includeDiagnostics: true, inputRootCursor: cursor);
+        }
+
+        var scope = ScopeWithRoots(roots, maxResultBytes);
+        var fixedHandlers = new McpToolHandlers(scope, scope.CreateModule());
+        return cursor => fixedHandlers.CapabilitiesAsync(null!, includeDiagnostics: true, inputRootCursor: cursor);
+    }
+
+    private static JsonElement EnvelopeOf(CallToolResult result)
+    {
+        using var document = JsonDocument.Parse(TextOf(result));
+        return document.RootElement.Clone();
+    }
+
+    private static int? NextCursorOf(JsonElement page) =>
+        page.GetProperty("inputRootsNextCursor").ValueKind == JsonValueKind.Null
+            ? null
+            : page.GetProperty("inputRootsNextCursor").GetInt32();
+
+    private static string[] RootsOf(JsonElement page) =>
+        page.GetProperty("inputRoots").EnumerateArray().Select(item => item.GetString()!).ToArray();
+
+    /// <summary>Follows inputRootsNextCursor from 0, asserting every page fits the budget and carries the raw document.</summary>
+    private static async Task<List<JsonElement>> CollectRootPagesAsync(Func<int, Task<CallToolResult>> call, int maxResultBytes)
+    {
+        var pages = new List<JsonElement>();
+        int? cursor = 0;
+        while (cursor is not null)
+        {
+            Assert.True(pages.Count < 1000, "Input root paging did not terminate.");
+            var result = await call(cursor.Value);
+            Assert.False(result.IsError == true, TextOf(result));
+            Assert.True(McpResultAdapter.MeasureBytes(result) <= maxResultBytes, "A capabilities page exceeded the result budget.");
+            var envelope = EnvelopeOf(result);
+            Assert.Equal(JsonValueKind.Null, envelope.GetProperty("truncation").ValueKind);
+            var page = envelope.GetProperty("result");
+            pages.Add(page);
+            var next = NextCursorOf(page);
+            if (next is not null)
+                Assert.True(next > cursor, "The input root cursor did not advance.");
+            cursor = next;
+        }
+
+        return pages;
+    }
+
+    [Fact]
+    public void Fixed_capabilities_disclose_exactly_the_enforced_input_roots()
+    {
+        var first = CreateRoot("alpha");
+        var second = CreateRoot("beta");
+        var scope = ScopeWithRoots([second + Path.DirectorySeparatorChar, first]);
+
+        var document = McpOperationMapper.BuildCapabilities(scope, includeDiagnostics: false);
+
+        Assert.Equal(scope.InputRoots, document.InputRoots);
+        Assert.Equal([second, first], document.InputRoots);
+        Assert.Equal(2, document.InputRootCount);
+        Assert.True(document.InputRootsComplete);
+        Assert.Null(document.InputRootsNextCursor);
+        Assert.Equal(0, document.InputRootsOmitted);
+    }
+
+    [Fact]
+    public void Request_capabilities_disclose_exactly_the_enforced_input_roots()
+    {
+        var first = CreateRoot("gamma");
+        var second = CreateRoot("delta");
+        var process = RequestProcessWithRoots([first, second + Path.DirectorySeparatorChar]);
+
+        var document = McpOperationMapper.BuildCapabilities(process, includeDiagnostics: true);
+
+        Assert.Equal(process.InputRoots, document.InputRoots);
+        Assert.Equal([first, second], document.InputRoots);
+        Assert.Equal(2, document.InputRootCount);
+        Assert.True(document.InputRootsComplete);
+        Assert.Null(document.InputRootsNextCursor);
+        Assert.Equal(0, document.InputRootsOmitted);
+        Assert.Equal("2", document.Diagnostics!["inputRootCount"]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Capabilities_without_input_roots_report_an_empty_complete_inventory(bool requestMode)
+    {
+        var call = CapabilitiesCall(requestMode, [], McpLimits.MinCallToolResultBudgetBytes);
+
+        var page = EnvelopeOf(await call(0)).GetProperty("result");
+
+        Assert.Empty(RootsOf(page));
+        Assert.Equal(0, page.GetProperty("inputRootCount").GetInt32());
+        Assert.True(page.GetProperty("inputRootsComplete").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, page.GetProperty("inputRootsNextCursor").ValueKind);
+        Assert.Equal(0, page.GetProperty("inputRootsOmitted").GetInt32());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Capabilities_return_several_short_input_roots_on_one_complete_page(bool requestMode)
+    {
+        var roots = CreateRoots(3, 4);
+
+        var pages = await CollectRootPagesAsync(CapabilitiesCall(requestMode, roots, McpLimits.MinCallToolResultBudgetBytes), McpLimits.MinCallToolResultBudgetBytes);
+
+        var page = Assert.Single(pages);
+        Assert.Equal(roots, RootsOf(page));
+        Assert.Equal(3, page.GetProperty("inputRootCount").GetInt32());
+        Assert.True(page.GetProperty("inputRootsComplete").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Capabilities_page_many_long_input_roots_within_the_minimum_budget(bool requestMode)
+    {
+        var roots = CreateRoots(30, 120);
+
+        var pages = await CollectRootPagesAsync(CapabilitiesCall(requestMode, roots, McpLimits.MinCallToolResultBudgetBytes), McpLimits.MinCallToolResultBudgetBytes);
+
+        Assert.True(pages.Count > 1, "Thirty long roots must not fit one 4096 B page.");
+        Assert.Equal(roots, pages.SelectMany(RootsOf).ToArray());
+        Assert.All(pages, page =>
+        {
+            Assert.NotEmpty(RootsOf(page));
+            Assert.Equal(30, page.GetProperty("inputRootCount").GetInt32());
+            Assert.Equal(0, page.GetProperty("inputRootsOmitted").GetInt32());
+            Assert.False(page.GetProperty("inputRootsComplete").GetBoolean());
+        });
+        Assert.NotNull(NextCursorOf(pages[0]));
+        Assert.Null(NextCursorOf(pages[^1]));
+    }
+
+    [Fact]
+    public async Task Capabilities_omit_an_input_root_that_cannot_fit_any_page_and_still_terminate()
+    {
+        var shortBefore = CreateRoot("before");
+        var longRoot = CreateRoot(Path.Combine(Enumerable.Range(0, 10).Select(index => index.ToString(System.Globalization.CultureInfo.InvariantCulture) + new string('L', 200)).ToArray()));
+        var shortAfter = CreateRoot("after");
+        var call = CapabilitiesCall(requestMode: false, [shortBefore, longRoot, shortAfter], McpLimits.MinCallToolResultBudgetBytes);
+
+        var pages = await CollectRootPagesAsync(call, McpLimits.MinCallToolResultBudgetBytes);
+
+        Assert.Equal([shortBefore, shortAfter], pages.SelectMany(RootsOf).ToArray());
+        Assert.Equal(1, pages.Sum(page => page.GetProperty("inputRootsOmitted").GetInt32()));
+        Assert.All(pages, page => Assert.False(page.GetProperty("inputRootsComplete").GetBoolean()));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Capabilities_cursor_at_the_end_returns_an_empty_incomplete_page(bool requestMode)
+    {
+        var roots = CreateRoots(2, 4);
+        var call = CapabilitiesCall(requestMode, roots, (int)McpLimits.CallToolResultBudgetBytes);
+
+        var page = EnvelopeOf(await call(2)).GetProperty("result");
+
+        Assert.Empty(RootsOf(page));
+        Assert.Equal(2, page.GetProperty("inputRootCount").GetInt32());
+        Assert.False(page.GetProperty("inputRootsComplete").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, page.GetProperty("inputRootsNextCursor").ValueKind);
+
+        var tail = EnvelopeOf(await call(1)).GetProperty("result");
+        Assert.Equal(roots[1..], RootsOf(tail));
+        Assert.False(tail.GetProperty("inputRootsComplete").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(false, -1)]
+    [InlineData(false, 3)]
+    [InlineData(true, -1)]
+    [InlineData(true, 3)]
+    public async Task Capabilities_reject_an_input_root_cursor_outside_the_inventory(bool requestMode, int cursor)
+    {
+        var call = CapabilitiesCall(requestMode, CreateRoots(2, 4), (int)McpLimits.CallToolResultBudgetBytes);
+
+        var result = await call(cursor);
+
+        Assert.True(result.IsError == true);
+        var envelope = EnvelopeOf(result);
+        Assert.Equal(2, envelope.GetProperty("exitCode").GetInt32());
+        Assert.Equal("safety_rejected", envelope.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal("The input root cursor is invalid.", envelope.GetProperty("error").GetProperty("message").GetString());
     }
 
     private sealed class RecordingModule : ISqlHarnessModule
@@ -364,6 +590,33 @@ public sealed class McpMappingTests : IDisposable
             new McpSqlSourceArgument { Sql = "SELECT @n" },
             new McpSqlSourceArgument { Sql = "SELECT @n" },
             null, null, 5, 30, "bogus", null, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Compare_mapping_carries_compare_nullability_and_rejects_it_with_off()
+    {
+        var scope = Scope();
+        McpSqlSourceArgument a = new() { Sql = "SELECT 1" }, b = new() { Sql = "SELECT 2" };
+        var matrixArgument = new McpMatrixArgument { Name = "N", Type = "int", Values = ["1", "2"] };
+
+        var defaults = Assert.IsType<SqlHarnessCompareOperation>(
+            await McpOperationMapper.MapCompareAsync(scope, a, b, null, null, 5, 30, "ordered", null, CancellationToken.None));
+        Assert.False(defaults.CompareNullability);
+
+        var strict = Assert.IsType<SqlHarnessCompareOperation>(
+            await McpOperationMapper.MapCompareAsync(scope, a, b, null, null, 5, 30, "set", null, CancellationToken.None, compareNullability: true));
+        Assert.True(strict.CompareNullability);
+
+        var strictMatrix = Assert.IsType<SqlHarnessCompareMatrixOperation>(
+            await McpOperationMapper.MapCompareAsync(scope, a, b, null, null, 5, 30, "multiset", matrixArgument, CancellationToken.None, compareNullability: true));
+        Assert.True(strictMatrix.CompareNullability);
+
+        foreach (var matrix in new McpMatrixArgument?[] { null, matrixArgument })
+        {
+            var ex = await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapCompareAsync(
+                scope, a, b, null, null, 5, 30, "off", matrix, CancellationToken.None, compareNullability: true));
+            Assert.Equal("compareNullability requires compareResults ordered, multiset, or set.", ex.Message);
+        }
     }
 
     // 012/T2 regression: the old text bridge rejected a comma and an empty
@@ -835,20 +1088,68 @@ public sealed class McpMappingTests : IDisposable
     }
 
     [Fact]
-    public void Sanitizer_strips_statement_text_and_literal_predicates()
+    public void Plan_text_policy_filters_credentials_and_keeps_literals_when_text_is_included()
+    {
+        var child = new PlanNode("Index Seek", "Index Seek", "dbo.T", "IX_T", 1, 1, 1, 0.1, "[Id]=(42) AND [Note]='x' AND password='hunter2-synthetic'", [], []);
+        var root = new PlanNode("Nested Loops", "Inner Join", null, null, 2, 2, 1, 0.9, "OuterRefs", [], [child]);
+        var plan = new DistilledPlan([new PlanStatement("SELECT * FROM dbo.T WHERE Id = 42 AND access_token=tok-synthetic", root, [])]);
+
+        var kept = Assert.IsType<DistilledPlan>(McpPlanTextPolicy.Apply(plan, includeText: true));
+
+        Assert.Contains("Id = 42", kept.Statements[0].StatementText, StringComparison.Ordinal);
+        Assert.DoesNotContain("tok-synthetic", kept.Statements[0].StatementText, StringComparison.Ordinal);
+        Assert.Equal("OuterRefs", kept.Statements[0].Root.Predicate);
+        var keptChild = kept.Statements[0].Root.Children[0];
+        Assert.Contains("[Id]=(42)", keptChild.Predicate, StringComparison.Ordinal);
+        Assert.Contains("[Note]='x'", keptChild.Predicate, StringComparison.Ordinal);
+        Assert.DoesNotContain("hunter2-synthetic", keptChild.Predicate, StringComparison.Ordinal);
+        Assert.Equal("dbo.T", keptChild.ObjectName);
+        Assert.Equal(plan.Statements[0].Root.EstimatedRows, kept.Statements[0].Root.EstimatedRows);
+    }
+
+    [Theory]
+    [InlineData("[dbo].[Users].[Password]=N'hunter2' AND [dbo].[Users].[Status]=N'ACTIVE'", "[dbo].[Users].[Password]=N'[REDACTED]' AND [dbo].[Users].[Status]=N'ACTIVE'")]
+    [InlineData("Password = N'hunter2' AND Status = N'ACTIVE'", "Password = N'[REDACTED]' AND Status = N'ACTIVE'")]
+    [InlineData("(password = 'x'::text) AND (status = 'ACTIVE'::text)", "(password = '[REDACTED]'::text) AND (status = 'ACTIVE'::text)")]
+    [InlineData("(\"password\" = 'x'::text)", "(\"password\" = '[REDACTED]'::text)")]
+    [InlineData("[t].[Pwd] LIKE N'ab%' AND [t].[Access_Token]<>'z'", "[t].[Pwd] LIKE N'[REDACTED]' AND [t].[Access_Token]<>'[REDACTED]'")]
+    [InlineData("[Password]!=N'it''s secret' AND [Kind]=N'gold'", "[Password]!=N'[REDACTED]' AND [Kind]=N'gold'")]
+    [InlineData("[Note]=N'hunter2' AND [Status]=N'ACTIVE'", "[Note]=N'hunter2' AND [Status]=N'ACTIVE'")]
+    public void Plan_text_policy_masks_only_literals_compared_with_credential_columns(string input, string expected)
+    {
+        var node = new PlanNode("Scan", null, null, null, 1, 1, 1, 0.1, input, [], []);
+        var plan = new DistilledPlan([new PlanStatement(input, node, [])]);
+        var kept = Assert.IsType<DistilledPlan>(McpPlanTextPolicy.Apply(plan, includeText: true));
+        Assert.Equal(expected, kept.Statements[0].Root.Predicate);
+        Assert.Equal(expected, kept.Statements[0].StatementText);
+    }
+
+    [Fact]
+    public void Plan_text_policy_omits_text_when_excluded_and_passes_other_reports_through()
     {
         var child = new PlanNode("Index Seek", "Index Seek", "dbo.T", "IX_T", 1, 1, 1, 0.1, "[Id]=@id", [], []);
         var root = new PlanNode("Nested Loops", "Inner Join", null, null, 2, 2, 1, 0.9, "OuterRefs", [], [child]);
         var plan = new DistilledPlan([new PlanStatement("SELECT * FROM dbo.T WHERE Id = 1", root, [])]);
-        var sanitized = Assert.IsType<DistilledPlan>(McpResultSanitizer.Sanitize(plan));
-        Assert.Null(sanitized.Statements[0].StatementText);
-        Assert.Null(sanitized.Statements[0].Root.Predicate);
-        Assert.Null(sanitized.Statements[0].Root.Children[0].Predicate);
-        Assert.Equal("Index Seek", sanitized.Statements[0].Root.Children[0].PhysicalOp);
-        Assert.Equal("dbo.T", sanitized.Statements[0].Root.Children[0].ObjectName);
-        Assert.Null(McpResultSanitizer.Sanitize(null));
+        var stripped = Assert.IsType<DistilledPlan>(McpPlanTextPolicy.Apply(plan, includeText: false));
+        Assert.Null(stripped.Statements[0].StatementText);
+        Assert.Null(stripped.Statements[0].Root.Predicate);
+        Assert.Null(stripped.Statements[0].Root.Children[0].Predicate);
+        Assert.Equal("Index Seek", stripped.Statements[0].Root.Children[0].PhysicalOp);
+        Assert.Equal("dbo.T", stripped.Statements[0].Root.Children[0].ObjectName);
+        Assert.Null(McpPlanTextPolicy.Apply(null, includeText: true));
         var passthrough = new object();
-        Assert.Same(passthrough, McpResultSanitizer.Sanitize(passthrough));
+        Assert.Same(passthrough, McpPlanTextPolicy.Apply(passthrough, includeText: false));
+    }
+
+    [Fact]
+    public void Adapter_does_not_strip_plan_text_that_the_tool_policy_kept()
+    {
+        var node = new PlanNode("Index Seek", "Index Seek", "dbo.T", "IX_T", 1, 1, 1, 0.1, "[Id]=(42)", [], []);
+        var plan = new DistilledPlan([new PlanStatement("SELECT 42", node, [])]);
+        var text = Assert.Single(McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, plan, null), "sqlharness_plan").Content.OfType<TextContentBlock>()).Text;
+        Assert.Contains("[Id]=(42)", text, StringComparison.Ordinal);
+        Assert.Contains("SELECT 42", text, StringComparison.Ordinal);
     }
 
     [Fact]

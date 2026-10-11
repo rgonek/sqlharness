@@ -16,9 +16,27 @@ public sealed record ResultEquivalenceReport(
     bool? Equivalent,
     long? DifferingPositions,
     long? BaselineOnlyCount,
-    long? CandidateOnlyCount);
+    long? CandidateOnlyCount,
+    bool CompareNullability = false,
+    bool? NullabilityEquivalent = null,
+    string? MismatchReason = null);
 
-internal sealed record CanonicalComparisonResult(string SchemaHash, IReadOnlyList<string> OrderedRows);
+/// <summary>Stable values for <see cref="ResultEquivalenceReport.MismatchReason"/>.</summary>
+public static class ResultMismatchReasons
+{
+    /// <summary>Strict nullability mode alone made the result not equivalent: the rows matched.</summary>
+    public const string Nullability = "nullability";
+}
+
+/// <summary>
+/// <see cref="SchemaHash"/> covers result-set ordinal, column ordinal, name and data type (no allowNull) and
+/// is the data-equivalence key. <see cref="NullabilityFingerprint"/> covers ordinals and allowNull only;
+/// null means the evidence is absent, including when the provider reported no nullability for any column.
+/// </summary>
+internal sealed record CanonicalComparisonResult(
+    string SchemaHash,
+    IReadOnlyList<string> OrderedRows,
+    string? NullabilityFingerprint = null);
 
 /// <summary>
 /// Cell-wide budget for stored unique comparison fingerprints (006 resource contract).
@@ -38,9 +56,10 @@ internal static class ResultComparer
         ResultComparisonMode mode,
         IReadOnlyList<CanonicalComparisonResult> baseline,
         IReadOnlyList<CanonicalComparisonResult> candidate,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool compareNullability = false)
     {
-        return Compare(mode, baseline, candidate, ComparisonBudget.DefaultMaxUniqueFingerprints, cancellationToken);
+        return Compare(mode, baseline, candidate, ComparisonBudget.DefaultMaxUniqueFingerprints, cancellationToken, compareNullability);
     }
 
     internal static ResultEquivalenceReport Compare(
@@ -48,13 +67,14 @@ internal static class ResultComparer
         IReadOnlyList<CanonicalComparisonResult> baseline,
         IReadOnlyList<CanonicalComparisonResult> candidate,
         int maxUniqueFingerprints,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool compareNullability = false)
     {
         ArgumentNullException.ThrowIfNull(baseline);
         ArgumentNullException.ThrowIfNull(candidate);
 
         if (mode == ResultComparisonMode.Off)
-            return new ResultEquivalenceReport(ResultComparisonMode.Off, null, null, null, null);
+            return new ResultEquivalenceReport(ResultComparisonMode.Off, null, null, null, null, compareNullability);
 
         if (baseline.Count == 0)
             throw new ArgumentException("At least one baseline measured result is required.", nameof(baseline));
@@ -67,6 +87,10 @@ internal static class ResultComparer
         var candidateReps = new SharedRepresentation[candidate.Count];
         for (var index = 0; index < candidate.Count; index++)
             candidateReps[index] = registry.GetOrAdd(candidate[index]);
+
+        // Nullability is judged on the raw per-run results: deduplicated representations may
+        // share rows while still differing in allowNull metadata.
+        var nullabilityEquivalent = EvaluateNullability(baseline, candidate);
 
         var reference = baselineReps[0];
         var equivalent = true;
@@ -101,12 +125,40 @@ internal static class ResultComparer
             }
         }
 
+        var strictNullabilityFailure = compareNullability && equivalent && nullabilityEquivalent == false;
         return new ResultEquivalenceReport(
             mode,
-            equivalent,
+            equivalent && (!compareNullability || nullabilityEquivalent == true),
             maxDifferingPositions,
             maxBaselineOnly,
-            maxCandidateOnly);
+            maxCandidateOnly,
+            compareNullability,
+            nullabilityEquivalent,
+            strictNullabilityFailure ? ResultMismatchReasons.Nullability : null);
+    }
+
+    private static bool? EvaluateNullability(
+        IReadOnlyList<CanonicalComparisonResult> baseline,
+        IReadOnlyList<CanonicalComparisonResult> candidate)
+    {
+        var reference = baseline[0].NullabilityFingerprint;
+        if (reference is null)
+            return null;
+
+        // A shape/type/name difference makes nullability not comparable, never "different".
+        var referenceSchema = baseline[0].SchemaHash;
+        var allSame = true;
+        foreach (var run in baseline.Concat(candidate))
+        {
+            if (run.NullabilityFingerprint is null)
+                return null;
+            if (!string.Equals(referenceSchema, run.SchemaHash, StringComparison.Ordinal))
+                return null;
+            if (!string.Equals(reference, run.NullabilityFingerprint, StringComparison.Ordinal))
+                allSame = false;
+        }
+
+        return allSame;
     }
 
     private static (long DifferingPositions, long BaselineOnly, long CandidateOnly) CountPair(
@@ -348,12 +400,14 @@ internal sealed class CanonicalComparisonAccumulator : IDisposable
 
     private readonly int _maximumRows;
     private readonly IncrementalHash _schemaHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+    private readonly IncrementalHash _nullabilityHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
     private readonly List<string> _orderedRows = [];
     private int _resultSetOrdinal = -1;
     private int _activeResultSetOrdinal = -1;
     private int _rowCount;
     private bool _inResultSet;
     private bool _completed;
+    private bool _nullabilityUnknown;
 
     public CanonicalComparisonAccumulator()
         : this(MaximumComparedRows)
@@ -366,7 +420,7 @@ internal sealed class CanonicalComparisonAccumulator : IDisposable
         _maximumRows = maximumRows;
     }
 
-    public void BeginResultSet(IReadOnlyList<CanonicalColumn> columns)
+    public void BeginResultSet(IReadOnlyList<CanonicalColumn> columns, bool nullabilityKnown = true)
     {
         EnsureActive();
         if (_inResultSet)
@@ -374,6 +428,10 @@ internal sealed class CanonicalComparisonAccumulator : IDisposable
 
         ArgumentNullException.ThrowIfNull(columns);
         _activeResultSetOrdinal = ++_resultSetOrdinal;
+        // Provider-unknown nullability (coerced to AllowNull = true elsewhere) is not
+        // evidence: the whole result's nullability fingerprint becomes unavailable.
+        if (!nullabilityKnown)
+            _nullabilityUnknown = true;
         AppendSchema(_activeResultSetOrdinal, columns);
         _inResultSet = true;
     }
@@ -412,10 +470,16 @@ internal sealed class CanonicalComparisonAccumulator : IDisposable
 
         _completed = true;
         var schemaHash = Convert.ToHexString(_schemaHash.GetHashAndReset());
-        return new CanonicalComparisonResult(schemaHash, _orderedRows.ToArray());
+        var nullabilityHash = Convert.ToHexString(_nullabilityHash.GetHashAndReset());
+        var nullabilityFingerprint = _nullabilityUnknown ? null : nullabilityHash;
+        return new CanonicalComparisonResult(schemaHash, _orderedRows.ToArray(), nullabilityFingerprint);
     }
 
-    public void Dispose() => _schemaHash.Dispose();
+    public void Dispose()
+    {
+        _schemaHash.Dispose();
+        _nullabilityHash.Dispose();
+    }
 
     private void AppendSchema(int resultSetOrdinal, IReadOnlyList<CanonicalColumn> columns)
     {
@@ -432,7 +496,6 @@ internal sealed class CanonicalComparisonAccumulator : IDisposable
                 writer.WriteNumber("ordinal", column.Ordinal);
                 writer.WriteString("name", column.Name);
                 writer.WriteString("dataType", column.DataType);
-                writer.WriteBoolean("allowNull", column.AllowNull);
                 writer.WriteEndObject();
             }
 
@@ -442,6 +505,30 @@ internal sealed class CanonicalComparisonAccumulator : IDisposable
         }
 
         _schemaHash.AppendData(stream.ToArray());
+
+        // Nullability fingerprint: ordinals and allowNull only, so a name or type
+        // difference can never surface as a nullability difference.
+        using var nullabilityStream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(nullabilityStream, new JsonWriterOptions { Indented = false }))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("resultSet", resultSetOrdinal);
+            writer.WritePropertyName("columns");
+            writer.WriteStartArray();
+            foreach (var column in columns)
+            {
+                writer.WriteStartObject();
+                writer.WriteNumber("ordinal", column.Ordinal);
+                writer.WriteBoolean("allowNull", column.AllowNull);
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+            writer.Flush();
+        }
+
+        _nullabilityHash.AppendData(nullabilityStream.ToArray());
     }
 
     private static string HashRow(int resultSetOrdinal, CanonicalScalarCodec.PreparedScalar[] values)

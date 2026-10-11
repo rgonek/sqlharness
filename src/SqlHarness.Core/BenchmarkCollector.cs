@@ -40,7 +40,9 @@ internal static class BenchmarkCollector
                 .Select(index => new CanonicalColumn(index, reader.GetName(index), reader.GetFieldType(index).FullName ?? reader.GetFieldType(index).Name, reader.GetAllowNull(index)))
                 .ToArray();
             canonical.BeginResultSet(columns);
-            comparison?.BeginResultSet(columns);
+            comparison?.BeginResultSet(
+                columns,
+                nullabilityKnown: Enumerable.Range(0, reader.FieldCount).All(index => reader.GetReportedAllowNull(index) is not null));
             raw.BeginResultSet(columns);
             while (await reader.ReadAsync(ct))
             {

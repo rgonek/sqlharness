@@ -46,6 +46,24 @@ public sealed class ProcessRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_ClosesChildStandardInput()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var runner = new ProcessRunner();
+        var result = await runner.RunAsync(
+            Path.Combine(Environment.SystemDirectory, "cmd.exe"),
+            ["/c", "set /p x= & echo done"],
+            workingDirectory: Environment.SystemDirectory,
+            cancellationToken: timeout.Token);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains("done", result.StandardOutput, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task RunAsync_CancellationTerminatesEntireProcessTree()
     {
         if (!OperatingSystem.IsWindows())
