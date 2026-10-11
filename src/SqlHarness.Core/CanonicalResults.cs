@@ -1,4 +1,3 @@
-using System.Data.SqlTypes;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -39,7 +38,8 @@ internal static class CanonicalScalarCodec
 
     public static PreparedScalar Prepare(object? value) => value switch
     {
-        INullable { IsNull: true } => new PreparedScalar(DBNull.Value, null),
+        SqlHierarchyId { IsNull: true } or SqlGeography { IsNull: true } or SqlGeometry { IsNull: true } =>
+            new PreparedScalar(DBNull.Value, null),
         float number when !float.IsFinite(number) => new PreparedScalar(
             value, NonFiniteText(number), "singleNonFinite"),
         double number when !double.IsFinite(number) => new PreparedScalar(

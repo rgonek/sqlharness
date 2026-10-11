@@ -1,3 +1,4 @@
+using System.Data.SqlTypes;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -167,6 +168,16 @@ public class CanonicalResultsTests
         AssertProviderNull(SqlHierarchyId.Null);
         AssertProviderNull(SqlGeography.Null);
         AssertProviderNull(SqlGeometry.Null);
+    }
+
+    [Fact]
+    public void Unsupported_sql_nullable_null_remains_rejected()
+    {
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            CanonicalScalarCodec.Prepare(SqlXml.Null));
+
+        Assert.Contains(typeof(SqlXml).FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("not supported as a result column", exception.Message, StringComparison.Ordinal);
     }
 
     public static TheoryData<object> NonFiniteFloatingValues =>
