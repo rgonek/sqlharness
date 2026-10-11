@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 
 using SqlHarness.Core;
 
@@ -21,16 +22,16 @@ public sealed class McpInputException(string message) : Exception(message);
 /// once, reads at most the stated bound plus one byte, then re-validates the
 /// on-disk entry before accepting the bytes.
 /// </summary>
-public static class McpInputReader
+public static partial class McpInputReader
 {
     /// <summary>Longest caller-supplied path echoed in a rejection message, in characters.</summary>
-    internal const int MaxEchoedPathCharacters = 200;
+    internal const int MaxEchoedPathCharacters = 120;
 
     /// <summary>Most configured roots listed in an outside-root rejection.</summary>
     internal const int MaxListedRoots = 8;
 
     /// <summary>Largest total root-string length listed in an outside-root rejection.</summary>
-    internal const int MaxListedRootCharacters = 240;
+    internal const int MaxListedRootCharacters = 150;
 
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
@@ -325,9 +326,13 @@ public static class McpInputReader
     }
 
     /// <summary>The caller's own path, credential-filtered, control characters flattened, and bounded.</summary>
+    [GeneratedRegex(@"(//|\\\\)[^/\\@\s]+@", RegexOptions.CultureInvariant)]
+    private static partial Regex UserInfoPattern();
+
     private static string EchoPath(string path)
     {
-        var safe = SecretRedactor.Redact(path, []);
+        // URL/UNC userinfo (user:password@host) is masked first, before redaction and truncation.
+        var safe = SecretRedactor.Redact(UserInfoPattern().Replace(path, "$1[REDACTED]@"), []);
         safe = string.Create(safe.Length, safe, static (span, source) =>
         {
             for (var i = 0; i < span.Length; i++)

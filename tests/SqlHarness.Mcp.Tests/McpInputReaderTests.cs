@@ -257,6 +257,52 @@ public sealed class McpInputReaderTests : IDisposable
         AssertFitsMinimumBudget(outside.Message);
     }
 
+    [Theory]
+    [InlineData("//admin:S3cret@srv/share/q.sql")]
+    [InlineData(@"\admin:S3cret@srv\share\q.sql")]
+    [InlineData("postgres://u:S3cret@h/db")]
+    public async Task Echoed_path_masks_url_and_unc_userinfo(string path)
+    {
+        var exception = await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadSqlAsync(null, path, _scope, CancellationToken.None));
+
+        Assert.DoesNotContain("S3cret", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]@", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Outside_root_message_masks_a_credential_in_the_caller_path()
+    {
+        var path = Path.Combine(_home, "Password=hunter2;outside.sql");
+
+        var exception = await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadSqlAsync(null, path, _scope, CancellationToken.None));
+
+        Assert.Contains("outside every configured input root", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("hunter2", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Worst_case_rejection_messages_stay_within_the_default_cell_limit()
+    {
+        var longPath = Path.Combine(Path.GetPathRoot(_home)!, new string('o', 3000) + ".sql");
+        foreach (var count in new[] { 1, 3, McpInputReader.MaxListedRoots, McpInputReader.MaxListedRoots + 4 })
+        {
+            var roots = Enumerable.Range(0, count)
+                .Select(index => Path.Combine(Path.GetPathRoot(_home)!, new string('r', 17) + index.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+                .ToArray();
+            var exception = await Assert.ThrowsAsync<McpInputException>(
+                () => McpInputReader.ReadTextFileAsync(longPath, roots, McpLimits.MaxSqlBytes, CancellationToken.None));
+            Assert.True(exception.Message.Length <= McpLimits.DefaultMaximumCellCharacters, $"{count} roots: {exception.Message.Length}");
+            Assert.Contains("[truncated,", exception.Message, StringComparison.Ordinal);
+        }
+
+        var tooLongRoots = new[] { Path.Combine(_home, new string('a', 400)) };
+        var single = await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadTextFileAsync(longPath, tooLongRoots, McpLimits.MaxSqlBytes, CancellationToken.None));
+        Assert.True(single.Message.Length <= McpLimits.DefaultMaximumCellCharacters);
+    }
+
     private static void AssertFitsMinimumBudget(string message)
     {
         var result = McpResultAdapter.Adapt(
