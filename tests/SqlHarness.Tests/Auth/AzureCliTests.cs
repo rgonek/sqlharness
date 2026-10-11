@@ -78,12 +78,13 @@ public sealed class AzureCliTests
     public async Task RunJsonAsync_NonWindowsPassesUnsafeArgumentToRunner()
     {
         var runner = new TrackingProcessRunner();
-        var cli = new AzureCli(runner, isWindows: false);
+        var locator = new AzureCliLocator(() => "", () => "/opt/az/bin", path => path == "/opt/az/bin/az");
+        var cli = new AzureCli(runner, isWindows: false, locator, TimeSpan.FromSeconds(1));
 
         await cli.RunJsonAsync(["two words"]);
 
         Assert.Equal(1, runner.InvocationCount);
-        Assert.Equal("az", runner.FileName);
+        Assert.Equal("/opt/az/bin/az", runner.FileName);
         Assert.Equal(["two words", "-o", "json"], runner.Arguments);
     }
 
@@ -102,6 +103,7 @@ public sealed class AzureCliTests
 
         Assert.Equal(@"C:\Windows\System32\cmd.exe", runner.FileName);
         Assert.Equal(systemDirectory, runner.WorkingDirectory);
+        Assert.Equal("1", runner.Environment?["NoDefaultCurrentDirectoryInExePath"]);
     }
 
     [Fact]
@@ -110,7 +112,7 @@ public sealed class AzureCliTests
         var runner = new RecordingProcessRunner(new ProcessResult(0, "{}", ""));
         var locator = new AzureCliLocator(
             () => "",
-            () => string.Join(Path.PathSeparator, "", ".", "relative/bin", "/opt/az/bin", "/usr/bin"),
+            () => string.Join(':', "", ".", "relative/bin", "/opt/az/bin", "/usr/bin"),
             path => path is "/opt/az/bin/az" or "./az");
         var cli = new AzureCli(runner, isWindows: false, locator, TimeSpan.FromSeconds(1));
 
@@ -184,7 +186,8 @@ public sealed class AzureCliTests
             string fileName,
             IEnumerable<string> arguments,
             string? workingDirectory = null,
-            CancellationToken cancellationToken = default) => Task.FromResult(result);
+            CancellationToken cancellationToken = default,
+            IReadOnlyDictionary<string, string>? environment = null) => Task.FromResult(result);
     }
 
     private sealed class TrackingProcessRunner : IProcessRunner
@@ -197,7 +200,8 @@ public sealed class AzureCliTests
             string fileName,
             IEnumerable<string> arguments,
             string? workingDirectory = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            IReadOnlyDictionary<string, string>? environment = null)
         {
             InvocationCount++;
             FileName = fileName;
@@ -211,17 +215,20 @@ public sealed class AzureCliTests
         public int InvocationCount { get; private set; }
         public string? FileName { get; private set; }
         public IReadOnlyList<string>? Arguments { get; private set; }
+        public IReadOnlyDictionary<string, string>? Environment { get; private set; }
         public string? WorkingDirectory { get; private set; }
 
         public Task<ProcessResult> RunAsync(
             string fileName,
             IEnumerable<string> arguments,
             string? workingDirectory = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            IReadOnlyDictionary<string, string>? environment = null)
         {
             InvocationCount++;
             FileName = fileName;
             Arguments = arguments.ToArray();
+            Environment = environment;
             WorkingDirectory = workingDirectory;
             return Task.FromResult(result);
         }
@@ -235,7 +242,8 @@ public sealed class AzureCliTests
             string fileName,
             IEnumerable<string> arguments,
             string? workingDirectory = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            IReadOnlyDictionary<string, string>? environment = null)
         {
             try
             {
