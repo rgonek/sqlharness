@@ -254,9 +254,8 @@ public sealed class SpaceTests
     public async Task Space_success_captures_nonzero_raw_footprint_on_receipt()
     {
         var session = SpaceFixture.Session(objectMatches: 0);
-        var gain = new FakeGain();
 
-        var outcome = await Module(session, gain).ExecuteAsync(
+        var outcome = await Module(session).ExecuteAsync(
             new SqlHarnessSpaceOperation(Target(), 25, null, 30));
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
@@ -271,9 +270,8 @@ public sealed class SpaceTests
     public async Task Space_receipt_completes_with_the_exit_code()
     {
         var session = SpaceFixture.Session(objectMatches: 0);
-        var gain = new FakeGain();
 
-        var outcome = await Module(session, gain).ExecuteAsync(
+        var outcome = await Module(session).ExecuteAsync(
             new SqlHarnessSpaceOperation(Target(), 25, null, 30));
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
@@ -281,8 +279,8 @@ public sealed class SpaceTests
             .CompleteAsync(new OutputFootprint(20, 2)));
     }
 
-    private static SqlHarnessModule Module(FakeSession session, FakeGain? gain = null) =>
-        new(session, gain ?? new FakeGain(), Profiles);
+    private static SqlHarnessModule Module(FakeSession session) =>
+        new(session, Profiles);
 
     private static SqlTargetRequest Target() =>
         new("test", new Dictionary<string, string> { ["tenant"] = ProfileSecret });
@@ -299,11 +297,6 @@ public sealed class SpaceTests
 
     private static SqlException FakeSqlException() =>
         (SqlException)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(SqlException));
-
-    private sealed class FakeGain : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
-    }
 
     private sealed class FakeSession(ISqlReader reader) : ISqlSessionFactory, ISqlSession
     {

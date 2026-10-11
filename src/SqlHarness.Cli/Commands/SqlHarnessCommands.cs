@@ -184,7 +184,7 @@ public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, Out
     /// <summary>
     /// Separate NDJSON output path (watch only): the module streams
     /// started/changed plus exactly one terminal record to the capture writer
-    /// while polling, then the usual begin/complete footprint lets gain count
+    /// while polling, then the usual begin/complete footprint lets the activity journal count
     /// the whole stream. Lives on the base class because derived commands
     /// cannot capture the base primary-constructor parameters directly.
     /// </summary>
@@ -384,13 +384,6 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
         mode = default;
         return false;
     }
-}
-
-public sealed class GainCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer) : SqlHarnessCommand<GainCommand.Settings>(module, output, renderer)
-{
-    public sealed class Settings : CommandSettings { [CommandOption("--json")] public bool Json { get; set; } [CommandOption("--output <MODE>")] public string? Output { get; set; } [CommandOption("--max-output-bytes <BYTES>")][DefaultValue(16384)] public int MaxOutputBytes { get; set; } = 16384; [CommandOption("--max-cell-chars <CHARS>")][DefaultValue(512)] public int MaxCellChars { get; set; } = 512; }
-    protected override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken ct) =>
-        Dispatch(new SqlHarnessGainOperation(), ResolveOutputMode(settings.Json, output: settings.Output), ct, new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
 }
 
 public sealed record CliInput(TextReader Stdin, bool StdinRedirected);

@@ -254,10 +254,9 @@ public class WatchTests
     [Fact]
     public async Task Watch_receipt_sums_raw_footprint_across_polls()
     {
-        var gain = new FakeGainStore();
         var clock = new FakeWatchClock();
         var session = FakeSession.WithScalarPolls(1, 1);
-        var outcome = await Module(session, clock, gain: gain).ExecuteAsync(
+        var outcome = await Module(session, clock).ExecuteAsync(
             Watch(untilUnchanged: 1));
 
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
@@ -271,10 +270,9 @@ public class WatchTests
     [Fact]
     public async Task Watch_max_duration_receipt_keeps_the_controlled_exit_code()
     {
-        var gain = new FakeGainStore();
         var clock = new FakeWatchClock();
         var session = FakeSession.WithScalarPolls(1, 2, 3, 4, 5, 6, 7, 8);
-        var outcome = await Module(session, clock, gain: gain).ExecuteAsync(
+        var outcome = await Module(session, clock).ExecuteAsync(
             Watch(
                 untilUnchanged: 100,
                 interval: TimeSpan.FromSeconds(30),
@@ -408,7 +406,7 @@ public class WatchTests
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var factory = new BlockingConnectFactory(entered);
         using var userCts = new CancellationTokenSource();
-        var module = new SqlHarnessModule(factory, new FakeGainStore(), Profiles, clock);
+        var module = new SqlHarnessModule(factory, Profiles, clock);
 
         var task = module.ExecuteAsync(Watch(untilUnchanged: 100), userCts.Token);
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -530,12 +528,10 @@ public class WatchTests
         FakeSession session,
         IWatchClock clock,
         FakeAzureCli? azure = null,
-        FakeGainStore? gain = null,
         Exception? connectFailure = null,
         Func<IReadOnlyDictionary<string, TargetProfile>>? loadProfiles = null) =>
         new(
             new FakeSessionFactory(session, azure ?? new FakeAzureCli(Token), connectFailure),
-            gain ?? new FakeGainStore(),
             loadProfiles ?? Profiles,
             clock);
 
@@ -636,11 +632,6 @@ public class WatchTests
             using var document = JsonDocument.Parse(JsonSerializer.Serialize(new { accessToken = token }));
             return Task.FromResult(document.RootElement.Clone());
         }
-    }
-
-    private sealed class FakeGainStore : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 
     private sealed class FakeSessionFactory(

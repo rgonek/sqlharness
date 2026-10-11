@@ -472,7 +472,7 @@ public sealed class JournalingModuleTests
     }
 
     [Fact]
-    public async Task Gain_write_failure_never_changes_the_exit_code()
+    public async Task Emission_write_failure_never_changes_the_exit_code()
     {
         var receipt = new SqlHarnessEmissionReceipt((_, _) => Task.FromResult(SqlHarnessExitCode.Success));
         var journal = new ThrowingEmissionJournal();

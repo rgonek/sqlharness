@@ -63,7 +63,6 @@ public static class SqlHarnessCli
             c.AddCommand<QueryCommand>("query").WithDescription("Run a bounded SQL query passing the static visible-effects check.");
             c.AddCommand<MeasureCommand>("measure").WithDescription("Measure query performance across repeated runs.");
             c.AddCommand<CompareCommand>("compare").WithDescription("Compare baseline and candidate performance and results.");
-            c.AddCommand<GainCommand>("gain").WithDescription("Report local output savings estimates.");
             c.AddCommand<PlanCommand>("plan").WithDescription("Distill a saved execution plan offline.");
             c.AddCommand<ArtifactCommand>("artifact").WithDescription("Read safe sections of a saved benchmark artifact.");
             c.AddCommand<SchemaCommand>("schema").WithDescription("Inspect database tables, columns, and relations.");

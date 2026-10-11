@@ -17,7 +17,7 @@ public sealed class PostgresQueryTests
             SELECT id FROM t;
             """;
         var session = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["id"], [1]));
-        var module = new SqlHarnessModule(session, new FakeGain(), Profiles);
+        var module = new SqlHarnessModule(session, Profiles);
 
         var outcome = await module.ExecuteAsync(new SqlHarnessQueryOperation(
             new SqlTargetRequest("local-pg", new Dictionary<string, string>()),
@@ -41,7 +41,7 @@ public sealed class PostgresQueryTests
     public async Task Postgres_truncate_of_a_proven_temp_runs_unchanged_without_mutation_approval(string sql)
     {
         var session = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["id"]));
-        var module = new SqlHarnessModule(session, new FakeGain(), Profiles);
+        var module = new SqlHarnessModule(session, Profiles);
 
         var outcome = await module.ExecuteAsync(Query(sql));
 
@@ -61,7 +61,7 @@ public sealed class PostgresQueryTests
     public async Task Postgres_truncate_of_an_unproven_target_is_rejected_before_connect(string sql, string reason)
     {
         var session = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["id"]));
-        var module = new SqlHarnessModule(session, new FakeGain(), Profiles);
+        var module = new SqlHarnessModule(session, Profiles);
 
         // Mutation approval does not unlock a persistent TRUNCATE either.
         foreach (var approve in new[] { false, true })
@@ -85,7 +85,7 @@ public sealed class PostgresQueryTests
         // 011/final (M9) end to end: exit code 2 and the reason are unchanged.
         const string sql = "CREATE TEMP TABLE scratch_rows (id int) ON COMMIT DROP; INSERT INTO scratch_rows VALUES (1)";
         var session = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["id"]));
-        var module = new SqlHarnessModule(session, new FakeGain(), Profiles);
+        var module = new SqlHarnessModule(session, Profiles);
 
         var outcome = await module.ExecuteAsync(Query(sql));
 
@@ -111,11 +111,6 @@ public sealed class PostgresQueryTests
                 TrustServerCertificate: true,
                 Engine: "postgres"),
         };
-
-    private sealed class FakeGain : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
-    }
 
     private sealed class FakeSession : ISqlSessionFactory, ISqlSession
     {

@@ -132,9 +132,9 @@ public sealed class McpCancellationTests
         using var cts = new CancellationTokenSource(Budget);
         var handlers = new McpToolHandlers(TestScope(), new FailingAfterCancelModule(cts), new McpExecutionGate());
 
-        var result = await handlers.GainAsync(null!, cts.Token);
+        var result = await handlers.PlanAsync(null!, "<ShowPlanXML/>", ct: cts.Token);
 
-        AssertCancelled(result, "sqlharness_gain");
+        AssertCancelled(result, "sqlharness_plan");
     }
 
     [Fact]
@@ -177,7 +177,7 @@ public sealed class McpCancellationTests
             });
         var sessions = new CoreSessionFactory(blockFirstSession: true);
         var handlers = new McpRequestToolHandlers(process, moduleFactory: scope =>
-            new SqlHarnessModule(sessions, new JournalGainStore(SqlHarnessPaths.ActivityDatabase, () => false), scope.ProfileProvider));
+            new SqlHarnessModule(sessions, scope.ProfileProvider));
         using var cancelA = new CancellationTokenSource(Budget);
 
         var a = handlers.QueryAsync(null!, new McpRequestScopeArgument("scope-a", new() { ["tenant"] = "a" }), "SELECT 1", ct: cancelA.Token);
@@ -211,7 +211,7 @@ public sealed class McpCancellationTests
             });
         var sessions = new CoreSessionFactory(blockFirstSession: true);
         var handlers = new McpRequestToolHandlers(process, moduleFactory: scope =>
-            new SqlHarnessModule(sessions, new JournalGainStore(SqlHarnessPaths.ActivityDatabase, () => false), scope.ProfileProvider));
+            new SqlHarnessModule(sessions, scope.ProfileProvider));
         using var guard = new CancellationTokenSource(Budget);
 
         var result = await handlers.QueryAsync(

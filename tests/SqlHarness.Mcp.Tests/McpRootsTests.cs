@@ -17,6 +17,9 @@ namespace SqlHarness.Mcp.Tests;
 [Collection("McpScopeHome")]
 public sealed class McpRootsTests : IDisposable
 {
+    private static readonly string PlanXml = File.ReadAllText(McpStdioProcessHarness.FindRepositoryFile(
+        "tests", "SqlHarness.Tests", "Fixtures", "distiller-sample.sqlplan"));
+
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
     private readonly string? _savedHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
     private readonly string _home = Path.Combine(Path.GetTempPath(), "sqlharness-mcp-roots-" + Guid.NewGuid().ToString("N"));
@@ -198,14 +201,14 @@ public sealed class McpRootsTests : IDisposable
         return value is DBNull or null ? null : (string)value;
     }
 
-    /// <summary>Calls gain until the session row carries the expected roots (the fetch is asynchronous).</summary>
+    /// <summary>Calls plan until the session row carries the expected roots (the fetch is asynchronous).</summary>
     private async Task<string?> CallUntilRoots(McpClient client, string? expected, CancellationToken ct)
     {
         var deadline = DateTime.UtcNow + Budget;
         string? seen;
         do
         {
-            await client.CallToolAsync("sqlharness_gain", new Dictionary<string, object?>(), cancellationToken: ct);
+            await client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = PlanXml }, cancellationToken: ct);
             seen = RootsJson();
             if (seen == expected)
                 return seen;
@@ -276,10 +279,10 @@ public sealed class McpRootsTests : IDisposable
             null,
             async (client, ct) =>
             {
-                await client.CallToolAsync("sqlharness_gain", new Dictionary<string, object?>(), cancellationToken: ct);
+                await client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = PlanXml }, cancellationToken: ct);
                 await client.SendNotificationAsync(NotificationMethods.RootsListChangedNotification, ct);
                 await Task.Delay(200, ct);
-                await client.CallToolAsync("sqlharness_gain", new Dictionary<string, object?>(), cancellationToken: ct);
+                await client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = PlanXml }, cancellationToken: ct);
             },
             log);
 
@@ -331,9 +334,9 @@ public sealed class McpRootsTests : IDisposable
             async (client, ct) =>
             {
                 Assert.Equal("2026-07-28", client.NegotiatedProtocolVersion);
-                await client.CallToolAsync("sqlharness_gain", new Dictionary<string, object?>(), cancellationToken: ct);
+                await client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = PlanXml }, cancellationToken: ct);
                 await Task.Delay(200, ct);
-                await client.CallToolAsync("sqlharness_gain", new Dictionary<string, object?>(), cancellationToken: ct);
+                await client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = PlanXml }, cancellationToken: ct);
             },
             new StringWriter(),
             revision: "2026-07-28");

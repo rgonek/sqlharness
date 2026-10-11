@@ -251,10 +251,9 @@ public class SnapshotTests
     [Fact]
     public async Task Snapshot_receipt_carries_a_nonzero_raw_footprint()
     {
-        var gain = new FakeGainStore();
         var store = new FakeSnapshotStore();
         var session = FakeSession.WithRows(1);
-        var outcome = await Module(session, store, gain: gain).ExecuteAsync(Snapshot());
+        var outcome = await Module(session, store).ExecuteAsync(Snapshot());
 
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
             .CompleteAsync(new OutputFootprint(10, 1));
@@ -266,9 +265,8 @@ public class SnapshotTests
     [Fact]
     public async Task Snapshot_diff_differences_receipt_keeps_the_controlled_exit_code()
     {
-        var gain = new FakeGainStore();
         var store = new FakeSnapshotStore(SnapshotFixture.Document(rows: [[1]]));
-        var outcome = await Module(FakeSession.WithRows(2), store, gain: gain)
+        var outcome = await Module(FakeSession.WithRows(2), store)
             .ExecuteAsync(Snapshot(diff: true));
 
         Assert.Equal(SqlHarnessExitCode.SnapshotDifferences, outcome.ExitCode);
@@ -349,12 +347,10 @@ public class SnapshotTests
         FakeSession session,
         ISnapshotStore store,
         FakeAzureCli? azure = null,
-        FakeGainStore? gain = null,
         Exception? connectFailure = null,
         Func<IReadOnlyDictionary<string, TargetProfile>>? loadProfiles = null) =>
         new(
             new FakeSessionFactory(session, azure ?? new FakeAzureCli(Token), connectFailure),
-            gain ?? new FakeGainStore(),
             loadProfiles ?? Profiles,
             watchClock: null,
             snapshotStore: store);
@@ -401,11 +397,6 @@ public class SnapshotTests
             using var document = JsonDocument.Parse(JsonSerializer.Serialize(new { accessToken = token }));
             return Task.FromResult(document.RootElement.Clone());
         }
-    }
-
-    private sealed class FakeGainStore : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 
     private sealed class FakeSessionFactory(

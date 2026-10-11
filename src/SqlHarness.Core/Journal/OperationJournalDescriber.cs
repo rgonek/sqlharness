@@ -25,7 +25,6 @@ internal static class OperationJournalDescriber
         SqlHarnessQueryStoreTopOperation qstop => Start("qstop", qstop.Target, false, null, null),
         SqlHarnessIndexesOperation indexes => Start("indexes", indexes.Target, false, null, null),
         SqlHarnessPlanOperation => TargetFree("plan"),
-        SqlHarnessGainOperation => TargetFree("gain"),
         _ => TargetFree(FallbackName(operation)),
     };
 

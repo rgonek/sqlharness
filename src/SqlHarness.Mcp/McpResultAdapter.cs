@@ -226,8 +226,8 @@ public static class McpResultAdapter
     }
 
     /// <summary>
-    /// Emitted footprint of a result for gain accounting: measured wire bytes
-    /// and line count. Gain token math reuses the Core estimator
+    /// Emitted footprint of a result for activity-journal accounting: measured wire bytes
+    /// and line count. Journal token math reuses the Core estimator
     /// (<see cref="OutputFootprint.EstimateTokens"/>).
     /// </summary>
     public static OutputFootprint EmittedFootprint(CallToolResult result)

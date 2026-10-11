@@ -383,10 +383,6 @@ public sealed class CommandTests
             Assert.Equal(0, await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(["compare", "dev", "--baseline", query, "--candidate", candidate]));
             var compare = Assert.IsType<SqlHarnessCompareOperation>(module.Operations[^1]);
             Assert.Equal(ResultComparisonMode.Ordered, compare.CompareResults);
-
-            module.Outcome = Success(GainReport());
-            Assert.Equal(0, await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(["gain", "--json"]));
-            Assert.IsType<SqlHarnessGainOperation>(module.Operations[^1]);
         }
         finally { File.Delete(query); File.Delete(candidate); }
     }
@@ -1651,7 +1647,6 @@ public sealed class CommandTests
         };
         return new CompareMatrixCellReport(index, value, compare);
     }
-    private static SqlHarnessGainReport GainReport() { var s = new SqlHarnessGainSummary(0, 0, 0, 0, 0, 0, 0, 0, 0, 0); return new(s, s, s); }
     private static SqlHarnessWatchReport WatchReport(WatchExitReason reason = WatchExitReason.ConditionMet) =>
         new(new("s", "d", "s", "d", "profile"), 1, 0, reason, []);
     private static SqlHarnessSnapshotReport SnapshotReport(SnapshotVerdict verdict = SnapshotVerdict.Stored) =>

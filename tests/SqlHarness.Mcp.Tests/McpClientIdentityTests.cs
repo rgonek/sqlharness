@@ -17,6 +17,9 @@ namespace SqlHarness.Mcp.Tests;
 [Collection("McpScopeHome")]
 public sealed class McpClientIdentityTests : IDisposable
 {
+    private static readonly string PlanXml = File.ReadAllText(McpStdioProcessHarness.FindRepositoryFile(
+        "tests", "SqlHarness.Tests", "Fixtures", "distiller-sample.sqlplan"));
+
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
     private readonly string? _savedHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
     private readonly string _home = Path.Combine(Path.GetTempPath(), "sqlharness-mcp-identity-" + Guid.NewGuid().ToString("N"));
@@ -93,7 +96,7 @@ public sealed class McpClientIdentityTests : IDisposable
             NullLoggerFactory.Instance, cts.Token))
         {
             Assert.Equal(revision, client.NegotiatedProtocolVersion);
-            var result = await client.CallToolAsync("sqlharness_gain", new Dictionary<string, object?>(), cancellationToken: cts.Token);
+            var result = await client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = PlanXml }, cancellationToken: cts.Token);
             Assert.NotEqual(true, result.IsError);
         }
 
@@ -144,9 +147,9 @@ public sealed class McpClientIdentityTests : IDisposable
             new McpClientOptions { ClientInfo = new Implementation { Name = "claude-code", Version = "9.9.9", Title = "Claude Code" }, ProtocolVersion = "2026-07-28" },
             NullLoggerFactory.Instance, cts.Token))
         {
-            var first = await client.CallToolAsync("sqlharness_gain", new Dictionary<string, object?>(), cancellationToken: cts.Token);
+            var first = await client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = PlanXml }, cancellationToken: cts.Token);
             Assert.NotEqual(true, first.IsError);
-            var second = await client.CallToolAsync("sqlharness_gain", new Dictionary<string, object?>(), cancellationToken: cts.Token);
+            var second = await client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = PlanXml }, cancellationToken: cts.Token);
             Assert.NotEqual(true, second.IsError);
         }
 

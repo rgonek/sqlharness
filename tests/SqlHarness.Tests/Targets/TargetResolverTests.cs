@@ -386,7 +386,7 @@ public sealed class TargetResolverTests
     {
         const string secret = "engine-secret-never-emit";
         var factory = new CountingSessionFactory();
-        var module = new SqlHarnessModule(factory, new UnusedGainStore(), () => Profiles);
+        var module = new SqlHarnessModule(factory, () => Profiles);
         var request = new SqlTargetRequest(
             "prod-eu",
             new Dictionary<string, string> { ["tenant"] = "acme", ["env"] = "uat" },
@@ -619,11 +619,6 @@ public sealed class TargetResolverTests
             Connects++;
             throw new InvalidOperationException("ConnectAsync must not run.");
         }
-    }
-
-    private sealed class UnusedGainStore : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 
     private static void AssertSafety(

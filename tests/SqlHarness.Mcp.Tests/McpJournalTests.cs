@@ -15,6 +15,9 @@ namespace SqlHarness.Mcp.Tests;
 [Collection("McpScopeHome")]
 public sealed class McpJournalTests : IDisposable
 {
+    private static readonly string PlanXml = File.ReadAllText(McpStdioProcessHarness.FindRepositoryFile(
+        "tests", "SqlHarness.Tests", "Fixtures", "distiller-sample.sqlplan"));
+
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
     private readonly string? _savedHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
     private readonly string _home = Path.Combine(Path.GetTempPath(), "sqlharness-mcp-journal-" + Guid.NewGuid().ToString("N"));
@@ -60,7 +63,7 @@ public sealed class McpJournalTests : IDisposable
             var meta = System.Text.Json.Nodes.JsonNode.Parse("""
                 {"callId":"exec-9","x-codex-turn-metadata":{"model":"gpt-6-sol","reasoning_effort":"high","turn_id":"turn-9"}}
                 """)!.AsObject();
-            await client.CallToolAsync("sqlharness_gain", new Dictionary<string, object?>(),
+            await client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = PlanXml },
                 options: new ModelContextProtocol.RequestOptions { Meta = meta }, cancellationToken: cts.Token);
         }
 
@@ -104,7 +107,7 @@ public sealed class McpJournalTests : IDisposable
             NullLoggerFactory.Instance,
             cts.Token))
         {
-            var result = await client.CallToolAsync("sqlharness_gain", new Dictionary<string, object?>(), cancellationToken: cts.Token);
+            var result = await client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = PlanXml }, cancellationToken: cts.Token);
             Assert.NotEqual(true, result.IsError);
         }
 
@@ -128,7 +131,7 @@ public sealed class McpJournalTests : IDisposable
         Assert.Equal("9.9.9", reader.GetString(4));
         Assert.Equal(mode, reader.GetString(5));
         Assert.StartsWith("mcp:", reader.GetString(6));
-        Assert.Equal("gain", reader.GetString(7));
+        Assert.Equal("plan", reader.GetString(7));
         Assert.Equal("succeeded", reader.GetString(8));
         Assert.Equal("Claude Code", reader.GetString(9));
         Assert.False(reader.Read());

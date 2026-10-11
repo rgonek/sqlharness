@@ -186,9 +186,8 @@ public sealed class PingTests
     public async Task Ping_receipt_completes_with_the_exit_code()
     {
         var session = new FakeSession(Row(1, "db", "server", "login"));
-        var gain = new FakeGain();
 
-        var outcome = await Module(session, gain).ExecuteAsync(new SqlHarnessPingOperation(Target(), 5));
+        var outcome = await Module(session).ExecuteAsync(new SqlHarnessPingOperation(Target(), 5));
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
         Assert.Equal(SqlHarnessExitCode.Success, await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
@@ -197,9 +196,8 @@ public sealed class PingTests
 
     private static SqlHarnessModule Module(
         FakeSession session,
-        FakeGain? gain = null,
         Func<IReadOnlyDictionary<string, TargetProfile>>? profiles = null) =>
-        new(session, gain ?? new FakeGain(), profiles ?? Profiles);
+        new(session, profiles ?? Profiles);
 
     private static FakeReader Row(int ok, string database, string server, string login) =>
         new(Set(["Ok", "Db", "Server", "Login"], [ok, database, server, login]));
@@ -235,11 +233,6 @@ public sealed class PingTests
 
     private static SqlException FakeSqlException() =>
         (SqlException)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(SqlException));
-
-    private sealed class FakeGain : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
-    }
 
     private sealed class FakeSession(ISqlReader reader) : ISqlSessionFactory, ISqlSession
     {

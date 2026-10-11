@@ -14,7 +14,7 @@ namespace SqlHarness.Dashboard;
 /// unpooled read-only connection; a missing database reads as empty. Running
 /// rows are reported as <c>abandoned</c> when their host process is gone.
 /// </summary>
-public sealed class JournalReader(string databasePath, IProcessInfo processes)
+public sealed class JournalReader(string databasePath, IProcessInfo processes, Func<ModelPriceTable>? prices = null)
 {
     public const int DefaultLimit = 50;
     public const int MaximumLimit = 200;
@@ -293,7 +293,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         if (connection is null)
             return new DashboardStats([], [], [], [], [], [], [], [], [], new TokenStat(0, 0), 0, 0, [],
                 new ProfileDimensionStats(query.Profile,
-                    query.Profile is not null && profileDimensions?.ContainsKey(query.Profile) == true, 0, [], [], 0));
+                    query.Profile is not null && profileDimensions?.ContainsKey(query.Profile) == true, 0, [], [], 0),
+                new SavingsStat(ModelPrices.Embedded.Source, ModelPrices.Embedded.FetchedAt, 0, [], 0, 0));
         (string, object?)[] window = [("$from", Iso(query.From)), ("$to", Iso(query.To))];
         const string inWindow = "($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to)";
 
@@ -412,7 +413,54 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             (int)spills,
             (int)cold,
             profileOperations,
-            dimensionStats);
+            dimensionStats,
+            Savings(connection, window));
+    }
+
+    private SavingsStat Savings(SqliteConnection connection, (string, object?)[] window)
+    {
+        ModelPriceTable table;
+        try
+        {
+            table = prices?.Invoke() ?? ModelPrices.Embedded;
+        }
+        catch
+        {
+            table = ModelPrices.Embedded;
+        }
+
+        var groups = Query(connection, $"""
+            SELECT s.agent_kind, o.agent_model, COUNT(*), SUM(o.raw_tokens - o.emitted_tokens)
+            FROM operations o JOIN sessions s ON s.id = o.session_id
+            WHERE ($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to)
+              AND o.raw_tokens IS NOT NULL AND o.emitted_tokens IS NOT NULL
+            GROUP BY s.agent_kind, o.agent_model;
+            """, window, r => (Kind: r.GetString(0), Model: NullableString(r, 1), Count: r.GetInt32(2), Saved: r.GetInt64(3)));
+        var byModel = new Dictionary<(string, string), (int Ops, long Saved, decimal Usd)>();
+        int withoutModel = 0, unpriced = 0;
+        foreach (var g in groups)
+        {
+            if (string.IsNullOrWhiteSpace(g.Model))
+            {
+                withoutModel += g.Count;
+                continue;
+            }
+
+            if (table.Find(g.Kind, g.Model) is not { } price)
+            {
+                unpriced += g.Count;
+                continue;
+            }
+
+            var key = (price.Provider, price.Model);
+            var current = byModel.GetValueOrDefault(key);
+            byModel[key] = (current.Ops + g.Count, current.Saved + g.Saved, current.Usd + g.Saved * price.InputPerMillion / 1_000_000m);
+        }
+
+        return new SavingsStat(table.Source, table.FetchedAt, byModel.Values.Sum(v => v.Usd),
+            byModel.Select(p => new ModelSaving(p.Key.Item1, p.Key.Item2, p.Value.Ops, p.Value.Saved, p.Value.Usd))
+                .OrderByDescending(m => m.Usd).ThenBy(m => m.Model, StringComparer.Ordinal).ToArray(),
+            withoutModel, unpriced);
     }
 
     private static ProfileDimensionStats AggregateProfileDimensions(

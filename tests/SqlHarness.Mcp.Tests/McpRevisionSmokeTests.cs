@@ -23,6 +23,9 @@ namespace SqlHarness.Mcp.Tests;
 [Collection("McpScopeHome")]
 public sealed class McpRevisionSmokeTests : IDisposable
 {
+    private static readonly string PlanXml = File.ReadAllText(McpStdioProcessHarness.FindRepositoryFile(
+        "tests", "SqlHarness.Tests", "Fixtures", "distiller-sample.sqlplan"));
+
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(30);
     private readonly string? _savedHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
     private readonly string _home = Path.Combine(Path.GetTempPath(), "sqlharness-mcp-smoke-" + Guid.NewGuid().ToString("N"));
@@ -169,8 +172,8 @@ public sealed class McpRevisionSmokeTests : IDisposable
         var tools = await client.ListToolsAsync(cancellationToken: ct);
         Assert.Equal(McpToolCatalog.ToolNames.OrderBy(n => n, StringComparer.Ordinal), tools.Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal));
 
-        var gain = await client.CallToolAsync("sqlharness_gain", new Dictionary<string, object?>(), cancellationToken: ct);
-        Assert.NotEqual(true, gain.IsError);
+        var plan = await client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = PlanXml }, cancellationToken: ct);
+        Assert.NotEqual(true, plan.IsError);
     });
 
     [Theory]

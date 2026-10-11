@@ -673,7 +673,7 @@ public class CompareMatrixTests
         ICompareArtifactWriter artifacts,
         Func<IReadOnlyDictionary<string, TargetProfile>>? profiles = null,
         int? comparisonMaximumRows = null) =>
-        new(sessions, new FakeGainStore(), artifacts, profiles ?? SqlProfiles)
+        new(sessions, artifacts, profiles ?? SqlProfiles)
         {
             ComparisonMaximumRows = comparisonMaximumRows ?? CanonicalComparisonAccumulator.MaximumComparedRows,
         };
@@ -720,11 +720,6 @@ public class CompareMatrixTests
 
     private static bool IsStatistics(string sql) =>
         sql.Contains("STATISTICS", StringComparison.Ordinal);
-
-    private sealed class FakeGainStore : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
-    }
 
     private sealed class DirectoryArtifactWriter : ICompareArtifactWriter, IDisposable
     {

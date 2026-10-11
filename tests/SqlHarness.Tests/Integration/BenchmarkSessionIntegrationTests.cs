@@ -31,7 +31,6 @@ public sealed class BenchmarkSessionIntegrationTests
 
         var module = new SqlHarnessModule(
             factory,
-            new NullGainStore(),
             new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UtcNow),
             () => profiles);
 
@@ -79,7 +78,6 @@ public sealed class BenchmarkSessionIntegrationTests
 
         var module = new SqlHarnessModule(
             factory,
-            new NullGainStore(),
             new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UtcNow),
             () => profiles);
 
@@ -134,7 +132,6 @@ public sealed class BenchmarkSessionIntegrationTests
 
         var module = new SqlHarnessModule(
             factory,
-            new NullGainStore(),
             new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UtcNow),
             () => profiles);
 
@@ -181,7 +178,6 @@ public sealed class BenchmarkSessionIntegrationTests
 
         var module = new SqlHarnessModule(
             factory,
-            new NullGainStore(),
             new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UtcNow),
             () => profiles);
 
@@ -229,7 +225,6 @@ public sealed class BenchmarkSessionIntegrationTests
 
         var module = new SqlHarnessModule(
             factory,
-            new NullGainStore(),
             new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UtcNow),
             () => profiles);
 
@@ -272,7 +267,6 @@ public sealed class BenchmarkSessionIntegrationTests
 
         var module = new SqlHarnessModule(
             factory,
-            new NullGainStore(),
             new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UtcNow),
             () => profiles);
 
@@ -325,7 +319,6 @@ public sealed class BenchmarkSessionIntegrationTests
 
         var module = new SqlHarnessModule(
             factory,
-            new NullGainStore(),
             new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UtcNow),
             () => profiles);
 
@@ -492,11 +485,6 @@ public sealed class BenchmarkSessionIntegrationTests
                 await inner.DisposeAsync();
             }
         }
-    }
-
-    private sealed class NullGainStore : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 
     private sealed class TempDirectory : IDisposable

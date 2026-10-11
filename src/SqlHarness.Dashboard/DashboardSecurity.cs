@@ -8,8 +8,8 @@ using Microsoft.AspNetCore.Http.Extensions;
 namespace SqlHarness.Dashboard;
 
 /// <summary>
-/// Loopback dashboard protection: exact Host allowlist (DNS rebinding), GET-only except one guarded PUT on /api/settings,
-/// one-time ?t= token exchange into an HttpOnly SameSite=Strict cookie, and
+/// Loopback dashboard protection: exact Host allowlist (DNS rebinding), GET-only except two guarded writes (PUT /api/settings, POST /api/prices/refresh),
+/// persistent ?t= token exchanged into a long-lived HttpOnly SameSite=Strict cookie through a same-origin hand-off page, and
 /// cookie authentication on every other request. Tokens are compared in constant time.
 /// </summary>
 internal static class DashboardSecurity
@@ -17,6 +17,8 @@ internal static class DashboardSecurity
     internal const string CookieName = "sqlharness_dashboard";
     internal const string WriteHeader = "X-SqlHarness-Dashboard";
     internal const string SettingsPath = "/api/settings";
+    internal const string PricesRefreshPath = "/api/prices/refresh";
+    internal static readonly TimeSpan CookieMaxAge = TimeSpan.FromDays(400);
     private const string TokenQuery = "t";
 
     internal static string NewToken() =>
@@ -72,16 +74,19 @@ internal static class DashboardSecurity
         var isRead = HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method);
         var isSettingsWrite = HttpMethods.IsPut(context.Request.Method)
             && string.Equals(context.Request.Path.Value, SettingsPath, StringComparison.Ordinal);
-        if (!isRead && !isSettingsWrite)
+        var isPricesRefresh = HttpMethods.IsPost(context.Request.Method)
+            && string.Equals(context.Request.Path.Value, PricesRefreshPath, StringComparison.Ordinal);
+        var isWrite = isSettingsWrite || isPricesRefresh;
+        if (!isRead && !isWrite)
         {
             context.Response.Headers.Allow = "GET, HEAD";
             await Reject(context, StatusCodes.Status405MethodNotAllowed, "Method not allowed.");
             return;
         }
 
-        // The one write: a cross-site form cannot set the custom header, a cross-site fetch with it
+        // The guarded writes: a cross-site form cannot set the custom header, a cross-site fetch with it
         // needs a CORS preflight the dashboard never answers, and a foreign Origin is refused outright.
-        if (isSettingsWrite && !IsTrustedWrite(context.Request, allowedPort))
+        if (isWrite && !IsTrustedWrite(context.Request, allowedPort))
         {
             await Reject(context, StatusCodes.Status403Forbidden, "Forbidden.");
             return;
@@ -102,13 +107,24 @@ internal static class DashboardSecurity
                 Secure = false,
                 Path = "/",
                 IsEssential = true,
+                MaxAge = CookieMaxAge,
             });
             var query = new QueryBuilder(context.Request.Query
                 .Where(pair => !string.Equals(pair.Key, TokenQuery, StringComparison.OrdinalIgnoreCase))
                 .SelectMany(pair => pair.Value.Select(value => new KeyValuePair<string, string>(pair.Key, value ?? string.Empty))));
             // Collapse leading slashes and backslashes so "//host/x" cannot become a protocol-relative redirect.
             var path = "/" + (context.Request.PathBase + context.Request.Path).Value?.TrimStart('/', '\\');
-            context.Response.Redirect(new PathString(path).ToUriComponent() + query.ToQueryString());
+            var target = new PathString(path).ToUriComponent() + query.ToQueryString();
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            context.Response.ContentType = "text/html; charset=utf-8";
+            var encoded = WebUtility.HtmlEncode(target);
+            // A same-origin navigation from this page sends the Strict cookie; a redirect would
+            // continue the cross-site navigation that started on the file:// launch page.
+            await context.Response.WriteAsync($"""
+                <!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer">
+                <meta http-equiv="refresh" content="0;url={encoded}"><title>SQLHarness dashboard</title></head>
+                <body><p><a href="{encoded}">Open the SQLHarness dashboard</a></p></body></html>
+                """);
             return;
         }
 

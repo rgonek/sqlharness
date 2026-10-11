@@ -151,7 +151,7 @@ public sealed class McpRequestScopeIsolationTests : IDisposable
                 },
                 () => Profiles);
             var handlers = new McpRequestToolHandlers(process, moduleFactory: scope =>
-                new SqlHarnessModule(new EmptySessionFactory(), new JournalGainStore(SqlHarnessPaths.ActivityDatabase, () => false), scope.ProfileProvider));
+                new SqlHarnessModule(new EmptySessionFactory(), scope.ProfileProvider));
 
             var matrix = await handlers.CompareAsync(
                 null!, new McpSqlSourceArgument { Sql = "SELECT @n" }, new McpSqlSourceArgument { Sql = "SELECT @n" },

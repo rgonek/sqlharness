@@ -93,8 +93,7 @@ public sealed class SchemaTests
     public async Task Batch_is_fixed_read_only_rowwise_and_all_inputs_are_bound()
     {
         var session = new FakeSession(Reader(0, []));
-        var gain = new FakeGain();
-        var outcome = await new SqlHarnessModule(session, gain, Profiles)
+        var outcome = await new SqlHarnessModule(session, Profiles)
             .ExecuteAsync(new SqlHarnessSchemaOperation(Target(), "%secret%", 30, 75));
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
         var command = Assert.Single(session.Commands);
@@ -260,18 +259,18 @@ public sealed class SchemaTests
     public async Task Schema_preserves_target_mismatch_mapping_without_executing_batch()
     {
         var session = new FakeSession(Reader(0, [])) { ConnectFailure = new SqlTargetMismatchException("mismatch") };
-        var outcome = await new SqlHarnessModule(session, new FakeGain(), Profiles)
+        var outcome = await new SqlHarnessModule(session, Profiles)
             .ExecuteAsync(new SqlHarnessSchemaOperation(Target(), null, 30, 50));
         Assert.Equal(SqlHarnessExitCode.TargetMismatch, outcome.ExitCode);
         Assert.Empty(session.Commands);
     }
 
     private static SqlHarnessModule Module(FakeSession session) =>
-        new(session, new FakeGain(), Profiles);
+        new(session, Profiles);
 
     private static async Task<SqlHarnessSchemaReport> Execute(FakeReader reader, int max = 50)
     {
-        var outcome = await new SqlHarnessModule(new FakeSession(reader), new FakeGain(), Profiles)
+        var outcome = await new SqlHarnessModule(new FakeSession(reader), Profiles)
             .ExecuteAsync(new SqlHarnessSchemaOperation(Target(), null, 30, max));
         return Assert.IsType<SqlHarnessSchemaReport>(outcome.Report);
     }
@@ -290,10 +289,6 @@ public sealed class SchemaTests
     private static object?[][] Set(string[] names, params object?[][] rows) => [[.. names], .. rows];
     private static SqlTargetRequest Target() => new("test", new Dictionary<string, string>());
     private static IReadOnlyDictionary<string, TargetProfile> Profiles() => new Dictionary<string, TargetProfile> { ["test"] = new("server", "db", new Dictionary<string, string>(), "integrated") };
-    private sealed class FakeGain : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
-    }
     private sealed class FakeSession(FakeReader reader) : ISqlSessionFactory, ISqlSession
     {
         public Exception? ConnectFailure { get; init; }

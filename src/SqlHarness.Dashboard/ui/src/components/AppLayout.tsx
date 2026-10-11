@@ -1,6 +1,7 @@
 import { Link, Outlet, useRouterState } from "@tanstack/react-router"
 import { buttonVariants } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { ConnectionBanner } from "@/components/ConnectionBanner"
 import { ThemeMenu } from "@/components/ThemeMenu"
 
 const links = [
@@ -16,6 +17,7 @@ export function AppLayout() {
   const pathname = useRouterState({ select: state => state.location.pathname })
   return (
     <div className="min-h-screen">
+      <ConnectionBanner />
       <header className="mx-auto flex max-w-7xl items-center gap-4 p-4">
         <span>SQLHarness</span>
         <nav className="flex gap-1">

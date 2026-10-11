@@ -205,7 +205,7 @@ public sealed class CountsTests
     {
         var session = FakeSession.ForCatalog(("dbo", "Contracts", 123L));
 
-        var outcome = await Module(session, new FakeGain()).ExecuteAsync(
+        var outcome = await Module(session).ExecuteAsync(
             new SqlHarnessCountsOperation(Target(), ["dbo.Contracts"], null, 50, false, 30));
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
@@ -230,8 +230,8 @@ public sealed class CountsTests
         Assert.Contains("[dbo].[A]", session.Commands[0].Sql, StringComparison.Ordinal);
     }
 
-    private static SqlHarnessModule Module(FakeSession session, FakeGain? gain = null) =>
-        new(session, gain ?? new FakeGain(), Profiles);
+    private static SqlHarnessModule Module(FakeSession session) =>
+        new(session, Profiles);
 
     private static SqlTargetRequest Target() => new("test", new Dictionary<string, string>());
 
@@ -243,11 +243,6 @@ public sealed class CountsTests
 
     private static SqlException FakeSqlException() =>
         (SqlException)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(SqlException));
-
-    private sealed class FakeGain : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
-    }
 
     private sealed class FakeSession : ISqlSessionFactory, ISqlSession
     {

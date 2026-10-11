@@ -15,7 +15,7 @@ public interface ISqlHarnessModule
     /// (<c>completed</c>/<c>failed</c>) record to <paramref name="writer"/>
     /// while polling, flushing after every record. The returned outcome
     /// carries no report (the stream is the output) but keeps the usual exit
-    /// code and gain receipt, so the whole stream counts as emitted output.
+    /// code and journal receipt, so the whole stream counts as emitted output.
     /// The default refuses; <see cref="SqlHarnessModule"/> implements it.
     /// </summary>
     Task<SqlHarnessOutcome> ExecuteWatchNdjsonAsync(
@@ -123,8 +123,6 @@ public sealed record SqlHarnessMeasureOperation(
     /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
     public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
 }
-
-public sealed record SqlHarnessGainOperation : SqlHarnessOperation;
 
 public sealed record SqlHarnessPlanOperation(string ShowplanXml, OutputFootprint RawFootprint) : SqlHarnessOperation;
 

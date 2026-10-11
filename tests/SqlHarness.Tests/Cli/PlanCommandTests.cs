@@ -69,7 +69,7 @@ public sealed class PlanCommandTests
     {
         var fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "seq-scan.explain.json");
         var output = new StringWriter();
-        var module = new SqlHarnessModule(new NeverSessionFactory(), new CapturingGainStore(), () => throw new InvalidOperationException("profiles must not load"));
+        var module = new SqlHarnessModule(new NeverSessionFactory(), () => throw new InvalidOperationException("profiles must not load"));
 
         var exit = await SqlHarnessCli.Create(module, output).RunAsync(["plan", fixture, "--json"]);
 
@@ -86,7 +86,7 @@ public sealed class PlanCommandTests
         var path = Path.GetTempFileName();
         await File.WriteAllTextAsync(path, "not-a-plan");
         var output = new StringWriter();
-        var module = new SqlHarnessModule(new NeverSessionFactory(), new CapturingGainStore(), () => throw new InvalidOperationException("profiles must not load"));
+        var module = new SqlHarnessModule(new NeverSessionFactory(), () => throw new InvalidOperationException("profiles must not load"));
         try
         {
             var exit = await SqlHarnessCli.Create(module, output).RunAsync(["plan", path]);
@@ -128,7 +128,7 @@ public sealed class PlanCommandTests
     {
         var output = new StringWriter();
         var module = new OutcomeCapturingModule(
-            new SqlHarnessModule(new NeverSessionFactory(), new CapturingGainStore(), () => throw new InvalidOperationException("profiles must not load")));
+            new SqlHarnessModule(new NeverSessionFactory(), () => throw new InvalidOperationException("profiles must not load")));
 
         var exit = await SqlHarnessCli.Create(module, output, planStdin: new MemoryStream(Encoding.UTF8.GetBytes("<invalid />"))).RunAsync(["plan", "-"]);
 
@@ -173,7 +173,7 @@ public sealed class PlanCommandTests
         Encoding encoding = utf16 ? new UnicodeEncoding(false, true, true) : new UTF8Encoding(true, true);
         var bytes = encoding.GetPreamble().Concat(encoding.GetBytes(xml)).ToArray();
         var module = new OutcomeCapturingModule(
-            new SqlHarnessModule(new NeverSessionFactory(), new CapturingGainStore(), () => throw new InvalidOperationException()));
+            new SqlHarnessModule(new NeverSessionFactory(), () => throw new InvalidOperationException()));
 
         var exit = await SqlHarnessCli.Create(module, new StringWriter(), planStdin: new MemoryStream(bytes)).RunAsync(["plan"]);
 
@@ -258,11 +258,6 @@ public sealed class PlanCommandTests
             Outcome = await inner.ExecuteAsync(operation, ct);
             return Outcome;
         }
-    }
-
-    private sealed class CapturingGainStore : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 
     private sealed class EndlessStream : Stream

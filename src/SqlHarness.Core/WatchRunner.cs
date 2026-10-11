@@ -198,7 +198,7 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
                 // Deadline elapsed during connect: the stream never started
                 // (started needs the session identity), so the terminal
                 // record is a failed-only stream. The exit code still reports
-                // the deadline and gain still counts it as a success.
+                // the deadline and the activity journal still counts it as a success.
                 EmitFailed(stream, start, SqlHarnessExitCode.WatchMaxDuration,
                     new SqlHarnessError(
                         "watch_max_duration",

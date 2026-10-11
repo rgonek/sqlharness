@@ -34,7 +34,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         new HashSet<string>(StringComparer.Ordinal);
 
     private readonly ISqlSessionFactory _sessionFactory;
-    private readonly IGainSource _gainSource;
     private readonly ICompareArtifactWriter _artifactWriter;
     private readonly CompareCellRunner _cellRunner;
     private readonly CompareMatrixRunner _matrixRunner;
@@ -68,7 +67,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     public SqlHarnessModule(Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles)
         : this(
             new EngineSessionFactory(new SqlClientSessionFactory(new AzureCli()), new NpgsqlSessionFactory()),
-            new JournalGainStore(SqlHarnessPaths.ActivityDatabase, () => SqlHarnessConfigLoader.Load().Config.Journal.Enabled),
             new CompareArtifactWriter(),
             loadProfiles,
             queryStoreArtifacts: new QueryStoreArtifactWriter(),
@@ -78,7 +76,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
     internal SqlHarnessModule(
         ISqlSessionFactory sessionFactory,
-        IGainSource gainSource,
         Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
         IWatchClock? watchClock = null,
         ISnapshotStore? snapshotStore = null,
@@ -86,7 +83,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         IIndexAnalysisArtifactWriter? indexAnalysisArtifacts = null)
         : this(
             sessionFactory,
-            gainSource,
             new CompareArtifactWriter(),
             loadProfiles,
             watchClock,
@@ -98,7 +94,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
     internal SqlHarnessModule(
         ISqlSessionFactory sessionFactory,
-        IGainSource gainSource,
         ICompareArtifactWriter artifactWriter,
         Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
         IWatchClock? watchClock = null,
@@ -107,7 +102,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         IIndexAnalysisArtifactWriter? indexAnalysisArtifacts = null)
     {
         _sessionFactory = sessionFactory ?? throw new ArgumentNullException(nameof(sessionFactory));
-        _gainSource = gainSource ?? throw new ArgumentNullException(nameof(gainSource));
         _artifactWriter = artifactWriter ?? throw new ArgumentNullException(nameof(artifactWriter));
         _cellRunner = new CompareCellRunner(_sessionFactory, _artifactWriter);
         _matrixRunner = new CompareMatrixRunner(_cellRunner);
@@ -123,20 +117,6 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
-        if (operation is SqlHarnessGainOperation)
-        {
-            try
-            {
-                return Checked(operation, new SqlHarnessOutcome(SqlHarnessExitCode.Success, _gainSource.Aggregate(), null));
-            }
-            catch (Exception exception)
-            {
-                return new SqlHarnessOutcome(
-                    SqlHarnessExitCode.LocalStorage,
-                    null,
-                    SecretRedactor.Redact(exception, []));
-            }
-        }
 
         if (operation is SqlHarnessPlanOperation plan)
             return Checked(plan, ExecutePlan(plan));
@@ -798,7 +778,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     /// pipeline; failures before the run emit a best-effort <c>failed</c>
     /// record (without <c>started</c>, which needs the session identity).
     /// The returned outcome carries no report â€” the stream is the output â€”
-    /// but keeps the exit code and gain receipt, so gain counts the whole
+    /// but keeps the exit code and journal receipt, so the activity journal counts the whole
     /// stream as emitted output.
     /// </summary>
     public async Task<SqlHarnessOutcome> ExecuteWatchNdjsonAsync(

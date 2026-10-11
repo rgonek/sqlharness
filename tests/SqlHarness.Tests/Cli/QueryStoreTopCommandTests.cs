@@ -285,27 +285,6 @@ public sealed class QueryStoreTopCommandTests
         }
     }
 
-    [Fact]
-    public void Gain_text_and_json_include_qstop_scope()
-    {
-        var qstop = new SqlHarnessGainSummary(1, 0, 4, 16, 1, 4, 1, 4, 1, 3);
-        var empty = new SqlHarnessGainSummary(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        var report = new SqlHarnessGainReport(qstop, empty, empty) { QueryStoreTop = qstop };
-        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
-
-        var text = new StringWriter();
-        new Renderer().Render(outcome, OutputMode.Text, new OutputCaptureWriter(text));
-        Assert.StartsWith("Scope\tExecutions\tFailures\tSaved tokens\tSavings %", text.ToString(), StringComparison.Ordinal);
-        Assert.Contains("qstop\t1\t0\t3\t75", text.ToString(), StringComparison.Ordinal);
-        Assert.Contains("total\t1\t0\t3\t75", text.ToString(), StringComparison.Ordinal);
-
-        var json = new StringWriter();
-        new Renderer().Render(outcome, OutputMode.Json, new OutputCaptureWriter(json));
-        using var document = JsonDocument.Parse(json.ToString());
-        Assert.Equal(1, document.RootElement.GetProperty("queryStoreTop").GetProperty("executions").GetInt64());
-        Assert.Equal(1, document.RootElement.GetProperty("total").GetProperty("executions").GetInt64());
-    }
-
     private static SqlHarnessQueryStoreTopReport Report(
         int windowMinutes,
         string artifactDirectory,

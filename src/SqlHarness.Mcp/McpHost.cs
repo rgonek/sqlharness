@@ -11,7 +11,7 @@ namespace SqlHarness.Mcp;
 /// section 2): stdout carries only protocol frames, all logging goes to
 /// stderr without arguments, SQL, parameter values, or secrets. T2 starts
 /// the transport with a frozen scope and clean shutdown; the explicit T3
-/// tool catalog registers exactly 11 tools on the frozen scope.
+/// tool catalog registers exactly 10 tools on the frozen scope.
 /// </summary>
 public static class McpHost
 {

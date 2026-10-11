@@ -245,7 +245,7 @@ public class WatchNdjsonTests
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var factory = new BlockingConnectFactory(entered);
         var transport = new StringWriter();
-        var module = new SqlHarnessModule(factory, new FakeGainStore(), Profiles, clock);
+        var module = new SqlHarnessModule(factory, Profiles, clock);
 
         var task = module.ExecuteWatchNdjsonAsync(Watch(untilUnchanged: 100), transport);
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -323,9 +323,8 @@ public class WatchNdjsonTests
     [Fact]
     public async Task Ndjson_receipt_completes_with_the_exit_code_of_the_completed_stream()
     {
-        var gain = new FakeGainStore();
         var transport = new StringWriter();
-        var outcome = await Module(FakeSession.WithScalarPolls(1, 1), new FakeWatchClock(), gain)
+        var outcome = await Module(FakeSession.WithScalarPolls(1, 1), new FakeWatchClock())
             .ExecuteWatchNdjsonAsync(Watch(untilUnchanged: 1), transport);
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
@@ -508,7 +507,7 @@ public class WatchNdjsonTests
         var reportClock = new FakeWatchClock();
         var reportEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var reportFactory = new BlockingConnectFactory(reportEntered);
-        var reportModule = new SqlHarnessModule(reportFactory, new FakeGainStore(), Profiles, reportClock);
+        var reportModule = new SqlHarnessModule(reportFactory, Profiles, reportClock);
         var reportTask = reportModule.ExecuteAsync(Watch(untilUnchanged: 100));
         await reportEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
         reportClock.Budgets.Single().Cancel();
@@ -520,7 +519,7 @@ public class WatchNdjsonTests
         var ndjsonClock = new FakeWatchClock();
         var ndjsonEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var ndjsonFactory = new BlockingConnectFactory(ndjsonEntered);
-        var ndjsonModule = new SqlHarnessModule(ndjsonFactory, new FakeGainStore(), Profiles, ndjsonClock);
+        var ndjsonModule = new SqlHarnessModule(ndjsonFactory, Profiles, ndjsonClock);
         var transport = new StringWriter();
         var ndjsonTask = ndjsonModule.ExecuteWatchNdjsonAsync(Watch(untilUnchanged: 100), transport);
         await ndjsonEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -802,10 +801,9 @@ public class WatchNdjsonTests
         return records;
     }
 
-    private static SqlHarnessModule Module(FakeSession session, FakeWatchClock clock, FakeGainStore? gain = null) =>
+    private static SqlHarnessModule Module(FakeSession session, FakeWatchClock clock) =>
         new(
             new FakeSessionFactory(session, new FakeAzureCli(Token), null),
-            gain ?? new FakeGainStore(),
             Profiles,
             clock);
 
@@ -895,11 +893,6 @@ public class WatchNdjsonTests
             Thread.Sleep(5);
             base.Write(value);
         }
-    }
-
-    private sealed class FakeGainStore : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 
     private sealed class FakeAzureCli(string token, Exception? failure = null) : IAzureCli

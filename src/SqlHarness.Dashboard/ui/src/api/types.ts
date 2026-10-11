@@ -186,6 +186,18 @@ export type DashboardStats = {
   coldCacheOperations: number
   profileOperations: ProfileOperationCount[]
   profileDimensions: ProfileDimensionStats
+  savings: SavingsStat
+}
+
+export type ModelSaving = { provider: string; model: string; operations: number; savedTokens: number; usd: number }
+
+export type SavingsStat = {
+  priceSource: string
+  pricesFetchedAt: string
+  totalUsd: number
+  byModel: ModelSaving[]
+  withoutModel: number
+  unpriced: number
 }
 
 // GET /api/plans/{hash}?view=distilled (PlanDistiller / PostgresPlanDistiller, camelCase).
@@ -241,3 +253,5 @@ export type ProfileView = {
   vars: ProfileVariable[]
 }
 export type ProfilesResponse = { status: "missing" | "valid" | "invalid"; profiles: ProfileView[]; message: string | null }
+
+export type PricesInfo = { source: string; fetchedAt: string; origin: "embedded" | "refreshed" }

@@ -20,6 +20,9 @@ namespace SqlHarness.Dashboard;
 
 public sealed record DashboardServerOptions(string DatabasePath, int PreferredPort, IProcessInfo Processes)
 {
+    /// <summary>The persistent token; null generates a fresh one (tests).</summary>
+    public string? Token { get; init; }
+
     public TimeSpan LivePollInterval { get; init; } = TimeSpan.FromSeconds(1);
 
     /// <summary>Records requests and open live streams; a new instance on the system clock when null.</summary>
@@ -30,6 +33,12 @@ public sealed record DashboardServerOptions(string DatabasePath, int PreferredPo
 
     /// <summary>The closed profile file shown read-only on the profiles page.</summary>
     public string TargetsPath { get; init; } = SqlHarnessPaths.TargetsFile;
+
+    /// <summary>The refreshed model price snapshot; the embedded table is used when it is missing or unusable.</summary>
+    public string PricesPath { get; init; } = Path.Combine(SqlHarnessPaths.Home, "data", "model-prices.json");
+
+    /// <summary>Supplies the models.dev JSON on a refresh; null performs the HTTPS download. Tests inject this.</summary>
+    public Func<CancellationToken, Task<Stream>>? PricesFetcher { get; init; }
 }
 
 public sealed class RunningDashboard : IAsyncDisposable
@@ -91,7 +100,7 @@ public static partial class DashboardServer
         ArgumentNullException.ThrowIfNull(options);
         ArgumentOutOfRangeException.ThrowIfNegative(options.PreferredPort, nameof(options));
         ArgumentOutOfRangeException.ThrowIfGreaterThan(options.PreferredPort, IPEndPoint.MaxPort, nameof(options));
-        var token = DashboardSecurity.NewToken();
+        var token = options.Token ?? DashboardSecurity.NewToken();
         // The preferred port and the next ones, then an ephemeral loopback port as the last resort;
         // the caller publishes whatever port was actually bound.
         int[] candidates = options.PreferredPort == 0
@@ -150,7 +159,7 @@ public static partial class DashboardServer
         builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
 
         var app = builder.Build();
-        var reader = new JournalReader(options.DatabasePath, options.Processes);
+        var reader = new JournalReader(options.DatabasePath, options.Processes, () => ModelPrices.Load(options.PricesPath));
         app.Use((context, next) => DashboardSecurity.InvokeAsync(context, () => next(context), token, boundPort));
         // Only authenticated requests reach here, so probes from other local processes do not keep the dashboard alive.
         app.Use((context, next) =>
@@ -206,8 +215,11 @@ public static partial class DashboardServer
         });
         MapRead(api, "/settings", () => Results.Json(DashboardSettings.Read(options.ConfigPath), Json));
         MapRead(api, "/profiles", () => Results.Json(DashboardProfiles.Read(options.TargetsPath), Json));
-        // The only write route; DashboardSecurity admits PUT here alone, with its extra checks.
+        // The two write routes (PUT settings, POST prices refresh); DashboardSecurity admits only these, with its extra checks.
         api.MapMethods("/settings", [HttpMethods.Put], (Delegate)((HttpContext context) => DashboardSettings.PutAsync(context, options.ConfigPath, Json)));
+        MapRead(api, "/prices", () => Results.Json(DashboardPrices.Describe(options.PricesPath), Json));
+        api.MapMethods("/prices/refresh", [HttpMethods.Post], (Delegate)((HttpContext context) =>
+            DashboardPrices.RefreshAsync(options.PricesPath, options.PricesFetcher ?? DashboardPrices.FetchModelsDevAsync, Json, context.RequestAborted)));
         MapRead(api, "/{**rest}", () => Results.NotFound());
 
         var assets = DashboardAssets.Default;

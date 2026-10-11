@@ -145,13 +145,6 @@ public sealed class McpRequestToolHandlers(
         CancellationToken ct = default) =>
         Invoke(ctx, "sqlharness_artifact", scope, handler => handler.ArtifactAsync(ctx, id, section, cursor, ct));
 
-    public Task<CallToolResult> GainAsync(RequestContext<CallToolRequestParams> ctx, CancellationToken ct = default) =>
-        TargetFreeAsync("sqlharness_gain", ctx, ct, token =>
-        {
-            ThrowUnknown(ctx, []);
-            return process.CreateModule().ExecuteAsync(new SqlHarnessGainOperation(), token);
-        });
-
     private Task<CallToolResult> Invoke(RequestContext<CallToolRequestParams> ctx, string command, McpRequestScopeArgument suppliedScope,
         Func<McpToolHandlers, Task<CallToolResult>> invoke)
     {

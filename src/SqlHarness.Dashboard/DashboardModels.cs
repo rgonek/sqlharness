@@ -125,4 +125,12 @@ public sealed record DashboardStats(
     int SpillOperations,
     int ColdCacheOperations,
     IReadOnlyList<ProfileOperationCount> ProfileOperations,
-    ProfileDimensionStats ProfileDimensions);
+    ProfileDimensionStats ProfileDimensions,
+    SavingsStat Savings);
+
+public sealed record ModelSaving(string Provider, string Model, int Operations, long SavedTokens, decimal Usd);
+
+/// <summary>Paired-footprint token savings valued at current input prices.</summary>
+public sealed record SavingsStat(
+    string PriceSource, DateTimeOffset PricesFetchedAt, decimal TotalUsd,
+    IReadOnlyList<ModelSaving> ByModel, int WithoutModel, int Unpriced);

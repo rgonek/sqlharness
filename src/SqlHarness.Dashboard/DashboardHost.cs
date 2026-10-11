@@ -133,6 +133,17 @@ public static class DashboardHost
             return (int)SqlHarnessExitCode.LocalStorage;
         }
 
+        string token;
+        try
+        {
+            token = DashboardToken.LoadOrCreate(options.Home);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            options.Error.WriteLine("sqlharness: the dashboard could not read or create its token in the SQLHarness home.");
+            return (int)SqlHarnessExitCode.LocalStorage;
+        }
+
         var activity = new DashboardActivity(options.Time);
         RunningDashboard running;
         try
@@ -142,8 +153,10 @@ public static class DashboardHost
                 {
                     LivePollInterval = options.LivePollInterval,
                     Activity = activity,
+                    Token = token,
                     ConfigPath = options.ConfigPath ?? Path.Combine(options.Home, "config.json"),
                     TargetsPath = Path.Combine(options.Home, "targets.json"),
+                    PricesPath = Path.Combine(options.Home, "data", "model-prices.json"),
                 },
                 ct);
         }

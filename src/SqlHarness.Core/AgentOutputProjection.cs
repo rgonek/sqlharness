@@ -280,8 +280,6 @@ public static class AgentOutputProjection
                                 : matrixCells.Continuation,
                         };
                     }
-                case SqlHarnessGainReport gain:
-                    return gain;
                 default:
                     if (report is null) return null;
                     if (report.GetType().IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), inherit: false))

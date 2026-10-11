@@ -662,4 +662,41 @@ public sealed class JournalReaderTests
         Assert.Equal("sql_execution_failed", operation.ErrorKind);
         Assert.Equal("Invalid column name 'x'.", operation.ErrorMessage);
     }
+
+    [Fact]
+    public void Savings_value_paired_tokens_at_current_input_prices()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var codex = JournalSeed.Session("mcp:codex", "codex");
+        seed.Operation(codex, agent: new AgentCallMetadata("c1", "gpt-6-sol", null, null, null, null, null));
+        seed.Operation(codex, agent: new AgentCallMetadata("c2", "gpt-6-sol", null, null, null, null, null));
+        seed.Operation(JournalSeed.Session("mcp:claude", "claude"));
+        seed.Operation(codex, agent: new AgentCallMetadata("c3", "gpt-unknown", null, null, null, null, null));
+        var prices = new ModelPriceTable("models.dev", DateTimeOffset.Parse("2026-10-11T00:00:00Z"),
+            new Dictionary<string, IReadOnlyDictionary<string, decimal>> { ["openai"] = new Dictionary<string, decimal> { ["gpt-6-sol"] = 2m } });
+
+        var savings = new JournalReader(home.DatabasePath, new FakeProcesses(), () => prices).Stats(new StatsQuery()).Savings;
+
+        var row = Assert.Single(savings.ByModel);
+        Assert.Equal(("openai", "gpt-6-sol", 2, 180L), (row.Provider, row.Model, row.Operations, row.SavedTokens));
+        Assert.Equal(180m * 2m / 1_000_000m, row.Usd);
+        Assert.Equal(row.Usd, savings.TotalUsd);
+        Assert.Equal(1, savings.WithoutModel);
+        Assert.Equal(1, savings.Unpriced);
+        Assert.Equal("models.dev", savings.PriceSource);
+    }
+
+    [Fact]
+    public void Savings_fall_back_to_embedded_prices_when_the_provider_throws()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("mcp:codex", "codex"));
+
+        var savings = new JournalReader(home.DatabasePath, new FakeProcesses(),
+            () => throw new InvalidDataException("bad")).Stats(new StatsQuery()).Savings;
+
+        Assert.Equal(ModelPrices.Embedded.Source, savings.PriceSource);
+    }
 }

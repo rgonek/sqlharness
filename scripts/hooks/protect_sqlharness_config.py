@@ -10,11 +10,11 @@ import sys
 from typing import Any
 
 
-SENSITIVE_CONFIG_PATH = re.compile(r"\.sqlharness[/\\](?:dashboard\.json|\*\.json)(?=$|[\s\"'])", re.IGNORECASE)
+SENSITIVE_CONFIG_PATH = re.compile(r"\.sqlharness[/\\](?:dashboard\.json|dashboard-token|\*\.json)(?=$|[\s\"'])", re.IGNORECASE)
 READ_COMMAND = re.compile(r"^\s*(?:(?:sudo|command|builtin)\s+)*(?:cat|type|get-content|gc|more|less|head|tail)\b", re.IGNORECASE)
 DENIAL_REASON = (
-    "Reading dashboard.json or globbed SQLHarness JSON config files is blocked because "
-    "dashboard.json contains a live access token. Read an explicitly named targets.json if needed."
+    "Reading dashboard.json, dashboard-token, or globbed SQLHarness JSON config files is blocked because "
+    "they contain a live access token. Read an explicitly named targets.json if needed."
 )
 
 

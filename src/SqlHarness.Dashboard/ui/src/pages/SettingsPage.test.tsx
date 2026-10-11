@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react"
+import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
 import type { SettingsResponse } from "@/api/types"
@@ -29,7 +29,9 @@ function stubSettings(initial: SettingsResponse) {
   return puts
 }
 
-test("enabling storeSensitive asks for confirmation before saving", async () => {
+type Put = { journal: { storeSensitive: boolean; retention: { enabled: boolean; maxAgeDays: number } }; dashboard: { autoStart: boolean } }
+
+test("enabling storeSensitive asks for confirmation, then saves", async () => {
   const puts = stubSettings(response())
   renderApp("/settings")
 
@@ -39,9 +41,8 @@ test("enabling storeSensitive asks for confirmation before saving", async () => 
   expect(puts).toHaveLength(0)
 
   await userEvent.click(within(dialog).getByRole("button", { name: "Enable" }))
-  await userEvent.click(screen.getByRole("button", { name: "Save" }))
-  expect(puts).toHaveLength(1)
-  expect((puts[0].body as { journal: { storeSensitive: boolean } }).journal.storeSensitive).toBe(true)
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect((puts[0].body as Put).journal.storeSensitive).toBe(true)
   expect(await screen.findByText(/restart running/)).toBeInTheDocument()
 })
 
@@ -51,6 +52,99 @@ test("disabling storeSensitive needs no confirmation", async () => {
 
   await userEvent.click(await screen.findByRole("switch", { name: "Store sensitive data" }))
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+})
+
+test("Toggle_saves_immediately", async () => {
+  const puts = stubSettings(response())
+  renderApp("/settings")
+
+  await userEvent.click(await screen.findByRole("switch", { name: "Start with mcp serve" }))
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect((puts[0].body as Put).dashboard.autoStart).toBe(true)
+  expect(await screen.findByText("Saved")).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument()
+})
+
+test("Number_field_saves_only_on_commit", async () => {
+  const puts = stubSettings(response())
+  renderApp("/settings")
+
+  const field = await screen.findByRole("spinbutton", { name: "Maximum age (days)" })
+  await userEvent.clear(field)
+  await userEvent.type(field, "300")
+  expect(puts).toHaveLength(0)
+  await userEvent.tab()
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect((puts[0].body as Put).journal.retention.maxAgeDays).toBe(300)
+})
+
+test("Invalid_number_is_not_sent", async () => {
+  const puts = stubSettings(response())
+  renderApp("/settings")
+
+  const field = await screen.findByRole("spinbutton", { name: "Maximum age (days)" })
+  await userEvent.clear(field)
+  await userEvent.type(field, "0{Enter}")
+  expect(puts).toHaveLength(0)
+  expect(await screen.findByText(/Enter a whole number from 1 to 3650/)).toBeInTheDocument()
+})
+
+test("Enabling_retention_asks_for_confirmation", async () => {
+  const puts = stubSettings(response())
+  renderApp("/settings")
+
+  const toggle = await screen.findByRole("switch", { name: "Retention enabled" })
+  await userEvent.click(toggle)
+  let dialog = await screen.findByRole("dialog")
+  expect(dialog).toHaveTextContent(/can delete activity journal data/)
+  await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }))
+  expect(puts).toHaveLength(0)
+  expect(toggle).not.toBeChecked()
+
+  await userEvent.click(toggle)
+  dialog = await screen.findByRole("dialog")
+  await userEvent.click(within(dialog).getByRole("button", { name: "Continue" }))
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect((puts[0].body as Put).journal.retention.enabled).toBe(true)
+})
+
+test("Lowering_limits_with_retention_on_asks_for_confirmation", async () => {
+  const on = response({ settings: { ...response().settings, journal: { ...response().settings.journal, retention: { enabled: true, maxAgeDays: 30, maxSizeMb: 500 } } } })
+  const puts = stubSettings(on)
+  renderApp("/settings")
+
+  const field = await screen.findByRole("spinbutton", { name: "Maximum age (days)" })
+  await userEvent.clear(field)
+  await userEvent.type(field, "7")
+  await userEvent.tab()
+  let dialog = await screen.findByRole("dialog")
+  await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }))
+  expect(puts).toHaveLength(0)
+  expect(field).toHaveValue(30)
+
+  await userEvent.clear(field)
+  await userEvent.type(field, "7")
+  await userEvent.tab()
+  dialog = await screen.findByRole("dialog")
+  await userEvent.click(within(dialog).getByRole("button", { name: "Continue" }))
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect((puts[0].body as Put).journal.retention.maxAgeDays).toBe(7)
+})
+
+test("a failed save shows the error and keeps the server value", async () => {
+  stubFetch({
+    "/api/settings": (_url: URL, init?: RequestInit) =>
+      init?.method === "PUT"
+        ? new Response(JSON.stringify({ errors: [{ field: "dashboard.idleShutdownHours", message: "Must be between 1 and 168." }] }), { status: 400 })
+        : new Response(JSON.stringify(response()), { status: 200 }),
+  })
+  renderApp("/settings")
+
+  const field = await screen.findByRole("spinbutton", { name: "Idle shutdown (hours)" })
+  await userEvent.clear(field)
+  await userEvent.type(field, "12{Enter}")
+  expect(await screen.findByText("Must be between 1 and 168.")).toBeInTheDocument()
+  expect(field).toHaveValue(8)
 })
 
 test("a conflict on save refetches and shows the invalid-file alert", async () => {
@@ -66,7 +160,7 @@ test("a conflict on save refetches and shows the invalid-file alert", async () =
   })
   renderApp("/settings")
 
-  await userEvent.click(await screen.findByRole("button", { name: "Save" }))
+  await userEvent.click(await screen.findByRole("switch", { name: "Start with mcp serve" }))
   expect(await screen.findByRole("button", { name: "Replace with these settings" })).toBeInTheDocument()
 })
 
@@ -78,4 +172,25 @@ test("port is read-only and an invalid file needs explicit replacement", async (
   expect(screen.queryByRole("spinbutton", { name: "Port" })).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Replace with these settings" }))
   expect(puts[0].search).toBe("?overwriteInvalid=true")
+})
+
+test("refreshing model prices updates the shown snapshot and reports failures", async () => {
+  let fail = false
+  stubFetch({
+    "/api/settings": response(),
+    "/api/prices": { source: "models.dev", fetchedAt: "2026-10-11T00:00:00Z", origin: "embedded" },
+    "/api/prices/refresh": () =>
+      fail
+        ? new Response(JSON.stringify({ error: "Model prices could not be refreshed." }), { status: 502 })
+        : new Response(JSON.stringify({ source: "models.dev", fetchedAt: "2026-10-20T08:00:00Z", origin: "refreshed" }), { status: 200 }),
+  })
+  renderApp("/settings")
+
+  expect(await screen.findByText("Model prices: models.dev, 2026-10-11 (built in)")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Refresh model prices" }))
+  expect(await screen.findByText("Model prices: models.dev, 2026-10-20 (refreshed)")).toBeInTheDocument()
+
+  fail = true
+  await userEvent.click(screen.getByRole("button", { name: "Refresh model prices" }))
+  expect(await screen.findByText("Model prices could not be refreshed.")).toBeInTheDocument()
 })

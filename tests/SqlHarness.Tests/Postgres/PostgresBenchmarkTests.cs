@@ -248,7 +248,7 @@ public sealed class PostgresBenchmarkTests
     {
         var session = new VaryingRowSession();
         var writer = new CapturingArtifactWriter();
-        var module = new SqlHarnessModule(session, new FakeGain(), writer, Profiles)
+        var module = new SqlHarnessModule(session, writer, Profiles)
         {
             ComparisonMaximumRows = 1,
         };
@@ -437,7 +437,7 @@ public sealed class PostgresBenchmarkTests
     }
 
     private static SqlHarnessModule Module(FakeSession session, ICompareArtifactWriter? writer = null) =>
-        new(session, new FakeGain(), writer ?? new CapturingArtifactWriter(), Profiles);
+        new(session, writer ?? new CapturingArtifactWriter(), Profiles);
 
     private static string Render(SqlHarnessOutcome outcome, OutputMode mode)
     {
@@ -480,11 +480,6 @@ public sealed class PostgresBenchmarkTests
                 TrustServerCertificate: true,
                 Engine: "postgres"),
         };
-
-    private sealed class FakeGain : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
-    }
 
     private sealed class CapturingArtifactWriter : ICompareArtifactWriter
     {

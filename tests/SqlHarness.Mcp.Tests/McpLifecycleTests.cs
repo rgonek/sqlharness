@@ -179,7 +179,6 @@ public sealed class McpLifecycleTests
         Assert.False(McpExecutionGate.IsDbTool("sqlharness_validate"));
         Assert.False(McpExecutionGate.IsDbTool("sqlharness_plan"));
         Assert.False(McpExecutionGate.IsDbTool("sqlharness_artifact"));
-        Assert.False(McpExecutionGate.IsDbTool("sqlharness_gain"));
         Assert.False(McpExecutionGate.IsDbTool(null));
         Assert.False(McpExecutionGate.IsDbTool("SQLHARNESS_QUERY"));
     }
@@ -975,7 +974,7 @@ public sealed class McpLifecycleTests
         Assert.Equal(McpToolCatalog.ToolNames.Count, tools.Count);
 
         // readOnly is claimed only where no local write can happen: benchmark
-        // and snapshot capture persist data and gain accounting may write, so
+        // and snapshot capture persist data and may write, so
         // they stay unclaimed. Unknown stays null rather than guessing.
         AssertAnnotations(tools, "sqlharness_capabilities", ReadOnly: true, destructive: false, idempotent: true, openWorld: false);
         AssertAnnotations(tools, "sqlharness_inspect", ReadOnly: true, destructive: false, idempotent: null, openWorld: true);
@@ -987,7 +986,6 @@ public sealed class McpLifecycleTests
         AssertAnnotations(tools, "sqlharness_snapshot", ReadOnly: null, destructive: false, idempotent: null, openWorld: true);
         AssertAnnotations(tools, "sqlharness_plan", ReadOnly: true, destructive: false, idempotent: true, openWorld: false);
         AssertAnnotations(tools, "sqlharness_artifact", ReadOnly: true, destructive: false, idempotent: true, openWorld: false);
-        AssertAnnotations(tools, "sqlharness_gain", ReadOnly: null, destructive: false, idempotent: null, openWorld: false);
     }
 
     private static void AssertAnnotations(
@@ -1019,11 +1017,11 @@ public sealed class McpLifecycleTests
             null!, new McpSqlSourceArgument { Sql = "SELECT 1" }, ct: cts.Token);
         var snapshot = await handlers.SnapshotAsync(
             null!, "capture", "t5-hints", "SELECT 1", ct: cts.Token);
-        var gain = await handlers.GainAsync(null!, cts.Token);
+        var plan = await handlers.PlanAsync(null!, "<ShowPlanXML/>", ct: cts.Token);
 
         Assert.False(measure.IsError == true, Text(measure));
         Assert.False(snapshot.IsError == true, Text(snapshot));
-        Assert.False(gain.IsError == true, Text(gain));
+        Assert.False(plan.IsError == true, Text(plan));
         Assert.Equal(3, module.Operations.Count);
     }
 

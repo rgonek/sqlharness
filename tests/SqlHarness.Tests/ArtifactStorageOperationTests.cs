@@ -17,7 +17,7 @@ public sealed class ArtifactStorageOperationTests
         try
         {
             var factory = new RejectingSessionFactory();
-            var module = new SqlHarnessModule(factory, new UnusedGainSource(),
+            var module = new SqlHarnessModule(factory,
                 new CompareArtifactWriter(root, () => DateTimeOffset.UtcNow), Profiles);
             var outcome = await module.ExecuteAsync(Operation(mode));
 
@@ -49,7 +49,7 @@ public sealed class ArtifactStorageOperationTests
         try
         {
             var factory = new RejectingSessionFactory();
-            var module = new SqlHarnessModule(factory, new UnusedGainSource(),
+            var module = new SqlHarnessModule(factory,
                 new CompareArtifactWriter(root, () => DateTimeOffset.UtcNow), Profiles);
             SqlHarnessOperation operation = Operation(mode) switch
             {
@@ -88,11 +88,6 @@ public sealed class ArtifactStorageOperationTests
 
     private static IReadOnlyDictionary<string, TargetProfile> Profiles() =>
         new Dictionary<string, TargetProfile> { ["test"] = new("test-server", "testdb", new Dictionary<string, string>(), "integrated") };
-
-    private sealed class UnusedGainSource : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
-    }
 
     private sealed class RejectingSessionFactory : ISqlSessionFactory
     {

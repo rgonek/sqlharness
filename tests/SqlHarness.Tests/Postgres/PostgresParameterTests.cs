@@ -115,7 +115,7 @@ public sealed class PostgresParameterTests
     {
         const string sql = "SELECT @id AS id";
         var session = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["id"], [1]));
-        var module = new SqlHarnessModule(session, new FakeGain(), Profiles);
+        var module = new SqlHarnessModule(session, Profiles);
 
         var outcome = await module.ExecuteAsync(new SqlHarnessQueryOperation(
             new SqlTargetRequest("local-pg", new Dictionary<string, string>()),
@@ -145,7 +145,7 @@ public sealed class PostgresParameterTests
     public async Task Query_accepts_postgres_placeholders_the_tsql_parser_rejects(string sql)
     {
         var session = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["value"], [1]));
-        var module = new SqlHarnessModule(session, new FakeGain(), Profiles);
+        var module = new SqlHarnessModule(session, Profiles);
         var parameter = sql.Contains("@doc", StringComparison.Ordinal) ? "doc:int=1" : "n:int=1";
 
         var outcome = await module.ExecuteAsync(new SqlHarnessQueryOperation(
@@ -305,7 +305,7 @@ public sealed class PostgresParameterTests
 
         var snapshots = new RecordingSnapshotStore();
         var snapshotSession = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["value"], [1]));
-        var snapshot = await new SqlHarnessModule(snapshotSession, new FakeGain(), Profiles, snapshotStore: snapshots)
+        var snapshot = await new SqlHarnessModule(snapshotSession, Profiles, snapshotStore: snapshots)
             .ExecuteAsync(new SqlHarnessSnapshotOperation(
                 Target(),
                 "SELECT @n LIMIT 1",
@@ -325,7 +325,7 @@ public sealed class PostgresParameterTests
     {
         const string sql = "SELECT @amount AS amount";
         var session = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["amount"], [1.23m]));
-        var module = new SqlHarnessModule(session, new FakeGain(), Profiles);
+        var module = new SqlHarnessModule(session, Profiles);
 
         var outcome = await module.ExecuteAsync(new SqlHarnessQueryOperation(
             new SqlTargetRequest("local-pg", new Dictionary<string, string>()),
@@ -357,7 +357,7 @@ public sealed class PostgresParameterTests
             SqlDialects.For(SqlEngine.Postgres).ValidateParameterReferences(SqlParameterParser.Parse(parameters), sql));
 
     private static Task<SqlHarnessOutcome> Execute(SqlHarnessOperation operation, FakeSession? session = null) =>
-        new SqlHarnessModule(session ?? FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["value"], [1])), new FakeGain(), Profiles)
+        new SqlHarnessModule(session ?? FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["value"], [1])), Profiles)
             .ExecuteAsync(operation);
 
     private static IReadOnlyDictionary<string, TargetProfile> Profiles() =>
@@ -381,11 +381,6 @@ public sealed class PostgresParameterTests
         public void Save(string name, SnapshotDocument document, bool force) => Saves++;
 
         public SnapshotDocument Load(string name) => throw new NotSupportedException();
-    }
-
-    private sealed class FakeGain : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 
     private sealed class FakeSession : ISqlSessionFactory, ISqlSession
