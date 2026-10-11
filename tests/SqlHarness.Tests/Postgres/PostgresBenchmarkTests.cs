@@ -42,6 +42,21 @@ public sealed class PostgresBenchmarkTests
     }
 
     [Fact]
+    public void Parse_handles_deep_postgres_plan_json_for_stats_and_operators()
+    {
+        var plan = "{\"Node Type\":\"Seq Scan\"}";
+        for (var depth = 0; depth < 60; depth++)
+            plan = $"{{\"Node Type\":\"Nested Loop\",\"Plans\":[{plan}]}}";
+        var json = $"[{{\"Plan\":{plan},\"Planning Time\":1.0,\"Execution Time\":2.0}}]";
+
+        var stats = PostgresBenchmark.ParseStats(json);
+        var parsedPlan = ExecutionPlanParser.Parse(json);
+
+        Assert.Equal(2.0m, stats.Metrics.ExecutionTimeMilliseconds);
+        Assert.Equal(61, parsedPlan.Operators.Count);
+    }
+
+    [Fact]
     public void Parse_uses_root_buffers_when_a_child_reports_the_same_blocks()
     {
         const string wrapped = """

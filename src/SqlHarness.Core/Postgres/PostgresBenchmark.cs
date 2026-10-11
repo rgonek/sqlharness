@@ -15,6 +15,7 @@ internal sealed record PostgresBenchmarkStats(
 internal static class PostgresBenchmark
 {
     internal const string ExplainPrefix = "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)\n";
+    internal static readonly JsonDocumentOptions PlanJsonOptions = new() { MaxDepth = 256 };
 
     private const string NoticesTruncatedWarning =
         "PostgreSQL notices exceeded the per-command limit and {0} messages were omitted from diagnostics. Benchmark metrics come from EXPLAIN and are unaffected.";
@@ -31,7 +32,7 @@ internal static class PostgresBenchmark
 
     internal static PostgresBenchmarkStats ParseStats(string json)
     {
-        using var document = JsonDocument.Parse(json);
+        using var document = JsonDocument.Parse(json, PlanJsonOptions);
         var root = ExplainObject(document.RootElement);
         var hasPlanning = TryDecimal(root, "Planning Time", out var planning);
         var hasExecution = TryDecimal(root, "Execution Time", out var execution);
