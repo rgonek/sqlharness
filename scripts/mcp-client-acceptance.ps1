@@ -52,7 +52,7 @@ New-Item -ItemType Directory -Path $work | Out-Null
 $inputRoot = Join-Path $work 'inputs'
 New-Item -ItemType Directory -Path $inputRoot | Out-Null
 $planPath = Join-Path $inputRoot 'distiller-sample.sqlplan'
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..	ests\SqlHarness.Tests\Fixtures\distiller-sample.sqlplan') -Destination $planPath
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..' 'tests' 'SqlHarness.Tests' 'Fixtures' 'distiller-sample.sqlplan') -Destination $planPath -ErrorAction Stop
 $prompt = "Do not change any configuration or trust settings. Call sqlharness_capabilities from the acceptance MCP server exactly once, then call sqlharness_plan exactly once with file `"$planPath`", then reply with one word: done."
 $results = [System.Collections.Generic.List[object]]::new()
 

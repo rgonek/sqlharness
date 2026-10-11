@@ -455,7 +455,7 @@ public sealed class McpToolHandlers(
 /// by name. No assembly scanning (WithToolsFromAssembly) is used anywhere on
 /// this path, so adding a public method can never silently widen the surface.
 /// Annotations are conservative local-effect hints only: benchmark and
-/// snapshot capture write data and gain accounting may write to disk, so they
+/// snapshot capture write data and journal accounting may write to disk, so they
 /// never claim readOnly; hints never replace policy enforcement.
 /// </summary>
 public static class McpToolCatalog

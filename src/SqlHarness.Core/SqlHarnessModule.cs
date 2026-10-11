@@ -778,7 +778,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     /// pipeline; failures before the run emit a best-effort <c>failed</c>
     /// record (without <c>started</c>, which needs the session identity).
     /// The returned outcome carries no report â€” the stream is the output â€”
-    /// but keeps the exit code and gain receipt, so gain counts the whole
+    /// but keeps the exit code and journal receipt, so the activity journal counts the whole
     /// stream as emitted output.
     /// </summary>
     public async Task<SqlHarnessOutcome> ExecuteWatchNdjsonAsync(

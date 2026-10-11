@@ -383,7 +383,6 @@ public sealed class CommandTests
             Assert.Equal(0, await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(["compare", "dev", "--baseline", query, "--candidate", candidate]));
             var compare = Assert.IsType<SqlHarnessCompareOperation>(module.Operations[^1]);
             Assert.Equal(ResultComparisonMode.Ordered, compare.CompareResults);
-
         }
         finally { File.Delete(query); File.Delete(candidate); }
     }

@@ -184,7 +184,7 @@ public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, Out
     /// <summary>
     /// Separate NDJSON output path (watch only): the module streams
     /// started/changed plus exactly one terminal record to the capture writer
-    /// while polling, then the usual begin/complete footprint lets gain count
+    /// while polling, then the usual begin/complete footprint lets the activity journal count
     /// the whole stream. Lives on the base class because derived commands
     /// cannot capture the base primary-constructor parameters directly.
     /// </summary>

@@ -36,7 +36,7 @@ public sealed class SystemMcpClock : IMcpClock
 /// operation. A second concurrent database call is rejected immediately with
 /// a stable BUSY result: no queue and no retry-after delay; the hint names the running tool so the client can wait for it to return.
 /// Safe local tools (capabilities, validate, plan,
-/// artifact, gain) run in parallel as long as they share no mutable request
+/// artifact) run in parallel as long as they share no mutable request
 /// state: every call builds its own Core operation records, so there is no
 /// shared reader, temp, or parameter state between calls.
 /// </summary>
