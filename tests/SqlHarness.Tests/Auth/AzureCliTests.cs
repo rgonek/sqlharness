@@ -136,6 +136,22 @@ public sealed class AzureCliTests
     }
 
     [Fact]
+    public async Task RunJsonAsync_LaunchFailureUsesRedactedException()
+    {
+        const string sensitiveLaunchError = "Could not launch C:\\private\\az.exe with token=secret";
+        var runner = new LaunchFailingProcessRunner(new System.ComponentModel.Win32Exception(sensitiveLaunchError));
+        var locator = new AzureCliLocator(() => "", () => "/opt/az/bin", _ => true);
+        var cli = new AzureCli(runner, isWindows: false, locator, TimeSpan.FromSeconds(1));
+
+        var exception = await Assert.ThrowsAsync<AzureCliException>(() =>
+            cli.RunJsonAsync(["account", "show"]));
+
+        Assert.Equal("Azure CLI process could not be started.", exception.Message);
+        Assert.DoesNotContain(sensitiveLaunchError, exception.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("C:\\private\\az.exe", exception.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Timeout_kills_and_throws_AzureCliException()
     {
         var runner = new DelayingProcessRunner();
@@ -257,5 +273,15 @@ public sealed class AzureCliTests
 
             return new ProcessResult(0, "{}", "");
         }
+    }
+
+    private sealed class LaunchFailingProcessRunner(Exception exception) : IProcessRunner
+    {
+        public Task<ProcessResult> RunAsync(
+            string fileName,
+            IEnumerable<string> arguments,
+            string? workingDirectory = null,
+            CancellationToken cancellationToken = default,
+            IReadOnlyDictionary<string, string>? environment = null) => Task.FromException<ProcessResult>(exception);
     }
 }

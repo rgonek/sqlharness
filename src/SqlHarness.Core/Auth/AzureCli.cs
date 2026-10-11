@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.Json;
 
@@ -199,6 +200,15 @@ public sealed class AzureCli : IAzureCli
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             throw new AzureCliException("Azure CLI did not finish within the time limit.");
+        }
+        catch (Exception exception) when (
+            exception is Win32Exception or
+                FileNotFoundException or
+                DirectoryNotFoundException or
+                UnauthorizedAccessException or
+                InvalidOperationException)
+        {
+            throw new AzureCliException("Azure CLI process could not be started.");
         }
     }
 
