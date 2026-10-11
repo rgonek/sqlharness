@@ -51,10 +51,9 @@ public static partial class SecretRedactor
                 string.Join("|", secrets.Select(Regex.Escape)),
                 RegexOptions.CultureInvariant | RegexOptions.NonBacktracking)
                 .Replace(value, "[REDACTED]");
-        safe = AccessTokenPattern().Replace(safe, "$1[REDACTED]$3");
-        safe = ConnectionSecretPattern().Replace(safe, "$1[REDACTED]");
+        safe = SecretFieldPattern().Replace(safe, "$1[REDACTED]$3");
+        safe = PasswordPattern().Replace(safe, "$1[REDACTED]");
         safe = JwtPattern().Replace(safe, "[REDACTED]");
-        safe = TokenLikePattern().Replace(safe, "[REDACTED]");
         return safe;
     }
 
@@ -95,17 +94,16 @@ public static partial class SecretRedactor
         }
     }
 
-    [GeneratedRegex("(?i)([\\\"']?(?:access_?token)[\\\"']?\\s*[:=]\\s*[\\\"']?)([^\\\"';&,}\\s]+)([\\\"']?)", RegexOptions.CultureInvariant)]
-    private static partial Regex AccessTokenPattern();
+    // Only the value of an explicit key/value field is masked; a field name or descriptive word alone is not a credential.
+    [GeneratedRegex("""(?i)(["']?(?:access[_\s-]?token|client[_\s-]?secret|account[_\s-]?key|shared[_\s-]?access[_\s-]?key)["']?\s*[:=]\s*["']?)([^"';&,}\s]+)(["']?)""", RegexOptions.CultureInvariant)]
+    private static partial Regex SecretFieldPattern();
 
-    [GeneratedRegex("(?i)((?:password|pwd|user\\s*id|uid|data\\s*source|server|initial\\s*catalog|database)\\s*=\\s*)(?:\"(?:\"\"|[^\"])*\"|'(?:''|[^'])*'|[^;\\r\\n]*)", RegexOptions.CultureInvariant)]
-    private static partial Regex ConnectionSecretPattern();
+    // Server, database and user fields are target diagnostics and stay readable.
+    [GeneratedRegex("""(?i)((?:password|pwd)\s*=\s*)(?:"(?:""|[^"])*"|'(?:''|[^'])*'|[^;\r\n]*)""", RegexOptions.CultureInvariant)]
+    private static partial Regex PasswordPattern();
 
-    [GeneratedRegex("\\beyJ[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+){1,2}\\b", RegexOptions.CultureInvariant)]
+    [GeneratedRegex("""\beyJ[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){1,2}\b""", RegexOptions.CultureInvariant)]
     private static partial Regex JwtPattern();
-
-    [GeneratedRegex("\\b[A-Za-z0-9_-]*access-token[A-Za-z0-9_-]*\\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex TokenLikePattern();
 }
 
 /// <summary>Registers operator-held credentials for error redaction once a target is resolved.</summary>
