@@ -194,6 +194,23 @@ public class SqlHarnessCompareTests
     }
 
     [Fact]
+    public async Task Compare_propagates_the_nullability_policy_into_the_report()
+    {
+        var lenient = await Module(FakeCompareSession.Create()).ExecuteAsync(Compare(repeat: 2));
+        var strict = await Module(FakeCompareSession.Create())
+            .ExecuteAsync(Compare(repeat: 2) with { CompareNullability = true });
+
+        var lenientReport = Assert.IsType<SqlHarnessCompareReport>(lenient.Report);
+        Assert.False(lenientReport.Equivalence.CompareNullability);
+        Assert.True(lenientReport.Equivalence.NullabilityEquivalent);
+        var strictReport = Assert.IsType<SqlHarnessCompareReport>(strict.Report);
+        Assert.True(strictReport.Equivalence.CompareNullability);
+        Assert.True(strictReport.Equivalence.NullabilityEquivalent);
+        Assert.True(strictReport.ResultsEquivalent);
+        Assert.Null(strictReport.Equivalence.MismatchReason);
+    }
+
+    [Fact]
     public async Task Compare_order_only_change_is_false_ordered_true_multiset_and_null_off()
     {
         var ordered = await Module(FakeCompareSession.Create(reorderCandidate: true))

@@ -50,8 +50,12 @@ public class ResultEquivalenceTests
 
         Assert.NotEqual(original.SchemaHash, renamed.SchemaHash);
         Assert.NotEqual(original.SchemaHash, retyped.SchemaHash);
-        Assert.NotEqual(original.SchemaHash, nullable.SchemaHash);
+        Assert.Equal(original.SchemaHash, nullable.SchemaHash);
+        Assert.NotEqual(original.NullabilityFingerprint, nullable.NullabilityFingerprint);
+        Assert.Equal(original.NullabilityFingerprint, renamed.NullabilityFingerprint);
+        Assert.Equal(original.NullabilityFingerprint, retyped.NullabilityFingerprint);
         Assert.Equal(original.OrderedRows, renamed.OrderedRows);
+        Assert.Equal(original.OrderedRows, nullable.OrderedRows);
     }
 
     [Fact]
@@ -727,4 +731,223 @@ public class ResultEquivalenceTests
 
     private static CanonicalComparisonResult Capture(params string[] rows) =>
         new("schema", rows);
+
+    private static CanonicalComparisonResult Nullable(bool allowNull, params object[] rows) =>
+        Build([[new CanonicalColumn(0, "Value", "System.Int32", allowNull)]], rows);
+
+    private static CanonicalComparisonResult Build(CanonicalColumn[][] resultSets, object[] rows)
+    {
+        using var capture = new CanonicalComparisonAccumulator();
+        for (var set = 0; set < resultSets.Length; set++)
+        {
+            capture.BeginResultSet(resultSets[set]);
+            if (set == 0)
+            {
+                foreach (var row in rows)
+                    capture.AddRow(Enumerable.Repeat(row, resultSets[set].Length).ToArray());
+            }
+
+            capture.EndResultSet();
+        }
+
+        return capture.Complete();
+    }
+
+    public static TheoryData<ResultComparisonMode> DataModes => new()
+    {
+        ResultComparisonMode.Ordered,
+        ResultComparisonMode.Multiset,
+        ResultComparisonMode.Set,
+    };
+
+    [Theory]
+    [MemberData(nameof(DataModes))]
+    public void Nullability_only_difference_is_equivalent_by_default_and_a_mismatch_when_strict(ResultComparisonMode mode)
+    {
+        var baseline = new[] { Nullable(false, 1, 2) };
+        var candidate = new[] { Nullable(true, 1, 2) };
+
+        var lenient = ResultComparer.Compare(mode, baseline, candidate);
+        var strict = ResultComparer.Compare(mode, baseline, candidate, compareNullability: true);
+
+        Assert.True(lenient.Equivalent);
+        Assert.False(lenient.CompareNullability);
+        Assert.False(lenient.NullabilityEquivalent);
+        Assert.Null(lenient.MismatchReason);
+        Assert.False(strict.Equivalent);
+        Assert.True(strict.CompareNullability);
+        Assert.False(strict.NullabilityEquivalent);
+        Assert.Equal(ResultMismatchReasons.Nullability, strict.MismatchReason);
+        Assert.Equal("nullability", ResultMismatchReasons.Nullability);
+        Assert.Equal(lenient.DifferingPositions, strict.DifferingPositions);
+        Assert.Equal(lenient.BaselineOnlyCount, strict.BaselineOnlyCount);
+        Assert.Equal(lenient.CandidateOnlyCount, strict.CandidateOnlyCount);
+        Assert.Equal(0, strict.BaselineOnlyCount);
+        Assert.Equal(0, strict.CandidateOnlyCount);
+    }
+
+    [Theory]
+    [MemberData(nameof(DataModes))]
+    public void Nullability_only_difference_with_empty_results_follows_the_same_policy(ResultComparisonMode mode)
+    {
+        var baseline = new[] { Nullable(false) };
+        var candidate = new[] { Nullable(true) };
+
+        var lenient = ResultComparer.Compare(mode, baseline, candidate);
+        var strict = ResultComparer.Compare(mode, baseline, candidate, compareNullability: true);
+
+        Assert.True(lenient.Equivalent);
+        Assert.False(lenient.NullabilityEquivalent);
+        Assert.Null(lenient.MismatchReason);
+        Assert.False(strict.Equivalent);
+        Assert.Equal(ResultMismatchReasons.Nullability, strict.MismatchReason);
+    }
+
+    [Theory]
+    [MemberData(nameof(DataModes))]
+    public void Matching_nullability_is_reported_true_in_both_policies(ResultComparisonMode mode)
+    {
+        var baseline = new[] { Nullable(true, 1), Nullable(true, 1) };
+        var candidate = new[] { Nullable(true, 1) };
+
+        foreach (var strict in new[] { false, true })
+        {
+            var report = ResultComparer.Compare(mode, baseline, candidate, compareNullability: strict);
+            Assert.True(report.Equivalent);
+            Assert.True(report.NullabilityEquivalent);
+            Assert.Null(report.MismatchReason);
+        }
+    }
+
+    public static TheoryData<ResultComparisonMode, string> SchemaShapes
+    {
+        get
+        {
+            var data = new TheoryData<ResultComparisonMode, string>();
+            foreach (var mode in new[] { ResultComparisonMode.Ordered, ResultComparisonMode.Multiset, ResultComparisonMode.Set })
+            {
+                foreach (var shape in new[] { "type", "name", "ordinal", "columns", "resultsets" })
+                    data.Add(mode, shape);
+            }
+
+            return data;
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(SchemaShapes))]
+    public void Type_name_ordinal_and_shape_differences_are_never_reported_as_nullability(ResultComparisonMode mode, string shape)
+    {
+        var baseline = Build([[new CanonicalColumn(0, "Value", "System.Int32", false)]], [1]);
+        CanonicalColumn[][] candidateColumns = shape switch
+        {
+            "type" => [[new CanonicalColumn(0, "Value", "System.Int64", false)]],
+            "name" => [[new CanonicalColumn(0, "Other", "System.Int32", false)]],
+            "ordinal" => [[new CanonicalColumn(1, "Value", "System.Int32", false)]],
+            "columns" => [[new CanonicalColumn(0, "Value", "System.Int32", false), new CanonicalColumn(1, "Extra", "System.Int32", false)]],
+            _ =>
+            [
+                [new CanonicalColumn(0, "Value", "System.Int32", false)],
+                [new CanonicalColumn(0, "Value", "System.Int32", false)],
+            ],
+        };
+        var candidate = Build(candidateColumns, [1]);
+
+        foreach (var strict in new[] { false, true })
+        {
+            var report = ResultComparer.Compare(mode, [baseline], [candidate], compareNullability: strict);
+            Assert.False(report.Equivalent);
+            Assert.Null(report.MismatchReason);
+            if (shape is "type" or "name")
+                Assert.True(report.NullabilityEquivalent);
+            else
+                Assert.False(report.NullabilityEquivalent);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(DataModes))]
+    public void Real_row_differences_keep_their_counts_and_never_report_a_nullability_reason(ResultComparisonMode mode)
+    {
+        var baseline = new[] { Nullable(false, 1, 2) };
+        var matching = ResultComparer.Compare(mode, baseline, [Nullable(false, 1, 3)]);
+
+        var differing = ResultComparer.Compare(mode, baseline, [Nullable(true, 1, 3)]);
+        var strict = ResultComparer.Compare(mode, baseline, [Nullable(true, 1, 3)], compareNullability: true);
+
+        Assert.False(matching.Equivalent);
+        foreach (var report in new[] { differing, strict })
+        {
+            Assert.False(report.Equivalent);
+            Assert.False(report.NullabilityEquivalent);
+            Assert.Null(report.MismatchReason);
+            Assert.Equal(matching.DifferingPositions, report.DifferingPositions);
+            Assert.Equal(matching.BaselineOnlyCount, report.BaselineOnlyCount);
+            Assert.Equal(matching.CandidateOnlyCount, report.CandidateOnlyCount);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(DataModes))]
+    public void Every_measured_run_participates_in_the_nullability_check_even_when_representations_are_shared(ResultComparisonMode mode)
+    {
+        var plain = Nullable(false, 1, 2);
+        var nullable = Nullable(true, 1, 2);
+
+        var laterCandidate = ResultComparer.Compare(mode, [plain, plain], [plain, nullable], compareNullability: true);
+        var laterBaseline = ResultComparer.Compare(mode, [plain, nullable], [plain, plain], compareNullability: true);
+        var uniform = ResultComparer.Compare(mode, [plain, plain], [plain, plain], compareNullability: true);
+
+        Assert.False(laterCandidate.NullabilityEquivalent);
+        Assert.False(laterCandidate.Equivalent);
+        Assert.Equal(ResultMismatchReasons.Nullability, laterCandidate.MismatchReason);
+        Assert.False(laterBaseline.NullabilityEquivalent);
+        Assert.Equal(ResultMismatchReasons.Nullability, laterBaseline.MismatchReason);
+        Assert.True(uniform.NullabilityEquivalent);
+        Assert.True(uniform.Equivalent);
+    }
+
+    [Fact]
+    public void Off_mode_leaves_nullability_unknown_and_records_the_policy()
+    {
+        var report = ResultComparer.Compare(
+            ResultComparisonMode.Off, [Nullable(false, 1)], [Nullable(true, 1)], compareNullability: true);
+
+        Assert.Null(report.Equivalent);
+        Assert.Null(report.NullabilityEquivalent);
+        Assert.Null(report.MismatchReason);
+        Assert.True(report.CompareNullability);
+    }
+
+    [Fact]
+    public void Absent_nullability_evidence_is_unknown_and_fails_strict_mode()
+    {
+        var lenient = ResultComparer.Compare(ResultComparisonMode.Ordered, [Capture("A")], [Capture("A")]);
+        var strict = ResultComparer.Compare(ResultComparisonMode.Ordered, [Capture("A")], [Capture("A")], compareNullability: true);
+
+        Assert.True(lenient.Equivalent);
+        Assert.Null(lenient.NullabilityEquivalent);
+        Assert.False(strict.Equivalent);
+        Assert.Null(strict.NullabilityEquivalent);
+        Assert.Null(strict.MismatchReason);
+    }
+
+    [Fact]
+    public void Legacy_equivalence_json_without_nullability_members_reads_as_unknown()
+    {
+        var current = System.Text.Json.JsonSerializer.SerializeToNode(
+            new ResultEquivalenceReport(ResultComparisonMode.Ordered, true, 0, 0, 0, true, false, "nullability"),
+            ArtifactDirectoryPublisher.JsonOptions)!.AsObject();
+        Assert.True(current.Remove("compareNullability"));
+        Assert.True(current.Remove("nullabilityEquivalent"));
+        Assert.True(current.Remove("mismatchReason"));
+
+        var legacy = System.Text.Json.JsonSerializer.Deserialize<ResultEquivalenceReport>(
+            current.ToJsonString(), ArtifactDirectoryPublisher.JsonOptions)!;
+
+        Assert.True(legacy.Equivalent);
+        Assert.False(legacy.CompareNullability);
+        Assert.Null(legacy.NullabilityEquivalent);
+        Assert.Null(legacy.MismatchReason);
+    }
 }

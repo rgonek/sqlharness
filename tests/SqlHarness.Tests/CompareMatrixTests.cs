@@ -13,6 +13,24 @@ public class CompareMatrixTests
     private const string Plan = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></BatchSequence></ShowPlanXML>";
 
     [Fact]
+    public async Task Matrix_propagates_the_nullability_policy_into_every_cell()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+
+        var outcome = await Module(factory, artifacts)
+            .ExecuteAsync(Matrix("BatchSize:int=1,20") with { CompareNullability = true });
+
+        var report = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
+        Assert.Equal(2, report.Cells.Count);
+        Assert.All(report.Cells, cell =>
+        {
+            Assert.True(cell.Compare.Equivalence.CompareNullability);
+            Assert.True(cell.Compare.Equivalence.NullabilityEquivalent);
+        });
+    }
+
+    [Fact]
     public async Task Matrix_runs_each_value_on_a_distinct_session_in_order()
     {
         using var artifacts = new DirectoryArtifactWriter();
