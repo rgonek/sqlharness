@@ -62,7 +62,7 @@ Request-scoped client entry:
 
 ## Protect local agent configuration
 
-`~/.sqlharness/dashboard.json` contains a live dashboard access token. Do not print, paste, or expose that file. Avoid broad reads such as `cat ~/.sqlharness/*.json`; name `targets.json` explicitly when you need to inspect profiles. On Windows, the corresponding dashboard path is `%USERPROFILE%\.sqlharness\dashboard.json`.
+`~/.sqlharness/dashboard.json` and `~/.sqlharness/dashboard-token` contain a live dashboard access token. Do not print, paste, or expose that file. Avoid broad reads such as `cat ~/.sqlharness/*.json`; name `targets.json` explicitly when you need to inspect profiles. On Windows, the corresponding dashboard path is `%USERPROFILE%\.sqlharness\dashboard.json`.
 
 The sample hooks in [`scripts/hooks`](../scripts/hooks) block common Claude Code and Codex shell reads of `dashboard.json` and `~/.sqlharness/*.json`, while allowing an explicit `targets.json` read. They are optional guardrails for shell commands, not a filesystem access boundary. Review and merge the relevant example into your existing client hook configuration; do not replace other settings. Claude Code hooks use the repo-local script path in `claude-settings.example.json`. For Codex, copy `protect_sqlharness_config.py` to `~/.codex/hooks/` and merge `codex-hooks.example.json` into `~/.codex/hooks.json`; review and trust the hook when Codex prompts.
 
@@ -107,7 +107,7 @@ names only the failure class.
 
 ## Tools
 
-Exactly 11 tools are registered explicitly by name. No assembly scanning is used, so adding a public method can never silently widen the surface.
+Exactly 10 tools are registered explicitly by name. No assembly scanning is used, so adding a public method can never silently widen the surface.
 
 | Tool | Behavior |
 |---|---|
@@ -121,9 +121,8 @@ Exactly 11 tools are registered explicitly by name. No assembly scanning is used
 | `sqlharness_snapshot` | Capture a named result, which never overwrites an existing name, or diff live results against it without printing cell values. There is no force flag. |
 | `sqlharness_plan` | Offline plan-document distillation. Sanitized projection only: no statement text and no literal predicates. |
 | `sqlharness_artifact` | Read one safe section (`summary`, `metrics`, `operators`, `statements`, `matrix-cells`) of a saved benchmark artifact. `matrix-cells` accepts an optional zero-based `cursor` and returns a bounded page with a continuation cursor. |
-| `sqlharness_gain` | Local output-savings aggregate with an explicit heuristic and net delta. |
 
-Tool annotations are conservative local-effect hints only: benchmarks write artifacts, snapshot capture writes data, and gain accounting may write to disk, so those tools never claim read-only. Hints never replace policy enforcement.
+Tool annotations are conservative local-effect hints only: benchmarks write artifacts, and snapshot capture writes data, so those tools never claim read-only. Hints never replace policy enforcement.
 
 ### `sqlharness_validate` usage
 
@@ -149,7 +148,7 @@ The MCP server v1 exposes no persistent DML or DDL. Query operations are built w
 Every tool returns a versioned agent envelope (`schemaVersion`, `command`, `status`, `exitCode`, `result`, `error`, `truncation`) carried in both representations: `StructuredContent` holds the parsed envelope and a single text block holds the same compact JSON. There is no third descriptive or table representation.
 
 - Statuses: `success`, `partial` (failed matrix-cell batch), `error`, `watch_max_duration` (exit 7), and `snapshot_differences` (exit 8). The two controlled outcomes are valid results with `isError=false`; only failures set `isError=true`.
-- Budgets are enforced on the whole serialized `CallToolResult` in UTF-8 bytes, including both representations, JSON escaping, and SDK metadata: default 16384 B, accepted range 4096..1048576. The tools/list catalog budget is 32768 B for at most 11 tools. The per-cell character limit defaults to 512 and an operator may configure at most 4096.
+- Budgets are enforced on the whole serialized `CallToolResult` in UTF-8 bytes, including both representations, JSON escaping, and SDK metadata: default 16384 B, accepted range 4096..1048576. The tools/list catalog budget is 32768 B for at most 10 tools. The per-cell character limit defaults to 512 and an operator may configure at most 4096.
 - JSON is never truncated to fit: projection first tries an untruncated render, then descends through detail limits until the wire cost fits, ending in a minimum valid error envelope that always fits the smallest budget.
 - `compare --matrix` results that do not fit in full provide a scope-owned `matrixArtifactId` and a continuation cursor. Fetch omitted cell ids through the `matrix-cells` artifact section under the same scope; parameter values and filesystem paths stay out of the projection.
 - Error text may quote the caller's SQL and parameter values. Only credentials (the SQL password, tokens, JWTs, connection-string fragments) are redacted.
@@ -180,10 +179,6 @@ Every live publish stamps the frozen scope owner into versioned metadata written
 Stdout carries only protocol frames. All logging goes to stderr without arguments, SQL, parameter values, or secrets. SDK log entries sent to stderr are limited to `Warning`, `Error`, and `Critical` levels and contain only the category, level, and numeric event ID; message, state, and exception content are never written. SQLHarness may also write generic, content-free stderr lines for a pre-handshake startup failure (exit 2), an unexpected transport failure (exit 1), a failed detached-dashboard launch, or a roots diagnostic naming only a count (`kept N of M`) or a failure class (`roots/list timed out`, `roots/list failed (<ExceptionType>)`). Clean shutdown on EOF or cancellation exits 0. Tool calls that reach the SQLHarness module (inspect, query, measure, compare, watch, snapshot, plan, gain) are recorded in the local activity journal with the client's `clientInfo` name, version and title, the negotiated protocol revision, and a raw token estimate. When the final budgeted `CallToolResult` is built, the MCP handler also records an emitted estimate from the SDK-serialized UTF-8 bytes of that complete result representation, including text, structured content, and metadata. The `ceil(bytes / 4)` value estimates this representation; it is not actual model tokenization or the full JSON-RPC transport frame. Historical raw-only MCP rows stay unavailable and are not backfilled. `sqlharness_capabilities`, `sqlharness_validate`, and `sqlharness_artifact` are not recorded; journal diagnostics go to stderr only, and journal failures never change a tool result.
 
 With `dashboard.autoStart: true` in `~/.sqlharness/config.json`, a validated startup (an invalid startup configuration never launches anything) also launches `sqlharness dashboard --background` as a detached process that inherits none of the server's standard handles, with the SQLHarness home as working directory, when no dashboard is running for that home, and starts one journal retention pass in the background (it does anything only with `journal.retention.enabled: true`). Both happen before the transport starts, neither writes to stdout, and a failed launch writes one line to stderr and never changes the server's behavior. The MCP client still sees EOF when the server exits, while the dashboard keeps running until it idle-exits after `dashboard.idleShutdownHours` (default 8). Known limitation: the dashboard is not placed in a new session or process group, so Ctrl+C or SIGHUP delivered to the client's process group (or closing its console on Windows) also stops it; the next `mcp serve` relaunches it.
-
-`sqlharness_gain` aggregates CLI operations and new MCP operations with paired raw and emitted footprints, and covers only operations the journal still holds (retention trims them). Historical MCP rows with raw counts only remain unavailable and are not backfilled. The report preserves signed net savings when emitted estimates exceed raw estimates. `gain.jsonl` is no longer written or read, and its data is not migrated. With `journal.enabled: false` the result reports zeros and `journalEnabled: false`.
-
-An operation name this process does not bucket still counts in the total. One unreadable journal row, or a row with a negative count, is skipped and does not fail `sqlharness_gain`.
 
 ## Versions
 
