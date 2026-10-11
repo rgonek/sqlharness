@@ -15,11 +15,12 @@
     is not where expected, the Grok run is skipped and fails a check instead of
     trusting any other folder.
     Each client calls sqlharness_capabilities once
-    and the target-free sqlharness_gain operation once for the journal check.
+    and sqlharness_plan once on a fixture plan copied into a per-run input root
+    for the journal check.
     Checks the negotiated revision (Claude Code and Copilot CLI: 2026-07-28 via
     server/discover; Codex: 2025-06-18; opencode and Grok Build: 2025-11-25), the
     revision the capabilities result reports, and that the
-    journal session linked to the gain operation persisted clientInfo.
+    journal session linked to the plan operation persisted clientInfo.
     Frames and journals stay in client-specific temporary homes and are not printed.
     opencode's default model may hit a plan usage limit; pass -OpencodeModel with
     a free model such as opencode/step-5-preview-free.
@@ -48,7 +49,11 @@ $Sqlharness = (Resolve-Path -LiteralPath $Sqlharness -ErrorAction Stop).Path
 $tap = Join-Path $PSScriptRoot 'mcp-client-acceptance-tap.py'
 $work = Join-Path ([IO.Path]::GetTempPath()) ("sqlharness-mcp-acceptance-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work | Out-Null
-$prompt = 'Do not change any configuration or trust settings. Call sqlharness_capabilities from the acceptance MCP server exactly once, then call sqlharness_gain exactly once, then reply with one word: done.'
+$inputRoot = Join-Path $work 'inputs'
+New-Item -ItemType Directory -Path $inputRoot | Out-Null
+$planPath = Join-Path $inputRoot 'distiller-sample.sqlplan'
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..	ests\SqlHarness.Tests\Fixtures\distiller-sample.sqlplan') -Destination $planPath
+$prompt = "Do not change any configuration or trust settings. Call sqlharness_capabilities from the acceptance MCP server exactly once, then call sqlharness_plan exactly once with file `"$planPath`", then reply with one word: done."
 $results = [System.Collections.Generic.List[object]]::new()
 
 function Add-Check([string]$client, [string]$check, [string]$expected, $actual, [bool]$pass) {
@@ -157,7 +162,7 @@ try:
     rows = connection.execute("""
         SELECT s.client_name, s.client_version, o.operation
         FROM operations AS o JOIN sessions AS s ON s.id = o.session_id
-        WHERE o.operation = 'gain'
+        WHERE o.operation = 'plan'
     """).fetchall()
     if len(rows) != 1:
         raise RuntimeError()
@@ -175,7 +180,7 @@ except Exception:
     $storedName = if ($journalRow) { $journalRow[0] } else { $null }
     $storedVersion = if ($journalRow) { $journalRow[1] } else { $null }
     $storedOperation = if ($journalRow) { $journalRow[2] } else { $null }
-    Add-Check $name 'journal operation linked' 'gain' $storedOperation ($storedOperation -eq 'gain')
+    Add-Check $name 'journal operation linked' 'plan' $storedOperation ($storedOperation -eq 'plan')
     Add-Check $name 'journal clientInfo.name' $clientName $storedName (
         -not [string]::IsNullOrWhiteSpace($clientName) -and $storedName -eq $clientName)
     Add-Check $name 'journal clientInfo.version' $clientVersion $storedVersion (
@@ -188,7 +193,7 @@ if (-not $SkipClaude) {
     $clientHome = Join-Path $work 'claude-home'
     New-Item -ItemType Directory -Path $clientHome | Out-Null
     New-IsolatedTarget $clientHome $Profile
-    $config = @{ mcpServers = @{ acceptance = @{ command = $python; args = @('-I', $tap, $logPath, $clientHome, $Sqlharness, 'mcp', 'serve', $Profile) } } } |
+    $config = @{ mcpServers = @{ acceptance = @{ command = $python; args = @('-I', $tap, $logPath, $clientHome, $Sqlharness, 'mcp', 'serve', $Profile, '--input-root', $inputRoot) } } } |
         ConvertTo-Json -Depth 8
     $configPath = Join-Path $work 'claude-mcp.json'
     Set-Content -LiteralPath $configPath -Value $config -Encoding utf8NoBOM
@@ -196,7 +201,7 @@ if (-not $SkipClaude) {
     $savedSqlHarnessHome = $env:SQLHARNESS_HOME
     try {
         $env:SQLHARNESS_HOME = $clientHome
-        & $claude.Source -p $prompt --mcp-config $configPath --strict-mcp-config --allowedTools 'mcp__acceptance__sqlharness_capabilities,mcp__acceptance__sqlharness_gain' --model haiku 2>$null | Out-Null
+        & $claude.Source -p $prompt --mcp-config $configPath --strict-mcp-config --allowedTools 'mcp__acceptance__sqlharness_capabilities,mcp__acceptance__sqlharness_plan' --model haiku 2>$null | Out-Null
         $clientExit = $LASTEXITCODE
     } finally {
         $env:SQLHARNESS_HOME = $savedSqlHarnessHome
@@ -212,7 +217,7 @@ if (-not $SkipCodex) {
     $clientHome = Join-Path $work 'codex-home'
     New-Item -ItemType Directory -Path $clientHome | Out-Null
     New-IsolatedTarget $clientHome $Profile
-    $argsToml = '[' + ((@('-I', $tap, $logPath, $clientHome, $Sqlharness, 'mcp', 'serve', $Profile) | ForEach-Object { "'" + ($_ -replace '\\', '/') + "'" }) -join ',') + ']'
+    $argsToml = '[' + ((@('-I', $tap, $logPath, $clientHome, $Sqlharness, 'mcp', 'serve', $Profile, '--input-root', $inputRoot) | ForEach-Object { "'" + ($_ -replace '\\', '/') + "'" }) -join ',') + ']'
     Push-Location $work
     $savedSqlHarnessHome = $env:SQLHARNESS_HOME
     try {
@@ -237,7 +242,7 @@ if (-not $SkipCopilot) {
     $clientHome = Join-Path $work 'copilot-home'
     New-Item -ItemType Directory -Path $clientHome | Out-Null
     New-IsolatedTarget $clientHome $Profile
-    $config = @{ mcpServers = @{ acceptance = @{ type = 'local'; command = $python; args = @('-I', $tap, $logPath, $clientHome, $Sqlharness, 'mcp', 'serve', $Profile); tools = @('*') } } } |
+    $config = @{ mcpServers = @{ acceptance = @{ type = 'local'; command = $python; args = @('-I', $tap, $logPath, $clientHome, $Sqlharness, 'mcp', 'serve', $Profile, '--input-root', $inputRoot); tools = @('*') } } } |
         ConvertTo-Json -Depth 8
     $configPath = Join-Path $work 'copilot-mcp.json'
     Set-Content -LiteralPath $configPath -Value $config -Encoding utf8NoBOM
@@ -261,7 +266,7 @@ if (-not $SkipOpencode) {
     New-IsolatedTarget $clientHome $Profile
     $config = @{
         '$schema' = 'https://opencode.ai/config.json'
-        mcp = @{ acceptance = @{ type = 'local'; enabled = $true; command = @($python, '-I', $tap, $logPath, $clientHome, $Sqlharness, 'mcp', 'serve', $Profile) } }
+        mcp = @{ acceptance = @{ type = 'local'; enabled = $true; command = @($python, '-I', $tap, $logPath, $clientHome, $Sqlharness, 'mcp', 'serve', $Profile, '--input-root', $inputRoot) } }
     } | ConvertTo-Json -Depth 8
     $configPath = Join-Path $work 'opencode.json'
     Set-Content -LiteralPath $configPath -Value $config -Encoding utf8NoBOM
@@ -294,7 +299,7 @@ if (-not $SkipGrok) {
     $grokRan = $false
     Push-Location $grokProject
     try {
-        & $grok.Source mcp add --scope project acceptance $python -- -I $tap $logPath $clientHome $Sqlharness mcp serve $Profile 2>$null | Out-Null
+        & $grok.Source mcp add --scope project acceptance $python -- -I $tap $logPath $clientHome $Sqlharness mcp serve $Profile --input-root $inputRoot 2>$null | Out-Null
         # Only trust the scratch folder when the project config landed inside it;
         # otherwise stop rather than trusting a different folder.
         if (Test-Path -LiteralPath (Join-Path $grokProject '.grok/config.toml') -PathType Leaf) {

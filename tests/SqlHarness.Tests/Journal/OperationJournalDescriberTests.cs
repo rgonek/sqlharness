@@ -53,7 +53,6 @@ public sealed class OperationJournalDescriberTests
     [Fact]
     public void Target_free_operations_are_named()
     {
-        Assert.Equal("gain", OperationJournalDescriber.DescribeStart(new SqlHarnessGainOperation()).Operation);
         Assert.Equal("plan", OperationJournalDescriber.DescribeStart(new SqlHarnessPlanOperation("<x/>", new OutputFootprint(0, 0))).Operation);
     }
 

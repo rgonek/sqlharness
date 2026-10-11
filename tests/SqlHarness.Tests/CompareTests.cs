@@ -721,7 +721,7 @@ public class SqlHarnessCompareTests
     public async Task Compare_never_reassigns_session_identity_after_connect()
     {
         var factory = new IdentityAssigningFactory(FakeCompareSession.Create());
-        var module = new SqlHarnessModule(factory, new FakeGainStore(), new NullArtifactWriter(), Profiles);
+        var module = new SqlHarnessModule(factory, new NullArtifactWriter(), Profiles);
 
         var outcome = await module.ExecuteAsync(Compare(repeat: 1));
 
@@ -792,11 +792,10 @@ public class SqlHarnessCompareTests
     private static SqlHarnessModule Module(
         FakeCompareSession session,
         FakeAzureCli? azure = null,
-        FakeGainStore? gain = null,
         Func<IReadOnlyDictionary<string, TargetProfile>>? loadProfiles = null,
         int? comparisonMaximumRows = null,
         ICompareArtifactWriter? artifacts = null) =>
-        new(session, gain ?? new FakeGainStore(), artifacts ?? new NullArtifactWriter(), loadProfiles ?? Profiles)
+        new(session, artifacts ?? new NullArtifactWriter(), loadProfiles ?? Profiles)
         {
             ComparisonMaximumRows = comparisonMaximumRows ?? CanonicalComparisonAccumulator.MaximumComparedRows,
         };
@@ -823,11 +822,6 @@ public class SqlHarnessCompareTests
             using var document = JsonDocument.Parse($"{{\"accessToken\":\"{Token}\"}}");
             return Task.FromResult(document.RootElement.Clone());
         }
-    }
-
-    private sealed class FakeGainStore : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 
     private sealed class NullArtifactWriter : ICompareArtifactWriter

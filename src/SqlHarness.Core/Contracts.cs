@@ -124,7 +124,6 @@ public sealed record SqlHarnessMeasureOperation(
     public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
 }
 
-public sealed record SqlHarnessGainOperation : SqlHarnessOperation;
 
 public sealed record SqlHarnessPlanOperation(string ShowplanXml, OutputFootprint RawFootprint) : SqlHarnessOperation;
 

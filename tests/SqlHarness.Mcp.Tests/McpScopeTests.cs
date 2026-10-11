@@ -178,11 +178,13 @@ public sealed class McpScopeTests : IDisposable
         _ = scope.ProfileProvider();
         var module = scope.CreateModule();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        var gain = await module.ExecuteAsync(
-            new SqlHarnessGainOperation(),
+        var planned = await module.ExecuteAsync(
+            new SqlHarnessPlanOperation(
+                File.ReadAllText(McpStdioProcessHarness.FindRepositoryFile("tests", "SqlHarness.Tests", "Fixtures", "distiller-sample.sqlplan")),
+                new OutputFootprint(0, 0)),
             cts.Token);
 
-        Assert.Equal(SqlHarnessExitCode.Success, gain.ExitCode);
+        Assert.Equal(SqlHarnessExitCode.Success, planned.ExitCode);
         Assert.Equal(1, reads);
     }
 

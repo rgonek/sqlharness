@@ -398,7 +398,7 @@ internal sealed class RecordingStream(Stream inner) : Stream
 /// <summary>
 /// T6 protocol proof over a real process: the official SDK client drives the
 /// published single-file <c>sqlharness mcp serve</c> for the current RID
-/// (initialize 2025-11-25, tools/list of 11, offline validate + plan,
+/// (initialize 2025-11-25, tools/list of 10, offline validate + plan,
 /// malformed input survival, shutdown). No database tool runs here.
 /// </summary>
 [Collection("McpStdioProcess")]
@@ -442,7 +442,7 @@ public sealed class McpStdioProcessTests
             Assert.Equal(McpHost.ServerName, client.ServerInfo.Name);
 
             var tools = await client.ListToolsAsync(cancellationToken: ct);
-            Assert.Equal(11, tools.Count);
+            Assert.Equal(10, tools.Count);
             Assert.Equal(
                 McpToolCatalog.ToolNames.Order(StringComparer.Ordinal),
                 tools.Select(tool => tool.Name).Order(StringComparer.Ordinal).ToArray());

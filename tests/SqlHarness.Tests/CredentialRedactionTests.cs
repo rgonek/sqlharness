@@ -127,7 +127,7 @@ public sealed class CredentialRedactionTests
     private static async Task<SqlHarnessOutcome> RunWatchNdjsonAsync(
         SqlHarnessWatchOperation op, Exception failure, string password, StringWriter transport)
     {
-        var module = new SqlHarnessModule(new ThrowingSession(failure), new NoGain(), () => Profiles("sql", null));
+        var module = new SqlHarnessModule(new ThrowingSession(failure), () => Profiles("sql", null));
         var previous = Environment.GetEnvironmentVariable(EnvVar);
         try
         {
@@ -154,7 +154,7 @@ public sealed class CredentialRedactionTests
     private static async Task<SqlHarnessOutcome> RunWithFailureAsync(SqlHarnessOperation op, string message)
     {
         var session = new ThrowingSession(new InvalidOperationException(message));
-        var module = new SqlHarnessModule(session, new NoGain(), VarProfiles);
+        var module = new SqlHarnessModule(session, VarProfiles);
         var previous = Environment.GetEnvironmentVariable(EnvVar);
         try
         {
@@ -192,7 +192,7 @@ public sealed class CredentialRedactionTests
         string operation, string auth, string? engine, string password)
     {
         var session = new ThrowingSession(new InvalidOperationException($"boom {password} end"));
-        var module = new SqlHarnessModule(session, new NoGain(), () => Profiles(auth, engine));
+        var module = new SqlHarnessModule(session, () => Profiles(auth, engine));
         var target = new SqlTargetRequest("p", new Dictionary<string, string>());
         const string sql = "SELECT 1 AS One";
 
@@ -262,11 +262,6 @@ public sealed class CredentialRedactionTests
                 TrustServerCertificate: true,
                 Engine: engine),
         };
-
-    private sealed class NoGain : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
-    }
 
     private sealed class ThrowingSession(Exception failure) : ISqlSessionFactory, ISqlSession
     {

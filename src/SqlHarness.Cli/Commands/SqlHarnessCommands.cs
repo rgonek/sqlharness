@@ -386,11 +386,4 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
     }
 }
 
-public sealed class GainCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer) : SqlHarnessCommand<GainCommand.Settings>(module, output, renderer)
-{
-    public sealed class Settings : CommandSettings { [CommandOption("--json")] public bool Json { get; set; } [CommandOption("--output <MODE>")] public string? Output { get; set; } [CommandOption("--max-output-bytes <BYTES>")][DefaultValue(16384)] public int MaxOutputBytes { get; set; } = 16384; [CommandOption("--max-cell-chars <CHARS>")][DefaultValue(512)] public int MaxCellChars { get; set; } = 512; }
-    protected override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken ct) =>
-        Dispatch(new SqlHarnessGainOperation(), ResolveOutputMode(settings.Json, output: settings.Output), ct, new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
-}
-
 public sealed record CliInput(TextReader Stdin, bool StdinRedirected);

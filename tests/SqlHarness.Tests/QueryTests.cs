@@ -246,13 +246,12 @@ public class SqlHarnessQueryTests
     [Fact]
     public async Task ExecuteReader_open_failure_keeps_zero_raw_footprint()
     {
-        var gain = new FakeGainStore();
         var session = FakeSqlSession.WithIdentity(
             "test-server",
             "testdb-a",
             failure: new TimeoutException("open failed"));
 
-        var outcome = await Module(session, gain: gain).ExecuteAsync(Query("SELECT 1"));
+        var outcome = await Module(session).ExecuteAsync(Query("SELECT 1"));
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
             .CompleteAsync(new OutputFootprint(0, 0));
 
@@ -266,7 +265,6 @@ public class SqlHarnessQueryTests
     public async Task Reader_failure_receipt_preserves_exact_partial_raw_rows_and_messages()
     {
         const string message = "safe diagnostic before reader failure";
-        var gain = new FakeGainStore();
         var messages = new List<string>();
         var reader = FakeSqlReader.RowsThenFail(["Value"], 1, () => messages.Add(message), [1], [2]);
         var session = FakeSqlSession.WithIdentity(
@@ -275,7 +273,7 @@ public class SqlHarnessQueryTests
             reader,
             messages: messages);
 
-        var outcome = await Module(session, gain: gain).ExecuteAsync(Query("SELECT Value"));
+        var outcome = await Module(session).ExecuteAsync(Query("SELECT Value"));
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
             .CompleteAsync(new OutputFootprint(1, 1));
 
@@ -320,12 +318,11 @@ public class SqlHarnessQueryTests
     [Fact]
     public async Task Receipt_completion_is_exactly_once_and_thread_safe()
     {
-        var gain = new FakeGainStore();
         var session = FakeSqlSession.WithIdentity(
             "test-server",
             "testdb-a",
             FakeSqlReader.Rows(["Value"], [1]));
-        var outcome = await Module(session, gain: gain).ExecuteAsync(Query("SELECT 1"));
+        var outcome = await Module(session).ExecuteAsync(Query("SELECT 1"));
         var receipt = Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt);
 
         var results = await Task.WhenAll(Enumerable.Range(0, 8)
@@ -337,12 +334,11 @@ public class SqlHarnessQueryTests
     [Fact]
     public async Task Invalid_negative_footprint_does_not_cache_receipt_completion()
     {
-        var gain = new FakeGainStore();
         var session = FakeSqlSession.WithIdentity(
             "test-server",
             "testdb-a",
             FakeSqlReader.Rows(["Value"], [1]));
-        var outcome = await Module(session, gain: gain).ExecuteAsync(Query("SELECT 1"));
+        var outcome = await Module(session).ExecuteAsync(Query("SELECT 1"));
         var receipt = Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
@@ -355,12 +351,11 @@ public class SqlHarnessQueryTests
     [Fact]
     public async Task Invalid_cloned_footprint_is_rejected_before_receipt_completion_is_cached()
     {
-        var gain = new FakeGainStore();
         var session = FakeSqlSession.WithIdentity(
             "test-server",
             "testdb-a",
             FakeSqlReader.Rows(["Value"], [1]));
-        var outcome = await Module(session, gain: gain).ExecuteAsync(Query("SELECT 1"));
+        var outcome = await Module(session).ExecuteAsync(Query("SELECT 1"));
         var receipt = Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt);
         var invalid = new OutputFootprint(1, 1) with { Bytes = -1 };
 
@@ -403,10 +398,8 @@ public class SqlHarnessQueryTests
     public async Task Typed_target_mismatch_maps_to_four_without_running_user_sql()
     {
         var session = FakeSqlSession.WithIdentity("test-server", "testdb-a");
-        var gain = new FakeGainStore();
         var outcome = await Module(
                 session,
-                gain: gain,
                 connectFailure: new SqlTargetMismatchException($"different target access_token={Token}"))
             .ExecuteAsync(Query("SELECT 1"));
         var receipt = Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt);
@@ -491,37 +484,6 @@ public class SqlHarnessQueryTests
         Assert.DoesNotContain(secret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.DoesNotContain(sql, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.Empty(session.Commands);
-    }
-
-    [Fact]
-    public async Task Gain_returns_the_aggregate_without_loading_profiles_or_opening_SQL()
-    {
-        var session = FakeSqlSession.WithIdentity("test-server", "testdb-a");
-        var gain = new FakeGainStore(aggregate: EmptyGainReport());
-
-        var outcome = await Module(session, gain: gain).ExecuteAsync(new SqlHarnessGainOperation());
-
-        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
-        Assert.Same(gain.AggregateResult, outcome.Report);
-        Assert.Empty(session.Commands);
-        Assert.Null(outcome.EmissionReceipt);
-    }
-
-    [Fact]
-    public async Task Gain_storage_failure_redacts_every_aggregate_exception_branch()
-    {
-        var secret = "gain-secret-never-emit";
-        var failure = new AggregateException(
-            new IOException($"Password={secret}"),
-            new InvalidOperationException($"access_token={secret}"));
-        var gain = new FakeGainStore(aggregateFailure: failure);
-
-        var outcome = await Module(FakeSqlSession.WithIdentity("test-server", "testdb-a"), gain: gain)
-            .ExecuteAsync(new SqlHarnessGainOperation());
-
-        Assert.Equal(SqlHarnessExitCode.LocalStorage, outcome.ExitCode);
-        Assert.DoesNotContain(secret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-        Assert.Contains("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -642,10 +604,9 @@ public class SqlHarnessQueryTests
     private static SqlHarnessModule Module(
         FakeSqlSession session,
         FakeAzureCli? azure = null,
-        FakeGainStore? gain = null,
         Exception? connectFailure = null,
         Func<IReadOnlyDictionary<string, TargetProfile>>? loadProfiles = null) =>
-        new(new FakeSqlSessionFactory(session, azure ?? new FakeAzureCli(Token), connectFailure), gain ?? new FakeGainStore(), loadProfiles ?? Profiles);
+        new(new FakeSqlSessionFactory(session, azure ?? new FakeAzureCli(Token), connectFailure), loadProfiles ?? Profiles);
 
     private static Microsoft.Data.SqlClient.SqlException FakeSqlException() =>
         (Microsoft.Data.SqlClient.SqlException)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(
@@ -678,21 +639,6 @@ public class SqlHarnessQueryTests
             using var document = JsonDocument.Parse(JsonSerializer.Serialize(new { accessToken = token }));
             return Task.FromResult(document.RootElement.Clone());
         }
-    }
-
-    private static SqlHarnessGainReport EmptyGainReport()
-    {
-        var empty = new SqlHarnessGainSummary(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        return new(empty, empty, empty) { Measure = empty };
-    }
-
-    private sealed class FakeGainStore(
-        SqlHarnessGainReport? aggregate = null,
-        Exception? aggregateFailure = null) : IGainSource
-    {
-        public SqlHarnessGainReport? AggregateResult => aggregate;
-        public SqlHarnessGainReport Aggregate() =>
-            aggregateFailure is not null ? throw aggregateFailure : aggregate ?? throw new NotSupportedException();
     }
 
     private sealed class FakeSqlSessionFactory(FakeSqlSession session, FakeAzureCli azure, Exception? connectFailure) : ISqlSessionFactory

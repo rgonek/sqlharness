@@ -213,7 +213,7 @@ public sealed class PostgresSpaceTests
     }
 
     private static SqlHarnessModule Module(FakeSession session) =>
-        new(session, new FakeGain(), Profiles);
+        new(session, Profiles);
 
     private static SqlTargetRequest Target() =>
         new("local-pg", new Dictionary<string, string>());
@@ -246,11 +246,6 @@ public sealed class PostgresSpaceTests
 
     private static object?[][] Set(string[] names, params object?[][] rows) =>
         [[.. names], .. rows];
-
-    private sealed class FakeGain : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
-    }
 
     private sealed class FakeSession(FakeReader reader) : ISqlSessionFactory, ISqlSession
     {

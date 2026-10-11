@@ -235,7 +235,7 @@ public sealed class McpTokenBudgetTests
         foreach (var tool in tools)
         {
             var schema = tool.ProtocolTool.OutputSchema;
-            Assert.True(schema.HasValue, $"{tool.Name} publishes no outputSchema; the budget must hold with all 11 schemas served.");
+            Assert.True(schema.HasValue, $"{tool.Name} publishes no outputSchema; the budget must hold with all 10 schemas served.");
             Assert.Equal(JsonValueKind.Object, schema!.Value.ValueKind);
         }
 

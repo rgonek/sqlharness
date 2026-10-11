@@ -109,18 +109,6 @@ public sealed class AgentWorkflowTests
     }
 
     [Fact]
-    public async Task Gain_text_names_estimates_and_the_heuristic()
-    {
-        var output = NewOutput();
-        var exit = await SqlHarnessCli.Create(new WorkflowModule(), output).RunAsync(["gain"]);
-
-        Assert.Equal(0, exit);
-        Assert.Contains("Token estimates: utf8-bytes-div-4 (ceil UTF-8 bytes / 4)", output.ToString(), StringComparison.Ordinal);
-        Assert.StartsWith("Scope\tExecutions\tFailures\tSaved tokens\tSavings %", output.ToString(), StringComparison.Ordinal);
-        Assert.Contains("Net estimated tokens by scope\nScope\tNet estimated tokens", output.ToString(), StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void Output_capture_uses_the_sink_newline_for_written_lines()
     {
         var sink = NewOutput();
@@ -172,7 +160,6 @@ public sealed class AgentWorkflowTests
                     new("offline.invalid", "unused", "offline.invalid", "unused", "profile"),
                     [new SchemaObjectReport("dbo", "Orders", "table", [], [], [])], 0),
                 SqlHarnessCompareOperation => CompareReport(artifactDirectory!),
-                SqlHarnessGainOperation => new SqlHarnessGainReport(Summary(100, 200), Summary(0, 0), Summary(0, 0)),
                 _ => throw new InvalidOperationException($"Unexpected workflow operation: {operation.GetType().Name}"),
             };
             return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null));
@@ -191,8 +178,5 @@ public sealed class AgentWorkflowTests
             name, new(1, 1, 1), new(1, 1, 1), new(0, 0, 0),
             new Dictionary<string, long>(), [], []);
 
-        private static SqlHarnessGainSummary Summary(long rawTokens, long emittedTokens) => new(
-            0, 0, 0, rawTokens * 4, 0, emittedTokens * 4, 0,
-            rawTokens, emittedTokens, Math.Max(rawTokens - emittedTokens, 0));
     }
 }

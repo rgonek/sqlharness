@@ -299,15 +299,6 @@ public sealed class McpToolHandlers(
                 null));
         }, ct);
 
-    public Task<CallToolResult> GainAsync(
-        RequestContext<CallToolRequestParams> ctx,
-        CancellationToken ct = default) =>
-        RunAsync("sqlharness_gain", ctx, async token =>
-        {
-            ThrowIfUnknown(ctx, []);
-            return await module.ExecuteAsync(new SqlHarnessGainOperation(), token);
-        }, ct);
-
     /// <summary>
     /// Rejects unknown argument keys before any mapping or execution. Keys
     /// compare case-insensitively (matching binder behavior); the rejection
@@ -460,7 +451,7 @@ public sealed class McpToolHandlers(
 }
 
 /// <summary>
-/// Explicit tool catalog: exactly the 11 MCP v1 tools, registered one by one
+/// Explicit tool catalog: exactly the 10 MCP v1 tools, registered one by one
 /// by name. No assembly scanning (WithToolsFromAssembly) is used anywhere on
 /// this path, so adding a public method can never silently widen the surface.
 /// Annotations are conservative local-effect hints only: benchmark and
@@ -481,7 +472,6 @@ public static class McpToolCatalog
         "sqlharness_snapshot",
         "sqlharness_plan",
         "sqlharness_artifact",
-        "sqlharness_gain",
     ];
 
     public static IReadOnlyList<McpServerTool> CreateTools(
@@ -521,7 +511,6 @@ public static class McpToolCatalog
             Tool(ToolNames[7], nameof(McpRequestToolHandlers.SnapshotAsync), "Capture or diff a snapshot against the supplied request scope.", null, false, null, true),
             Tool(ToolNames[8], nameof(McpRequestToolHandlers.PlanAsync), "Distill a plan document offline.", true, false, true, false),
             Tool(ToolNames[9], nameof(McpRequestToolHandlers.ArtifactAsync), "Read a safe section of an artifact against the supplied request scope.", true, false, true, false),
-            Tool(ToolNames[10], nameof(McpRequestToolHandlers.GainAsync), "Report the local output-savings aggregate.", null, false, null, false),
         };
         if (tools.Count != McpLimits.MaxTools)
             throw new InvalidOperationException($"The MCP catalog must serve exactly {McpLimits.MaxTools} tools.");
@@ -589,7 +578,6 @@ public static class McpToolCatalog
             Tool(ToolNames[7], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it. No force flag.", null, false, null, true),
             Tool(ToolNames[8], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. Sanitized projection only: no statement text or literal predicates.", true, false, true, false),
             Tool(ToolNames[9], nameof(McpToolHandlers.ArtifactAsync), "Read one safe section (summary, metrics, operators, statements, matrix-cells) of a saved benchmark artifact.", true, false, true, false),
-            Tool(ToolNames[10], nameof(McpToolHandlers.GainAsync), "Report the local output-savings aggregate.", null, false, null, false),
         };
         if (tools.Count != McpLimits.MaxTools)
             throw new InvalidOperationException($"The MCP catalog must serve exactly {McpLimits.MaxTools} tools.");

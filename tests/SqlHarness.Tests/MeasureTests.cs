@@ -268,10 +268,8 @@ public class SqlHarnessMeasureTests
     [Fact]
     public async Task Measure_receipt_raw_footprint_includes_setup_warmup_and_measured_runs()
     {
-        var leanGain = new FakeGainStore();
-        var richGain = new FakeGainStore();
-        var lean = await Module(FakeMeasureSession.Create(), gain: leanGain).ExecuteAsync(Measure(1));
-        var rich = await Module(FakeMeasureSession.Create(includeSetupResult: true, includeExtraMessage: true), gain: richGain)
+        var lean = await Module(FakeMeasureSession.Create()).ExecuteAsync(Measure(1));
+        var rich = await Module(FakeMeasureSession.Create(includeSetupResult: true, includeExtraMessage: true))
             .ExecuteAsync(Measure(1));
 
         await Assert.IsType<SqlHarnessEmissionReceipt>(lean.EmissionReceipt).CompleteAsync(new OutputFootprint(1, 1));
@@ -283,8 +281,7 @@ public class SqlHarnessMeasureTests
     [Fact]
     public async Task Measure_partial_failure_receipt_preserves_prior_raw_snapshot()
     {
-        var gain = new FakeGainStore();
-        var outcome = await Module(FakeMeasureSession.Create(includeSetupResult: true, failOnQueryNumber: 2), gain: gain)
+        var outcome = await Module(FakeMeasureSession.Create(includeSetupResult: true, failOnQueryNumber: 2))
             .ExecuteAsync(Measure(2));
 
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt).CompleteAsync(new OutputFootprint(1, 1));
@@ -296,9 +293,8 @@ public class SqlHarnessMeasureTests
     [Fact]
     public async Task Measure_partial_query_failure_retains_message_emitted_before_failure_exactly_once()
     {
-        var gain = new FakeGainStore();
         var session = FakeMeasureSession.Create(failOnQueryNumber: 2, emitMessageBeforeQueryFailure: true);
-        var outcome = await Module(session, gain: gain).ExecuteAsync(Measure(1) with { SetupSql = null });
+        var outcome = await Module(session).ExecuteAsync(Measure(1) with { SetupSql = null });
 
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt).CompleteAsync(new OutputFootprint(1, 1));
 
@@ -316,9 +312,8 @@ public class SqlHarnessMeasureTests
     [Fact]
     public async Task Measure_setup_failure_retains_message_emitted_before_failure_exactly_once()
     {
-        var gain = new FakeGainStore();
         var session = FakeMeasureSession.Create(failSetup: true);
-        var outcome = await Module(session, gain: gain).ExecuteAsync(Measure(1));
+        var outcome = await Module(session).ExecuteAsync(Measure(1));
 
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt).CompleteAsync(new OutputFootprint(1, 1));
 
@@ -548,11 +543,10 @@ public class SqlHarnessMeasureTests
     private static SqlHarnessModule Module(
         FakeMeasureSession session,
         FakeAzureCli? azure = null,
-        FakeGainStore? gain = null,
         ICompareArtifactWriter? writer = null,
         Func<IReadOnlyDictionary<string, TargetProfile>>? loadProfiles = null,
         int? comparisonMaximumRows = null) =>
-        new(session, gain ?? new FakeGainStore(), writer ?? new CapturingArtifactWriter(), loadProfiles ?? Profiles)
+        new(session, writer ?? new CapturingArtifactWriter(), loadProfiles ?? Profiles)
         {
             ComparisonMaximumRows = comparisonMaximumRows ?? CanonicalComparisonAccumulator.MaximumComparedRows,
         };
@@ -567,11 +561,6 @@ public class SqlHarnessMeasureTests
             using var document = JsonDocument.Parse($"{{\"accessToken\":\"{Token}\"}}");
             return Task.FromResult(document.RootElement.Clone());
         }
-    }
-
-    private sealed class FakeGainStore : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 
     private sealed class CapturingArtifactWriter : ICompareArtifactWriter

@@ -17,7 +17,6 @@ internal static class OperationReportContract
             [typeof(SqlHarnessCompareOperation)] = new HashSet<Type> { typeof(SqlHarnessCompareReport) },
             [typeof(SqlHarnessCompareMatrixOperation)] = new HashSet<Type> { typeof(SqlHarnessCompareMatrixReport) },
             [typeof(SqlHarnessMeasureOperation)] = new HashSet<Type> { typeof(SqlHarnessMeasureReport), typeof(SqlHarnessMeasureSetReport) },
-            [typeof(SqlHarnessGainOperation)] = new HashSet<Type> { typeof(SqlHarnessGainReport) },
             [typeof(SqlHarnessPlanOperation)] = new HashSet<Type> { typeof(DistilledPlan) },
             [typeof(SqlHarnessSchemaOperation)] = new HashSet<Type> { typeof(SqlHarnessSchemaReport) },
             [typeof(SqlHarnessPingOperation)] = new HashSet<Type> { typeof(SqlHarnessPingReport) },

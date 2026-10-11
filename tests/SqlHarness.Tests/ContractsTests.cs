@@ -274,7 +274,6 @@ public class ContractsTests
             "sqlharness_snapshot",
             "sqlharness_plan",
             "sqlharness_artifact",
-            "sqlharness_gain",
         })
         {
             Assert.Contains(tool, mcp, StringComparison.Ordinal);
@@ -325,7 +324,7 @@ public class ContractsTests
     }
 
     [Fact]
-    public void Operation_family_is_closed_to_query_compare_measure_gain_and_plan()
+    public void Operation_family_is_closed_to_query_compare_measure_and_plan()
     {
         Assert.Equal(
             [
@@ -333,7 +332,6 @@ public class ContractsTests
                 typeof(SqlHarnessCompareOperation),
                 typeof(SqlHarnessCompareMatrixOperation),
                 typeof(SqlHarnessMeasureOperation),
-                typeof(SqlHarnessGainOperation),
                 typeof(SqlHarnessPlanOperation),
                 typeof(SqlHarnessSchemaOperation),
                 typeof(SqlHarnessPingOperation),
@@ -355,16 +353,15 @@ public class ContractsTests
         nameof(SqlHarnessCompareOperation) => 1,
         nameof(SqlHarnessCompareMatrixOperation) => 2,
         nameof(SqlHarnessMeasureOperation) => 3,
-        nameof(SqlHarnessGainOperation) => 4,
-        nameof(SqlHarnessPlanOperation) => 5,
-        nameof(SqlHarnessSchemaOperation) => 6,
-        nameof(SqlHarnessPingOperation) => 7,
-        nameof(SqlHarnessCountsOperation) => 8,
-        nameof(SqlHarnessSpaceOperation) => 9,
-        nameof(SqlHarnessWatchOperation) => 10,
-        nameof(SqlHarnessSnapshotOperation) => 11,
-        nameof(SqlHarnessQueryStoreTopOperation) => 12,
-        nameof(SqlHarnessIndexesOperation) => 13,
+        nameof(SqlHarnessPlanOperation) => 4,
+        nameof(SqlHarnessSchemaOperation) => 5,
+        nameof(SqlHarnessPingOperation) => 6,
+        nameof(SqlHarnessCountsOperation) => 7,
+        nameof(SqlHarnessSpaceOperation) => 8,
+        nameof(SqlHarnessWatchOperation) => 9,
+        nameof(SqlHarnessSnapshotOperation) => 10,
+        nameof(SqlHarnessQueryStoreTopOperation) => 11,
+        nameof(SqlHarnessIndexesOperation) => 12,
         _ => int.MaxValue,
     };
 
@@ -463,7 +460,7 @@ public class ContractsTests
     public void Every_operation_accepts_only_its_own_report_types()
     {
         var cases = OperationReportCases();
-        Assert.Equal(14, cases.Select(c => c.Operation.GetType()).Distinct().Count());
+        Assert.Equal(13, cases.Select(c => c.Operation.GetType()).Distinct().Count());
         foreach (var (operation, report, compatible) in cases)
         {
             var exception = Record.Exception(() =>
@@ -481,7 +478,6 @@ public class ContractsTests
         new SqlHarnessCompareOperation(Target(), null, "SELECT 1", "SELECT 2", [], 30, 1),
         new SqlHarnessCompareMatrixOperation(Target(), null, "SELECT 1", "SELECT 2", [], 30, 1, "BatchSize:int=1,2"),
         new SqlHarnessMeasureOperation(Target(), null, "SELECT 1", [], 30, 1),
-        new SqlHarnessGainOperation(),
         new SqlHarnessPlanOperation("<ShowPlanXML/>", new OutputFootprint(0, 0)),
         new SqlHarnessSchemaOperation(Target(), null, 30),
         new SqlHarnessPingOperation(Target(), 30),
@@ -502,7 +498,6 @@ public class ContractsTests
         new SqlHarnessMeasureSetReport(
             Identity(), 1, 2, 1, [], "rule", "warning", [],
             new MeasureCrossSetSummary(null, 0, null, 0, null, 0, null, 0, null, 0, null, 0), null),
-        new SqlHarnessGainReport(new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0), new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0), new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
         new DistilledPlan([]),
         new SqlHarnessSchemaReport(Identity(), [], 0),
         new SqlHarnessPingReport(Identity(), "s", "d", "login", 5),
@@ -521,7 +516,7 @@ public class ContractsTests
         var compatible = new HashSet<(int Operation, int Report)>
         {
             (0, 0), (1, 1), (2, 2), (3, 3), (3, 4), (4, 5), (5, 6), (6, 7),
-            (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 13), (13, 14),
+            (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 13),
         };
         var cases = new List<(SqlHarnessOperation, object, bool)>();
         for (var o = 0; o < operations.Count; o++)

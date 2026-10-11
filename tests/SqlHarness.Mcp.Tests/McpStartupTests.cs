@@ -86,7 +86,7 @@ public sealed class McpStartupTests
         Assert.Equal(HandshakeVersion, client.NegotiatedProtocolVersion);
         Assert.Equal(McpHost.ServerName, client.ServerInfo.Name);
 
-        // T3 wires the explicit 11-tool catalog on the frozen scope: tools/list
+        // T3 wires the explicit 10-tool catalog on the frozen scope: tools/list
         // serves exactly those tools and nothing else (no assembly scanning,
         // so no reload/switch-target surface can exist either).
         var served = await client.ListToolsAsync(cancellationToken: cts.Token);

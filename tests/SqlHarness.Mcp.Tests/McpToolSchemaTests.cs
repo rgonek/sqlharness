@@ -17,7 +17,7 @@ using SqlHarness.Mcp.Tools;
 namespace SqlHarness.Mcp.Tests;
 
 /// <summary>
-/// T3 catalog contract: exactly the 11 spec tools with strict input schemas,
+/// T3 catalog contract: exactly the 10 spec tools with strict input schemas,
 /// no target/auth/mutation surface, and unknown-property rejection without
 /// ever echoing values. Only synthetic HOME directories are used; the
 /// unreachable profile target is never connected (unknown properties are
@@ -42,7 +42,6 @@ public sealed class McpToolSchemaTests : IDisposable
         "sqlharness_snapshot",
         "sqlharness_plan",
         "sqlharness_artifact",
-        "sqlharness_gain",
     ];
 
     private readonly string _home;
@@ -248,7 +247,7 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
-    public void Catalog_registers_exactly_the_11_spec_tools()
+    public void Catalog_registers_exactly_the_10_spec_tools()
     {
         var scope = Scope();
         var tools = McpToolCatalog.CreateTools(scope, scope.CreateModule());
@@ -293,7 +292,7 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.True(scopeSchema.GetProperty("properties").TryGetProperty("profile", out _));
             Assert.True(scopeSchema.GetProperty("properties").TryGetProperty("vars", out _));
         }
-        foreach (var tool in new[] { "sqlharness_capabilities", "sqlharness_plan", "sqlharness_gain" })
+        foreach (var tool in new[] { "sqlharness_capabilities", "sqlharness_plan" })
             Assert.DoesNotContain("scope", Properties(requestSchemas[tool]).EnumerateObject().Select(property => property.Name));
         var rawNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var schema in requestSchemas.Values) CollectPropertyNames(schema, rawNames);
@@ -459,9 +458,6 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Equal(["id", "section"], Required(artifact).Order().ToArray());
         Assert.Equal(["summary", "metrics", "operators", "statements", "matrix-cells"], EnumOf(artifact, "section"));
         Assert.Contains("cursor", Properties(artifact).EnumerateObject().Select(property => property.Name));
-
-        var gain = schemas["sqlharness_gain"];
-        Assert.Empty(Properties(gain).EnumerateObject());
 
         var capabilities = schemas["sqlharness_capabilities"];
         Assert.Empty(Required(capabilities));

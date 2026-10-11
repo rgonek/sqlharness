@@ -47,7 +47,6 @@ public static class SqlHarnessCapabilitiesProvider
                 new("qstop", "Rank SQL Server Query Store consumers."),
                 new("indexes", "Inspect SQL Server missing-index evidence."),
                 new("plan", "Distill a saved execution plan offline."),
-                new("gain", "Report saved-output estimates."),
                 new("artifact", "Read safe sections of a saved benchmark artifact offline."),
             ],
             [

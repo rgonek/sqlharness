@@ -20,7 +20,6 @@ public sealed class JournalContractTests : IDisposable
 
     public static TheoryData<string[]> Commands => new()
     {
-        new[] { "gain", "--json" },
         new[] { "ping", "missing-profile", "--json" },
         new[] { "query", "missing-profile", "--json", "--file", "does-not-exist.sql" },
     };
@@ -105,7 +104,7 @@ public sealed class JournalContractTests : IDisposable
             ? SqlHarnessMeasureTests.FakeMeasureSession.Create(plan: PlanMetricsExtractorTests.ActualPlan)
             : SqlHarnessCompareTests.FakeCompareSession.Create(plan: PlanMetricsExtractorTests.ActualPlan);
         ISqlHarnessModule module = new SqlHarnessModule(
-            sessions, new NullGainStore(), new CompareArtifactWriter(artifactRoot, () => fixedNow), BenchmarkProfiles);
+            sessions, new CompareArtifactWriter(artifactRoot, () => fixedNow), BenchmarkProfiles);
         if (journal is not null)
             module = new JournalingModule(module, () => journal, () => JournalTestData.Session());
 
@@ -130,11 +129,6 @@ public sealed class JournalContractTests : IDisposable
         {
             ["test"] = new("test-server", "testdb-{env}", new Dictionary<string, string> { ["env"] = "^(a|b)$" }, "integrated"),
         };
-
-    private sealed class NullGainStore : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
-    }
 
     private static async Task<(int Exit, string Output)> Run(ISqlHarnessModule module, string[] args)
     {

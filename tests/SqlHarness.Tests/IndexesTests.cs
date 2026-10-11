@@ -439,10 +439,9 @@ public sealed class IndexesTests
     public async Task Indexes_success_receipt_stores_indexes_and_nonzero_raw_footprint()
     {
         var session = Fixture.Session();
-        var gain = new FakeGain();
         var artifacts = new CapturingIndexAnalysisArtifactWriter("index-artifacts");
 
-        var outcome = await Module(session, artifacts, gain).ExecuteAsync(Operation());
+        var outcome = await Module(session, artifacts).ExecuteAsync(Operation());
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt)
@@ -508,9 +507,8 @@ public sealed class IndexesTests
     private static SqlHarnessModule Module(
         FakeSession session,
         IIndexAnalysisArtifactWriter? artifacts = null,
-        FakeGain? gain = null,
         Func<IReadOnlyDictionary<string, TargetProfile>>? profiles = null) =>
-        new(session, gain ?? new FakeGain(), profiles ?? Profiles, indexAnalysisArtifacts: artifacts);
+        new(session, profiles ?? Profiles, indexAnalysisArtifacts: artifacts);
 
     private static SqlTargetRequest Target() =>
         new("test", new Dictionary<string, string> { ["tenant"] = "acme" });
@@ -547,11 +545,6 @@ public sealed class IndexesTests
 
     private static SqlException FakeSqlException() =>
         (SqlException)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(SqlException));
-
-    private sealed class FakeGain : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
-    }
 
     private sealed class CapturingIndexAnalysisArtifactWriter(string directory) : IIndexAnalysisArtifactWriter
     {

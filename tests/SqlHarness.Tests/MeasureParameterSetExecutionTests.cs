@@ -252,7 +252,6 @@ public sealed class MeasureParameterSetExecutionTests
             setupSql: "CREATE TABLE #ids (Id int); INSERT #ids (Id) SELECT Id FROM dbo.Clients WHERE Id = @id AND Tenant = @tenant",
             querySql: "SELECT Value FROM dbo.Clients WHERE Id = @id AND Tenant = @tenant");
         var writer = new CapturingWriter();
-        var gain = new FakeGainStore();
         var operation = new SqlHarnessMeasureOperation(
             Target(),
             session.SetupSql,
@@ -262,7 +261,7 @@ public sealed class MeasureParameterSetExecutionTests
             2,
             Inputs("A", "B"));
 
-        var outcome = await Module(session, writer: writer, comparisonMaximumRows: 2, gain: gain).ExecuteAsync(operation);
+        var outcome = await Module(session, writer: writer, comparisonMaximumRows: 2).ExecuteAsync(operation);
 
         Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
         Assert.Null(outcome.SafeError);
@@ -561,9 +560,8 @@ public sealed class MeasureParameterSetExecutionTests
         RecordingSession session,
         Func<IReadOnlyDictionary<string, TargetProfile>>? profiles = null,
         ICompareArtifactWriter? writer = null,
-        int? comparisonMaximumRows = null,
-        FakeGainStore? gain = null) =>
-        new(session, gain ?? new FakeGainStore(), writer ?? new CapturingWriter(), profiles ?? Profiles)
+        int? comparisonMaximumRows = null) =>
+        new(session, writer ?? new CapturingWriter(), profiles ?? Profiles)
         {
             ComparisonMaximumRows = comparisonMaximumRows ?? CanonicalComparisonAccumulator.MaximumComparedRows,
         };
@@ -662,11 +660,6 @@ public sealed class MeasureParameterSetExecutionTests
                 comparisonMaximumRows,
                 ct);
         }
-    }
-
-    private sealed class FakeGainStore : IGainSource
-    {
-        public SqlHarnessGainReport Aggregate() => throw new NotSupportedException();
     }
 
     private sealed class CapturingWriter : ICompareArtifactWriter

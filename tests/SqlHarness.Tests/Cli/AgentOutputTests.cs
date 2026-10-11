@@ -20,12 +20,12 @@ public sealed class AgentOutputTests
     {
         var output = new StringWriter();
         var module = new FakeModule(new SqlHarnessOutcome(SqlHarnessExitCode.Success, new { value = 7 }, null));
-        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["gain", "--output", "agent"]);
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["ping", "dev", "--output", "agent"]);
 
         Assert.Equal(0, exit);
         using var json = JsonDocument.Parse(output.ToString());
         Assert.Equal(1, json.RootElement.GetProperty("schemaVersion").GetInt32());
-        Assert.Equal("gain", json.RootElement.GetProperty("command").GetString());
+        Assert.Equal("ping", json.RootElement.GetProperty("command").GetString());
         Assert.Equal("success", json.RootElement.GetProperty("status").GetString());
         Assert.Equal(0, json.RootElement.GetProperty("exitCode").GetInt32());
         Assert.Equal(7, json.RootElement.GetProperty("result").GetProperty("value").GetInt32());
@@ -38,7 +38,7 @@ public sealed class AgentOutputTests
     {
         var output = new StringWriter();
         var module = new FakeModule(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null));
-        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["gain", "--output", "agent", "--unknown", "secret-value"]);
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["ping", "dev", "--output", "agent", "--unknown", "secret-value"]);
 
         Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
         Assert.Empty(module.Operations);
@@ -60,7 +60,8 @@ public sealed class AgentOutputTests
             UseShellExecute = false,
         };
         start.ArgumentList.Add(cli);
-        start.ArgumentList.Add("gain");
+        start.ArgumentList.Add("ping");
+        start.ArgumentList.Add("dev");
         start.ArgumentList.Add("--output");
         start.ArgumentList.Add("agent");
         start.ArgumentList.Add("--unknown");
@@ -85,7 +86,7 @@ public sealed class AgentOutputTests
     {
         var output = new StringWriter();
         var error = new SqlHarnessOutcome(SqlHarnessExitCode.Authentication, null, "Credentials were rejected.");
-        var exit = await SqlHarnessCli.Create(new FakeModule(error), output).RunAsync(["gain", "--json"]);
+        var exit = await SqlHarnessCli.Create(new FakeModule(error), output).RunAsync(["ping", "dev", "--json"]);
 
         Assert.Equal((int)SqlHarnessExitCode.Authentication, exit);
         using var json = JsonDocument.Parse(output.ToString());
@@ -118,7 +119,7 @@ public sealed class AgentOutputTests
     {
         var output = new StringWriter();
         var module = new FakeModule(new SqlHarnessOutcome(exitCode, null, "Safe failure message."));
-        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["gain", "--output", "agent"]);
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["ping", "dev", "--output", "agent"]);
 
         Assert.Equal((int)exitCode, exit);
         using var json = JsonDocument.Parse(output.ToString());
@@ -254,7 +255,7 @@ public sealed class AgentOutputTests
     {
         var output = new StringWriter();
         var module = new FakeModule(new SqlHarnessOutcome(SqlHarnessExitCode.Success, new { value = "😀" }, null));
-        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["gain", "--output", "agent", "--max-output-bytes", "4096", "--max-cell-chars", "0"]);
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["ping", "dev", "--output", "agent", "--max-output-bytes", "4096", "--max-cell-chars", "0"]);
 
         Assert.Equal(0, exit);
         Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(output.ToString()), 1, 4096);

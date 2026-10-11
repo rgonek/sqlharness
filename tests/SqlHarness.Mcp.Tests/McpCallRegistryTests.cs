@@ -57,7 +57,7 @@ public sealed class McpCallRegistryTests : IDisposable
 
         public async Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default)
         {
-            if (operation is SqlHarnessGainOperation)
+            if (operation is SqlHarnessPlanOperation)
                 return new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null);
             Entered.TrySetResult();
             await Task.Delay(Timeout.Infinite, ct);
@@ -140,10 +140,10 @@ public sealed class McpCallRegistryTests : IDisposable
         var call = handlers.QueryAsync(null!, "SELECT 1", ct: request.Token);
         await inner.Entered.Task.WaitAsync(Budget);
         await request.CancelAsync();
-        await handlers.GainAsync(null!, ct: CancellationToken.None).WaitAsync(Budget);
+        await handlers.PlanAsync(null!, "<ShowPlanXML/>", ct: CancellationToken.None).WaitAsync(Budget);
         await call.WaitAsync(Budget);
 
         Assert.Equal("client", ReasonOf(database, "query"));
-        Assert.Null(ReasonOf(database, "gain"));
+        Assert.Null(ReasonOf(database, "plan"));
     }
 }

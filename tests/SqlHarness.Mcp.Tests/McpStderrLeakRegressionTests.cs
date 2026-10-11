@@ -14,6 +14,9 @@ namespace SqlHarness.Mcp.Tests;
 [Collection("McpStdioProcess")]
 public sealed class McpStderrLeakRegressionTests
 {
+    private static readonly string PlanXml = File.ReadAllText(McpStdioProcessHarness.FindRepositoryFile(
+        "tests", "SqlHarness.Tests", "Fixtures", "distiller-sample.sqlplan"));
+
     private static readonly TimeSpan LeakBudget = TimeSpan.FromMinutes(6);
 
     private const string SqlMarker = "steno-sql-4171";
@@ -227,8 +230,8 @@ public sealed class McpStderrLeakRegressionTests
             var stdin = child.Process.StandardInput.BaseStream;
             var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct, revision);
             Assert.Equal(revision, client.NegotiatedProtocolVersion);
-            var gain = await client.CallToolAsync("sqlharness_gain", new Dictionary<string, object?>(), cancellationToken: ct);
-            Assert.NotEqual(true, gain.IsError);
+            var plan = await client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = PlanXml }, cancellationToken: ct);
+            Assert.NotEqual(true, plan.IsError);
             await client.DisposeAsync();
             child.Process.StandardInput.Close();
             Assert.True(child.Process.WaitForExit(30_000), "The published server did not exit after stdin EOF.");
