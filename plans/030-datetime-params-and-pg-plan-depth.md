@@ -81,9 +81,9 @@ Branch `fix/plan-030-datetime-depth`. Commits per step. Do NOT push.
 
 ### Execution phases — user priority update, 2026-10-11
 
-- **A, first: shared date/time parameter correctness.** Step 1 and the matching Step 4 documentation/tests. Shared parser changes apply to both engines and must not break existing PG behavior; the required platform gates remain Windows and Linux.
-- **B, deferred: PostgreSQL binding and deep plans.** Steps 2 and 3, their focused tests and remaining Step 4 documentation. A's completion does not imply these improvements are shipped.
-- Stage A can run now that 026 is DONE. Sequence it with 045 because both edit SqlSafety.cs. After A, record PARTIAL with scope and gate evidence; mark the whole plan DONE only when B is complete too. Focused checks must run the intended cases, not pass with zero selected tests.
+- **A, complete: shared date/time parameter correctness.** Step 1 and the matching Step 4 documentation/tests. Shared parser changes apply to both engines and preserve PostgreSQL behavior.
+- **B, complete: PostgreSQL binding and deep plans.** The user explicitly un-deferred Steps 2 and 3 after A had been recorded as PARTIAL. B's focused tests and both platform gates are complete.
+- Historical sequencing: A ran after 026 and was coordinated with 045 because both edited `SqlSafety.cs`. The initial priority update deferred B and correctly left the plan PARTIAL; the later user decision resumed B. Focused checks must run the intended cases, not pass with zero selected tests.
 
 ### Step 1: Offset-less types reject offsets (validation, exit 2)
 
@@ -131,10 +131,14 @@ Six parser tests, one PG binding test and one deep-plan test, following the patt
 
 ## Done criteria
 
-- [ ] Focused tests and the full gate pass
-- [ ] `grep -n "DateTimeStyles.RoundtripKind" src/SqlHarness.Core/SqlSafety.cs` → no match on the datetime2 line (other uses, if any, are justified in a comment)
-- [ ] `grep -n "PlanJsonOptions" src/SqlHarness.Core` → defined and used twice
-- [ ] `plans/README.md` row updated
+- [x] Focused tests and the full gate pass. Windows `verify.ps1` and isolated ext4 Linux `verify-linux.ps1` both exited 0 at `bb78c87`; focused parser, PostgreSQL parameter, and deep-plan tests passed.
+- [x] `grep -n "DateTimeStyles.RoundtripKind" src/SqlHarness.Core/SqlSafety.cs` → no match on the offset-less datetime line. The sole remaining match is inside `CreateDateTimeOffset`, where parsing preserves an explicit offset for the offset-bearing type.
+- [x] `grep -n "PlanJsonOptions" src/SqlHarness.Core` → one definition and two uses, in `PostgresBenchmark.ParseStats` and `ExecutionPlanParser.ParseJson`.
+- [x] `plans/README.md` row updated.
+
+## Completion record — 2026-10-11
+
+Stage A implementation: `8feaf14`; documentation/format follow-up: `54224ff`. Stage B PostgreSQL `DateTimeOffset` UTC binding: `48ed3a1`; shared deep-plan JSON depth and regression: `bb78c87`. Windows `scripts/verify.ps1` and isolated ext4 Linux `scripts/verify-linux.ps1` both exited 0 at `bb78c87` (Core 3585 passed on each; MCP 333 passed/4 skipped on Windows and 334 passed/3 skipped on Linux). No live PostgreSQL tests were run. The branch was merged from main at `1128ce0`; controller-owned integration gates are tracked separately.
 
 ## STOP conditions
 
