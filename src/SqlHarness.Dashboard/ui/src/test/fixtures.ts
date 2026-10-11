@@ -58,5 +58,7 @@ export const stats = (over: Partial<DashboardStats> = {}): DashboardStats => ({
     dimensions: [{ name: "tenant", values: [{ name: "tenant", value: "acme", isUnknown: false, source: "recorded",
       operations: 6, percentage: 100, totalDurationMs: 7200, durationAvailableOperations: 6, durationUnavailableOperations: 0, failed: 0, rejected: 0 }] }],
     targets: [{ profile: "local", database: "db", count: 6, engine: "sqlserver", server: "srv" }], targetCount: 1, matrix: null,
-  }, ...over,
+  },
+  savings: { priceSource: "models.dev", pricesFetchedAt: "2026-10-11T00:00:00Z", totalUsd: 0, byModel: [], withoutModel: 0, unpriced: 0 },
+  ...over,
 })

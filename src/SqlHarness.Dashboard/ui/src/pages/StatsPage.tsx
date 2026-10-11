@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { rangeWindow, type StatsRange, useProfiles, useStats, type StatsWindow } from "@/api/queries"
-import type { DashboardStats, KeyCount, ProfileView, SqlHashStat } from "@/api/types"
+import type { DashboardStats, KeyCount, ProfileView, SavingsStat, SqlHashStat } from "@/api/types"
 import { agentLabel } from "@/lib/agents"
 import { ErrorState } from "@/components/ErrorState"
 import { Kpi } from "@/components/Kpi"
@@ -22,6 +22,58 @@ const ranges: { value: StatsRange; label: string }[] = [
   { value: "30d", label: "30 days" },
   { value: "all", label: "All time" },
 ]
+
+const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 4 })
+
+function plural(count: number, noun: string) {
+  return `${formatNumber(count)} ${noun}${count === 1 ? "" : "s"}`
+}
+
+function SavingsCard({ savings }: { savings: SavingsStat }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Savings (USD)</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 overflow-x-auto">
+        <div className="text-2xl font-semibold">{usd.format(savings.totalUsd)}</div>
+        {savings.byModel.length > 0 && (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Model</TableHead>
+                <TableHead>Provider</TableHead>
+                <TableHead className="text-right">Operations</TableHead>
+                <TableHead className="text-right">Saved tokens</TableHead>
+                <TableHead className="text-right">USD</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {savings.byModel.map(row => (
+                <TableRow key={`${row.provider}/${row.model}`}>
+                  <TableCell className="font-mono">{row.model}</TableCell>
+                  <TableCell>{row.provider}</TableCell>
+                  <TableCell className="text-right">{formatNumber(row.operations)}</TableCell>
+                  <TableCell className="text-right">{formatNumber(row.savedTokens)}</TableCell>
+                  <TableCell className="text-right">{usd.format(row.usd)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+        {savings.withoutModel > 0 && (
+          <p className="text-sm text-muted-foreground">{plural(savings.withoutModel, "operation")} without a known model</p>
+        )}
+        {savings.unpriced > 0 && (
+          <p className="text-sm text-muted-foreground">{plural(savings.unpriced, "operation")} with an unpriced model</p>
+        )}
+        <p className="text-xs text-muted-foreground">
+          at current prices ({savings.priceSource}, {savings.pricesFetchedAt.slice(0, 10)})
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
 
 function SqlTable({ rows }: { rows: SqlHashStat[] }) {
   return (
@@ -234,6 +286,7 @@ function StatsContent({
           </ChartContainer>
         </CardContent>
       </Card>
+      <SavingsCard savings={stats.savings} />
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>

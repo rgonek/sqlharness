@@ -156,6 +156,7 @@ public static class DashboardHost
                     Token = token,
                     ConfigPath = options.ConfigPath ?? Path.Combine(options.Home, "config.json"),
                     TargetsPath = Path.Combine(options.Home, "targets.json"),
+                    PricesPath = Path.Combine(options.Home, "data", "model-prices.json"),
                 },
                 ct);
         }

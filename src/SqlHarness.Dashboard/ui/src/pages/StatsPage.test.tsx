@@ -25,6 +25,25 @@ test("shows KPIs, charts and top lists, and switches range", async () => {
   expect(calls.some(call => call.startsWith("/api/stats?from="))).toBe(true)
 })
 
+test("shows estimated savings in USD per model with coverage notes", async () => {
+  stubFetch({
+    "/api/stats": stats({ savings: {
+      priceSource: "models.dev", pricesFetchedAt: "2026-10-11T00:00:00Z", totalUsd: 0.00144,
+      byModel: [{ provider: "openai", model: "gpt-6-sol", operations: 2, savedTokens: 720, usd: 0.00144 }],
+      withoutModel: 1, unpriced: 1,
+    } }),
+    "/api/profiles": profilesResponse(),
+  })
+  renderApp("/stats")
+
+  expect(await screen.findByText("Savings (USD)")).toBeInTheDocument()
+  expect(screen.getByRole("cell", { name: "gpt-6-sol" })).toBeInTheDocument()
+  expect(screen.getAllByText("$0.0014").length).toBeGreaterThan(0)
+  expect(screen.getByText("1 operation without a known model")).toBeInTheDocument()
+  expect(screen.getByText("1 operation with an unpriced model")).toBeInTheDocument()
+  expect(screen.getByText("at current prices (models.dev, 2026-10-11)")).toBeInTheDocument()
+})
+
 test("per-day chart keys series by index so agent kinds never reach CSS variable names", async () => {
   const hostile = "my agent; } body { display:none"
   stubFetch({

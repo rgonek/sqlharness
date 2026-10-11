@@ -45,7 +45,8 @@ public sealed class DashboardContractTests
         var variant = new VariantDetail(0, "measure", null, null, 1, null, null, null, null, null, null, null, null, null,
             0, false, false, 0, null, null, [], []);
         var stats = new DashboardStats([], [], [], [], [], [], [], [], [], new TokenStat(0, 0), 0, 0, [],
-            new ProfileDimensionStats(null, false, 0, [], [], 0));
+            new ProfileDimensionStats(null, false, 0, [], [], 0),
+            new SavingsStat("models.dev", DateTimeOffset.UnixEpoch, 0m, [], 0, 0));
 
         Assert.Equal(
             ["ordinal", "variant", "parameterSet", "matrixCell", "runs", "elapsedMs", "cpuMs", "logicalReads",
@@ -55,7 +56,7 @@ public sealed class DashboardContractTests
         Assert.Equal(
             ["operationsPerDay", "statuses", "exitCodes", "operations", "topSqlByCount", "topSqlByDuration",
              "topTablesByLogicalReads", "topWaits", "targets", "tokens", "spillOperations", "coldCacheOperations",
-             "profileOperations", "profileDimensions"],
+             "profileOperations", "profileDimensions", "savings"],
             Names(stats));
     }
 

@@ -33,6 +33,9 @@ public sealed record DashboardServerOptions(string DatabasePath, int PreferredPo
 
     /// <summary>The closed profile file shown read-only on the profiles page.</summary>
     public string TargetsPath { get; init; } = SqlHarnessPaths.TargetsFile;
+
+    /// <summary>The refreshed model price snapshot; the embedded table is used when it is missing or unusable.</summary>
+    public string PricesPath { get; init; } = Path.Combine(SqlHarnessPaths.Home, "data", "model-prices.json");
 }
 
 public sealed class RunningDashboard : IAsyncDisposable
@@ -153,7 +156,7 @@ public static partial class DashboardServer
         builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
 
         var app = builder.Build();
-        var reader = new JournalReader(options.DatabasePath, options.Processes);
+        var reader = new JournalReader(options.DatabasePath, options.Processes, () => ModelPrices.Load(options.PricesPath));
         app.Use((context, next) => DashboardSecurity.InvokeAsync(context, () => next(context), token, boundPort));
         // Only authenticated requests reach here, so probes from other local processes do not keep the dashboard alive.
         app.Use((context, next) =>
