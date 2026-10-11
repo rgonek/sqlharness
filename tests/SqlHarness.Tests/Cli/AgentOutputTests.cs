@@ -647,10 +647,12 @@ public sealed class AgentOutputTests
             new SqlHarnessColumnReport(3, "text", "nvarchar", true),
         };
         var big = Enumerable.Range(0, 64).Select(i => (byte)i).ToArray();
-        var rows = Enumerable.Range(0, 5)
+        // Enough rows that the set's complete rows exceed the whole-set reserve,
+        // so the row sample applies instead of the cheap-set top-up.
+        var rows = Enumerable.Range(0, 500)
             .Select(i => (IReadOnlyList<object?>)new object?[] { i == 0 ? big : new byte[] { 1, 2 }, null, i, new string('x', 40) })
             .ToArray();
-        var report = QueryShapeFixtures.Report(new SqlHarnessResultSetReport(columns, rows, 5, 0));
+        var report = QueryShapeFixtures.Report(new SqlHarnessResultSetReport(columns, rows, 500, 0));
 
         var result = ProjectQueryJson(report, 16, 2);
 
@@ -658,7 +660,7 @@ public sealed class AgentOutputTests
         Assert.Equal(4, set.GetProperty("columns").GetArrayLength());
         var emitted = set.GetProperty("rows");
         Assert.Equal(2, emitted.GetArrayLength());
-        Assert.Equal(3, set.GetProperty("omittedRowCount").GetInt64());
+        Assert.Equal(498, set.GetProperty("omittedRowCount").GetInt64());
         for (var r = 0; r < 2; r++)
             Assert.Equal(4, emitted[r].GetArrayLength());
         var clippedBlob = emitted[0][0];
@@ -720,16 +722,86 @@ public sealed class AgentOutputTests
         Assert.Equal(0, result.GetProperty("omittedResultSetCount").GetInt32());
         var sets = result.GetProperty("resultSets");
         Assert.Equal(2, sets.GetArrayLength());
-        // Greedy in order: the wide first schema takes the column budget and is
-        // explicitly cut. The summary set keeps its inventory, gets only what is
-        // left for columns, and counts every column it could not emit. Rows are
-        // never emitted at level 0, and their count is carried in omittedRowCount.
+        // Cheapest complete schema first, then complete rows, then column
+        // prefixes: the summary set keeps its whole schema and rows, and the
+        // wide first schema gets the leftover columns, explicitly counted.
         Assert.True(sets[0].GetProperty("omittedColumnCount").GetInt32() > 0);
         Assert.Equal(0, sets[0].GetProperty("rows").GetArrayLength());
-        Assert.Equal(2, sets[1].GetProperty("columns").GetArrayLength() + sets[1].GetProperty("omittedColumnCount").GetInt32());
+        Assert.Equal(3, sets[0].GetProperty("omittedRowCount").GetInt64());
+        Assert.Equal(2, sets[1].GetProperty("columns").GetArrayLength());
+        Assert.Equal(0, sets[1].GetProperty("omittedColumnCount").GetInt32());
         Assert.Equal(2, sets[1].GetProperty("rowCount").GetInt64());
-        Assert.Equal(2, sets[1].GetProperty("omittedRowCount").GetInt64());
-        Assert.Equal(0, sets[1].GetProperty("rows").GetArrayLength());
+        Assert.Equal(2, sets[1].GetProperty("rows").GetArrayLength());
+        Assert.Equal(0, sets[1].GetProperty("omittedRowCount").GetInt64());
+    }
+
+    public static TheoryData<int, int, int> WideDetailShapes => new()
+    {
+        { 100, 200, 30 }, // SELECT * over ~100 columns: one row cannot fit
+        { 12, 5000, 20 }, // ~12 nvarchar(max) columns, clipped to the cell limit
+    };
+
+    [Theory]
+    [MemberData(nameof(WideDetailShapes))]
+    public void Query_wide_one_row_detail_keeps_both_summaries_complete_at_default_budget(int columns, int width, int nameLength)
+    {
+        var report = QueryShapeFixtures.Report(
+            QueryShapeFixtures.Set(columns, 1, width: width, nameLength: nameLength),
+            QueryShapeFixtures.Set(1, 1),
+            QueryShapeFixtures.Set(2, 5));
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "query",
+            new OutputCaptureWriter(output), new AgentOutputOptions());
+
+        Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(output.ToString()), 1, 16384);
+        using var json = JsonDocument.Parse(output.ToString());
+        var result = json.RootElement.GetProperty("result");
+        QueryShapeFixtures.AssertAccounted(result, report);
+        QueryShapeFixtures.AssertSummariesComplete(result, report, 1, 2);
+    }
+
+    [Fact]
+    public void Query_wide_one_row_detail_that_cannot_fit_keeps_summaries_at_level_zero()
+    {
+        var report = QueryShapeFixtures.Report(
+            QueryShapeFixtures.Set(100, 1, width: 200, nameLength: 30),
+            QueryShapeFixtures.Set(1, 1),
+            QueryShapeFixtures.Set(2, 5));
+
+        var result = ProjectQueryJson(report, 512, 0);
+
+        QueryShapeFixtures.AssertAccounted(result, report);
+        QueryShapeFixtures.AssertSummariesComplete(result, report, 1, 2);
+        var detail = result.GetProperty("resultSets")[0];
+        Assert.True(detail.GetProperty("omittedColumnCount").GetInt32() > 0);
+        Assert.Equal(0, detail.GetProperty("rows").GetArrayLength());
+        Assert.Equal(1, detail.GetProperty("omittedRowCount").GetInt64());
+    }
+
+    [Fact]
+    public void Query_row_sample_keeps_cheap_summary_whole_while_detail_is_sampled()
+    {
+        // The detail set forces a small row sample; the 50-row GROUP BY summary
+        // is cheap enough for the whole-set reserve and is not cut to the sample.
+        var report = QueryShapeFixtures.Report(
+            QueryShapeFixtures.Set(4, 200, width: 500),
+            QueryShapeFixtures.Set(2, 50));
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "query",
+            new OutputCaptureWriter(output), new AgentOutputOptions());
+
+        Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(output.ToString()), 1, 16384);
+        using var json = JsonDocument.Parse(output.ToString());
+        var truncation = json.RootElement.GetProperty("truncation");
+        Assert.InRange(truncation.GetProperty("detailLimit").GetInt32(), 1, 49);
+        var result = json.RootElement.GetProperty("result");
+        QueryShapeFixtures.AssertAccounted(result, report);
+        QueryShapeFixtures.AssertSummariesComplete(result, report, 1);
+        var detailRows = result.GetProperty("resultSets")[0].GetProperty("rows").GetArrayLength();
+        Assert.Equal(truncation.GetProperty("detailLimit").GetInt32(), detailRows);
+        Assert.Equal(200 - detailRows, truncation.GetProperty("omittedItems").GetInt32());
     }
 
     private static SqlHarnessCompareReport BuildCompare(string warning, string artifactPath)

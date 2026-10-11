@@ -9,7 +9,7 @@ public sealed record AgentBinaryValue(long ByteLength, string Base64Prefix, bool
 /// One query result set in the agent projection. <c>Ordinal</c> is the
 /// zero-based position in the source report (the snapshot-diff convention).
 /// Every emitted row has exactly <c>Columns.Count</c> cells. Rows not emitted
-/// are counted in <c>OmittedRowCount</c>; columns dropped by the zero-row
+/// are counted in <c>OmittedRowCount</c>; columns dropped by the detail-limit-0
 /// fallback (always the trailing ones) are counted in <c>OmittedColumnCount</c>,
 /// and a set with omitted columns carries no rows.
 /// </summary>
@@ -61,8 +61,8 @@ public static class AgentOutputProjection
     /// report without truncation. If that does not fit the byte budget, the
     /// loop descends through conservative estimates down to 1, then 0.
     /// A query report instead descends through bounded per-result-set row
-    /// samples (128, 64, 32, 16, 8, 4, 2, 1) and ends with the zero-row,
-    /// budget-aware schema/inventory fallback at 0.
+    /// samples (128, 64, 32, 16, 8, 4, 2, 1) and ends with the budget-aware
+    /// inventory, schema and row allocation at 0.
     /// </summary>
     public static IEnumerable<int> GetCandidateDetailLimits(object? report, int maximumBytes, int maximumCellCharacters) =>
         report is SqlHarnessQueryReport
@@ -96,30 +96,8 @@ public static class AgentOutputProjection
         omittedItems = 0;
         var omissions = 0;
         var clippedItems = 0;
-        string? Clip(string? value)
-        {
-            if (value is null || value.Length <= maximumCellCharacters) return value;
-            clippedItems++;
-            var length = maximumCellCharacters;
-            if (length > 0 && char.IsHighSurrogate(value[length - 1])) length--;
-            return value[..length];
-        }
-        object? ProjectCell(object? value) => value switch
-        {
-            string text => Clip(text),
-            byte[] bytes => ProjectBinary(bytes),
-            _ => value,
-        };
-        object ProjectBinary(byte[] bytes)
-        {
-            var fullBase64Length = ((long)bytes.Length + 2) / 3 * 4;
-            if (fullBase64Length <= maximumCellCharacters)
-                return Convert.ToBase64String(bytes);
-            clippedItems++;
-            var prefixLength = Math.Min(bytes.Length, maximumCellCharacters / 4 * 3);
-            var prefix = Convert.ToBase64String(bytes.AsSpan(0, prefixLength));
-            return new AgentBinaryValue(bytes.LongLength, prefix, Truncated: true);
-        }
+        string? Clip(string? value) => ClipText(value, maximumCellCharacters, ref clippedItems);
+        object? ProjectCell(object? value) => ProjectCellValue(value, maximumCellCharacters, ref clippedItems);
         IReadOnlyList<T> Take<T>(IReadOnlyList<T> values)
         {
             var selected = values.Take(detailLimit).ToArray();
@@ -144,8 +122,8 @@ public static class AgentOutputProjection
                     {
                         var messages = Take(query.Messages).Select(Clip).ToArray();
                         var queryProjection = detailLimit > 0
-                            ? ProjectQueryRowSample(query, messages, detailLimit, ProjectCell, out var queryOmitted)
-                            : ProjectQueryInventory(query, messages, maximumBytes, out queryOmitted);
+                            ? ProjectQueryRowSample(query, messages, detailLimit, maximumCellCharacters, maximumBytes, out var queryOmitted)
+                            : ProjectQueryInventory(query, messages, maximumCellCharacters, maximumBytes, out queryOmitted);
                         omissions += queryOmitted;
                         omissions += clippedItems;
                         return queryProjection;
@@ -383,89 +361,299 @@ public static class AgentOutputProjection
 
     /// <summary>
     /// Query projection for a positive detail limit: every result set and
-    /// every column is kept, and only the per-set row sample shrinks. Rows
-    /// keep all their cells (values are clipped by <paramref name="projectCell"/>),
-    /// so each emitted row stays aligned with the complete column schema.
+    /// every column is kept, and each emitted row keeps all its cells (values
+    /// are only clipped), so each row stays aligned with the complete column
+    /// schema. Rows are a source prefix per set. A set whose complete rows fit
+    /// a conservative reserve is kept whole; the reserve is one third of the
+    /// outer budget minus the rowless shell (all schemas and inventories), and
+    /// it is granted to sets cheapest first (ties by ordinal), whole set or
+    /// nothing. Every other set is sampled to <paramref name="rowLimit"/> rows.
+    /// The caller's real measurement stays the authority.
     /// </summary>
     private static AgentQueryProjection ProjectQueryRowSample(
         SqlHarnessQueryReport query,
         IReadOnlyList<string?> messages,
         int rowLimit,
-        Func<object?, object?> projectCell,
-        out int omittedRows)
+        int maximumCellCharacters,
+        int maximumBytes,
+        out int omittedItems)
     {
-        var omitted = 0;
-        var sets = new AgentQueryResultSet[query.ResultSets.Count];
-        for (var ordinal = 0; ordinal < sets.Length; ordinal++)
+        var count = query.ResultSets.Count;
+        var caches = query.ResultSets.Select(set => new QueryRowCache(set, maximumCellCharacters)).ToArray();
+        var rowless = new AgentQueryResultSet[count];
+        for (var ordinal = 0; ordinal < count; ordinal++)
         {
             var set = query.ResultSets[ordinal];
-            var rows = set.Rows.Take(rowLimit)
-                .Select(row => (IReadOnlyList<object?>)row.Select(projectCell).ToArray())
-                .ToArray();
-            var setOmitted = set.Rows.Count - rows.Length;
-            omitted += setOmitted;
-            sets[ordinal] = new AgentQueryResultSet(ordinal, set.Columns.ToArray(), rows, set.RowCount, set.OmittedRowCount + setOmitted, 0);
+            rowless[ordinal] = new AgentQueryResultSet(ordinal, set.Columns.ToArray(), [], set.RowCount, set.OmittedRowCount + set.Rows.Count, 0);
         }
 
-        omittedRows = omitted;
+        long reserve = PreFilterBudget(maximumBytes) - SerializedLength(QueryShell(query, rowless, 0, messages));
+        var whole = new bool[count];
+        if (reserve > 0)
+        {
+            var candidates = Enumerable.Range(0, count)
+                .Where(ordinal => caches[ordinal].Count > rowLimit)
+                .Select(ordinal => (Ordinal: ordinal, Cost: caches[ordinal].CompleteCost(reserve)))
+                .OrderBy(candidate => candidate.Cost)
+                .ThenBy(candidate => candidate.Ordinal)
+                .ToArray();
+            foreach (var (ordinal, cost) in candidates)
+            {
+                if (cost > reserve)
+                    continue;
+                reserve -= cost;
+                whole[ordinal] = true;
+            }
+        }
+
+        var omitted = 0;
+        var sets = new AgentQueryResultSet[count];
+        for (var ordinal = 0; ordinal < count; ordinal++)
+        {
+            var take = whole[ordinal] ? caches[ordinal].Count : Math.Min(caches[ordinal].Count, rowLimit);
+            var rows = caches[ordinal].Prefix(take, out var clipped);
+            var setOmitted = caches[ordinal].Count - take;
+            omitted += setOmitted + clipped;
+            sets[ordinal] = rowless[ordinal] with
+            {
+                Rows = rows,
+                OmittedRowCount = query.ResultSets[ordinal].OmittedRowCount + setOmitted,
+            };
+        }
+
+        omittedItems = omitted;
         return QueryShell(query, sets, 0, messages);
     }
 
     /// <summary>
-    /// Zero-row query fallback. Like <see cref="BuildOmittedCellReferences"/>
-    /// this is a conservative pre-filter against one third of the outer byte
-    /// budget; the caller's real measurement stays the authority. It first
-    /// keeps the result-set inventory (ordinal and row/column counts) for as
-    /// many leading sets as fit, then spends what remains on each kept set's
-    /// column schema in order, dropping trailing columns explicitly. Nothing
-    /// partial is ever unaccounted: every dropped set, column, and row is
-    /// counted.
+    /// Budget-aware query fallback at detail limit 0. Like
+    /// <see cref="BuildOmittedCellReferences"/> this is a conservative
+    /// pre-filter against one third of the outer byte budget; the caller's
+    /// real measurement stays the authority. It spends that budget in this
+    /// order, and every step is bounded by the budget that is left:
+    /// <list type="number">
+    /// <item>the result-set inventory (ordinal and row/column counts) for as
+    /// many leading sets as fit; trailing sets are counted;</item>
+    /// <item>complete column schemas, cheapest schema first (ties by
+    /// ordinal), whole schema or nothing;</item>
+    /// <item>complete rows for sets whose full schema was kept, cheapest set
+    /// first (ties by ordinal), whole set or nothing;</item>
+    /// <item>a leading column prefix, in ordinal order, for each set whose
+    /// schema did not fit whole (such a set carries no rows);</item>
+    /// <item>a leading row prefix, in ordinal order, for each full-schema set
+    /// whose complete rows did not fit.</item>
+    /// </list>
+    /// So small summary sets keep their complete schema and rows ahead of a
+    /// wide detail set's column prefix or row sample. Nothing partial is ever
+    /// unaccounted: every dropped set, column, and row is counted.
     /// </summary>
     private static AgentQueryProjection ProjectQueryInventory(
         SqlHarnessQueryReport query,
         IReadOnlyList<string?> messages,
+        int maximumCellCharacters,
         int maximumBytes,
         out int omittedItems)
     {
-        var available = Math.Max(0, maximumBytes / 3 - 128);
-        var remaining = available - SerializedLength(QueryShell(query, [], query.ResultSets.Count, messages));
+        long remaining = PreFilterBudget(maximumBytes) - SerializedLength(QueryShell(query, [], query.ResultSets.Count, messages));
 
-        var sets = new List<AgentQueryResultSet>(query.ResultSets.Count);
+        // 1. Inventory for a prefix of the result sets.
+        var kept = 0;
         foreach (var set in query.ResultSets)
         {
-            var inventory = new AgentQueryResultSet(sets.Count, [], [], set.RowCount, set.OmittedRowCount + set.Rows.Count, set.Columns.Count);
+            var inventory = new AgentQueryResultSet(kept, [], [], set.RowCount, set.OmittedRowCount + set.Rows.Count, set.Columns.Count);
             var cost = SerializedLength(inventory) + 1;
             if (cost > remaining)
                 break;
             remaining -= cost;
-            sets.Add(inventory);
+            kept++;
         }
 
-        var omitted = query.ResultSets.Count - sets.Count;
-        for (var ordinal = 0; ordinal < sets.Count; ordinal++)
+        var source = query.ResultSets;
+        var columnCounts = new int[kept];
+        var fullSchema = new bool[kept];
+
+        // 2. Complete schemas, cheapest first.
+        var schemaCosts = Enumerable.Range(0, kept)
+            .Select(ordinal => (Ordinal: ordinal, Cost: source[ordinal].Columns.Sum(column => (long)SerializedLength(column) + 1)))
+            .OrderBy(candidate => candidate.Cost)
+            .ThenBy(candidate => candidate.Ordinal)
+            .ToArray();
+        foreach (var (ordinal, cost) in schemaCosts)
         {
-            var columns = query.ResultSets[ordinal].Columns;
-            var kept = 0;
-            while (kept < columns.Count)
+            if (cost > remaining)
+                continue;
+            remaining -= cost;
+            fullSchema[ordinal] = true;
+            columnCounts[ordinal] = source[ordinal].Columns.Count;
+        }
+
+        // 3. Complete rows for full-schema sets, cheapest first.
+        var caches = new QueryRowCache?[kept];
+        var rowCounts = new int[kept];
+        if (remaining > 0)
+        {
+            var rowCosts = Enumerable.Range(0, kept)
+                .Where(ordinal => fullSchema[ordinal] && source[ordinal].Rows.Count > 0)
+                .Select(ordinal =>
+                {
+                    caches[ordinal] = new QueryRowCache(source[ordinal], maximumCellCharacters);
+                    return (Ordinal: ordinal, Cost: caches[ordinal]!.CompleteCost(remaining));
+                })
+                .OrderBy(candidate => candidate.Cost)
+                .ThenBy(candidate => candidate.Ordinal)
+                .ToArray();
+            foreach (var (ordinal, cost) in rowCosts)
             {
-                var cost = SerializedLength(columns[kept]) + 1;
+                if (cost > remaining)
+                    continue;
+                remaining -= cost;
+                rowCounts[ordinal] = source[ordinal].Rows.Count;
+            }
+        }
+
+        // 4. Column prefixes for sets whose schema did not fit whole.
+        for (var ordinal = 0; ordinal < kept; ordinal++)
+        {
+            if (fullSchema[ordinal])
+                continue;
+            var columns = source[ordinal].Columns;
+            while (columnCounts[ordinal] < columns.Count)
+            {
+                var cost = SerializedLength(columns[columnCounts[ordinal]]) + 1;
                 if (cost > remaining)
                     break;
                 remaining -= cost;
-                kept++;
+                columnCounts[ordinal]++;
             }
+        }
 
-            sets[ordinal] = sets[ordinal] with
+        // 5. Row prefixes for full-schema sets whose complete rows did not fit.
+        for (var ordinal = 0; ordinal < kept; ordinal++)
+        {
+            if (caches[ordinal] is not { } cache || rowCounts[ordinal] == cache.Count)
+                continue;
+            while (rowCounts[ordinal] < cache.Count)
             {
-                Columns = columns.Take(kept).ToArray(),
-                OmittedColumnCount = columns.Count - kept,
-            };
-            omitted += columns.Count - kept;
-            omitted += query.ResultSets[ordinal].Rows.Count;
+                var cost = cache.Cost(rowCounts[ordinal]);
+                if (cost > remaining)
+                    break;
+                remaining -= cost;
+                rowCounts[ordinal]++;
+            }
+        }
+
+        var omitted = source.Count - kept;
+        var sets = new AgentQueryResultSet[kept];
+        for (var ordinal = 0; ordinal < kept; ordinal++)
+        {
+            var set = source[ordinal];
+            var clipped = 0;
+            IReadOnlyList<IReadOnlyList<object?>> rows = caches[ordinal] is { } cache
+                ? cache.Prefix(rowCounts[ordinal], out clipped)
+                : [];
+            var omittedColumns = set.Columns.Count - columnCounts[ordinal];
+            var omittedRows = set.Rows.Count - rows.Count;
+            omitted += omittedColumns + omittedRows + clipped;
+            sets[ordinal] = new AgentQueryResultSet(
+                ordinal,
+                set.Columns.Take(columnCounts[ordinal]).ToArray(),
+                rows,
+                set.RowCount,
+                set.OmittedRowCount + omittedRows,
+                omittedColumns);
         }
 
         omittedItems = omitted;
-        return QueryShell(query, sets, query.ResultSets.Count - sets.Count, messages);
+        return QueryShell(query, sets, source.Count - kept, messages);
+    }
+
+    /// <summary>
+    /// Lazily projected (clipped) rows of one source result set with their
+    /// serialized cost. Rows are projected at most once, in source order, and
+    /// only as far as a caller asks, so costing is bounded by the budget the
+    /// caller passes. Clipped cells are counted only for rows emitted.
+    /// </summary>
+    private sealed class QueryRowCache(SqlHarnessResultSetReport set, int maximumCellCharacters)
+    {
+        private readonly List<(IReadOnlyList<object?> Cells, int Clipped, int Cost)> rows = [];
+
+        public int Count => set.Rows.Count;
+
+        public int Cost(int index) => Get(index).Cost;
+
+        /// <summary>The cost of every row, or <paramref name="cap"/> + 1 once the running sum exceeds the cap.</summary>
+        public long CompleteCost(long cap)
+        {
+            long total = 0;
+            for (var index = 0; index < Count; index++)
+            {
+                total += Get(index).Cost;
+                if (total > cap)
+                    return cap + 1;
+            }
+
+            return total;
+        }
+
+        public IReadOnlyList<IReadOnlyList<object?>> Prefix(int length, out int clipped)
+        {
+            var selected = new IReadOnlyList<object?>[length];
+            clipped = 0;
+            for (var index = 0; index < length; index++)
+            {
+                var row = Get(index);
+                selected[index] = row.Cells;
+                clipped += row.Clipped;
+            }
+
+            return selected;
+        }
+
+        private (IReadOnlyList<object?> Cells, int Clipped, int Cost) Get(int index)
+        {
+            while (rows.Count <= index)
+            {
+                var source = set.Rows[rows.Count];
+                var clipped = 0;
+                var cells = new object?[source.Count];
+                for (var cell = 0; cell < cells.Length; cell++)
+                    cells[cell] = ProjectCellValue(source[cell], maximumCellCharacters, ref clipped);
+                rows.Add((cells, clipped, SerializedLength(cells) + 1));
+            }
+
+            return rows[index];
+        }
+    }
+
+    /// <summary>One third of the outer budget minus a fixed margin: MCP carries two representations plus metadata.</summary>
+    private static int PreFilterBudget(int maximumBytes) => Math.Max(0, maximumBytes / 3 - 128);
+
+    private static string? ClipText(string? value, int maximumCellCharacters, ref int clippedItems)
+    {
+        if (value is null || value.Length <= maximumCellCharacters) return value;
+        clippedItems++;
+        var length = maximumCellCharacters;
+        if (length > 0 && char.IsHighSurrogate(value[length - 1])) length--;
+        return value[..length];
+    }
+
+    private static object? ProjectCellValue(object? value, int maximumCellCharacters, ref int clippedItems)
+    {
+        switch (value)
+        {
+            case string text:
+                return ClipText(text, maximumCellCharacters, ref clippedItems);
+            case byte[] bytes:
+                var fullBase64Length = ((long)bytes.Length + 2) / 3 * 4;
+                if (fullBase64Length <= maximumCellCharacters)
+                    return Convert.ToBase64String(bytes);
+                clippedItems++;
+                var prefixLength = Math.Min(bytes.Length, maximumCellCharacters / 4 * 3);
+                var prefix = Convert.ToBase64String(bytes.AsSpan(0, prefixLength));
+                return new AgentBinaryValue(bytes.LongLength, prefix, Truncated: true);
+            default:
+                return value;
+        }
     }
 
     private static AgentQueryProjection QueryShell(

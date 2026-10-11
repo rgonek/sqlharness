@@ -58,4 +58,28 @@ internal static class QueryShapeFixtures
             }
         }
     }
+
+    /// <summary>
+    /// The given source result sets are emitted complete: every column, every
+    /// row, and every (unclipped) cell value, with no omission counted.
+    /// </summary>
+    public static void AssertSummariesComplete(JsonElement result, SqlHarnessQueryReport source, params int[] ordinals)
+    {
+        var sets = result.GetProperty("resultSets");
+        foreach (var ordinal in ordinals)
+        {
+            Assert.True(ordinal < sets.GetArrayLength(), $"Result set {ordinal} must be emitted.");
+            var set = sets[ordinal];
+            var origin = source.ResultSets[ordinal];
+            Assert.Equal(ordinal, set.GetProperty("ordinal").GetInt32());
+            Assert.Equal(origin.Columns.Count, set.GetProperty("columns").GetArrayLength());
+            Assert.Equal(0, set.GetProperty("omittedColumnCount").GetInt32());
+            var rows = set.GetProperty("rows");
+            Assert.Equal(origin.Rows.Count, rows.GetArrayLength());
+            Assert.Equal(origin.OmittedRowCount, set.GetProperty("omittedRowCount").GetInt64());
+            for (var r = 0; r < origin.Rows.Count; r++)
+                for (var c = 0; c < origin.Columns.Count; c++)
+                    Assert.Equal((string)origin.Rows[r][c]!, rows[r][c].GetString());
+        }
+    }
 }

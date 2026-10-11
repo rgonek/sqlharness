@@ -474,16 +474,45 @@ public sealed class McpOutputTests
         var projected = envelope.GetProperty("result");
         QueryShapeFixtures.AssertAccounted(projected, report);
         var sets = projected.GetProperty("resultSets");
-        // The wide first schema takes the budget and is explicitly cut. The summary set
-        // is either counted as omitted or kept with its omitted columns and rows counted.
+        // The summary set's complete schema and rows are allocated before the wide
+        // first schema's column prefix, which is explicitly cut and carries no rows.
+        Assert.Equal(0, projected.GetProperty("omittedResultSetCount").GetInt32());
+        Assert.Equal(2, sets.GetArrayLength());
         Assert.True(sets[0].GetProperty("omittedColumnCount").GetInt32() > 0);
         Assert.Equal(0, sets[0].GetProperty("rows").GetArrayLength());
-        Assert.Equal(2, sets.GetArrayLength() + projected.GetProperty("omittedResultSetCount").GetInt32());
-        if (sets.GetArrayLength() == 2)
-        {
-            Assert.Equal(2, sets[1].GetProperty("columns").GetArrayLength() + sets[1].GetProperty("omittedColumnCount").GetInt32());
-            Assert.Equal(2, sets[1].GetProperty("omittedRowCount").GetInt64());
-        }
+        Assert.Equal(3, sets[0].GetProperty("omittedRowCount").GetInt64());
+        QueryShapeFixtures.AssertSummariesComplete(projected, report, 1);
+    }
+
+    public static TheoryData<int, int, int> WideDetailShapes => new()
+    {
+        { 100, 200, 30 }, // SELECT * over ~100 columns: one row cannot fit
+        { 12, 5000, 20 }, // ~12 nvarchar(max) columns, clipped to the cell limit
+    };
+
+    [Theory]
+    [MemberData(nameof(WideDetailShapes))]
+    public void Query_wide_one_row_detail_keeps_both_summaries_complete_within_default_wire_budget(int columns, int width, int nameLength)
+    {
+        var report = QueryShapeFixtures.Report(
+            QueryShapeFixtures.Set(columns, 1, width: width, nameLength: nameLength),
+            QueryShapeFixtures.Set(1, 1),
+            QueryShapeFixtures.Set(2, 5));
+        var before = JsonSerializer.Serialize(report);
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "sqlharness_query");
+
+        Assert.Equal(16384, McpLimits.CallToolResultBudgetBytes);
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.CallToolResultBudgetBytes);
+        Assert.Equal(before, JsonSerializer.Serialize(report));
+        var envelope = EnvelopeOf(result);
+        AssertValidEnvelope(envelope);
+        var projected = envelope.GetProperty("result");
+        Assert.Equal("raw-hash", projected.GetProperty("resultHash").GetString());
+        QueryShapeFixtures.AssertAccounted(projected, report);
+        QueryShapeFixtures.AssertSummariesComplete(projected, report, 1, 2);
+        var detail = projected.GetProperty("resultSets")[0];
+        Assert.Equal(columns, detail.GetProperty("columns").GetArrayLength() + detail.GetProperty("omittedColumnCount").GetInt32());
     }
 
     private static SqlHarnessCompareReport BuildCompareReport(string marker, string? artifactDirectory = null) => new(
