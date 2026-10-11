@@ -124,4 +124,4 @@ internal static class OperationSecrets
         if (target.Auth.PasswordForRedaction() is { Length: > 0 } password)
             knownSecrets.Add(password);
     }
-}
+}
