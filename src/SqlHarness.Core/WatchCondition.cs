@@ -16,10 +16,8 @@ internal sealed record WatchCondition(string Column, WatchOperator Operator, str
 {
     private const string InvalidPredicateMessage = "Watch condition predicate is invalid.";
     private const string MissingResultSetMessage = "Watch condition requires a result set.";
-    private const string MissingRowMessage = "Watch condition requires a first row.";
     private const string MissingColumnMessage = "Watch condition column was not found.";
     private const string DuplicateColumnMessage = "Watch condition column matches more than once.";
-    private const string NullValueMessage = "Watch condition value cannot be NULL.";
     private const string NonNumericCompareMessage = "Watch condition comparison requires numeric values.";
 
     // Longer operators first so "<=" is not parsed as "<".
@@ -90,9 +88,6 @@ internal sealed record WatchCondition(string Column, WatchOperator Operator, str
         if (firstResultSet is null)
             throw new SqlHarnessSafetyException(MissingResultSetMessage);
 
-        if (firstResultSet.Rows.Count == 0)
-            throw new SqlHarnessSafetyException(MissingRowMessage);
-
         var matchCount = 0;
         var ordinal = -1;
         for (var i = 0; i < firstResultSet.Columns.Count; i++)
@@ -108,13 +103,16 @@ internal sealed record WatchCondition(string Column, WatchOperator Operator, str
         if (matchCount > 1)
             throw new SqlHarnessSafetyException(DuplicateColumnMessage);
 
+        if (firstResultSet.Rows.Count == 0)
+            return false;
+
         var row = firstResultSet.Rows[0];
         if (ordinal < 0 || ordinal >= row.Count)
             throw new SqlHarnessSafetyException(MissingColumnMessage);
 
         var cell = row[ordinal];
         if (cell is null)
-            throw new SqlHarnessSafetyException(NullValueMessage);
+            return false;
 
         var leftText = FormatValue(cell);
         var rightText = Operand;

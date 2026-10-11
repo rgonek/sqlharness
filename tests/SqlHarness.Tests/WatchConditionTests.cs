@@ -121,9 +121,22 @@ public class WatchConditionTests
     }
 
     [Fact]
-    public void Rejects_missing_first_row()
+    public void Missing_first_row_does_not_satisfy_condition()
     {
         var condition = WatchCondition.Parse("Count >= 1");
+        var empty = new SqlHarnessResultSetReport(
+            [new SqlHarnessColumnReport(0, "Count", "System.Int32", false)],
+            [],
+            0,
+            0);
+
+        Assert.False(condition.IsMet(empty));
+    }
+
+    [Fact]
+    public void Rejects_missing_column_even_when_there_are_no_rows()
+    {
+        var condition = WatchCondition.Parse("Missing >= 1");
         var empty = new SqlHarnessResultSetReport(
             [new SqlHarnessColumnReport(0, "Count", "System.Int32", false)],
             [],
@@ -134,14 +147,7 @@ public class WatchConditionTests
     }
 
     [Fact]
-    public void Rejects_missing_column()
-    {
-        var condition = WatchCondition.Parse("Missing >= 1");
-        Assert.Throws<SqlHarnessSafetyException>(() => { _ = condition.IsMet(SingleColumn("Count", 1)); });
-    }
-
-    [Fact]
-    public void Rejects_duplicate_column_names_case_insensitive()
+    public void Rejects_duplicate_column_names_case_insensitive_even_when_there_are_no_rows()
     {
         var condition = WatchCondition.Parse("Count >= 1");
         var duplicate = new SqlHarnessResultSetReport(
@@ -149,18 +155,18 @@ public class WatchConditionTests
                 new SqlHarnessColumnReport(0, "Count", "System.Int32", false),
                 new SqlHarnessColumnReport(1, "count", "System.Int32", false),
             ],
-            [[1, 2]],
-            1,
+            [],
+            0,
             0);
 
         Assert.Throws<SqlHarnessSafetyException>(() => { _ = condition.IsMet(duplicate); });
     }
 
     [Fact]
-    public void Rejects_null_condition_value()
+    public void Null_condition_value_does_not_satisfy_condition()
     {
         var condition = WatchCondition.Parse("Count >= 1");
-        Assert.Throws<SqlHarnessSafetyException>(() => { _ = condition.IsMet(SingleColumn("Count", null)); });
+        Assert.False(condition.IsMet(SingleColumn("Count", null)));
     }
 
     [Theory]
