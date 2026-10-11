@@ -624,6 +624,25 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Equal("(a.id = b.id)", Text(result.Root, "predicate"));
     }
 
+    // SQL comments with odd quotes must not misalign the scan; a credential comparison inside a comment stays masked.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_tool_masks_credential_literals_around_and_inside_sql_comments(bool requestMode)
+    {
+        await using var served = await ServePlanModeAsync(requestMode);
+        var xml = ShowplanWithText("SELECT * FROM dbo.Users /* it's \"odd */ WHERE [Password] = N'zcm1' AND PasswordHash = N'zcm2'"
+            + " AND Status = N'ACTIVE' -- don't [Pwd]=N'zcm3'");
+        var result = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = xml }, cancellationToken: CancellationToken.None));
+
+        Assert.DoesNotContain("zcm", result.Raw, StringComparison.Ordinal);
+        var sql = Text(result.Statement, "sql")!;
+        Assert.Contains("[Password] = N'[REDACTED]'", sql, StringComparison.Ordinal);
+        Assert.Contains("PasswordHash = N'[REDACTED]'", sql, StringComparison.Ordinal);
+        Assert.Contains("[Pwd]=N'[REDACTED]'", sql, StringComparison.Ordinal);
+        Assert.Contains("Status = N'ACTIVE'", sql, StringComparison.Ordinal);
+    }
+
     // Nested wrappers: SQL Server implicit-over-explicit conversion and PostgreSQL cast-over-cast, both operand orders.
     [Theory]
     [InlineData(false)]

@@ -1209,6 +1209,28 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal(input, kept.Statements[0].StatementText);
     }
 
+    // SQL comments are whole tokens: an odd quote inside one must not misalign the scan, and a credential comparison
+    // written inside a comment is still masked (comment bodies go through the same rule).
+    [Theory]
+    [InlineData("SELECT * FROM T -- don't do this\nWHERE [Password]=N'hunter2' AND [Status]=N'ACTIVE'", "SELECT * FROM T -- don't do this\nWHERE [Password]=N'[REDACTED]' AND [Status]=N'ACTIVE'")]
+    [InlineData("SELECT 1 -- don't\nWHERE [dbo].[Users].[Password] = N'hunter2' AND [Status]=N'ACTIVE'", "SELECT 1 -- don't\nWHERE [dbo].[Users].[Password] = N'[REDACTED]' AND [Status]=N'ACTIVE'")]
+    [InlineData("SELECT 1 -- don't\r\nWHERE PasswordHash = N'hunter2' AND Status = N'ACTIVE'", "SELECT 1 -- don't\r\nWHERE PasswordHash = N'[REDACTED]' AND Status = N'ACTIVE'")]
+    [InlineData("/* it's */ WHERE [Pwd]=N'hunter2' AND [Status]=N'ACTIVE'", "/* it's */ WHERE [Pwd]=N'[REDACTED]' AND [Status]=N'ACTIVE'")]
+    [InlineData("/* it's */ WHERE [PasswordHash]=N'hunter2' AND [Status]=N'ACTIVE'", "/* it's */ WHERE [PasswordHash]=N'[REDACTED]' AND [Status]=N'ACTIVE'")]
+    [InlineData("/* say \"hi */ WHERE \"PasswordHash\" = 'hunter2' AND \"Status\" = 'ACTIVE'", "/* say \"hi */ WHERE \"PasswordHash\" = '[REDACTED]' AND \"Status\" = 'ACTIVE'")]
+    [InlineData("/* it's **/ WHERE [Password]=N'hunter2' AND [Status]=N'ACTIVE'", "/* it's **/ WHERE [Password]=N'[REDACTED]' AND [Status]=N'ACTIVE'")]
+    [InlineData("SELECT 1 /* old: [Password]=N'hunter2' */ WHERE [Status]=N'ACTIVE' -- was [PasswordHash] = N'hunter3'", "SELECT 1 /* old: [Password]=N'[REDACTED]' */ WHERE [Status]=N'ACTIVE' -- was [PasswordHash] = N'[REDACTED]'")]
+    [InlineData("WHERE [Status]=N'ACTIVE' /* it's [Password]=N'hunter2'", "WHERE [Status]=N'ACTIVE' /* it's [Password]=N'[REDACTED]'")]
+    [InlineData("WHERE [Note]=N'a--b /* c' AND [Password]=N'hunter2' AND [Status]=N'ACTIVE'", "WHERE [Note]=N'a--b /* c' AND [Password]=N'[REDACTED]' AND [Status]=N'ACTIVE'")]
+    public void Plan_text_policy_treats_sql_comments_as_tokens_and_masks_credentials_inside_them(string input, string expected)
+    {
+        var node = new PlanNode("Scan", null, null, null, 1, 1, 1, 0.1, input, [], []);
+        var kept = Assert.IsType<DistilledPlan>(McpPlanTextPolicy.Apply(new DistilledPlan([new PlanStatement(input, node, [])]), includeText: true));
+        Assert.Equal(expected, kept.Statements[0].StatementText);
+        Assert.Equal(expected, kept.Statements[0].Root.Predicate);
+        Assert.DoesNotContain("hunter", kept.Statements[0].StatementText, StringComparison.Ordinal);
+    }
+
     // A predicate clipped by the distiller inside a credential literal still masks the partial secret.
     [Fact]
     public void Plan_text_policy_masks_a_credential_literal_clipped_at_the_end()
