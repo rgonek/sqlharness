@@ -9,7 +9,7 @@ internal static class DashboardPrices
     internal const long MaximumResponseBytes = 20L * 1024 * 1024;
     internal static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
     private const string FailureMessage = "Model prices could not be refreshed.";
-    private static readonly HttpClient Http = new() { Timeout = Timeout };
+    private static readonly HttpClient Http = new(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = Timeout };
 
     internal static object Describe(string pricesPath)
     {
@@ -24,13 +24,19 @@ internal static class DashboardPrices
         response.EnsureSuccessStatusCode();
         if (response.Content.Headers.ContentLength > MaximumResponseBytes)
             throw new InvalidDataException("Response too large.");
-        var buffer = new MemoryStream();
         await using var body = await response.Content.ReadAsStreamAsync(ct);
+        return await ReadCappedAsync(body, MaximumResponseBytes, ct);
+    }
+
+    /// <summary>Buffers <paramref name="body"/>, failing as soon as it exceeds <paramref name="maxBytes"/> (no trust in Content-Length).</summary>
+    internal static async Task<Stream> ReadCappedAsync(Stream body, long maxBytes, CancellationToken ct)
+    {
+        var buffer = new MemoryStream();
         var chunk = new byte[81920];
         int read;
         while ((read = await body.ReadAsync(chunk, ct)) > 0)
         {
-            if (buffer.Length + read > MaximumResponseBytes)
+            if (buffer.Length + read > maxBytes)
                 throw new InvalidDataException("Response too large.");
             buffer.Write(chunk, 0, read);
         }
@@ -40,15 +46,18 @@ internal static class DashboardPrices
     }
 
     internal static async Task<IResult> RefreshAsync(
-        string pricesPath, Func<CancellationToken, Task<Stream>> fetch, System.Text.Json.JsonSerializerOptions json, CancellationToken ct)
+        string pricesPath, Func<CancellationToken, Task<Stream>> fetch, System.Text.Json.JsonSerializerOptions json, CancellationToken ct,
+        TimeSpan? timeoutOverride = null)
     {
         try
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(Timeout);
+            timeout.CancelAfter(timeoutOverride ?? Timeout);
             await using var source = await fetch(timeout.Token);
             var reduced = ModelPrices.Extract(source, DateTimeOffset.UtcNow);
-            _ = ModelPrices.Parse(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(reduced)));
+            var table = ModelPrices.Parse(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(reduced)));
+            if (!ModelPrices.PrimaryProviders.Any(provider => table.InputPerMillion.TryGetValue(provider, out var models) && models.Count > 0))
+                throw new InvalidDataException("No usable prices.");
             Directory.CreateDirectory(Path.GetDirectoryName(pricesPath)!);
             DashboardLock.WriteOwnerOnly(pricesPath, reduced);
             return Results.Json(Describe(pricesPath), json);

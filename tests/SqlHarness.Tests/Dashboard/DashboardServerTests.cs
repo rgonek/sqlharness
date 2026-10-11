@@ -105,6 +105,80 @@ public sealed class DashboardServerTests
         }
     }
 
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"openai":{"models":{"m":{"name":"n","cost":{"output":9}}}}}""")]
+    [InlineData("""{"other":{"models":{"m":{"cost":{"input":1}}}}}""")]
+    public async Task Price_refresh_rejects_a_table_without_usable_prices(string answer)
+    {
+        using var home = new TempHome();
+        var pricesPath = Path.Combine(home.Path, "data", "model-prices.json");
+        await using var dashboard = await StartAuthenticated(home, options => options with
+        {
+            PricesPath = pricesPath,
+            PricesFetcher = _ => Task.FromResult<Stream>(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(answer))),
+        });
+        var (_, client) = dashboard;
+
+        var response = await Refresh(client);
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        Assert.False(File.Exists(pricesPath));
+    }
+
+    [Fact]
+    public async Task Price_refresh_keeps_the_existing_file_when_the_answer_has_no_usable_prices()
+    {
+        using var home = new TempHome();
+        var pricesPath = Path.Combine(home.Path, "data", "model-prices.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(pricesPath)!);
+        File.WriteAllText(pricesPath, "existing");
+        await using var dashboard = await StartAuthenticated(home, options => options with
+        {
+            PricesPath = pricesPath,
+            PricesFetcher = _ => Task.FromResult<Stream>(new MemoryStream(System.Text.Encoding.UTF8.GetBytes("{}"))),
+        });
+        var (_, client) = dashboard;
+
+        Assert.Equal(HttpStatusCode.BadGateway, (await Refresh(client)).StatusCode);
+        Assert.Equal("existing", File.ReadAllText(pricesPath));
+    }
+
+    [Fact]
+    public async Task Capped_read_fails_on_a_body_over_the_limit_without_a_content_length()
+    {
+        using var small = new MemoryStream(new byte[100]);
+        using var ok = await DashboardPrices.ReadCappedAsync(small, 100, CancellationToken.None);
+        Assert.Equal(100, ok.Length);
+
+        using var large = new MemoryStream(new byte[101]);
+        await Assert.ThrowsAsync<InvalidDataException>(() => DashboardPrices.ReadCappedAsync(large, 100, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Price_refresh_times_out_with_a_502_and_writes_nothing()
+    {
+        using var home = new TempHome();
+        var pricesPath = Path.Combine(home.Path, "data", "model-prices.json");
+
+        var result = await DashboardPrices.RefreshAsync(
+            pricesPath,
+            async token => { await Task.Delay(Timeout.Infinite, token); return Stream.Null; },
+            new JsonSerializerOptions(),
+            CancellationToken.None,
+            TimeSpan.FromMilliseconds(50));
+
+        Assert.Equal(502, Assert.IsAssignableFrom<Microsoft.AspNetCore.Http.IStatusCodeHttpResult>(result).StatusCode);
+        Assert.False(File.Exists(pricesPath));
+    }
+
+    private static Task<HttpResponseMessage> Refresh(HttpClient client)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/prices/refresh") { Content = JsonContent.Create(new { }) };
+        request.Headers.Add(DashboardSecurity.WriteHeader, "1");
+        return client.SendAsync(request);
+    }
+
     [Fact]
     public async Task Token_exchange_answers_a_same_origin_hand_off_page_with_a_long_lived_cookie()
     {

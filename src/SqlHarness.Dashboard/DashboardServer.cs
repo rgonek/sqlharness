@@ -215,7 +215,7 @@ public static partial class DashboardServer
         });
         MapRead(api, "/settings", () => Results.Json(DashboardSettings.Read(options.ConfigPath), Json));
         MapRead(api, "/profiles", () => Results.Json(DashboardProfiles.Read(options.TargetsPath), Json));
-        // The only write route; DashboardSecurity admits PUT here alone, with its extra checks.
+        // The two write routes (PUT settings, POST prices refresh); DashboardSecurity admits only these, with its extra checks.
         api.MapMethods("/settings", [HttpMethods.Put], (Delegate)((HttpContext context) => DashboardSettings.PutAsync(context, options.ConfigPath, Json)));
         MapRead(api, "/prices", () => Results.Json(DashboardPrices.Describe(options.PricesPath), Json));
         api.MapMethods("/prices/refresh", [HttpMethods.Post], (Delegate)((HttpContext context) =>

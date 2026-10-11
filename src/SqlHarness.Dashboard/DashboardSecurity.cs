@@ -86,7 +86,7 @@ internal static class DashboardSecurity
 
         // The guarded writes: a cross-site form cannot set the custom header, a cross-site fetch with it
         // needs a CORS preflight the dashboard never answers, and a foreign Origin is refused outright.
-        if (isWrite &&!IsTrustedWrite(context.Request, allowedPort))
+        if (isWrite && !IsTrustedWrite(context.Request, allowedPort))
         {
             await Reject(context, StatusCodes.Status403Forbidden, "Forbidden.");
             return;
