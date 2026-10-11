@@ -72,7 +72,7 @@ public sealed class PostgresParameterTests
     {
         var id = Guid.Parse("0f8fad5b-d9cb-469f-a165-70867728950e");
         var at = new DateTime(2026, 7, 29, 12, 0, 0, DateTimeKind.Unspecified);
-        var offset = new DateTimeOffset(2026, 7, 29, 12, 0, 0, TimeSpan.Zero);
+        var offset = new DateTimeOffset(2026, 7, 29, 10, 0, 0, TimeSpan.Zero);
         var parsed = SqlParameterParser.Parse([
             "n:int=1",
             "tiny:tinyint=255",
@@ -81,7 +81,7 @@ public sealed class PostgresParameterTests
             "t:nvarchar=witaj",
             "bin:varbinary=AQID",
             "d:datetime2=2026-07-29T12:00:00",
-            "at:datetimeoffset=2026-07-29T12:00:00Z",
+            "at:datetimeoffset=2026-07-29T12:00:00+02:00",
             "missing:int:null",
         ]);
 
@@ -105,7 +105,10 @@ public sealed class PostgresParameterTests
         Assert.Equal(NpgsqlDbType.Timestamp, command.Parameters["@d"].NpgsqlDbType);
         Assert.Equal(at, command.Parameters["@d"].Value);
         Assert.Equal(NpgsqlDbType.TimestampTz, command.Parameters["@at"].NpgsqlDbType);
-        Assert.Equal(offset, command.Parameters["@at"].Value);
+        var boundOffset = Assert.IsType<DateTimeOffset>(command.Parameters["@at"].Value);
+        Assert.Equal(offset, boundOffset);
+        Assert.Equal(TimeSpan.Zero, boundOffset.Offset);
+        Assert.Equal(new DateTime(2026, 7, 29, 10, 0, 0), boundOffset.UtcDateTime);
         Assert.Equal(NpgsqlDbType.Integer, command.Parameters["@missing"].NpgsqlDbType);
         Assert.Equal(DBNull.Value, command.Parameters["@missing"].Value);
     }

@@ -121,7 +121,7 @@ Use `--json` for the full report (automation and artifacts). For agent-sized std
 
 Supported `--param` types (culture-invariant; date/time values use ISO 8601):
 
-`datetime`, `datetime2`, and `smalldatetime` accept offset-less ISO 8601 values; use `datetimeoffset` for instants.
+`datetime`, `datetime2`, and `smalldatetime` accept offset-less ISO 8601 values; use `datetimeoffset` for instants. On PostgreSQL, `datetimeoffset` values are bound as UTC.
 
 `nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`, `nchar`, `int`, `bigint`, `smallint`, `tinyint`, `bit`, `decimal`, `decimal(p,s)`, `numeric`, `numeric(p,s)`, `float`, `real`, `money`, `smallmoney`, `date`, `time`, `datetime`, `datetime2`, `smalldatetime`, `datetimeoffset`, `uniqueidentifier`, `varbinary`, `varbinary(max)`, `hierarchyid`, `geography`, `geometry`
 
