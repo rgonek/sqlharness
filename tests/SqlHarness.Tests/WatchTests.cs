@@ -10,7 +10,7 @@ namespace SqlHarness.Tests;
 
 public class WatchTests
 {
-    private const string Token = "fake-access-token-never-emit";
+    private const string Token = "eyJsynthetic.access-never-emit.signature";
 
     [Fact]
     public async Task Watch_emits_first_and_changed_polls_only()

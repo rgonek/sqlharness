@@ -11,7 +11,7 @@ namespace SqlHarness.Tests;
 
 public class SqlHarnessQueryTests
 {
-    private const string Token = "fake-access-token-never-emit";
+    private const string Token = "eyJsynthetic.access-never-emit.signature";
 
     [Fact]
     public async Task Target_mismatch_stops_before_user_sql()
@@ -429,10 +429,10 @@ public class SqlHarnessQueryTests
     [InlineData(true)]
     public async Task Profile_load_io_failures_map_to_local_storage_and_are_redacted(bool unauthorized)
     {
-        var secret = "access-token-profile-secret-never-emit";
+        var secret = "profile-secret-never-emit";
         Exception failure = unauthorized
-            ? new UnauthorizedAccessException($"denied {secret}")
-            : new IOException($"failed {secret}");
+            ? new UnauthorizedAccessException($"denied password={secret}")
+            : new IOException($"failed password={secret}");
         var outcome = await Module(
                 FakeSqlSession.WithIdentity("test-server", "testdb-a"),
                 loadProfiles: () => throw failure)

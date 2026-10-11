@@ -12,7 +12,7 @@ namespace SqlHarness.Tests;
 
 public class SqlHarnessCompareTests
 {
-    private const string Token = "compare-access-token-never-emit";
+    private const string Token = "eyJsynthetic.access-never-emit.signature";
     private const string PlanA = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></BatchSequence></ShowPlanXML>";
     private const string PlanB = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"2\" PhysicalOp=\"Hash Match\"><Warnings><SpillToTempDb /></Warnings><Hash /></RelOp></BatchSequence></ShowPlanXML>";
 
