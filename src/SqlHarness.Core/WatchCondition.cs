@@ -12,7 +12,7 @@ internal enum WatchOperator
     GreaterOrEqual,
 }
 
-internal sealed record WatchCondition(string Column, WatchOperator Operator, string Operand)
+internal sealed record WatchCondition(string Column, WatchOperator Operator, string Operand, bool IsQuoted)
 {
     private const string InvalidPredicateMessage = "Watch condition predicate is invalid.";
     private const string MissingResultSetMessage = "Watch condition requires a result set.";
@@ -65,7 +65,24 @@ internal sealed record WatchCondition(string Column, WatchOperator Operator, str
         if (column.Length == 0 || operand.Length == 0)
             throw new SqlHarnessSafetyException(InvalidPredicateMessage);
 
-        return new WatchCondition(column, bestOperator.Value, operand);
+        var isQuoted = operand.Length >= 2
+            && operand[0] is '\'' or '"'
+            && operand[^1] == operand[0];
+        if (isQuoted)
+        {
+            var quote = operand[0];
+            operand = operand[1..^1].Replace(new string(quote, 2), quote.ToString(), StringComparison.Ordinal);
+        }
+        else if (string.Equals(operand, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            operand = "1";
+        }
+        else if (string.Equals(operand, "false", StringComparison.OrdinalIgnoreCase))
+        {
+            operand = "0";
+        }
+
+        return new WatchCondition(column, bestOperator.Value, operand, isQuoted);
     }
 
     internal bool IsMet(SqlHarnessResultSetReport firstResultSet)
@@ -102,8 +119,12 @@ internal sealed record WatchCondition(string Column, WatchOperator Operator, str
         var leftText = FormatValue(cell);
         var rightText = Operand;
 
-        var leftNumeric = decimal.TryParse(leftText, NumberStyles.Number, CultureInfo.InvariantCulture, out var leftNumber);
-        var rightNumeric = decimal.TryParse(rightText, NumberStyles.Number, CultureInfo.InvariantCulture, out var rightNumber);
+        if (IsQuoted)
+            return CompareText(leftText, rightText, Operator);
+
+        // Values outside decimal's range fail parsing and fall back to text comparison.
+        var leftNumeric = decimal.TryParse(leftText, NumberStyles.Float, CultureInfo.InvariantCulture, out var leftNumber);
+        var rightNumeric = decimal.TryParse(rightText, NumberStyles.Float, CultureInfo.InvariantCulture, out var rightNumber);
 
         if (leftNumeric && rightNumeric)
             return CompareNumeric(leftNumber, rightNumber, Operator);
@@ -133,6 +154,8 @@ internal sealed record WatchCondition(string Column, WatchOperator Operator, str
 
     private static string FormatValue(object value)
     {
+        if (value is bool boolean)
+            return boolean ? "1" : "0";
         if (value is string text)
             return text;
         if (value is IFormattable formattable)
