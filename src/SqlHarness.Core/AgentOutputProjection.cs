@@ -5,6 +5,38 @@ namespace SqlHarness.Core;
 public sealed record AgentBoundedOutput(string ReportType, int OmittedItems);
 public sealed record AgentBinaryValue(long ByteLength, string Base64Prefix, bool Truncated);
 
+/// <summary>
+/// One query result set in the agent projection. <c>Ordinal</c> is the
+/// zero-based position in the source report (the snapshot-diff convention).
+/// Every emitted row has exactly <c>Columns.Count</c> cells. Rows not emitted
+/// are counted in <c>OmittedRowCount</c>; columns dropped by the zero-row
+/// fallback (always the trailing ones) are counted in <c>OmittedColumnCount</c>,
+/// and a set with omitted columns carries no rows.
+/// </summary>
+public sealed record AgentQueryResultSet(
+    int Ordinal,
+    IReadOnlyList<SqlHarnessColumnReport> Columns,
+    IReadOnlyList<IReadOnlyList<object?>> Rows,
+    long RowCount,
+    long OmittedRowCount,
+    int OmittedColumnCount);
+
+/// <summary>
+/// Agent projection of a query report. <c>ResultSets</c> is a prefix of the
+/// source result sets; <c>OmittedResultSetCount</c> counts the trailing sets
+/// that did not fit.
+/// </summary>
+public sealed record AgentQueryProjection(
+    SqlHarnessTargetIdentityReport Target,
+    string StatementClassification,
+    IReadOnlyList<AgentQueryResultSet> ResultSets,
+    int OmittedResultSetCount,
+    IReadOnlyList<string?> Messages,
+    int RecordsAffected,
+    long DurationMilliseconds,
+    string ResultHash,
+    OutputFootprint RawFootprint);
+
 /// <summary>Presentation-only bounds for the opt-in agent response.</summary>
 public sealed record AgentOutputOptions(int MaximumBytes = 16 * 1024, int MaximumCellCharacters = 512);
 
@@ -21,13 +53,30 @@ public static class AgentOutputProjection
         return Math.Clamp((int)Math.Pow(estimate, 0.2), 1, 128);
     }
 
+    private static readonly int[] QueryRowSampleLadder = [128, 64, 32, 16, 8, 4, 2, 1, 0];
+
     /// <summary>
     /// Candidate detail limits for the agent projection degradation loop.
     /// The first candidate is <see cref="int.MaxValue"/>, which projects the
     /// report without truncation. If that does not fit the byte budget, the
     /// loop descends through conservative estimates down to 1, then 0.
+    /// A query report instead descends through bounded per-result-set row
+    /// samples (128, 64, 32, 16, 8, 4, 2, 1) and ends with the zero-row,
+    /// budget-aware schema/inventory fallback at 0.
     /// </summary>
-    public static IEnumerable<int> GetCandidateDetailLimits(int maximumBytes, int maximumCellCharacters)
+    public static IEnumerable<int> GetCandidateDetailLimits(object? report, int maximumBytes, int maximumCellCharacters) =>
+        report is SqlHarnessQueryReport
+            ? QueryCandidateDetailLimits()
+            : DefaultCandidateDetailLimits(maximumBytes, maximumCellCharacters);
+
+    private static IEnumerable<int> QueryCandidateDetailLimits()
+    {
+        yield return int.MaxValue;
+        foreach (var level in QueryRowSampleLadder)
+            yield return level;
+    }
+
+    private static IEnumerable<int> DefaultCandidateDetailLimits(int maximumBytes, int maximumCellCharacters)
     {
         yield return int.MaxValue;
         var level = CalculateDetailLimit(maximumBytes, maximumCellCharacters);
@@ -92,10 +141,15 @@ public static class AgentOutputProjection
             switch (report)
             {
                 case SqlHarnessQueryReport query:
-                    var sets = ProjectResultSets(query.ResultSets);
-                    var messages = Take(query.Messages).Select(Clip).ToArray();
-                    omissions += clippedItems;
-                    return new { target = query.Target, statementClassification = query.StatementClassification, resultSets = sets, messages, query.RecordsAffected, query.DurationMilliseconds, query.ResultHash, query.RawFootprint };
+                    {
+                        var messages = Take(query.Messages).Select(Clip).ToArray();
+                        var queryProjection = detailLimit > 0
+                            ? ProjectQueryRowSample(query, messages, detailLimit, ProjectCell, out var queryOmitted)
+                            : ProjectQueryInventory(query, messages, maximumBytes, out queryOmitted);
+                        omissions += queryOmitted;
+                        omissions += clippedItems;
+                        return queryProjection;
+                    }
                 case SqlHarnessCountsReport counts:
                     var tables = Take(counts.Tables).Select(table => table with { Schema = Clip(table.Schema)!, Name = Clip(table.Name)! }).ToArray();
                     omissions += clippedItems;
@@ -326,6 +380,104 @@ public static class AgentOutputProjection
         static bool IsScalar(object? value) => value is null || value is bool or byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal or char or DateTime or DateTimeOffset or Guid or Enum;
 
     }
+
+    /// <summary>
+    /// Query projection for a positive detail limit: every result set and
+    /// every column is kept, and only the per-set row sample shrinks. Rows
+    /// keep all their cells (values are clipped by <paramref name="projectCell"/>),
+    /// so each emitted row stays aligned with the complete column schema.
+    /// </summary>
+    private static AgentQueryProjection ProjectQueryRowSample(
+        SqlHarnessQueryReport query,
+        IReadOnlyList<string?> messages,
+        int rowLimit,
+        Func<object?, object?> projectCell,
+        out int omittedRows)
+    {
+        var omitted = 0;
+        var sets = new AgentQueryResultSet[query.ResultSets.Count];
+        for (var ordinal = 0; ordinal < sets.Length; ordinal++)
+        {
+            var set = query.ResultSets[ordinal];
+            var rows = set.Rows.Take(rowLimit)
+                .Select(row => (IReadOnlyList<object?>)row.Select(projectCell).ToArray())
+                .ToArray();
+            var setOmitted = set.Rows.Count - rows.Length;
+            omitted += setOmitted;
+            sets[ordinal] = new AgentQueryResultSet(ordinal, set.Columns.ToArray(), rows, set.RowCount, set.OmittedRowCount + setOmitted, 0);
+        }
+
+        omittedRows = omitted;
+        return QueryShell(query, sets, 0, messages);
+    }
+
+    /// <summary>
+    /// Zero-row query fallback. Like <see cref="BuildOmittedCellReferences"/>
+    /// this is a conservative pre-filter against one third of the outer byte
+    /// budget; the caller's real measurement stays the authority. It first
+    /// keeps the result-set inventory (ordinal and row/column counts) for as
+    /// many leading sets as fit, then spends what remains on each kept set's
+    /// column schema in order, dropping trailing columns explicitly. Nothing
+    /// partial is ever unaccounted: every dropped set, column, and row is
+    /// counted.
+    /// </summary>
+    private static AgentQueryProjection ProjectQueryInventory(
+        SqlHarnessQueryReport query,
+        IReadOnlyList<string?> messages,
+        int maximumBytes,
+        out int omittedItems)
+    {
+        var available = Math.Max(0, maximumBytes / 3 - 128);
+        var remaining = available - SerializedLength(QueryShell(query, [], query.ResultSets.Count, messages));
+
+        var sets = new List<AgentQueryResultSet>(query.ResultSets.Count);
+        foreach (var set in query.ResultSets)
+        {
+            var inventory = new AgentQueryResultSet(sets.Count, [], [], set.RowCount, set.OmittedRowCount + set.Rows.Count, set.Columns.Count);
+            var cost = SerializedLength(inventory) + 1;
+            if (cost > remaining)
+                break;
+            remaining -= cost;
+            sets.Add(inventory);
+        }
+
+        var omitted = query.ResultSets.Count - sets.Count;
+        for (var ordinal = 0; ordinal < sets.Count; ordinal++)
+        {
+            var columns = query.ResultSets[ordinal].Columns;
+            var kept = 0;
+            while (kept < columns.Count)
+            {
+                var cost = SerializedLength(columns[kept]) + 1;
+                if (cost > remaining)
+                    break;
+                remaining -= cost;
+                kept++;
+            }
+
+            sets[ordinal] = sets[ordinal] with
+            {
+                Columns = columns.Take(kept).ToArray(),
+                OmittedColumnCount = columns.Count - kept,
+            };
+            omitted += columns.Count - kept;
+            omitted += query.ResultSets[ordinal].Rows.Count;
+        }
+
+        omittedItems = omitted;
+        return QueryShell(query, sets, query.ResultSets.Count - sets.Count, messages);
+    }
+
+    private static AgentQueryProjection QueryShell(
+        SqlHarnessQueryReport query,
+        IReadOnlyList<AgentQueryResultSet> sets,
+        int omittedResultSets,
+        IReadOnlyList<string?> messages) =>
+        new(query.Target, query.StatementClassification, sets, omittedResultSets, messages,
+            query.RecordsAffected, query.DurationMilliseconds, query.ResultHash, query.RawFootprint);
+
+    private static int SerializedLength<T>(T value) =>
+        JsonSerializer.SerializeToUtf8Bytes(value, ProjectionJson).Length;
 
     private static IReadOnlyList<CompareMatrixCellReference>? BuildOmittedCellReferences(
         IReadOnlyList<CompareMatrixCellReport> allCells,
