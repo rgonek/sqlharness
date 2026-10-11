@@ -624,6 +624,37 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Equal("(a.id = b.id)", Text(result.Root, "predicate"));
     }
 
+    // Nested wrappers: SQL Server implicit-over-explicit conversion and PostgreSQL cast-over-cast, both operand orders.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_tool_masks_credential_literals_behind_nested_wrappers_for_both_engines(bool requestMode)
+    {
+        await using var served = await ServePlanModeAsync(requestMode);
+        const string sqlPredicate = "CONVERT_IMPLICIT(nvarchar(100),CONVERT(varchar(100),[Users].[Password],0),0)=N'zq9s1'"
+            + " AND N'zq9s2'=CONVERT_IMPLICIT(nvarchar(100),CONVERT(varchar(100),[PwdSalt],0),0) AND [Status]=N'ACTIVE'";
+        Assert.True(sqlPredicate.Length <= 200);
+        var xml = ShowplanWithText("SELECT 1")
+            .Replace("[dbo].[Orders].[Status]=N'ACTIVE' AND [Name]=&quot;x&quot;", sqlPredicate, StringComparison.Ordinal);
+        var sql = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = xml }, cancellationToken: CancellationToken.None));
+        Assert.DoesNotContain("zq9s", sql.Raw, StringComparison.Ordinal);
+        var sqlText = Text(sql.Root, "predicate")!;
+        Assert.Contains("[Users].[Password],0),0)=N'[REDACTED]'", sqlText, StringComparison.Ordinal);
+        Assert.Contains("N'[REDACTED]'=CONVERT_IMPLICIT(", sqlText, StringComparison.Ordinal);
+        Assert.Contains("[Status]=N'ACTIVE'", sqlText, StringComparison.Ordinal);
+
+        const string pgFilter = "((((password)::text)::character varying = 'zq9s3'::character varying)"
+            + " AND ('zq9s4'::text = ((pwd)::text)::text) AND (status = 'ACTIVE'::text))";
+        var pgPlan = PostgresCredentialPlan.Replace(PostgresCredentialFilter, pgFilter, StringComparison.Ordinal);
+        Assert.Contains("zq9s3", pgPlan, StringComparison.Ordinal);
+        var pg = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = pgPlan }, cancellationToken: CancellationToken.None));
+        Assert.DoesNotContain("zq9s", pg.Raw, StringComparison.Ordinal);
+        var filter = Text(pg.Root.GetProperty("children")[0], "predicate")!;
+        Assert.Contains("(((password)::text)::character varying = '[REDACTED]'::character varying)", filter, StringComparison.Ordinal);
+        Assert.Contains("('[REDACTED]'::text = ((pwd)::text)::text)", filter, StringComparison.Ordinal);
+        Assert.Contains("(status = 'ACTIVE'::text)", filter, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

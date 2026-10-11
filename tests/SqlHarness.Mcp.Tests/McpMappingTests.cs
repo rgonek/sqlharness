@@ -1131,6 +1131,14 @@ public sealed class McpMappingTests : IDisposable
     [InlineData("CONVERT(nvarchar(100),[Users].[Password])=N'hunter2' AND [Status]=N'ACTIVE'", "CONVERT(nvarchar(100),[Users].[Password])=N'[REDACTED]' AND [Status]=N'ACTIVE'")]
     [InlineData("CAST([Password] AS nvarchar(100)) = N'hunter2' AND CAST([Status] AS nvarchar(10)) = N'ACTIVE'", "CAST([Password] AS nvarchar(100)) = N'[REDACTED]' AND CAST([Status] AS nvarchar(10)) = N'ACTIVE'")]
     [InlineData("CONVERT_IMPLICIT(nvarchar(4000),[Password],0) like N'hunter2%' AND CONVERT_IMPLICIT(nvarchar(4000),[Status],0)=N'ACTIVE'", "CONVERT_IMPLICIT(nvarchar(4000),[Password],0) like N'[REDACTED]' AND CONVERT_IMPLICIT(nvarchar(4000),[Status],0)=N'ACTIVE'")]
+    // Gap 1, nested wrappers (implicit over explicit conversion), in both operand orders and on the literal side.
+    [InlineData("CONVERT_IMPLICIT(nvarchar(100),CONVERT(varchar(100),[Password],0),0)=N'hunter2' AND [Status]=N'ACTIVE'", "CONVERT_IMPLICIT(nvarchar(100),CONVERT(varchar(100),[Password],0),0)=N'[REDACTED]' AND [Status]=N'ACTIVE'")]
+    [InlineData("N'hunter2'=CONVERT_IMPLICIT(nvarchar(100),CONVERT(varchar(100),[Password],0),0) AND [Status]=N'ACTIVE'", "N'[REDACTED]'=CONVERT_IMPLICIT(nvarchar(100),CONVERT(varchar(100),[Password],0),0) AND [Status]=N'ACTIVE'")]
+    [InlineData("CAST(CONVERT(varchar(100),([Users].[Password])) AS nvarchar(100))=N'hunter2' AND [Status]=N'ACTIVE'", "CAST(CONVERT(varchar(100),([Users].[Password])) AS nvarchar(100))=N'[REDACTED]' AND [Status]=N'ACTIVE'")]
+    [InlineData("[Password]=CONVERT_IMPLICIT(nvarchar(100),CONVERT(varchar(100),N'hunter2',0),0) AND [Status]=N'ACTIVE'", "[Password]=CONVERT_IMPLICIT(nvarchar(100),CONVERT(varchar(100),N'[REDACTED]',0),0) AND [Status]=N'ACTIVE'")]
+    // Gap 2, nested PostgreSQL casts, in both operand orders.
+    [InlineData("((((password)::text)::character varying = 'hunter2'::character varying) AND (status = 'ACTIVE'::text))", "((((password)::text)::character varying = '[REDACTED]'::character varying) AND (status = 'ACTIVE'::text))")]
+    [InlineData("(('hunter2'::text = ((password)::text)::text) AND ('ACTIVE'::text = (status)::text))", "(('[REDACTED]'::text = ((password)::text)::text) AND ('ACTIVE'::text = (status)::text))")]
     // Gap 2: wrapped column on PostgreSQL.
     [InlineData("(((password)::text = 'hunter2'::text) AND ((status)::text = 'ACTIVE'::text))", "(((password)::text = '[REDACTED]'::text) AND ((status)::text = 'ACTIVE'::text))")]
     [InlineData("((password::text = 'hunter2'::text) AND (status = 'ACTIVE'::text))", "((password::text = '[REDACTED]'::text) AND (status = 'ACTIVE'::text))")]

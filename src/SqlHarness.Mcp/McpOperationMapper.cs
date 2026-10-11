@@ -154,7 +154,7 @@ public static partial class McpPlanTextPolicy
     // A comparison is <operand> <op> <operand> in either order (column first or literal first), or
     // <operand> [NOT] IN (<list>). An operand is an optionally qualified identifier (bracketed, double-quoted or
     // bare) or a literal N'..' / '..', optionally parenthesised or wrapped in CONVERT_IMPLICIT(type, x, style),
-    // CONVERT(type, x[, style]), CAST(x AS type) or ANY / ALL / SOME (...), with an optional trailing PostgreSQL
+    // CONVERT(type, x[, style]), CAST(x AS type) or ANY / ALL / SOME (...), up to three levels deep, with optional PostgreSQL
     // ::type (including ::text[] after an '{...}' array literal). A literal clipped at the end of the text still
     // counts. Operators are =, <>, !=, [NOT] LIKE, ILIKE and the PostgreSQL spellings ~~, ~~*, !~~ and !~~*
     // (EXPLAIN deparses LIKE / ILIKE / NOT LIKE / NOT ILIKE to them). IN list elements may mix literals with
@@ -180,8 +180,11 @@ public static partial class McpPlanTextPolicy
     // independently. Keeping a single copy of each part keeps the generated matcher small enough to compile well
     // inside the match timeout on first use. The cost is that an unpaired wrapper part is accepted; masking still
     // needs a credential column in the comparison and only touches its literals.
-    private const string WrapperPrefix = """(?:(?:CONVERT(?:_IMPLICIT)?\(\s*""" + ConvertType + """\s*,|CAST\(|(?:any|all|some)\s*\(|\()\s*)?""";
-    private const string WrapperSuffix = """(?:\s*(?:,\s*\d+\s*)?\)|\s+AS\s+""" + ConvertType + """\s*\))?""" + PgCast + "?";
+    // Wrappers nest to a bounded depth: up to three opening steps (CONVERT_IMPLICIT over CONVERT over a
+    // parenthesised column, or ((col)::text)::varchar) and up to six closing steps, each a closing ')' or ' AS
+    // type)' or a ::type cast. Each step consumes at least one character, so the bounded loops cannot spin.
+    private const string WrapperPrefix = """(?:(?:CONVERT(?:_IMPLICIT)?\(\s*""" + ConvertType + """\s*,|CAST\(|(?:any|all|some)\s*\(|\()\s*){0,3}""";
+    private const string WrapperSuffix = """(?:\s*(?:,\s*\d+\s*)?\)|\s+AS\s+""" + ConvertType + """\s*\)|""" + PgCast + "){0,6}";
     private const string Operand = WrapperPrefix + "(?:" + Literal + "|" + ColumnChain + ")" + WrapperSuffix;
     private const string Operator = """(?:=|<>|!=|!~~\*?|~~\*?|(?:not\s+)?i?like)""";
     private const string ListElement = "(?:" + Literal + """|[@$:]?[\w.+-]+)""";
