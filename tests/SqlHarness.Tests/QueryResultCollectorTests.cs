@@ -213,7 +213,7 @@ public class QueryResultCollectorTests
         const string message = "safe diagnostic before scalar failure";
         var messages = new List<string>();
         var reader = FakeCollectorReader.FromSets(
-            [new ResultSet(["Value"], [float.PositiveInfinity])],
+            [new ResultSet(["Value"], [new UnsupportedResultScalar()])],
             onSuccessfulRead: () => messages.Add(message));
         var session = new FakeCollectorSession(reader, messages);
         using var raw = new CanonicalResultAccumulator();
@@ -223,11 +223,13 @@ public class QueryResultCollectorTests
                 session, new SqlExecutionCommand("select", [], 30), maxRows: 50,
                 knownSecrets: [], () => raw, CancellationToken.None));
 
-        Assert.Contains("Non-finite", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("not supported as a result column", ex.Message, StringComparison.Ordinal);
         // Failure path ends the open raw result set then appends safe messages.
         Assert.True(raw.SnapshotFootprint().Bytes > 0);
         Assert.True(raw.SnapshotFootprint().Lines >= 1);
     }
+
+    private sealed class UnsupportedResultScalar { }
 
     [Fact]
     public async Task Cancellation_during_read_propagates_and_appends_partial_messages()

@@ -1,7 +1,10 @@
+using System.Data.SqlTypes;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+
+using Microsoft.SqlServer.Types;
 
 namespace SqlHarness.Core;
 
@@ -32,14 +35,24 @@ internal sealed record CanonicalResult(string Hash, OutputFootprint Footprint);
 
 internal static class CanonicalScalarCodec
 {
-    internal readonly record struct PreparedScalar(object? Value, string? InvariantValue);
+    internal readonly record struct PreparedScalar(object? Value, string? InvariantValue, string? TypeName = null);
 
     public static PreparedScalar Prepare(object? value) => value switch
     {
-        float number when !float.IsFinite(number) => throw new NotSupportedException(
-            "Non-finite System.Single values are not supported canonical scalars."),
-        double number when !double.IsFinite(number) => throw new NotSupportedException(
-            "Non-finite System.Double values are not supported canonical scalars."),
+        INullable { IsNull: true } => new PreparedScalar(DBNull.Value, null),
+        float number when !float.IsFinite(number) => new PreparedScalar(
+            value, NonFiniteText(number), "singleNonFinite"),
+        double number when !double.IsFinite(number) => new PreparedScalar(
+            value, NonFiniteText(number), "doubleNonFinite"),
+        SqlHierarchyId hierarchyId => new PreparedScalar(value, hierarchyId.ToString(), "hierarchyId"),
+        SqlGeography geography => new PreparedScalar(
+            value,
+            $"{geography.STSrid.Value.ToString(CultureInfo.InvariantCulture)};{new string(geography.STAsText().Value)}",
+            "geography"),
+        SqlGeometry geometry => new PreparedScalar(
+            value,
+            $"{geometry.STSrid.Value.ToString(CultureInfo.InvariantCulture)};{new string(geometry.STAsText().Value)}",
+            "geometry"),
         null or DBNull or string or char or bool or byte[] or
             byte or sbyte or short or ushort or int or uint or long or ulong or
             decimal or float or double or Guid or DateTime or DateTimeOffset or
@@ -50,8 +63,14 @@ internal static class CanonicalScalarCodec
                 ?? throw new NotSupportedException(
                     $"Canonical scalar type '{value.GetType().FullName}' returned no invariant value.")),
         _ => throw new NotSupportedException(
-            $"Canonical scalar type '{value.GetType().FullName}' is not supported."),
+            $"Canonical scalar type '{value.GetType().FullName}' is not supported as a result column."),
     };
+
+    private static string NonFiniteText(float number) =>
+        float.IsNaN(number) ? "NaN" : float.IsPositiveInfinity(number) ? "Infinity" : "-Infinity";
+
+    private static string NonFiniteText(double number) =>
+        double.IsNaN(number) ? "NaN" : double.IsPositiveInfinity(number) ? "Infinity" : "-Infinity";
 
     public static void Write(Utf8JsonWriter writer, PreparedScalar scalar)
     {
@@ -114,6 +133,10 @@ internal static class CanonicalScalarCodec
                 WriteScalarHeader(writer, "single", false, Utf8Length(singleText));
                 writer.WriteNumber("value", number);
                 break;
+            case float singleNumber when !float.IsFinite(singleNumber):
+            case double doubleNumber when !double.IsFinite(doubleNumber):
+                WriteInvariantText(writer, scalar.TypeName!, scalar.InvariantValue!);
+                break;
             case double number when double.IsFinite(number):
                 var doubleText = number.ToString("R", CultureInfo.InvariantCulture);
                 WriteScalarHeader(writer, "double", false, Utf8Length(doubleText));
@@ -142,6 +165,9 @@ internal static class CanonicalScalarCodec
             case TimeSpan timeSpan:
                 WriteInvariantText(writer, "timeSpan", timeSpan.ToString("c", CultureInfo.InvariantCulture));
                 break;
+            case object _ when scalar.TypeName is not null:
+                WriteInvariantText(writer, scalar.TypeName, scalar.InvariantValue!);
+                break;
             case IFormattable formattable:
                 WriteInvariantText(
                     writer,
@@ -150,7 +176,7 @@ internal static class CanonicalScalarCodec
                 break;
             default:
                 throw new NotSupportedException(
-                    $"Canonical scalar type '{value.GetType().FullName}' is not supported.");
+                    $"Canonical scalar type '{value.GetType().FullName}' is not supported as a result column.");
         }
 
         writer.WriteEndObject();

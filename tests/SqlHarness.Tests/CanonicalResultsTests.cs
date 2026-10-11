@@ -3,6 +3,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
+using Microsoft.SqlServer.Types;
+
 using SqlHarness.Core;
 
 namespace SqlHarness.Tests;
@@ -107,20 +109,64 @@ public class CanonicalResultsTests
 
     [Theory]
     [MemberData(nameof(NonFiniteFloatingValues))]
-    public void Non_finite_floating_scalar_is_rejected_without_changing_state(object nonFiniteValue)
+    public void Non_finite_floating_scalars_have_stable_tagged_encodings(object nonFiniteValue)
     {
-        const string expected = "{\"events\":[{\"kind\":\"resultSetStart\",\"columns\":[{\"ordinal\":0,\"name\":\"Value\",\"dataType\":\"floating\",\"allowNull\":false}]},{\"kind\":\"row\",\"values\":[{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":1}]},{\"kind\":\"resultSetEnd\",\"rowCount\":1}]}";
-        var bytes = Encoding.UTF8.GetBytes(expected);
-        using var accumulator = new CanonicalResultAccumulator();
-        accumulator.BeginResultSet([new CanonicalColumn(0, "Value", "floating", false)]);
+        var first = CanonicalFixture.ResultSet([nonFiniteValue]);
+        var second = CanonicalFixture.ResultSet([nonFiniteValue]);
+        var type = nonFiniteValue is float ? "singleNonFinite" : "doubleNonFinite";
+        var text = nonFiniteValue switch
+        {
+            float value when float.IsNaN(value) => "NaN",
+            double value when double.IsNaN(value) => "NaN",
+            float value when float.IsPositiveInfinity(value) => "Infinity",
+            double value when double.IsPositiveInfinity(value) => "Infinity",
+            _ => "-Infinity",
+        };
 
-        Assert.Throws<NotSupportedException>(() => accumulator.AddRow([nonFiniteValue]));
-        accumulator.AddRow([1]);
-        accumulator.EndResultSet();
-        var actual = accumulator.Complete();
+        Assert.Equal(first.Hash, second.Hash);
+        Assert.Equal(first.Footprint, second.Footprint);
+        Assert.Equal($"{{\"type\":\"{type}\",\"isNull\":false,\"length\":{text.Length},\"value\":\"{text}\"}}", CanonicalScalarJson(nonFiniteValue));
+    }
+
+    [Fact]
+    public void Non_finite_double_nan_has_explicit_canonical_json()
+    {
+        const string expected = "{\"events\":[{\"kind\":\"resultSetStart\",\"columns\":[{\"ordinal\":0,\"name\":\"Value\",\"dataType\":\"floating\",\"allowNull\":false}]},{\"kind\":\"row\",\"values\":[{\"type\":\"doubleNonFinite\",\"isNull\":false,\"length\":3,\"value\":\"NaN\"}]},{\"kind\":\"resultSetEnd\",\"rowCount\":1}]}";
+        var bytes = Encoding.UTF8.GetBytes(expected);
+
+        var actual = CanonicalFixture.ResultSet(
+            [double.NaN], new CanonicalColumn(0, "Value", "floating", false));
 
         Assert.Equal(Convert.ToHexString(SHA256.HashData(bytes)), actual.Hash);
         Assert.Equal(new OutputFootprint(bytes.Length, 1), actual.Footprint);
+        Assert.NotEqual(CanonicalFixture.ResultSet([double.NaN]).Hash,
+            CanonicalFixture.ResultSet([double.PositiveInfinity]).Hash);
+    }
+
+    [Fact]
+    public void Sql_hierarchy_id_uses_invariant_named_encoding()
+    {
+        AssertProviderValue(SqlHierarchyId.Parse("/1/2/"), "hierarchyId", "/1/2/");
+    }
+
+    [Fact]
+    public void Sql_geography_uses_invariant_named_encoding()
+    {
+        AssertProviderValue(SqlGeography.Point(1, 2, 4326), "geography", "4326;POINT (2 1)");
+    }
+
+    [Fact]
+    public void Sql_geometry_uses_invariant_named_encoding()
+    {
+        AssertProviderValue(SqlGeometry.Point(1, 2, 4326), "geometry", "4326;POINT (1 2)");
+    }
+
+    [Fact]
+    public void Sql_null_provider_values_use_the_null_envelope()
+    {
+        AssertProviderNull(SqlHierarchyId.Null);
+        AssertProviderNull(SqlGeography.Null);
+        AssertProviderNull(SqlGeometry.Null);
     }
 
     public static TheoryData<object> NonFiniteFloatingValues =>
@@ -132,6 +178,36 @@ public class CanonicalResultsTests
         float.PositiveInfinity,
         float.NegativeInfinity,
     ];
+
+    private static void AssertProviderValue(object value, string type, string text)
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("pl-PL");
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("pl-PL");
+            var expectedValue = JsonSerializer.Serialize(text);
+            var expected = $"{{\"type\":\"{type}\",\"isNull\":false,\"length\":{Encoding.UTF8.GetByteCount(text)},\"value\":{expectedValue}}}";
+            Assert.Equal(expected, CanonicalScalarJson(value));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    private static void AssertProviderNull(object value) =>
+        Assert.Equal("{\"type\":\"null\",\"isNull\":true,\"length\":0,\"value\":null}", CanonicalScalarJson(value));
+
+    private static string CanonicalScalarJson(object value)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+            CanonicalScalarCodec.Write(writer, CanonicalScalarCodec.Prepare(value));
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
 
     [Fact]
     public void Supported_scalar_bytes_are_independent_of_current_culture()

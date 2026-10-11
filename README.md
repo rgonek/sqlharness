@@ -123,6 +123,8 @@ Supported `--param` types (culture-invariant; date/time values use ISO 8601):
 
 `nvarchar`, `nvarchar(max)`, `varchar`, `varchar(max)`, `char`, `nchar`, `int`, `bigint`, `smallint`, `tinyint`, `bit`, `decimal`, `decimal(p,s)`, `numeric`, `numeric(p,s)`, `float`, `real`, `money`, `smallmoney`, `date`, `time`, `datetime`, `datetime2`, `smalldatetime`, `datetimeoffset`, `uniqueidentifier`, `varbinary`, `varbinary(max)`, `hierarchyid`, `geography`, `geometry`
 
+Result hashing supports non-finite floats and SQL Server `hierarchyid`, `geography`, and `geometry` values. Other provider-specific result types fail with a clear `not supported as a result column` error; cast them to text in the query.
+
 Notes:
 
 - Untyped `name=value` is `nvarchar`; strings longer than 4000 characters bind as `nvarchar(max)` (`Size = -1`).
