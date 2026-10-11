@@ -33,6 +33,39 @@ public class WatchConditionTests
         Assert.Equal(expected, condition.IsMet(SingleColumn("Count", value)));
     }
 
+    [Theory]
+    [InlineData("Done = 1", true, true)]
+    [InlineData("Done = 0", false, true)]
+    [InlineData("Done = true", true, true)]
+    [InlineData("Done = TRUE", true, true)]
+    [InlineData("Done = false", true, false)]
+    [InlineData("Done != 1", false, true)]
+    public void Boolean_values_match_boolean_operands(string text, object value, bool expected)
+    {
+        var condition = WatchCondition.Parse(text);
+        Assert.Equal(expected, condition.IsMet(SingleColumn("Done", value)));
+    }
+
+    [Theory]
+    [InlineData("Status = 'Completed'", "Completed", true)]
+    [InlineData("Status = \"Completed\"", "Completed", true)]
+    [InlineData("Status = 'It''s'", "It's", true)]
+    public void Quoted_text_operands_match_string_values(string text, object value, bool expected)
+    {
+        var condition = WatchCondition.Parse(text);
+        Assert.Equal(expected, condition.IsMet(SingleColumn("Status", value)));
+    }
+
+    [Theory]
+    [InlineData("Ratio = 0.00001", 0.00001d, true)]
+    [InlineData("Ratio < 0.001", 0.00001d, true)]
+    [InlineData("Big >= 1e15", 1e15d, true)]
+    public void Exponent_and_small_decimal_operands_compare_numerically(string text, object value, bool expected)
+    {
+        var condition = WatchCondition.Parse(text);
+        Assert.Equal(expected, condition.IsMet(SingleColumn(condition.Column, value)));
+    }
+
     [Fact]
     public void Parses_longer_operators_before_shorter_ones()
     {
@@ -88,9 +121,22 @@ public class WatchConditionTests
     }
 
     [Fact]
-    public void Rejects_missing_first_row()
+    public void Missing_first_row_does_not_satisfy_condition()
     {
         var condition = WatchCondition.Parse("Count >= 1");
+        var empty = new SqlHarnessResultSetReport(
+            [new SqlHarnessColumnReport(0, "Count", "System.Int32", false)],
+            [],
+            0,
+            0);
+
+        Assert.False(condition.IsMet(empty));
+    }
+
+    [Fact]
+    public void Rejects_missing_column_even_when_there_are_no_rows()
+    {
+        var condition = WatchCondition.Parse("Missing >= 1");
         var empty = new SqlHarnessResultSetReport(
             [new SqlHarnessColumnReport(0, "Count", "System.Int32", false)],
             [],
@@ -101,14 +147,7 @@ public class WatchConditionTests
     }
 
     [Fact]
-    public void Rejects_missing_column()
-    {
-        var condition = WatchCondition.Parse("Missing >= 1");
-        Assert.Throws<SqlHarnessSafetyException>(() => { _ = condition.IsMet(SingleColumn("Count", 1)); });
-    }
-
-    [Fact]
-    public void Rejects_duplicate_column_names_case_insensitive()
+    public void Rejects_duplicate_column_names_case_insensitive_even_when_there_are_no_rows()
     {
         var condition = WatchCondition.Parse("Count >= 1");
         var duplicate = new SqlHarnessResultSetReport(
@@ -116,18 +155,18 @@ public class WatchConditionTests
                 new SqlHarnessColumnReport(0, "Count", "System.Int32", false),
                 new SqlHarnessColumnReport(1, "count", "System.Int32", false),
             ],
-            [[1, 2]],
-            1,
+            [],
+            0,
             0);
 
         Assert.Throws<SqlHarnessSafetyException>(() => { _ = condition.IsMet(duplicate); });
     }
 
     [Fact]
-    public void Rejects_null_condition_value()
+    public void Null_condition_value_does_not_satisfy_condition()
     {
         var condition = WatchCondition.Parse("Count >= 1");
-        Assert.Throws<SqlHarnessSafetyException>(() => { _ = condition.IsMet(SingleColumn("Count", null)); });
+        Assert.False(condition.IsMet(SingleColumn("Count", null)));
     }
 
     [Theory]
