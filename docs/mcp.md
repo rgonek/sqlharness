@@ -82,7 +82,17 @@ Each resolved scope carries an artifact owner tuple built from its profile reque
 
 Inline input works without filesystem access. File input is admitted only under the absolute `--input-root` directories frozen at startup. The reader rejects path traversal, UNC and network paths, NTFS alternate streams, symlink and reparse-point escapes (including linked parent directories), and files replaced while they are read. Each file is opened once with a bounded read.
 
-A well-formed path outside every configured input root, including a path that resolves through a link outside those roots, reports how many roots are configured and points to `--input-root`; it never includes the root paths. Relative or malformed paths keep the generic invalid-path error.
+`sqlharness_capabilities` discloses the configured input roots in both modes, so a caller can find a permitted location without reading client configuration:
+
+- `inputRoots`: a page of the normalized absolute roots, in configured order. An empty array means file inputs are disabled (no `--input-root` was configured); pass content inline instead.
+- `inputRootCount`: the total number of configured roots.
+- `inputRootsComplete`: `true` only when this single response holds every root (first page, nothing omitted, no next page).
+- `inputRootsNextCursor`: the offset to pass as `inputRootCursor` for the next page, or `null` on the last page. The page size follows the result byte budget. To get the full inventory, repeat the call with `inputRootCursor` set to the previous `inputRootsNextCursor` until it is `null`. A cursor outside `0..inputRootCount` is rejected.
+- `inputRootsOmitted`: roots skipped because a single root path is too long to fit any page; they stay enforced but cannot be listed.
+
+Discovery workflow: call `sqlharness_capabilities`, pick a root from `inputRoots`, place the file under that root, and pass its absolute path as `file`. Roots are fixed at startup. SQLHarness never reads client configuration, never creates directories, and MCP `roots/list` never widens the allowlist.
+
+Input-path rejections name the reason and echo the caller path (credential-filtered, control characters replaced, truncated at 200 characters), for example `The input path was rejected: not an absolute path. Path: ...`. A well-formed path outside every configured input root (including one that resolves through a link outside those roots) reports `The input path is outside every configured input root` and lists the configured roots when they fit a small bound (at most 8 roots); otherwise it points to the `sqlharness_capabilities` `inputRoots` pages. With no roots configured the message says file inputs are disabled. Resolved link targets are never echoed.
 
 - SQL tools take exactly one of inline `sql` or `file`; the plan tool takes exactly one of inline `content` or `file`. Inline payloads above 1 MiB are rejected and must arrive as files under an input root. SQL and plan files are admitted up to 16 MiB, matching the CLI/Core SQL bound.
 - Parameter-set files must use the `.sqljson` extension, are limited to 64 KiB, and are parsed with the shared Core strict parser: only `name` and `parameters`, no BOM, comments, or trailing commas. Values are never copied into reports.
@@ -111,7 +121,7 @@ Exactly 10 tools are registered explicitly by name. No assembly scanning is used
 
 | Tool | Behavior |
 |---|---|
-| `sqlharness_capabilities` | Server versions and build, scope mode, engine, tool list, and limits; request mode also reports only the explicitly permitted profile names. Optional local diagnostics contain counts and existence flags only, never secrets, paths, or resolved database lists. |
+| `sqlharness_capabilities` | Server versions and build, scope mode, engine, tool list, and limits; request mode also reports only the explicitly allowlisted profile names, and both modes report the configured input roots (`inputRoots`, see below). Optional local diagnostics contain counts and existence flags only. Never disclosed: secrets, environment values, the dashboard token, unrelated filesystem paths, or profiles outside the allowlist. |
 | `sqlharness_inspect` | One catalog inspection with fixed internal probes: `ping`, `schema`, `counts`, `space`, `qstop`, or `indexes`. No SQL input. `qstop` and `indexes` are SQL Server only and are rejected before connecting on Postgres. It runs under the process gate like the other database tools. |
 | `sqlharness_validate` | Static check of SQL effects visible in the text (see `safetyAnalysis`) for usage `query`, `setup`, or `benchmark`. One Core offline classifier serves every usage; it never connects, and object and permission status stays unknown. `benchmark` adds the measured-batch shape check. The tool carries no setup-SQL input: a setup-dependent batch validates under engine query rules, as if executed without setup. In request mode it needs a scope even though it remains target-free at execution time. |
 | `sqlharness_query` | Bounded query passing the static visible-effects text check, with timeout and row cap. No persistent-mutation flags are offered on this path; hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. |
