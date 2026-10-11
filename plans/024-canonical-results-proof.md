@@ -114,4 +114,10 @@ The implementation commit was `0b9f659` before the final full gates.
 - Windows: `pwsh -NoProfile -File scripts/verify.ps1`, exit 0, literal `verify: OK`; build had 0 warnings/errors; Core 3569 passed; MCP 326 passed / 4 expected skips; UI 32 files / 148 tests passed. Log: `.superpowers/sdd/024-canonical-results-common-types/task-final-fix-windows-verify.log`.
 - Linux: `pwsh -NoProfile -File scripts/verify-linux.ps1`, exit 0, literal `verify-linux: OK`; build had 0 warnings/errors; Core 3569 passed; MCP 327 passed / 3 expected skips; UI 32 files / 148 tests passed. The ext4 clone synced to commit `0b9f659` before the gate. Log: `.superpowers/sdd/024-canonical-results-common-types/task-final-fix-linux-verify.log`.
 
-Scoped re-review of this one final-fix wave remains pending with the controller. No merge, push, or unrelated workspace cleanup was performed.
+## Scoped re-review and controller ruling
+
+The controller's final-fix re-review marked the original finding **ADDRESSED** and found no new Critical or Important issue. It identified one Minor compatibility edge: a multidimensional snapshot created on this unmerged Plan 024 branch lacks dimensions; comparing it with a fresh same-shape capture reports a difference and returns exit 8.
+
+The controller accepts the conservative difference. The pre-Plan 024 base `aae13b9` rejected ordinary arrays, so released snapshots cannot contain multidimensional arrays. A dimensionless snapshot cannot prove its shape, and treating it as identical would risk a false equality. Branch-local development snapshots may need recapture. Legacy version 1 documents remain readable, and ordinary scalar bytes remain unchanged.
+
+No merge, push, or unrelated workspace cleanup was performed.

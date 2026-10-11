@@ -79,7 +79,11 @@ The exception fails the **whole operation**, not just display. So `SELECT * FROM
 
 ### Authorized whole-branch final fix (2026-10-11)
 
-The controller authorized a narrow extension after whole-branch review found that snapshot persistence discarded multidimensional array dimensions. `SnapshotStore` may persist nullable dimensions as additive optional metadata, and `SnapshotDiffer` may compare them. Cover persistence/load, equal and different shapes with the same flattened elements, old version 1 snapshots without dimensions, and runner `Different` / exit 8 behavior. Preserve canonical scalar tags, legacy version 1 documents, and ordinary scalar persisted bytes; do not bump the document version. No changes to equivalence semantics, rendering, readers, lower-bound behavior, or live database behavior are authorized. The final-fix report and full-gate evidence are recorded in [the durable proof](024-canonical-results-proof.md); the controller's scoped re-review remains the next review step.
+The controller authorized a narrow extension after whole-branch review found that snapshot persistence discarded multidimensional array dimensions. `SnapshotStore` may persist nullable dimensions as additive optional metadata, and `SnapshotDiffer` may compare them. Cover persistence/load, equal and different shapes with the same flattened elements, old version 1 snapshots without dimensions, and runner `Different` / exit 8 behavior. Preserve canonical scalar tags, legacy version 1 documents, and ordinary scalar persisted bytes; do not bump the document version. No changes to equivalence semantics, rendering, readers, lower-bound behavior, or live database behavior are authorized.
+
+### Scoped re-review and accepted minor
+
+The final-fix re-review marked the original shape-loss finding **ADDRESSED** and found no new Critical or Important issue. It identified one Minor compatibility edge: a multidimensional snapshot created on this unmerged Plan 024 branch has no persisted dimensions, so comparing it with a fresh same-shape capture conservatively reports a difference (exit 8). The controller accepts this behavior: the pre-Plan 024 base `aae13b9` rejected ordinary arrays, so released snapshots cannot contain these values; a dimensionless document cannot establish shape equality; branch-local development snapshots may need recapture. Legacy version 1 documents remain readable, and scalar compatibility is preserved. This ruling and gate evidence are recorded in [the durable proof](024-canonical-results-proof.md).
 
 ## Git workflow
 
