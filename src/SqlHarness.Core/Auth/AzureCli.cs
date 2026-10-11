@@ -109,7 +109,7 @@ internal sealed class AzureCliLocator(
             if (!Path.IsPathFullyQualified(entry) && !isPosixAbsoluteOnWindows)
                 continue;
 
-            var executable = entry.TrimEnd('/', '\\') + "/az";
+            var executable = entry.TrimEnd('/') + "/az";
             if (fileExists(executable))
                 return executable;
         }

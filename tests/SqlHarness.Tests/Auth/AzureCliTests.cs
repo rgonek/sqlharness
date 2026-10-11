@@ -122,6 +122,21 @@ public sealed class AzureCliTests
     }
 
     [Fact]
+    public async Task Unix_preserves_backslash_at_end_of_absolute_PATH_entry()
+    {
+        var runner = new RecordingProcessRunner(new ProcessResult(0, "{}", ""));
+        var locator = new AzureCliLocator(
+            () => "",
+            () => "/opt/az/bin\\",
+            path => path == "/opt/az/bin\\/az");
+        var cli = new AzureCli(runner, isWindows: false, locator, TimeSpan.FromSeconds(1));
+
+        await cli.RunJsonAsync(["account", "show"]);
+
+        Assert.Equal("/opt/az/bin\\/az", runner.FileName);
+    }
+
+    [Fact]
     public async Task Unix_missing_az_throws_AzureCliException()
     {
         var runner = new RecordingProcessRunner(new ProcessResult(0, "{}", ""));
