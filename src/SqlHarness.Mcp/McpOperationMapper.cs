@@ -41,18 +41,20 @@ public sealed record McpCapabilitiesDocument(
     int InputRootsOmitted = 0);
 
 /// <summary>
-/// Shared projection sanitizer for plan and artifact results. Distilled plans
-/// lose statement text and literal predicates (both engines distill to the
-/// same Core shape); artifact sections from the manifest reader are already
-/// limited to summary/metrics/operators and carry no raw plans, SQL, or
-/// snapshot cells, so they pass through unchanged.
+/// Plan text policy for the offline plan tool. The caller supplies the plan
+/// document, so with <c>includeText</c> true statement text and predicates are
+/// kept after the credential-pattern filter (<see cref="SecretRedactor"/>
+/// without known secrets; ordinary SQL literals are not treated as secrets);
+/// with false both are omitted. Names, metrics and objects are never changed.
+/// Length bounds stay with <see cref="AgentOutputProjection"/>. Non-plan
+/// reports, including manifest-read artifact sections, pass through unchanged.
 /// </summary>
-public static class McpResultSanitizer
+public static class McpPlanTextPolicy
 {
-    public static object? Sanitize(object? report) =>
-        report is DistilledPlan plan ? StripPlan(plan) : report;
+    public static object? Apply(object? report, bool includeText) =>
+        report is DistilledPlan plan ? ApplyPlan(plan, includeText) : report;
 
-    internal static DistilledPlan StripPlan(DistilledPlan plan)
+    internal static DistilledPlan ApplyPlan(DistilledPlan plan, bool includeText)
     {
         ArgumentNullException.ThrowIfNull(plan);
         return plan with
@@ -60,19 +62,22 @@ public static class McpResultSanitizer
             Statements = plan.Statements
                 .Select(statement => statement with
                 {
-                    StatementText = null,
-                    Root = StripNode(statement.Root),
+                    StatementText = Text(statement.StatementText, includeText),
+                    Root = ApplyNode(statement.Root, includeText),
                 })
                 .ToArray(),
         };
     }
 
-    private static PlanNode StripNode(PlanNode node) =>
+    private static PlanNode ApplyNode(PlanNode node, bool includeText) =>
         node with
         {
-            Predicate = null,
-            Children = node.Children.Select(StripNode).ToArray(),
+            Predicate = Text(node.Predicate, includeText),
+            Children = node.Children.Select(child => ApplyNode(child, includeText)).ToArray(),
         };
+
+    private static string? Text(string? value, bool includeText) =>
+        includeText && value is not null ? SecretRedactor.Redact(value, []) : null;
 }
 
 /// <summary>

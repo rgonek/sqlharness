@@ -14,7 +14,7 @@ namespace SqlHarness.Mcp.Tests;
 /// (null, decimal, Unicode, '=', ',' and empty text preserved whole;
 /// duplicates and unknown types left to Core), PG
 /// gates fire before any connection, Core safety stays authoritative offline,
-/// and plan results lose statement text and literal predicates. Only synthetic
+/// and plan results keep credential-filtered statement text and predicates unless includeText is false. Only synthetic
 /// HOME directories and an unreachable profile target are used; no test opens
 /// a real database connection.
 /// </summary>
@@ -1061,20 +1061,51 @@ public sealed class McpMappingTests : IDisposable
     }
 
     [Fact]
-    public void Sanitizer_strips_statement_text_and_literal_predicates()
+    public void Plan_text_policy_filters_credentials_and_keeps_literals_when_text_is_included()
+    {
+        var child = new PlanNode("Index Seek", "Index Seek", "dbo.T", "IX_T", 1, 1, 1, 0.1, "[Id]=(42) AND [Pwd]='x' AND password='hunter2-synthetic'", [], []);
+        var root = new PlanNode("Nested Loops", "Inner Join", null, null, 2, 2, 1, 0.9, "OuterRefs", [], [child]);
+        var plan = new DistilledPlan([new PlanStatement("SELECT * FROM dbo.T WHERE Id = 42 AND access_token=tok-synthetic", root, [])]);
+
+        var kept = Assert.IsType<DistilledPlan>(McpPlanTextPolicy.Apply(plan, includeText: true));
+
+        Assert.Contains("Id = 42", kept.Statements[0].StatementText, StringComparison.Ordinal);
+        Assert.DoesNotContain("tok-synthetic", kept.Statements[0].StatementText, StringComparison.Ordinal);
+        Assert.Equal("OuterRefs", kept.Statements[0].Root.Predicate);
+        var keptChild = kept.Statements[0].Root.Children[0];
+        Assert.Contains("[Id]=(42)", keptChild.Predicate, StringComparison.Ordinal);
+        Assert.Contains("[Pwd]='x'", keptChild.Predicate, StringComparison.Ordinal);
+        Assert.DoesNotContain("hunter2-synthetic", keptChild.Predicate, StringComparison.Ordinal);
+        Assert.Equal("dbo.T", keptChild.ObjectName);
+        Assert.Equal(plan.Statements[0].Root.EstimatedRows, kept.Statements[0].Root.EstimatedRows);
+    }
+
+    [Fact]
+    public void Plan_text_policy_omits_text_when_excluded_and_passes_other_reports_through()
     {
         var child = new PlanNode("Index Seek", "Index Seek", "dbo.T", "IX_T", 1, 1, 1, 0.1, "[Id]=@id", [], []);
         var root = new PlanNode("Nested Loops", "Inner Join", null, null, 2, 2, 1, 0.9, "OuterRefs", [], [child]);
         var plan = new DistilledPlan([new PlanStatement("SELECT * FROM dbo.T WHERE Id = 1", root, [])]);
-        var sanitized = Assert.IsType<DistilledPlan>(McpResultSanitizer.Sanitize(plan));
-        Assert.Null(sanitized.Statements[0].StatementText);
-        Assert.Null(sanitized.Statements[0].Root.Predicate);
-        Assert.Null(sanitized.Statements[0].Root.Children[0].Predicate);
-        Assert.Equal("Index Seek", sanitized.Statements[0].Root.Children[0].PhysicalOp);
-        Assert.Equal("dbo.T", sanitized.Statements[0].Root.Children[0].ObjectName);
-        Assert.Null(McpResultSanitizer.Sanitize(null));
+        var stripped = Assert.IsType<DistilledPlan>(McpPlanTextPolicy.Apply(plan, includeText: false));
+        Assert.Null(stripped.Statements[0].StatementText);
+        Assert.Null(stripped.Statements[0].Root.Predicate);
+        Assert.Null(stripped.Statements[0].Root.Children[0].Predicate);
+        Assert.Equal("Index Seek", stripped.Statements[0].Root.Children[0].PhysicalOp);
+        Assert.Equal("dbo.T", stripped.Statements[0].Root.Children[0].ObjectName);
+        Assert.Null(McpPlanTextPolicy.Apply(null, includeText: true));
         var passthrough = new object();
-        Assert.Same(passthrough, McpResultSanitizer.Sanitize(passthrough));
+        Assert.Same(passthrough, McpPlanTextPolicy.Apply(passthrough, includeText: false));
+    }
+
+    [Fact]
+    public void Adapter_does_not_strip_plan_text_that_the_tool_policy_kept()
+    {
+        var node = new PlanNode("Index Seek", "Index Seek", "dbo.T", "IX_T", 1, 1, 1, 0.1, "[Id]=(42)", [], []);
+        var plan = new DistilledPlan([new PlanStatement("SELECT 42", node, [])]);
+        var text = Assert.Single(McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, plan, null), "sqlharness_plan").Content.OfType<TextContentBlock>()).Text;
+        Assert.Contains("[Id]=(42)", text, StringComparison.Ordinal);
+        Assert.Contains("SELECT 42", text, StringComparison.Ordinal);
     }
 
     [Fact]

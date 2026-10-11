@@ -128,13 +128,14 @@ public sealed class McpRequestToolHandlers(
     public Task<CallToolResult> PlanAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Inline plan document.")] string? content = null,
         [Description("Plan file under an operator input root.")] string? file = null,
+        [Description("Keep statement text and predicates (credential patterns filtered). Plan text may contain data; false returns metadata only.")] bool includeText = true,
         CancellationToken ct = default) => TargetFreeAsync("sqlharness_plan", ctx, ct, async token =>
         {
-            ThrowUnknown(ctx, ["content", "file"]);
+            ThrowUnknown(ctx, ["content", "file", "includeText"]);
             var operation = await McpOperationMapper.MapPlanAsync(process.InputRoots, content, file, token);
             var outcome = await process.CreateModule().ExecuteAsync(operation, token);
             return outcome.ExitCode == SqlHarnessExitCode.Success
-                ? outcome with { Report = McpResultSanitizer.Sanitize(outcome.Report) }
+                ? outcome with { Report = McpPlanTextPolicy.Apply(outcome.Report, includeText) }
                 : outcome;
         });
 

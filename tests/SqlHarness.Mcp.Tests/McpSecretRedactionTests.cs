@@ -246,14 +246,15 @@ public sealed class McpSecretRedactionTests
     }
 
     [Fact]
-    public void Plan_literals_never_reach_results_even_with_secrets_inside()
+    public void Plan_credential_syntax_is_scrubbed_while_plain_literals_stay_visible()
     {
         var node = new PlanNode(
             "Index Seek", "Index Seek", "dbo.Contracts", "IX_Contracts",
-            1, 1, 1, 0.1, $"[Secret] = '{FictionalSecret}'", [], []);
+            1, 1, 1, 0.1, $"[Kind]='gold' AND password='{FictionalSecret}'", [], []);
         var plan = new DistilledPlan(
-            [new PlanStatement($"SELECT * FROM dbo.Contracts WHERE Secret = '{FictionalSecret}'", node, [])]);
-        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, plan, null);
+            [new PlanStatement($"SELECT * FROM dbo.Contracts WHERE Kind = 'gold' AND access_token={FictionalSecret}", node, [])]);
+        var applied = McpPlanTextPolicy.Apply(plan, includeText: true);
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, applied, null);
 
         var text = TextOf(McpResultAdapter.Adapt(outcome, "sqlharness_plan"));
 
@@ -261,8 +262,20 @@ public sealed class McpSecretRedactionTests
         using var document = JsonDocument.Parse(text);
         Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
         var statement = document.RootElement.GetProperty("result").GetProperty("statements")[0];
-        var hasText = statement.TryGetProperty("statementText", out var statementText);
-        Assert.True(!hasText || statementText.ValueKind == JsonValueKind.Null, "Sanitized plans carry no statement text.");
+        Assert.Contains("Kind = 'gold'", statement.GetProperty("sql").GetString(), StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", statement.GetProperty("root").GetProperty("predicate").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_error_text_stays_credential_filtered()
+    {
+        var outcome = new SqlHarnessOutcome(
+            SqlHarnessExitCode.Safety, null, $"Invalid plan near password={FictionalSecret}; stop.");
+
+        var text = TextOf(McpResultAdapter.Adapt(outcome, "sqlharness_plan"));
+
+        Assert.DoesNotContain(FictionalSecret, text, StringComparison.Ordinal);
+        Assert.Contains("password=[REDACTED]", text, StringComparison.Ordinal);
     }
 
     [Fact]
