@@ -75,6 +75,23 @@ public sealed class McpOutputTests
     }
 
     [Fact]
+    public void Compare_result_carries_the_nullability_diagnostic()
+    {
+        var report = BuildCompareReport("m") with
+        {
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Ordered, false, 0, 0, 0, true, false, ResultMismatchReasons.Nullability),
+        };
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
+
+        var envelope = EnvelopeOf(McpResultAdapter.Adapt(outcome, "sqlharness_compare"));
+
+        var equivalence = envelope.GetProperty("result").GetProperty("equivalence");
+        Assert.True(equivalence.GetProperty("compareNullability").GetBoolean());
+        Assert.False(equivalence.GetProperty("nullabilityEquivalent").GetBoolean());
+        Assert.Equal("nullability", equivalence.GetProperty("mismatchReason").GetString());
+    }
+
+    [Fact]
     public void Failed_matrix_batch_is_partial_but_still_an_error()
     {
         var matrix = new SqlHarnessCompareMatrixReport("batch", "int", []);

@@ -45,6 +45,23 @@ public sealed class JournalSummaryTests
     }
 
     [Fact]
+    public void Compare_summary_records_the_nullability_diagnostic()
+    {
+        var report = Compare(false) with
+        {
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Ordered, false, 0, 0, 0, true, false, ResultMismatchReasons.Nullability),
+        };
+
+        using var json = JsonDocument.Parse(JournalSummary.Build(report)!);
+        Assert.True(json.RootElement.GetProperty("compareNullability").GetBoolean());
+        Assert.False(json.RootElement.GetProperty("nullabilityEquivalent").GetBoolean());
+
+        using var unknown = JsonDocument.Parse(JournalSummary.Build(Compare(true))!);
+        Assert.False(unknown.RootElement.GetProperty("compareNullability").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, unknown.RootElement.GetProperty("nullabilityEquivalent").ValueKind);
+    }
+
+    [Fact]
     public void Matrix_summary_never_contains_matrix_values()
     {
         var report = new SqlHarnessCompareMatrixReport("Tenant", "nvarchar(20)",

@@ -858,10 +858,7 @@ public class ResultEquivalenceTests
             var report = ResultComparer.Compare(mode, [baseline], [candidate], compareNullability: strict);
             Assert.False(report.Equivalent);
             Assert.Null(report.MismatchReason);
-            if (shape is "type" or "name")
-                Assert.True(report.NullabilityEquivalent);
-            else
-                Assert.False(report.NullabilityEquivalent);
+            Assert.Null(report.NullabilityEquivalent);
         }
     }
 

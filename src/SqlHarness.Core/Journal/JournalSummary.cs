@@ -32,6 +32,8 @@ internal static class JournalSummary
             kind = "compare",
             comparison = compare.Equivalence.Mode.ToString(),
             resultsEquivalent = compare.ResultsEquivalent,
+            compareNullability = compare.Equivalence.CompareNullability,
+            nullabilityEquivalent = compare.Equivalence.NullabilityEquivalent,
             baselineOperators = Operators(compare.Baseline),
             candidateOperators = Operators(compare.Candidate),
         }),

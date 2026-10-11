@@ -281,6 +281,9 @@ public sealed class McpToolSchemaTests : IDisposable
             .ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
         Assert.Equal(["summary", "metrics", "operators", "statements", "matrix-cells"], EnumOf(requestSchemas["sqlharness_artifact"], "section"));
         Assert.Contains("cursor", Properties(requestSchemas["sqlharness_artifact"]).EnumerateObject().Select(property => property.Name));
+        var requestCompare = Properties(requestSchemas["sqlharness_compare"]).GetProperty("compareNullability");
+        Assert.Equal("boolean", requestCompare.GetProperty("type").GetString());
+        Assert.False(requestCompare.GetProperty("default").GetBoolean());
         var targetTools = new[] { "sqlharness_inspect", "sqlharness_validate", "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot", "sqlharness_artifact" };
         foreach (var tool in targetTools)
         {
@@ -660,6 +663,8 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Equal(["baseline", "candidate"], Required(compare).Order().ToArray());
         Assert.Equal(["ordered", "multiset", "set", "off"], EnumOf(compare, "compareResults"));
         Assert.Equal("ordered", Properties(compare).GetProperty("compareResults").GetProperty("default").GetString());
+        Assert.Equal("boolean", Properties(compare).GetProperty("compareNullability").GetProperty("type").GetString());
+        Assert.False(Properties(compare).GetProperty("compareNullability").GetProperty("default").GetBoolean());
         var matrix = Properties(compare).GetProperty("matrix");
         Assert.Equal(["name", "type", "values"], matrix.GetProperty("required").EnumerateArray().Select(item => item.GetString()!).Order().ToArray());
 

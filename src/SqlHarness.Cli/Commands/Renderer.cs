@@ -509,11 +509,15 @@ public sealed class Renderer
             ResultComparisonMode.Set => "set",
             _ => equivalence.Mode.ToString().ToLowerInvariant(),
         };
+        var label = equivalence.CompareNullability ? $"{mode}, strict nullability" : mode;
         var text =
-            $"Technical equivalence ({mode}): {equivalence.Equivalent}; baseline-only: {equivalence.BaselineOnlyCount}; candidate-only: {equivalence.CandidateOnlyCount}";
+            $"Technical equivalence ({label}): {equivalence.Equivalent}; baseline-only: {equivalence.BaselineOnlyCount}; candidate-only: {equivalence.CandidateOnlyCount}";
         // Differing positions is ordered-only; multiset/set leave it null.
         if (equivalence.DifferingPositions is not null)
             text += $"; differing positions: {equivalence.DifferingPositions}";
+        text += $"; nullability: {(equivalence.NullabilityEquivalent is { } nullability ? nullability.ToString() : "unavailable")}";
+        if (equivalence.MismatchReason is not null)
+            text += $"; mismatch reason: {equivalence.MismatchReason}";
         return text;
     }
     private static void RenderPlan(DistilledPlan plan, TextWriter output)

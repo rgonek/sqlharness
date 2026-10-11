@@ -187,6 +187,8 @@ public sealed class McpToolHandlers(
         string compareResults = "ordered",
         [Description("Optional single matrix dimension {name, type, values}: at least two distinct values, each a culture-invariant string or JSON null.")]
         McpMatrixArgument? matrix = null,
+        [Description("Also require matching column nullability (allowNull) for result equivalence. Default compares observed data only and reports nullability separately. Not allowed with compareResults off.")]
+        bool compareNullability = false,
         [Description("Response cap 4096..1048576 bytes; only lowers the process maximum.")]
         int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
@@ -194,9 +196,9 @@ public sealed class McpToolHandlers(
         CancellationToken ct = default) =>
         RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "repeat", "timeout", "compareResults", "matrix", "maxResultBytes", "maxOperationSeconds"]);
+            ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "repeat", "timeout", "compareResults", "matrix", "compareNullability", "maxResultBytes", "maxOperationSeconds"]);
             return await module.ExecuteAsync(
-                await McpOperationMapper.MapCompareAsync(scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token),
+                await McpOperationMapper.MapCompareAsync(scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability),
                 token);
         }, ct);
 

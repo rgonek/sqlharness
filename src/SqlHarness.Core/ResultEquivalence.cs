@@ -145,10 +145,14 @@ internal static class ResultComparer
         if (reference is null)
             return null;
 
+        // A shape/type/name difference makes nullability not comparable, never "different".
+        var referenceSchema = baseline[0].SchemaHash;
         var allSame = true;
         foreach (var run in baseline.Concat(candidate))
         {
             if (run.NullabilityFingerprint is null)
+                return null;
+            if (!string.Equals(referenceSchema, run.SchemaHash, StringComparison.Ordinal))
                 return null;
             if (!string.Equals(reference, run.NullabilityFingerprint, StringComparison.Ordinal))
                 allSame = false;

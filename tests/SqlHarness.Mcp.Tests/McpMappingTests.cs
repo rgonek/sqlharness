@@ -592,6 +592,33 @@ public sealed class McpMappingTests : IDisposable
             null, null, 5, 30, "bogus", null, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task Compare_mapping_carries_compare_nullability_and_rejects_it_with_off()
+    {
+        var scope = Scope();
+        McpSqlSourceArgument a = new() { Sql = "SELECT 1" }, b = new() { Sql = "SELECT 2" };
+        var matrixArgument = new McpMatrixArgument { Name = "N", Type = "int", Values = ["1", "2"] };
+
+        var defaults = Assert.IsType<SqlHarnessCompareOperation>(
+            await McpOperationMapper.MapCompareAsync(scope, a, b, null, null, 5, 30, "ordered", null, CancellationToken.None));
+        Assert.False(defaults.CompareNullability);
+
+        var strict = Assert.IsType<SqlHarnessCompareOperation>(
+            await McpOperationMapper.MapCompareAsync(scope, a, b, null, null, 5, 30, "set", null, CancellationToken.None, compareNullability: true));
+        Assert.True(strict.CompareNullability);
+
+        var strictMatrix = Assert.IsType<SqlHarnessCompareMatrixOperation>(
+            await McpOperationMapper.MapCompareAsync(scope, a, b, null, null, 5, 30, "multiset", matrixArgument, CancellationToken.None, compareNullability: true));
+        Assert.True(strictMatrix.CompareNullability);
+
+        foreach (var matrix in new McpMatrixArgument?[] { null, matrixArgument })
+        {
+            var ex = await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapCompareAsync(
+                scope, a, b, null, null, 5, 30, "off", matrix, CancellationToken.None, compareNullability: true));
+            Assert.Equal("compareNullability requires compareResults ordered, multiset, or set.", ex.Message);
+        }
+    }
+
     // 012/T2 regression: the old text bridge rejected a comma and an empty
     // string in the mapper and could not carry a JSON null at all. The values
     // must now reach Core as structure, in caller order, with no text matrix.
