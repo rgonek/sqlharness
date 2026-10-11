@@ -226,6 +226,19 @@ public static class McpResultAdapter
     }
 
     /// <summary>
+    /// True when <paramref name="report"/> travels raw as a success result
+    /// within <paramref name="maximumBytes"/>: the same envelope and wire
+    /// measurement <see cref="Adapt"/> uses for its raw path, so a caller can
+    /// size a report (for example a capabilities page) before adapting it.
+    /// </summary>
+    internal static bool FitsRawSuccess(object report, string command, int maximumBytes)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        TryEnvelopeBytes(command, "success", (int)SqlHarnessExitCode.Success, report, null, null, out var bytes);
+        return TryBuildWithinBudget(bytes, isError: false, maximumBytes, out _);
+    }
+
+    /// <summary>
     /// Emitted footprint of a result for activity-journal accounting: measured wire bytes
     /// and line count. Journal token math reuses the Core estimator
     /// (<see cref="OutputFootprint.EstimateTokens"/>).

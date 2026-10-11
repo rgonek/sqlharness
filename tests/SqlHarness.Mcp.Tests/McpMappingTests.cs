@@ -111,6 +111,232 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal(McpHost.SupportedProtocolVersions, negotiated.SupportedProtocolVersions);
     }
 
+    private McpScope ScopeWithRoots(IReadOnlyList<string> roots, int maxResultBytes = (int)McpLimits.CallToolResultBudgetBytes) =>
+        McpScope.Create(
+            new McpServerOptions
+            {
+                Profile = ProfileName,
+                Vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["tenant"] = "frozen" },
+                InputRoots = roots,
+                MaxResultBytes = maxResultBytes,
+            },
+            ProfileStore.Load(_targetsFile));
+
+    private McpProcessContext RequestProcessWithRoots(IReadOnlyList<string> roots, int maxResultBytes = (int)McpLimits.CallToolResultBudgetBytes) =>
+        McpProcessContext.Create(
+            new McpServerOptions
+            {
+                RequestScope = true,
+                AllowedProfiles = [ProfileName],
+                InputRoots = roots,
+                MaxResultBytes = maxResultBytes,
+            },
+            () => ProfileStore.Load(_targetsFile));
+
+    private string CreateRoot(string name)
+    {
+        var path = Path.Combine(_home, "input-roots", name);
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private string[] CreateRoots(int count, int nameLength) =>
+        Enumerable.Range(0, count)
+            .Select(index => CreateRoot(index.ToString("D3", System.Globalization.CultureInfo.InvariantCulture) + new string('r', nameLength)))
+            .ToArray();
+
+    private Func<int, Task<CallToolResult>> CapabilitiesCall(bool requestMode, IReadOnlyList<string> roots, int maxResultBytes)
+    {
+        if (requestMode)
+        {
+            var handlers = new McpRequestToolHandlers(RequestProcessWithRoots(roots, maxResultBytes));
+            return cursor => handlers.CapabilitiesAsync(null!, includeDiagnostics: true, inputRootCursor: cursor);
+        }
+
+        var scope = ScopeWithRoots(roots, maxResultBytes);
+        var fixedHandlers = new McpToolHandlers(scope, scope.CreateModule());
+        return cursor => fixedHandlers.CapabilitiesAsync(null!, includeDiagnostics: true, inputRootCursor: cursor);
+    }
+
+    private static JsonElement EnvelopeOf(CallToolResult result)
+    {
+        using var document = JsonDocument.Parse(TextOf(result));
+        return document.RootElement.Clone();
+    }
+
+    private static int? NextCursorOf(JsonElement page) =>
+        page.GetProperty("inputRootsNextCursor").ValueKind == JsonValueKind.Null
+            ? null
+            : page.GetProperty("inputRootsNextCursor").GetInt32();
+
+    private static string[] RootsOf(JsonElement page) =>
+        page.GetProperty("inputRoots").EnumerateArray().Select(item => item.GetString()!).ToArray();
+
+    /// <summary>Follows inputRootsNextCursor from 0, asserting every page fits the budget and carries the raw document.</summary>
+    private static async Task<List<JsonElement>> CollectRootPagesAsync(Func<int, Task<CallToolResult>> call, int maxResultBytes)
+    {
+        var pages = new List<JsonElement>();
+        int? cursor = 0;
+        while (cursor is not null)
+        {
+            Assert.True(pages.Count < 1000, "Input root paging did not terminate.");
+            var result = await call(cursor.Value);
+            Assert.False(result.IsError == true, TextOf(result));
+            Assert.True(McpResultAdapter.MeasureBytes(result) <= maxResultBytes, "A capabilities page exceeded the result budget.");
+            var envelope = EnvelopeOf(result);
+            Assert.Equal(JsonValueKind.Null, envelope.GetProperty("truncation").ValueKind);
+            var page = envelope.GetProperty("result");
+            pages.Add(page);
+            var next = NextCursorOf(page);
+            if (next is not null)
+                Assert.True(next > cursor, "The input root cursor did not advance.");
+            cursor = next;
+        }
+
+        return pages;
+    }
+
+    [Fact]
+    public void Fixed_capabilities_disclose_exactly_the_enforced_input_roots()
+    {
+        var first = CreateRoot("alpha");
+        var second = CreateRoot("beta");
+        var scope = ScopeWithRoots([second + Path.DirectorySeparatorChar, first]);
+
+        var document = McpOperationMapper.BuildCapabilities(scope, includeDiagnostics: false);
+
+        Assert.Equal(scope.InputRoots, document.InputRoots);
+        Assert.Equal([second, first], document.InputRoots);
+        Assert.Equal(2, document.InputRootCount);
+        Assert.True(document.InputRootsComplete);
+        Assert.Null(document.InputRootsNextCursor);
+        Assert.Equal(0, document.InputRootsOmitted);
+    }
+
+    [Fact]
+    public void Request_capabilities_disclose_exactly_the_enforced_input_roots()
+    {
+        var first = CreateRoot("gamma");
+        var second = CreateRoot("delta");
+        var process = RequestProcessWithRoots([first, second + Path.DirectorySeparatorChar]);
+
+        var document = McpOperationMapper.BuildCapabilities(process, includeDiagnostics: true);
+
+        Assert.Equal(process.InputRoots, document.InputRoots);
+        Assert.Equal([first, second], document.InputRoots);
+        Assert.Equal(2, document.InputRootCount);
+        Assert.True(document.InputRootsComplete);
+        Assert.Null(document.InputRootsNextCursor);
+        Assert.Equal(0, document.InputRootsOmitted);
+        Assert.Equal("2", document.Diagnostics!["inputRootCount"]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Capabilities_without_input_roots_report_an_empty_complete_inventory(bool requestMode)
+    {
+        var call = CapabilitiesCall(requestMode, [], McpLimits.MinCallToolResultBudgetBytes);
+
+        var page = EnvelopeOf(await call(0)).GetProperty("result");
+
+        Assert.Empty(RootsOf(page));
+        Assert.Equal(0, page.GetProperty("inputRootCount").GetInt32());
+        Assert.True(page.GetProperty("inputRootsComplete").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, page.GetProperty("inputRootsNextCursor").ValueKind);
+        Assert.Equal(0, page.GetProperty("inputRootsOmitted").GetInt32());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Capabilities_return_several_short_input_roots_on_one_complete_page(bool requestMode)
+    {
+        var roots = CreateRoots(3, 4);
+
+        var pages = await CollectRootPagesAsync(CapabilitiesCall(requestMode, roots, McpLimits.MinCallToolResultBudgetBytes), McpLimits.MinCallToolResultBudgetBytes);
+
+        var page = Assert.Single(pages);
+        Assert.Equal(roots, RootsOf(page));
+        Assert.Equal(3, page.GetProperty("inputRootCount").GetInt32());
+        Assert.True(page.GetProperty("inputRootsComplete").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Capabilities_page_many_long_input_roots_within_the_minimum_budget(bool requestMode)
+    {
+        var roots = CreateRoots(30, 120);
+
+        var pages = await CollectRootPagesAsync(CapabilitiesCall(requestMode, roots, McpLimits.MinCallToolResultBudgetBytes), McpLimits.MinCallToolResultBudgetBytes);
+
+        Assert.True(pages.Count > 1, "Thirty long roots must not fit one 4096 B page.");
+        Assert.Equal(roots, pages.SelectMany(RootsOf).ToArray());
+        Assert.All(pages, page =>
+        {
+            Assert.NotEmpty(RootsOf(page));
+            Assert.Equal(30, page.GetProperty("inputRootCount").GetInt32());
+            Assert.Equal(0, page.GetProperty("inputRootsOmitted").GetInt32());
+            Assert.False(page.GetProperty("inputRootsComplete").GetBoolean());
+        });
+        Assert.NotNull(NextCursorOf(pages[0]));
+        Assert.Null(NextCursorOf(pages[^1]));
+    }
+
+    [Fact]
+    public async Task Capabilities_omit_an_input_root_that_cannot_fit_any_page_and_still_terminate()
+    {
+        var shortBefore = CreateRoot("before");
+        var longRoot = CreateRoot(Path.Combine(Enumerable.Range(0, 10).Select(index => index.ToString(System.Globalization.CultureInfo.InvariantCulture) + new string('L', 200)).ToArray()));
+        var shortAfter = CreateRoot("after");
+        var call = CapabilitiesCall(requestMode: false, [shortBefore, longRoot, shortAfter], McpLimits.MinCallToolResultBudgetBytes);
+
+        var pages = await CollectRootPagesAsync(call, McpLimits.MinCallToolResultBudgetBytes);
+
+        Assert.Equal([shortBefore, shortAfter], pages.SelectMany(RootsOf).ToArray());
+        Assert.Equal(1, pages.Sum(page => page.GetProperty("inputRootsOmitted").GetInt32()));
+        Assert.All(pages, page => Assert.False(page.GetProperty("inputRootsComplete").GetBoolean()));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Capabilities_cursor_at_the_end_returns_an_empty_incomplete_page(bool requestMode)
+    {
+        var roots = CreateRoots(2, 4);
+        var call = CapabilitiesCall(requestMode, roots, (int)McpLimits.CallToolResultBudgetBytes);
+
+        var page = EnvelopeOf(await call(2)).GetProperty("result");
+
+        Assert.Empty(RootsOf(page));
+        Assert.Equal(2, page.GetProperty("inputRootCount").GetInt32());
+        Assert.False(page.GetProperty("inputRootsComplete").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, page.GetProperty("inputRootsNextCursor").ValueKind);
+
+        var tail = EnvelopeOf(await call(1)).GetProperty("result");
+        Assert.Equal(roots[1..], RootsOf(tail));
+        Assert.False(tail.GetProperty("inputRootsComplete").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(false, -1)]
+    [InlineData(false, 3)]
+    [InlineData(true, -1)]
+    [InlineData(true, 3)]
+    public async Task Capabilities_reject_an_input_root_cursor_outside_the_inventory(bool requestMode, int cursor)
+    {
+        var call = CapabilitiesCall(requestMode, CreateRoots(2, 4), (int)McpLimits.CallToolResultBudgetBytes);
+
+        var result = await call(cursor);
+
+        Assert.True(result.IsError == true);
+        var envelope = EnvelopeOf(result);
+        Assert.Equal(2, envelope.GetProperty("exitCode").GetInt32());
+        Assert.Equal("safety_rejected", envelope.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal("The input root cursor is invalid.", envelope.GetProperty("error").GetProperty("message").GetString());
+    }
+
     private sealed class RecordingModule : ISqlHarnessModule
     {
         public List<SqlHarnessOperation> Operations { get; } = [];

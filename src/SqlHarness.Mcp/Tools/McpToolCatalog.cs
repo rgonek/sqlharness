@@ -51,15 +51,17 @@ public sealed class McpToolHandlers(
 
     public Task<CallToolResult> CapabilitiesAsync(
         RequestContext<CallToolRequestParams> ctx,
-        [Description("Include local counts and existence flags. Never secrets, paths, or profile lists.")]
+        [Description("Include local counts and existence flags. Never secrets.")]
         bool includeDiagnostics = false,
+        [Description("Zero-based offset 0..inputRootCount into the configured input roots; default 0. Follow inputRootsNextCursor until it is null; inputRootsComplete is true only when one response holds every root.")]
+        int inputRootCursor = 0,
         CancellationToken ct = default) =>
         RunAsync("sqlharness_capabilities", ctx, _ =>
         {
-            ThrowIfUnknown(ctx, ["includeDiagnostics"]);
+            ThrowIfUnknown(ctx, ["includeDiagnostics", "inputRootCursor"]);
             return Task.FromResult(new SqlHarnessOutcome(
                 SqlHarnessExitCode.Success,
-                McpOperationMapper.BuildCapabilities(scope, includeDiagnostics, ctx?.Server?.NegotiatedProtocolVersion),
+                McpOperationMapper.BuildCapabilities(scope, includeDiagnostics, ctx?.Server?.NegotiatedProtocolVersion, inputRootCursor),
                 null));
         }, ct);
 
@@ -501,7 +503,7 @@ public static class McpToolCatalog
             });
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
-            Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), "Describe server versions, request-scope mode, permitted profiles, tools, and limits.", true, false, true, false),
+            Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), "Describe server versions, request-scope mode, permitted profiles, input roots, tools, and limits.", true, false, true, false),
             Tool(ToolNames[1], nameof(McpRequestToolHandlers.InspectAsync), "Run one catalog inspection against the supplied request scope.", true, false, null, true),
             Tool(ToolNames[2], nameof(McpRequestToolHandlers.ValidateAsync), "Static check of SQL effects visible in the text; never connects.", true, false, true, false),
             Tool(ToolNames[3], nameof(McpRequestToolHandlers.QueryAsync), "Run a bounded query against the supplied request scope.", true, false, null, true),
@@ -568,7 +570,7 @@ public static class McpToolCatalog
                 });
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
-            Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), "Describe server versions, scope engine, tools, and limits. Optional local diagnostics; no secrets or profile lists.", true, false, true, false),
+            Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), "Describe server versions, scope engine, input roots, tools, and limits. Optional local diagnostics; no secrets or profile lists.", true, false, true, false),
             Tool(ToolNames[1], nameof(McpToolHandlers.InspectAsync), "Run one catalog inspection with fixed internal probes: ping, schema, counts, space, qstop, or indexes. qstop/indexes are SQL Server only. No SQL input.", true, false, null, true),
             Tool(ToolNames[2], nameof(McpToolHandlers.ValidateAsync), "Static check of SQL effects visible in the text (see safetyAnalysis); never connects, object and permission status stays unknown. Exactly one of inline sql (at most 1 MiB) or a file under an input root.", true, false, true, false),
             Tool(ToolNames[3], nameof(McpToolHandlers.QueryAsync), "Run a bounded query passing the static visible-effects text check; no persistent-mutation flags are offered on this path. Hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. Exactly one of inline sql (at most 1 MiB) or a file under an input root.", true, false, null, true),
