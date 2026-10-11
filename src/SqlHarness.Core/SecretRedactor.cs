@@ -51,8 +51,8 @@ public static partial class SecretRedactor
                 string.Join("|", secrets.Select(Regex.Escape)),
                 RegexOptions.CultureInvariant | RegexOptions.NonBacktracking)
                 .Replace(value, "[REDACTED]");
-        safe = SecretFieldPattern().Replace(safe, "$1[REDACTED]$3");
         safe = PasswordPattern().Replace(safe, "$1[REDACTED]");
+        safe = SecretFieldPattern().Replace(safe, "$1[REDACTED]$3");
         safe = JwtPattern().Replace(safe, "[REDACTED]");
         return safe;
     }
@@ -95,7 +95,7 @@ public static partial class SecretRedactor
     }
 
     // Only the value of an explicit key/value field is masked; a field name or descriptive word alone is not a credential.
-    [GeneratedRegex("""(?i)(["']?(?:access[_\s-]?token|client[_\s-]?secret|account[_\s-]?key|shared[_\s-]?access[_\s-]?key)["']?\s*[:=]\s*["']?)([^"';&,}\s]+)(["']?)""", RegexOptions.CultureInvariant)]
+    [GeneratedRegex("""(?i)(["']?(?:password|pwd|access[_\s-]?token|client[_\s-]?secret|account[_\s-]?key|shared[_\s-]?access[_\s-]?key)["']?\s*[:=]\s*["']?)([^"';&,}\s]+)(["']?)""", RegexOptions.CultureInvariant)]
     private static partial Regex SecretFieldPattern();
 
     // Server, database and user fields are target diagnostics and stay readable.

@@ -112,6 +112,10 @@ public sealed class SecretRedactorTests
     [InlineData("Access Token=abc123;", "Access Token=[REDACTED];")]
     [InlineData("accessToken=abc123", "accessToken=[REDACTED]")]
     [InlineData("{\"access_token\":\"abc123\"}", "{\"access_token\":\"[REDACTED]\"}")]
+    [InlineData("password: abc123", "password: [REDACTED]")]
+    [InlineData("{\"password\":\"abc123\"}", "{\"password\":\"[REDACTED]\"}")]
+    [InlineData("{\"pwd\": \"abc123\", \"server\": \"s1\"}", "{\"pwd\": \"[REDACTED]\", \"server\": \"s1\"}")]
+    [InlineData("Password=abc123", "Password=[REDACTED]")]
     [InlineData("client_secret=abc123&x=1", "client_secret=[REDACTED]&x=1")]
     [InlineData("Client Secret=abc123", "Client Secret=[REDACTED]")]
     public void Redact_masks_values_of_explicit_authentication_secret_fields(string input, string expected)
