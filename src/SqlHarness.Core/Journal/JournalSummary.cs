@@ -44,6 +44,8 @@ internal static class JournalSummary
             parameterType = matrix.ParameterType,
             cells = matrix.Cells.Count,
             equivalentCells = matrix.Cells.Count(cell => cell.Compare.ResultsEquivalent == true),
+            // One policy applies to every cell of a matrix run.
+            compareNullability = matrix.Cells.Count > 0 && matrix.Cells[0].Compare.Equivalence.CompareNullability,
         }),
         _ => null,
     };

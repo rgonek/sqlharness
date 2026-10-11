@@ -80,6 +80,32 @@ public sealed class JournalSummaryTests
     }
 
     [Fact]
+    public void Matrix_summary_records_the_nullability_policy()
+    {
+        static SqlHarnessCompareReport Strict(bool equivalent) => Compare(equivalent) with
+        {
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Ordered, equivalent, 0, 0, 0, true, equivalent),
+        };
+
+        var strict = new SqlHarnessCompareMatrixReport("Tenant", "int",
+        [
+            new CompareMatrixCellReport(0, "1", Strict(true)),
+            new CompareMatrixCellReport(1, "2", Strict(false)),
+        ]);
+        var lenient = new SqlHarnessCompareMatrixReport("Tenant", "int",
+        [
+            new CompareMatrixCellReport(0, "1", Compare(true)),
+            new CompareMatrixCellReport(1, "2", Compare(true)),
+        ]);
+
+        using var strictJson = JsonDocument.Parse(JournalSummary.Build(strict)!);
+        using var lenientJson = JsonDocument.Parse(JournalSummary.Build(lenient)!);
+
+        Assert.True(strictJson.RootElement.GetProperty("compareNullability").GetBoolean());
+        Assert.False(lenientJson.RootElement.GetProperty("compareNullability").GetBoolean());
+    }
+
+    [Fact]
     public void Operators_are_capped()
     {
         var operators = Enumerable.Range(1, 15).Select(i => new CompareOperatorReport(i, "Sort", "T", true, false, false)).ToArray();
