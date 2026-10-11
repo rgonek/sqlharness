@@ -655,6 +655,61 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Contains("(status = 'ACTIVE'::text)", filter, StringComparison.Ordinal);
     }
 
+    // Plan 048 task 2: a scan timeout fails the call with the generic failure and nothing from the plan. The injected
+    // pattern backtracks catastrophically on the statement text, so the timeout is deterministic.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_tool_fails_closed_with_a_content_free_result_when_the_text_scan_times_out(bool requestMode)
+    {
+        await using var served = await ServePlanModeAsync(requestMode);
+        var statementText = new string('a', 40) + "! WHERE Password = N'zq-timeout-secret' AND Status = N'ZQ-TIMEOUT-LITERAL'";
+        var xml = ShowplanWithText(statementText);
+        var path = WriteInput("timeout.sqlplan", xml);
+        McpPlanTextPolicy.CredentialLiteralPatternOverride = new System.Text.RegularExpressions.Regex("(a+)+$", System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromMilliseconds(50));
+        try
+        {
+            foreach (var args in new[]
+            {
+                new Dictionary<string, object?> { ["content"] = xml },
+                new Dictionary<string, object?> { ["file"] = path },
+            })
+            {
+                var result = await served.Client.CallToolAsync("sqlharness_plan", args, cancellationToken: CancellationToken.None);
+                Assert.True(result.IsError == true);
+                var raw = string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text));
+                foreach (var leaked in new[] { "zq-timeout-secret", "ZQ-TIMEOUT-LITERAL", "aaaaaaaa", "Status =", "WHERE", "ShowPlanXML", "Orders", "timeout.sqlplan", "Regex", "RegexMatchTimeout", "(a+)+" })
+                    Assert.DoesNotContain(leaked, raw, StringComparison.OrdinalIgnoreCase);
+                var envelope = JsonDocument.Parse(raw).RootElement;
+                Assert.True(envelope.TryGetProperty("command", out _), raw);
+                Assert.Equal("error", envelope.GetProperty("status").GetString());
+                Assert.True(!envelope.TryGetProperty("result", out var emitted) || emitted.ValueKind == JsonValueKind.Null, raw);
+                // The generic failure: a fixed message and no hint or location.
+                var error = envelope.GetProperty("error");
+                // Fixed mode reports an execution failure, request mode a safety rejection; both carry the same fixed message.
+                var (code, message) = requestMode
+                    ? ("safety_rejected", "The tool failed without a safe error.")
+                    : ("sql_execution_failed", "The tool failed without a safe error.");
+                Assert.Equal(code, error.GetProperty("code").GetString());
+                Assert.Equal(message, error.GetProperty("message").GetString());
+                Assert.Equal(JsonValueKind.Null, error.GetProperty("hint").ValueKind);
+                Assert.Equal(JsonValueKind.Null, error.GetProperty("location").ValueKind);
+            }
+
+            // includeText false never runs the scan, so metadata still comes back while the override is active.
+            var metadata = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = xml, ["includeText"] = false }, cancellationToken: CancellationToken.None));
+            Assert.Equal("Clustered Index Scan", Text(metadata.Root, "physicalOp"));
+        }
+        finally
+        {
+            McpPlanTextPolicy.CredentialLiteralPatternOverride = null;
+        }
+
+        var recovered = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = xml }, cancellationToken: CancellationToken.None));
+        Assert.DoesNotContain("zq-timeout-secret", recovered.Raw, StringComparison.Ordinal);
+        Assert.Contains("N'ZQ-TIMEOUT-LITERAL'", Text(recovered.Statement, "sql")!, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

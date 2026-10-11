@@ -1235,6 +1235,42 @@ public sealed class McpMappingTests : IDisposable
         Assert.Same(passthrough, McpPlanTextPolicy.Apply(passthrough, includeText: false));
     }
 
+    // Plan 048 task 2: the shipped pattern is linear-time, so adversarial shapes at the input cap neither time out nor
+    // change the result; a trailing credential comparison is still masked after a long identifier chain.
+    [Fact]
+    public void Plan_text_policy_uses_a_non_backtracking_pattern_that_stays_bounded_on_adversarial_text()
+    {
+        Assert.True(McpPlanTextPolicy.DefaultCredentialLiteralPattern.Options.HasFlag(System.Text.RegularExpressions.RegexOptions.NonBacktracking));
+        Assert.True(McpPlanTextPolicy.DefaultCredentialLiteralPattern.MatchTimeout > TimeSpan.Zero);
+        foreach (var filler in new[] { string.Concat(Enumerable.Repeat("[a].", 40_000)), new string('(', 160_000), "N'" + new string('a', 160_000) + "' " })
+        {
+            var node = new PlanNode("Index Seek", "Index Seek", null, null, 1, 1, 1, 0.1, null, [], []);
+            var plan = new DistilledPlan([new PlanStatement(filler + " AND [Password] = N'zz-secret-1'", node, [])]);
+            var applied = Assert.IsType<DistilledPlan>(McpPlanTextPolicy.Apply(plan, includeText: true));
+            var text = applied.Statements[0].StatementText!;
+            Assert.DoesNotContain("zz-secret-1", text, StringComparison.Ordinal);
+        }
+    }
+
+    // A match timeout must surface as an exception, never as partially filtered or unfiltered text.
+    [Fact]
+    public void Plan_text_policy_throws_instead_of_returning_text_when_the_scan_times_out()
+    {
+        var node = new PlanNode("Index Seek", "Index Seek", null, null, 1, 1, 1, 0.1, null, [], []);
+        var plan = new DistilledPlan([new PlanStatement(new string('a', 40) + "! password = 'zz-secret-2'", node, [])]);
+        McpPlanTextPolicy.CredentialLiteralPatternOverride = new System.Text.RegularExpressions.Regex("(a+)+$", System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromMilliseconds(50));
+        try
+        {
+            Assert.Throws<System.Text.RegularExpressions.RegexMatchTimeoutException>(() => McpPlanTextPolicy.Apply(plan, includeText: true));
+            Assert.Equal(plan.Statements[0].StatementText, new string('a', 40) + "! password = 'zz-secret-2'");
+        }
+        finally
+        {
+            McpPlanTextPolicy.CredentialLiteralPatternOverride = null;
+        }
+        Assert.DoesNotContain("zz-secret-2", Assert.IsType<DistilledPlan>(McpPlanTextPolicy.Apply(plan, includeText: true)).Statements[0].StatementText!, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Adapter_does_not_strip_plan_text_that_the_tool_policy_kept()
     {

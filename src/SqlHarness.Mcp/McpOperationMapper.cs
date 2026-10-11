@@ -169,7 +169,7 @@ public static partial class McpPlanTextPolicy
     // ([PasswordVault].[dbo].[T].[Status]) does not count. Key names mirror SecretRedactor.
     //
     // Constructs: alternation, greedy loops over disjoint character classes, optional groups and named captures;
-    // no backreferences, lookarounds, atomic groups, lazy loops or conditionals.
+    // no backreferences, lookarounds, atomic groups, lazy loops or conditionals (so RegexOptions.NonBacktracking applies).
     private const string CredentialKey = """(?:password|pwd|access[_\s-]?token|client[_\s-]?secret|account[_\s-]?key|shared[_\s-]?access[_\s-]?key)""";
     private const string IdentifierPart = """(?:\[(?:\]\]|[^\]])*\]|"(?:""|[^"])*"|[\w@#$]+)""";
     private const string ColumnChain = "(?:" + IdentifierPart + """\.)*(?<col>""" + IdentifierPart + ")";
@@ -193,8 +193,21 @@ public static partial class McpPlanTextPolicy
         + """|(?:not\s+)?in\s*\((?:\s*""" + ListElement + """\s*,)*\s*""" + ListElement + """\s*(?:\)|$)))""";
     private const string SkippedToken = """N?'(?:''|[^'])*'|(?:""" + IdentifierPart + """\.)*""" + IdentifierPart;
 
-    [GeneratedRegex("(?i)" + Comparison + "|" + SkippedToken, RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
-    private static partial Regex CredentialLiteralPattern();
+    // NonBacktracking: the pattern has no backreferences, lookarounds, atomic groups or lazy loops, so it is
+    // supported, and match time is linear in the input (about 0.8 ms per KB of ordinary SQL, at most about 0.65 s for
+    // a 1 MiB adversarial input). The engine is built once when the type loads, so construction never counts against
+    // the match timeout. The timeout (per match attempt) stays as a safety net far above any real input: plan text
+    // reaching it is already bounded by the distiller and the 1 MiB input cap. A timeout surfaces as
+    // RegexMatchTimeoutException, which the plan tool maps to its generic content-free failure, never to unfiltered text.
+    internal static readonly Regex DefaultCredentialLiteralPattern = new(
+        "(?i)" + Comparison + "|" + SkippedToken,
+        RegexOptions.CultureInvariant | RegexOptions.NonBacktracking,
+        TimeSpan.FromSeconds(5));
+
+    // Test seam: replaces the scanning pattern (for example with one that has a tiny timeout).
+    internal static Regex? CredentialLiteralPatternOverride { get; set; }
+
+    private static Regex CredentialLiteralPattern() => CredentialLiteralPatternOverride ?? DefaultCredentialLiteralPattern;
 
     [GeneratedRegex("(?i)" + CredentialKey, RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
     private static partial Regex CredentialKeyPattern();
