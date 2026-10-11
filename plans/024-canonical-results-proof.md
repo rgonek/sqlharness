@@ -47,3 +47,41 @@ Fix verification, all against commit `8780fe0`:
 - Linux: `pwsh -NoProfile -File scripts/verify-linux.ps1` exited 0, literal `verify-linux: OK`; Core 3558 passed, MCP 327 passed / 3 expected skips. The new `Unsupported_sql_nullable_null_remains_rejected` test passed in this run. Full fix log: `task-1-fix-linux-verify.log`.
 
 The fix gates repeated no product behavior beyond narrowing null acceptance to the three explicitly supported SQL Server UDT types. No live database or provider-result operation was run.
+
+---
+
+# Plan 024, Task 2 (Phase B) implementation report
+
+## Outcome
+
+Phase B is implemented in commit `3d097ff` (`Add canonical PostgreSQL result encodings`) on `fix/plan-024-canonical-types`, based on phase A's `beea534`. Canonical arrays are recursively prepared before JSON writing, then emitted with scalar envelopes; multidimensional arrays include dimensions and row-major values. PostgreSQL `inet`, `macaddr`, and `bit varying` values use invariant named encodings. Byte arrays retain the existing `bytes` encoding. Npgsql 10's default `cidr` value, `System.Net.IPNetwork`, retains its existing generic `IFormattable` tag and invariant text so its supported hash remains unchanged.
+
+No live database, provider read, dashboard, or API was used. The gates exercise the offline test suites only.
+
+## Provider mapping and compatibility evidence
+
+The Npgsql 10.0 release notes say PostgreSQL `cidr` maps to `System.Net.IPNetwork` by default instead of `NpgsqlCidr`: https://www.npgsql.org/doc/release-notes/10.0.html. Reflection against the installed Npgsql 10.0.3 assembly confirmed `System.Net.IPNetwork` implements `System.IFormattable`; the obsolete `NpgsqlTypes.NpgsqlCidr` exists but does not implement it. Before this change, `IPNetwork` therefore already passed through the generic scalar arm under type tag `System.Net.IPNetwork`. The implementation preserves that encoding and adds a regression pinning its exact JSON and SHA-256 across `pl-PL` and `en-US`. No obsolete `NpgsqlCidr` arm was added.
+
+## Focused checks
+
+- `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~CanonicalResults|FullyQualifiedName~ResultEquivalence|FullyQualifiedName~Snapshot"`: exit 0, 171 passed, 0 failed, 0 skipped.
+- `dotnet build SqlHarness.sln -warnaserror`: exit 0, 0 warnings, 0 errors.
+- `dotnet format SqlHarness.sln --no-restore --verify-no-changes --include src/SqlHarness.Core/CanonicalResults.cs tests/SqlHarness.Tests/CanonicalResultsTests.cs`: exit 0. `git diff --check`: exit 0.
+- One early focused run failed only because the new expected JSON mistakenly used IPNetwork text length 13; actual UTF-8 length is 12. Correcting that test expectation produced the green run above. This was a test expectation correction, not a production-behavior RED. No pre-implementation RED was run.
+
+Tests cover stable and order-sensitive hashes, exact array JSON, strings with null elements, empty arrays, multidimensional shape and row-major values, byte-array compatibility, and rejection of an unsupported nested element without changing the accumulator. IPAddress, PhysicalAddress, BitArray, and IPNetwork encodings are pinned under invariant culture checks.
+
+## Full gates
+
+Both gates ran against implementation commit `3d097ff`.
+
+- Windows command: `pwsh -NoProfile -File scripts/verify.ps1`; exit 0; literal `verify: OK`. Build: 0 warnings/errors. Core: 3564 passed. MCP: 326 passed, 4 expected skips. UI: 32 files and 148 tests passed. Full log: `task-2-windows-verify.log`.
+- Linux command: `pwsh -NoProfile -File scripts/verify-linux.ps1`; exit 0; literal `verify-linux: OK`. Build: 0 warnings/errors. Core: 3564 passed. MCP: 327 passed, 3 expected skips. UI: 32 files and 148 tests passed. Full log: `task-2-linux-verify.log`. The ext4 gate clone had no competing Linux gate process before launch.
+
+Phase A evidence, including the initial Linux cancellation timing flake and its focused plus full clean reruns, is retained in the preceding Phase A report in `plans/024-canonical-results-proof.md`. Neither phase used live SQL Server/PostgreSQL reads.
+
+## Files and self-review
+
+Phase B changed `src/SqlHarness.Core/CanonicalResults.cs`, `tests/SqlHarness.Tests/CanonicalResultsTests.cs`, `README.md`, `AGENTS.md`, and the provider reconciliation in `plans/024-canonical-results-common-types.md`. The array arm is after the existing byte-array arm in `Write`; `Prepare` keeps `byte[]` on its primitive path, while every other array recursively prepares all elements before a writer can be mutated. Existing Phase A tags and envelopes were preserved.
+
+No unresolved concerns.
