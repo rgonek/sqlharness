@@ -89,7 +89,7 @@ internal sealed class AzureCliLocator(
         () => Environment.GetEnvironmentVariable("PATH"),
         File.Exists);
 
-    internal string WindowsCommandProcessor => Path.Combine(systemDirectory(), "cmd.exe");
+    internal string WindowsCommandProcessor => systemDirectory().TrimEnd('\\', '/') + @"\cmd.exe";
 
     internal string NeutralWorkingDirectory => systemDirectory();
 
