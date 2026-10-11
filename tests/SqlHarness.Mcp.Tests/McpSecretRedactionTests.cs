@@ -50,6 +50,20 @@ public sealed class McpSecretRedactionTests
     }
 
     [Fact]
+    public void Connection_string_error_keeps_target_and_user_but_removes_the_password_on_the_wire()
+    {
+        var outcome = new SqlHarnessOutcome(
+            SqlHarnessExitCode.SqlExecution,
+            null,
+            $"Cannot open: Server=sql.example.test;Database=Sales;User ID=app_user;Password={FictionalPassword};");
+
+        var text = TextOf(McpResultAdapter.Adapt(outcome, "sqlharness_query", knownSecrets: [FictionalPassword]));
+
+        Assert.DoesNotContain(FictionalPassword, text, StringComparison.Ordinal);
+        Assert.Contains("Server=sql.example.test;Database=Sales;User ID=app_user;Password=[REDACTED]", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Full_secret_in_parser_error_is_redacted_from_both_representations()
     {
         var outcome = new SqlHarnessOutcome(

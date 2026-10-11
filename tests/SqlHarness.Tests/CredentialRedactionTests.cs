@@ -106,6 +106,19 @@ public sealed class CredentialRedactionTests
         Assert.Equal("device ClientID Line 1 [REDACTED]", outcome.SafeError);
     }
 
+    [Fact]
+    public async Task Connection_string_error_keeps_target_and_user_but_removes_the_password()
+    {
+        var outcome = await RunWithFailureAsync(
+            new SqlHarnessQueryOperation(VarTarget("dev"), "SELECT 1 AS One", [], 5, 10, false, null),
+            "Cannot open: Data Source=sql.example.test;Initial Catalog=Sales;User ID=app_user;Password=\"x y;z\";Pwd=" + Password);
+
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
+        Assert.Equal(
+            "Cannot open: Data Source=sql.example.test;Initial Catalog=Sales;User ID=app_user;Password=[REDACTED];Pwd=[REDACTED]",
+            outcome.SafeError);
+    }
+
     // "ACT" is a substring of the "[REDACTED]" marker, so a second redaction pass would mangle it.
     [Fact]
     public async Task Watch_ndjson_runner_failure_redacts_once_and_keeps_the_marker_intact()

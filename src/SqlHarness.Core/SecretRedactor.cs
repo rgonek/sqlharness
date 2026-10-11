@@ -52,7 +52,7 @@ public static partial class SecretRedactor
                 RegexOptions.CultureInvariant | RegexOptions.NonBacktracking)
                 .Replace(value, "[REDACTED]");
         safe = PasswordPattern().Replace(safe, "$1[REDACTED]");
-        safe = SecretFieldPattern().Replace(safe, "$1[REDACTED]$3");
+        safe = SecretFieldPattern().Replace(safe, MaskFieldValue);
         safe = JwtPattern().Replace(safe, "[REDACTED]");
         return safe;
     }
@@ -95,8 +95,18 @@ public static partial class SecretRedactor
     }
 
     // Only the value of an explicit key/value field is masked; a field name or descriptive word alone is not a credential.
-    [GeneratedRegex("""(?i)(["']?(?:password|pwd|access[_\s-]?token|client[_\s-]?secret|account[_\s-]?key|shared[_\s-]?access[_\s-]?key)["']?\s*[:=]\s*["']?)([^"';&,}\s]+)(["']?)""", RegexOptions.CultureInvariant)]
+    // Group 1 is the key and separator; group 2 is the whole value: escaped-JSON, double- or single-quoted (with doubled quotes), or bare.
+    [GeneratedRegex("""(?i)(\\?["']?(?:password|pwd|access[_\s-]?token|client[_\s-]?secret|account[_\s-]?key|shared[_\s-]?access[_\s-]?key)\\?["']?\s*[:=]\s*)(\\"[^"\\]*\\"|"(?:\\.|""|[^"\\])*"|'(?:''|[^'])*'|[^"';&,}\s]+)""", RegexOptions.CultureInvariant)]
     private static partial Regex SecretFieldPattern();
+
+    private static string MaskFieldValue(Match match)
+    {
+        var value = match.Groups[2].Value;
+        var quote = value.StartsWith("\\\"", StringComparison.Ordinal) ? "\\\""
+            : value[0] is '"' or '\'' ? value[..1]
+            : string.Empty;
+        return match.Groups[1].Value + quote + "[REDACTED]" + quote;
+    }
 
     // Server, database and user fields are target diagnostics and stay readable.
     [GeneratedRegex("""(?i)((?:password|pwd)\s*=\s*)(?:"(?:""|[^"])*"|'(?:''|[^'])*'|[^;\r\n]*)""", RegexOptions.CultureInvariant)]
@@ -114,4 +124,4 @@ internal static class OperationSecrets
         if (target.Auth.PasswordForRedaction() is { Length: > 0 } password)
             knownSecrets.Add(password);
     }
-}
+}

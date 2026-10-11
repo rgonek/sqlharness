@@ -116,6 +116,11 @@ public sealed class SecretRedactorTests
     [InlineData("{\"password\":\"abc123\"}", "{\"password\":\"[REDACTED]\"}")]
     [InlineData("{\"pwd\": \"abc123\", \"server\": \"s1\"}", "{\"pwd\": \"[REDACTED]\", \"server\": \"s1\"}")]
     [InlineData("Password=abc123", "Password=[REDACTED]")]
+    [InlineData("{\"password\": \"a b c\"}", "{\"password\": \"[REDACTED]\"}")]
+    [InlineData("client_secret='ab;cd'", "client_secret='[REDACTED]'")]
+    [InlineData("access_token=\"ab cd\"", "access_token=\"[REDACTED]\"")]
+    [InlineData("password: 'it''s x'", "password: '[REDACTED]'")]
+    [InlineData("{\\\"password\\\":\\\"abc\\\"}", "{\\\"password\\\":\\\"[REDACTED]\\\"}")]
     [InlineData("client_secret=abc123&x=1", "client_secret=[REDACTED]&x=1")]
     [InlineData("Client Secret=abc123", "Client Secret=[REDACTED]")]
     public void Redact_masks_values_of_explicit_authentication_secret_fields(string input, string expected)
@@ -149,9 +154,19 @@ public sealed class SecretRedactorTests
     [Fact]
     public void Redact_scrubs_one_character_and_overlapping_registered_credentials_without_a_label()
     {
+        // Registered credentials of any length win over target readability, so "sql.e[REDACTED]ample.test" is intended.
         var safe = SecretRedactor.Redact("login failed for sql.example.test using xy and xyz", ["x", "xyz"]);
 
         Assert.DoesNotContain("xyz", safe, StringComparison.Ordinal);
         Assert.Equal("login failed for sql.e[REDACTED]ample.test using [REDACTED]y and [REDACTED]", safe);
+    }
+
+    [Fact]
+    public void Redact_is_idempotent_over_masked_field_values()
+    {
+        const string input = "{\"password\": \"a b\", \"access_token\":\"x y\"} client_secret='p;q' pwd: z";
+        var once = SecretRedactor.Redact(input, []);
+
+        Assert.Equal(once, SecretRedactor.Redact(once, []));
     }
 }
