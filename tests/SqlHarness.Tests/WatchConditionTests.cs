@@ -33,6 +33,39 @@ public class WatchConditionTests
         Assert.Equal(expected, condition.IsMet(SingleColumn("Count", value)));
     }
 
+    [Theory]
+    [InlineData("Done = 1", true, true)]
+    [InlineData("Done = 0", false, true)]
+    [InlineData("Done = true", true, true)]
+    [InlineData("Done = TRUE", true, true)]
+    [InlineData("Done = false", true, false)]
+    [InlineData("Done != 1", false, true)]
+    public void Boolean_values_match_boolean_operands(string text, object value, bool expected)
+    {
+        var condition = WatchCondition.Parse(text);
+        Assert.Equal(expected, condition.IsMet(SingleColumn("Done", value)));
+    }
+
+    [Theory]
+    [InlineData("Status = 'Completed'", "Completed", true)]
+    [InlineData("Status = \"Completed\"", "Completed", true)]
+    [InlineData("Status = 'It''s'", "It's", true)]
+    public void Quoted_text_operands_match_string_values(string text, object value, bool expected)
+    {
+        var condition = WatchCondition.Parse(text);
+        Assert.Equal(expected, condition.IsMet(SingleColumn("Status", value)));
+    }
+
+    [Theory]
+    [InlineData("Ratio = 0.00001", 0.00001d, true)]
+    [InlineData("Ratio < 0.001", 0.00001d, true)]
+    [InlineData("Big >= 1e15", 1e15d, true)]
+    public void Exponent_and_small_decimal_operands_compare_numerically(string text, object value, bool expected)
+    {
+        var condition = WatchCondition.Parse(text);
+        Assert.Equal(expected, condition.IsMet(SingleColumn(condition.Column, value)));
+    }
+
     [Fact]
     public void Parses_longer_operators_before_shorter_ones()
     {
