@@ -563,6 +563,67 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Equal("Hash Join", Text(hidden.Root, "physicalOp"));
     }
 
+    // Plan 048: wrapped, reversed, listed and compound credential columns in a synthetic Showplan. The predicate
+    // carries the OR-chain that Showplan expands IN into; the statement text carries the IN list itself.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_tool_masks_wrapped_reversed_and_listed_credential_literals_for_sqlserver(bool requestMode)
+    {
+        await using var served = await ServePlanModeAsync(requestMode);
+        // The distiller keeps at most 200 predicate characters, so the predicate stays short.
+        const string predicateText = "(CONVERT_IMPLICIT(nvarchar(4000),[Users].[Password],0)=N'sqs1' OR [Users].[Password]=N'sqs2')"
+            + " AND N'sqs3'=[Users].[PasswordHash] AND [PwdSalt]=N'sqs4' AND [Users].[Status]=N'ACTIVE'";
+        Assert.True(predicateText.Length <= 200);
+        var xml = ShowplanWithText("SELECT * FROM dbo.Users WHERE Password IN (N'sqs1', N'sqs2') AND PasswordHash = N'sqs3' AND Status = N'ACTIVE'")
+            .Replace("[dbo].[Orders].[Status]=N'ACTIVE' AND [Name]=&quot;x&quot;", predicateText, StringComparison.Ordinal);
+        Assert.Contains("sqs4", xml, StringComparison.Ordinal);
+        var result = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = xml }, cancellationToken: CancellationToken.None));
+
+        Assert.DoesNotContain("sqs", result.Raw, StringComparison.Ordinal);
+        var predicate = Text(result.Root, "predicate")!;
+        Assert.Contains("[Password],0)=N'[REDACTED]' OR [Users].[Password]=N'[REDACTED]')", predicate, StringComparison.Ordinal);
+        Assert.Contains("N'[REDACTED]'=[Users].[PasswordHash]", predicate, StringComparison.Ordinal);
+        Assert.Contains("[PwdSalt]=N'[REDACTED]'", predicate, StringComparison.Ordinal);
+        Assert.Contains("[Users].[Status]=N'ACTIVE'", predicate, StringComparison.Ordinal);
+        var sql = Text(result.Statement, "sql")!;
+        Assert.Contains("Password IN (N'[REDACTED]', N'[REDACTED]')", sql, StringComparison.Ordinal);
+        Assert.Contains("PasswordHash = N'[REDACTED]'", sql, StringComparison.Ordinal);
+        Assert.Contains("Status = N'ACTIVE'", sql, StringComparison.Ordinal);
+    }
+
+    // Synthetic EXPLAIN (FORMAT JSON): deparsed spellings follow PostgreSQL ruleutils (relabel casts as (col)::text,
+    // LIKE family as ~~ / ~~* / !~~ / !~~*, IN lists as = ANY ('{...}'::type[]), literals as '...'::type).
+    private const string PostgresCredentialPlan =
+        "[{\"Plan\":{\"Node Type\":\"Hash Join\",\"Join Type\":\"Inner\",\"Total Cost\":100.0,\"Plan Rows\":10,\"Actual Rows\":10,\"Actual Loops\":1,"
+        + "\"Hash Cond\":\"(a.id = b.id)\",\"Plans\":[{\"Node Type\":\"Seq Scan\",\"Relation Name\":\"users\",\"Total Cost\":40.0,\"Plan Rows\":100,\"Actual Rows\":100,"
+        + "\"Actual Loops\":1,\"Filter\":\"" + PostgresCredentialFilter + "\"}]},"
+        + "\"Planning Time\":10.4,\"Execution Time\":4.6}]";
+
+    // At most 200 characters: the distiller clips longer predicates.
+    private const string PostgresCredentialFilter =
+        "(((password)::text ~~ 'pgs1%'::text) AND (password_hash = ANY ('{pgs2,pgs3}'::text[]))"
+        + " AND ('pgs4'::text = (pwd)::text) AND (user_password !~~* 'pgs5'::text) AND (status = 'ACTIVE'::text))";
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_tool_masks_wrapped_reversed_and_listed_credential_literals_for_postgres(bool requestMode)
+    {
+        await using var served = await ServePlanModeAsync(requestMode);
+        var result = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = PostgresCredentialPlan }, cancellationToken: CancellationToken.None));
+
+        Assert.True(PostgresCredentialFilter.Length <= 200);
+        Assert.DoesNotContain("pgs", result.Raw, StringComparison.Ordinal);
+        var filter = Text(result.Root.GetProperty("children")[0], "predicate")!;
+        Assert.Contains("((password)::text ~~ '[REDACTED]'::text)", filter, StringComparison.Ordinal);
+        Assert.Contains("(password_hash = ANY ('[REDACTED]'::text[]))", filter, StringComparison.Ordinal);
+        Assert.Contains("('[REDACTED]'::text = (pwd)::text)", filter, StringComparison.Ordinal);
+        Assert.Contains("(user_password !~~* '[REDACTED]'::text)", filter, StringComparison.Ordinal);
+        Assert.Contains("(status = 'ACTIVE'::text)", filter, StringComparison.Ordinal);
+        Assert.Equal("(a.id = b.id)", Text(result.Root, "predicate"));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

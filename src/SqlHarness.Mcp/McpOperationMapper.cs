@@ -87,18 +87,114 @@ public static partial class McpPlanTextPolicy
         var position = 0;
         foreach (var match in CredentialLiteralPattern().Matches(value).Cast<Match>())
         {
+            // Skipped tokens and comparisons with other columns stay in the text that the shared redactor filters.
+            if (!match.Groups["cmp"].Success || !match.Groups["col"].Success || !CredentialKeyPattern().IsMatch(match.Groups["col"].Value))
+                continue;
             builder.Append(SecretRedactor.Redact(value[position..match.Index], []));
-            builder.Append(match.Groups[1].Value).Append("[REDACTED]").Append(match.Groups[3].Value);
+            AppendMaskedLiterals(builder, match.Value);
             position = match.Index + match.Length;
         }
         builder.Append(SecretRedactor.Redact(value[position..], []));
         return builder.ToString();
     }
 
-    // Masks only the string literal compared with a credential-named column (bracketed, quoted or bare, optionally
-    // qualified). Key names mirror SecretRedactor; other literals are plan data and stay readable.
-    [GeneratedRegex("""(?i)((?:password|pwd|access[_\s-]?token|client[_\s-]?secret|account[_\s-]?key|shared[_\s-]?access[_\s-]?key)[\]"]?\s*(?:=|<>|!=|like)\s*N?')((?:''|[^'])*)(')""", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    // Copies one matched credential comparison and replaces the body of every string literal in it with
+    // [REDACTED], keeping quotes, the N prefix and any ::type suffix. Bracketed and double-quoted identifiers are
+    // copied as they are; a literal clipped at the end of the text keeps no closing quote.
+    private static void AppendMaskedLiterals(StringBuilder builder, string comparison)
+    {
+        var index = 0;
+        while (index < comparison.Length)
+        {
+            var current = comparison[index];
+            if (current is '[' or '"' or '\'')
+            {
+                var close = ClosingIndex(comparison, index + 1, current == '[' ? ']' : current);
+                if (current == '\'')
+                    builder.Append("'[REDACTED]").Append(close < comparison.Length ? "'" : string.Empty);
+                else
+                    builder.Append(comparison, index, Math.Min(close + 1, comparison.Length) - index);
+                index = close + 1;
+            }
+            else
+            {
+                builder.Append(current);
+                index++;
+            }
+        }
+    }
+
+    // Index of the closing delimiter, where a doubled delimiter is an escape; the text length when unclosed.
+    private static int ClosingIndex(string text, int start, char close)
+    {
+        var index = start;
+        while (index < text.Length)
+        {
+            if (text[index] == close)
+            {
+                if (index + 1 < text.Length && text[index + 1] == close)
+                {
+                    index += 2;
+                    continue;
+                }
+                return index;
+            }
+            index++;
+        }
+        return text.Length;
+    }
+
+    // Credential-column literal rule (MCP-local; the shared Core SecretRedactor is unchanged).
+    //
+    // A match is either a comparison (group "cmp") or a skipped token: a whole string literal or a whole dotted
+    // chain of bracketed, double-quoted or bare identifier parts. Skipping whole tokens keeps the scan aligned, so a
+    // quote that closes one literal is never read as the start of another, text inside a literal is never read as a
+    // comparison, and a long identifier chain is not rescanned from each of its parts.
+    //
+    // A comparison is <operand> <op> <operand> in either order (column first or literal first), or
+    // <operand> [NOT] IN (<list>). An operand is an optionally qualified identifier (bracketed, double-quoted or
+    // bare) or a literal N'..' / '..', optionally parenthesised or wrapped in CONVERT_IMPLICIT(type, x, style),
+    // CONVERT(type, x[, style]), CAST(x AS type) or ANY / ALL / SOME (...), with an optional trailing PostgreSQL
+    // ::type (including ::text[] after an '{...}' array literal). A literal clipped at the end of the text still
+    // counts. Operators are =, <>, !=, [NOT] LIKE, ILIKE and the PostgreSQL spellings ~~, ~~*, !~~ and !~~*
+    // (EXPLAIN deparses LIKE / ILIKE / NOT LIKE / NOT ILIKE to them). IN list elements may mix literals with
+    // parameters, numbers or NULL. Parameters (@p, [@1], $1) are not literals and are never masked.
+    //
+    // Only a comparison whose last identifier part (group "col") contains a credential key is masked; every
+    // literal inside it is masked. The key test is a case-insensitive containment test, which covers a key that
+    // is a word part at a camel-case, '_' or '-' boundary (PasswordHash, password_hash, PwdSalt, UserPassword,
+    // Password-Hash) and also all-lower or all-upper spellings (userpassword, PWDSALT) where no boundary is
+    // visible. It deliberately masks literals next to PasswordHint, LastPasswordChange and Passwordless too:
+    // losing a non-secret literal is the accepted cost; leaking a secret is not. A key in a qualifier only
+    // ([PasswordVault].[dbo].[T].[Status]) does not count. Key names mirror SecretRedactor.
+    //
+    // Constructs: alternation, greedy loops over disjoint character classes, optional groups and named captures;
+    // no backreferences, lookarounds, atomic groups, lazy loops or conditionals.
+    private const string CredentialKey = """(?:password|pwd|access[_\s-]?token|client[_\s-]?secret|account[_\s-]?key|shared[_\s-]?access[_\s-]?key)""";
+    private const string IdentifierPart = """(?:\[(?:\]\]|[^\]])*\]|"(?:""|[^"])*"|[\w@#$]+)""";
+    private const string ColumnChain = "(?:" + IdentifierPart + """\.)*(?<col>""" + IdentifierPart + ")";
+    private const string PgCast = """(?:::"?[\w.]+"?(?:\s+(?:varying|precision|with(?:out)?|time|zone))*(?:\(\s*\d+\s*(?:,\s*\d+\s*)?\))?(?:\[\])*)""";
+    private const string ConvertType = """[^(),']*(?:\([^()']*\))?""";
+    private const string Literal = """N?'(?:''|[^'])*(?:'|$)""";
+    // One operand shape serves both sides (column or literal), and the wrapper prefix and suffix are optional
+    // independently. Keeping a single copy of each part keeps the generated matcher small enough to compile well
+    // inside the match timeout on first use. The cost is that an unpaired wrapper part is accepted; masking still
+    // needs a credential column in the comparison and only touches its literals.
+    private const string WrapperPrefix = """(?:(?:CONVERT(?:_IMPLICIT)?\(\s*""" + ConvertType + """\s*,|CAST\(|(?:any|all|some)\s*\(|\()\s*)?""";
+    private const string WrapperSuffix = """(?:\s*(?:,\s*\d+\s*)?\)|\s+AS\s+""" + ConvertType + """\s*\))?""" + PgCast + "?";
+    private const string Operand = WrapperPrefix + "(?:" + Literal + "|" + ColumnChain + ")" + WrapperSuffix;
+    private const string Operator = """(?:=|<>|!=|!~~\*?|~~\*?|(?:not\s+)?i?like)""";
+    private const string ListElement = "(?:" + Literal + """|[@$:]?[\w.+-]+)""";
+    private const string Comparison =
+        "(?<cmp>" + Operand + """\s*(?:""" + Operator + """\s*""" + Operand
+        + """|(?:not\s+)?in\s*\((?:\s*""" + ListElement + """\s*,)*\s*""" + ListElement + """\s*(?:\)|$)))""";
+    private const string SkippedToken = """N?'(?:''|[^'])*'|(?:""" + IdentifierPart + """\.)*""" + IdentifierPart;
+
+    [GeneratedRegex("(?i)" + Comparison + "|" + SkippedToken, RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
     private static partial Regex CredentialLiteralPattern();
+
+    [GeneratedRegex("(?i)" + CredentialKey, RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex CredentialKeyPattern();
 }
 
 /// <summary>

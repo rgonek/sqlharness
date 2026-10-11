@@ -1124,6 +1124,92 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal(expected, kept.Statements[0].StatementText);
     }
 
+    // Plan 048 gaps. Every case keeps a neighbouring non-credential literal readable and must not echo the secret.
+    [Theory]
+    // Gap 1: wrapped column on SQL Server.
+    [InlineData("CONVERT_IMPLICIT(nvarchar(4000),[db].[dbo].[Users].[Password],0)=N'hunter2' AND [db].[dbo].[Users].[Status]=N'ACTIVE'", "CONVERT_IMPLICIT(nvarchar(4000),[db].[dbo].[Users].[Password],0)=N'[REDACTED]' AND [db].[dbo].[Users].[Status]=N'ACTIVE'")]
+    [InlineData("CONVERT(nvarchar(100),[Users].[Password])=N'hunter2' AND [Status]=N'ACTIVE'", "CONVERT(nvarchar(100),[Users].[Password])=N'[REDACTED]' AND [Status]=N'ACTIVE'")]
+    [InlineData("CAST([Password] AS nvarchar(100)) = N'hunter2' AND CAST([Status] AS nvarchar(10)) = N'ACTIVE'", "CAST([Password] AS nvarchar(100)) = N'[REDACTED]' AND CAST([Status] AS nvarchar(10)) = N'ACTIVE'")]
+    [InlineData("CONVERT_IMPLICIT(nvarchar(4000),[Password],0) like N'hunter2%' AND CONVERT_IMPLICIT(nvarchar(4000),[Status],0)=N'ACTIVE'", "CONVERT_IMPLICIT(nvarchar(4000),[Password],0) like N'[REDACTED]' AND CONVERT_IMPLICIT(nvarchar(4000),[Status],0)=N'ACTIVE'")]
+    // Gap 2: wrapped column on PostgreSQL.
+    [InlineData("(((password)::text = 'hunter2'::text) AND ((status)::text = 'ACTIVE'::text))", "(((password)::text = '[REDACTED]'::text) AND ((status)::text = 'ACTIVE'::text))")]
+    [InlineData("((password::text = 'hunter2'::text) AND (status = 'ACTIVE'::text))", "((password::text = '[REDACTED]'::text) AND (status = 'ACTIVE'::text))")]
+    [InlineData("((u.password = 'hunter2'::character varying) AND (u.status = 'ACTIVE'::character varying))", "((u.password = '[REDACTED]'::character varying) AND (u.status = 'ACTIVE'::character varying))")]
+    // Gap 3: PostgreSQL LIKE-family operator spellings, plus NOT LIKE in statement text.
+    [InlineData("(((password)::text ~~ 'hunter2%'::text) AND ((status)::text ~~ 'ACT%'::text))", "(((password)::text ~~ '[REDACTED]'::text) AND ((status)::text ~~ 'ACT%'::text))")]
+    [InlineData("((password ~~* 'hunter2%'::text) AND (status ~~* 'act%'::text))", "((password ~~* '[REDACTED]'::text) AND (status ~~* 'act%'::text))")]
+    [InlineData("((password !~~ 'hunter2%'::text) AND (status !~~ 'X%'::text))", "((password !~~ '[REDACTED]'::text) AND (status !~~ 'X%'::text))")]
+    [InlineData("((password !~~* 'hunter2%'::text) AND (status = 'ACTIVE'::text))", "((password !~~* '[REDACTED]'::text) AND (status = 'ACTIVE'::text))")]
+    [InlineData("[Password] NOT LIKE N'hunter2%' AND [Status]=N'ACTIVE'", "[Password] NOT LIKE N'[REDACTED]' AND [Status]=N'ACTIVE'")]
+    // Gap 4: lists. Statement-text IN, SQL Server OR-chain expansion, PostgreSQL ANY/ALL array literals.
+    [InlineData("Password IN (N'hunter2', N'hunter3') AND Status IN (N'ACTIVE', N'NEW')", "Password IN (N'[REDACTED]', N'[REDACTED]') AND Status IN (N'ACTIVE', N'NEW')")]
+    [InlineData("Password NOT IN (N'hunter2', @p1, 42, NULL) AND Status = N'ACTIVE'", "Password NOT IN (N'[REDACTED]', @p1, 42, NULL) AND Status = N'ACTIVE'")]
+    [InlineData("[dbo].[Users].[Password]=N'hunter2' OR [dbo].[Users].[Password]=N'hunter3' OR [dbo].[Users].[Status]=N'ACTIVE'", "[dbo].[Users].[Password]=N'[REDACTED]' OR [dbo].[Users].[Password]=N'[REDACTED]' OR [dbo].[Users].[Status]=N'ACTIVE'")]
+    [InlineData("((password = ANY ('{hunter2,hunter3}'::text[])) AND (status = ANY ('{ACTIVE,NEW}'::text[])))", "((password = ANY ('[REDACTED]'::text[])) AND (status = ANY ('{ACTIVE,NEW}'::text[])))")]
+    [InlineData("(((password)::text <> ALL ('{hunter2,hunter3}'::text[])) AND (status = 'ACTIVE'::text))", "(((password)::text <> ALL ('[REDACTED]'::text[])) AND (status = 'ACTIVE'::text))")]
+    // Gap 5: reversed operand order.
+    [InlineData("N'hunter2'=[dbo].[Users].[Password] AND N'ACTIVE'=[dbo].[Users].[Status]", "N'[REDACTED]'=[dbo].[Users].[Password] AND N'ACTIVE'=[dbo].[Users].[Status]")]
+    [InlineData("N'hunter2'=CONVERT_IMPLICIT(nvarchar(4000),[Password],0) AND [Status]=N'ACTIVE'", "N'[REDACTED]'=CONVERT_IMPLICIT(nvarchar(4000),[Password],0) AND [Status]=N'ACTIVE'")]
+    [InlineData("(('hunter2'::text = (password)::text) AND ('ACTIVE'::text = (status)::text))", "(('[REDACTED]'::text = (password)::text) AND ('ACTIVE'::text = (status)::text))")]
+    // Gap 6: credential key as a word part of a longer last identifier part.
+    [InlineData("[PasswordHash]=N'hunter2' AND [Status]=N'ACTIVE'", "[PasswordHash]=N'[REDACTED]' AND [Status]=N'ACTIVE'")]
+    [InlineData("(password_hash = 'hunter2'::text) AND (status = 'ACTIVE'::text)", "(password_hash = '[REDACTED]'::text) AND (status = 'ACTIVE'::text)")]
+    [InlineData("[t].[PwdSalt]=N'hunter2' AND [t].[Status]=N'ACTIVE'", "[t].[PwdSalt]=N'[REDACTED]' AND [t].[Status]=N'ACTIVE'")]
+    [InlineData("UserPassword = N'hunter2' AND Status = N'ACTIVE'", "UserPassword = N'[REDACTED]' AND Status = N'ACTIVE'")]
+    [InlineData("(userpassword = 'hunter2'::text) AND (status = 'ACTIVE'::text)", "(userpassword = '[REDACTED]'::text) AND (status = 'ACTIVE'::text)")]
+    [InlineData("[Users].[Password-Hash]=N'hunter2' AND (\"PasswordHash\" = 'hunter3'::text) AND [Status]=N'ACTIVE'", "[Users].[Password-Hash]=N'[REDACTED]' AND (\"PasswordHash\" = '[REDACTED]'::text) AND [Status]=N'ACTIVE'")]
+    // Accepted cost: any last part that contains a key is masked, including non-secret neighbours of the key.
+    [InlineData("[PasswordHint]=N'hint' AND [LastPasswordChange]=N'2026' AND [Status]=N'ACTIVE'", "[PasswordHint]=N'[REDACTED]' AND [LastPasswordChange]=N'[REDACTED]' AND [Status]=N'ACTIVE'")]
+    public void Plan_text_policy_masks_credential_literals_in_wrapped_listed_reversed_and_compound_shapes(string input, string expected)
+    {
+        var node = new PlanNode("Scan", null, null, null, 1, 1, 1, 0.1, input, [], []);
+        var plan = new DistilledPlan([new PlanStatement(input, node, [])]);
+        var kept = Assert.IsType<DistilledPlan>(McpPlanTextPolicy.Apply(plan, includeText: true));
+        Assert.Equal(expected, kept.Statements[0].Root.Predicate);
+        Assert.Equal(expected, kept.Statements[0].StatementText);
+        Assert.DoesNotContain("hunter", kept.Statements[0].Root.Predicate, StringComparison.Ordinal);
+    }
+
+    // Passwordless decision: the rule matches a key anywhere in the last identifier part (case-insensitive), so
+    // Passwordless is masked as well. Losing that literal is the accepted cost of never missing an all-lower or
+    // all-upper spelling such as userpassword or PWDSALT, where no camel-case boundary is visible.
+    [Theory]
+    [InlineData("[Passwordless]=N'yes' AND [Status]=N'ACTIVE'", "[Passwordless]=N'[REDACTED]' AND [Status]=N'ACTIVE'")]
+    [InlineData("(passwordless = 'yes'::text) AND (status = 'ACTIVE'::text)", "(passwordless = '[REDACTED]'::text) AND (status = 'ACTIVE'::text)")]
+    [InlineData("[PWDSALT]=N'hunter2' AND [STATUS]=N'ACTIVE'", "[PWDSALT]=N'[REDACTED]' AND [STATUS]=N'ACTIVE'")]
+    public void Plan_text_policy_masks_passwordless_and_other_containing_words(string input, string expected)
+    {
+        var node = new PlanNode("Scan", null, null, null, 1, 1, 1, 0.1, input, [], []);
+        var kept = Assert.IsType<DistilledPlan>(McpPlanTextPolicy.Apply(new DistilledPlan([new PlanStatement(null, node, [])]), includeText: true));
+        Assert.Equal(expected, kept.Statements[0].Root.Predicate);
+    }
+
+    // Literals compared with other columns, parameters, and a credential key that is only a qualifier stay readable.
+    [Theory]
+    [InlineData("[Password]=@p1 AND [Status]=N'ACTIVE'")]
+    [InlineData("CONVERT_IMPLICIT(nvarchar(4000),[Users].[Password],0)=[@1] AND [Status]=N'ACTIVE'")]
+    [InlineData("((password)::text = $1) AND (status = 'ACTIVE'::text)")]
+    [InlineData("Password IN (@p1, @p2) AND Status IN (N'ACTIVE', N'NEW')")]
+    [InlineData("[PasswordVault].[dbo].[Users].[Status]=N'ACTIVE' AND [Note]=N'x'")]
+    [InlineData("CONVERT_IMPLICIT(nvarchar(4000),[Status],0)=N'ACTIVE' AND N'gold'=[Kind] AND (note ~~ 'a%'::text)")]
+    [InlineData("[Note]=N'it''s [Password]=N''x''' AND [Status]=N'ACTIVE'")]
+    public void Plan_text_policy_keeps_parameters_and_non_credential_literals(string input)
+    {
+        var node = new PlanNode("Scan", null, null, null, 1, 1, 1, 0.1, input, [], []);
+        var kept = Assert.IsType<DistilledPlan>(McpPlanTextPolicy.Apply(new DistilledPlan([new PlanStatement(input, node, [])]), includeText: true));
+        Assert.Equal(input, kept.Statements[0].Root.Predicate);
+        Assert.Equal(input, kept.Statements[0].StatementText);
+    }
+
+    // A predicate clipped by the distiller inside a credential literal still masks the partial secret.
+    [Fact]
+    public void Plan_text_policy_masks_a_credential_literal_clipped_at_the_end()
+    {
+        var node = new PlanNode("Scan", null, null, null, 1, 1, 1, 0.1, "[Status]=N'ACTIVE' AND [Password]=N'hunt", [], []);
+        var kept = Assert.IsType<DistilledPlan>(McpPlanTextPolicy.Apply(new DistilledPlan([new PlanStatement(null, node, [])]), includeText: true));
+        Assert.Equal("[Status]=N'ACTIVE' AND [Password]=N'[REDACTED]", kept.Statements[0].Root.Predicate);
+    }
+
     [Fact]
     public void Plan_text_policy_omits_text_when_excluded_and_passes_other_reports_through()
     {
