@@ -196,8 +196,14 @@ function StatsContent({
   onDimensionCellSelect?: (scope: DimensionCellScope) => void
 }) {
   const perDay = pivotPerDay(stats.operationsPerDay)
+  // Series are keyed by index: an agent kind is client-supplied text and must never become a CSS variable name.
+  const seriesKeys = perDay.agents.map((_, index) => `a${index}`)
+  const perDayRows = perDay.rows.map(row => ({
+    day: row.day,
+    ...Object.fromEntries(perDay.agents.map((agent, index) => [seriesKeys[index], row[agent]])),
+  }))
   const perDayConfig = Object.fromEntries(
-    perDay.agents.map((agent, index) => [agent, { label: agentLabel(agent), color: `var(--chart-${(index % 5) + 1})` }]),
+    perDay.agents.map((agent, index) => [seriesKeys[index], { label: agentLabel(agent), color: `var(--chart-${(index % 5) + 1})` }]),
   ) satisfies ChartConfig
   const total = stats.operations.reduce((sum, row) => sum + row.count, 0)
 
@@ -215,14 +221,14 @@ function StatsContent({
         </CardHeader>
         <CardContent>
           <ChartContainer config={perDayConfig} className="h-64 w-full">
-            <BarChart data={perDay.rows}>
+            <BarChart data={perDayRows}>
               <CartesianGrid vertical={false} />
               <XAxis dataKey="day" tickLine={false} axisLine={false} />
               <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={32} />
               <ChartTooltip content={<ChartTooltipContent />} />
               <ChartLegend content={<ChartLegendContent />} />
-              {perDay.agents.map(agent => (
-                <Bar key={agent} dataKey={agent} stackId="agents" fill={`var(--color-${agent})`} />
+              {seriesKeys.map(key => (
+                <Bar key={key} dataKey={key} stackId="agents" fill={`var(--color-${key})`} />
               ))}
             </BarChart>
           </ChartContainer>

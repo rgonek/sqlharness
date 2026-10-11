@@ -58,4 +58,19 @@ public sealed class DashboardContractTests
              "profileOperations", "profileDimensions"],
             Names(stats));
     }
+
+    [Fact]
+    public void Agent_call_key_count_and_session_root_names_match_the_ui()
+    {
+        Assert.Equal(["callId", "model", "reasoningEffort", "sessionId", "turnId", "turnTrigger", "threadSource"],
+            Names(new AgentCall(null, null, null, null, null, null, null)));
+        Assert.Equal(["key", "count"], Names(new KeyCount("claude", 1)));
+        Assert.Equal(["uri", "name"], Names(new SessionRoot("file:///w", null)));
+    }
+
+    [Fact]
+    public void Operation_detail_exposes_the_agent_property()
+    {
+        Assert.Contains("agent", typeof(OperationDetail).GetProperties().Select(p => JsonNamingPolicy.CamelCase.ConvertName(p.Name)));
+    }
 }

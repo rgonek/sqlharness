@@ -281,4 +281,23 @@ public sealed class SessionIdentitiesTests
 
         Assert.Equal(SessionIdentities.MaximumTitleLength, identity.ClientTitle!.Length);
     }
+
+    [Fact]
+    public void Title_and_agent_kind_caps_never_split_a_surrogate_pair()
+    {
+        var processes = new FakeProcesses(30, P(30, null, "sqlharness.exe"));
+        var titleInput = new string('t', SessionIdentities.MaximumTitleLength - 1) + "😀";
+        var kindInput = new string('x', SessionIdentities.MaximumAgentKindLength - 1) + "😀";
+
+        var identity = SessionIdentities.Mcp(processes, "mcp:abc", kindInput, "1", "fixed", titleInput);
+
+        Assert.Equal(SessionIdentities.MaximumTitleLength - 1, identity.ClientTitle!.Length);
+        Assert.Equal(SessionIdentities.MaximumAgentKindLength - 1, identity.AgentKind.Length);
+    }
+
+    [Fact]
+    public void Agent_kind_cap_is_trimmed_again_after_cutting() =>
+        Assert.Equal(
+            new string('x', SessionIdentities.MaximumAgentKindLength - 1),
+            SessionIdentities.AgentKindFromClientName(new string('x', SessionIdentities.MaximumAgentKindLength - 1) + " tail"));
 }

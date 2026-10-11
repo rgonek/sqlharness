@@ -3,6 +3,8 @@ using System.Text.Json;
 
 using ModelContextProtocol.Protocol;
 
+using SqlHarness.Core;
+
 #pragma warning disable MCP9005 // Roots is deprecated as of 2026-07-28; handshake revisions still use it.
 
 namespace SqlHarness.Mcp;
@@ -48,6 +50,9 @@ internal sealed class McpRootsTracker(TextWriter log, CancellationToken lifetime
         try
         {
             var result = await request(fetch.Token);
+            // A malformed result (no roots list) is a failure, not "the client reported none".
+            if (result?.Roots is null)
+                throw new InvalidDataException("roots/list returned no roots list.");
             var (json, kept, total) = Normalize(result.Roots);
             lock (_gate)
             {
@@ -117,5 +122,5 @@ internal sealed class McpRootsTracker(TextWriter log, CancellationToken lifetime
         return (Encoding.UTF8.GetString(buffer.ToArray()), Math.Min(total, MaximumRoots), total);
     }
 
-    private static string Cap(string value, int limit) => value.Length <= limit ? value : value[..limit];
+    private static string Cap(string value, int limit) => SafeTruncation.Cap(value, limit);
 }

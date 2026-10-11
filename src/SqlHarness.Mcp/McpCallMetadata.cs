@@ -43,6 +43,6 @@ internal static class McpCallMetadata
         if (source is null || !source.TryGetPropertyValue(key, out var node) || node is not JsonValue value
             || !value.TryGetValue<string>(out var text) || text.Length == 0)
             return null;
-        return text.Length <= MaximumLength ? text : text[..MaximumLength];
+        return SafeTruncation.Cap(text, MaximumLength);
     }
 }

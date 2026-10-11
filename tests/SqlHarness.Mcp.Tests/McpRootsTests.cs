@@ -108,6 +108,33 @@ public sealed class McpRootsTests : IDisposable
     }
 
     [Fact]
+    public async Task Null_roots_list_is_a_failure_that_keeps_the_previous_snapshot()
+    {
+        var log = new StringWriter();
+        var tracker = new McpRootsTracker(log, CancellationToken.None);
+        await tracker.Refresh(Answer("file:///w")).WaitAsync(Budget);
+
+        await tracker.Refresh(_ => ValueTask.FromResult(new ListRootsResult { Roots = null! })).WaitAsync(Budget);
+
+        Assert.Equal("""[{"uri":"file:///w"}]""", tracker.Current);
+        Assert.Contains("roots/list failed (InvalidDataException)", log.ToString());
+    }
+
+    [Fact]
+    public void Normalize_never_cuts_inside_a_surrogate_pair()
+    {
+        // The pair straddles the cap: units [limit-1] and [limit].
+        var uri = new string('u', McpRootsTracker.MaximumUriLength - 1) + "😀" + "tail";
+        var name = new string('n', McpRootsTracker.MaximumNameLength - 1) + "😀";
+
+        var json = McpRootsTracker.Normalize([new Root { Uri = uri, Name = name }]).Json;
+
+        var root = JsonDocument.Parse(json).RootElement[0];
+        Assert.Equal(McpRootsTracker.MaximumUriLength - 1, root.GetProperty("uri").GetString()!.Length);
+        Assert.Equal(McpRootsTracker.MaximumNameLength - 1, root.GetProperty("name").GetString()!.Length);
+    }
+
+    [Fact]
     public async Task Timed_out_fetch_keeps_previous_snapshot()
     {
         var log = new StringWriter();

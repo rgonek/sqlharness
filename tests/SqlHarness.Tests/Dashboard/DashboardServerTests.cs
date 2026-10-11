@@ -156,6 +156,26 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
+    public async Task Agents_route_lists_kinds_as_key_count_pairs_and_detail_carries_agent()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var handle = seed.Operation(JournalSeed.Session("cli:a"));
+        seed.Operation(JournalSeed.Session("cli:b", agent: "codex"));
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        using var agents = JsonDocument.Parse(await client.GetStringAsync("/api/agents"));
+        var items = agents.RootElement.EnumerateArray().ToList();
+        Assert.All(items, item => Assert.Equal(["key", "count"], item.EnumerateObject().Select(p => p.Name).ToArray()));
+        Assert.Contains(items, item => item.GetProperty("key").GetString() == "claude" && item.GetProperty("count").GetInt32() == 1);
+        Assert.Contains(items, item => item.GetProperty("key").GetString() == "codex" && item.GetProperty("count").GetInt32() == 1);
+
+        using var detail = JsonDocument.Parse(await client.GetStringAsync($"/api/operations/{handle.OperationId}"));
+        Assert.True(detail.RootElement.TryGetProperty("agent", out _));
+    }
+
+    [Fact]
     public async Task Stats_and_operation_list_share_profile_and_dimension_filter_contract()
     {
         using var home = new TempHome();

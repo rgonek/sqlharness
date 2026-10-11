@@ -87,7 +87,7 @@ public static class SessionIdentities
         var trimmed = clientTitle?.Trim();
         if (string.IsNullOrEmpty(trimmed))
             return null;
-        return trimmed.Length <= MaximumTitleLength ? trimmed : trimmed[..MaximumTitleLength];
+        return SafeTruncation.Cap(trimmed, MaximumTitleLength);
     }
 
     public static string AgentKindFromClientName(string? clientName)
@@ -106,7 +106,7 @@ public static class SessionIdentities
             return "grok";
         // No "other" bucket: an unrecognised client is its own kind, so the dashboard filter lists it by name.
         var kind = clientName.Trim().ToLowerInvariant();
-        return kind.Length <= MaximumAgentKindLength ? kind : kind[..MaximumAgentKindLength];
+        return SafeTruncation.Cap(kind, MaximumAgentKindLength).TrimEnd();
     }
 
     internal static string? Classify(ProcessSnapshot process)

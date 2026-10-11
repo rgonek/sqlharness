@@ -34,13 +34,17 @@ public sealed class McpJournalTests : IDisposable
 
     public static TheoryData<string> Modes => new() { "fixed", "request" };
 
-    [Fact]
-    public async Task Tool_call_meta_is_recorded_on_the_operation()
+    [Theory]
+    [MemberData(nameof(Modes))]
+    public async Task Tool_call_meta_is_recorded_on_the_operation(string mode)
     {
-        var options = new McpServerOptions { Profile = "mcp-t5" };
+        var options = mode == "fixed"
+            ? new McpServerOptions { Profile = "mcp-t5" }
+            : new McpServerOptions { RequestScope = true, AllowedProfiles = ["sample-a"] };
         Func<IReadOnlyDictionary<string, TargetProfile>> profiles = () => new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
         {
             ["mcp-t5"] = new TargetProfile("mcp-unreachable.invalid", "reportdb", new Dictionary<string, string>(), "integrated"),
+            ["sample-a"] = new("server-a.invalid", "database-a", new Dictionary<string, string> { ["tenant"] = "^a$" }, "integrated"),
         };
         using var cts = new CancellationTokenSource(Budget);
         var clientToServer = new Pipe();

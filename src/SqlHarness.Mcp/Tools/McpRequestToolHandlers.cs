@@ -180,7 +180,10 @@ public sealed class McpRequestToolHandlers(
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, hostShutdown);
             using var reason = McpCallRegistry.Track(linked, ct, hostShutdown, McpCallMetadata.Read(context?.Params?.Meta));
             linked.CancelAfter(TimeSpan.FromSeconds(process.MaxOperationSeconds));
-            return await McpResultAdapter.AdaptAndCompleteAsync(await run(linked.Token), command, budget);
+            var outcome = await run(linked.Token);
+            // Same rule as RunDbAsync: a non-success outcome under a cancelled token is a cancellation.
+            linked.Token.ThrowIfCancellationRequested();
+            return await McpResultAdapter.AdaptAndCompleteAsync(outcome, command, budget);
         }
         catch (OperationCanceledException) { return McpExecutionGate.CancelledResult(command, budget); }
         catch (Exception exception) when (exception is McpMappingException or McpInputException or ParameterSetFileException)
