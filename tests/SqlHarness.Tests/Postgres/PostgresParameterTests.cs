@@ -66,7 +66,7 @@ public sealed class PostgresParameterTests
     public void Accepts_sized_types_advertised_by_capabilities(string input)
     {
         PostgresParameters.Validate(SqlParameterParser.Parse([input]));
-        var advertised = SqlHarnessCapabilitiesProvider.Get().Engines.Single(e => e.Name == "postgres").ParameterTypes;
+        var advertised = SqlHarnessCapabilitiesProvider.Get(SqlEngine.Postgres, "p").ParameterTypes!;
         Assert.Contains(input[(input.IndexOf(':') + 1)..input.IndexOf('(')] + "(n)", advertised);
     }
 

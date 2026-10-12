@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json.Serialization;
 
 namespace SqlHarness.Core;
 
@@ -7,33 +8,128 @@ public sealed record SqlHarnessCapabilities(
     string BuildId,
     int ContractVersion,
     IReadOnlyList<SqlHarnessCommandCapability> Commands,
-    IReadOnlyList<SqlHarnessEngineCapability> Engines,
+    IReadOnlyList<SqlHarnessEngineSummary> Engines,
     IReadOnlyDictionary<string, object> Limits,
     IReadOnlyList<string> OutputModes,
     SqlHarnessSafetyAnalysis SafetyAnalysis,
-    IReadOnlyDictionary<string, string> OutputModesByCommand);
+    IReadOnlyDictionary<string, string> OutputModesByCommand,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SqlHarnessProfileCapability? Profile = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? ParameterTypes = null);
 
 public sealed record SqlHarnessCommandCapability(string Name, string Description);
 
-public sealed record SqlHarnessEngineCapability(
-    string Name,
-    bool SupportsQstop,
-    bool SupportsIndexes,
-    IReadOnlyList<string> ParameterTypes);
+public sealed record SqlHarnessEngineSummary(string Name, string Summary);
+
+public sealed record SqlHarnessProfileCapability(string Name, string Engine);
 
 public static class SqlHarnessCapabilitiesProvider
 {
-    public static SqlHarnessCapabilities Get()
+    // Bump when the document shape changes. 2: engines became a short { name, summary } list;
+    // parameter types, session-temp rules and engine-only limits moved behind a profile.
+    public const int ContractVersion = 2;
+
+    // Parameter types both engines accept; an engine detail adds only what is its own.
+    private static readonly string[] SharedParameterTypes =
+    [
+        "nvarchar", "nvarchar(max)", "nvarchar(n)", "varchar", "varchar(max)", "varchar(n)", "char", "char(n)", "nchar", "nchar(n)", "int", "bigint", "smallint", "tinyint", "bit", "decimal", "decimal(p,s)", "numeric", "numeric(p,s)", "float", "real", "date", "time", "datetime", "datetime2", "datetimeoffset", "uniqueidentifier", "varbinary", "varbinary(max)", "varbinary(n)", "binary(n)",
+    ];
+
+    // One entry per engine: adding an engine adds one entry here (and one SqlEngine value).
+    private static readonly IReadOnlyDictionary<SqlEngine, EngineDetail> Details = new Dictionary<SqlEngine, EngineDetail>
+    {
+        [SqlEngine.SqlServer] = new(
+            "sqlserver",
+            "SQL Server and Azure SQL: all commands, including Query Store (qstop) and missing indexes (indexes).",
+            [.. SharedParameterTypes, "money", "smallmoney", "smalldatetime", "hierarchyid", "geography", "geometry"],
+            new Dictionary<string, object>(StringComparer.Ordinal)
+            {
+                ["qstopTop"] = new { min = OperationLimits.TopMin, max = OperationLimits.TopMax },
+                ["qstopWindowMinutes"] = new { min = OperationLimits.QueryStoreWindowMinutesMin, max = OperationLimits.QueryStoreWindowMinutesMax },
+                ["indexesTop"] = new { min = OperationLimits.TopMin, max = OperationLimits.TopMax },
+            },
+            [
+                "DECLARE scalar variables with analyzed initializers",
+                "Plain SET @v = expr to a scalar local declared earlier in the same batch: allowed in query, measured SQL and --setup. The RHS gets the external, stateful and cross-database checks. Compound, cursor, member and session/transaction option SET stay denied",
+                "DECLARE @t TABLE (...) then INSERT/UPDATE/DELETE/MERGE/SELECT against it, declared earlier in the same batch. A table variable from --setup is not visible to measured SQL (separate batch): carry data in #temp. OUTPUT INTO @t only when the primary target is also proven local (persistent primary target: MutationNotAllowed). Aliased DML targets and user-defined table types stay denied",
+                "TRUNCATE TABLE #temp (unambiguous local temp only)",
+                "ALTER TABLE #temp ADD/DROP COLUMN and local CHECK/DEFAULT/NULL/UNIQUE constraints"]),
+        [SqlEngine.Postgres] = new(
+            "postgres",
+            "PostgreSQL: per-command READ ONLY; no qstop or indexes.",
+            [.. SharedParameterTypes],
+            new Dictionary<string, object>(StringComparer.Ordinal),
+            [
+                "EXPLAIN over a safe SELECT (plan-only, read-only)",
+                "EXPLAIN ANALYZE with full inner-statement effect analysis",
+                "SELECT INTO TEMP TABLE with unambiguous single-part name",
+                "TRUNCATE [ONLY] of proven current-session temps only, named unqualified or as pg_temp.name; not ON COMMIT DROP. Persistent, mixed, CASCADE, RESTART IDENTITY and other schema-qualified targets stay denied",
+                "Session-temp proof for temp DML, DROP TABLE, CREATE INDEX and TRUNCATE targets is name-based. An unqualified name assumes the default search_path (pg_temp first) and is not checked against the server; when search_path may differ, write to pg_temp.name, which does not depend on it. A name must be quoted or all-ASCII-unquoted and at most 63 UTF-8 bytes where declared and where used, else never proven (quote or shorten). DROP TABLE of a name unknown offline revokes every proof. See README.md"]),
+    };
+
+    /// <summary>Engine-neutral document: commands, modes, shared limits and a one-line summary per engine.</summary>
+    public static SqlHarnessCapabilities Get() =>
+        Build(Details.Values.Select(d => new SqlHarnessEngineSummary(d.Name, d.Summary)).ToList(), null, null, null, null);
+
+    /// <summary>Document scoped to one engine; the profile name is echoed back. Offline, no connection.</summary>
+    public static SqlHarnessCapabilities Get(SqlEngine engine, string profileName)
+    {
+        var detail = Details[engine];
+        return Build(
+            [new SqlHarnessEngineSummary(detail.Name, detail.Summary)],
+            new SqlHarnessProfileCapability(profileName, detail.Name),
+            detail.ParameterTypes,
+            detail.EngineLimits,
+            detail.SessionTempStatements);
+    }
+
+    /// <summary>Scoped document for a profile's declared engine string (null or empty means sqlserver).</summary>
+    public static SqlHarnessCapabilities Get(string profileName, string? profileEngine) =>
+        Get(SqlEngineNames.Parse(profileEngine), profileName);
+
+    private sealed record EngineDetail(
+        string Name,
+        string Summary,
+        IReadOnlyList<string> ParameterTypes,
+        IReadOnlyDictionary<string, object> EngineLimits,
+        IReadOnlyList<string> SessionTempStatements);
+
+    private static SqlHarnessCapabilities Build(
+        IReadOnlyList<SqlHarnessEngineSummary> engines,
+        SqlHarnessProfileCapability? profile,
+        IReadOnlyList<string>? parameterTypes,
+        IReadOnlyDictionary<string, object>? engineLimits,
+        IReadOnlyList<string>? sessionTempStatements)
     {
         var assembly = typeof(SqlHarnessCapabilitiesProvider).Assembly;
         var version = assembly.GetName().Version?.ToString(3) ?? "0.0.0";
         var buildId = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? version;
+        var limits = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["queryTimeoutSeconds"] = new { min = OperationLimits.QueryTimeoutSecondsMin, max = OperationLimits.QueryTimeoutSecondsMax },
+            ["queryMaxRows"] = new { min = OperationLimits.MaxRowsMin, max = OperationLimits.MaxRowsMax },
+            ["comparisonRowCapPerRun"] = new { min = 0, max = CanonicalComparisonAccumulator.MaximumComparedRows },
+            ["comparisonUniqueFingerprintBudgetPerCell"] = new { min = 0, max = ComparisonBudget.DefaultMaxUniqueFingerprints },
+            ["repeat"] = new { min = OperationLimits.RepeatMin, max = OperationLimits.RepeatMax },
+            ["targetIdentity"] = new { server = "informational; authentication depends on transport; PostgreSQL hostname check needs sslMode: verify-full", database = "must match the resolved database (ordinal); mismatch is exit 4" },
+            ["agentOutputBytes"] = new { min = 4096, max = 1048576, defaultValue = 16384 },
+            ["agentCellChars"] = new { min = 0, max = 4096, defaultValue = 512 },
+            ["artifactRead"] = new { sections = ArtifactReader.SupportedSections, manifestVersion = ArtifactReader.CurrentManifestVersion, maxReportBytes = ArtifactReader.MaxReportBytes },
+            ["watchNdjson"] = new { events = new[] { "started", "changed", "completed", "failed" }, schemaVersion = WatchNdjsonWriter.SchemaVersion, sequence = "strictly increasing; one terminal record", history = "none; every change emitted" },
+        };
+        if (engineLimits is not null)
+        {
+            foreach (var (name, value) in engineLimits)
+                limits[name] = value;
+        }
+        if (sessionTempStatements is not null)
+            limits["sessionTempStatements"] = sessionTempStatements;
+
         return new SqlHarnessCapabilities(
             version,
             buildId,
-            ContractVersion: 1,
+            ContractVersion,
             [
-                new("capabilities", "Describe commands, engines, limits, modes."),
+                new("capabilities", "Describe commands, engines, limits, modes. Pass a profile for that engine's parameter types and limits."),
                 new("doctor", "Check installation and profiles."),
                 new("validate", "Classify SQL offline for a closed profile. Usages: query, setup, benchmark."),
                 new("query", "Run a bounded query. PostgreSQL: per-command READ ONLY, known administrative effects denied; TEMP setup is read-write under static checks; user functions can hide effects (setup SELECTs too), so use a least-privilege role."),
@@ -50,45 +146,9 @@ public static class SqlHarnessCapabilitiesProvider
                 new("plan", "Distill a saved plan offline; bounded statements and predicates."),
                 new("artifact", "Read safe sections of a saved artifact offline."),
                 new("mcp", "Serve the Core tools to one MCP client over local stdio (mcp serve)."),
-                new("dashboard", "Operator tool: local activity dashboard on 127.0.0.1; agents do not call it or its API."),
             ],
-            [
-                new("sqlserver", true, true, [
-                    "nvarchar", "nvarchar(max)", "nvarchar(n)", "varchar", "varchar(max)", "varchar(n)", "char", "char(n)", "nchar", "nchar(n)", "int", "bigint", "smallint", "tinyint", "bit", "decimal", "decimal(p,s)", "numeric", "numeric(p,s)", "float", "real", "money", "smallmoney", "date", "time", "datetime", "datetime2", "smalldatetime", "datetimeoffset", "uniqueidentifier", "varbinary", "varbinary(max)", "varbinary(n)", "binary(n)", "hierarchyid", "geography", "geometry"]),
-                new("postgres", false, false, [
-                    "nvarchar", "nvarchar(max)", "nvarchar(n)", "varchar", "varchar(max)", "varchar(n)", "char", "char(n)", "nchar", "nchar(n)", "int", "bigint", "smallint", "tinyint", "bit", "decimal", "decimal(p,s)", "numeric", "numeric(p,s)", "float", "real", "date", "time", "datetime", "datetime2", "datetimeoffset", "uniqueidentifier", "varbinary", "varbinary(max)", "varbinary(n)", "binary(n)"]),
-            ],
-            new Dictionary<string, object>(StringComparer.Ordinal)
-            {
-                ["queryTimeoutSeconds"] = new { min = OperationLimits.QueryTimeoutSecondsMin, max = OperationLimits.QueryTimeoutSecondsMax },
-                ["queryMaxRows"] = new { min = OperationLimits.MaxRowsMin, max = OperationLimits.MaxRowsMax },
-                ["comparisonRowCapPerRun"] = new { min = 0, max = CanonicalComparisonAccumulator.MaximumComparedRows },
-                ["comparisonUniqueFingerprintBudgetPerCell"] = new { min = 0, max = ComparisonBudget.DefaultMaxUniqueFingerprints },
-                ["repeat"] = new { min = OperationLimits.RepeatMin, max = OperationLimits.RepeatMax },
-                ["targetIdentity"] = new { server = "informational; authentication depends on transport; PostgreSQL hostname check needs sslMode: verify-full", database = "must match the resolved database (ordinal); mismatch is exit 4" },
-                ["qstopTop"] = new { min = OperationLimits.TopMin, max = OperationLimits.TopMax },
-                ["qstopWindowMinutes"] = new { min = OperationLimits.QueryStoreWindowMinutesMin, max = OperationLimits.QueryStoreWindowMinutesMax },
-                ["indexesTop"] = new { min = OperationLimits.TopMin, max = OperationLimits.TopMax },
-                ["agentOutputBytes"] = new { min = 4096, max = 1048576, defaultValue = 16384 },
-                ["agentCellChars"] = new { min = 0, max = 4096, defaultValue = 512 },
-                ["sessionTempStatements"] = new Dictionary<string, string[]>(StringComparer.Ordinal)
-                {
-                    ["sqlserver"] = [
-                        "DECLARE scalar variables with analyzed initializers",
-                        "Plain SET @v = expr to a scalar local declared earlier in the same batch: allowed in query, measured SQL and --setup. The RHS gets the external, stateful and cross-database checks. Compound, cursor, member and session/transaction option SET stay denied",
-                        "DECLARE @t TABLE (...) then INSERT/UPDATE/DELETE/MERGE/SELECT against it, declared earlier in the same batch. A table variable from --setup is not visible to measured SQL (separate batch): carry data in #temp. OUTPUT INTO @t only when the primary target is also proven local (persistent primary target: MutationNotAllowed). Aliased DML targets and user-defined table types stay denied",
-                        "TRUNCATE TABLE #temp (unambiguous local temp only)",
-                        "ALTER TABLE #temp ADD/DROP COLUMN and local CHECK/DEFAULT/NULL/UNIQUE constraints"],
-                    ["postgres"] = [
-                        "EXPLAIN over a safe SELECT (plan-only, read-only)",
-                        "EXPLAIN ANALYZE with full inner-statement effect analysis",
-                        "SELECT INTO TEMP TABLE with unambiguous single-part name",
-                        "TRUNCATE [ONLY] of proven current-session temps only, named unqualified or as pg_temp.name; not ON COMMIT DROP. Persistent, mixed, CASCADE, RESTART IDENTITY and other schema-qualified targets stay denied",
-                        "Session-temp proof for temp DML, DROP TABLE, CREATE INDEX and TRUNCATE targets is name-based. An unqualified name assumes the default search_path (pg_temp first) and is not checked against the server; when search_path may differ, write to pg_temp.name, which does not depend on it. A name must be quoted or all-ASCII-unquoted and at most 63 UTF-8 bytes where declared and where used, else never proven (quote or shorten). DROP TABLE of a name unknown offline revokes every proof. See README.md"],
-                },
-                ["artifactRead"] = new { sections = ArtifactReader.SupportedSections, manifestVersion = ArtifactReader.CurrentManifestVersion, maxReportBytes = ArtifactReader.MaxReportBytes },
-                ["watchNdjson"] = new { events = new[] { "started", "changed", "completed", "failed" }, schemaVersion = WatchNdjsonWriter.SchemaVersion, sequence = "strictly increasing; one terminal record", history = "none; every change emitted" },
-            },
+            engines,
+            limits,
             ["text", "json", "json-summary", "agent"],
             new SqlHarnessSafetyAnalysis(
                 SqlSafetyAnalysis.AnalysisKind,
@@ -104,6 +164,8 @@ public static class SqlHarnessCapabilitiesProvider
                 ["text|json|agent"] = "query,schema,ping,counts,space,snapshot,qstop,indexes,plan",
                 ["text|json|json-summary|agent"] = "measure,compare",
                 ["text|json|agent|ndjson"] = "watch",
-            });
+            },
+            profile,
+            parameterTypes);
     }
 }

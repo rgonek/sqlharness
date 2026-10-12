@@ -8,6 +8,7 @@ using SqlHarness.Core.Postgres;
 
 namespace SqlHarness.Tests.Cli;
 
+[Collection(SqlHarnessHomeCollection.Name)]
 public sealed class CapabilitiesCommandTests
 {
     [Fact]
@@ -21,17 +22,79 @@ public sealed class CapabilitiesCommandTests
         Assert.Empty(module.Operations);
         using var document = JsonDocument.Parse(output.ToString());
         var root = document.RootElement;
-        Assert.True(root.GetProperty("contractVersion").GetInt32() > 0);
+        Assert.Equal(2, root.GetProperty("contractVersion").GetInt32());
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("buildId").GetString()));
         Assert.Contains(root.GetProperty("commands").EnumerateArray(), command => command.GetProperty("name").GetString() == "validate");
-        var sqlServer = root.GetProperty("engines").EnumerateArray().Single(engine => engine.GetProperty("name").GetString() == "sqlserver");
-        var postgres = root.GetProperty("engines").EnumerateArray().Single(engine => engine.GetProperty("name").GetString() == "postgres");
-        Assert.True(sqlServer.GetProperty("supportsQstop").GetBoolean());
-        Assert.False(postgres.GetProperty("supportsQstop").GetBoolean());
+        var engines = root.GetProperty("engines").EnumerateArray().ToArray();
+        Assert.Equal(["postgres", "sqlserver"], engines.Select(engine => engine.GetProperty("name").GetString()!).Order(StringComparer.Ordinal));
+        Assert.All(engines, engine => Assert.Equal(["name", "summary"], engine.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal)));
+        Assert.False(root.TryGetProperty("profile", out _));
+        Assert.False(root.TryGetProperty("parameterTypes", out _));
         Assert.Contains("agentOutputBytes", root.GetProperty("limits").EnumerateObject().Select(property => property.Name));
         var limits = root.GetProperty("limits");
         Assert.Equal(1000000, limits.GetProperty("comparisonRowCapPerRun").GetProperty("max").GetInt32());
         Assert.Equal(2000000, limits.GetProperty("comparisonUniqueFingerprintBudgetPerCell").GetProperty("max").GetInt32());
+        foreach (var engineOnly in new[] { "sessionTempStatements", "qstopTop", "qstopWindowMinutes", "indexesTop" })
+            Assert.False(limits.TryGetProperty(engineOnly, out _), engineOnly);
+    }
+
+    [Fact]
+    public void Contract_version_is_pinned()
+    {
+        Assert.Equal(2, SqlHarnessCapabilitiesProvider.ContractVersion);
+        Assert.Equal(2, SqlHarnessCapabilitiesProvider.Get().ContractVersion);
+    }
+
+    [Theory]
+    [InlineData("sqlserver-profile", "sqlserver", "postgres", true)]
+    [InlineData("pg-profile", "postgres", "sqlserver", false)]
+    public async Task Capabilities_with_a_profile_carries_only_that_engines_details(string profile, string engine, string other, bool sqlServer)
+    {
+        using var home = new TempProfiles();
+        var module = new RecordingModule();
+        var output = new StringWriter();
+        var exitCode = await SqlHarnessCli.Create(module, output).RunAsync(["capabilities", profile, "--json"]);
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(module.Operations);
+        using var document = JsonDocument.Parse(output.ToString());
+        var root = document.RootElement;
+        Assert.Equal(profile, root.GetProperty("profile").GetProperty("name").GetString());
+        Assert.Equal(engine, root.GetProperty("profile").GetProperty("engine").GetString());
+        Assert.Equal([engine], root.GetProperty("engines").EnumerateArray().Select(e => e.GetProperty("name").GetString()!));
+        var types = root.GetProperty("parameterTypes").EnumerateArray().Select(t => t.GetString()!).ToArray();
+        Assert.Contains("nvarchar(n)", types);
+        Assert.Equal(sqlServer, types.Contains("hierarchyid"));
+        var limits = root.GetProperty("limits");
+        var temp = limits.GetProperty("sessionTempStatements");
+        Assert.Equal(JsonValueKind.Array, temp.ValueKind);
+        Assert.Equal(sqlServer, temp.GetRawText().Contains("#temp", StringComparison.Ordinal));
+        foreach (var name in new[] { "qstopTop", "qstopWindowMinutes", "indexesTop" })
+            Assert.Equal(sqlServer, limits.TryGetProperty(name, out _));
+        Assert.DoesNotContain("\"name\": \"" + other + "\"", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Capabilities_with_an_unknown_profile_exits_2_naming_it()
+    {
+        using var home = new TempProfiles();
+        var output = new StringWriter();
+        var exitCode = await SqlHarnessCli.Create(new RecordingModule(), output).RunAsync(["capabilities", "nope-profile", "--json"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, exitCode);
+        Assert.Contains("nope-profile", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Capabilities_with_an_unreadable_profiles_file_exits_2_naming_the_profile_and_reason()
+    {
+        using var home = new TempProfiles("{ not json");
+        var output = new StringWriter();
+        var exitCode = await SqlHarnessCli.Create(new RecordingModule(), output).RunAsync(["capabilities", "any-profile", "--json"]);
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, exitCode);
+        Assert.Contains("any-profile", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("could not be resolved", output.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -80,13 +143,13 @@ public sealed class CapabilitiesCommandTests
     }
 
     [Fact]
-    public void Capabilities_lists_mcp_dashboard_and_sized_parameter_types()
+    public void Capabilities_lists_mcp_not_dashboard_and_sized_parameter_types()
     {
         var caps = SqlHarnessCapabilitiesProvider.Get();
         Assert.Contains(caps.Commands, c => c.Name == "mcp" && c.Description.Contains("MCP client", StringComparison.Ordinal));
-        Assert.Contains(caps.Commands, c => c.Name == "dashboard" && c.Description.StartsWith("Operator tool", StringComparison.Ordinal));
-        foreach (var engine in caps.Engines)
-            Assert.All(new[] { "nvarchar(n)", "varchar(n)", "char(n)", "nchar(n)", "varbinary(n)", "binary(n)" }, t => Assert.Contains(t, engine.ParameterTypes));
+        Assert.DoesNotContain(caps.Commands, c => c.Name == "dashboard");
+        foreach (var engine in new[] { SqlEngine.SqlServer, SqlEngine.Postgres })
+            Assert.All(new[] { "nvarchar(n)", "varchar(n)", "char(n)", "nchar(n)", "varbinary(n)", "binary(n)" }, t => Assert.Contains(t, SqlHarnessCapabilitiesProvider.Get(engine, "p").ParameterTypes!));
     }
 
     [Fact]
@@ -112,7 +175,7 @@ public sealed class CapabilitiesCommandTests
         var bound = SqlDialects.For(SqlEngine.SqlServer).BindParameters([new SqlHarnessParameterInput("x", declared, value)]);
 
         Assert.Equal(expected, Assert.Single(bound).Type);
-        Assert.Contains(advertised, SqlHarnessCapabilitiesProvider.Get().Engines.Single(e => e.Name == "sqlserver").ParameterTypes);
+        Assert.Contains(advertised, SqlHarnessCapabilitiesProvider.Get(SqlEngine.SqlServer, "p").ParameterTypes!);
     }
 
     [Fact]
@@ -161,8 +224,8 @@ public sealed class CapabilitiesCommandTests
     // 63 ASCII letters: the longest name that still has a known stored name.
     private static readonly string A63 = new('a', 63);
 
-    private static Dictionary<string, string[]> SessionTempStatements() =>
-        (Dictionary<string, string[]>)SqlHarnessCapabilitiesProvider.Get().Limits["sessionTempStatements"];
+    private static IReadOnlyList<string> SessionTempStatements(SqlEngine engine) =>
+        (IReadOnlyList<string>)SqlHarnessCapabilitiesProvider.Get(engine, "p").Limits["sessionTempStatements"];
 
     private static string ExpandNames(string sql) => sql.Replace("{A63}", A63, StringComparison.Ordinal);
 
@@ -172,9 +235,7 @@ public sealed class CapabilitiesCommandTests
         // 011/T6 fix round 1: agents read this wording as a contract, so the
         // whole list is pinned; the verdict tests below tie each 011 entry to
         // the classifier.
-        var statements = SessionTempStatements();
-
-        Assert.Equal(["postgres", "sqlserver"], statements.Keys.Order(StringComparer.Ordinal));
+        Assert.False(SqlHarnessCapabilitiesProvider.Get().Limits.ContainsKey("sessionTempStatements"));
         Assert.Equal(
             [
                 "DECLARE scalar variables with analyzed initializers",
@@ -183,7 +244,7 @@ public sealed class CapabilitiesCommandTests
                 "TRUNCATE TABLE #temp (unambiguous local temp only)",
                 "ALTER TABLE #temp ADD/DROP COLUMN and local CHECK/DEFAULT/NULL/UNIQUE constraints",
             ],
-            statements["sqlserver"]);
+            SessionTempStatements(SqlEngine.SqlServer));
         Assert.Equal(
             [
                 "EXPLAIN over a safe SELECT (plan-only, read-only)",
@@ -192,7 +253,7 @@ public sealed class CapabilitiesCommandTests
                 CapabilityPostgresTruncateEntry,
                 CapabilityPostgresProofEntry,
             ],
-            statements["postgres"]);
+            SessionTempStatements(SqlEngine.Postgres));
     }
 
     // 011/final (M8): the plan 011 entries hold no character that the JSON
@@ -200,18 +261,26 @@ public sealed class CapabilitiesCommandTests
     [Fact]
     public async Task SessionTempStatements_serialize_without_json_escapes()
     {
-        var output = new StringWriter();
-        var exitCode = await SqlHarnessCli.Create(new RecordingModule(), output).RunAsync(["capabilities", "--json"]);
-        Assert.Equal(0, exitCode);
-
-        using var document = JsonDocument.Parse(output.ToString());
-        var raw = document.RootElement.GetProperty("limits").GetProperty("sessionTempStatements").GetRawText();
-        Assert.DoesNotContain("\\u", raw, StringComparison.Ordinal);
-
-        foreach (var entry in new[] { CapabilitySetEntry, CapabilityTableVariableEntry, CapabilityPostgresTruncateEntry, CapabilityPostgresProofEntry })
+        using var home = new TempProfiles();
+        foreach (var (profile, entries) in new[]
         {
-            Assert.Contains("\"" + entry + "\"", raw, StringComparison.Ordinal);
-            Assert.DoesNotContain(entry, character => character is '<' or '>' or '+' or '\'' or '&' or '`' or '"' or '\\' || character > 0x7E);
+            ("sqlserver-profile", new[] { CapabilitySetEntry, CapabilityTableVariableEntry }),
+            ("pg-profile", new[] { CapabilityPostgresTruncateEntry, CapabilityPostgresProofEntry }),
+        })
+        {
+            var output = new StringWriter();
+            var exitCode = await SqlHarnessCli.Create(new RecordingModule(), output).RunAsync(["capabilities", profile, "--json"]);
+            Assert.Equal(0, exitCode);
+
+            using var document = JsonDocument.Parse(output.ToString());
+            var raw = document.RootElement.GetProperty("limits").GetProperty("sessionTempStatements").GetRawText();
+            Assert.DoesNotContain("\\u", raw, StringComparison.Ordinal);
+
+            foreach (var entry in entries)
+            {
+                Assert.Contains("\"" + entry + "\"", raw, StringComparison.Ordinal);
+                Assert.DoesNotContain(entry, character => character is '<' or '>' or '+' or '\'' or '&' or '`' or '"' or '\\' || character > 0x7E);
+            }
         }
     }
 
@@ -221,7 +290,7 @@ public sealed class CapabilitiesCommandTests
     [InlineData("DECLARE @m int; SET @m = (SELECT MAX(Id) FROM dbo.Clients); SELECT @m")]
     public void SessionTempStatements_sqlserver_SET_entry_allows_what_it_claims(string sql)
     {
-        Assert.Contains(CapabilitySetEntry, SessionTempStatements()["sqlserver"]);
+        Assert.Contains(CapabilitySetEntry, SessionTempStatements(SqlEngine.SqlServer));
 
         var decision = new SqlSafetyClassifier().Classify(sql, SqlUsage.Query, "db", allowMutation: false);
         Assert.True(decision.Allowed, decision.RejectionDescription);
@@ -245,7 +314,7 @@ public sealed class CapabilitiesCommandTests
     [InlineData("SET TRANSACTION ISOLATION LEVEL READ COMMITTED", "UnsupportedStatement")]
     public void SessionTempStatements_sqlserver_SET_entry_denies_what_it_names(string sql, string expected)
     {
-        Assert.Contains(CapabilitySetEntry, SessionTempStatements()["sqlserver"]);
+        Assert.Contains(CapabilitySetEntry, SessionTempStatements(SqlEngine.SqlServer));
 
         var decision = new SqlSafetyClassifier().Classify(sql, SqlUsage.Query, "db", allowMutation: false);
         Assert.False(decision.Allowed);
@@ -257,7 +326,7 @@ public sealed class CapabilitiesCommandTests
     [InlineData("DECLARE @n int; SET @n = 5; CREATE TABLE #t (Id int)")]
     public void SessionTempStatements_sqlserver_SET_entry_is_allowed_in_setup_as_it_says(string sql)
     {
-        Assert.Contains(CapabilitySetEntry, SessionTempStatements()["sqlserver"]);
+        Assert.Contains(CapabilitySetEntry, SessionTempStatements(SqlEngine.SqlServer));
 
         var decision = new SqlSafetyClassifier().Classify(sql, SqlUsage.CompareSetup, "db", allowMutation: false);
         Assert.True(decision.Allowed);
@@ -266,7 +335,7 @@ public sealed class CapabilitiesCommandTests
     [Fact]
     public void SessionTempStatements_sqlserver_table_variable_entry_also_holds_in_setup()
     {
-        Assert.Contains(CapabilityTableVariableEntry, SessionTempStatements()["sqlserver"]);
+        Assert.Contains(CapabilityTableVariableEntry, SessionTempStatements(SqlEngine.SqlServer));
 
         var decision = new SqlSafetyClassifier().Classify("DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (1)", SqlUsage.CompareSetup, "db", allowMutation: false);
         Assert.True(decision.Allowed, decision.RejectionDescription);
@@ -278,7 +347,7 @@ public sealed class CapabilitiesCommandTests
     {
         // 011/final (M7): setup and measured SQL are separate batches, and a
         // table variable lives in its declaring batch. #temp carries the data.
-        Assert.Contains(CapabilityTableVariableEntry, SessionTempStatements()["sqlserver"]);
+        Assert.Contains(CapabilityTableVariableEntry, SessionTempStatements(SqlEngine.SqlServer));
         var classifier = new SqlSafetyClassifier();
 
         const string setup = "DECLARE @t TABLE (Id int); INSERT @t (Id) VALUES (1); SELECT Id INTO #ids FROM @t";
@@ -305,7 +374,7 @@ public sealed class CapabilitiesCommandTests
     [InlineData("DECLARE @log TABLE (Id int); CREATE TABLE #t (Id int); DELETE #t OUTPUT deleted.Id INTO @log (Id)")]
     public void SessionTempStatements_sqlserver_table_variable_entry_allows_what_it_claims(string sql)
     {
-        Assert.Contains(CapabilityTableVariableEntry, SessionTempStatements()["sqlserver"]);
+        Assert.Contains(CapabilityTableVariableEntry, SessionTempStatements(SqlEngine.SqlServer));
 
         var decision = new SqlSafetyClassifier().Classify(sql, SqlUsage.Query, "db", allowMutation: false);
         Assert.True(decision.Allowed, decision.RejectionDescription);
@@ -316,7 +385,7 @@ public sealed class CapabilitiesCommandTests
     [Fact]
     public void SessionTempStatements_sqlserver_table_variable_entry_allows_SELECT_from_the_variable()
     {
-        Assert.Contains(CapabilityTableVariableEntry, SessionTempStatements()["sqlserver"]);
+        Assert.Contains(CapabilityTableVariableEntry, SessionTempStatements(SqlEngine.SqlServer));
 
         var decision = new SqlSafetyClassifier().Classify("DECLARE @t TABLE (Id int); SELECT Id FROM @t", SqlUsage.Query, "db", allowMutation: false);
         Assert.True(decision.Allowed, decision.RejectionDescription);
@@ -338,7 +407,7 @@ public sealed class CapabilitiesCommandTests
     [InlineData("DECLARE @v dbo.SomeType; SELECT Id FROM @v", "UnsupportedStatement")]
     public void SessionTempStatements_sqlserver_table_variable_entry_denies_what_it_names(string sql, string expected)
     {
-        Assert.Contains(CapabilityTableVariableEntry, SessionTempStatements()["sqlserver"]);
+        Assert.Contains(CapabilityTableVariableEntry, SessionTempStatements(SqlEngine.SqlServer));
 
         var decision = new SqlSafetyClassifier().Classify(sql, SqlUsage.Query, "db", allowMutation: false);
         Assert.False(decision.Allowed);
@@ -354,7 +423,7 @@ public sealed class CapabilitiesCommandTests
     [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE ONLY pg_temp.t")]
     public void SessionTempStatements_postgres_TRUNCATE_entry_allows_what_it_claims(string sql)
     {
-        Assert.Contains(CapabilityPostgresTruncateEntry, SessionTempStatements()["postgres"]);
+        Assert.Contains(CapabilityPostgresTruncateEntry, SessionTempStatements(SqlEngine.Postgres));
 
         var decision = new PostgresSafetyClassifier().Classify(sql, SqlUsage.Query, "appdb", allowMutation: false, confirmDatabase: null, NoCarriedTemps);
         Assert.True(decision.Allowed, decision.RejectionDescription);
@@ -376,7 +445,7 @@ public sealed class CapabilitiesCommandTests
     [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE t RESTART IDENTITY", "UnsupportedStatement")]
     public void SessionTempStatements_postgres_TRUNCATE_entry_denies_what_it_names(string sql, string expected)
     {
-        Assert.Contains(CapabilityPostgresTruncateEntry, SessionTempStatements()["postgres"]);
+        Assert.Contains(CapabilityPostgresTruncateEntry, SessionTempStatements(SqlEngine.Postgres));
 
         // Mutation approval unlocks none of these.
         var classifier = new PostgresSafetyClassifier();
@@ -400,7 +469,7 @@ public sealed class CapabilitiesCommandTests
     [InlineData("CREATE TEMP TABLE items (id int); DELETE FROM pg_temp.items; TRUNCATE pg_temp.items")]
     public void SessionTempStatements_postgres_proof_entry_allows_what_it_claims(string sql)
     {
-        Assert.Contains(CapabilityPostgresProofEntry, SessionTempStatements()["postgres"]);
+        Assert.Contains(CapabilityPostgresProofEntry, SessionTempStatements(SqlEngine.Postgres));
 
         var decision = new PostgresSafetyClassifier().Classify(ExpandNames(sql), SqlUsage.Query, "appdb", allowMutation: false, confirmDatabase: null, NoCarriedTemps);
         Assert.True(decision.Allowed, decision.RejectionDescription);
@@ -425,7 +494,7 @@ public sealed class CapabilitiesCommandTests
     [InlineData("CREATE TEMP TABLE items (id int); DROP TABLE pg_temp.{A63}y; TRUNCATE items", "NonTemporaryWrite")]
     public void SessionTempStatements_postgres_proof_entry_denies_what_it_names(string sql, string expected)
     {
-        Assert.Contains(CapabilityPostgresProofEntry, SessionTempStatements()["postgres"]);
+        Assert.Contains(CapabilityPostgresProofEntry, SessionTempStatements(SqlEngine.Postgres));
 
         var decision = new PostgresSafetyClassifier().Classify(ExpandNames(sql), SqlUsage.Query, "appdb", allowMutation: false, confirmDatabase: null, NoCarriedTemps);
         Assert.False(decision.Allowed);
@@ -437,7 +506,7 @@ public sealed class CapabilitiesCommandTests
     {
         // The search_path clause is a stated limitation, not a verdict: the
         // classifier is offline, so a recorded name is all the proof there is.
-        Assert.Contains(CapabilityPostgresProofEntry, SessionTempStatements()["postgres"]);
+        Assert.Contains(CapabilityPostgresProofEntry, SessionTempStatements(SqlEngine.Postgres));
 
         var classifier = new PostgresSafetyClassifier();
         var setup = classifier.Classify("CREATE TEMP TABLE t (id int)", SqlUsage.CompareSetup, "appdb", allowMutation: false, confirmDatabase: null, NoCarriedTemps);
@@ -451,6 +520,27 @@ public sealed class CapabilitiesCommandTests
         var unproven = classifier.Classify("INSERT INTO t VALUES (1)", SqlUsage.Query, "appdb", allowMutation: false, confirmDatabase: null, NoCarriedTemps);
         Assert.False(unproven.Allowed);
         Assert.Equal(SqlSafetyReason.MutationNotAllowed, unproven.Reason);
+    }
+
+    private sealed class TempProfiles : IDisposable
+    {
+        private readonly string? _original = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
+        private readonly string _path = Path.Combine(Path.GetTempPath(), "sqlharness-caps-" + Guid.NewGuid().ToString("N"));
+
+        public TempProfiles(string? targetsJson = null)
+        {
+            Directory.CreateDirectory(_path);
+            File.WriteAllText(Path.Combine(_path, "targets.json"), targetsJson ??
+                "{\"sqlserver-profile\":{\"server\":\"offline.invalid\",\"database\":\"unused\",\"vars\":{},\"auth\":\"sql\",\"sqlUser\":\"u\",\"passwordEnvVar\":\"UNUSED_SQLHARNESS_PASSWORD\"}," +
+                "\"pg-profile\":{\"server\":\"offline.invalid\",\"database\":\"unused\",\"vars\":{},\"auth\":\"sql\",\"sqlUser\":\"u\",\"passwordEnvVar\":\"UNUSED_SQLHARNESS_PASSWORD\",\"engine\":\"postgres\",\"sslMode\":\"verify-full\"}}");
+            Environment.SetEnvironmentVariable("SQLHARNESS_HOME", _path);
+        }
+
+        public void Dispose()
+        {
+            Environment.SetEnvironmentVariable("SQLHARNESS_HOME", _original);
+            try { Directory.Delete(_path, true); } catch (IOException) { }
+        }
     }
 
     private sealed class RecordingModule : ISqlHarnessModule

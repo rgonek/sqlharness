@@ -4,14 +4,19 @@ using Spectre.Console.Cli;
 
 using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
+using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Cli.Commands;
 
-[Description("Describe the local SQLHarness command and engine contract.")]
+[Description("Describe the local SQLHarness command and engine contract; with a profile, add that engine's parameter types and limits (offline, never connects).")]
 public sealed class CapabilitiesCommand(OutputContext output) : AsyncCommand<CapabilitiesCommand.Settings>
 {
     public sealed class Settings : CommandSettings
     {
+        [CommandArgument(0, "[profile]")]
+        [Description("Optional target profile: scope the document to its engine. Read offline; secrets and variables are not needed.")]
+        public string? Profile { get; set; }
+
         [CommandOption("--json")]
         [Description("Write one JSON capabilities document.")]
         public bool Json { get; set; }
@@ -20,13 +25,37 @@ public sealed class CapabilitiesCommand(OutputContext output) : AsyncCommand<Cap
     protected override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         if (!settings.Json)
+            return Task.FromResult(Reject("capabilities requires --json."));
+
+        SqlHarnessCapabilities capabilities;
+        if (string.IsNullOrWhiteSpace(settings.Profile))
         {
-            output.Capture.WriteLine("capabilities requires --json.");
-            output.Capture.Flush();
-            return Task.FromResult((int)SqlHarnessExitCode.Safety);
+            capabilities = SqlHarnessCapabilitiesProvider.Get();
         }
-        output.Capture.WriteLine(System.Text.Json.JsonSerializer.Serialize(SqlHarnessCapabilitiesProvider.Get(), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web) { WriteIndented = true }));
+        else
+        {
+            try
+            {
+                var profiles = ProfileStore.Load();
+                if (!profiles.TryGetValue(settings.Profile, out var profile))
+                    return Task.FromResult(Reject($"Unknown profile '{settings.Profile}'. Run doctor to list the configured profiles."));
+                capabilities = SqlHarnessCapabilitiesProvider.Get(settings.Profile, profile.Engine);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                return Task.FromResult(Reject($"Profile '{settings.Profile}' could not be resolved: {exception.Message}"));
+            }
+        }
+
+        output.Capture.WriteLine(System.Text.Json.JsonSerializer.Serialize(capabilities, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web) { WriteIndented = true }));
         output.Capture.Flush();
         return Task.FromResult((int)SqlHarnessExitCode.Success);
+    }
+
+    private int Reject(string message)
+    {
+        output.Capture.WriteLine(message);
+        output.Capture.Flush();
+        return (int)SqlHarnessExitCode.Safety;
     }
 }

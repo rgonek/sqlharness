@@ -29,6 +29,8 @@ public sealed partial class DocsSyncTests
 {
     private const string Marker = "<!-- docs-sync:example -->";
     private static readonly string[] ServerCommands = ["mcp", "dashboard"];
+    // Operator-only commands are documented in README, not advertised to agents: capabilities omits them.
+    private static readonly string[] OperatorOnlyCommands = ["dashboard"];
     private static readonly Dictionary<string, (int, string)> HelpCache = new(StringComparer.Ordinal);
 
     [Fact]
@@ -37,7 +39,9 @@ public sealed partial class DocsSyncTests
         var registered = await RegisteredCommandsAsync();
         var capabilities = SqlHarnessCapabilitiesProvider.Get().Commands.Select(c => c.Name).Order(StringComparer.Ordinal).ToArray();
 
-        Assert.Equal(registered.Order(StringComparer.Ordinal).ToArray(), capabilities);
+        // Operator-only commands are documented in README, not advertised to agents.
+        var advertised = registered.Where(c => !OperatorOnlyCommands.Contains(c, StringComparer.Ordinal)).Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(advertised, capabilities);
     }
 
     [Fact]
