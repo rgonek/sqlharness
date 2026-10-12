@@ -53,7 +53,7 @@ public sealed class OperationLimitsTests
 
     private static (int Min, int Max) LimitRange(string name)
     {
-        var entry = SqlHarnessCapabilitiesProvider.Get().Limits[name];
+        var entry = SqlHarnessCapabilitiesProvider.Get(SqlEngine.SqlServer, "p").Limits[name];
         var type = entry.GetType();
         return (
             (int)type.GetProperty("min")!.GetValue(entry)!,

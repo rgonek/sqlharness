@@ -129,6 +129,8 @@ public class ContractsTests
         Assert.Contains("--diff", skill, StringComparison.Ordinal);
     }
 
+    // Structural pins (plan 029 Step 5): README owns the wording; the skill links the canonical
+    // section, and both carry the runnable command. Sentences are not pinned in two documents.
     [Fact]
     public void Documentation_covers_query_store_top_consumers()
     {
@@ -137,47 +139,18 @@ public class ContractsTests
         const string example =
             "sqlharness qstop prod-eu --var tenant=acme --var env=uat --top 20 --window 24h --json";
 
-        foreach (var doc in new[] { readme, skill })
-        {
-            Assert.Contains("qstop", doc, StringComparison.Ordinal);
-            Assert.Contains("24h", doc, StringComparison.Ordinal);
-            Assert.Contains("query_id", doc, StringComparison.Ordinal);
-            Assert.Contains("queries.jsonl", doc, StringComparison.Ordinal);
-            Assert.Contains("measure", doc, StringComparison.Ordinal);
-            Assert.Contains("compare", doc, StringComparison.Ordinal);
-            Assert.Contains("plan", doc, StringComparison.Ordinal);
-            Assert.Contains(example, doc, StringComparison.Ordinal);
-            Assert.True(
-                doc.Contains("total duration", StringComparison.OrdinalIgnoreCase)
-                || doc.Contains("total-duration", StringComparison.OrdinalIgnoreCase),
-                "Docs must describe total-duration ranking.");
-            Assert.Contains("rank", doc, StringComparison.OrdinalIgnoreCase);
-            Assert.True(
-                doc.Contains("aggregat", StringComparison.OrdinalIgnoreCase)
-                && doc.Contains("plans", StringComparison.OrdinalIgnoreCase)
-                && doc.Contains("intervals", StringComparison.OrdinalIgnoreCase),
-                "Docs must aggregate plans and intervals into one query_id.");
-            Assert.True(
-                doc.Contains("empty", StringComparison.OrdinalIgnoreCase)
-                && (doc.Contains("unavailable", StringComparison.OrdinalIgnoreCase)
-                    || doc.Contains("OFF", StringComparison.Ordinal)),
-                "Docs must distinguish an empty result from unavailable Query Store.");
-            Assert.True(
-                doc.Contains("stdout", StringComparison.OrdinalIgnoreCase)
-                && doc.Contains("no SQL text", StringComparison.OrdinalIgnoreCase),
-                "Docs must state that stdout has no SQL text.");
-            Assert.True(
-                doc.Contains("sensitive", StringComparison.OrdinalIgnoreCase)
-                && doc.Contains("pasted", StringComparison.OrdinalIgnoreCase)
-                && doc.Contains("published", StringComparison.OrdinalIgnoreCase)
-                && doc.Contains("explicit review", StringComparison.OrdinalIgnoreCase),
-                "Docs must treat the artifact as locally sensitive and forbid paste or publish without explicit review.");
-            Assert.True(
-                doc.Contains("high rank", StringComparison.OrdinalIgnoreCase)
-                && doc.Contains("lead", StringComparison.OrdinalIgnoreCase)
-                && doc.Contains("defective", StringComparison.OrdinalIgnoreCase),
-                "Docs must say a high rank is a lead to measure, not proof the query is defective.");
-        }
+        Assert.Contains(example, readme, StringComparison.Ordinal);
+        Assert.Contains(example, skill, StringComparison.Ordinal);
+        foreach (var token in new[] { "`qstop`", "`query_id`", "queries.jsonl", "--window", "--top" })
+            Assert.Contains(token, readme, StringComparison.Ordinal);
+        Assert.Contains("`qstop`", Section(readme, "## Commands"), StringComparison.Ordinal);
+        // Safety clause: Query Store text is published only after explicit review.
+        Assert.Contains("`queries.jsonl` without explicit review", Section(readme, "## Safety contract"), StringComparison.Ordinal);
+
+        var qstop = Paragraph(skill, "**Query Store**");
+        Assert.Contains("](../../README.md#commands)", qstop, StringComparison.Ordinal);
+        Assert.Contains("queries.jsonl", qstop, StringComparison.Ordinal);
+        Assert.Contains("no SQL text", qstop, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -187,50 +160,49 @@ public class ContractsTests
         var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
         const string example =
             "sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\\queries\\orders.sql --param tenant:nvarchar=acme --param-set .\\sets\\small.sqljson --param-set .\\sets\\large.sqljson --repeat 5 --json";
-        const string cacheWarning =
-            "Parameter-set measurements use the observed server plan-cache state; SQLHarness did not clear or isolate the plan cache.";
-        const string orderRule =
-            "In one-based round r, measured execution starts at index r modulo setCount and wraps in user-supplied order.";
 
-        foreach (var doc in new[] { readme, skill })
-        {
-            Assert.Contains(example, doc, StringComparison.Ordinal);
-            Assert.Contains(cacheWarning, doc, StringComparison.Ordinal);
-            Assert.Contains(orderRule, doc, StringComparison.Ordinal);
-            Assert.Contains("--param-set", doc, StringComparison.Ordinal);
-            Assert.Contains("--param", doc, StringComparison.Ordinal);
-            Assert.Contains("compare --matrix", doc, StringComparison.Ordinal);
-            Assert.Contains("64 KiB", doc, StringComparison.Ordinal);
-            Assert.Contains("BOM", doc, StringComparison.Ordinal);
-            Assert.Contains("comments", doc, StringComparison.Ordinal);
-            Assert.Contains("trailing commas", doc, StringComparison.Ordinal);
-            Assert.Contains("only `name` and `parameters`", doc, StringComparison.Ordinal);
-            Assert.Contains("locally sensitive", doc, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("one session", doc, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("setup once", doc, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains(
-                "Setup runs once and binds the first parameter set's merged parameters.",
-                doc,
-                StringComparison.Ordinal);
-            Assert.Contains("Later sets do not re-run setup.", doc, StringComparison.Ordinal);
-            Assert.Contains("per-set", doc, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("fixed", doc, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("stability", doc, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains(".sqlplan", doc, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("fresh connection", doc, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("two query variants", doc, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("one parameter", doc, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("order-dependent", doc, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("does not copy parameter values", doc, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("does not claim cross-set", doc, StringComparison.OrdinalIgnoreCase);
-        }
+        var section = Section(readme, "## Measure parameter sets");
+        Assert.Contains(example, section, StringComparison.Ordinal);
+        foreach (var token in new[] { "--param-set", "--param", "compare --matrix", "--json-summary", "64 KiB", ".sqlplan" })
+            Assert.Contains(token, section, StringComparison.Ordinal);
+        // Safety clauses: the files are locally sensitive and their values stay out of reports.
+        Assert.Contains("files are locally sensitive", section, StringComparison.Ordinal);
+        Assert.Contains("does not copy parameter values", section, StringComparison.Ordinal);
+        Assert.Contains("](README.md#measure-parameter-sets)", ReadRepositoryFile("AGENTS.md"), StringComparison.Ordinal);
+        Assert.Contains("](../../README.md#measure-parameter-sets)", skill, StringComparison.Ordinal);
+        Assert.Contains(example, skill, StringComparison.Ordinal);
 
         Assert.DoesNotContain(
             "Parameter-sniffing checks in `measure` across multiple parameter sets.",
             readme,
             StringComparison.Ordinal);
-        Assert.Contains("Missing-index overlap analysis against existing indexes.", readme, StringComparison.Ordinal);
+        // Overlap analysis ships as `indexes` (plan 029): the roadmap no longer lists it.
+        Assert.DoesNotContain("Missing-index overlap analysis", readme, StringComparison.Ordinal);
         Assert.DoesNotContain("A thin MCP facade over `SqlHarness.Core`.", readme, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Skill_links_resolve_to_reference_sections()
+    {
+        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
+        foreach (var (file, path) in new[] { ("README.md", new[] { "README.md" }), ("docs/mcp.md", new[] { "docs", "mcp.md" }) })
+        {
+            var slugs = HeadingSlugs(ReadRepositoryFile(path));
+            var anchors = System.Text.RegularExpressions.Regex
+                .Matches(skill, @"\]\(\.\./\.\./" + System.Text.RegularExpressions.Regex.Escape(file) + @"#([^)]+)\)")
+                .Select(match => match.Groups[1].Value)
+                .ToArray();
+            if (file == "README.md")
+                Assert.NotEmpty(anchors);
+            Assert.All(anchors, anchor => Assert.Contains(anchor, slugs));
+        }
+
+        Assert.Contains("](../../docs/mcp.md)", skill, StringComparison.Ordinal);
+
+        // The skill keeps one line of honest framing; README Safety contract is the authoritative statement.
+        const string framing = "For enforcement, point profiles at a least-privilege (reader) database principal.";
+        Assert.Contains(framing, skill, StringComparison.Ordinal);
+        Assert.Contains(framing, Section(ReadRepositoryFile("README.md"), "## Safety contract"), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -273,7 +245,7 @@ public class ContractsTests
         Assert.Contains("watch_max_duration", mcp, StringComparison.Ordinal);
         Assert.Contains("snapshot_differences", mcp, StringComparison.Ordinal);
         Assert.Contains("Byte counts are not token counts", mcp, StringComparison.Ordinal);
-        Assert.Contains("Zakres dowodów", mcp, StringComparison.Ordinal);
+        Assert.Contains("## Evidence scope", mcp, StringComparison.Ordinal);
         Assert.Contains("Not executed", mcp, StringComparison.Ordinal);
     }
 
@@ -282,10 +254,7 @@ public class ContractsTests
     {
         var agents = ReadRepositoryFile("AGENTS.md");
         var readme = ReadRepositoryFile("README.md");
-        var headingSlugs = System.Text.RegularExpressions.Regex
-            .Matches(readme, @"^#{1,6}\s+(.+?)\s*$", System.Text.RegularExpressions.RegexOptions.Multiline)
-            .Select(match => GitHubSlug(match.Groups[1].Value))
-            .ToHashSet(StringComparer.Ordinal);
+        var headingSlugs = HeadingSlugs(readme);
 
         var anchors = System.Text.RegularExpressions.Regex
             .Matches(agents, @"\]\(README\.md#([^)]+)\)")
@@ -297,6 +266,58 @@ public class ContractsTests
         Assert.Contains("](docs/mcp.md)", agents, StringComparison.Ordinal);
         Assert.Contains("--allow-mutation --confirm-database", agents, StringComparison.Ordinal);
         Assert.Contains("verify-linux.ps1", agents, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Readme_links_into_mcp_doc_resolve_to_headings()
+    {
+        var readme = ReadRepositoryFile("README.md");
+        var slugs = HeadingSlugs(ReadRepositoryFile("docs", "mcp.md"));
+        var anchors = System.Text.RegularExpressions.Regex
+            .Matches(readme, @"\]\(docs/mcp\.md#([^)]+)\)")
+            .Select(match => match.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(anchors);
+        Assert.All(anchors, anchor => Assert.Contains(anchor, slugs));
+    }
+
+    private static HashSet<string> HeadingSlugs(string markdown) =>
+        System.Text.RegularExpressions.Regex
+            .Matches(markdown, @"^#{1,6}\s+(.+?)\s*$", System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Select(match => GitHubSlug(match.Groups[1].Value))
+            .ToHashSet(StringComparer.Ordinal);
+
+    // The text from a heading line to the next heading of the same or a higher level; lines inside
+    // fenced code blocks (for example a `# comment`) are never headings.
+    private static string Section(string markdown, string heading)
+    {
+        var lines = markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var level = heading.TakeWhile(c => c == '#').Count();
+        var start = Array.FindIndex(lines, line => line.TrimEnd() == heading);
+        Assert.True(start >= 0, "Missing heading: " + heading);
+        var end = lines.Length;
+        var inFence = false;
+        for (var i = start + 1; i < lines.Length; i++)
+        {
+            if (lines[i].TrimStart().StartsWith("```", StringComparison.Ordinal))
+                inFence = !inFence;
+            else if (!inFence && lines[i].StartsWith('#') && lines[i].TakeWhile(c => c == '#').Count() <= level && lines[i].TrimStart('#').StartsWith(' '))
+            {
+                end = i;
+                break;
+            }
+        }
+
+        return string.Join('\n', lines[start..end]);
+    }
+
+    // The paragraph (blank-line delimited) that starts with the given text.
+    private static string Paragraph(string markdown, string start)
+    {
+        var paragraphs = markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Split("\n\n");
+        return Assert.Single(paragraphs, paragraph => paragraph.StartsWith(start, StringComparison.Ordinal));
     }
 
     private static string GitHubSlug(string heading)

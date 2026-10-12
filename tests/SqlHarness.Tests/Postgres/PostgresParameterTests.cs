@@ -56,6 +56,20 @@ public sealed class PostgresParameterTests
         PostgresParameters.Validate(parsed);
     }
 
+    [Theory]
+    [InlineData("a:nvarchar(10)=x")]
+    [InlineData("a:varchar(10)=x")]
+    [InlineData("a:char(10)=x")]
+    [InlineData("a:nchar(10)=x")]
+    [InlineData("a:varbinary(10)=AQID")]
+    [InlineData("a:binary(10)=AQID")]
+    public void Accepts_sized_types_advertised_by_capabilities(string input)
+    {
+        PostgresParameters.Validate(SqlParameterParser.Parse([input]));
+        var advertised = SqlHarnessCapabilitiesProvider.Get(SqlEngine.Postgres, "p").ParameterTypes!;
+        Assert.Contains(input[(input.IndexOf(':') + 1)..input.IndexOf('(')] + "(n)", advertised);
+    }
+
     [Fact]
     public void Tinyint_256_is_rejected()
     {

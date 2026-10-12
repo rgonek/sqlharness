@@ -84,7 +84,8 @@ public sealed record AuthSpec(
 
     internal bool RequiresAccessToken => Strategy == AuthStrategy.AzureCli;
 
-    // The only operator-held secret the caller cannot already obtain; read per call, never cached.
+    // The operator-held secret redacted from errors; read per call, never cached. An MCP client
+    // without a shell cannot obtain it otherwise; a CLI agent shares the environment and can.
     internal string? PasswordForRedaction() =>
         Strategy == AuthStrategy.Sql && !string.IsNullOrEmpty(PasswordEnvVar)
             ? Environment.GetEnvironmentVariable(PasswordEnvVar)

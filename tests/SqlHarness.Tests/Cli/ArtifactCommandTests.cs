@@ -174,7 +174,7 @@ public sealed class ArtifactCommandTests
             document.RootElement.GetProperty("commands").EnumerateArray(),
             command => command.GetProperty("name").GetString() == "artifact");
         var limits = document.RootElement.GetProperty("limits");
-        Assert.Contains("sessionTempStatements", limits.EnumerateObject().Select(property => property.Name));
+        Assert.DoesNotContain("sessionTempStatements", limits.EnumerateObject().Select(property => property.Name));
         var read = limits.GetProperty("artifactRead");
         Assert.Equal(
             ["summary", "metrics", "operators", "statements", "matrix-cells"],
