@@ -4,7 +4,7 @@
 
 ## Status
 
-- Status: DONE
+- Status: DONE (locally merged in `761f2ab`; post-merge gates pass on `7f6f1d0`)
 - Priority: P2
 - Effort: M
 - Risk: MED (removes exit 4 from the contract)
@@ -39,9 +39,9 @@ Out of scope: profile schema, `--confirm-database` (stays exact and ordinal), th
 
 - `dotnet build SqlHarness.sln -warnaserror` — 0 warnings.
 - `dotnet test tests/SqlHarness.Tests --no-build --filter "FullyQualifiedName~SqlExecution|FullyQualifiedName~Target|FullyQualifiedName~PostgresEndpoint|FullyQualifiedName~PostgresTransport"` — pass.
-- `pwsh -NoProfile -File scripts/verify.ps1` — `verify: OK`; Core 3,696 passed/0 skipped, MCP 383 passed/4 skipped (Windows, commit `e87882a`; `.superpowers/sdd/050-sqlserver-server-name-informational/windows-gate-3.log`).
-- `pwsh -NoProfile -File scripts/verify-linux.ps1` — `verify-linux: OK`; Core 3,696 passed/0 skipped, MCP 384 passed/3 skipped (WSL ext4 `/home/rgone/src/sqlharness`, commit `e87882a`; `.superpowers/sdd/050-sqlserver-server-name-informational/linux-gate.log`).
-- Feature branch remains unmerged and unpublished. No live database or TLS proof was run.
+- Feature-branch gates on `e87882a`: Windows `pwsh -NoProfile -File scripts/verify.ps1` → `verify: OK` (Core 3,696 passed/0 skipped, MCP 383 passed/4 skipped); Linux `pwsh -NoProfile -File scripts/verify-linux.ps1` → `verify-linux: OK` (Core 3,696 passed/0 skipped, MCP 384 passed/3 skipped; WSL ext4 `/home/rgone/src/sqlharness`).
+- Post-merge gates on `7f6f1d0`: Windows `pwsh -NoProfile -File scripts/verify.ps1` → `verify: OK` (Core 3,713 passed/0 skipped, MCP 383 passed/4 skipped; `.superpowers/plan-050-postmerge-windows-2.log`); Linux `pwsh -NoProfile -File scripts/verify-linux.ps1` → `verify-linux: OK` (Core 3,713 passed/0 skipped, MCP 384 passed/3 skipped; WSL ext4 `/home/rgone/src/sqlharness-gate`, `.superpowers/plan-050-postmerge-linux.log`).
+- Plan 050 was locally merged to `main` in `761f2ab`. After the gates, `main` advanced to `3d7ae11` through documentation and `publish-local` script changes only; source, tests, and verification scripts were unchanged and were not retested at that later commit. This session did not push. No live database or TLS proof was run.
 
 ## Done criteria
 
