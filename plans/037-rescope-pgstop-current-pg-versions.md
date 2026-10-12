@@ -1,99 +1,62 @@
-# Plan 037: The `pgstop` design covers the current PostgreSQL majors (17, 18) before anyone implements it
+# Plan 037: Potwierdź kształty pgstop i przygotuj fixture możliwości runtime
 
-> **Executor instructions**: Follow this plan step by step. Run every
-> verification command and confirm the expected result before moving to the
-> next step. If anything in the "STOP conditions" section occurs, stop and
-> report — do not improvise. When done, update the status row for this plan
-> in `plans/README.md` — unless a reviewer dispatched you and told you they
-> maintain the index.
->
-> **Drift check (run first)**: `git diff --stat 5280f78..HEAD -- plans/014-pg-statements-contract.md plans/014-pg-statements-implementation.md docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md docs/superpowers/specs/2026-09-10-postgres-engine-design.md scripts/setup-local-postgres.ps1`
-> If any in-scope file changed since this plan was written, compare the
-> "Current state" excerpts against the live code before proceeding; on a
-> mismatch, treat it as a STOP condition.
+> **REJECTED 2026-10-11** — `pgstop` will not be built. `query` can already read `pg_stat_statements`; a ranked example query in the agent docs (plan 029) covers the need. Kept for history; do not execute.
+
+> Wykonawca: przeczytaj kontrakt i implementation plan 014. Ten plan tworzy dokumentację i fixture specyfikujące przyszłe testy; nie wdraża pgstop. Drift sprawdź przez `git diff --stat 729d88f..HEAD -- plans/014-pg-statements-contract.md plans/014-pg-statements-implementation.md docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md docs/superpowers/specs/2026-09-10-postgres-engine-design.md`. Przeanalizuj zmiany i dostosuj wskazówki. Zatrzymaj tylko krok z rzeczywistą nierozwiązaną sprzecznością zachowania.
 
 ## Status
 
-- **Priority**: P2 (direction; a design-only task)
-- **Effort**: S–M (documents and fixtures; no product code)
+- **Priority**: P2
+- **Effort**: S–M
 - **Risk**: LOW
-- **Depends on**: none. Live verification of each column shape needs plan 036 or an operator-authorized server.
-- **Category**: direction
-- **Planned at**: commit `5280f78`, 2026-10-03
+- **Status**: PLANNED; aktualizacja projektu 2026-10-11 nie oznacza wykonania badań PG17/18.
+- **Depends on**: kontrakt 014; plan 036 daje środowisko live proof, nie listę wersji wymaganych do dopuszczenia runtime.
+- **Category**: direction/tests
+- **Planned at**: `729d88f`, 2026-10-11
 
-## Why this matters
+## Problem i wynik
 
-Plan 014 designed `pgstop`, a read-only `pg_stat_statements` counterpart to SQL Server's `qstop`. The design only opened the PostgreSQL 14, 15 and 16 documentation and defines column SQL **only** for the pairs "server 14 + extension 1.9" and "server 15/16 + extension 1.10". Every other pair, explicitly including "server newer than 16", gets no column SQL and fails (`plans/014-pg-statements-contract.md`, `## Kolumny` / step 6; `plans/014-pg-statements-implementation.md` "Decyzje, które zadania niosą": "SQL kolumn jest tylko dla PostgreSQL 14 … oraz … 15 albo 16"). As of October 2026, PostgreSQL 17 and 18 are the current majors, and PG14 is close to end of life. Implemented as designed, the feature would refuse most new deployments. pg_stat_statements also changed columns after 1.10. For example, newer versions rename `blk_read_time`/`blk_write_time` to `shared_blk_read_time`/`shared_blk_write_time` and add `local_blk_*` and `stats_since` columns. These are recollections, not verified facts, and must be checked against the official sources in the same way plan 014 T1 did.
+Wcześniejszy projekt dopuszczał jedynie dokładne pary PG14+1.9 i PG15/16+1.10. To utrwalało ręczną listę numerów jako blokadę poprawnej diagnostyki. Kontrakt 014 teraz wymaga runtime probe nazw/typów i jawnej projekcji, więc nieznana wersja z kompatybilnym kształtem jest obsługiwana. Ten plan potwierdza wymagane minimum, opcjonalne pola oraz fixture PG17/18 na źródłach pierwotnych. Numery wersji służą pokryciu testów; nie wyłączają poprawnego kształtu.
 
-There is also an unrecorded decision reversal. `docs/superpowers/specs/2026-09-10-postgres-engine-design.md` (around line 44, "Non-goals") lists "A `pg_stat_statements` analog of Query Store `qstop`". The later audit roadmap (06/T5) and plan 014 adopted it at the user's request, but the engine spec was never annotated.
+## Stan i zakres
 
-## Current state
+`plans/014-pg-statements-contract.md` ma historyczną macierz PG14/15/16 oraz nowy normatywny krok 6 runtime probe. `plans/014-pg-statements-implementation.md` wymaga fixture F14/F15/F17/F18/F-new/F-missing/F-type/F-optional/F-schema. Nie ma jeszcze product code PgStatementTop. `scripts/setup-local-postgres.ps1` używa postgres:16. Nie zmieniaj setupu w tym zadaniu dokumentacyjnym.
 
-- `plans/014-pg-statements-contract.md` (Polish): `## Macierz źródeł` with per-version tables for PG14/15/16 (sources: the official module pages F.30/F.32 and the `pg_stat_statements.control` file at tags `REL_14_0`/`REL_14_24`, `REL_15_0`/`REL_15_19`, `REL_16_0`/`REL_16_15`); `### Kolumny pg_stat_statements` (per-column presence per version); a connection-sequence section (resolve → auth → identity → `server_version_num` floor `140000` → `installed_version` → column SQL).
-- `plans/014-pg-statements-implementation.md`: decisions (only the two pairs get column SQL), file list, tests (including the "V-pair": a newer server is not exit 0).
-- `scripts/setup-local-postgres.ps1:26` pins the playground image `postgres:16`.
-- `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`: the original hypothesis spec.
+W zakresie: obydwa dokumenty 014, `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`, jedna adnotacja decyzji w `docs/superpowers/specs/2026-09-10-postgres-engine-design.md`, indeks. Poza zakresem: kod pgstop, skrypty DB, delta, reset, instalacja extension, zmiany GUC, profile i hasła użytkownika. Pracuj w izolowanym worktree, commity docs(037), bez push.
 
-## Commands you will need
+## Kroki
 
-| Purpose | Command | Expected on success |
-|---|---|---|
-| Whitespace check | `git diff --check` | no output |
-| Link/path check | for each path you cite, `Test-Path <path>` | `True` |
+### 1. Źródła PG17/18
 
-No `dotnet test` is required (documents only). Do not run application tests for this plan, matching the plan-014 convention.
+Otwórz oficjalne strony `https://www.postgresql.org/docs/17/pgstatstatements.html` i `https://www.postgresql.org/docs/18/pgstatstatements.html` oraz katalogi systemowe opisujące namespace, kolumny/typy i własność obiektów rozszerzenia. Uzupełnij macierz 014 o PG17/18; każda faktograficzna komórka ma źródło/wersję strony albo UNPROVEN z warunkiem. Rozdziel extversion od server_version. Nie zgaduj nazw ani semantyki czasów I/O.
 
-## Scope
+**Weryfikacja:** `git diff --check` → exit 0; każda nowa komórka ma URL albo jawne UNPROVEN.
 
-**In scope**: `plans/014-pg-statements-contract.md` (add PG17/PG18 rows and columns), `plans/014-pg-statements-implementation.md` (extend the allowed pairs and test table), `docs/superpowers/specs/2026-09-10-postgres-engine-design.md` (one superseded note), `plans/README.md`. Optionally, `scripts/setup-local-postgres.ps1` gains a `-Image` parameter defaulting to `postgres:16`; if so, update its Pester and C# script tests in the same commit.
+### 2. Descriptor możliwości i jawne query
 
-**Out of scope**: any product code (`pgstop` stays PLANNED), and changing plan 014's sequence, exit codes or delta semantics.
+Potwierdź wymagane typy kroku 6 kontraktu i katalogowy sposób identyfikacji obiektu należącego do rozszerzenia. Opisz jawny SQL probe i jawne projekcje w implementation plan; namespace cytowany helperem, nazwy metryk z wewnętrznej listy, brak search_path/SELECT *. Kolumny opcjonalne nie są warunkiem sukcesu. Zmianę nazwy I/O odwzoruj wyłącznie po źródłowym potwierdzeniu semantyki; gdy znaczenie się różni, pozostaw unavailable albo zaprojektuj osobne pole z uzasadnieniem. Nie sumuj odmiennych zakresów I/O jako tej samej metryki.
 
-## Git workflow
+**Weryfikacja:** `git diff --check` → exit 0; wszystkie projekcje mają jawne kolumny, żaden zapis nie odrzuca wyłącznie nieznanej pary wersji.
 
-Branch `docs/plan-037-pgstop-versions`. Commits `docs(037): ...`. Write in Polish, matching the 014 documents. Do NOT push.
+### 3. Fixture i live proof
 
-## Steps
+W tabeli implementation plan opisz fixture kształtów PG14/15/16/17/18, nieznanych wersji z kompatybilnym minimum, braku/zmiany typu wymaganej kolumny, opcjonalnego pola unavailable, extra kolumn, namespace z cudzysłowem i fałszywego obiektu na search_path. Oczekiwane: zgodne minimum → ranking; niezgodne minimum → exit 5 przed query rankingowym; opcjonalne brak → null/unavailable z przyczyną. Wersja sama nie tworzy innej ścieżki. Fixture nie jest live proof.
 
-### Step 1: Source matrix rows for PG17 and PG18
+Zapisz sposób użycia izolowanej ścieżki 036 dla PG17 i PG18 z pg_stat_statements. Przy wykonaniu live wymagany osobny ograniczony cel/autoryzacja zgodnie z kontraktem; nie wybieraj profilu użytkownika. Brak środowiska jednej wersji zostaw jako nieprzeprowadzony dowód; nie przywracaj przez to runtime allowlisty. Live sprawdza faktycznie obecne typy, discovery/quoting, prosty ranking i ograniczoną rolę. Reset/delta nie są zadaniem v1.
 
-Using the same source types as T1 (official module pages for 17 and 18, and the `pg_stat_statements.control` `default_version` at `REL_17_0` / latest `REL_17_*` and `REL_18_0` / latest `REL_18_*` on the `postgres/postgres` mirror), add columns `PG17` and `PG18` to every table in `## Macierz źródeł`, and record page footers and section numbers as T1 did. Each cell is a fact with a source, or `UNPROVEN` with the condition for proof. Do not fill cells from memory.
+**Weryfikacja:** `git diff --check` → exit 0; wszystkie wyżej wymienione klasy mają wejście/oczekiwany wynik, status live jest jawny.
 
-If you have no network access, STOP: this plan's value is in sourced facts.
+### 4. Uzgodnij specyfikacje
 
-**Verify**: every new cell cites a URL or a tag path, or says `UNPROVEN` with a condition. `git diff --check` is clean.
+Zastąp w szkicu postgres-statement-diagnostics normatywne delta/allowlist wymagania skumulowanym v1 i runtime probe według 014. Future delta pozostaje odłożona; bez funkcji która zawsze daje unknown/incomparable. W engine-design przy non-goal pg_stat_statements dodaj adnotację: adopted as plan 014, feature still PLANNED. Zaktualizuj indeks z dowodem projektu, bez twierdzenia o wdrożeniu.
 
-### Step 2: Column table
+**Weryfikacja:** `git diff --check` → exit 0; `Test-Path` każdej cytowanej lokalnej ścieżki → True; `git diff --stat` mieści się w zakresie. Testy aplikacji nie są potrzebne dla dokumentów.
 
-Extend `### Kolumny pg_stat_statements` with PG17/PG18 presence per column, including renamed and added columns, each with its source. Mark renames explicitly (old name → new name, version), because the column SQL must branch on them.
+## Done i STOP
 
-### Step 3: Allowed pairs and tests
+- [ ] PG17/18 mają źródłowe komórki lub oznaczone brakujące dowody.
+- [ ] Descriptor/probe, wymagane/optional typy i bezpieczne kwalifikowanie obiektu są wykonalne i zgodne z kontraktem 014.
+- [ ] Fixture obejmują nieznaną kompatybilną wersję oraz błędny wymagany shape; numer wersji nie stanowi bramy.
+- [ ] Specyfikacje i indeks uzgodnione, diff check exit 0; brak kodu i uruchomień na DB.
 
-In `plans/014-pg-statements-implementation.md`: extend "SQL kolumn jest tylko dla…" to the new pairs proven in Steps 1–2 (e.g. server 17 + its default version, server 18 + its default version). Keep "any other pair → no column SQL, `UNPROVEN`, not exit 0". Add test rows for each new pair to the test table, and state that a live column-shape check per pair needs plan 036's lane (add `postgres:17`/`:18` to its matrix) or an authorized target.
-
-### Step 4: Record the decision reversal
-
-In `docs/superpowers/specs/2026-09-10-postgres-engine-design.md`, after the non-goal bullet about `pg_stat_statements`, add one line: "Superseded 2026-09-26: adopted as plan 014 (`pgstop`) at the user's request; see `plans/014-pg-statements-contract.md`." Do not delete the original bullet.
-
-**Verify**: `git diff --check` is clean; `git diff --stat` touches only in-scope files.
-
-## Test plan
-
-None (documents only). The future implementation's tests are what Step 3 defines.
-
-## Done criteria
-
-- [ ] Contract tables have PG17/PG18 columns with sourced cells or explicit `UNPROVEN`
-- [ ] The implementation design lists the new pairs and test rows
-- [ ] The engine spec has the superseded note
-- [ ] `git diff --check` clean; `plans/README.md` row updated
-
-## STOP conditions
-
-- No network access to the official sources.
-- The sources show a change that breaks plan 014's sequence (e.g. `installed_version` semantics changed). Report it; do not redesign here.
-
-## Maintenance notes
-
-- Each new PostgreSQL major needs a new matrix column before `pgstop` will accept it. Put a yearly reminder in `plans/README.md`.
-- Implementing `pgstop` remains plan 014's implementation design plus this extension. Schedule it after plan 036 provides live column-shape proof.
+Gdy źródło jest niedostępne, zapisz konkretny brak i wykonaj niezależne zadania; bez zmyślonych faktów. Zatrzymaj zależny krok, jeżeli źródła obalają semantykę wymaganej metryki albo bezpieczną identyfikację obiektu i nie da się dopasować tego w zakresie kontraktu. Każdy nowy major może dodać coverage; nie potrzebuje osobnego dokumentacyjnego odblokowania runtime. Reviewer sprawdza znaczenie aliasów I/O i rozdzielenie nieznanego numeru od niezgodnego kształtu.
