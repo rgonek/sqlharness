@@ -47,15 +47,15 @@ sqlharness plan .\artifacts\orders.sqlplan --json
 
 **Output.** Prefer `--json` for full reports; on `measure` and `compare`, `--json-summary` gives the bounded projection (pass one of the two). `--output agent` returns the versioned agent envelope bounded by `--max-output-bytes` and `--max-cell-chars`; `outputModesByCommand` in `capabilities --json` lists which modes each command accepts, and [docs/mcp.md budgets](../../docs/mcp.md#result-envelope-errors-and-budgets) explain how the envelope shrinks to fit.
 
-**Polling.** `watch` replaces a loop of ad-hoc `query` calls: it stops on `--until <predicate>` or `--until-unchanged <polls>`, and exits `7` when `--max-duration` elapses first. `watch --output ndjson` streams a `started` event, a `changed` event per change, and one terminal `completed` or `failed` record.
+**Polling.** `watch` replaces a loop of ad-hoc `query` calls: it stops on `--until <predicate>` or `--until-unchanged <polls>`, and exits `7` when `--max-duration` elapses first. `watch --output ndjson` streams a `started` event, a `changed` event per change, and one terminal `completed` or `failed` record ([README Commands](../../README.md#commands)).
 
-**Before/after results.** `snapshot --name` stores a canonical result under `~/.sqlharness/snapshots` (`--force` to replace a name). `snapshot --diff` reports locations and kinds without cell values: exit `8` means a valid comparison found differences rather than an execution failure.
+**Before/after results.** `snapshot --name` stores a canonical result under `~/.sqlharness/snapshots` (`--force` to replace a name). `snapshot --diff` reports locations and kinds without cell values: exit `8` means a valid comparison found differences rather than an execution failure ([README Commands](../../README.md#commands)).
 
-**Query Store** (SQL Server). `qstop` ranks consumers by total duration; one item aggregates all plans and runtime intervals of one `query_id`. A high rank is a lead to `measure`, `compare` and `plan`, not proof the query is defective. An empty readable window exits `0`; unavailable Query Store (`OFF`, `ERROR`) exits `5`. Stdout has no SQL text; the text sits in `artifactDirectory/queries.jsonl`.
+**Query Store** (SQL Server). `qstop` ranks consumers by total duration; one item aggregates all plans and runtime intervals of one `query_id`. A high rank is a lead to `measure`, `compare` and `plan`, not proof the query is defective. An empty readable window exits `0`; unavailable Query Store (`OFF`, `ERROR`) exits `5`. Stdout has no SQL text; the text sits in `artifactDirectory/queries.jsonl` ([README Commands](../../README.md#commands)).
 
-**Missing indexes** (SQL Server). `indexes` lists missing-index evidence classified against existing indexes (`covered`, `include-gap`, `partial-key`, `new-shape`); `--object` narrows it to one table. Creating an index is a persistent mutation under the mutation gate.
+**Missing indexes** (SQL Server). `indexes` lists missing-index evidence classified against existing indexes (`covered`, `include-gap`, `partial-key`, `new-shape`); `--object` narrows it to one table. Creating an index is a persistent mutation under the mutation gate ([README Commands](../../README.md#commands)).
 
-**Saved benchmarks.** `artifact <id> --section summary` reads a safe section of a saved `measure`/`compare` artifact offline; `<id>` is the directory name in the report's `artifactDirectory`.
+**Saved benchmarks.** `artifact <id> --section summary` reads a safe section of a saved `measure`/`compare` artifact offline; `<id>` is the directory name in the report's `artifactDirectory` ([README Commands](../../README.md#commands)).
 
 **MCP.** `sqlharness mcp serve` exposes the tools to one local stdio client and never runs persistent mutations. Start, scope and limits: [docs/mcp.md](../../docs/mcp.md).
 

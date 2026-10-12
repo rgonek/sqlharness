@@ -229,7 +229,8 @@ public class ContractsTests
             "Parameter-sniffing checks in `measure` across multiple parameter sets.",
             readme,
             StringComparison.Ordinal);
-        Assert.Contains("Missing-index overlap analysis against existing indexes.", readme, StringComparison.Ordinal);
+        // Overlap analysis ships as `indexes` (plan 029): the roadmap no longer lists it.
+        Assert.DoesNotContain("Missing-index overlap analysis", readme, StringComparison.Ordinal);
         Assert.DoesNotContain("A thin MCP facade over `SqlHarness.Core`.", readme, StringComparison.Ordinal);
     }
 
