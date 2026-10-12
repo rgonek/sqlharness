@@ -278,7 +278,7 @@ public sealed class McpTokenBudgetTests
         var bytes = ResultTextBytes(result, (int)McpLimits.DefaultCallToolResultBudgetBytes);
         _output.WriteLine($"compare matrix result with regression: {bytes} bytes of {McpLimits.DefaultCallToolResultBudgetBytes}");
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
-        var first = document.RootElement.GetProperty("result").GetProperty("cells")[0];
+        var first = document.RootElement.GetProperty("result").GetProperty("details")[0];
         Assert.Equal("fail", first.GetProperty("compare").GetProperty("regression").GetProperty("verdict").GetString());
     }
 
@@ -291,9 +291,59 @@ public sealed class McpTokenBudgetTests
 
         var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "compare");
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
-        var cells = document.RootElement.GetProperty("result").GetProperty("cells");
-        Assert.Equal(2, cells.GetArrayLength());
+        var cases = document.RootElement.GetProperty("result").GetProperty("cases");
+        Assert.Equal(2, cases.GetArrayLength());
         Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("truncation").ValueKind);
+    }
+
+    [Theory]
+    [InlineData(4096)]
+    [InlineData(65536)]
+    public void Matrix_case_inventory_survives_optional_detail_at_minimum_and_default_budgets(int budget)
+    {
+        var matrix = new SqlHarnessCompareMatrixReport("batch", "int",
+            Enumerable.Range(0, 6).Select(index => new CompareMatrixCellReport(index, index.ToString(), MatrixInventoryCompare(index))).ToArray());
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, matrix, null),
+            "sqlharness_compare", new McpResultBudget(budget, 128));
+
+        ResultTextBytes(result, budget);
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        var projected = document.RootElement.GetProperty("result");
+        var cases = projected.GetProperty("cases");
+        Assert.Equal(6, cases.GetArrayLength());
+        Assert.Equal(6, projected.GetProperty("caseCount").GetInt32());
+        Assert.Equal(Enumerable.Range(0, 6), cases.EnumerateArray().Select(item => item.GetProperty("index").GetInt32()));
+        Assert.Equal(10m, cases[0].GetProperty("delta").GetProperty("elapsedMilliseconds").GetDecimal());
+        Assert.Equal("not-requested", cases[0].GetProperty("equivalenceAvailability").GetString());
+        Assert.Equal(JsonValueKind.Null, cases[0].GetProperty("equivalent").ValueKind);
+    }
+
+    private static SqlHarnessCompareReport MatrixInventoryCompare(int index)
+    {
+        var source = BuildCompareReport();
+        var baseline = source.Baseline with
+        {
+            CpuTimeMilliseconds = new CompareDistribution(10, 20, 30),
+            ElapsedTimeMilliseconds = new CompareDistribution(30, 40, 50),
+            LogicalReads = new CompareDistribution(5, 6, 7),
+            LogicalReadsByTable = Enumerable.Range(0, 24).ToDictionary(i => $"table-{i}", _ => new CompareDistribution(1, 2, 3)),
+            Warnings = [new string('w', 20_000)],
+            Operators = Enumerable.Range(0, 24).Select(i => new CompareOperatorReport(i, $"operator-{i}", $"dbo.t{i}", true, false, false)).ToArray(),
+        };
+        var candidate = baseline with
+        {
+            CpuTimeMilliseconds = new CompareDistribution(20, 30, 40),
+            ElapsedTimeMilliseconds = new CompareDistribution(40, 50, 60),
+            LogicalReads = new CompareDistribution(7, 8, 9),
+        };
+        return source with
+        {
+            Baseline = baseline,
+            Candidate = candidate,
+            ArtifactDirectory = $"/artifacts/case-{index}",
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Off, null, null, null, null),
+        };
     }
 
     [Fact]
@@ -317,7 +367,9 @@ public sealed class McpTokenBudgetTests
         ResultTextBytes(result, (int)McpLimits.DefaultCallToolResultBudgetBytes);
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
         Assert.DoesNotContain(path, document.RootElement.GetRawText(), StringComparison.OrdinalIgnoreCase);
-        Assert.True(document.RootElement.GetProperty("result").GetProperty("cells").GetArrayLength() < 100);
+        var projected = document.RootElement.GetProperty("result");
+        Assert.Equal(100, projected.GetProperty("caseCount").GetInt32());
+        Assert.True(projected.GetProperty("cases").GetArrayLength() <= 100);
         Assert.True(document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
     }
 

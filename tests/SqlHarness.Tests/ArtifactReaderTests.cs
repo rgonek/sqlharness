@@ -86,7 +86,7 @@ public class ArtifactReaderTests
     }
 
     [Fact]
-    public void Matrix_cell_index_pages_return_safe_ids_and_a_consumable_cursor()
+    public void Matrix_case_inventory_pages_preserve_the_agent_case_schema_and_cursor()
     {
         using var temp = new TempDirectory();
         const string id = "matrix-index";
@@ -94,19 +94,38 @@ public class ArtifactReaderTests
         Directory.CreateDirectory(directory);
         File.WriteAllText(Path.Combine(directory, "manifest.json"),
             "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"matrix-cells\"]}");
+        var cases = Enumerable.Range(0, 40).Select(index => new AgentMatrixCase(index, $"cell-{index:D3}", true, "compared",
+            new AgentMedianMetrics(1, 2, 3), new AgentMedianMetrics(4, 5, 6), new AgentMedianMetrics(3, 3, 3), ["warning"])).ToArray();
+        var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), JsonSerializer.Serialize(new
         {
-            cells = Enumerable.Range(0, 40).Select(index => new { index, artifactId = $"cell-{index:D3}" }).ToArray(),
-        }));
+            cases,
+        }, jsonOptions));
 
         var first = ArtifactReader.ReadSection(temp.Path, id, "matrix-cells");
         using var json = JsonDocument.Parse(JsonSerializer.Serialize(first, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
-        Assert.Equal(32, json.RootElement.GetProperty("cells").GetArrayLength());
+        Assert.Equal(32, json.RootElement.GetProperty("cases").GetArrayLength());
+        Assert.Equal(4m, json.RootElement.GetProperty("cases")[0].GetProperty("candidate").GetProperty("cpuMilliseconds").GetDecimal());
         Assert.Equal(32, json.RootElement.GetProperty("continuation").GetInt32());
         var second = Assert.IsType<ArtifactMatrixCellsSection>(ArtifactReader.ReadSection(temp.Path, id, "matrix-cells", cursor: 32));
-        Assert.Equal(8, second.Cells.Count);
+        Assert.Equal(8, second.Cases.Count);
         Assert.Null(second.Continuation);
-        Assert.Equal(Enumerable.Range(32, 8), second.Cells.Select(cell => cell.Index));
+        Assert.Equal(Enumerable.Range(32, 8), second.Cases.Select(cell => cell.Index));
+
+        var smallPage = Assert.IsType<ArtifactMatrixCellsSection>(AgentOutputProjection.Project(first, 128, 0, out _, 4096));
+        Assert.InRange(JsonSerializer.SerializeToUtf8Bytes(smallPage, jsonOptions).Length, 1, 4096);
+        Assert.InRange(smallPage.Cases.Count, 1, 31);
+        Assert.Equal(smallPage.Cases.Count, smallPage.Continuation);
+
+        File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), JsonSerializer.Serialize(new
+        {
+            cells = Enumerable.Range(0, 40).Select(index => new { index, artifactId = $"cell-{index:D3}" }).ToArray(),
+        }, jsonOptions));
+        var legacy = Assert.IsType<ArtifactMatrixCellsSection>(ArtifactReader.ReadSection(temp.Path, id, "matrix-cells"));
+        Assert.Equal("unavailable", legacy.Cases[0].EquivalenceAvailability);
+        Assert.Null(legacy.Cases[0].Equivalent);
+        Assert.Null(legacy.Cases[0].Baseline.CpuMilliseconds);
+        Assert.Equal("cell-000", legacy.Cases[0].ArtifactId);
     }
 
     [Fact]

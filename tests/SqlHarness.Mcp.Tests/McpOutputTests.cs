@@ -81,7 +81,7 @@ public sealed class McpOutputTests
         Assert.False(result.IsError == true);
         var envelope = EnvelopeOf(result);
         AssertValidEnvelope(envelope);
-        Assert.Equal(1, envelope.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(2, envelope.GetProperty("schemaVersion").GetInt32());
         Assert.Equal("sqlharness_inspect", envelope.GetProperty("command").GetString());
         Assert.Equal("success", envelope.GetProperty("status").GetString());
         Assert.Equal(0, envelope.GetProperty("exitCode").GetInt32());
@@ -347,12 +347,9 @@ public sealed class McpOutputTests
             AssertValidEnvelope(envelope);
             var projected = envelope.GetProperty("result");
             Assert.DoesNotContain(root, envelope.GetRawText(), StringComparison.OrdinalIgnoreCase);
-            var projectedCells = projected.GetProperty("cells");
-            var references = projected.GetProperty("omittedCellReferences");
-            Assert.All(references.EnumerateArray(), reference =>
-                Assert.Equal(JsonValueKind.Null, reference.GetProperty("parameterValue").ValueKind));
-            Assert.True(projectedCells.GetArrayLength() < 100 || references.GetArrayLength() > 0,
-                "An oversized matrix should either project fewer than 100 full cells or emit references for omitted cells.");
+            var projectedCases = projected.GetProperty("cases");
+            Assert.True(projectedCases.GetArrayLength() < 100 || projected.GetProperty("omittedDetailCount").GetInt32() > 0,
+                "An oversized matrix should preserve its case inventory before omitting optional detail.");
             Assert.True(envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
             var matrixArtifactId = projected.GetProperty("matrixArtifactId").GetString();
             Assert.False(string.IsNullOrWhiteSpace(matrixArtifactId), "Paged recovery must identify the scope-owned matrix index artifact.");
@@ -361,13 +358,13 @@ public sealed class McpOutputTests
                 root, matrixArtifactId!, "matrix-cells", owner with { Profile = "foreign-profile" }, projected.GetProperty("continuation").GetInt32()));
             Assert.Equal("The artifact is not available in the current scope.", foreign.Message);
             var recovered = new List<int>();
-            foreach (var reference in references.EnumerateArray())
+            foreach (var matrixCase in projectedCases.EnumerateArray())
             {
-                var id = reference.GetProperty("artifactId").GetString();
+                var id = matrixCase.GetProperty("artifactId").GetString();
                 Assert.False(string.IsNullOrEmpty(id));
                 var section = ArtifactReader.ReadSection(root, id, "metrics", owner);
                 Assert.IsType<ArtifactMetricsSection>(section);
-                recovered.Add(reference.GetProperty("index").GetInt32());
+                recovered.Add(matrixCase.GetProperty("index").GetInt32());
             }
 
             var cursor = projected.TryGetProperty("continuation", out var continuation) && continuation.ValueKind == JsonValueKind.Number
@@ -381,19 +378,19 @@ public sealed class McpOutputTests
                 var pageResult = McpResultAdapter.Adapt(pageOutcome, "sqlharness_artifact", new McpResultBudget(16384, 128));
                 Assert.True(McpResultAdapter.MeasureBytes(pageResult) <= 16384);
                 var pageEnvelope = EnvelopeOf(pageResult);
-                foreach (var cellReference in pageEnvelope.GetProperty("result").GetProperty("cells").EnumerateArray())
+                foreach (var matrixCase in pageEnvelope.GetProperty("result").GetProperty("cases").EnumerateArray())
                 {
-                    var artifactId = cellReference.GetProperty("artifactId").GetString()!;
+                    var artifactId = matrixCase.GetProperty("artifactId").GetString()!;
                     var section = ArtifactReader.ReadSection(root, artifactId, "metrics", owner);
                     Assert.IsType<ArtifactMetricsSection>(section);
-                    recovered.Add(cellReference.GetProperty("index").GetInt32());
+                    recovered.Add(matrixCase.GetProperty("index").GetInt32());
                 }
                 cursor = pageEnvelope.GetProperty("result").TryGetProperty("continuation", out var next) && next.ValueKind == JsonValueKind.Number
                     ? next.GetInt32()
                     : null;
             }
 
-            Assert.Equal(Enumerable.Range(0, 100).Where(index => !projectedCells.EnumerateArray().Any(cell => cell.GetProperty("index").GetInt32() == index)), recovered.Order());
+            Assert.Equal(Enumerable.Range(0, 100), recovered.Order());
         }
         finally
         {
@@ -485,7 +482,8 @@ public sealed class McpOutputTests
             Assert.Equal("success", envelope.GetProperty("status").GetString());
             Assert.Equal(0, envelope.GetProperty("truncation").GetProperty("detailLimit").GetInt32());
             var projected = envelope.GetProperty("result");
-            Assert.Equal("raw-hash", projected.GetProperty("resultHash").GetString());
+            Assert.False(projected.TryGetProperty("resultHash", out _));
+            Assert.Equal("db", projected.GetProperty("database").GetString());
             QueryShapeFixtures.AssertAccounted(projected, report);
             Assert.True(projected.GetProperty("resultSets").GetArrayLength() > 0);
         }
@@ -509,7 +507,7 @@ public sealed class McpOutputTests
         var sets = projected.GetProperty("resultSets");
         // The summary set's complete schema and rows are allocated before the wide
         // first schema's column prefix, which is explicitly cut and carries no rows.
-        Assert.Equal(0, projected.GetProperty("omittedResultSetCount").GetInt32());
+        Assert.Equal(0, projected.TryGetProperty("omittedResultSetCount", out var omittedSets) ? omittedSets.GetInt32() : 0);
         Assert.Equal(2, sets.GetArrayLength());
         Assert.True(sets[0].GetProperty("omittedColumnCount").GetInt32() > 0);
         Assert.Equal(0, sets[0].GetProperty("rows").GetArrayLength());
@@ -541,11 +539,13 @@ public sealed class McpOutputTests
         var envelope = EnvelopeOf(result);
         AssertValidEnvelope(envelope);
         var projected = envelope.GetProperty("result");
-        Assert.Equal("raw-hash", projected.GetProperty("resultHash").GetString());
+        Assert.False(projected.TryGetProperty("resultHash", out _));
+        Assert.Equal("db", projected.GetProperty("database").GetString());
         QueryShapeFixtures.AssertAccounted(projected, report);
         QueryShapeFixtures.AssertSummariesComplete(projected, report, 1, 2);
         var detail = projected.GetProperty("resultSets")[0];
-        Assert.Equal(columns, detail.GetProperty("columns").GetArrayLength() + detail.GetProperty("omittedColumnCount").GetInt32());
+        Assert.Equal(columns, detail.GetProperty("columns").GetArrayLength()
+            + (detail.TryGetProperty("omittedColumnCount", out var omittedColumns) ? omittedColumns.GetInt32() : 0));
     }
 
     private static SqlHarnessCompareReport BuildCompareReport(string marker, string? artifactDirectory = null) => new(

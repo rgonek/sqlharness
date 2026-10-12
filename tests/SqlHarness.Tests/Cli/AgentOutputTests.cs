@@ -358,8 +358,8 @@ public sealed class AgentOutputTests
         using var json = JsonDocument.Parse(output.ToString());
         var result = json.RootElement.GetProperty("result");
         Assert.DoesNotContain("/workspace/artifacts", json.RootElement.GetRawText(), StringComparison.OrdinalIgnoreCase);
-        Assert.True(result.GetProperty("cells").GetArrayLength() < 100);
-        Assert.Equal((int)ResultComparisonMode.Multiset, result.GetProperty("cells")[0].GetProperty("compare").GetProperty("equivalence").GetProperty("mode").GetInt32());
+        Assert.True(result.GetProperty("cases").GetArrayLength() < 100);
+        Assert.Equal("compared", result.GetProperty("cases")[0].GetProperty("equivalenceAvailability").GetString());
         Assert.True(json.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
     }
 
@@ -537,7 +537,7 @@ public sealed class AgentOutputTests
     }
 
     [Fact]
-    public void Agent_projection_small_matrix_returns_all_cells_and_references()
+    public void Agent_projection_small_matrix_returns_all_case_outcomes_and_details()
     {
         var cells = Enumerable.Range(1, 3)
             .Select(i => new CompareMatrixCellReport(i - 1, i.ToString(), BuildCompare($"warning{i}", $"/artifacts/cell{i}")))
@@ -553,10 +553,12 @@ public sealed class AgentOutputTests
         Assert.InRange(bytes, 1, 16384);
         using var json = JsonDocument.Parse(output.ToString());
         Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("truncation").ValueKind);
-        var resultCells = json.RootElement.GetProperty("result").GetProperty("cells");
-        Assert.Equal(3, resultCells.GetArrayLength());
-        Assert.All(resultCells.EnumerateArray(), cell =>
-            Assert.False(string.IsNullOrEmpty(cell.GetProperty("compare").GetProperty("artifactDirectory").GetString())));
+        var result = json.RootElement.GetProperty("result");
+        var resultCases = result.GetProperty("cases");
+        Assert.Equal(3, resultCases.GetArrayLength());
+        Assert.All(resultCases.EnumerateArray(), item =>
+            Assert.False(string.IsNullOrEmpty(item.GetProperty("artifactId").GetString())));
+        Assert.Equal(3, result.GetProperty("details").GetArrayLength());
     }
 
     [Fact]
@@ -576,16 +578,104 @@ public sealed class AgentOutputTests
         Assert.InRange(bytes, 1, 4096);
         using var json = JsonDocument.Parse(output.ToString());
         var result = json.RootElement.GetProperty("result");
-        var projectedCells = result.GetProperty("cells");
-        var references = result.GetProperty("omittedCellReferences");
-        Assert.True(projectedCells.GetArrayLength() < 20 || references.GetArrayLength() > 0,
-            "An oversized matrix should either project fewer than 20 full cells or emit references for omitted cells.");
+        var projectedCases = result.GetProperty("cases");
+        Assert.True(projectedCases.GetArrayLength() < 20 || result.GetProperty("continuation").ValueKind == JsonValueKind.Number,
+            "An oversized matrix should page its outcome inventory when all cases do not fit.");
         Assert.True(json.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
-        if (references.GetArrayLength() > 0)
+        Assert.All(projectedCases.EnumerateArray(), item =>
+            Assert.False(string.IsNullOrEmpty(item.GetProperty("artifactId").GetString())));
+    }
+
+    [Theory]
+    [InlineData(4096)]
+    [InlineData(65536)]
+    public void Agent_matrix_keeps_completed_case_inventory_ahead_of_optional_detail(int budget)
+    {
+        var cells = Enumerable.Range(0, 6).Select(i => new CompareMatrixCellReport(
+            i, i.ToString(), BuildInventoryCompare(i, i == 0 ? ResultComparisonMode.Off : ResultComparisonMode.Multiset,
+                i == 1 ? false : true, i == 2))).ToArray();
+        var matrix = new SqlHarnessCompareMatrixReport("batch", "int", cells);
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, matrix, null), "compare",
+            new OutputCaptureWriter(output), new AgentOutputOptions(budget, 128));
+
+        Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(output.ToString()), 1, budget);
+        using var json = JsonDocument.Parse(output.ToString());
+        var result = json.RootElement.GetProperty("result");
+        var cases = result.GetProperty("cases");
+        Assert.Equal(6, cases.GetArrayLength());
+        Assert.Equal(6, result.GetProperty("caseCount").GetInt32());
+        Assert.Equal(0, result.GetProperty("omittedCaseCount").GetInt32());
+        Assert.Equal(Enumerable.Range(0, 6), cases.EnumerateArray().Select(item => item.GetProperty("index").GetInt32()));
+        Assert.Equal("case-0", cases[0].GetProperty("artifactId").GetString());
+        Assert.Equal(40m, cases[0].GetProperty("baseline").GetProperty("elapsedMilliseconds").GetDecimal());
+        Assert.Equal(50m, cases[0].GetProperty("candidate").GetProperty("elapsedMilliseconds").GetDecimal());
+        Assert.Equal(10m, cases[0].GetProperty("delta").GetProperty("elapsedMilliseconds").GetDecimal());
+        Assert.Equal(JsonValueKind.Null, cases[2].GetProperty("candidate").GetProperty("cpuMilliseconds").ValueKind);
+        Assert.Equal(JsonValueKind.Null, cases[2].GetProperty("delta").GetProperty("cpuMilliseconds").ValueKind);
+        Assert.Equal(JsonValueKind.Null, cases[2].GetProperty("baseline").GetProperty("cpuMilliseconds").ValueKind);
+        Assert.Equal("not-requested", cases[0].GetProperty("equivalenceAvailability").GetString());
+        Assert.Equal(JsonValueKind.Null, cases[0].GetProperty("equivalent").ValueKind);
+        Assert.Equal("compared", cases[1].GetProperty("equivalenceAvailability").GetString());
+        Assert.False(cases[1].GetProperty("equivalent").GetBoolean());
+        Assert.All(result.GetProperty("details").EnumerateArray(), detail =>
         {
-            Assert.All(references.EnumerateArray(), reference =>
-                Assert.False(string.IsNullOrEmpty(reference.GetProperty("artifactDirectory").GetString())));
-        }
+            Assert.False(detail.GetProperty("compare").TryGetProperty("target", out _));
+            Assert.False(detail.GetProperty("compare").TryGetProperty("classification", out _));
+            Assert.False(detail.GetProperty("compare").TryGetProperty("parameters", out _));
+            Assert.False(detail.GetProperty("compare").TryGetProperty("repetitions", out _));
+            Assert.True(detail.GetProperty("compare").TryGetProperty("regression", out _));
+        });
+    }
+
+    [Fact]
+    public void Agent_matrix_partial_run_keeps_status_error_and_completed_outcomes_only()
+    {
+        var matrix = new SqlHarnessCompareMatrixReport("batch", "int",
+            Enumerable.Range(0, 3).Select(i => new CompareMatrixCellReport(i, i.ToString(), BuildInventoryCompare(i, ResultComparisonMode.Multiset, true, false))).ToArray());
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, matrix, "Cell 3 failed."), "compare",
+            new OutputCaptureWriter(output), new AgentOutputOptions(4096, 128));
+
+        using var json = JsonDocument.Parse(output.ToString());
+        Assert.Equal("partial", json.RootElement.GetProperty("status").GetString());
+        Assert.Equal("Cell 3 failed.", json.RootElement.GetProperty("error").GetProperty("message").GetString());
+        var result = json.RootElement.GetProperty("result");
+        Assert.Equal(3, result.GetProperty("caseCount").GetInt32());
+        Assert.Equal(new[] { 0, 1, 2 }, result.GetProperty("cases").EnumerateArray().Select(item => item.GetProperty("index").GetInt32()).ToArray());
+    }
+
+    private static SqlHarnessCompareReport BuildInventoryCompare(int index, ResultComparisonMode mode, bool? equivalent, bool unavailableCpu)
+    {
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        var baseline = new CompareVariantReport("baseline", new CompareDistribution(10, 20, 30), new CompareDistribution(30, 40, 50),
+            new CompareDistribution(5, 6, 7), new Dictionary<string, long>(),
+            Enumerable.Range(0, 30).Select(i => new CompareOperatorReport(i, $"baseline-op-{i}", $"dbo.t{i}", true, false, false)).ToArray(),
+            [$"matrix-warning-{index}-" + new string('w', 20_000)])
+        {
+            LogicalReadsByTable = Enumerable.Range(0, 30).ToDictionary(i => $"table-{i}", _ => new CompareDistribution(1, 2, 3)),
+            MetricReport = unavailableCpu ? new BenchmarkMetricReport(BenchmarkMetricReport.Unavailable, BenchmarkMetricReport.Measured,
+                null, true, null, null, BenchmarkMetricReport.Measured, null, null, null, BenchmarkMetricReport.ResultStatement,
+                BenchmarkMetricText.StatementRows, []) : null,
+        };
+        var candidate = baseline with
+        {
+            Name = "candidate",
+            CpuTimeMilliseconds = new CompareDistribution(20, 30, 40),
+            ElapsedTimeMilliseconds = new CompareDistribution(40, 50, 60),
+            LogicalReads = new CompareDistribution(7, 8, 9),
+        };
+        return new SqlHarnessCompareReport(target, 5, 5, equivalent, baseline, candidate, $"/artifacts/case-{index}")
+        {
+            Equivalence = new ResultEquivalenceReport(mode, equivalent, null, null, null),
+            Classification = new CompareClassificationReport("setup", "baseline", "candidate"),
+            Regression = new RegressionReport("inconclusive", [], 1,
+                new RegressionDiagnostic("regressed", 40m, 50m, 10m, 25m),
+                new RegressionDiagnostic("not-regressed", 6m, 8m, 2m, 33m),
+                new RegressionDiagnostic("unavailable", null, null, null, null)),
+        };
     }
 
     [Theory]

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace SqlHarness.Core;
 
@@ -70,24 +71,44 @@ public sealed record MeasureSetBenchmarkSummary(
     MeasureCrossSetSummary CrossSetSummary,
     string? ArtifactDirectory);
 
-public sealed record CompareMatrixCellSummary(
-    int Index,
-    string? ParameterValue,
-    CompareBenchmarkSummary Compare);
+public sealed record AgentMedianMetrics(decimal? CpuMilliseconds, decimal? ElapsedMilliseconds, long? LogicalReads);
 
-/// <summary>Lightweight reference to a matrix cell omitted from the projection.</summary>
-public sealed record CompareMatrixCellReference(
+/// <summary>Decision-oriented outcome for one completed matrix case.</summary>
+public sealed record AgentMatrixCase(
     int Index,
-    string? ParameterValue,
-    string? ArtifactId);
+    string ArtifactId,
+    bool? Equivalent,
+    string EquivalenceAvailability,
+    AgentMedianMetrics Baseline,
+    AgentMedianMetrics Candidate,
+    AgentMedianMetrics Delta,
+    IReadOnlyList<string> Warnings);
+
+/// <summary>Optional per-case diagnostics; matrix-wide identity and method live on the envelope.</summary>
+public sealed record CompareMatrixCellDetailContent(
+    BenchmarkVariantSummary Baseline,
+    BenchmarkVariantSummary Candidate,
+    ResultEquivalenceReport Equivalence,
+    IReadOnlyList<NoteworthyOperatorSummary> NoteworthyOperators,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RegressionReport? Regression);
+
+public sealed record CompareMatrixCellDetail(int Index, CompareMatrixCellDetailContent Compare);
 
 public sealed record CompareMatrixBenchmarkSummary(
+    SqlHarnessTargetIdentityReport? Target,
+    int? Repetitions,
+    CompareClassificationReport? Classification,
+    IReadOnlyList<BenchmarkParameterReport> Parameters,
+    ResultComparisonMode? ComparisonMode,
     string ParameterName,
     string ParameterType,
-    IReadOnlyList<CompareMatrixCellSummary> Cells,
-    IReadOnlyList<CompareMatrixCellReference>? OmittedCellReferences = null,
-    int? Continuation = null,
-    string? MatrixArtifactId = null);
+    IReadOnlyList<AgentMatrixCase> Cases,
+    IReadOnlyList<CompareMatrixCellDetail> Details,
+    int CaseCount,
+    int OmittedCaseCount,
+    int OmittedDetailCount,
+    string? MatrixArtifactId,
+    int? Continuation);
 
 public static class BenchmarkSummaryProjector
 {
@@ -156,13 +177,74 @@ public static class BenchmarkSummaryProjector
     {
         ArgumentNullException.ThrowIfNull(report);
 
+        var cells = report.Cells.OrderBy(cell => cell.Index).ToArray();
+        var first = cells.FirstOrDefault()?.Compare;
         return new CompareMatrixBenchmarkSummary(
+            first?.Target,
+            first?.Repetitions,
+            first?.Classification,
+            first?.Parameters ?? [],
+            first?.Equivalence.Mode,
             report.ParameterName,
             report.ParameterType,
-            report.Cells.Select(cell => new CompareMatrixCellSummary(
-                cell.Index,
-                cell.ParameterValue,
-                Project(cell.Compare))).ToArray());
+            cells.Select(ProjectCase).ToArray(),
+            cells.Select(cell => ProjectDetail(cell.Index, cell.Compare)).ToArray(),
+            cells.Length,
+            0,
+            0,
+            cells.FirstOrDefault() is { } firstCell ? SafeArtifactId(firstCell.Compare.ArtifactDirectory) : null,
+            null);
+    }
+
+    public static AgentMatrixCase ProjectCase(CompareMatrixCellReport cell) =>
+        ProjectCase(cell.Index, SafeArtifactId(cell.Compare.ArtifactDirectory), cell.Compare);
+
+    public static AgentMatrixCase ProjectCase(int index, string? artifactId, SqlHarnessCompareReport compare)
+    {
+        var equivalence = compare.Equivalence;
+        var availability = equivalence.Mode == ResultComparisonMode.Off
+            ? "not-requested"
+            : equivalence.Equivalent is null ? "unavailable" : "compared";
+        var equivalent = availability == "compared" ? equivalence.Equivalent : null;
+        var baseline = MedianMetrics(compare.Baseline);
+        var candidate = MedianMetrics(compare.Candidate);
+        return new AgentMatrixCase(
+            index,
+            artifactId ?? string.Empty,
+            equivalent,
+            availability,
+            baseline,
+            candidate,
+            new AgentMedianMetrics(
+                Delta(baseline.CpuMilliseconds, candidate.CpuMilliseconds),
+                Delta(baseline.ElapsedMilliseconds, candidate.ElapsedMilliseconds),
+                Delta(baseline.LogicalReads, candidate.LogicalReads)),
+            compare.Baseline.Warnings.Concat(compare.Candidate.Warnings).Distinct(StringComparer.Ordinal).ToArray());
+    }
+
+    public static CompareMatrixCellDetail ProjectDetail(int index, SqlHarnessCompareReport compare)
+    {
+        var projected = Project(compare);
+        return new CompareMatrixCellDetail(index, new CompareMatrixCellDetailContent(projected.Baseline, projected.Candidate,
+            projected.Equivalence, projected.NoteworthyOperators, projected.Regression));
+    }
+
+    private static AgentMedianMetrics MedianMetrics(CompareVariantReport variant) => new(
+        variant.MetricReport?.CpuTimeAvailability == BenchmarkMetricReport.Unavailable ? null : variant.CpuTimeMilliseconds.Median,
+        variant.MetricReport?.ElapsedTimeAvailability == BenchmarkMetricReport.Unavailable ? null : variant.ElapsedTimeMilliseconds.Median,
+        variant.MetricReport?.LogicalReadsAvailability == BenchmarkMetricReport.Unavailable ? null : variant.LogicalReads.Median);
+
+    private static decimal? Delta(decimal? baseline, decimal? candidate) =>
+        baseline is { } left && candidate is { } right ? right - left : null;
+
+    private static long? Delta(long? baseline, long? candidate) =>
+        baseline is { } left && candidate is { } right ? right - left : null;
+
+    private static string? SafeArtifactId(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        var id = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        return Regex.IsMatch(id, "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$", RegexOptions.CultureInvariant) ? id : null;
     }
 
     private static BenchmarkVariantSummary ProjectVariant(CompareVariantReport variant) =>

@@ -136,26 +136,70 @@ public static class AgentOutputProjection
                     omissions += clippedItems;
                     return new MeasureSetBenchmarkSummary(setReport.Target, setReport.MeasuredOrderRule, planCacheWarning, selectedSets, setReport.CrossSetSummary, artifactDirectory);
                 case SqlHarnessCompareMatrixReport matrix:
-                    var nestedOmitted = 0;
-                    var cells = Take(matrix.Cells).Select(cell =>
-                    {
-                        var projected = Project(cell.Compare, maximumCellCharacters, detailLimit, out var cellOmitted, maximumBytes);
-                        nestedOmitted += cellOmitted;
-                        var compareSummary = (CompareBenchmarkSummary)projected!;
-                        return new CompareMatrixCellSummary(cell.Index, null,
-                            compareSummary with { ArtifactDirectory = SafeArtifactId(cell.Compare.ArtifactDirectory) });
-                    }).ToArray();
-                    omissions += nestedOmitted;
+                    var shared = BenchmarkSummaryProjector.Project(matrix);
+                    var orderedMatrixCells = matrix.Cells.OrderBy(cell => cell.Index).ToArray();
+                    var matrixArtifactId = shared.MatrixArtifactId;
                     var parameterName = Clip(matrix.ParameterName)!;
                     var parameterType = Clip(matrix.ParameterType)!;
-                    var omittedCellReferences = BuildOmittedCellReferences(
-                        matrix.Cells, cells, parameterName, parameterType, maximumBytes, out var referenceOmissions, out var continuation);
-                    omissions += referenceOmissions;
-                    omissions += clippedItems;
-                    var matrixArtifactId = matrix.Cells.Count == 0
-                        ? null
-                        : SafeArtifactId(matrix.Cells[0].Compare.ArtifactDirectory);
-                    return new CompareMatrixBenchmarkSummary(parameterName, parameterType, cells, omittedCellReferences, continuation, matrixArtifactId);
+                    var inventoryShell = shared with
+                    {
+                        ParameterName = parameterName,
+                        ParameterType = parameterType,
+                        Cases = [],
+                        Details = [],
+                        OmittedCaseCount = orderedMatrixCells.Length,
+                        OmittedDetailCount = orderedMatrixCells.Length,
+                        Continuation = null,
+                    };
+                    var cases = new List<AgentMatrixCase>();
+                    var omittedCaseWarnings = 0;
+                    var availableCases = orderedMatrixCells.Select(BenchmarkSummaryProjector.ProjectCase)
+                        .Select(item =>
+                        {
+                            var warnings = item.Warnings.Take(1)
+                                .Select(value => ClipText(value, Math.Min(128, maximumCellCharacters), ref clippedItems)!).ToArray();
+                            omittedCaseWarnings += item.Warnings.Count - warnings.Length;
+                            return item with { Warnings = warnings };
+                        }).ToArray();
+                    omissions += omittedCaseWarnings;
+                    foreach (var item in availableCases)
+                    {
+                        var candidateCases = cases.Append(item).ToArray();
+                        var omittedCaseCount = orderedMatrixCells.Length - candidateCases.Length;
+                        var candidate = inventoryShell with
+                        {
+                            Cases = candidateCases,
+                            OmittedCaseCount = omittedCaseCount,
+                            Continuation = omittedCaseCount > 0 && matrixArtifactId is not null ? candidateCases.Length : null,
+                        };
+                        // Leave room for the outer command/status/error/truncation envelope.
+                        if (SerializedLength(candidate) + 384 > maximumBytes)
+                            break;
+                        cases.Add(item);
+                    }
+
+                    var omittedCases = orderedMatrixCells.Length - cases.Count;
+                    var selectedDetails = new List<CompareMatrixCellDetail>();
+                    var nestedOmitted = 0;
+                    foreach (var cell in orderedMatrixCells.Take(cases.Count).Take(detailLimit))
+                    {
+                        var projected = Project(BenchmarkSummaryProjector.Project(cell.Compare), maximumCellCharacters, detailLimit,
+                            out var cellOmitted, maximumBytes);
+                        nestedOmitted += cellOmitted;
+                        var summary = (CompareBenchmarkSummary)projected!;
+                        selectedDetails.Add(new CompareMatrixCellDetail(cell.Index, new CompareMatrixCellDetailContent(
+                            summary.Baseline, summary.Candidate, summary.Equivalence, summary.NoteworthyOperators, summary.Regression)));
+                    }
+                    var omittedDetails = orderedMatrixCells.Length - selectedDetails.Count;
+                    omissions += omittedCases + omittedDetails + nestedOmitted + clippedItems;
+                    return inventoryShell with
+                    {
+                        Cases = cases,
+                        Details = selectedDetails,
+                        OmittedCaseCount = omittedCases,
+                        OmittedDetailCount = omittedDetails,
+                        Continuation = omittedCases > 0 && matrixArtifactId is not null ? cases.Count : null,
+                    };
                 case SqlHarnessCompareReport compare:
                     {
                         var nestedProjection = Project(BenchmarkSummaryProjector.Project(compare), maximumCellCharacters, detailLimit, out var compareSummaryOmitted, maximumBytes);
@@ -277,12 +321,33 @@ public static class AgentOutputProjection
                     }
                 case ArtifactMatrixCellsSection matrixCells:
                     {
-                        var selected = Take(matrixCells.Cells);
-                        omissions += clippedItems;
+                        var selected = new List<AgentMatrixCase>();
+                        foreach (var matrixCase in matrixCells.Cases)
+                        {
+                            var projectedCase = matrixCase with
+                            {
+                                Warnings = matrixCase.Warnings.Take(1)
+                                    .Select(value => ClipText(value, Math.Min(128, maximumCellCharacters), ref clippedItems)!)
+                                    .ToArray(),
+                            };
+                            var candidateCases = selected.Append(projectedCase).ToArray();
+                            var candidate = matrixCells with
+                            {
+                                Cases = candidateCases,
+                                Continuation = candidateCases.Length < matrixCells.Cases.Count
+                                    ? matrixCells.Cursor + candidateCases.Length
+                                    : matrixCells.Continuation,
+                            };
+                            if (SerializedLength(candidate) + 384 > maximumBytes)
+                                break;
+                            selected.Add(projectedCase);
+                            omissions += Math.Max(0, matrixCase.Warnings.Count - projectedCase.Warnings.Count);
+                        }
+                        omissions += matrixCells.Cases.Count - selected.Count + clippedItems;
                         return matrixCells with
                         {
-                            Cells = selected,
-                            Continuation = selected.Count < matrixCells.Cells.Count
+                            Cases = selected,
+                            Continuation = selected.Count < matrixCells.Cases.Count
                                 ? matrixCells.Cursor + selected.Count
                                 : matrixCells.Continuation,
                         };
@@ -696,58 +761,6 @@ public static class AgentOutputProjection
 
     private static int SerializedLength<T>(T value) =>
         JsonSerializer.SerializeToUtf8Bytes(value, ProjectionJson).Length;
-
-    private static IReadOnlyList<CompareMatrixCellReference>? BuildOmittedCellReferences(
-        IReadOnlyList<CompareMatrixCellReport> allCells,
-        IReadOnlyList<CompareMatrixCellSummary> selectedCells,
-        string parameterName,
-        string parameterType,
-        int maximumBytes,
-        out int omittedReferences,
-        out int? continuation)
-    {
-        omittedReferences = 0;
-        continuation = null;
-        if (selectedCells.Count >= allCells.Count)
-            return null;
-
-        var selectedIndexes = selectedCells.Select(cell => cell.Index).ToHashSet();
-        var references = allCells
-            .Where(cell => !selectedIndexes.Contains(cell.Index))
-            .Select(cell => new CompareMatrixCellReference(cell.Index, null, SafeArtifactId(cell.Compare.ArtifactDirectory)))
-            .ToArray();
-
-        // Keep the reference list itself inside the byte budget. The full envelope is
-        // measured by the caller, so this is a conservative pre-filter that lets the
-        // degradation loop land on a references-only projection (detailLimit=0) when
-        // full cells do not fit. If references still do not fit, page them with an
-        // explicit continuation marker so the caller never assumes completeness.
-        // MCP serializes both text and structured content plus SDK metadata.
-        // Reserve one third of the outer wire budget for this summary estimate.
-        var availableForSummary = Math.Max(0, maximumBytes / 3 - 128);
-        var emptySummary = new CompareMatrixBenchmarkSummary(parameterName, parameterType, selectedCells);
-        var emptyBytes = JsonSerializer.SerializeToUtf8Bytes(emptySummary, ProjectionJson).Length;
-        var remaining = Math.Max(0, availableForSummary - emptyBytes);
-        if (references.Length == 0)
-            return references;
-
-        if (remaining <= 0)
-        {
-            omittedReferences = references.Length;
-            continuation = selectedCells.Count;
-            return [];
-        }
-
-        var sampleBytes = JsonSerializer.SerializeToUtf8Bytes(references[0], ProjectionJson).Length;
-        var estimatedPerReference = sampleBytes + 8;
-        var maxReferences = Math.Max(0, remaining / Math.Max(estimatedPerReference, 1));
-        if (references.Length <= maxReferences)
-            return references;
-
-        omittedReferences = references.Length - maxReferences;
-        continuation = selectedCells.Count + maxReferences;
-        return references.Take(maxReferences).ToArray();
-    }
 
     private static (DistilledPlan Report, int OmittedItems) ProjectPlan(DistilledPlan plan, int detailLimit, Func<string?, string?> clip, Func<IReadOnlyList<PlanNode>, IReadOnlyList<PlanNode>> takeNodes, int maximumNodes)
     {

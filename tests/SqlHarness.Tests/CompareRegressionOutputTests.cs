@@ -171,7 +171,7 @@ public class CompareRegressionOutputTests
     }
 
     [Fact]
-    public void BenchmarkSummary_matrix_cells_carry_their_own_verdicts()
+    public void BenchmarkSummary_matrix_details_carry_their_own_verdicts()
     {
         var matrix = new SqlHarnessCompareMatrixReport("batch", "int",
         [
@@ -182,12 +182,12 @@ public class CompareRegressionOutputTests
         var summary = BenchmarkSummaryProjector.Project(matrix);
         Assert.Equal(
             ["pass", "fail"],
-            summary.Cells.Select(cell => cell.Compare.Regression!.Verdict).ToArray());
+            summary.Details.Select(cell => cell.Compare.Regression!.Verdict).ToArray());
 
         var agent = Assert.IsType<CompareMatrixBenchmarkSummary>(AgentOutputProjection.Project(matrix, 512, 32, out _));
         Assert.Equal(
             ["pass", "fail"],
-            agent.Cells.Select(cell => cell.Compare.Regression!.Verdict).ToArray());
+            agent.Details.Select(cell => cell.Compare.Regression!.Verdict).ToArray());
     }
 
     [Fact]
