@@ -270,7 +270,7 @@ public sealed class McpSecretRedactionTests
     }
 
     [Fact]
-    public async Task Startup_failure_logs_generic_text_without_secret_values()
+    public async Task Startup_failure_names_the_profile_and_reason_without_secret_values()
     {
         var options = new McpServerOptions
         {
@@ -292,18 +292,19 @@ public sealed class McpSecretRedactionTests
             CancellationToken.None);
 
         Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
-        Assert.DoesNotContain(FictionalSecret, log.ToString(), StringComparison.Ordinal);
-        Assert.DoesNotContain("acme", log.ToString(), StringComparison.Ordinal);
+        var text = log.ToString();
+        Assert.Contains("The MCP profile 'missing-profile' or its variables are invalid.", text, StringComparison.Ordinal);
+        Assert.Contains("Unknown profile 'missing-profile'.", text, StringComparison.Ordinal);
+        Assert.DoesNotContain(FictionalSecret, text, StringComparison.Ordinal);
+        Assert.DoesNotContain("acme", text, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// 001/T3 transport failure: a broken stdin mid-loop exits 1 with
-    /// generic stderr text, without the exception content (which may hold
-    /// request data), and writes zero stdout bytes — failure diagnostics
-    /// never belong on the protocol stream.
+    /// Plan 053: a broken stdin mid-loop reports the exception on stderr,
+    /// while stdout stays protocol-only.
     /// </summary>
     [Fact]
-    public async Task Transport_failure_logs_generic_text_without_exception_content()
+    public async Task Transport_failure_logs_the_exception_on_stderr_without_writing_stdout()
     {
         const string marker = "t3-marker-transport-5c19";
         var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
@@ -327,7 +328,7 @@ public sealed class McpSecretRedactionTests
         Assert.Equal(1, await hostTask.WaitAsync(TimeSpan.FromSeconds(30), cts.Token));
         var text = log.ToString();
         Assert.Contains("sqlharness-mcp", text, StringComparison.Ordinal);
-        Assert.DoesNotContain(marker, text, StringComparison.Ordinal);
+        Assert.Contains("t3-boom-" + marker, text, StringComparison.Ordinal);
         Assert.Equal(0, output.Length);
     }
 

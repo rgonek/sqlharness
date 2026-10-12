@@ -15,7 +15,10 @@ internal sealed record PreparedCompareFamily(
     ISqlDialect Dialect,
     IReadOnlyList<SqlHarnessParameter> FixedParameters,
     CompareClassificationReport Classification,
-    IReadOnlySet<string> SetupTempTables);
+    IReadOnlySet<string> SetupTempTables)
+{
+    internal SqlSafetyDecision? SetupSafety { get; init; }
+}
 
 internal static class CompareOperationPreparer
 {
@@ -83,7 +86,10 @@ internal static class CompareOperationPreparer
                 BenchmarkReports.ClassificationLabel(setupSafety),
                 BenchmarkReports.ClassificationLabel(baselineSafety),
                 BenchmarkReports.ClassificationLabel(candidateSafety)),
-            setupTemps);
+            setupTemps)
+        {
+            SetupSafety = setupSafety,
+        };
     }
 
     internal static void ValidateVariants(
@@ -123,6 +129,8 @@ internal sealed record CompareCellRequest(
         new("none", "read-only", "read-only");
 
     internal ArtifactOwner? Owner { get; init; }
+
+    internal SqlSafetyDecision? SetupSafety { get; init; }
 }
 
 internal sealed record CompareCellResult(
@@ -178,7 +186,8 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
                 request.TimeoutSeconds,
                 session,
                 raw,
-                ct);
+                ct,
+                request.SetupSafety);
 
             // Fingerprints only for modes that run ResultComparer; off skips equivalence work entirely.
             // Warmup is EXPLAIN/STATISTICS only; sidecar follows measured repetitions.

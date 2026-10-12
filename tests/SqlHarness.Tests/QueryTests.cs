@@ -1,10 +1,13 @@
 ﻿using System.Data;
 using System.Text.Json;
 
+using Npgsql;
+
 using SqlHarness.Cli.Commands;
 using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
+using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Tests;
@@ -549,6 +552,102 @@ public class SqlHarnessQueryTests
             "Invalid value 'private-audit-value' for SQL parameter 'n' of type 'int'.",
             "n:int=private-audit-value");
         Assert.Empty(session.Commands);
+    }
+
+    [Fact]
+    public async Task Postgres_ordinary_query_stays_read_only_even_when_mutation_is_requested()
+    {
+        var session = FakeSqlSession.WithIdentity(
+            "localhost",
+            "appdb",
+            FakeSqlReader.Rows(["Value"], [1]));
+        var operation = new SqlHarnessQueryOperation(
+            new SqlTargetRequest("local-pg", new Dictionary<string, string>()),
+            "SELECT 1 AS Value",
+            [],
+            17,
+            50,
+            true,
+            "appdb");
+
+        var outcome = await Module(session, loadProfiles: PostgresProfiles).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var command = Assert.Single(session.Commands);
+        Assert.Equal(PostgresExecutionMode.ReadOnly, command.PostgresMode);
+        Assert.Equal("SELECT 1 AS Value", command.Sql);
+        Assert.Equal(17, command.TimeoutSeconds);
+    }
+
+    [Fact]
+    public async Task Postgres_mutation_gets_read_write_mode_only_after_exact_database_approval()
+    {
+        const string sql = "INSERT INTO items (id) VALUES (1) RETURNING id";
+        var session = FakeSqlSession.WithIdentity(
+            "localhost",
+            "appdb",
+            FakeSqlReader.Rows(["id"], [1]));
+        var operation = new SqlHarnessQueryOperation(
+            new SqlTargetRequest("local-pg", new Dictionary<string, string>()),
+            sql,
+            [],
+            23,
+            50,
+            true,
+            "appdb");
+
+        var outcome = await Module(session, loadProfiles: PostgresProfiles).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var command = Assert.Single(session.Commands);
+        Assert.Equal(PostgresExecutionMode.ApprovedMutation, command.PostgresMode);
+        Assert.Equal(sql, command.Sql);
+        Assert.Equal(23, command.TimeoutSeconds);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("anotherdb")]
+    public async Task Postgres_mutation_without_exact_database_approval_never_reaches_the_session(string? confirmation)
+    {
+        var session = FakeSqlSession.WithIdentity("localhost", "appdb");
+        var operation = new SqlHarnessQueryOperation(
+            new SqlTargetRequest("local-pg", new Dictionary<string, string>()),
+            "INSERT INTO items (id) VALUES (1)",
+            [],
+            30,
+            50,
+            true,
+            confirmation);
+
+        var outcome = await Module(session, loadProfiles: PostgresProfiles).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Empty(session.Commands);
+        Assert.Null(session.FactoryTarget);
+    }
+
+    [Fact]
+    public async Task Postgres_sqlstate_25006_from_the_fake_session_maps_to_safety_exit_and_exact_message()
+    {
+        var failure = new InvalidOperationException(
+            "reader failed",
+            new PostgresException("cannot execute in a read-only transaction", "ERROR", "ERROR", "25006"));
+        var session = FakeSqlSession.WithIdentity("localhost", "appdb", failure: failure);
+        var operation = new SqlHarnessQueryOperation(
+            new SqlTargetRequest("local-pg", new Dictionary<string, string>()),
+            "SELECT write_function()",
+            [],
+            30,
+            50,
+            false,
+            null);
+
+        var outcome = await Module(session, loadProfiles: PostgresProfiles).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal(PostgresReadOnlyFailure.RejectionMessage, outcome.SafeError);
+        Assert.Equal(PostgresExecutionMode.ReadOnly, Assert.Single(session.Commands).PostgresMode);
     }
 
     private static void AssertParameterError(SqlHarnessOutcome outcome, string expected, params string[] forbidden)

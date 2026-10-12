@@ -105,17 +105,24 @@ internal static class SetupSqlExecution
         int timeoutSeconds,
         ISqlSession session,
         CanonicalResultAccumulator raw,
-        CancellationToken ct)
+        CancellationToken ct,
+        SqlSafetyDecision? setupSafety = null)
     {
         if (string.IsNullOrWhiteSpace(setupSql))
             return;
+
+        if (engine == SqlEngine.Postgres && setupSafety?.Allowed != true)
+            throw new SqlHarnessSafetyException("PostgreSQL setup execution requires successful setup classification.");
 
         var commands = engine == SqlEngine.SqlServer
             ? PrepareCommands(setupSql, parameters, timeoutSeconds)
             : [new SqlExecutionCommand(setupSql, parameters, timeoutSeconds)];
         foreach (var command in commands)
         {
-            await BenchmarkRunner.ExecuteRawAsync(session, command, raw, ct);
+            var execution = engine == SqlEngine.Postgres
+                ? command with { PostgresMode = PostgresExecutionMode.SessionSetup }
+                : command;
+            await BenchmarkRunner.ExecuteRawAsync(session, execution, raw, ct);
         }
     }
 

@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 
+using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Core;
@@ -8,6 +9,9 @@ public static partial class SecretRedactor
 {
     public static string Redact(Exception exception, IReadOnlyList<string> knownSecrets)
     {
+        if (PostgresReadOnlyFailure.ContainsReadOnlyViolation(exception))
+            return PostgresReadOnlyFailure.RejectionMessage;
+
         var messages = new List<string>();
         var pending = new Stack<Exception>();
         var visited = new HashSet<Exception>(ReferenceEqualityComparer.Instance);

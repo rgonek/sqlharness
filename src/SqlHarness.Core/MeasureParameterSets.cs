@@ -460,7 +460,8 @@ internal sealed class MeasureParameterSetRunner
         SqlHarnessMeasureOperation operation,
         IReadOnlyList<PreparedMeasureParameterSet> sets,
         CanonicalResultAccumulator raw,
-        CancellationToken ct)
+        CancellationToken ct,
+        SqlSafetyDecision? setupSafety = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(operation);
@@ -477,7 +478,8 @@ internal sealed class MeasureParameterSetRunner
                 operation.TimeoutSeconds,
                 session,
                 raw,
-                ct);
+                ct,
+                setupSafety);
             setupExecutionCount = 1;
         }
 

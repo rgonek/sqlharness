@@ -74,7 +74,8 @@ public sealed class McpDashboardAutostartTests : IDisposable
         var exit = await app.RunAsync(["mcp", "serve", "no-such-profile"]);
 
         Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
-        Assert.Contains("invalid MCP startup configuration", error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("The MCP profile 'no-such-profile' or its variables are invalid.", error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Unknown profile 'no-such-profile'.", error.ToString(), StringComparison.Ordinal);
         Assert.Empty(launcher.Launches);
         Assert.Equal(string.Empty, output.ToString());
         Assert.False(File.Exists(Path.Combine(_home, "dashboard.json")));

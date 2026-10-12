@@ -190,7 +190,12 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             await using var session = await _sessionFactory.ConnectAsync(target, ct);
             phase = OperationPhase.Sql;
 
-            var execution = new SqlExecutionCommand(query.Sql, parameters, query.TimeoutSeconds);
+            var execution = new SqlExecutionCommand(query.Sql, parameters, query.TimeoutSeconds)
+            {
+                PostgresMode = target.Engine == SqlEngine.Postgres && safety.HasMutation
+                    ? PostgresExecutionMode.ApprovedMutation
+                    : PostgresExecutionMode.ReadOnly,
+            };
             var collected = await QueryResultCollector.CollectAsync(
                 session,
                 execution,
@@ -300,6 +305,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 compare.CompareNullability)
             {
                 Classification = prepared.Classification,
+                SetupSafety = prepared.SetupSafety,
                 Owner = ArtifactOwner.From(compare.Target, prepared.Target),
             };
             _cellRunner.ComparisonMaximumRows = ComparisonMaximumRows;
@@ -405,6 +411,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 operation.CompareNullability)
             {
                 Classification = prepared.Classification,
+                SetupSafety = prepared.SetupSafety,
                 Owner = ArtifactOwner.From(operation.Target, prepared.Target),
             };
             _matrixRunner.ComparisonMaximumRows = ComparisonMaximumRows;
@@ -540,7 +547,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     measure,
                     boundSets,
                     raw,
-                    ct);
+                    ct,
+                    setupSafety);
                 rawFootprint = raw.Complete().Footprint;
                 var setReport = MeasureParameterSetReportProjector.Project(
                     multiSession.Identity,
@@ -575,7 +583,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 measure.TimeoutSeconds,
                 session,
                 raw,
-                ct);
+                ct,
+                setupSafety);
 
             // Measure never runs ResultComparer; skip fingerprint retention and the 1M row comparison cap.
             await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, 0, "measure", raw, captureComparison: false, ct);

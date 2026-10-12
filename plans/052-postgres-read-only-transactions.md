@@ -4,7 +4,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: DONE (implementation at `c07f001`; Windows and isolated ext4 Linux gates passed; evidence and accepted limits are recorded in [052-verification.md](052-verification.md))
 - Priority: **P1** (security)
 - Effort: M
 - Risk: MED
@@ -27,7 +27,7 @@ A name denylist can never be complete. PostgreSQL itself enforces "no writes to 
 - Every classified command that does **not** carry approved mutation (`--allow-mutation --confirm-database`) runs as an explicit transaction: `BEGIN TRANSACTION READ ONLY` → command → `COMMIT` (`ROLLBACK` on error or cancellation). Use Npgsql `BeginTransaction` plus a `SET TRANSACTION READ ONLY` as the first statement, or the equivalent; the classified text itself is unchanged.
 - Per command, **not** a session default. A function can call `set_config('default_transaction_read_only','off', false)` inside a read-only transaction; a session default would then be off for the next command on the same session (measure/compare reuse one session for setup, warm-up and every repetition).
 - Applies to: `query` (read-only path), `watch`, `snapshot`, catalog helpers, measured and warm-up runs, the equivalence sidecar, and `EXPLAIN ANALYZE`.
-- Setup: setup DDL that creates, indexes, truncates or drops TEMP tables cannot run in a read-only transaction. Setup stays on the current name-proof rules (plan 047 owns their simplification) and runs read-write; everything after setup runs read-only.
+- Setup: setup DDL that creates, indexes, truncates or drops TEMP tables cannot run in a read-only transaction. Setup stays on the current name-proof and static visible-effects rules (plan 047 owns their simplification) and runs read-write; everything after setup runs read-only. This preserves an existing limitation: a setup SELECT can invoke a user-defined function that writes persistent data because static validation does not inspect function bodies. Review setup SQL and use a least-privilege setup role; neither the setup classifier nor READ ONLY guarantees that every such effect is rejected. Do not add an opaque-function whitelist in this plan; track setup hardening separately if needed.
 - Temp DML (`INSERT`/`UPDATE`/`DELETE` into a TEMP table) in query or measured SQL is allowed by PostgreSQL inside a read-only transaction; confirm in the proof.
 - A server rejection (`SQLSTATE 25006 read_only_sql_transaction`) maps to exit `2` with "PostgreSQL rejected a write in a read-only transaction; persistent writes need an approved mutation."
 
@@ -35,13 +35,14 @@ A name denylist can never be complete. PostgreSQL itself enforces "no writes to 
 
 1. **Proof on the playground** (disposable objects only), recorded in `plans/052-readonly-proof.md` with the PostgreSQL version and the `SET TRANSACTION` documentation section:
    - persistent-table write through a plpgsql function → rejected;
-   - `pg_stat_statements_reset()`, `nextval` on a persistent sequence, `pg_promote()` (expect a privilege or read-only error) → record each outcome;
+   - `pg_stat_statements_reset()`, `nextval` on a persistent sequence, `pg_promote()` → record each outcome; an allowed stats reset or a server-state error does not establish transaction containment, so retain explicit safety checks for effects the read-only transaction does not block;
    - `set_config('default_transaction_read_only','off',false)` inside the transaction, then a write in the next per-command transaction → still rejected;
    - temp-table `INSERT`/`UPDATE`/`DELETE` → allowed; `EXPLAIN ANALYZE` of both;
-   - timing overhead of the wrapper on a trivial `SELECT 1` (100 repetitions) to confirm measurements are not distorted.
+   - end-to-end wrapper timing on a trivial `SELECT 1` (100 balanced pairs after warm-up), interpreted separately from SQLHarness benchmark timings, which come from PostgreSQL `EXPLAIN` planning and execution times.
+   - Runner: `pwsh ./scripts/prove-postgres-readonly.ps1 -ConfirmDisposableDatabase <exact-database>`. It requires `SQLHARNESS_PG_INTEGRATION_CONNECTION_STRING`, creates only a uniquely named schema plus a session-local temp table, and refuses to overwrite a completed proof report. Results are recorded in `plans/052-readonly-proof.md`.
 2. Implement the per-command wrapper in the PostgreSQL session for every non-mutation path. Keep the approved-mutation path read-write and unchanged.
 3. Map `25006` to the safety exit with the message above. Tests with a fake session for the mapping; integration tests (`Category=PostgresIntegration`) for steps 1's cases.
-4. Shrink the PostgreSQL function denylist to effects a transaction cannot contain: backend terminate/cancel, `pg_reload_conf`, advisory locks, `pg_sleep`, `dblink*`, server file reads, `set_config`. Keep the external-access checks. Record in the classifier comment that persistent writes are enforced by the server, and that a least-privilege role is the operator's control for the rest.
+4. Shrink the PostgreSQL function denylist only for effects a transaction contains. Keep explicit denials for backend terminate/cancel, `pg_reload_conf`, advisory locks, `pg_sleep`, `dblink*`, server file reads, `set_config`, `pg_stat_statements_reset`, and backup/promotion operations such as `pg_backup_start` and `pg_promote`. `pg_stat_statements_reset()` succeeded inside a `READ ONLY` transaction on PostgreSQL 18.6; `pg_promote()` returned SQLSTATE `55000` because the proof target is not in recovery, so neither is protected by that run's `25006` evidence. Keep the external-access checks. Record in the classifier comment that persistent writes are enforced by the server, and that a least-privilege role is the operator's control for the rest.
 5. Docs (README PostgreSQL engine notes, Safety contract, docs/mcp.md, Capabilities): "Non-approved PostgreSQL commands run in a READ ONLY transaction; the server rejects persistent writes."
 
 ## Verification
@@ -53,13 +54,15 @@ A name denylist can never be complete. PostgreSQL itself enforces "no writes to 
 
 ## Done criteria
 
-- [ ] Every example in "Why this matters" is rejected (or, for privilege-gated functions, fails on privileges) without approved mutation, proven by integration tests.
-- [ ] The wrapper is per command; the `set_config` bypass test passes.
-- [ ] Measured timings show no material wrapper overhead (recorded numbers).
-- [ ] Docs and capabilities describe the server-enforced rule.
-- [ ] Both gates pass; `plans/README.md` row updated.
+- [x] Every example in "Why this matters" is rejected (or, for privilege-gated functions, fails on privileges) without approved mutation, proven by integration tests.
+- [x] The wrapper is per command; the `set_config` bypass test passes.
+- [x] Client wrapper overhead is documented; benchmark latency continues to use PostgreSQL server `EXPLAIN` Planning Time + Execution Time and excludes client transaction round trips.
+- [x] Docs and capabilities describe the server-enforced rule.
+- [x] Both gates pass; `plans/README.md` row updated.
 
 ## STOP conditions
 
 - No authorized disposable PostgreSQL is available. Stop after writing the proof script.
 - A temp-table write is rejected inside `READ ONLY` on the playground version. Report; the design then needs setup-style handling for temp DML.
+
+Completion boundary: non-approved PostgreSQL commands run in per-command READ ONLY transactions, which reject persistent relation writes. Explicit classifier denials remain for effects not contained by READ ONLY. Approved persistent mutations retain the exact database confirmation path. TEMP setup continues to run read-write under the existing name-proof and static visible-effects rules; an opaque user-defined function inside setup can still write persistent data. PostgreSQL live evidence is specific to version 18.6. The client wrapper overhead is measured and documented; benchmark latency remains the server-provided `EXPLAIN` Planning Time + Execution Time. See [052-verification.md](052-verification.md) for gate history, live proof, reviews, and rulings.
