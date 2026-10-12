@@ -26,8 +26,8 @@ Lock one closed named profile and one `--var` set per invocation; a different pr
 
 1. **Inventory** representative cases offline before measuring: row count, cardinality distribution, ordering ties, missing history, boundary dates, empty results. Keep ticket SQL outside the application repository.
 2. **Helpers** come before ad-hoc SQL: `ping` (readiness), `counts` (approximate partition estimates; `--exact` for `COUNT_BIG(*)`), `schema` (`--object` for one table or view), `space` (storage). They run fixed internal SQL and never accept arbitrary SQL.
-3. **`query`** returns one bounded read-only batch. Bind values as typed `--param name[:type]=value` (types: [README Quick start](../../README.md#quick-start), or `capabilities <profile>`), and put preparation in `--setup`.
-4. **`measure`** collects repeated timing, IO and plan evidence for one query; **`compare`** adds baseline/candidate result equivalence and a latency `regression.verdict` (on `inconclusive`, read `reasons`; the verdict never changes the exit code).
+3. **`query`** returns one bounded read-only batch. Bind values as typed `--param name[:type]=value` (types: [README Quick start](../../README.md#quick-start), or `capabilities <profile>`).
+4. **`measure`** collects repeated timing, IO and plan evidence for one query; **`compare`** adds baseline/candidate result equivalence and a latency `regression.verdict` (on `inconclusive`, read `reasons`; the verdict never changes the exit code). For both, put preparation in `--setup` (runs once on the measured session).
 5. **`plan`** distills a saved showplan offline, with no scope lock.
 
 <!-- docs-sync:example -->
@@ -47,11 +47,11 @@ sqlharness plan .\artifacts\orders.sqlplan --json
 
 **Output.** Prefer `--json` for full reports; on `measure` and `compare`, `--json-summary` gives the bounded projection (pass one of the two). `--output agent` returns the versioned agent envelope bounded by `--max-output-bytes` and `--max-cell-chars`; `outputModesByCommand` in `capabilities --json` lists which modes each command accepts, and [docs/mcp.md budgets](../../docs/mcp.md#result-envelope-errors-and-budgets) explain how the envelope shrinks to fit.
 
-**Polling.** `watch` replaces a loop of ad-hoc `query` calls: it stops on `--until <predicate>` or `--until-unchanged <polls>`, and exits `7` when `--max-duration` elapses first. `watch --output ndjson` streams one event per change and one terminal record.
+**Polling.** `watch` replaces a loop of ad-hoc `query` calls: it stops on `--until <predicate>` or `--until-unchanged <polls>`, and exits `7` when `--max-duration` elapses first. `watch --output ndjson` streams a `started` event, a `changed` event per change, and one terminal `completed` or `failed` record.
 
-**Before/after results.** `snapshot --name` stores a canonical result under `~/.sqlharness/snapshots` (sensitive result data; `--force` to replace a name). `snapshot --diff` reports locations and kinds without cell values: exit `8` means a valid comparison found differences rather than an execution failure.
+**Before/after results.** `snapshot --name` stores a canonical result under `~/.sqlharness/snapshots` (`--force` to replace a name). `snapshot --diff` reports locations and kinds without cell values: exit `8` means a valid comparison found differences rather than an execution failure.
 
-**Query Store** (SQL Server). `qstop` ranks consumers by total duration; one item aggregates all plans and runtime intervals of one `query_id`. A high rank is a lead to `measure`, `compare` and `plan`, not proof the query is defective. An empty readable window exits `0`; unavailable Query Store (`OFF`, `ERROR`) exits `5`. Stdout has no SQL text; the text sits in `artifactDirectory/queries.jsonl`, which is locally sensitive and is pasted or published only after explicit review.
+**Query Store** (SQL Server). `qstop` ranks consumers by total duration; one item aggregates all plans and runtime intervals of one `query_id`. A high rank is a lead to `measure`, `compare` and `plan`, not proof the query is defective. An empty readable window exits `0`; unavailable Query Store (`OFF`, `ERROR`) exits `5`. Stdout has no SQL text; the text sits in `artifactDirectory/queries.jsonl`.
 
 **Missing indexes** (SQL Server). `indexes` lists missing-index evidence classified against existing indexes (`covered`, `include-gap`, `partial-key`, `new-shape`); `--object` narrows it to one table. Creating an index is a persistent mutation under the mutation gate.
 
@@ -102,7 +102,7 @@ Any ScriptDom-parsable construct inside a top-level `SELECT` is accepted, so SQL
 - Each non-approved command runs in its own `READ ONLY` transaction. TEMP setup runs outside it under static checks, and a setup `SELECT` can still call a user function that writes persistently: review setup SQL.
 - Benchmarks time one statement with `EXPLAIN (ANALYZE, BUFFERS)`: `CpuTimeMs` is `0`, `logicalReads` are buffer hits plus reads, and `missingIndexes` is empty. `qstop` and `indexes` are SQL Server only.
 - Catalog matching (`--like`, `--filter`, `--object`) is case-sensitive as stored.
-- **Top statements**: rank `pg_stat_statements` with a `query`. The extension must be installed on the server; the column names are PostgreSQL 13+.
+- **Top statements**: rank `pg_stat_statements` with a `query`: save the SQL below as `.\queries\pg-top-statements.sql`. The extension must be installed on the server; the column names are PostgreSQL 13+.
 
 ```sql
 SELECT queryid, calls, total_exec_time, mean_exec_time,
@@ -130,6 +130,6 @@ An approval covers that batch, database, profile and variable set only. A safety
 
 ## Local outputs and exit codes
 
-Locally sensitive: `.sqlplan` files, measure/compare artifacts, snapshots, `queries.jsonl`, `--param-set` files and `~/.sqlharness/data/activity.db`. Share them only after the user reviewed them. Secrets stay in the environment variables the profile names.
+Locally sensitive outputs are pasted, attached or published only after the user's explicit review: `.sqlplan` files, measure/compare artifacts, snapshots under `~/.sqlharness/snapshots` (result data), `qstop`'s `queries.jsonl` (SQL text), `--param-set` files and `~/.sqlharness/data/activity.db`. Secrets live in the environment variables the profile names, and in process memory only.
 
-Exit codes are listed in [README Safety contract](../../README.md#safety-contract): `2` is a validation or safety stop, `5` a SQL execution failure. A text-mode command-line parse error exits `-1` (255 on POSIX); JSON and agent modes return `2` instead.
+Exit codes, redaction and artifact rules: [README Safety contract](../../README.md#safety-contract). `2` is a validation or safety stop, `5` a SQL execution failure. A text-mode command-line parse error exits `-1` (255 on POSIX); JSON and agent modes return `2` instead.

@@ -5,8 +5,10 @@
 //     <!-- docs-sync:example -->
 // Every logical line of such a block that starts with `sqlharness ` (PowerShell backtick and POSIX
 // backslash continuations are joined) is parsed offline through SqlHarnessCli with a stub module and
-// an empty temporary SQLHARNESS_HOME. A line passes when Spectre accepts the command and options
-// (not exit -1 / "Invalid command line arguments."); the stub never connects and refuses any dispatch.
+// an empty temporary SQLHARNESS_HOME. A line passes when strict parsing accepts the command and
+// options: either the stub module was reached (dispatch proves the parse succeeded; the stub never
+// connects and its refusal is not drift), or the command ended without exit -1 or
+// "Invalid command line arguments." before dispatch (for example on a missing input file).
 // `<placeholder>` tokens are replaced by a fixture value. `mcp` and `dashboard` lines are not run
 // (they would start servers); their options are checked against that command's real --help text.
 // Untagged fences and prose are never checked.
@@ -88,6 +90,9 @@ public sealed partial class DocsSyncTests
         var bad = $"{Marker}\n```powershell\nsqlharness query prod-eu --file .\\q.sql --no-such-option 1 --json\n```\n";
         var failures = await CheckExamplesAsync(ExtractExamples(bad));
         Assert.Single(failures);
+
+        var badDispatching = $"{Marker}\n```powershell\nsqlharness ping prod-eu --no-such-option --json\n```\n";
+        Assert.Single(await CheckExamplesAsync(ExtractExamples(badDispatching)));
 
         var badServer = $"{Marker}\n```\nsqlharness mcp serve --no-such-option\n```\n";
         Assert.Single(await CheckExamplesAsync(ExtractExamples(badServer)));
