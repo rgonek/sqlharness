@@ -4,7 +4,7 @@
 
 ## Status
 
-- Status: DONE (branch `feat/plan-051-regression-verdict`; verify.ps1 green at f21d4f0; verify-linux.ps1 skipped by user decision 2026-10-12)
+- Status: DONE (merged to main `e05da9b`; Windows and Linux gates green, confirmed by the user 2026-10-12)
 - Priority: P2
 - Effort: M
 - Risk: LOW
