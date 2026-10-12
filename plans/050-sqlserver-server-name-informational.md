@@ -4,7 +4,7 @@
 
 ## Status
 
-- Status: Implementation complete; focused verification passed; Windows/Linux full gates pending controller.
+- Status: DONE
 - Priority: P2
 - Effort: M
 - Risk: MED (removes exit 4 from the contract)
@@ -39,14 +39,17 @@ Out of scope: profile schema, `--confirm-database` (stays exact and ordinal), th
 
 - `dotnet build SqlHarness.sln -warnaserror` — 0 warnings.
 - `dotnet test tests/SqlHarness.Tests --no-build --filter "FullyQualifiedName~SqlExecution|FullyQualifiedName~Target|FullyQualifiedName~PostgresEndpoint|FullyQualifiedName~PostgresTransport"` — pass.
-- Final `scripts/verify.ps1` → `verify: OK`; `scripts/verify-linux.ps1` → `verify-linux: OK`.
+- `pwsh -NoProfile -File scripts/verify.ps1` — `verify: OK`; Core 3,696 passed/0 skipped, MCP 383 passed/4 skipped (Windows, commit `e87882a`; `.superpowers/sdd/050-sqlserver-server-name-informational/windows-gate-3.log`).
+- `pwsh -NoProfile -File scripts/verify-linux.ps1` — `verify-linux: OK`; Core 3,696 passed/0 skipped, MCP 384 passed/3 skipped (WSL ext4 `/home/rgone/src/sqlharness`, commit `e87882a`; `.superpowers/sdd/050-sqlserver-server-name-informational/linux-gate.log`).
+- Feature branch remains unmerged and unpublished. No live database or TLS proof was run.
 
 ## Done criteria
 
 - [x] No path returns exit 4 for a server-name or address difference alone, on either engine.
 - [x] No reflection into Npgsql private members remains (`rg "BindingFlags.NonPublic" src/SqlHarness.Core/Postgres` → none for identity).
 - [x] Identity reports still show the connected server.
-- [x] Plan 033 is REJECTED in the index. Windows/Linux full gates remain pending controller.
+- [x] Plan 033 is REJECTED in the index.
+- [x] Windows and Linux full gates pass (evidence above).
 
 ## STOP conditions
 
