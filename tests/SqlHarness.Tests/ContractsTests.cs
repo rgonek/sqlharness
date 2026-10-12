@@ -268,6 +268,21 @@ public class ContractsTests
         Assert.Contains("verify-linux.ps1", agents, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Readme_links_into_mcp_doc_resolve_to_headings()
+    {
+        var readme = ReadRepositoryFile("README.md");
+        var slugs = HeadingSlugs(ReadRepositoryFile("docs", "mcp.md"));
+        var anchors = System.Text.RegularExpressions.Regex
+            .Matches(readme, @"\]\(docs/mcp\.md#([^)]+)\)")
+            .Select(match => match.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(anchors);
+        Assert.All(anchors, anchor => Assert.Contains(anchor, slugs));
+    }
+
     private static HashSet<string> HeadingSlugs(string markdown) =>
         System.Text.RegularExpressions.Regex
             .Matches(markdown, @"^#{1,6}\s+(.+?)\s*$", System.Text.RegularExpressions.RegexOptions.Multiline)

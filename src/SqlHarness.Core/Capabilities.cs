@@ -12,7 +12,7 @@ public sealed record SqlHarnessCapabilities(
     IReadOnlyDictionary<string, object> Limits,
     IReadOnlyList<string> OutputModes,
     SqlHarnessSafetyAnalysis SafetyAnalysis,
-    IReadOnlyDictionary<string, string> OutputModesByCommand,
+    IReadOnlyDictionary<string, IReadOnlyList<string>> OutputModesByCommand,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SqlHarnessProfileCapability? Profile = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? ParameterTypes = null);
 
@@ -133,7 +133,7 @@ public static class SqlHarnessCapabilitiesProvider
             buildId,
             ContractVersion,
             [
-                new("capabilities", "Describe commands, engines, limits, modes. Pass a profile for that engine's parameter types and limits."),
+                new("capabilities", "Describe commands, engines, limits, modes. Pass a profile for the parameter types and limits of its engine."),
                 new("doctor", "Check installation and profiles."),
                 new("validate", "Classify SQL offline for a closed profile. Usages: query, setup, benchmark."),
                 new("query", "Run a bounded query. PostgreSQL: per-command READ ONLY, known administrative effects denied; TEMP setup is read-write under static checks; user functions can hide effects (setup SELECTs too), so use a least-privilege role."),
@@ -160,16 +160,23 @@ public static class SqlHarnessCapabilitiesProvider
                 SqlSafetyAnalysis.HiddenEffectsVerified,
                 SqlSafetyAnalysis.ObjectAndPermissionStatus),
             // Per-command modes. "outputModes" above stays the global union; no command accepts
-            // two of --json, --json-summary and --output together; keys without text need one of the listed flags.
-            new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["json"] = "capabilities,doctor,validate",
-                ["json|agent"] = "artifact",
-                ["text|json|agent"] = "query,schema,ping,counts,space,snapshot,qstop,indexes,plan",
-                ["text|json|json-summary|agent"] = "measure,compare",
-                ["text|json|agent|ndjson"] = "watch",
-            },
+            // two of --json, --json-summary and --output together; a list without text needs one of its flags.
+            OutputModesByCommand(),
             profile,
             parameterTypes);
+    }
+
+    private static Dictionary<string, IReadOnlyList<string>> OutputModesByCommand()
+    {
+        var map = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        foreach (var command in new[] { "capabilities", "doctor", "validate" })
+            map[command] = ["json"];
+        map["artifact"] = ["json", "agent"];
+        foreach (var command in new[] { "query", "schema", "ping", "counts", "space", "snapshot", "qstop", "indexes", "plan" })
+            map[command] = ["text", "json", "agent"];
+        foreach (var command in new[] { "measure", "compare" })
+            map[command] = ["text", "json", "json-summary", "agent"];
+        map["watch"] = ["text", "json", "agent", "ndjson"];
+        return map;
     }
 }

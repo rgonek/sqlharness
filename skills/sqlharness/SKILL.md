@@ -57,7 +57,7 @@ sqlharness plan .\artifacts\orders.sqlplan --json
 
 **Saved benchmarks**: `artifact <id> --section summary` rereads a `measure`/`compare` result offline ([README Commands](../../README.md#commands)).
 
-**MCP.** `sqlharness mcp serve` exposes the tools to one local stdio client and never runs persistent mutations. In request scope the operator's `--allow-profile` list approves profile switches; different variables still need a new user request. Start, scope and limits: [docs/mcp.md](../../docs/mcp.md).
+**MCP.** `sqlharness mcp serve` exposes the tools to one local stdio client and runs no explicit persistent mutations; PostgreSQL TEMP setup can still reach a persistent-writing user function, so use a least-privilege principal ([details](../../docs/mcp.md#no-persistent-mutations)). In request scope the operator's `--allow-profile` list approves profile switches; different variables still need a new user request. Start, scope and limits: [docs/mcp.md](../../docs/mcp.md).
 
 <!-- docs-sync:example -->
 ```powershell

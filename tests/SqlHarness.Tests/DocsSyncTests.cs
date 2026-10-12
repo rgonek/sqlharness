@@ -112,14 +112,14 @@ public sealed partial class DocsSyncTests
         var failures = new List<string>();
 
         // Keys without "text" need one of their flags: a bare invocation must reject (exit 2).
-        foreach (var (key, commands) in caps.OutputModesByCommand)
+        foreach (var (command, modeList) in caps.OutputModesByCommand)
         {
-            if (key.Split('|').Contains("text", StringComparer.Ordinal))
+            var key = string.Join('|', modeList);
+            if (modeList.Contains("text", StringComparer.Ordinal))
             {
                 continue;
             }
 
-            foreach (var command in commands.Split(','))
             {
                 var (exit, _, module) = await RunAsync(command == "artifact" ? ["artifact", "some-id", "--section", "summary"] : [command]);
                 if (exit != 2 || module.Calls != 0)

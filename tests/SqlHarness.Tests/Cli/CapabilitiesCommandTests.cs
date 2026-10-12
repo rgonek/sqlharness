@@ -211,13 +211,12 @@ public sealed class CapabilitiesCommandTests
     [Fact]
     public void Capabilities_states_output_modes_per_command()
     {
-        var byCommand = SqlHarnessCapabilitiesProvider.Get().OutputModesByCommand;
-        var modes = byCommand.SelectMany(pair => pair.Value.Split(',').Select(command => (command, mode: pair.Key))).ToDictionary(x => x.command, x => x.mode, StringComparer.Ordinal);
-        Assert.Equal("text|json|json-summary|agent", modes["measure"]);
-        Assert.Equal("text|json|json-summary|agent", modes["compare"]);
-        Assert.Contains("ndjson", modes["watch"], StringComparison.Ordinal);
-        Assert.DoesNotContain("json-summary", modes["query"], StringComparison.Ordinal);
-        Assert.DoesNotContain("ndjson", modes["query"], StringComparison.Ordinal);
+        var modes = SqlHarnessCapabilitiesProvider.Get().OutputModesByCommand;
+        Assert.Equal(["text", "json", "json-summary", "agent"], modes["measure"]);
+        Assert.Equal(["text", "json", "json-summary", "agent"], modes["compare"]);
+        Assert.Contains("ndjson", modes["watch"]);
+        Assert.DoesNotContain("json-summary", modes["query"]);
+        Assert.DoesNotContain("ndjson", modes["query"]);
         Assert.DoesNotContain("mcp", modes.Keys);
     }
 
