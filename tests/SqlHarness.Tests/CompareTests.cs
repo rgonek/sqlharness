@@ -311,7 +311,7 @@ public class SqlHarnessCompareTests
         var session = FakeCompareSession.Create();
         var operation = Compare(repeat: 1) with
         {
-            SetupSql = "DECLARE @seed TABLE (Id int); INSERT @seed (Id) VALUES (1); SELECT Id INTO #ids FROM @seed",
+            SetupSql = "DECLARE @n int; SET @n = 1; DECLARE @seed TABLE (Id int); INSERT @seed (Id) VALUES (@n); SELECT Id INTO #ids FROM @seed",
             BaselineSql = "DECLARE @n int; SET @n = 1; SELECT Value FROM dbo.Clients WHERE Id = @n",
             CandidateSql = "DECLARE @n int; SET @n = 1; SELECT Value FROM dbo.Clients WHERE Id = @n -- candidate",
         };
@@ -331,8 +331,8 @@ public class SqlHarnessCompareTests
     }
 
     [Theory]
-    // SET is denied in setup.
-    [InlineData("DECLARE @n int; SET @n = 1; SELECT Id INTO #ids FROM dbo.Clients WHERE Id = @n", null, null, "setup")]
+    // An unproven SET target remains denied in setup.
+    [InlineData("SET @n = 1; SELECT Id INTO #ids FROM dbo.Clients WHERE Id = @n", null, null, "setup")]
     // A table variable declared in setup is not visible to a measured variant.
     [InlineData("DECLARE @seed TABLE (Id int); INSERT @seed (Id) VALUES (1); SELECT Id INTO #ids FROM @seed", "SELECT Id AS Value FROM @seed", null, "baseline")]
     [InlineData("DECLARE @seed TABLE (Id int); INSERT @seed (Id) VALUES (1); SELECT Id INTO #ids FROM @seed", null, "SELECT Id AS Value FROM @seed -- candidate", "candidate")]

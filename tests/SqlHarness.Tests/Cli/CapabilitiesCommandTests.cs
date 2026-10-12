@@ -94,7 +94,7 @@ public sealed class CapabilitiesCommandTests
     }
 
     private const string CapabilitySetEntry =
-        "Plain SET @v = expr to a scalar local declared earlier in the same batch: allowed in query and measured SQL, denied in --setup. The RHS gets the external, stateful and cross-database checks. Compound, cursor, member and session/transaction option SET stay denied";
+        "Plain SET @v = expr to a scalar local declared earlier in the same batch: allowed in query, measured SQL and --setup. The RHS gets the external, stateful and cross-database checks. Compound, cursor, member and session/transaction option SET stay denied";
 
     private const string CapabilityTableVariableEntry =
         "DECLARE @t TABLE (...) then INSERT/UPDATE/DELETE/MERGE/SELECT against it, declared earlier in the same batch. A table variable from --setup is not visible to measured SQL (separate batch): carry data in #temp. OUTPUT INTO @t only when the primary target is also proven local (persistent primary target: MutationNotAllowed). Aliased DML targets and user-defined table types stay denied";
@@ -204,13 +204,12 @@ public sealed class CapabilitiesCommandTests
     [Theory]
     [InlineData("DECLARE @n int; SET @n = 5; SELECT @n")]
     [InlineData("DECLARE @n int; SET @n = 5; CREATE TABLE #t (Id int)")]
-    public void SessionTempStatements_sqlserver_SET_entry_is_denied_in_setup_as_it_says(string sql)
+    public void SessionTempStatements_sqlserver_SET_entry_is_allowed_in_setup_as_it_says(string sql)
     {
         Assert.Contains(CapabilitySetEntry, SessionTempStatements()["sqlserver"]);
 
         var decision = new SqlSafetyClassifier().Classify(sql, SqlUsage.CompareSetup, "db", allowMutation: false);
-        Assert.False(decision.Allowed);
-        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.True(decision.Allowed);
     }
 
     [Fact]

@@ -156,6 +156,62 @@ public class SetupSqlExecutionTests
     }
 
     [Fact]
+    public void Plan045_Parameter_free_scalar_assignment_keeps_original_batch()
+    {
+        const string sql = "CREATE TABLE #t (Id int); DECLARE @v int; SET @v = 2; INSERT #t VALUES (@v);";
+
+        var command = Assert.Single(SetupSqlExecution.PrepareCommands(sql, Parameters(("unused", "int", "7")), 30));
+
+        Assert.Equal(sql, command.Sql);
+        Assert.Empty(command.Parameters);
+        Assert.Equal(30, command.TimeoutSeconds);
+    }
+
+    [Theory]
+    [InlineData("DECLARE @v int; CREATE TABLE #t (Id int); SET @v = @value; INSERT #t VALUES (@v);")]
+    [InlineData("DECLARE @v int; SET @v = 2; CREATE TABLE #t (Id int); INSERT #t VALUES (@value); SET @v = 3;")]
+    public void Plan045_Assignment_cannot_cross_parameter_split(string sql)
+    {
+        var parameters = Parameters(("value", "int", "7"));
+        var decision = new SqlSafetyClassifier().Classify(sql, SqlUsage.CompareSetup, "db", false);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+
+        var exception = Assert.Throws<SetupSqlShapeException>(() =>
+            SetupSqlExecution.PrepareCommands(sql, parameters, 30));
+        Assert.Contains("local variable declared before the parameterized setup boundary", exception.Message, StringComparison.Ordinal);
+        Assert.Throws<SetupSqlShapeException>(() => SetupSqlExecution.Validate(SqlEngine.SqlServer, sql, parameters));
+    }
+
+    [Fact]
+    public void Plan045_Assignment_declared_after_parameter_split_preserves_order_and_bindings()
+    {
+        const string sql = "CREATE TABLE #t (Id int); DECLARE @v int = @value; SET @v = @v + 2; INSERT #t VALUES (@v);";
+        var parameters = Parameters(("value", "int", "7"));
+        var decision = new SqlSafetyClassifier().Classify(sql, SqlUsage.CompareSetup, "db", false);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+
+        var commands = SetupSqlExecution.PrepareCommands(sql, parameters, 30);
+
+        Assert.Equal(2, commands.Count);
+        Assert.Equal("CREATE TABLE #t (Id int);", commands[0].Sql);
+        Assert.Empty(commands[0].Parameters);
+        Assert.Equal(string.Join(Environment.NewLine, "DECLARE @v int = @value;", "SET @v = @v + 2;", "INSERT #t VALUES (@v);"), commands[1].Sql);
+        Assert.Equal("@value", Assert.Single(commands[1].Parameters).Name);
+        SetupSqlExecution.Validate(SqlEngine.SqlServer, sql, parameters);
+    }
+
+    [Theory]
+    [InlineData("SELECT @v;")]
+    [InlineData("SET @v = 3; SELECT @v;")]
+    public void Plan045_Setup_assignment_does_not_extend_local_lifetime_to_measured_batch(string measuredSql)
+    {
+        const string setup = "DECLARE @v int; SET @v = 2;";
+
+        Assert.Throws<SqlSetupVariableScopeException>(() =>
+            SqlSetupVariableReferenceValidator.Validate(setup, [], measuredSql));
+    }
+
+    [Fact]
     public void Validate_is_no_op_for_empty_setup_or_no_parameters()
     {
         var parameters = Parameters(("x", "int", "7"));

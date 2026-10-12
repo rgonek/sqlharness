@@ -131,6 +131,8 @@ For `measure` and for `compare` without `--matrix`, setup runs exactly once per 
 
 SQL Server local `#temp` only (name starts with exactly one `#`): setup may create/index/DML/`DROP` session temps with supported constraints without mutation confirmation. Postgres uses native `TEMP` / `TEMPORARY` only. Persistent objects, `##temp`, dynamic SQL, external access, cross-database references, and transaction control remain denied.
 
+SQL Server plain `SET @v = <expr>` is allowed in query, measured SQL and setup when its scalar local is declared earlier in the same batch. The RHS retains external, stateful and cross-database safety checks. Compound, cursor, member and session/transaction option SET, undeclared targets and use before declaration stay denied. Setup locals cannot cross the parameter split or enter the separate measured batch; declare them where used, pass typed parameters, or carry data in `#temp`.
+
 ### Technical vs domain equivalence
 
 `compare --compare-results` defaults to `ordered`. Modes: `ordered` (schema + multiset + row order), `multiset` (schema + multiset; order free), `set` (schema + distinct rows), `off` (no comparison; null equivalence fields). Every measured run participates; warm-ups do not. Directional counts are the max over any baseline/candidate measured pair. Fingerprint retention is capped at 1,000,000 rows per measured variant run.

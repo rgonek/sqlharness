@@ -299,9 +299,8 @@ internal sealed class SqlSafetyClassifier
         var hasSessionLocal = false;
         foreach (var batch in batches)
         {
-            // 011/T3: table variables are proven against same-batch
-            // declarations. A SET never reaches an allow here: it is neither a
-            // SELECT nor session-local work, so setup denies it below.
+            // Table variables and scalar assignments reuse the same-batch
+            // declaration proofs used for query classification.
             var scope = inspection.ScopeOf(batch);
             foreach (var statement in batch.Statements)
             {
@@ -331,7 +330,9 @@ internal sealed class SqlSafetyClassifier
                 if (classification.HasPersistentWrite)
                     return Denied(SqlSafetyReason.NonTemporaryWrite);
 
-                if (!classification.HasSessionLocalWrite && statement is not SelectStatement)
+                // A SET reaches this point only after the existing plain scalar
+                // assignment proof succeeds; unsafe SET variants remain denied.
+                if (!classification.HasSessionLocalWrite && statement is not (SelectStatement or SetVariableStatement))
                 {
                     return Denied(
                         IsWrite(statement) ? SqlSafetyReason.NonTemporaryWrite : SqlSafetyReason.UnsupportedStatement,

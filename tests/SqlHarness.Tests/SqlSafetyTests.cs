@@ -1185,20 +1185,55 @@ public class SqlSafetyTests
         Assert.False(decision.HasSessionLocalWork);
     }
 
-    // 011/T6 fix round 1: pins shipped behaviour. Setup accepts SELECT and
-    // session-local work only; a SET is neither, whatever the local's type.
+    // Plan 045: setup reuses the same proven scalar assignment rule as query.
     [Theory]
-    [InlineData("DECLARE @v int; SET @v = 1")]
+    [InlineData("DECLARE @v int; SET @v = 2;")]
     [InlineData("DECLARE @v int; SET @v = 1; SELECT @v")]
     [InlineData("DECLARE @v int; SET @v = 1; CREATE TABLE #t (Id int)")]
     [InlineData("DECLARE @v dbo.SomeType; SET @v = 1; SELECT @v")]
-    public void T6_Compare_setup_denies_SET_local_scalar_assignment(string sql)
+    public void Plan045_Setup_allows_proven_same_batch_scalar_assignment(string sql)
     {
         Assert.True(ClassifyQuery(sql).Allowed);
 
         var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        Assert.False(setup.HasMutation);
+        Assert.Equal(sql.Contains("CREATE TABLE #t", StringComparison.Ordinal), setup.HasSessionLocalWork);
+    }
+
+    [Fact]
+    public void Plan045_Setup_allows_scalar_reassignment_used_in_temp_population()
+    {
+        const string sql = "CREATE TABLE #t (Id int); DECLARE @v int = 1; SET @v = 2; INSERT #t VALUES (@v); SET @v = (SELECT MAX(Id) FROM #t); INSERT #t VALUES (@v);";
+
+        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null);
+
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        Assert.True(setup.HasSessionLocalWork);
+        Assert.False(setup.HasMutation);
+    }
+
+    [Theory]
+    [InlineData("SET @v = 2;", "UnsupportedStatement")]
+    [InlineData("SET @v = 2; DECLARE @v int;", "UnsupportedStatement")]
+    [InlineData("DECLARE @t TABLE (Id int); SET @t = 2;", "UnsupportedStatement")]
+    [InlineData("DECLARE @v int; SET @v += 2;", "UnsupportedStatement")]
+    [InlineData("DECLARE @v dbo.SomeType; SET @v.Member = 2;", "UnsupportedStatement")]
+    [InlineData("DECLARE @v dbo.SomeType; SET @v::Member = 2;", "UnsupportedStatement")]
+    [InlineData("DECLARE @v dbo.SomeType; SET @v.DoIt(2);", "UnsupportedStatement")]
+    [InlineData("DECLARE @v int; SET @v = CURSOR FOR SELECT 1;", "UnsupportedStatement")]
+    [InlineData("SET NOCOUNT ON;", "UnsupportedStatement")]
+    [InlineData("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;", "UnsupportedStatement")]
+    [InlineData("DECLARE @v int; SET @v = NEXT VALUE FOR dbo.Seq;", "UnsupportedStatement")]
+    [InlineData("DECLARE @v int; SET @v = (SELECT COUNT(*) FROM OPENROWSET('MSOLEDBSQL', 'Server=other;Trusted_Connection=yes;', 'SELECT 1') AS r);", "UnsupportedStatement")]
+    [InlineData("DECLARE @v int; SET @v = (SELECT MAX(Id) FROM otherdb.dbo.Clients);", "CrossDatabaseReference")]
+    [InlineData("DECLARE @v int;\nGO\nSET @v = 2;", "UnsupportedStatement")]
+    public void Plan045_Setup_preserves_unsafe_assignment_denials(string sql, string reason)
+    {
+        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "db", false, null);
+
         Assert.False(setup.Allowed);
-        Assert.Equal(SqlSafetyReason.UnsupportedStatement, setup.Reason);
+        Assert.Equal(reason, setup.Reason.ToString());
     }
 
     // 011/final (M5): pins the ScriptDom AST the SET rule reads. A member,
