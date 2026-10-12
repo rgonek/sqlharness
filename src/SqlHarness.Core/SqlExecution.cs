@@ -12,7 +12,18 @@ namespace SqlHarness.Core;
 internal sealed record SqlExecutionCommand(
     string Sql,
     IReadOnlyList<SqlHarnessParameter> Parameters,
-    int TimeoutSeconds);
+    int TimeoutSeconds)
+{
+    // PostgreSQL fails closed when a new call site omits execution intent.
+    internal PostgresExecutionMode PostgresMode { get; init; } = PostgresExecutionMode.ReadOnly;
+}
+
+internal enum PostgresExecutionMode
+{
+    ReadOnly,
+    SessionSetup,
+    ApprovedMutation,
+}
 
 internal interface ISqlReader : IAsyncDisposable
 {

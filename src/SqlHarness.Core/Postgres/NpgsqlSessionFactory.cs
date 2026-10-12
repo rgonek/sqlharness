@@ -96,8 +96,6 @@ internal sealed class NpgsqlSessionFactory : ISqlSessionFactory
 
 internal static class PostgresSessionScope
 {
-    // Query and CompareSetup both run already-classified text.
-    // No transaction wrapper, role change, privilege change, or search_path edit.
     internal static void BindClassifiedCommand(NpgsqlCommand command, SqlExecutionCommand execution)
     {
         command.CommandText = execution.Sql;
@@ -120,18 +118,25 @@ internal sealed class NpgsqlSession(
     public async Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand execution, CancellationToken ct)
     {
         var command = connection.CreateCommand();
-        var transferred = false;
+        NpgsqlTransaction? transaction = null;
         try
         {
             BindCommand(command, execution);
+            if (execution.PostgresMode is not (PostgresExecutionMode.SessionSetup or PostgresExecutionMode.ApprovedMutation))
+            {
+                transaction = await connection.BeginTransactionAsync(ct);
+                command.Transaction = transaction;
+                await using var readOnly = new NpgsqlCommand("SET TRANSACTION READ ONLY", connection, transaction);
+                readOnly.CommandTimeout = execution.TimeoutSeconds;
+                await readOnly.ExecuteNonQueryAsync(ct);
+            }
             var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, ct);
-            transferred = true;
-            return new NpgsqlSessionReader(command, reader);
+            return new NpgsqlSessionReader(command, reader, transaction);
         }
-        finally
+        catch (Exception exception)
         {
-            if (!transferred)
-                await command.DisposeAsync();
+            await NpgsqlSessionReader.CleanupFailedOpenAsync(command, transaction);
+            throw PostgresReadOnlyFailure.Map(exception);
         }
     }
 
@@ -149,11 +154,17 @@ internal sealed class NpgsqlSessionReader : ISqlReader
 {
     private readonly NpgsqlCommand _command;
     private readonly NpgsqlDataReader _reader;
+    private readonly NpgsqlTransaction? _transaction;
     private IReadOnlyList<DbColumn>? _columns;
-    internal NpgsqlSessionReader(NpgsqlCommand command, NpgsqlDataReader reader)
+    private bool _currentResultConsumed;
+    private bool _allResultsConsumed = true;
+    private bool _completed;
+    private bool _disposed;
+    internal NpgsqlSessionReader(NpgsqlCommand command, NpgsqlDataReader reader, NpgsqlTransaction? transaction)
     {
         _command = command;
         _reader = reader;
+        _transaction = transaction;
     }
     public int FieldCount => _reader.FieldCount;
     public int RecordsAffected => _reader.RecordsAffected;
@@ -162,17 +173,122 @@ internal sealed class NpgsqlSessionReader : ISqlReader
     public bool GetAllowNull(int ordinal) => ProviderNullability.AllowNull(Columns[ordinal]);
     public bool? GetReportedAllowNull(int ordinal) => ProviderNullability.Reported(Columns[ordinal]);
     public object GetValue(int ordinal) => _reader.GetValue(ordinal);
-    public Task<bool> ReadAsync(CancellationToken ct) => _reader.ReadAsync(ct);
+    public async Task<bool> ReadAsync(CancellationToken ct)
+    {
+        try
+        {
+            var hasRow = await _reader.ReadAsync(ct);
+            if (!hasRow)
+                _currentResultConsumed = true;
+            return hasRow;
+        }
+        catch (Exception exception)
+        {
+            await AbortAsync();
+            throw PostgresReadOnlyFailure.Map(exception);
+        }
+    }
     public async Task<bool> NextResultAsync(CancellationToken ct)
     {
-        var hasNext = await _reader.NextResultAsync(ct);
-        if (hasNext) _columns = null;
-        return hasNext;
+        try
+        {
+            // A result with no columns has no rows to consume. Advancing before a
+            // row-bearing result reaches EOF makes the whole transaction incomplete.
+            var priorConsumed = _currentResultConsumed || FieldCount == 0;
+            _allResultsConsumed &= priorConsumed;
+            var hasNext = await _reader.NextResultAsync(ct);
+            if (hasNext)
+            {
+                _columns = null;
+                _currentResultConsumed = false;
+            }
+            else
+            {
+                _completed = _allResultsConsumed;
+            }
+            return hasNext;
+        }
+        catch (Exception exception)
+        {
+            await AbortAsync();
+            throw PostgresReadOnlyFailure.Map(exception);
+        }
     }
     private IReadOnlyList<DbColumn> Columns => _columns ??= _reader.GetColumnSchema();
     public async ValueTask DisposeAsync()
     {
-        try { await _reader.DisposeAsync(); }
-        finally { await _command.DisposeAsync(); }
+        if (_disposed)
+            return;
+        _disposed = true;
+        Exception? primary = null;
+        try
+        {
+            await _reader.DisposeAsync();
+            if (_transaction is not null)
+            {
+                if (_completed)
+                    await _transaction.CommitAsync();
+                else
+                    await _transaction.RollbackAsync();
+            }
+        }
+        catch (Exception exception)
+        {
+            primary = exception;
+            if (_transaction is not null)
+                await TryRollbackAsync(_transaction);
+        }
+        finally
+        {
+            await DisposeResourcesAsync(_reader, _command, _transaction, primary);
+        }
+
+        if (primary is not null)
+            throw PostgresReadOnlyFailure.Map(primary);
+    }
+
+    private async Task AbortAsync()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+        await CleanupFailedOpenAsync(_reader, _command, _transaction);
+    }
+
+    internal static async Task CleanupFailedOpenAsync(NpgsqlCommand command, NpgsqlTransaction? transaction)
+    {
+        await CleanupFailedOpenAsync(null, command, transaction);
+    }
+
+    private static async Task CleanupFailedOpenAsync(NpgsqlDataReader? reader, NpgsqlCommand command, NpgsqlTransaction? transaction)
+    {
+        if (transaction is not null)
+            await TryRollbackAsync(transaction);
+        await DisposeResourcesAsync(reader, command, transaction, primary: new InvalidOperationException("Preserve the original database failure."));
+    }
+
+    private static async Task TryRollbackAsync(NpgsqlTransaction transaction)
+    {
+        try { await transaction.RollbackAsync(CancellationToken.None); }
+        catch { /* Best-effort cleanup must preserve the SQL failure. */ }
+    }
+
+    private static async Task DisposeResourcesAsync(
+        NpgsqlDataReader? reader,
+        NpgsqlCommand command,
+        NpgsqlTransaction? transaction,
+        Exception? primary)
+    {
+        if (reader is not null)
+            await IgnoreCleanupAsync(() => reader.DisposeAsync().AsTask(), primary);
+        await IgnoreCleanupAsync(() => command.DisposeAsync().AsTask(), primary);
+        if (transaction is not null)
+            await IgnoreCleanupAsync(() => transaction.DisposeAsync().AsTask(), primary);
+    }
+
+    private static async Task IgnoreCleanupAsync(Func<Task> cleanup, Exception? primary)
+    {
+        try { await cleanup(); }
+        catch when (primary is not null) { /* Preserve the primary failure. */ }
     }
 }

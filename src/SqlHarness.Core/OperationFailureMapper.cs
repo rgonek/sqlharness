@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
 
 using SqlHarness.Core.Auth;
+using SqlHarness.Core.Postgres;
 
 namespace SqlHarness.Core;
 
@@ -25,8 +26,13 @@ internal enum OperationPhase
 /// </summary>
 internal static class OperationFailureMapper
 {
-    internal static SqlHarnessExitCode Map(Exception exception, OperationPhase phase) => exception switch
+    internal static SqlHarnessExitCode Map(Exception exception, OperationPhase phase)
     {
+        if (PostgresReadOnlyFailure.ContainsReadOnlyViolation(exception))
+            return SqlHarnessExitCode.Safety;
+
+        return exception switch
+        {
         ArtifactStoragePreflightException => SqlHarnessExitCode.LocalStorage,
         SqlTargetMismatchException => SqlHarnessExitCode.TargetMismatch,
         SqlHarnessSafetyException => SqlHarnessExitCode.Safety,
@@ -39,8 +45,9 @@ internal static class OperationFailureMapper
         TimeoutException => SqlHarnessExitCode.SqlExecution,
         OperationCanceledException when phase == OperationPhase.Sql => SqlHarnessExitCode.SqlExecution,
         _ when phase == OperationPhase.Authentication => SqlHarnessExitCode.Authentication,
-        _ => SqlHarnessExitCode.SqlExecution,
-    };
+            _ => SqlHarnessExitCode.SqlExecution,
+        };
+    }
 
     /// <summary>
     /// Runs best-effort <paramref name="cleanup"/> without ever masking
