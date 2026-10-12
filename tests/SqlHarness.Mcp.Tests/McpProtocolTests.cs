@@ -1,5 +1,6 @@
 using System.IO.Pipelines;
 using System.Text;
+using System.Text.Json;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -84,6 +85,25 @@ public sealed class McpProtocolTests
         Assert.Contains("__invalid_request__", frames[1], StringComparison.Ordinal);
         Assert.DoesNotContain(sentinel, frames[1], StringComparison.Ordinal);
         Assert.Equal("{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"ping\",\"params\":{}}", frames[2]);
+    }
+
+    [Fact]
+    public async Task Duplicate_json_rpc_id_is_rejected_as_ambiguous_before_sdk_parsing()
+    {
+        const string frame = "{\"jsonrpc\":\"2.0\",\"id\":41,\"id\":42,\"method\":\"ping\",\"params\":{}}\n";
+
+        // The pinned SDK converter assigns every id it encounters, so the last wins.
+        var sdkMessage = JsonSerializer.Deserialize<JsonRpcMessage>(frame.TrimEnd());
+        Assert.IsType<JsonRpcRequest>(sdkMessage);
+        Assert.Equal(42L, Assert.IsType<long>(((JsonRpcRequest)sdkMessage!).Id.Id));
+
+        await using var guarded = new McpDuplicateJsonFieldGuardInput(new MemoryStream(Encoding.UTF8.GetBytes(frame)));
+        using var output = new MemoryStream();
+        await guarded.CopyToAsync(output);
+        using var rejected = JsonDocument.Parse(output.ToArray());
+
+        Assert.Equal(JsonValueKind.Null, rejected.RootElement.GetProperty("id").ValueKind);
+        Assert.Equal("__invalid_request__", rejected.RootElement.GetProperty("params").GetProperty("name").GetString());
     }
 
     [Fact]
