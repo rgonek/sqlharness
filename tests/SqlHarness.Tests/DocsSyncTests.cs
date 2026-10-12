@@ -120,12 +120,10 @@ public sealed partial class DocsSyncTests
                 continue;
             }
 
+            var (exit, _, module) = await RunAsync(command == "artifact" ? ["artifact", "some-id", "--section", "summary"] : [command]);
+            if (exit != 2 || module.Calls != 0)
             {
-                var (exit, _, module) = await RunAsync(command == "artifact" ? ["artifact", "some-id", "--section", "summary"] : [command]);
-                if (exit != 2 || module.Calls != 0)
-                {
-                    failures.Add($"{command} (modes {key}) bare run: exit {exit}, dispatches {module.Calls}");
-                }
+                failures.Add($"{command} (modes {key}) bare run: exit {exit}, dispatches {module.Calls}");
             }
         }
 
