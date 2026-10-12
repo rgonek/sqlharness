@@ -107,7 +107,7 @@ public sealed class McpProtocolTests
     }
 
     [Fact]
-    public async Task Raw_duplicate_scope_call_is_rejected_and_session_serves_next_valid_call()
+    public async Task Raw_duplicate_ids_and_scope_are_rejected_and_session_serves_next_valid_call()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var clientToServer = new Pipe();
@@ -139,7 +139,9 @@ public sealed class McpProtocolTests
             }, NullLoggerFactory.Instance, cts.Token);
 
         const string sentinel = "outer-scope-duplicate-secret";
-        var raw = "{\"jsonrpc\":\"2.0\",\"id\":\"raw-duplicate\",\"method\":\"tools/call\",\"params\":{\"name\":\"sqlharness_validate\",\"arguments\":{\"scope\":{\"profile\":\"sample-a\",\"vars\":{\"tenant\":\"abc\"}},\"scope\":{\"profile\":\"sample-a\",\"vars\":{\"tenant\":\"" + sentinel + "\"}},\"usage\":\"query\",\"sql\":\"SELECT 1\"}}}\n";
+        var raw = "{\"jsonrpc\":\"2.0\",\"id\":\"raw-duplicate-first\",\"id\":\"raw-duplicate-last\",\"method\":\"tools/call\",\"params\":{\"name\":\"sqlharness_validate\",\"arguments\":{\"scope\":{\"profile\":\"sample-a\",\"vars\":{\"tenant\":\"abc\"}},\"scope\":{\"profile\":\"sample-a\",\"vars\":{\"tenant\":\"" + sentinel + "\"}},\"usage\":\"query\",\"sql\":\"SELECT 1\"}}}\n";
+        var sdkMessage = JsonSerializer.Deserialize<JsonRpcMessage>(raw.TrimEnd());
+        Assert.Equal("raw-duplicate-last", Assert.IsType<string>(Assert.IsType<JsonRpcRequest>(sdkMessage).Id.Id));
         var rawBytes = Encoding.UTF8.GetBytes(raw);
         await clientToServer.Writer.WriteAsync(rawBytes, cts.Token);
         await clientToServer.Writer.FlushAsync(cts.Token);

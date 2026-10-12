@@ -171,7 +171,7 @@ public static partial class McpInputReader
         {
             if (new FileInfo(full).Length > maxBytes)
                 throw new McpInputException(TooLargeMessage(kind, maxBytes));
-            stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read, 8192, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 8192, FileOptions.Asynchronous | FileOptions.SequentialScan);
         }
         catch (McpInputException)
         {

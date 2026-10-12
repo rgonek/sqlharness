@@ -219,7 +219,7 @@ public class WatchNdjsonTests
     }
 
     [Fact]
-    public async Task Ndjson_sql_failure_emits_failed_with_redacted_message()
+    public async Task Ndjson_sql_failure_preserves_caller_supplied_message()
     {
         var session = FakeSession.WithScalarPolls(1);
         session.ExecuteFailure = new TimeoutException($"timeout {Token}");
@@ -228,14 +228,14 @@ public class WatchNdjsonTests
             .ExecuteWatchNdjsonAsync(Watch(untilUnchanged: 1), transport);
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
-        Assert.DoesNotContain(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
 
         var records = Parse(transport);
         Assert.Equal(["started", "failed"], records.Select(r => r.Event));
         var failed = Assert.Single(records, r => r.Event == "failed");
         Assert.Equal((int)SqlHarnessExitCode.SqlExecution, failed.Data.GetProperty("exitCode").GetInt32());
         Assert.Equal("sql_execution_failed", failed.Data.GetProperty("error").GetProperty("code").GetString());
-        Assert.DoesNotContain(Token, failed.Data.GetProperty("error").GetProperty("message").GetString() ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(Token, failed.Data.GetProperty("error").GetProperty("message").GetString() ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -714,7 +714,7 @@ public class WatchNdjsonTests
             .ExecuteAsync(Watch(untilUnchanged: 1));
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, reportOutcome.ExitCode);
-        Assert.DoesNotContain(Token, reportOutcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(Token, reportOutcome.SafeError ?? string.Empty, StringComparison.Ordinal);
 
         var ndjsonSession = FakeSession.WithScalarPolls(1);
         ndjsonSession.ExecuteFailure = new TimeoutException($"timeout {Token}");
@@ -723,13 +723,13 @@ public class WatchNdjsonTests
             .ExecuteWatchNdjsonAsync(Watch(untilUnchanged: 1), transport);
 
         Assert.Equal(reportOutcome.ExitCode, ndjsonOutcome.ExitCode);
-        Assert.DoesNotContain(Token, ndjsonOutcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(Token, ndjsonOutcome.SafeError ?? string.Empty, StringComparison.Ordinal);
 
         var records = Parse(transport);
         Assert.Equal(["started", "failed"], records.Select(r => r.Event));
         var failed = Assert.Single(records, r => r.Event == "failed");
         Assert.Equal((int)SqlHarnessExitCode.SqlExecution, failed.Data.GetProperty("exitCode").GetInt32());
-        Assert.DoesNotContain(Token, failed.Data.GetProperty("error").GetProperty("message").GetString() ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(Token, failed.Data.GetProperty("error").GetProperty("message").GetString() ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]

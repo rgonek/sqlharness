@@ -115,7 +115,7 @@ public sealed class CredentialRedactionTests
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
         Assert.Equal(
-            "Cannot open: Data Source=sql.example.test;Initial Catalog=Sales;User ID=app_user;Password=[REDACTED];Pwd=[REDACTED]",
+            "Cannot open: Data Source=sql.example.test;Initial Catalog=Sales;User ID=app_user;Password=\"x y;z\";Pwd=[REDACTED]",
             outcome.SafeError);
     }
 

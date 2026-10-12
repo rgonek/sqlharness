@@ -328,6 +328,8 @@ The classifier and the mutation flags prevent accidents. For enforcement, point 
 | Secrets | Known credentials (the profile's password and the Azure token) are replaced in every output. Other text, including SQL quoted in server errors, is shown as is. |
 | Artifacts | Comparison artifacts, `.sqlplan` files, named snapshots under `~/.sqlharness/snapshots`, Query Store text in `queries.jsonl`, and runtime parameter material are locally sensitive because they can embed SQL text, parameter values, and result data. `snapshot --diff` never prints cell values. Do not paste or publish `queries.jsonl` without explicit review. |
 
+Keep passwords and tokens out of command-line arguments, configuration output, logs, reports, and artifacts. Store profile passwords in the environment variables named by the profile.
+
 A safety rejection is a stop: narrow the operation or obtain explicit approval. A rejected setup stops execution.
 
 ## Activity journal and savings

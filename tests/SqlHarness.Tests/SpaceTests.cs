@@ -214,7 +214,7 @@ public sealed class SpaceTests
     }
 
     [Fact]
-    public async Task Space_sql_never_includes_profile_variables_and_errors_keep_them_but_redact_password_fragments()
+    public async Task Space_sql_never_includes_profile_variables_and_errors_keep_caller_supplied_text()
     {
         Assert.DoesNotContain(ProfileSecret, SpaceQuery.Sql, StringComparison.Ordinal);
         Assert.DoesNotContain("Password", SpaceQuery.Sql, StringComparison.OrdinalIgnoreCase);
@@ -231,8 +231,7 @@ public sealed class SpaceTests
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
         Assert.Contains(ProfileSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-        Assert.DoesNotContain(PasswordSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-        Assert.Contains("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(PasswordSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]
