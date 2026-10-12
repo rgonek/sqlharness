@@ -254,20 +254,20 @@ public sealed class ActivityJournalTests
     }
 
     [Fact]
-    public void Error_message_is_stored_only_when_store_sensitive()
+    public void Redacted_error_message_is_stored_by_default()
     {
-        using var hashOnly = new JournalTempDirectory();
+        using var defaultJournal = new JournalTempDirectory();
         using var sensitive = new JournalTempDirectory();
-        var end = JournalTestData.End("failed", 5) with { ErrorKind = "sql_execution_failed", ErrorMessage = "Invalid object name 'SQLH_ERR_MARKER'." };
+        var end = JournalTestData.End("failed", 5) with { ErrorKind = "sql_execution_failed", ErrorMessage = "Invalid object name '[REDACTED]'." };
 
-        var plain = Open(hashOnly, TextWriter.Null);
+        var plain = Open(defaultJournal, TextWriter.Null);
         plain.Complete(plain.Begin(JournalTestData.Session(), JournalTestData.Start()), end);
         var stored = Open(sensitive, TextWriter.Null, storeSensitive: true);
         stored.Complete(stored.Begin(JournalTestData.Session(), JournalTestData.Start()), end);
 
-        Assert.False(JournalDb.Contains(JournalDb.AllBytes(hashOnly.DatabasePath), "SQLH_ERR_MARKER"));
-        Assert.Null(JournalDb.Rows(hashOnly.DatabasePath, "SELECT error_message FROM operations")[0]["error_message"]);
-        Assert.Equal("Invalid object name 'SQLH_ERR_MARKER'.",
+        Assert.Equal("Invalid object name '[REDACTED]'.",
+            JournalDb.Rows(defaultJournal.DatabasePath, "SELECT error_message FROM operations")[0]["error_message"]);
+        Assert.Equal("Invalid object name '[REDACTED]'.",
             JournalDb.Rows(sensitive.DatabasePath, "SELECT error_message FROM operations")[0]["error_message"]);
     }
 
@@ -275,7 +275,7 @@ public sealed class ActivityJournalTests
     public void Long_error_message_is_truncated()
     {
         using var temp = new JournalTempDirectory();
-        var journal = Open(temp, TextWriter.Null, storeSensitive: true);
+        var journal = Open(temp, TextWriter.Null);
         var end = JournalTestData.End("failed", 5) with { ErrorMessage = new string('x', 5000) };
 
         journal.Complete(journal.Begin(JournalTestData.Session(), JournalTestData.Start()), end);

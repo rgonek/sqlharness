@@ -4,7 +4,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: Implemented; verification pending
 - Priority: P2
 - Effort: M
 - Risk: LOW

@@ -201,11 +201,14 @@ public class ContractsTests
             Assert.Contains("--param", doc, StringComparison.Ordinal);
             Assert.Contains("compare --matrix", doc, StringComparison.Ordinal);
             Assert.Contains("64 KiB", doc, StringComparison.Ordinal);
-            Assert.Contains("BOM", doc, StringComparison.Ordinal);
-            Assert.Contains("comments", doc, StringComparison.Ordinal);
+            Assert.Contains("UTF-8 BOM", doc, StringComparison.Ordinal);
+            Assert.Contains("JSON comments", doc, StringComparison.Ordinal);
             Assert.Contains("trailing commas", doc, StringComparison.Ordinal);
+            Assert.Contains("accepted", doc, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("only `name` and `parameters`", doc, StringComparison.Ordinal);
             Assert.Contains("locally sensitive", doc, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("credential-redacted", doc, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("journal.storeSensitive", doc, StringComparison.Ordinal);
             Assert.Contains("one session", doc, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("setup once", doc, StringComparison.OrdinalIgnoreCase);
             Assert.Contains(

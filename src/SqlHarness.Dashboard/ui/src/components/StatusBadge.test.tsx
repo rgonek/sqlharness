@@ -19,10 +19,12 @@ test("failed opens a dialog with the stored message", async () => {
   expect(dialog).toHaveTextContent("Invalid column name 'x'.")
 })
 
-test("rejected without a stored message explains storeSensitive", async () => {
+test("a legacy operation without a stored message explains that details are unavailable", async () => {
   render(<StatusBadge operation={operation({ status: "rejected", exitCode: 2, errorKind: "safety_rejected" })} />)
   await userEvent.click(screen.getByRole("button", { name: /rejected/ }))
-  expect(await screen.findByRole("dialog")).toHaveTextContent("journal.storeSensitive")
+  const dialog = await screen.findByRole("dialog")
+  expect(dialog).toHaveTextContent("No error message is available for this operation.")
+  expect(dialog).not.toHaveTextContent("journal.storeSensitive")
 })
 
 test("renders error message as text", async () => {

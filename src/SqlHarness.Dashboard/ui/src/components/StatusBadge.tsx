@@ -38,8 +38,7 @@ export function StatusBadge({ operation }: { operation: StatusFields }) {
             <pre className="max-h-96 overflow-auto whitespace-pre-wrap font-mono text-sm">{operation.errorMessage}</pre>
           ) : (
             <p className="text-sm text-muted-foreground">
-              The full message is stored only when <code>journal.storeSensitive</code> is enabled in{" "}
-              <a href="/settings">Settings</a>.
+              No error message is available for this operation.
             </p>
           )}
         </DialogContent>

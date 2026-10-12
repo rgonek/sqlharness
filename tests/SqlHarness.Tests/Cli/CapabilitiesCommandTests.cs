@@ -28,6 +28,9 @@ public sealed class CapabilitiesCommandTests
         Assert.False(postgres.GetProperty("supportsQstop").GetBoolean());
         Assert.Contains("agentOutputBytes", root.GetProperty("limits").EnumerateObject().Select(property => property.Name));
         var limits = root.GetProperty("limits");
+        var journalStorage = limits.GetProperty("activityJournalStorage");
+        Assert.Equal("credential-redacted error messages are stored by default", journalStorage.GetProperty("errorMessages").GetString());
+        Assert.Equal("journal.storeSensitive", journalStorage.GetProperty("sqlTextAndPlans").GetString());
         Assert.Equal(1000000, limits.GetProperty("comparisonRowCapPerRun").GetProperty("max").GetInt32());
         Assert.Equal(2000000, limits.GetProperty("comparisonUniqueFingerprintBudgetPerCell").GetProperty("max").GetInt32());
     }

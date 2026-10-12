@@ -50,6 +50,7 @@ public sealed record AgentCallMetadata(
     string? TurnTrigger,
     string? ThreadSource);
 
+/// <summary>ErrorMessage is a credential-redacted caller-facing diagnostic; SQL text and plans remain opt-in.</summary>
 public sealed record OperationEnd(
     string Status,
     int ExitCode,

@@ -6,7 +6,7 @@ namespace SqlHarness.Core;
 /// <summary>
 /// Maps operations and outcomes to journal rows. It reads only names, scope,
 /// SQL text (for hashing and opt-in storage), and target identity, plus the
-/// error message for opt-in storage; it never reads parameter values or result rows.
+/// already-redacted error message for storage; it never reads parameter values or result rows.
 /// </summary>
 internal static class OperationJournalDescriber
 {

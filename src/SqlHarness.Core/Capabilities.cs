@@ -68,6 +68,11 @@ public static class SqlHarnessCapabilitiesProvider
                 ["indexesTop"] = new { min = OperationLimits.TopMin, max = OperationLimits.TopMax },
                 ["agentOutputBytes"] = new { min = 4096, max = 1048576, defaultValue = 16384 },
                 ["agentCellChars"] = new { min = 0, max = 4096, defaultValue = 512 },
+                ["activityJournalStorage"] = new
+                {
+                    errorMessages = "credential-redacted error messages are stored by default",
+                    sqlTextAndPlans = "journal.storeSensitive",
+                },
                 ["sessionTempStatements"] = new Dictionary<string, string[]>(StringComparer.Ordinal)
                 {
                     ["sqlserver"] = [

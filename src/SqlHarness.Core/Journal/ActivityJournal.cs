@@ -140,7 +140,7 @@ public sealed class ActivityJournal : IActivityJournal
             update.Parameters.AddWithValue("$status", end.Status);
             update.Parameters.AddWithValue("$exit", end.ExitCode);
             update.Parameters.AddWithValue("$error", (object?)end.ErrorKind ?? DBNull.Value);
-            update.Parameters.AddWithValue("$message", _storeSensitive ? (object?)TruncateErrorMessage(end.ErrorMessage) ?? DBNull.Value : DBNull.Value);
+            update.Parameters.AddWithValue("$message", (object?)TruncateErrorMessage(end.ErrorMessage) ?? DBNull.Value);
             update.Parameters.AddWithValue("$cancel", (object?)end.CancelReason ?? DBNull.Value);
             update.Parameters.AddWithValue("$duration", end.DurationMilliseconds);
             update.Parameters.AddWithValue("$engine", (object?)end.Engine ?? DBNull.Value);

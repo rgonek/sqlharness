@@ -33,7 +33,7 @@ Odświeżono po weryfikacji Plan 049 na `58fab51`. Preferencja użytkownika: pla
 |---|---|---|---|
 | 5 | [051](051-compare-regression-verdict.md) | Ogólne: werdykt regresji w wyniku compare | Zastępuje 035; progi z 013 |
 | [052](052-postgres-read-only-transactions.md) | PostgreSQL runs every non-approved command inside a READ ONLY transaction | P1 | M | PG playground for proof | TODO |
-| [053](053-specific-errors-for-the-caller.md) | Errors name what went wrong when the reader already holds the data | P2 | M | — | TODO |
+| [053](053-specific-errors-for-the-caller.md) | Errors name what went wrong when the reader already holds the data | P2 | M | — | IMPLEMENTED; verification pending |
 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redaction is exact known-secret replacement; MCP input guards match a same-user threat model | P2 | M | 049 (DONE) | TODO |
 
 ### Grupa 3 — dostarczanie i utrzymanie
