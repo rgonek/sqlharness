@@ -130,9 +130,9 @@ public sealed class MeasureParameterSetCommandTests
     }
 
     [Fact]
-    public async Task Measure_invalid_parameter_set_exits_safety_without_leaking_text()
+    public async Task Measure_invalid_parameter_set_names_path_and_unknown_property()
     {
-        using var first = TempJson($$"""{"name":"small","parameters":["{{ParameterSecret}}"],}""");
+        using var first = TempJson($$"""{"name":"small","parameters":["{{ParameterSecret}}"],"secret":"private-file-value"}""");
         using var second = TempJson("""{"name":"large","parameters":["id:int=999001"]}""");
         var module = new FakeModule();
         var output = new StringWriter();
@@ -144,12 +144,12 @@ public sealed class MeasureParameterSetCommandTests
 
         Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
         Assert.Empty(module.Operations);
-        Assert.Equal($"The parameter set file is invalid.{Environment.NewLine}", output.ToString());
-        AssertDoesNotLeak(output.ToString(), first.Path, second.Path, ParameterSecret, "999001", "small", "large");
+        Assert.Equal($"Parameter set file '{first.Path}' contains unknown property 'secret'.{Environment.NewLine}", output.ToString());
+        AssertDoesNotLeak(output.ToString(), "private-file-value", ParameterSecret, "999001", "small", "large");
     }
 
     [Fact]
-    public async Task Measure_parameter_set_io_failure_exits_safety_without_the_path()
+    public async Task Measure_parameter_set_io_failure_exits_safety_with_the_path()
     {
         var missingA = Path.Combine(Path.GetTempPath(), "sqlharness-io-" + Guid.NewGuid().ToString("n") + ".sqljson");
         var missingB = Path.Combine(Path.GetTempPath(), "sqlharness-io-" + Guid.NewGuid().ToString("n") + ".sqljson");
@@ -163,8 +163,8 @@ public sealed class MeasureParameterSetCommandTests
 
         Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
         Assert.Empty(module.Operations);
-        Assert.Equal($"Unable to read parameter set file.{Environment.NewLine}", output.ToString());
-        AssertDoesNotLeak(output.ToString(), missingA, missingB);
+        Assert.Equal($"Parameter set file '{missingA}' could not be read.{Environment.NewLine}", output.ToString());
+        Assert.DoesNotContain(missingB, output.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]

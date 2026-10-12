@@ -417,7 +417,7 @@ public sealed class McpInputReaderTests : IDisposable
     }
 
     [Fact]
-    public async Task Parameter_sets_use_the_shared_strict_parser_and_size_cap()
+    public async Task Parameter_sets_use_the_shared_parser_and_size_cap()
     {
         var good = WriteFile("good.sqljson", "{\"name\":\"small\",\"parameters\":[\"id:int=1\"]}");
         var sets = await McpInputReader.ReadParameterSetsAsync([good], _scope, CancellationToken.None);
@@ -426,25 +426,31 @@ public sealed class McpInputReaderTests : IDisposable
 
         var bom = Path.Combine(_root, "bom.sqljson");
         File.WriteAllBytes(bom, Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes("{\"name\":\"s\",\"parameters\":[\"id:int=1\"]}")).ToArray());
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([bom], _scope, CancellationToken.None));
+        var bomSet = await McpInputReader.ReadParameterSetsAsync([bom], _scope, CancellationToken.None);
+        Assert.Equal("s", Assert.Single(bomSet).Name);
 
         var trailing = WriteFile("trailing.sqljson", "{\"name\":\"s\",\"parameters\":[\"id:int=1\"],}");
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([trailing], _scope, CancellationToken.None));
+        await McpInputReader.ReadParameterSetsAsync([trailing], _scope, CancellationToken.None);
 
         var comment = WriteFile("comment.sqljson", "{\"name\":/*c*/\"s\",\"parameters\":[\"id:int=1\"]}");
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([comment], _scope, CancellationToken.None));
+        await McpInputReader.ReadParameterSetsAsync([comment], _scope, CancellationToken.None);
 
         var extra = WriteFile("extra.sqljson", "{\"name\":\"s\",\"parameters\":[\"id:int=1\"],\"values\":[]}");
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([extra], _scope, CancellationToken.None));
+        var unknown = await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([extra], _scope, CancellationToken.None));
+        Assert.Contains(extra, unknown.Message, StringComparison.Ordinal);
+        Assert.Contains("unknown property 'values'", unknown.Message, StringComparison.Ordinal);
 
         var wrongExtension = WriteFile("set.json", "{\"name\":\"s\",\"parameters\":[\"id:int=1\"]}");
         var extension = await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([wrongExtension], _scope, CancellationToken.None));
         Assert.Contains(".sqljson", extension.Message, StringComparison.Ordinal);
+        Assert.Contains(wrongExtension, extension.Message, StringComparison.Ordinal);
 
         var big = Path.Combine(_root, "big.sqljson");
         var padding = new string(' ', McpLimits.MaxParameterSetBytes);
         File.WriteAllText(big, "{\"name\":\"s\",\"parameters\":[\"id:int=1\"]}" + padding);
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([big], _scope, CancellationToken.None));
+        var oversized = await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([big], _scope, CancellationToken.None));
+        Assert.Contains(big, oversized.Message, StringComparison.Ordinal);
+        Assert.Contains("64 KiB", oversized.Message, StringComparison.Ordinal);
     }
 
     [Fact]

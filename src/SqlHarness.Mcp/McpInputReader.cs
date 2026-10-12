@@ -77,7 +77,7 @@ public static partial class McpInputReader
 
     /// <summary>
     /// Reads parameter-set files through the guarded reader and parses every
-    /// file with the shared Core strict parser (64 KiB, no BOM/comments/
+    /// file with the shared Core parser (64 KiB, optional BOM/comments/
     /// trailing commas, only name and parameters). Only .sqljson files are
     /// admitted, and values never leave this path into reports.
     /// </summary>
@@ -93,15 +93,22 @@ public static partial class McpInputReader
         {
             if (string.IsNullOrWhiteSpace(path) ||
                 !string.Equals(Path.GetExtension(path), ".sqljson", StringComparison.OrdinalIgnoreCase))
-                throw new McpInputException("Parameter-set files must use the .sqljson extension.");
-            var bytes = await ReadBytesFileAsync(path, scope.InputRoots, McpLimits.MaxParameterSetBytes, ct, kind: "parameter set file");
+                throw new McpInputException($"Parameter set file '{EchoPath(path ?? string.Empty)}' must use the .sqljson extension.");
+            byte[] bytes;
             try
             {
-                sets.Add(ParameterSetFileReader.Parse(bytes));
+                bytes = await ReadBytesFileAsync(path, scope.InputRoots, McpLimits.MaxParameterSetBytes, ct, kind: "parameter set file");
+            }
+            catch (McpInputException exception)
+            {
+                throw new McpInputException($"Parameter set file '{EchoPath(path)}' could not be read: {exception.Message}");
+            }
+            try
+            {
+                sets.Add(ParameterSetFileReader.Parse(bytes, EchoPath(path)));
             }
             catch (ParameterSetFileException exception)
             {
-                // The shared parser messages are constant and value-free.
                 throw new McpInputException(exception.Message);
             }
         }
@@ -329,7 +336,7 @@ public static partial class McpInputReader
     [GeneratedRegex(@"(//|\\\\)[^/\\@\s]+@", RegexOptions.CultureInvariant)]
     private static partial Regex UserInfoPattern();
 
-    private static string EchoPath(string path)
+    internal static string EchoPath(string path)
     {
         // URL/UNC userinfo (user:password@host) is masked first, before redaction and truncation.
         var safe = SecretRedactor.Redact(UserInfoPattern().Replace(path, "$1[REDACTED]@"), []);

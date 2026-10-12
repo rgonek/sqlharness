@@ -300,7 +300,7 @@ public class WatchNdjsonTests
     }
 
     [Fact]
-    public async Task Ndjson_typed_parameter_rejection_emits_failed_without_echoing_the_value()
+    public async Task Ndjson_typed_parameter_rejection_emits_failed_with_the_value()
     {
         var transport = new StringWriter();
         var operation = Watch(untilUnchanged: 1) with
@@ -312,8 +312,8 @@ public class WatchNdjsonTests
             .ExecuteWatchNdjsonAsync(operation, transport);
 
         Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
-        Assert.Equal("Invalid value for SQL parameter 'Flag' of type 'int'.", outcome.SafeError);
-        Assert.DoesNotContain("nope-secret", transport.ToString(), StringComparison.Ordinal);
+        Assert.Equal("Invalid value 'nope-secret' for SQL parameter 'Flag' of type 'int'.", outcome.SafeError);
+        Assert.Contains("nope-secret", transport.ToString(), StringComparison.Ordinal);
 
         var records = Parse(transport);
         var failed = Assert.Single(records);

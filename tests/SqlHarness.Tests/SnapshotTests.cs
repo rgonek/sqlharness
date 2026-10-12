@@ -306,7 +306,7 @@ public class SnapshotTests
     }
 
     [Fact]
-    public async Task Snapshot_invalid_parameter_value_is_redacted_before_connect()
+    public async Task Snapshot_invalid_parameter_value_is_reported_before_connect()
     {
         var store = new FakeSnapshotStore();
         var session = FakeSession.WithRows(1);
@@ -324,8 +324,7 @@ public class SnapshotTests
         Assert.Equal(0, store.LoadCalls);
         AssertParameterError(
             outcome,
-            "Invalid value for SQL parameter 'n' of type 'int'.",
-            "private-audit-value",
+            "Invalid value 'private-audit-value' for SQL parameter 'n' of type 'int'.",
             "n:int=private-audit-value");
     }
 

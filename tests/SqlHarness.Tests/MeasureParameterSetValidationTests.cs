@@ -295,7 +295,7 @@ public sealed class MeasureParameterSetValidationTests
     }
 
     [Fact]
-    public void Prepare_rejects_invalid_values_without_echoing_them()
+    public void Prepare_reports_invalid_values_with_the_parameter_name()
     {
         var exception = Reject(
             [],
@@ -303,8 +303,8 @@ public sealed class MeasureParameterSetValidationTests
             null,
             "select @id");
 
-        Assert.Equal("Parameter set 'large' is invalid: Invalid value for SQL parameter 'id' of type 'int'.", exception.Message);
-        AssertSafe(exception, "not-a-number-secret", "id:int=not-a-number-secret");
+        Assert.Equal("Parameter set 'large' is invalid: Invalid value 'not-a-number-secret' for SQL parameter 'id' of type 'int'.", exception.Message);
+        Assert.DoesNotContain("id:int=not-a-number-secret", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

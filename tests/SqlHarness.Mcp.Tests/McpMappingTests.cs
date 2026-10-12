@@ -729,8 +729,8 @@ public sealed class McpMappingTests : IDisposable
     [Theory]
     [InlineData("nvarchar(20)", "[null,null]", "The --matrix option for SQL parameter '@Label' contains a duplicate value.")]
     [InlineData("nvarchar(20)", "[\"\",\"\"]", "The --matrix option for SQL parameter '@Label' contains a duplicate value.")]
-    [InlineData("int", "[\"1\",\"\"]", "The --matrix option for SQL parameter '@Label' of type 'int' is invalid.")]
-    [InlineData("int", "[\"1\",\"2,3\"]", "The --matrix option for SQL parameter '@Label' of type 'int' is invalid.")]
+    [InlineData("int", "[\"1\",\"\"]", "The --matrix option for SQL parameter '@Label' of type 'int' with value '' is invalid.")]
+    [InlineData("int", "[\"1\",\"2,3\"]", "The --matrix option for SQL parameter '@Label' of type 'int' with value '2,3' is invalid.")]
     public async Task Matrix_value_rejections_come_from_the_core_binder(string type, string valuesJson, string expected)
     {
         var scope = Scope();
@@ -1058,7 +1058,7 @@ public sealed class McpMappingTests : IDisposable
     }
 
     [Fact]
-    public async Task Invalid_matrix_values_fail_in_core_without_value_echo()
+    public async Task Invalid_matrix_values_fail_in_core_with_a_specific_diagnostic()
     {
         var scope = Scope();
         var operation = await McpOperationMapper.MapCompareAsync(
@@ -1071,7 +1071,9 @@ public sealed class McpMappingTests : IDisposable
         var outcome = await scope.CreateModule().ExecuteAsync(
             operation, new CancellationTokenSource(TimeSpan.FromSeconds(30)).Token);
         Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
-        Assert.DoesNotContain(SecretValue, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Equal(
+            $"The --matrix option for SQL parameter '@n' of type 'int' with value '{SecretValue}' is invalid.",
+            outcome.SafeError);
     }
 
     [Fact]

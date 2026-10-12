@@ -80,7 +80,7 @@ public sealed class McpSecretRedactionTests
     }
 
     [Fact]
-    public async Task Request_scope_core_error_does_not_echo_SQL_scope_or_typed_parameter_sentinels()
+    public async Task Request_scope_core_error_keeps_parameter_value_but_not_SQL_or_scope_sentinels()
     {
         const string SqlSentinel = "request-sql-sentinel-7741";
         const string VariableSentinel = "request-var-secret-5528";
@@ -105,28 +105,18 @@ public sealed class McpSecretRedactionTests
         var text = TextOf(result);
         Assert.DoesNotContain(SqlSentinel, text, StringComparison.Ordinal);
         Assert.DoesNotContain(VariableSentinel, text, StringComparison.Ordinal);
-        Assert.DoesNotContain(ParameterSentinel, text, StringComparison.Ordinal);
+        Assert.Contains(ParameterSentinel, text, StringComparison.Ordinal);
         using var document = JsonDocument.Parse(text);
         Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
     }
 
     /// <summary>
-    /// 012/T2: a typed value travels whole, so a secret with a comma (or an
-    /// '=' in a fixed parameter) is one value end to end. Core rejects the
-    /// bad value offline with a constant message that never interpolates a
-    /// value, which this test pins by exact equality for both operations
-    /// (not just the matrix one, as before). That equality is the real
-    /// regression guard: if either rejection ever started interpolating the
-    /// value, this assertion would fail on the first changed character. The
-    /// <c>DoesNotContain</c> lines below are a belt-and-suspenders check on
-    /// top of it. Parameter values are not redacted under the credential-only
-    /// policy (plan 025), so they prove nothing about redaction here; they only
-    /// show the constant message never interpolates a value. Credential
-    /// redaction (the SQL password and token patterns) is covered by the
-    /// password and <c>SecretRedactor</c> tests.
+    /// Typed values remain caller-readable in validation errors. The message
+    /// quotes the offending value and still passes through known-secret
+    /// replacement at the operation boundary.
     /// </summary>
     [Fact]
-    public async Task Typed_values_with_separator_characters_reach_core_whole_and_its_rejection_is_a_constant_message()
+    public async Task Typed_values_with_separator_characters_reach_core_and_are_quoted_in_rejection()
     {
         const string FirstHalf = "fikcyjna-polowa-4410";
         const string SecondHalf = "fikcyjna-reszta-8852";
@@ -162,17 +152,17 @@ public sealed class McpSecretRedactionTests
                 var text = TextOf(result);
                 using var document = JsonDocument.Parse(text);
                 Assert.Equal((int)SqlHarnessExitCode.Safety, document.RootElement.GetProperty("exitCode").GetInt32());
-                Assert.DoesNotContain(FirstHalf, text, StringComparison.Ordinal);
-                Assert.DoesNotContain(SecondHalf, text, StringComparison.Ordinal);
+                Assert.Contains(FirstHalf, text, StringComparison.Ordinal);
+                Assert.Contains(SecondHalf, text, StringComparison.Ordinal);
             }
 
             using var matrixDocument = JsonDocument.Parse(TextOf(matrix));
             Assert.Equal(
-                "The --matrix option for SQL parameter '@n' of type 'int' is invalid.",
+                $"The --matrix option for SQL parameter '@n' of type 'int' with value '{CommaSecret}' is invalid.",
                 matrixDocument.RootElement.GetProperty("error").GetProperty("message").GetString());
             using var queryDocument = JsonDocument.Parse(TextOf(query));
             Assert.Equal(
-                "Invalid value for SQL parameter 'n' of type 'int'.",
+                $"Invalid value '{FirstHalf}={SecondHalf}' for SQL parameter 'n' of type 'int'.",
                 queryDocument.RootElement.GetProperty("error").GetProperty("message").GetString());
         }
         finally

@@ -611,7 +611,7 @@ public class SqlHarnessCompareTests
     }
 
     [Fact]
-    public async Task Compare_invalid_parameter_value_is_redacted_before_connect()
+    public async Task Compare_invalid_parameter_value_is_reported_before_connect()
     {
         var session = FakeCompareSession.Create();
         var artifacts = new CapturingArtifactWriter();
@@ -629,8 +629,7 @@ public class SqlHarnessCompareTests
         Assert.Null(artifacts.Report);
         AssertParameterError(
             outcome,
-            "Invalid value for SQL parameter 'n' of type 'int'.",
-            "private-audit-value",
+            "Invalid value 'private-audit-value' for SQL parameter 'n' of type 'int'.",
             "n:int=private-audit-value");
     }
 
@@ -662,7 +661,7 @@ public class SqlHarnessCompareTests
     }
 
     [Fact]
-    public async Task Compare_matrix_invalid_value_keeps_name_and_type()
+    public async Task Compare_matrix_invalid_value_keeps_name_type_and_offending_value()
     {
         var session = FakeCompareSession.Create();
         var artifacts = new CapturingArtifactWriter();
@@ -681,8 +680,7 @@ public class SqlHarnessCompareTests
         Assert.Empty(artifacts.Runs);
         AssertParameterError(
             outcome,
-            "The --matrix option for SQL parameter '@amount' of type 'decimal(19,4)' is invalid.",
-            "private-audit-value",
+            "The --matrix option for SQL parameter '@amount' of type 'decimal(19,4)' with value 'private-audit-value' is invalid.",
             "amount:decimal(19,4)=private-audit-value,1.00",
             "1.00");
     }
@@ -707,9 +705,8 @@ public class SqlHarnessCompareTests
         Assert.Empty(artifacts.Runs);
         AssertParameterError(
             outcome,
-            "The --matrix option for SQL parameter '@privateaudit' of type 'int' is invalid.",
-            "privateaudit:int=1,private",
-            "'private'");
+            "The --matrix option for SQL parameter '@privateaudit' of type 'int' with value 'private' is invalid.",
+            "privateaudit:int=1,private");
     }
 
     private static void AssertParameterError(SqlHarnessOutcome outcome, string expected, params string[] forbidden)

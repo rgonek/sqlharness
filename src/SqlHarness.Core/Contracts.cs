@@ -110,7 +110,11 @@ public sealed record SqlHarnessCompareMatrixReport(
     IReadOnlyList<CompareMatrixCellReport> Cells);
 
 public sealed record SqlHarnessParameterSetInput(
-    string Name, IReadOnlyList<string> Parameters);
+    string Name, IReadOnlyList<string> Parameters)
+{
+    [JsonIgnore]
+    internal string? SourcePath { get; init; }
+}
 
 public sealed record SqlHarnessMeasureOperation(
     SqlTargetRequest Target,

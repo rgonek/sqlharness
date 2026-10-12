@@ -107,7 +107,7 @@ public class CompareMatrixTests
         Assert.Equal(2, (int)outcome.ExitCode);
         Assert.Equal(0, factory.ConnectCount);
         Assert.Null(outcome.Report);
-        Assert.DoesNotContain("nope", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("nope", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -485,7 +485,7 @@ public class CompareMatrixTests
         var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
 
         Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
-        Assert.Equal("The --matrix option for SQL parameter '@BatchSize' of type 'int' is invalid.", outcome.SafeError);
+        Assert.Equal("The --matrix option for SQL parameter '@BatchSize' of type 'int' with value 'private,audit' is invalid.", outcome.SafeError);
         Assert.Equal(0, factory.ConnectCount);
     }
 
@@ -580,7 +580,7 @@ public class CompareMatrixTests
         var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
 
         Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
-        Assert.Equal("Invalid value for SQL parameter 'Tenant' of type 'int'.", outcome.SafeError);
+        Assert.Equal("Invalid value 'private,audit=value' for SQL parameter 'Tenant' of type 'int'.", outcome.SafeError);
         Assert.Equal(0, factory.ConnectCount);
     }
 

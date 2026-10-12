@@ -470,7 +470,7 @@ public class WatchTests
     }
 
     [Fact]
-    public async Task Watch_invalid_parameter_value_is_redacted_before_connect()
+    public async Task Watch_invalid_parameter_value_is_reported_before_connect()
     {
         var session = FakeSession.WithScalarPolls(1);
         var azure = new FakeAzureCli(Token);
@@ -486,8 +486,7 @@ public class WatchTests
         Assert.Empty(session.Commands);
         AssertParameterError(
             outcome,
-            "Invalid value for SQL parameter 'n' of type 'int'.",
-            "private-audit-value",
+            "Invalid value 'private-audit-value' for SQL parameter 'n' of type 'int'.",
             "n:int=private-audit-value");
     }
 

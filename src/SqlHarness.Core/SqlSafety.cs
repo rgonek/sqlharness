@@ -11,23 +11,20 @@ using SqlHarness.Core.Dialect;
 namespace SqlHarness.Core;
 
 
-// ParameterName marks a value-validation failure. Diagnostic is not InnerException, so ToString cannot inherit the rejected value.
+// ParameterName marks a value-validation failure. The public message is redacted at the operation boundary.
 internal class SqlHarnessSafetyException(string message, Exception? innerException = null) : Exception(message, innerException)
 {
     internal string? ParameterName { get; init; }
 
     internal string? ExpectedType { get; init; }
 
-    internal Exception? Diagnostic { get; init; }
-
     internal bool IsParameterValue => ParameterName is not null && ExpectedType is not null;
 
-    internal static SqlHarnessSafetyException InvalidParameter(string name, string type, Exception? diagnostic = null) =>
-        new($"Invalid value for SQL parameter '{name}' of type '{type}'.")
+    internal static SqlHarnessSafetyException InvalidParameter(string name, string type, string? value) =>
+        new($"Invalid value '{value}' for SQL parameter '{name}' of type '{type}'.")
         {
             ParameterName = name,
             ExpectedType = type,
-            Diagnostic = diagnostic,
         };
 
     internal SqlHarnessSafetyException WithParameterValue(string? message = null) =>
@@ -35,26 +32,7 @@ internal class SqlHarnessSafetyException(string message, Exception? innerExcepti
         {
             ParameterName = ParameterName,
             ExpectedType = ExpectedType,
-            Diagnostic = Diagnostic,
         };
-
-    internal IReadOnlyList<string> PreservedTokens()
-    {
-        var tokens = new List<string>(8);
-        Add(tokens, ParameterName);
-        Add(tokens, ExpectedType);
-        if (!string.IsNullOrEmpty(ParameterName) && !ParameterName.StartsWith('@'))
-            Add(tokens, "@" + ParameterName);
-        return tokens;
-    }
-
-    private static void Add(List<string> tokens, string? value)
-    {
-        if (string.IsNullOrEmpty(value))
-            return;
-        tokens.Add(value);
-        tokens.Add("'" + value + "'");
-    }
 }
 
 /// <summary>
@@ -1250,11 +1228,11 @@ internal static partial class SqlParameterParser
         }
         catch (SqlHarnessSafetyException exception) when (IsInvalidParameterValue(exception))
         {
-            throw SqlHarnessSafetyException.InvalidParameter(name, type, exception.InnerException ?? exception.Diagnostic);
+            throw SqlHarnessSafetyException.InvalidParameter(name, type, value);
         }
         catch (Exception exception) when (exception is FormatException or OverflowException or ArgumentOutOfRangeException or ArgumentException)
         {
-            throw SqlHarnessSafetyException.InvalidParameter(name, type, exception);
+            throw SqlHarnessSafetyException.InvalidParameter(name, type, value);
         }
     }
 

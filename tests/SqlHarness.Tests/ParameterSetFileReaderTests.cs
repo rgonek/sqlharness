@@ -8,9 +8,8 @@ namespace SqlHarness.Tests;
 public sealed class ParameterSetFileReaderTests
 {
     private const string ParameterSecret = "customerId:int=424242";
-    private const string InvalidFileMessage = "The parameter set file is invalid.";
-    private const string TooLargeMessage = "Parameter set file exceeds the 64 KiB limit.";
-    private const string UnableToReadMessage = "Unable to read parameter set file.";
+    private const string InvalidFileMessage = "valid";
+    private const string TooLargeMessage = "64 KiB";
 
     [Fact]
     public async Task ReadAsync_returns_name_and_parameters_in_file_order()
@@ -81,7 +80,7 @@ public sealed class ParameterSetFileReaderTests
     }
 
     [Fact]
-    public async Task ReadAsync_rejects_bom()
+    public async Task ReadAsync_accepts_bom()
     {
         var json = """{"name":"ok","parameters":["customerId:int=424242"]}"""u8.ToArray();
         var bytes = new byte[Encoding.UTF8.Preamble.Length + json.Length];
@@ -89,31 +88,34 @@ public sealed class ParameterSetFileReaderTests
         json.CopyTo(bytes.AsSpan(Encoding.UTF8.Preamble.Length));
         using var file = TempBytes(bytes);
 
-        var exception = await RejectBytes(file, InvalidFileMessage);
+        var set = await ParameterSetFileReader.ReadAsync(file.Path, CancellationToken.None);
 
-        AssertSafe(exception, file.Path, ParameterSecret, "ok");
+        Assert.Equal("ok", set.Name);
+        Assert.Equal([ParameterSecret], set.Parameters);
     }
 
     [Theory]
     [InlineData("""{"name":"ok" /* secret-note-value */,"parameters":["customerId:int=424242"]}""")]
     [InlineData("""{"name":"ok","parameters":["customerId:int=424242"]} // secret-note-value""")]
     [InlineData("""{/* secret-note-value */"name":"ok","parameters":["customerId:int=424242"]}""")]
-    public async Task ReadAsync_rejects_comments(string json)
+    public async Task ReadAsync_accepts_comments(string json)
     {
         using var file = TempJson(json);
-        var exception = await Reject(file, InvalidFileMessage);
-        AssertSafe(exception, file.Path, ParameterSecret, "secret-note-value");
+        var set = await ParameterSetFileReader.ReadAsync(file.Path, CancellationToken.None);
+        Assert.Equal("ok", set.Name);
+        Assert.Equal([ParameterSecret], set.Parameters);
     }
 
     [Theory]
     [InlineData("""{"name":"ok","parameters":["customerId:int=424242",]}""")]
     [InlineData("""{"name":"ok","parameters":["customerId:int=424242"],}""")]
     [InlineData("""{"name":"ok","parameters":["customerId:int=424242",],}""")]
-    public async Task ReadAsync_rejects_trailing_commas(string json)
+    public async Task ReadAsync_accepts_trailing_commas(string json)
     {
         using var file = TempJson(json);
-        var exception = await Reject(file, InvalidFileMessage);
-        AssertSafe(exception, file.Path, ParameterSecret);
+        var set = await ParameterSetFileReader.ReadAsync(file.Path, CancellationToken.None);
+        Assert.Equal("ok", set.Name);
+        Assert.Equal([ParameterSecret], set.Parameters);
     }
 
     [Theory]
@@ -154,7 +156,7 @@ public sealed class ParameterSetFileReaderTests
     public async Task ReadAsync_rejects_unknown_properties(string json)
     {
         using var file = TempJson(json);
-        var exception = await Reject(file, InvalidFileMessage);
+        var exception = await Reject(file, "unknown property");
         AssertSafe(exception, file.Path, ParameterSecret, "secret-label");
     }
 
@@ -163,9 +165,11 @@ public sealed class ParameterSetFileReaderTests
     {
         using var file = TempJson("""{"name":"ok","parameters":["customerId:int=424242"],"note":"secret-note-value","path":"D:\\secret\\one.sqljson"}""");
 
-        var exception = await Reject(file, InvalidFileMessage);
+        var exception = await Reject(file, "unknown property");
 
-        AssertSafe(exception, file.Path, ParameterSecret, "secret-note-value", "one.sqljson", "D:\\secret\\one.sqljson");
+        Assert.Contains(file.Path, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("unknown property 'note'", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret-note-value", exception.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -247,19 +251,49 @@ public sealed class ParameterSetFileReaderTests
     }
 
     [Fact]
-    public async Task ReadAsync_rejects_missing_file_without_the_path()
+    public async Task ReadAsync_reports_path_and_json_position_without_echoing_file_values()
+    {
+        using var file = TempJson("{\n  \"name\":\"ok\",\n  \"parameters\":[\"id:int=private-json-value\"],\n  broken\n}");
+
+        var exception = await Reject(file, "line 4, byte");
+
+        Assert.Contains(file.Path, exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-json-value", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReadAsync_returns_source_path_for_later_parameter_diagnostics()
+    {
+        using var file = TempJson("""{"name":"bad-entry","parameters":["customerId:int=private-entry-value"]}""");
+
+        var set = await ParameterSetFileReader.ReadAsync(file.Path, CancellationToken.None);
+
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() => MeasureParameterSetValidator.Prepare(
+            [], [set], setupSql: null, querySql: "SELECT @customerId AS Value"));
+        Assert.Contains(file.Path, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("invalid entry for parameter 'customerId'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("private-entry-value", exception.Message, StringComparison.Ordinal);
+
+        var redacted = SecretRedactor.Redact(exception, [file.Path, "private-entry-value"]);
+        Assert.DoesNotContain(file.Path, redacted, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-entry-value", redacted, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", redacted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReadAsync_rejects_missing_file_with_the_path()
     {
         var path = Path.Combine(Path.GetTempPath(), "sqlharness-missing-" + Guid.NewGuid().ToString("n") + ".sqljson");
 
         var exception = await Assert.ThrowsAsync<ParameterSetFileException>(() =>
             ParameterSetFileReader.ReadAsync(path, CancellationToken.None));
 
-        Assert.Equal(UnableToReadMessage, exception.Message);
+        Assert.Contains("could not be read", exception.Message, StringComparison.Ordinal);
         AssertSafe(exception, path);
     }
 
     [Fact]
-    public async Task ReadAsync_rejects_directory_without_the_path()
+    public async Task ReadAsync_rejects_directory_with_the_path()
     {
         var directory = Directory.CreateTempSubdirectory("sqlharness-ps-dir");
         try
@@ -267,8 +301,8 @@ public sealed class ParameterSetFileReaderTests
             var exception = await Assert.ThrowsAsync<ParameterSetFileException>(() =>
                 ParameterSetFileReader.ReadAsync(directory.FullName, CancellationToken.None));
 
-            Assert.Equal(UnableToReadMessage, exception.Message);
-            AssertSafe(exception, directory.FullName, directory.Name);
+            Assert.Contains("could not be read", exception.Message, StringComparison.Ordinal);
+            AssertSafe(exception, directory.FullName);
         }
         finally
         {
@@ -277,15 +311,15 @@ public sealed class ParameterSetFileReaderTests
     }
 
     [Fact]
-    public async Task ReadAsync_rejects_illegal_path_without_echoing_it()
+    public async Task ReadAsync_rejects_illegal_path_with_the_path()
     {
         var path = Path.Combine(Path.GetTempPath(), "bad|name-" + Guid.NewGuid().ToString("n") + ".sqljson");
 
         var exception = await Assert.ThrowsAsync<ParameterSetFileException>(() =>
             ParameterSetFileReader.ReadAsync(path, CancellationToken.None));
 
-        Assert.Equal(UnableToReadMessage, exception.Message);
-        AssertSafe(exception, path, "bad|name");
+        Assert.Contains("could not be read", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(path, exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -342,7 +376,7 @@ public sealed class ParameterSetFileReaderTests
     {
         var exception = await Assert.ThrowsAsync<ParameterSetFileException>(() =>
             ParameterSetFileReader.ReadAsync(file.Path, CancellationToken.None));
-        Assert.Equal(message, exception.Message);
+        Assert.Contains(message, exception.Message, StringComparison.Ordinal);
         return exception;
     }
 
@@ -352,7 +386,9 @@ public sealed class ParameterSetFileReaderTests
     private static void AssertSafe(Exception exception, params string?[] forbidden)
     {
         Assert.Null(exception.InnerException);
-        foreach (var value in forbidden)
+        if (forbidden.Length > 0 && forbidden[0] is { } path)
+            Assert.Contains(path, exception.Message, StringComparison.Ordinal);
+        foreach (var value in forbidden.Skip(1))
         {
             // A one-character or whitespace label is already covered by the fixed message equality.
             if (string.IsNullOrWhiteSpace(value) || value.Length < 2)

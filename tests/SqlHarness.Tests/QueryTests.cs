@@ -487,19 +487,18 @@ public class SqlHarnessQueryTests
     }
 
     [Theory]
-    [InlineData("SELECT @n AS Value", "n:int=private-audit-value", "Invalid value for SQL parameter 'n' of type 'int'.", "private-audit-value", "n:int=private-audit-value")]
-    [InlineData("SELECT @amount AS Value", "amount:decimal(19,4)=private-audit-value", "Invalid value for SQL parameter 'amount' of type 'decimal(19,4)'.", "private-audit-value", "amount:decimal(19,4)=private-audit-value")]
-    [InlineData("SELECT @day AS Value", "day:date=private-audit-value", "Invalid value for SQL parameter 'day' of type 'date'.", "private-audit-value", "day:date=private-audit-value")]
-    [InlineData("SELECT @id AS Value", "id:uniqueidentifier=private-audit-value", "Invalid value for SQL parameter 'id' of type 'uniqueidentifier'.", "private-audit-value", "id:uniqueidentifier=private-audit-value")]
-    [InlineData("SELECT @blob AS Value", "blob:varbinary=private-audit-value", "Invalid value for SQL parameter 'blob' of type 'varbinary'.", "private-audit-value", "blob:varbinary=private-audit-value")]
-    [InlineData("SELECT @n AS Value", "n:int=zażółć-私-audit", "Invalid value for SQL parameter 'n' of type 'int'.", "zażółć-私-audit", "n:int=zażółć-私-audit")]
-    [InlineData("SELECT @privateaudit AS Value", "privateaudit:int=private", "Invalid value for SQL parameter 'privateaudit' of type 'int'.", "privateaudit:int=private", "'private'")]
-    [InlineData("SELECT @count AS Value", "count:int=int", "Invalid value for SQL parameter 'count' of type 'int'.", "count:int=int", "input string")]
-    public async Task Query_invalid_parameter_value_is_redacted_before_connect(
+    [InlineData("SELECT @n AS Value", "n:int=private-audit-value", "Invalid value 'private-audit-value' for SQL parameter 'n' of type 'int'.", "n:int=private-audit-value")]
+    [InlineData("SELECT @amount AS Value", "amount:decimal(19,4)=private-audit-value", "Invalid value 'private-audit-value' for SQL parameter 'amount' of type 'decimal(19,4)'.", "amount:decimal(19,4)=private-audit-value")]
+    [InlineData("SELECT @day AS Value", "day:date=private-audit-value", "Invalid value 'private-audit-value' for SQL parameter 'day' of type 'date'.", "day:date=private-audit-value")]
+    [InlineData("SELECT @id AS Value", "id:uniqueidentifier=private-audit-value", "Invalid value 'private-audit-value' for SQL parameter 'id' of type 'uniqueidentifier'.", "id:uniqueidentifier=private-audit-value")]
+    [InlineData("SELECT @blob AS Value", "blob:varbinary=private-audit-value", "Invalid value 'private-audit-value' for SQL parameter 'blob' of type 'varbinary'.", "blob:varbinary=private-audit-value")]
+    [InlineData("SELECT @n AS Value", "n:int=zażółć-私-audit", "Invalid value 'zażółć-私-audit' for SQL parameter 'n' of type 'int'.", "n:int=zażółć-私-audit")]
+    [InlineData("SELECT @privateaudit AS Value", "privateaudit:int=private", "Invalid value 'private' for SQL parameter 'privateaudit' of type 'int'.", "privateaudit:int=private")]
+    [InlineData("SELECT @count AS Value", "count:int=int", "Invalid value 'int' for SQL parameter 'count' of type 'int'.", "count:int=int")]
+    public async Task Query_invalid_parameter_value_reports_the_value_before_connect(
         string sql,
         string declaration,
         string expected,
-        string forbidden,
         string forbiddenDeclaration)
     {
         var session = FakeSqlSession.WithIdentity("test-server", "testdb-a");
@@ -507,7 +506,7 @@ public class SqlHarnessQueryTests
 
         var outcome = await Module(session, azure: azure).ExecuteAsync(Query(sql) with { Parameters = [declaration] });
 
-        AssertParameterError(outcome, expected, forbidden, forbiddenDeclaration);
+        AssertParameterError(outcome, expected, forbiddenDeclaration);
         Assert.Empty(azure.Calls);
         Assert.Empty(session.Commands);
     }
@@ -524,8 +523,7 @@ public class SqlHarnessQueryTests
 
         AssertParameterError(
             outcome,
-            "Invalid value for SQL parameter 'n' of type 'int'.",
-            "private-audit-value",
+            "Invalid value 'private-audit-value' for SQL parameter 'n' of type 'int'.",
             "n:int=private-audit-value",
             "ok:int=1");
         Assert.Empty(session.Commands);
@@ -548,8 +546,7 @@ public class SqlHarnessQueryTests
 
         AssertParameterError(
             outcome,
-            "Invalid value for SQL parameter 'n' of type 'int'.",
-            "private-audit-value",
+            "Invalid value 'private-audit-value' for SQL parameter 'n' of type 'int'.",
             "n:int=private-audit-value");
         Assert.Empty(session.Commands);
     }

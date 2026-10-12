@@ -53,7 +53,7 @@ internal static class MeasureParameterSetValidator
             if (!seenNames.Add(set.Name))
                 throw new SqlHarnessSafetyException($"Duplicate parameter set '{set.Name}'.");
 
-            var parsed = ParseShaped(set.Parameters, set.Name);
+            var parsed = ParseShaped(set.Parameters, set.Name, set.SourcePath);
             foreach (var parameter in parsed)
             {
                 if (fixedNames.Contains(parameter.Name))
@@ -89,7 +89,10 @@ internal static class MeasureParameterSetValidator
         return prepared;
     }
 
-    private static IReadOnlyList<SqlHarnessParameter> Parse(IEnumerable<SqlHarnessParameterInput> inputs, string? setName)
+    private static IReadOnlyList<SqlHarnessParameter> Parse(
+        IEnumerable<SqlHarnessParameterInput> inputs,
+        string? setName,
+        string? sourcePath = null)
     {
         try
         {
@@ -97,17 +100,16 @@ internal static class MeasureParameterSetValidator
         }
         catch (SqlHarnessSafetyException exception) when (exception.IsParameterValue)
         {
-            // Keep name and type on the public exception. Do not reattach Diagnostic as InnerException.
-            var message = setName is null
-                ? exception.Message
-                : $"Parameter set '{setName}' is invalid: {exception.Message}";
+            var message = sourcePath is not null
+                ? $"Parameter set file '{sourcePath}' has an invalid entry for parameter '{exception.ParameterName}': {exception.Message}"
+                : setName is null ? exception.Message : $"Parameter set '{setName}' is invalid: {exception.Message}";
             throw exception.WithParameterValue(message);
         }
         catch (SqlHarnessSafetyException exception)
         {
-            var message = setName is null
-                ? exception.Message
-                : $"Parameter set '{setName}' is invalid: {exception.Message}";
+            var message = sourcePath is not null
+                ? $"Parameter set file '{sourcePath}' has an invalid parameter entry: {exception.Message}"
+                : setName is null ? exception.Message : $"Parameter set '{setName}' is invalid: {exception.Message}";
             throw new SqlHarnessSafetyException(message);
         }
     }
@@ -116,10 +118,13 @@ internal static class MeasureParameterSetValidator
     // gets the setName prefix. Reuses SqlParameterParser.ToInput for the type token instead of
     // re-reading the declaration grammar a second time, and reuses the typed overload's shaping
     // (012/final F5; TypeToken, the second grammar reader, is gone).
-    private static IReadOnlyList<ShapedParameter> ParseShaped(IReadOnlyList<string> inputs, string? setName)
+    private static IReadOnlyList<ShapedParameter> ParseShaped(
+        IReadOnlyList<string> inputs,
+        string? setName,
+        string? sourcePath = null)
     {
         var converted = new List<SqlHarnessParameterInput>(inputs.Count);
-        var parsed = Parse(Convert(inputs, converted), setName);
+        var parsed = Parse(Convert(inputs, converted), setName, sourcePath);
         return Shape(parsed, converted);
     }
 

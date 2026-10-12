@@ -106,7 +106,7 @@ internal static partial class SqlParameterMatrixParser
             {
                 var label = parameterName ?? "@" + exception.ParameterName;
                 throw exception.WithParameterValue(
-                    MatrixError(label, $"of type '{exception.ExpectedType}' is invalid."));
+                    MatrixError(label, $"of type '{exception.ExpectedType}' with value '{displayValue}' is invalid."));
             }
             catch (SqlHarnessSafetyException)
             {

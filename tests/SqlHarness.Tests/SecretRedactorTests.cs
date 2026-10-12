@@ -41,17 +41,16 @@ public sealed class SecretRedactorTests
     }
 
     [Fact]
-    public void Redact_does_not_publish_a_validation_inner_exception()
+    public void Redact_replaces_known_secret_in_a_parameter_error_message()
     {
         var exception = new SqlHarnessSafetyException(
-            "Invalid value for SQL parameter 'n' of type 'int'.",
+            "Invalid value 'private-audit-value' for SQL parameter 'n' of type 'int'.",
             new FormatException("The input string 'private-audit-value' was not in a correct format."));
 
-        var safe = SecretRedactor.Redact(exception, []);
+        var safe = SecretRedactor.Redact(exception, ["private-audit-value"]);
 
-        Assert.Equal("Invalid value for SQL parameter 'n' of type 'int'.", safe);
+        Assert.Equal("Invalid value '[REDACTED]' for SQL parameter 'n' of type 'int'.", safe);
         Assert.DoesNotContain("private-audit-value", safe, StringComparison.Ordinal);
-        Assert.DoesNotContain("input string", safe, StringComparison.Ordinal);
         Assert.DoesNotContain("n:int=private-audit-value", safe, StringComparison.Ordinal);
         Assert.Contains("'n'", safe, StringComparison.Ordinal);
         Assert.Contains("int", safe, StringComparison.Ordinal);

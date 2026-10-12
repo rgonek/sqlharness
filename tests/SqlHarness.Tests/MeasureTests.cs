@@ -358,7 +358,7 @@ public class SqlHarnessMeasureTests
     }
 
     [Fact]
-    public async Task Measure_invalid_parameter_value_is_redacted_before_connect()
+    public async Task Measure_invalid_parameter_value_is_reported_before_connect()
     {
         var session = FakeMeasureSession.Create();
         var azure = new FakeAzureCli();
@@ -376,8 +376,7 @@ public class SqlHarnessMeasureTests
         Assert.Empty(writer.Runs);
         AssertParameterError(
             outcome,
-            "Invalid value for SQL parameter 'n' of type 'int'.",
-            "private-audit-value",
+            "Invalid value 'private-audit-value' for SQL parameter 'n' of type 'int'.",
             "n:int=private-audit-value");
     }
 
@@ -403,8 +402,7 @@ public class SqlHarnessMeasureTests
         Assert.Empty(writer.Runs);
         AssertParameterError(
             outcome,
-            "Parameter set 'large' is invalid: Invalid value for SQL parameter 'n' of type 'int'.",
-            "private-audit-value",
+            "Parameter set 'large' is invalid: Invalid value 'private-audit-value' for SQL parameter 'n' of type 'int'.",
             "n:int=private-audit-value",
             "ok:int=1");
     }
@@ -430,9 +428,8 @@ public class SqlHarnessMeasureTests
         Assert.Empty(writer.Runs);
         AssertParameterError(
             outcome,
-            "Parameter set 'large' is invalid: Invalid value for SQL parameter 'privateaudit' of type 'int'.",
-            "privateaudit:int=private",
-            "'private'");
+            "Parameter set 'large' is invalid: Invalid value 'private' for SQL parameter 'privateaudit' of type 'int'.",
+            "privateaudit:int=private");
     }
 
     [Fact]

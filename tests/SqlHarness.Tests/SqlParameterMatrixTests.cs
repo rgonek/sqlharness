@@ -213,14 +213,15 @@ public class SqlParameterMatrixTests
     [InlineData("BatchSize=1,2", "The --matrix option for SQL parameter '@BatchSize' requires a type.")]
     [InlineData("BatchSize:=1,2", "The --matrix option for SQL parameter '@BatchSize' requires a type.")]
     [InlineData("BatchSize:xml=1,2", "The --matrix option for SQL parameter '@BatchSize' is invalid.")]
-    [InlineData("BatchSize:int=nope,2", "The --matrix option for SQL parameter '@BatchSize' of type 'int' is invalid.")]
+    [InlineData("BatchSize:int=nope,2", "The --matrix option for SQL parameter '@BatchSize' of type 'int' with value 'nope' is invalid.")]
     [InlineData(":int=1,2", "The --matrix option is invalid.")]
     public void Parse_rejects_malformed_name_type_or_value(string input, string expected)
     {
         var exception = Reject(input);
 
         Assert.Equal(expected, exception.Message);
-        AssertDoesNotEcho(exception, input, "1", "2", "nope", "xml", "bad-name");
+        if (!expected.Contains("with value", StringComparison.Ordinal))
+            AssertDoesNotEcho(exception, input, "1", "2", "nope", "xml", "bad-name");
     }
 
     // 012/T1 characterization: the legacy text grammar, pinned before the typed model was put under it.
@@ -246,7 +247,7 @@ public class SqlParameterMatrixTests
     [InlineData("BatchSize:xml=1,,2", "The --matrix option for SQL parameter '@BatchSize' contains an empty value.")]
     [InlineData("BatchSize:int=nope", "The --matrix option for SQL parameter '@BatchSize' requires at least two values.")]
     [InlineData("BatchSize:int=1,1,nope", "The --matrix option for SQL parameter '@BatchSize' contains a duplicate value.")]
-    [InlineData("BatchSize:int=nope,1,1", "The --matrix option for SQL parameter '@BatchSize' of type 'int' is invalid.")]
+    [InlineData("BatchSize:int=nope,1,1", "The --matrix option for SQL parameter '@BatchSize' of type 'int' with value 'nope' is invalid.")]
     public void Legacy_matrix_reports_the_first_failing_check(string input, string expected)
     {
         var exception = Reject(input);
@@ -306,9 +307,9 @@ public class SqlParameterMatrixTests
     [InlineData("name:null=1", "Unsupported SQL parameter type 'null'.")]
     [InlineData("name:int:x=1", "Unsupported SQL parameter type 'int:x'.")]
     [InlineData("name:nchar(max):null", "Unsupported SQL parameter type 'nchar(max)'.")]
-    [InlineData("name:int=", "Invalid value for SQL parameter 'name' of type 'int'.")]
-    [InlineData("name:int=nope", "Invalid value for SQL parameter 'name' of type 'int'.")]
-    [InlineData("name:char=", "Invalid value for SQL parameter 'name' of type 'char'.")]
+    [InlineData("name:int=", "Invalid value '' for SQL parameter 'name' of type 'int'.")]
+    [InlineData("name:int=nope", "Invalid value 'nope' for SQL parameter 'name' of type 'int'.")]
+    [InlineData("name:char=", "Invalid value '' for SQL parameter 'name' of type 'char'.")]
     public void Legacy_declaration_rejections_keep_their_text(string input, string expected)
     {
         var exception = Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterParser.ParseOne(input));
@@ -317,8 +318,8 @@ public class SqlParameterMatrixTests
     }
 
     [Theory]
-    [InlineData("a:int=nope", "broken", "Invalid value for SQL parameter 'a' of type 'int'.")]
-    [InlineData("a=1", "A:int=nope", "Invalid value for SQL parameter 'A' of type 'int'.")]
+    [InlineData("a:int=nope", "broken", "Invalid value 'nope' for SQL parameter 'a' of type 'int'.")]
+    [InlineData("a=1", "A:int=nope", "Invalid value 'nope' for SQL parameter 'A' of type 'int'.")]
     [InlineData("a=1", "A:int=2", "Duplicate SQL parameter '@A'.")]
     public void Legacy_declaration_list_reports_the_first_failing_declaration(string first, string second, string expected)
     {
@@ -405,8 +406,8 @@ public class SqlParameterMatrixTests
     [InlineData("a=b", null, "1", "Invalid SQL parameter name.")]
     [InlineData("@a", "int", "1", "Invalid SQL parameter name.")]
     [InlineData("a", "", "1", "Unsupported SQL parameter type ''.")]
-    [InlineData("a", "int", "", "Invalid value for SQL parameter 'a' of type 'int'.")]
-    [InlineData("a", "int", "private,audit", "Invalid value for SQL parameter 'a' of type 'int'.")]
+    [InlineData("a", "int", "", "Invalid value '' for SQL parameter 'a' of type 'int'.")]
+    [InlineData("a", "int", "private,audit", "Invalid value 'private,audit' for SQL parameter 'a' of type 'int'.")]
     public void Model_parameter_rejections_are_the_declaration_rejections(string name, string? type, string value, string expected)
     {
         var exception = Assert.Throws<SqlHarnessSafetyException>(
@@ -430,8 +431,7 @@ public class SqlParameterMatrixTests
         var exception = Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterParser.Bind(
             new SqlHarnessParameterInput("amount", "decimal(10,2)", "123456789.00")));
 
-        Assert.Equal("Invalid value for SQL parameter 'amount' of type 'decimal(10,2)'.", exception.Message);
-        Assert.DoesNotContain("123456789", exception.Message, StringComparison.Ordinal);
+        Assert.Equal("Invalid value '123456789.00' for SQL parameter 'amount' of type 'decimal(10,2)'.", exception.Message);
     }
 
     // 012/T3: the duplicate-name check on Bind(IEnumerable<...>) is case-insensitive
@@ -473,8 +473,8 @@ public class SqlParameterMatrixTests
     }
 
     [Theory]
-    [InlineData("BatchSize", "int", "1", "nope", "The --matrix option for SQL parameter '@BatchSize' of type 'int' is invalid.")]
-    [InlineData("BatchSize", "int", "", "2", "The --matrix option for SQL parameter '@BatchSize' of type 'int' is invalid.")]
+    [InlineData("BatchSize", "int", "1", "nope", "The --matrix option for SQL parameter '@BatchSize' of type 'int' with value 'nope' is invalid.")]
+    [InlineData("BatchSize", "int", "", "2", "The --matrix option for SQL parameter '@BatchSize' of type 'int' with value '' is invalid.")]
     [InlineData("BatchSize", "xml", "1", "2", "The --matrix option for SQL parameter '@BatchSize' is invalid.")]
     [InlineData("BatchSize", "", "1", "2", "The --matrix option for SQL parameter '@BatchSize' requires a type.")]
     [InlineData("bad:name", "int", "1", "2", "The --matrix option is invalid.")]

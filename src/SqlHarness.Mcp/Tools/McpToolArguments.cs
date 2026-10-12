@@ -25,8 +25,9 @@ public sealed record McpParameterArgument
     public string? Type { get; init; }
 
     /// <summary>
-    /// Culture-invariant value text, or JSON null for a typed NULL.
-    /// Values are never echoed in errors.
+    /// Culture-invariant value text, or JSON null for a typed NULL. A
+    /// parameter validation error can quote the rejected value; known
+    /// credentials are still replaced before the result is returned.
     /// </summary>
     [JsonPropertyName("value")]
     public string? Value { get; init; }
@@ -67,7 +68,8 @@ public sealed record McpMatrixArgument
 
     /// <summary>
     /// At least two distinct values: culture-invariant value text, or JSON
-    /// null for a typed NULL. Values are never echoed in errors.
+    /// null for a typed NULL. A parameter validation error can quote the
+    /// rejected value; known credentials are still replaced before return.
     /// </summary>
     [JsonPropertyName("values")]
     public required IReadOnlyList<string?> Values { get; init; }

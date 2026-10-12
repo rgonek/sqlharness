@@ -326,24 +326,23 @@ public class SqlParameterParserTests
     [InlineData("n:int=zażółć-私-audit", "n", "int", "zażółć-私-audit")]
     [InlineData("privateaudit:int=private", "privateaudit", "int", "private")]
     [InlineData("count:int=int", "count", "int", "int")]
-    public void Parse_invalid_value_keeps_name_and_type_out_of_the_public_exception(
+    public void Parse_invalid_value_reports_name_type_and_offending_value(
         string input,
         string name,
         string type,
         string value)
     {
         var exception = Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterParser.Parse([input]));
-        var expected = $"Invalid value for SQL parameter '{name}' of type '{type}'.";
+        var expected = $"Invalid value '{value}' for SQL parameter '{name}' of type '{type}'.";
 
         Assert.Null(exception.InnerException);
-        Assert.Equal(expected, exception.Message);
-        Assert.DoesNotContain(input, exception.ToString(), StringComparison.Ordinal);
-        Assert.DoesNotContain("input string", exception.ToString(), StringComparison.OrdinalIgnoreCase);
-        if (!expected.Contains(value, StringComparison.Ordinal))
-            Assert.DoesNotContain(value, exception.ToString(), StringComparison.Ordinal);
+        Assert.StartsWith(expected, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(value, exception.Message, StringComparison.Ordinal);
 
-        var redacted = SecretRedactor.Redact(exception, [value, input]);
-        Assert.Equal(expected, redacted);
+        var redacted = SecretRedactor.Redact(exception, [value]);
+        Assert.DoesNotContain(value, redacted, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", redacted, StringComparison.Ordinal);
+        Assert.DoesNotContain(input, redacted, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -355,11 +354,9 @@ public class SqlParameterParserTests
         ]));
 
         Assert.Null(exception.InnerException);
-        Assert.Equal("Invalid value for SQL parameter 'n' of type 'int'.", exception.Message);
-        Assert.DoesNotContain("private-audit-value", exception.ToString(), StringComparison.Ordinal);
-        Assert.DoesNotContain("n:int=private-audit-value", exception.ToString(), StringComparison.Ordinal);
-        Assert.DoesNotContain("ok:int=1", exception.ToString(), StringComparison.Ordinal);
-        Assert.DoesNotContain("input string", exception.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Invalid value 'private-audit-value' for SQL parameter 'n' of type 'int'.", exception.Message);
+        Assert.Contains("private-audit-value", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("n:int=private-audit-value", exception.Message, StringComparison.Ordinal);
     }
 
     private sealed class TemporaryCulture : IDisposable
