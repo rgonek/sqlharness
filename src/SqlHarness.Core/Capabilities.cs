@@ -34,11 +34,11 @@ public static class SqlHarnessCapabilitiesProvider
             ContractVersion: 1,
             [
                 new("capabilities", "Describe commands, engines, limits, modes."),
-                new("doctor", "Check installation and profile files."),
-                new("validate", "Classify SQL offline for a closed profile; never connects. Usages: query, setup, benchmark."),
-                new("query", "Run a bounded query. PostgreSQL runs READ ONLY per command and denies known administrative effects; user functions can hide effects (setup SELECTs too), so use a least-privilege role."),
+                new("doctor", "Check installation and profiles."),
+                new("validate", "Classify SQL offline for a closed profile. Usages: query, setup, benchmark."),
+                new("query", "Run a bounded query. PostgreSQL: per-command READ ONLY, known administrative effects denied; TEMP setup is read-write under static checks; user functions can hide effects (setup SELECTs too), so use a least-privilege role."),
                 new("measure", "Measure a query."),
-                new("compare", "Compare baseline and candidate: result equivalence and latency regression verdict."),
+                new("compare", "Compare baseline/candidate: result equivalence and latency regression verdict."),
                 new("schema", "Inspect schema."),
                 new("ping", "Check a connection."),
                 new("counts", "Inspect row counts."),
@@ -50,7 +50,7 @@ public static class SqlHarnessCapabilitiesProvider
                 new("plan", "Distill a saved plan offline; bounded statements and predicates."),
                 new("artifact", "Read safe sections of a saved artifact offline."),
                 new("mcp", "Serve the Core tools to one MCP client over local stdio (mcp serve)."),
-                new("dashboard", "Operator tool: serve the local activity dashboard on 127.0.0.1; agents do not call it or its API."),
+                new("dashboard", "Operator tool: local activity dashboard on 127.0.0.1; agents do not call it or its API."),
             ],
             [
                 new("sqlserver", true, true, [
@@ -65,7 +65,7 @@ public static class SqlHarnessCapabilitiesProvider
                 ["comparisonRowCapPerRun"] = new { min = 0, max = CanonicalComparisonAccumulator.MaximumComparedRows },
                 ["comparisonUniqueFingerprintBudgetPerCell"] = new { min = 0, max = ComparisonBudget.DefaultMaxUniqueFingerprints },
                 ["repeat"] = new { min = OperationLimits.RepeatMin, max = OperationLimits.RepeatMax },
-                ["targetIdentity"] = new { server = "informational; authentication depends on transport mode; PostgreSQL hostname check needs sslMode: verify-full", database = "must match the resolved database (ordinal); mismatch is exit 4" },
+                ["targetIdentity"] = new { server = "informational; authentication depends on transport; PostgreSQL hostname check needs sslMode: verify-full", database = "must match the resolved database (ordinal); mismatch is exit 4" },
                 ["qstopTop"] = new { min = OperationLimits.TopMin, max = OperationLimits.TopMax },
                 ["qstopWindowMinutes"] = new { min = OperationLimits.QueryStoreWindowMinutesMin, max = OperationLimits.QueryStoreWindowMinutesMax },
                 ["indexesTop"] = new { min = OperationLimits.TopMin, max = OperationLimits.TopMax },

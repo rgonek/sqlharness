@@ -1,9 +1,9 @@
 using System.Data;
-using SqlHarness.Core.Dialect;
 using System.Text.Json;
 
 using SqlHarness.Cli;
 using SqlHarness.Core;
+using SqlHarness.Core.Dialect;
 using SqlHarness.Core.Postgres;
 
 namespace SqlHarness.Tests.Cli;
@@ -94,6 +94,7 @@ public sealed class CapabilitiesCommandTests
     {
         var query = SqlHarnessCapabilitiesProvider.Get().Commands.Single(c => c.Name == "query").Description;
         Assert.Contains("READ ONLY", query, StringComparison.Ordinal);
+        Assert.Contains("TEMP setup", query, StringComparison.Ordinal);
         Assert.Contains("user functions", query, StringComparison.Ordinal);
         Assert.Contains("least-privilege", query, StringComparison.Ordinal);
     }
