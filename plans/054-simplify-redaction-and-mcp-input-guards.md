@@ -64,3 +64,10 @@ Implemented in order with one commit per item: `0ec4e4e`, `e0b7cc0`, `4025483`, 
 
 - Ruling: The five numbered Items were treated as tasks and equivalent briefs generated directly because the extraction helper requires absent Task headings. Cost if wrong: task grouping rework only.
 - Ruling: Defer direct malformed-frame first-ID recovery test coverage after the single final fix wave. The pinned SDK differential was independently verified and the guard remains; valid duplicate-ID rejection and session-recovery tests pass. Cost if wrong: SDK fallback behavior could drift without that focused regression; duplicate keys are still rejected before SDK parsing.
+## Post-merge verification — 2026-10-12
+
+- Local merge to `main`: `6ff68d3` (parents `27d2a9a` Plan 053 and `f17c1ed` Plan 054). Conflicts resolved preserving both plans; capabilities output is 7525 UTF-8 bytes within unchanged 8192-byte budget.
+- README journal-contract omission corrected in `f5aef96`. Focused integration review and scoped re-review approved.
+- At `f5aef96`: Windows `pwsh ./scripts/verify.ps1` -> `verify: OK`; Core 3787 passed, MCP 389 passed / 4 skipped.
+- At `f5aef96`: WSL ext4 `pwsh ./scripts/verify-linux.ps1` -> `verify-linux: OK`; Core 3787 passed, MCP 390 passed / 3 skipped.
+- Local integration only; no push and no live database execution.
