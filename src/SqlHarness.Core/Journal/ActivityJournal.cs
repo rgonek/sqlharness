@@ -304,6 +304,7 @@ public sealed class ActivityJournal : IActivityJournal
     private void Initialize()
     {
         var directory = Path.GetDirectoryName(_path)!;
+        SqlHarnessPaths.EnsureHomeFor(directory);
         Directory.CreateDirectory(directory);
         OwnerOnlyFiles.Directory(directory);
         try

@@ -12,6 +12,13 @@ namespace SqlHarness.Cli.Commands;
 [Description("Check local installation and profile-file availability without connecting.")]
 public sealed class DoctorCommand(OutputContext output) : AsyncCommand<DoctorCommand.Settings>
 {
+    /// <summary>
+    /// Permission bits that make a directory traversable by users other than its owner.
+    /// </summary>
+    private const UnixFileMode BroadBits =
+        UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
+        UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
+
     public sealed class Settings : CommandSettings
     {
         [CommandOption("--json")]
@@ -30,6 +37,16 @@ public sealed class DoctorCommand(OutputContext output) : AsyncCommand<DoctorCom
 
         var assembly = typeof(DoctorCommand).Assembly;
         var config = SqlHarnessConfigLoader.Load();
+        var homePath = SqlHarnessPaths.Home;
+        var homePresent = Directory.Exists(homePath);
+        var homeMode = homePresent ? SqlHarnessPaths.HomeMode : null;
+        bool? homePrivate = homeMode is { } mode ? (mode & BroadBits) == 0 : null;
+        var warnings = new List<string>();
+        if (homePrivate is false)
+        {
+            warnings.Add($"SQLHarness home '{homePath}' is readable by other users; run: chmod 700 '{homePath}'");
+        }
+
         var report = new
         {
             version = assembly.GetName().Version?.ToString(3) ?? "0.0.0",
@@ -42,6 +59,10 @@ public sealed class DoctorCommand(OutputContext output) : AsyncCommand<DoctorCom
             journalEnabled = config.Config.Journal.Enabled,
             journalStoreSensitive = config.Config.Journal.StoreSensitive,
             activityJournalPresent = File.Exists(SqlHarnessPaths.ActivityDatabase),
+            homePath,
+            homePresent,
+            homePrivate,
+            warnings = warnings.ToArray(),
             databaseCheckPerformed = false,
             credentialsRead = false,
             tokenRequested = false,

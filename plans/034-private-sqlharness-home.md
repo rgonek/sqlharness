@@ -43,10 +43,27 @@ Out of scope: per-file creation modes, Windows ACLs, chmod of directories SQLHar
 
 ## Done criteria
 
-- [ ] Fresh home is 0700 on Linux; existing homes are never chmodded.
-- [ ] Doctor warns on a broad home.
-- [ ] Journal owner-only behaviour unchanged.
-- [ ] Both gates pass; `plans/README.md` row updated.
+- [x] Fresh home is 0700 on Linux; existing homes are never chmodded.
+- [x] Doctor warns on a broad home.
+- [x] Journal owner-only behaviour unchanged.
+- [x] Both gates pass; `plans/README.md` row updated.
+
+## Implementation notes
+
+- `HomeDirectory.EnsureFor` is the single home-creation path. It is a no-op outside the
+  home, so writers that work on a caller-supplied root (tests, `--root`) are unaffected.
+- Only the directory it creates gets the mode: `Directory.CreateDirectory(path, 0700)`
+  applies the mode to the leaf and default modes to intermediate ancestors. That is why
+  the home must be created explicitly before any subdirectory. Verified on Linux
+  (.NET 10): `CreateDirectory(home/data, 0700)` leaves `home` at the umask default, and
+  re-calling it on an existing broad home does not change the mode.
+- Wired sites (Core): `SqlHarnessConfigWriter.Write`, `ActivityJournal.Initialize`,
+  `ArtifactDirectoryPublisher.Publish`, `ArtifactStoragePreflight.Check`,
+  `SnapshotStore.Save`. Dashboard: `DashboardAutostart.TryStart`,
+  `DashboardLock.TryAcquire`, `DashboardPrices.RefreshAsync`.
+- Doctor gained `homePath`, `homePresent`, `homePrivate` (null off Unix or when the home
+  is missing) and `warnings`; it stays offline and creates nothing.
+- The Unix-only tests early-return on Windows and execute on the Linux gate.
 
 ## STOP conditions
 

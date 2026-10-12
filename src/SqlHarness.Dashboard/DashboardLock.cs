@@ -64,6 +64,10 @@ public sealed class DashboardLock : IDisposable
     {
         ArgumentException.ThrowIfNullOrEmpty(home);
         ArgumentNullException.ThrowIfNull(beforeRetry);
+        // A home SQLHarness creates is 0700 from the start, so the lock file and the published
+        // endpoint are never briefly world-readable. A home that already existed is left alone by
+        // that path; the journal's owner-only pass below is the pre-existing rule, not a new one.
+        SqlHarnessPaths.EnsureHomeFor(home);
         Directory.CreateDirectory(home);
         OwnerOnlyFiles.Directory(home);
         if (TryAcquireOnce(home) is { } acquired)

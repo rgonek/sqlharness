@@ -163,7 +163,7 @@ Do not reuse an approval for changed SQL, a different database, a different prof
 sqlharness plan .\artifacts\orders.sqlplan --json
 ```
 
-`.sqlplan` artifacts, comparison artifacts, named snapshots under `~/.sqlharness/snapshots` (sensitive result data; replace only with `--force`), `qstop` SQL text in `artifactDirectory/queries.jsonl`, and runtime parameters are locally sensitive: they can contain batch text, parameter values, and result data. `snapshot --diff` never prints cell values. Do not paste or publish them without explicit review. `queries.jsonl` must not be pasted or published without explicit review.
+`.sqlplan` artifacts, comparison artifacts, named snapshots under `~/.sqlharness/snapshots` (sensitive result data; replace only with `--force`), `qstop` SQL text in `artifactDirectory/queries.jsonl`, and runtime parameters are locally sensitive: they can contain batch text, parameter values, and result data. `snapshot --diff` never prints cell values. Do not paste or publish them without explicit review. `queries.jsonl` must not be pasted or published without explicit review. On Unix, SQLHarness creates its home with mode 0700; `doctor` warns when an existing home is broader.
 
 `schema` uses only internal catalog queries (no arbitrary SQL) and returns compact tables, views, columns, indexes, and foreign keys. Prefer `--object` for exactly one table or view; use `--filter` for a LIKE catalog walk:
 

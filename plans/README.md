@@ -44,7 +44,9 @@ Odświeżono po weryfikacji Plan 049 na `58fab51`. Preferencja użytkownika: pla
 | 7 | [032 — dokończenie całego planu](032-ci-matrix-and-test-hygiene.md) | CI: Windows/Linux i stabilność testów | Po 028 |
 | 8 | [036](036-live-database-ci-lane.md) | Ogólne: izolowane testy z SQL Server i PG | Oba silniki w jednym wykonaniu |
 | 9 | [029](029-agent-docs-and-capabilities-drift.md) | Ogólne: dokumentacja, capabilities, uczciwe ramy bezpieczeństwa, piny testów | Po 053/054; AGENTS.md już przepisany |
-| 10 | [034](034-private-sqlharness-home.md) | Prywatny katalog domowy na Unixie | Zakres zmniejszony do 0700 na home; P3 |
+
+034 jest DONE i scalone lokalnie (`0d30771`); oba gate'y przeszły na tym commitcie.
+| 10 | [034](034-private-sqlharness-home.md) | Prywatny katalog domowy na Unixie | Zakres zmniejszony do 0700 na home; P3; DONE (`0d30771`) |
 
 ### Grupa 4 — wyłącznie PostgreSQL, późniejsza kolejka
 
@@ -166,7 +168,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [031](031-pg-session-hardening.md) | PG refuses non-standard string lexing; SCRAM only on unauthenticated transports | P2 | S–M | 019 (and 022) | TODO (revised 2026-10-11: SCRAM-only step dropped) |
 | [032](032-ci-matrix-and-test-hygiene.md) | CI on Windows and Linux; honest skips; no env races; no publish leak; Pester runs | P2 | M | 016, 028 | PARTIAL (local Linux gate + parity guard landed on ci/plan-032-matrix; CI matrix withheld on the plan-005 MCP flake; Steps 1-3, Pester, .gitattributes remain) |
 | [033](033-sqlserver-target-identity.md) | Explicit SQL Server identity for aliases/listeners; preserve DNS labels and exact database confirmation | P2 | M | 016 | REJECTED (2026-10-11: server-name check cannot catch a wrong profile; superseded by 050) |
-| [034](034-private-sqlharness-home.md) | Private creation before sensitive writes; current journal DB/WAL/SHM and artifact lifecycle | P2 | M | 016 (existing Linux gate provides proof; coordinate 032) | TODO (revised 2026-10-11: one 0700 home instead of per-file modes; P3) |
+| [034](034-private-sqlharness-home.md) | Private creation before sensitive writes; current journal DB/WAL/SHM and artifact lifecycle | P2 | M | 016 (existing Linux gate provides proof; coordinate 032) | DONE (branch fix/plan-034-private-home, 0d30771; one 0700 home via `HomeDirectory.EnsureFor`, wired at all `CreateDirectory` sites in Core and Dashboard; doctor warns on a broad home; Unix-only tests execute on the Linux gate; Windows `verify: OK`, Linux `verify-linux: OK` on 0d30771 — 3739 Tests + 384 MCP passed, 3 live opt-in skipped, `dotnet format` clean; no live DB checks; not pushed) |
 | [035](035-implement-regress-decider.md) | Offline latency regression decision; explicit counts first, optional cost diagnostics | P2 | M–L | 016; 046 before execution | SUPERSEDED (2026-10-11: verdict computed inside compare; see 051) |
 | [036](036-live-database-ci-lane.md) | Direction: opt-in CI lane against throwaway PG/SQL Server containers | P2 | M | 016 (028 for pins) | TODO |
 | [037](037-rescope-pgstop-current-pg-versions.md) | PG17/18 capability fixtures and source evidence; versions do not gate compatible runtime shapes | P2 | S–M | Revised 014 contract | REJECTED (2026-10-11: pgstop not built; query reads pg_stat_statements) |
