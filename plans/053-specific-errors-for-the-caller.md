@@ -4,7 +4,7 @@
 
 ## Status
 
-- Status: Implemented; verification pending
+- Status: DONE — locally merged to main at `5a1eb2a`; see [053 verification](053-verification.md)
 - Priority: P2
 - Effort: M
 - Risk: LOW
@@ -15,7 +15,7 @@
 
 Several messages hide values from the reader who supplied them or who wrote the configuration. That is the same mistake plans 025/043 removed from redaction: it protects nothing and makes failures undiagnosable. Credentials stay protected by exact known-secret replacement (`SecretRedactor` with the resolved password and token), which this plan keeps.
 
-## Current state (verify each)
+## Baseline when planned
 
 1. **Parameter errors** — `SqlHarnessSafetyException.Diagnostic` / `PreservedTokens` (`SqlSafety.cs:14-58`) and `SecretRedactor.RedactPreserving` with private-use placeholders (`SecretRedactor.cs:11-12, 60-95`) keep a parameter's name and type but never its value, although the caller typed the value.
 2. **Parameter-set files** — `ParameterSetFileReader` (`:13, 40-44`) returns one opaque "The parameter set file is invalid." for every failure and drops the path. It also rejects a UTF-8 BOM, comments and trailing commas (`:18-22, 119-120`); Windows PowerShell 5 `-Encoding UTF8` writes a BOM, while SQL input already strips one (`McpInputReader.cs:246`).
@@ -40,16 +40,16 @@ Out of scope: exact known-secret redaction; SQL text and plan storage in the jou
 
 ## Verification
 
-- `dotnet build SqlHarness.sln -warnaserror` — 0 warnings.
-- Focused: `dotnet test SqlHarness.sln --no-build --filter "FullyQualifiedName~SecretRedactor|FullyQualifiedName~ParameterSet|FullyQualifiedName~SqlSafety|FullyQualifiedName~TargetResolver|FullyQualifiedName~McpStartup|FullyQualifiedName~McpStderr|FullyQualifiedName~Journal|FullyQualifiedName~Contracts"` — pass.
-- Final `scripts/verify.ps1` → `verify: OK`; `scripts/verify-linux.ps1` → `verify-linux: OK`.
+- Windows `pwsh ./scripts/verify.ps1` at `5a1eb2a`: exit 0, `verify: OK`, UI 148, Core 3,829, MCP 393 passed / 4 skipped, 0 warnings/errors, format passed, uppercase `FAILED` 0.
+- Linux `pwsh ./scripts/verify-linux.ps1` at `5a1eb2a`: exit 0, `verify-linux: OK`, UI 148, Core 3,829, MCP 394 passed / 3 skipped, 0 warnings/errors, format passed, uppercase `FAILED` 0.
+- The [verification record](053-verification.md) contains commit history, reviews, rulings, and limits. No live database proof was run; no push was performed.
 
 ## Done criteria
 
-- [ ] A test per item shows the specific message; a known secret placed in any of them is still replaced.
-- [ ] A BOM-prefixed, commented parameter-set file with a trailing comma loads.
-- [ ] `rg "RedactPreserving|PreservedTokens" src` → no matches.
-- [ ] Both gates pass; `plans/README.md` row updated.
+- [x] A test per item shows the specific message; known secrets remain redacted.
+- [x] A BOM-prefixed, commented parameter-set file with a trailing comma loads.
+- [x] `rg "RedactPreserving|PreservedTokens" src` → no matches.
+- [x] Both gates pass; `plans/README.md` row updated.
 
 ## STOP conditions
 

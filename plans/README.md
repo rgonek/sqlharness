@@ -15,14 +15,13 @@ Odświeżono po weryfikacji Plan 049 na `58fab51`. Preferencja użytkownika: pla
 | [Ceny modeli i ustawienia](../docs/superpowers/plans/2026-10-11-model-prices-settings.md) | Dashboard, wycena tokenów, konfiguracja, katalog CLI/MCP | DONE — scalony do main; bramki Windows i Linux zielone (potwierdzone przez użytkownika 2026-10-12) |
 | [051](051-compare-regression-verdict.md) | Ogólne: werdykt regresji w wyniku compare | DONE — scalony do main `e05da9b`; bramki Windows i Linux zielone (potwierdzone przez użytkownika 2026-10-12) |
 
-020, 026, 030, 041, 042, 043, 044, 046, 049, 050 i 052 mają już DONE w aktualnym indeksie i nie wracają do kolejki. Starsze dowody zachowano bez ponownego uruchamiania bramek przy odświeżaniu dokumentacji; Plan 049 uzyskał świeże zielone bramki Windows i Linux na `58fab51`. DONE nie stanowi dodatkowej zgody na push.
+020, 026, 029, 030, 041, 042, 043, 044, 046, 049, 050, 052 i 053 mają już DONE w aktualnym indeksie i nie wracają do kolejki. Starsze dowody zachowano bez ponownego uruchamiania bramek przy odświeżaniu dokumentacji; Plan 049 uzyskał świeże zielone bramki Windows i Linux na `58fab51`. DONE nie stanowi dodatkowej zgody na push.
 
 ### Grupa 1 — bezpieczeństwo i podstawowa praca agenta
 
 | Kolejność | Plan | Kategoria | Warunek wykonania |
 |---|---|---|---|
-| 1 | [053](053-specific-errors-for-the-caller.md) | Konkretne błędy dla wywołującego, param-set z BOM/komentarzami | IMPLEMENTED; verification pending |
-| 2 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redakcja = znane sekrety (+ token Azure); uproszczenie strażników MCP | 049 DONE; najlepiej po 053 |
+| 1 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redakcja = znane sekrety (+ token Azure); uproszczenie strażników MCP | 049, 053 DONE |
 
 024 i 045 scalone do main (`232ec01`, `3e8236f`); 046 ma DONE.
 
@@ -34,10 +33,9 @@ Pusta: 051 (zastępuje 035; progi z 013) ma DONE i jest w main.
 
 | Kolejność | Plan | Kategoria | Zależności |
 |---|---|---|---|
-| 4 | [028](028-release-pipeline-hardening.md) | Release: wersja, bramka CI, minimalne uprawnienia | Bez SHA-pinów, Dependabota i atestacji (odrzucone 2026-10-11) |
-| 5 | [032 — dokończenie całego planu](032-ci-matrix-and-test-hygiene.md) | CI: Windows/Linux i stabilność testów | Po 028 |
-| 6 | [036](036-live-database-ci-lane.md) | Ogólne: izolowane testy z SQL Server i PG | Oba silniki w jednym wykonaniu |
-| 7 | [029](029-agent-docs-and-capabilities-drift.md) | Ogólne: dokumentacja, capabilities, uczciwe ramy bezpieczeństwa, piny testów | DONE na `docs/plan-029-agent-docs` (bramki Windows i Linux zielone na `5c07092`); czeka na scalenie |
+| 2 | [028](028-release-pipeline-hardening.md) | Release: wersja, bramka CI, minimalne uprawnienia | Bez SHA-pinów, Dependabota i atestacji (odrzucone 2026-10-11) |
+| 3 | [032 — dokończenie całego planu](032-ci-matrix-and-test-hygiene.md) | CI: Windows/Linux i stabilność testów | Po 028 |
+| 4 | [036](036-live-database-ci-lane.md) | Ogólne: izolowane testy z SQL Server i PG | Oba silniki w jednym wykonaniu |
 
 034 jest DONE i scalone lokalnie (`0d30771`); oba gate'y przeszły na tym commitcie.
 
@@ -156,7 +154,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [026](026-watch-condition-matching.md) | `watch --until` matches bit/bool, quoted strings and exponents; keeps polling while no row exists | P2 | S | 016 | DONE (branch fix/plan-026-watch-condition; docs eb53de4, formatting fix d7d7606; Windows and Linux gates passed) |
 | [027](027-gain-store-robustness-and-mcp-gain.md) | Gain never fails a successful command; tolerant reads; MCP records gain | P2 | S–M | 016 | DONE (branch fix/plan-027-gain; plan 040 already recorded one MCP emission per call and kept accounting failures off the tool result; the journal replaced gain.jsonl; f8d1583 counts unknown operations in the total and skips unreadable rows; Windows verify.ps1 and Linux verify-linux.ps1 OK) |
 | [028](028-release-pipeline-hardening.md) | Releases are versioned, gated on CI, least-privilege, with provenance | P2 | S | 016 | TODO (revised 2026-10-11: provenance, SHA pinning and Dependabot dropped) |
-| [029](029-agent-docs-and-capabilities-drift.md) | Skill/README/AGENTS/capabilities match the shipped CLI; a sync test guards them | P2 | S | 016 (after 021/023/024/026/027 if scheduled) | DONE (branch `docs/plan-029-agent-docs`, 1cbdc14..5c07092; `verify: OK` Core 3826, MCP 385/4 skipped; `verify-linux: OK` 3826. User decisions 2026-10-12: `capabilities [profile] --json` scoped to the profile's engine (contract v2), `dashboard` not advertised, docs written with the writing-for-agents rules; request-scope `--allow-profile` approves profile switches only. Follow-ups: SKILL parameter-set section → pointer after 053; `indexes` on PostgreSQL should reject offline) |
+| [029](029-agent-docs-and-capabilities-drift.md) | Skill/README/AGENTS/capabilities match the shipped CLI; a sync test guards them | P2 | S | 016 (after 021/023/024/026/027 if scheduled) | DONE (branch `docs/plan-029-agent-docs`, 1cbdc14..5c07092; merged locally with Plans 051–053 at `5a1eb2a`. Original gates: `verify: OK` Core 3826, MCP 385/4 skipped; `verify-linux: OK` 3826. User decisions 2026-10-12: `capabilities [profile] --json` scoped to the profile's engine (contract v2), `dashboard` not advertised, docs written with the writing-for-agents rules; request-scope `--allow-profile` approves profile switches only. Follow-ups: SKILL parameter-set section → pointer after 053; `indexes` on PostgreSQL should reject offline) |
 | [030](030-datetime-params-and-pg-plan-depth.md) | Date/time params never shift silently; deep PG plans parse | P2 | S | 016 (after 022 if both) | DONE (A: `8feaf14` and docs follow-up `54224ff`; B: PostgreSQL UTC binding `48ed3a1` and deep-plan JSON `bb78c87`; Windows `verify.ps1` and isolated ext4 Linux `verify-linux.ps1` exited 0 at `bb78c87`—Core 3585 each, MCP 333 Windows/334 Linux with 4/3 skipped; no live PostgreSQL tests) |
 | [031](031-pg-session-hardening.md) | PG refuses non-standard string lexing; SCRAM only on unauthenticated transports | P2 | S–M | 019 (and 022) | TODO (revised 2026-10-11: SCRAM-only step dropped) |
 | [032](032-ci-matrix-and-test-hygiene.md) | CI on Windows and Linux; honest skips; no env races; no publish leak; Pester runs | P2 | M | 016, 028 | PARTIAL (local Linux gate + parity guard landed on ci/plan-032-matrix; CI matrix withheld on the plan-005 MCP flake; Steps 1-3, Pester, .gitattributes remain) |
@@ -180,7 +178,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [050](050-sqlserver-server-name-informational.md) | SQL Server and PostgreSQL report connected server identity without blocking | P2 | M | — | DONE (commits e6b7d01, 1ecc7d6, e87882a, 7f6f1d0; locally merged in 761f2ab; post-merge Windows `verify: OK` Core 3713, MCP 383/4 skipped; Linux `verify-linux: OK` Core 3713, MCP 384/3 skipped; no push/live DB proof) |
 | [051](051-compare-regression-verdict.md) | `compare` reports a latency regression verdict from its own samples | P2 | M | 046 | DONE (merged to main `e05da9b` from `feat/plan-051-regression-verdict`; `regression` verdict in compare JSON, summary, matrix cells, MCP and CLI text; supersedes 035 and the offline-reader part of 013; Windows and Linux gates green, confirmed by the user 2026-10-12) |
 | [052](052-postgres-read-only-transactions.md) | Every non-approved PostgreSQL command uses a per-command READ ONLY transaction | P1 | M | Disposable PostgreSQL 18.6 proof | DONE at frozen `c07f001`; integrated tip `9082149` (Windows and isolated Linux gates passed; see [052-verification](052-verification.md)); locally merged to main by fast-forward at `f09a614`; not pushed |
-| [053](053-specific-errors-for-the-caller.md) | Errors name what went wrong when the reader already holds the data | P2 | M | — | TODO |
+| [053](053-specific-errors-for-the-caller.md) | Errors name what went wrong when the reader already holds the data | P2 | M | — | DONE — locally merged to main `5a1eb2a`; proof: [053-verification](053-verification.md); Windows/Linux gates passed; not pushed |
 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redaction is exact known-secret replacement; MCP input guards match a same-user threat model | P2 | M | 049 (DONE) | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED, SUPERSEDED or REVERTED (with one-line rationale).
