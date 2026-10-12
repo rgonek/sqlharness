@@ -4,7 +4,7 @@
 
 ## Status
 
-- Status: BLOCKED (step 1 requires an authorized disposable PostgreSQL target)
+- Status: IN PROGRESS (step 1 executed on PostgreSQL 18.6; findings constrain steps 2–4)
 - Priority: **P1** (security)
 - Effort: M
 - Risk: MED
@@ -35,14 +35,14 @@ A name denylist can never be complete. PostgreSQL itself enforces "no writes to 
 
 1. **Proof on the playground** (disposable objects only), recorded in `plans/052-readonly-proof.md` with the PostgreSQL version and the `SET TRANSACTION` documentation section:
    - persistent-table write through a plpgsql function → rejected;
-   - `pg_stat_statements_reset()`, `nextval` on a persistent sequence, `pg_promote()` (expect a privilege or read-only error) → record each outcome;
+   - `pg_stat_statements_reset()`, `nextval` on a persistent sequence, `pg_promote()` → record each outcome; an allowed stats reset or a server-state error does not establish transaction containment, so retain explicit safety checks for effects the read-only transaction does not block;
    - `set_config('default_transaction_read_only','off',false)` inside the transaction, then a write in the next per-command transaction → still rejected;
    - temp-table `INSERT`/`UPDATE`/`DELETE` → allowed; `EXPLAIN ANALYZE` of both;
-   - timing overhead of the wrapper on a trivial `SELECT 1` (100 repetitions) to confirm measurements are not distorted.
-   - Prepared runner: `pwsh ./scripts/prove-postgres-readonly.ps1 -ConfirmDisposableDatabase <exact-database>`. It requires `SQLHARNESS_PG_INTEGRATION_CONNECTION_STRING`, creates only a uniquely named schema plus a session-local temp table, and refuses to overwrite a completed proof report. Current report is explicitly pending because no disposable target is authorized or available.
+   - end-to-end wrapper timing on a trivial `SELECT 1` (100 balanced pairs after warm-up), interpreted separately from SQLHarness benchmark timings, which come from PostgreSQL `EXPLAIN` planning and execution times.
+   - Runner: `pwsh ./scripts/prove-postgres-readonly.ps1 -ConfirmDisposableDatabase <exact-database>`. It requires `SQLHARNESS_PG_INTEGRATION_CONNECTION_STRING`, creates only a uniquely named schema plus a session-local temp table, and refuses to overwrite a completed proof report. Results are recorded in `plans/052-readonly-proof.md`.
 2. Implement the per-command wrapper in the PostgreSQL session for every non-mutation path. Keep the approved-mutation path read-write and unchanged.
 3. Map `25006` to the safety exit with the message above. Tests with a fake session for the mapping; integration tests (`Category=PostgresIntegration`) for steps 1's cases.
-4. Shrink the PostgreSQL function denylist to effects a transaction cannot contain: backend terminate/cancel, `pg_reload_conf`, advisory locks, `pg_sleep`, `dblink*`, server file reads, `set_config`. Keep the external-access checks. Record in the classifier comment that persistent writes are enforced by the server, and that a least-privilege role is the operator's control for the rest.
+4. Shrink the PostgreSQL function denylist only for effects a transaction contains. Keep explicit denials for backend terminate/cancel, `pg_reload_conf`, advisory locks, `pg_sleep`, `dblink*`, server file reads, `set_config`, `pg_stat_statements_reset`, and backup/promotion operations such as `pg_backup_start` and `pg_promote`. `pg_stat_statements_reset()` succeeded inside a `READ ONLY` transaction on PostgreSQL 18.6; `pg_promote()` returned SQLSTATE `55000` because the proof target is not in recovery, so neither is protected by that run's `25006` evidence. Keep the external-access checks. Record in the classifier comment that persistent writes are enforced by the server, and that a least-privilege role is the operator's control for the rest.
 5. Docs (README PostgreSQL engine notes, Safety contract, docs/mcp.md, Capabilities): "Non-approved PostgreSQL commands run in a READ ONLY transaction; the server rejects persistent writes."
 
 ## Verification
@@ -65,4 +65,4 @@ A name denylist can never be complete. PostgreSQL itself enforces "no writes to 
 - No authorized disposable PostgreSQL is available. Stop after writing the proof script.
 - A temp-table write is rejected inside `READ ONLY` on the playground version. Report; the design then needs setup-style handling for temp DML.
 
-Current step-1 state: proof harness prepared, but no database proof run. Do not treat the pending report as evidence or proceed to runtime implementation until the disposable PostgreSQL prerequisite is available and authorized.
+Current step-1 state: proof completed against the explicitly confirmed disposable `127.0.0.1:55452/sqlharness_plan052` target on PostgreSQL 18.6. Persistent function writes and persistent-sequence `nextval` returned SQLSTATE `25006`; temp-table DML and its `EXPLAIN ANALYZE` cases succeeded. `pg_stat_statements_reset()` succeeded and `pg_promote()` returned `55000` on a primary, so these findings require the denylist retention described in step 4. The end-to-end wrapper measurement was 130.9% slower than bare `SELECT 1` for this trivial local case; it is not a no-overhead result. Do not mark the plan DONE or claim that every effectful function is contained.

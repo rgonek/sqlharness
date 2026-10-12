@@ -20,7 +20,7 @@ Odświeżono na `3f425ef`. Preferencja użytkownika: plany ogólne i SQL Server 
 
 | Kolejność | Plan | Kategoria | Warunek wykonania |
 |---|---|---|---|
-| 1 | [052](052-postgres-read-only-transactions.md) | PG (P1): każde niezatwierdzone polecenie w transakcji READ ONLY | Mimo preferencji SQL Server: realna luka, także w MCP; wymaga playgroundu PG |
+| 1 | [052](052-postgres-read-only-transactions.md) | PG (P1): każde niezatwierdzone polecenie w transakcji READ ONLY | Dowód PG18.6 wykonany; implementacja musi zachować denials dla funkcji, których skutków transakcja nie blokuje |
 | 2 | [049](049-plan-text-without-literal-masking.md) | MCP: tekst planu bez maskowania literałów | Po revercie 048 |
 | 3 | [050](050-sqlserver-server-name-informational.md) | SQL Server i PG: tożsamość endpointu tylko raportowana | Zastępuje 033; usuwa exit 4 poza różnicą bazy |
 | 4 | [053](053-specific-errors-for-the-caller.md) | Konkretne błędy dla wywołującego, param-set z BOM/komentarzami | — |
@@ -33,7 +33,7 @@ Odświeżono na `3f425ef`. Preferencja użytkownika: plany ogólne i SQL Server 
 | Kolejność | Plan | Kategoria | Zależności |
 |---|---|---|---|
 | 6 | [051](051-compare-regression-verdict.md) | Ogólne: werdykt regresji w wyniku compare | Zastępuje 035; progi z 013 |
-| [052](052-postgres-read-only-transactions.md) | PostgreSQL runs every non-approved command inside a READ ONLY transaction | P1 | M | Authorized disposable PG proof | BLOCKED (proof target unavailable) |
+| [052](052-postgres-read-only-transactions.md) | PostgreSQL runs every non-approved command inside a READ ONLY transaction | P1 | M | Proof complete; findings constrain classifier | IN PROGRESS |
 | [053](053-specific-errors-for-the-caller.md) | Errors name what went wrong when the reader already holds the data | P2 | M | — | TODO |
 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redaction is exact known-secret replacement; MCP input guards match a same-user threat model | P2 | M | 049 | TODO |
 
