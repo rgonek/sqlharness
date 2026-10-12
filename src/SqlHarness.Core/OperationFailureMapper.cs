@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
 
 using SqlHarness.Core.Auth;
+using SqlHarness.Core.Postgres;
 
 namespace SqlHarness.Core;
 
@@ -25,22 +26,28 @@ internal enum OperationPhase
 /// </summary>
 internal static class OperationFailureMapper
 {
-    internal static SqlHarnessExitCode Map(Exception exception, OperationPhase phase) => exception switch
+    internal static SqlHarnessExitCode Map(Exception exception, OperationPhase phase)
     {
-        ArtifactStoragePreflightException => SqlHarnessExitCode.LocalStorage,
-        SqlTargetMismatchException => SqlHarnessExitCode.TargetMismatch,
-        SqlHarnessSafetyException => SqlHarnessExitCode.Safety,
-        IOException or UnauthorizedAccessException when phase == OperationPhase.Validation => SqlHarnessExitCode.LocalStorage,
-        AzureCliException => SqlHarnessExitCode.Authentication,
-        SqlException when phase == OperationPhase.Authentication => SqlHarnessExitCode.Authentication,
-        SqlException => SqlHarnessExitCode.SqlExecution,
-        Npgsql.NpgsqlException when phase == OperationPhase.Authentication => SqlHarnessExitCode.Authentication,
-        Npgsql.NpgsqlException => SqlHarnessExitCode.SqlExecution,
-        TimeoutException => SqlHarnessExitCode.SqlExecution,
-        OperationCanceledException when phase == OperationPhase.Sql => SqlHarnessExitCode.SqlExecution,
-        _ when phase == OperationPhase.Authentication => SqlHarnessExitCode.Authentication,
-        _ => SqlHarnessExitCode.SqlExecution,
-    };
+        if (PostgresReadOnlyFailure.ContainsReadOnlyViolation(exception))
+            return SqlHarnessExitCode.Safety;
+
+        return exception switch
+        {
+            ArtifactStoragePreflightException => SqlHarnessExitCode.LocalStorage,
+            SqlTargetMismatchException => SqlHarnessExitCode.TargetMismatch,
+            SqlHarnessSafetyException => SqlHarnessExitCode.Safety,
+            IOException or UnauthorizedAccessException when phase == OperationPhase.Validation => SqlHarnessExitCode.LocalStorage,
+            AzureCliException => SqlHarnessExitCode.Authentication,
+            SqlException when phase == OperationPhase.Authentication => SqlHarnessExitCode.Authentication,
+            SqlException => SqlHarnessExitCode.SqlExecution,
+            Npgsql.NpgsqlException when phase == OperationPhase.Authentication => SqlHarnessExitCode.Authentication,
+            Npgsql.NpgsqlException => SqlHarnessExitCode.SqlExecution,
+            TimeoutException => SqlHarnessExitCode.SqlExecution,
+            OperationCanceledException when phase == OperationPhase.Sql => SqlHarnessExitCode.SqlExecution,
+            _ when phase == OperationPhase.Authentication => SqlHarnessExitCode.Authentication,
+            _ => SqlHarnessExitCode.SqlExecution,
+        };
+    }
 
     /// <summary>
     /// Runs best-effort <paramref name="cleanup"/> without ever masking

@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 
+using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Core;
@@ -8,6 +9,9 @@ public static partial class SecretRedactor
 {
     public static string Redact(Exception exception, IReadOnlyList<string> knownSecrets)
     {
+        if (PostgresReadOnlyFailure.ContainsReadOnlyViolation(exception))
+            return PostgresReadOnlyFailure.RejectionMessage;
+
         if (exception is SqlHarnessSafetyException parameterError && parameterError.IsParameterValue)
             return RedactPreserving(parameterError.Message, knownSecrets, parameterError.PreservedTokens());
 

@@ -790,15 +790,12 @@ public sealed class ValidateCommandTests
     [InlineData("postgres", "SELECT pg_cancel_backend(123);")]
     [InlineData("postgres", "SELECT pg_terminate_backend(123);")]
     [InlineData("postgres", "SELECT pg_sleep(1);")]
-    [InlineData("postgres", "SELECT nextval('seq');")]
-    [InlineData("postgres", "SELECT setval('seq', 1);")]
     [InlineData("postgres", "SELECT lo_import('/tmp/x');")]
     [InlineData("postgres", "SELECT pg_read_file('pg_hba.conf');")]
     [InlineData("postgres", "SELECT * FROM pg_ls_dir('.');")]
     [InlineData("postgres", "SELECT * FROM dblink('c', 'SELECT 1') AS t(x int);")]
     [InlineData("postgres", "SELECT pg_advisory_lock(1);")]
     [InlineData("postgres", "SELECT pg_try_advisory_lock(1);")]
-    [InlineData("postgres", "SELECT pg_catalog.setval('s', 1);")]
     [InlineData("postgres", "SELECT SET_CONFIG('a', 'b', false);")]
     [InlineData("postgres", "SELECT length(set_config('a', 'b', false));")]
     [InlineData("sqlserver", "EXEC sp_executesql N'SELECT 1';")]
@@ -818,6 +815,23 @@ public sealed class ValidateCommandTests
         Assert.False(report.Executed);
         Assert.Equal(SqlSafetyAnalysis.ObjectAndPermissionStatus, report.ObjectAndPermissionStatus);
         Assert.NotNull(report.Reason);
+    }
+
+    [Theory]
+    [InlineData("SELECT nextval('seq');")]
+    [InlineData("SELECT setval('seq', 1);")]
+    [InlineData("SELECT pg_catalog.setval('s', 1);")]
+    public void Preflight_accepts_sequence_functions_without_execution_or_hidden_effect_claim(string sql)
+    {
+        var profiles = new Dictionary<string, TargetProfile> { ["test"] = Profile("postgres") };
+        var request = new SqlTargetRequest("test", new Dictionary<string, string>());
+
+        var report = SqlValidation.Validate(request, sql, [], profiles);
+
+        Assert.True(report.Allowed, JsonSerializer.Serialize(report));
+        Assert.False(report.Executed);
+        Assert.False(report.HiddenEffectsVerified);
+        Assert.Equal(SqlSafetyAnalysis.ObjectAndPermissionStatus, report.ObjectAndPermissionStatus);
     }
 
     [Fact]

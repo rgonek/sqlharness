@@ -12,7 +12,18 @@ namespace SqlHarness.Core;
 internal sealed record SqlExecutionCommand(
     string Sql,
     IReadOnlyList<SqlHarnessParameter> Parameters,
-    int TimeoutSeconds);
+    int TimeoutSeconds)
+{
+    // PostgreSQL fails closed when a new call site omits execution intent.
+    internal PostgresExecutionMode PostgresMode { get; init; } = PostgresExecutionMode.ReadOnly;
+}
+
+internal enum PostgresExecutionMode
+{
+    ReadOnly,
+    SessionSetup,
+    ApprovedMutation,
+}
 
 internal interface ISqlReader : IAsyncDisposable
 {
@@ -153,7 +164,7 @@ internal static class SqlExecution
 
     internal static bool TargetMatches(ResolvedTarget expected, string server, string database)
     {
-        _ = server; // Server name is retained in the identity report; TLS authenticates the endpoint.
+        _ = server; // Server name is informational; endpoint authentication depends on transport mode, and PostgreSQL hostname verification requires sslMode: verify-full.
         return string.Equals(expected.Database, database, StringComparison.Ordinal);
     }
 }
