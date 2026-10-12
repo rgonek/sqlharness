@@ -38,7 +38,7 @@ public sealed class CapabilitiesCommand(OutputContext output, Renderer renderer)
             {
                 var profiles = ProfileStore.Load();
                 if (!profiles.TryGetValue(settings.Profile, out var profile))
-                    return Task.FromResult(RejectProfile("profile_unknown", $"Unknown profile '{settings.Profile}'. Run doctor to list the configured profiles."));
+                    return Task.FromResult(RejectProfile("profile_unknown", UnknownProfileMessage(settings.Profile, profiles.Keys)));
                 capabilities = SqlHarnessCapabilitiesProvider.Get(settings.Profile, profile.Engine);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
@@ -50,6 +50,14 @@ public sealed class CapabilitiesCommand(OutputContext output, Renderer renderer)
         output.Capture.WriteLine(System.Text.Json.JsonSerializer.Serialize(capabilities, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web) { WriteIndented = true }));
         output.Capture.Flush();
         return Task.FromResult((int)SqlHarnessExitCode.Success);
+    }
+
+    private static string UnknownProfileMessage(string profile, IEnumerable<string> configured)
+    {
+        var names = configured.Order(StringComparer.Ordinal).ToArray();
+        return names.Length == 0
+            ? $"Unknown profile '{profile}'. No profiles are configured in {SqlHarnessPaths.TargetsFile}."
+            : $"Unknown profile '{profile}'. Configured profiles: {string.Join(", ", names)}.";
     }
 
     private int RejectProfile(string code, string message)

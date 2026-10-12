@@ -132,7 +132,7 @@ Read-only database helpers (`ping`, `counts`, `schema --object`, and `space`) us
 
 `plan --json` emits a compact, deterministic plan contract: `statements` preserves input order; each statement has optional `sql`, a `root` node, and optional `missingIndexes`. Nodes retain `physicalOp`, optional `logicalOp`, operator metadata and runtime values, warnings (with their Showplan attributes), and child nodes. Persisted `*.plan.json` files from `compare` and `measure` use this same schema, including `sql`. This output is serialization-only; it is not accepted as plan input.
 
-Use `--json` for the full report (automation and artifacts). For agent-sized stdout on `measure` / `compare`, use `--json-summary` instead: a bounded projection (target, classification, distributions, table reads, warnings, at most ten noteworthy operators, equivalence and regression verdict for compare, artifact directory) without full operator/run arrays, plan XML, or result hashes. `--json` and `--json-summary` are mutually exclusive (`Choose only one of --json or --json-summary.`). `query` reads SQL from exactly one source: `--file` or redirected stdin. SQLHarness sends one batch; `GO` separators are rejected. Split work into separate invocations; for `measure` and `compare`, put preparation in `--setup` (see [Benchmark setup contract](#benchmark-setup-contract)). Bind runtime values with repeatable `--param name[:type]=value`, never by string interpolation.
+Use `--json` for the full report (automation and artifacts). For agent-sized stdout on `measure` / `compare`, use `--json-summary` instead: a bounded projection (target, classification, distributions, table reads, warnings, at most ten noteworthy operators, equivalence and regression verdict for compare, artifact directory) without full operator/run arrays, plan XML, or result hashes. A command accepts one output flag ([Commands](#commands) lists the modes). `query` reads SQL from exactly one source: `--file` or redirected stdin. SQLHarness sends one batch; `GO` separators are rejected. Split work into separate invocations; for `measure` and `compare`, put preparation in `--setup` (see [Benchmark setup contract](#benchmark-setup-contract)). Bind runtime values with repeatable `--param name[:type]=value`, never by string interpolation.
 
 Supported `--param` types (culture-invariant; date/time values use ISO 8601; `sqlharness capabilities <profile> --json` lists the set for that profile's engine):
 
@@ -307,7 +307,7 @@ Output modes: `--json` writes the full report; `measure` and `compare` add the b
 <!-- docs-sync:example -->
 ```powershell
 sqlharness indexes prod-eu --var tenant=acme --var env=uat --object dbo.Contracts --json
-sqlharness artifact <id> --section summary --json
+sqlharness artifact 20261012T101500123Z-prod-eu-0f3c2a9d4b6e4f1a8c7d5e3b2a190876 --section summary --json
 sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --output agent --max-output-bytes 8192 --max-cell-chars 256
 sqlharness watch prod-eu --var tenant=acme --var env=uat --file .\queries\progress.sql --until-unchanged 3 --output ndjson
 ```
@@ -316,7 +316,7 @@ sqlharness watch prod-eu --var tenant=acme --var env=uat --file .\queries\progre
 
 | Area | Contract |
 | --- | --- |
-| Exit codes | `-1` text-mode command-line parse error (255 on POSIX; JSON and agent modes return `2` instead); `0` success; `2` validation or safety rejection; `3` authentication failure; `4` connected database differs from the resolved database (exact ordinal comparison); `5` SQL execution failure; `6` local storage failure; `7` `watch` max duration elapsed without a stop condition; `8` `snapshot --diff` found differences (valid comparison, not an execution failure). |
+| Exit codes | `-1` text-mode command-line parse error (255 on POSIX); other output modes, `mcp` and `dashboard` return `2`; `0` success; `2` validation or safety rejection; `3` authentication failure; `4` connected database differs from the resolved database (exact ordinal comparison); `5` SQL execution failure; `6` local storage failure; `7` `watch` max duration elapsed without a stop condition; `8` `snapshot --diff` found differences (valid comparison, not an execution failure). |
 | Closed targets | Profiles in `~/.sqlharness/targets.json` define server, database template, variables, authentication, and optional `engine` (`sqlserver` default, or `postgres`). Missing, extra, or invalid variables are rejected. |
 | Direct targets | `--unsafe-direct` deliberately bypasses the closed-profile guardrail and requires `--server`, `--database`, and `--auth`. Do not mix it with a profile or `--var`. `--engine` is valid only with `--unsafe-direct` (never with a named profile). |
 | Mutations | Read-only is the default. Explicit persistent-object mutation requires fresh, single-use approval for the exact batch and exact resolved database, plus `--allow-mutation --confirm-database <exact-resolved-name>`. Exception: read-write PostgreSQL TEMP setup can statically accept a setup `SELECT` that invokes an opaque user-defined function which writes persistently, without approval; review setup SQL (see PostgreSQL execution). |

@@ -82,6 +82,7 @@ public sealed class CapabilitiesCommandTests
         var exitCode = await SqlHarnessCli.Create(new RecordingModule(), output).RunAsync(["capabilities", "nope-profile", "--json"]);
 
         AssertProfileError(exitCode, output, "profile_unknown", "nope-profile");
+        Assert.Contains("Configured profiles: pg-profile, sqlserver-profile.", ErrorMessage(output), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -93,6 +94,15 @@ public sealed class CapabilitiesCommandTests
         var exitCode = await SqlHarnessCli.Create(new RecordingModule(), output).RunAsync(["capabilities", "any-profile", "--json"]);
 
         AssertProfileError(exitCode, output, "profile_unknown", "any-profile");
+        var message = ErrorMessage(output);
+        Assert.Contains("No profiles are configured in", message, StringComparison.Ordinal);
+        Assert.Contains("targets.json", message, StringComparison.Ordinal);
+    }
+
+    private static string ErrorMessage(StringWriter output)
+    {
+        using var document = JsonDocument.Parse(output.ToString());
+        return document.RootElement.GetProperty("error").GetProperty("message").GetString()!;
     }
 
     private static void AssertProfileError(int exitCode, StringWriter output, string code, string profile)
