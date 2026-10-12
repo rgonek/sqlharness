@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text;
 
 using SqlHarness.Core;
@@ -9,8 +8,8 @@ namespace SqlHarness.Mcp.Tests;
 /// <summary>
 /// T3 bounded-reader contract: SQL/plan ingress at 16 MiB, parameter sets at
 /// 64 KiB through the shared Core strict parser, inline payloads at 1 MiB,
-/// explicit roots only, and rejection of traversal, ADS, UNC, symlink/reparse
-/// escapes, and replace-during-read. Snapshot capture takes no force flag.
+/// explicit roots only, and rejection of traversal, UNC, and oversized input.
+/// Snapshot capture takes no force flag.
 /// Only synthetic HOME and temp directories are used.
 /// </summary>
 [Collection("McpScopeHome")]
@@ -207,11 +206,6 @@ public sealed class McpInputReaderTests : IDisposable
         Assert.Contains("UNC", uncMessage, StringComparison.Ordinal);
         Assert.Contains(unc, uncMessage, StringComparison.Ordinal);
 
-        var ads = Path.Combine(_root, "q.sql:stream");
-        var adsMessage = await Message(ads);
-        Assert.Contains("alternate data streams", adsMessage, StringComparison.Ordinal);
-        Assert.Contains(ads, adsMessage, StringComparison.Ordinal);
-
         var missing = Path.Combine(_root, "no-such-file.sql");
         var missingMessage = await Message(missing);
         Assert.Contains("cannot be read", missingMessage, StringComparison.Ordinal);
@@ -221,19 +215,18 @@ public sealed class McpInputReaderTests : IDisposable
             () => McpInputReader.ReadTextFileAsync("  ", _scope.InputRoots, McpLimits.MaxSqlBytes, CancellationToken.None))).Message;
         Assert.Contains("blank", blank, StringComparison.Ordinal);
 
-        Assert.Equal(6, new[] { relative, malformed, uncMessage, adsMessage, missingMessage, blank }.Distinct().Count());
+        Assert.Equal(5, new[] { relative, malformed, uncMessage, missingMessage, blank }.Distinct().Count());
     }
 
     [Fact]
-    public async Task Echoed_path_is_credential_filtered()
+    public async Task Echoed_path_preserves_caller_supplied_diagnostics()
     {
-        var path = Path.Combine(_root, "Password=hunter2;x.sql:s");
+        var path = Path.Combine(_root, "Password=hunter2;x.sql");
 
         var exception = await Assert.ThrowsAsync<McpInputException>(
             () => McpInputReader.ReadSqlAsync(null, path, _scope, CancellationToken.None));
 
-        Assert.DoesNotContain("hunter2", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("[REDACTED]", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Password=hunter2;x.sql", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -271,7 +264,7 @@ public sealed class McpInputReaderTests : IDisposable
     }
 
     [Fact]
-    public async Task Outside_root_message_masks_a_credential_in_the_caller_path()
+    public async Task Outside_root_message_preserves_the_caller_path_for_diagnostics()
     {
         var path = Path.Combine(_home, "Password=hunter2;outside.sql");
 
@@ -279,7 +272,24 @@ public sealed class McpInputReaderTests : IDisposable
             () => McpInputReader.ReadSqlAsync(null, path, _scope, CancellationToken.None));
 
         Assert.Contains("outside every configured input root", exception.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("hunter2", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Password=hunter2;outside.sql", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task MCP_result_redacts_an_exact_known_secret_in_a_caller_path()
+    {
+        const string knownSecret = "mcp-reader-known-secret-4197";
+        var path = Path.Combine(_home, "secret=" + knownSecret + ";outside.sql");
+        var inputError = await Assert.ThrowsAsync<McpInputException>(
+            () => McpInputReader.ReadSqlAsync(null, path, _scope, CancellationToken.None));
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, inputError.Message),
+            "sqlharness_query",
+            knownSecrets: [knownSecret]);
+        var text = Assert.Single(result.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>()).Text;
+
+        Assert.DoesNotContain(knownSecret, text, StringComparison.Ordinal);
+        Assert.Contains("outside every configured input root", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -310,100 +320,6 @@ public sealed class McpInputReaderTests : IDisposable
             "sqlharness_query",
             new McpResultBudget(McpLimits.MinCallToolResultBudgetBytes));
         Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.MinCallToolResultBudgetBytes);
-    }
-
-    [Fact]
-    public async Task Ads_unc_and_missing_files_are_rejected()
-    {
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadSqlAsync(null, Path.Combine(_root, "q.sql:stream"), _scope, CancellationToken.None));
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadSqlAsync(null, @"\\mcp-unreachable.invalid\share\q.sql", _scope, CancellationToken.None));
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadSqlAsync(null, "//mcp-unreachable.invalid/share/q.sql", _scope, CancellationToken.None));
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadSqlAsync(null, Path.Combine(_root, "no-such-file.sql"), _scope, CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task Symlink_and_reparse_escapes_are_rejected()
-    {
-        var outside = Path.Combine(_home, "secret.sql");
-        File.WriteAllText(outside, "SELECT 1;");
-        // xUnit v2 has no dynamic skip: when the platform denies link creation
-        // there is no reparse point to reject, so the test passes trivially.
-        var link = Path.Combine(_root, "link.sql");
-        try
-        {
-            File.CreateSymbolicLink(link, outside);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            return;
-        }
-
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadSqlAsync(null, link, _scope, CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task Directory_link_to_outside_root_reports_roots_without_disclosing_target()
-    {
-        var outsideDir = Path.Combine(_home, "outside-dir");
-        Directory.CreateDirectory(outsideDir);
-        File.WriteAllText(Path.Combine(outsideDir, "q.sql"), "SELECT 1;");
-        var dirLink = Path.Combine(_root, "dirlink");
-        if (!TryCreateDirectoryLink(dirLink, outsideDir))
-            return;
-
-        var exception = await Assert.ThrowsAsync<McpInputException>(
-            () => McpInputReader.ReadSqlAsync(null, Path.Combine(dirLink, "q.sql"), _scope, CancellationToken.None));
-
-        Assert.Contains("outside every configured input root", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("sqlharness_capabilities", exception.Message, StringComparison.Ordinal);
-        Assert.Contains(_root, exception.Message, StringComparison.Ordinal);
-        // The caller's own path is echoed; the resolved link target never is.
-        Assert.Contains(dirLink, exception.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain(outsideDir, exception.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool TryCreateDirectoryLink(string link, string target)
-    {
-        try
-        {
-            if (!OperatingSystem.IsWindows())
-            {
-                Directory.CreateSymbolicLink(link, target);
-                return true;
-            }
-
-            var start = new ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{target}\"")
-            {
-                CreateNoWindow = true,
-                UseShellExecute = false,
-            };
-            using var process = Process.Start(start);
-            process?.WaitForExit();
-            return process?.ExitCode == 0;
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-            return false;
-        }
-    }
-
-    [Fact]
-    public async Task Replace_during_read_is_rejected()
-    {
-        var path = WriteFile("volatile.sql", "SELECT 1;");
-        var exception = await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadTextFileAsync(
-            path,
-            _scope.InputRoots,
-            McpLimits.MaxSqlBytes,
-            CancellationToken.None,
-            afterOpen: () =>
-            {
-                // Delete plus recreate: the open handle keeps the old bytes
-                // while the path resolves to new length and timestamps.
-                File.Delete(path);
-                File.WriteAllText(path, "SELECT 2; -- replaced after open");
-            }));
-        Assert.Contains("changed", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -543,47 +459,11 @@ public sealed class McpInputReaderTests : IDisposable
         await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([sets], scope, CancellationToken.None));
     }
 
-    // 002/T1 regression 5: ADS/UNC variants on the Read* methods the existing
-    // test does not exercise (plan and parameter-set inputs).
-    [Fact]
-    public async Task Ads_and_unc_are_rejected_on_plan_and_parameter_set_inputs()
-    {
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadPlanAsync(null, Path.Combine(_root, "p.plan:stream"), _scope, CancellationToken.None));
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadPlanAsync(null, @"\\mcp-unreachable.invalid\share\q.plan", _scope, CancellationToken.None));
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadPlanAsync(null, "//mcp-unreachable.invalid/share/q.plan", _scope, CancellationToken.None));
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([Path.Combine(_root, "s.sqljson:stream")], _scope, CancellationToken.None));
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadParameterSetsAsync([@"\\mcp-unreachable.invalid\share\s.sqljson"], _scope, CancellationToken.None));
-    }
-
-    // 002/T1 regression 6: gap beyond the covered top-level absolute links —
-    // a relative symlink nested in a root subdirectory must not escape.
-    // Trivial pass when the platform denies link creation (same convention
-    // as the existing symlink test).
-    [Fact]
-    public async Task Nested_relative_symlink_inside_root_is_rejected()
-    {
-        var outside = Path.Combine(_home, "nested-secret.sql");
-        File.WriteAllText(outside, "SELECT 1;");
-        var sub = Path.Combine(_root, "sub");
-        Directory.CreateDirectory(sub);
-        var link = Path.Combine(sub, "rel.sql");
-        try
-        {
-            File.CreateSymbolicLink(link, Path.GetRelativePath(sub, outside));
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            return;
-        }
-
-        await Assert.ThrowsAsync<McpInputException>(() => McpInputReader.ReadSqlAsync(null, link, _scope, CancellationToken.None));
-    }
-
     // 002/T1 regression 7: case-sensitivity proof exists ONLY on a
     // case-sensitive filesystem. On case-insensitive NTFS this test proves
     // nothing and intentionally passes trivially; the missing evidence is
     // recorded in the T1 report instead of faked. xUnit v2 has no dynamic
-    // skip, hence the early return (same convention as the symlink tests).
+    // skip, hence the early return.
     [Fact]
     public async Task Case_only_sibling_is_rejected_on_case_sensitive_filesystems()
     {

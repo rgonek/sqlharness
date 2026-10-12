@@ -8,7 +8,7 @@ namespace SqlHarness.Mcp;
 /// <summary>
 /// Safe rejection of an MCP file or inline input. Messages name the reason and may echo the caller-supplied
 /// path (credential-filtered and length-bounded) and the configured input roots; they never echo SQL, file
-/// content, resolved link targets, or any other filesystem path.
+/// content, or any other filesystem path.
 /// </summary>
 public sealed class McpInputException(string message) : Exception(message);
 
@@ -16,11 +16,9 @@ public sealed class McpInputException(string message) : Exception(message);
 /// Bounded file ingress for MCP tools (spec section 5). Inline input works
 /// without filesystem access; file input is admitted only under the absolute
 /// --input-root directories frozen at startup, and an empty root list means
-/// no file inputs at all. Rejects traversal, UNC/network paths, NTFS
-/// alternate streams, symlink/reparse escapes (including linked parent
-/// directories), and files replaced while they are read. Opens each file
-/// once, reads at most the stated bound plus one byte, then re-validates the
-/// on-disk entry before accepting the bytes.
+/// no file inputs at all. Rejects UNC/network paths. Absolute paths must be
+/// lexically under an admitted root.
+/// Opens each file once and reads at most the stated bound plus one byte.
 /// </summary>
 public static partial class McpInputReader
 {
@@ -129,25 +127,22 @@ public static partial class McpInputReader
         IReadOnlyList<string> roots,
         long maxBytes,
         CancellationToken ct,
-        Action? afterOpen = null,
         string kind = "input") =>
-        ReadFileAsync(path, roots, maxBytes, ct, afterOpen, DecodeText, kind);
+        ReadFileAsync(path, roots, maxBytes, ct, DecodeText, kind);
 
     internal static Task<byte[]> ReadBytesFileAsync(
         string path,
         IReadOnlyList<string> roots,
         long maxBytes,
         CancellationToken ct,
-        Action? afterOpen = null,
         string kind = "input") =>
-        ReadFileAsync(path, roots, maxBytes, ct, afterOpen, bytes => bytes, kind);
+        ReadFileAsync(path, roots, maxBytes, ct, bytes => bytes, kind);
 
     private static async Task<T> ReadFileAsync<T>(
         string path,
         IReadOnlyList<string> roots,
         long maxBytes,
         CancellationToken ct,
-        Action? afterOpen,
         Func<byte[], T> decode,
         string kind)
     {
@@ -175,27 +170,14 @@ public static partial class McpInputReader
             throw Rejected("not a valid path", path);
         }
 
-        // NTFS alternate data streams hide behind a colon in the file name.
-        // The drive-letter colon lives in the directory portion, never here.
-        if (Path.GetFileName(full).Contains(':', StringComparison.Ordinal))
-            throw Rejected("alternate data streams are not accepted", path);
         if (!McpInputRoots.IsUnderAnyRoot(full, roots))
             throw OutsideRootsException(roots, path);
-        if (IsLinkOrReparseChain(full))
-        {
-            if (LinkTargetIsOutsideRoots(full, roots))
-                throw OutsideRootsException(roots, path);
-            throw Rejected("resolves through a link or reparse point, which is not accepted", path);
-        }
 
         FileStream stream;
         try
         {
             if (new FileInfo(full).Length > maxBytes)
                 throw new McpInputException(TooLargeMessage(kind, maxBytes));
-            // FileShare.Delete lets the operator rotate files by rename while a
-            // read holds the old entry; the post-read snapshot then rejects
-            // the replaced file instead of mixing old and new bytes.
             stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 8192, FileOptions.Asynchronous | FileOptions.SequentialScan);
         }
         catch (McpInputException)
@@ -209,12 +191,7 @@ public static partial class McpInputReader
 
         await using (stream)
         {
-            var before = Snapshot(full);
             var bytes = await ReadBoundedAsync(stream, maxBytes, ct, kind);
-            afterOpen?.Invoke();
-            var after = Snapshot(full);
-            if (!before.Equals(after) || !McpInputRoots.IsUnderAnyRoot(full, roots) || IsLinkOrReparseChain(full))
-                throw Rejected("the file changed while it was read", path);
             try
             {
                 return decode(bytes);
@@ -263,51 +240,6 @@ public static partial class McpInputReader
     };
 
 
-    /// <summary>
-    /// Fails closed on the file itself and on every parent directory up to the
-    /// admitted root: a symlinked directory inside a root must not smuggle
-    /// reads outside it.
-    /// </summary>
-    private static bool IsLinkOrReparseChain(string full)
-    {
-        var current = full;
-        while (current is not null)
-        {
-            if (IsLinkOrReparse(current))
-                return true;
-            current = Path.GetDirectoryName(current);
-        }
-
-        return false;
-    }
-
-    private static bool LinkTargetIsOutsideRoots(string full, IReadOnlyList<string> roots)
-    {
-        var current = full;
-        while (current is not null)
-        {
-            try
-            {
-                FileSystemInfo info = File.Exists(current) ? new FileInfo(current) : new DirectoryInfo(current);
-                if (info.Exists && (info.LinkTarget is not null || (info.Attributes & FileAttributes.ReparsePoint) != 0))
-                {
-                    var target = info.ResolveLinkTarget(returnFinalTarget: true);
-                    if (target is not null && !McpInputRoots.IsUnderAnyRoot(Path.GetFullPath(target.FullName), roots))
-                        return true;
-                }
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-            {
-                // Keep the existing generic rejection when a reparse target cannot be resolved safely.
-                return false;
-            }
-
-            current = Path.GetDirectoryName(current);
-        }
-
-        return false;
-    }
-
     private static McpInputException Rejected(string reason, string path) =>
         new($"The input path was rejected: {reason}. Path: {EchoPath(path)}");
 
@@ -350,33 +282,4 @@ public static partial class McpInputReader
             : $"{safe[..MaxEchoedPathCharacters]}... [truncated, {safe.Length} characters]";
     }
 
-    private static bool IsLinkOrReparse(string path)
-    {
-        try
-        {
-            FileSystemInfo info = File.Exists(path) ? new FileInfo(path) : new DirectoryInfo(path);
-            if (!info.Exists)
-                return false;
-            return info.LinkTarget is not null || (info.Attributes & FileAttributes.ReparsePoint) != 0;
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            return true;
-        }
-    }
-
-    private static (long Length, DateTime Modified, bool IsLink) Snapshot(string full)
-    {
-        try
-        {
-            var info = new FileInfo(full);
-            if (!info.Exists)
-                return (-1, DateTime.MinValue, true);
-            return (info.Length, info.LastWriteTimeUtc, IsLinkOrReparse(full));
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            return (-1, DateTime.MinValue, true);
-        }
-    }
 }

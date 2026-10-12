@@ -128,9 +128,11 @@ sqlharness query prod-eu --var tenant=acme --var env=uat --file .\batches\approv
 
 An approval covers that batch, database, profile and variable set only. A safety rejection is a stop: report it and ask the user for a narrower request or an approval; persistent helper objects are never the way around it. The classifier and the mutation flags prevent accidents. For enforcement, point profiles at a least-privilege (reader) database principal.
 
+MCP file inputs require an absolute path lexically under a configured `--input-root`; UNC paths are rejected and file reads are byte-bounded. The reader does not resolve links, reject alternate data streams, or detect same-user replacement during a read. Treat input roots as caller path scoping, not a boundary against the OS user running SQLHarness ([MCP contract](../../docs/mcp.md#input-roots-and-file-inputs)).
+
 ## Local outputs and exit codes
 
 Locally sensitive outputs are pasted, attached or published only after the user's explicit review: `.sqlplan` files, measure/compare artifacts, snapshots under `~/.sqlharness/snapshots` (result data), `qstop`'s `queries.jsonl` (SQL text), `--param-set` files and `~/.sqlharness/data/activity.db`. Secrets live in the environment variables the profile names, and in process memory only.
 
-Exit codes, redaction and artifact rules: [README Safety contract](../../README.md#safety-contract). `2` is a validation or safety stop, `5` a SQL execution failure.
+Exit codes, redaction and artifact rules: [README Safety contract](../../README.md#safety-contract). Every output replaces the profile password and Azure SQL token fetched by Azure CLI for the current operation; other text, including caller SQL quoted in server errors, stays readable. `2` is a validation or safety stop, `5` a SQL execution failure.
 The activity journal stores credential-redacted error messages by default; SQL text and full plans require `journal.storeSensitive` ([Activity journal](../../README.md#activity-journal-and-savings)).

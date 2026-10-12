@@ -47,16 +47,19 @@ public sealed class SqlExecutionTests
         var cli = new FakeAzureCli("azure-token");
         var connector = new FakeConnector("logical.database.windows.net", "database");
         var factory = new SqlClientSessionFactory(cli, connector.ConnectAsync);
+        var knownSecrets = new List<string>();
 
         await using var session = await factory.ConnectAsync(
             new ResolvedTarget("logical", "database", AuthSpec.Parse("azure-cli", null, null, false), "profile"),
-            default);
+            default,
+            knownSecrets);
 
         Assert.Equal(1, cli.RunCount);
         Assert.Equal(
             ["account", "get-access-token", "--resource", "https://database.windows.net/"],
             cli.LastArgs);
         Assert.Equal("azure-token", connector.AccessToken);
+        Assert.Contains("azure-token", knownSecrets);
         Assert.Equal("profile", session.Identity.Mode);
     }
 

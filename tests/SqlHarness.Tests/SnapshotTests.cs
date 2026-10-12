@@ -233,7 +233,7 @@ public class SnapshotTests
         var outcome = await Module(session, store).ExecuteAsync(Snapshot());
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
-        Assert.DoesNotContain(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.DoesNotContain("SELECT", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.Empty(store.Saves);
     }
@@ -241,14 +241,14 @@ public class SnapshotTests
     [Fact]
     public async Task Snapshot_authentication_failure_maps_to_three()
     {
-        var azure = new FakeAzureCli(Token, new AzureCliException($"not logged in {Token}"));
+        var azure = new FakeAzureCli(Token, new AzureCliException("not logged in"));
         var store = new FakeSnapshotStore();
         var session = FakeSession.WithRows(1);
         var outcome = await Module(session, store, azure: azure).ExecuteAsync(Snapshot());
 
         Assert.Equal(SqlHarnessExitCode.Authentication, outcome.ExitCode);
         Assert.Empty(session.Commands);
-        Assert.DoesNotContain(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("not logged in", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -264,7 +264,7 @@ public class SnapshotTests
 
         Assert.Equal(SqlHarnessExitCode.TargetMismatch, outcome.ExitCode);
         Assert.Empty(session.Commands);
-        Assert.DoesNotContain(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -302,7 +302,7 @@ public class SnapshotTests
         var outcome = await Module(session, store).ExecuteAsync(Snapshot());
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
-        Assert.DoesNotContain(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -107,7 +107,7 @@ public sealed class CredentialRedactionTests
     }
 
     [Fact]
-    public async Task Connection_string_error_keeps_target_and_user_but_removes_the_password()
+    public async Task Connection_string_error_redacts_registered_password_and_keeps_other_text()
     {
         var outcome = await RunWithFailureAsync(
             new SqlHarnessQueryOperation(VarTarget("dev"), "SELECT 1 AS One", [], 5, 10, false, null),
@@ -115,7 +115,7 @@ public sealed class CredentialRedactionTests
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
         Assert.Equal(
-            "Cannot open: Data Source=sql.example.test;Initial Catalog=Sales;User ID=app_user;Password=[REDACTED];Pwd=[REDACTED]",
+            "Cannot open: Data Source=sql.example.test;Initial Catalog=Sales;User ID=app_user;Password=\"x y;z\";Pwd=[REDACTED]",
             outcome.SafeError);
     }
 

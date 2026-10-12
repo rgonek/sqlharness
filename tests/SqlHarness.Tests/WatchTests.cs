@@ -222,20 +222,20 @@ public class WatchTests
 
         Assert.Equal(SqlHarnessExitCode.TargetMismatch, outcome.ExitCode);
         Assert.Empty(session.Commands);
-        Assert.DoesNotContain(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task Watch_authentication_failure_maps_to_three()
     {
-        var azure = new FakeAzureCli(Token, new AzureCliException($"not logged in {Token}"));
+        var azure = new FakeAzureCli(Token, new AzureCliException("not logged in"));
         var session = FakeSession.WithScalarPolls(1);
         var outcome = await Module(session, new FakeWatchClock(), azure: azure).ExecuteAsync(
             Watch(untilUnchanged: 1));
 
         Assert.Equal(SqlHarnessExitCode.Authentication, outcome.ExitCode);
         Assert.Empty(session.Commands);
-        Assert.DoesNotContain(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("not logged in", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -247,7 +247,7 @@ public class WatchTests
             Watch(untilUnchanged: 1));
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
-        Assert.DoesNotContain(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.DoesNotContain("SELECT", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 

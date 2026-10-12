@@ -23,4 +23,19 @@ internal sealed class EngineSessionFactory : ISqlSessionFactory
             _ => throw new SqlHarnessSafetyException("Unknown engine."),
         };
     }
+
+    public Task<ISqlSession> ConnectAsync(
+        ResolvedTarget target,
+        CancellationToken ct,
+        List<string> knownSecrets)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(knownSecrets);
+        return target.Engine switch
+        {
+            SqlEngine.SqlServer => _sqlServer.ConnectAsync(target, ct, knownSecrets),
+            SqlEngine.Postgres => _postgres.ConnectAsync(target, ct, knownSecrets),
+            _ => throw new SqlHarnessSafetyException("Unknown engine."),
+        };
+    }
 }

@@ -145,7 +145,7 @@ public sealed class PingTests
     }
 
     [Fact]
-    public async Task Ping_sql_never_includes_profile_variables_and_errors_keep_them_but_redact_password_fragments()
+    public async Task Ping_sql_never_includes_profile_variables_and_errors_keep_caller_supplied_text()
     {
         Assert.DoesNotContain(ProfileSecret, PingQuery.Sql, StringComparison.Ordinal);
         Assert.DoesNotContain("Password", PingQuery.Sql, StringComparison.OrdinalIgnoreCase);
@@ -166,8 +166,7 @@ public sealed class PingTests
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
         Assert.DoesNotContain(ProfileSecret, PingQuery.Sql, StringComparison.Ordinal);
         Assert.Contains(ProfileSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-        Assert.DoesNotContain(PasswordSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-        Assert.Contains("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(PasswordSecret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
         Assert.Empty(Assert.Single(session.Commands).Parameters);
     }
 
