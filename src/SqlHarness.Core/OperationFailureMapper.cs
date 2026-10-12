@@ -33,18 +33,18 @@ internal static class OperationFailureMapper
 
         return exception switch
         {
-        ArtifactStoragePreflightException => SqlHarnessExitCode.LocalStorage,
-        SqlTargetMismatchException => SqlHarnessExitCode.TargetMismatch,
-        SqlHarnessSafetyException => SqlHarnessExitCode.Safety,
-        IOException or UnauthorizedAccessException when phase == OperationPhase.Validation => SqlHarnessExitCode.LocalStorage,
-        AzureCliException => SqlHarnessExitCode.Authentication,
-        SqlException when phase == OperationPhase.Authentication => SqlHarnessExitCode.Authentication,
-        SqlException => SqlHarnessExitCode.SqlExecution,
-        Npgsql.NpgsqlException when phase == OperationPhase.Authentication => SqlHarnessExitCode.Authentication,
-        Npgsql.NpgsqlException => SqlHarnessExitCode.SqlExecution,
-        TimeoutException => SqlHarnessExitCode.SqlExecution,
-        OperationCanceledException when phase == OperationPhase.Sql => SqlHarnessExitCode.SqlExecution,
-        _ when phase == OperationPhase.Authentication => SqlHarnessExitCode.Authentication,
+            ArtifactStoragePreflightException => SqlHarnessExitCode.LocalStorage,
+            SqlTargetMismatchException => SqlHarnessExitCode.TargetMismatch,
+            SqlHarnessSafetyException => SqlHarnessExitCode.Safety,
+            IOException or UnauthorizedAccessException when phase == OperationPhase.Validation => SqlHarnessExitCode.LocalStorage,
+            AzureCliException => SqlHarnessExitCode.Authentication,
+            SqlException when phase == OperationPhase.Authentication => SqlHarnessExitCode.Authentication,
+            SqlException => SqlHarnessExitCode.SqlExecution,
+            Npgsql.NpgsqlException when phase == OperationPhase.Authentication => SqlHarnessExitCode.Authentication,
+            Npgsql.NpgsqlException => SqlHarnessExitCode.SqlExecution,
+            TimeoutException => SqlHarnessExitCode.SqlExecution,
+            OperationCanceledException when phase == OperationPhase.Sql => SqlHarnessExitCode.SqlExecution,
+            _ when phase == OperationPhase.Authentication => SqlHarnessExitCode.Authentication,
             _ => SqlHarnessExitCode.SqlExecution,
         };
     }
