@@ -81,8 +81,28 @@ public sealed class CapabilitiesCommandTests
         var output = new StringWriter();
         var exitCode = await SqlHarnessCli.Create(new RecordingModule(), output).RunAsync(["capabilities", "nope-profile", "--json"]);
 
+        AssertProfileError(exitCode, output, "profile_unknown", "nope-profile");
+    }
+
+    [Fact]
+    public async Task Capabilities_with_a_missing_profiles_file_is_an_unknown_profile_json_error()
+    {
+        using var home = new TempProfiles();
+        File.Delete(Path.Combine(Environment.GetEnvironmentVariable("SQLHARNESS_HOME")!, "targets.json"));
+        var output = new StringWriter();
+        var exitCode = await SqlHarnessCli.Create(new RecordingModule(), output).RunAsync(["capabilities", "any-profile", "--json"]);
+
+        AssertProfileError(exitCode, output, "profile_unknown", "any-profile");
+    }
+
+    private static void AssertProfileError(int exitCode, StringWriter output, string code, string profile)
+    {
         Assert.Equal((int)SqlHarnessExitCode.Safety, exitCode);
-        Assert.Contains("nope-profile", output.ToString(), StringComparison.Ordinal);
+        using var document = JsonDocument.Parse(output.ToString());
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("result").ValueKind);
+        var error = document.RootElement.GetProperty("error");
+        Assert.Equal(code, error.GetProperty("code").GetString());
+        Assert.Contains(profile, error.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -92,9 +112,9 @@ public sealed class CapabilitiesCommandTests
         var output = new StringWriter();
         var exitCode = await SqlHarnessCli.Create(new RecordingModule(), output).RunAsync(["capabilities", "any-profile", "--json"]);
 
-        Assert.Equal((int)SqlHarnessExitCode.Safety, exitCode);
-        Assert.Contains("any-profile", output.ToString(), StringComparison.Ordinal);
-        Assert.Contains("could not be resolved", output.ToString(), StringComparison.Ordinal);
+        AssertProfileError(exitCode, output, "profile_unavailable", "any-profile");
+        using var document = JsonDocument.Parse(output.ToString());
+        Assert.Contains("could not be resolved", document.RootElement.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]

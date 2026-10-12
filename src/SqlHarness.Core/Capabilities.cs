@@ -35,9 +35,11 @@ public static class SqlHarnessCapabilitiesProvider
     ];
 
     // One entry per engine: adding an engine adds one entry here (and one SqlEngine value).
-    private static readonly IReadOnlyDictionary<SqlEngine, EngineDetail> Details = new Dictionary<SqlEngine, EngineDetail>
-    {
-        [SqlEngine.SqlServer] = new(
+    // An ordered array: the order of the engines list is part of the contract.
+    private static readonly EngineDetail[] Details =
+    [
+        new(
+            SqlEngine.SqlServer,
             "sqlserver",
             "SQL Server and Azure SQL: all commands, including Query Store (qstop) and missing indexes (indexes).",
             [.. SharedParameterTypes, "money", "smallmoney", "smalldatetime", "hierarchyid", "geography", "geometry"],
@@ -53,7 +55,8 @@ public static class SqlHarnessCapabilitiesProvider
                 "DECLARE @t TABLE (...) then INSERT/UPDATE/DELETE/MERGE/SELECT against it, declared earlier in the same batch. A table variable from --setup is not visible to measured SQL (separate batch): carry data in #temp. OUTPUT INTO @t only when the primary target is also proven local (persistent primary target: MutationNotAllowed). Aliased DML targets and user-defined table types stay denied",
                 "TRUNCATE TABLE #temp (unambiguous local temp only)",
                 "ALTER TABLE #temp ADD/DROP COLUMN and local CHECK/DEFAULT/NULL/UNIQUE constraints"]),
-        [SqlEngine.Postgres] = new(
+        new(
+            SqlEngine.Postgres,
             "postgres",
             "PostgreSQL: per-command READ ONLY; no qstop or indexes.",
             [.. SharedParameterTypes],
@@ -64,16 +67,16 @@ public static class SqlHarnessCapabilitiesProvider
                 "SELECT INTO TEMP TABLE with unambiguous single-part name",
                 "TRUNCATE [ONLY] of proven current-session temps only, named unqualified or as pg_temp.name; not ON COMMIT DROP. Persistent, mixed, CASCADE, RESTART IDENTITY and other schema-qualified targets stay denied",
                 "Session-temp proof for temp DML, DROP TABLE, CREATE INDEX and TRUNCATE targets is name-based. An unqualified name assumes the default search_path (pg_temp first) and is not checked against the server; when search_path may differ, write to pg_temp.name, which does not depend on it. A name must be quoted or all-ASCII-unquoted and at most 63 UTF-8 bytes where declared and where used, else never proven (quote or shorten). DROP TABLE of a name unknown offline revokes every proof. See README.md"]),
-    };
+    ];
 
     /// <summary>Engine-neutral document: commands, modes, shared limits and a one-line summary per engine.</summary>
     public static SqlHarnessCapabilities Get() =>
-        Build(Details.Values.Select(d => new SqlHarnessEngineSummary(d.Name, d.Summary)).ToList(), null, null, null, null);
+        Build(Details.Select(d => new SqlHarnessEngineSummary(d.Name, d.Summary)).ToList(), null, null, null, null);
 
     /// <summary>Document scoped to one engine; the profile name is echoed back. Offline, no connection.</summary>
     public static SqlHarnessCapabilities Get(SqlEngine engine, string profileName)
     {
-        var detail = Details[engine];
+        var detail = Details.Single(d => d.Engine == engine);
         return Build(
             [new SqlHarnessEngineSummary(detail.Name, detail.Summary)],
             new SqlHarnessProfileCapability(profileName, detail.Name),
@@ -87,6 +90,7 @@ public static class SqlHarnessCapabilitiesProvider
         Get(SqlEngineNames.Parse(profileEngine), profileName);
 
     private sealed record EngineDetail(
+        SqlEngine Engine,
         string Name,
         string Summary,
         IReadOnlyList<string> ParameterTypes,

@@ -9,7 +9,7 @@ using SqlHarness.Core.Targets;
 namespace SqlHarness.Cli.Commands;
 
 [Description("Describe the local SQLHarness command and engine contract; with a profile, add that engine's parameter types and limits (offline, never connects).")]
-public sealed class CapabilitiesCommand(OutputContext output) : AsyncCommand<CapabilitiesCommand.Settings>
+public sealed class CapabilitiesCommand(OutputContext output, Renderer renderer) : AsyncCommand<CapabilitiesCommand.Settings>
 {
     public sealed class Settings : CommandSettings
     {
@@ -38,18 +38,25 @@ public sealed class CapabilitiesCommand(OutputContext output) : AsyncCommand<Cap
             {
                 var profiles = ProfileStore.Load();
                 if (!profiles.TryGetValue(settings.Profile, out var profile))
-                    return Task.FromResult(Reject($"Unknown profile '{settings.Profile}'. Run doctor to list the configured profiles."));
+                    return Task.FromResult(RejectProfile("profile_unknown", $"Unknown profile '{settings.Profile}'. Run doctor to list the configured profiles."));
                 capabilities = SqlHarnessCapabilitiesProvider.Get(settings.Profile, profile.Engine);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                return Task.FromResult(Reject($"Profile '{settings.Profile}' could not be resolved: {exception.Message}"));
+                return Task.FromResult(RejectProfile("profile_unavailable", $"Profile '{settings.Profile}' could not be resolved: {exception.Message}"));
             }
         }
 
         output.Capture.WriteLine(System.Text.Json.JsonSerializer.Serialize(capabilities, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web) { WriteIndented = true }));
         output.Capture.Flush();
         return Task.FromResult((int)SqlHarnessExitCode.Success);
+    }
+
+    private int RejectProfile(string code, string message)
+    {
+        renderer.RenderError(SqlHarnessExitCode.Safety, message, OutputMode.Json, "capabilities", output.Capture, new SqlHarnessError(code, "profile", message));
+        output.Capture.Flush();
+        return (int)SqlHarnessExitCode.Safety;
     }
 
     private int Reject(string message)
