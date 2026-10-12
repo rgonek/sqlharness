@@ -92,7 +92,7 @@ public sealed partial class DocsSyncTests
         var badServer = $"{Marker}\n```\nsqlharness mcp serve --no-such-option\n```\n";
         Assert.Single(await CheckExamplesAsync(ExtractExamples(badServer)));
 
-        var good = $"{Marker}\n```powershell\nsqlharness capabilities --json\nsqlharness query <profile> --var a=b `\n  --file .\\q.sql --param id:int=1 --json\n```\n";
+        var good = $"{Marker}\n```powershell\nsqlharness capabilities --json\nsqlharness query <profile> --var a=b `\n  --file .\\q.sql --param id:int=1 --json\nsqlharness ping prod-eu --var a=b --json\n```\n";
         Assert.Empty(await CheckExamplesAsync(ExtractExamples(good)));
 
         var untagged = "```\nsqlharness query --no-such-option\n```\n";
@@ -221,8 +221,10 @@ public sealed partial class DocsSyncTests
                 continue;
             }
 
-            var (exit, output, _) = await RunAsync(args);
-            if (exit == -1 || output.Contains("Invalid command line arguments", StringComparison.Ordinal))
+            // A dispatch to the stub proves Spectre accepted the line; the stub's refusal then surfaces
+            // through the CLI exception handler as "Invalid command line arguments", which is not drift.
+            var (exit, output, module) = await RunAsync(args);
+            if (module.Calls == 0 && (exit == -1 || output.Contains("Invalid command line arguments", StringComparison.Ordinal)))
             {
                 failures.Add($"'{example}': rejected by the CLI parser (exit {exit}); a command, option or argument no longer exists");
             }
