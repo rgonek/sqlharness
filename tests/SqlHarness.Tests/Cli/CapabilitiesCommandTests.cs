@@ -246,8 +246,11 @@ public sealed class CapabilitiesCommandTests
     private const string CapabilityPostgresTruncateEntry =
         "TRUNCATE [ONLY] of proven current-session temps only, named unqualified or as pg_temp.name; not ON COMMIT DROP. Persistent, mixed, CASCADE, RESTART IDENTITY and other schema-qualified targets stay denied";
 
-    private const string CapabilityPostgresProofEntry =
-        "Session-temp proof for temp DML, DROP TABLE, CREATE INDEX and TRUNCATE targets is name-based. An unqualified name assumes the default search_path (pg_temp first) and is not checked against the server; when search_path may differ, write to pg_temp.name, which does not depend on it. A name must be quoted or all-ASCII-unquoted and at most 63 UTF-8 bytes where declared and where used, else never proven (quote or shorten). DROP TABLE of a name unknown offline revokes every proof. See README.md";
+    // Plan 029 Step 5: the PostgreSQL temp-proof entry is checked by the facts it must carry, not
+    // pinned verbatim; README "PostgreSQL temp target proof" owns the wording.
+    private static bool IsPostgresProofEntry(string entry) =>
+        new[] { "name-based", "search_path", "pg_temp.name", "63 UTF-8 bytes", "README.md" }
+            .All(fact => entry.Contains(fact, StringComparison.Ordinal));
 
     private static readonly IReadOnlySet<string> NoCarriedTemps = new HashSet<string>(StringComparer.Ordinal);
 
@@ -281,9 +284,9 @@ public sealed class CapabilitiesCommandTests
                 "EXPLAIN ANALYZE with full inner-statement effect analysis",
                 "SELECT INTO TEMP TABLE with unambiguous single-part name",
                 CapabilityPostgresTruncateEntry,
-                CapabilityPostgresProofEntry,
             ],
-            SessionTempStatements(SqlEngine.Postgres));
+            SessionTempStatements(SqlEngine.Postgres).Where(entry => !IsPostgresProofEntry(entry)));
+        Assert.Single(SessionTempStatements(SqlEngine.Postgres), IsPostgresProofEntry);
     }
 
     // 011/final (M8): the plan 011 entries hold no character that the JSON
@@ -295,7 +298,7 @@ public sealed class CapabilitiesCommandTests
         foreach (var (profile, entries) in new[]
         {
             ("sqlserver-profile", new[] { CapabilitySetEntry, CapabilityTableVariableEntry }),
-            ("pg-profile", new[] { CapabilityPostgresTruncateEntry, CapabilityPostgresProofEntry }),
+            ("pg-profile", new[] { CapabilityPostgresTruncateEntry, SessionTempStatements(SqlEngine.Postgres).Single(IsPostgresProofEntry) }),
         })
         {
             var output = new StringWriter();
@@ -499,7 +502,7 @@ public sealed class CapabilitiesCommandTests
     [InlineData("CREATE TEMP TABLE items (id int); DELETE FROM pg_temp.items; TRUNCATE pg_temp.items")]
     public void SessionTempStatements_postgres_proof_entry_allows_what_it_claims(string sql)
     {
-        Assert.Contains(CapabilityPostgresProofEntry, SessionTempStatements(SqlEngine.Postgres));
+        Assert.Contains(SessionTempStatements(SqlEngine.Postgres), IsPostgresProofEntry);
 
         var decision = new PostgresSafetyClassifier().Classify(ExpandNames(sql), SqlUsage.Query, "appdb", allowMutation: false, confirmDatabase: null, NoCarriedTemps);
         Assert.True(decision.Allowed, decision.RejectionDescription);
@@ -524,7 +527,7 @@ public sealed class CapabilitiesCommandTests
     [InlineData("CREATE TEMP TABLE items (id int); DROP TABLE pg_temp.{A63}y; TRUNCATE items", "NonTemporaryWrite")]
     public void SessionTempStatements_postgres_proof_entry_denies_what_it_names(string sql, string expected)
     {
-        Assert.Contains(CapabilityPostgresProofEntry, SessionTempStatements(SqlEngine.Postgres));
+        Assert.Contains(SessionTempStatements(SqlEngine.Postgres), IsPostgresProofEntry);
 
         var decision = new PostgresSafetyClassifier().Classify(ExpandNames(sql), SqlUsage.Query, "appdb", allowMutation: false, confirmDatabase: null, NoCarriedTemps);
         Assert.False(decision.Allowed);
@@ -536,7 +539,7 @@ public sealed class CapabilitiesCommandTests
     {
         // The search_path clause is a stated limitation, not a verdict: the
         // classifier is offline, so a recorded name is all the proof there is.
-        Assert.Contains(CapabilityPostgresProofEntry, SessionTempStatements(SqlEngine.Postgres));
+        Assert.Contains(SessionTempStatements(SqlEngine.Postgres), IsPostgresProofEntry);
 
         var classifier = new PostgresSafetyClassifier();
         var setup = classifier.Classify("CREATE TEMP TABLE t (id int)", SqlUsage.CompareSetup, "appdb", allowMutation: false, confirmDatabase: null, NoCarriedTemps);
