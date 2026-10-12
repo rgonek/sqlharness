@@ -222,6 +222,11 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
                 Equivalence = equivalence,
                 Classification = request.Classification,
                 Parameters = BenchmarkReports.ToParameterReports(request.Parameters),
+                Regression = RegressionPolicy.Evaluate(new RegressionInput(
+                    request.Target.Engine,
+                    ToRegressionVariant(baselineRuns),
+                    ToRegressionVariant(candidateRuns),
+                    equivalence)),
             };
 
             phase = CompareCellPhase.Artifact;
@@ -239,6 +244,24 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
         {
             raw?.Dispose();
         }
+    }
+
+    // Measured repetitions only (warm-up is never in runs). Metrics are null for whole-millisecond runs.
+    private static RegressionVariantInput ToRegressionVariant(IReadOnlyList<CollectedBenchmarkRun> variantRuns)
+    {
+        var artifacts = variantRuns.Select(run => run.Artifact).ToArray();
+        static string Availability(IEnumerable<string?> tokens) =>
+            tokens.All(token => token is null || string.Equals(token, BenchmarkMetricReport.Measured, StringComparison.Ordinal))
+                ? BenchmarkMetricReport.Measured
+                : BenchmarkMetricReport.Unavailable;
+
+        return new RegressionVariantInput(
+            artifacts.Select(run => run.Metrics?.ElapsedTimeMillisecondsExact ?? run.ElapsedTimeMilliseconds).ToArray(),
+            artifacts.Select(run => run.LogicalReads).ToArray(),
+            artifacts.Select(run => run.CpuTimeMilliseconds).ToArray(),
+            Availability(artifacts.Select(run => run.Metrics?.ElapsedTimeAvailability)),
+            Availability(artifacts.Select(run => run.Metrics?.LogicalReadsAvailability)),
+            Availability(artifacts.Select(run => run.Metrics?.CpuTimeAvailability)));
     }
 
     private Task<CollectedBenchmarkRun> ExecuteBenchmarkRunAsync(

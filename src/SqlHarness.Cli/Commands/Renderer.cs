@@ -57,7 +57,7 @@ public sealed class Renderer
         else if (outcome.Report is SqlHarnessMeasureSetReport measureSet)
             RenderMeasureSet(measureSet, output);
         else if (outcome.Report is SqlHarnessCompareReport compare)
-            output.WriteLine($"baseline\t{ElapsedText(compare.Baseline)}\ncandidate\t{ElapsedText(compare.Candidate)}\n{FormatTechnicalEquivalence(compare.Equivalence)}; artifacts: {compare.ArtifactDirectory ?? "none"}");
+            output.WriteLine($"baseline\t{ElapsedText(compare.Baseline)}\ncandidate\t{ElapsedText(compare.Candidate)}\n{FormatTechnicalEquivalence(compare.Equivalence)}; artifacts: {compare.ArtifactDirectory ?? "none"}{FormatRegressionLine(compare.Regression)}");
         else if (outcome.Report is SqlHarnessCompareMatrixReport matrix)
             RenderMatrix(matrix, output);
         else if (outcome.Report is DistilledPlan plan)
@@ -497,6 +497,28 @@ public sealed class Renderer
 
     private static string FormatDecimal(decimal value) =>
         value.ToString("0.############################", CultureInfo.InvariantCulture);
+    // Leading newline so a missing verdict (legacy artifact) adds no line.
+    private static string FormatRegressionLine(RegressionReport? regression)
+    {
+        if (regression is null)
+            return string.Empty;
+
+        if (regression.Verdict == RegressionPolicy.Inconclusive)
+            return $"\nRegression: inconclusive ({string.Join(", ", regression.Reasons)})";
+
+        var elapsed = regression.Elapsed;
+        if (elapsed.Delta is not { } delta)
+            return $"\nRegression: {regression.Verdict}";
+
+        var text = $"elapsed {FormatSigned(delta)} ms";
+        if (elapsed.DeltaPercent is { } percent)
+            text += $", {FormatSigned(percent)} %";
+        return $"\nRegression: {regression.Verdict} ({text})";
+    }
+
+    private static string FormatSigned(decimal value) =>
+        (value < 0 ? "-" : "+") + FormatDecimal(Math.Abs(value));
+
     private static string FormatTechnicalEquivalence(ResultEquivalenceReport equivalence)
     {
         if (equivalence.Mode == ResultComparisonMode.Off)

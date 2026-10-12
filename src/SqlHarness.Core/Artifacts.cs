@@ -238,6 +238,10 @@ public sealed record SqlHarnessCompareReport(
         new("none", "read-only", "read-only");
 
     public IReadOnlyList<BenchmarkParameterReport> Parameters { get; init; } = [];
+
+    /// <summary>Latency regression verdict. Absent in artifacts written before it existed; readers never infer one.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RegressionReport? Regression { get; init; }
 }
 
 public sealed record SqlHarnessMeasureReport(

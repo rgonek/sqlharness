@@ -29,7 +29,12 @@ public sealed record CompareBenchmarkSummary(
     BenchmarkVariantSummary Baseline,
     BenchmarkVariantSummary Candidate,
     IReadOnlyList<NoteworthyOperatorSummary> NoteworthyOperators,
-    string? ArtifactDirectory);
+    string? ArtifactDirectory)
+{
+    /// <summary>Absent when the report predates the regression verdict.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public RegressionReport? Regression { get; init; }
+}
 
 public sealed record MeasureBenchmarkSummary(
     SqlHarnessTargetIdentityReport Target,
@@ -99,7 +104,10 @@ public static class BenchmarkSummaryProjector
             ProjectVariant(report.Baseline),
             ProjectVariant(report.Candidate),
             SelectCompareNoteworthy(report.Baseline.Operators, report.Candidate.Operators),
-            report.ArtifactDirectory);
+            report.ArtifactDirectory)
+        {
+            Regression = report.Regression,
+        };
     }
 
     public static MeasureBenchmarkSummary Project(SqlHarnessMeasureReport report)
