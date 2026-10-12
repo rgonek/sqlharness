@@ -32,6 +32,8 @@ Plan 051 is DONE. New local contract plans are indexed below and remain TODO:
 this order describes dependencies and grants no execution, commit or publication authorization.
 The report API remains a separate draft.
 
+Plan [062](062-compare-context-dashboard.md) jest osobnym planem produktu: kontekst compare i ekran przebiegu optymalizacji. Wymaga 051 (DONE); nie wymaga zakończenia 055–061, ale dzieli z 060/061 katalog MCP i kontrakty compare, więc zmian nie wykonywać równolegle bez integracji. Status TODO; zapis planu nie zleca implementacji.
+
 ### Grupa 3 — dostarczanie i utrzymanie
 
 | Kolejność | Plan | Kategoria | Zależności |
@@ -190,6 +192,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [059](059-journal-workflow-cost.md) | Explicit producer references and honest measured/estimated workflow cost | P2 | M | 055, 056, 058 | TODO — accepted provenance/accounting refinements; not implemented |
 | [060](060-mcp-tool-surface.md) | Smaller MCP surface, compact runtime capabilities, built-in recipes and concurrent calls | P2 | M | 055, 056, 059 | TODO — accepted compact-capabilities refinement; additional recipes not accepted |
 | [061](061-unified-parameter-sets.md) | Shared measure/compare parameter-set inputs | P3 | L | 056, 058, 060 | TODO — adapt projection to 055 case inventory; not implemented |
+| [062](062-compare-context-dashboard.md) | Compare context, SQL/scope/attempt history and comparison dashboard | P2 | L | 051 (DONE); coordinate with 060/061 | TODO — design agreed 2026-10-12; not implemented |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED, SUPERSEDED or REVERTED (with one-line rationale).
 
