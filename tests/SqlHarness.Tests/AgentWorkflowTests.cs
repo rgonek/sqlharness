@@ -22,10 +22,23 @@ public sealed class AgentWorkflowTests
     {
         var module = new WorkflowModule();
         var capabilityOutput = NewOutput();
-        var exitCodes = new List<int>
+        var home = Path.Combine(Path.GetTempPath(), $"sqlharness-workflow-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(home);
+        var originalHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
+        Environment.SetEnvironmentVariable("SQLHARNESS_HOME", home);
+        List<int> exitCodes;
+        try
         {
-            await SqlHarnessCli.Create(module, capabilityOutput).RunAsync(["capabilities", "--json"]),
-        };
+            await File.WriteAllTextAsync(Path.Combine(home, "targets.json"),
+                "{\"local\":{\"server\":\"offline.invalid\",\"database\":\"unused\",\"vars\":{},\"auth\":\"sql\",\"sqlUser\":\"unused\",\"passwordEnvVar\":\"UNUSED_SQLHARNESS_PASSWORD\"}}");
+            // What an agent runs once it holds a profile: the profile-scoped document.
+            exitCodes = [await SqlHarnessCli.Create(module, capabilityOutput).RunAsync(["capabilities", "local", "--json"])];
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SQLHARNESS_HOME", originalHome);
+            Directory.Delete(home, recursive: true);
+        }
         var schemaOutput = NewOutput();
         exitCodes.Add(await SqlHarnessCli.Create(module, schemaOutput).RunAsync(["schema", "local", "--object", "dbo.Orders", "--json"]));
 

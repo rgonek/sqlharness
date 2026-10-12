@@ -16,6 +16,7 @@
 
 ## Status
 
+- **Status**: DONE (branch `docs/plan-029-agent-docs`, 1cbdc14..5c07092; Windows and Linux gates green)
 - **Priority**: P2
 - **Effort**: S
 - **Risk**: LOW

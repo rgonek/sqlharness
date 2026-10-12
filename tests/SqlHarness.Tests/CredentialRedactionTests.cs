@@ -5,8 +5,8 @@ using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Tests;
 
-// The SQL password is the only operator-held value the caller cannot obtain, so it is registered
-// for redaction after every executing target resolution, at any length and without a prefix.
+// The SQL password is the operator-held secret (hidden from an MCP client without a shell), so it
+// is registered for redaction after every executing target resolution, at any length and without a prefix.
 public sealed class CredentialRedactionTests
 {
     private const string EnvVar = "SQLHARNESS_TEST_REDACTION_PASSWORD";
