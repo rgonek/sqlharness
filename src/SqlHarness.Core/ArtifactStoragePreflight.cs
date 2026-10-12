@@ -36,6 +36,8 @@ internal sealed class ArtifactStoragePreflight
             string? createdDirectory = null;
             try
             {
+                // The probe is only private if the home itself was created 0700 first.
+                SqlHarnessPaths.EnsureHomeFor(root);
                 _createDirectory(root);
                 _createDirectory(probe);
                 createdDirectory = probe;

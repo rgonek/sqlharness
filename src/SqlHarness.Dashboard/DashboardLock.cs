@@ -64,6 +64,9 @@ public sealed class DashboardLock : IDisposable
     {
         ArgumentException.ThrowIfNullOrEmpty(home);
         ArgumentNullException.ThrowIfNull(beforeRetry);
+        // A fresh home is created 0700 so the lock and the published endpoint stay owner-only;
+        // a home that already exists keeps whatever mode its owner gave it.
+        SqlHarnessPaths.EnsureHomeFor(home);
         Directory.CreateDirectory(home);
         OwnerOnlyFiles.Directory(home);
         if (TryAcquireOnce(home) is { } acquired)

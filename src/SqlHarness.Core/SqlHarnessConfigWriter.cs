@@ -16,6 +16,8 @@ public static class SqlHarnessConfigWriter
     {
         ArgumentNullException.ThrowIfNull(config);
         var directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
+        // A child directory is only private if the home itself was created 0700 first.
+        SqlHarnessPaths.EnsureHomeFor(directory);
         Directory.CreateDirectory(directory);
         var temp = Path.Combine(directory, $".config-{Guid.NewGuid():N}.tmp");
         try

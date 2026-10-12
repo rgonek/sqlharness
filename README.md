@@ -347,6 +347,8 @@ The UI lives in `src/SqlHarness.Dashboard/ui` (React, Vite, shadcn/ui on Base UI
 
 Set `SQLHARNESS_HOME` to relocate these paths, for example in an isolated test environment.
 
+On Unix, SQLHarness creates its home with mode 0700; `doctor` warns when an existing home is broader.
+
 ## Roadmap after v1
 
 - Missing-index overlap analysis against existing indexes.
