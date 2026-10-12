@@ -1,4 +1,9 @@
+using System.Text.Json;
+
+using ModelContextProtocol.Protocol;
+
 using SqlHarness.Core.Targets;
+using SqlHarness.Mcp.Tools;
 
 namespace SqlHarness.Mcp.Tests;
 
@@ -30,6 +35,8 @@ public sealed class McpRequestScopeTests
 
     private static McpRequestScope Request(string profile, IReadOnlyDictionary<string, string>? vars = null) =>
         new(profile, vars ?? new Dictionary<string, string>(StringComparer.Ordinal) { ["tenant"] = Tenant });
+
+    private static string Text(CallToolResult result) => Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
 
     [Fact]
     public void Request_startup_is_offline_needs_no_profile_vars_and_loads_once()
@@ -85,7 +92,96 @@ public sealed class McpRequestScopeTests
             ["tenant"] = "marker.secret",
         })));
         Assert.DoesNotContain("marker.secret", invalid.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("sample-a", invalid.Message, StringComparison.Ordinal);
+        Assert.Contains("sample-a", invalid.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Request_handler_names_missing_vars_and_redacts_selected_profile_password()
+    {
+        const string secret = "request-scope-missing-secret-3c81";
+        const string passwordVariable = "SQLHARNESS_MCP_REQUEST_SCOPE_MISSING_PASSWORD";
+        Environment.SetEnvironmentVariable(passwordVariable, secret);
+        try
+        {
+            var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+            {
+                [secret] = Profile("server-a", "database-a") with
+                {
+                    Auth = "sql",
+                    SqlUser = "test-user",
+                    PasswordEnvVar = passwordVariable,
+                },
+            };
+            var context = McpProcessContext.Create(Options(secret), () => profiles);
+            var handlers = new McpRequestToolHandlers(context);
+
+            var result = await handlers.QueryAsync(
+                null!,
+                new McpRequestScopeArgument(secret, new Dictionary<string, string>()),
+                "SELECT 1");
+
+            Assert.True(result.IsError == true);
+            using var document = JsonDocument.Parse(Text(result));
+            var message = document.RootElement.GetProperty("error").GetProperty("message").GetString();
+            Assert.Contains("Profile '[REDACTED]': Missing required profile vars: tenant.", message, StringComparison.Ordinal);
+            Assert.Contains("[REDACTED]", message, StringComparison.Ordinal);
+            Assert.DoesNotContain(secret, message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(passwordVariable, null);
+        }
+    }
+
+    [Fact]
+    public async Task Request_handler_names_auth_reason_and_redacts_selected_profile_password()
+    {
+        const string secret = "request-scope-auth-secret-6d34";
+        const string passwordVariable = "SQLHARNESS_MCP_REQUEST_SCOPE_AUTH_PASSWORD";
+        Environment.SetEnvironmentVariable(passwordVariable, secret);
+        try
+        {
+            var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+            {
+                [secret] = Profile("server-a", "database-a") with
+                {
+                    Auth = "invalid-auth",
+                    PasswordEnvVar = passwordVariable,
+                },
+            };
+            var context = McpProcessContext.Create(Options(secret), () => profiles);
+            var handlers = new McpRequestToolHandlers(context);
+
+            var result = await handlers.QueryAsync(null!, new McpRequestScopeArgument(secret,
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["tenant"] = Tenant }), "SELECT 1");
+
+            Assert.True(result.IsError == true);
+            using var document = JsonDocument.Parse(Text(result));
+            var message = document.RootElement.GetProperty("error").GetProperty("message").GetString();
+            Assert.Contains("authentication settings are invalid", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("authentication strategy is unknown", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("[REDACTED]", message, StringComparison.Ordinal);
+            Assert.DoesNotContain(secret, message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(passwordVariable, null);
+        }
+    }
+
+    [Fact]
+    public async Task Request_handler_keeps_malformed_scope_errors_generic()
+    {
+        var context = McpProcessContext.Create(Options("sample-a"), Profiles);
+        var handlers = new McpRequestToolHandlers(context);
+
+        var result = await handlers.QueryAsync(null!, new McpRequestScopeArgument("sample-a", null!), "SELECT 1");
+
+        Assert.True(result.IsError == true);
+        using var document = JsonDocument.Parse(Text(result));
+        Assert.Equal(
+            "The MCP request scope is invalid.",
+            document.RootElement.GetProperty("error").GetProperty("message").GetString());
     }
 
     [Fact]

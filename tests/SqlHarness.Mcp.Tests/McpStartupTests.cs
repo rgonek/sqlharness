@@ -195,25 +195,25 @@ public sealed class McpStartupTests
         {
             var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
             {
-                ["selected-profile"] = new TargetProfile(
+                [secret] = new TargetProfile(
                     "mcp-unreachable.invalid",
                     "db-{tenant}",
-                    new Dictionary<string, string> { [secret] = ".*" },
+                    new Dictionary<string, string> { ["tenant"] = ".*" },
                     "sql",
                     SqlUser: "mcp-user",
                     PasswordEnvVar: passwordVariable),
             };
             var log = new StringWriter();
             var exit = await McpHost.RunAsync(
-                new McpServerOptions { Profile = "selected-profile" },
+                new McpServerOptions { Profile = secret },
                 new MemoryStream(),
                 new MemoryStream(),
                 log,
                 () => profiles);
 
             Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
-            Assert.Contains("selected-profile", log.ToString(), StringComparison.Ordinal);
-            Assert.Contains("missing required profile vars", log.ToString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("profile '[REDACTED]'", log.ToString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("missing required profile vars: tenant", log.ToString(), StringComparison.OrdinalIgnoreCase);
             Assert.Contains("[REDACTED]", log.ToString(), StringComparison.Ordinal);
             Assert.DoesNotContain(secret, log.ToString(), StringComparison.Ordinal);
         }
@@ -252,6 +252,8 @@ public sealed class McpStartupTests
 
             Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
             Assert.Contains("input root", log.ToString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("missing-root", log.ToString(), StringComparison.Ordinal);
+            Assert.Contains("the directory does not exist", log.ToString(), StringComparison.OrdinalIgnoreCase);
             Assert.Contains("[REDACTED]", log.ToString(), StringComparison.Ordinal);
             Assert.DoesNotContain(secret, log.ToString(), StringComparison.Ordinal);
         }
@@ -288,7 +290,7 @@ public sealed class McpStartupTests
 
             Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
             Assert.Contains("authentication", log.ToString(), StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("strategy", log.ToString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("the authentication strategy is unknown", log.ToString(), StringComparison.OrdinalIgnoreCase);
             Assert.Contains("[REDACTED]", log.ToString(), StringComparison.Ordinal);
             Assert.DoesNotContain(secret, log.ToString(), StringComparison.Ordinal);
         }

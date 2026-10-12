@@ -140,11 +140,15 @@ public sealed class McpProcessContext
 
         var profile = Profiles[request.Profile];
         var canonicalVars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var missing = profile.Vars.Keys.Where(key => !supplied.ContainsKey(key)).ToArray();
+        if (missing.Length != 0)
+            throw ProfileResolutionFailure(
+                request.Profile,
+                $"Missing required profile vars: {string.Join(", ", missing)}.");
+
         foreach (var key in profile.Vars.Keys)
         {
-            if (!supplied.TryGetValue(key, out var value))
-                throw new McpStartupException("The MCP request scope is invalid.");
-            canonicalVars.Add(key, value);
+            canonicalVars.Add(key, supplied[key]);
         }
         if (supplied.Count != canonicalVars.Count)
             throw new McpStartupException("The MCP request scope is invalid.");
@@ -157,7 +161,10 @@ public sealed class McpProcessContext
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            throw new McpStartupException("The MCP request scope is invalid.", exception);
+            // The request shape and allowlist have already been checked. At
+            // this point the failure is profile resolution; its safe resolver
+            // message is redacted with the selected profile password below.
+            throw ProfileResolutionFailure(request.Profile, exception.Message, exception);
         }
 
         if (target.Engine != SqlEngine.SqlServer)
@@ -180,6 +187,24 @@ public sealed class McpProcessContext
 
     /// <summary>Composition for target-free tools; it performs no connection.</summary>
     public ISqlHarnessModule CreateModule() => Decorate(new SqlHarnessModule(() => Profiles));
+
+    private McpStartupException ProfileResolutionFailure(string profileName, string reason, Exception? inner = null)
+    {
+        var profilePrefix = $"Profile '{profileName}'";
+        var detail = reason.Contains(profilePrefix, StringComparison.Ordinal)
+            ? reason
+            : $"{profilePrefix}: {reason}";
+        var knownSecrets = new List<string>();
+        if (Profiles.TryGetValue(profileName, out var profile) &&
+            !string.IsNullOrWhiteSpace(profile.PasswordEnvVar) &&
+            Environment.GetEnvironmentVariable(profile.PasswordEnvVar) is { Length: > 0 } password)
+            knownSecrets.Add(password);
+
+        return new McpStartupException(SecretRedactor.Redact(detail, knownSecrets), inner)
+        {
+            ExposeSafeMessage = true,
+        };
+    }
 
     private static IReadOnlyList<string> ValidateAllowlist(
         McpServerOptions options,

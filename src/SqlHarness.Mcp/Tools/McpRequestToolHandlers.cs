@@ -156,6 +156,10 @@ public sealed class McpRequestToolHandlers(
         {
             scope = process.ResolveScope(ParseScope(ctx, suppliedScope));
         }
+        catch (McpStartupException exception) when (exception.ExposeSafeMessage)
+        {
+            return Task.FromResult(Failure(exception.Message, command, process.MaxResultBytes));
+        }
         catch (Exception exception) when (exception is McpStartupException or McpMappingException)
         {
             return Task.FromResult(Failure("The MCP request scope is invalid.", command, process.MaxResultBytes));

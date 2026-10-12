@@ -10,7 +10,11 @@ namespace SqlHarness.Mcp;
 /// profile setting or input root; known credentials are redacted by the host.
 /// </summary>
 public sealed class McpStartupException(string message, Exception? innerException = null)
-    : Exception(message, innerException);
+    : Exception(message, innerException)
+{
+    /// <summary>True only for a resolver message that was redacted for its selected profile.</summary>
+    internal bool ExposeSafeMessage { get; init; }
+}
 
 /// <summary>
 /// Immutable target scope for one MCP call. Fixed-mode scopes are resolved
