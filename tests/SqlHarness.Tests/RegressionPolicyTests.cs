@@ -167,6 +167,17 @@ public class RegressionPolicyTests
     }
 
     [Fact]
+    public void Elapsed_unavailable_suppresses_the_spread_gate()
+    {
+        var report = Run(
+            Variant(Flat(100m)),
+            Variant([100m, 100m, 100m, 100m, 200m], elapsedAvailability: Unavailable));
+
+        Assert.Contains(RegressionPolicy.ReasonElapsedUnavailable, report.Reasons);
+        Assert.DoesNotContain(RegressionPolicy.ReasonUnstableElapsed, report.Reasons);
+    }
+
+    [Fact]
     public void Elapsed_availability_is_compared_ordinally()
     {
         var report = Run(Variant(Flat(100m)), Variant(Flat(100m), elapsedAvailability: "Measured"));

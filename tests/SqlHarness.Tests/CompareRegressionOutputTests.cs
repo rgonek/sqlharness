@@ -109,7 +109,7 @@ public class CompareRegressionOutputTests
     public async Task CompareCellRunner_unrecognized_statistics_make_elapsed_unavailable_and_inconclusive()
     {
         var session = SqlHarnessCompareTests.FakeCompareSession.Create();
-        session.StatisticsMessages = ["unrecognized statistics text"];
+        session.CandidateStatisticsMessages = ["unrecognized statistics text"];
         var runner = new CompareCellRunner(session, new MemoryWriter());
 
         var cell = await runner.RunAsync(Request(ResultComparisonMode.Ordered) with { Repeat = 5 }, CancellationToken.None);
