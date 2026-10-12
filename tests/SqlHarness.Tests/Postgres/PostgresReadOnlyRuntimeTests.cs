@@ -1,6 +1,7 @@
 using Npgsql;
 
 using SqlHarness.Core;
+using SqlHarness.Core.Dialect;
 using SqlHarness.Core.Postgres;
 
 namespace SqlHarness.Tests.Postgres;
@@ -55,6 +56,91 @@ public sealed class PostgresReadOnlyRuntimeTests
                 CancellationToken.None));
 
         Assert.Equal("PostgreSQL setup execution requires successful setup classification.", exception.Message);
+    }
+
+    [Fact]
+    public async Task Successfully_classified_Postgres_setup_emits_session_setup_mode_to_the_fake_session()
+    {
+        const string sql = "CREATE TEMP TABLE setup_probe (id integer)";
+        var classifier = SqlDialects.For(SqlEngine.Postgres);
+        var safety = classifier.Classify(
+            sql,
+            SqlUsage.CompareSetup,
+            "appdb",
+            allowMutation: false,
+            confirmDatabase: null,
+            new HashSet<string>(StringComparer.Ordinal));
+        Assert.True(safety.Allowed);
+
+        using var raw = new CanonicalResultAccumulator();
+        var session = new CapturingSession();
+        await SetupSqlExecution.ExecuteSetupAsync(
+            SqlEngine.Postgres,
+            sql,
+            [],
+            5,
+            session,
+            raw,
+            CancellationToken.None,
+            safety);
+
+        Assert.Equal(PostgresExecutionMode.SessionSetup, Assert.Single(session.Commands).PostgresMode);
+    }
+
+    [Fact]
+    public async Task Rejected_Postgres_setup_classification_never_emits_read_write_mode()
+    {
+        const string sql = "CREATE TABLE public.persisted_probe (id integer)";
+        var safety = SqlDialects.For(SqlEngine.Postgres).Classify(
+            sql,
+            SqlUsage.CompareSetup,
+            "appdb",
+            allowMutation: false,
+            confirmDatabase: null,
+            new HashSet<string>(StringComparer.Ordinal));
+        Assert.False(safety.Allowed);
+
+        using var raw = new CanonicalResultAccumulator();
+        var session = new CapturingSession();
+        await Assert.ThrowsAsync<SqlHarnessSafetyException>(() => SetupSqlExecution.ExecuteSetupAsync(
+            SqlEngine.Postgres,
+            sql,
+            [],
+            5,
+            session,
+            raw,
+            CancellationToken.None,
+            safety));
+
+        Assert.Empty(session.Commands);
+    }
+
+    private sealed class CapturingSession : ISqlSession
+    {
+        public List<SqlExecutionCommand> Commands { get; } = [];
+        public IReadOnlyList<string> Messages => [];
+        public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
+
+        public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
+        {
+            Commands.Add(command);
+            return Task.FromResult<ISqlReader>(new EmptyReader());
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class EmptyReader : ISqlReader
+    {
+        public int FieldCount => 0;
+        public int RecordsAffected => 0;
+        public string GetName(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public Type GetFieldType(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public bool GetAllowNull(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public object GetValue(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public Task<bool> ReadAsync(CancellationToken ct) => Task.FromResult(false);
+        public Task<bool> NextResultAsync(CancellationToken ct) => Task.FromResult(false);
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class UnusedSession : ISqlSession
