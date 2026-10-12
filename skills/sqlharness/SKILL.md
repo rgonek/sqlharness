@@ -157,7 +157,7 @@ Do not reuse an approval for changed SQL, a different database, a different prof
 
 ## Offline plans and schema
 
-`plan` is offline and does not need a scope lock or database access. It reads a showplan XML file (or stdin), returns a compact plan tree, and can emit JSON:
+`plan` is offline and does not need a scope lock or database access. It reads a showplan XML file (or stdin) and returns a compact plan tree with bounded statement text and predicates unchanged from the caller-supplied plan; output limits clip long cells and mark truncation. It can emit JSON:
 
 ```powershell
 sqlharness plan .\artifacts\orders.sqlplan --json

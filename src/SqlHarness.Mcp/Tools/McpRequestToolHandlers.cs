@@ -129,7 +129,7 @@ public sealed class McpRequestToolHandlers(
     public Task<CallToolResult> PlanAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Inline plan document.")] string? content = null,
         [Description("Plan file under an operator input root.")] string? file = null,
-        [Description("Keep statement text and predicates (credential patterns filtered). Imported plan text may contain data and you choose that surface; false returns metadata only.")] bool includeText = true,
+        [Description("includeText (default true) returns bounded statement text and predicates; false returns metadata only.")] bool includeText = true,
         CancellationToken ct = default) => TargetFreeAsync("sqlharness_plan", ctx, ct, async token =>
         {
             ThrowUnknown(ctx, ["content", "file", "includeText"]);

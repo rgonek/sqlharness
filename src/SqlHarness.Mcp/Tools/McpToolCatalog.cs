@@ -274,7 +274,7 @@ public sealed class McpToolHandlers(
         string? content = null,
         [Description("Plan file under an operator input root. Exactly one of content or file.")]
         string? file = null,
-        [Description("Keep statement text and predicates (credential patterns filtered). Imported plan text may contain data and you choose that surface; false returns metadata only.")]
+        [Description("includeText (default true) returns bounded statement text and predicates; false returns metadata only.")]
         bool includeText = true,
         CancellationToken ct = default) =>
         RunAsync("sqlharness_plan", ctx, async token =>
@@ -517,7 +517,7 @@ public static class McpToolCatalog
             Tool(ToolNames[5], nameof(McpRequestToolHandlers.CompareAsync), "Compare queries against the supplied request scope.", null, false, null, true),
             Tool(ToolNames[6], nameof(McpRequestToolHandlers.WatchAsync), "Poll a bounded query against the supplied request scope.", true, false, null, true),
             Tool(ToolNames[7], nameof(McpRequestToolHandlers.SnapshotAsync), "Capture or diff a snapshot against the supplied request scope.", null, false, null, true),
-            Tool(ToolNames[8], nameof(McpRequestToolHandlers.PlanAsync), "Distill a plan document offline. Keeps bounded statement text and predicates (credential patterns filtered; may contain data) unless includeText is false.", true, false, true, false),
+            Tool(ToolNames[8], nameof(McpRequestToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
             Tool(ToolNames[9], nameof(McpRequestToolHandlers.ArtifactAsync), "Read a safe section of an artifact against the supplied request scope.", true, false, true, false),
         };
         if (tools.Count != McpLimits.MaxTools)
@@ -584,7 +584,7 @@ public static class McpToolCatalog
             Tool(ToolNames[5], nameof(McpToolHandlers.CompareAsync), "Compare baseline vs candidate with the CLI sessions and equivalence rules. Optional single matrix dimension.", null, false, null, true),
             Tool(ToolNames[6], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
             Tool(ToolNames[7], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it. No force flag.", null, false, null, true),
-            Tool(ToolNames[8], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. Keeps bounded statement text and predicates (credential patterns filtered; may contain data) unless includeText is false.", true, false, true, false),
+            Tool(ToolNames[8], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
             Tool(ToolNames[9], nameof(McpToolHandlers.ArtifactAsync), "Read one safe section (summary, metrics, operators, statements, matrix-cells) of a saved benchmark artifact.", true, false, true, false),
         };
         if (tools.Count != McpLimits.MaxTools)

@@ -87,6 +87,8 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\
 sqlharness plan .\artifacts\orders.sqlplan --json
 ```
 
+`plan` is offline and returns a compact tree with bounded statement text and predicates unchanged from the caller-supplied plan. Output limits clip long cells and mark truncation.
+
 `compare` accepts one `--matrix` dimension:
 
 ```powershell
