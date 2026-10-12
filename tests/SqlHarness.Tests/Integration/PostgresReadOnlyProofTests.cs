@@ -198,29 +198,77 @@ public sealed class PostgresReadOnlyProofTests
     private static async Task<string> MeasureWrapperAsync(NpgsqlConnection connection)
     {
         const int repetitions = 100;
-        var bare = Stopwatch.StartNew();
-        for (var index = 0; index < repetitions; index++)
-            await connection.ExecuteScalarAsync<int>("SELECT 1");
-        bare.Stop();
+        const int warmupPairs = 10;
 
-        var wrapped = Stopwatch.StartNew();
+        for (var index = 0; index < warmupPairs; index++)
+        {
+            if (index % 2 == 0)
+            {
+                await ExecuteBareSelectAsync(connection);
+                await ExecuteWrappedSelectAsync(connection);
+            }
+            else
+            {
+                await ExecuteWrappedSelectAsync(connection);
+                await ExecuteBareSelectAsync(connection);
+            }
+        }
+
+        var bareSamples = new List<double>(repetitions);
+        var wrappedSamples = new List<double>(repetitions);
         for (var index = 0; index < repetitions; index++)
         {
-            await using var transaction = await connection.BeginTransactionAsync();
-            await using (var setReadOnly = new NpgsqlCommand("SET TRANSACTION READ ONLY", connection, transaction))
-                await setReadOnly.ExecuteNonQueryAsync();
-            await using (var command = new NpgsqlCommand("SELECT 1", connection, transaction))
-                await command.ExecuteScalarAsync();
-            await transaction.CommitAsync();
+            if (index % 2 == 0)
+            {
+                bareSamples.Add(await MeasureAsync(() => ExecuteBareSelectAsync(connection)));
+                wrappedSamples.Add(await MeasureAsync(() => ExecuteWrappedSelectAsync(connection)));
+            }
+            else
+            {
+                wrappedSamples.Add(await MeasureAsync(() => ExecuteWrappedSelectAsync(connection)));
+                bareSamples.Add(await MeasureAsync(() => ExecuteBareSelectAsync(connection)));
+            }
         }
-        wrapped.Stop();
 
-        var barePerRun = bare.Elapsed.TotalMilliseconds / repetitions;
-        var wrappedPerRun = wrapped.Elapsed.TotalMilliseconds / repetitions;
-        var percent = barePerRun == 0 ? 0 : ((wrappedPerRun - barePerRun) / barePerRun) * 100;
-        return $"{repetitions} repetitions each; bare={bare.Elapsed.TotalMilliseconds:F3} ms total ({barePerRun:F3} ms/run), " +
-               $"READ ONLY wrapper={wrapped.Elapsed.TotalMilliseconds:F3} ms total ({wrappedPerRun:F3} ms/run), " +
-               $"overhead={percent:F1}% vs bare";
+        var pairedDeltas = wrappedSamples.Zip(bareSamples, (wrapped, bare) => wrapped - bare).ToArray();
+        var bareTotal = bareSamples.Sum();
+        var wrappedTotal = wrappedSamples.Sum();
+        var deltaTotal = wrappedTotal - bareTotal;
+        var overhead = bareTotal == 0 ? 0 : (deltaTotal / bareTotal) * 100;
+        return $"{warmupPairs} warm-up pairs; {repetitions} measured pairs, balanced alternating order " +
+               $"(bare→wrapped {repetitions / 2}, wrapped→bare {repetitions / 2}); " +
+               $"paired totals: bare={bareTotal:F3} ms, READ ONLY wrapper={wrappedTotal:F3} ms, " +
+               $"delta={deltaTotal:F3} ms ({overhead:F1}%); per-run median/p95: " +
+               $"bare={Percentile(bareSamples, 0.50):F3}/{Percentile(bareSamples, 0.95):F3} ms, " +
+               $"wrapped={Percentile(wrappedSamples, 0.50):F3}/{Percentile(wrappedSamples, 0.95):F3} ms; " +
+               $"paired delta median/p95={Percentile(pairedDeltas, 0.50):F3}/{Percentile(pairedDeltas, 0.95):F3} ms.";
+    }
+
+    private static async Task<double> MeasureAsync(Func<Task> operation)
+    {
+        var started = Stopwatch.GetTimestamp();
+        await operation();
+        return Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+    }
+
+    private static async Task ExecuteBareSelectAsync(NpgsqlConnection connection) =>
+        await connection.ExecuteScalarAsync<int>("SELECT 1");
+
+    private static async Task ExecuteWrappedSelectAsync(NpgsqlConnection connection)
+    {
+        await using var transaction = await connection.BeginTransactionAsync();
+        await using (var setReadOnly = new NpgsqlCommand("SET TRANSACTION READ ONLY", connection, transaction))
+            await setReadOnly.ExecuteNonQueryAsync();
+        await using (var command = new NpgsqlCommand("SELECT 1", connection, transaction))
+            await command.ExecuteScalarAsync();
+        await transaction.CommitAsync();
+    }
+
+    private static double Percentile(IReadOnlyCollection<double> values, double percentile)
+    {
+        var ordered = values.Order().ToArray();
+        var rank = (int)Math.Ceiling(percentile * ordered.Length);
+        return ordered[Math.Clamp(rank - 1, 0, ordered.Length - 1)];
     }
 
     private static string? GetSqlState(Exception exception)

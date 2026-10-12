@@ -27,7 +27,7 @@ The runner records the server version, SQLSTATE and outcome for each case, 100-r
 
 ## Wrapper timing
 
-PENDING: 100 bare and 100 wrapped executions of `SELECT 1` have not been run.
+PENDING: timing has not been run. The prepared measurement uses 10 alternating warm-up pairs, then 100 measured pairs with balanced order (50 bare-first, 50 wrapper-first), and reports paired totals plus per-run and paired-delta median/p95 distributions.
 
 ## Cleanup
 
