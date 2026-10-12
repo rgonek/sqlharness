@@ -23,6 +23,30 @@ public sealed class PostgresSafetyTests
         Assert.False(decision.HasMutation);
     }
 
+    [Theory]
+    [InlineData("Query", "SELECT nextval('s')")]
+    [InlineData("Query", "SELECT setval('s', 1)")]
+    [InlineData("Query", "SELECT app.purge_old_orders()")]
+    [InlineData("Query", "EXPLAIN ANALYZE SELECT * FROM app.archive()")]
+    public void Transaction_contained_writes_and_user_functions_pass_static_classification(string usage, string sql)
+    {
+        var decision = _classifier.Classify(sql, ParseUsage(usage), "appdb", false, null, Empty);
+
+        Assert.True(decision.Allowed);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Theory]
+    [InlineData("SELECT nextval('s')")]
+    [InlineData("SELECT pg_catalog.setval('s', 1)")]
+    public void Sequence_mutations_stay_denied_in_unwrapped_temp_setup(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.CompareSetup, "appdb", false, null, Empty);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
+
     [Fact]
     public void Create_temp_and_insert_are_session_local()
     {
@@ -99,7 +123,6 @@ public sealed class PostgresSafetyTests
     [InlineData("COPY t FROM STDIN")]
     [InlineData("DO $$ BEGIN NULL; END $$")]
     [InlineData("PREPARE x AS SELECT 1")]
-    [InlineData("SELECT nextval('s')")]
     [InlineData("SELECT dblink('dbname=other','select 1')")]
     [InlineData("SELECT * FROM dblink('dbname=other','select 1')")]
     [InlineData("SELECT * FROM pg_ls_dir('.')")]
@@ -225,6 +248,12 @@ public sealed class PostgresSafetyTests
     [InlineData("SELECT pg_create_restore_point('x')")]
     [InlineData("SELECT pg_stat_reset()")]
     [InlineData("SELECT pg_stat_reset_shared('bgwriter')")]
+    [InlineData("SELECT pg_stat_statements_reset()")]
+    [InlineData("SELECT pg_promote()")]
+    [InlineData("SELECT pg_backup_start('label')")]
+    [InlineData("SELECT pg_backup_stop()")]
+    [InlineData("SELECT pg_start_backup('label')")]
+    [InlineData("SELECT pg_stop_backup()")]
     [InlineData("SELECT pg_create_physical_replication_slot('s')")]
     [InlineData("SELECT pg_create_logical_replication_slot('s','pgoutput')")]
     [InlineData("SELECT pg_drop_replication_slot('s')")]
@@ -235,6 +264,22 @@ public sealed class PostgresSafetyTests
         var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
         Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
         Assert.False(decision.Allowed);
+    }
+
+    [Theory]
+    [InlineData("Query", "SELECT pg_stat_statements_reset()")]
+    [InlineData("CompareSetup", "SELECT pg_catalog.pg_stat_statements_reset()")]
+    [InlineData("Query", "SELECT pg_promote()")]
+    [InlineData("CompareSetup", "SELECT pg_backup_start('label')")]
+    [InlineData("Query", "SELECT pg_backup_stop()")]
+    [InlineData("Query", "SELECT pg_start_backup('label')")]
+    [InlineData("CompareSetup", "SELECT pg_stop_backup()")]
+    public void Read_only_transaction_does_not_allow_residual_admin_effects(string usage, string sql)
+    {
+        var decision = _classifier.Classify(sql, ParseUsage(usage), "appdb", false, null, Empty);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
     }
 
     [Theory]
@@ -279,7 +324,6 @@ public sealed class PostgresSafetyTests
     [InlineData("SELECT pg_try_advisory_lock(42)")]
     [InlineData("SELECT PG_ADVISORY_LOCK(1)")]
     [InlineData("SELECT pg_catalog.pg_advisory_lock(42)")]
-    [InlineData("SELECT setval('s', 1)")]
     [InlineData("SELECT lo_custom_readonly()")]
     [InlineData("SELECT * FROM (SELECT set_config('search_path', 'public', false)) s")]
     [InlineData("SELECT * FROM t JOIN (SELECT pg_cancel_backend(1)) s ON true")]
@@ -302,8 +346,6 @@ public sealed class PostgresSafetyTests
     [InlineData("CompareSetup", "SELECT * FROM public.items WHERE length(set_config('search_path', 'public', false)) > 0")]
     [InlineData("Query", "CREATE TEMP TABLE t (note text DEFAULT lower(set_config('search_path', 'public', false)))")]
     [InlineData("CompareSetup", "CREATE TEMP TABLE t (note text DEFAULT lower(set_config('search_path', 'public', false)))")]
-    [InlineData("Query", "SELECT coalesce(nextval('s'), 0)")]
-    [InlineData("CompareSetup", "SELECT length(setval('s', 1)::text)")]
     [InlineData("Query", "SELECT * FROM public.items WHERE length(pg_cancel_backend(1)::text) > 0")]
     [InlineData("CompareSetup", "SELECT coalesce(pg_advisory_lock(1), 1)")]
     [InlineData("Query", "SELECT coalesce(pg_try_advisory_lock(1), false)")]
@@ -320,10 +362,6 @@ public sealed class PostgresSafetyTests
     [Theory]
     [InlineData("Query", """CREATE TEMP TABLE t (note text DEFAULT set_config('search_path', 'public', false)); INSERT INTO t DEFAULT VALUES""")]
     [InlineData("CompareSetup", """CREATE TEMP TABLE t (note text DEFAULT pg_catalog.set_config('search_path', 'public', false)); INSERT INTO t DEFAULT VALUES""")]
-    [InlineData("Query", """CREATE TEMP TABLE t (id int DEFAULT nextval('s')); INSERT INTO t DEFAULT VALUES""")]
-    [InlineData("CompareSetup", """CREATE TEMP TABLE t (id int DEFAULT nextval('s')); INSERT INTO t DEFAULT VALUES""")]
-    [InlineData("Query", """CREATE TEMP TABLE t (id int DEFAULT "setval"('s', 1)); INSERT INTO t DEFAULT VALUES""")]
-    [InlineData("CompareSetup", """CREATE TEMPORARY TABLE t (id int DEFAULT "setval"('s', 1)); INSERT INTO t DEFAULT VALUES""")]
     [InlineData("Query", """CREATE TEMP TABLE t (id int CHECK (set_config('search_path', 'public', false) IS NOT NULL))""")]
     [InlineData("CompareSetup", """CREATE TEMP TABLE t (id int, CONSTRAINT c CHECK (set_config('search_path', 'public', false) IS NOT NULL))""")]
     [InlineData("Query", """CREATE TEMP TABLE t (id int GENERATED ALWAYS AS (set_config('search_path', 'public', false)::int) STORED)""")]

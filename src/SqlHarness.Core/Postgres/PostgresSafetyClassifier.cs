@@ -8,10 +8,13 @@ internal sealed class PostgresSafetyClassifier
     private static readonly IReadOnlySet<string> EmptyTemps =
         new HashSet<string>(StringComparer.Ordinal);
 
+    // READ ONLY contains persistent relation and sequence writes, so nextval/setval
+    // and user functions that write persistent relations are left to the server.
+    // It does not contain external access or other administrative effects; the
+    // denylist below keeps those visible calls out. A least-privilege database
+    // role remains the operator's control for hidden user-function effects.
     private static readonly HashSet<string> DeniedExactFunctions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "nextval",
-        "setval",
         "pg_read_file",
         "pg_ls_dir",
         "lo_import",
@@ -27,9 +30,15 @@ internal sealed class PostgresSafetyClassifier
         "ts_stat",
         "pg_notify",
         "pg_stat_file",
+        "pg_stat_statements_reset",
         "pg_reload_conf",
         "pg_rotate_logfile",
         "pg_switch_wal",
+        "pg_promote",
+        "pg_backup_start",
+        "pg_backup_stop",
+        "pg_start_backup",
+        "pg_stop_backup",
         "pg_create_restore_point",
         "pg_drop_replication_slot",
         "pg_logical_emit_message",
@@ -53,7 +62,8 @@ internal sealed class PostgresSafetyClassifier
         foreach (var statement in statements)
         {
             var effect = StatementEffectVisitor.Inspect(statement);
-            if (effect.HasProhibitedFunction)
+            if (effect.HasProhibitedFunction ||
+                (usage == SqlUsage.CompareSetup && effect.HasSequenceMutationFunction))
                 return Denied(SqlSafetyReason.UnsupportedStatement);
             parsed.Add((statement, effect));
         }
@@ -674,6 +684,7 @@ internal sealed class PostgresSafetyClassifier
 
     private readonly record struct StatementEffect(
         bool HasProhibitedFunction,
+        bool HasSequenceMutationFunction,
         bool HasSelectInto,
         int SelectIntoCount,
         bool UnresolvedWrite,
@@ -685,6 +696,7 @@ internal sealed class PostgresSafetyClassifier
         private int _selectIntoCount;
 
         internal bool HasProhibitedFunction { get; private set; }
+        internal bool HasSequenceMutationFunction { get; private set; }
         internal bool UnresolvedWrite { get; private set; }
 
         internal static StatementEffect Inspect(Statement statement)
@@ -694,6 +706,7 @@ internal sealed class PostgresSafetyClassifier
             visitor.VisitSkippedChildren(statement);
             return new StatementEffect(
                 visitor.HasProhibitedFunction,
+                visitor.HasSequenceMutationFunction,
                 visitor._selectIntoCount > 0,
                 visitor._selectIntoCount,
                 visitor.UnresolvedWrite,
@@ -816,6 +829,9 @@ internal sealed class PostgresSafetyClassifier
             if (expression is not Expression.Function function)
                 return ControlFlow.Continue;
 
+            if (IsSequenceMutationFunction(function.Name))
+                HasSequenceMutationFunction = true;
+
             if (IsDeniedObjectName(function.Name))
             {
                 HasProhibitedFunction = true;
@@ -935,11 +951,22 @@ internal sealed class PostgresSafetyClassifier
                 || HasDeniedPrefix(functionName, "pg_try_advisory_")
                 || HasDeniedPrefix(functionName, "pg_sleep")
                 || HasDeniedPrefix(functionName, "pg_stat_reset")
+                || HasDeniedPrefix(functionName, "pg_backup")
                 || HasDeniedPrefix(functionName, "pg_create_")
                 || HasDeniedPrefix(functionName, "pg_replication_origin_");
 
             static bool HasDeniedPrefix(string functionName, string prefix) =>
                 functionName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsSequenceMutationFunction(ObjectName name)
+        {
+            if (name.Values.Count == 0)
+                return false;
+
+            var functionName = name.Values[^1].Value;
+            return functionName.Equals("nextval", StringComparison.OrdinalIgnoreCase) ||
+                   functionName.Equals("setval", StringComparison.OrdinalIgnoreCase);
         }
     }
 }
