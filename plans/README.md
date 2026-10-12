@@ -3,9 +3,9 @@
 Zapis: 2026-09-29, skill improve. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
 Źródło: [audyt](2026-09-28-project-audit.md). Użytkownik zlecił zapis wszystkich ustaleń; plany nie są jeszcze wdrożone.
 
-## Aktualna kolejka wykonania — 2026-10-11
+## Aktualna kolejka wykonania — 2026-10-12
 
-Odświeżono na `3f425ef`. Preferencja użytkownika: plany ogólne i SQL Server mają pierwszeństwo przed planami wyłącznie PostgreSQL. **Jednostką wykonania jest cały plan.** Jego kroki są kolejnością wewnętrzną, a nie osobnymi zadaniami odkładanymi na później. Plany mieszane wykonuje się w całości, również z częścią PG; o niższej kolejce decyduje wyłącznie zakres całego planu.
+Odświeżono po weryfikacji Plan 049 na `58fab51`. Preferencja użytkownika: plany ogólne i SQL Server mają pierwszeństwo przed planami wyłącznie PostgreSQL. **Jednostką wykonania jest cały plan.** Jego kroki są kolejnością wewnętrzną, a nie osobnymi zadaniami odkładanymi na później. Plany mieszane wykonuje się w całości, również z częścią PG; o niższej kolejce decyduje wyłącznie zakres całego planu.
 
 ### W wykonaniu
 
@@ -14,17 +14,16 @@ Odświeżono na `3f425ef`. Preferencja użytkownika: plany ogólne i SQL Server 
 | [024](024-canonical-results-common-types.md) | Ogólne / SQL Server / PG: pełna obsługa typów wyników | DONE — scalony do main `232ec01` |
 | [Ceny modeli i ustawienia](../docs/superpowers/plans/2026-10-11-model-prices-settings.md) | Dashboard, wycena tokenów, konfiguracja, katalog CLI/MCP | MERGED — cała gałąź `feat/model-prices-settings` jest w `main`, worktree czysty; wyniki bramek nie były sprawdzane przy tej aktualizacji |
 
-020, 026, 030, 041, 042, 043, 044 i 046 mają już DONE w aktualnym indeksie i nie wracają do kolejki. Zachowano istniejące dowody; bram nie uruchamiano ponownie przy odświeżaniu dokumentacji. DONE nie stanowi dodatkowej zgody na push.
+020, 026, 030, 041, 042, 043, 044, 046 i 049 mają już DONE w aktualnym indeksie i nie wracają do kolejki. Starsze dowody zachowano bez ponownego uruchamiania bramek przy odświeżaniu dokumentacji; Plan 049 uzyskał świeże zielone bramki Windows i Linux na `58fab51`. DONE nie stanowi dodatkowej zgody na push.
 
 ### Grupa 1 — bezpieczeństwo i podstawowa praca agenta
 
 | Kolejność | Plan | Kategoria | Warunek wykonania |
 |---|---|---|---|
 | 1 | [052](052-postgres-read-only-transactions.md) | PG (P1): każde niezatwierdzone polecenie w transakcji READ ONLY | Mimo preferencji SQL Server: realna luka, także w MCP; wymaga playgroundu PG |
-| 2 | [049](049-plan-text-without-literal-masking.md) | MCP: tekst planu bez maskowania literałów | Po revercie 048 |
-| 3 | [050](050-sqlserver-server-name-informational.md) | SQL Server i PG: tożsamość endpointu tylko raportowana | Zastępuje 033; usuwa exit 4 poza różnicą bazy |
-| 4 | [053](053-specific-errors-for-the-caller.md) | Konkretne błędy dla wywołującego, param-set z BOM/komentarzami | — |
-| 5 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redakcja = znane sekrety (+ token Azure); uproszczenie strażników MCP | Po 049, najlepiej po 053 |
+| 2 | [050](050-sqlserver-server-name-informational.md) | SQL Server i PG: tożsamość endpointu tylko raportowana | Zastępuje 033; usuwa exit 4 poza różnicą bazy |
+| 3 | [053](053-specific-errors-for-the-caller.md) | Konkretne błędy dla wywołującego, param-set z BOM/komentarzami | — |
+| 4 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redakcja = znane sekrety (+ token Azure); uproszczenie strażników MCP | 049 DONE; najlepiej po 053 |
 
 024 i 045 scalone do main (`232ec01`, `3e8236f`); 046 ma DONE.
 
@@ -32,20 +31,20 @@ Odświeżono na `3f425ef`. Preferencja użytkownika: plany ogólne i SQL Server 
 
 | Kolejność | Plan | Kategoria | Zależności |
 |---|---|---|---|
-| 6 | [051](051-compare-regression-verdict.md) | Ogólne: werdykt regresji w wyniku compare | Zastępuje 035; progi z 013 |
+| 5 | [051](051-compare-regression-verdict.md) | Ogólne: werdykt regresji w wyniku compare | Zastępuje 035; progi z 013 |
 | [052](052-postgres-read-only-transactions.md) | PostgreSQL runs every non-approved command inside a READ ONLY transaction | P1 | M | PG playground for proof | TODO |
 | [053](053-specific-errors-for-the-caller.md) | Errors name what went wrong when the reader already holds the data | P2 | M | — | TODO |
-| [054](054-simplify-redaction-and-mcp-input-guards.md) | Redaction is exact known-secret replacement; MCP input guards match a same-user threat model | P2 | M | 049 | TODO |
+| [054](054-simplify-redaction-and-mcp-input-guards.md) | Redaction is exact known-secret replacement; MCP input guards match a same-user threat model | P2 | M | 049 (DONE) | TODO |
 
 ### Grupa 3 — dostarczanie i utrzymanie
 
 | Kolejność | Plan | Kategoria | Zależności |
 |---|---|---|---|
-| 7 | [028](028-release-pipeline-hardening.md) | Release: wersja, bramka CI, minimalne uprawnienia | Bez SHA-pinów, Dependabota i atestacji (odrzucone 2026-10-11) |
-| 8 | [032 — dokończenie całego planu](032-ci-matrix-and-test-hygiene.md) | CI: Windows/Linux i stabilność testów | Po 028 |
-| 9 | [036](036-live-database-ci-lane.md) | Ogólne: izolowane testy z SQL Server i PG | Oba silniki w jednym wykonaniu |
-| 10 | [029](029-agent-docs-and-capabilities-drift.md) | Ogólne: dokumentacja, capabilities, uczciwe ramy bezpieczeństwa, piny testów | Po 053/054; AGENTS.md już przepisany |
-| 11 | [034](034-private-sqlharness-home.md) | Prywatny katalog domowy na Unixie | Zakres zmniejszony do 0700 na home; P3 |
+| 6 | [028](028-release-pipeline-hardening.md) | Release: wersja, bramka CI, minimalne uprawnienia | Bez SHA-pinów, Dependabota i atestacji (odrzucone 2026-10-11) |
+| 7 | [032 — dokończenie całego planu](032-ci-matrix-and-test-hygiene.md) | CI: Windows/Linux i stabilność testów | Po 028 |
+| 8 | [036](036-live-database-ci-lane.md) | Ogólne: izolowane testy z SQL Server i PG | Oba silniki w jednym wykonaniu |
+| 9 | [029](029-agent-docs-and-capabilities-drift.md) | Ogólne: dokumentacja, capabilities, uczciwe ramy bezpieczeństwa, piny testów | Po 053/054; AGENTS.md już przepisany |
+| 10 | [034](034-private-sqlharness-home.md) | Prywatny katalog domowy na Unixie | Zakres zmniejszony do 0700 na home; P3 |
 
 ### Grupa 4 — wyłącznie PostgreSQL, późniejsza kolejka
 
@@ -182,7 +181,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [046](046-result-nullability-diagnostics.md) | Nullability diagnostics are separate from observed data equivalence; optional strict comparison | P2 | M | — | DONE (merged locally to main fdfc072 from feat/plan-046-nullability (3f425ef..66e70b6: 45bd63a core, 878bcd7 CLI/MCP/journal, 7a4fab1 docs, d4259ab/7500da7/5d9b5de final-review fixes incl. provider-unknown nullability → unavailable, 66e70b6 format); Windows verify.ps1 `verify: OK` (Mcp.Tests 384 passed/4 skipped, SqlHarness.Tests 3678 passed) and Linux verify-linux.ps1 `verify-linux: OK` (388 total/385 passed/3 skipped; 3678 passed) on 66e70b6; git diff --check: 0; snapshots unchanged; no live DB checks; not pushed) |
 | [047](047-postgres-temp-target-proof.md) | Explicit pg_temp write targets and a bounded proof before simplifying TRUNCATE | P2 | M | Live proof required for TRUNCATE relaxation | TODO (narrowed 2026-10-11: setup-only proof simplification after 052) |
 | [048](048-plan-text-credential-column-coverage.md) | MCP plan text masks credential-column literals behind wrappers, PG operators, lists, reversed order and compound names | P2 | S | 042 (DONE) | REVERTED (merged a74b485, reverted cadde67: caller already holds the plan file; follow-up 049) |
-| [049](049-plan-text-without-literal-masking.md) | MCP plan text is returned as supplied, within size bounds; no literal masking | P2 | S | 048 reverted | TODO |
+| [049](049-plan-text-without-literal-masking.md) | MCP plan text is returned as supplied, within size bounds; no literal masking | P2 | S | 048 reverted | DONE (feature branch `feat/plan-049-plan-text`; commits `932d4ad`, `c12aeb4`, `58fab51`; Windows `verify: OK` Core 3722, MCP 383 passed/4 skipped; Linux `verify-linux: OK` Core 3722, MCP 384 passed/3 skipped on WSL ext4; task, whole-branch, fixture and formatting reviews clean; no live DB checks; not merged) |
 | [050](050-sqlserver-server-name-informational.md) | SQL Server reports the connected server name instead of blocking on it | P2 | S | — | TODO (extended 2026-10-11 to PostgreSQL endpoint identity) |
 | [051](051-compare-regression-verdict.md) | `compare` reports a latency regression verdict from its own samples | P2 | M | 046 | TODO |
 
@@ -240,7 +239,7 @@ Planning base: `729d88f`. The user requested plans/corrections for all findings 
 | Minor: private-home plan describes removed gain store | Revised 034 | Cover the actual journal and sensitive artifact creation paths |
 | Minor: mechanical drift STOP and unnecessary repeated full gates | Revised pending plan headers and 030/032 | Inspect and adapt drift; use focused repeats for an actual flake and final Windows/Linux gates |
 
-Current execution order is in **Aktualna kolejka wykonania — 2026-10-11** above. Execute whole plans; no separately deferred A/B scopes. 024 is in progress; 046 is done; 020/026/030/041/042/043/044/046 are done. Preserve 046 → 051 and 028 → 032. Reconcile MCP/schema/docs work with the model-prices changes already merged into main. Required provider proof remains an internal prerequisite of 047.
+Current execution order is in **Aktualna kolejka wykonania — 2026-10-12** above. Execute whole plans; no separately deferred A/B scopes. 024 is in progress; 046 and 049 are done; 020/026/030/041/042/043/044/046/049 are done. Preserve 046 → 051 and 028 → 032. Reconcile MCP/schema/docs work with the model-prices changes already merged into main. Required provider proof remains an internal prerequisite of 047.
 
 For pending execution plans, historical snippets and tests are evidence to inspect. A changed file alone is not a reason to stop or request permission. Keep the approved intent and update obsolete details; stop for an incompatible contract, missing required proof or actions beyond authorization. Run the final Windows and Linux gates after relevant code changes. Repeat complete gates only for a concrete remaining risk. Documentation-only revisions use diff/link/consistency checks; they do not require application builds or live database calls.
 

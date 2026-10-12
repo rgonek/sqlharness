@@ -4,7 +4,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: DONE (feature branch `feat/plan-049-plan-text`; not merged)
 - Priority: P2
 - Effort: S
 - Risk: LOW
@@ -44,10 +44,19 @@ Out of scope: Core `SecretRedactor`, redaction of errors and journal text, the C
 
 ## Done criteria
 
-- [ ] `rg -n "CredentialLiteralPattern" src tests` → no matches.
-- [ ] Core `SecretRedactor` and its tests unchanged.
-- [ ] Docs and tool schema describe size bounds only.
-- [ ] Both gates pass; `plans/README.md` row updated.
+- [x] `rg -n "CredentialLiteralPattern" src tests` → no matches.
+- [x] Core `SecretRedactor` and its tests unchanged.
+- [x] Docs and tool schema describe bounded text and metadata-only mode.
+- [x] Both gates pass; `plans/README.md` row updated.
+
+## Implementation and verification evidence
+
+- Feature commits: `932d4ad` (plan-text passthrough), `c12aeb4` (AgentWorkflow byte-budget observation), `58fab51` (EditorConfig final-newline formatting).
+- Windows `pwsh -NoProfile -File scripts/verify.ps1`: exit 0, `verify: OK`; Core 3722 passed; MCP 383 passed, 4 skipped.
+- Linux `pwsh -NoProfile -File scripts/verify-linux.ps1`: exit 0, `verify-linux: OK`; Core 3722 passed; MCP 384 passed, 3 skipped; run from WSL ext4 at `/home/rgone/src/sqlharness-gate`.
+- Task-level Luna xhigh review, whole-branch Sol low review, and the focused fixture and formatting reviews were clean.
+- No live database checks were run. The implementation remains on the feature branch and has not been merged.
+- The MCP tool-list line formerly mentioned in the planned `AGENTS.md` edit had already been removed; the current agent contract already says caller-supplied plan text remains readable, so `AGENTS.md` was left unchanged.
 
 ## STOP conditions
 
