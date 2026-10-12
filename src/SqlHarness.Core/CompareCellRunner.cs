@@ -131,6 +131,8 @@ internal sealed record CompareCellRequest(
     internal ArtifactOwner? Owner { get; init; }
 
     internal SqlSafetyDecision? SetupSafety { get; init; }
+
+    internal List<string> KnownSecrets { get; init; } = [];
 }
 
 internal sealed record CompareCellResult(
@@ -175,7 +177,7 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
         var phase = CompareCellPhase.Authentication;
         try
         {
-            await using var session = await _sessions.ConnectAsync(request.Target, ct);
+            await using var session = await _sessions.ConnectAsync(request.Target, ct, request.KnownSecrets);
             phase = CompareCellPhase.Sql;
 
             raw = new CanonicalResultAccumulator();

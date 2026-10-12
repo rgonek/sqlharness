@@ -15,13 +15,13 @@ Odświeżono po weryfikacji Plan 049 na `58fab51`. Preferencja użytkownika: pla
 | [Ceny modeli i ustawienia](../docs/superpowers/plans/2026-10-11-model-prices-settings.md) | Dashboard, wycena tokenów, konfiguracja, katalog CLI/MCP | DONE — scalony do main; bramki Windows i Linux zielone (potwierdzone przez użytkownika 2026-10-12) |
 | [051](051-compare-regression-verdict.md) | Ogólne: werdykt regresji w wyniku compare | DONE — scalony do main `e05da9b`; bramki Windows i Linux zielone (potwierdzone przez użytkownika 2026-10-12) |
 
-020, 026, 029, 030, 041, 042, 043, 044, 046, 049, 050, 052 i 053 mają już DONE w aktualnym indeksie i nie wracają do kolejki. Starsze dowody zachowano bez ponownego uruchamiania bramek przy odświeżaniu dokumentacji; Plan 049 uzyskał świeże zielone bramki Windows i Linux na `58fab51`. DONE nie stanowi dodatkowej zgody na push.
+020, 026, 029, 030, 041, 042, 043, 044, 046, 049, 050, 052, 053 i 054 mają już DONE w aktualnym indeksie i nie wracają do kolejki. Starsze dowody zachowano bez ponownego uruchamiania bramek przy odświeżaniu dokumentacji; Plan 049 uzyskał świeże zielone bramki Windows i Linux na `58fab51`. DONE nie stanowi dodatkowej zgody na push.
 
 ### Grupa 1 — bezpieczeństwo i podstawowa praca agenta
 
 | Kolejność | Plan | Kategoria | Warunek wykonania |
 |---|---|---|---|
-| 1 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redakcja = znane sekrety (+ token Azure); uproszczenie strażników MCP | 049, 053 DONE |
+
 
 024 i 045 scalone do main (`232ec01`, `3e8236f`); 046 ma DONE.
 
@@ -182,7 +182,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [051](051-compare-regression-verdict.md) | `compare` reports a latency regression verdict from its own samples | P2 | M | 046 | DONE (merged to main `e05da9b` from `feat/plan-051-regression-verdict`; `regression` verdict in compare JSON, summary, matrix cells, MCP and CLI text; supersedes 035 and the offline-reader part of 013; Windows and Linux gates green, confirmed by the user 2026-10-12) |
 | [052](052-postgres-read-only-transactions.md) | Every non-approved PostgreSQL command uses a per-command READ ONLY transaction | P1 | M | Disposable PostgreSQL 18.6 proof | DONE at frozen `c07f001`; integrated tip `9082149` (Windows and isolated Linux gates passed; see [052-verification](052-verification.md)); locally merged to main by fast-forward at `f09a614`; not pushed |
 | [053](053-specific-errors-for-the-caller.md) | Errors name what went wrong when the reader already holds the data | P2 | M | — | DONE — locally merged to main `5a1eb2a`; proof: [053-verification](053-verification.md); Windows/Linux gates passed; not pushed |
-| [054](054-simplify-redaction-and-mcp-input-guards.md) | Redaction is exact known-secret replacement; MCP input guards match a same-user threat model | P2 | M | 049 (DONE) | TODO |
+| [054](054-simplify-redaction-and-mcp-input-guards.md) | Redaction is exact known-secret replacement; MCP input guards match a same-user threat model | P2 | M | 049 (DONE) | DONE (local merge main 6ff68d3, journal docs fix f5aef96; post-merge Windows verify: OK Core3787/MCP389+4 skipped; Linux verify-linux: OK Core3787/MCP390+3 skipped; duplicate JSON guard retained for proven SDK differential; no push/live DB) |
 | [055](055-agent-output-budget-and-envelope.md) | Text-only budgeted output, inventory-first matrix cases, honest query value types and clipping metadata | P1 | M | — | TODO — accepted output refinements; not implemented |
 | [056](056-parameter-contract-and-dry-run.md) | Parameter normalization, binding parity and dry runs of exact operation arguments | P1 | M | 055 | TODO — existing local plan, not implemented |
 | [057](057-tsql-control-flow-classification.md) | Recursive IF/BEGIN classification under existing statement rules | P2 | S | 056 | TODO — existing local plan, not implemented |
