@@ -102,13 +102,19 @@ public sealed class TargetResolverTests
     }
 
     [Theory]
-    [InlineData("missing", "Unknown profile")]
+    [InlineData("missing", "Unknown profile 'missing'.")]
     public void Rejects_unknown_profile(string profile, string expected) =>
         AssertSafety(new SqlTargetRequest(profile, EmptyVars()), expected);
 
     [Fact]
-    public void Rejects_missing_var() =>
-        AssertSafety(new SqlTargetRequest("prod-eu", new Dictionary<string, string> { ["tenant"] = "acme" }), "Missing");
+    public void Rejects_missing_var()
+    {
+        var error = Assert.Throws<SqlHarnessSafetyException>(() => TargetResolver.Resolve(
+            new SqlTargetRequest("prod-eu", new Dictionary<string, string> { ["tenant"] = "acme" }),
+            Profiles));
+
+        Assert.Equal("Missing required profile vars: env.", error.Message);
+    }
 
     [Fact]
     public void Rejects_extra_var() =>
@@ -164,6 +170,7 @@ public sealed class TargetResolverTests
         var error = Assert.Throws<SqlHarnessSafetyException>(() =>
             TargetResolver.Resolve(new SqlTargetRequest("broken", EmptyVars()), profiles));
 
+        Assert.Contains("authentication strategy", error.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(secretAuth, error.ToString());
         Assert.Null(error.InnerException);
     }

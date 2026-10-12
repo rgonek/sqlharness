@@ -179,10 +179,143 @@ public sealed class McpStartupTests
         Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
         var text = log.ToString();
         Assert.Contains("sqlharness-mcp", text, StringComparison.Ordinal);
+        Assert.Contains("no-such-profile", text, StringComparison.Ordinal);
         Assert.DoesNotContain("t2-marker-value-4d77", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("no-such-profile", text, StringComparison.Ordinal);
         // No server was created, so nothing may reach the stdout stream.
         Assert.False(serverToClient.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public async Task Startup_errors_name_profile_and_missing_vars_and_redact_known_password()
+    {
+        const string secret = "t2-marker-startup-secret-63da";
+        const string passwordVariable = "SQLHARNESS_MCP_T2_STARTUP_SECRET";
+        Environment.SetEnvironmentVariable(passwordVariable, secret);
+        try
+        {
+            var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+            {
+                ["selected-profile"] = new TargetProfile(
+                    "mcp-unreachable.invalid",
+                    "db-{tenant}",
+                    new Dictionary<string, string> { [secret] = ".*" },
+                    "sql",
+                    SqlUser: "mcp-user",
+                    PasswordEnvVar: passwordVariable),
+            };
+            var log = new StringWriter();
+            var exit = await McpHost.RunAsync(
+                new McpServerOptions { Profile = "selected-profile" },
+                new MemoryStream(),
+                new MemoryStream(),
+                log,
+                () => profiles);
+
+            Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+            Assert.Contains("selected-profile", log.ToString(), StringComparison.Ordinal);
+            Assert.Contains("missing required profile vars", log.ToString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("[REDACTED]", log.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain(secret, log.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(passwordVariable, null);
+        }
+    }
+
+    [Fact]
+    public async Task Startup_rejected_input_root_is_named_and_known_password_is_redacted()
+    {
+        const string secret = "t2-marker-root-secret-19a7";
+        const string passwordVariable = "SQLHARNESS_MCP_T2_ROOT_SECRET";
+        Environment.SetEnvironmentVariable(passwordVariable, secret);
+        try
+        {
+            var root = Path.Combine(Path.GetTempPath(), secret, "missing-root");
+            var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+            {
+                ["mcp-sql"] = new TargetProfile(
+                    "mcp-unreachable.invalid",
+                    "mcp-frozen-db",
+                    new Dictionary<string, string>(),
+                    "sql",
+                    SqlUser: "mcp-user",
+                    PasswordEnvVar: passwordVariable),
+            };
+            var log = new StringWriter();
+            var exit = await McpHost.RunAsync(
+                new McpServerOptions { Profile = "mcp-sql", InputRoots = [root] },
+                new MemoryStream(),
+                new MemoryStream(),
+                log,
+                () => profiles);
+
+            Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+            Assert.Contains("input root", log.ToString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("[REDACTED]", log.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain(secret, log.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(passwordVariable, null);
+        }
+    }
+
+    [Fact]
+    public async Task Startup_authentication_error_names_reason_and_redacts_profile_name_secret()
+    {
+        const string secret = "t2-marker-auth-secret-9b41";
+        const string passwordVariable = "SQLHARNESS_MCP_T2_AUTH_SECRET";
+        Environment.SetEnvironmentVariable(passwordVariable, secret);
+        try
+        {
+            var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+            {
+                [secret] = new TargetProfile(
+                    "mcp-unreachable.invalid",
+                    "mcp-frozen-db",
+                    new Dictionary<string, string>(),
+                    "invalid-auth",
+                    PasswordEnvVar: passwordVariable),
+            };
+            var log = new StringWriter();
+            var exit = await McpHost.RunAsync(
+                new McpServerOptions { Profile = secret },
+                new MemoryStream(),
+                new MemoryStream(),
+                log,
+                () => profiles);
+
+            Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+            Assert.Contains("authentication", log.ToString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("strategy", log.ToString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("[REDACTED]", log.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain(secret, log.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(passwordVariable, null);
+        }
+    }
+
+    [Fact]
+    public void Mcp_stderr_logger_renders_and_redacts_message_and_exception()
+    {
+        const string secret = "t2-marker-logger-secret-73f0";
+        var log = new StringWriter();
+        var logger = new McpHost.McpStderrLoggerFactory(log, [secret]).CreateLogger("test");
+        var exception = new InvalidOperationException($"failure {secret}");
+
+        logger.Log(
+            Microsoft.Extensions.Logging.LogLevel.Error,
+            new Microsoft.Extensions.Logging.EventId(17),
+            $"message {secret}",
+            exception,
+            (state, failure) => $"{state}; {failure?.Message}");
+
+        Assert.Contains("message [REDACTED]", log.ToString(), StringComparison.Ordinal);
+        Assert.Contains("failure [REDACTED]", log.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(secret, log.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]

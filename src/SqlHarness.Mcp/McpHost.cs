@@ -8,8 +8,8 @@ namespace SqlHarness.Mcp;
 
 /// <summary>
 /// Local stdio host for one profile-scoped MCP server process (spec
-/// section 2): stdout carries only protocol frames, all logging goes to
-/// stderr without arguments, SQL, parameter values, or secrets. T2 starts
+/// section 2): stdout carries only protocol frames, while operator diagnostics go to
+/// stderr with resolved credential redaction. T2 starts
 /// the transport with a frozen scope and clean shutdown; the explicit T3
 /// tool catalog registers exactly 10 tools on the frozen scope.
 /// </summary>
@@ -100,15 +100,18 @@ public static class McpHost
         log = TextWriter.Synchronized(log);
 
         McpProcessContext process;
+        IReadOnlyList<string> knownSecrets = Array.Empty<string>();
         try
         {
-            process = McpProcessContext.Create(options, loadProfiles);
+            var profiles = loadProfiles();
+            knownSecrets = ResolveKnownSecrets(options, profiles);
+            process = McpProcessContext.Create(options, () => profiles);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // Pre-handshake failure: stderr only, generic text, exit 2.
-            // The inner chain may hold var values or paths; never print it.
-            log.WriteLine("sqlharness-mcp: invalid MCP startup configuration.");
+            // Pre-handshake failures are useful to the operator. Keep them on
+            // stderr and redact the password values held by the selected profile(s).
+            log.WriteLine($"sqlharness-mcp: {SecretRedactor.Redact(exception, knownSecrets)}");
             return (int)SqlHarnessExitCode.Safety;
         }
 
@@ -116,7 +119,7 @@ public static class McpHost
         // database connection. The process context owns one gate for every
         // request scope.
 
-        var loggerFactory = new McpStderrLoggerFactory(log);
+        var loggerFactory = new McpStderrLoggerFactory(log, knownSecrets);
         var clientIdentity = new McpClientIdentity();
         var serverOptions = CreateServerOptions(clientIdentity);
         // Explicit EOF binding (T5 fix R1): the SDK does not propagate stdin
@@ -211,26 +214,45 @@ public static class McpHost
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            log.WriteLine($"sqlharness-mcp: the MCP server stopped unexpectedly ({exception.GetType().Name}).");
+            log.WriteLine($"sqlharness-mcp: {SecretRedactor.Redact(exception, knownSecrets)}");
             return 1;
         }
     }
 
-    private sealed class McpStderrLoggerFactory(TextWriter writer) : ILoggerFactory
+    private static IReadOnlyList<string> ResolveKnownSecrets(
+        McpServerOptions options,
+        IReadOnlyDictionary<string, TargetProfile> profiles)
+    {
+        var selectedProfiles = options.RequestScope
+            ? options.AllowedProfiles ?? Array.Empty<string>()
+            : string.IsNullOrWhiteSpace(options.Profile) ? Array.Empty<string>() : [options.Profile];
+        var knownSecrets = new List<string>();
+        foreach (var name in selectedProfiles)
+        {
+            if (name is null || !profiles.TryGetValue(name, out var profile) || profile is null ||
+                string.IsNullOrWhiteSpace(profile.PasswordEnvVar))
+                continue;
+
+            if (Environment.GetEnvironmentVariable(profile.PasswordEnvVar) is { Length: > 0 } password)
+                knownSecrets.Add(password);
+        }
+        return knownSecrets;
+    }
+
+    internal sealed class McpStderrLoggerFactory(TextWriter writer, IReadOnlyList<string> knownSecrets) : ILoggerFactory
     {
         public void AddProvider(ILoggerProvider provider) { }
 
-        public ILogger CreateLogger(string categoryName) => new McpStderrLogger(writer, categoryName);
+        public ILogger CreateLogger(string categoryName) => new McpStderrLogger(writer, categoryName, knownSecrets);
 
         public void Dispose() { }
 
-        private sealed class McpStderrLogger(TextWriter writer, string category) : ILogger
+        internal sealed class McpStderrLogger(TextWriter writer, string category, IReadOnlyList<string> knownSecrets) : ILogger
         {
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
-            // Noise reduction only: SDK Trace/Debug/Information events carry no text here and
-            // only fill client logs. The leak protection is that Log never renders state,
-            // exception, or formatter output, at any level.
+            // Noise reduction only: SDK Trace/Debug/Information events fill
+            // client logs but do not help the operator diagnose this process.
             public bool IsEnabled(LogLevel logLevel) => logLevel is LogLevel.Warning or LogLevel.Error or LogLevel.Critical;
 
             public void Log<TState>(
@@ -243,14 +265,10 @@ public static class McpHost
                 if (!IsEnabled(logLevel))
                     return;
 
-                // SDK-side diagnostics only. This logger emits
-                // only safe primitives, so no SQL, parameters, or connection details
-                // can reach stderr through it: category, level, numeric event id. Never call
-                // formatter(state, exception) and never ToString state or
-                // exception: the SDK renders tool-call arguments, file paths,
-                // and binder exception content into log state, which leaked
-                // request content to stderr (001/T1 oracle).
-                writer.WriteLine($"sqlharness-mcp[{category}]: {logLevel} (event {eventId.Id})");
+                var message = SecretRedactor.Redact(formatter(state, exception), knownSecrets);
+                writer.WriteLine($"sqlharness-mcp[{category}]: {logLevel} (event {eventId.Id}) {message}");
+                if (exception is not null)
+                    writer.WriteLine($"sqlharness-mcp[{category}]: {SecretRedactor.Redact(exception, knownSecrets)}");
             }
         }
     }

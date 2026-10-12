@@ -6,8 +6,8 @@ using SqlHarness.Core.Targets;
 namespace SqlHarness.Mcp;
 
 /// <summary>
-/// Startup failure before the MCP handshake. Messages are generic on
-/// purpose: they never echo profile names, var values, paths, or secrets.
+/// Startup failure before the MCP handshake. Messages identify the failed
+/// profile setting or input root; known credentials are redacted by the host.
 /// </summary>
 public sealed class McpStartupException(string message, Exception? innerException = null)
     : Exception(message, innerException);
@@ -138,7 +138,7 @@ public sealed class McpScope
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            throw new McpStartupException("The MCP profile or variables are invalid.", exception);
+            throw new McpStartupException($"The MCP profile '{options.Profile}' or its variables are invalid.", exception);
         }
 
         return CreateResolved(request, resolved, roots, frozenProfiles, options.MaxResultBytes, options.MaxOperationSeconds);
@@ -217,16 +217,22 @@ public sealed class McpScope
         var normalized = new List<string>(roots.Count);
         foreach (var root in roots)
         {
+            var safeRoot = root is null ? string.Empty : McpInputReader.EchoPath(root);
             if (string.IsNullOrWhiteSpace(root) ||
                 !Path.IsPathFullyQualified(root) ||
                 !Directory.Exists(root))
             {
-                throw new McpStartupException("The MCP input roots are invalid.");
+                var reason = string.IsNullOrWhiteSpace(root)
+                    ? "it is empty"
+                    : !Path.IsPathFullyQualified(root)
+                        ? "it must be an absolute path"
+                        : "the directory does not exist";
+                throw new McpStartupException($"The MCP input root '{safeRoot}' is invalid because {reason}.");
             }
 
             var normalizedRoot = McpInputRoots.NormalizeRoot(root);
             if (McpInputRoots.IsFilesystemRoot(normalizedRoot))
-                throw new McpStartupException("The MCP input roots are invalid.");
+                throw new McpStartupException($"The MCP input root '{safeRoot}' is invalid because it cannot be a filesystem root.");
             normalized.Add(normalizedRoot);
         }
 

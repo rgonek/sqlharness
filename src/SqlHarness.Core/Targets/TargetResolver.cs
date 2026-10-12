@@ -64,7 +64,7 @@ public static class TargetResolver
 
         var missing = profile.Vars.Keys.Where(key => !request.Vars.ContainsKey(key)).ToArray();
         if (missing.Length != 0)
-            throw new SqlHarnessSafetyException("Missing required profile vars.");
+            throw new SqlHarnessSafetyException($"Missing required profile vars: {string.Join(", ", missing)}.");
 
         var extra = request.Vars.Keys.Where(key => !profile.Vars.ContainsKey(key)).ToArray();
         if (extra.Length != 0)
@@ -119,7 +119,13 @@ public static class TargetResolver
         }
         catch (SqlHarnessSafetyException)
         {
-            throw new SqlHarnessSafetyException("The profile authentication settings are invalid.");
+            var reason = profile.Auth switch
+            {
+                "azure-cli" or "ad-default" or "integrated" => "the authentication settings are incomplete",
+                "sql" => "SQL authentication requires both a user and a password environment variable",
+                _ => "the authentication strategy is unknown",
+            };
+            throw new SqlHarnessSafetyException($"Profile '{request.Profile}' authentication settings are invalid: {reason}.");
         }
 
         var engine = SqlEngineNames.Parse(profile.Engine);

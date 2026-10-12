@@ -210,16 +210,21 @@ public sealed class McpScopeTests : IDisposable
 
         Assert.Empty(McpScope.Create(Options(), frozen).InputRoots);
 
-        Assert.Throws<McpStartupException>(() => McpScope.Create(
+        var relativeRoot = Assert.Throws<McpStartupException>(() => McpScope.Create(
             new McpServerOptions { Profile = ProfileName, InputRoots = ["relative/dir"] },
             frozen));
-        Assert.Throws<McpStartupException>(() => McpScope.Create(
+        Assert.Contains("relative/dir", relativeRoot.Message, StringComparison.Ordinal);
+        Assert.Contains("absolute", relativeRoot.Message, StringComparison.OrdinalIgnoreCase);
+        var missingRoot = Path.Combine(_home, "no-such-dir");
+        var missingRootError = Assert.Throws<McpStartupException>(() => McpScope.Create(
             new McpServerOptions
             {
                 Profile = ProfileName,
-                InputRoots = [Path.Combine(_home, "no-such-dir")],
+                InputRoots = [missingRoot],
             },
             frozen));
+        Assert.Contains(missingRoot, missingRootError.Message, StringComparison.Ordinal);
+        Assert.Contains("does not exist", missingRootError.Message, StringComparison.OrdinalIgnoreCase);
 
         var existing = Path.Combine(_home, "inputs");
         Directory.CreateDirectory(existing);
@@ -232,6 +237,22 @@ public sealed class McpScopeTests : IDisposable
             },
             frozen);
         Assert.Equal([Path.GetFullPath(existing)], scoped.InputRoots);
+    }
+
+    [Fact]
+    public void Rejected_input_root_masks_embedded_url_user_info()
+    {
+        WriteTargetsFile(FrozenDatabase, "^frozen$");
+        var frozen = ProfileStore.Load(_targetsFile);
+        const string password = "root-path-password-8c4e";
+        var root = $"\\\\operator:{password}@server\\missing-root";
+
+        var failure = Assert.Throws<McpStartupException>(() => McpScope.Create(
+            new McpServerOptions { Profile = ProfileName, InputRoots = [root] },
+            frozen));
+
+        Assert.Contains("[REDACTED]@server", failure.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(password, failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -251,11 +272,10 @@ public sealed class McpScopeTests : IDisposable
             },
             frozen));
 
-        // The public message is generic. The inner chain keeps the Core
-        // diagnostic for debugging, but McpHost never prints it: startup
-        // errors use fixed literals on stderr (see McpStartupTests).
+        // The public message identifies the operator-selected profile. The
+        // inner chain carries the specific safe resolver reason for stderr.
         Assert.DoesNotContain("t2-marker-secret-77aa", failure.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("no-such-profile", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("no-such-profile", failure.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(FrozenDatabase, failure.Message, StringComparison.Ordinal);
     }
 
