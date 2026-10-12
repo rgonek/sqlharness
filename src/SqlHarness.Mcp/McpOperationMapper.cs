@@ -81,173 +81,24 @@ public static partial class McpPlanTextPolicy
         if (!includeText || value is null)
             return null;
 
+        // The credential-column rule runs first and keeps its matches out of the shared redactor, whose bare
+        // password branch would otherwise mask the rest of the text after an N'...' literal.
         var builder = new StringBuilder(value.Length);
-        AppendFiltered(builder, value, CredentialLiteralPattern());
-        return builder.ToString();
-    }
-
-    // The credential-column rule runs first and keeps its matches out of the shared redactor, whose bare password
-    // branch would otherwise mask the rest of the text after an N'...' literal. A SQL comment (group "comment", only
-    // in the top-level pattern) is cut out of the surrounding text and its body is filtered with the comment-free
-    // pattern, so a credential comparison written inside a comment is masked too and the scan never recurses.
-    private static void AppendFiltered(StringBuilder builder, string value, Regex pattern)
-    {
         var position = 0;
-        foreach (var match in pattern.Matches(value).Cast<Match>())
+        foreach (var match in CredentialLiteralPattern().Matches(value).Cast<Match>())
         {
-            var comment = match.Groups["comment"].Success;
-            // Skipped tokens and comparisons with other columns stay in the text that the shared redactor filters.
-            if (!comment && (!match.Groups["cmp"].Success || !match.Groups["col"].Success || !CredentialKeyPattern().IsMatch(match.Groups["col"].Value)))
-                continue;
             builder.Append(SecretRedactor.Redact(value[position..match.Index], []));
-            if (comment)
-                AppendComment(builder, match.Value);
-            else
-                AppendMaskedLiterals(builder, match.Value);
+            builder.Append(match.Groups[1].Value).Append("[REDACTED]").Append(match.Groups[3].Value);
             position = match.Index + match.Length;
         }
         builder.Append(SecretRedactor.Redact(value[position..], []));
+        return builder.ToString();
     }
 
-    // Keeps the comment delimiters and filters the body. A block comment clipped at the end has no closing "*/".
-    private static void AppendComment(StringBuilder builder, string comment)
-    {
-        var closed = comment.StartsWith("/*", StringComparison.Ordinal) && comment.Length >= 4 && comment.EndsWith("*/", StringComparison.Ordinal);
-        var bodyLength = comment.Length - 2 - (closed ? 2 : 0);
-        builder.Append(comment, 0, 2);
-        AppendFiltered(builder, comment.Substring(2, bodyLength), CommentBodyPattern);
-        if (closed)
-            builder.Append("*/");
-    }
-
-    // Copies one matched credential comparison and replaces the body of every string literal in it with
-    // [REDACTED], keeping quotes, the N prefix and any ::type suffix. Bracketed and double-quoted identifiers are
-    // copied as they are; a literal clipped at the end of the text keeps no closing quote.
-    private static void AppendMaskedLiterals(StringBuilder builder, string comparison)
-    {
-        var index = 0;
-        while (index < comparison.Length)
-        {
-            var current = comparison[index];
-            if (current is '[' or '"' or '\'')
-            {
-                var close = ClosingIndex(comparison, index + 1, current == '[' ? ']' : current);
-                if (current == '\'')
-                    builder.Append("'[REDACTED]").Append(close < comparison.Length ? "'" : string.Empty);
-                else
-                    builder.Append(comparison, index, Math.Min(close + 1, comparison.Length) - index);
-                index = close + 1;
-            }
-            else
-            {
-                builder.Append(current);
-                index++;
-            }
-        }
-    }
-
-    // Index of the closing delimiter, where a doubled delimiter is an escape; the text length when unclosed.
-    private static int ClosingIndex(string text, int start, char close)
-    {
-        var index = start;
-        while (index < text.Length)
-        {
-            if (text[index] == close)
-            {
-                if (index + 1 < text.Length && text[index + 1] == close)
-                {
-                    index += 2;
-                    continue;
-                }
-                return index;
-            }
-            index++;
-        }
-        return text.Length;
-    }
-
-    // Credential-column literal rule (MCP-local; the shared Core SecretRedactor is unchanged).
-    //
-    // A match is either a comparison (group "cmp") or a skipped token: a whole string literal or a whole dotted
-    // chain of bracketed, double-quoted or bare identifier parts. Skipping whole tokens keeps the scan aligned, so a
-    // quote that closes one literal is never read as the start of another, text inside a literal is never read as a
-    // comparison, and a long identifier chain is not rescanned from each of its parts.
-    //
-    // A comparison is <operand> <op> <operand> in either order (column first or literal first), or
-    // <operand> [NOT] IN (<list>). An operand is an optionally qualified identifier (bracketed, double-quoted or
-    // bare) or a literal N'..' / '..', optionally parenthesised or wrapped in CONVERT_IMPLICIT(type, x, style),
-    // CONVERT(type, x[, style]), CAST(x AS type) or ANY / ALL / SOME (...), up to three levels deep, with optional PostgreSQL
-    // ::type (including ::text[] after an '{...}' array literal). A literal clipped at the end of the text still
-    // counts. Operators are =, <>, !=, [NOT] LIKE, ILIKE and the PostgreSQL spellings ~~, ~~*, !~~ and !~~*
-    // (EXPLAIN deparses LIKE / ILIKE / NOT LIKE / NOT ILIKE to them). IN list elements may mix literals with
-    // parameters, numbers or NULL. Parameters (@p, [@1], $1) are not literals and are never masked.
-    //
-    // Only a comparison whose last identifier part (group "col") contains a credential key is masked; every
-    // literal inside it is masked. The key test is a case-insensitive containment test, which covers a key that
-    // is a word part at a camel-case, '_' or '-' boundary (PasswordHash, password_hash, PwdSalt, UserPassword,
-    // Password-Hash) and also all-lower or all-upper spellings (userpassword, PWDSALT) where no boundary is
-    // visible. It deliberately masks literals next to PasswordHint, LastPasswordChange and Passwordless too:
-    // losing a non-secret literal is the accepted cost; leaking a secret is not. A key in a qualifier only
-    // ([PasswordVault].[dbo].[T].[Status]) does not count. Key names mirror SecretRedactor.
-    //
-    // Constructs: alternation, greedy loops over disjoint character classes, optional groups and named captures;
-    // no backreferences, lookarounds, atomic groups, lazy loops or conditionals (so RegexOptions.NonBacktracking applies).
-    private const string CredentialKey = """(?:password|pwd|access[_\s-]?token|client[_\s-]?secret|account[_\s-]?key|shared[_\s-]?access[_\s-]?key)""";
-    private const string IdentifierPart = """(?:\[(?:\]\]|[^\]])*\]|"(?:""|[^"])*"|[\w@#$]+)""";
-    private const string ColumnChain = "(?:" + IdentifierPart + """\.)*(?<col>""" + IdentifierPart + ")";
-    private const string PgCast = """(?:::"?[\w.]+"?(?:\s+(?:varying|precision|with(?:out)?|time|zone))*(?:\(\s*\d+\s*(?:,\s*\d+\s*)?\))?(?:\[\])*)""";
-    private const string ConvertType = """[^(),']*(?:\([^()']*\))?""";
-    private const string Literal = """N?'(?:''|[^'])*(?:'|$)""";
-    // One operand shape serves both sides (column or literal), and the wrapper prefix and suffix are optional
-    // independently. Keeping a single copy of each part keeps the generated matcher small enough to compile well
-    // inside the match timeout on first use. The cost is that an unpaired wrapper part is accepted; masking still
-    // needs a credential column in the comparison and only touches its literals.
-    // Wrappers nest to a bounded depth: up to three opening steps (CONVERT_IMPLICIT over CONVERT over a
-    // parenthesised column, or ((col)::text)::varchar) and up to six closing steps, each a closing ')' or ' AS
-    // type)' or a ::type cast. Each step consumes at least one character, so the bounded loops cannot spin.
-    private const string WrapperPrefix = """(?:(?:CONVERT(?:_IMPLICIT)?\(\s*""" + ConvertType + """\s*,|CAST\(|(?:any|all|some)\s*\(|\()\s*){0,3}""";
-    private const string WrapperSuffix = """(?:\s*(?:,\s*\d+\s*)?\)|\s+AS\s+""" + ConvertType + """\s*\)|""" + PgCast + "){0,6}";
-    private const string Operand = WrapperPrefix + "(?:" + Literal + "|" + ColumnChain + ")" + WrapperSuffix;
-    private const string Operator = """(?:=|<>|!=|!~~\*?|~~\*?|(?:not\s+)?i?like)""";
-    private const string ListElement = "(?:" + Literal + """|[@$:]?[\w.+-]+)""";
-    private const string Comparison =
-        "(?<cmp>" + Operand + """\s*(?:""" + Operator + """\s*""" + Operand
-        + """|(?:not\s+)?in\s*\((?:\s*""" + ListElement + """\s*,)*\s*""" + ListElement + """\s*(?:\)|$)))""";
-    private const string SkippedToken = """N?'(?:''|[^'])*'|(?:""" + IdentifierPart + """\.)*""" + IdentifierPart;
-    // A line comment runs to the end of the line; a block comment runs to "*/" or, when clipped, to the end. Both are
-    // whole tokens, so an odd quote inside one ("-- don't", "/* say "hi */") cannot misalign the scan. Block comments
-    // do not nest here; a nested opener is plain body text.
-    private const string Comment = """(?<comment>--[^\r\n]*|/\*(?:[^*]|\*+[^*/])*(?:\*+/|\**$))""";
-
-    // NonBacktracking: the pattern has no backreferences, lookarounds, atomic groups or lazy loops, so it is
-    // supported, and match time is linear in the input (about 0.8 ms per KB of ordinary SQL; about 1-3 s for a whole
-    // adversarial 1 MiB scan, with a single match well under the 5 s timeout). The engines are built once when the
-    // type loads, so construction never counts against the match timeout. The timeout (per match attempt) stays as a safety net far above any real input: plan text
-    // reaching it is already bounded by the distiller and the 1 MiB input cap. A timeout surfaces as
-    // RegexMatchTimeoutException, which the plan tool maps to its generic content-free failure, never to unfiltered text.
-    internal static readonly Regex DefaultCredentialLiteralPattern = new(
-        "(?i)" + Comparison + "|" + Comment + "|" + SkippedToken,
-        RegexOptions.CultureInvariant | RegexOptions.NonBacktracking,
-        TimeSpan.FromSeconds(5));
-
-    // Filters comment bodies: the same comparison rule without the comment token (nested comment openers stay body
-    // text) and without the literal skip token. Comments are prose, where an apostrophe ("it's", "don't") is not a
-    // literal delimiter, so the body scan stays unaligned like the plan 042 rule: a comparison may start anywhere in
-    // the body. That can only over-mask inside a comment.
-    private static readonly Regex CommentBodyPattern = new(
-        "(?i)" + Comparison + "|(?:" + IdentifierPart + """\.)*""" + IdentifierPart,
-        RegexOptions.CultureInvariant | RegexOptions.NonBacktracking,
-        TimeSpan.FromSeconds(5));
-
-    // Test-only seam: replaces the top-level scanning pattern (for example with one that has a tiny timeout). It is
-    // process-wide static state, so every test that sets it must run in the non-parallel McpScopeHome collection and
-    // reset it in a finally block.
-    internal static Regex? CredentialLiteralPatternOverride { get; set; }
-
-    private static Regex CredentialLiteralPattern() => CredentialLiteralPatternOverride ?? DefaultCredentialLiteralPattern;
-
-    [GeneratedRegex("(?i)" + CredentialKey, RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
-    private static partial Regex CredentialKeyPattern();
+    // Masks only the string literal compared with a credential-named column (bracketed, quoted or bare, optionally
+    // qualified). Key names mirror SecretRedactor; other literals are plan data and stay readable.
+    [GeneratedRegex("""(?i)((?:password|pwd|access[_\s-]?token|client[_\s-]?secret|account[_\s-]?key|shared[_\s-]?access[_\s-]?key)[\]"]?\s*(?:=|<>|!=|like)\s*N?')((?:''|[^'])*)(')""", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex CredentialLiteralPattern();
 }
 
 /// <summary>

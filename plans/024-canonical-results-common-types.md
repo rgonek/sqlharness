@@ -8,12 +8,14 @@
 > maintain the index.
 >
 > **Drift check (run first)**: `git diff --stat 5280f78..HEAD -- src/SqlHarness.Core/CanonicalResults.cs tests/SqlHarness.Tests/CanonicalResultsTests.cs README.md AGENTS.md`
-> If any in-scope file changed since this plan was written, compare the
-> "Current state" excerpts against the live code before proceeding; on a
-> mismatch, treat it as a STOP condition.
+> Inspect changes against the current source and adapt implementation details
+> within the authorized intent. A changed file or obsolete excerpt alone is
+> not a STOP condition. Stop for an incompatible contract, missing required
+> proof, or a change that exceeds the approved scope. Record the reconciled base.
 
 ## Status
 
+- **Status**: IN PROGRESS — user-confirmed 2026-10-11; complete scope, branch fix/plan-024-canonical-types.
 - **Priority**: P2
 - **Effort**: M
 - **Risk**: MED (canonical encoding is the basis of result equivalence and snapshot diff)
@@ -80,6 +82,10 @@ The exception fails the **whole operation**, not just display. So `SELECT * FROM
 Branch `fix/plan-024-canonical-types`. Commits per step. Do NOT push.
 
 ## Steps
+
+### Whole-plan execution — user correction, 2026-10-11
+
+Execute the complete plan in one delivery, including its PostgreSQL scope. General/SQL Server priority determines which whole plan is chosen next; it does not authorize deferring part of a selected mixed plan. Steps below are internal implementation order. Preserve required proof and both platform gates; do not mark a partial scope DONE. Historical completed-step evidence elsewhere in this file remains unchanged.
 
 ### Step 1: Non-finite floats get tagged encodings
 

@@ -1,5 +1,9 @@
 # Plan 025: Redact credentials, not caller-supplied input
 
+> Follow-up planned on 2026-10-11: [043](043-credential-only-pattern-redaction.md)
+> narrows the remaining server/database/user and broad token-word patterns.
+> This completed plan records the earlier delivered scope; the follow-up is TODO.
+
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and

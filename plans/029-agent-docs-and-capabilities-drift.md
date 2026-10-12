@@ -9,8 +9,10 @@
 >
 > **Drift check (run first)**: `git diff --stat 5280f78..HEAD -- skills/sqlharness/SKILL.md README.md AGENTS.md docs/mcp.md src/SqlHarness.Core/Capabilities.cs src/SqlHarness.Cli/SqlHarnessCli.cs tests/SqlHarness.Tests/Cli/CapabilitiesCommandTests.cs tests/SqlHarness.Tests/Fixtures/AgentWorkflow/byte-budgets.json`
 > If any in-scope file changed since this plan was written, compare the
-> "Current state" excerpts against the live code before proceeding; on a
-> mismatch, treat it as a STOP condition.
+> "Current state" excerpts against the live code before proceeding. Adapt paths,
+> symbols and obsolete test expectations within the authorized intent and scope;
+> record the adjustment. Stop only for a substantive incompatible contract,
+> an unapproved safety change or work outside scope.
 
 ## Status
 
@@ -19,7 +21,7 @@
 - **Risk**: LOW
 - **Depends on**: plans/016-restore-green-ci.md. Run **after** plans 021, 023, 024, 026 and 027 if they are scheduled, because each adds one doc sentence. Otherwise rebase over them.
 - **Category**: docs
-- **Planned at**: commit `5280f78`, 2026-10-03
+- **Planned at**: commit `5280f78`, 2026-10-03; revised against `729d88f`, 2026-10-11
 
 ## Why this matters
 
@@ -45,7 +47,7 @@ Other drift:
 - `src/SqlHarness.Core/Capabilities.cs:30-95`: the `SqlHarnessCapabilities` construction: the command list (17 entries, no `mcp`), the engine parameter-type lists, a limits dictionary and output modes `["text", "json", "json-summary", "agent"]`.
 - `tests/SqlHarness.Tests/Cli/CapabilitiesCommandTests.cs` pins capabilities wording **exactly** (plan 011/T6). `tests/SqlHarness.Tests/AgentWorkflowTests.cs` + `Fixtures/AgentWorkflow/byte-budgets.json` pin `discoveryThenSchema` output bytes (7100), which includes capabilities JSON. Adding entries changes both, which is expected: update them deliberately.
 - `skills/sqlharness/SKILL.md` (182 lines): frontmatter `description:` plus sections "Readiness and scope", "Safe workflow", parameter types, PG notes, the session contract, exit codes.
-- `AGENTS.md`: the authoritative agent contract. Wording in the skill should **link to or mirror** AGENTS.md, never invent new rules.
+- `AGENTS.md`: the authoritative agent contract. The skill is a concise workflow entry point with links to exact authoritative sections of AGENTS.md/docs/mcp.md. Avoid copying their long contracts; include the few rules needed to choose the next action.
 
 ## Commands you will need
 
@@ -58,7 +60,7 @@ Other drift:
 
 ## Scope
 
-**In scope**: `skills/sqlharness/SKILL.md`, `README.md`, `AGENTS.md`, `docs/mcp.md`, `src/SqlHarness.Core/Capabilities.cs` (add `mcp` command and `ndjson` output mode; add sized types to the SQL Server/PG lists), `tests/SqlHarness.Tests/Cli/CapabilitiesCommandTests.cs` (update pins), `tests/SqlHarness.Tests/Fixtures/AgentWorkflow/byte-budgets.json` (re-pin), `tests/SqlHarness.Tests/DocsSyncTests.cs` (create).
+**In scope**: `skills/sqlharness/SKILL.md`, `README.md`, `AGENTS.md`, `docs/mcp.md`, `src/SqlHarness.Core/Capabilities.cs` (command discovery and operation-specific output metadata; add sized types accepted by each engine), `tests/SqlHarness.Tests/Cli/CapabilitiesCommandTests.cs` (update pins), `tests/SqlHarness.Tests/Fixtures/AgentWorkflow/byte-budgets.json` (re-pin), `tests/SqlHarness.Tests/DocsSyncTests.cs` (create).
 
 **Out of scope**: changing the `-1` exit behavior (document it only), adding an MCP `--max-cell-chars` option (fix the docs instead), and any safety rule change. Where docs and code disagree on a rule, the code wins unless another plan changes it.
 
@@ -72,7 +74,7 @@ Branch `docs/plan-029-agent-docs`. Commits: `docs(029): skill`, `docs(029): READ
 
 In `Capabilities.cs`:
 - Add `new("mcp", "Serve the Core tools to one MCP client over local stdio (mcp serve).")` after `artifact`.
-- Output modes: add `"ndjson"` (used by `watch --output ndjson`).
+- Output modes: describe support per operation, not a universal list implying every command accepts every mode. `ndjson` belongs to watch; `json-summary` belongs to measure/compare and conflicts with `json`; MCP stdio is a transport rather than a CLI output mode. Inventory current settings/validators and reflect their exact supported combinations in capabilities and docs; add optional per-command metadata if needed while retaining backward-compatible global discovery fields.
 - Parameter types: after `"nvarchar(max)"` add `"nvarchar(n)"`, after `"varchar(max)"` add `"varchar(n)"`, after `"char"` add `"char(n)"`, after `"nchar"` add `"nchar(n)"`, after `"varbinary(max)"` add `"varbinary(n)"` and `"binary(n)"`. First confirm each sized form is accepted by the parser: write a quick test binding `--param x:char(10)=a` through `SqlParameterParser` (`grep -n "SizedTypePattern" src/SqlHarness.Core/SqlSafety.cs`). Add a sized form to the **postgres** list only if `PostgresParameters` accepts it (`grep -n "binary\|char" src/SqlHarness.Core/Postgres/PostgresParameters.cs`).
 
 Update `CapabilitiesCommandTests` pins, and re-pin `discoveryThenSchema` in `byte-budgets.json` from the value the test prints (`--logger "console;verbosity=detailed"`). It must still be ≤ the 8192 budget. If it exceeds 8192, STOP.
@@ -83,7 +85,7 @@ Update `CapabilitiesCommandTests` pins, and re-pin `discoveryThenSchema` in `byt
 
 Create `tests/SqlHarness.Tests/DocsSyncTests.cs`:
 1. `Capabilities_lists_every_registered_command`: get the registered top-level command names from Spectre. The simplest robust way is to run `SqlHarnessCli.Create(...)` with `["--help"]` into a `StringWriter` and parse the COMMANDS section, or reflect on the `Configure` registrations if the CLI exposes them; prefer `--help` output. Compare to `SqlHarnessCapabilitiesProvider.Get().Commands` names. Exclude `--help`/`--version` only.
-2. `Skill_and_readme_mention_every_command`: locate `skills/sqlharness/SKILL.md` and `README.md` by walking up from `AppContext.BaseDirectory` (same helper as `ReleaseWorkflowTests.FindRepositoryFile`). Assert each command name appears as `` `name` `` (backticked) in both files.
+2. `Documented_examples_match_command_contract`: locate README and skill examples via the repository-file helper. Use a small explicitly delimited set of executable examples (not arbitrary prose/backticks), substitute fixture profile/path placeholders, and feed them through the existing offline command/settings parser with stub dependencies. Assert command/option combinations parse, unsupported output combinations reject, and no DB connection is opened. Check command coverage in the authoritative README command table; allow the digest skill to link to that table rather than listing every command. Add a negative fixture containing a real command with an invalid option so a test proves semantic drift is detected. Do not execute a live SQL example.
 
 **Verify**: these tests FAIL now for the skill/README (missing commands). That is the RED state for Steps 3–4.
 
@@ -91,45 +93,45 @@ Create `tests/SqlHarness.Tests/DocsSyncTests.cs`:
 
 In `SKILL.md`:
 - Frontmatter `description`: add validate, capabilities, artifact, indexes and MCP to the trigger list (keep it one sentence).
-- "Readiness and scope": add the offline startup block from AGENTS.md lines 12-21 (`capabilities --json`, `doctor --json`, `validate <profile> --file … --json`), copied **verbatim** from AGENTS.md.
-- Add short sections, 3-6 lines each, mirroring AGENTS.md wording: `indexes` (SQL Server missing-index evidence with overlap classes), `artifact` (offline safe sections of a saved benchmark), `--output agent` / `--max-output-bytes` / `--max-cell-chars`, `watch --output ndjson`, and "MCP server" (point to `docs/mcp.md`; the 11 tools; no persistent mutations).
-- PG notes: replace the legacy-only TLS paragraph with AGENTS.md's PostgreSQL transport bullet (the `sslMode` / `rootCertificate` / `verify-full` text).
-- Session contract: replace the `#temp`-only list with AGENTS.md's "Benchmark setup contract" SQL Server and Postgres bullets, verbatim.
+- "Readiness and scope": add the offline startup block from AGENTS.md lines 12-21 (`capabilities --json`, `doctor --json`, `validate <profile> --file … --json`), as a short example with a link to AGENTS.md's startup section.
+- Add short sections, 3-6 lines each, mirroring AGENTS.md wording: `indexes` (SQL Server missing-index evidence with overlap classes), `artifact` (offline safe sections of a saved benchmark), `--output agent` / `--max-output-bytes` / `--max-cell-chars`, `watch --output ndjson`, and "MCP server" (point to `docs/mcp.md`; no persistent mutations).
+- PG diagnostics: add one example `query` that ranks `pg_stat_statements` by `total_exec_time` (top 20, `queryid`, `calls`, `total_exec_time`, `mean_exec_time`, `shared_blks_hit + shared_blks_read`). This replaces the rejected `pgstop` command; note that the extension must be installed.
+- PG notes: recommend explicit `verify-full` for remote profiles and link to the authoritative transport-policy section for exact combinations and legacy behavior.
+- Session contract: summarize same-session setup and native temporary objects in a few sentences; link to AGENTS.md's Benchmark setup contract for syntax/proof limits, including table-variable batch visibility and PostgreSQL `search_path`. Do not copy the large rule list.
 - Exit codes: add "`-1` (255 on POSIX): command-line parse error in text mode; JSON/agent modes return `2`."
 
-**Verify**: `DocsSyncTests` skill assertions pass.
+**Verify**: skill examples parse offline and authoritative documentation links resolve in the repository.
 
 ### Step 4: README, AGENTS.md, docs/mcp.md
 
 - README command table: add rows for `indexes`, `artifact`, `capabilities`, `doctor`, `validate` and `mcp serve`, each with a one-line purpose taken from `Capabilities.cs`.
-- README roadmap: replace the overlap-analysis bullet with the current planned items, linking `plans/013-regression-implementation.md` (regress), `plans/014-pg-statements-implementation.md` (pgstop) and `docs/superpowers/plans/2026-09-26-audit-08-windows-approval-tray.md` (approval tray), each marked "designed, not implemented".
+- README roadmap: replace the overlap-analysis bullet with the current planned items: the compare regression verdict (`plans/051-compare-regression-verdict.md`) and the approval tray (`docs/superpowers/plans/2026-09-26-audit-08-windows-approval-tray.md`), each marked "designed, not implemented". `pgstop` is rejected; do not list it.
 - README "Results to fill from real runs" table with `TBD` rows (`:257-262`): replace it with one sentence saying measured examples will be added from real runs. Do not invent numbers.
 - Every exit-code list (README `:242`, AGENTS.md "Safety contract" exit codes, SKILL.md): add the `-1` line.
 - Parameter type lists (README `:109`, AGENTS.md `:78`, SKILL.md): add the sized forms confirmed in Step 1.
-- `docs/mcp.md:92` and `AGENTS.md:142`: change the cell sentence to "Cells are clipped at 512 characters; this is fixed in v1."
-- `AGENTS.md:97`: replace "This is not the plan 03 agent envelope." with "The agent output envelope is described in docs/superpowers/specs/2026-09-26-agent-output-contract.md." `AGENTS.md:105`: remove the `CIVICLENS_POSTGRES_PASSWORD` mention, keeping the sentence's point that the TLS proof reads only `SQLHARNESS_PG_TLS_PROOF`.
+- Inspect live MCP serve options and catalog limits before editing the cell-limit sentence. Describe the actual default and supported configuration path; do not advertise an option that does not exist or call a configurable limit fixed. Verify an offline settings test agrees with the documented value.
+- AGENTS.md was rewritten on 2026-10-11 (plan-envelope jargon and the foreign password variable are gone). Only add the `-1` exit code and sized parameter types there; keep it a short contract that links to docs.
 
 **Verify**: `DocsSyncTests` pass. `pwsh -NoProfile -File scripts/verify.ps1` → `verify: OK`.
 
 ## Test plan
 
-`DocsSyncTests` (2 tests) plus updated capabilities pins and the re-pinned byte budget.
+`DocsSyncTests` covers command discovery and semantic example/option validation, including one invalid-example fixture; updated capabilities pins and the re-pinned byte budget. Verify both Windows/Linux gates after edits.
 
 ## Done criteria
 
 - [ ] `grep -c "validate" skills/sqlharness/SKILL.md` ≥ 1; `grep -n "verify-full" skills/sqlharness/SKILL.md` → match
 - [ ] `grep -n "Missing-index overlap analysis against existing indexes" README.md` → no match
-- [ ] `grep -n "CIVICLENS" AGENTS.md` → no match
-- [ ] `DocsSyncTests` and the full gate pass
+- [ ] Semantic documentation examples/command coverage tests pass; both Windows and Linux full gates pass
 - [ ] `plans/README.md` row updated
 
 ## STOP conditions
 
-- AGENTS.md and the code disagree on a **safety** rule while you copy text. Report it; do not pick one.
+- A discovered safety-policy conflict cannot be resolved from the approved contracts or coordinating plan within this scope. Report the conflicting evidence; routine stale documentation is corrected to the established behavior.
 - The capabilities change pushes `discoveryThenSchema` over its 8192-byte budget.
 - Spectre's `--help` output cannot be parsed reliably. Fall back to a hard-coded expected list in the test with a comment, and report it.
 
 ## Maintenance notes
 
-- `DocsSyncTests` makes adding a command without documenting it a test failure. That is intended.
-- The skill should stay a **digest** of AGENTS.md. When AGENTS.md changes a rule, update the skill in the same commit.
+- The documentation guard validates command coverage and runnable examples. Backtick formatting and verbatim wording are not behavior contracts.
+- The skill stays a concise digest with authoritative links. Update only affected summary rules and examples when a contract changes; avoid duplicating large sections.

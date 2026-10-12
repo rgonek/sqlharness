@@ -12,10 +12,9 @@ public class ContractsTests
     public void Documentation_covers_read_only_database_helpers()
     {
         var readme = ReadRepositoryFile("README.md");
-        var agents = ReadRepositoryFile("AGENTS.md");
         var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
 
-        foreach (var doc in new[] { readme, agents, skill })
+        foreach (var doc in new[] { readme, skill })
         {
             Assert.Contains("ping", doc, StringComparison.Ordinal);
             Assert.Contains("counts", doc, StringComparison.Ordinal);
@@ -36,7 +35,6 @@ public class ContractsTests
 
         Assert.Contains("Prefer `--json`", skill, StringComparison.Ordinal);
         Assert.Contains("sqlharness ping prod-eu", readme, StringComparison.Ordinal);
-        Assert.Contains("sqlharness counts prod-eu", agents, StringComparison.Ordinal);
         Assert.Contains("sqlharness schema prod-eu", skill, StringComparison.Ordinal);
         Assert.Contains("--object dbo.Contracts", skill, StringComparison.Ordinal);
     }
@@ -45,10 +43,9 @@ public class ContractsTests
     public void Documentation_covers_database_space_inspection()
     {
         var readme = ReadRepositoryFile("README.md");
-        var agents = ReadRepositoryFile("AGENTS.md");
         var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
 
-        foreach (var doc in new[] { readme, agents, skill })
+        foreach (var doc in new[] { readme, skill })
         {
             Assert.Contains("space", doc, StringComparison.Ordinal);
             Assert.Contains("--top", doc, StringComparison.Ordinal);
@@ -70,7 +67,6 @@ public class ContractsTests
         }
 
         Assert.Contains("sqlharness space prod-eu", readme, StringComparison.Ordinal);
-        Assert.Contains("sqlharness space prod-eu", agents, StringComparison.Ordinal);
         Assert.Contains("sqlharness space prod-eu", skill, StringComparison.Ordinal);
         Assert.Contains("--top 25", skill, StringComparison.Ordinal);
         Assert.Contains("--object dbo.Contracts", skill, StringComparison.Ordinal);
@@ -80,10 +76,9 @@ public class ContractsTests
     public void Documentation_covers_watch_and_snapshot_workflows()
     {
         var readme = ReadRepositoryFile("README.md");
-        var agents = ReadRepositoryFile("AGENTS.md");
         var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
 
-        foreach (var doc in new[] { readme, agents, skill })
+        foreach (var doc in new[] { readme, skill })
         {
             Assert.Contains("watch", doc, StringComparison.Ordinal);
             Assert.Contains("snapshot", doc, StringComparison.Ordinal);
@@ -128,8 +123,6 @@ public class ContractsTests
             "sqlharness snapshot prod-eu --var tenant=acme --var env=uat --file .\\queries\\coverage.sql --name before-import --diff --json",
             readme,
             StringComparison.Ordinal);
-        Assert.Contains("sqlharness watch prod-eu", agents, StringComparison.Ordinal);
-        Assert.Contains("sqlharness snapshot prod-eu", agents, StringComparison.Ordinal);
         Assert.Contains("sqlharness watch prod-eu", skill, StringComparison.Ordinal);
         Assert.Contains("sqlharness snapshot prod-eu", skill, StringComparison.Ordinal);
         Assert.Contains("--until-unchanged", skill, StringComparison.Ordinal);
@@ -140,12 +133,11 @@ public class ContractsTests
     public void Documentation_covers_query_store_top_consumers()
     {
         var readme = ReadRepositoryFile("README.md");
-        var agents = ReadRepositoryFile("AGENTS.md");
         var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
         const string example =
             "sqlharness qstop prod-eu --var tenant=acme --var env=uat --top 20 --window 24h --json";
 
-        foreach (var doc in new[] { readme, agents, skill })
+        foreach (var doc in new[] { readme, skill })
         {
             Assert.Contains("qstop", doc, StringComparison.Ordinal);
             Assert.Contains("24h", doc, StringComparison.Ordinal);
@@ -186,18 +178,12 @@ public class ContractsTests
                 && doc.Contains("defective", StringComparison.OrdinalIgnoreCase),
                 "Docs must say a high rank is a lead to measure, not proof the query is defective.");
         }
-
-        Assert.Contains(
-            "`qstop` reads SQL Server Query Store only and returns exit 5 on Postgres.",
-            agents,
-            StringComparison.Ordinal);
     }
 
     [Fact]
     public void Documentation_covers_measure_parameter_sets()
     {
         var readme = ReadRepositoryFile("README.md");
-        var agents = ReadRepositoryFile("AGENTS.md");
         var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
         const string example =
             "sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\\queries\\orders.sql --param tenant:nvarchar=acme --param-set .\\sets\\small.sqljson --param-set .\\sets\\large.sqljson --repeat 5 --json";
@@ -206,7 +192,7 @@ public class ContractsTests
         const string orderRule =
             "In one-based round r, measured execution starts at index r modulo setCount and wraps in user-supplied order.";
 
-        foreach (var doc in new[] { readme, agents, skill })
+        foreach (var doc in new[] { readme, skill })
         {
             Assert.Contains(example, doc, StringComparison.Ordinal);
             Assert.Contains(cacheWarning, doc, StringComparison.Ordinal);
@@ -251,16 +237,11 @@ public class ContractsTests
     public void Documentation_covers_deployed_mcp_server()
     {
         var readme = ReadRepositoryFile("README.md");
-        var agents = ReadRepositoryFile("AGENTS.md");
         var mcp = ReadRepositoryFile("docs", "mcp.md");
 
         Assert.Contains("docs/mcp.md", readme, StringComparison.Ordinal);
         Assert.Contains("The local MCP server over stdio is implemented", readme, StringComparison.Ordinal);
 
-        Assert.Contains("mcp serve", agents, StringComparison.Ordinal);
-        Assert.Contains("docs/mcp.md", agents, StringComparison.Ordinal);
-        Assert.Contains("AllowMutation: false", agents, StringComparison.Ordinal);
-        Assert.Contains("2025-11-25", agents, StringComparison.Ordinal);
 
         foreach (var tool in new[]
         {
@@ -294,6 +275,42 @@ public class ContractsTests
         Assert.Contains("Byte counts are not token counts", mcp, StringComparison.Ordinal);
         Assert.Contains("Zakres dowodów", mcp, StringComparison.Ordinal);
         Assert.Contains("Not executed", mcp, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Agents_contract_links_resolve_to_reference_sections()
+    {
+        var agents = ReadRepositoryFile("AGENTS.md");
+        var readme = ReadRepositoryFile("README.md");
+        var headingSlugs = System.Text.RegularExpressions.Regex
+            .Matches(readme, @"^#{1,6}\s+(.+?)\s*$", System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Select(match => GitHubSlug(match.Groups[1].Value))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var anchors = System.Text.RegularExpressions.Regex
+            .Matches(agents, @"\]\(README\.md#([^)]+)\)")
+            .Select(match => match.Groups[1].Value)
+            .ToArray();
+
+        Assert.NotEmpty(anchors);
+        Assert.All(anchors, anchor => Assert.Contains(anchor, headingSlugs));
+        Assert.Contains("](docs/mcp.md)", agents, StringComparison.Ordinal);
+        Assert.Contains("--allow-mutation --confirm-database", agents, StringComparison.Ordinal);
+        Assert.Contains("verify-linux.ps1", agents, StringComparison.Ordinal);
+    }
+
+    private static string GitHubSlug(string heading)
+    {
+        var builder = new System.Text.StringBuilder(heading.Length);
+        foreach (var character in heading.Trim().ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(character) || character is '-' or '_')
+                builder.Append(character);
+            else if (character == ' ')
+                builder.Append('-');
+        }
+
+        return builder.ToString();
     }
 
     private static string ReadRepositoryFile(params string[] path)

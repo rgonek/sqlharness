@@ -9,8 +9,10 @@
 >
 > **Drift check (run first)**: `git diff --stat 5280f78..HEAD -- .github/workflows/ci.yml .gitattributes tests/SqlHarness.Tests/Auth/ProcessRunnerTests.cs tests/SqlHarness.Tests/Postgres/PostgresConnectionStringTests.cs tests/SqlHarness.Tests/Postgres/PostgresSafetyTests.cs tests/SqlHarness.Mcp.Tests/McpStdioProcessTests.cs tests/SqlHarness.Mcp.Tests/McpInputReaderTests.cs tests/SqlHarness.Tests/ArtifactReaderTests.cs`
 > If any in-scope file changed since this plan was written, compare the
-> "Current state" excerpts against the live code before proceeding; on a
-> mismatch, treat it as a STOP condition.
+> "Current state" excerpts against the live code before proceeding. Adapt paths,
+> symbols and obsolete test expectations within the authorized intent and scope;
+> record the adjustment. Stop only for a substantive incompatible contract,
+> an unapproved safety change or work outside scope.
 
 ## Status
 
@@ -19,7 +21,7 @@
 - **Risk**: LOW
 - **Depends on**: plans/016-restore-green-ci.md (required); plans/028-release-pipeline-hardening.md (edits `ci.yml` permissions and adds `workflow_call`; land 028 first or merge carefully)
 - **Category**: tests / dx
-- **Planned at**: commit `5280f78`, 2026-10-03
+- **Planned at**: commit `5280f78`, 2026-10-03; revised against `729d88f`, 2026-10-11
 
 ## Why this matters
 
@@ -92,14 +94,14 @@ Create `PlatformFactAttributes.cs` with `WindowsFactAttribute : FactAttribute` (
 
 For the symlink/case guards: when the guard is an **OS** check, use the attribute. When it is a **runtime capability** check (cannot create a symlink, filesystem is case-insensitive), xUnit v2 cannot skip dynamically, so keep the early return and write the reason to `ITestOutputHelper` (if the class has one), with a comment `// capability guard: xUnit v2 has no dynamic skip`. Do not invent a dynamic-skip library.
 
-**Verify**: full gate passes on Windows, with the same pass count minus 0 (Windows still runs them).
+**Verify**: build and run affected platform tests on Windows; applicable tests execute and others report Skip. Run complete gates after all edits.
 
 ### Step 2: Remove env-var races
 
 - `PostgresConnectionStringTests.cs:19-34` and `:40-52`, `PostgresSafetyTests.cs:444-458`: use a unique variable per test (`var variable = $"SQLHARNESS_TEST_{Guid.NewGuid():N}";`) and pass that name into the profile/`AuthSpec` instead of the fixed `SQLHARNESS_PG_PASSWORD` / `P`. Keep the assertions otherwise identical. If a test asserts the variable **name** appears in an error message, assert the generated name.
 - `grep -rn 'SetEnvironmentVariable("' tests --include=*.cs | grep -v SQLHARNESS_HOME` → every remaining fixed name must be in a class marked `[Collection(SqlHarnessHomeCollection.Name)]` (or the MCP project's equivalent). Fix any that are not, using the same technique.
 
-**Verify**: full gate passes three times in a row.
+**Verify**: repeat affected connection-string/safety tests three times with parallel execution enabled. Repeat a complete gate only when a remaining failure implicates interactions outside these classes.
 
 ### Step 3: Clean up the publish output
 
@@ -125,14 +127,14 @@ Create `.gitattributes` with `* text=auto` (normalize to LF in the repo, leaving
 
 ## Test plan
 
-No new behavior tests. Attribute conversions, env-var isolation and cleanup are covered by running the existing suite repeatedly (Step 2: three consecutive green runs).
+Repeat only affected race-sensitive tests in Step 2. After all edits run one complete Windows gate (`scripts/verify.ps1`) and one Linux ext4 gate (`scripts/verify-linux.ps1`); both must pass. Broaden repetition only for a concrete unresolved flake. Record CI proof separately after an authorized push.
 
 ## Done criteria
 
 - [ ] `grep -rn "if (!OperatingSystem.IsWindows())" tests --include=*.cs` → no match (or only capability guards with the explanatory comment)
 - [ ] `grep -rn 'SetEnvironmentVariable("SQLHARNESS_PG_PASSWORD"' tests` → no match
 - [ ] `ci.yml` contains `windows-latest`, `timeout-minutes`, `concurrency`, `--logger trx`, `Invoke-Pester`
-- [ ] Full gate green three runs in a row locally
+- [ ] Focused race-sensitive repeats green; one complete Windows gate and one complete Linux gate green
 - [ ] `plans/README.md` row updated (CI proof pending first push)
 
 ## STOP conditions

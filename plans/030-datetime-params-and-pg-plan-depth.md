@@ -79,11 +79,9 @@ Branch `fix/plan-030-datetime-depth`. Commits per step. Do NOT push.
 
 ## Steps
 
-### Execution phases — user priority update, 2026-10-11
+### Whole-plan execution — user correction, 2026-10-11
 
-- **A, complete: shared date/time parameter correctness.** Step 1 and the matching Step 4 documentation/tests. Shared parser changes apply to both engines and preserve PostgreSQL behavior.
-- **B, complete: PostgreSQL binding and deep plans.** The user explicitly un-deferred Steps 2 and 3 after A had been recorded as PARTIAL. B's focused tests and both platform gates are complete.
-- Historical sequencing: A ran after 026 and was coordinated with 045 because both edited `SqlSafety.cs`. The initial priority update deferred B and correctly left the plan PARTIAL; the later user decision resumed B. Focused checks must run the intended cases, not pass with zero selected tests.
+Execute the complete plan in one delivery, including its PostgreSQL scope. General/SQL Server priority determines which whole plan is chosen next; it does not authorize deferring part of a selected mixed plan. Steps below are internal implementation order. Preserve required proof and both platform gates; do not mark a partial scope DONE. Historical completed-step evidence elsewhere in this file remains unchanged.
 
 ### Step 1: Offset-less types reject offsets (validation, exit 2)
 

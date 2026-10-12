@@ -133,6 +133,10 @@ Threshold superseded by plan 025 (2026-10-10): caller-supplied values are no lon
 
 ## W4 — Invalid input path gives no hint (P2, ux)
 
+**Planned follow-up (2026-10-11):** [044](044-mcp-input-root-discovery.md) — DONE in 8a088fb
+replaces the path-hiding policy with bounded discovery of the actual configured
+input roots. This is future work; W4's historical delivery remains recorded below.
+
 **Evidence.** Files under the agent scratchpad were rejected with `The input path is invalid.`; the agent found
 the allowed root only by reading the client MCP config and the `--input-root` argument.
 
