@@ -232,7 +232,7 @@ public sealed class ProcessRunnerTests
             .Distinct()
             .ToArray();
         foreach (var pid in processIds)
-            KillIfAlive(pid);
+            await KillAndWaitForExitAsync(pid);
 
         if (Directory.Exists(testDirectory))
             Directory.Delete(testDirectory, recursive: true);
@@ -387,16 +387,28 @@ public sealed class ProcessRunnerTests
         return false;
     }
 
-    private static void KillIfAlive(int pid)
+    private static async Task KillAndWaitForExitAsync(int pid)
     {
         try
         {
             using var process = Process.GetProcessById(pid);
             if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (InvalidOperationException) when (process.HasExited)
+                {
+                    // The process exited after HasExited was checked.
+                }
+            }
+
+            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
         }
         catch (ArgumentException)
         {
+            // The process exited before its handle could be opened.
         }
     }
 }
