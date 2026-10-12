@@ -27,7 +27,10 @@ Odświeżono po weryfikacji Plan 049 na `58fab51`. Preferencja użytkownika: pla
 
 ### Grupa 2 — SQL Server i automatyzacja optymalizacji
 
-Pusta: 051 (zastępuje 035; progi z 013) ma DONE i jest w main.
+Plan 051 is DONE. New local contract plans are indexed below and remain TODO:
+055 -> 056 -> 057 -> 058 -> 059 -> 060 -> 061. Accepted refinements update 055/058/059;
+this order describes dependencies and grants no execution, commit or publication authorization.
+The report API remains a separate draft.
 
 ### Grupa 3 — dostarczanie i utrzymanie
 
@@ -180,6 +183,13 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [052](052-postgres-read-only-transactions.md) | Every non-approved PostgreSQL command uses a per-command READ ONLY transaction | P1 | M | Disposable PostgreSQL 18.6 proof | DONE at frozen `c07f001`; integrated tip `9082149` (Windows and isolated Linux gates passed; see [052-verification](052-verification.md)); locally merged to main by fast-forward at `f09a614`; not pushed |
 | [053](053-specific-errors-for-the-caller.md) | Errors name what went wrong when the reader already holds the data | P2 | M | — | DONE — locally merged to main `5a1eb2a`; proof: [053-verification](053-verification.md); Windows/Linux gates passed; not pushed |
 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redaction is exact known-secret replacement; MCP input guards match a same-user threat model | P2 | M | 049 (DONE) | TODO |
+| [055](055-agent-output-budget-and-envelope.md) | Text-only budgeted output, inventory-first matrix cases, honest query value types and clipping metadata | P1 | M | — | TODO — accepted output refinements; not implemented |
+| [056](056-parameter-contract-and-dry-run.md) | Parameter normalization, binding parity and dry runs of exact operation arguments | P1 | M | 055 | TODO — existing local plan, not implemented |
+| [057](057-tsql-control-flow-classification.md) | Recursive IF/BEGIN classification under existing statement rules | P2 | S | 056 | TODO — existing local plan, not implemented |
+| [058](058-benchmark-plan-evidence.md) | Stored-plan reader, repetition identity, node/operator continuation and matrix values | P1 | M | 055 | TODO — accepted evidence refinements; not implemented |
+| [059](059-journal-workflow-cost.md) | Explicit producer references and honest measured/estimated workflow cost | P2 | M | 055, 056, 058 | TODO — accepted provenance/accounting refinements; not implemented |
+| [060](060-mcp-tool-surface.md) | Smaller MCP surface, compact runtime capabilities, built-in recipes and concurrent calls | P2 | M | 055, 056, 059 | TODO — accepted compact-capabilities refinement; additional recipes not accepted |
+| [061](061-unified-parameter-sets.md) | Shared measure/compare parameter-set inputs | P3 | L | 056, 058, 060 | TODO — adapt projection to 055 case inventory; not implemented |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED, SUPERSEDED or REVERTED (with one-line rationale).
 
