@@ -6,7 +6,7 @@ internal static class PostgresEndpointIdentity
 {
     internal static bool Matches(ResolvedTarget expected, string actualServer, string actualDatabase)
     {
-        _ = actualServer; // Retained in the report; TLS authenticates the endpoint.
+        _ = actualServer; // Retained for informational reporting; PostgreSQL hostname verification requires sslMode: verify-full.
         return string.Equals(expected.Database, actualDatabase, StringComparison.Ordinal);
     }
 
