@@ -37,7 +37,7 @@ public static class SqlHarnessCapabilitiesProvider
                 new("validate", "Classify SQL offline using a closed target profile; never connects. Usages: query, setup, benchmark."),
                 new("query", "Run a bounded SQL query."),
                 new("measure", "Measure a query."),
-                new("compare", "Compare baseline and candidate queries."),
+                new("compare", "Compare baseline and candidate queries; reports result equivalence and a latency regression verdict."),
                 new("schema", "Inspect database schema."),
                 new("ping", "Check a database connection."),
                 new("counts", "Inspect table row counts."),

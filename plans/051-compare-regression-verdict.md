@@ -4,7 +4,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: DONE (branch `feat/plan-051-regression-verdict`; both gates pending)
 - Priority: P2
 - Effort: M
 - Risk: LOW
@@ -61,10 +61,11 @@ Out of scope: a `regress` command, an MCP tool, any change to exit codes, readin
 
 ## Done criteria
 
-- [ ] Every rule above has a test row.
-- [ ] `compare --json-summary` and MCP compare carry the verdict; matrix cells each carry their own.
-- [ ] No new command, MCP tool or exit code.
-- [ ] Plans 035 and 013 marked superseded in `plans/README.md`; both gates pass.
+- [x] Every rule above has a test row.
+- [x] `compare --json-summary` and MCP compare carry the verdict; matrix cells each carry their own.
+- [x] No new command, MCP tool or exit code.
+- [x] Plans 035 and 013 marked superseded in `plans/README.md`.
+- [ ] Both gates pass (`verify.ps1`, `verify-linux.ps1`).
 
 ## STOP conditions
 
