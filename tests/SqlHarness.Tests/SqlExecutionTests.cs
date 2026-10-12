@@ -1,17 +1,12 @@
-using System.Net;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 using Microsoft.Data.SqlClient;
 
-using Npgsql;
-
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
 using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
-using SqlHarness.Tests.Postgres;
 
 namespace SqlHarness.Tests;
 
@@ -94,48 +89,33 @@ public sealed class SqlExecutionTests
     }
 
     [Fact]
-    public async Task Direct_mode_rejects_a_post_connect_identity_mismatch()
+    public async Task Server_name_difference_does_not_reject_a_connection()
     {
         var connector = new FakeConnector("other-server", "database");
         var factory = new SqlClientSessionFactory(new FakeAzureCli("unused"), connector.ConnectAsync);
 
-        var error = await Assert.ThrowsAsync<SqlTargetMismatchException>(() => factory.ConnectAsync(
+        await using var session = await factory.ConnectAsync(
             new ResolvedTarget("server", "database", AuthSpec.Parse("integrated", null, null, false), "direct"),
-            default));
+            default);
 
-        Assert.Contains("identity", error.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.True(connector.Session.Disposed);
+        Assert.Equal("other-server", session.Identity.ActualServer);
+        Assert.False(connector.Session.Disposed);
     }
 
     [Theory]
-    [InlineData("localhost,14334")]
-    [InlineData("127.0.0.1,14334")]
-    [InlineData("tcp:localhost,14334")]
-    [InlineData("::1,14334")]
-    [InlineData("[::1],14334")]
-    [InlineData(".")]
-    [InlineData("(local)")]
-    public async Task Loopback_endpoint_accepts_container_or_machine_server_name(string dataSource)
+    [InlineData("sql01.corp.local", "SQL01")]
+    [InlineData("ag-listener", "sql-primary-03")]
+    [InlineData("fog.database.windows.net", "physical-primary.database.windows.net")]
+    public async Task Different_server_name_is_reported_for_aliases_and_listeners(string requested, string actual)
     {
-        // Docker SQL reports a container hostname via SERVERPROPERTY('ServerName'), not localhost.
-        var connector = new FakeConnector("9134b03e1a34", "CivicLens");
+        var connector = new FakeConnector(actual, "AppDb");
         var factory = new SqlClientSessionFactory(new FakeAzureCli("unused"), connector.ConnectAsync);
-        const string passwordVariable = "SQLHARNESS_LOOPBACK_IDENTITY_PASSWORD";
-        Environment.SetEnvironmentVariable(passwordVariable, "secret");
-        try
-        {
-            var auth = AuthSpec.Parse("sql", "sa", passwordVariable, true);
-            await using var session = await factory.ConnectAsync(
-                new ResolvedTarget(dataSource, "CivicLens", auth, "profile"), default);
+        await using var session = await factory.ConnectAsync(
+            new ResolvedTarget(requested, "AppDb", AuthSpec.Parse("integrated", null, null, false), "profile"),
+            default);
 
-            Assert.Equal(dataSource, session.Identity.RequestedServer);
-            Assert.Equal("CivicLens", session.Identity.ActualDatabase);
-            Assert.Equal("9134b03e1a34", session.Identity.ActualServer);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable(passwordVariable, null);
-        }
+        Assert.Equal(requested, session.Identity.RequestedServer);
+        Assert.Equal(actual, session.Identity.ActualServer);
     }
 
     [Fact]
@@ -174,15 +154,6 @@ public sealed class SqlExecutionTests
         Assert.Equal("sql-box,1433", session.Identity.RequestedServer);
         Assert.Equal("sql-box", session.Identity.ActualServer);
     }
-
-    [Theory]
-    [InlineData("localhost,14334", true)]
-    [InlineData("127.0.0.1", true)]
-    [InlineData("tcp:localhost,1433", true)]
-    [InlineData("sql-box,1433", false)]
-    [InlineData("logical.database.windows.net", false)]
-    public void IsLoopbackEndpoint_classifies_data_sources(string dataSource, bool expected) =>
-        Assert.Equal(expected, SqlClientSessionFactory.IsLoopbackEndpoint(dataSource));
 
     [Fact]
     public void Command_binds_parsed_parameters_without_interpolating_values()
@@ -280,177 +251,28 @@ public sealed class SqlExecutionTests
         Assert.True(commandDisposed);
     }
 
-    [Fact]
-    public void Verified_dns_host_matches_the_connected_address()
-    {
-        var resolver = new ScriptedResolver(IPAddress.Parse("192.0.2.1"));
-        var target = PostgresTarget("db.example.test", false, new PostgresTransport(PostgresSslMode.VerifyFull, null));
-        var observation = new PostgresEndpointObservation(IPAddress.Parse("192.0.2.1"), ["db.example.test"]);
-
-        Assert.True(PostgresEndpointIdentity.Matches(target, "appdb", observation, resolver));
-        Assert.Equal("db.example.test", resolver.Host);
-        Assert.Equal(1, resolver.Calls);
-    }
-
-    [Fact]
-    public void Database_mismatch_fails_without_calling_the_resolver()
-    {
-        var resolver = new ScriptedResolver(IPAddress.Parse("192.0.2.1")) { Throw = true };
-        var target = PostgresTarget("db.example.test", false, new PostgresTransport(PostgresSslMode.VerifyFull, null));
-        var observation = new PostgresEndpointObservation(IPAddress.Parse("192.0.2.1"), ["db.example.test"]);
-
-        Assert.False(PostgresEndpointIdentity.Matches(target, "otherdb", observation, resolver));
-        Assert.Equal(0, resolver.Calls);
-    }
-
-    [Fact]
-    public void Different_authenticated_host_fails_even_when_the_address_matches()
-    {
-        var resolver = new ScriptedResolver(IPAddress.Parse("192.0.2.1"));
-        var target = PostgresTarget("db.example.test", false, new PostgresTransport(PostgresSslMode.VerifyFull, null));
-        var observation = new PostgresEndpointObservation(IPAddress.Parse("192.0.2.1"), ["other.example.test"]);
-
-        Assert.False(PostgresEndpointIdentity.Matches(target, "appdb", observation, resolver));
-        Assert.Equal(0, resolver.Calls);
-    }
-
-    [Fact]
-    public void Proxy_address_outside_the_resolver_answer_fails()
-    {
-        var resolver = new ScriptedResolver(IPAddress.Parse("192.0.2.1"));
-        var target = PostgresTarget("db.example.test", false, new PostgresTransport(PostgresSslMode.VerifyFull, null));
-        var observation = new PostgresEndpointObservation(IPAddress.Parse("198.51.100.8"), ["db.example.test"]);
-
-        Assert.False(PostgresEndpointIdentity.Matches(target, "appdb", observation, resolver));
-        Assert.Equal(1, resolver.Calls);
-    }
-
-    [Fact]
-    public void Non_verifying_dns_name_is_not_authenticated_by_a_resolver_hit()
-    {
-        var resolver = new ScriptedResolver(IPAddress.Parse("192.0.2.1"));
-        var require = PostgresTarget("db.example.test", false, new PostgresTransport(PostgresSslMode.Require, null));
-        var legacy = PostgresTarget("db.example.test", false, null);
-        var observation = new PostgresEndpointObservation(IPAddress.Parse("192.0.2.1"), ["db.example.test"]);
-
-        Assert.False(PostgresEndpointIdentity.Matches(require, "appdb", observation, resolver));
-        Assert.False(PostgresEndpointIdentity.Matches(legacy, "appdb", observation, resolver));
-        Assert.Equal(0, resolver.Calls);
-    }
-
-    [Fact]
-    public void Non_verifying_ip_literal_matches_only_the_connected_address()
-    {
-        var resolver = new ScriptedResolver { Throw = true };
-        var target = PostgresTarget("192.0.2.10,5432", true, new PostgresTransport(PostgresSslMode.Disable, null));
-        var same = new PostgresEndpointObservation(IPAddress.Parse("192.0.2.10"), []);
-        var other = new PostgresEndpointObservation(IPAddress.Parse("192.0.2.11"), []);
-
-        Assert.True(PostgresEndpointIdentity.Matches(target, "appdb", same, resolver));
-        Assert.False(PostgresEndpointIdentity.Matches(target, "appdb", other, resolver));
-        Assert.Equal(0, resolver.Calls);
-    }
-
-    [Fact]
-    public void Ipv6_literals_match_structurally_and_mapped_ipv4_does_not()
-    {
-        var resolver = new ScriptedResolver { Throw = true };
-        var target = PostgresTarget("[2001:db8::10],5432", true, new PostgresTransport(PostgresSslMode.Disable, null));
-        var expanded = new PostgresEndpointObservation(IPAddress.Parse("2001:db8:0:0:0:0:0:10"), []);
-        Assert.True(PostgresEndpointIdentity.Matches(target, "appdb", expanded, resolver));
-
-        var v4 = PostgresTarget("192.0.2.10", true, new PostgresTransport(PostgresSslMode.Disable, null));
-        var mapped = new PostgresEndpointObservation(IPAddress.Parse("::ffff:192.0.2.10"), []);
-        Assert.False(PostgresEndpointIdentity.Matches(v4, "appdb", mapped, resolver));
-        Assert.Equal(0, resolver.Calls);
-    }
-
     [Theory]
-    [InlineData("localhost,5433")]
-    [InlineData("LOCALHOST")]
-    [InlineData("127.0.0.1,5432")]
-    [InlineData("[::1],5432")]
-    public void Postgres_loopback_checks_the_database_and_skips_the_resolver(string server)
+    [InlineData("db.example.test", "192.0.2.1/32", PostgresSslMode.Require)]
+    [InlineData("db.example.test", "192.0.2.1/32", PostgresSslMode.VerifyFull)]
+    public void Postgres_dns_host_is_accepted_and_observed_address_is_reported(
+        string requestedServer, string actualServer, PostgresSslMode sslMode)
     {
-        var resolver = new ScriptedResolver { Throw = true };
-        var target = PostgresTarget(server, true, null);
-        var observation = new PostgresEndpointObservation(null, []);
+        var target = PostgresTarget(requestedServer, false, new PostgresTransport(sslMode, null));
 
-        Assert.True(PostgresEndpointIdentity.Matches(target, "appdb", observation, resolver));
-        Assert.False(PostgresEndpointIdentity.Matches(target, "otherdb", observation, resolver));
-        Assert.Equal(0, resolver.Calls);
+        Assert.True(PostgresEndpointIdentity.Matches(target, actualServer, "appdb"));
+        var report = PostgresEndpointIdentity.CreateReport(target, actualServer, "appdb");
+        Assert.Equal(requestedServer, report.RequestedServer);
+        Assert.Equal(actualServer, report.ActualServer);
+        Assert.Equal(PostgresTransportPolicy.Label(target), report.TransportPolicy);
     }
 
     [Fact]
-    public void Trailing_dot_is_not_treated_as_loopback()
+    public void Postgres_database_mismatch_remains_ordinal()
     {
-        var resolver = new ScriptedResolver { Throw = true };
-        var target = PostgresTarget("localhost.", false, new PostgresTransport(PostgresSslMode.Require, null));
+        var target = PostgresTarget("db.example.test", false, new PostgresTransport(PostgresSslMode.Require, null));
 
-        Assert.False(PostgresEndpointIdentity.Matches(
-            target, "appdb", new PostgresEndpointObservation(IPAddress.Loopback, ["localhost"]), resolver));
-        Assert.Equal(0, resolver.Calls);
-    }
-
-    [Fact]
-    public void Verify_full_without_certificate_names_uses_the_requested_host_only()
-    {
-        var resolver = new ScriptedResolver(IPAddress.Parse("192.0.2.1"));
-        var verifyFull = PostgresTarget("db.example.test,5432", false, new PostgresTransport(PostgresSslMode.VerifyFull, null));
-        var verifyCa = PostgresTarget("db.example.test,5432", false, new PostgresTransport(PostgresSslMode.VerifyCa, null));
-        var seen = new PostgresEndpointObservation(IPAddress.Parse("192.0.2.1"), []);
-
-        var full = PostgresEndpointIdentity.WithVerifyFullFallback(verifyFull, seen);
-        var ca = PostgresEndpointIdentity.WithVerifyFullFallback(verifyCa, seen);
-
-        Assert.Equal(["db.example.test"], full.AuthenticatedNames);
-        Assert.Empty(ca.AuthenticatedNames);
-        Assert.True(PostgresEndpointIdentity.Matches(verifyFull, "appdb", full, resolver));
-        Assert.False(PostgresEndpointIdentity.Matches(verifyCa, "appdb", ca, resolver));
-    }
-
-    [Theory]
-    [InlineData("db.example.test", true)]
-    [InlineData("DB.Example.Test", true)]
-    [InlineData("a.b.example.test", false)]
-    [InlineData("example.test", false)]
-    public void Single_label_wildcard_authenticates_only_one_label(string host, bool expected)
-    {
-        var resolver = new ScriptedResolver(IPAddress.Parse("192.0.2.1"));
-        var target = PostgresTarget(host, false, new PostgresTransport(PostgresSslMode.VerifyCa, null));
-        var observation = new PostgresEndpointObservation(IPAddress.Parse("192.0.2.1"), ["*.example.test"]);
-
-        Assert.Equal(expected, PostgresEndpointIdentity.Matches(target, "appdb", observation, resolver));
-    }
-
-    [Fact]
-    public void Certificate_names_prefer_subject_alternative_names_over_a_different_common_name()
-    {
-        using var alternative = TestCertificates.Create("other.example.test", "db.example.test");
-        using var commonOnly = TestCertificates.Create("db.example.test");
-
-        Assert.Equal(["db.example.test"], NpgsqlEndpointObservation.CertificateNames(alternative));
-        Assert.Equal(["db.example.test"], NpgsqlEndpointObservation.CertificateNames(commonOnly));
-    }
-
-    [Fact]
-    public void Npgsql_connector_exposes_the_endpoint_members_identity_reads()
-    {
-        var connector = typeof(NpgsqlConnection).GetProperty(
-            "Connector", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(connector);
-        Assert.NotNull(connector.PropertyType.GetProperty(
-            "ConnectedEndPoint", BindingFlags.Instance | BindingFlags.NonPublic));
-        Assert.NotNull(connector.PropertyType.GetField(
-            "_stream", BindingFlags.Instance | BindingFlags.NonPublic));
-    }
-
-    [Fact]
-    public void System_resolver_returns_ip_literals_without_dns()
-    {
-        var resolver = new SystemPostgresHostResolver();
-        Assert.Equal(IPAddress.Parse("192.0.2.8"), Assert.Single(resolver.Resolve("192.0.2.8")));
-        Assert.Equal(IPAddress.Parse("2001:db8::8"), Assert.Single(resolver.Resolve("[2001:db8::8]")));
+        Assert.False(PostgresEndpointIdentity.Matches(target, "198.51.100.8", "otherdb"));
+        Assert.False(PostgresEndpointIdentity.Matches(target, "198.51.100.8", "APPDB"));
     }
 
     private static ResolvedTarget PostgresTarget(string server, bool trust, PostgresTransport? transport) =>
@@ -461,23 +283,6 @@ public sealed class SqlExecutionTests
             "profile",
             SqlEngine.Postgres,
             transport);
-
-    private sealed class ScriptedResolver(params IPAddress[] addresses) : IPostgresHostResolver
-    {
-        public int Calls { get; private set; }
-        public string? Host { get; private set; }
-        public bool Throw { get; init; }
-
-        public IReadOnlyList<IPAddress> Resolve(string host)
-        {
-            Calls++;
-            Host = host;
-            if (Throw)
-                throw new InvalidOperationException("resolver-was-called");
-            return addresses;
-        }
-    }
-
     private sealed class FakeAzureCli(string token) : IAzureCli
     {
         public int RunCount { get; private set; }

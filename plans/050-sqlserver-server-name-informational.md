@@ -4,7 +4,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: Implementation complete; focused verification passed; Windows/Linux full gates pending controller.
 - Priority: P2
 - Effort: M
 - Risk: MED (removes exit 4 from the contract)
@@ -13,15 +13,13 @@
 
 ## Why this matters
 
-Both engines compare the endpoint they just connected to with what the server reports. That cannot catch a wrong profile or a wrong `--var`: the connection already went to the wrong host. Server identity is authenticated by TLS certificate validation, which the driver performs before any of this runs.
+The previous implementation compared the endpoint text with an identity observed after connecting. That could not catch a wrong profile or a wrong `--var`: the connection already went to the resolved host. Endpoint authentication belongs to transport validation by the driver; the connected server identity is useful report context.
 
-**SQL Server** (`SqlExecution.TargetMatches`): compares host text with `SERVERPROPERTY('ServerName')`. It fails for FQDNs, IPs, AG listeners, Azure failover groups, DNS aliases and privatelink hosts, pushing users toward `--unsafe-direct`.
+**SQL Server** (`SqlExecution.TargetMatches`): now compares only the requested and connected database names. The report still includes `SERVERPROPERTY('ServerName')` for FQDNs, IPs, AG listeners, Azure failover groups, DNS aliases and privatelink hosts.
 
-**PostgreSQL** (`PostgresEndpointIdentity.Matches`):
-- with `require`/`disable` (including legacy `trustServerCertificate: false` → `Require`), a DNS host name always returns false, so every remote legacy profile using a host name gets exit 4; an IP literal is compared with the address just connected to (a tautology);
-- with `verify-full`/`verify-ca`, Npgsql has already authenticated the certificate; SQLHarness re-checks it through reflection into Npgsql private members (`Connector`, `ConnectedEndPoint`, `_stream`) and re-resolves DNS. An Npgsql upgrade that renames those members makes `ConnectedAddress` null and fails every remote connection; round-robin DNS, private endpoints and proxies fail too.
+**PostgreSQL** (`PostgresEndpointIdentity.Matches`): now compares only the requested and connected database names. The report still includes `inet_server_addr()` and `transportPolicy`; Npgsql performs TLS validation according to the configured mode, including hostname verification for `verify-full`.
 
-The database comparison (`DB_NAME()` / `current_database()` against the requested name) is near-tautological — the connection string already selects it — but it is cheap and catches a server that maps names unexpectedly. Keep it.
+The database comparison (`DB_NAME()` / `current_database()` against the requested name) remains an exact ordinal guard, and a mismatch is the only connected-target condition that returns exit 4.
 
 ## Scope
 
@@ -45,10 +43,10 @@ Out of scope: profile schema, `--confirm-database` (stays exact and ordinal), th
 
 ## Done criteria
 
-- [ ] No path returns exit 4 for a server-name or address difference alone, on either engine.
-- [ ] No reflection into Npgsql private members remains (`rg "BindingFlags.NonPublic" src/SqlHarness.Core/Postgres` → none for identity).
-- [ ] Identity reports still show the connected server.
-- [ ] Plan 033 REJECTED in the index; both gates pass.
+- [x] No path returns exit 4 for a server-name or address difference alone, on either engine.
+- [x] No reflection into Npgsql private members remains (`rg "BindingFlags.NonPublic" src/SqlHarness.Core/Postgres` → none for identity).
+- [x] Identity reports still show the connected server.
+- [x] Plan 033 is REJECTED in the index. Windows/Linux full gates remain pending controller.
 
 ## STOP conditions
 
