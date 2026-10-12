@@ -45,51 +45,17 @@ public static class AgentOutputProjection
 {
     private static readonly JsonSerializerOptions ProjectionJson = new(JsonSerializerDefaults.Web);
 
-    public static int CalculateDetailLimit(int maximumBytes, int maximumCellCharacters)
-    {
-        var perItemEstimate = Math.Max(128L, (long)Math.Max(1, maximumCellCharacters) * 16);
-        perItemEstimate = Math.Max(perItemEstimate, 128L);
-        var estimate = Math.Max(1d, maximumBytes / (double)perItemEstimate);
-        return Math.Clamp((int)Math.Pow(estimate, 0.2), 1, 128);
-    }
-
-    private static readonly int[] QueryRowSampleLadder = [128, 64, 32, 16, 8, 4, 2, 1, 0];
-
     /// <summary>
-    /// Candidate detail limits for the agent projection degradation loop.
-    /// The first candidate is <see cref="int.MaxValue"/>, which projects the
-    /// report without truncation. If that does not fit the byte budget, the
-    /// loop descends through conservative estimates down to 1, then 0.
-    /// A query report instead descends through bounded per-result-set row
-    /// samples (128, 64, 32, 16, 8, 4, 2, 1) and ends with the budget-aware
-    /// inventory, schema and row allocation at 0.
+    /// Detail limits tried in order until the rendered envelope fits the budget. The first
+    /// entry renders the report without truncation. Every report type uses the same steps.
     /// </summary>
-    public static IEnumerable<int> GetCandidateDetailLimits(object? report, int maximumBytes, int maximumCellCharacters) =>
-        report is SqlHarnessQueryReport
-            ? QueryCandidateDetailLimits()
-            : DefaultCandidateDetailLimits(maximumBytes, maximumCellCharacters);
+    public static IReadOnlyList<int> CandidateDetailLimits { get; } = [int.MaxValue, 128, 64, 32, 16, 8, 4, 2, 1, 0];
 
-    private static IEnumerable<int> QueryCandidateDetailLimits()
-    {
-        yield return int.MaxValue;
-        foreach (var level in QueryRowSampleLadder)
-            yield return level;
-    }
-
-    private static IEnumerable<int> DefaultCandidateDetailLimits(int maximumBytes, int maximumCellCharacters)
-    {
-        yield return int.MaxValue;
-        var level = CalculateDetailLimit(maximumBytes, maximumCellCharacters);
-        while (level > 0)
-        {
-            yield return level;
-            if (level == 1)
-                break;
-            level = Math.Max(1, level / 2);
-        }
-
-        yield return 0;
-    }
+    internal static IEnumerable<KeyValuePair<string, CompareDistribution>> BySignificance(
+        IReadOnlyDictionary<string, CompareDistribution> reads) =>
+        reads.OrderByDescending(pair => pair.Value.Median)
+            .ThenByDescending(pair => pair.Value.Max)
+            .ThenBy(pair => pair.Key, StringComparer.Ordinal);
 
     public static object? Project(object? report, int maximumCellCharacters, int detailLimit, out int omittedItems, int maximumBytes = 16 * 1024)
     {
@@ -263,7 +229,7 @@ public static class AgentOutputProjection
                         var variants = Take(metrics.Variants).Select(variant => variant with
                         {
                             Name = Clip(variant.Name)!,
-                            LogicalReadsByTable = Take(variant.LogicalReadsByTable.ToArray()).ToDictionary(
+                            LogicalReadsByTable = Take(BySignificance(variant.LogicalReadsByTable).ToArray()).ToDictionary(
                                 pair => Clip(pair.Key)!, pair => pair.Value, StringComparer.Ordinal),
                             Warnings = Take(variant.Warnings).Select(warning => Clip(warning)!).ToArray(),
                         }).ToArray();
@@ -342,7 +308,7 @@ public static class AgentOutputProjection
 
         BenchmarkVariantSummary ClipVariant(BenchmarkVariantSummary variant)
         {
-            var reads = Take(variant.LogicalReadsByTable.ToArray()).ToDictionary(p => Clip(p.Key)!, p => p.Value, StringComparer.Ordinal);
+            var reads = Take(BySignificance(variant.LogicalReadsByTable).ToArray()).ToDictionary(p => Clip(p.Key)!, p => p.Value, StringComparer.Ordinal);
             var warnings = Take(variant.Warnings).Select(w => Clip(w)!).ToArray();
             return variant with { LogicalReadsByTable = reads, Warnings = warnings };
         }

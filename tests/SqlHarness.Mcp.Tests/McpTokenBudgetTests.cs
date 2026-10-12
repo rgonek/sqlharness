@@ -204,6 +204,22 @@ public sealed class McpTokenBudgetTests
     }
 
     [Fact]
+    public void Small_compare_matrix_keeps_both_cells_without_truncation()
+    {
+        var variant = new CompareVariantReport("variant", new CompareDistribution(1, 2, 3), new CompareDistribution(4, 5, 6),
+            new CompareDistribution(7, 8, 9), new Dictionary<string, long>(), [], []);
+        var compare = new SqlHarnessCompareReport(Target, 5, 10, true, variant, variant, "/workspace/compare/artifact-001");
+        var report = new SqlHarnessCompareMatrixReport("batch", "int",
+            [new CompareMatrixCellReport(0, "1", compare), new CompareMatrixCellReport(1, "2", compare)]);
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "compare");
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        var cells = document.RootElement.GetProperty("result").GetProperty("cells");
+        Assert.Equal(2, cells.GetArrayLength());
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("truncation").ValueKind);
+    }
+
+    [Fact]
     public void Long_warnings_paths_and_big_cells_fit_the_default_budget()
     {
         var warning = new string('w', 100000);

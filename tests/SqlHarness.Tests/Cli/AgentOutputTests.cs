@@ -498,20 +498,29 @@ public sealed class AgentOutputTests
     }
 
     [Fact]
-    public void Query_candidate_ladder_samples_rows_before_dropping_shape()
+    public void Every_report_uses_one_descending_ladder()
     {
-        var query = QueryShapeFixtures.Report(QueryShapeFixtures.Set(3, 3));
-        var counts = new SqlHarnessCountsReport(new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "p"), [], 0);
-
         Assert.Equal(
             [int.MaxValue, 128, 64, 32, 16, 8, 4, 2, 1, 0],
-            AgentOutputProjection.GetCandidateDetailLimits(query, 16384, 512).ToArray());
-        var expected = new List<int> { int.MaxValue };
-        for (var level = AgentOutputProjection.CalculateDetailLimit(16384, 512); level > 0; level = level == 1 ? 0 : Math.Max(1, level / 2))
-            expected.Add(level);
-        expected.Add(0);
-        Assert.Equal(expected, AgentOutputProjection.GetCandidateDetailLimits(counts, 16384, 512).ToArray());
-        Assert.Equal(expected, AgentOutputProjection.GetCandidateDetailLimits(null, 16384, 512).ToArray());
+            AgentOutputProjection.CandidateDetailLimits);
+    }
+
+    [Fact]
+    public void Per_table_reads_order_by_median_then_max_then_name()
+    {
+        var reads = new Dictionary<string, CompareDistribution>(StringComparer.Ordinal)
+        {
+            ["Worktable"] = new(0, 0, 0),
+            ["[dbo].[B]"] = new(28, 28, 28),
+            ["[dbo].[A]"] = new(280, 282, 290),
+            ["[dbo].[C]"] = new(20, 28, 40),
+            ["[dbo].[D]"] = new(2, 280, 290),
+            ["[dbo].[E]"] = new(1, 280, 290),
+        };
+
+        var ordered = AgentOutputProjection.BySignificance(reads).Select(pair => pair.Key).ToArray();
+
+        Assert.Equal(["[dbo].[A]", "[dbo].[D]", "[dbo].[E]", "[dbo].[C]", "[dbo].[B]", "Worktable"], ordered);
     }
 
     [Fact]
@@ -617,7 +626,7 @@ public sealed class AgentOutputTests
         var report = QueryShapeFixtures.Report(QueryShapeFixtures.Set(400, 3, width: 5000, nameLength: 60), QueryShapeFixtures.Set(4, 1000, width: 40));
         var before = JsonSerializer.Serialize(report);
 
-        foreach (var limit in AgentOutputProjection.GetCandidateDetailLimits(report, 4096, 64))
+        foreach (var limit in AgentOutputProjection.CandidateDetailLimits)
         {
             var projected = AgentOutputProjection.Project(report, 64, limit, out _, 4096);
             using var json = JsonDocument.Parse(JsonSerializer.Serialize(projected, new JsonSerializerOptions(JsonSerializerDefaults.Web)));

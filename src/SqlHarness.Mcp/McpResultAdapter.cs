@@ -169,7 +169,7 @@ public static class McpResultAdapter
         var exitCode = (int)outcome.ExitCode;
 
         var report = outcome.Report;
-        foreach (var detailLimit in AgentOutputProjection.GetCandidateDetailLimits(report, maximumBytes, maximumCellCharacters).Distinct())
+        foreach (var detailLimit in AgentOutputProjection.CandidateDetailLimits)
         {
             var projected = AgentOutputProjection.Project(
                 report, maximumCellCharacters, detailLimit, out var omitted, maximumBytes);
