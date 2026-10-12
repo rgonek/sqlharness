@@ -160,16 +160,21 @@ public sealed class McpTokenBudgetTests
         new RegressionDiagnostic(RegressionPolicy.StatusRegressed, 1000m, 2000m, 1000m, 100m),
         new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 40m, 40m, 0m, 0m));
 
-    [Fact]
-    public void Compare_result_carries_the_regression_verdict_within_the_default_budget()
+    private static SqlHarnessCompareReport BuildCompareReport(RegressionReport? regression = null)
     {
         var variant = new CompareVariantReport("variant", new CompareDistribution(1, 2, 3), new CompareDistribution(4, 5, 6),
             new CompareDistribution(7, 8, 9), new Dictionary<string, long>(), [], []);
-        var compare = new SqlHarnessCompareReport(Target, 5, 10, true, variant, variant, "/workspace/compare/artifact-001")
+        return new SqlHarnessCompareReport(Target, 5, 10, true, variant, variant, "/workspace/compare/artifact-001")
         {
             Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Multiset, true, null, 0, 0),
-            Regression = FailVerdict(),
+            Regression = regression,
         };
+    }
+
+    [Fact]
+    public void Compare_result_carries_the_regression_verdict_within_the_default_budget()
+    {
+        var compare = BuildCompareReport(FailVerdict());
 
         var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, compare, null), "sqlharness_compare");
 
@@ -184,13 +189,7 @@ public sealed class McpTokenBudgetTests
     [Fact]
     public void Compare_matrix_result_with_regression_per_cell_fits_the_default_budget()
     {
-        var variant = new CompareVariantReport("variant", new CompareDistribution(1, 2, 3), new CompareDistribution(4, 5, 6),
-            new CompareDistribution(7, 8, 9), new Dictionary<string, long>(), [], []);
-        var compare = new SqlHarnessCompareReport(Target, 5, 10, true, variant, variant, "/workspace/compare/artifact-001")
-        {
-            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Multiset, true, null, 0, 0),
-            Regression = FailVerdict(),
-        };
+        var compare = BuildCompareReport(FailVerdict());
         var matrix = new SqlHarnessCompareMatrixReport("batch", "int",
             Enumerable.Range(0, 100).Select(i => new CompareMatrixCellReport(i, i.ToString(), compare)).ToArray());
 
@@ -206,9 +205,7 @@ public sealed class McpTokenBudgetTests
     [Fact]
     public void Small_compare_matrix_keeps_both_cells_without_truncation()
     {
-        var variant = new CompareVariantReport("variant", new CompareDistribution(1, 2, 3), new CompareDistribution(4, 5, 6),
-            new CompareDistribution(7, 8, 9), new Dictionary<string, long>(), [], []);
-        var compare = new SqlHarnessCompareReport(Target, 5, 10, true, variant, variant, "/workspace/compare/artifact-001");
+        var compare = BuildCompareReport();
         var report = new SqlHarnessCompareMatrixReport("batch", "int",
             [new CompareMatrixCellReport(0, "1", compare), new CompareMatrixCellReport(1, "2", compare)]);
 
