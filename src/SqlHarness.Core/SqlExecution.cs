@@ -152,6 +152,11 @@ internal sealed class SessionMessageBuffer
 internal interface ISqlSessionFactory
 {
     Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct);
+
+    Task<ISqlSession> ConnectAsync(
+        ResolvedTarget target,
+        CancellationToken ct,
+        List<string> knownSecrets) => ConnectAsync(target, ct);
 }
 
 internal sealed class SqlTargetMismatchException(string message) : Exception(message);
@@ -196,11 +201,21 @@ internal sealed class SqlClientSessionFactory : ISqlSessionFactory
     }
 
     public async Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
+        => await ConnectAsync(target, ct, []);
+
+    public async Task<ISqlSession> ConnectAsync(
+        ResolvedTarget target,
+        CancellationToken ct,
+        List<string> knownSecrets)
     {
         ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(knownSecrets);
         string? accessToken = null;
         if (target.Auth.RequiresAccessToken)
+        {
             accessToken = ReadAccessToken(await _azureCli.RunJsonAsync(AccessTokenArguments, ct));
+            knownSecrets.Add(accessToken);
+        }
 
         var connectionString = target.Auth.BuildConnectionString(
             target.Server, target.Database, _connectTimeoutSeconds);

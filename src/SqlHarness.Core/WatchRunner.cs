@@ -70,7 +70,7 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
         SqlHarnessWatchOperation operation,
         ResolvedTarget target,
         IReadOnlyList<SqlHarnessParameter> parameters,
-        IReadOnlyCollection<string> knownSecrets,
+        List<string> knownSecrets,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -92,7 +92,7 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
             ISqlSession connected;
             try
             {
-                connected = await _sessions.ConnectAsync(target, budget.Token);
+                connected = await _sessions.ConnectAsync(target, budget.Token, knownSecrets);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
@@ -168,7 +168,7 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
         SqlHarnessWatchOperation operation,
         ResolvedTarget target,
         IReadOnlyList<SqlHarnessParameter> parameters,
-        IReadOnlyCollection<string> knownSecrets,
+        List<string> knownSecrets,
         WatchNdjsonWriter stream,
         CancellationToken ct)
     {
@@ -191,7 +191,7 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
             ISqlSession connected;
             try
             {
-                connected = await _sessions.ConnectAsync(target, budget.Token);
+                connected = await _sessions.ConnectAsync(target, budget.Token, knownSecrets);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {

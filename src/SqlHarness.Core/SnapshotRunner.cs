@@ -18,7 +18,7 @@ internal sealed class SnapshotRunner(ISqlSessionFactory sessions, ISnapshotStore
         SqlHarnessSnapshotOperation operation,
         ResolvedTarget target,
         IReadOnlyList<SqlHarnessParameter> parameters,
-        IReadOnlyCollection<string> knownSecrets,
+        List<string> knownSecrets,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -73,7 +73,7 @@ internal sealed class SnapshotRunner(ISqlSessionFactory sessions, ISnapshotStore
 
         try
         {
-            await using var session = await _sessions.ConnectAsync(target, ct);
+            await using var session = await _sessions.ConnectAsync(target, ct, knownSecrets);
             phase = OperationPhase.Sql;
 
             var execution = new SqlExecutionCommand(operation.Sql, parameters, operation.TimeoutSeconds);

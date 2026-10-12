@@ -187,7 +187,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             dialect.ValidateParameterReferences(parameters, query.Sql);
 
             phase = OperationPhase.Authentication;
-            await using var session = await _sessionFactory.ConnectAsync(target, ct);
+            await using var session = await _sessionFactory.ConnectAsync(target, ct, knownSecrets);
             phase = OperationPhase.Sql;
 
             var execution = new SqlExecutionCommand(query.Sql, parameters, query.TimeoutSeconds)
@@ -307,6 +307,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 Classification = prepared.Classification,
                 SetupSafety = prepared.SetupSafety,
                 Owner = ArtifactOwner.From(compare.Target, prepared.Target),
+                KnownSecrets = knownSecrets,
             };
             _cellRunner.ComparisonMaximumRows = ComparisonMaximumRows;
 
@@ -413,6 +414,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 Classification = prepared.Classification,
                 SetupSafety = prepared.SetupSafety,
                 Owner = ArtifactOwner.From(operation.Target, prepared.Target),
+                KnownSecrets = knownSecrets,
             };
             _matrixRunner.ComparisonMaximumRows = ComparisonMaximumRows;
             CompareMatrixResult result;
@@ -538,7 +540,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 var boundSets = BindMeasureParameterSets(dialect, measure, parameterSets);
                 _artifactWriter.CheckStorage();
                 phase = OperationPhase.Authentication;
-                await using var multiSession = await _sessionFactory.ConnectAsync(target, ct);
+                await using var multiSession = await _sessionFactory.ConnectAsync(target, ct, knownSecrets);
                 phase = OperationPhase.Sql;
 
                 raw = new CanonicalResultAccumulator();
@@ -572,7 +574,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
             _artifactWriter.CheckStorage();
             phase = OperationPhase.Authentication;
-            await using var session = await _sessionFactory.ConnectAsync(target, ct);
+            await using var session = await _sessionFactory.ConnectAsync(target, ct, knownSecrets);
             phase = OperationPhase.Sql;
 
             raw = new CanonicalResultAccumulator();
@@ -712,7 +714,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             phase = OperationPhase.Authentication;
-            await using var session = await _sessionFactory.ConnectAsync(target, ct); phase = OperationPhase.Sql;
+            await using var session = await _sessionFactory.ConnectAsync(target, ct, knownSecrets); phase = OperationPhase.Sql;
             await using var reader = await session.ExecuteReaderAsync(
                 new SqlExecutionCommand(
                     dialect.SchemaSql,
@@ -976,7 +978,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var target = TargetResolver.Resolve(ping.Target, _loadProfiles());
             OperationSecrets.AddCredentials(knownSecrets, target);
             phase = OperationPhase.Authentication;
-            await using var session = await _sessionFactory.ConnectAsync(target, ct);
+            await using var session = await _sessionFactory.ConnectAsync(target, ct, knownSecrets);
             phase = OperationPhase.Sql;
             var sql = SqlDialects.For(target.Engine).PingSql;
             await using var reader = await session.ExecuteReaderAsync(
@@ -1022,7 +1024,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             phase = OperationPhase.Authentication;
-            await using var session = await _sessionFactory.ConnectAsync(target, ct);
+            await using var session = await _sessionFactory.ConnectAsync(target, ct, knownSecrets);
             phase = OperationPhase.Sql;
 
             ResolvedCountSelection selection;
@@ -1099,7 +1101,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             phase = OperationPhase.Authentication;
-            await using var session = await _sessionFactory.ConnectAsync(target, ct);
+            await using var session = await _sessionFactory.ConnectAsync(target, ct, knownSecrets);
             phase = OperationPhase.Sql;
             await using var reader = await session.ExecuteReaderAsync(
                 new SqlExecutionCommand(
@@ -1152,7 +1154,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var target = TargetResolver.Resolve(operation.Target, _loadProfiles());
             OperationSecrets.AddCredentials(knownSecrets, target);
             phase = OperationPhase.Authentication;
-            await using var session = await _sessionFactory.ConnectAsync(target, ct);
+            await using var session = await _sessionFactory.ConnectAsync(target, ct, knownSecrets);
             phase = OperationPhase.Sql;
             // Query Store exists only on SQL Server. Do not send the batch to Postgres.
             if (target.Engine == SqlEngine.Postgres)
@@ -1214,7 +1216,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var target = TargetResolver.Resolve(operation.Target, _loadProfiles());
             OperationSecrets.AddCredentials(knownSecrets, target);
             phase = OperationPhase.Authentication;
-            await using var session = await _sessionFactory.ConnectAsync(target, ct);
+            await using var session = await _sessionFactory.ConnectAsync(target, ct, knownSecrets);
             phase = OperationPhase.Sql;
             // Missing-index DMVs exist only on SQL Server. Do not send the batch to Postgres.
             if (target.Engine == SqlEngine.Postgres)

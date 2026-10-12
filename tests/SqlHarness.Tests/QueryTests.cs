@@ -190,6 +190,22 @@ public class SqlHarnessQueryTests
     }
 
     [Fact]
+    public async Task Azure_access_token_is_registered_for_exception_redaction()
+    {
+        const string opaqueToken = "opaque-azure-access-token-value";
+        var azure = new FakeAzureCli(opaqueToken);
+        var session = FakeSqlSession.WithIdentity(
+            "test-server",
+            "testdb-a",
+            failure: new InvalidOperationException($"Login failed for token {opaqueToken}"));
+
+        var outcome = await Module(session, azure: azure).ExecuteAsync(Query("SELECT 1"));
+
+        Assert.DoesNotContain(opaqueToken, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Query_consumes_all_rows_but_retains_only_global_display_limit()
     {
         var reader = FakeSqlReader.Rows(["Value"], [1], [2], [3], [4], [5]);
@@ -742,13 +758,17 @@ public class SqlHarnessQueryTests
 
     private sealed class FakeSqlSessionFactory(FakeSqlSession session, FakeAzureCli azure, Exception? connectFailure) : ISqlSessionFactory
     {
-        public async Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
+        public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct) =>
+            ConnectAsync(target, ct, []);
+
+        public async Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct, List<string> knownSecrets)
         {
-            if (connectFailure is not null)
-                throw connectFailure;
             var tokenResponse = await azure.RunJsonAsync(
                 ["account", "get-access-token", "--resource", "https://database.windows.net/"], ct);
             var accessToken = tokenResponse.GetProperty("accessToken").GetString()!;
+            knownSecrets.Add(accessToken);
+            if (connectFailure is not null)
+                throw connectFailure;
             session.FactoryTarget = target;
             session.FactoryAccessToken = accessToken;
             if (!string.Equals(target.Server, session.Identity.ActualServer, StringComparison.OrdinalIgnoreCase) ||
