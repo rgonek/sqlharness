@@ -16,40 +16,45 @@ Odświeżono na `3f425ef`. Preferencja użytkownika: plany ogólne i SQL Server 
 
 020, 026, 030, 041, 042, 043, 044 i 046 mają już DONE w aktualnym indeksie i nie wracają do kolejki. Zachowano istniejące dowody; bram nie uruchamiano ponownie przy odświeżaniu dokumentacji. DONE nie stanowi dodatkowej zgody na push.
 
-### Grupa 1 — podstawowa praca agenta i diagnostyka
+### Grupa 1 — bezpieczeństwo i podstawowa praca agenta
 
 | Kolejność | Plan | Kategoria | Warunek wykonania |
 |---|---|---|---|
-| 1 | [049](049-plan-text-without-literal-masking.md) | MCP: tekst planu bez maskowania literałów | Po revercie 048 (`cadde67`); tylko McpPlanTextPolicy |
-| 2 | [050](050-sqlserver-server-name-informational.md) | SQL Server: nazwa serwera tylko raportowana | Zastępuje 033 |
+| 1 | [052](052-postgres-read-only-transactions.md) | PG (P1): każde niezatwierdzone polecenie w transakcji READ ONLY | Mimo preferencji SQL Server: realna luka, także w MCP; wymaga playgroundu PG |
+| 2 | [049](049-plan-text-without-literal-masking.md) | MCP: tekst planu bez maskowania literałów | Po revercie 048 |
+| 3 | [050](050-sqlserver-server-name-informational.md) | SQL Server i PG: tożsamość endpointu tylko raportowana | Zastępuje 033; usuwa exit 4 poza różnicą bazy |
+| 4 | [053](053-specific-errors-for-the-caller.md) | Konkretne błędy dla wywołującego, param-set z BOM/komentarzami | — |
+| 5 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redakcja = znane sekrety (+ token Azure); uproszczenie strażników MCP | Po 049, najlepiej po 053 |
 
-024, należący do tej grupy, jest już wykonywany w całości; 046 ma DONE.
+024 i 045 są ukończone na swoich gałęziach i czekają na merge; 046 ma DONE.
 
 ### Grupa 2 — SQL Server i automatyzacja optymalizacji
 
 | Kolejność | Plan | Kategoria | Zależności |
 |---|---|---|---|
-| 3 | [045](045-scalar-set-in-benchmark-setup.md) | SQL Server: lokalny SET w setupie | 030 już DONE; sprawdzić aktualny SqlSafety.cs |
-| 4 | [051](051-compare-regression-verdict.md) | Ogólne: werdykt regresji w wyniku compare | Zastępuje 035; progi z 013 |
+| 6 | [051](051-compare-regression-verdict.md) | Ogólne: werdykt regresji w wyniku compare | Zastępuje 035; progi z 013 |
+| [052](052-postgres-read-only-transactions.md) | PostgreSQL runs every non-approved command inside a READ ONLY transaction | P1 | M | PG playground for proof | TODO |
+| [053](053-specific-errors-for-the-caller.md) | Errors name what went wrong when the reader already holds the data | P2 | M | — | TODO |
+| [054](054-simplify-redaction-and-mcp-input-guards.md) | Redaction is exact known-secret replacement; MCP input guards match a same-user threat model | P2 | M | 049 | TODO |
 
 ### Grupa 3 — dostarczanie i utrzymanie
 
 | Kolejność | Plan | Kategoria | Zależności |
 |---|---|---|---|
-| 5 | [028](028-release-pipeline-hardening.md) | Release: wersja, bramka CI, minimalne uprawnienia | Bez SHA-pinów, Dependabota i atestacji (odrzucone 2026-10-11) |
-| 6 | [032 — dokończenie całego planu](032-ci-matrix-and-test-hygiene.md) | CI: Windows/Linux i stabilność testów | Po 028 |
-| 7 | [036](036-live-database-ci-lane.md) | Ogólne: izolowane testy z SQL Server i PG | Oba silniki w jednym wykonaniu |
-| 8 | [029](029-agent-docs-and-capabilities-drift.md) | Ogólne: dokumentacja i capabilities | AGENTS.md już przepisany 2026-10-11; skill, README, capabilities, przykład pg_stat_statements |
-| 9 | [034](034-private-sqlharness-home.md) | Prywatny katalog domowy na Unixie | Zakres zmniejszony do 0700 na home; P3 |
+| 7 | [028](028-release-pipeline-hardening.md) | Release: wersja, bramka CI, minimalne uprawnienia | Bez SHA-pinów, Dependabota i atestacji (odrzucone 2026-10-11) |
+| 8 | [032 — dokończenie całego planu](032-ci-matrix-and-test-hygiene.md) | CI: Windows/Linux i stabilność testów | Po 028 |
+| 9 | [036](036-live-database-ci-lane.md) | Ogólne: izolowane testy z SQL Server i PG | Oba silniki w jednym wykonaniu |
+| 10 | [029](029-agent-docs-and-capabilities-drift.md) | Ogólne: dokumentacja, capabilities, uczciwe ramy bezpieczeństwa, piny testów | Po 053/054; AGENTS.md już przepisany |
+| 11 | [034](034-private-sqlharness-home.md) | Prywatny katalog domowy na Unixie | Zakres zmniejszony do 0700 na home; P3 |
 
 ### Grupa 4 — wyłącznie PostgreSQL, późniejsza kolejka
 
 | Kolejność w grupie | Plan | Kategoria |
 |---|---|---|
-| 1 | [031](031-pg-session-hardening.md) | PG: standard_conforming_strings (krok SCRAM usunięty) |
-| 2 | [047](047-postgres-temp-target-proof.md) | PG: najpierw dowód transakcji READ ONLY, potem uproszczenie reguł TEMP |
+| 1 | [031](031-pg-session-hardening.md) | PG: standard_conforming_strings (krok SCRAM usunięty; nadal potrzebny przy 052) |
+| 2 | [047](047-postgres-temp-target-proof.md) | PG: uproszczenie dowodu TEMP tylko dla setupu, po 052 |
 
-Odrzucone/zastąpione w przeglądzie krytycznym 2026-10-11 (wieczór): 033 → 050, 035 → 051, 014 i 037 (pgstop) odrzucone, 048 wycofany revertem. Szczegóły w sekcji „Critical review 2”.
+Odrzucone/zastąpione w przeglądzie krytycznym 2026-10-11 (wieczór): 033 → 050, 035 → 051, 014 i 037 (pgstop) odrzucone, 048 wycofany revertem. Szczegóły w sekcjach „Critical review 2” i „Rule review 3”.
 
 Po scaleniu cen modeli dostosuj plany do rzeczywistego katalogu MCP i usuniętego gain. Nie przywracaj komendy ani starej liczby narzędzi przez piny, fixture czy historyczne fragmenty dokumentacji. Zachowaj granice sekretów, target scope i budżetów.
 
@@ -175,10 +180,10 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [044](044-mcp-input-root-discovery.md) | MCP callers discover the actual configured file-input roots | P2 | S | — | DONE (merged locally 8a088fb from feat/plan-044-input-root-discovery; commits ba00213, 64c82dc, 2be2f67, 48a85f3, 542173b, f8f1393; branch: `verify: OK` and `verify-linux: OK`; merged main: `verify: OK`, Linux gate on merged main stopped by host memory pressure, not re-run) |
 | [045](045-scalar-set-in-benchmark-setup.md) | Proven same-batch scalar SET works in SQL Server benchmark setup | P2 | S | — | TODO |
 | [046](046-result-nullability-diagnostics.md) | Nullability diagnostics are separate from observed data equivalence; optional strict comparison | P2 | M | — | DONE (merged locally to main fdfc072 from feat/plan-046-nullability (3f425ef..66e70b6: 45bd63a core, 878bcd7 CLI/MCP/journal, 7a4fab1 docs, d4259ab/7500da7/5d9b5de final-review fixes incl. provider-unknown nullability → unavailable, 66e70b6 format); Windows verify.ps1 `verify: OK` (Mcp.Tests 384 passed/4 skipped, SqlHarness.Tests 3678 passed) and Linux verify-linux.ps1 `verify-linux: OK` (388 total/385 passed/3 skipped; 3678 passed) on 66e70b6; git diff --check: 0; snapshots unchanged; no live DB checks; not pushed) |
-| [047](047-postgres-temp-target-proof.md) | Explicit pg_temp write targets and a bounded proof before simplifying TRUNCATE | P2 | M | Live proof required for TRUNCATE relaxation | TODO (revised 2026-10-11: READ ONLY transaction proof first; no breaking pg_temp requirement) |
+| [047](047-postgres-temp-target-proof.md) | Explicit pg_temp write targets and a bounded proof before simplifying TRUNCATE | P2 | M | Live proof required for TRUNCATE relaxation | TODO (narrowed 2026-10-11: setup-only proof simplification after 052) |
 | [048](048-plan-text-credential-column-coverage.md) | MCP plan text masks credential-column literals behind wrappers, PG operators, lists, reversed order and compound names | P2 | S | 042 (DONE) | REVERTED (merged a74b485, reverted cadde67: caller already holds the plan file; follow-up 049) |
 | [049](049-plan-text-without-literal-masking.md) | MCP plan text is returned as supplied, within size bounds; no literal masking | P2 | S | 048 reverted | TODO |
-| [050](050-sqlserver-server-name-informational.md) | SQL Server reports the connected server name instead of blocking on it | P2 | S | — | TODO |
+| [050](050-sqlserver-server-name-informational.md) | SQL Server reports the connected server name instead of blocking on it | P2 | S | — | TODO (extended 2026-10-11 to PostgreSQL endpoint identity) |
 | [051](051-compare-regression-verdict.md) | `compare` reports a latency regression verdict from its own samples | P2 | M | 046 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED, SUPERSEDED or REVERTED (with one-line rationale).
@@ -254,6 +259,22 @@ Question applied to every rule: who is the adversary, and do they have another p
 | SCRAM-only on transports that already expose data | Dropped; recommend `verify-full` | 031 revised |
 | SHA pinning, Dependabot, provenance for a single-maintainer tool | Dropped | 028 revised |
 | `qstop` SQL text kept out of stdout; `snapshot --diff` hides cells | Kept as output-size bounds, no longer described as protection | AGENTS.md rewrite |
+
+## Rule review 3, 2026-10-11 (subagent, read-only)
+
+Framing: in CLI mode the agent shares the shell's environment, so closed profiles, mutation flags and credential hiding prevent accidents; a least-privilege database principal is the enforcement. MCP without a shell is the case where they are a boundary.
+
+| Finding | Decision | Owner |
+|---|---|---|
+| PG "read-only" runs any non-denylisted function (`SELECT app.purge()`, `pg_stat_statements_reset()`), also over MCP | Per-command READ ONLY transaction, not a session default | 052 (P1) |
+| PG endpoint identity: DNS hosts always fail on `require`; reflection into Npgsql internals on `verify-full` | Informational, like SQL Server | 050 extended |
+| Parameter values, param-set paths, profile var names and MCP stderr text hidden from their author | Specific errors; BOM/comments/trailing commas accepted; journal keeps redacted error text by default | 053 |
+| Credential field patterns, input-root reparse/ADS/TOCTOU checks, duplicate-JSON-key guard, constant `az` argument validator | Removed or rationale proven; Azure token added to known secrets | 054 |
+| Verbatim doc pins, "user approval" wording for agent-supplied flags, owner checks described as access control | Structure pins; honest framing | 029 step 5 |
+| `standard_conforming_strings` | Kept: a lexing split could hide `COMMIT;` and escape 052 | 031 |
+| T-SQL server-filesystem denylist incomplete (`fn_dump_dblog`) | Not chased; server permissions are the control (029 framing) | — |
+
+Kept as right: T-SQL classifier and its closed bypass shapes, typed parameter binding, exact `--confirm-database`, MCP budgets and busy gate, dashboard host/cookie/origin/CSP, owner-only journal files, exits 7/8, offline validate.
 
 ## Calendar dates
 

@@ -114,6 +114,12 @@ In `SKILL.md`:
 
 **Verify**: `DocsSyncTests` pass. `pwsh -NoProfile -File scripts/verify.ps1` → `verify: OK`.
 
+### Step 5: Honest framing and pins that do not force duplication (added 2026-10-11 after the rule review)
+
+- **Framing.** In CLI mode the agent shares the shell's environment: it can read the password variable, call `az`, and use `--unsafe-direct`. State in README Safety contract and the skill: "The classifier and the mutation flags prevent accidents. For enforcement, point profiles at a least-privilege (reader) database principal." Fix the comment in `src/SqlHarness.Core/Targets/` that calls the env password "the only operator-held secret the caller cannot already obtain" (true only for MCP without a shell).
+- **Wording.** `--allow-mutation --confirm-database` is a deliberate-act check supplied by the agent, recorded after the user's approval; describe it that way. In request-scope MCP the operator's `--allow-profile` list is the approval for switching profiles; say so where AGENTS/README require a new user request per profile. Describe MCP artifact/snapshot owner checks as namespacing, not access control.
+- **Pins.** Replace verbatim-sentence pins with structure: `ContractsTests` checks that README and the skill link the canonical sections (as the AGENTS.md link test does) and that key commands/options appear; drop long sentences pinned in two documents (`Documentation_covers_measure_parameter_sets`, `Documentation_covers_query_store_top_consumers`). `CapabilitiesCommandTests` asserts structured capability fields instead of the PostgreSQL TEMP-proof paragraph. Remove the Polish phrase pinned in `docs/mcp.md` ("Zakres dowodów") and translate that section to English.
+
 ## Test plan
 
 `DocsSyncTests` covers command discovery and semantic example/option validation, including one invalid-example fixture; updated capabilities pins and the re-pinned byte budget. Verify both Windows/Linux gates after edits.

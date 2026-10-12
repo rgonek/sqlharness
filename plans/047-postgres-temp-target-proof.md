@@ -1,5 +1,7 @@
 # Plan 047: Let PostgreSQL enforce "no persistent writes" before simplifying the temp-name proof
 
+> **Narrowed 2026-10-11:** the READ ONLY transaction for every non-approved command moved to [052](052-postgres-read-only-transactions.md) (P1). This plan now covers only what remains after 052: simplifying the name-based proof for setup DDL (CREATE TEMP, CREATE INDEX, TRUNCATE, DROP) and unqualified temp DML in setup. Execute after 052 and reuse its proof file.
+
 > Read current source before editing. Inspect drift since `cadde67` in the scope below and adapt implementation details within this intent. A changed file alone is not a STOP condition. Revised 2026-10-11: the earlier version required `pg_temp.` qualification for every temp write (a breaking change). This version first tests whether the server can enforce the boundary.
 
 ## Status
@@ -8,7 +10,7 @@
 - Priority: P2 (PostgreSQL queue)
 - Effort: M
 - Risk: MED
-- Depends on: a disposable PostgreSQL (playground `scripts/setup-local-postgres.ps1`) for step 1
+- Depends on: 052 (DONE first); a disposable PostgreSQL for step 1
 - Planned at: `729d88f`; revised at `cadde67`, 2026-10-11
 
 ## Why this matters

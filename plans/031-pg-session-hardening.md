@@ -1,5 +1,7 @@
 # Plan 031: PostgreSQL sessions refuse to run classified text under non-standard string lexing, and recommend authenticated transports
 
+> **Note 2026-10-11:** keep Step 1 even after [052](052-postgres-read-only-transactions.md). A string the parser and server split differently could hide `COMMIT;` followed by a write, which would end 052's read-only transaction. The check is cheap and fails closed.
+
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
