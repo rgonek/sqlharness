@@ -78,6 +78,29 @@ public sealed class CapabilitiesCommandTests
     }
 
     [Fact]
+    public void Capabilities_lists_mcp_dashboard_and_sized_parameter_types()
+    {
+        var caps = SqlHarnessCapabilitiesProvider.Get();
+        Assert.Contains(caps.Commands, c => c.Name == "mcp" && c.Description.Contains("MCP client", StringComparison.Ordinal));
+        Assert.Contains(caps.Commands, c => c.Name == "dashboard" && c.Description.StartsWith("Operator tool", StringComparison.Ordinal));
+        foreach (var engine in caps.Engines)
+            Assert.All(new[] { "nvarchar(n)", "varchar(n)", "char(n)", "nchar(n)", "varbinary(n)", "binary(n)" }, t => Assert.Contains(t, engine.ParameterTypes));
+    }
+
+    [Fact]
+    public void Capabilities_states_output_modes_per_command()
+    {
+        var byCommand = SqlHarnessCapabilitiesProvider.Get().OutputModesByCommand;
+        var modes = byCommand.SelectMany(pair => pair.Value.Split(", ").Select(command => (command, mode: pair.Key))).ToDictionary(x => x.command, x => x.mode, StringComparer.Ordinal);
+        Assert.Equal("text|json|json-summary|agent", modes["measure"]);
+        Assert.Equal("text|json|json-summary|agent", modes["compare"]);
+        Assert.Contains("ndjson", modes["watch"], StringComparison.Ordinal);
+        Assert.DoesNotContain("json-summary", modes["query"], StringComparison.Ordinal);
+        Assert.DoesNotContain("ndjson", modes["query"], StringComparison.Ordinal);
+        Assert.DoesNotContain("mcp", modes.Keys);
+    }
+
+    [Fact]
     public void Watch_capability_description_makes_no_read_only_claim()
     {
         // 009/final-fix (closes the final-review minor): the capabilities
