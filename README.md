@@ -362,6 +362,13 @@ clone never lives under `/mnt/d`). Neither gate replaces CI, and CI itself curre
 only ubuntu-latest with an unfiltered test step. A change is not done until both gates are green.
 The .NET SDK version comes from `global.json` (currently `10.0.303`, `rollForward: latestPatch`). Re-release after .NET runtime security patches.
 
+`just publish` tests, builds a self-contained binary and installs it where `sqlharness` is on PATH
+(override with `SQLHARNESS_INSTALL_DIR`). On Windows, when the system host cannot resolve the
+pinned SDK, it tries the user-local installation under `%LOCALAPPDATA%/Microsoft/dotnet`.
+The publishing process uses `%SystemDrive%/t` for Windows test temporary files so bounded-path
+tests do not depend on the length of the user's normal temp directory. These environment changes
+apply only to the publishing process; no terminal configuration is needed.
+
 ```powershell
 pwsh ./scripts/verify.ps1
 pwsh ./scripts/verify-linux.ps1

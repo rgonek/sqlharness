@@ -5,6 +5,10 @@ description: Use when a coding agent needs safe, repeatable SQL Server, Azure SQ
 
 # SQLHarness
 
+For local development, `just publish` runs tests and installs the self-contained CLI. On Windows
+it falls back to the SDK under `%LOCALAPPDATA%/Microsoft/dotnet` if the PATH host cannot resolve
+`global.json`, and uses `%SystemDrive%/t` for test temporary files within the publishing process.
+
 SQLHarness is a repeatable SQL Server and PostgreSQL optimization harness: it measures, compares, and proves SQL changes while keeping target resolution and SQL execution guarded. Engine lives on the locked profile (`"engine": "postgres"` or omitted for SQL Server); `--engine` is valid only with `--unsafe-direct`.
 
 ## Readiness and scope
