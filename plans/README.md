@@ -31,7 +31,7 @@ Odświeżono po weryfikacji Plan 049 na `58fab51`. Preferencja użytkownika: pla
 
 | Kolejność | Plan | Kategoria | Zależności |
 |---|---|---|---|
-| 5 | [051](051-compare-regression-verdict.md) | Ogólne: werdykt regresji w wyniku compare | Zastępuje 035; progi z 013. DONE (branch `feat/plan-051-regression-verdict`; werdykt `regression` w compare, bramki jeszcze nie uruchomione) |
+| 5 | [051](051-compare-regression-verdict.md) | Ogólne: werdykt regresji w wyniku compare | Zastępuje 035; progi z 013. DONE (branch `feat/plan-051-regression-verdict`; werdykt `regression` w compare, verify.ps1 zielone, verify-linux pominięte decyzją użytkownika) |
 | [052](052-postgres-read-only-transactions.md) | PostgreSQL runs every non-approved command inside a READ ONLY transaction | P1 | M | PG playground for proof | TODO |
 | [053](053-specific-errors-for-the-caller.md) | Errors name what went wrong when the reader already holds the data | P2 | M | — | TODO |
 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redaction is exact known-secret replacement; MCP input guards match a same-user threat model | P2 | M | 049 (DONE) | TODO |
@@ -185,7 +185,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [048](048-plan-text-credential-column-coverage.md) | MCP plan text masks credential-column literals behind wrappers, PG operators, lists, reversed order and compound names | P2 | S | 042 (DONE) | REVERTED (merged a74b485, reverted cadde67: caller already holds the plan file; follow-up 049) |
 | [049](049-plan-text-without-literal-masking.md) | MCP plan text is returned as supplied, within size bounds; no literal masking | P2 | S | 048 reverted | DONE (feature branch `feat/plan-049-plan-text`; commits `932d4ad`, `c12aeb4`, `58fab51`; Windows `verify: OK` Core 3722, MCP 383 passed/4 skipped; Linux `verify-linux: OK` Core 3722, MCP 384 passed/3 skipped on WSL ext4; task, whole-branch, fixture and formatting reviews clean; no live DB checks; not merged) |
 | [050](050-sqlserver-server-name-informational.md) | SQL Server and PostgreSQL report connected server identity without blocking | P2 | M | — | DONE (commits e6b7d01, 1ecc7d6, e87882a, 7f6f1d0; locally merged in 761f2ab; post-merge Windows `verify: OK` Core 3713, MCP 383/4 skipped; Linux `verify-linux: OK` Core 3713, MCP 384/3 skipped; no push/live DB proof) |
-| [051](051-compare-regression-verdict.md) | `compare` reports a latency regression verdict from its own samples | P2 | M | 046 | DONE (branch `feat/plan-051-regression-verdict`; `regression` verdict in compare JSON, summary, matrix cells, MCP and CLI text; supersedes 035 and the offline-reader part of 013; both gates pending at this entry) |
+| [051](051-compare-regression-verdict.md) | `compare` reports a latency regression verdict from its own samples | P2 | M | 046 | DONE (branch `feat/plan-051-regression-verdict`; `regression` verdict in compare JSON, summary, matrix cells, MCP and CLI text; supersedes 035 and the offline-reader part of 013; verify.ps1 green at f21d4f0; verify-linux.ps1 skipped by user decision 2026-10-12) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED, SUPERSEDED or REVERTED (with one-line rationale).
 
