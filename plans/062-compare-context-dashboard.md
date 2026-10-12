@@ -4,7 +4,7 @@
 
 **Goal:** Pokazać operatorowi historię optymalizacji SQL w sesji i dowody pojedynczej próby compare, przy minimalnym kontekście od agenta.
 
-**Architecture:** Jedna globalna polityka steruje wymaganiem kontekstu CLI i zamrożonym kontraktem MCP. Core przenosi parę subject/scope do journala. Dashboard buduje read model wersji i prób z zachowanej historii; UI pokazuje SQL → zakres → próby oraz porównanie obu stron bez nowego klasyfikatora regresji.
+**Architecture:** Jedna globalna polityka steruje wymaganiem kontekstu CLI i zamrożonym kontraktem MCP. Core przenosi parę subject/scope do journala. W MCP request-scoped dotychczasowy obiekt `scope` wskazujący profil/vars zostaje przemianowany na `target` we wszystkich narzędziach zależnych od celu; tekstowe `scope` oznacza wyłącznie fragment SQL w `compare`. Dashboard buduje read model wersji i prób z zachowanej historii; UI pokazuje SQL → zakres → próby oraz porównanie obu stron bez nowego klasyfikatora regresji.
 
 **Tech Stack:** C#/.NET, System.CommandLine, ModelContextProtocol SDK, SQLite, React, TypeScript, TanStack Query/Router, xUnit, Vitest.
 
@@ -22,8 +22,10 @@
 
 - Kontrakt i wartości normatywne są w Spec; obowiązują wszystkie zadania.
 - `compare.requireContext=true` domyślnie; nie uzależniać go od `journal.enabled`.
-- MCP off: brak obu properties i brak akceptowania ukrytych argumentów. CLI off: brak obu lub poprawna pełna para.
+- MCP compare off (`compare.requireContext=false`): brak properties `subject` i tekstowego `scope`, bez akceptowania ukrytych pól; w trybie request-scoped obiekt `target` pozostaje wymagany. CLI off: brak obu pól kontekstu lub poprawna pełna para.
+- Breaking change MCP: w **każdym** narzędziu zależnym od bazy w trybie request-scoped publiczny obiekt `scope` (`profile`/`vars`) zmienia nazwę na `target`. Starej nazwy nie przyjmować jako aliasu. W trybie fixed nie ma argumentu `target`. W `compare` nazwa `scope` jest zarezerwowana dla tekstowego zakresu optymalizacji; inne narzędzia nie przyjmują tego pola. Nie zmieniać nazw opcji CLI służących do wyboru bazy.
 - Granica wersji: `(sessionId, subject, scope)`, hash obu stron, pełna zachowana historia. Warunki pomiaru należą do próby, nie do wersji SQL.
+- Tożsamość sesji nie jest zmieniana w 062: aktualny klucz procesu MCP / bieżące reguły CLI wyznaczają `sessionId`. Nie dodawać nowej identyfikacji rozmów agenta ani automatycznego scalania sesji.
 - Nie traktować różnych baz, vars, setupów, parametrów lub cache jako jednego porównywalnego szeregu pomiarowego. UI nie rysuje wspólnego trendu ani rankingu wersji na takich danych.
 - Brak live DB i dostępu do dashboardu operatora. Weryfikacja izolowana.
 - Done wymaga obu bramek, uruchomionych kolejno, oraz aktualizacji README, skills/sqlharness/SKILL.md, Capabilities.cs i docs/mcp.md.
@@ -35,6 +37,7 @@
 3. Ponad 500 operacji i retencja: jawne stronicowanie, kompletność i brak numeracji wyliczanej z pojedynczej strony (T4/T5).
 4. Matrix: jedna regresja lub różne wyniki wśród popraw nie giną w zielonym agregacie (T3/T6).
 5. Najnowszy whole zakończony błędem oraz starszy zielony compare: nagłówek pokazuje błąd i właściwą parę, bez deklaracji sukcesu (T5).
+6. W request-scoped MCP argument `target` (obiekt połączenia) nie koliduje z `scope` (tekst zakresu SQL w compare); wszystkie narzędzia DB odrzucają stary obiekt `scope` (T2).
 
 ## Mapa plików
 
@@ -58,12 +61,13 @@ Nowe małe moduły: `Core/CompareContext.cs`, `Dashboard/CompareHistoryBuilder.c
 
 **Files:** MCP katalog/handlers/mapper/host z mapy; testy `McpToolSchemaTests.cs`, `McpRequestScopeTests.cs`, `McpMappingTests.cs`, `McpStartupTests.cs`.
 
-**Interfaces:** host przekazuje niemutowalny snapshot `RequireContext` do rejestracji katalogu i handlerów. Mapper przypisuje `Context` z T1. Schema i runtime używają tej samej polityki; nie stosować mutowanego globalnego cache narzędzi SDK.
+**Interfaces:** host przekazuje niemutowalny snapshot `RequireContext` do rejestracji katalogu i handlerów. W każdym narzędziu target-dependent request-scoped zmień publiczną nazwę obiektu wyboru celu `scope` na `target` (jego struktura `profile`/`vars` zostaje bez zmian). Mapper przypisuje `Context` z T1 dla `compare`; wewnętrzne typy `McpScope`/`McpRequestScopeArgument` mogą zachować nazwy. Schema i runtime używają tej samej polityki; nie stosować mutowanego globalnego cache narzędzi SDK.
 
-- [ ] RED: fixed i request scope, true → subject/scope są properties i required; false → nie ma ich w properties ani required. Off + przesłane ukryte pola → odrzucenie. On + brak/pusta/połowiczna para → błąd przed DB.
+- [ ] RED: `compare` w fixed MCP: true → tekstowe `subject`/`scope` są properties i required, bez `target`; false → brak obu properties. `compare` w request-scoped MCP: zawsze wymagany obiekt `target`, a tekstowe `subject`/`scope` tylko przy true. Off + przesłane ukryte pola kontekstu → odrzucenie. On + brak/pusta/połowiczna para → błąd przed DB.
+- [ ] RED: wszystkie narzędzia zależne od celu w request-scoped przyjmują `target: {profile, vars}` i odrzucają dotychczasowy obiekt `scope` (bez aliasu), także gdy kontekst compare jest wyłączony. Dla `compare` przy true obiekt przesłany jako tekstowe `scope` jest błędnym typem. Dla innych narzędzi tekstowe `scope` jest nieznanym argumentem. Zweryfikuj preflight bez DB, allowlist unknown-arguments oraz `tools/list`/`tools/call` dla fixed i request-scoped.
 - [ ] RED: dwie izolowane instancje o przeciwnych ustawieniach; zmiana pliku config nie zmienia działającego kontraktu, nowy host widzi zmianę.
 - [ ] Uruchom `dotnet test tests/SqlHarness.Mcp.Tests --filter "FullyQualifiedName~McpToolSchemaTests|FullyQualifiedName~McpRequestScopeTests|FullyQualifiedName~McpMappingTests|FullyQualifiedName~McpStartupTests"`.
-- [ ] Implementuj przy użyciu aktualnych możliwości rejestracji SDK, z osobnym schematem instancji. Zostaw spójne allowlist unknown-arguments i budżety. Nie wprowadzaj restartu serwera przez agenta.
+- [ ] Implementuj przy użyciu aktualnych możliwości rejestracji SDK, z osobnym schematem instancji. Przejrzyj oba katalogi/handlery MCP i każdą ścieżkę parsera/mappera targetu — nie zmieniaj wyłącznie `compare`. Zostaw spójne allowlist unknown-arguments i budżety. Nie wprowadzaj restartu serwera przez agenta.
 - [ ] GREEN filtra, test rzeczywistego tools/list i tools/call przez izolowany proces stdio bez DB. Zmierz różnicę rozmiaru schematu on/off; nie pinuj liczby tokenów do konkretnego modelu.
 - [ ] Commit po review.
 
@@ -116,7 +120,7 @@ Nowe małe moduły: `Core/CompareContext.cs`, `Dashboard/CompareHistoryBuilder.c
 
 **Files:** README.md, docs/mcp.md, skills/sqlharness/SKILL.md, Capabilities.cs, plans/README.md; tests capabilities/schema dopasowane do nowego kontraktu.
 
-- [ ] Zaktualizuj wszystkie przykłady CLI/MCP compare o subject/scope; opisz globalne ustawienie, ukrywanie pól off, restart MCP, `whole`, stabilne nazwy, wersje po hashach i ograniczenia retained history. Nie dodawaj kontekstu do wywołań innych narzędzi.
+- [ ] Zaktualizuj wszystkie przykłady CLI/MCP compare o `subject`/`scope`; w **każdym** przykładzie request-scoped MCP i opisie schematu zmień obiekt wyboru bazy `scope` na `target`. Opisz breaking change bez aliasu, globalne ustawienie, ukrywanie tekstowych pól kontekstu off (lecz nie `target`), restart MCP, `whole`, stabilne nazwy, wersje po hashach i ograniczenia retained history. Nie dodawaj kontekstu SQL do wywołań innych narzędzi.
 - [ ] Capabilities raportuje aktywną politykę kontekstu i semantykę wersji zgodnie z rzeczywistym kontraktem, bez sekretów i nowych instrukcji zbędnych w trybie off.
 - [ ] Przejrzyj cały diff względem Spec: cały plan, bez mechanizmu wyboru wersji, bez procentów składanych, bez zmian safety. `git diff --check` musi zwrócić 0.
 - [ ] Uruchom foreground `pwsh ./scripts/verify.ps1`, a po zakończeniu `pwsh ./scripts/verify-linux.ps1` (WSL ext4; provision przez istniejący setup jeśli wymagany). Zapisz exit code, literal `VERIFICATION PASS` i sprawdź case-sensitive `FAILED` dla obu. Nie uznawaj częściowego logu za PASS.
@@ -124,4 +128,4 @@ Nowe małe moduły: `Core/CompareContext.cs`, `Dashboard/CompareHistoryBuilder.c
 
 ## Kryterium odbioru
 
-Operator widzi prawidłową historię kilku SQL i fragmentów w jednej sesji, rozpoznaje powrót do poprzedniej wersji, otwiera compare z dowodami obu stron i nie otrzymuje fałszywej deklaracji końcowego sukcesu. Tryb off usuwa tokenowy koszt dwóch pól z kontraktu MCP. Obydwie bramki są zielone, dokumentacja odpowiada zachowaniu.
+Operator widzi prawidłową historię kilku SQL i fragmentów w jednej sesji, rozpoznaje powrót do poprzedniej wersji, otwiera compare z dowodami obu stron i nie otrzymuje fałszywej deklaracji końcowego sukcesu. Tryb off usuwa tokenowy koszt dwóch pól kontekstu compare z kontraktu MCP, pozostawiając request-scoped `target`. Wszystkie narzędzia DB w request-scoped używają już `target` zamiast starego obiektu `scope`; obie bramki są zielone, dokumentacja odpowiada zachowaniu.

@@ -8,18 +8,39 @@ Operator ma zobaczyć przebieg optymalizacji SQL przez agenta: kolejne próby, t
 
 ## Kontekst compare
 
-- Dwa pola: `subject` identyfikuje optymalizowany SQL, `scope` identyfikuje testowany fragment. Dla całości agent używa dokładnie `whole`.
+- Dwa pola kontekstu `compare`: `subject` identyfikuje optymalizowany SQL, tekstowe `scope` identyfikuje testowany fragment. Dla całości agent używa dokładnie `whole`.
 - Przykład: `{ "subject": "orders-report", "scope": "history" }`. Kontekst nie zawiera opisów SQL, wersji ani uzasadnień.
 - Globalne ustawienie `compare.requireContext`, domyślnie `true`, niezależne od profilu i ustawienia journala.
 - Przy `true`: oba pola są widoczne i wymagane w schemacie MCP oraz wymagane jako `--subject` i `--scope` w CLI. Brak poprawnej pary jest błędem walidacji przed połączeniem z DB.
-- Przy `false`: oba pola są całkowicie usunięte ze schematu MCP i nie są akceptowane jako ukryte argumenty. W CLI są opcjonalne; jeśli użytkownik poda jedno, musi podać oba.
+- Przy `false`: oba pola kontekstu `compare` (`subject` i tekstowe `scope`) są całkowicie usunięte ze schematu MCP i nie są akceptowane jako ukryte argumenty. Nie dotyczy to request-scoped `target`, który nadal służy do wyboru bazy. W CLI pola kontekstu są opcjonalne; jeśli użytkownik poda jedno, musi podać oba.
 - MCP zamraża ustawienie na czas procesu. Zmiana obowiązuje po restarcie serwera i ponownym połączeniu klienta; CLI odczytuje je na początku wywołania.
 - Nie ma okresu kompatybilności dla wywołań beta. Starsze rekordy journala pozostają czytelne bez kontekstu.
 - Etykiety: 1..64 znaków ASCII, wzorzec `^[a-z0-9][a-z0-9._-]{0,63}$`, rozróżnianie ordinal; nie zmieniać ani nie przycinać wejścia. Agent używa krótkich etykiet bez danych biznesowych i sekretów oraz konsekwentnie ponawia istniejące nazwy.
 
+## Rozdzielenie `target` i `scope` w MCP (breaking change)
+
+- We **wszystkich narzędziach zależnych od celu bazy w trybie request-scoped MCP** dotychczasowy obiekt wejściowy `scope: {profile, vars}` zmienia nazwę na `target: {profile, vars}`. To świadomie niekompatybilna zmiana API, bez aliasu starego obiektu `scope`. Nie dotyczy wewnętrznych nazw typów ani opcji CLI wyboru bazy.
+- W `compare` argument `scope` oznacza **wyłącznie tekstowy fragment optymalizacji SQL** (`whole`, `aggregation` itd.); występuje, gdy `compare.requireContext=true`. `subject` również dotyczy tylko `compare`.
+- W trybie request-scoped `compare` przy włączonym kontekście wymagane są osobno `target` (obiekt), `subject` (string) i `scope` (string). W trybie fixed MCP nie ma argumentu `target`, bo cel wybiera konfiguracja serwera.
+- Gdy `compare.requireContext=false`, w schemacie `compare` nie występują `subject` i `scope`; request-scoped `target` nadal występuje. Pozostałe narzędzia nie przyjmują tekstowego `scope` ani `subject` w żadnym trybie.
+- Nie przyjmować starego obiektu `scope` w request-scoped: dla `compare` z kontekstem on jest błędnym typem zakresu SQL; bez kontekstu lub w innych narzędziach jest nieznanym argumentem. Oba przypadki muszą kończyć się walidacją przed połączeniem z DB.
+
+Przykładowe `compare` w request-scoped MCP przy `compare.requireContext=true`:
+
+```json
+{
+  "target": { "profile": "staging", "vars": {} },
+  "subject": "orders-report",
+  "scope": "aggregation",
+  "baseline": { "sql": "SELECT ..." },
+  "candidate": { "sql": "SELECT ..." }
+}
+```
+
 ## Sesja i wersje
 
 - Układ: sesja → `subject` → `scope` → chronologiczne próby compare. Inne operacje pozostają w zakładce Wszystkie operacje. Metadane sesji są w zwijanym panelu.
+- Plan 062 nie zmienia granic sesji: używa istniejącego `sessionId` (aktualny klucz procesu MCP albo istniejąca identyfikacja sesji CLI), bez wprowadzania nowego identyfikatora rozmowy agenta. Jeśli cykl życia procesu MCP nie odpowiada cyklowi życia rozmowy, dashboard nadal pokazuje granicę aktualnej sesji journala.
 - W obrębie `(sessionId, subject, scope)` każda nowa treść SQL otrzymuje `v0`, `v1`, itd. według pierwszego wystąpienia hasha; baseline jest pierwszy przy remisie w jednej próbie. Ponownie użyty hash zachowuje numer.
 - Baseline/candidate to role w próbie. `v1` może występować po obu stronach. Numer nie oznacza pochodzenia wersji ani wyboru przez agenta.
 - Brak hasha oznacza nieznaną wersję. Nie wyliczać tożsamości po podobieństwie SQL, nazwie pliku ani kolejności operacji.
@@ -49,4 +70,4 @@ Operator ma zobaczyć przebieg optymalizacji SQL przez agenta: kolejne próby, t
 
 ## Granice
 
-Brak zmian zasad połączeń, scope DB, sekretów, persistent-mutation classifier i budżetów wyjścia. Nie uruchamiać dashboardu operatora ani jego API podczas pracy agenta: weryfikować przez izolowane fixture/test host i UI. Brak live DB, zmiany konfiguracji użytkownika, instalacji, publikacji czy push w ramach implementacji tego planu. Czytelne SQL i dane nie są zastępowane maskowaniem; obowiązuje obecna polityka przechowywania i credential filtering.
+Brak zmian zasad połączeń i zakresu uprawnień DB (nowa nazwa wejściowego `target` nie zmienia semantyki wyboru bazy), sekretów, persistent-mutation classifier i budżetów wyjścia. Nie uruchamiać dashboardu operatora ani jego API podczas pracy agenta: weryfikować przez izolowane fixture/test host i UI. Brak live DB, zmiany konfiguracji użytkownika, instalacji, publikacji czy push w ramach implementacji tego planu. Czytelne SQL i dane nie są zastępowane maskowaniem; obowiązuje obecna polityka przechowywania i credential filtering.
