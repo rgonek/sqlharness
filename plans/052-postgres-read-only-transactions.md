@@ -4,7 +4,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: BLOCKED (step 1 requires an authorized disposable PostgreSQL target)
 - Priority: **P1** (security)
 - Effort: M
 - Risk: MED
@@ -39,6 +39,7 @@ A name denylist can never be complete. PostgreSQL itself enforces "no writes to 
    - `set_config('default_transaction_read_only','off',false)` inside the transaction, then a write in the next per-command transaction → still rejected;
    - temp-table `INSERT`/`UPDATE`/`DELETE` → allowed; `EXPLAIN ANALYZE` of both;
    - timing overhead of the wrapper on a trivial `SELECT 1` (100 repetitions) to confirm measurements are not distorted.
+   - Prepared runner: `pwsh ./scripts/prove-postgres-readonly.ps1 -ConfirmDisposableDatabase <exact-database>`. It requires `SQLHARNESS_PG_INTEGRATION_CONNECTION_STRING`, creates only a uniquely named schema plus a session-local temp table, and refuses to overwrite a completed proof report. Current report is explicitly pending because no disposable target is authorized or available.
 2. Implement the per-command wrapper in the PostgreSQL session for every non-mutation path. Keep the approved-mutation path read-write and unchanged.
 3. Map `25006` to the safety exit with the message above. Tests with a fake session for the mapping; integration tests (`Category=PostgresIntegration`) for steps 1's cases.
 4. Shrink the PostgreSQL function denylist to effects a transaction cannot contain: backend terminate/cancel, `pg_reload_conf`, advisory locks, `pg_sleep`, `dblink*`, server file reads, `set_config`. Keep the external-access checks. Record in the classifier comment that persistent writes are enforced by the server, and that a least-privilege role is the operator's control for the rest.
@@ -63,3 +64,5 @@ A name denylist can never be complete. PostgreSQL itself enforces "no writes to 
 
 - No authorized disposable PostgreSQL is available. Stop after writing the proof script.
 - A temp-table write is rejected inside `READ ONLY` on the playground version. Report; the design then needs setup-style handling for temp DML.
+
+Current step-1 state: proof harness prepared, but no database proof run. Do not treat the pending report as evidence or proceed to runtime implementation until the disposable PostgreSQL prerequisite is available and authorized.
