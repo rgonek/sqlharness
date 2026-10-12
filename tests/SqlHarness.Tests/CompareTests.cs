@@ -914,6 +914,9 @@ public class SqlHarnessCompareTests
         // When set, benchmark commands emit these messages instead of English STATISTICS text.
         public IReadOnlyList<string>? StatisticsMessages { get; set; }
 
+        // When set, candidate benchmark commands emit these messages instead of StatisticsMessages.
+        public IReadOnlyList<string>? CandidateStatisticsMessages { get; set; }
+
         // Simulates SqlClient reporting no AllowDBNull for result columns.
         public bool UnknownNullability { get; set; }
 
@@ -1013,9 +1016,10 @@ public class SqlHarnessCompareTests
                 return Task.FromException<ISqlReader>(new TimeoutException("measured run failed"));
             var measured = Math.Max(count - 1, 1);
             Labels.Add(count == 1 ? $"warmup-{(baseline ? "A" : "B")}" : baseline ? "A" : "B");
-            if (StatisticsMessages is not null)
+            var overrideMessages = baseline ? StatisticsMessages : CandidateStatisticsMessages ?? StatisticsMessages;
+            if (overrideMessages is not null)
             {
-                foreach (var statisticsMessage in StatisticsMessages)
+                foreach (var statisticsMessage in overrideMessages)
                     _messages.Add(statisticsMessage);
             }
             else

@@ -152,6 +152,57 @@ public sealed class McpTokenBudgetTests
         Assert.True(document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
     }
 
+    private static RegressionReport FailVerdict() => new(
+        RegressionPolicy.Fail,
+        [RegressionPolicy.ReasonElapsedRegressed],
+        RegressionPolicy.PolicyVersion,
+        new RegressionDiagnostic(RegressionPolicy.StatusRegressed, 100m, 1000m, 900m, 900m),
+        new RegressionDiagnostic(RegressionPolicy.StatusRegressed, 1000m, 2000m, 1000m, 100m),
+        new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 40m, 40m, 0m, 0m));
+
+    [Fact]
+    public void Compare_result_carries_the_regression_verdict_within_the_default_budget()
+    {
+        var variant = new CompareVariantReport("variant", new CompareDistribution(1, 2, 3), new CompareDistribution(4, 5, 6),
+            new CompareDistribution(7, 8, 9), new Dictionary<string, long>(), [], []);
+        var compare = new SqlHarnessCompareReport(Target, 5, 10, true, variant, variant, "/workspace/compare/artifact-001")
+        {
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Multiset, true, null, 0, 0),
+            Regression = FailVerdict(),
+        };
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, compare, null), "sqlharness_compare");
+
+        var bytes = WireBytes(result, (int)McpLimits.CallToolResultBudgetBytes);
+        _output.WriteLine($"compare result with regression: {bytes} bytes of {McpLimits.CallToolResultBudgetBytes}");
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        var regression = document.RootElement.GetProperty("result").GetProperty("regression");
+        Assert.Equal("fail", regression.GetProperty("verdict").GetString());
+        Assert.Equal(900m, regression.GetProperty("elapsed").GetProperty("delta").GetDecimal());
+    }
+
+    [Fact]
+    public void Compare_matrix_result_with_regression_per_cell_fits_the_default_budget()
+    {
+        var variant = new CompareVariantReport("variant", new CompareDistribution(1, 2, 3), new CompareDistribution(4, 5, 6),
+            new CompareDistribution(7, 8, 9), new Dictionary<string, long>(), [], []);
+        var compare = new SqlHarnessCompareReport(Target, 5, 10, true, variant, variant, "/workspace/compare/artifact-001")
+        {
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Multiset, true, null, 0, 0),
+            Regression = FailVerdict(),
+        };
+        var matrix = new SqlHarnessCompareMatrixReport("batch", "int",
+            Enumerable.Range(0, 100).Select(i => new CompareMatrixCellReport(i, i.ToString(), compare)).ToArray());
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, matrix, null), "sqlharness_compare");
+
+        var bytes = WireBytes(result, (int)McpLimits.CallToolResultBudgetBytes);
+        _output.WriteLine($"compare matrix result with regression: {bytes} bytes of {McpLimits.CallToolResultBudgetBytes}");
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        var first = document.RootElement.GetProperty("result").GetProperty("cells")[0];
+        Assert.Equal("fail", first.GetProperty("compare").GetProperty("regression").GetProperty("verdict").GetString());
+    }
+
     [Fact]
     public void Long_warnings_paths_and_big_cells_fit_the_default_budget()
     {

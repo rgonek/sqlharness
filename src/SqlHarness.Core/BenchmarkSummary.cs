@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace SqlHarness.Core;
 
 public sealed record BenchmarkVariantSummary(
@@ -7,7 +9,7 @@ public sealed record BenchmarkVariantSummary(
     IReadOnlyDictionary<string, CompareDistribution> LogicalReadsByTable,
     IReadOnlyList<string> Warnings)
 {
-    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public BenchmarkMetricReport? MetricReport { get; init; }
 }
 
@@ -29,7 +31,12 @@ public sealed record CompareBenchmarkSummary(
     BenchmarkVariantSummary Baseline,
     BenchmarkVariantSummary Candidate,
     IReadOnlyList<NoteworthyOperatorSummary> NoteworthyOperators,
-    string? ArtifactDirectory);
+    string? ArtifactDirectory)
+{
+    /// <summary>Absent when the report predates the regression verdict.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RegressionReport? Regression { get; init; }
+}
 
 public sealed record MeasureBenchmarkSummary(
     SqlHarnessTargetIdentityReport Target,
@@ -51,7 +58,7 @@ public sealed record MeasureParameterSetSummary(
     long MedianLogicalReads,
     IReadOnlyList<NoteworthyOperatorSummary> NoteworthyOperators)
 {
-    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public BenchmarkMetricReport? MetricReport { get; init; }
 }
 
@@ -99,7 +106,10 @@ public static class BenchmarkSummaryProjector
             ProjectVariant(report.Baseline),
             ProjectVariant(report.Candidate),
             SelectCompareNoteworthy(report.Baseline.Operators, report.Candidate.Operators),
-            report.ArtifactDirectory);
+            report.ArtifactDirectory)
+        {
+            Regression = report.Regression,
+        };
     }
 
     public static MeasureBenchmarkSummary Project(SqlHarnessMeasureReport report)

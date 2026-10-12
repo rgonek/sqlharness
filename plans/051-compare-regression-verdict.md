@@ -4,7 +4,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: DONE (branch `feat/plan-051-regression-verdict`; verify.ps1 green at f21d4f0; verify-linux.ps1 skipped by user decision 2026-10-12)
 - Priority: P2
 - Effort: M
 - Risk: LOW
@@ -61,10 +61,11 @@ Out of scope: a `regress` command, an MCP tool, any change to exit codes, readin
 
 ## Done criteria
 
-- [ ] Every rule above has a test row.
-- [ ] `compare --json-summary` and MCP compare carry the verdict; matrix cells each carry their own.
-- [ ] No new command, MCP tool or exit code.
-- [ ] Plans 035 and 013 marked superseded in `plans/README.md`; both gates pass.
+- [x] Every rule above has a test row.
+- [x] `compare --json-summary` and MCP compare carry the verdict; matrix cells each carry their own.
+- [x] No new command, MCP tool or exit code.
+- [x] Plans 035 and 013 marked superseded in `plans/README.md`.
+- [x] Windows gate passes (`verify.ps1`: 3773 + 385 tests, format OK). Linux gate (`verify-linux.ps1`) skipped by user decision.
 
 ## STOP conditions
 
