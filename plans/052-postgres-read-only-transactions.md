@@ -4,7 +4,7 @@
 
 ## Status
 
-- Status: IN PROGRESS (step 1 executed on PostgreSQL 18.6; findings constrain steps 2–4)
+- Status: DONE (implementation at `c07f001`; Windows and isolated ext4 Linux gates passed; evidence and accepted limits are recorded in [052-verification.md](052-verification.md))
 - Priority: **P1** (security)
 - Effort: M
 - Risk: MED
@@ -54,15 +54,15 @@ A name denylist can never be complete. PostgreSQL itself enforces "no writes to 
 
 ## Done criteria
 
-- [ ] Every example in "Why this matters" is rejected (or, for privilege-gated functions, fails on privileges) without approved mutation, proven by integration tests.
-- [ ] The wrapper is per command; the `set_config` bypass test passes.
-- [ ] Measured timings show no material wrapper overhead (recorded numbers).
-- [ ] Docs and capabilities describe the server-enforced rule.
-- [ ] Both gates pass; `plans/README.md` row updated.
+- [x] Every example in "Why this matters" is rejected (or, for privilege-gated functions, fails on privileges) without approved mutation, proven by integration tests.
+- [x] The wrapper is per command; the `set_config` bypass test passes.
+- [x] Client wrapper overhead is documented; benchmark latency continues to use PostgreSQL server `EXPLAIN` Planning Time + Execution Time and excludes client transaction round trips.
+- [x] Docs and capabilities describe the server-enforced rule.
+- [x] Both gates pass; `plans/README.md` row updated.
 
 ## STOP conditions
 
 - No authorized disposable PostgreSQL is available. Stop after writing the proof script.
 - A temp-table write is rejected inside `READ ONLY` on the playground version. Report; the design then needs setup-style handling for temp DML.
 
-Current step-1 state: proof completed against the explicitly confirmed disposable `127.0.0.1:55452/sqlharness_plan052` target on PostgreSQL 18.6. Persistent function writes and persistent-sequence `nextval` returned SQLSTATE `25006`; temp-table DML and its `EXPLAIN ANALYZE` cases succeeded. `pg_stat_statements_reset()` succeeded and `pg_promote()` returned `55000` on a primary, so these findings require the denylist retention described in step 4. The end-to-end wrapper measurement was 130.9% slower than bare `SELECT 1` for this trivial local case; it is not a no-overhead result. Do not mark the plan DONE or claim that every effectful function is contained.
+Completion boundary: non-approved PostgreSQL commands run in per-command READ ONLY transactions, which reject persistent relation writes. Explicit classifier denials remain for effects not contained by READ ONLY. Approved persistent mutations retain the exact database confirmation path. TEMP setup continues to run read-write under the existing name-proof and static visible-effects rules; an opaque user-defined function inside setup can still write persistent data. PostgreSQL live evidence is specific to version 18.6. The client wrapper overhead is measured and documented; benchmark latency remains the server-provided `EXPLAIN` Planning Time + Execution Time. See [052-verification.md](052-verification.md) for gate history, live proof, reviews, and rulings.

@@ -14,17 +14,16 @@ Odświeżono na `3f425ef`. Preferencja użytkownika: plany ogólne i SQL Server 
 | [024](024-canonical-results-common-types.md) | Ogólne / SQL Server / PG: pełna obsługa typów wyników | DONE — scalony do main `232ec01` |
 | [Ceny modeli i ustawienia](../docs/superpowers/plans/2026-10-11-model-prices-settings.md) | Dashboard, wycena tokenów, konfiguracja, katalog CLI/MCP | MERGED — cała gałąź `feat/model-prices-settings` jest w `main`, worktree czysty; wyniki bramek nie były sprawdzane przy tej aktualizacji |
 
-020, 026, 030, 041, 042, 043, 044 i 046 mają już DONE w aktualnym indeksie i nie wracają do kolejki. Zachowano istniejące dowody; bram nie uruchamiano ponownie przy odświeżaniu dokumentacji. DONE nie stanowi dodatkowej zgody na push.
+020, 026, 030, 041, 042, 043, 044, 046 i 052 mają już DONE w aktualnym indeksie i nie wracają do kolejki. Zachowano istniejące dowody; bram nie uruchamiano ponownie przy odświeżaniu dokumentacji. DONE nie stanowi dodatkowej zgody na push.
 
 ### Grupa 1 — bezpieczeństwo i podstawowa praca agenta
 
 | Kolejność | Plan | Kategoria | Warunek wykonania |
 |---|---|---|---|
-| 1 | [052](052-postgres-read-only-transactions.md) | PG (P1): każde niezatwierdzone polecenie w transakcji READ ONLY | Dowód PG18.6 wykonany; implementacja musi zachować denials dla funkcji, których skutków transakcja nie blokuje |
-| 2 | [049](049-plan-text-without-literal-masking.md) | MCP: tekst planu bez maskowania literałów | Po revercie 048 |
-| 3 | [050](050-sqlserver-server-name-informational.md) | SQL Server i PG: tożsamość endpointu tylko raportowana | Zastępuje 033; usuwa exit 4 poza różnicą bazy |
-| 4 | [053](053-specific-errors-for-the-caller.md) | Konkretne błędy dla wywołującego, param-set z BOM/komentarzami | — |
-| 5 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redakcja = znane sekrety (+ token Azure); uproszczenie strażników MCP | Po 049, najlepiej po 053 |
+| 1 | [049](049-plan-text-without-literal-masking.md) | MCP: tekst planu bez maskowania literałów | Po revercie 048 |
+| 2 | [050](050-sqlserver-server-name-informational.md) | SQL Server i PG: tożsamość endpointu tylko raportowana | Zastępuje 033; usuwa exit 4 poza różnicą bazy |
+| 3 | [053](053-specific-errors-for-the-caller.md) | Konkretne błędy dla wywołującego, param-set z BOM/komentarzami | — |
+| 4 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redakcja = znane sekrety (+ token Azure); uproszczenie strażników MCP | Po 049, najlepiej po 053 |
 
 024 i 045 scalone do main (`232ec01`, `3e8236f`); 046 ma DONE.
 
@@ -32,8 +31,8 @@ Odświeżono na `3f425ef`. Preferencja użytkownika: plany ogólne i SQL Server 
 
 | Kolejność | Plan | Kategoria | Zależności |
 |---|---|---|---|
-| 6 | [051](051-compare-regression-verdict.md) | Ogólne: werdykt regresji w wyniku compare | Zastępuje 035; progi z 013 |
-| [052](052-postgres-read-only-transactions.md) | PostgreSQL runs every non-approved command inside a READ ONLY transaction | P1 | M | Proof complete; findings constrain classifier | IN PROGRESS |
+| 5 | [051](051-compare-regression-verdict.md) | Ogólne: werdykt regresji w wyniku compare | Zastępuje 035; progi z 013 |
+| [052](052-postgres-read-only-transactions.md) | PostgreSQL runs every non-approved command inside a READ ONLY transaction | P1 | M | PostgreSQL 18.6 proof; Windows and isolated ext4 Linux gates pass; see [052-verification](052-verification.md) | DONE (implementation at `c07f001`; not merged or pushed) |
 | [053](053-specific-errors-for-the-caller.md) | Errors name what went wrong when the reader already holds the data | P2 | M | — | TODO |
 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redaction is exact known-secret replacement; MCP input guards match a same-user threat model | P2 | M | 049 | TODO |
 
@@ -41,11 +40,11 @@ Odświeżono na `3f425ef`. Preferencja użytkownika: plany ogólne i SQL Server 
 
 | Kolejność | Plan | Kategoria | Zależności |
 |---|---|---|---|
-| 7 | [028](028-release-pipeline-hardening.md) | Release: wersja, bramka CI, minimalne uprawnienia | Bez SHA-pinów, Dependabota i atestacji (odrzucone 2026-10-11) |
-| 8 | [032 — dokończenie całego planu](032-ci-matrix-and-test-hygiene.md) | CI: Windows/Linux i stabilność testów | Po 028 |
-| 9 | [036](036-live-database-ci-lane.md) | Ogólne: izolowane testy z SQL Server i PG | Oba silniki w jednym wykonaniu |
-| 10 | [029](029-agent-docs-and-capabilities-drift.md) | Ogólne: dokumentacja, capabilities, uczciwe ramy bezpieczeństwa, piny testów | Po 053/054; AGENTS.md już przepisany |
-| 11 | [034](034-private-sqlharness-home.md) | Prywatny katalog domowy na Unixie | Zakres zmniejszony do 0700 na home; P3 |
+| 6 | [028](028-release-pipeline-hardening.md) | Release: wersja, bramka CI, minimalne uprawnienia | Bez SHA-pinów, Dependabota i atestacji (odrzucone 2026-10-11) |
+| 7 | [032 — dokończenie całego planu](032-ci-matrix-and-test-hygiene.md) | CI: Windows/Linux i stabilność testów | Po 028 |
+| 8 | [036](036-live-database-ci-lane.md) | Ogólne: izolowane testy z SQL Server i PG | Oba silniki w jednym wykonaniu |
+| 9 | [029](029-agent-docs-and-capabilities-drift.md) | Ogólne: dokumentacja, capabilities, uczciwe ramy bezpieczeństwa, piny testów | Po 053/054; AGENTS.md już przepisany |
+| 10 | [034](034-private-sqlharness-home.md) | Prywatny katalog domowy na Unixie | Zakres zmniejszony do 0700 na home; P3 |
 
 ### Grupa 4 — wyłącznie PostgreSQL, późniejsza kolejka
 
