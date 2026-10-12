@@ -60,7 +60,7 @@ The timing proof used 100 balanced pairs after warm-up for trivial local `SELECT
 
 ## Integrated branch verification (final)
 
-This section records verification after integrating current `main` into the Plan 052 branch and applying the documentation-index and transport-metadata review fixes. The exact tested feature tip is `9082149`; its main parent is `7180fda`. The integrated branch includes Plan 052 documentation commit `f63eb22`, merge commit `97610ad`, index correction `1d20bc0`, transport-metadata correction `5cfc6ed`, and EOF-format correction `9082149`. The authorized local fast-forward to `main` is pending controller execution. Nothing has been pushed.
+This section records verification after integrating current `main` into the Plan 052 branch and applying the documentation-index and transport-metadata review fixes. The exact tested feature tip is `9082149`; its main parent is `7180fda`. The integrated branch includes Plan 052 documentation commit `f63eb22`, merge commit `97610ad`, index correction `1d20bc0`, transport-metadata correction `5cfc6ed`, and EOF-format correction `9082149`. The authorized local fast-forward to `main` completed at `f09a614`. A post-merge Git comparison confirmed that `src`, `tests`, `scripts`, `skills`, `README.md` and `docs` exactly match verified code `9082149`; only plan documentation differs. Nothing has been pushed.
 
 ### Integrated Windows gate
 
