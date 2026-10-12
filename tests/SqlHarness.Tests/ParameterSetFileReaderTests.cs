@@ -262,6 +262,19 @@ public sealed class ParameterSetFileReaderTests
     }
 
     [Fact]
+    public async Task ReadAsync_reports_eof_position_for_unterminated_top_level_object()
+    {
+        const string json = "{\"name\":\"x\",\"parameters\":[]";
+        using var file = TempJson(json);
+
+        var exception = await Assert.ThrowsAsync<ParameterSetFileException>(() =>
+            ParameterSetFileReader.ReadAsync(file.Path, CancellationToken.None));
+
+        Assert.True(exception.Message.Contains($"line 1, byte {json.Length + 1}", StringComparison.Ordinal), exception.Message);
+        Assert.Contains(file.Path, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ReadAsync_returns_source_path_for_later_parameter_diagnostics()
     {
         using var file = TempJson("""{"name":"bad-entry","parameters":["customerId:int=private-entry-value"]}""");

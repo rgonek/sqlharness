@@ -113,6 +113,25 @@ public static partial class ParameterSetFileReader
             var line = (exception.LineNumber ?? 0) + 1;
             var bomLength = bytes.AsSpan().StartsWith(Encoding.UTF8.Preamble) ? Encoding.UTF8.Preamble.Length : 0;
             var bytePosition = (exception.BytePositionInLine ?? 0) + 1 + (line == 1 ? bomLength : 0);
+            var json = bytes.AsSpan(bomLength);
+            if (IsUnterminatedTopLevelObject(json))
+            {
+                line = 1;
+                long bytePositionInLine = 0;
+                for (var index = 0; index < json.Length; index++)
+                {
+                    if (json[index] == (byte)'\n')
+                    {
+                        line++;
+                        bytePositionInLine = 0;
+                    }
+                    else
+                    {
+                        bytePositionInLine++;
+                    }
+                }
+                bytePosition = bytePositionInLine + 1 + (line == 1 ? bomLength : 0);
+            }
             throw new ParameterSetFileException(FileMessage(path, $"has invalid JSON at line {line}, byte {bytePosition}"));
         }
         catch (DecoderFallbackException)
@@ -161,7 +180,9 @@ public static partial class ParameterSetFileReader
             }
         }
 
-        if (reader.TokenType != JsonTokenType.EndObject || name is null || parameters is null)
+        if (reader.TokenType != JsonTokenType.EndObject)
+            throw InvalidJson("The object must contain name and parameters.", json, json.Length);
+        if (name is null || parameters is null)
             throw InvalidJson("The object must contain name and parameters.", json, reader.TokenStartIndex);
         // '$' matches before a trailing newline; the label must be the entire string.
         var label = LabelPattern().Match(name);
@@ -224,6 +245,19 @@ public static partial class ParameterSetFileReader
         path is null
             ? $"Parameter set file {reason}."
             : $"Parameter set file '{path}' {reason}.";
+
+    private static bool IsUnterminatedTopLevelObject(ReadOnlySpan<byte> json)
+    {
+        var first = 0;
+        while (first < json.Length && IsJsonWhitespace(json[first]))
+            first++;
+        var last = json.Length - 1;
+        while (last >= first && IsJsonWhitespace(json[last]))
+            last--;
+        return first < last && json[first] == (byte)'{' && json[last] == (byte)']';
+    }
+
+    private static bool IsJsonWhitespace(byte value) => value is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
 
     private sealed class UnknownPropertyException(string property) : Exception(property);
 
