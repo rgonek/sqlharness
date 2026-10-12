@@ -388,14 +388,14 @@ public class SqlHarnessQueryTests
     [Fact]
     public async Task Azure_token_failure_maps_to_authentication_and_does_not_open_a_session()
     {
-        var azure = new FakeAzureCli(Token, new AzureCliException($"not logged in {Token}"));
+        var azure = new FakeAzureCli(Token, new AzureCliException("not logged in"));
         var session = FakeSqlSession.WithIdentity("test-server", "testdb-a");
 
         var outcome = await Module(session, azure: azure).ExecuteAsync(Query("SELECT 1"));
 
         Assert.Equal(SqlHarnessExitCode.Authentication, outcome.ExitCode);
         Assert.Empty(session.Commands);
-        Assert.DoesNotContain(Token, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("not logged in", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -446,7 +446,7 @@ public class SqlHarnessQueryTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Profile_load_io_failures_map_to_local_storage_and_are_redacted(bool unauthorized)
+    public async Task Profile_load_io_failures_keep_the_available_diagnostic(bool unauthorized)
     {
         var secret = "profile-secret-never-emit";
         Exception failure = unauthorized
@@ -458,7 +458,7 @@ public class SqlHarnessQueryTests
             .ExecuteAsync(Query("SELECT 1"));
 
         Assert.Equal(SqlHarnessExitCode.LocalStorage, outcome.ExitCode);
-        Assert.DoesNotContain(secret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(secret, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]

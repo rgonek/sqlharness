@@ -136,7 +136,7 @@ public static class SqlHarnessCapabilitiesProvider
                 new("capabilities", "Describe commands, engines, limits, modes. Pass a profile for the parameter types and limits of its engine."),
                 new("doctor", "Check installation and profiles."),
                 new("validate", "Classify SQL offline for a closed profile. Usages: query, setup, benchmark."),
-                new("query", "Run a bounded query. Diagnostics redact resolved credentials, including Azure CLI access tokens fetched for the operation. PostgreSQL: per-command READ ONLY, known administrative effects denied; TEMP setup is read-write under static checks; user functions can hide effects (setup SELECTs too), so use a least-privilege role."),
+                new("query", "Run a bounded query. Every output replaces the profile password and Azure CLI access token fetched for the operation; other text, including SQL quoted in server errors, stays readable. PostgreSQL: per-command READ ONLY, known administrative effects denied; TEMP setup is read-write under static checks; user functions can hide effects (setup SELECTs too), so use a least-privilege role."),
                 new("measure", "Measure a query."),
                 new("compare", "Compare baseline/candidate: result equivalence and latency regression verdict."),
                 new("schema", "Inspect schema."),

@@ -132,4 +132,4 @@ An approval covers that batch, database, profile and variable set only. A safety
 
 Locally sensitive outputs are pasted, attached or published only after the user's explicit review: `.sqlplan` files, measure/compare artifacts, snapshots under `~/.sqlharness/snapshots` (result data), `qstop`'s `queries.jsonl` (SQL text), `--param-set` files and `~/.sqlharness/data/activity.db`. Secrets live in the environment variables the profile names, and in process memory only.
 
-Exit codes, redaction and artifact rules: [README Safety contract](../../README.md#safety-contract). This includes the SQL password from its profile environment variable and any Azure SQL access token fetched by Azure CLI for the current operation. `2` is a validation or safety stop, `5` a SQL execution failure.
+Exit codes, redaction and artifact rules: [README Safety contract](../../README.md#safety-contract). Every output replaces the profile password and Azure SQL token fetched by Azure CLI for the current operation; other text, including caller SQL quoted in server errors, stays readable. `2` is a validation or safety stop, `5` a SQL execution failure.
