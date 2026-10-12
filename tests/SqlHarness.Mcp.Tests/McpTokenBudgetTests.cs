@@ -116,6 +116,7 @@ public sealed class McpTokenBudgetTests
 
         Assert.Equal(AgentEnvelopeSchema.Version, document.RootElement.GetProperty("schemaVersion").GetInt32());
         var query = document.RootElement.GetProperty("result");
+        Assert.Equal("db", query.GetProperty("database").GetString());
         Assert.False(query.TryGetProperty("target", out _));
         Assert.False(query.TryGetProperty("resultHash", out _));
         Assert.False(query.TryGetProperty("rawFootprint", out _));

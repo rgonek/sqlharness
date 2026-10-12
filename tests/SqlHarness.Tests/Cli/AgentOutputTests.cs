@@ -243,6 +243,7 @@ public sealed class AgentOutputTests
 
         using var json = JsonDocument.Parse(output.ToString());
         var result = json.RootElement.GetProperty("result");
+        Assert.Equal("db", result.GetProperty("database").GetString());
         Assert.False(result.TryGetProperty("target", out _));
         Assert.False(result.TryGetProperty("resultHash", out _));
         Assert.False(result.TryGetProperty("rawFootprint", out _));

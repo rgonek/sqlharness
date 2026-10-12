@@ -6,18 +6,17 @@ namespace SqlHarness.Core;
 public sealed record AgentBoundedOutput(string ReportType, int OmittedItems);
 public sealed record AgentBinaryValue(long ByteLength, string Base64Prefix, bool Truncated);
 
-/// <summary>
-/// One query result set in the agent projection. <c>Ordinal</c> is the
-/// zero-based position in the source report (the snapshot-diff convention).
-/// Every emitted row has exactly <c>Columns.Count</c> cells. Rows not emitted
-/// are counted in <c>OmittedRowCount</c>; columns dropped by the detail-limit-0
-/// fallback (always the trailing ones) are counted in <c>OmittedColumnCount</c>,
-/// and a set with omitted columns carries no rows.
-/// </summary>
+/// <summary>A query column with its CLR value type alias and source nullability.</summary>
 public sealed record AgentQueryColumn(string Name, string ValueType, bool AllowNull);
 
 public sealed record AgentClippedCell(int Row, int Column, long OriginalLength, int ReturnedLength, string Unit);
 
+/// <summary>
+/// One query result set in the agent projection. <c>Ordinal</c> is the
+/// zero-based position in the source report. Every emitted row has exactly
+/// <c>Columns.Count</c> cells. Omitted rows and columns are counted; a set with
+/// omitted columns carries no rows.
+/// </summary>
 public sealed record AgentCompactResultSet(
     int Ordinal,
     IReadOnlyList<AgentQueryColumn> Columns,
@@ -28,11 +27,12 @@ public sealed record AgentCompactResultSet(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<AgentClippedCell>? ClippedCells = null);
 
 /// <summary>
-/// Agent projection of a query report. <c>ResultSets</c> is a prefix of the
-/// source result sets; <c>OmittedResultSetCount</c> counts the trailing sets
-/// that did not fit.
+/// Compact agent projection of a query report. <c>Database</c> is the
+/// resolved database name; <c>ResultSets</c> is a prefix of the source sets,
+/// with trailing omitted sets counted in <c>OmittedResultSetCount</c>.
 /// </summary>
 public sealed record AgentCompactQuery(
+    string Database,
     string StatementClassification,
     IReadOnlyList<AgentCompactResultSet> ResultSets,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int OmittedResultSetCount = 0,
@@ -672,7 +672,7 @@ public static class AgentOutputProjection
         IReadOnlyList<AgentCompactResultSet> sets,
         int omittedResultSets,
         IReadOnlyList<string?> messages) =>
-        new(query.StatementClassification, sets, omittedResultSets,
+        new(query.Target.ActualDatabase, query.StatementClassification, sets, omittedResultSets,
             messages.Count == 0 ? null : messages,
             query.RecordsAffected < 0 ? null : query.RecordsAffected,
             query.DurationMilliseconds);

@@ -53,3 +53,24 @@ Passed!  - Failed:     0, Passed:   188, Skipped:     0, Total:   188 - SqlHarne
 ## Concerns
 
 No Task 3 concerns remain. Full platform gates were intentionally not run; this task requested the scoped solution filter only.
+
+## Review fix round 1
+
+Added `database` from the resolved target database to the compact query, without exposing the remaining target identity. Corrected the XML summaries for query columns and result sets.
+
+RED command:
+
+```powershell
+dotnet test SqlHarness.sln --filter "FullyQualifiedName~Agent_query_projection_uses_clr_aliases_and_omits_only_default_fields|FullyQualifiedName~Query_result_uses_shared_v2_compact_projection"
+```
+
+Actual output: both the CLI and MCP tests failed with `KeyNotFoundException` when `database` was absent.
+
+GREEN command: same filter.
+
+Actual output:
+
+```text
+Passed!  - Failed:     0, Passed:     1, Skipped:     0, Total:     1 - SqlHarness.Mcp.Tests.dll
+Passed!  - Failed:     0, Passed:     1, Skipped:     0, Total:     1 - SqlHarness.Tests.dll
+```
