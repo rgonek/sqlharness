@@ -1,4 +1,4 @@
-# Plan 031: PostgreSQL sessions refuse to run classified text under non-standard string lexing, and never offer the password to an unauthenticated server in a recoverable form
+# Plan 031: PostgreSQL sessions refuse to run classified text under non-standard string lexing, and recommend authenticated transports
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
@@ -8,15 +8,16 @@
 > maintain the index.
 >
 > **Drift check (run first)**: `git diff --stat 5280f78..HEAD -- src/SqlHarness.Core/Postgres/NpgsqlSessionFactory.cs src/SqlHarness.Core/Postgres/PostgresConnectionString.cs src/SqlHarness.Core/Postgres/PostgresTransportPolicy.cs tests/SqlHarness.Tests/Postgres/ docs/superpowers/specs/2026-09-26-postgres-transport-policy.md AGENTS.md`
-> If any in-scope file changed since this plan was written, compare the
-> "Current state" excerpts against the live code before proceeding; on a
-> mismatch, treat it as a STOP condition.
+> Inspect changes against the current source and adapt implementation details
+> within the authorized intent. A changed file or obsolete excerpt alone is
+> not a STOP condition. Stop for an incompatible contract, missing required
+> proof, or a change that exceeds the approved scope. Record the reconciled base.
 
 ## Status
 
 - **Priority**: P2 (security hardening)
 - **Effort**: S–M
-- **Risk**: MED (Step 2 can stop md5-only servers working on unauthenticated transports)
+- **Risk**: LOW (Step 1 only refuses sessions with non-standard string lexing)
 - **Depends on**: plans/019-pg-classifier-holes.md (denies `set_config`-via-string, which would otherwise flip the setting mid-session); plans/022 if Npgsql is upgraded (check the API on the version in use)
 - **Category**: security
 - **Planned at**: commit `5280f78`, 2026-10-03
@@ -76,18 +77,16 @@ Branch `fix/plan-031-pg-session`. Commits per step. Do NOT push.
 
 **Verify**: PG tests pass.
 
-### Step 2: SCRAM-only authentication on unauthenticated transports
+### Step 2: Dropped on 2026-10-11
 
-1. Check whether the referenced Npgsql exposes a "require auth" setting. `grep -rn "RequireAuth" ~/.nuget/packages/npgsql/<version>/lib/net8.0/Npgsql.xml` (Windows: `%USERPROFILE%\.nuget\packages\npgsql\...`), or try `builder.RequireAuth = "ScramSHA256";` in a scratch build. If no such setting exists in the version in use, **STOP** and report. Do not implement a hand-rolled auth check.
-2. In `PostgresConnectionString.Build`, when the effective mode is `Require` or `Disable` (which includes the legacy mappings), set the builder to allow only SCRAM-SHA-256 (with SCRAM-SHA-256-PLUS when TLS is used, if the setting supports a list). For `VerifyFull`/`VerifyCa`, leave the default.
-3. Tests in `PostgresConnectionStringTests.cs`: the connection string for `require` and legacy-`trustServerCertificate:true` targets contains the SCRAM-only setting; for `verify-full` it does not. Mirror the file's existing env-var setup, using a **unique** env var name per test (`$"SQLHARNESS_TEST_{Guid.NewGuid():N}"`) to avoid the known cross-test env race.
+SCRAM-only authentication on `require`/`disable`/legacy transports was removed. On those transports the whole session, including result data, is already exposed to a man-in-the-middle; protecting only the password is a partial fix that can break md5-only servers. The remedy is the transport itself: new remote examples already use `verify-full` (see the transport policy). Step 3 documents that recommendation instead.
 
-**Verify**: PG tests pass.
+Open decision for the operator, not part of this plan: the legacy mapping `trustServerCertificate: true → SslMode=Disable` gives PostgreSQL no encryption at all, while the same flag on SQL Server means "encrypt without verifying". Changing it to `Require` alters behaviour for existing profiles.
 
 ### Step 3: Policy and contract text
 
-- Transport policy spec: add a section (in the file's language, Polish) covering both rules: SCRAM only for `require`/`disable`/legacy, and fail-closed on `standard_conforming_strings`, with the reasons above.
-- `AGENTS.md`, PostgreSQL engine notes: one sentence: "On `require`/`disable`/legacy transports only SCRAM-SHA-256 authentication is accepted; sessions with `standard_conforming_strings` off are refused (exit 2)."
+- Transport policy spec: add a section (in the file's language, Polish) covering the fail-closed `standard_conforming_strings` rule with its reason, and the recommendation to use `verify-full` for remote servers because `require`/`disable` expose the credential and the data.
+- `AGENTS.md`, PostgreSQL engine notes: one sentence: "Sessions with `standard_conforming_strings` off are refused (exit 2)."
 
 **Verify**: `pwsh -NoProfile -File scripts/verify.ps1` → `verify: OK`.
 
@@ -97,7 +96,7 @@ On the opt-in playground (`scripts/setup-local-postgres.ps1`, `postgres:16`, whi
 
 ## Test plan
 
-1 parser-assumption test, 3 `EnsureStandardStrings` tests, and 2–3 connection-string tests.
+1 parser-assumption test and 3 `EnsureStandardStrings` tests.
 
 ## Done criteria
 
@@ -109,10 +108,7 @@ On the opt-in playground (`scripts/setup-local-postgres.ps1`, `postgres:16`, whi
 ## STOP conditions
 
 - The parser-assumption test (Step 1.1) shows the parser does **not** assume standard strings.
-- Npgsql has no require-auth setting in the version in use (Step 2.1).
-- The operator reports md5-only servers reached over `require`. Then a profile opt-out (e.g. `"allowMd5": true`) is needed, which changes the profile schema: a separate decision.
 
 ## Maintenance notes
 
 - If the parser is upgraded or replaced (see plan 019 maintenance notes), re-run the Step 1.1 assumption test first.
-- Channel binding (SCRAM-PLUS) strengthens `require` further against relays. Make it mandatory when Npgsql and the target servers support it.

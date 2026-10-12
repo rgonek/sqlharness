@@ -10,7 +10,7 @@
 
 ## Status
 
-- **Status**: TODO
+- **Status**: DONE (merged locally 498c3dd)
 - **Priority**: P2
 - **Effort**: M
 - **Risk**: MEDIUM (shared projection and serialized response budgets)
@@ -85,7 +85,7 @@ matches the emitted fields and omission semantics. Existing benchmark/artifact p
 
 ## STOP conditions
 
-- The current-state description no longer matches the source or another active plan owns the change.
+- Another active plan owns an incompatible change. Inspect ordinary source drift and adapt this plan within its authorized intent; outdated excerpts alone do not require stopping.
 - A proposed fix requires exposing raw sensitive data through a new retrieval surface.
 - Required schemas or result-set inventories cannot fit and the proposed fallback has no explicit omission contract.
 - Changes weaken wire-budget enforcement, redaction, scope ownership or source-report immutability.

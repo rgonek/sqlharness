@@ -9,8 +9,10 @@
 >
 > **Drift check (run first)**: `git diff --stat 5280f78..HEAD -- src/SqlHarness.Core/Auth/ tests/SqlHarness.Tests/Auth/`
 > If any in-scope file changed since this plan was written, compare the
-> "Current state" excerpts against the live code before proceeding; on a
-> mismatch, treat it as a STOP condition.
+> "Current state" excerpts against the live code before proceeding. Adapt paths,
+> symbols and obsolete test expectations within the authorized intent and scope;
+> record the adjustment. Stop only for a substantive incompatible contract,
+> an unapproved safety change or work outside scope.
 
 ## Status
 
@@ -19,7 +21,7 @@
 - **Risk**: LOW
 - **Depends on**: plans/016-restore-green-ci.md
 - **Category**: security
-- **Planned at**: commit `5280f78`, 2026-10-03
+- **Planned at**: commit `5280f78`, 2026-10-03; revised against `729d88f`, 2026-10-11
 
 ## Why this matters
 
@@ -86,7 +88,7 @@ Files:
 
 Exit-code mapping (`src/SqlHarness.Core/OperationFailureMapper.cs:33`): `AzureCliException => SqlHarnessExitCode.Authentication` (exit 3). Throwing `AzureCliException` on timeout gives the right exit code with no mapper change.
 
-Error-message convention: `AzureCliException` messages are fixed and never contain arguments, stdout or stderr (pinned by `RunJsonAsync_NonzeroExitUsesRedactedException`). New messages must follow that.
+Error-message contract: include useful bounded diagnostics such as executable path, exit code and failure kind when known. Paths are not credentials. Protect passwords, tokens and credential-bearing fields; never dump token-response stdout or raw subprocess streams. Replace old fixed-message pins with tests of useful safe context and credential protection.
 
 ## Commands you will need
 
@@ -175,7 +177,11 @@ In `ProcessRunner.RunAsync`, set `RedirectStandardInput = true` and, right after
 
 **Verify**: `dotnet test tests/SqlHarness.Tests --no-build --filter "FullyQualifiedName~SqlHarness.Tests.Auth"` → all pass, including the 5 new `AzureCliTests` and the stdin test.
 
-### Step 5: Full gate
+### Step 5: Verify useful diagnostics and full gates
+
+Add tests that the resolved executable path and failure kind remain visible while credential fixtures are removed. Do not copy access-token JSON into errors. Use the shared secret filter; paths and nonsecret invocation context do not need blanket redaction.
+
+Run both `scripts/verify.ps1` and `scripts/verify-linux.ps1`; require exit 0 and each script's literal success marker.
 
 **Verify**: `pwsh -NoProfile -File scripts/verify.ps1` → `verify: OK`. `grep -n '"cmd.exe" : "az"' src/SqlHarness.Core/Auth/AzureCli.cs` → no match.
 
@@ -203,4 +209,4 @@ In `ProcessRunner.RunAsync`, set `RedirectStandardInput = true` and, right after
 
 - Any new external process the harness spawns must go through the same rules: an absolute executable, a neutral working directory, no inherited stdin, and a bounded wait.
 - The 60 s default covers a slow `az account get-access-token`. If users report timeouts on first-run token refresh, raise the default instead of removing it.
-- Reviewers: check that no exception message includes the resolved `az` path. Paths are not secrets, but the existing redaction tests assume fixed messages.
+- Reviewers: safe executable paths remain visible; seeded credentials never appear. Preserve bounded waits, process-tree cancellation and stdin protections. Old fixed-message tests do not justify hiding paths.

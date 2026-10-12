@@ -1,4 +1,4 @@
-# Plan 028: Releases carry their real version, only ship from a commit that passes the CI gate, and run with least privilege and provenance
+# Plan 028: Releases carry their real version, only ship from a commit that passes the CI gate, and run with least privilege
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
@@ -8,9 +8,10 @@
 > maintain the index.
 >
 > **Drift check (run first)**: `git diff --stat 5280f78..HEAD -- .github/ Directory.Build.props tests/SqlHarness.Tests/ReleaseWorkflowTests.cs README.md`
-> If any in-scope file changed since this plan was written, compare the
-> "Current state" excerpts against the live code before proceeding; on a
-> mismatch, treat it as a STOP condition.
+> Inspect changes against the current source and adapt implementation details
+> within the authorized intent. A changed file or obsolete excerpt alone is
+> not a STOP condition. Stop for an incompatible contract, missing required
+> proof, or a change that exceeds the approved scope. Record the reconciled base.
 
 ## Status
 
@@ -50,7 +51,7 @@
 
 ## Scope
 
-**In scope**: `.github/workflows/release.yml`, `.github/workflows/ci.yml` (permissions, `workflow_call` trigger, SHA pins only), `.github/dependabot.yml` (create), `Directory.Build.props` (dev `VersionPrefix`), `tests/SqlHarness.Tests/ReleaseWorkflowTests.cs` (add assertions; do not weaken existing ones), `README.md` (one "verifying a release" paragraph).
+**In scope**: `.github/workflows/release.yml`, `.github/workflows/ci.yml` (permissions and `workflow_call` trigger only), `Directory.Build.props` (dev `VersionPrefix`), `tests/SqlHarness.Tests/ReleaseWorkflowTests.cs` (add assertions; do not weaken existing ones).
 
 **Out of scope**: OS matrix, caching and integration lanes in CI (plans 032/036); code signing with a certificate (needs secrets the operator must provision; record it as a follow-up); changing the RID set.
 
@@ -76,33 +77,26 @@ Branch `ci/plan-028-release`. Commits per step. Do NOT push, and do not create t
 
 **Verify**: workflow tests pass.
 
-### Step 3: Least privilege, credential hygiene and pinning
+### Step 3: Least privilege and credential hygiene
 
-- `release.yml`: top-level `permissions: contents: read`. On the `release` job only: `permissions: contents: write`, `id-token: write`, `attestations: write`.
+- `release.yml`: top-level `permissions: contents: read`. On the `release` job only: `permissions: contents: write`.
 - Every `actions/checkout` step: `with: persist-credentials: false`.
-- Pin every `uses:` to a full 40-character commit SHA with a trailing `# vX.Y.Z` comment. Resolve SHAs with `gh api repos/<owner>/<repo>/git/ref/tags/<tag> --jq .object.sha`. Annotated tags need a second call to dereference to the commit. If there is no network/`gh` access, STOP after Steps 1–2 and mark this sub-step BLOCKED in the index.
-- Create `.github/dependabot.yml` with `package-ecosystem: github-actions` (weekly) and `package-ecosystem: nuget` (weekly, directory `/`).
-- Add a test: every `uses:` line in both workflows (except the local `./.github/workflows/ci.yml`) matches `@[0-9a-f]{40}`.
-
-**Verify**: workflow tests pass.
-
-### Step 4: Build provenance
-
-In the `release` job, after downloading artifacts and before `gh release create`, add `actions/attest-build-provenance` (SHA-pinned) with `subject-path: artifacts/sqlharness-*`. Keep the `gh release create` command byte-identical to the pinned contract.
-
-README: add a "Verifying a release" paragraph covering `sha256sum -c SHA256SUMS` and `gh attestation verify <file> --repo <owner>/<repo>`.
+- Add a test: `contents: write` appears only inside the `release:` job.
 
 **Verify**: workflow tests pass. `pwsh -NoProfile -File scripts/verify.ps1` → `verify: OK`.
 
+### Dropped on 2026-10-11
+
+SHA-pinning every action, Dependabot and build-provenance attestation were removed from this plan. For a single-maintainer tool with no external consumers verifying binaries they add review load (every Dependabot PR) without a reader who would check the attestation. Reopen as a separate plan when the release has outside users.
+
 ## Test plan
 
-New assertions in `ReleaseWorkflowTests.cs`: the version property, the gate dependency, and SHA pinning. Existing contract tests unchanged.
+New assertions in `ReleaseWorkflowTests.cs`: the version property, the gate dependency, and job-scoped write permission. Existing contract tests unchanged.
 
 ## Done criteria
 
 - [ ] `grep -n "contents: write" .github/workflows/release.yml` → only inside the `release:` job
 - [ ] `grep -n "uses: ./.github/workflows/ci.yml" .github/workflows/release.yml` → match
-- [ ] `grep -nE "uses: [^.].*@v[0-9]" .github/workflows/*.yml` → no match (all SHA-pinned), unless Step 3 is BLOCKED
 - [ ] Workflow tests and the full gate pass
 - [ ] `plans/README.md` row updated (note: the first real proof is the next tag build, which the operator triggers)
 
@@ -110,10 +104,8 @@ New assertions in `ReleaseWorkflowTests.cs`: the version property, the gate depe
 
 - An existing `ReleaseWorkflowTests` assertion would have to be weakened.
 - `workflow_call` reuse makes CI run twice on tag pushes in a way that conflicts with branch protection. Report it; the operator decides.
-- No network for SHA resolution (Step 3 BLOCKED; Steps 1, 2 and 4 can still land, but then Step 4's attest action stays tag-pinned with a TODO in the index).
 
 ## Maintenance notes
 
 - After merging, the operator should enable branch protection requiring the CI check, and should cut a release (plan 022's runtime update is the motivating one).
-- Dependabot PRs for actions must be reviewed like code. They change what runs with `contents: write`.
 - Authenticode/codesign is deferred: it needs a certificate and secrets the operator controls.

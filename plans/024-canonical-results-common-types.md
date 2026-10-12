@@ -15,6 +15,7 @@
 
 ## Status
 
+- **Status**: IN PROGRESS — user-confirmed 2026-10-11; complete scope, branch fix/plan-024-canonical-types.
 - **Priority**: P2
 - **Effort**: M
 - **Risk**: MED (canonical encoding is the basis of result equivalence and snapshot diff)
@@ -91,12 +92,11 @@ Branch `fix/plan-024-canonical-types`. Commits per step. Do NOT push.
 
 ## Steps
 
-### Execution phases — user priority update, 2026-10-11
+### Whole-plan execution — user correction, 2026-10-11
 
-- **A, first: shared and SQL Server.** Step 1, the SqlHierarchyId/SqlGeography/SqlGeometry rows of Step 3, their tests and the matching Step 4 documentation. Shared scalar support remains engine-neutral; do not disable its use on PG.
-- **B, second: PostgreSQL-oriented result mappings.** Step 2 arrays and the IPAddress/PhysicalAddress/BitArray/cidr rows of Step 3, including the current Npgsql 10 IPNetwork mapping after inspecting the actual provider. Do not implement an obsolete NpgsqlCidr arm merely because the historical table names it.
+Execute the complete plan in one delivery, including its PostgreSQL scope. General/SQL Server priority determines which whole plan is chosen next; it does not authorize deferring part of a selected mixed plan. Steps below are internal implementation order. Preserve required proof and both platform gates; do not mark a partial scope DONE. Historical completed-step evidence elsewhere in this file remains unchanged.
+
 - **Phase B provider reconciliation:** Npgsql 10 maps PostgreSQL `cidr` to `System.Net.IPNetwork` by default (Npgsql 10.0 release notes: https://www.npgsql.org/doc/release-notes/10.0.html). The referenced Npgsql 10.0.3 assembly confirms `IPNetwork` implements `IFormattable`, so `CanonicalScalarCodec` already accepts it using the generic stable type tag `System.Net.IPNetwork` and invariant string. Preserve that existing representation and its hash; do not replace it with a new `cidr` tag or add an obsolete `NpgsqlCidr` arm. The result remains supported as `System.Net.IPNetwork`. Phase B is complete in `3d097ff`; focused canonical/equivalence/snapshot tests passed 171/171, and Windows/Linux full gates passed. Evidence, gate logs, prior Phase A cancellation flake and clean reruns, and the no-live-database-read boundary are preserved in [the durable Plan 024 proof](024-canonical-results-proof.md).
-- The stage selection changes scheduling, not canonical encoding compatibility. Keep existing encodings/hashes stable and run focused plus Windows/Linux gates for each implemented stage. After A, record PARTIAL with its evidence and B pending; whole-plan DONE still requires both stages. Do not describe deferred mappings as supported in capabilities or docs.
 
 ### Step 1: Non-finite floats get tagged encodings
 

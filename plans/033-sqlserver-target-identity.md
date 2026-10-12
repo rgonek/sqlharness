@@ -1,4 +1,6 @@
-# Plan 033: SQL Server target identity accepts legitimate endpoints (FQDN, listeners, database name casing) without weakening wrong-target detection
+# Plan 033: SQL Server profiles declare expected server identity for aliases and listeners without discarding DNS labels
+
+> **REJECTED 2026-10-11** — superseded by [050](050-sqlserver-server-name-informational.md). The server-name comparison it works around cannot catch a wrong profile (the connection already went to that host); TLS certificate validation is the identity check. Kept for history; do not execute.
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
@@ -9,8 +11,10 @@
 >
 > **Drift check (run first)**: `git diff --stat 5280f78..HEAD -- src/SqlHarness.Core/SqlExecution.cs src/SqlHarness.Core/Targets/ tests/SqlHarness.Tests/SqlExecutionTests.cs tests/SqlHarness.Tests/Targets/ README.md AGENTS.md docs/example-targets.json`
 > If any in-scope file changed since this plan was written, compare the
-> "Current state" excerpts against the live code before proceeding; on a
-> mismatch, treat it as a STOP condition.
+> "Current state" excerpts against the live code before proceeding. Adapt paths,
+> symbols and obsolete test expectations within the authorized intent and scope;
+> record the adjustment. Stop only for a substantive incompatible contract,
+> an unapproved safety change or work outside scope.
 
 ## Status
 
@@ -19,15 +23,15 @@
 - **Risk**: MED (this is a safety check; loosening it must not admit a wrong target)
 - **Depends on**: plans/016-restore-green-ci.md
 - **Category**: bug
-- **Planned at**: commit `5280f78`, 2026-10-03
+- **Planned at**: commit `5280f78`, 2026-10-03; revised against `729d88f`, 2026-10-11
 
 ## Why this matters
 
-After connecting, SQLHarness checks that the server and database it reached are the ones the profile resolved, and fails with exit 4 (`TargetMismatch`) otherwise. On SQL Server the check compares the profile's host text with `SERVERPROPERTY('ServerName')` (the machine NetBIOS name plus optional `\instance`). Legitimate configurations therefore always fail:
+After connecting, SQLHarness checks that the server and database it reached are the ones the profile resolved, and fails with exit 4 (`TargetMismatch`) otherwise. On SQL Server the check compares the profile's host text with `SERVERPROPERTY('ServerName')` (the machine NetBIOS name plus optional `\instance`). Some legitimate endpoint spellings fail this textual comparison unless identity is explicitly configured:
 
 - An FQDN (`sql01.corp.local`) or IP profile versus `SQL01`.
 - Availability-group listeners, Azure SQL failover-group listeners (`fog.database.windows.net`, which reports the physical primary's name), Azure DNS aliases and `*.privatelink.database.windows.net` hosts.
-- A profile database `salesdb` versus `DB_NAME()` returning the stored casing `SalesDB`. The connection succeeds because SQL Server resolves the name, then the ordinal comparison fails.
+- Database casing is a distinct issue: a profile `salesdb` can fail against stored `SalesDB`. Preserve strict identity and configure the exact stored name; case-sensitive databases prohibit a global case-insensitive shortcut.
 
 Users hit exit 4 and are pushed toward `--unsafe-direct` or loopback tunnels. Loopback is a documented-by-code blind spot: only the database name is checked for `localhost`, `127.0.0.1`, `.` and `(local)`, so an SSH tunnel to production passes as long as the database name matches.
 
@@ -71,7 +75,7 @@ Users hit exit 4 and are pushed toward `--unsafe-direct` or loopback tunnels. Lo
 
 ## Scope
 
-**In scope**: `SqlExecution.cs` (`TargetMatches`, `NormalizeServer`), `Targets/TargetProfile.cs`, `ProfileStore.cs`, `TargetResolver.cs` (one new optional SQL Server field), the corresponding tests, README/AGENTS profile docs and `docs/example-targets.json`.
+**In scope**: `SqlExecution.cs` (`TargetMatches`, existing normalization regression coverage), `Targets/TargetProfile.cs`, `ProfileStore.cs`, `TargetResolver.cs` (one new optional SQL Server field), the corresponding tests, README/AGENTS profile docs and `docs/example-targets.json`.
 
 **Out of scope**: PostgreSQL identity (separate policy, already designed); `--unsafe-direct` flags for the new field (profiles only, see Maintenance notes); MCP owner tuples (they use the resolved profile server text, which does not change).
 
@@ -81,24 +85,19 @@ Branch `fix/plan-033-sqlserver-identity`. Commits per step. Do NOT push.
 
 ## Steps
 
-### Step 1: Database name comparison ignores case
+### Step 1: Preserve strict database identity and inventory confirmation
 
-Change the database comparison to `StringComparison.OrdinalIgnoreCase`, with a comment: "// 033: the connection opened Initial Catalog by server-side name resolution, so DB_NAME() is that database; only its stored casing can differ." Tests: `salesdb` vs `SalesDB` matches; `salesdb` vs `otherdb` does not.
+Keep the ordinal database comparison. `SalesDB` and `salesdb` can identify different databases on a case-sensitive SQL Server; successful connection alone is not evidence that relaxing identity is safe. Inventory the resolved profile value, `DB_NAME()` check, and `SqlSafety.cs` mutation confirmation comparison (`Ordinal`). Require the exact resolved database name for approval consistently. Document stored-casing requirements rather than silently accepting case variants. A future server-resolved database-ID contract requires a separate proposal and evidence on both collations.
 
-Check the mutation confirmation path is unaffected: `SqlSafety.cs` compares `--confirm-database` against `target.Database` (the profile value) with `Ordinal`. That stays as is, since the user confirms the name they configured.
+Tests: exact database matches; changed casing and a different name reject. Preserve mutation confirmation tests for the exact resolved name; add case-sensitive identity fixtures without connecting.
 
-**Verify**: identity tests pass.
+**Verify**: identity/target tests pass.
 
-### Step 2: FQDN matches its first label
+### Step 2: Preserve full server names
 
-In `NormalizeServer` (SQL Server only), split off the instance part (`\INST`). If the expected host is not an IP address and contains dots, compare **only its first DNS label** (case-insensitive) with the server's machine part, and compare instance parts exactly (case-insensitive; both absent, or both equal). Keep the existing `.database.windows.net` handling for Azure SQL Database (`server.database.windows.net` vs ServerName `server`).
+Keep current port/`tcp:` normalization and the existing explicitly supported `.database.windows.net` mapping. Do not reduce arbitrary DNS names to their first label: `sql01.firma-a` and `sql01.firma-b` are distinct expected endpoints. FQDN/NetBIOS differences, IPs, listeners and unrecognized Azure aliases use the explicit field in Step 3.
 
-Tests:
-- `sql01.corp.local` vs `SQL01` → match.
-- `sql01.corp.local\INST` vs `SQL01\INST` → match.
-- `sql01.corp.local` vs `SQL02` → no match.
-- `sql01.corp.local\A` vs `SQL01\B` → no match.
-- `10.0.0.5` vs `SQL01` → no match. An IP proves nothing textual; Step 3 is the way to allow it.
+Tests: `sql01.firma-a` and `sql01.firma-b` do not match each other or bare `SQL01` by first-label coincidence. Instance mismatch rejects; known Azure suffix cases retain their current behavior. With no explicit expected identity, preserve existing loopback semantics and document their limit.
 
 **Verify**: identity tests pass.
 
@@ -117,24 +116,24 @@ Tests:
 ### Step 4: Docs
 
 - README/AGENTS profile section and `docs/example-targets.json`: document `expectedServerName` with a listener example. Also add: "Loopback endpoints (`localhost`, `.`, tunnels) verify only the database unless `expectedServerName` is set."
-- Exit-code 4 description: mention FQDN first-label matching.
+- Exit-code 4 description: describe explicit expected identity for aliases and exact database-name requirements; never claim first-label DNS equivalence.
 
 **Verify**: `pwsh -NoProfile -File scripts/verify.ps1` → `verify: OK`.
 
 ## Test plan
 
-About 12 new cases across `SqlExecutionTests.cs` and the target/profile tests, following `IsLoopbackEndpoint_classifies_data_sources` (theory style).
+Identity and explicit-field cases across `SqlExecutionTests.cs` and the target/profile tests, following `IsLoopbackEndpoint_classifies_data_sources` (theory style).
 
 ## Done criteria
 
-- [ ] Identity/target tests and the full gate pass
+- [ ] Identity/target tests and both Windows/Linux full gates pass
 - [ ] `grep -rn "expectedServerName" src/SqlHarness.Core/Targets docs/example-targets.json README.md AGENTS.md` → matches in each
 - [ ] No existing identity test expectation was changed (only additions)
 - [ ] `plans/README.md` row updated
 
 ## STOP conditions
 
-- An existing test asserts that an FQDN profile **must** mismatch (an intentional strictness decision). Report it.
+- The explicit field cannot be represented without changing target ownership or widening a profile authorization boundary; report the concrete incompatibility. Existing strict FQDN mismatch tests should remain valid without the field.
 - `ResolvedTarget` is part of a persisted artifact owner tuple (`ArtifactOwner`) and adding a field changes owner matching (`grep -rn "ResolvedTarget" src/SqlHarness.Core/Artifact*`). Report it before changing the record shape.
 - The profile loader's unknown-field rejection is order- or reflection-based in a way that makes adding a field risky.
 

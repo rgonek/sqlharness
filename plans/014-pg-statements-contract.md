@@ -1,6 +1,8 @@
 # Kontrakt pg_stat_statements — macierz źródeł
 
-Status: macierz źródeł (T1); sekwencja połączenia (T2); osobny kontrakt od qstop (T3); delta (T4).
+> **REJECTED 2026-10-11** — `pgstop` will not be built. `query` can already read `pg_stat_statements`; a ranked example query in the agent docs (plan 029) covers the need. Kept for history; do not execute.
+
+Status: projekt skumulowanego rankingu v1; macierz źródeł (T1), sekwencja połączenia i runtime probe (T2), osobny kontrakt od qstop (T3). Korekta 2026-10-11 przy `729d88f`; delta odłożona (T4). Funkcja nadal PLANNED.
 
 ## Macierz źródeł
 
@@ -198,11 +200,13 @@ Kolejność jest jedna: resolve, auth, identity, wersja serwera, wersja rozszerz
 
 3. **Identity.** Po udanym otwarciu, nadal wewnątrz `ConnectAsync`, `ReadIdentityAsync` wykonuje `PostgresPing.IdentitySql`: `current_database()` i `COALESCE(inet_server_addr()::text, 'localhost')`. To nie jest `server_version` i nie jest wersja rozszerzenia. Komentarz w `NpgsqlSessionFactory` zostawia `inet_server_addr()` na raporcie. O tym, czy cel się zgadza, decyduje ustanowione połączenie w `PostgresEndpointIdentity.Matches`. Fałsz kończy się `SqlTargetMismatchException` z `src/SqlHarness.Core/SqlExecution.cs`. Mapper daje exit `4` (`SqlHarnessExitCode.TargetMismatch`) niezależnie od fazy. `ConnectAsync` w `catch` zamyka sesję przez `DisposeAsync` i rzuca dalej. Exit `3` i exit `4` są oba przed próbą rozszerzenia. `NpgsqlException` zapytania tożsamości, dopóki faza wołającego to nadal `Authentication`, zostaje exit `3`. To samo dotyczy braku wiersza tożsamości: `ReadIdentityAsync` rzuca wtedy `InvalidOperationException`, a gałąź mappera dla fazy `Authentication` też daje exit `3`. Nie jest to exit `4` ani exit `5`.
 
-4. **Wersja serwera.** Odczyt wersji nie wchodzi do `PostgresPing.IdentitySql` i nie wchodzi do `ConnectAsync`. Dopóki faza wołającego to `Authentication`, `NpgsqlException` tego odczytu mapowałby się na exit `3`. Wersja pada dopiero, gdy `ConnectAsync` zwróci sesję i wołający ustawi `OperationPhase.Sql`, tak jak dzisiejsze operacje w `SqlHarnessModule`. Odczyt idzie istniejącym `ISqlSession.ExecuteReaderAsync`. SQL to `SELECT current_setting('server_version_num')`. Preset `server_version_num` jest typu `integer` (`PG_VERSION_NUM`). `current_setting` zwraca `text`. Porównanie używa liczby sparsowanej niezmiennie kulturowo, nie napisu `server_version`. Kodowanie jest to samo co `PQserverVersion`: major razy `10000` plus minor. Strona libpq podaje wersję 11.0 jako `110000`, więc próg PostgreSQL 14.0 to `140000`. Podłoga: liczba mniejsza niż `140000`. Exit zostaje `2`. Wyjątek to `SqlHarnessSafetyException`, żeby ten sam mapper dał `Safety`, a nie błąd SQL. Wzorzec `qstop` tego nie jest: `ExecuteQueryStoreTopAsync` rzuca `InvalidOperationException` po połączeniu, w fazie `Sql`, i domyślna gałąź mappera daje exit `5`. Faza podłogi nie wraca do `Validation` ani do `Authentication`. Gdy odczyt rzuci `NpgsqlException` albo tekst nie jest liczbą, exit to `5` (`SqlHarnessExitCode.SqlExecution`) i sekwencja staje. To nie jest `SqlHarnessSafetyException` i nie jest podłoga. Przy podłodze połączenie zostało otwarte i zamknięte. Sesja zwrócona przez `ConnectAsync` jest zwalniana (`await using`, `NpgsqlSession.DisposeAsync` zamyka `NpgsqlConnection`) zanim wyjdzie exit `2`. Do wersji rozszerzenia i do SQL kolumn ta ścieżka nie dochodzi.
+4. **Wersja serwera.** Po zwróceniu sesji przez `ConnectAsync` faza to `OperationPhase.Sql`. `SELECT current_setting('server_version_num')` zwraca tekst parsowany niezmiennie kulturowo; niepoprawny odczyt jest exit `5`. Zachowujemy zakres PG14+: liczba poniżej `140000` jest exit `2`, a sesja zostaje zamknięta przez `await using`. Numer serwera służy kontekstowi i zakresowi PG14+, nie wyborowi dokładnej listy dozwolonych par wersji.
 
-5. **Wersja rozszerzenia.** Osobny odczyt po udanej podłodze, nadal w fazie `Sql`. Kolumna to `pg_available_extensions.installed_version` przy `name` równym `pg_stat_statements`. To nie jest `server_version`, nie jest `server_version_num` i nie jest `default_version`. Macierz: `installed_version` jest NULL, gdy rozszerzenie nie jest zainstalowane. `pg_extension.extversion` jest nazwą wersji, gdy wiersz istnieje. `default_version` z pliku kontrolnego to `1.9` na PostgreSQL 14 oraz `1.10` na PostgreSQL 15 i 16. Zainstalowana wersja może zostać w tyle za serwerem, bo `ALTER EXTENSION … UPDATE` jest osobno od upgrade serwera. NULL `installed_version` albo brak wiersza `pg_stat_statements` to brak rozszerzenia w rozstrzygniętej bazie. To niepowodzenie, nie pusta lista i nie exit `0`. Przyczyna jest osobna od braku uprawnień. Exit to `5`. To nie jest `SqlHarnessSafetyException`, bo tamto dałoby exit `2`. Nowej gałęzi mappera nie ma: wyjątek w fazie `Sql`, którego mapper nie bierze jako safety, mismatch ani auth, daje `SqlExecution`. Sekwencja nie woła `CREATE EXTENSION` ani `ALTER EXTENSION`. SQLSTATE `42P01` i `42883` nie opisują tego kroku. Macierz pokazuje brak instalacji jako NULL `installed_version`, nie jako brak relacji. Zostają wyłącznie hipotezą specyfikacji §2, gdyby późniejsze polecenie i tak dotknęło brakującego widoku lub funkcji. Ta sekwencja do takiego polecenia nie przechodzi, gdy katalog już pokazał brak instalacji.
+5. **Rozszerzenie.** Odczytaj zainstalowane `pg_stat_statements`, jego wersję i namespace z katalogu w rozstrzygniętej bazie. Brak instalacji jest exit `5`, nigdy pustym sukcesem. Nie wywołuj `CREATE EXTENSION`, `ALTER EXTENSION` ani resetu. Znajdź widok należący do tego rozszerzenia; nie ufaj obiektowi o tej samej nazwie znalezionemu przez `search_path`. Namespace cytuj jako identyfikator przez istniejący helper PostgreSQL (podwojenie cudzysłowów); kolumny wybieraj wyłącznie z wewnętrznej listy. Wersję rozszerzenia raportuj jako kontekst diagnostyczny. Nieznany numer nie jest odmową.
 
-6. **Probe.** SQL, który wymienia kolumny widoku, stoi za oboma odczytami. Nie startuje, gdy podłoga odrzuciła serwer, gdy wersja rozszerzenia nie wróciła, albo gdy rozszerzenia nie ma. Lista kolumn jest listą macierzy dla głównej wersji serwera. Nie jest funkcją samego `extversion` ani samego `server_version_num`. Para, którą macierz opisuje wprost: serwer 14 z zainstalowanym `1.9` używa kolumn PG14 i nie wymienia `temp_blk_read_time`, `temp_blk_write_time` ani `jit_functions`, `jit_generation_time`, `jit_inlining_count`, `jit_inlining_time`, `jit_optimization_count`, `jit_optimization_time`, `jit_emission_count`, `jit_emission_time`. Serwer 15 albo 16 z zainstalowanym `1.10` może użyć kolumn, które macierz oznacza jako obecne dla tej wersji, w tym tych dwóch kolumn I/O i tej ósemki `jit_*`. Każda inna para, także serwer 15 lub 16 z wersją inną niż `1.10` oraz serwer nowszy niż 16, nie dostaje SQL kolumn. Kształt takiej pary jest `UNPROVEN`. Warunek: odczyt nazw kolumn widoku na jawnym celu dla tej pary. Tego odczytu nie wykonano. Brak uprawnień przy odczycie katalogu albo przy tym późniejszym SQL jest osobnym niepowodzeniem. Też exit `5`, nigdy pusta lista sukcesu. SQLSTATE `42501` zostaje hipotezą specyfikacji §2 i §9. Mapper nie czyta `SqlState` i tego numeru nie obala: `NpgsqlException` w fazie `Sql` i tak jest exit `5`. Klasyfikatora, który zmienia exit według SQLSTATE, nie dodajemy. Treść błędu nazywa klasę przyczyny i nie zawiera tekstu SQL. Probe nie woła `pg_stat_statements_reset`. Zmiana `stats_reset` nie jest dowodem resetu jednego `queryid`. Ten skutek w macierzy jest `UNPROVEN`. Probe nie agreguje `queryid` i nie rozstrzyga, czy ukryty `queryid` jest NULL, czy brakiem wiersza. To zostaje `UNPROVEN` i należy do rankingu, nie tutaj.
+6. **Runtime probe kształtu.** Po identity i potwierdzeniu instalacji odczytaj nazwy i typy kolumn należącego do rozszerzenia widoku z katalogów. Wymagane: `userid`/`dbid` (`oid`), `toplevel` (`bool`), `queryid` (`bigint`, wartość może być NULL), `query` (`text`, wartość może być NULL), `calls`/`rows`/`shared_blks_hit`/`shared_blks_read` (`bigint`), `total_exec_time`/`max_exec_time` (`double precision`). Brak lub niezgodny typ wymaganej kolumny to exit `5` z przyczyną incompatible shape; brak uprawnień lub niepoprawny odczyt także exit `5`. Nie zwracaj wtedy artefaktu sukcesu. Dodatkowe kolumny ignoruj. SQL wybiera jawne nazwy, nigdy `SELECT *`; nie wysyłaj odwołania do niepotwierdzonej kolumny. PG14/15/16/17/18 oraz nieznane wersje z kompatybilnym kształtem przechodzą tę samą kontrolę.
+
+Kolumny metryk poza minimum są opcjonalne: plan times (`double precision`), local/temp counters (`bigint`), `wal_bytes` (`numeric`), czasy I/O (`double precision`). Brak lub nieobsługiwany typ daje `null`/unavailable z opisem przyczyny, nigdy 0. Sumy opcjonalne są dostępne tylko przy poprawnych danych wszystkich agregowanych wierszy; niepełnej sumy nie przedstawiaj jako pełnej. Obsługa aliasów nowych nazw I/O wymaga potwierdzenia ich semantyki w oficjalnej dokumentacji (plan 037). Bez tego pozostają unavailable. `pg_stat_statements_info`, jego `dealloc`/`stats_reset` i GUC są kontekstem opcjonalnym: brak obiektu/kolumn albo uprawnień daje niedostępny kontekst z przyczyną, a nie odmowę dostępnego rankingu. Innych błędów wykonania/transportu nie połykaj. Executor potwierdza SQL katalogów, własność obiektu i typy na źródłach pierwotnych oraz fixture; źródłowa macierz poniżej opisuje testowane przykłady, nie allowlistę runtime.
 
 Specyfikacja §9 kładzie brak rozszerzenia i brak uprawnień na ten sam exit `5`. Ta sekcja ten numer zachowuje i rozdziela przyczyny. Czytelny widok z zerem wierszy nie jest żadną z tych dwóch przyczyn. Specyfikacja §9 nazywa taki czytelny pusty wynik exit `0`. Ta sekcja tego raportu nie projektuje. Exit `6`, `7` i `8` ta sekwencja nie rusza. Nowego kodu wyjścia nie ma.
 
@@ -289,7 +293,7 @@ Pusta lista pozycji po udanym odczycie to exit `0` (`SqlHarnessExitCode.Success`
 
 Agregacja dotyczy tylko wierszy o tym samym znanym `queryid` po filtrze bazy. `userid` i `toplevel` nie rozcinają pozycji. Kilka wierszy widoku o tym samym `queryid` staje się jedną pozycją. Powtórzenie `queryid` przed agregacją nie jest błędem. `qstop` rzuca przy zduplikowanym `query_id` w zbiorze metryk (`RequireMatchingTexts`), bo jego SQL już zgrupował plany. Tutaj ziarno widoku jest drobniejsze niż pozycja, więc ten rzut nie obowiązuje. Po agregacji jest jedna pozycja na jeden znany `queryid`. Pozycja nie liczy własnego hasha. Bierze `queryid` z widoku.
 
-Formuły są hipotezą specyfikacji §4. Kolumny są w zbiorze PG14, więc wolno je wybrać i przy zainstalowanym `1.9` na PostgreSQL 14, i przy zainstalowanym `1.10` na PostgreSQL 15 albo 16. `total_exec_time` jest już w milisekundach. Dzielenia przez 1000 z SQL `qstop` nie ma.
+Formuły są kontraktem agregacji po runtime probe. Kolumny wymagane muszą być poprawne; opcjonalne dają dostępne sumy albo null/unavailable według kroku 6. `total_exec_time` jest w milisekundach. Dzielenia przez 1000 z SQL `qstop` nie ma.
 
 - `executionCount` = `SUM(calls)`
 - `totalDurationMs` = `SUM(total_exec_time)`
@@ -314,7 +318,7 @@ Formuły są hipotezą specyfikacji §4. Kolumny są w zbiorze PG14, więc wolno
 
 `mean_exec_time`, `mean_plan_time`, `min_*` i `stddev_*` nie są polami pozycji. Średnia wiersza nie jest średnią pozycji. Specyfikacja §4 mówi też ogólnie o sumie liczników odczytu, zapisu, buforów i WAL. Lista pól jest węższa i jest listą ze specyfikacji §5. Kolumny spoza tej listy nie dostają pól. W szczególności nie dostają ich `shared_blks_dirtied`, `shared_blks_written`, `local_blks_hit`, `local_blks_dirtied`, `wal_records` i `wal_fpi`.
 
-Specyfikacja dzieli przez `SUM(calls)` i nie podaje wyniku dla zera. Strona mówi, że `plans` i `calls` nie zawsze się zgadzają, bo statystyki planu i wykonania aktualizują się osobno. Przy `SUM(calls) = 0` kontrakt nie podstawia 0, null ani `mean_*`. Pól `averageDurationMs` i `averagePlanMs` w tej pozycji nie ma. To nie jest exit `5`. Klucz rankingu i tak jest sumą `total_exec_time`, nie średnią.
+Specyfikacja dzieli przez `SUM(calls)` i nie podaje wyniku dla zera. Strona mówi, że `plans` i `calls` nie zawsze się zgadzają, bo statystyki planu i wykonania aktualizują się osobno. Przy `SUM(calls) = 0` kontrakt nie podstawia 0, null ani `mean_*`. Pól `averageDurationMs` i `averagePlanMs` w tej pozycji nie ma. Gdy calls są niezerowe, lecz opcjonalny total_plan_time jest niedostępny, averagePlanMs również pozostaje niedostępne według kroku 6. To nie jest exit `5`. Klucz rankingu i tak jest sumą `total_exec_time`, nie średnią.
 
 Tekst linii jest kolumną `query`, verbatim, bez obcięcia. Null, gdy serwer zwrócił null, zostaje null. Macierz: po odrzuceniu tekstów `query` jest null, a statystyki przy `queryid` zostają. To nie jest błąd. Null z `pg_stat_statements(showtext := false)` jest osobnym faktem macierzy i nie jest tekstem linii. Odczyt z `showtext := false` nie jest źródłem `queries.jsonl`.
 
@@ -322,9 +326,9 @@ Gdy każdy wiersz pozycji ma `query` null, linia ma null. Gdy każdy wiersz ma t
 
 ### Ranking
 
-Ranking jest po kroku 6 sekwencji: wersja serwera i zainstalowana wersja rozszerzenia są już znane. SQL kolumn jest tylko dla PostgreSQL 14 z zainstalowanym `1.9` oraz dla PostgreSQL 15 albo 16 z zainstalowanym `1.10`. Inna para nie dostaje SQL kolumn. Ta sekcja nie nazywa jej kodu wyjścia i nie daje jej porządku. Zostaje to przy sekwencji. Braku wiersza rozszerzenia ta sekcja też nie poprawia.
+Ranking następuje po udanym runtime probe z kroku 6. Dokładna para numerów serwera i rozszerzenia nie jest bramą. Brak kompatybilnego kształtu jest exit `5`.
 
-Klucze używają tylko kolumn, które obie dozwolone pary mogą wybrać. Nie ma wśród nich `temp_blk_read_time`, `temp_blk_write_time` ani `jit_functions`, `jit_generation_time`, `jit_inlining_count`, `jit_inlining_time`, `jit_optimization_count`, `jit_optimization_time`, `jit_emission_count`, `jit_emission_time`. Sekwencja przy parze `1.10` może te kolumny odczytać. Ten kontrakt nie używa ich w porządku i nie wstawia ich do stdout.
+Klucze rankingu używają wyłącznie wymaganych kolumn minimum potwierdzonych runtime. Dodatkowe kolumny I/O i jit nie stają się nowymi kluczami rankingu ani polami stdout.
 
 Porządek jest porządkiem pozycji po agregacji, nie porządkiem wierszy widoku. Klucze, hipoteza specyfikacji §4, dają pełny porządek:
 
@@ -341,16 +345,16 @@ Liczniki pozycji są wartościami widoku po agregacji. Kontrakt nic od nich nie 
 
 ### Stdout i `queries.jsonl`
 
-Stdout pozycji ma metryki i `queryId`. Nie ma pola `query`, tekstu SQL, `queryHash`, CPU, recency ani `windowMinutes`. Nazwy są pisownią specyfikacji §5: `queryId`, `toplevelOnly`, `executionCount`, `totalDurationMs`, `averageDurationMs`, `maximumDurationMs`, `totalPlanMs`, `averagePlanMs`, `maximumPlanMs`, `rowsReturned`, `sharedBlocksHit`, `sharedBlocksRead`, `localBlocksRead`, `localBlocksWritten`, `tempBlocksRead`, `tempBlocksWritten`, `walBytes`, `blockReadMs`, `blockWriteMs`. Specyfikacja zapisuje część z nich skrótem ze slashem (`sharedBlocksHit/Read`, `localBlocksRead/Written`, `tempBlocksRead/Written`, `blockReadMs/blockWriteMs`, `totalPlanMs / averagePlanMs / maximumPlanMs`). Rozwinięcie jest tą listą, nie nowym polem. Średnie znikają tylko przy `SUM(calls) = 0`, jak wyżej.
+Stdout pozycji ma metryki i `queryId`. Nie ma pola `query`, tekstu SQL, `queryHash`, CPU, recency ani `windowMinutes`. Nazwy są pisownią specyfikacji §5: `queryId`, `toplevelOnly`, `executionCount`, `totalDurationMs`, `averageDurationMs`, `maximumDurationMs`, `totalPlanMs`, `averagePlanMs`, `maximumPlanMs`, `rowsReturned`, `sharedBlocksHit`, `sharedBlocksRead`, `localBlocksRead`, `localBlocksWritten`, `tempBlocksRead`, `tempBlocksWritten`, `walBytes`, `blockReadMs`, `blockWriteMs`. Specyfikacja zapisuje część z nich skrótem ze slashem (`sharedBlocksHit/Read`, `localBlocksRead/Written`, `tempBlocksRead/Written`, `blockReadMs/blockWriteMs`, `totalPlanMs / averagePlanMs / maximumPlanMs`). Rozwinięcie jest tą listą, nie nowym polem. Średnia czasu wykonania znika przy `SUM(calls) = 0`; średnia planowania również przy niedostępnej opcjonalnej sumie. Pozostałe metryki opcjonalne są null/unavailable z przyczyną według kroku 6.
 
 Kontekst raportu, nie pozycja:
 
-- `server_version_num` już odczytany w sekwencji. To nie jest napis `server_version` i nie jest `installed_version`. Specyfikacja §5 mówi „server version string”. Ta sekcja zwęża to do liczby, którą sekwencja już ma. `installed_version` zostaje progiem sekwencji i nie zastępuje tej liczby na raporcie.
-- `pg_stat_statements.track`, `pg_stat_statements.track_utility`, `pg_stat_statements.track_planning`, w pisowni GUC. Wartość jest tą z serwera. Nie ma skróconego aliasu.
+- `server_version_num` już odczytany w sekwencji. To nie jest napis `server_version` i nie jest `installed_version`. Specyfikacja §5 mówi „server version string”. Ta sekcja zwęża to do liczby, którą sekwencja już ma. `installed_version` jest osobnym kontekstem, nie bramą dopuszczonych par wersji.
+- `pg_stat_statements.track`, `pg_stat_statements.track_utility`, `pg_stat_statements.track_planning`, w pisowni GUC. Wartość, gdy dostępna, jest tą z serwera. Brak kontekstu jest unavailable według kroku 6; nie ma skróconego aliasu.
 - `track_io_timing`, w tej pisowni, obok `blockReadMs` i `blockWriteMs`. Odczyt jest tylko `current_setting('track_io_timing')`. Wartość jest tą z serwera. To nie jest zmiana GUC, nie jest kluczem rankingu i nie jest tekstem SQL na stdout. Macierz: `blk_read_time` i `blk_write_time` są zero, gdy ten GUC jest wyłączony. Ta wartość odróżnia „nieśledzone” od „szybkiego”.
 - `dealloc` i `stats_reset`, w pisowni kolumn widoku info. `stats_reset` nie jest `lastExecutionAt` i nie jest etykietą „ostatnie 24h”.
 
-Te odczyty kontekstu stoją za tym samym progiem co probe: po znanej wersji serwera i znanej zainstalowanej wersji rozszerzenia. Niepowodzenie w fazie `Sql` jest exit `5` istniejącym mapperem. Nowej gałęzi nie ma. Odczyty nie wołają `pg_stat_statements_reset` i nie interpretują zmiany `stats_reset`.
+Kontekst czytaj po runtime probe według zasad opcjonalności kroku 6. Nie jest warunkiem ciągłości ani podstawą obliczania delty. Odczyty nie wołają `pg_stat_statements_reset`.
 
 `artifactDirectory` jest nazwą JSON pola `ArtifactDirectory` z raportu `qstop`: katalog artefaktu, bez tekstu SQL w nazwie pliku. Układ katalogu i nazwy typów należą do planu plików, nie tutaj. Raport nie przyjmuje nazwy bazy jako argumentu rankingu.
 
@@ -371,125 +375,10 @@ Niepowodzenie zapisu artefaktu jest exit `6` (`SqlHarnessExitCode.LocalStorage`)
 - `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md`, sekcje 4, 5, 6 i 8, jako hipoteza porządku i pól stdout tam, gdzie ta sekcja ich nie zwęża
 - strony modułu z macierzy, otwarte ponownie dla filtra `dbid`, tekstu reprezentatywnego i granic `queryid`: https://www.postgresql.org/docs/14/pgstatstatements.html , https://www.postgresql.org/docs/15/pgstatstatements.html , https://www.postgresql.org/docs/16/pgstatstatements.html
 
-## Delta
+## Delta — odłożona
 
-Ta sekcja jest krokiem T4. Macierzy, sekwencji i sekcji qstop nie przepisuje. Nie dodaje komend, stubów ani capabilities. Nie projektuje listy plików. Nie uruchamiano live DB ani `dotnet test`. `QueryStoreAvailable: !pg` zostaje.
+V1 zwraca skumulowany ranking jednego odczytu. Nie zawiera `Compare`, statusów `unknown`/`incomparable`, magazynu migawek ani pól w pamięci istniejących wyłącznie dla delty. Nie odczytuje `pg_stat_statements.save` ani czasu startu serwera dla przyszłego porównania. Wcześniejszy projekt, który nigdy nie odejmował liczników, został usunięty z zakresu implementacji.
 
-Specyfikacja §7 jest hipotezą. Ta sekcja zwęża ją do tego, czego dowodzi macierz. Nie wkleja jej. Macierz delty nie projektuje. Reguły niżej nie zastępują wierszy macierzy o `stats_reset`, `dealloc` i resecie.
+Ewentualny późniejszy plan może zaprojektować obserwowaną różnicę liczników na tym samym celu/bazie i kompatybilnej tożsamości wpisu. Musi określić okres obserwacji, reset/eviction/restart, brakujące wpisy, spadki liczników i możliwość niewykrytego resetu selektywnego. Różnica nie będzie dowodem pełnej ciągłości. Wykryta utrata ciągłości unieważni porównanie; równość globalnych znaczników sama nie dowodzi ciągłości wpisu. Nie jest to zadanie v1 ani obietnica nowej funkcji.
 
-Delta jest porównaniem dwóch udanych wyników kontraktu z sekcji qstop. Kolejność jest kolejnością wołającego: pierwszy i drugi. Nie wyznacza jej `stats_reset` ani zegar. Delta nie ma `--window` i nie ma `windowMinutes`. Nie ma etykiety „ostatnie N godzin” ani „ostatnie 24h”. Nie ma czasu trwania i nie ma ilorazu na jednostkę czasu. Liczniki zostają skumulowane. Sekcja qstop zostawia je bez odejmowania i bez czasu trwania. Ta sekcja też nie odejmuje: status nie niesie różnicy.
-
-Niepowodzenie odczytu zostaje przy sekwencji i przy sekcji qstop. Ta sekcja nie nadaje mu statusu delty i nie zmienia numerów wyjścia. Nie woła `pg_stat_statements_reset`.
-
-### Para
-
-Para wymaga tego samego rozstrzygniętego celu, tej samej głównej wersji serwera i tej samej bazy filtra. Główna wersja jest ilorazem całkowitym `server_version_num` przez `10000`, tym samym kodowaniem co próg sekwencji. `queryid` nie jest kluczem między serwerami, architekturami, wersjami głównymi ani repliką logiczną. Poza tą granicą pary nie ma. To nie jest nowy identyfikator.
-
-W tej granicy para jest jednym znanym, nie-null `queryid` obecnym w obu wynikach. Wartość jest tą liczbą `bigint`, ze znakiem. Pole zostaje `queryId`.
-
-Nieznane albo null `queryid` nie są pozycjami. Nie są scalane między wynikami. Nie są parą. Nie łączy ich null, tekst `query`, `userid`, `toplevel`, numer wiersza ani `queryHash`. `0` w `pg_stat_statements_reset` nie jest ich identyfikatorem.
-
-Znane `queryid` tylko w jednym wyniku nie jest parą. Brak wpisu nie jest wykrytym resetem selektywnym. Nie wstawia się zera. Ciągłość takiego id ma status `unknown`.
-
-Rozjazd tekstu `query` zostawia znane `queryid` i ustawia tylko `query` na null, jak w sekcji qstop. Tekst nie jest przyczyną statusu. Null tekstu nie jest resetem.
-
-Pusta lista pozycji zostaje exit `0` z sekcji qstop. Ta sekcja nie zmienia tego numeru i nie robi z pustki pary.
-
-### Status
-
-Tokeny statusu są dwa: `incomparable` i `unknown`. Nie mają polskich zamienników. Nie ma tokenu porównawalności.
-
-Specyfikacja §7 mówi, że delta jest porównawalna tylko wtedy, gdy równe są trzy znaczniki: `stats_reset`, `dealloc` i `pg_postmaster_start_time()`. Macierz tego zdania nie dowodzi. To zdanie nie obowiązuje. Równość odczytów nie jest deltą porównawalną.
-
-Przyczyny `incomparable`, i tylko te, to: reset, dealloc, restart, spadek licznika. Przyczyna, która zaszła, zostaje nazwana przy statusie. Kilka naraz nie zmienia tokenu i nie nazywa się resetem selektywnym. Gdy nie zaszła żadna, status pary jest `unknown`.
-
-Status nie jest kodem wyjścia.
-
-### Reset
-
-`stats_reset` znaczy: „Time at which all statistics in the `pg_stat_statements` view were last reset.” Gdy oba wyniki mają odczyt `stats_reset` i odczyty się różnią, czas ostatniego resetu wszystkich statystyk widoku jest inny. Każda para tego porównania jest `incomparable`, przyczyna reset. Gdy par nie ma, porównanie i tak niesie tę przyczynę. Nie tworzy par z brakujących id i nie wstawia zer.
-
-To nie jest dowód, że wołano `pg_stat_statements_reset`. Sekwencja zostawia zdanie, że zmiana `stats_reset` nie jest dowodem resetu jednego `queryid`. Ta sekcja go nie cofa. Reset jednego `queryid` nie jest opisany jako odrzucenie wszystkich statystyk widoku. Jego skutek dla `stats_reset` i `dealloc` zostaje `UNPROVEN`. Warunek jest wierszem macierzy „Skutek resetu jednego `queryid` dla `stats_reset` i `dealloc`”. Tego odczytu nie wykonano. Zdanie specyfikacji §7, że reset selektywny zmienia `stats_reset`, zostaje rozjazdem z macierzy. Nie jest faktem źródła.
-
-Reset bazy nie jest osobną przyczyną. Jego skutek dla `stats_reset` i `dealloc` zostaje `UNPROVEN`, wierszem macierzy o tym skutku. Tego odczytu nie wykonano.
-
-Czy pełny reset, bez argumentów albo same zera, ustawia `stats_reset`, zeruje `dealloc`, czy robi oba, zostaje `UNPROVEN`. Warunek jest wierszem macierzy „Skutek resetu całości dla `stats_reset` osobno i dla `dealloc` osobno”. Tego odczytu nie wykonano. Różnica kolumny nie rozstrzyga tej komórki. Kolumna jest jedna na cały widok, nie na bazę filtra. Przyczyna reset nie mówi, że reset dotyczył tylko tej bazy.
-
-Gdy któregoś odczytu `stats_reset` brak, w tym gdy jest NULL, porównanie nie jest równością i nie jest różnicą. Przyczyna reset nie zachodzi. Macierz nie mówi, czy kolumna bywa NULL. To zostaje `UNPROVEN`. Warunek: odczyt `pg_stat_statements_info` na jawnym celu, który pokaże, czy `stats_reset` bywa NULL. Tego odczytu nie wykonano.
-
-### Dealloc
-
-`dealloc` jest łączną liczbą wyrzuceń wpisów o najmniej wykonywanych poleceniach, gdy zaobserwowano więcej różnych poleceń niż `pg_stat_statements.max`. Gdy oba wyniki mają odczyt `dealloc` i drugi jest większy, każda para jest `incomparable`, przyczyna dealloc. Gdy par nie ma, porównanie i tak niesie tę przyczynę i nie wstawia zer.
-
-Strony nie opisują delty per wpis po tym wyrzuceniu. Nie wskazują `queryid` ani bazy. Nie ma liczb „tylko dla wpisów, które zostały”. Zdanie specyfikacji §7, że delty per wpis są wtedy „silently partial”, nie jest zdaniem źródła. Ta sekcja go nie przyjmuje.
-
-Spadek `dealloc` nie jest tą przyczyną. Jest spadkiem licznika, niżej. Równe `dealloc` nie jest dowodem, że wpisy trwają.
-
-Brak odczytu albo NULL nie jest wzrostem. Przyczyna dealloc nie zachodzi. Czy `dealloc` bywa NULL, jest `UNPROVEN` na tym samym warunku co NULL w `stats_reset`. Tego odczytu nie wykonano.
-
-### Restart
-
-`pg_postmaster_start_time()` nie jest znacznikiem ciągłości. Macierz go nie dowodzi. Ta sekcja nie otwiera strony tej funkcji i nie robi z niej trzeciego znacznika. Równość albo różnica tego odczytu sama nie jest `incomparable` i sama nie jest deltą porównawalną. Nowego tokenu ciągłości nie ma.
-
-Przyczyna restart zachodzi tylko łącznie. Oba wyniki mają odczyt tej funkcji i te odczyty się różnią. Oba wyniki mają `pg_stat_statements.save` równe `off`. Fakt macierzy: `off` nie zapisuje statystyk przy wyłączeniu i nie wczytuje ich przy starcie. Każda para jest wtedy `incomparable`, przyczyna restart. Domyślne `on` nie jest podstawiane, gdy `save` nie zostało odczytane. Samo `off`, bez różnicy odczytu startu, nie jest tą przyczyną. Dwa odczyty `save` nie są odczytem w chwili wyłączenia. Innego faktu o restarcie macierz nie ma, więc inny układ `save` tej przyczyny nie daje.
-
-Gdy `save` jest `on`, macierz nie podaje reguły delty, także przy różnym odczycie startu. Przyczyna restart nie zachodzi. Delta nie staje się porównawalna. Skutek jest `UNPROVEN`. Warunek: zdanie źródła albo odczyt na jawnym celu, które mówi, czy statystyki po starcie przy `save = on` są statystykami sprzed wyłączenia. Tego odczytu nie wykonano.
-
-Brak odczytu startu nie znaczy, że restartu nie było. Nie uprawnia odejmowania. Zmiana `save` między wynikami, bez koniunkcji wyżej, nie jest przyczyną. Jej skutek dla liczników jest `UNPROVEN`. Warunek: zdanie źródła, które mówi, czy zmiana `save` bez wyłączenia rusza statystyki. Macierz go nie ma. Tego odczytu nie wykonano.
-
-Odczyt startu i `save` nie jest polem stdout sekcji qstop. Ta sekcja nie dopisuje tam pól. Bez tych odczytów przyczyna restart nie zachodzi.
-
-### Spadek licznika
-
-Przyczyna spadek licznika zachodzi, gdy w kolejności wołającego drugi wynik ma mniejszą wartość niż pierwszy. Dotyczy `dealloc`, gdy obie wartości są obecne. Dotyczy pary, gdy oba wyniki mają to samo pole po agregacji z sekcji qstop i druga wartość jest mniejsza:
-
-- `executionCount`
-- `totalDurationMs`
-- `maximumDurationMs`
-- `totalPlanMs`
-- `maximumPlanMs`
-- `rowsReturned`
-- `sharedBlocksHit`
-- `sharedBlocksRead`
-- `localBlocksRead`
-- `localBlocksWritten`
-- `tempBlocksRead`
-- `tempBlocksWritten`
-- `walBytes`
-- `blockReadMs`
-- `blockWriteMs`
-
-Jedno mniejsze pole wystarcza. Para jest `incomparable` w całości. Żadne pole nie dostaje różnicy. Średnie `averageDurationMs` i `averagePlanMs` nie są tym testem. Ich spadek przy niespadających sumach nie jest tą przyczyną. Ich brak przy `SUM(calls) = 0` też nie jest. `toplevelOnly` i `query` nie są tym testem. Brak pola po jednej stronie nie jest zerem i nie jest spadkiem.
-
-Spadek nie jest wykrytym resetem selektywnym i nie jest wykrytym resetem bazy. Nazywa obserwację, nie funkcję, której strony na `stats_reset` nie pokazują.
-
-### Ciągłość `unknown`
-
-Gdy dla pary nie zaszła żadna przyczyna, status jest `unknown`. Równe `stats_reset`, równe `dealloc`, brak koniunkcji restartu i liczniki, które nie są mniejsze, nie wykluczają resetu jednego `queryid` ani resetu bazy. Skutek tych resetów dla obu kolumn jest `UNPROVEN`, jak w macierzy. Tego odczytu nie wykonano. Ta równość nie jest deltą porównawalną.
-
-Kontrakt nie obiecuje pełnego wykrycia resetu selektywnego. W macierzy nie ma metadanej resetu jednego `queryid`. Tej metadanej się nie wymyśla. Reset, którego źródło nie pokazuje, zostaje `unknown`. Nie jest wykrytym resetem i nie jest deltą porównawalną.
-
-`unknown` też nie niesie różnicy liczników. Wzrost licznika nie jest ciągiem. Mógł powstać po resecie, którego te kolumny nie pokazują, a potem powyżej wartości z pierwszego wyniku.
-
-### Przypadki statusu
-
-To nie jest tabela testów implementacji. Pliki, typy i testy należą do osobnego planu, nie tutaj. Lista jest tylko statusami z tej sekcji.
-
-| Przypadek | Obserwacja | Status |
-|---|---|---|
-| Różne `stats_reset` | Inny czas ostatniego resetu wszystkich statystyk widoku. To nie jest nazwa wywołania. | `incomparable`, reset |
-| `dealloc` większe w drugim wyniku | Wyrzucenie pod `pg_stat_statements.max`. Bez delty per wpis. | `incomparable`, dealloc |
-| Różny start i `save = off` w obu wynikach | Nie zapisano przy wyłączeniu i nie wczytano przy starcie. | `incomparable`, restart |
-| `save = on`, także przy różnym starcie | Macierz nie ma reguły delty. | `unknown`; skutek `UNPROVEN` |
-| Mniejszy licznik pary albo mniejszy `dealloc` | Spadek w kolejności wołającego. | `incomparable`, spadek licznika |
-| Równe `stats_reset` i równe `dealloc`, liczniki nie mniejsze, restart nie zaszedł | Reset jednego `queryid` i reset bazy nie są wykluczone. | `unknown` |
-| Znane `queryid` w jednym wyniku | Nie para. Brak nie jest wykrytym resetem selektywnym. | ciągłość `unknown` |
-| Null albo nieznane `queryid` | Nie pozycja i nie para. Bez scalenia. | nie para |
-| Rozjazd `query` | Zostaje `queryId`. Nulluje się tylko `query`. | status liczników bez zmiany z powodu tekstu |
-
-### Odwołania
-
-- Macierz tego pliku: `stats_reset`, `pg_stat_statements_reset`, `dealloc`, `pg_stat_statements.max`, `pg_stat_statements.save` i rozjazd specyfikacji §7. Ta sekcja tych wierszy nie zastępuje.
-- Sekcja qstop tego pliku: znane `queryid`, brak pary z nieznanego id, rozjazd tekstu nulluje tylko `query`, liczniki bez odejmowania i bez czasu trwania. Zdanie, że ta sekcja nie projektuje delty, zostaje przy niej. Projekt delty jest tutaj.
-- Sekwencja tego pliku: zmiana `stats_reset` nie jest dowodem resetu jednego `queryid`. To zdanie zostaje.
-- `docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md` §7, jako hipoteza zwężona powyżej. Zdanie o trzech równych znacznikach nie obowiązuje.
+Macierz źródeł zachowuje historyczne pytania UNPROVEN dotyczące resetów; nie są bramą dla skumulowanego rankingu i nie wymagają wykonania resetu na bazie użytkownika.
