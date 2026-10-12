@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace SqlHarness.Core;
 
@@ -13,29 +14,37 @@ public sealed record AgentBinaryValue(long ByteLength, string Base64Prefix, bool
 /// fallback (always the trailing ones) are counted in <c>OmittedColumnCount</c>,
 /// and a set with omitted columns carries no rows.
 /// </summary>
-public sealed record AgentQueryResultSet(
+public sealed record AgentQueryColumn(string Name, string ValueType, bool AllowNull);
+
+public sealed record AgentClippedCell(int Row, int Column, long OriginalLength, int ReturnedLength, string Unit);
+
+public sealed record AgentCompactResultSet(
     int Ordinal,
-    IReadOnlyList<SqlHarnessColumnReport> Columns,
+    IReadOnlyList<AgentQueryColumn> Columns,
     IReadOnlyList<IReadOnlyList<object?>> Rows,
     long RowCount,
-    long OmittedRowCount,
-    int OmittedColumnCount);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] long OmittedRowCount = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int OmittedColumnCount = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<AgentClippedCell>? ClippedCells = null);
 
 /// <summary>
 /// Agent projection of a query report. <c>ResultSets</c> is a prefix of the
 /// source result sets; <c>OmittedResultSetCount</c> counts the trailing sets
 /// that did not fit.
 /// </summary>
-public sealed record AgentQueryProjection(
-    SqlHarnessTargetIdentityReport Target,
+public sealed record AgentCompactQuery(
     string StatementClassification,
-    IReadOnlyList<AgentQueryResultSet> ResultSets,
-    int OmittedResultSetCount,
-    IReadOnlyList<string?> Messages,
-    int RecordsAffected,
-    long DurationMilliseconds,
-    string ResultHash,
-    OutputFootprint RawFootprint);
+    IReadOnlyList<AgentCompactResultSet> ResultSets,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int OmittedResultSetCount = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string?>? Messages = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? RecordsAffected = null,
+    long DurationMilliseconds = 0);
+
+/// <summary>The version shared by CLI and MCP agent response envelopes.</summary>
+public static class AgentEnvelopeSchema
+{
+    public const int Version = 2;
+}
 
 /// <summary>Presentation-only bounds for the opt-in agent response.</summary>
 public sealed record AgentOutputOptions(int MaximumBytes = 16 * 1024, int MaximumCellCharacters = 512);
@@ -336,7 +345,7 @@ public static class AgentOutputProjection
     /// nothing. Every other set is sampled to <paramref name="rowLimit"/> rows.
     /// The caller's real measurement stays the authority.
     /// </summary>
-    private static AgentQueryProjection ProjectQueryRowSample(
+    private static AgentCompactQuery ProjectQueryRowSample(
         SqlHarnessQueryReport query,
         IReadOnlyList<string?> messages,
         int rowLimit,
@@ -346,11 +355,11 @@ public static class AgentOutputProjection
     {
         var count = query.ResultSets.Count;
         var caches = query.ResultSets.Select(set => new QueryRowCache(set, maximumCellCharacters)).ToArray();
-        var rowless = new AgentQueryResultSet[count];
+        var rowless = new AgentCompactResultSet[count];
         for (var ordinal = 0; ordinal < count; ordinal++)
         {
             var set = query.ResultSets[ordinal];
-            rowless[ordinal] = new AgentQueryResultSet(ordinal, set.Columns.ToArray(), [], set.RowCount, set.OmittedRowCount + set.Rows.Count, 0);
+            rowless[ordinal] = new AgentCompactResultSet(ordinal, set.Columns.Select(CompactColumn).ToArray(), [], set.RowCount, set.OmittedRowCount + set.Rows.Count, 0);
         }
 
         long reserve = PreFilterBudget(maximumBytes) - SerializedLength(QueryShell(query, rowless, 0, messages));
@@ -373,17 +382,18 @@ public static class AgentOutputProjection
         }
 
         var omitted = 0;
-        var sets = new AgentQueryResultSet[count];
+        var sets = new AgentCompactResultSet[count];
         for (var ordinal = 0; ordinal < count; ordinal++)
         {
             var take = whole[ordinal] ? caches[ordinal].Count : Math.Min(caches[ordinal].Count, rowLimit);
-            var rows = caches[ordinal].Prefix(take, out var clipped);
+            var rows = caches[ordinal].Prefix(take, out var clipped, out var clippedCells);
             var setOmitted = caches[ordinal].Count - take;
             omitted += setOmitted + clipped;
             sets[ordinal] = rowless[ordinal] with
             {
                 Rows = rows,
                 OmittedRowCount = query.ResultSets[ordinal].OmittedRowCount + setOmitted,
+                ClippedCells = clippedCells,
             };
         }
 
@@ -413,7 +423,7 @@ public static class AgentOutputProjection
     /// wide detail set's column prefix or row sample. Nothing partial is ever
     /// unaccounted: every dropped set, column, and row is counted.
     /// </summary>
-    private static AgentQueryProjection ProjectQueryInventory(
+    private static AgentCompactQuery ProjectQueryInventory(
         SqlHarnessQueryReport query,
         IReadOnlyList<string?> messages,
         int maximumCellCharacters,
@@ -426,7 +436,7 @@ public static class AgentOutputProjection
         var kept = 0;
         foreach (var set in query.ResultSets)
         {
-            var inventory = new AgentQueryResultSet(kept, [], [], set.RowCount, set.OmittedRowCount + set.Rows.Count, set.Columns.Count);
+            var inventory = new AgentCompactResultSet(kept, [], [], set.RowCount, set.OmittedRowCount + set.Rows.Count, set.Columns.Count);
             var cost = SerializedLength(inventory) + 1;
             if (cost > remaining)
                 break;
@@ -509,24 +519,28 @@ public static class AgentOutputProjection
         }
 
         var omitted = source.Count - kept;
-        var sets = new AgentQueryResultSet[kept];
+        var sets = new AgentCompactResultSet[kept];
         for (var ordinal = 0; ordinal < kept; ordinal++)
         {
             var set = source[ordinal];
             var clipped = 0;
-            IReadOnlyList<IReadOnlyList<object?>> rows = caches[ordinal] is { } cache
-                ? cache.Prefix(rowCounts[ordinal], out clipped)
-                : [];
+            IReadOnlyList<AgentClippedCell>? retainedClippedCells = null;
+            IReadOnlyList<IReadOnlyList<object?>> rows;
+            if (caches[ordinal] is { } cache)
+                rows = cache.Prefix(rowCounts[ordinal], out clipped, out retainedClippedCells);
+            else
+                rows = [];
             var omittedColumns = set.Columns.Count - columnCounts[ordinal];
             var omittedRows = set.Rows.Count - rows.Count;
             omitted += omittedColumns + omittedRows + clipped;
-            sets[ordinal] = new AgentQueryResultSet(
+            sets[ordinal] = new AgentCompactResultSet(
                 ordinal,
-                set.Columns.Take(columnCounts[ordinal]).ToArray(),
+                set.Columns.Take(columnCounts[ordinal]).Select(CompactColumn).ToArray(),
                 rows,
                 set.RowCount,
                 set.OmittedRowCount + omittedRows,
-                omittedColumns);
+                omittedColumns,
+                retainedClippedCells);
         }
 
         omittedItems = omitted;
@@ -541,7 +555,7 @@ public static class AgentOutputProjection
     /// </summary>
     private sealed class QueryRowCache(SqlHarnessResultSetReport set, int maximumCellCharacters)
     {
-        private readonly List<(IReadOnlyList<object?> Cells, int Clipped, int Cost)> rows = [];
+        private readonly List<(IReadOnlyList<object?> Cells, int Clipped, int Cost, IReadOnlyList<AgentClippedCell> ClippedCells)> rows = [];
 
         public int Count => set.Rows.Count;
 
@@ -561,30 +575,54 @@ public static class AgentOutputProjection
             return total;
         }
 
-        public IReadOnlyList<IReadOnlyList<object?>> Prefix(int length, out int clipped)
+        public IReadOnlyList<IReadOnlyList<object?>> Prefix(int length, out int clipped, out IReadOnlyList<AgentClippedCell>? clippedCells)
         {
             var selected = new IReadOnlyList<object?>[length];
+            var metadata = new List<AgentClippedCell>();
             clipped = 0;
             for (var index = 0; index < length; index++)
             {
                 var row = Get(index);
                 selected[index] = row.Cells;
                 clipped += row.Clipped;
+                metadata.AddRange(row.ClippedCells);
             }
 
+            clippedCells = metadata.Count == 0 ? null : metadata;
             return selected;
         }
 
-        private (IReadOnlyList<object?> Cells, int Clipped, int Cost) Get(int index)
+        private (IReadOnlyList<object?> Cells, int Clipped, int Cost, IReadOnlyList<AgentClippedCell> ClippedCells) Get(int index)
         {
             while (rows.Count <= index)
             {
                 var source = set.Rows[rows.Count];
                 var clipped = 0;
+                var clippedCells = new List<AgentClippedCell>();
                 var cells = new object?[source.Count];
                 for (var cell = 0; cell < cells.Length; cell++)
-                    cells[cell] = ProjectCellValue(source[cell], maximumCellCharacters, ref clipped);
-                rows.Add((cells, clipped, SerializedLength(cells) + 1));
+                {
+                    var value = source[cell];
+                    if (value is string text && text.Length > maximumCellCharacters)
+                    {
+                        var prefixLength = SafeTextPrefixLength(text, maximumCellCharacters);
+                        cells[cell] = text[..prefixLength];
+                        clippedCells.Add(new AgentClippedCell(rows.Count, cell, text.Length, prefixLength, "utf16-code-units"));
+                        clipped++;
+                    }
+                    else if (value is byte[] bytes && ((long)bytes.Length + 2) / 3 * 4 > maximumCellCharacters)
+                    {
+                        var prefixLength = Math.Min(bytes.Length, maximumCellCharacters / 4 * 3);
+                        cells[cell] = new AgentBinaryValue(bytes.LongLength, Convert.ToBase64String(bytes.AsSpan(0, prefixLength)), Truncated: true);
+                        clippedCells.Add(new AgentClippedCell(rows.Count, cell, bytes.LongLength, prefixLength, "bytes"));
+                        clipped++;
+                    }
+                    else
+                    {
+                        cells[cell] = ProjectCellValue(value, maximumCellCharacters, ref clipped);
+                    }
+                }
+                rows.Add((cells, clipped, SerializedLength(cells) + 1, clippedCells));
             }
 
             return rows[index];
@@ -599,8 +637,15 @@ public static class AgentOutputProjection
         if (value is null || value.Length <= maximumCellCharacters) return value;
         clippedItems++;
         var length = maximumCellCharacters;
-        if (length > 0 && char.IsHighSurrogate(value[length - 1])) length--;
+        length = SafeTextPrefixLength(value, length);
         return value[..length];
+    }
+
+    private static int SafeTextPrefixLength(string value, int maximumLength)
+    {
+        var length = Math.Min(value.Length, maximumLength);
+        if (length > 0 && length < value.Length && char.IsHighSurrogate(value[length - 1])) length--;
+        return length;
     }
 
     private static object? ProjectCellValue(object? value, int maximumCellCharacters, ref int clippedItems)
@@ -622,13 +667,32 @@ public static class AgentOutputProjection
         }
     }
 
-    private static AgentQueryProjection QueryShell(
+    private static AgentCompactQuery QueryShell(
         SqlHarnessQueryReport query,
-        IReadOnlyList<AgentQueryResultSet> sets,
+        IReadOnlyList<AgentCompactResultSet> sets,
         int omittedResultSets,
         IReadOnlyList<string?> messages) =>
-        new(query.Target, query.StatementClassification, sets, omittedResultSets, messages,
-            query.RecordsAffected, query.DurationMilliseconds, query.ResultHash, query.RawFootprint);
+        new(query.StatementClassification, sets, omittedResultSets,
+            messages.Count == 0 ? null : messages,
+            query.RecordsAffected < 0 ? null : query.RecordsAffected,
+            query.DurationMilliseconds);
+
+    private static AgentQueryColumn CompactColumn(SqlHarnessColumnReport column) =>
+        new(column.Name, ValueTypeName(column.DataType), column.AllowNull);
+
+    public static string ValueTypeName(string clrType) => clrType switch
+    {
+        "System.DateTime" or "DateTime" => "dateTime",
+        "System.DateTimeOffset" or "DateTimeOffset" => "dateTimeOffset",
+        "System.String" or "String" => "string",
+        "System.Int16" or "Int16" => "int16",
+        "System.Int32" or "Int32" => "int32",
+        "System.Int64" or "Int64" => "int64",
+        "System.Boolean" or "Boolean" => "boolean",
+        "System.Decimal" or "Decimal" => "decimal",
+        "System.Byte[]" or "Byte[]" => "bytes",
+        _ => clrType,
+    };
 
     private static int SerializedLength<T>(T value) =>
         JsonSerializer.SerializeToUtf8Bytes(value, ProjectionJson).Length;

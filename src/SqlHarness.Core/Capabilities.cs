@@ -117,6 +117,7 @@ public static class SqlHarnessCapabilitiesProvider
             ["targetIdentity"] = new { server = "informational; authentication depends on transport; PostgreSQL hostname check needs sslMode: verify-full", database = "must match the resolved database (ordinal); mismatch is exit 4" },
             ["agentOutputBytes"] = new { min = 4096, max = 1048576, defaultValue = 16384 },
             ["agentCellChars"] = new { min = 0, max = 4096, defaultValue = 512 },
+            ["agentEnvelopeSchemaVersion"] = AgentEnvelopeSchema.Version,
             ["activityJournalStorage"] = new
             {
                 errorMessages = "credential-redacted error messages are stored by default",

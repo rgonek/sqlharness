@@ -45,7 +45,7 @@ sqlharness plan .\artifacts\orders.sqlplan --json
 
 `space` diagnoses storage only through read-only DMVs and `--object dbo.Contracts` adds per-index detail; shrink, recovery-model, compression and index changes go through an approved `query --allow-mutation` batch. `compare --matrix` varies one parameter, opening a new connection and running setup once per value; its rules sit next to the matrix example in [README Quick start](../../README.md#quick-start).
 
-**Output.** Prefer `--json`; on `measure` and `compare`, `--json-summary` is the bounded projection. A byte-budgeted envelope (`--output agent`): [README Commands](../../README.md#commands).
+**Output.** Prefer `--json`; on `measure` and `compare`, `--json-summary` is the bounded projection. `--output agent` and MCP use shared envelope schema version 2. Query projections identify CLR value types and report the position and lengths of each clipped retained cell: [README Commands](../../README.md#commands).
 
 **Polling.** `watch` replaces a loop of ad-hoc `query` calls: it stops on `--until <predicate>` or `--until-unchanged <polls>`, and exits `7` when `--max-duration` elapses first. `watch --output ndjson` streams a `started` event, a `changed` event per change, and one terminal `completed` or `failed` record ([README Commands](../../README.md#commands)).
 

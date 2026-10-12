@@ -25,7 +25,7 @@ public sealed class AgentOutputTests
 
         Assert.Equal(0, exit);
         using var json = JsonDocument.Parse(output.ToString());
-        Assert.Equal(1, json.RootElement.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(AgentEnvelopeSchema.Version, json.RootElement.GetProperty("schemaVersion").GetInt32());
         Assert.Equal("ping", json.RootElement.GetProperty("command").GetString());
         Assert.Equal("success", json.RootElement.GetProperty("status").GetString());
         Assert.Equal(0, json.RootElement.GetProperty("exitCode").GetInt32());
@@ -157,7 +157,7 @@ public sealed class AgentOutputTests
         Assert.InRange(bytes, 1, 4096);
         Assert.EndsWith("\n", output.ToString(), StringComparison.Ordinal);
         using var json = JsonDocument.Parse(output.ToString());
-        Assert.Equal(1, json.RootElement.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(AgentEnvelopeSchema.Version, json.RootElement.GetProperty("schemaVersion").GetInt32());
         Assert.True(json.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
         Assert.True(json.RootElement.GetProperty("result").GetProperty("tables").GetArrayLength() < 1000);
     }
@@ -184,7 +184,7 @@ public sealed class AgentOutputTests
     }
 
     [Fact]
-    public void Agent_projection_clips_huge_unicode_cells_and_keeps_raw_hash()
+    public void Agent_projection_clips_unicode_cells_and_reports_safe_prefix_metadata()
     {
         var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
         var text = string.Concat(Enumerable.Repeat("語😀", 10000));
@@ -193,16 +193,91 @@ public sealed class AgentOutputTests
         var output = new StringWriter();
 
         new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "query",
-            new OutputCaptureWriter(output), new AgentOutputOptions(4096, 64));
+            new OutputCaptureWriter(output), new AgentOutputOptions(4096, 65));
 
         var bytes = System.Text.Encoding.UTF8.GetByteCount(output.ToString());
         _testOutput.WriteLine($"Unicode cell projection: {bytes} UTF-8 bytes including newline (budget 4096)");
         Assert.InRange(bytes, 1, 4096);
         using var json = JsonDocument.Parse(output.ToString());
         var projected = json.RootElement.GetProperty("result");
-        Assert.Equal("raw-hash", projected.GetProperty("resultHash").GetString());
-        Assert.True(projected.GetProperty("resultSets")[0].GetProperty("rows")[0][0].GetString()!.Length <= 64);
+        Assert.False(projected.TryGetProperty("resultHash", out _));
+        Assert.False(projected.TryGetProperty("rawFootprint", out _));
+        Assert.False(projected.TryGetProperty("target", out _));
+        Assert.True(projected.GetProperty("resultSets")[0].GetProperty("rows")[0][0].GetString()!.Length <= 65);
+        var clippedCell = Assert.Single(projected.GetProperty("resultSets")[0].GetProperty("clippedCells").EnumerateArray());
+        Assert.Equal(0, clippedCell.GetProperty("row").GetInt32());
+        Assert.Equal(0, clippedCell.GetProperty("column").GetInt32());
+        Assert.Equal(text.Length, clippedCell.GetProperty("originalLength").GetInt64());
+        Assert.Equal(projected.GetProperty("resultSets")[0].GetProperty("rows")[0][0].GetString()!.Length,
+            clippedCell.GetProperty("returnedLength").GetInt32());
+        Assert.False(char.IsHighSurrogate(projected.GetProperty("resultSets")[0].GetProperty("rows")[0][0].GetString()![^1]));
+        Assert.Equal("utf16-code-units", clippedCell.GetProperty("unit").GetString());
         Assert.True(json.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+    }
+
+    [Fact]
+    public void Agent_query_projection_uses_clr_aliases_and_omits_only_default_fields()
+    {
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        var columns = new[]
+        {
+            new SqlHarnessColumnReport(0, "date", "System.DateTime", true),
+            new SqlHarnessColumnReport(1, "alsoDate", "System.DateTime", false),
+            new SqlHarnessColumnReport(2, "offset", "System.DateTimeOffset", true),
+            new SqlHarnessColumnReport(3, "text", "System.String", true),
+            new SqlHarnessColumnReport(4, "short", "System.Int16", false),
+            new SqlHarnessColumnReport(5, "int", "System.Int32", false),
+            new SqlHarnessColumnReport(6, "long", "System.Int64", false),
+            new SqlHarnessColumnReport(7, "bool", "System.Boolean", false),
+            new SqlHarnessColumnReport(8, "decimal", "System.Decimal", false),
+            new SqlHarnessColumnReport(9, "bytes", "System.Byte[]", true),
+            new SqlHarnessColumnReport(10, "custom", "Example.CustomType", true),
+        };
+        var empty = new SqlHarnessResultSetReport(columns, [], 0, 0);
+        var report = new SqlHarnessQueryReport(target, "read-only", [empty], [], 0, 1,
+            "canonical-hash", new OutputFootprint(0, 0));
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "query",
+            new OutputCaptureWriter(output), new AgentOutputOptions(4096, 64));
+
+        using var json = JsonDocument.Parse(output.ToString());
+        var result = json.RootElement.GetProperty("result");
+        Assert.False(result.TryGetProperty("target", out _));
+        Assert.False(result.TryGetProperty("resultHash", out _));
+        Assert.False(result.TryGetProperty("rawFootprint", out _));
+        Assert.False(result.TryGetProperty("messages", out _));
+        Assert.False(result.TryGetProperty("omittedResultSetCount", out _));
+        Assert.Equal(0, result.GetProperty("recordsAffected").GetInt32());
+        var set = result.GetProperty("resultSets")[0];
+        Assert.Equal(0, set.GetProperty("rowCount").GetInt64());
+        Assert.Equal(columns.Length, set.GetProperty("columns").GetArrayLength());
+        Assert.False(set.TryGetProperty("clippedCells", out _));
+        Assert.False(set.TryGetProperty("omittedRowCount", out _));
+        Assert.False(set.TryGetProperty("omittedColumnCount", out _));
+        Assert.Equal(new[] { "dateTime", "dateTime", "dateTimeOffset", "string", "int16", "int32", "int64", "boolean", "decimal", "bytes", "Example.CustomType" },
+            set.GetProperty("columns").EnumerateArray().Select(c => c.GetProperty("valueType").GetString()).ToArray());
+        Assert.Equal("System.DateTime", report.ResultSets[0].Columns[0].DataType);
+        Assert.Equal("canonical-hash", report.ResultHash);
+    }
+
+    [Fact]
+    public void Agent_query_projection_keeps_compact_empty_result_and_zero_records_affected_when_it_fits()
+    {
+        var target = new SqlHarnessTargetIdentityReport(new string('s', 5000), new string('d', 5000), "actual", "database", "profile");
+        var set = new SqlHarnessResultSetReport([new SqlHarnessColumnReport(0, "value", "System.String", true)], [["kept"]], 1, 0);
+        var report = new SqlHarnessQueryReport(target, "read-only", [set], [], 0, 1, new string('h', 5000), new OutputFootprint(50000, 1));
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "query",
+            new OutputCaptureWriter(output), new AgentOutputOptions(4096, 64));
+
+        using var json = JsonDocument.Parse(output.ToString());
+        var result = json.RootElement.GetProperty("result");
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("truncation").ValueKind);
+        Assert.Equal(1, result.GetProperty("resultSets")[0].GetProperty("rows").GetArrayLength());
+        Assert.Equal(0, result.GetProperty("recordsAffected").GetInt32());
+        Assert.False(result.GetProperty("resultSets")[0].TryGetProperty("clippedCells", out _));
     }
 
     [Fact]
@@ -222,12 +297,48 @@ public sealed class AgentOutputTests
         Assert.InRange(emittedBytes, 1, 4096);
         using var json = JsonDocument.Parse(output.ToString());
         var result = json.RootElement.GetProperty("result");
-        Assert.Equal("binary-hash", result.GetProperty("resultHash").GetString());
+        Assert.False(result.TryGetProperty("resultHash", out _));
         var projectedCell = result.GetProperty("resultSets")[0].GetProperty("rows")[0][0];
         Assert.Equal(bytes.LongLength, projectedCell.GetProperty("byteLength").GetInt64());
         Assert.True(projectedCell.GetProperty("truncated").GetBoolean());
         Assert.True(projectedCell.GetProperty("base64Prefix").GetString()!.Length <= 64);
+        var clippedCell = Assert.Single(result.GetProperty("resultSets")[0].GetProperty("clippedCells").EnumerateArray());
+        Assert.Equal(bytes.LongLength, clippedCell.GetProperty("originalLength").GetInt64());
+        Assert.Equal(48, clippedCell.GetProperty("returnedLength").GetInt32());
+        Assert.Equal("bytes", clippedCell.GetProperty("unit").GetString());
         Assert.True(json.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
+    }
+
+    [Fact]
+    public void Agent_query_clipping_metadata_is_local_and_excludes_omitted_rows()
+    {
+        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
+        var columns = new[]
+        {
+            new SqlHarnessColumnReport(0, "left", "System.String", true),
+            new SqlHarnessColumnReport(1, "right", "System.String", true),
+        };
+        var rows = Enumerable.Range(0, 200)
+            .Select(i => (IReadOnlyList<object?>)[$"left-{i:D4}-long", $"right-{i:D4}-long"])
+            .ToArray();
+        var set = new SqlHarnessResultSetReport(columns, rows, rows.Length, 0);
+        var report = new SqlHarnessQueryReport(target, "read-only", [set, set], [], -1, 1,
+            "hash", new OutputFootprint(10000, 2));
+        var projected = AgentOutputProjection.Project(report, 8, 1, out _, 4096);
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(projected, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
+        var result = json.RootElement;
+        Assert.False(result.TryGetProperty("recordsAffected", out _));
+        var sets = result.GetProperty("resultSets");
+        Assert.Equal(2, sets.GetArrayLength());
+        foreach (var projectedSet in sets.EnumerateArray())
+        {
+            Assert.Equal(1, projectedSet.GetProperty("rows").GetArrayLength());
+            var clips = projectedSet.GetProperty("clippedCells").EnumerateArray().ToArray();
+            Assert.Equal(2, clips.Length);
+            Assert.All(clips, clip => Assert.Equal(0, clip.GetProperty("row").GetInt32()));
+            Assert.Equal(new[] { 0, 1 }, clips.Select(clip => clip.GetProperty("column").GetInt32()).ToArray());
+        }
     }
 
     [Fact]
@@ -361,7 +472,7 @@ public sealed class AgentOutputTests
         var projectedSet = resultSets[0];
         Assert.Equal(3, projectedSet.GetProperty("columns").GetArrayLength());
         Assert.Equal(3, projectedSet.GetProperty("rows").GetArrayLength());
-        Assert.Equal(0, projectedSet.GetProperty("omittedRowCount").GetInt64());
+        Assert.False(projectedSet.TryGetProperty("omittedRowCount", out _));
     }
 
     [Fact]
@@ -420,7 +531,7 @@ public sealed class AgentOutputTests
         {
             Assert.Equal(1, resultSets[i].GetProperty("columns").GetArrayLength());
             Assert.Equal(3, resultSets[i].GetProperty("rows").GetArrayLength());
-            Assert.Equal(0, resultSets[i].GetProperty("omittedRowCount").GetInt64());
+            Assert.False(resultSets[i].TryGetProperty("omittedRowCount", out _));
         }
     }
 
@@ -537,12 +648,12 @@ public sealed class AgentOutputTests
         Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("truncation").ValueKind);
         var result = json.RootElement.GetProperty("result");
         QueryShapeFixtures.AssertAccounted(result, report);
-        Assert.Equal(0, result.GetProperty("omittedResultSetCount").GetInt32());
+        Assert.False(result.TryGetProperty("omittedResultSetCount", out _));
         var sets = result.GetProperty("resultSets");
         Assert.Equal(3, sets.GetArrayLength());
         for (var i = 0; i < 3; i++)
         {
-            Assert.Equal(0, sets[i].GetProperty("omittedColumnCount").GetInt32());
+            Assert.False(sets[i].TryGetProperty("omittedColumnCount", out _));
             Assert.Equal(report.ResultSets[i].Rows.Count, sets[i].GetProperty("rows").GetArrayLength());
         }
     }
@@ -630,9 +741,9 @@ public sealed class AgentOutputTests
         {
             var projected = AgentOutputProjection.Project(report, 64, limit, out _, 4096);
             using var json = JsonDocument.Parse(JsonSerializer.Serialize(projected, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
-            Assert.Equal(report.ResultHash, json.RootElement.GetProperty("resultHash").GetString());
-            Assert.Equal(report.Target.ActualDatabase, json.RootElement.GetProperty("target").GetProperty("actualDatabase").GetString());
-            Assert.Equal(report.RawFootprint.Bytes, json.RootElement.GetProperty("rawFootprint").GetProperty("bytes").GetInt64());
+            Assert.False(json.RootElement.TryGetProperty("resultHash", out _));
+            Assert.False(json.RootElement.TryGetProperty("target", out _));
+            Assert.False(json.RootElement.TryGetProperty("rawFootprint", out _));
             QueryShapeFixtures.AssertAccounted(json.RootElement, report);
         }
 
@@ -699,14 +810,14 @@ public sealed class AgentOutputTests
         var result = ProjectQueryJson(report, 64, limit);
 
         QueryShapeFixtures.AssertAccounted(result, report);
-        Assert.Equal(0, result.GetProperty("omittedResultSetCount").GetInt32());
+        Assert.False(result.TryGetProperty("omittedResultSetCount", out _));
         var sets = result.GetProperty("resultSets");
         Assert.Equal(5, sets.GetArrayLength());
         Assert.Equal(0, sets[1].GetProperty("columns").GetArrayLength());
-        Assert.Equal(0, sets[1].GetProperty("omittedColumnCount").GetInt32());
+        Assert.False(sets[1].TryGetProperty("omittedColumnCount", out _));
         Assert.Equal(2, sets[2].GetProperty("columns").GetArrayLength());
         Assert.Equal(0, sets[2].GetProperty("rows").GetArrayLength());
-        Assert.Equal(0, sets[2].GetProperty("omittedRowCount").GetInt64());
+        Assert.False(sets[2].TryGetProperty("omittedRowCount", out _));
         Assert.Equal(2, sets[3].GetProperty("rowCount").GetInt64());
     }
 
@@ -728,7 +839,7 @@ public sealed class AgentOutputTests
         Assert.Equal(0, json.RootElement.GetProperty("truncation").GetProperty("detailLimit").GetInt32());
         var result = json.RootElement.GetProperty("result");
         QueryShapeFixtures.AssertAccounted(result, report);
-        Assert.Equal(0, result.GetProperty("omittedResultSetCount").GetInt32());
+        Assert.False(result.TryGetProperty("omittedResultSetCount", out _));
         var sets = result.GetProperty("resultSets");
         Assert.Equal(2, sets.GetArrayLength());
         // Cheapest complete schema first, then complete rows, then column
@@ -738,10 +849,10 @@ public sealed class AgentOutputTests
         Assert.Equal(0, sets[0].GetProperty("rows").GetArrayLength());
         Assert.Equal(3, sets[0].GetProperty("omittedRowCount").GetInt64());
         Assert.Equal(2, sets[1].GetProperty("columns").GetArrayLength());
-        Assert.Equal(0, sets[1].GetProperty("omittedColumnCount").GetInt32());
+        Assert.False(sets[1].TryGetProperty("omittedColumnCount", out _));
         Assert.Equal(2, sets[1].GetProperty("rowCount").GetInt64());
         Assert.Equal(2, sets[1].GetProperty("rows").GetArrayLength());
-        Assert.Equal(0, sets[1].GetProperty("omittedRowCount").GetInt64());
+        Assert.False(sets[1].TryGetProperty("omittedRowCount", out _));
     }
 
     public static TheoryData<int, int, int> WideDetailShapes => new()

@@ -159,7 +159,7 @@ public sealed class Renderer
             var result = AgentOutputProjection.Project(outcome.Report, requestedCellChars, detailLimit, out var omitted, requestedBytes);
             omitted += errorOmitted;
             var truncated = omitted > 0;
-            var envelope = new SqlHarnessAgentEnvelope(1, boundedCommand, status, (int)outcome.ExitCode, result, error,
+            var envelope = new SqlHarnessAgentEnvelope(AgentEnvelopeSchema.Version, boundedCommand, status, (int)outcome.ExitCode, result, error,
                 truncated ? new { omittedItems = omitted, detailLimit, maxCellChars = requestedCellChars } : null);
             var bytes = JsonSerializer.SerializeToUtf8Bytes(envelope, CompactJson);
             if (bytes.Length + 1 <= requestedBytes)
@@ -170,7 +170,7 @@ public sealed class Renderer
             }
         }
 
-        var minimal = new SqlHarnessAgentEnvelope(1, boundedCommand, "error", (int)SqlHarnessExitCode.Safety, null,
+        var minimal = new SqlHarnessAgentEnvelope(AgentEnvelopeSchema.Version, boundedCommand, "error", (int)SqlHarnessExitCode.Safety, null,
             new SqlHarnessError("output_budget_too_small", "render", "The minimum agent response does not fit the configured byte budget."),
             new { omittedItems = 1, maxOutputBytes = requestedBytes });
         var minimalBytes = JsonSerializer.SerializeToUtf8Bytes(minimal, CompactJson);
@@ -182,7 +182,7 @@ public sealed class Renderer
         else
         {
             // Minimum accepted budget is 4096 bytes, so this is defensive only.
-            output.WriteLine("{\"schemaVersion\":1,\"command\":\"unknown\",\"status\":\"error\",\"exitCode\":2,\"result\":null,\"error\":{\"code\":\"output_budget_too_small\",\"phase\":\"render\",\"message\":\"Agent output unavailable.\"},\"truncation\":null}");
+            output.WriteLine($"{{\"schemaVersion\":{AgentEnvelopeSchema.Version},\"command\":\"unknown\",\"status\":\"error\",\"exitCode\":2,\"result\":null,\"error\":{{\"code\":\"output_budget_too_small\",\"phase\":\"render\",\"message\":\"Agent output unavailable.\"}},\"truncation\":null}}");
         }
     }
 

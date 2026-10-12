@@ -89,7 +89,7 @@ public static class McpResultAdapter
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     /// <summary>Envelope schema version shared with the CLI agent output.</summary>
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = AgentEnvelopeSchema.Version;
 
     /// <summary>
     /// <summary>
@@ -159,9 +159,9 @@ public static class McpResultAdapter
 
         // Defensive only: the minimum budget (4096) always fits the envelope
         // above, so reaching here means misconfiguration, not content size.
-        const string Fallback =
-            /*lang=json*/ "{\"schemaVersion\":1,\"command\":\"unknown\",\"status\":\"error\",\"exitCode\":2,\"result\":null,\"error\":{\"code\":\"output_budget_too_small\",\"phase\":\"render\",\"message\":\"Agent output unavailable.\"},\"truncation\":null}";
-        return Build(Encoding.UTF8.GetBytes(Fallback), isError: true);
+        var fallback =
+            /*lang=json*/ $"{{\"schemaVersion\":{SchemaVersion},\"command\":\"unknown\",\"status\":\"error\",\"exitCode\":2,\"result\":null,\"error\":{{\"code\":\"output_budget_too_small\",\"phase\":\"render\",\"message\":\"Agent output unavailable.\"}},\"truncation\":null}}";
+        return Build(Encoding.UTF8.GetBytes(fallback), isError: true);
     }
 
     /// <summary>

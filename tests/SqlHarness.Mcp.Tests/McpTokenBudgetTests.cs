@@ -102,6 +102,28 @@ public sealed class McpTokenBudgetTests
     }
 
     [Fact]
+    public void Query_result_uses_shared_v2_compact_projection()
+    {
+        var set = new SqlHarnessResultSetReport(
+            [new SqlHarnessColumnReport(0, "when", "System.DateTime", true)],
+            [], 0, 0);
+        var report = new SqlHarnessQueryReport(Target, "read-only", [set], [], 0, 1,
+            "canonical-hash", new OutputFootprint(0, 0));
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "query");
+        var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+        using var document = JsonDocument.Parse(text);
+
+        Assert.Equal(AgentEnvelopeSchema.Version, document.RootElement.GetProperty("schemaVersion").GetInt32());
+        var query = document.RootElement.GetProperty("result");
+        Assert.False(query.TryGetProperty("target", out _));
+        Assert.False(query.TryGetProperty("resultHash", out _));
+        Assert.False(query.TryGetProperty("rawFootprint", out _));
+        Assert.Equal("dateTime", query.GetProperty("resultSets")[0].GetProperty("columns")[0].GetProperty("valueType").GetString());
+        Assert.Equal(0, query.GetProperty("recordsAffected").GetInt32());
+    }
+
+    [Fact]
     public void Budget_counts_only_the_text_the_model_reads()
     {
         var result = McpResultAdapter.Adapt(LargeQueryOutcome(targetBytes: 40_000), "query");
@@ -482,7 +504,7 @@ public sealed class McpTokenBudgetTests
         Assert.Equal(0, projectedSet.GetProperty("rows").GetArrayLength());
         Assert.Equal(1, projectedSet.GetProperty("columns").GetArrayLength());
         Assert.Equal(1, projectedSet.GetProperty("omittedRowCount").GetInt64());
-        Assert.Equal(0, projectedSet.GetProperty("omittedColumnCount").GetInt32());
+        Assert.False(projectedSet.TryGetProperty("omittedColumnCount", out _));
         Assert.True(document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
     }
 
