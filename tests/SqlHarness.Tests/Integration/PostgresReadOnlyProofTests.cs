@@ -137,8 +137,8 @@ public sealed class PostgresReadOnlyProofTests
 
         Assert.Contains(records, record => record.Name == "Function persistent write inside READ ONLY transaction" && record.SqlState == "25006");
         Assert.Contains(records, record => record.Name == "Next per-command READ ONLY transaction after default changed to off" && record.SqlState == "25006");
-        Assert.Contains(records, record => record.Name == "SELECT nextval('" + schema + ".proof_seq')" && record.SqlState == "25006");
-        Assert.Contains(records, record => record.Name == "EXPLAIN (ANALYZE, COSTS OFF) SELECT " + schema + ".write_probe()" && record.SqlState == "25006");
+        Assert.Contains(records, record => record.Name == "nextval() on persistent sequence inside READ ONLY transaction" && record.SqlState == "25006");
+        Assert.Contains(records, record => record.Name == "EXPLAIN ANALYZE function persistent write inside READ ONLY transaction" && record.SqlState == "25006");
         Assert.Contains(records, record => record.Name.StartsWith("INSERT INTO pg_temp.", StringComparison.Ordinal) && record.Outcome == "PASS");
         Assert.Contains(records, record => record.Name.StartsWith("UPDATE pg_temp.", StringComparison.Ordinal) && record.Outcome == "PASS");
         Assert.Contains(records, record => record.Name.StartsWith("DELETE FROM pg_temp.", StringComparison.Ordinal) && record.Outcome == "PASS");
