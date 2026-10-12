@@ -144,11 +144,13 @@ public class ContractsTests
         foreach (var token in new[] { "`qstop`", "`query_id`", "queries.jsonl", "--window", "--top" })
             Assert.Contains(token, readme, StringComparison.Ordinal);
         Assert.Contains("`qstop`", Section(readme, "## Commands"), StringComparison.Ordinal);
-        Assert.Contains("queries.jsonl", Section(readme, "## Safety contract"), StringComparison.Ordinal);
+        // Safety clause: Query Store text is published only after explicit review.
+        Assert.Contains("`queries.jsonl` without explicit review", Section(readme, "## Safety contract"), StringComparison.Ordinal);
 
         var qstop = Paragraph(skill, "**Query Store**");
         Assert.Contains("](../../README.md#commands)", qstop, StringComparison.Ordinal);
         Assert.Contains("queries.jsonl", qstop, StringComparison.Ordinal);
+        Assert.Contains("no SQL text", qstop, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -163,6 +165,9 @@ public class ContractsTests
         Assert.Contains(example, section, StringComparison.Ordinal);
         foreach (var token in new[] { "--param-set", "--param", "compare --matrix", "--json-summary", "64 KiB", ".sqlplan" })
             Assert.Contains(token, section, StringComparison.Ordinal);
+        // Safety clauses: the files are locally sensitive and their values stay out of reports.
+        Assert.Contains("files are locally sensitive", section, StringComparison.Ordinal);
+        Assert.Contains("does not copy parameter values", section, StringComparison.Ordinal);
         Assert.Contains("](README.md#measure-parameter-sets)", ReadRepositoryFile("AGENTS.md"), StringComparison.Ordinal);
         Assert.Contains("](../../README.md#measure-parameter-sets)", skill, StringComparison.Ordinal);
         Assert.Contains(example, skill, StringComparison.Ordinal);
@@ -269,16 +274,28 @@ public class ContractsTests
             .Select(match => GitHubSlug(match.Groups[1].Value))
             .ToHashSet(StringComparer.Ordinal);
 
-    // The text from a heading line to the next heading of the same or a higher level.
+    // The text from a heading line to the next heading of the same or a higher level; lines inside
+    // fenced code blocks (for example a `# comment`) are never headings.
     private static string Section(string markdown, string heading)
     {
         var lines = markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
         var level = heading.TakeWhile(c => c == '#').Count();
         var start = Array.FindIndex(lines, line => line.TrimEnd() == heading);
         Assert.True(start >= 0, "Missing heading: " + heading);
-        var end = Array.FindIndex(lines, start + 1, line =>
-            line.StartsWith('#') && line.TakeWhile(c => c == '#').Count() <= level && line.TrimStart('#').StartsWith(' '));
-        return string.Join('\n', lines[start..(end < 0 ? lines.Length : end)]);
+        var end = lines.Length;
+        var inFence = false;
+        for (var i = start + 1; i < lines.Length; i++)
+        {
+            if (lines[i].TrimStart().StartsWith("```", StringComparison.Ordinal))
+                inFence = !inFence;
+            else if (!inFence && lines[i].StartsWith('#') && lines[i].TakeWhile(c => c == '#').Count() <= level && lines[i].TrimStart('#').StartsWith(' '))
+            {
+                end = i;
+                break;
+            }
+        }
+
+        return string.Join('\n', lines[start..end]);
     }
 
     // The paragraph (blank-line delimited) that starts with the given text.
