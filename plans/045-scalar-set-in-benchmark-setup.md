@@ -4,7 +4,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: DONE (implementation merged to main `3e8236f`; both branch gates passed on `eb64089`)
 - Priority: P2
 - Effort: S
 - Risk: LOW
@@ -50,12 +50,21 @@ Run one final gate on each required platform after the final relevant code chang
 
 ## Done criteria
 
-- [ ] Proven same-batch plain scalar SET is allowed in setup.
-- [ ] Existing unsafe SET variants remain denied.
-- [ ] Setup split and separate measured-batch variable lifetimes remain correct.
-- [ ] Offline validation and execution preparation apply the same rule.
-- [ ] Focused and required platform gates pass, and plans/README.md records evidence.
-- [ ] Source, CLI/MCP descriptions and documentation agree on the final behavior.
+- [x] Proven same-batch plain scalar SET is allowed in setup.
+- [x] Existing unsafe SET variants remain denied.
+- [x] Setup split and separate measured-batch variable lifetimes remain correct.
+- [x] Offline validation and execution preparation apply the same rule.
+- [x] Focused and required platform gates pass, and plans/README.md records evidence.
+- [x] Source, CLI/MCP descriptions and documentation agree on the final behavior.
+
+## Execution evidence — 2026-10-12
+
+- Commits: `869cf01` safety/lifetime regressions; `6302c8b` CLI/MCP parity and documentation; `c36a68b` capability byte golden; `eb64089` agent digest. Incoming main was preserved at `b607466`; implementation was independently merged to main at `3e8236f` during verification.
+- Regression evidence: 8 expected RED failures before the safety change, then all 25 Plan045 cases passed. Two new CLI/MCP split-lifetime cases failed before the SqlValidation parity correction. Final focused selection: 755 passed, zero failed/skipped; byte workflow fix: 5 passed.
+- Final Windows gate on `eb64089`: exit 0, literal `verify: OK`; Core 3705 passed, MCP 390 passed/4 skipped; build zero warnings/errors and format passed.
+- Final Linux gate on the same `eb64089`, sequentially on WSL ext4: exit 0, literal `verify-linux: OK`; Core 3705 passed, MCP 391 passed/3 skipped; all stages including format passed.
+- Both task reviews and whole-branch review approved after scoped re-reviews. Initial Windows failure was a stale capability byte golden; a later UI check could not find `tsc`, then direct typecheck and the full fresh gate passed. Neither failed attempt is counted as a pass.
+- No live database checks; provider execution uses synthetic fixtures. Skips are opt-in live MCP and foreign-platform smoke tests. These gates prove the branch at `eb64089`, not newer main changes from other plans. No push performed by this execution.
 
 ## Stop conditions and maintenance
 
