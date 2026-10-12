@@ -20,6 +20,40 @@ public class SnapshotDifferTests
     }
 
     [Fact]
+    public void Same_multidimensional_array_shape_and_elements_are_identical()
+    {
+        var before = SnapshotFixture.Document(
+            columns: [("Value", "System.Int32[,]")],
+            rows: [[new int[,] { { 1, 2, 3 }, { 4, 5, 6 } }]]);
+        var after = SnapshotFixture.Document(
+            columns: [("Value", "System.Int32[,]")],
+            rows: [[new int[,] { { 1, 2, 3 }, { 4, 5, 6 } }]]);
+
+        var diff = SnapshotDiffer.Compare(before, after);
+
+        Assert.Equal(0, diff.DifferenceCount);
+        Assert.Empty(diff.Differences);
+    }
+
+    [Fact]
+    public void Different_multidimensional_array_shapes_with_same_elements_are_different()
+    {
+        var before = SnapshotFixture.Document(
+            columns: [("Value", "System.Int32[,]")],
+            rows: [[new int[,] { { 1, 2, 3 }, { 4, 5, 6 } }]]);
+        var after = SnapshotFixture.Document(
+            columns: [("Value", "System.Int32[,]")],
+            rows: [[new int[,] { { 1, 2 }, { 3, 4 }, { 5, 6 } }]]);
+
+        var diff = SnapshotDiffer.Compare(before, after);
+
+        Assert.Equal(1, diff.DifferenceCount);
+        Assert.Equal(
+            new SqlHarnessSnapshotDifference(0, 0, 0, "cell-changed"),
+            Assert.Single(diff.Differences));
+    }
+
+    [Fact]
     public void Changed_cell_reports_location_without_values()
     {
         var before = SnapshotFixture.Document(

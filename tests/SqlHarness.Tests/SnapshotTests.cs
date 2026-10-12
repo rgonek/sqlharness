@@ -95,6 +95,25 @@ public class SnapshotTests
     }
 
     [Fact]
+    public async Task Snapshot_diff_multidimensional_shape_change_returns_eight()
+    {
+        var store = new FakeSnapshotStore(SnapshotFixture.Document(
+            columns: [("Value", "System.Int32[,]")],
+            rows: [[new int[,] { { 1, 2, 3 }, { 4, 5, 6 } }]]));
+        var candidate = FakeSession.WithRows(new int[,] { { 1, 2 }, { 3, 4 }, { 5, 6 } });
+
+        var outcome = await Module(candidate, store).ExecuteAsync(Snapshot(diff: true));
+
+        Assert.Equal(SqlHarnessExitCode.SnapshotDifferences, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessSnapshotReport>(outcome.Report);
+        Assert.Equal(SnapshotVerdict.Different, report.Verdict);
+        Assert.Equal(1, report.DifferenceCount);
+        Assert.Equal(
+            new SqlHarnessSnapshotDifference(0, 0, 0, "cell-changed"),
+            Assert.Single(report.Differences));
+    }
+
+    [Fact]
     public async Task Snapshot_shape_change_returns_safety_without_cell_locations()
     {
         var store = new FakeSnapshotStore(

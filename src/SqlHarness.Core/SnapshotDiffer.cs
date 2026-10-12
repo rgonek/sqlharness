@@ -127,7 +127,17 @@ internal static class SnapshotDiffer
         // compare canonical type/null flags and raw JSON text instead.
         return string.Equals(left.Type, right.Type, StringComparison.Ordinal)
             && left.IsNull == right.IsNull
+            && DimensionsEqual(left.Dimensions, right.Dimensions)
             && string.Equals(left.Value.GetRawText(), right.Value.GetRawText(), StringComparison.Ordinal);
+    }
+
+    private static bool DimensionsEqual(
+        IReadOnlyList<int>? baseline,
+        IReadOnlyList<int>? candidate)
+    {
+        if (baseline is null || candidate is null)
+            return baseline is null && candidate is null;
+        return baseline.SequenceEqual(candidate);
     }
 
     private static SnapshotScalar? GetCell(IReadOnlyList<SnapshotScalar>? row, int column)

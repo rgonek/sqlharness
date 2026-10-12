@@ -1,7 +1,12 @@
+using System.Data.SqlTypes;
 using System.Globalization;
+using System.Net;
+using System.Net.NetworkInformation;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+
+using Microsoft.SqlServer.Types;
 
 using SqlHarness.Core;
 
@@ -107,20 +112,160 @@ public class CanonicalResultsTests
 
     [Theory]
     [MemberData(nameof(NonFiniteFloatingValues))]
-    public void Non_finite_floating_scalar_is_rejected_without_changing_state(object nonFiniteValue)
+    public void Non_finite_floating_scalars_have_stable_tagged_encodings(object nonFiniteValue)
     {
-        const string expected = "{\"events\":[{\"kind\":\"resultSetStart\",\"columns\":[{\"ordinal\":0,\"name\":\"Value\",\"dataType\":\"floating\",\"allowNull\":false}]},{\"kind\":\"row\",\"values\":[{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":1}]},{\"kind\":\"resultSetEnd\",\"rowCount\":1}]}";
-        var bytes = Encoding.UTF8.GetBytes(expected);
-        using var accumulator = new CanonicalResultAccumulator();
-        accumulator.BeginResultSet([new CanonicalColumn(0, "Value", "floating", false)]);
+        var first = CanonicalFixture.ResultSet([nonFiniteValue]);
+        var second = CanonicalFixture.ResultSet([nonFiniteValue]);
+        var type = nonFiniteValue is float ? "singleNonFinite" : "doubleNonFinite";
+        var text = nonFiniteValue switch
+        {
+            float value when float.IsNaN(value) => "NaN",
+            double value when double.IsNaN(value) => "NaN",
+            float value when float.IsPositiveInfinity(value) => "Infinity",
+            double value when double.IsPositiveInfinity(value) => "Infinity",
+            _ => "-Infinity",
+        };
 
-        Assert.Throws<NotSupportedException>(() => accumulator.AddRow([nonFiniteValue]));
-        accumulator.AddRow([1]);
-        accumulator.EndResultSet();
-        var actual = accumulator.Complete();
+        Assert.Equal(first.Hash, second.Hash);
+        Assert.Equal(first.Footprint, second.Footprint);
+        Assert.Equal($"{{\"type\":\"{type}\",\"isNull\":false,\"length\":{text.Length},\"value\":\"{text}\"}}", CanonicalScalarJson(nonFiniteValue));
+    }
+
+    [Fact]
+    public void Non_finite_double_nan_has_explicit_canonical_json()
+    {
+        const string expected = "{\"events\":[{\"kind\":\"resultSetStart\",\"columns\":[{\"ordinal\":0,\"name\":\"Value\",\"dataType\":\"floating\",\"allowNull\":false}]},{\"kind\":\"row\",\"values\":[{\"type\":\"doubleNonFinite\",\"isNull\":false,\"length\":3,\"value\":\"NaN\"}]},{\"kind\":\"resultSetEnd\",\"rowCount\":1}]}";
+        var bytes = Encoding.UTF8.GetBytes(expected);
+
+        var actual = CanonicalFixture.ResultSet(
+            [double.NaN], new CanonicalColumn(0, "Value", "floating", false));
 
         Assert.Equal(Convert.ToHexString(SHA256.HashData(bytes)), actual.Hash);
         Assert.Equal(new OutputFootprint(bytes.Length, 1), actual.Footprint);
+        Assert.NotEqual(CanonicalFixture.ResultSet([double.NaN]).Hash,
+            CanonicalFixture.ResultSet([double.PositiveInfinity]).Hash);
+    }
+
+    [Fact]
+    public void Sql_hierarchy_id_uses_invariant_named_encoding()
+    {
+        AssertProviderValue(SqlHierarchyId.Parse("/1/2/"), "hierarchyId", "/1/2/");
+    }
+
+    [Fact]
+    public void Sql_geography_uses_invariant_named_encoding()
+    {
+        AssertProviderValue(SqlGeography.Point(1, 2, 4326), "geography", "4326;POINT (2 1)");
+    }
+
+    [Fact]
+    public void Sql_geometry_uses_invariant_named_encoding()
+    {
+        AssertProviderValue(SqlGeometry.Point(1, 2, 4326), "geometry", "4326;POINT (1 2)");
+    }
+
+    [Fact]
+    public void Sql_null_provider_values_use_the_null_envelope()
+    {
+        AssertProviderNull(SqlHierarchyId.Null);
+        AssertProviderNull(SqlGeography.Null);
+        AssertProviderNull(SqlGeometry.Null);
+    }
+
+    [Fact]
+    public void Arrays_have_stable_ordered_canonical_encodings()
+    {
+        var values = new[] { 1, 2 };
+        var first = CanonicalFixture.ResultSet([values]);
+        var second = CanonicalFixture.ResultSet([new[] { 1, 2 }]);
+
+        Assert.Equal(first.Hash, second.Hash);
+        Assert.NotEqual(CanonicalFixture.ResultSet([new[] { 2, 1 }]).Hash, first.Hash);
+        Assert.Equal(
+            "{\"type\":\"array\",\"isNull\":false,\"length\":2,\"value\":[{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":1},{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":2}]}",
+            CanonicalScalarJson(values));
+    }
+
+    [Fact]
+    public void Arrays_encode_nulls_empty_arrays_and_multidimensional_shape()
+    {
+        Assert.Equal(
+            "{\"type\":\"array\",\"isNull\":false,\"length\":2,\"value\":[{\"type\":\"string\",\"isNull\":false,\"length\":1,\"value\":\"a\"},{\"type\":\"null\",\"isNull\":true,\"length\":0,\"value\":null}]}",
+            CanonicalScalarJson(new string?[] { "a", null }));
+        Assert.Equal(
+            "{\"type\":\"array\",\"isNull\":false,\"length\":0,\"value\":[]}",
+            CanonicalScalarJson(Array.Empty<int>()));
+        Assert.Equal(
+            "{\"type\":\"array\",\"isNull\":false,\"length\":4,\"dimensions\":[2,2],\"value\":[{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":1},{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":2},{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":3},{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":4}]}",
+            CanonicalScalarJson(new[,] { { 1, 2 }, { 3, 4 } }));
+    }
+
+    [Fact]
+    public void Byte_arrays_keep_the_existing_binary_scalar_encoding()
+    {
+        const string expected = "{\"type\":\"bytes\",\"isNull\":false,\"length\":3,\"value\":\"AAH/\"}";
+
+        Assert.Equal(expected, CanonicalScalarJson(new byte[] { 0, 1, 255 }));
+        Assert.Equal(SHA256.HashData(Encoding.UTF8.GetBytes(expected)), OneShotScalarHash(new byte[] { 0, 1, 255 }));
+    }
+
+    [Fact]
+    public void Unsupported_array_element_rejection_leaves_accumulator_clean_and_usable()
+    {
+        const string expected = "{\"events\":[{\"kind\":\"resultSetStart\",\"columns\":[{\"ordinal\":0,\"name\":\"Value\",\"dataType\":\"array\",\"allowNull\":false}]},{\"kind\":\"row\",\"values\":[{\"type\":\"array\",\"isNull\":false,\"length\":1,\"value\":[{\"type\":\"int32\",\"isNull\":false,\"length\":1,\"value\":1}]}]},{\"kind\":\"resultSetEnd\",\"rowCount\":1}]}";
+        using var accumulator = new CanonicalResultAccumulator();
+        accumulator.BeginResultSet([new CanonicalColumn(0, "Value", "array", false)]);
+
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            accumulator.AddRow([new object?[] { new object?[] { 1, new CultureDependentScalar() } }]));
+        accumulator.AddRow([new object?[] { 1 }]);
+        accumulator.EndResultSet();
+
+        Assert.Contains(typeof(CultureDependentScalar).FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.Equal(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(expected))), accumulator.Complete().Hash);
+    }
+
+    [Fact]
+    public void Postgres_network_and_bit_types_have_invariant_named_encodings()
+    {
+        AssertProviderValue(IPAddress.Parse("192.0.2.1"), "ipAddress", "192.0.2.1");
+        AssertProviderValue(PhysicalAddress.Parse("001122AABBCC"), "macAddress", "001122AABBCC");
+        AssertProviderValue(new System.Collections.BitArray([true, false, true, true]), "bits", "1011");
+    }
+
+    [Fact]
+    public void Npgsql_cidr_ipnetwork_keeps_its_invariant_formattable_encoding()
+    {
+        const string expected = "{\"type\":\"System.Net.IPNetwork\",\"isNull\":false,\"length\":12,\"value\":\"192.0.2.0/24\"}";
+        var expectedHash = SHA256.HashData(Encoding.UTF8.GetBytes(expected));
+        var value = IPNetwork.Parse("192.0.2.0/24");
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            foreach (var culture in new[] { "pl-PL", "en-US" })
+            {
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(culture);
+                CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
+                Assert.Equal(expected, CanonicalScalarJson(value));
+                Assert.Equal(expectedHash, OneShotScalarHash(value));
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    [Fact]
+    public void Unsupported_sql_nullable_null_remains_rejected()
+    {
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            CanonicalScalarCodec.Prepare(SqlXml.Null));
+
+        Assert.Contains(typeof(SqlXml).FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("not supported as a result column", exception.Message, StringComparison.Ordinal);
     }
 
     public static TheoryData<object> NonFiniteFloatingValues =>
@@ -132,6 +277,36 @@ public class CanonicalResultsTests
         float.PositiveInfinity,
         float.NegativeInfinity,
     ];
+
+    private static void AssertProviderValue(object value, string type, string text)
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("pl-PL");
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("pl-PL");
+            var expectedValue = JsonSerializer.Serialize(text);
+            var expected = $"{{\"type\":\"{type}\",\"isNull\":false,\"length\":{Encoding.UTF8.GetByteCount(text)},\"value\":{expectedValue}}}";
+            Assert.Equal(expected, CanonicalScalarJson(value));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    private static void AssertProviderNull(object value) =>
+        Assert.Equal("{\"type\":\"null\",\"isNull\":true,\"length\":0,\"value\":null}", CanonicalScalarJson(value));
+
+    private static string CanonicalScalarJson(object value)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+            CanonicalScalarCodec.Write(writer, CanonicalScalarCodec.Prepare(value));
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
 
     [Fact]
     public void Supported_scalar_bytes_are_independent_of_current_culture()
