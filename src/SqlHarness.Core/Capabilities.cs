@@ -149,7 +149,7 @@ public static class SqlHarnessCapabilitiesProvider
                 new("indexes", "Inspect SQL Server missing indexes."),
                 new("plan", "Distill a saved plan offline; bounded statements and predicates."),
                 new("artifact", "Read safe sections of a saved artifact offline."),
-                new("mcp", "Serve the Core tools to one MCP client over local stdio (mcp serve)."),
+                new("mcp", "Serve the Core tools to one MCP client over local stdio (mcp serve). File inputs require absolute paths under configured roots; UNC paths are rejected and reads are byte-bounded."),
             ],
             engines,
             limits,
