@@ -87,6 +87,8 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\
 sqlharness plan .\artifacts\orders.sqlplan --json
 ```
 
+`plan` is offline and returns a compact tree with bounded statement text and predicates unchanged from the caller-supplied plan. Output limits clip long cells and mark truncation.
+
 `compare` accepts one `--matrix` dimension:
 
 ```powershell
@@ -152,7 +154,7 @@ sqlharness measure prod-eu --var tenant=acme --var env=uat `
 - Postgres auth is `sql` only (`sqlUser` + `passwordEnvVar`). `ad-default` / `azure-cli` / `integrated` are rejected (exit 2). Password values stay in the environment variable.
 - Every non-approved PostgreSQL command runs in its own `READ ONLY` transaction. PostgreSQL rejects persistent table and sequence writes there (SQLSTATE `25006`, reported as safety exit `2`); this includes writes reached through user functions. PostgreSQL `TEMP` setup is the exception: it runs outside that wrapper under the existing static visible-effects and temp-target checks, so `nextval` and `setval` remain denied in setup. That does not inspect a user-defined function body: a setup `SELECT` can execute a persistent-writing function. Review setup SQL and use a least-privilege setup role; this is not a guarantee that every setup effect is rejected. Query and measured commands use the per-command read-only transaction. The transaction does not contain every administrative or external effect. SQLHarness explicitly denies known residual calls such as statistics resets, promotion and backup operations, but cannot prove arbitrary user functions harmless; use a least-privilege database role to limit their other effects. PostgreSQL `measure` / `compare` timings use server `EXPLAIN` planning plus execution time, so they do not include the client-side transaction-wrapper cost.
 - Omitted `sslMode` and `rootCertificate` keep the historical mapping, and a successful report sets `target.transportPolicy` to `legacy`: `trustServerCertificate: true` → Npgsql `SslMode=Disable`, `false` → `SslMode=Require`. An explicit `sslMode` of `verify-full`, `verify-ca`, `require`, or `disable` is authoritative. A mode that contradicts `trustServerCertificate` is rejected (`true` agrees only with `disable`; `false` agrees with `require` and the verifying modes). `rootCertificate` is accepted only with `verify-full` or `verify-ca` and must be a readable certificate file. SQL Server profiles that set either field are rejected. `--ssl-mode` and `--root-certificate` are direct options (`--unsafe-direct` only). New remote examples use `verify-full`. Details: `docs/superpowers/specs/2026-09-26-postgres-transport-policy.md`.
-- Postgres always checks `current_database()`. Endpoint identity is the connection that was established, not a text comparison of a DNS name with `inet_server_addr()`. Loopback checks the database only. Non-loopback `verify-full` and `verify-ca` also require the authenticated host and a connected address returned for that name. `require` and `disable` do not authenticate a DNS name. DNS by itself is not authentication.
+- Both engines report the server identity observed on the connected session (`SERVERPROPERTY('ServerName')` for SQL Server and `inet_server_addr()` for Postgres). That value is informational; it is not compared with the profile host. TLS certificate validation authenticates the endpoint: use `trustServerCertificate: false` for SQL Server and `sslMode: verify-full` for Postgres when hostname verification is required. Both engines still require the observed database name to equal the resolved database with exact ordinal comparison; this is the only connected-target mismatch that returns exit 4.
 - `measure` / `compare` time a single EXPLAIN-able statement via `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`. Result equivalence uses an unmeasured sidecar SELECT. `CpuTimeMs` is `0`; `logicalReads` are shared/local buffer hits+reads; `missingIndexes` is empty.
 - Catalog helpers (`counts`, `schema`, `space`) use fixed `pg_catalog` SQL. Unquoted identifiers and `--like` / `--filter` patterns are case-sensitive as stored (`Contracts` does not match `contracts`).
 - `space` field analogs: Files = one `DATA` row from `pg_database_size` / `data_directory`; Allocation `ReservedMb` = database size while `UsedMb`/`DataMb` sum user relation sizes (they need not equal Reserved); Tables = top N by `pg_total_relation_size` with `Rows` from `reltuples`; `--object` indexes use access-method `Type` and null `Compression`.
@@ -276,7 +278,7 @@ Run `sqlharness <command> --help` for the final option surface.
 
 | Area | Contract |
 | --- | --- |
-| Exit codes | `0` success; `2` validation or safety rejection; `3` authentication failure; `4` target mismatch; `5` SQL execution failure; `6` local storage failure; `7` `watch` max duration elapsed without a stop condition; `8` `snapshot --diff` found differences (valid comparison, not an execution failure). |
+| Exit codes | `0` success; `2` validation or safety rejection; `3` authentication failure; `4` connected database differs from the resolved database (exact ordinal comparison); `5` SQL execution failure; `6` local storage failure; `7` `watch` max duration elapsed without a stop condition; `8` `snapshot --diff` found differences (valid comparison, not an execution failure). |
 | Closed targets | Profiles in `~/.sqlharness/targets.json` define server, database template, variables, authentication, and optional `engine` (`sqlserver` default, or `postgres`). Missing, extra, or invalid variables are rejected. |
 | Direct targets | `--unsafe-direct` deliberately bypasses the closed-profile guardrail and requires `--server`, `--database`, and `--auth`. Do not mix it with a profile or `--var`. `--engine` is valid only with `--unsafe-direct` (never with a named profile). |
 | Mutations | Read-only is the default. Explicit persistent-object mutation requires fresh, single-use approval for the exact batch and exact resolved database, plus `--allow-mutation --confirm-database <exact-resolved-name>`. Exception: read-write PostgreSQL TEMP setup can statically accept a setup `SELECT` that invokes an opaque user-defined function which writes persistently, without approval; review setup SQL (see PostgreSQL execution). |
@@ -347,6 +349,8 @@ The UI lives in `src/SqlHarness.Dashboard/ui` (React, Vite, shadcn/ui on Base UI
 
 Set `SQLHARNESS_HOME` to relocate these paths, for example in an isolated test environment.
 
+On Unix, SQLHarness creates its home with mode 0700; `doctor` warns when an existing home is broader.
+
 ## Roadmap after v1
 
 - Missing-index overlap analysis against existing indexes.
@@ -363,6 +367,13 @@ Linux-only behaviour before pushing — provision it once with `pwsh ./scripts/s
 clone never lives under `/mnt/d`). Neither gate replaces CI, and CI itself currently runs
 only ubuntu-latest with an unfiltered test step. A change is not done until both gates are green.
 The .NET SDK version comes from `global.json` (currently `10.0.303`, `rollForward: latestPatch`). Re-release after .NET runtime security patches.
+
+`just publish` tests, builds a self-contained binary and installs it where `sqlharness` is on PATH
+(override with `SQLHARNESS_INSTALL_DIR`). On Windows, when the system host cannot resolve the
+pinned SDK, it tries the user-local installation under `%LOCALAPPDATA%/Microsoft/dotnet`.
+The publishing process uses `%SystemDrive%/t` for Windows test temporary files so bounded-path
+tests do not depend on the length of the user's normal temp directory. These environment changes
+apply only to the publishing process; no terminal configuration is needed.
 
 ```powershell
 pwsh ./scripts/verify.ps1

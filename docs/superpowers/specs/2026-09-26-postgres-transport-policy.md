@@ -114,42 +114,15 @@ Every successful Postgres connection sets it:
 
 The session identity is the `Target` already embedded in the command report, including `--json` and a `--json-summary` that copies that target. This is not a new envelope. Text mode stays a lossy projection and does not have to repeat the field. `ActualServer` remains the observed identity-query value; it is not the acceptance key below.
 
-## Endpoint identity
+## Connected identity reporting and acceptance
 
-Postgres does not use `SqlExecution.TargetMatches`. That method remains the SQL Server check, including `.`, `(local)`, the Azure suffix, and loopback. Deleting the Postgres check is not the fix.
+Plan 050 supersedes the endpoint-identity acceptance policy above. PostgreSQL no longer inspects Npgsql private connection members or resolves DNS after connecting. SQL Server and PostgreSQL report the server identity observed on the session (`SERVERPROPERTY('ServerName')` and `inet_server_addr()`, respectively), but do not compare that value with the resolved profile host.
 
-The database is always checked, for every mode, including loopback: `current_database()` must equal the resolved database with `StringComparison.Ordinal`. A mismatch fails even when no resolver is called.
+Endpoint authentication belongs to the transport: use `sslMode: verify-full` for PostgreSQL hostname verification and `trustServerCertificate: false` for SQL Server certificate validation. Npgsql/SqlClient complete TLS validation during connection establishment according to the configured transport options.
 
-The endpoint check uses the TCP connection that was established, plus TLS authentication when the mode verifies the host. It does not compare the profile host as text with `inet_server_addr()`. That function can be an IP, an IP with a CIDR suffix, another interface, or the origin behind a proxy, and a DNS name never matches it. The identity statement is unchanged and its server column is only `ActualServer` in the report.
+Both engines still compare the connected database (`current_database()` / `DB_NAME()`) with the resolved database using exact ordinal comparison. A database mismatch fails with `SqlTargetMismatchException` and exit 4; a server-name or address difference alone does not fail. PostgreSQL `transportPolicy` remains reported as `legacy` or `explicit` as described above.
 
-Postgres loopback is only `localhost` (ordinal ignore case), `127.0.0.1`, `::1`, and `[::1]`, after the `,port` suffix is removed. `.` and `(local)` are not Postgres loopback. Loopback skips the endpoint check and does not call the resolver. The database check still applies. The port is not an identity field.
-
-Host form is `host` or `host,port`. An IPv6 host is written `[address]` or `[address],port`. Brackets are removed before IP parsing. One trailing DNS root dot is not ignored.
-
-Non-loopback rules:
-
-| Effective mode | DNS name | IP literal |
-| --- | --- | --- |
-| `verify-full` | Passes only when the host is authenticated and the connected address is in the resolver answer | Same, using IP equality for the authenticated name and the resolver answer |
-| `verify-ca` | Same name check as `verify-full`. `verify-ca` itself does not authenticate the hostname, so a certificate whose names do not include the requested host fails | Same |
-| `require`, `disable`, and legacy (`Require` or `Disable`) | Fails. A resolver hit is not authentication | Passes only when the connected address equals the requested address |
-
-Effective mode is the explicit mode, or the legacy mapping when `Transport` is null.
-
-Authenticated names come from the peer certificate when it can be read: DNS and IP subject alternative names, or the subject CN only when the certificate has neither. Comparison is ordinal ignore case. A name `*.example.test` matches one label (`db.example.test`) and does not match `example.test` or `a.b.example.test`. IP names use `IPAddress.Equals`. IPv4-mapped IPv6 is not folded into IPv4.
-
-`verify-full` already requires Npgsql to complete hostname verification for the requested host. If the certificate cannot be read after that handshake, the only authenticated name is that requested host. `verify-ca` does not get that fallback: no readable names means failure. A different authenticated host fails even when the connected address is in the resolver answer.
-
-The resolver is called only for a non-loopback verifying check. It receives the host with the port and brackets removed. An IP literal is returned as that address and is not sent to DNS. A DNS failure, a missing connected address, or any other resolver exception fails the check. The mismatch exception has no inner exception.
-
-Proxy and address change: there is no proxy allow-list. The connected remote address must be one of the addresses the resolver returns after connect. A proxy address that the requested name does not resolve to fails, even if the certificate name matched. `inet_server_addr()` is not a substitute. If DNS no longer contains the connected address, the check fails.
-
-DNS by itself is not authentication. `require` and `disable` reject a DNS name even when the resolver returns the connected address.
-
-A failed check throws the existing `SqlTargetMismatchException` (`Connected SQL target identity does not match the resolved target.`) and the session is disposed. The module already maps that to exit 4. If the connected address or a required certificate cannot be read, the check fails closed rather than falling back to string equality.
-
-Unit tests supply a resolver and endpoint metadata. They open no sockets. The production resolver is `Dns.GetHostAddresses` only for a non-IP host on a real verifying connection.
-
+Unit tests use a fake observed server identity for PostgreSQL; no live database is needed to prove that an endpoint string difference no longer gates acceptance. TLS handshake behavior remains owned by the providers and transport configuration.
 ## Errors and secrets
 
 Safety errors use these fixed messages:
@@ -195,7 +168,7 @@ Failure exceptions must not contain the password. This proof is not part of the 
 
 ## Non-goals
 
-- No change to SQL Server `TargetMatches`, SqlClient encryption, or the historical meaning of `trustServerCertificate` when `sslMode` is absent.
+- SQL Server certificate validation and the historical meaning of PostgreSQL `trustServerCertificate` when `sslMode` is absent remain transport-policy concerns.
 - No agent output envelope, and no edit to `skills/sqlharness/SKILL.md`.
 - No claim that a DNS answer, a proxy, or `require` / `disable` authenticates the server.
 - No rewrite of the 2026-09-10 design as if `sslMode` had always been there.

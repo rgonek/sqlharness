@@ -5,6 +5,10 @@ description: Use when a coding agent needs safe, repeatable SQL Server, Azure SQ
 
 # SQLHarness
 
+For local development, `just publish` runs tests and installs the self-contained CLI. On Windows
+it falls back to the SDK under `%LOCALAPPDATA%/Microsoft/dotnet` if the PATH host cannot resolve
+`global.json`, and uses `%SystemDrive%/t` for test temporary files within the publishing process.
+
 SQLHarness is a repeatable SQL Server and PostgreSQL optimization harness: it measures, compares, and proves SQL changes while keeping target resolution and SQL execution guarded. Engine lives on the locked profile (`"engine": "postgres"` or omitted for SQL Server); `--engine` is valid only with `--unsafe-direct`.
 
 ## Readiness and scope
@@ -158,13 +162,13 @@ Do not reuse an approval for changed SQL, a different database, a different prof
 
 ## Offline plans and schema
 
-`plan` is offline and does not need a scope lock or database access. It reads a showplan XML file (or stdin), returns a compact plan tree, and can emit JSON:
+`plan` is offline and does not need a scope lock or database access. It reads a showplan XML file (or stdin) and returns a compact plan tree with bounded statement text and predicates unchanged from the caller-supplied plan; output limits clip long cells and mark truncation. It can emit JSON:
 
 ```powershell
 sqlharness plan .\artifacts\orders.sqlplan --json
 ```
 
-`.sqlplan` artifacts, comparison artifacts, named snapshots under `~/.sqlharness/snapshots` (sensitive result data; replace only with `--force`), `qstop` SQL text in `artifactDirectory/queries.jsonl`, and runtime parameters are locally sensitive: they can contain batch text, parameter values, and result data. `snapshot --diff` never prints cell values. Do not paste or publish them without explicit review. `queries.jsonl` must not be pasted or published without explicit review.
+`.sqlplan` artifacts, comparison artifacts, named snapshots under `~/.sqlharness/snapshots` (sensitive result data; replace only with `--force`), `qstop` SQL text in `artifactDirectory/queries.jsonl`, and runtime parameters are locally sensitive: they can contain batch text, parameter values, and result data. `snapshot --diff` never prints cell values. Do not paste or publish them without explicit review. `queries.jsonl` must not be pasted or published without explicit review. On Unix, SQLHarness creates its home with mode 0700; `doctor` warns when an existing home is broader.
 
 `schema` uses only internal catalog queries (no arbitrary SQL) and returns compact tables, views, columns, indexes, and foreign keys. Prefer `--object` for exactly one table or view; use `--filter` for a LIKE catalog walk:
 
@@ -182,4 +186,4 @@ sqlharness space prod-eu --var tenant=acme --var env=uat --object dbo.Contracts 
 
 ## Outcomes
 
-Exit codes are stable: `0` success, `2` validation or safety rejection, `3` authentication, `4` target mismatch, `5` SQL execution failure, `6` local storage failure, `7` `watch` max duration elapsed without a stop condition, and `8` `snapshot --diff` found differences (a valid comparison, not an execution failure). Secrets, access tokens, and passwords must remain only in process memory; do not put them in arguments, files, logs, reports, or artifacts.
+Connected server names/addresses are reported as observed session identity and are not compared with the profile host. TLS certificate validation authenticates the endpoint (`trustServerCertificate: false` for SQL Server; `sslMode: verify-full` for PostgreSQL). Exit codes are stable: `0` success, `2` validation or safety rejection, `3` authentication, `4` connected database differs from the resolved database (exact ordinal comparison), `5` SQL execution failure, `6` local storage failure, `7` `watch` max duration elapsed without a stop condition, and `8` `snapshot --diff` found differences (a valid comparison, not an execution failure). Secrets, access tokens, and passwords must remain only in process memory; do not put them in arguments, files, logs, reports, or artifacts.

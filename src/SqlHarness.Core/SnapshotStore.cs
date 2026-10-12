@@ -155,6 +155,7 @@ internal sealed partial class SnapshotStore : ISnapshotStore
         if (!force && _exists(path))
             throw new IOException($"Snapshot '{name}' already exists.");
 
+        SqlHarnessPaths.EnsureHomeFor(_root);
         _createDirectory(_root);
 
         string? tempPath = path + ".tmp-" + Guid.NewGuid().ToString("N");

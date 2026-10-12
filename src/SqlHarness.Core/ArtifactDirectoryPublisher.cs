@@ -61,6 +61,9 @@ internal sealed partial class ArtifactDirectoryPublisher
         ArgumentNullException.ThrowIfNull(writeStaging);
         var safeTarget = SanitizeTarget(target);
 
+        // Creating the home explicitly first is what makes ancestors private (CreateDirectory only
+        // applies the mode to the leaf it creates); see HomeDirectory.
+        SqlHarnessPaths.EnsureHomeFor(_root);
         Directory.CreateDirectory(_root);
         string directory;
         do

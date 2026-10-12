@@ -46,7 +46,7 @@ public static class SqlHarnessCapabilitiesProvider
                 new("snapshot", "Capture or compare a named query result."),
                 new("qstop", "Rank SQL Server Query Store consumers."),
                 new("indexes", "Inspect SQL Server missing-index evidence."),
-                new("plan", "Distill a saved execution plan offline."),
+                new("plan", "Distill a saved execution plan offline; return bounded statement text and predicates by default."),
                 new("artifact", "Read safe sections of a saved benchmark artifact offline."),
             ],
             [
@@ -62,6 +62,7 @@ public static class SqlHarnessCapabilitiesProvider
                 ["comparisonRowCapPerRun"] = new { min = 0, max = CanonicalComparisonAccumulator.MaximumComparedRows },
                 ["comparisonUniqueFingerprintBudgetPerCell"] = new { min = 0, max = ComparisonBudget.DefaultMaxUniqueFingerprints },
                 ["repeat"] = new { min = OperationLimits.RepeatMin, max = OperationLimits.RepeatMax },
+                ["targetIdentity"] = new { server = "observed and informational; endpoint authentication is provided by TLS certificate validation", database = "must exactly match the resolved database using ordinal comparison; mismatch returns exit 4" },
                 ["qstopTop"] = new { min = OperationLimits.TopMin, max = OperationLimits.TopMax },
                 ["qstopWindowMinutes"] = new { min = OperationLimits.QueryStoreWindowMinutesMin, max = OperationLimits.QueryStoreWindowMinutesMax },
                 ["indexesTop"] = new { min = OperationLimits.TopMin, max = OperationLimits.TopMax },

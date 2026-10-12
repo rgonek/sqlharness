@@ -38,12 +38,9 @@ internal sealed class NpgsqlSessionFactory : ISqlSessionFactory
         ISqlSession? session = null;
         try
         {
-            var opened = await ConnectNpgsqlAsync(connectionString, ct);
-            session = opened.Session;
+            session = await ConnectNpgsqlAsync(connectionString, ct);
             var identity = await ReadIdentityAsync(session, _connectTimeoutSeconds, ct);
-            var observation = PostgresEndpointIdentity.WithVerifyFullFallback(target, opened.Observation);
-            // The established connection is the endpoint. inet_server_addr() stays on the report only.
-            if (!PostgresEndpointIdentity.Matches(target, identity.Database, observation, SystemPostgresHostResolver.Instance))
+            if (!PostgresEndpointIdentity.Matches(target, identity.Server, identity.Database))
                 throw new SqlTargetMismatchException("Connected SQL target identity does not match the resolved target.");
 
             session.Identity = PostgresEndpointIdentity.CreateReport(target, identity.Server, identity.Database);
@@ -72,7 +69,7 @@ internal sealed class NpgsqlSessionFactory : ISqlSessionFactory
         return (server, database);
     }
 
-    private static async Task<(ISqlSession Session, PostgresEndpointObservation Observation)> ConnectNpgsqlAsync(
+    private static async Task<ISqlSession> ConnectNpgsqlAsync(
         string connectionString, CancellationToken ct)
     {
         var connection = new NpgsqlConnection(connectionString);
@@ -84,7 +81,7 @@ internal sealed class NpgsqlSessionFactory : ISqlSessionFactory
             connection.Notice += handler;
             await connection.OpenAsync(ct);
             opened = true;
-            return (new NpgsqlSession(connection, messages, handler), NpgsqlEndpointObservation.Read(connection));
+            return new NpgsqlSession(connection, messages, handler);
         }
         finally
         {

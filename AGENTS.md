@@ -22,10 +22,10 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\before.s
 - **Read-only is the default.** A persistent mutation needs fresh, single-use user approval for the exact batch and the resolved database, then `--allow-mutation --confirm-database <exact-resolved-name>`. Session-local work (SQL Server `#temp` and table variables, PostgreSQL `TEMP`) follows the [setup contract](README.md#benchmark-setup-contract) and needs no approval.
 - **A safety rejection is a stop.** Report it and ask the user for a narrower request or an approval. Persistent helper objects are never the way around a rejected setup.
 - **Secrets live in environment variables** named by the profile, and in process memory only.
-- **Local outputs are locally sensitive:** snapshots under `~/.sqlharness/snapshots`, compare/measure artifacts, `.sqlplan` files, `qstop`'s `queries.jsonl`, `--param-set` files and `~/.sqlharness/data/activity.db`. Commit, attach or publish them only after the user reviewed them.
+- **Local outputs are locally sensitive:** snapshots under `~/.sqlharness/snapshots`, compare/measure artifacts, `.sqlplan` files, `qstop`'s `queries.jsonl`, `--param-set` files and `~/.sqlharness/data/activity.db`. Commit, attach or publish them only after the user reviewed them; the SQLHarness home itself is created with mode 0700 on Unix, and `doctor` warns when an existing home is broader.
 - **The dashboard** (`sqlharness dashboard`) is the operator's tool; agents leave it and its API alone.
 
-Exit codes: `0` success · `2` validation/safety · `3` authentication · `4` target mismatch · `5` SQL execution · `6` local storage · `7` `watch` reached `--max-duration` · `8` `snapshot --diff` found differences.
+Exit codes: `0` success · `2` validation/safety · `3` authentication · `4` connected database differs from the resolved database (exact ordinal comparison) · `5` SQL execution · `6` local storage · `7` `watch` reached `--max-duration` · `8` `snapshot --diff` found differences. Connected server names/addresses are reported for context and are not compared with the profile host; TLS certificate validation authenticates the endpoint (`trustServerCertificate: false` for SQL Server, `sslMode: verify-full` for PostgreSQL).
 
 ## Reference map
 

@@ -58,6 +58,7 @@ internal static class DashboardPrices
             var table = ModelPrices.Parse(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(reduced)));
             if (!ModelPrices.PrimaryProviders.Any(provider => table.InputPerMillion.TryGetValue(provider, out var models) && models.Count > 0))
                 throw new InvalidDataException("No usable prices.");
+            SqlHarnessPaths.EnsureHomeFor(pricesPath);
             Directory.CreateDirectory(Path.GetDirectoryName(pricesPath)!);
             DashboardLock.WriteOwnerOnly(pricesPath, reduced);
             return Results.Json(Describe(pricesPath), json);

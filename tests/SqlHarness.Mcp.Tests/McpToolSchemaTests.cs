@@ -382,8 +382,8 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.False(plan.IsError == true);
     }
 
-    // Synthetic Showplan: the predicate carries a plain literal, quotes and brackets; the statement text also
-    // carries credential syntax that the pattern filter must scrub.
+    // Synthetic Showplan: the predicate carries a plain literal, quotes and brackets; statement text and predicates
+    // are returned unchanged from the caller-supplied plan.
     private const string PlanLiteral = "N'ACTIVE'";
     private const string PlanPasswordValue = "hunter2-synthetic";
     private const string PlanTokenValue = "tok-synthetic-9f3";
@@ -454,7 +454,7 @@ public sealed class McpToolSchemaTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Plan_tool_defaults_to_text_with_credentials_scrubbed_for_sqlserver(bool requestMode)
+    public async Task Plan_tool_defaults_to_bounded_text_unchanged_for_sqlserver(bool requestMode)
     {
         await using var served = await ServePlanModeAsync(requestMode);
         var xml = ShowplanWithText(DefaultStatementText);
@@ -463,15 +463,16 @@ public sealed class McpToolSchemaTests : IDisposable
         var statementText = Text(inline.Statement, "sql");
         Assert.NotNull(statementText);
         Assert.Contains(PlanLiteral, statementText, StringComparison.Ordinal);
-        Assert.Contains("[REDACTED]", statementText, StringComparison.Ordinal);
+        Assert.Contains(PlanPasswordValue, statementText, StringComparison.Ordinal);
+        Assert.Contains(PlanTokenValue, statementText, StringComparison.Ordinal);
         var predicate = Text(inline.Root, "predicate");
         Assert.NotNull(predicate);
         Assert.Contains("=" + PlanLiteral, predicate, StringComparison.Ordinal);
         // JSON escaping round-trips quotes; brackets stay literal.
         Assert.Contains("[Name]=\"x\"", predicate, StringComparison.Ordinal);
         Assert.DoesNotContain("[Name]=\"x\"", inline.Raw, StringComparison.Ordinal);
-        Assert.DoesNotContain(PlanPasswordValue, inline.Raw, StringComparison.Ordinal);
-        Assert.DoesNotContain(PlanTokenValue, inline.Raw, StringComparison.Ordinal);
+        Assert.Contains(PlanPasswordValue, inline.Raw, StringComparison.Ordinal);
+        Assert.Contains(PlanTokenValue, inline.Raw, StringComparison.Ordinal);
         Assert.Contains("PK_Orders", Text(inline.Root, "indexName")!, StringComparison.Ordinal);
         // The input document is never echoed.
         Assert.DoesNotContain("ShowPlanXML", inline.Raw, StringComparison.Ordinal);
@@ -480,7 +481,7 @@ public sealed class McpToolSchemaTests : IDisposable
         var path = WriteInput("sample.sqlplan", xml);
         var fileResult = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["file"] = path }, cancellationToken: CancellationToken.None));
         Assert.Contains(PlanLiteral, Text(fileResult.Root, "predicate")!, StringComparison.Ordinal);
-        Assert.DoesNotContain(PlanPasswordValue, fileResult.Raw, StringComparison.Ordinal);
+        Assert.Contains(PlanPasswordValue, fileResult.Raw, StringComparison.Ordinal);
         Assert.DoesNotContain("ShowPlanXML", fileResult.Raw, StringComparison.Ordinal);
         Assert.DoesNotContain("sample.sqlplan", fileResult.Raw, StringComparison.Ordinal);
         Assert.Equal(xml, File.ReadAllText(path));
@@ -490,15 +491,15 @@ public sealed class McpToolSchemaTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Plan_tool_masks_bracketed_credential_column_literals_in_predicates(bool requestMode)
+    public async Task Plan_tool_returns_bracketed_credential_column_literals_unchanged(bool requestMode)
     {
         await using var served = await ServePlanModeAsync(requestMode);
         var xml = ShowplanWithText("SELECT * FROM dbo.Users WHERE Password = N'hunter2' AND Status = N'ACTIVE'")
             .Replace("[Status]=N'ACTIVE'", "[Users].[Password]=N'hunter2' AND [dbo].[Users].[Status]=N'ACTIVE'", StringComparison.Ordinal);
         var result = PlanResult(await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?> { ["content"] = xml }, cancellationToken: CancellationToken.None));
 
-        Assert.DoesNotContain("hunter2", result.Raw, StringComparison.Ordinal);
-        Assert.Contains("[Password]=N'[REDACTED]'", Text(result.Root, "predicate")!, StringComparison.Ordinal);
+        Assert.Contains("hunter2", result.Raw, StringComparison.Ordinal);
+        Assert.Contains("[Password]=N'hunter2'", Text(result.Root, "predicate")!, StringComparison.Ordinal);
         Assert.Contains("[Status]=N'ACTIVE'", Text(result.Root, "predicate")!, StringComparison.Ordinal);
         Assert.Contains("Status = N'ACTIVE'", Text(result.Statement, "sql")!, StringComparison.Ordinal);
     }
@@ -550,8 +551,8 @@ public sealed class McpToolSchemaTests : IDisposable
             var filter = Text(result.Root.GetProperty("children")[0], "predicate");
             Assert.NotNull(filter);
             Assert.Contains("'ACTIVE'", filter, StringComparison.Ordinal);
-            Assert.Contains("[REDACTED]", filter, StringComparison.Ordinal);
-            Assert.DoesNotContain(PlanPasswordValue, result.Raw, StringComparison.Ordinal);
+            Assert.Contains(PlanPasswordValue, filter, StringComparison.Ordinal);
+            Assert.Contains(PlanPasswordValue, result.Raw, StringComparison.Ordinal);
             Assert.DoesNotContain("Planning Time", result.Raw, StringComparison.Ordinal);
         }
         Assert.Equal(PostgresPlan, File.ReadAllText(path));
@@ -602,6 +603,8 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.True(include.GetProperty("default").GetBoolean());
             Assert.DoesNotContain("includeText", Required(ServedSchema(plan)));
             Assert.Contains("includeText", plan.Description ?? string.Empty, StringComparison.Ordinal);
+            Assert.Contains("bounded statement text and predicates", plan.Description ?? string.Empty, StringComparison.Ordinal);
+            Assert.Contains("returns metadata only", plan.Description ?? string.Empty, StringComparison.Ordinal);
             Assert.DoesNotContain("Sanitized projection only", plan.Description ?? string.Empty, StringComparison.Ordinal);
         }
     }

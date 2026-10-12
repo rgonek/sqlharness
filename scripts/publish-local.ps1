@@ -34,6 +34,28 @@ param(
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 
+# The user-local installer is not necessarily ahead of the system host on PATH.
+$sdkVersion = & dotnet --version 2>$null
+if ($LASTEXITCODE -ne 0 -and $IsWindows) {
+    $localDotnet = Join-Path $env:LOCALAPPDATA 'Microsoft/dotnet'
+    if (Test-Path (Join-Path $localDotnet 'dotnet.exe')) {
+        $env:PATH = "$localDotnet$([IO.Path]::PathSeparator)$env:PATH"
+        $sdkVersion = & dotnet --version 2>$null
+    }
+}
+if ($LASTEXITCODE -ne 0) {
+    throw 'The SDK required by global.json is unavailable. Install it before publishing.'
+}
+Write-Host "==> SDK $sdkVersion"
+
+# MCP tests exercise bounded path diagnostics. Keep their Windows temp prefix short.
+if ($IsWindows -and -not $SkipTests) {
+    $testTemp = Join-Path $env:SystemDrive 't'
+    New-Item -ItemType Directory -Force -Path $testTemp | Out-Null
+    $env:TEMP = $testTemp
+    $env:TMP = $testTemp
+}
+
 if (-not $Runtime) {
     $os = if ($IsWindows) { 'win' } elseif ($IsMacOS) { 'osx' } else { 'linux' }
     $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()

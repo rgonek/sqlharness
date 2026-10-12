@@ -110,6 +110,7 @@ public static class DashboardAutostart
         {
             if (DashboardLock.ReadRunning(home, processes) is not null)
                 return AutostartResult.AlreadyRunning;
+            SqlHarnessPaths.EnsureHomeFor(home);
             Directory.CreateDirectory(home);
             launcher.Launch(command, home);
             return AutostartResult.Launched;

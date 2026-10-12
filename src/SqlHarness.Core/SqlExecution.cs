@@ -164,59 +164,8 @@ internal static class SqlExecution
 
     internal static bool TargetMatches(ResolvedTarget expected, string server, string database)
     {
-        // SQL Server only. Postgres uses PostgresEndpointIdentity and does not compare inet_server_addr() text.
-        // Database identity is always authoritative: Initial Catalog / current_database() must match.
-        if (!string.Equals(expected.Database, database, StringComparison.Ordinal))
-            return false;
-
-        // Loopback endpoints (Docker-published SQL, local instances) connect by client host:port.
-        // SERVERPROPERTY('ServerName') / inet_server_addr() may not return localhost —
-        // so only the database name can be verified for those targets.
-        if (IsLoopbackEndpoint(expected.Server))
-            return true;
-
-        return string.Equals(
-            NormalizeServer(expected.Server, expected.Engine),
-            NormalizeServer(server, expected.Engine),
-            StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// True when the resolved DataSource is a loopback endpoint (optional tcp: prefix and port).
-    /// </summary>
-    internal static bool IsLoopbackEndpoint(string server)
-    {
-        var host = HostFromDataSource(server);
-        return host is "localhost" or "127.0.0.1" or "::1" or "[::1]" or "." or "(local)";
-    }
-
-    private static string NormalizeServer(string server, SqlEngine engine)
-    {
-        var host = HostFromDataSource(server);
-        if (engine == SqlEngine.Postgres)
-            return host;
-
-        const string azureSuffix = ".database.windows.net";
-        return host.EndsWith(azureSuffix, StringComparison.OrdinalIgnoreCase)
-            ? host[..^azureSuffix.Length]
-            : host;
-    }
-
-    /// <summary>
-    /// Extracts the host (or host\instance) from a SqlClient DataSource, stripping tcp: and port.
-    /// </summary>
-    private static string HostFromDataSource(string server)
-    {
-        var normalized = server.Trim();
-        if (normalized.StartsWith("tcp:", StringComparison.OrdinalIgnoreCase))
-            normalized = normalized[4..].TrimStart();
-
-        // Port is always after the final comma in host,port or host\instance,port.
-        var comma = normalized.LastIndexOf(',');
-        if (comma > 0)
-            normalized = normalized[..comma];
-
-        return normalized.Trim();
+        _ = server; // Server name is retained in the identity report; TLS authenticates the endpoint.
+        return string.Equals(expected.Database, database, StringComparison.Ordinal);
     }
 }
 
@@ -298,8 +247,6 @@ internal sealed class SqlClientSessionFactory : ISqlSessionFactory
             while (await reader.ReadAsync(ct)) { }
         return (server, database);
     }
-
-    internal static bool IsLoopbackEndpoint(string server) => SqlExecution.IsLoopbackEndpoint(server);
 
     private static async Task<ISqlSession> ConnectSqlClientAsync(
         string connectionString, string? accessToken, CancellationToken ct)

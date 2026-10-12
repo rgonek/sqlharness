@@ -15,7 +15,7 @@
 
 ## Status
 
-- **Status**: IN PROGRESS — user-confirmed 2026-10-11; complete scope, branch fix/plan-024-canonical-types.
+- **Status**: DONE — complete scope merged into main `232ec01`; verification evidence: [024-canonical-results-proof.md](024-canonical-results-proof.md). Refreshed 2026-10-12.
 - **Priority**: P2
 - **Effort**: M
 - **Risk**: MED (canonical encoding is the basis of result equivalence and snapshot diff)
