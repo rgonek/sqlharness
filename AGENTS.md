@@ -5,7 +5,7 @@ SQLHarness runs bounded SQL Server and PostgreSQL queries for coding agents: exe
 ## Working against a database
 
 1. **Start offline.** `sqlharness capabilities <profile> --json`, `sqlharness doctor --json`, then classify the SQL with `sqlharness validate <profile> --file .\query.sql --json` (add `--var`/`--param` the profile and SQL need). Validation never connects; it does not authorize a later mutation.
-2. **Lock the scope.** One closed named profile and one `--var` set per invocation. A different profile or different variables needs a new explicit user request. `--unsafe-direct` is for an explicit user request only, with complete `--server`, `--database` and `--auth`, and never with a profile or `--var`.
+2. **Lock the scope.** One closed named profile and one `--var` set per invocation. A different profile or different variables needs a new explicit user request (in request-scope MCP, the operator's `--allow-profile` list approves profile switches). `--unsafe-direct` is for an explicit user request only, with complete `--server`, `--database` and `--auth`, and never with a profile or `--var`.
 3. **Inventory before measuring.** Pick representative cases offline: row count, cardinality distribution, ordering ties, missing history, boundary dates, empty results.
 4. **Run one batch per invocation.** Pass values as typed `--param` (types in [README Quick start](README.md#quick-start)). For `measure` and `compare`, put preparation in `--setup`, which runs once on the measured session. Any ScriptDom-parsable construct inside a top-level `SELECT` is accepted, so SQLHarness handles unfamiliar nested syntax; `sqlcmd` is not a fallback.
 5. **Read compact output.** `--json-summary` on `measure`/`compare` gives a bounded projection; `--json` gives the full report.
@@ -19,7 +19,7 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\before.s
 
 ## Safety contract
 
-- **Read-only is the default.** A persistent mutation needs fresh, single-use user approval for the exact batch and the resolved database, then `--allow-mutation --confirm-database <exact-resolved-name>`. Session-local work (SQL Server `#temp` and table variables, PostgreSQL `TEMP`) follows the [setup contract](README.md#benchmark-setup-contract) and needs no approval.
+- **Read-only is the default.** A persistent mutation needs fresh, single-use user approval for the exact batch and the resolved database; then record that approval with `--allow-mutation --confirm-database <exact-resolved-name>`. Session-local work (SQL Server `#temp` and table variables, PostgreSQL `TEMP`) follows the [setup contract](README.md#benchmark-setup-contract) and needs no approval.
 - **A safety rejection is a stop.** Report it and ask the user for a narrower request or an approval. Persistent helper objects are never the way around a rejected setup.
 - **Secrets live in environment variables** named by the profile, and in process memory only.
 - **Local outputs are locally sensitive:** snapshots under `~/.sqlharness/snapshots`, compare/measure artifacts, `.sqlplan` files, `qstop`'s `queries.jsonl`, `--param-set` files and `~/.sqlharness/data/activity.db`. Commit, attach or publish them only after the user reviewed them; the SQLHarness home itself is created with mode 0700 on Unix, and `doctor` warns when an existing home is broader.
