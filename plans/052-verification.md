@@ -57,3 +57,23 @@ The timing proof used 100 balanced pairs after warm-up for trivial local `SELECT
 > Ruling: Preserve existing name-proof/read-write TEMP setup exemption rather than introduce a new opaque-function whitelist in plan052; explicitly document that persistent-writing UDFs inside setup remain outside server containment — design mandates current setup rules and plan047 owns setup safety simplification; an AST function whitelist cannot prove transitive effects — if wrong, a least-privilege setup role can still mutate persistent data through permitted UDFs and follow-up setup hardening is required.
 
 > Ruling: Run identical verify-linux script via scratch copy pointing at dedicated ext4 clone sqlharness-gate-plan052 — shared clone was externally switched to ci/plan-032-matrix7f6f1d0 mid-run and npm modules disappeared — if wrong, rerun standard shared gate after other jobs finish; no test/verification stages altered.
+
+## Integrated branch verification (final)
+
+This section records verification after integrating current `main` into the Plan 052 branch and applying the documentation-index and transport-metadata review fixes. The exact tested feature tip is `9082149`; its main parent is `7180fda`. The integrated branch includes Plan 052 documentation commit `f63eb22`, merge commit `97610ad`, index correction `1d20bc0`, transport-metadata correction `5cfc6ed`, and EOF-format correction `9082149`. The authorized local fast-forward to `main` is pending controller execution. Nothing has been pushed.
+
+### Integrated Windows gate
+
+The final run on `9082149` completed with exit 0 and literal `verify: OK`. UI passed 148 tests across 32 files; build completed with 0 warnings and 0 errors; `SqlHarness.Tests` passed 3736/3736; `SqlHarness.Mcp.Tests` passed 383 with 4 skips. The four skips are recorded as skips; no PostgreSQL TLS fixture was executed. The log is `.superpowers/sdd/052-postgres-read-only-transactions/verify-windows-integrated-recovery.log`.
+
+### Integrated Linux gate
+
+The final isolated ext4 run used source tip `9082149`, completed with exit 0 and literal `verify-linux: OK`, and passed UI 148 tests across 32 files, a build with 0 warnings and 0 errors, Core 3736/3736, and MCP 384 passed with 3 skips. The final log is `.superpowers/sdd/052-postgres-read-only-transactions/verify-linux-integrated-final.log`. The controller rechecked the isolated script against `scripts/verify-linux.ps1` after restoring only the two repository-root/clone-path constants; exact script equivalence was confirmed `True`, with no verification-stage or test changes. The three skips remain skips; no PostgreSQL TLS fixture was executed.
+
+### Integration review corrections and scoped checks
+
+The index-only correction `1d20bc0` removes completed Plans 050 and 034 from active queues, fixes the four-column Group 2 layout, and retains status/evidence in the canonical status table. The integration review found no runtime regression. The accepted metadata correction `5cfc6ed` states that server identity is observed and informational, endpoint authentication depends on configured transport mode, and PostgreSQL hostname verification requires `sslMode: verify-full`; it changes no execution behavior. Both review follow-ups were accepted, as recorded in `.superpowers/sdd/052-postgres-read-only-transactions/integration-review.md`.
+
+The affected AgentWorkflow selection passed 5/5 after refreshing its observation: discovery output is 7785 UTF-8 bytes against the unchanged 8192-byte budget. The initial focused run's stale observation (expected 7722, observed 7785) remains recorded in the ignored task report. Earlier post-merge focused checks passed Core 718 and MCP 155 tests. The final EOF-format correction passed `dotnet format whitespace src/SqlHarness.Core/SqlHarness.Core.csproj --verify-no-changes --no-restore` and `git diff --check`; the final Windows and Linux gates then passed on the same `9082149` tip.
+
+These integration gates do not replace or alter the frozen-source (`c07f001`) evidence above. The earlier shared-clone Linux failure and isolated MCP timeout, the recovery gate, live PostgreSQL 18.6 proof/runtime evidence, and all six verbatim progress-ledger rulings remain preserved. No database commands ran during integration. No new rulings were added. The four Windows and three Linux skips are not TLS test results. The measured client wrapper overhead remains explicit; benchmark timings remain server EXPLAIN Planning + Execution Time and are not described as zero client overhead. The documented opaque user-defined-function limitation in read-write TEMP setup remains unchanged.
