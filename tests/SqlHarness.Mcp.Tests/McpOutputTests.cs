@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 
 using ModelContextProtocol.Protocol;
@@ -22,13 +23,27 @@ public sealed class McpOutputTests
     private static JsonElement EnvelopeOf(CallToolResult result)
     {
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
-        Assert.Equal(text, result.StructuredContent?.GetRawText());
+        Assert.Null(result.StructuredContent);
         using var document = JsonDocument.Parse(text);
         return document.RootElement.Clone();
     }
 
     private static void AssertValidEnvelope(JsonElement envelope) =>
         Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
+
+    [Fact]
+    public void Emitted_footprint_counts_text_bytes_and_lines_only()
+    {
+        const string text = "first\né";
+        using var structured = JsonDocument.Parse("{\"hidden\":\"structured\"}");
+        var result = new CallToolResult
+        {
+            Content = [new TextContentBlock { Text = text }],
+            StructuredContent = structured.RootElement.Clone(),
+        };
+
+        Assert.Equal(new OutputFootprint(Encoding.UTF8.GetByteCount(text), 2), McpResultAdapter.EmittedFootprint(result));
+    }
 
     [Theory]
     [InlineData(4096)]
@@ -255,8 +270,8 @@ public sealed class McpOutputTests
         var result = McpResultAdapter.Adapt(outcome, "sqlharness_query");
 
         Assert.False(result.IsError == true);
-        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.CallToolResultBudgetBytes,
-            "Small query result must fit the default wire budget.");
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.DefaultCallToolResultBudgetBytes,
+            "Small query result must fit the default text budget.");
         var envelope = EnvelopeOf(result);
         AssertValidEnvelope(envelope);
         Assert.Equal(JsonValueKind.Null, envelope.GetProperty("truncation").ValueKind);
@@ -266,7 +281,7 @@ public sealed class McpOutputTests
     }
 
     [Fact]
-    public void Large_query_projection_truncates_within_real_wire_budget()
+    public void Large_query_projection_truncates_within_explicit_text_budget()
     {
         var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
         var columns = new[]
@@ -282,11 +297,12 @@ public sealed class McpOutputTests
         var report = new SqlHarnessQueryReport(target, "read-only", [set], [], 0, 1, "raw-hash", new OutputFootprint(50000, 1));
         var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
 
-        var result = McpResultAdapter.Adapt(outcome, "sqlharness_query");
+        const int budget = 16 * 1024;
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_query", new McpResultBudget(budget));
 
         Assert.False(result.IsError == true);
-        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.CallToolResultBudgetBytes,
-            "Large query projection must still fit the real wire budget.");
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= budget,
+            "Large query projection must still fit the explicit result-text budget.");
         var envelope = EnvelopeOf(result);
         AssertValidEnvelope(envelope);
         Assert.Equal(JsonValueKind.Object, envelope.GetProperty("truncation").ValueKind);
@@ -326,7 +342,7 @@ public sealed class McpOutputTests
 
             Assert.False(result.IsError == true, Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
             Assert.True(McpResultAdapter.MeasureBytes(result) <= 16384,
-                "Oversized matrix projection must fit the requested wire budget.");
+                "Oversized matrix projection must fit the requested text budget.");
             var envelope = EnvelopeOf(result);
             AssertValidEnvelope(envelope);
             var projected = envelope.GetProperty("result");
@@ -388,7 +404,7 @@ public sealed class McpOutputTests
     [Theory]
     [InlineData(4096)]
     [InlineData(16384)]
-    public void All_adapted_results_fit_real_wire_bytes(int maximumBytes)
+    public void All_adapted_results_fit_result_text_bytes(int maximumBytes)
     {
         var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
         var text = string.Concat(Enumerable.Repeat("x", maximumBytes));
@@ -399,7 +415,7 @@ public sealed class McpOutputTests
         var result = McpResultAdapter.Adapt(outcome, "sqlharness_query", new McpResultBudget(maximumBytes));
 
         Assert.True(McpResultAdapter.MeasureBytes(result) <= maximumBytes,
-            $"Adapted result must fit the {maximumBytes} byte wire budget.");
+            $"Adapted result must fit the {maximumBytes} byte text budget.");
         var envelope = EnvelopeOf(result);
         AssertValidEnvelope(envelope);
         Assert.True(envelope.TryGetProperty("result", out _));
@@ -412,7 +428,7 @@ public sealed class McpOutputTests
 
         var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "sqlharness_query");
 
-        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.CallToolResultBudgetBytes);
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.DefaultCallToolResultBudgetBytes);
         var envelope = EnvelopeOf(result);
         AssertValidEnvelope(envelope);
         Assert.Equal(JsonValueKind.Null, envelope.GetProperty("truncation").ValueKind);
@@ -425,13 +441,13 @@ public sealed class McpOutputTests
     }
 
     [Fact]
-    public void Query_large_detail_set_keeps_summary_sets_within_wire_budget()
+    public void Query_large_detail_set_keeps_summary_sets_within_text_budget()
     {
         var report = QueryShapeFixtures.Report(QueryShapeFixtures.Set(4, 1000, width: 40), QueryShapeFixtures.Set(2, 3), QueryShapeFixtures.Set(3, 2));
 
         var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "sqlharness_query");
 
-        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.CallToolResultBudgetBytes);
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.DefaultCallToolResultBudgetBytes);
         var envelope = EnvelopeOf(result);
         AssertValidEnvelope(envelope);
         var truncation = envelope.GetProperty("truncation");
@@ -451,7 +467,7 @@ public sealed class McpOutputTests
     [Theory]
     [InlineData(4096)]
     [InlineData(16384)]
-    public void Query_wide_schema_and_many_sets_fall_back_within_wire_budget(int maximumBytes)
+    public void Query_wide_schema_and_many_sets_fall_back_within_text_budget(int maximumBytes)
     {
         var wide = QueryShapeFixtures.Report(QueryShapeFixtures.Set(400, 3, width: 5000, nameLength: 60), QueryShapeFixtures.Set(2, 2));
         var many = QueryShapeFixtures.Report(Enumerable.Range(0, 400).Select(_ => QueryShapeFixtures.Set(3, 50, width: 20)).ToArray());
@@ -476,7 +492,7 @@ public sealed class McpOutputTests
     }
 
     [Fact]
-    public void Query_wide_first_set_then_summary_set_at_level_zero_fits_wire_budget_with_explicit_omissions()
+    public void Query_wide_first_set_then_summary_set_at_level_zero_fits_text_budget_with_explicit_omissions()
     {
         const int budget = 4096;
         var report = QueryShapeFixtures.Report(QueryShapeFixtures.Set(400, 3, width: 5000, nameLength: 60), QueryShapeFixtures.Set(2, 2));
@@ -509,7 +525,7 @@ public sealed class McpOutputTests
 
     [Theory]
     [MemberData(nameof(WideDetailShapes))]
-    public void Query_wide_one_row_detail_keeps_both_summaries_complete_within_default_wire_budget(int columns, int width, int nameLength)
+    public void Query_wide_one_row_detail_keeps_both_summaries_complete_within_default_text_budget(int columns, int width, int nameLength)
     {
         var report = QueryShapeFixtures.Report(
             QueryShapeFixtures.Set(columns, 1, width: width, nameLength: nameLength),
@@ -519,8 +535,8 @@ public sealed class McpOutputTests
 
         var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "sqlharness_query");
 
-        Assert.Equal(16384, McpLimits.CallToolResultBudgetBytes);
-        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.CallToolResultBudgetBytes);
+        Assert.Equal(65536, McpLimits.DefaultCallToolResultBudgetBytes);
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.DefaultCallToolResultBudgetBytes);
         Assert.Equal(before, JsonSerializer.Serialize(report));
         var envelope = EnvelopeOf(result);
         AssertValidEnvelope(envelope);

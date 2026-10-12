@@ -198,32 +198,12 @@ public sealed class McpToolSchemaTests : IDisposable
 
     private static JsonElement ServedEnvelope(CallToolResult result, string tool)
     {
+        Assert.Null(result.StructuredContent);
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
         using var document = JsonDocument.Parse(text);
         var envelope = document.RootElement.Clone();
-        if (result.StructuredContent.HasValue)
-        {
-            using var structured = JsonDocument.Parse(result.StructuredContent.Value.GetRawText());
-            var structuredRoot = structured.RootElement;
-            Assert.Equal(envelope.GetProperty("command").GetString(), structuredRoot.GetProperty("command").GetString());
-            Assert.Equal(envelope.GetProperty("status").GetString(), structuredRoot.GetProperty("status").GetString());
-            Assert.Equal(envelope.GetProperty("exitCode").GetInt32(), structuredRoot.GetProperty("exitCode").GetInt32());
-        }
         Assert.Equal(tool, envelope.GetProperty("command").GetString());
         return envelope;
-    }
-
-    private static void AssertEnvelopeMatchesServedSchema(JsonElement servedSchema, JsonElement envelope, string tool)
-    {
-        var required = servedSchema.GetProperty("required").EnumerateArray().Select(item => item.GetString()!).ToArray();
-        foreach (var name in required)
-            Assert.True(envelope.TryGetProperty(name, out _), $"{tool} envelope lacks served-required '{name}'.");
-        Assert.Equal(
-            servedSchema.GetProperty("properties").GetProperty("schemaVersion").GetProperty("const").GetInt32(),
-            envelope.GetProperty("schemaVersion").GetInt32());
-        var allowed = servedSchema.GetProperty("properties").GetProperty("status").GetProperty("enum")
-            .EnumerateArray().Select(item => item.GetString()!).ToHashSet(StringComparer.Ordinal);
-        Assert.Contains(envelope.GetProperty("status").GetString()!, allowed);
     }
 
     private static void CollectPropertyNames(JsonElement node, HashSet<string> names)
@@ -580,7 +560,7 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.True(clipped.Length < longText.Length);
         var envelope = ServedEnvelope(result, "sqlharness_plan");
         Assert.True(envelope.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
-        Assert.True(McpResultAdapter.MeasureBytes(result) <= (int)McpLimits.CallToolResultBudgetBytes);
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= (int)McpLimits.DefaultCallToolResultBudgetBytes);
     }
 
     [Fact]
@@ -854,129 +834,43 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
-    public void All_tools_publish_the_envelope_output_schema()
+    public void All_tools_publish_no_output_schema()
     {
-        var expected = McpResultAdapter.OutputSchema.RootElement.GetRawText();
         var scope = Scope();
         var tools = McpToolCatalog.CreateTools(scope, scope.CreateModule());
         Assert.Equal(McpToolCatalog.ToolNames.Count, tools.Count);
         foreach (var tool in tools)
-        {
-            Assert.True(
-                tool.ProtocolTool.OutputSchema.HasValue,
-                $"{tool.ProtocolTool.Name} publishes no outputSchema.");
-            Assert.Equal(
-                expected,
-                tool.ProtocolTool.OutputSchema!.Value.GetRawText());
-        }
+            Assert.Null(tool.ProtocolTool.OutputSchema);
     }
 
     [Fact]
-    public async Task Served_tools_publish_the_envelope_output_schema()
+    public async Task Served_tools_publish_no_output_schema()
     {
         await using var served = await ServedCatalog.CreateAsync(Scope());
         var tools = (await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None)).ToList();
         Assert.Equal(ExpectedTools.Length, tools.Count);
         foreach (var tool in tools)
-        {
-            var schema = tool.ProtocolTool.OutputSchema;
-            Assert.True(schema.HasValue, $"{tool.Name} publishes no outputSchema.");
-            Assert.Equal(JsonValueKind.Object, schema!.Value.ValueKind);
-            var properties = schema.Value.GetProperty("properties");
-            foreach (var name in new[] { "schemaVersion", "command", "status", "exitCode", "result", "error", "truncation" })
-                Assert.True(properties.TryGetProperty(name, out _), $"{tool.Name} outputSchema lacks '{name}'.");
-        }
+            Assert.Null(tool.ProtocolTool.OutputSchema);
     }
 
     [Fact]
-    public async Task Served_capabilities_envelope_conforms_to_the_advertised_output_schema()
+    public async Task Served_capabilities_envelope_conforms_to_the_agent_contract_without_output_schema()
     {
         await using var served = await ServedCatalog.CreateAsync(Scope());
         var tools = await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
-        var capabilities = tools.Single(tool => tool.Name == "sqlharness_capabilities");
-        Assert.True(
-            capabilities.ProtocolTool.OutputSchema.HasValue,
-            "sqlharness_capabilities publishes no outputSchema.");
+        Assert.Null(tools.Single(tool => tool.Name == "sqlharness_capabilities").ProtocolTool.OutputSchema);
         var result = await served.Client.CallToolAsync(
             "sqlharness_capabilities",
             new Dictionary<string, object?>(),
             cancellationToken: CancellationToken.None);
         Assert.False(result.IsError == true);
-        var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
-        using var document = JsonDocument.Parse(text);
-        var envelope = document.RootElement;
+        var envelope = ServedEnvelope(result, "sqlharness_capabilities");
         Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
-        Assert.Equal("sqlharness_capabilities", envelope.GetProperty("command").GetString());
     }
-
     [Fact]
-    public async Task Served_output_schemas_cover_the_envelope_contract_for_all_tools()
+    public async Task Served_validate_envelopes_conform_to_the_agent_contract()
     {
         await using var served = await ServedCatalog.CreateAsync(Scope());
-        var tools = (await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None)).ToList();
-        Assert.Equal(ExpectedTools.Order(StringComparer.Ordinal), tools.Select(tool => tool.Name).Order(StringComparer.Ordinal).ToArray());
-        Assert.Equal(ExpectedTools.Length, tools.Count);
-        foreach (var tool in tools)
-        {
-            Assert.True(tool.ProtocolTool.OutputSchema.HasValue, $"{tool.Name} publishes no outputSchema.");
-            var servedSchema = tool.ProtocolTool.OutputSchema!.Value;
-            Assert.Equal(JsonValueKind.Object, servedSchema.ValueKind);
-            Assert.Equal("object", servedSchema.GetProperty("type").GetString());
-            Assert.Equal(
-                ["command", "error", "exitCode", "result", "schemaVersion", "status", "truncation"],
-                servedSchema.GetProperty("required").EnumerateArray().Select(item => item.GetString()!).Order(StringComparer.Ordinal).ToArray());
-            var properties = servedSchema.GetProperty("properties");
-            Assert.Equal(1, properties.GetProperty("schemaVersion").GetProperty("const").GetInt32());
-            Assert.Equal(
-                ["error", "partial", "snapshot_differences", "success", "watch_max_duration"],
-                properties.GetProperty("status").GetProperty("enum").EnumerateArray().Select(item => item.GetString()!).Order(StringComparer.Ordinal).ToArray());
-            Assert.Equal(JsonValueKind.True, properties.GetProperty("result").ValueKind);
-            Assert.Equal(
-                ["code", "message", "phase"],
-                properties.GetProperty("error").GetProperty("required").EnumerateArray().Select(item => item.GetString()!).Order(StringComparer.Ordinal).ToArray());
-            Assert.Equal(
-                ["detailLimit", "maxCellChars", "omittedItems"],
-                properties.GetProperty("truncation").GetProperty("required").EnumerateArray().Select(item => item.GetString()!).Order(StringComparer.Ordinal).ToArray());
-        }
-    }
-
-    [Fact]
-    public async Task Served_tools_share_the_free_form_envelope_schema_without_per_tool_narrowing()
-    {
-        // 008/T4 decision (DONE without narrowing): per-tool narrowing of
-        // `result` was evaluated against the 32768 B tools/list budget and
-        // rejected. Measured on the wire: catalog 24239 B with 11
-        // byte-identical 973 B envelope schemas (8529 B headroom); a
-        // lower-bound narrowing sketch for the simplest tool (gain, naming
-        // only 3 of its 7 sub-objects) already costs +156 B per tool
-        // (+1716 B across all 11), while an honest schema for the
-        // polymorphic tools (inspect serves 6 report variants, compare 3
-        // shapes, artifact serves disk-shaped JSON, every tool emits null
-        // on failure plus degraded placeholders under budget pressure and
-        // raw passthrough of projection-unknown reports) converges back
-        // to free-form with extra bytes. This test locks the plan minimum:
-        // every served tool advertises the shared envelope with free-form
-        // `result`, so no per-tool divergence can slip in silently.
-        await using var served = await ServedCatalog.CreateAsync(Scope());
-        var tools = (await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None)).ToList();
-        Assert.Equal(ExpectedTools.Length, tools.Count);
-        var expected = JsonSerializer.Serialize(
-            McpResultAdapter.OutputSchema.RootElement, McpJsonUtilities.DefaultOptions);
-        foreach (var tool in tools)
-        {
-            Assert.True(tool.ProtocolTool.OutputSchema.HasValue, $"{tool.Name} publishes no outputSchema.");
-            Assert.Equal(
-                expected,
-                JsonSerializer.Serialize(tool.ProtocolTool.OutputSchema!.Value, McpJsonUtilities.DefaultOptions));
-        }
-    }
-
-    [Fact]
-    public async Task Served_validate_envelopes_conform_to_the_advertised_schema()
-    {
-        await using var served = await ServedCatalog.CreateAsync(Scope());
-        var tools = await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
-        var servedSchema = tools.Single(tool => tool.Name == "sqlharness_validate").ProtocolTool.OutputSchema!.Value;
         var success = await served.Client.CallToolAsync(
             "sqlharness_validate",
             new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
@@ -986,7 +880,6 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Empty(McpResultAdapter.ValidateEnvelope(successEnvelope));
         Assert.Equal("success", successEnvelope.GetProperty("status").GetString());
         Assert.Equal(0, successEnvelope.GetProperty("exitCode").GetInt32());
-        AssertEnvelopeMatchesServedSchema(servedSchema, successEnvelope, "sqlharness_validate");
         var failure = await served.Client.CallToolAsync(
             "sqlharness_validate",
             new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1", ["bogus"] = 1 },
@@ -997,17 +890,14 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Equal("error", failureEnvelope.GetProperty("status").GetString());
         Assert.Equal(2, failureEnvelope.GetProperty("exitCode").GetInt32());
         Assert.Equal("safety_rejected", failureEnvelope.GetProperty("error").GetProperty("code").GetString());
-        AssertEnvelopeMatchesServedSchema(servedSchema, failureEnvelope, "sqlharness_validate");
     }
 
     [Fact]
-    public async Task Served_partial_watch_and_snapshot_envelopes_conform_to_the_advertised_schema()
+    public async Task Served_partial_watch_and_snapshot_envelopes_conform_to_the_agent_contract()
     {
         var partialModule = new CannedModule(new SqlHarnessOutcome(
             SqlHarnessExitCode.SqlExecution, new SqlHarnessCompareMatrixReport("batch", "int", []), "Cell 2 failed."));
         await using var partialServed = await ServedCatalog.CreateAsync(Scope(), partialModule);
-        var partialTools = await partialServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
-        var partialSchema = partialTools.Single(tool => tool.Name == "sqlharness_compare").ProtocolTool.OutputSchema!.Value;
         var partial = await partialServed.Client.CallToolAsync(
             "sqlharness_compare",
             new Dictionary<string, object?>
@@ -1021,14 +911,11 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Empty(McpResultAdapter.ValidateEnvelope(partialEnvelope));
         Assert.Equal("partial", partialEnvelope.GetProperty("status").GetString());
         Assert.Equal(5, partialEnvelope.GetProperty("exitCode").GetInt32());
-        AssertEnvelopeMatchesServedSchema(partialSchema, partialEnvelope, "sqlharness_compare");
         var watchModule = new CannedModule(new SqlHarnessOutcome(
             SqlHarnessExitCode.WatchMaxDuration,
             new SqlHarnessWatchReport(ConformanceTarget, 4, 900000, WatchExitReason.MaxDuration, []),
             null));
         await using var watchServed = await ServedCatalog.CreateAsync(Scope(), watchModule);
-        var watchTools = await watchServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
-        var watchSchema = watchTools.Single(tool => tool.Name == "sqlharness_watch").ProtocolTool.OutputSchema!.Value;
         var watch = await watchServed.Client.CallToolAsync(
             "sqlharness_watch",
             new Dictionary<string, object?> { ["sql"] = "SELECT 1" },
@@ -1038,7 +925,6 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Empty(McpResultAdapter.ValidateEnvelope(watchEnvelope));
         Assert.Equal("watch_max_duration", watchEnvelope.GetProperty("status").GetString());
         Assert.Equal(7, watchEnvelope.GetProperty("exitCode").GetInt32());
-        AssertEnvelopeMatchesServedSchema(watchSchema, watchEnvelope, "sqlharness_watch");
         var snapshotModule = new CannedModule(new SqlHarnessOutcome(
             SqlHarnessExitCode.SnapshotDifferences,
             new SqlHarnessSnapshotReport(
@@ -1046,8 +932,6 @@ public sealed class McpToolSchemaTests : IDisposable
                 [new SqlHarnessSnapshotDifference(0, 1, 2, "changed")]),
             null));
         await using var snapshotServed = await ServedCatalog.CreateAsync(Scope(), snapshotModule);
-        var snapshotTools = await snapshotServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
-        var snapshotSchema = snapshotTools.Single(tool => tool.Name == "sqlharness_snapshot").ProtocolTool.OutputSchema!.Value;
         var snapshot = await snapshotServed.Client.CallToolAsync(
             "sqlharness_snapshot",
             new Dictionary<string, object?> { ["action"] = "diff", ["name"] = "before-import", ["sql"] = "SELECT 1" },
@@ -1057,7 +941,6 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Empty(McpResultAdapter.ValidateEnvelope(snapshotEnvelope));
         Assert.Equal("snapshot_differences", snapshotEnvelope.GetProperty("status").GetString());
         Assert.Equal(8, snapshotEnvelope.GetProperty("exitCode").GetInt32());
-        AssertEnvelopeMatchesServedSchema(snapshotSchema, snapshotEnvelope, "sqlharness_snapshot");
     }
 
     [Fact]

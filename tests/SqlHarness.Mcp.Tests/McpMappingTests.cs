@@ -94,7 +94,8 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal("request", document.ScopeMode);
         Assert.Equal("sqlserver", document.Engine);
         Assert.Equal([ProfileName], document.AllowedProfiles);
-        Assert.Equal(8192, document.Limits["callToolResultBudgetBytes"]);
+        Assert.Equal(65536, document.Limits["defaultResultBytes"]);
+        Assert.Equal(8192, document.Limits["maxResultBytes"]);
         Assert.Equal(30, document.Limits["maxOperationSeconds"]);
         Assert.DoesNotContain("frozen", json, StringComparison.Ordinal);
         Assert.DoesNotContain(PgProfileName, json, StringComparison.Ordinal);
@@ -111,7 +112,7 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal(McpHost.SupportedProtocolVersions, negotiated.SupportedProtocolVersions);
     }
 
-    private McpScope ScopeWithRoots(IReadOnlyList<string> roots, int maxResultBytes = (int)McpLimits.CallToolResultBudgetBytes) =>
+    private McpScope ScopeWithRoots(IReadOnlyList<string> roots, int maxResultBytes = McpLimits.DefaultProcessResultCeilingBytes) =>
         McpScope.Create(
             new McpServerOptions
             {
@@ -122,7 +123,7 @@ public sealed class McpMappingTests : IDisposable
             },
             ProfileStore.Load(_targetsFile));
 
-    private McpProcessContext RequestProcessWithRoots(IReadOnlyList<string> roots, int maxResultBytes = (int)McpLimits.CallToolResultBudgetBytes) =>
+    private McpProcessContext RequestProcessWithRoots(IReadOnlyList<string> roots, int maxResultBytes = McpLimits.DefaultProcessResultCeilingBytes) =>
         McpProcessContext.Create(
             new McpServerOptions
             {
@@ -288,7 +289,7 @@ public sealed class McpMappingTests : IDisposable
     public async Task Capabilities_omit_an_input_root_that_cannot_fit_any_page_and_still_terminate()
     {
         var shortBefore = CreateRoot("before");
-        var longRoot = CreateRoot(Path.Combine(Enumerable.Range(0, 10).Select(index => index.ToString(System.Globalization.CultureInfo.InvariantCulture) + new string('L', 200)).ToArray()));
+        var longRoot = CreateRoot(Path.Combine(Enumerable.Range(0, 24).Select(index => index.ToString(System.Globalization.CultureInfo.InvariantCulture) + new string('L', 200)).ToArray()));
         var shortAfter = CreateRoot("after");
         var call = CapabilitiesCall(requestMode: false, [shortBefore, longRoot, shortAfter], McpLimits.MinCallToolResultBudgetBytes);
 
@@ -305,7 +306,7 @@ public sealed class McpMappingTests : IDisposable
     public async Task Capabilities_cursor_at_the_end_returns_an_empty_incomplete_page(bool requestMode)
     {
         var roots = CreateRoots(2, 4);
-        var call = CapabilitiesCall(requestMode, roots, (int)McpLimits.CallToolResultBudgetBytes);
+        var call = CapabilitiesCall(requestMode, roots, (int)McpLimits.DefaultCallToolResultBudgetBytes);
 
         var page = EnvelopeOf(await call(2)).GetProperty("result");
 
@@ -326,7 +327,7 @@ public sealed class McpMappingTests : IDisposable
     [InlineData(true, 3)]
     public async Task Capabilities_reject_an_input_root_cursor_outside_the_inventory(bool requestMode, int cursor)
     {
-        var call = CapabilitiesCall(requestMode, CreateRoots(2, 4), (int)McpLimits.CallToolResultBudgetBytes);
+        var call = CapabilitiesCall(requestMode, CreateRoots(2, 4), (int)McpLimits.DefaultCallToolResultBudgetBytes);
 
         var result = await call(cursor);
 

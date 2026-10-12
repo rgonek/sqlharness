@@ -37,7 +37,7 @@ public static class McpLimits
     public const int MinCallToolResultBudgetBytes = 4096;
 
     /// <summary>
-    /// Largest CallToolResult budget a process operator may configure
+    /// Largest result-text budget a process operator may configure
     /// (1048576). A single tool call may only lower the process maximum,
     /// never raise it.
     /// </summary>
@@ -49,8 +49,11 @@ public static class McpLimits
     /// <summary>Largest per-cell character limit an operator may configure (4096).</summary>
     public const int MaxCellCharactersLimit = 4096;
 
-    /// <summary>Budget for one serialized CallToolResult in UTF-8 bytes (enforced in T4).</summary>
-    public const long CallToolResultBudgetBytes = 16L * 1024;
+    /// <summary>Default per-call budget: UTF-8 bytes of the text block the model reads.</summary>
+    public const int DefaultCallToolResultBudgetBytes = 64 * 1024;
+
+    /// <summary>Default process ceiling for any single call (<c>--max-result-bytes</c>).</summary>
+    public const int DefaultProcessResultCeilingBytes = 256 * 1024;
 
     /// <summary>Default process-wide DB time budget in seconds (15 minutes, spec section 7).</summary>
     public const int DefaultMaxOperationSeconds = 900;

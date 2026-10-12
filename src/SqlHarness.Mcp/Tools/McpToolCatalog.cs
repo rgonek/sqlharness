@@ -128,7 +128,7 @@ public sealed class McpToolHandlers(
         int timeout = 30,
         [Description("Presentation row cap 0..500.")]
         int maxRows = 50,
-        [Description("Response cap 4096..1048576 bytes; only lowers the process maximum.")]
+        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")]
         int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
         int? maxOperationSeconds = null,
@@ -155,7 +155,7 @@ public sealed class McpToolHandlers(
         int repeat = 5,
         [Description("SQL timeout 1..300 seconds.")]
         int? timeout = null,
-        [Description("Response cap 4096..1048576 bytes; only lowers the process maximum.")]
+        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")]
         int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
         int? maxOperationSeconds = null,
@@ -189,7 +189,7 @@ public sealed class McpToolHandlers(
         McpMatrixArgument? matrix = null,
         [Description("Also require matching column nullability (allowNull) for result equivalence. Default compares observed data only and reports nullability separately. Not allowed with compareResults off.")]
         bool compareNullability = false,
-        [Description("Response cap 4096..1048576 bytes; only lowers the process maximum.")]
+        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")]
         int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
         int? maxOperationSeconds = null,
@@ -222,7 +222,7 @@ public sealed class McpToolHandlers(
         string? interval = null,
         [Description("Maximum watch time like 15m (s/m/h suffix, at most 24h). Default 15m.")]
         string? maxDuration = null,
-        [Description("Response cap 4096..1048576 bytes; only lowers the process maximum.")]
+        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")]
         int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
         int? maxOperationSeconds = null,
@@ -255,7 +255,7 @@ public sealed class McpToolHandlers(
         int timeout = 30,
         [Description("Presentation row cap 0..500.")]
         int maxRows = 50,
-        [Description("Response cap 4096..1048576 bytes; only lowers the process maximum.")]
+        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")]
         int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
         int? maxOperationSeconds = null,
@@ -504,8 +504,6 @@ public static class McpToolCatalog
                 Destructive = destructive,
                 Idempotent = idempotent,
                 OpenWorld = openWorld,
-                UseStructuredContent = true,
-                OutputSchema = McpResultAdapter.OutputSchema.RootElement,
             });
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
@@ -568,11 +566,6 @@ public static class McpToolCatalog
                     Destructive = destructive,
                     Idempotent = idempotent,
                     OpenWorld = openWorld,
-                    // The SDK only advertises OutputSchema when structured
-                    // content is enabled; every tool result already carries
-                    // the budgeted agent envelope as structured content.
-                    UseStructuredContent = true,
-                    OutputSchema = McpResultAdapter.OutputSchema.RootElement,
                 });
         var tools = new List<McpServerTool>(ToolNames.Count)
         {

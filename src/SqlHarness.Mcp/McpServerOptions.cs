@@ -28,10 +28,11 @@ public sealed class McpServerOptions
     public IReadOnlyList<string> InputRoots { get; init; } = [];
 
     /// <summary>
-    /// Process-wide cap for one serialized tool response in UTF-8 bytes
-    /// (4096..1048576, default 16384). A single tool call may only lower it.
+    /// Process-wide ceiling for one tool's result text in UTF-8 bytes
+    /// (4096..1048576, default 262144). A single tool call may raise or lower
+    /// the default per-call budget within this ceiling.
     /// </summary>
-    public int MaxResultBytes { get; init; } = (int)McpLimits.CallToolResultBudgetBytes;
+    public int MaxResultBytes { get; init; } = McpLimits.DefaultProcessResultCeilingBytes;
 
     /// <summary>
     /// Process-wide time budget for one database call in seconds (1..86400,
