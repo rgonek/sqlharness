@@ -46,7 +46,7 @@ public static class SqlHarnessCapabilitiesProvider
                 new("snapshot", "Capture or compare a named query result."),
                 new("qstop", "Rank SQL Server Query Store consumers."),
                 new("indexes", "Inspect SQL Server missing-index evidence."),
-                new("plan", "Distill a saved execution plan offline."),
+                new("plan", "Distill a saved execution plan offline; return bounded statement text and predicates by default."),
                 new("artifact", "Read safe sections of a saved benchmark artifact offline."),
             ],
             [

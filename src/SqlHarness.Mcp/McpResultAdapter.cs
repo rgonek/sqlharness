@@ -79,8 +79,8 @@ public sealed record McpTruncationInfo(int OmittedItems, int DetailLimit, int Ma
 ///
 /// Projection and secret handling reuse the shared Core pieces: reports go
 /// through <see cref="AgentOutputProjection"/> (never a second projector)
-/// (plan statement text and predicates are decided earlier, by the plan tool
-/// via <see cref="McpPlanTextPolicy"/>), and error text goes through
+/// (the plan tool keeps or omits statement text and predicates via
+/// <see cref="McpPlanTextPolicy"/>), and error text goes through
 /// <see cref="SecretRedactor"/> with caller-supplied secrets.
 ///
 /// Semantics: only failures set <c>IsError</c>. The controlled outcomes

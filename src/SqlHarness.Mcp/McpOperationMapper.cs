@@ -42,10 +42,9 @@ public sealed record McpCapabilitiesDocument(
 
 /// <summary>
 /// Plan text policy for the offline plan tool. The caller supplies the plan
-/// document, so with <c>includeText</c> true statement text and predicates are
-/// kept after the credential-pattern filter (<see cref="SecretRedactor"/>
-/// without known secrets; ordinary SQL literals are not treated as secrets);
-/// with false both are omitted. Names, metrics and objects are never changed.
+/// document, so with <c>includeText</c> true bounded statement text and
+/// predicates are returned unchanged; with false both are omitted. Names,
+/// metrics and objects are never changed.
 /// Length bounds stay with <see cref="AgentOutputProjection"/>. Non-plan
 /// reports, including manifest-read artifact sections, pass through unchanged.
 /// </summary>
@@ -81,24 +80,8 @@ public static partial class McpPlanTextPolicy
         if (!includeText || value is null)
             return null;
 
-        // The credential-column rule runs first and keeps its matches out of the shared redactor, whose bare
-        // password branch would otherwise mask the rest of the text after an N'...' literal.
-        var builder = new StringBuilder(value.Length);
-        var position = 0;
-        foreach (var match in CredentialLiteralPattern().Matches(value).Cast<Match>())
-        {
-            builder.Append(SecretRedactor.Redact(value[position..match.Index], []));
-            builder.Append(match.Groups[1].Value).Append("[REDACTED]").Append(match.Groups[3].Value);
-            position = match.Index + match.Length;
-        }
-        builder.Append(SecretRedactor.Redact(value[position..], []));
-        return builder.ToString();
+        return value;
     }
-
-    // Masks only the string literal compared with a credential-named column (bracketed, quoted or bare, optionally
-    // qualified). Key names mirror SecretRedactor; other literals are plan data and stay readable.
-    [GeneratedRegex("""(?i)((?:password|pwd|access[_\s-]?token|client[_\s-]?secret|account[_\s-]?key|shared[_\s-]?access[_\s-]?key)[\]"]?\s*(?:=|<>|!=|like)\s*N?')((?:''|[^'])*)(')""", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
-    private static partial Regex CredentialLiteralPattern();
 }
 
 /// <summary>
