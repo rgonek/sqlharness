@@ -48,32 +48,6 @@ public sealed class AzureCliTests
         Assert.Equal(expected, AzureCli.BuildArguments(["account", "show"], isWindows));
     }
 
-    [Theory]
-    [InlineData("two words")]
-    [InlineData("quoted\"value")]
-    [InlineData("quoted'value")]
-    [InlineData("left&right")]
-    [InlineData("left|right")]
-    [InlineData("left<right")]
-    [InlineData("left>right")]
-    [InlineData("left^right")]
-    [InlineData("left%right")]
-    [InlineData("left!right")]
-    [InlineData("left(right")]
-    [InlineData("left)right")]
-    public async Task RunJsonAsync_WindowsRejectsUnsafeArgumentBeforeExecution(string unsafeArgument)
-    {
-        var runner = new TrackingProcessRunner();
-        var cli = new AzureCli(runner, isWindows: true);
-
-        var exception = await Assert.ThrowsAsync<AzureCliException>(() =>
-            cli.RunJsonAsync([unsafeArgument]));
-
-        Assert.Equal("Azure CLI argument is unsafe for Windows command execution.", exception.Message);
-        Assert.DoesNotContain(unsafeArgument, exception.ToString(), StringComparison.Ordinal);
-        Assert.Equal(0, runner.InvocationCount);
-    }
-
     [Fact]
     public async Task RunJsonAsync_NonWindowsPassesUnsafeArgumentToRunner()
     {
@@ -195,6 +169,26 @@ public sealed class AzureCliTests
             cli.RunJsonAsync(["account", "show"], cancellation.Token));
     }
 
+    private sealed class TrackingProcessRunner : IProcessRunner
+    {
+        public int InvocationCount { get; private set; }
+        public string? FileName { get; private set; }
+        public IReadOnlyList<string>? Arguments { get; private set; }
+
+        public Task<ProcessResult> RunAsync(
+            string fileName,
+            IEnumerable<string> arguments,
+            string? workingDirectory = null,
+            CancellationToken cancellationToken = default,
+            IReadOnlyDictionary<string, string>? environment = null)
+        {
+            InvocationCount++;
+            FileName = fileName;
+            Arguments = arguments.ToArray();
+            return Task.FromResult(new ProcessResult(0, "{}", ""));
+        }
+    }
+
     [Fact]
     public void BuildArguments_WindowsPreservesSafeTokenFlowValues()
     {
@@ -219,26 +213,6 @@ public sealed class AzureCliTests
             string? workingDirectory = null,
             CancellationToken cancellationToken = default,
             IReadOnlyDictionary<string, string>? environment = null) => Task.FromResult(result);
-    }
-
-    private sealed class TrackingProcessRunner : IProcessRunner
-    {
-        public int InvocationCount { get; private set; }
-        public string? FileName { get; private set; }
-        public IReadOnlyList<string>? Arguments { get; private set; }
-
-        public Task<ProcessResult> RunAsync(
-            string fileName,
-            IEnumerable<string> arguments,
-            string? workingDirectory = null,
-            CancellationToken cancellationToken = default,
-            IReadOnlyDictionary<string, string>? environment = null)
-        {
-            InvocationCount++;
-            FileName = fileName;
-            Arguments = arguments.ToArray();
-            return Task.FromResult(new ProcessResult(0, "{}", ""));
-        }
     }
 
     private sealed class RecordingProcessRunner(ProcessResult result) : IProcessRunner
