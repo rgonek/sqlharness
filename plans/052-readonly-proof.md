@@ -28,7 +28,7 @@
 ## Interpretation
 
 - The uncontained PL/pgSQL function inserted one persistent row. The same function and `EXPLAIN ANALYZE` form were rejected inside `READ ONLY` with SQLSTATE `25006`; the row count remained one. Persistent-sequence `nextval` and the next per-command transaction after changing the session default also returned `25006`.
-- TEMP `INSERT`, `UPDATE`, and `DELETE` committed inside read-only transactions, and all three TEMP `EXPLAIN ANALYZE` DML cases succeeded.
+- TEMP `INSERT`, `UPDATE`, and `DELETE` committed inside read-only transactions, and all three TEMP `EXPLAIN ANALYZE` DML cases succeeded. This proof covers commands inside READ ONLY; it does not test or prove containment for `--setup`, which remains read-write under existing static visible-effects and temp-target checks. A setup SELECT may invoke a persistent-writing user-defined function. Review setup SQL and use a least-privilege role; the classifier cannot promise every such effect is rejected. Any stricter setup policy belongs in follow-up hardening, not this plan.
 - `pg_stat_statements_reset()` succeeded inside the read-only transaction and returned a timestamp. Its effect is not contained by this transaction mode; retain an explicit function denial until an approved alternative protects that effect.
 - `pg_promote()` returned SQLSTATE `55000` on this primary server because it was not in recovery. This records a server-state rejection and does not demonstrate read-only enforcement. Keep promotion and backup operations explicitly denied. The proof did not test `pg_backup_start()`.
 

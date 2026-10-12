@@ -35,7 +35,7 @@ public static class SqlHarnessCapabilitiesProvider
                 new("capabilities", "Describe commands, engines, limits, and output modes."),
                 new("doctor", "Check local SQLHarness installation and profile-file availability."),
                 new("validate", "Classify SQL offline using a closed target profile; never connects. Usages: query, setup, benchmark."),
-                new("query", "Run a bounded SQL query. Non-approved PostgreSQL commands use per-command READ ONLY transactions, which reject persistent writes; known residual administrative effects are denied, while least-privilege roles must constrain other effects hidden in user functions."),
+                new("query", "Run a bounded SQL query. Non-approved PostgreSQL commands use per-command READ ONLY transactions, which reject persistent writes; known residual administrative effects are denied, and least-privilege roles must constrain other effects hidden in user functions. TEMP setup is read-write under static checks; a setup SELECT can call a persistent-writing user function, so review setup SQL."),
                 new("measure", "Measure a query."),
                 new("compare", "Compare baseline and candidate queries."),
                 new("schema", "Inspect database schema."),

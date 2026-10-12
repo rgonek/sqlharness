@@ -48,6 +48,19 @@ public sealed class PostgresSafetyTests
     }
 
     [Fact]
+    public void Temp_setup_static_classification_does_not_inspect_user_function_effects()
+    {
+        var decision = _classifier.Classify(
+            "SELECT app.purge_old_orders()",
+            SqlUsage.CompareSetup, "appdb", false, null, Empty);
+
+        // TEMP setup remains read-write under the existing setup contract.
+        // Static acceptance cannot prove that an opaque function has no writes.
+        Assert.True(decision.Allowed);
+        Assert.False(decision.HasMutation);
+    }
+
+    [Fact]
     public void Create_temp_and_insert_are_session_local()
     {
         var decision = _classifier.Classify("""
