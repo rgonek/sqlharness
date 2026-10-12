@@ -1,3 +1,5 @@
+using System.Data;
+using SqlHarness.Core.Dialect;
 using System.Text.Json;
 
 using SqlHarness.Cli;
@@ -88,10 +90,35 @@ public sealed class CapabilitiesCommandTests
     }
 
     [Fact]
+    public void Query_description_keeps_the_user_function_least_privilege_caveat()
+    {
+        var query = SqlHarnessCapabilitiesProvider.Get().Commands.Single(c => c.Name == "query").Description;
+        Assert.Contains("READ ONLY", query, StringComparison.Ordinal);
+        Assert.Contains("user functions", query, StringComparison.Ordinal);
+        Assert.Contains("least-privilege", query, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("nvarchar(10)", "nvarchar(n)", SqlDbType.NVarChar)]
+    [InlineData("varchar(10)", "varchar(n)", SqlDbType.VarChar)]
+    [InlineData("char(10)", "char(n)", SqlDbType.Char)]
+    [InlineData("nchar(10)", "nchar(n)", SqlDbType.NChar)]
+    [InlineData("varbinary(10)", "varbinary(n)", SqlDbType.VarBinary)]
+    [InlineData("binary(10)", "binary(n)", SqlDbType.Binary)]
+    public void Sized_types_advertised_for_sqlserver_bind_through_the_sqlserver_dialect(string declared, string advertised, SqlDbType expected)
+    {
+        var value = declared.Contains("binary", StringComparison.Ordinal) ? "AQID" : "a";
+        var bound = SqlDialects.For(SqlEngine.SqlServer).BindParameters([new SqlHarnessParameterInput("x", declared, value)]);
+
+        Assert.Equal(expected, Assert.Single(bound).Type);
+        Assert.Contains(advertised, SqlHarnessCapabilitiesProvider.Get().Engines.Single(e => e.Name == "sqlserver").ParameterTypes);
+    }
+
+    [Fact]
     public void Capabilities_states_output_modes_per_command()
     {
         var byCommand = SqlHarnessCapabilitiesProvider.Get().OutputModesByCommand;
-        var modes = byCommand.SelectMany(pair => pair.Value.Split(", ").Select(command => (command, mode: pair.Key))).ToDictionary(x => x.command, x => x.mode, StringComparer.Ordinal);
+        var modes = byCommand.SelectMany(pair => pair.Value.Split(',').Select(command => (command, mode: pair.Key))).ToDictionary(x => x.command, x => x.mode, StringComparer.Ordinal);
         Assert.Equal("text|json|json-summary|agent", modes["measure"]);
         Assert.Equal("text|json|json-summary|agent", modes["compare"]);
         Assert.Contains("ndjson", modes["watch"], StringComparison.Ordinal);
