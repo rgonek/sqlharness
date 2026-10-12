@@ -7,11 +7,11 @@ namespace SqlHarness.Tests.Integration;
 
 public sealed class PostgresReadOnlyProofTests
 {
-    private const string ConnectionVariable = "SQLHARNESS_PG_INTEGRATION_CONNECTION_STRING";
-    private const string ConfirmationVariable = "SQLHARNESS_PG_READONLY_PROOF_CONFIRM_DATABASE";
+    private const string ConnectionVariable = PostgresIntegrationFactAttribute.Variable;
+    private const string ConfirmationVariable = PostgresIntegrationFactAttribute.DisposableTargetConfirmationVariable;
     private const string ReportVariable = "SQLHARNESS_PG_READONLY_PROOF_REPORT";
 
-    [Fact]
+    [PostgresIntegrationFact(requireDisposableTargetConfirmation: true)]
     [Trait("Category", "PostgresIntegration")]
     public async Task Server_enforces_read_only_transaction_proof()
     {
@@ -64,6 +64,7 @@ public sealed class PostgresReadOnlyProofTests
             var rowsAfterRejectedWrite = await connection.ExecuteScalarAsync<long>($"SELECT count(*) FROM {schema}.effects");
             records.Add(new ProofRecord("Persistent table unchanged after read-only rejection",
                 rowsAfterRejectedWrite == initialRows ? "PASS" : "FAIL", null, $"rows={rowsAfterRejectedWrite}"));
+            Assert.Equal(initialRows, rowsAfterRejectedWrite);
             records.Add((await RunAsync(connection, $"SELECT pg_stat_statements_reset()", readOnly: true)) with
             {
                 Name = "pg_stat_statements_reset() inside READ ONLY transaction"
