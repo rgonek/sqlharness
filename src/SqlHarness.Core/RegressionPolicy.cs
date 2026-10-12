@@ -117,8 +117,8 @@ public static class RegressionPolicy
             elapsedBaselineMedian = Median(baseline.ElapsedMilliseconds);
             elapsedCandidateMedian = Median(candidate.ElapsedMilliseconds);
             elapsedRegressed = elapsedBaselineMedian > 0m
-                ? elapsedCandidateMedian >= elapsedBaselineMedian * ElapsedRatio &&
-                  elapsedCandidateMedian - elapsedBaselineMedian >= ElapsedMinimumDeltaMilliseconds
+                ? ExceedsRatioAndDelta(
+                    elapsedBaselineMedian, elapsedCandidateMedian, ElapsedRatio, ElapsedMinimumDeltaMilliseconds)
                 : elapsedCandidateMedian > ZeroBaselineCeilingMilliseconds;
         }
 
@@ -142,8 +142,8 @@ public static class RegressionPolicy
 
         var logicalReads = CostDiagnostic(
             baseline.LogicalReadsAvailability, candidate.LogicalReadsAvailability,
-            baseline.LogicalReads.Select(static value => (decimal)value).ToArray(),
-            candidate.LogicalReads.Select(static value => (decimal)value).ToArray(),
+            ToDecimals(baseline.LogicalReads),
+            ToDecimals(candidate.LogicalReads),
             LogicalReadsRatio, LogicalReadsMinimumDelta);
 
         // PostgreSQL has no CPU time source: the metric is unavailable whatever the token says.
@@ -151,11 +151,11 @@ public static class RegressionPolicy
             ? Unavailable()
             : CostDiagnostic(
                 baseline.CpuAvailability, candidate.CpuAvailability,
-                baseline.CpuMilliseconds.Select(static value => (decimal)value).ToArray(),
-                candidate.CpuMilliseconds.Select(static value => (decimal)value).ToArray(),
+                ToDecimals(baseline.CpuMilliseconds),
+                ToDecimals(candidate.CpuMilliseconds),
                 CpuRatio, CpuMinimumDeltaMilliseconds);
 
-        return new RegressionReport(verdict, reasons, PolicyVersion, elapsed, logicalReads, cpu);
+        return new RegressionReport(verdict, reasons.ToArray(), PolicyVersion, elapsed, logicalReads, cpu);
     }
 
     private static RegressionDiagnostic CostDiagnostic(
@@ -172,10 +172,16 @@ public static class RegressionPolicy
 
         var baselineMedian = Median(baselineSamples);
         var candidateMedian = Median(candidateSamples);
-        var regressed = candidateMedian >= baselineMedian * ratio &&
-            candidateMedian - baselineMedian >= minimumDelta;
+        var regressed = ExceedsRatioAndDelta(baselineMedian, candidateMedian, ratio, minimumDelta);
         return Diagnostic(regressed ? StatusRegressed : StatusNotRegressed, baselineMedian, candidateMedian);
     }
+
+    private static bool ExceedsRatioAndDelta(
+        decimal baselineMedian, decimal candidateMedian, decimal ratio, decimal minimumDelta) =>
+        candidateMedian >= baselineMedian * ratio && candidateMedian - baselineMedian >= minimumDelta;
+
+    private static decimal[] ToDecimals(IReadOnlyList<long> samples) =>
+        samples.Select(static value => (decimal)value).ToArray();
 
     private static RegressionDiagnostic Diagnostic(string status, decimal baselineMedian, decimal candidateMedian)
     {
