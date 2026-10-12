@@ -1,7 +1,9 @@
 # Plan 014: Przygotuj wykonalny kontrakt diagnostyki pg_stat_statements
 
+> **REJECTED 2026-10-11** — `pgstop` will not be built. `query` can already read `pg_stat_statements`; a ranked example query in the agent docs (plan 029) covers the need. Kept for history; do not execute.
+
 Status: **DONE — tylko etap projektowy/diagnostyczny** (funkcja `pgstop` nadal **PLANNED**; commity `f0934b3..7d82bf1`; niezaznaczone pola zadań nie są statusem)
-Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
+Aktualizacja kontraktu: 2026-10-11 przy `729d88f`: skumulowany ranking v1, runtime probe możliwości; delta odłożona. Data etapu pierwotnego: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
 Priorytet: P2; nakład: L; ryzyko zmiany: MED.
 Pokrycie: **propozycja diagnostyki PG**. Zależności: **003, 004, 009**.
 
@@ -17,7 +19,7 @@ git diff --stat 8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b..HEAD -- "plans/014-pg-
 
 Zmiany poprzedników są oczekiwane: przeczytaj je i dopasuj plan przed kodowaniem. Niewyjaśniony rozjazd wymaga aktualizacji założeń, nie mechanicznego wklejania starego kodu.
 
-Spec docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md opisuje PG14+, cumulative counters i delta. Wymaga jednak rozpoznania nieznanej wersji przed connect oraz zakłada szerszą wykrywalność resetów niż sam globalny stats_reset może udowodnić. To wymaga weryfikacji źródeł i kontraktu.
+Spec docs/superpowers/specs/2026-09-26-postgres-statement-diagnostics.md opisuje PG14+, cumulative counters i delta. Wymaga jednak rozpoznania nieznanej wersji przed connect oraz zakłada szerszą wykrywalność resetów niż sam globalny stats_reset może udowodnić. Wynik jest teraz skumulowanym rankingiem v1 z runtime probe wymaganych nazw/typów; dokładne pary numerów wersji nie są bramą. Delta pozostaje odłożona poza implementację v1.
 
 Punkt odniesienia z kodu/komendy:
 ```text
@@ -45,7 +47,7 @@ Poza zakresem: live DB, deploy, profile i hasła użytkownika, instalacja, push,
 
 ### 014/T2
 
-- [ ] Zaprojektuj sekwencję resolve/auth/identity/version/extension/probe. Wersję odczytaj po połączeniu i potwierdzeniu targetu, przed SQL zależnym od wersji. Brak extension i permissions nie jest pustym sukcesem.
+- [ ] Zaprojektuj sekwencję resolve/auth/identity/version/extension/runtime column probe. Wersję odczytaj po potwierdzeniu targetu; sprawdź wymagane nazwy/typy niezależnie od dokładnej pary numerów. Bezpiecznie kwalifikuj obiekt rozszerzenia. Niekompatybilny wymagany shape, brak extension lub uprawnień rankingu jest exit 5; opcjonalne metryki/kontekst unavailable z przyczyną.
 
 **Weryfikacja:** sprawdź wskazane źródła i odwołania lokalne; `git diff --check` → exit 0; rezultat kroku zapisany w dokumencie wynikowym.
 
@@ -57,19 +59,19 @@ Poza zakresem: live DB, deploy, profile i hasła użytkownika, instalacja, push,
 
 ### 014/T4
 
-- [ ] Zdefiniuj delta z jawnym incomparable przy reset/dealloc/restart/spadku liczników i unknown continuity, gdy obserwacje nie wykluczają resetu. Nie obiecuj pełnego wykrycia resetu selektywnego bez metadanych źródłowych.
+- [ ] Zapisz odłożenie delty poza v1. Nie implementuj Compare, magazynu migawek ani samych tokenów unknown/incomparable bez użytecznej różnicy. Ewentualny późniejszy plan obserwowanej różnicy musi opisać reset/eviction/restart i niewykrywalną utratę ciągłości; macierz resetów nie blokuje skumulowanego rankingu.
 
 **Weryfikacja:** sprawdź wskazane źródła i odwołania lokalne; `git diff --check` → exit 0; rezultat kroku zapisany w dokumencie wynikowym.
 
 ### 014/T5
 
-- [ ] Napisz wykonawczy plan PgStatementTopQuery/Reader/ArtifactWriter, CLI pgstop i ewentualnego nowego inspect kind, ze wspólnym Core, scope i gate. Fixture-first PG14/15+, brak instalacji extension, brak zmian GUC. Live proof pozostaje osobnym krokiem wymagającym jawnego celu.
+- [ ] Napisz wykonawczy plan PgStatementTopQuery/Reader/ArtifactWriter, CLI pgstop i ewentualnego nowego inspect kind, ze wspólnym Core, scope i gate. Fixture-first wymagane/optional shape, PG14/15/16/17/18 i nieznany numer z kompatybilnym minimum, bez allowlisty par; brak instalacji extension, brak zmian GUC. Live proof pozostaje osobnym krokiem wymagającym jawnego celu.
 
 **Weryfikacja:** sprawdź wskazane źródła i odwołania lokalne; `git diff --check` → exit 0; rezultat kroku zapisany w dokumencie wynikowym.
 
 ## Testy i zakończenie
 
-Kontrakt rozróżnia obserwowalne fakty od unknown, ma tabelę fixture/error/empty/reset/version i samodzielny plan kodu. Brak nowych reklamowanych capabilities przed implementacją.
+Kontrakt rozróżnia obserwowalne fakty od unknown, ma tabelę fixture/error/empty/runtime-shape/version; delta nie jest zadaniem v1 i samodzielny plan kodu. Brak nowych reklamowanych capabilities przed implementacją.
 
 - [ ] Dokumenty wynikowe zawierają decyzje, granice, zakres przyszłych plików oraz tabelę testów.
 - [ ] Niepewności oznaczone UNPROVEN z warunkiem uzyskania dowodu.
@@ -83,7 +85,7 @@ Baseline audytu: 1895 Core/CLI passed; MCP 122 passed, 2 timeouty, 4 skipped. Pl
 
 ## Warunki zatrzymania i utrzymanie
 
-Etap projektowy; jeśli resetu nie da się udowodnić, ogranicz obietnicę delta zamiast wymyślać znaczniki ciągłości.
+Etap projektowy; pytania resetów pozostają źródłowym UNPROVEN i nie blokują skumulowanego v1. Nie wymyślaj znaczników ciągłości ani nie dodawaj Compare.
 
 Jeśli krok wymaga rzeczywistego celu DB, sekretów lub wyjścia poza autoryzację, zatrzymaj ten krok i zapisz brak. Dokończ niezależne zadania. Nie oznaczaj całości DONE bez wszystkich wymaganych wyników.
 

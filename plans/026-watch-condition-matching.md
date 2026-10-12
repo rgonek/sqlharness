@@ -8,9 +8,10 @@
 > maintain the index.
 >
 > **Drift check (run first)**: `git diff --stat 5280f78..HEAD -- src/SqlHarness.Core/WatchCondition.cs src/SqlHarness.Core/WatchRunner.cs tests/SqlHarness.Tests/WatchConditionTests.cs tests/SqlHarness.Tests/WatchTests.cs AGENTS.md README.md`
-> If any in-scope file changed since this plan was written, compare the
-> "Current state" excerpts against the live code before proceeding; on a
-> mismatch, treat it as a STOP condition.
+> Inspect changes against the current source and adapt implementation details
+> within the authorized intent. A changed file or obsolete excerpt alone is
+> not a STOP condition. Stop for an incompatible contract, missing required
+> proof, or a change that exceeds the approved scope. Record the reconciled base.
 
 ## Status
 

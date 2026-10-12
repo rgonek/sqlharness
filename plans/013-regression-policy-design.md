@@ -1,6 +1,9 @@
 # Plan 013: Doprecyzuj i przygotuj wdrożenie decyzji regresji CI
 
+> **2026-10-11:** the decision thresholds here are reused by [051](051-compare-regression-verdict.md). Everything about reading saved artifacts offline (run-count inference, legacy producer proof, `regress` command) is superseded.
+
 Status: **DONE — etap projektowy/diagnostyczny** (funkcja nadal **PLANNED**; dokumenty: `plans/013-regression-contract.md`, `plans/013-regression-implementation.md`; commity `983f7b6..f6c8d7a`)
+Rewizja kontraktu i planu implementacji: 2026-10-11, HEAD729d88f. Historyczny etap projektowy pozostaje DONE; funkcja nadal PLANNED.
 Data: 2026-09-29. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
 Priorytet: P2; nakład: L; ryzyko zmiany: MED.
 Pokrycie: **propozycja funkcji regresji**. Zależności: **003, 006, 009**.
@@ -51,7 +54,7 @@ Poza zakresem: live DB, deploy, profile i hasła użytkownika, instalacja, push,
 
 ### 013/T3
 
-- [x] Zachowaj offline odczyt bez rebenchmark, pass/fail/inconclusive jako verdict z exit0, brak przejęcia exit8, CPU PG unavailable i AND progów względny+absolutny. Zachowaj elapsed plus corroboration, minimum5 i spread25% o ile zmiana zostanie jawnie uzasadniona.
+- [x] Zachowaj offline odczyt bez rebenchmark, pass/fail/inconclusive jako verdict z exit0, brak przejęcia exit8, CPU PG unavailable i AND progów względny+absolutny. Zachowaj minimum5 i spread25%. Rewizja 2026-10-11 jawnie usuwa obowiązkową korroborację: stabilna regresja czasu daje fail niezależnie od reads/CPU; koszty są osobną diagnostyką. Czas0 do >5ms daje fail po bramach; brak dowodu dostępności nadal inconclusive.
 
 **Weryfikacja:** sprawdź wskazane źródła i odwołania lokalne; `git diff --check` → exit 0; rezultat kroku zapisany w dokumencie wynikowym.
 
