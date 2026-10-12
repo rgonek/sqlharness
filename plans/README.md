@@ -22,7 +22,7 @@ Odświeżono po weryfikacji Plan 049 na `58fab51`. Preferencja użytkownika: pla
 | Kolejność | Plan | Kategoria | Warunek wykonania |
 |---|---|---|---|
 | 1 | [053](053-specific-errors-for-the-caller.md) | Konkretne błędy dla wywołującego, param-set z BOM/komentarzami | — |
-| 2 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redakcja = znane sekrety (+ token Azure); uproszczenie strażników MCP | 049 DONE; najlepiej po 053 |
+| 2 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redakcja = znane sekrety (+ token Azure); uproszczenie strażników MCP | DONE na feat/plan-054-simplify-guards; obie bramki zielone na 187fcbb; czeka na scalenie |
 
 024 i 045 scalone do main (`232ec01`, `3e8236f`); 046 ma DONE.
 
@@ -181,7 +181,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [051](051-compare-regression-verdict.md) | `compare` reports a latency regression verdict from its own samples | P2 | M | 046 | DONE (merged to main `e05da9b` from `feat/plan-051-regression-verdict`; `regression` verdict in compare JSON, summary, matrix cells, MCP and CLI text; supersedes 035 and the offline-reader part of 013; Windows and Linux gates green, confirmed by the user 2026-10-12) |
 | [052](052-postgres-read-only-transactions.md) | Every non-approved PostgreSQL command uses a per-command READ ONLY transaction | P1 | M | Disposable PostgreSQL 18.6 proof | DONE at frozen `c07f001`; integrated tip `9082149` (Windows and isolated Linux gates passed; see [052-verification](052-verification.md)); locally merged to main by fast-forward at `f09a614`; not pushed |
 | [053](053-specific-errors-for-the-caller.md) | Errors name what went wrong when the reader already holds the data | P2 | M | — | TODO |
-| [054](054-simplify-redaction-and-mcp-input-guards.md) | Redaction is exact known-secret replacement; MCP input guards match a same-user threat model | P2 | M | 049 (DONE) | TODO |
+| [054](054-simplify-redaction-and-mcp-input-guards.md) | Redaction is exact known-secret replacement; MCP input guards match a same-user threat model | P2 | M | 049 (DONE) | DONE (feat/plan-054-simplify-guards; 0ec4e4e..187fcbb; Windows verify: OK Core3783/MCP381+4 skipped; Linux verify-linux: OK Core3783/MCP382+3 skipped; guard duplicate JSON retained for proven SDK differential; no merge/push/live DB) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED, SUPERSEDED or REVERTED (with one-line rationale).
 

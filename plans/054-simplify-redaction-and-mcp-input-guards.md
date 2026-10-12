@@ -4,7 +4,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: DONE (feature branch; not merged or pushed)
 - Priority: P2
 - Effort: M
 - Risk: MED (removes defensive code; each removal needs its rationale checked)
@@ -41,11 +41,26 @@ Implement items in the order above, one commit each, each with its tests adjuste
 
 ## Done criteria
 
-- [ ] Azure token is a known secret on every redaction path.
-- [ ] Each removed guard has its rationale recorded in the commit message; item 4 records the `75d43aa` finding either way.
-- [ ] README Secrets row says: "Known credentials (the profile's password and the Azure token) are replaced in every output. Other text, including SQL quoted in server errors, is shown as is."
-- [ ] Both gates pass; `plans/README.md` row updated.
+- [x] Azure token is a known secret on every redaction path.
+- [x] Each removed guard has its rationale recorded in the commit message; item 4 records the `75d43aa` finding either way.
+- [x] README Secrets row says: "Known credentials (the profile's password and the Azure token) are replaced in every output. Other text, including SQL quoted in server errors, is shown as is."
+- [x] Both gates pass; `plans/README.md` row updated.
 
 ## STOP conditions
 
 - A credential reaches output that is not a known secret (for example a connection string the caller did not supply). Keep a narrow pattern for that source and document it.
+
+## Completion evidence — 2026-10-12
+
+Implemented in order with one commit per item: `0ec4e4e`, `e0b7cc0`, `4025483`, `68d8da2`, `ee5e64e`. Final review fixes: `3a5f1f9`; final-newline normalization: `187fcbb`.
+
+- Windows at `187fcbb`: `pwsh ./scripts/verify.ps1` -> `verify: OK`; Core 3783 passed, MCP 381 passed / 4 skipped; build 0 warnings/errors.
+- Linux at `187fcbb`: `pwsh ./scripts/verify-linux.ps1` -> `verify-linux: OK` on WSL ext4; Core 3783 passed, MCP 382 passed / 3 skipped.
+- Task reviews: Luna xhigh; whole-branch review and scoped final re-review: Sol low. No production Critical/Important findings remain.
+- The first Windows run exposed six stale heuristic-redaction tests and an observed capabilities byte-count fixture; corrected without increasing the 8192-byte budget. A later format-only gate failure was corrected, then both complete gates passed.
+- No live database calls, merge, or push. The existing duplicate JSON guard remains for the concrete SDK differential documented above.
+
+### Controller decisions
+
+- Ruling: The five numbered Items were treated as tasks and equivalent briefs generated directly because the extraction helper requires absent Task headings. Cost if wrong: task grouping rework only.
+- Ruling: Defer direct malformed-frame first-ID recovery test coverage after the single final fix wave. The pinned SDK differential was independently verified and the guard remains; valid duplicate-ID rejection and session-recovery tests pass. Cost if wrong: SDK fallback behavior could drift without that focused regression; duplicate keys are still rejected before SDK parsing.
