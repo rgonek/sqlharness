@@ -497,6 +497,7 @@ public sealed class Renderer
 
     private static string FormatDecimal(decimal value) =>
         value.ToString("0.############################", CultureInfo.InvariantCulture);
+
     // Leading newline so a missing verdict (legacy artifact) adds no line.
     private static string FormatRegressionLine(RegressionReport? regression)
     {

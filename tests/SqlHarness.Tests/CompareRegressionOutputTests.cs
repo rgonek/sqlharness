@@ -85,6 +85,44 @@ public class CompareRegressionOutputTests
     }
 
     [Fact]
+    public async Task CompareCellRunner_stable_equal_samples_with_compared_results_pass()
+    {
+        var session = SqlHarnessCompareTests.FakeCompareSession.Create();
+        session.StatisticsMessages =
+        [
+            "Table 'Clients'. Scan count 1, logical reads 5, physical reads 0, lob logical reads 0." + "\n" +
+            "SQL Server Execution Times: CPU time = 10 ms, elapsed time = 20 ms.",
+        ];
+        var runner = new CompareCellRunner(session, new MemoryWriter());
+
+        var cell = await runner.RunAsync(Request(ResultComparisonMode.Ordered) with { Repeat = 5 }, CancellationToken.None);
+
+        var regression = Assert.IsType<RegressionReport>(cell.Report.Regression);
+        Assert.Equal(RegressionPolicy.Pass, regression.Verdict);
+        Assert.Empty(regression.Reasons);
+        Assert.Equal(RegressionPolicy.StatusNotRegressed, regression.Elapsed.Status);
+        Assert.Equal(20m, regression.Elapsed.BaselineMedian);
+        Assert.Equal(20m, regression.Elapsed.CandidateMedian);
+    }
+
+    [Fact]
+    public async Task CompareCellRunner_unrecognized_statistics_make_elapsed_unavailable_and_inconclusive()
+    {
+        var session = SqlHarnessCompareTests.FakeCompareSession.Create();
+        session.StatisticsMessages = ["unrecognized statistics text"];
+        var runner = new CompareCellRunner(session, new MemoryWriter());
+
+        var cell = await runner.RunAsync(Request(ResultComparisonMode.Ordered) with { Repeat = 5 }, CancellationToken.None);
+
+        var regression = Assert.IsType<RegressionReport>(cell.Report.Regression);
+        Assert.Equal(RegressionPolicy.Inconclusive, regression.Verdict);
+        Assert.Contains(RegressionPolicy.ReasonElapsedUnavailable, regression.Reasons);
+        Assert.Equal(RegressionPolicy.StatusUnavailable, regression.Elapsed.Status);
+        Assert.Equal(RegressionPolicy.StatusUnavailable, regression.LogicalReads.Status);
+        Assert.Equal(RegressionPolicy.StatusUnavailable, regression.Cpu.Status);
+    }
+
+    [Fact]
     public async Task CompareCellRunner_off_mode_reports_results_not_compared()
     {
         var session = SqlHarnessCompareTests.FakeCompareSession.Create();

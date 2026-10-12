@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace SqlHarness.Core;
 
 public sealed record BenchmarkVariantSummary(
@@ -7,7 +9,7 @@ public sealed record BenchmarkVariantSummary(
     IReadOnlyDictionary<string, CompareDistribution> LogicalReadsByTable,
     IReadOnlyList<string> Warnings)
 {
-    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public BenchmarkMetricReport? MetricReport { get; init; }
 }
 
@@ -32,7 +34,7 @@ public sealed record CompareBenchmarkSummary(
     string? ArtifactDirectory)
 {
     /// <summary>Absent when the report predates the regression verdict.</summary>
-    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RegressionReport? Regression { get; init; }
 }
 
@@ -56,7 +58,7 @@ public sealed record MeasureParameterSetSummary(
     long MedianLogicalReads,
     IReadOnlyList<NoteworthyOperatorSummary> NoteworthyOperators)
 {
-    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public BenchmarkMetricReport? MetricReport { get; init; }
 }
 

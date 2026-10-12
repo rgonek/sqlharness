@@ -336,8 +336,11 @@ public class RegressionPolicyTests
             SqlEngine.SqlServer, Variant(Flat(100m)), Variant(Flat(1000m)), null));
 
         Assert.Equal(RegressionPolicy.Inconclusive, report.Verdict);
-        Assert.Equal(RegressionPolicy.StatusRegressed, report.Elapsed.Status);
+        Assert.Equal(RegressionPolicy.StatusInconclusive, report.Elapsed.Status);
+        Assert.Equal(100m, report.Elapsed.BaselineMedian);
+        Assert.Equal(1000m, report.Elapsed.CandidateMedian);
         Assert.Equal(900m, report.Elapsed.Delta);
+        Assert.Equal(900m, report.Elapsed.DeltaPercent);
     }
 
     [Fact]

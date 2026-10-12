@@ -79,6 +79,7 @@ public static class RegressionPolicy
     public const string StatusRegressed = "regressed";
     public const string StatusNotRegressed = "not-regressed";
     public const string StatusUnavailable = "unavailable";
+    public const string StatusInconclusive = "inconclusive";
 
     public static RegressionReport Evaluate(RegressionInput input)
     {
@@ -108,17 +109,17 @@ public static class RegressionPolicy
             (IsUnstable(baseline.ElapsedMilliseconds) || IsUnstable(candidate.ElapsedMilliseconds)))
             reasons.Add(ReasonUnstableElapsed);
 
-        var elapsed = Unavailable();
         var elapsedRegressed = false;
+        decimal elapsedBaselineMedian = 0m;
+        decimal elapsedCandidateMedian = 0m;
         if (elapsedAvailable)
         {
-            var baselineMedian = Median(baseline.ElapsedMilliseconds);
-            var candidateMedian = Median(candidate.ElapsedMilliseconds);
-            elapsedRegressed = baselineMedian > 0m
-                ? candidateMedian >= baselineMedian * ElapsedRatio &&
-                  candidateMedian - baselineMedian >= ElapsedMinimumDeltaMilliseconds
-                : candidateMedian > ZeroBaselineCeilingMilliseconds;
-            elapsed = Diagnostic(elapsedRegressed, baselineMedian, candidateMedian);
+            elapsedBaselineMedian = Median(baseline.ElapsedMilliseconds);
+            elapsedCandidateMedian = Median(candidate.ElapsedMilliseconds);
+            elapsedRegressed = elapsedBaselineMedian > 0m
+                ? elapsedCandidateMedian >= elapsedBaselineMedian * ElapsedRatio &&
+                  elapsedCandidateMedian - elapsedBaselineMedian >= ElapsedMinimumDeltaMilliseconds
+                : elapsedCandidateMedian > ZeroBaselineCeilingMilliseconds;
         }
 
         string verdict;
@@ -131,6 +132,13 @@ public static class RegressionPolicy
         }
         else
             verdict = Pass;
+
+        // The elapsed status mirrors the verdict: a failed gate makes it inconclusive, medians stay visible.
+        var elapsed = !elapsedAvailable
+            ? Unavailable()
+            : Diagnostic(
+                verdict == Inconclusive ? StatusInconclusive : elapsedRegressed ? StatusRegressed : StatusNotRegressed,
+                elapsedBaselineMedian, elapsedCandidateMedian);
 
         var logicalReads = CostDiagnostic(
             baseline.LogicalReadsAvailability, candidate.LogicalReadsAvailability,
@@ -166,17 +174,17 @@ public static class RegressionPolicy
         var candidateMedian = Median(candidateSamples);
         var regressed = candidateMedian >= baselineMedian * ratio &&
             candidateMedian - baselineMedian >= minimumDelta;
-        return Diagnostic(regressed, baselineMedian, candidateMedian);
+        return Diagnostic(regressed ? StatusRegressed : StatusNotRegressed, baselineMedian, candidateMedian);
     }
 
-    private static RegressionDiagnostic Diagnostic(bool regressed, decimal baselineMedian, decimal candidateMedian)
+    private static RegressionDiagnostic Diagnostic(string status, decimal baselineMedian, decimal candidateMedian)
     {
         var delta = candidateMedian - baselineMedian;
         decimal? percent = baselineMedian == 0m
             ? null
             : Math.Round(delta / baselineMedian * 100m, DeltaPercentDecimals, MidpointRounding.AwayFromZero);
         return new RegressionDiagnostic(
-            regressed ? StatusRegressed : StatusNotRegressed, baselineMedian, candidateMedian, delta, percent);
+            status, baselineMedian, candidateMedian, delta, percent);
     }
 
     private static RegressionDiagnostic Unavailable() =>
