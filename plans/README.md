@@ -14,15 +14,14 @@ Odświeżono po weryfikacji Plan 049 na `58fab51`. Preferencja użytkownika: pla
 | [024](024-canonical-results-common-types.md) | Ogólne / SQL Server / PG: pełna obsługa typów wyników | DONE — scalony do main `232ec01` |
 | [Ceny modeli i ustawienia](../docs/superpowers/plans/2026-10-11-model-prices-settings.md) | Dashboard, wycena tokenów, konfiguracja, katalog CLI/MCP | MERGED — cała gałąź `feat/model-prices-settings` jest w `main`, worktree czysty; wyniki bramek nie były sprawdzane przy tej aktualizacji |
 
-020, 026, 030, 041, 042, 043, 044, 046, 049 i 052 mają już DONE w aktualnym indeksie i nie wracają do kolejki. Starsze dowody zachowano bez ponownego uruchamiania bramek przy odświeżaniu dokumentacji; Plan 049 uzyskał świeże zielone bramki Windows i Linux na `58fab51`. DONE nie stanowi dodatkowej zgody na push.
+020, 026, 030, 041, 042, 043, 044, 046, 049, 050 i 052 mają już DONE w aktualnym indeksie i nie wracają do kolejki. Starsze dowody zachowano bez ponownego uruchamiania bramek przy odświeżaniu dokumentacji; Plan 049 uzyskał świeże zielone bramki Windows i Linux na `58fab51`. DONE nie stanowi dodatkowej zgody na push.
 
 ### Grupa 1 — bezpieczeństwo i podstawowa praca agenta
 
 | Kolejność | Plan | Kategoria | Warunek wykonania |
 |---|---|---|---|
-| 1 | [050](050-sqlserver-server-name-informational.md) | SQL Server i PG: tożsamość endpointu tylko raportowana | Zastępuje 033; usuwa exit 4 poza różnicą bazy |
-| 2 | [053](053-specific-errors-for-the-caller.md) | Konkretne błędy dla wywołującego, param-set z BOM/komentarzami | — |
-| 3 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redakcja = znane sekrety (+ token Azure); uproszczenie strażników MCP | 049 DONE; najlepiej po 053 |
+| 1 | [053](053-specific-errors-for-the-caller.md) | Konkretne błędy dla wywołującego, param-set z BOM/komentarzami | — |
+| 2 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redakcja = znane sekrety (+ token Azure); uproszczenie strażników MCP | 049 DONE; najlepiej po 053 |
 
 024 i 045 scalone do main (`232ec01`, `3e8236f`); 046 ma DONE.
 
@@ -30,22 +29,18 @@ Odświeżono po weryfikacji Plan 049 na `58fab51`. Preferencja użytkownika: pla
 
 | Kolejność | Plan | Kategoria | Zależności |
 |---|---|---|---|
-| 4 | [051](051-compare-regression-verdict.md) | Ogólne: werdykt regresji w wyniku compare | Zastępuje 035; progi z 013 |
-| [052](052-postgres-read-only-transactions.md) | PostgreSQL runs every non-approved command inside a READ ONLY transaction | P1 | M | PostgreSQL 18.6 proof; Windows and isolated ext4 Linux gates pass; see [052-verification](052-verification.md) | DONE (implementation at `c07f001`; not merged or pushed) |
-| [053](053-specific-errors-for-the-caller.md) | Errors name what went wrong when the reader already holds the data | P2 | M | — | TODO |
-| [054](054-simplify-redaction-and-mcp-input-guards.md) | Redaction is exact known-secret replacement; MCP input guards match a same-user threat model | P2 | M | 049 (DONE) | TODO |
+| 3 | [051](051-compare-regression-verdict.md) | Ogólne: werdykt regresji w wyniku compare | Zastępuje 035; progi z 013 |
 
 ### Grupa 3 — dostarczanie i utrzymanie
 
 | Kolejność | Plan | Kategoria | Zależności |
 |---|---|---|---|
-| 5 | [028](028-release-pipeline-hardening.md) | Release: wersja, bramka CI, minimalne uprawnienia | Bez SHA-pinów, Dependabota i atestacji (odrzucone 2026-10-11) |
-| 6 | [032 — dokończenie całego planu](032-ci-matrix-and-test-hygiene.md) | CI: Windows/Linux i stabilność testów | Po 028 |
-| 7 | [036](036-live-database-ci-lane.md) | Ogólne: izolowane testy z SQL Server i PG | Oba silniki w jednym wykonaniu |
-| 8 | [029](029-agent-docs-and-capabilities-drift.md) | Ogólne: dokumentacja, capabilities, uczciwe ramy bezpieczeństwa, piny testów | Po 053/054; AGENTS.md już przepisany |
+| 4 | [028](028-release-pipeline-hardening.md) | Release: wersja, bramka CI, minimalne uprawnienia | Bez SHA-pinów, Dependabota i atestacji (odrzucone 2026-10-11) |
+| 5 | [032 — dokończenie całego planu](032-ci-matrix-and-test-hygiene.md) | CI: Windows/Linux i stabilność testów | Po 028 |
+| 6 | [036](036-live-database-ci-lane.md) | Ogólne: izolowane testy z SQL Server i PG | Oba silniki w jednym wykonaniu |
+| 7 | [029](029-agent-docs-and-capabilities-drift.md) | Ogólne: dokumentacja, capabilities, uczciwe ramy bezpieczeństwa, piny testów | Po 053/054; AGENTS.md już przepisany |
 
 034 jest DONE i scalone lokalnie (`0d30771`); oba gate'y przeszły na tym commitcie.
-| 9 | [034](034-private-sqlharness-home.md) | Prywatny katalog domowy na Unixie | Zakres zmniejszony do 0700 na home; P3; DONE (`0d30771`) |
 
 ### Grupa 4 — wyłącznie PostgreSQL, późniejsza kolejka
 
@@ -185,6 +180,9 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [049](049-plan-text-without-literal-masking.md) | MCP plan text is returned as supplied, within size bounds; no literal masking | P2 | S | 048 reverted | DONE (feature branch `feat/plan-049-plan-text`; commits `932d4ad`, `c12aeb4`, `58fab51`; Windows `verify: OK` Core 3722, MCP 383 passed/4 skipped; Linux `verify-linux: OK` Core 3722, MCP 384 passed/3 skipped on WSL ext4; task, whole-branch, fixture and formatting reviews clean; no live DB checks; not merged) |
 | [050](050-sqlserver-server-name-informational.md) | SQL Server and PostgreSQL report connected server identity without blocking | P2 | M | — | DONE (commits e6b7d01, 1ecc7d6, e87882a, 7f6f1d0; locally merged in 761f2ab; post-merge Windows `verify: OK` Core 3713, MCP 383/4 skipped; Linux `verify-linux: OK` Core 3713, MCP 384/3 skipped; no push/live DB proof) |
 | [051](051-compare-regression-verdict.md) | `compare` reports a latency regression verdict from its own samples | P2 | M | 046 | TODO |
+| [052](052-postgres-read-only-transactions.md) | Every non-approved PostgreSQL command uses a per-command READ ONLY transaction | P1 | M | Disposable PostgreSQL 18.6 proof | DONE at frozen `c07f001` (Windows and isolated Linux gates passed there; integrated gates pending; see [052-verification](052-verification.md); not merged to main or pushed) |
+| [053](053-specific-errors-for-the-caller.md) | Errors name what went wrong when the reader already holds the data | P2 | M | — | TODO |
+| [054](054-simplify-redaction-and-mcp-input-guards.md) | Redaction is exact known-secret replacement; MCP input guards match a same-user threat model | P2 | M | 049 (DONE) | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED, SUPERSEDED or REVERTED (with one-line rationale).
 
