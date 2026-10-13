@@ -174,9 +174,10 @@ public static class SqlValidation
                 reason = "parameter_validation_failed";
                 detail = shapeException.Message;
             }
-            catch (SqlHarnessSafetyException)
+            catch (SqlHarnessSafetyException exception)
             {
                 reason = "parameter_validation_failed";
+                detail = exception.Message;
             }
         }
 

@@ -75,6 +75,31 @@ public class SqlSafetyTests
     public void Query_denies_stateful_NEXT_VALUE_FOR_expression() =>
         Assert.False(ClassifyQuery("SELECT NEXT VALUE FOR dbo.Seq").Allowed);
 
+    [Fact]
+    public void Unsupported_statement_names_its_kind_and_line()
+    {
+        var decision = ClassifyQuery("SELECT 1 AS A;\nWHILE 1 = 0 BEGIN SELECT 2 AS B; END;");
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.Equal("WhileStatement at line 2", decision.Detail);
+    }
+
+    [Fact]
+    public void Compare_setup_unsupported_statement_names_its_kind_and_line()
+    {
+        var decision = _classifier.Classify(
+            "SELECT 1 AS A;\nWHILE 1 = 0 BEGIN SELECT 2 AS B; END;",
+            SqlUsage.CompareSetup,
+            "db",
+            false,
+            null);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.Equal("WhileStatement at line 2", decision.Detail);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

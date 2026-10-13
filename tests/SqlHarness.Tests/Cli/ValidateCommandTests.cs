@@ -81,6 +81,24 @@ public sealed class ValidateCommandTests
     }
 
     [Fact]
+    public void Parameter_validation_detail_names_the_rejected_parameter()
+    {
+        var report = SqlValidation.Validate(
+            new SqlTargetRequest("test", new Dictionary<string, string>()),
+            "SELECT @Name AS N;",
+            [],
+            new Dictionary<string, TargetProfile> { ["test"] = Profile("sqlserver") },
+            new ValidationOptions
+            {
+                TypedParameters = [new SqlHarnessParameterInput("1bad", "int", "1")],
+            });
+
+        Assert.False(report.Allowed);
+        Assert.Equal("parameter_validation_failed", report.Reason);
+        Assert.Contains("'1bad'", report.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Rejected_mutation_does_not_claim_supplied_parameters_are_missing()
     {
         var result = SqlValidation.Validate(

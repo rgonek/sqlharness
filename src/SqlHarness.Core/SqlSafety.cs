@@ -235,7 +235,11 @@ internal sealed class SqlSafetyClassifier
                 var hasUnprovenUse = HasUnprovenTableVariableUse(statement, scope);
                 var classification = ClassifyStatement(statement, scope);
                 if (classification.DenyReason is { } deny)
-                    return Denied(deny, hasUnprovenUse ? UnprovenTableVariableDetail : null);
+                    return Denied(
+                        deny,
+                        hasUnprovenUse
+                            ? UnprovenTableVariableDetail
+                            : deny == SqlSafetyReason.UnsupportedStatement ? StatementDetail(statement) : null);
 
                 hasMutation |= classification.HasPersistentWrite;
                 hasSessionLocal |= classification.HasSessionLocalWrite;
@@ -302,7 +306,11 @@ internal sealed class SqlSafetyClassifier
                             hasUnprovenUse ? UnprovenTableVariableDetail : null);
                     }
 
-                    return Denied(deny, hasUnprovenUse ? UnprovenTableVariableDetail : null);
+                    return Denied(
+                        deny,
+                        hasUnprovenUse
+                            ? UnprovenTableVariableDetail
+                            : deny == SqlSafetyReason.UnsupportedStatement ? StatementDetail(statement) : null);
                 }
 
                 if (classification.HasPersistentWrite)
@@ -314,7 +322,9 @@ internal sealed class SqlSafetyClassifier
                 {
                     return Denied(
                         IsWrite(statement) ? SqlSafetyReason.NonTemporaryWrite : SqlSafetyReason.UnsupportedStatement,
-                        hasUnprovenUse ? UnprovenTableVariableDetail : null);
+                        hasUnprovenUse
+                            ? UnprovenTableVariableDetail
+                            : IsWrite(statement) ? null : StatementDetail(statement));
                 }
 
                 hasSessionLocal |= classification.HasSessionLocalWrite;
@@ -806,6 +816,9 @@ internal sealed class SqlSafetyClassifier
 
     private static SqlSafetyDecision Denied(SqlSafetyReason reason, string? detail = null) =>
         new(false, reason, Detail: detail);
+
+    private static string StatementDetail(TSqlStatement statement) =>
+        $"{statement.GetType().Name} at line {statement.StartLine}";
 
     private sealed class NestedDmlWriteVisitor(BatchVariableScope scope) : TSqlFragmentVisitor
     {

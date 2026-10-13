@@ -864,13 +864,16 @@ public sealed class McpMappingTests : IDisposable
     }
 
     [Fact]
-    public async Task Validate_rejects_a_bad_typed_value_in_core_without_echo()
+    public async Task Validate_rejects_a_bad_typed_value_and_reports_caller_parameter_detail()
     {
+        const string callerValue = "caller-owned-not-an-integer";
         var report = await McpOperationMapper.MapValidateAsync(
-            Scope(), "SELECT @id;", null, "query", [P("id", "int", SecretValue)], CancellationToken.None);
+            Scope(), "SELECT @id;", null, "query", [P("id", "int", callerValue)], CancellationToken.None);
         Assert.False(report.Allowed);
         Assert.Equal("parameter_validation_failed", report.Reason);
-        Assert.DoesNotContain(SecretValue, JsonSerializer.Serialize(report), StringComparison.Ordinal);
+        Assert.Contains(callerValue, report.Detail, StringComparison.Ordinal);
+        Assert.Contains("'id'", report.Detail, StringComparison.Ordinal);
+        Assert.Contains("'int'", report.Detail, StringComparison.Ordinal);
     }
 
     [Theory]
