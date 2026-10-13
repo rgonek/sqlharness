@@ -20,7 +20,7 @@ Key implementation commits:
 
 ## Reviews and recorded rulings
 
-The task-level reviews and required fix-round rereviews approved the implementation; the final portability fix rereview was clean. The whole-branch review by gpt-6-sol (low) is complete with no Critical or Important findings and two Minor comments. This final review fix addresses both comments; re-review is pending. The user authorized local merge after completion, but the branch has not yet been merged. No push was performed or authorized.
+The task-level reviews and required fix-round rereviews approved the implementation; the final portability fix rereview was clean. The whole-branch review by gpt-6-sol (low) found no Critical or Important findings and two Minor comments. Both were addressed and the final re-review was clean. The user authorized local merge; the branch was locally merged to main by merge commit `4bb783a` on 2026-10-13. No push was performed or authorized.
 
 Execution allocation recorded in the SDD ledger: implementation by gpt-6-luna (high), task reviews by gpt-6-luna (xhigh), and whole-branch review by gpt-6-sol (low).
 
@@ -75,4 +75,4 @@ The three MCP skips are configured environment-gated tests. No live database or 
 
 ## Remaining integration steps
 
-The implementation and platform gates are complete. The whole-branch review found no Critical or Important issues; its two Minor comments were addressed in `README.md` and `AgentOutputProjection.cs`. Re-review is pending. Then perform the already-authorized local merge. This record describes the feature branch and does not claim that re-review or merge has happened.
+The implementation, platform gates, whole-branch review, and re-review are complete. The two Minor comments were addressed in `README.md` and `AgentOutputProjection.cs`. The feature branch was merged locally to main at `4bb783a`. Main had docs/plans-only drift after the final branch gates, so no post-merge gates were rerun. No push or live database proof is claimed.
