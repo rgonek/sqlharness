@@ -477,7 +477,7 @@ internal sealed class MeasureParameterSetRunner
                 sets[0].Parameters,
                 operation.TimeoutSeconds,
                 session,
-                raw,
+                raw: null,
                 ct,
                 setupSafety);
             setupExecutionCount = 1;
@@ -513,7 +513,7 @@ internal sealed class MeasureParameterSetRunner
                 repetition,
                 "measure",
                 set.Name,
-                raw,
+                repetition == 1 ? raw : null,
                 captureComparison: false,
                 _comparisonMaximumRows,
                 ct);

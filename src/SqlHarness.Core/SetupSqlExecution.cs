@@ -104,7 +104,7 @@ internal static class SetupSqlExecution
         IReadOnlyList<SqlHarnessParameter> parameters,
         int timeoutSeconds,
         ISqlSession session,
-        CanonicalResultAccumulator raw,
+        CanonicalResultAccumulator? raw,
         CancellationToken ct,
         SqlSafetyDecision? setupSafety = null)
     {

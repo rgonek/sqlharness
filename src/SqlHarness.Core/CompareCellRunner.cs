@@ -187,28 +187,28 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
                 request.Parameters,
                 request.TimeoutSeconds,
                 session,
-                raw,
+                raw: null,
                 ct,
                 request.SetupSafety);
 
             // Fingerprints only for modes that run ResultComparer; off skips equivalence work entirely.
             // Warmup is EXPLAIN/STATISTICS only; sidecar follows measured repetitions.
             var captureComparison = request.CompareResults != ResultComparisonMode.Off;
-            await ExecuteBenchmarkRunAsync(dialect, session, request.BaselineSql, request.Parameters, request.TimeoutSeconds, 0, "baseline", raw, captureComparison: false, ct);
-            await ExecuteBenchmarkRunAsync(dialect, session, request.CandidateSql, request.Parameters, request.TimeoutSeconds, 0, "candidate", raw, captureComparison: false, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, request.BaselineSql, request.Parameters, request.TimeoutSeconds, 0, "baseline", raw: null, captureComparison: false, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, request.CandidateSql, request.Parameters, request.TimeoutSeconds, 0, "candidate", raw: null, captureComparison: false, ct);
 
             var runs = new List<CollectedBenchmarkRun>(request.Repeat * 2);
             for (var repetition = 1; repetition <= request.Repeat; repetition++)
             {
                 if (repetition % 2 == 1)
                 {
-                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.BaselineSql, request.Parameters, request.TimeoutSeconds, repetition, "baseline", raw, captureComparison, ct));
-                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.CandidateSql, request.Parameters, request.TimeoutSeconds, repetition, "candidate", raw, captureComparison, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.BaselineSql, request.Parameters, request.TimeoutSeconds, repetition, "baseline", repetition == 1 ? raw : null, captureComparison, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.CandidateSql, request.Parameters, request.TimeoutSeconds, repetition, "candidate", repetition == 1 ? raw : null, captureComparison, ct));
                 }
                 else
                 {
-                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.CandidateSql, request.Parameters, request.TimeoutSeconds, repetition, "candidate", raw, captureComparison, ct));
-                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.BaselineSql, request.Parameters, request.TimeoutSeconds, repetition, "baseline", raw, captureComparison, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.CandidateSql, request.Parameters, request.TimeoutSeconds, repetition, "candidate", repetition == 1 ? raw : null, captureComparison, ct));
+                    runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, request.BaselineSql, request.Parameters, request.TimeoutSeconds, repetition, "baseline", repetition == 1 ? raw : null, captureComparison, ct));
                 }
             }
 
@@ -283,7 +283,7 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
         int timeoutSeconds,
         int repetition,
         string variant,
-        CanonicalResultAccumulator raw,
+        CanonicalResultAccumulator? raw,
         bool captureComparison,
         CancellationToken ct) =>
         BenchmarkRunner.ExecuteAsync(

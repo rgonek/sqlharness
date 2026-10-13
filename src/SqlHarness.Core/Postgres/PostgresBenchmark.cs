@@ -103,7 +103,7 @@ internal static class PostgresBenchmark
         int timeoutSeconds,
         int repetition,
         string variant,
-        CanonicalResultAccumulator raw,
+        CanonicalResultAccumulator? raw,
         bool captureComparison,
         int comparisonMaximumRows,
         CancellationToken ct)
@@ -123,8 +123,7 @@ internal static class PostgresBenchmark
         var consumed = session.ConsumeMessages(messageStart);
         var messages = consumed.Messages.ToArray();
         foreach (var message in messages)
-            raw.AddMessage("sql", message);
-        raw.AddMessage("planXml", planJson);
+            raw?.AddMessage("sql", message);
         var omittedMessageCount = consumed.OmittedMessageCount;
 
         var stats = ParseStats(planJson);
@@ -155,7 +154,7 @@ internal static class PostgresBenchmark
                 sidecar, raw, captureComparison, comparisonMaximumRows, ct);
             var sidecarConsumed = session.ConsumeMessages(sidecarStart);
             foreach (var message in sidecarConsumed.Messages)
-                raw.AddMessage("sql", message);
+                raw?.AddMessage("sql", message);
             omittedMessageCount += sidecarConsumed.OmittedMessageCount;
             canonical = collected.Canonical;
             comparison = collected.Comparison;

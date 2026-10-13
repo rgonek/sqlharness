@@ -385,7 +385,7 @@ public sealed class BenchmarkRunTests
             int timeoutSeconds,
             int repetition,
             string variant,
-            CanonicalResultAccumulator raw,
+            CanonicalResultAccumulator? raw,
             bool captureComparison,
             int comparisonMaximumRows,
             CancellationToken ct)
@@ -430,7 +430,7 @@ public sealed class BenchmarkRunTests
         int TimeoutSeconds,
         int Repetition,
         string Variant,
-        CanonicalResultAccumulator Raw,
+        CanonicalResultAccumulator? Raw,
         bool CaptureComparison,
         int ComparisonMaximumRows,
         CancellationToken CancellationToken);

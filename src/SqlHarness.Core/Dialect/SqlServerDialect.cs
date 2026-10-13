@@ -55,7 +55,7 @@ internal sealed class SqlServerDialect : ISqlDialect
         int timeoutSeconds,
         int repetition,
         string variant,
-        CanonicalResultAccumulator raw,
+        CanonicalResultAccumulator? raw,
         bool captureComparison,
         int comparisonMaximumRows,
         CancellationToken ct)
@@ -79,7 +79,7 @@ internal sealed class SqlServerDialect : ISqlDialect
             var consumed = session.ConsumeMessages(messageStart);
             var messages = consumed.Messages.ToArray();
             foreach (var message in messages)
-                raw.AddMessage("sql", message);
+                raw?.AddMessage("sql", message);
             messagesCaptured = true;
             var statistics = string.Join(Environment.NewLine, messages);
             var io = StatisticsIoParser.Parse(statistics);

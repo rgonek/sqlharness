@@ -632,15 +632,15 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 parameters,
                 measure.TimeoutSeconds,
                 session,
-                raw,
+                raw: null,
                 ct,
                 setupSafety);
 
             // Measure never runs ResultComparer; skip fingerprint retention and the 1M row comparison cap.
-            await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, 0, "measure", raw, captureComparison: false, ct);
+            await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, 0, "measure", raw: null, captureComparison: false, ct);
             var runs = new List<CollectedBenchmarkRun>(measure.Repeat);
             for (var repetition = 1; repetition <= measure.Repeat; repetition++)
-                runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, repetition, "measure", raw, captureComparison: false, ct));
+                runs.Add(await ExecuteBenchmarkRunAsync(dialect, session, measure.QuerySql, parameters, measure.TimeoutSeconds, repetition, "measure", repetition == 1 ? raw : null, captureComparison: false, ct));
 
             rawFootprint = raw.Complete().Footprint;
             var targetReport = session.Identity;
@@ -716,7 +716,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         int timeoutSeconds,
         int repetition,
         string variant,
-        CanonicalResultAccumulator raw,
+        CanonicalResultAccumulator? raw,
         bool captureComparison,
         CancellationToken ct) =>
         BenchmarkRunner.ExecuteAsync(

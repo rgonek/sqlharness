@@ -50,7 +50,7 @@ internal sealed class PostgresDialect : ISqlDialect
         int timeoutSeconds,
         int repetition,
         string variant,
-        CanonicalResultAccumulator raw,
+        CanonicalResultAccumulator? raw,
         bool captureComparison,
         int comparisonMaximumRows,
         CancellationToken ct) =>
