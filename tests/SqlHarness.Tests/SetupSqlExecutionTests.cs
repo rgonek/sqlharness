@@ -71,6 +71,8 @@ public class SetupSqlExecutionTests
             SetupSqlExecution.PrepareCommands(sql, parameters, 30));
 
         Assert.Contains("session-local temp table", exception.Message, StringComparison.Ordinal);
+        Assert.Throws<SetupSqlShapeException>(() =>
+            SetupSqlExecution.Validate(SqlEngine.SqlServer, sql, parameters));
     }
 
     [Fact]
@@ -83,6 +85,8 @@ public class SetupSqlExecutionTests
             SetupSqlExecution.PrepareCommands(sql, parameters, 30));
 
         Assert.Contains("session-local temp table", exception.Message, StringComparison.Ordinal);
+        Assert.Throws<SetupSqlShapeException>(() =>
+            SetupSqlExecution.Validate(SqlEngine.SqlServer, sql, parameters));
     }
 
     [Fact]
@@ -141,6 +145,35 @@ public class SetupSqlExecutionTests
 
         Assert.Contains("session-local temp table", exception.Message, StringComparison.Ordinal);
         Assert.Contains("before any statement that references a parameter", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("SELECT @value; IF 1 = 1 BEGIN CREATE TABLE #t (Id int); END;")]
+    [InlineData("SELECT @value; IF 1 = 1 BEGIN SELECT Id INTO #t FROM dbo.T; END;")]
+    public void Nested_temp_creation_after_parameter_boundary_is_rejected(string sql)
+    {
+        var parameters = Parameters(("value", "int", "7"));
+
+        var exception = Assert.Throws<SetupSqlShapeException>(() =>
+            SetupSqlExecution.PrepareCommands(sql, parameters, 30));
+
+        Assert.Contains("session-local temp table", exception.Message, StringComparison.Ordinal);
+        Assert.Throws<SetupSqlShapeException>(() =>
+            SetupSqlExecution.Validate(SqlEngine.SqlServer, sql, parameters));
+    }
+
+    [Fact]
+    public void Branch_local_declaration_does_not_hide_a_real_parameter_reference()
+    {
+        const string sql = "IF 1 = 1 BEGIN DECLARE @local int; SET @local = 1; END; SELECT @value;";
+        var parameters = Parameters(("value", "int", "7"));
+
+        var commands = SetupSqlExecution.PrepareCommands(sql, parameters, 30);
+
+        Assert.Equal(2, commands.Count);
+        Assert.Contains("DECLARE @local", commands[0].Sql);
+        Assert.Contains("SELECT @value", commands[1].Sql);
+        Assert.Equal("@value", Assert.Single(commands[1].Parameters).Name);
     }
 
     [Fact]
@@ -209,6 +242,25 @@ public class SetupSqlExecutionTests
 
         Assert.Throws<SqlSetupVariableScopeException>(() =>
             SqlSetupVariableReferenceValidator.Validate(setup, [], measuredSql));
+    }
+
+    [Fact]
+    public void Branch_local_measured_declaration_is_not_mistaken_for_setup_variable()
+    {
+        const string setup = "DECLARE @v int;";
+        const string measured = "BEGIN DECLARE @v int = 1; END; SELECT @v;";
+
+        SqlSetupVariableReferenceValidator.Validate(setup, [], measured);
+    }
+
+    [Fact]
+    public void Branch_local_setup_declaration_is_rejected_when_measured_batch_references_it()
+    {
+        const string setup = "IF 1 = 1 BEGIN DECLARE @v int; END;";
+        const string measured = "SELECT @v;";
+
+        Assert.Throws<SqlSetupVariableScopeException>(() =>
+            SqlSetupVariableReferenceValidator.Validate(setup, [], measured));
     }
 
     [Fact]

@@ -239,7 +239,9 @@ internal sealed class SqlSafetyClassifier
                         deny,
                         hasUnprovenUse
                             ? UnprovenTableVariableDetail
-                            : deny == SqlSafetyReason.UnsupportedStatement ? StatementDetail(statement) : null);
+                            : deny == SqlSafetyReason.UnsupportedStatement
+                                ? StatementDetail(classification.DeniedStatement ?? statement)
+                                : null);
 
                 hasMutation |= classification.HasPersistentWrite;
                 hasSessionLocal |= classification.HasSessionLocalWrite;
@@ -310,7 +312,9 @@ internal sealed class SqlSafetyClassifier
                         deny,
                         hasUnprovenUse
                             ? UnprovenTableVariableDetail
-                            : deny == SqlSafetyReason.UnsupportedStatement ? StatementDetail(statement) : null);
+                            : deny == SqlSafetyReason.UnsupportedStatement
+                                ? StatementDetail(classification.DeniedStatement ?? statement)
+                                : null);
                 }
 
                 if (classification.HasPersistentWrite)
@@ -318,13 +322,14 @@ internal sealed class SqlSafetyClassifier
 
                 // A SET reaches this point only after the existing plain scalar
                 // assignment proof succeeds; unsafe SET variants remain denied.
-                if (!classification.HasSessionLocalWrite && statement is not (SelectStatement or SetVariableStatement))
+                if (!classification.HasSessionLocalWrite &&
+                    statement is not (SelectStatement or SetVariableStatement or IfStatement or BeginEndBlockStatement))
                 {
                     return Denied(
                         IsWrite(statement) ? SqlSafetyReason.NonTemporaryWrite : SqlSafetyReason.UnsupportedStatement,
                         hasUnprovenUse
                             ? UnprovenTableVariableDetail
-                            : IsWrite(statement) ? null : StatementDetail(statement));
+                            : IsWrite(statement) ? null : StatementDetail(classification.DeniedStatement ?? statement));
                 }
 
                 hasSessionLocal |= classification.HasSessionLocalWrite;
@@ -437,12 +442,56 @@ internal sealed class SqlSafetyClassifier
                     merge,
                     scope);
 
+            case BeginEndAtomicBlockStatement atomicBlock:
+                return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement, atomicBlock);
+
+            case IfStatement ifStatement:
+                {
+                    // The predicate rides on the global inspection. Classify every
+                    // branch without evaluating whether its condition is true.
+                    var thenClassification = ClassifyNestedStatement(ifStatement.ThenStatement, scope);
+                    if (ifStatement.ElseStatement is null)
+                        return thenClassification;
+
+                    return Combine(
+                        thenClassification,
+                        ClassifyNestedStatement(ifStatement.ElseStatement, scope));
+                }
+
+            case BeginEndBlockStatement block:
+                {
+                    var combined = StatementClassification.ReadOnly;
+                    foreach (var inner in block.StatementList.Statements)
+                    {
+                        combined = Combine(combined, ClassifyNestedStatement(inner, scope));
+                        if (combined.DenyReason is not null)
+                            return combined;
+                    }
+                    return combined;
+                }
+
             default:
                 return IsDirectMutation(statement)
                     ? StatementClassification.Persistent
                     : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
         }
     }
+
+    private static StatementClassification ClassifyNestedStatement(TSqlStatement statement, BatchVariableScope scope)
+    {
+        var classification = ClassifyProvenStatement(statement, scope);
+        return classification.DenyReason is { } reason && classification.DeniedStatement is null
+            ? StatementClassification.Denied(reason, statement)
+            : classification;
+    }
+
+    private static StatementClassification Combine(StatementClassification left, StatementClassification right) =>
+        left.DenyReason is not null ? left
+        : right.DenyReason is not null ? right
+        : new(
+            null,
+            left.HasSessionLocalWrite || right.HasSessionLocalWrite,
+            left.HasPersistentWrite || right.HasPersistentWrite);
 
     // 011/T2: same-batch proof for SET targets (Ruling R3, fail closed).
     // A name counts as a scalar local only when a same-batch
@@ -511,7 +560,7 @@ internal sealed class SqlSafetyClassifier
         var scalars = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var tables = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var nonTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var statement in batch.Statements)
+        foreach (var statement in SqlServerControlFlowTraversal.Flatten(batch.Statements))
         {
             if (statement is DeclareVariableStatement declare)
             {
@@ -780,12 +829,14 @@ internal sealed class SqlSafetyClassifier
     private readonly record struct StatementClassification(
         SqlSafetyReason? DenyReason,
         bool HasSessionLocalWrite,
-        bool HasPersistentWrite)
+        bool HasPersistentWrite,
+        TSqlStatement? DeniedStatement = null)
     {
         internal static StatementClassification ReadOnly { get; } = new(null, false, false);
         internal static StatementClassification SessionLocal { get; } = new(null, true, false);
         internal static StatementClassification Persistent { get; } = new(null, false, true);
-        internal static StatementClassification Denied(SqlSafetyReason reason) => new(reason, false, false);
+        internal static StatementClassification Denied(SqlSafetyReason reason, TSqlStatement? deniedStatement = null) =>
+            new(reason, false, false, deniedStatement);
     }
 
     private enum TargetResolutionKind
@@ -1753,6 +1804,34 @@ internal static class SqlParameterReferenceValidator
     }
 }
 
+/// <summary>
+/// Walks only the T-SQL control-flow shapes explicitly accepted by the SQL
+/// Server safety classifier. Unsupported control flow remains opaque here and
+/// is rejected by classification before these scope helpers are used.
+/// </summary>
+internal static class SqlServerControlFlowTraversal
+{
+    internal static IEnumerable<TSqlStatement> Flatten(IEnumerable<TSqlStatement> statements)
+    {
+        foreach (var statement in statements)
+        {
+            yield return statement;
+            var nested = statement switch
+            {
+                IfStatement { ElseStatement: { } elseStatement } ifStatement =>
+                    new TSqlStatement[] { ifStatement.ThenStatement, elseStatement },
+                IfStatement ifStatement => new TSqlStatement[] { ifStatement.ThenStatement },
+                BeginEndAtomicBlockStatement => Array.Empty<TSqlStatement>(),
+                BeginEndBlockStatement block => block.StatementList.Statements,
+                _ => Array.Empty<TSqlStatement>(),
+            };
+
+            foreach (var inner in Flatten(nested))
+                yield return inner;
+        }
+    }
+}
+
 internal sealed class SqlSetupVariableScopeException() : SqlHarnessSafetyException(
     "A variable declared in setup is referenced by a benchmark batch. Setup variables do not cross into benchmark batches.");
 
@@ -1806,7 +1885,7 @@ internal static class SqlSetupVariableReferenceValidator
     private static Dictionary<string, int> CollectDeclaredVariablePositions(TSqlBatch batch)
     {
         var positions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var statement in batch.Statements)
+        foreach (var statement in SqlServerControlFlowTraversal.Flatten(batch.Statements))
         {
             if (statement is DeclareVariableStatement declare)
             {

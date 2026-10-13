@@ -41,7 +41,7 @@ public static class SqlHarnessCapabilitiesProvider
         new(
             SqlEngine.SqlServer,
             "sqlserver",
-            "SQL Server and Azure SQL: all commands, including Query Store (qstop) and missing indexes (indexes).",
+            "SQL Server and Azure SQL: all commands, including Query Store (qstop) and missing indexes (indexes). IF/ELSE/BEGIN…END (nested) allowed; scan every branch regardless of predicate; WHILE/BREAK/CONTINUE/GOTO/labels/RETURN/TRY…CATCH/WAITFOR/THROW/RAISERROR denied.",
             [.. SharedParameterTypes, "money", "smallmoney", "smalldatetime", "hierarchyid", "geography", "geometry"],
             new Dictionary<string, object>(StringComparer.Ordinal)
             {

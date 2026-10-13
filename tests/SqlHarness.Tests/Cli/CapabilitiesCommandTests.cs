@@ -304,6 +304,18 @@ public sealed class CapabilitiesCommandTests
         Assert.Single(SessionTempStatements(SqlEngine.Postgres), IsPostgresProofEntry);
     }
 
+    [Fact]
+    public void Capabilities_describe_sqlserver_control_flow_without_changing_postgres_summary()
+    {
+        var sqlServerSummary = SqlHarnessCapabilitiesProvider.Get(SqlEngine.SqlServer, "p").Engines.Single().Summary;
+        var postgresSummary = SqlHarnessCapabilitiesProvider.Get(SqlEngine.Postgres, "p").Engines.Single().Summary;
+
+        Assert.Contains("IF/ELSE/BEGIN…END (nested) allowed", sqlServerSummary, StringComparison.Ordinal);
+        Assert.Contains("scan every branch regardless of predicate", sqlServerSummary, StringComparison.Ordinal);
+        Assert.Contains("WHILE/BREAK/CONTINUE/GOTO/labels/RETURN/TRY…CATCH/WAITFOR/THROW/RAISERROR denied", sqlServerSummary, StringComparison.Ordinal);
+        Assert.DoesNotContain("Allowed control flow", postgresSummary, StringComparison.Ordinal);
+    }
+
     // 011/final (M8): the plan 011 entries hold no character that the JSON
     // writer escapes, so the text an agent reads is the text in the source.
     [Fact]
