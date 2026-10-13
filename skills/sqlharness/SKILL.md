@@ -96,6 +96,8 @@ For `measure` and for `compare` without `--matrix`, `--setup` runs once on the m
 
 Any ScriptDom-parsable construct inside a top-level `SELECT` is accepted, so SQLHarness handles unfamiliar nested syntax; report a safe nested fragment it rejects as a SQLHarness compatibility bug. `sqlcmd` is not a fallback.
 
+SQL Server control flow: Allowed control flow: IF, ELSE, BEGIN … END (any nesting). Still denied: WHILE, BREAK, CONTINUE, GOTO, labels, RETURN, TRY … CATCH, WAITFOR, THROW, RAISERROR. A branch is classified even when its predicate is constant false: classifier never evaluates predicates. SQL Server only. PostgreSQL unchanged.
+
 ## Equivalence
 
 `compare --compare-results` (default `ordered`; also `multiset`, `set`, `off`) checks observed rows: technical equivalence, not domain equivalence. For a domain check use two-direction `EXCEPT`, or grouped counts when duplicates matter. Modes, nullability and limits: [README Result equivalence](../../README.md#result-equivalence-and-compact-output).

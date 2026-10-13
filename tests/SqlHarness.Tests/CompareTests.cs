@@ -52,6 +52,27 @@ public class SqlHarnessCompareTests
     }
 
     [Fact]
+    public async Task Compare_classifies_if_else_batch_end_to_end_on_fake_session()
+    {
+        const string branchingSql = "DECLARE @Flag bit = 0; IF @Flag = 1 SELECT 1 AS A ELSE SELECT 2 AS A;";
+        var session = FakeCompareSession.Create();
+        var operation = Compare(repeat: 1) with
+        {
+            SetupSql = null,
+            BaselineSql = branchingSql,
+            CandidateSql = branchingSql,
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessCompareReport>(outcome.Report);
+        Assert.Equal("read-only", report.Classification.Baseline);
+        Assert.Equal("read-only", report.Classification.Candidate);
+        Assert.Contains(session.Commands, command => command.Sql == branchingSql);
+    }
+
+    [Fact]
     public async Task CompareCellRunner_repeat_two_uses_one_session_and_returns_equivalence_and_artifacts()
     {
         var session = FakeCompareSession.Create();

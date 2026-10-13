@@ -446,29 +446,29 @@ internal sealed class SqlSafetyClassifier
                 return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement, atomicBlock);
 
             case IfStatement ifStatement:
-            {
-                // The predicate rides on the global inspection. Classify every
-                // branch without evaluating whether its condition is true.
-                var thenClassification = ClassifyNestedStatement(ifStatement.ThenStatement, scope);
-                if (ifStatement.ElseStatement is null)
-                    return thenClassification;
+                {
+                    // The predicate rides on the global inspection. Classify every
+                    // branch without evaluating whether its condition is true.
+                    var thenClassification = ClassifyNestedStatement(ifStatement.ThenStatement, scope);
+                    if (ifStatement.ElseStatement is null)
+                        return thenClassification;
 
-                return Combine(
-                    thenClassification,
-                    ClassifyNestedStatement(ifStatement.ElseStatement, scope));
-            }
+                    return Combine(
+                        thenClassification,
+                        ClassifyNestedStatement(ifStatement.ElseStatement, scope));
+                }
 
             case BeginEndBlockStatement block:
-            {
-                var combined = StatementClassification.ReadOnly;
-                foreach (var inner in block.StatementList.Statements)
                 {
-                    combined = Combine(combined, ClassifyNestedStatement(inner, scope));
-                    if (combined.DenyReason is not null)
-                        return combined;
+                    var combined = StatementClassification.ReadOnly;
+                    foreach (var inner in block.StatementList.Statements)
+                    {
+                        combined = Combine(combined, ClassifyNestedStatement(inner, scope));
+                        if (combined.DenyReason is not null)
+                            return combined;
+                    }
+                    return combined;
                 }
-                return combined;
-            }
 
             default:
                 return IsDirectMutation(statement)
