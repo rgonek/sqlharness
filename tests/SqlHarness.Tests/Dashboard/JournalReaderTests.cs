@@ -411,12 +411,13 @@ public sealed class JournalReaderTests
         Assert.Equal(("PAGEIOLATCH_SH", 120d), (stats.TopWaits[0].WaitType, stats.TopWaits[0].TotalWaitMs));
         Assert.Equal(1, stats.SpillOperations);
         Assert.Equal(1, stats.ColdCacheOperations);
-        Assert.Equal((400L, 40L), (stats.Tokens.Raw, stats.Tokens.Emitted));
+        Assert.Equal((160L, 40L), (Assert.Single(stats.WorkflowCosts).OutputBytes,
+            stats.WorkflowCosts[0].EstimatedOutputTokens));
         Assert.Equal(("local", "db", 4), (stats.Targets[0].Profile, stats.Targets[0].Database, stats.Targets[0].Count));
     }
 
     [Fact]
-    public void Stats_token_totals_count_only_operations_with_both_token_counts()
+    public void Legacy_output_cost_uses_measured_emitted_bytes_without_comparison()
     {
         using var home = new TempHome();
         var seed = new JournalSeed(home.DatabasePath);
@@ -428,7 +429,10 @@ public sealed class JournalReaderTests
 
         var stats = Reader(home).Stats(new StatsQuery());
 
-        Assert.Equal((100L, 10L), (stats.Tokens.Raw, stats.Tokens.Emitted));
+        var legacy = Assert.Single(stats.WorkflowCosts);
+        Assert.Equal("legacy-artifact-volume", legacy.AccountingKind);
+        Assert.Equal((120L, 30L, 3), (legacy.OutputBytes, legacy.EstimatedOutputTokens, legacy.CallCount));
+        Assert.Null(legacy.Comparison);
     }
 
     [Fact]
@@ -440,6 +444,139 @@ public sealed class JournalReaderTests
         var stats = Reader(home).Stats(new StatsQuery(From: new DateTimeOffset(2026, 10, 8, 0, 0, 0, TimeSpan.Zero)));
 
         Assert.Empty(stats.OperationsPerDay);
+    }
+
+    [Fact]
+    public void Workflow_cost_adds_root_and_exactly_linked_artifact_outputs_and_uses_root_baseline()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:workflow");
+        var root = seed.Operation(session);
+        var read1 = seed.Operation(session, operation: "artifact");
+        var read2 = seed.Operation(session, operation: "artifact");
+        SetFootprint(home.DatabasePath, root, operationRef: "root-1", parentRef: null,
+            rawBytes: 4000, emittedBytes: 1600, rawTokens: 1000, emittedTokens: 400);
+        SetFootprint(home.DatabasePath, read1, operationRef: "read-1", parentRef: "root-1",
+            rawBytes: 1200, emittedBytes: 1200, rawTokens: 300, emittedTokens: 300);
+        SetFootprint(home.DatabasePath, read2, operationRef: "read-2", parentRef: "root-1",
+            rawBytes: 1200, emittedBytes: 1200, rawTokens: 300, emittedTokens: 300);
+
+        var workflow = Assert.Single(Reader(home).Stats(new StatsQuery()).WorkflowCosts);
+
+        Assert.Equal(("root-1", 4000L, 1000L, 3),
+            (workflow.RootOperationRef, workflow.OutputBytes, workflow.EstimatedOutputTokens, workflow.CallCount));
+        Assert.Equal("utf8-bytes-div-4", workflow.TokenEstimationMethod);
+        Assert.Equal("single-measured-execution-output", workflow.Comparison!.BaselineKind);
+        Assert.Equal((4000L, 1000L, 0L, 0L),
+            (workflow.Comparison.BaselineBytes, workflow.Comparison.BaselineEstimatedTokens,
+                workflow.Comparison.OutputOverheadBytes, workflow.Comparison.EstimatedOutputTokenDelta));
+        Assert.Equal("unmeasured", workflow.Coverage.Input);
+        Assert.Equal("unmeasured", workflow.Coverage.Discovery);
+        Assert.Equal("unmeasured", workflow.Coverage.Chat);
+    }
+
+    [Fact]
+    public void Workflow_cost_uses_producer_baseline_outside_window_and_reports_positive_output_overhead()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:window");
+        var root = seed.Operation(session);
+        var read = seed.Operation(session, operation: "artifact");
+        SetFootprint(home.DatabasePath, root, operationRef: "root-2", parentRef: null,
+            rawBytes: 4000, emittedBytes: 2000, rawTokens: 1000, emittedTokens: 500);
+        SetFootprint(home.DatabasePath, read, operationRef: "read-3", parentRef: "root-2",
+            rawBytes: 1000, emittedBytes: 5000, rawTokens: 250, emittedTokens: 1250);
+
+        var workflow = Assert.Single(Reader(home).Stats(new StatsQuery(
+            From: new DateTimeOffset(2026, 10, 7, 9, 0, 1, TimeSpan.Zero))).WorkflowCosts);
+
+        Assert.Equal(("root-2", 5000L, 1250L, 1),
+            (workflow.RootOperationRef, workflow.OutputBytes, workflow.EstimatedOutputTokens, workflow.CallCount));
+        Assert.Equal((4000L, 1000L, 1000L, -250L),
+            (workflow.Comparison!.BaselineBytes, workflow.Comparison.BaselineEstimatedTokens,
+                workflow.Comparison.OutputOverheadBytes, workflow.Comparison.EstimatedOutputTokenDelta));
+    }
+
+    [Fact]
+    public void Workflow_cost_keeps_missing_baselines_and_legacy_volume_out_of_comparisons()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:mixed");
+        var noBaseline = seed.Operation(session);
+        var legacy = seed.Operation(session);
+        SetFootprint(home.DatabasePath, noBaseline, operationRef: "root-no-baseline", parentRef: null,
+            rawBytes: null, emittedBytes: 800, rawTokens: null, emittedTokens: 200);
+        SetFootprint(home.DatabasePath, legacy, operationRef: null, parentRef: null,
+            rawBytes: 400, emittedBytes: 200, rawTokens: 100, emittedTokens: 50);
+
+        var costs = Reader(home).Stats(new StatsQuery()).WorkflowCosts;
+
+        Assert.Equal(2, costs.Count);
+        var current = Assert.Single(costs, cost => cost.RootOperationRef == "root-no-baseline");
+        Assert.Null(current.Comparison);
+        var old = Assert.Single(costs, cost => cost.AccountingKind == "legacy-artifact-volume");
+        Assert.Null(old.RootOperationRef);
+        Assert.Null(old.Comparison);
+        Assert.Equal((200L, 50L, 1), (old.OutputBytes, old.EstimatedOutputTokens, old.CallCount));
+    }
+
+    [Fact]
+    public void Dry_run_is_in_output_cost_and_calls_but_not_database_execution_count()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:dry-run");
+        var dryRun = seed.Operation(session);
+        SetFootprint(home.DatabasePath, dryRun, "dry-run-root", null, 4000, 1600, 1000, 400, dryRun: true);
+
+        var stats = Reader(home).Stats(new StatsQuery());
+        var cost = Assert.Single(stats.WorkflowCosts);
+
+        Assert.Equal((1600L, 400L, 1), (cost.OutputBytes, cost.EstimatedOutputTokens, cost.CallCount));
+        Assert.Equal(1, cost.DryRunCalls);
+        Assert.Equal(0, cost.DatabaseExecutionCalls);
+        Assert.Null(cost.Comparison);
+    }
+
+    [Fact]
+    public void Failed_root_and_artifact_read_raw_footprints_never_supply_a_comparison_baseline()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:failed-root");
+        var failedRoot = seed.Operation(session, status: "failed", exitCode: 5);
+        var artifactRoot = seed.Operation(session, operation: "artifact");
+        SetFootprint(home.DatabasePath, failedRoot, "failed-root", null, 4000, 800, 1000, 200);
+        SetFootprint(home.DatabasePath, artifactRoot, "artifact-root", null, 4000, 800, 1000, 200);
+
+        var costs = Reader(home).Stats(new StatsQuery()).WorkflowCosts;
+
+        Assert.All(costs, cost => Assert.Null(cost.Comparison));
+    }
+
+    private static void SetFootprint(string path, JournalHandle handle, string? operationRef, string? parentRef,
+        long? rawBytes, long emittedBytes, long? rawTokens, long emittedTokens, bool dryRun = false)
+    {
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path};Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            UPDATE operations SET operation_ref = $operationRef, parent_operation_ref = $parentRef, dry_run = $dryRun,
+                raw_bytes = $rawBytes, emitted_bytes = $emittedBytes, raw_tokens = $rawTokens, emitted_tokens = $emittedTokens
+            WHERE id = $id;
+            """;
+        command.Parameters.AddWithValue("$id", handle.OperationId);
+        command.Parameters.AddWithValue("$operationRef", (object?)operationRef ?? DBNull.Value);
+        command.Parameters.AddWithValue("$parentRef", (object?)parentRef ?? DBNull.Value);
+        command.Parameters.AddWithValue("$dryRun", dryRun ? 1 : 0);
+        command.Parameters.AddWithValue("$rawBytes", (object?)rawBytes ?? DBNull.Value);
+        command.Parameters.AddWithValue("$emittedBytes", emittedBytes);
+        command.Parameters.AddWithValue("$rawTokens", (object?)rawTokens ?? DBNull.Value);
+        command.Parameters.AddWithValue("$emittedTokens", emittedTokens);
+        command.ExecuteNonQuery();
     }
 
     [Fact]
@@ -625,11 +762,10 @@ public sealed class JournalReaderTests
         seed.Operation(session, tokens: SeedTokens.None);
         seed.Operation(session, tokens: SeedTokens.Both);
 
-        var tokens = Reader(home).Stats(new StatsQuery()).Tokens;
+        var costs = Reader(home).Stats(new StatsQuery()).WorkflowCosts;
 
-        Assert.Equal((4, 1, 1, 1, 1), (tokens.TotalOperations, tokens.PairedOperations, tokens.RawOnlyOperations,
-            tokens.EmittedOnlyOperations, tokens.MissingBothOperations));
-        Assert.Equal((100L, 10L), (tokens.Raw, tokens.Emitted));
+        var legacy = Assert.Single(costs);
+        Assert.Equal((80L, 20L, 2), (legacy.OutputBytes, legacy.EstimatedOutputTokens, legacy.CallCount));
     }
 
     [Fact]
@@ -663,40 +799,4 @@ public sealed class JournalReaderTests
         Assert.Equal("Invalid column name 'x'.", operation.ErrorMessage);
     }
 
-    [Fact]
-    public void Savings_value_paired_tokens_at_current_input_prices()
-    {
-        using var home = new TempHome();
-        var seed = new JournalSeed(home.DatabasePath);
-        var codex = JournalSeed.Session("mcp:codex", "codex");
-        seed.Operation(codex, agent: new AgentCallMetadata("c1", "gpt-6-sol", null, null, null, null, null));
-        seed.Operation(codex, agent: new AgentCallMetadata("c2", "gpt-6-sol", null, null, null, null, null));
-        seed.Operation(JournalSeed.Session("mcp:claude", "claude"));
-        seed.Operation(codex, agent: new AgentCallMetadata("c3", "gpt-unknown", null, null, null, null, null));
-        var prices = new ModelPriceTable("models.dev", DateTimeOffset.Parse("2026-10-11T00:00:00Z"),
-            new Dictionary<string, IReadOnlyDictionary<string, decimal>> { ["openai"] = new Dictionary<string, decimal> { ["gpt-6-sol"] = 2m } });
-
-        var savings = new JournalReader(home.DatabasePath, new FakeProcesses(), () => prices).Stats(new StatsQuery()).Savings;
-
-        var row = Assert.Single(savings.ByModel);
-        Assert.Equal(("openai", "gpt-6-sol", 2, 180L), (row.Provider, row.Model, row.Operations, row.SavedTokens));
-        Assert.Equal(180m * 2m / 1_000_000m, row.Usd);
-        Assert.Equal(row.Usd, savings.TotalUsd);
-        Assert.Equal(1, savings.WithoutModel);
-        Assert.Equal(1, savings.Unpriced);
-        Assert.Equal("models.dev", savings.PriceSource);
-    }
-
-    [Fact]
-    public void Savings_fall_back_to_embedded_prices_when_the_provider_throws()
-    {
-        using var home = new TempHome();
-        var seed = new JournalSeed(home.DatabasePath);
-        seed.Operation(JournalSeed.Session("mcp:codex", "codex"));
-
-        var savings = new JournalReader(home.DatabasePath, new FakeProcesses(),
-            () => throw new InvalidDataException("bad")).Stats(new StatsQuery()).Savings;
-
-        Assert.Equal(ModelPrices.Embedded.Source, savings.PriceSource);
-    }
 }

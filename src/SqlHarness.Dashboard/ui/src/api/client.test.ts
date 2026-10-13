@@ -19,8 +19,8 @@ describe("client", () => {
   })
 
   test("returns parsed json", async () => {
-    stubFetch({ "/api/stats": { tokens: { raw: 1, emitted: 1 } } })
-    expect(await getJson("/api/stats")).toEqual({ tokens: { raw: 1, emitted: 1 } })
+    stubFetch({ "/api/stats": { workflowCosts: [] } })
+    expect(await getJson("/api/stats")).toEqual({ workflowCosts: [] })
   })
 
   test("putJson sends the write header and JSON, and maps 400 and 409", async () => {

@@ -87,6 +87,8 @@ public sealed class ActivityJournalTests
         Assert.Equal("2026-10-06T09:00:02.000Z", done["finished_at"]);
         Assert.Equal(100L, done["raw_tokens"]);
         Assert.Equal(10L, done["emitted_tokens"]);
+        Assert.Equal(400L, done["raw_bytes"]);
+        Assert.Equal(40L, done["emitted_bytes"]);
         var session = JournalDb.Rows(temp.DatabasePath, "SELECT * FROM sessions")[0];
         Assert.Equal("claude", session["agent_kind"]);
         Assert.Equal("cli", session["transport"]);

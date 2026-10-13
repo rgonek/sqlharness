@@ -73,7 +73,7 @@ function ModelPricesCard() {
     <Card>
       <CardHeader>
         <CardTitle>Model prices</CardTitle>
-        <CardDescription>Used to estimate savings in USD. Refreshing downloads current prices from models.dev.</CardDescription>
+          <CardDescription>Stored pricing reference data. Refreshing downloads the current table from models.dev.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
         {prices.data && (

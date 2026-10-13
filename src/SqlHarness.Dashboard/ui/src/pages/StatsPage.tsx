@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { rangeWindow, type StatsRange, useProfiles, useStats, type StatsWindow } from "@/api/queries"
-import type { DashboardStats, KeyCount, ProfileView, SavingsStat, SqlHashStat } from "@/api/types"
+import type { DashboardStats, KeyCount, ProfileView, SqlHashStat, WorkflowCost } from "@/api/types"
 import { agentLabel } from "@/lib/agents"
 import { ErrorState } from "@/components/ErrorState"
 import { Kpi } from "@/components/Kpi"
@@ -12,8 +12,8 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { formatDuration, formatNumber, formatPercent, shortHash } from "@/lib/format"
-import { pivotPerDay, tokenSavings } from "@/lib/stats"
+import { formatDuration, formatNumber, shortHash } from "@/lib/format"
+import { pivotPerDay } from "@/lib/stats"
 import { ProfileDimensionsPanel, type DimensionAxes, type DimensionCellScope } from "./ProfileDimensionsPanel"
 
 const ranges: { value: StatsRange; label: string }[] = [
@@ -23,53 +23,51 @@ const ranges: { value: StatsRange; label: string }[] = [
   { value: "all", label: "All time" },
 ]
 
-const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 4 })
-
-function plural(count: number, noun: string) {
-  return `${formatNumber(count)} ${noun}${count === 1 ? "" : "s"}`
-}
-
-function SavingsCard({ savings }: { savings: SavingsStat }) {
+function WorkflowCostCard({ costs }: { costs: WorkflowCost[] }) {
+  const outputBytes = costs.reduce((sum, cost) => sum + cost.outputBytes, 0)
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Savings (USD)</CardTitle>
+        <CardTitle>Workflow output cost</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 overflow-x-auto">
-        <div className="text-2xl font-semibold">{usd.format(savings.totalUsd)}</div>
-        {savings.byModel.length > 0 && (
+        {costs.length > 0 ? (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Model</TableHead>
-                <TableHead>Provider</TableHead>
-                <TableHead className="text-right">Operations</TableHead>
-                <TableHead className="text-right">Saved tokens</TableHead>
-                <TableHead className="text-right">USD</TableHead>
+                <TableHead>Workflow</TableHead>
+                <TableHead className="text-right">Output bytes</TableHead>
+                <TableHead className="text-right">Estimated output tokens</TableHead>
+                <TableHead className="text-right">Calls</TableHead>
+                <TableHead className="text-right">Dry runs</TableHead>
+                <TableHead className="text-right">Database executions</TableHead>
+                <TableHead>Comparison</TableHead>
+                <TableHead className="text-right">Baseline bytes</TableHead>
+                <TableHead className="text-right">Output overhead bytes</TableHead>
+                <TableHead className="text-right">Estimated output-token delta</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {savings.byModel.map(row => (
-                <TableRow key={`${row.provider}/${row.model}`}>
-                  <TableCell className="font-mono">{row.model}</TableCell>
-                  <TableCell>{row.provider}</TableCell>
-                  <TableCell className="text-right">{formatNumber(row.operations)}</TableCell>
-                  <TableCell className="text-right">{formatNumber(row.savedTokens)}</TableCell>
-                  <TableCell className="text-right">{usd.format(row.usd)}</TableCell>
+              {costs.map((cost, index) => (
+                <TableRow key={cost.rootOperationRef ?? `legacy-${index}`}>
+                  <TableCell>{cost.rootOperationRef ?? "Legacy output"}</TableCell>
+                  <TableCell className="text-right">{formatNumber(cost.outputBytes)}</TableCell>
+                  <TableCell className="text-right">{formatNumber(cost.estimatedOutputTokens)}</TableCell>
+                  <TableCell className="text-right">{formatNumber(cost.callCount)}</TableCell>
+                  <TableCell className="text-right">{formatNumber(cost.dryRunCalls)}</TableCell>
+                  <TableCell className="text-right">{formatNumber(cost.databaseExecutionCalls)}</TableCell>
+                  <TableCell>{cost.comparison?.baselineKind ?? "Unavailable"}</TableCell>
+                  <TableCell className="text-right">{cost.comparison ? formatNumber(cost.comparison.baselineBytes) : "—"}</TableCell>
+                  <TableCell className="text-right">{cost.comparison ? formatNumber(cost.comparison.outputOverheadBytes) : "—"}</TableCell>
+                  <TableCell className="text-right">{cost.comparison?.estimatedOutputTokenDelta == null ? "—" : formatNumber(cost.comparison.estimatedOutputTokenDelta)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-        )}
-        {savings.withoutModel > 0 && (
-          <p className="text-sm text-muted-foreground">{plural(savings.withoutModel, "operation")} without a known model</p>
-        )}
-        {savings.unpriced > 0 && (
-          <p className="text-sm text-muted-foreground">{plural(savings.unpriced, "operation")} with an unpriced model</p>
-        )}
-        <p className="text-xs text-muted-foreground">
-          at current prices ({savings.priceSource}, {savings.pricesFetchedAt.slice(0, 10)})
-        </p>
+        ) : <p className="text-sm text-muted-foreground">No measured workflow output in this time range.</p>}
+        {costs.length > 0 && <p className="text-sm text-muted-foreground">Measured output: {formatNumber(outputBytes)} bytes. Input, discovery and chat are unmeasured. Token estimation method: UTF-8 bytes divided by four, rounded up.</p>}
+        {costs.some(cost => cost.accountingKind === "legacy-artifact-volume") &&
+          <p className="text-xs text-muted-foreground">Legacy artifact-volume estimates are reported separately without a comparison.</p>}
       </CardContent>
     </Card>
   )
@@ -113,23 +111,6 @@ function CountChart({ rows, label }: { rows: KeyCount[]; label: string }) {
       </BarChart>
     </ChartContainer>
   )
-}
-
-function gainLabel(stats: DashboardStats): string {
-  const tokens = stats.tokens
-  if (tokens.totalOperations === 0) return "No activity"
-  if (tokens.pairedOperations === 0) return "Unavailable"
-  const savings = tokenSavings(tokens)
-  return savings === null ? "Unavailable" : formatPercent(savings)
-}
-
-function gainHint(stats: DashboardStats): string {
-  const tokens = stats.tokens
-  const coverage = `${formatNumber(tokens.pairedOperations)} of ${formatNumber(tokens.totalOperations)} operations have both estimates; ${formatNumber(tokens.rawOnlyOperations)} raw only, ${formatNumber(tokens.emittedOnlyOperations)} emitted only, ${formatNumber(tokens.missingBothOperations)} missing both.`
-  if (tokens.totalOperations === 0) return `No operations in this time range. ${coverage}`
-  if (tokens.pairedOperations === 0) return `Gain unavailable because no operation has both estimates. ${coverage} Estimates use output bytes, not actual model usage.`
-  if (tokens.raw === 0) return `Gain unavailable because paired raw output is zero. ${coverage} Paired totals: ${formatNumber(tokens.raw)} raw → ${formatNumber(tokens.emitted)} emitted. Estimates use output bytes, not actual model usage.`
-  return `${coverage} Paired totals: ${formatNumber(tokens.raw)} raw → ${formatNumber(tokens.emitted)} emitted. Estimates use output bytes, not actual model usage.`
 }
 
 type StatsPageProps = { onDimensionCellSelect?: (scope: DimensionCellScope) => void }
@@ -263,7 +244,7 @@ function StatsContent({
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Kpi label="Operations" value={formatNumber(total)} />
-        <Kpi label="Tokens saved (estimated)" value={gainLabel(stats)} hint={gainHint(stats)} />
+        <Kpi label="Measured workflow output" value={`${formatNumber(stats.workflowCosts.reduce((sum, cost) => sum + cost.outputBytes, 0))} bytes`} />
         <Kpi label="Operations with spills" value={formatNumber(stats.spillOperations)} />
         <Kpi label="Operations on a cold cache" value={formatNumber(stats.coldCacheOperations)} />
       </div>
@@ -286,7 +267,7 @@ function StatsContent({
           </ChartContainer>
         </CardContent>
       </Card>
-      <SavingsCard savings={stats.savings} />
+      <WorkflowCostCard costs={stats.workflowCosts} />
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>

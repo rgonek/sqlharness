@@ -24,7 +24,8 @@ public sealed class DashboardContractTests
         Assert.Equal(
             ["id", "sessionId", "agentKind", "operation", "status", "exitCode", "errorKind", "startedAt", "updatedAt",
              "finishedAt", "durationMs", "profile", "engine", "server", "database", "mutationRequested", "sqlHash",
-             "rowsReturned", "logicalReadsMedian", "hasSpill", "coldCache", "overGranted", "progress", "errorMessage", "cancelReason", "agentModel", "agentReasoningEffort"],
+             "rowsReturned", "logicalReadsMedian", "hasSpill", "coldCache", "overGranted", "progress", "errorMessage", "cancelReason", "agentModel", "agentReasoningEffort",
+             "operationRef", "parentOperationRef", "dryRun"],
             Names(summary));
     }
 
@@ -44,9 +45,9 @@ public sealed class DashboardContractTests
     {
         var variant = new VariantDetail(0, "measure", null, null, 1, null, null, null, null, null, null, null, null, null,
             0, false, false, 0, null, null, [], []);
-        var stats = new DashboardStats([], [], [], [], [], [], [], [], [], new TokenStat(0, 0), 0, 0, [],
+        var stats = new DashboardStats([], [], [], [], [], [], [], [], [], 0, 0, [],
             new ProfileDimensionStats(null, false, 0, [], [], 0),
-            new SavingsStat("models.dev", DateTimeOffset.UnixEpoch, 0m, [], 0, 0));
+            []);
 
         Assert.Equal(
             ["ordinal", "variant", "parameterSet", "matrixCell", "runs", "elapsedMs", "cpuMs", "logicalReads",
@@ -55,8 +56,8 @@ public sealed class DashboardContractTests
             Names(variant));
         Assert.Equal(
             ["operationsPerDay", "statuses", "exitCodes", "operations", "topSqlByCount", "topSqlByDuration",
-             "topTablesByLogicalReads", "topWaits", "targets", "tokens", "spillOperations", "coldCacheOperations",
-             "profileOperations", "profileDimensions", "savings"],
+             "topTablesByLogicalReads", "topWaits", "targets", "spillOperations", "coldCacheOperations",
+             "profileOperations", "profileDimensions", "workflowCosts"],
             Names(stats));
     }
 
@@ -67,6 +68,19 @@ public sealed class DashboardContractTests
             Names(new AgentCall(null, null, null, null, null, null, null)));
         Assert.Equal(["key", "count"], Names(new KeyCount("claude", 1)));
         Assert.Equal(["uri", "name"], Names(new SessionRoot("file:///w", null)));
+    }
+
+    [Fact]
+    public void Workflow_cost_contract_names_match_the_ui()
+    {
+        var cost = new WorkflowCost("root", 1200, 300, 2, "utf8-bytes-div-4", "workflow-output",
+            new WorkflowCostCoverage("unmeasured", "unmeasured", "unmeasured"),
+            new WorkflowCostComparison("single-measured-execution-output", 1200, 300, 0, 0), 0, 1);
+
+        Assert.Equal(["rootOperationRef", "outputBytes", "estimatedOutputTokens", "callCount", "tokenEstimationMethod",
+                "accountingKind", "coverage", "comparison", "dryRunCalls", "databaseExecutionCalls"], Names(cost));
+        Assert.Equal(["baselineKind", "baselineBytes", "baselineEstimatedTokens", "outputOverheadBytes", "estimatedOutputTokenDelta"],
+            Names(cost.Comparison));
     }
 
     [Fact]

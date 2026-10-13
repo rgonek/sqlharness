@@ -122,6 +122,13 @@ public static class SqlHarnessCapabilitiesProvider
             {
                 errorMessages = "credential-redacted error messages are stored by default",
                 sqlTextAndPlans = "journal.storeSensitive",
+                outputCost = new
+                {
+                    measurements = "raw_bytes and emitted_bytes are authoritative; estimated tokens use utf8-bytes-div-4",
+                    comparison = "single-measured-execution-output; output-volume comparison, not actual token savings",
+                    coverage = new { input = "unmeasured", discovery = "unmeasured", chat = "unmeasured", capabilities = "not journaled" },
+                    legacyRows = "rows without operation references use legacy-artifact-volume and are not comparable",
+                },
             },
             ["artifactRead"] = new
             {

@@ -136,7 +136,12 @@ function OperationView({ id }: { id: number }) {
             <Fact label="Server / database">{[op.server, op.database].filter(Boolean).join(" / ") || "—"}</Fact>
             <Fact label="Rows">{formatNumber(op.rowsReturned)}</Fact>
             <Fact label="SQL hash"><span className="font-mono">{shortHash(op.sqlHash)}</span></Fact>
-            <Fact label="Tokens raw / emitted">{formatNumber(detail.rawTokens)} / {formatNumber(detail.emittedTokens)}</Fact>
+            <Fact label="Output bytes (raw / emitted)">{formatNumber(detail.rawBytes)} / {formatNumber(detail.emittedBytes)}</Fact>
+            <Fact label="Estimated output tokens (raw / emitted)">{formatNumber(detail.rawTokens)} / {formatNumber(detail.emittedTokens)}</Fact>
+            <Fact label="Token estimation method">{detail.tokenEstimationMethod}; UTF-8 bytes divided by four, rounded up</Fact>
+            {op.dryRun && <Fact label="Execution mode">Dry run; output counted, no database execution</Fact>}
+            {op.operationRef && <Fact label="Operation reference"><span className="font-mono">{op.operationRef}</span></Fact>}
+            {op.parentOperationRef && <Fact label="Producer reference"><span className="font-mono">{op.parentOperationRef}</span></Fact>}
             <Fact label="Artifact directory"><span className="font-mono">{detail.artifactDirectory ?? "—"}</span></Fact>
             {op.progress && <Fact label="Watch progress">{op.progress.polls} polls, {op.progress.changedPolls} changed</Fact>}
           </div>

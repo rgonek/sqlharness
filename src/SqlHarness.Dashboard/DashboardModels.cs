@@ -30,7 +30,8 @@ public sealed record OperationSummary(
     string StartedAt, string UpdatedAt, string? FinishedAt, long? DurationMs, string? Profile, string? Engine,
     string? Server, string? Database, bool MutationRequested, string? SqlHash, long? RowsReturned,
     long? LogicalReadsMedian, bool HasSpill, bool ColdCache, bool OverGranted, JsonElement? Progress,
-    string? ErrorMessage, string? CancelReason, string? AgentModel, string? AgentReasoningEffort);
+    string? ErrorMessage, string? CancelReason, string? AgentModel, string? AgentReasoningEffort,
+    string? OperationRef = null, string? ParentOperationRef = null, bool DryRun = false);
 
 public sealed record AgentCall(
     string? CallId, string? Model, string? ReasoningEffort, string? SessionId, string? TurnId,
@@ -60,7 +61,8 @@ public sealed record OperationDetail(
     string? CandidateSqlHash, string? SqlText, string? CandidateSqlText, long? RawTokens, long? EmittedTokens,
     string? ArtifactDirectory, JsonElement? Summary, IReadOnlyList<VariantDetail> Variants,
     OperationDimensions Dimensions,
-    AgentCall? Agent);
+    AgentCall? Agent, long? RawBytes = null, long? EmittedBytes = null,
+    string TokenEstimationMethod = "utf8-bytes-div-4");
 
 public sealed record StoredPlan(string Hash, string Format, string Document);
 
@@ -107,9 +109,16 @@ public sealed record ProfileDimensionStats(
     string? Profile, bool ProfileDefinitionAvailable, int Operations, IReadOnlyList<DimensionStat> Dimensions,
     IReadOnlyList<TargetStat> Targets, int TargetCount, DimensionMatrixStats? Matrix = null);
 
-/// <summary>Token totals over operations that carry both a raw and an emitted count.</summary>
-public sealed record TokenStat(long Raw, long Emitted, int TotalOperations = 0, int PairedOperations = 0,
-    int RawOnlyOperations = 0, int EmittedOnlyOperations = 0, int MissingBothOperations = 0);
+public sealed record WorkflowCost(
+    string? RootOperationRef, long OutputBytes, long EstimatedOutputTokens, int CallCount,
+    string TokenEstimationMethod, string AccountingKind, WorkflowCostCoverage Coverage,
+    WorkflowCostComparison? Comparison, int DryRunCalls, int DatabaseExecutionCalls);
+
+public sealed record WorkflowCostCoverage(string Input, string Discovery, string Chat);
+
+public sealed record WorkflowCostComparison(
+    string BaselineKind, long BaselineBytes, long BaselineEstimatedTokens, long OutputOverheadBytes,
+    long? EstimatedOutputTokenDelta);
 
 public sealed record DashboardStats(
     IReadOnlyList<DayAgentCount> OperationsPerDay,
@@ -121,16 +130,8 @@ public sealed record DashboardStats(
     IReadOnlyList<TableReadStat> TopTablesByLogicalReads,
     IReadOnlyList<WaitStat> TopWaits,
     IReadOnlyList<TargetStat> Targets,
-    TokenStat Tokens,
     int SpillOperations,
     int ColdCacheOperations,
     IReadOnlyList<ProfileOperationCount> ProfileOperations,
     ProfileDimensionStats ProfileDimensions,
-    SavingsStat Savings);
-
-public sealed record ModelSaving(string Provider, string Model, int Operations, long SavedTokens, decimal Usd);
-
-/// <summary>Paired-footprint token savings valued at current input prices.</summary>
-public sealed record SavingsStat(
-    string PriceSource, DateTimeOffset PricesFetchedAt, decimal TotalUsd,
-    IReadOnlyList<ModelSaving> ByModel, int WithoutModel, int Unpriced);
+    IReadOnlyList<WorkflowCost> WorkflowCosts);

@@ -1,4 +1,4 @@
-import type { DayAgentCount, TokenStat } from "@/api/types"
+import type { DayAgentCount } from "@/api/types"
 
 export function pivotPerDay(rows: DayAgentCount[]): { rows: Record<string, string | number>[]; agents: string[] } {
   const agents = [...new Set(rows.map(row => row.agentKind))].sort()
@@ -11,8 +11,4 @@ export function pivotPerDay(rows: DayAgentCount[]): { rows: Record<string, strin
       return entry
     }),
   }
-}
-
-export function tokenSavings(tokens: Pick<TokenStat, "raw" | "emitted">): number | null {
-  return tokens.raw > 0 ? (tokens.raw - tokens.emitted) / tokens.raw : null
 }
