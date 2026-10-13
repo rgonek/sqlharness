@@ -145,7 +145,7 @@ There is no profile field and no CLI option that relaxes this. A role or databas
 
 ## Why `verify-full` for a remote server
 
-The gate above runs after `OpenAsync` has authenticated, so the credential is already spent before SQLHarness learns anything about the peer. `require` and `disable` — and the legacy mapping above, where `trustServerCertificate: true` becomes `SslMode=Disable` — encrypt without verifying the server identity. An active man-in-the-middle, or simply the wrong server, is accepted during the handshake and then sees the password authentication and the result data of every command. The connected-database comparison described above (exit 4) happens after that and is not a substitute.
+The connected-database comparison runs after `OpenAsync` has authenticated, so the credential is already spent before SQLHarness learns anything about the peer. `require` and `disable` — and the legacy mapping above, where `trustServerCertificate: true` becomes `SslMode=Disable` — encrypt without verifying the server identity. An active man-in-the-middle, or simply the wrong server, is accepted during the handshake and then sees the password authentication and the result data of every command. The connected-database comparison described above (exit 4) happens after that and is not a substitute.
 
 Use `verify-full` for a remote PostgreSQL server, and `verify-ca` only when the endpoint name cannot be matched against the certificate. `require` and `disable` remain legal for a disposable local target such as the playground, where the transport is not a boundary and nothing on the session is confidential; both stay reported as `legacy` or `explicit` in `target.transportPolicy`, and that field records the configured mode, not an authenticated peer.
 
@@ -158,6 +158,7 @@ Safety errors use these fixed messages:
 - `Postgres rootCertificate requires a verifying sslMode.`
 - `Postgres rootCertificate is missing or unreadable.`
 - `SQL Server targets cannot set Postgres transport fields.`
+- `PostgreSQL standard_conforming_strings must be on; SQLHarness classifies SQL under standard string rules.`
 
 None of them includes the password, the rejected mode string, the certificate path, or certificate bytes. The missing-password exception may still name the variable: `SQL password environment variable '<name>' is missing or empty.`
 
