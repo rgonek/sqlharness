@@ -543,7 +543,9 @@ public sealed class CommandTests
             Assert.Equal(0, await SqlHarnessCli.Create(new FakeModule(Success(matrix)), matrixOutput).RunAsync(
                 ["compare", "dev", "--baseline", query, "--candidate", candidate, "--matrix", "N:int=1,2", "--json-summary"]));
             using var matrixJson = JsonDocument.Parse(matrixOutput.ToString());
-            var cell = matrixJson.RootElement.GetProperty("cells")[0].GetProperty("compare").GetProperty("equivalence");
+            var cases = matrixJson.RootElement.GetProperty("cases");
+            Assert.Single(cases.EnumerateArray());
+            var cell = matrixJson.RootElement.GetProperty("details")[0].GetProperty("compare").GetProperty("equivalence");
             Assert.True(cell.GetProperty("compareNullability").GetBoolean());
             Assert.False(cell.GetProperty("nullabilityEquivalent").GetBoolean());
             Assert.Equal("nullability", cell.GetProperty("mismatchReason").GetString());
@@ -967,15 +969,17 @@ public sealed class CommandTests
 
             using var summary = JsonDocument.Parse(summaryOutput.ToString());
             using var full = JsonDocument.Parse(fullOutput.ToString());
-            var summaryCells = summary.RootElement.GetProperty("cells");
+            var summaryCases = summary.RootElement.GetProperty("cases");
+            var summaryDetails = summary.RootElement.GetProperty("details");
             var fullCells = full.RootElement.GetProperty("cells");
-            Assert.Equal(2, summaryCells.GetArrayLength());
-            Assert.Equal("100", summaryCells[0].GetProperty("parameterValue").GetString());
-            Assert.Equal("20", summaryCells[1].GetProperty("parameterValue").GetString());
-            var noteworthy = summaryCells[0].GetProperty("compare").GetProperty("noteworthyOperators");
+            Assert.Equal(2, summaryCases.GetArrayLength());
+            Assert.Equal(new[] { 0, 1 }, summaryCases.EnumerateArray().Select(matrixCase => matrixCase.GetProperty("index").GetInt32()));
+            Assert.Equal(2, summaryDetails.GetArrayLength());
+            Assert.Equal(0, summaryDetails[0].GetProperty("index").GetInt32());
+            var noteworthy = summaryDetails[0].GetProperty("compare").GetProperty("noteworthyOperators");
             Assert.True(noteworthy.GetArrayLength() <= 10);
-            Assert.False(summaryCells[0].GetProperty("compare").GetProperty("baseline").TryGetProperty("operators", out _));
-            Assert.False(summaryCells[0].GetProperty("compare").GetProperty("candidate").TryGetProperty("operators", out _));
+            Assert.False(summaryDetails[0].GetProperty("compare").GetProperty("baseline").TryGetProperty("operators", out _));
+            Assert.False(summaryDetails[0].GetProperty("compare").GetProperty("candidate").TryGetProperty("operators", out _));
             Assert.Equal(15, fullCells[0].GetProperty("compare").GetProperty("baseline").GetProperty("operators").GetArrayLength());
             Assert.Equal("100", fullCells[0].GetProperty("parameterValue").GetString());
             Assert.DoesNotContain("sentinel_matrix_sql_text", summaryOutput.ToString(), StringComparison.Ordinal);
