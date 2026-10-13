@@ -239,7 +239,9 @@ internal sealed class SqlSafetyClassifier
                         deny,
                         hasUnprovenUse
                             ? UnprovenTableVariableDetail
-                            : deny == SqlSafetyReason.UnsupportedStatement ? StatementDetail(statement) : null);
+                            : deny == SqlSafetyReason.UnsupportedStatement
+                                ? StatementDetail(classification.DeniedStatement ?? statement)
+                                : null);
 
                 hasMutation |= classification.HasPersistentWrite;
                 hasSessionLocal |= classification.HasSessionLocalWrite;
@@ -310,7 +312,9 @@ internal sealed class SqlSafetyClassifier
                         deny,
                         hasUnprovenUse
                             ? UnprovenTableVariableDetail
-                            : deny == SqlSafetyReason.UnsupportedStatement ? StatementDetail(statement) : null);
+                            : deny == SqlSafetyReason.UnsupportedStatement
+                                ? StatementDetail(classification.DeniedStatement ?? statement)
+                                : null);
                 }
 
                 if (classification.HasPersistentWrite)
@@ -318,13 +322,14 @@ internal sealed class SqlSafetyClassifier
 
                 // A SET reaches this point only after the existing plain scalar
                 // assignment proof succeeds; unsafe SET variants remain denied.
-                if (!classification.HasSessionLocalWrite && statement is not (SelectStatement or SetVariableStatement))
+                if (!classification.HasSessionLocalWrite &&
+                    statement is not (SelectStatement or SetVariableStatement or IfStatement or BeginEndBlockStatement))
                 {
                     return Denied(
                         IsWrite(statement) ? SqlSafetyReason.NonTemporaryWrite : SqlSafetyReason.UnsupportedStatement,
                         hasUnprovenUse
                             ? UnprovenTableVariableDetail
-                            : IsWrite(statement) ? null : StatementDetail(statement));
+                            : IsWrite(statement) ? null : StatementDetail(classification.DeniedStatement ?? statement));
                 }
 
                 hasSessionLocal |= classification.HasSessionLocalWrite;
@@ -437,12 +442,56 @@ internal sealed class SqlSafetyClassifier
                     merge,
                     scope);
 
+            case BeginEndAtomicBlockStatement atomicBlock:
+                return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement, atomicBlock);
+
+            case IfStatement ifStatement:
+            {
+                // The predicate rides on the global inspection. Classify every
+                // branch without evaluating whether its condition is true.
+                var thenClassification = ClassifyNestedStatement(ifStatement.ThenStatement, scope);
+                if (ifStatement.ElseStatement is null)
+                    return thenClassification;
+
+                return Combine(
+                    thenClassification,
+                    ClassifyNestedStatement(ifStatement.ElseStatement, scope));
+            }
+
+            case BeginEndBlockStatement block:
+            {
+                var combined = StatementClassification.ReadOnly;
+                foreach (var inner in block.StatementList.Statements)
+                {
+                    combined = Combine(combined, ClassifyNestedStatement(inner, scope));
+                    if (combined.DenyReason is not null)
+                        return combined;
+                }
+                return combined;
+            }
+
             default:
                 return IsDirectMutation(statement)
                     ? StatementClassification.Persistent
                     : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement);
         }
     }
+
+    private static StatementClassification ClassifyNestedStatement(TSqlStatement statement, BatchVariableScope scope)
+    {
+        var classification = ClassifyProvenStatement(statement, scope);
+        return classification.DenyReason is { } reason && classification.DeniedStatement is null
+            ? StatementClassification.Denied(reason, statement)
+            : classification;
+    }
+
+    private static StatementClassification Combine(StatementClassification left, StatementClassification right) =>
+        left.DenyReason is not null ? left
+        : right.DenyReason is not null ? right
+        : new(
+            null,
+            left.HasSessionLocalWrite || right.HasSessionLocalWrite,
+            left.HasPersistentWrite || right.HasPersistentWrite);
 
     // 011/T2: same-batch proof for SET targets (Ruling R3, fail closed).
     // A name counts as a scalar local only when a same-batch
@@ -780,12 +829,14 @@ internal sealed class SqlSafetyClassifier
     private readonly record struct StatementClassification(
         SqlSafetyReason? DenyReason,
         bool HasSessionLocalWrite,
-        bool HasPersistentWrite)
+        bool HasPersistentWrite,
+        TSqlStatement? DeniedStatement = null)
     {
         internal static StatementClassification ReadOnly { get; } = new(null, false, false);
         internal static StatementClassification SessionLocal { get; } = new(null, true, false);
         internal static StatementClassification Persistent { get; } = new(null, false, true);
-        internal static StatementClassification Denied(SqlSafetyReason reason) => new(reason, false, false);
+        internal static StatementClassification Denied(SqlSafetyReason reason, TSqlStatement? deniedStatement = null) =>
+            new(reason, false, false, deniedStatement);
     }
 
     private enum TargetResolutionKind

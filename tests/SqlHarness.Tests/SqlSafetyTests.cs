@@ -18,6 +18,63 @@ public class SqlSafetyTests
         Assert.True(ClassifyQuery(sql).Allowed);
 
     [Theory]
+    [InlineData("DECLARE @UseGroup bit = 0; IF (@UseGroup = 1) BEGIN SELECT 1 AS A; END ELSE BEGIN SELECT 2 AS A; END;")]
+    [InlineData("DECLARE @X int = 1; IF @X = 1 SELECT 1 AS A;")]
+    [InlineData("DECLARE @X int = 1; IF @X = 1 BEGIN IF @X = 2 SELECT 1 AS A; ELSE SELECT 2 AS A; END")]
+    [InlineData("BEGIN SELECT 1 AS A; END")]
+    public void Query_allows_branching_reads(string sql) =>
+        Assert.True(ClassifyQuery(sql).Allowed);
+
+    [Fact]
+    public void Query_allows_temp_work_inside_branches()
+    {
+        var decision = ClassifyQuery("DECLARE @X int = 1; CREATE TABLE #t (Id int); IF @X = 1 BEGIN INSERT #t VALUES (1); END ELSE BEGIN INSERT #t VALUES (2); END; SELECT Id FROM #t;");
+        Assert.True(decision.Allowed);
+    }
+
+    [Fact]
+    public void Compare_setup_allows_read_only_control_flow()
+    {
+        var decision = _classifier.Classify(
+            "IF 1 = 1 BEGIN SELECT 1 AS A; END ELSE BEGIN SELECT 2 AS A; END;",
+            SqlUsage.CompareSetup,
+            "db",
+            false,
+            null);
+        Assert.True(decision.Allowed);
+    }
+
+    [Theory]
+    [InlineData("IF 1 = 0 UPDATE dbo.Clients SET Active = 0;")]
+    [InlineData("IF 1 = 1 SELECT 1 AS A; ELSE DELETE dbo.Clients;")]
+    [InlineData("IF 1 = 1 BEGIN SELECT 1 AS A; END ELSE BEGIN INSERT dbo.Clients (Id) VALUES (1); END")]
+    public void Query_denies_a_persistent_write_in_any_branch(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "db", false, null);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, decision.Reason);
+    }
+
+    [Theory]
+    [InlineData("IF EXISTS (SELECT 1 FROM OtherDb.dbo.Clients) SELECT 1 AS A;")]
+    [InlineData("IF 1 = 1 EXEC dbo.DoWork;")]
+    [InlineData("IF 1 = 1 SELECT * FROM OPENROWSET('SQLNCLI', 'x', 'SELECT 1');")]
+    public void Query_denies_unsafe_content_in_predicates_and_branches(string sql) =>
+        Assert.False(ClassifyQuery(sql).Allowed);
+
+    [Theory]
+    [InlineData("WHILE 1 = 0 SELECT 1 AS A;", "WhileStatement")]
+    [InlineData("BEGIN TRY SELECT 1 AS A; END TRY BEGIN CATCH SELECT 2 AS A; END CATCH", "TryCatchStatement")]
+    [InlineData("IF 1 = 1 WAITFOR DELAY '00:00:01';", "WaitForStatement")]
+    [InlineData("IF 1 = 1 RETURN;", "ReturnStatement")]
+    public void Query_still_denies_other_control_flow(string sql, string kind)
+    {
+        var decision = ClassifyQuery(sql);
+        Assert.False(decision.Allowed);
+        Assert.StartsWith(kind, decision.Detail);
+    }
+
+    [Theory]
     [InlineData("CREATE TABLE #ids(Id int)")]
     [InlineData("INSERT #ids(Id) VALUES (1)")]
     [InlineData("UPDATE #ids SET Id = 2")]
