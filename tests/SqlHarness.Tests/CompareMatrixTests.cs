@@ -13,6 +13,66 @@ public class CompareMatrixTests
     private const string Plan = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></BatchSequence></ShowPlanXML>";
 
     [Fact]
+    public async Task Matrix_dry_run_binds_every_value_without_connecting_or_preflighting_artifacts()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix("BatchSize:int=1,20,100") with { DryRun = true });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        Assert.Equal("compare", report.Command);
+        Assert.Equal(3, report.ParameterSets);
+        Assert.Equal(0, factory.ConnectCount);
+        Assert.Equal(0, artifacts.PreflightCount);
+        Assert.Empty(artifacts.Directories);
+    }
+
+    [Fact]
+    public async Task Matrix_dry_run_fails_on_a_bad_value_like_the_real_call()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix("BatchSize:int=1,abc") with { DryRun = true });
+
+        Assert.NotEqual(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(0, factory.ConnectCount);
+        Assert.Equal(0, artifacts.PreflightCount);
+    }
+
+    [Fact]
+    public async Task Compare_dry_run_validates_setup_and_parameters_without_connecting_or_preflighting_artifacts()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+        var operation = new SqlHarnessCompareOperation(
+            new SqlTargetRequest("test", new Dictionary<string, string> { ["env"] = "a" }),
+            "CREATE TABLE #ids (Id int); INSERT #ids (Id) SELECT Id FROM dbo.Clients WHERE Tenant = @Tenant",
+            "SELECT Value FROM dbo.Clients WHERE BatchSize = @BatchSize AND Tenant = @Tenant",
+            "SELECT Value FROM dbo.Clients WHERE BatchSize = @BatchSize AND Tenant = @Tenant -- candidate",
+            [],
+            30,
+            1)
+        {
+            TypedParameters = [new SqlHarnessParameterInput("Tenant", "int", "7"), new SqlHarnessParameterInput("BatchSize", "int", "20")],
+            DryRun = true,
+        };
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        Assert.Equal("compare", report.Command);
+        Assert.Equal(1, report.ParameterSets);
+        Assert.Equal(2, report.Parameters.Count);
+        Assert.Equal(0, factory.ConnectCount);
+        Assert.Equal(0, artifacts.PreflightCount);
+        Assert.Empty(artifacts.Directories);
+    }
+
+    [Fact]
     public async Task Matrix_propagates_the_nullability_policy_into_every_cell()
     {
         using var artifacts = new DirectoryArtifactWriter();
@@ -741,7 +801,12 @@ public class CompareMatrixTests
 
     private sealed class DirectoryArtifactWriter : ICompareArtifactWriter, IDisposable
     {
-        public void CheckStorage() => new ArtifactStoragePreflight().Check(Root);
+        public int PreflightCount { get; private set; }
+        public void CheckStorage()
+        {
+            PreflightCount++;
+            new ArtifactStoragePreflight().Check(Root);
+        }
 
         public List<string> Directories { get; } = [];
         public string Root { get; } = Path.Combine(Path.GetTempPath(), "sqlharness-matrix-" + Guid.NewGuid().ToString("N"));

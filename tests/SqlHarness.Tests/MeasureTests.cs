@@ -14,6 +14,54 @@ public class SqlHarnessMeasureTests
     private const string Plan = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></BatchSequence></ShowPlanXML>";
 
     [Fact]
+    public async Task Measure_dry_run_validates_temp_setup_and_parameter_without_connecting_or_preflighting_artifacts()
+    {
+        var session = FakeMeasureSession.Create();
+        var writer = new CapturingArtifactWriter();
+        var operation = Measure(1) with
+        {
+            SetupSql = "CREATE TABLE #ids (Id int); INSERT #ids VALUES (1);",
+            QuerySql = "SELECT Id FROM #ids WHERE Id = @Id",
+            TypedParameters = [new SqlHarnessParameterInput("Id", "int", "1")],
+            DryRun = true,
+        };
+
+        var outcome = await Module(session, writer: writer).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        Assert.Equal("measure", report.Command);
+        Assert.Equal(1, report.ParameterSets);
+        Assert.Equal(0, session.FactoryOpenCount);
+        Assert.Equal(0, writer.PreflightCount);
+        Assert.Empty(writer.Runs);
+    }
+
+    [Fact]
+    public async Task Measure_parameter_set_dry_run_binds_every_set_without_connecting_or_preflighting_artifacts()
+    {
+        var session = FakeMeasureSession.Create();
+        var writer = new CapturingArtifactWriter();
+        var operation = Measure(1) with
+        {
+            SetupSql = null,
+            QuerySql = "SELECT @Id",
+            ParameterSets = [new("small", ["Id:int=1"]), new("large", ["Id:int=2"])],
+            DryRun = true,
+        };
+
+        var outcome = await Module(session, writer: writer).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        Assert.Equal("measure", report.Command);
+        Assert.Equal(2, report.ParameterSets);
+        Assert.Equal(0, session.FactoryOpenCount);
+        Assert.Equal(0, writer.PreflightCount);
+        Assert.Empty(writer.Runs);
+    }
+
+    [Fact]
     public async Task Measure_runs_setup_warmup_and_measured_queries_in_order_on_one_session()
     {
         var session = FakeMeasureSession.Create();
@@ -562,7 +610,8 @@ public class SqlHarnessMeasureTests
 
     private sealed class CapturingArtifactWriter : ICompareArtifactWriter
     {
-        public void CheckStorage() { /* This test writer stores artifacts in memory. */ }
+        public int PreflightCount { get; private set; }
+        public void CheckStorage() { PreflightCount++; /* This test writer stores artifacts in memory. */ }
 
         public IReadOnlyList<CompareRunArtifact> Runs { get; private set; } = [];
         public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target)

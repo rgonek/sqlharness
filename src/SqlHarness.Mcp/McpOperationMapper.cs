@@ -478,8 +478,9 @@ public static partial class McpOperationMapper
         IReadOnlyList<McpParameterArgument>? parameters,
         int timeout,
         int maxRows,
-        CancellationToken ct) =>
-        MapQueryAsync(scope, new McpSqlSourceArgument { Sql = sql, File = file }, parameters, timeout, maxRows, ct);
+        CancellationToken ct,
+        bool dryRun = false) =>
+        MapQueryAsync(scope, new McpSqlSourceArgument { Sql = sql, File = file }, parameters, timeout, maxRows, ct, dryRun);
 
     internal static async Task<SqlHarnessQueryOperation> MapQueryAsync(
         McpScope scope,
@@ -487,7 +488,8 @@ public static partial class McpOperationMapper
         IReadOnlyList<McpParameterArgument>? parameters,
         int timeout,
         int maxRows,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool dryRun = false)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(source);
@@ -500,6 +502,7 @@ public static partial class McpOperationMapper
             RequireTimeout(timeout), RequireMaxRows(maxRows), AllowMutation: false, ConfirmDatabase: null)
         {
             TypedParameters = MapParameters(parameters),
+            DryRun = dryRun,
         };
     }
 
@@ -511,7 +514,8 @@ public static partial class McpOperationMapper
         IReadOnlyList<string>? paramSetFiles,
         int repeat,
         int? timeout,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool dryRun = false)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(query);
@@ -523,6 +527,7 @@ public static partial class McpOperationMapper
             RequireTimeout(timeout), RequireRepeat(repeat), sets)
         {
             TypedParameters = MapParameters(parameters),
+            DryRun = dryRun,
         };
     }
 
@@ -537,7 +542,8 @@ public static partial class McpOperationMapper
         string? compareResults,
         McpMatrixArgument? matrix,
         CancellationToken ct,
-        bool compareNullability = false)
+        bool compareNullability = false,
+        bool dryRun = false)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(baseline);
@@ -565,6 +571,7 @@ public static partial class McpOperationMapper
                 [], validatedTimeout, validatedRepeat, mode, compareNullability)
             {
                 TypedParameters = typedParameters,
+                DryRun = dryRun,
             };
         return new SqlHarnessCompareMatrixOperation(
             scope.TargetRequest, setupSql, baselineSql, candidateSql,
@@ -572,6 +579,7 @@ public static partial class McpOperationMapper
         {
             TypedParameters = typedParameters,
             TypedMatrix = MapMatrix(matrix),
+            DryRun = dryRun,
         };
     }
 

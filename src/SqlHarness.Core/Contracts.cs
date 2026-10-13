@@ -38,6 +38,7 @@ public sealed record SqlHarnessQueryOperation(
 {
     /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
     public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+    public bool DryRun { get; init; }
 }
 
 public sealed record SqlHarnessCompareOperation(
@@ -53,6 +54,7 @@ public sealed record SqlHarnessCompareOperation(
 {
     /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
     public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+    public bool DryRun { get; init; }
 }
 
 public sealed record SqlHarnessCompareMatrixOperation(
@@ -72,6 +74,7 @@ public sealed record SqlHarnessCompareMatrixOperation(
 
     /// <summary>Typed alternative to <see cref="Matrix"/> (012). When it is set, <see cref="Matrix"/> must be empty.</summary>
     public SqlHarnessParameterMatrixInput? TypedMatrix { get; init; }
+    public bool DryRun { get; init; }
 }
 
 /// <summary>
@@ -128,7 +131,19 @@ public sealed record SqlHarnessMeasureOperation(
 {
     /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
     public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+    public bool DryRun { get; init; }
 }
+
+/// <summary>
+/// Result of a dry run: the call passed every offline check a real call performs
+/// (bounds, safety classification, parameter binding and references, setup shape,
+/// matrix or parameter-set binding) and stopped before connecting.
+/// </summary>
+public sealed record SqlHarnessDryRunReport(
+    string Command,
+    string Classification,
+    IReadOnlyList<BenchmarkParameterReport> Parameters,
+    int ParameterSets);
 
 public sealed record SqlHarnessPlanOperation(string ShowplanXml, OutputFootprint RawFootprint) : SqlHarnessOperation;
 

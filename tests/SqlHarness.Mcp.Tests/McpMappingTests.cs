@@ -382,9 +382,10 @@ public sealed class McpMappingTests : IDisposable
     {
         var scope = Scope();
         var operation = await McpOperationMapper.MapQueryAsync(
-            scope, "SELECT 1", null, [P("customerId", "int", "42")], 30, 50, CancellationToken.None);
+            scope, "SELECT 1", null, [P("customerId", "int", "42")], 30, 50, CancellationToken.None, dryRun: true);
         AssertQueryOperation(
             operation, scope.TargetRequest, "SELECT 1", [new("customerId", "int", "42")], 30, 50);
+        Assert.True(operation.DryRun);
     }
 
     [Fact]
@@ -393,11 +394,12 @@ public sealed class McpMappingTests : IDisposable
         var scope = Scope();
         var recording = new RecordingModule();
         var handlers = new McpToolHandlers(scope, recording);
-        var result = await handlers.QueryAsync(null!, "SELECT 1", null, [P("customerId", "int", "42")], 30, 50);
+        var result = await handlers.QueryAsync(null!, "SELECT 1", null, [P("customerId", "int", "42")], 30, 50, dryRun: true);
         Assert.False(result.IsError == true);
         var operation = Assert.IsType<SqlHarnessQueryOperation>(Assert.Single(recording.Operations));
         AssertQueryOperation(
             operation, scope.TargetRequest, "SELECT 1", [new("customerId", "int", "42")], 30, 50);
+        Assert.True(operation.DryRun);
     }
 
     [Fact]
@@ -534,7 +536,8 @@ public sealed class McpMappingTests : IDisposable
             [setA, setB],
             5,
             null,
-            CancellationToken.None);
+            CancellationToken.None,
+            dryRun: true);
         Assert.Same(rooted.TargetRequest, operation.Target);
         Assert.Equal("SELECT @id;", operation.QuerySql);
         Assert.Equal("SELECT 1;", operation.SetupSql);
@@ -542,6 +545,7 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal([new SqlHarnessParameterInput("tenant", "nvarchar", "frozen")], operation.TypedParameters);
         Assert.Equal(5, operation.Repeat);
         Assert.Equal(30, operation.TimeoutSeconds);
+        Assert.True(operation.DryRun);
         Assert.NotNull(operation.ParameterSets);
         Assert.Equal(["a", "b"], operation.ParameterSets.Select(set => set.Name).ToArray());
     }
@@ -554,13 +558,14 @@ public sealed class McpMappingTests : IDisposable
             scope,
             new McpSqlSourceArgument { Sql = "SELECT 1" },
             new McpSqlSourceArgument { Sql = "SELECT 2" },
-            null, [P("tenant", "nvarchar", "frozen")], 5, 30, "multiset", null, CancellationToken.None);
+            null, [P("tenant", "nvarchar", "frozen")], 5, 30, "multiset", null, CancellationToken.None, dryRun: true);
         var compare = Assert.IsType<SqlHarnessCompareOperation>(plain);
         Assert.Equal("SELECT 1", compare.BaselineSql);
         Assert.Equal("SELECT 2", compare.CandidateSql);
         Assert.Equal(ResultComparisonMode.Multiset, compare.CompareResults);
         Assert.Empty(compare.Parameters);
         Assert.Equal([new SqlHarnessParameterInput("tenant", "nvarchar", "frozen")], compare.TypedParameters);
+        Assert.True(compare.DryRun);
 
         var matrix = await McpOperationMapper.MapCompareAsync(
             scope,
@@ -568,7 +573,8 @@ public sealed class McpMappingTests : IDisposable
             new McpSqlSourceArgument { Sql = "SELECT @n" },
             null, null, 5, 30, "ordered",
             new McpMatrixArgument { Name = "BatchSize", Type = "int", Values = ["1", "20", "100"] },
-            CancellationToken.None);
+            CancellationToken.None,
+            dryRun: true);
         var matrixOperation = Assert.IsType<SqlHarnessCompareMatrixOperation>(matrix);
         Assert.Equal(string.Empty, matrixOperation.Matrix);
         Assert.Empty(matrixOperation.Parameters);
@@ -577,6 +583,7 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal("BatchSize", matrixOperation.TypedMatrix.Name);
         Assert.Equal("int", matrixOperation.TypedMatrix.Type);
         Assert.Equal(new string?[] { "1", "20", "100" }, matrixOperation.TypedMatrix.Values.ToArray());
+        Assert.True(matrixOperation.DryRun);
 
         // Shape checks stay in the mapper; value checks belong to Core.
         foreach (var malformed in new[]

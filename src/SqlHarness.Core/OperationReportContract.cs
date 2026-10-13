@@ -13,10 +13,10 @@ internal static class OperationReportContract
     private static readonly IReadOnlyDictionary<Type, IReadOnlySet<Type>> ExpectedReports =
         new Dictionary<Type, IReadOnlySet<Type>>
         {
-            [typeof(SqlHarnessQueryOperation)] = new HashSet<Type> { typeof(SqlHarnessQueryReport) },
-            [typeof(SqlHarnessCompareOperation)] = new HashSet<Type> { typeof(SqlHarnessCompareReport) },
-            [typeof(SqlHarnessCompareMatrixOperation)] = new HashSet<Type> { typeof(SqlHarnessCompareMatrixReport) },
-            [typeof(SqlHarnessMeasureOperation)] = new HashSet<Type> { typeof(SqlHarnessMeasureReport), typeof(SqlHarnessMeasureSetReport) },
+            [typeof(SqlHarnessQueryOperation)] = new HashSet<Type> { typeof(SqlHarnessQueryReport), typeof(SqlHarnessDryRunReport) },
+            [typeof(SqlHarnessCompareOperation)] = new HashSet<Type> { typeof(SqlHarnessCompareReport), typeof(SqlHarnessDryRunReport) },
+            [typeof(SqlHarnessCompareMatrixOperation)] = new HashSet<Type> { typeof(SqlHarnessCompareMatrixReport), typeof(SqlHarnessDryRunReport) },
+            [typeof(SqlHarnessMeasureOperation)] = new HashSet<Type> { typeof(SqlHarnessMeasureReport), typeof(SqlHarnessMeasureSetReport), typeof(SqlHarnessDryRunReport) },
             [typeof(SqlHarnessPlanOperation)] = new HashSet<Type> { typeof(DistilledPlan) },
             [typeof(SqlHarnessSchemaOperation)] = new HashSet<Type> { typeof(SqlHarnessSchemaReport) },
             [typeof(SqlHarnessPingOperation)] = new HashSet<Type> { typeof(SqlHarnessPingReport) },

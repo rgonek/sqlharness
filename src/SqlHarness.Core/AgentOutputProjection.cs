@@ -355,6 +355,8 @@ public static class AgentOutputProjection
                                 : matrixCells.Continuation,
                         };
                     }
+                case SqlHarnessDryRunReport dryRun:
+                    return dryRun;
                 default:
                     if (report is null) return null;
                     if (report.GetType().IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), inherit: false))
