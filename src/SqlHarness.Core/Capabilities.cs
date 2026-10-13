@@ -41,14 +41,9 @@ public static class SqlHarnessCapabilitiesProvider
         new(
             SqlEngine.SqlServer,
             "sqlserver",
-            "SQL Server and Azure SQL: all commands, including Query Store (qstop) and missing indexes (indexes). IF/ELSE/BEGIN…END (nested) allowed; scan every branch regardless of predicate; WHILE/BREAK/CONTINUE/GOTO/labels/RETURN/TRY…CATCH/WAITFOR/THROW/RAISERROR denied.",
+            "SQL Server and Azure SQL: all commands. IF/ELSE/BEGIN…END (nested) allowed; scan every branch regardless of predicate; WHILE/BREAK/CONTINUE/GOTO/labels/RETURN/TRY…CATCH/WAITFOR/THROW/RAISERROR denied.",
             [.. SharedParameterTypes, "money", "smallmoney", "smalldatetime", "hierarchyid", "geography", "geometry"],
-            new Dictionary<string, object>(StringComparer.Ordinal)
-            {
-                ["qstopTop"] = new { min = OperationLimits.TopMin, max = OperationLimits.TopMax },
-                ["qstopWindowMinutes"] = new { min = OperationLimits.QueryStoreWindowMinutesMin, max = OperationLimits.QueryStoreWindowMinutesMax },
-                ["indexesTop"] = new { min = OperationLimits.TopMin, max = OperationLimits.TopMax },
-            },
+            new Dictionary<string, object>(StringComparer.Ordinal),
             [
                 "DECLARE scalar variables with analyzed initializers",
                 "Plain SET @v = expr to a scalar local declared earlier in the same batch: allowed in query, measured SQL and --setup. The RHS gets the external, stateful and cross-database checks. Compound, cursor, member and session/transaction option SET stay denied",
@@ -58,7 +53,7 @@ public static class SqlHarnessCapabilitiesProvider
         new(
             SqlEngine.Postgres,
             "postgres",
-            "PostgreSQL: per-command READ ONLY; no qstop or indexes.",
+            "PostgreSQL: per-command READ ONLY.",
             [.. SharedParameterTypes],
             new Dictionary<string, object>(StringComparer.Ordinal),
             [
@@ -148,18 +143,11 @@ public static class SqlHarnessCapabilitiesProvider
             [
                 new("capabilities", "Describe commands, engines, limits, modes. Pass a profile for the parameter types and limits of its engine."),
                 new("doctor", "Check installation and profiles."),
-                new("validate", "Classify SQL offline for a closed profile. Usages: query, setup, benchmark."),
                 new("query", "Run a bounded query; CLI --dry-run and MCP dryRun check exact arguments offline; no connection or writes. Every output replaces the profile password and Azure CLI access token fetched for the operation; other text, including SQL quoted in server errors, stays readable. PostgreSQL: per-command READ ONLY, known administrative effects denied; TEMP setup is read-write under static checks; user functions can hide effects (setup SELECTs too), so use a least-privilege role."),
                 new("measure", "Measure a query; CLI --dry-run and MCP dryRun check exact arguments offline; no connection or writes."),
                 new("compare", "Compare baseline/candidate: result equivalence and latency regression verdict; CLI --dry-run and MCP dryRun check exact arguments offline; no connection or writes."),
-                new("schema", "Inspect schema."),
-                new("ping", "Check a connection."),
-                new("counts", "Inspect row counts."),
-                new("space", "Inspect storage."),
                 new("watch", "Poll a bounded query passing the static visible-effects check."),
                 new("snapshot", "Capture or diff a named result."),
-                new("qstop", "Rank SQL Server Query Store consumers."),
-                new("indexes", "Inspect SQL Server missing indexes."),
                 new("plan", "Saved plan reads include measured runs with missing plans."),
                 new("artifact", "Read safe sections of a saved artifact offline."),
                 new("mcp", "Serve the Core tools to one MCP client over local stdio (mcp serve). File inputs require absolute paths under configured roots; UNC paths are rejected and reads are byte-bounded."),
@@ -182,10 +170,10 @@ public static class SqlHarnessCapabilitiesProvider
     private static Dictionary<string, IReadOnlyList<string>> OutputModesByCommand()
     {
         var map = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
-        foreach (var command in new[] { "capabilities", "doctor", "validate" })
+        foreach (var command in new[] { "capabilities", "doctor" })
             map[command] = ["json"];
         map["artifact"] = ["json", "agent"];
-        foreach (var command in new[] { "query", "schema", "ping", "counts", "space", "snapshot", "qstop", "indexes", "plan" })
+        foreach (var command in new[] { "query", "snapshot", "plan" })
             map[command] = ["text", "json", "agent"];
         foreach (var command in new[] { "measure", "compare" })
             map[command] = ["text", "json", "json-summary", "agent"];

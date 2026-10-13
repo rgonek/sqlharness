@@ -73,7 +73,7 @@ public sealed class McpOutputTests
     {
         var outcome = new SqlHarnessOutcome(
             SqlHarnessExitCode.Success,
-            new SqlHarnessPingReport(Target, "srv", "db", "login", 7),
+            new SqlHarnessDryRunReport("query", "read-only", [], 0),
             null);
 
         var result = McpResultAdapter.Adapt(outcome, "sqlharness_query");
@@ -86,7 +86,7 @@ public sealed class McpOutputTests
         Assert.Equal("success", envelope.GetProperty("status").GetString());
         Assert.Equal(0, envelope.GetProperty("exitCode").GetInt32());
         Assert.Equal(JsonValueKind.Null, envelope.GetProperty("error").ValueKind);
-        Assert.Equal("srv", envelope.GetProperty("result").GetProperty("server").GetString());
+        Assert.Equal("read-only", envelope.GetProperty("result").GetProperty("classification").GetString());
     }
 
     [Fact]

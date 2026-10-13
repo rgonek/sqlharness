@@ -9,37 +9,6 @@ public class ContractsTests
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
     [Fact]
-    public void Documentation_covers_read_only_database_helpers()
-    {
-        var readme = ReadRepositoryFile("README.md");
-        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
-
-        foreach (var doc in new[] { readme, skill })
-        {
-            Assert.Contains("ping", doc, StringComparison.Ordinal);
-            Assert.Contains("counts", doc, StringComparison.Ordinal);
-            Assert.Contains("--exact", doc, StringComparison.Ordinal);
-            Assert.Contains("--object", doc, StringComparison.Ordinal);
-            Assert.True(
-                doc.Contains("partition", StringComparison.OrdinalIgnoreCase)
-                || doc.Contains("approximate", StringComparison.OrdinalIgnoreCase),
-                "Helper docs must describe counts partition/approximate defaults.");
-            Assert.True(
-                doc.Contains("arbitrary SQL", StringComparison.OrdinalIgnoreCase)
-                || doc.Contains("no user SQL", StringComparison.OrdinalIgnoreCase)
-                || doc.Contains("never accept arbitrary", StringComparison.OrdinalIgnoreCase)
-                || doc.Contains("does not accept arbitrary", StringComparison.OrdinalIgnoreCase)
-                || doc.Contains("fixed internal", StringComparison.OrdinalIgnoreCase),
-                "Helper docs must state that helpers do not accept arbitrary SQL.");
-        }
-
-        Assert.Contains("Prefer `--json`", skill, StringComparison.Ordinal);
-        Assert.Contains("sqlharness ping prod-eu", readme, StringComparison.Ordinal);
-        Assert.Contains("sqlharness schema prod-eu", skill, StringComparison.Ordinal);
-        Assert.Contains("--object dbo.Contracts", skill, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void Documentation_covers_database_space_inspection()
     {
         var readme = ReadRepositoryFile("README.md");
@@ -391,14 +360,8 @@ public class ContractsTests
                 typeof(SqlHarnessCompareMatrixOperation),
                 typeof(SqlHarnessMeasureOperation),
                 typeof(SqlHarnessPlanOperation),
-                typeof(SqlHarnessSchemaOperation),
-                typeof(SqlHarnessPingOperation),
-                typeof(SqlHarnessCountsOperation),
-                typeof(SqlHarnessSpaceOperation),
                 typeof(SqlHarnessWatchOperation),
                 typeof(SqlHarnessSnapshotOperation),
-                typeof(SqlHarnessQueryStoreTopOperation),
-                typeof(SqlHarnessIndexesOperation),
                 typeof(SqlHarnessArtifactReadOperation),
             ],
             typeof(SqlHarnessOperation).Assembly.GetTypes()
@@ -413,15 +376,9 @@ public class ContractsTests
         nameof(SqlHarnessCompareMatrixOperation) => 2,
         nameof(SqlHarnessMeasureOperation) => 3,
         nameof(SqlHarnessPlanOperation) => 4,
-        nameof(SqlHarnessSchemaOperation) => 5,
-        nameof(SqlHarnessPingOperation) => 6,
-        nameof(SqlHarnessCountsOperation) => 7,
-        nameof(SqlHarnessSpaceOperation) => 8,
-        nameof(SqlHarnessWatchOperation) => 9,
-        nameof(SqlHarnessSnapshotOperation) => 10,
-        nameof(SqlHarnessQueryStoreTopOperation) => 11,
-        nameof(SqlHarnessIndexesOperation) => 12,
-        nameof(SqlHarnessArtifactReadOperation) => 13,
+        nameof(SqlHarnessWatchOperation) => 5,
+        nameof(SqlHarnessSnapshotOperation) => 6,
+        nameof(SqlHarnessArtifactReadOperation) => 7,
         _ => int.MaxValue,
     };
 
@@ -520,7 +477,7 @@ public class ContractsTests
     public void Every_operation_accepts_only_its_own_report_types()
     {
         var cases = OperationReportCases();
-        Assert.Equal(14, cases.Select(c => c.Operation.GetType()).Distinct().Count());
+        Assert.Equal(8, cases.Select(c => c.Operation.GetType()).Distinct().Count());
         foreach (var (operation, report, compatible) in cases)
         {
             var exception = Record.Exception(() =>
@@ -539,14 +496,8 @@ public class ContractsTests
         new SqlHarnessCompareMatrixOperation(Target(), null, "SELECT 1", "SELECT 2", [], 30, 1, "BatchSize:int=1,2"),
         new SqlHarnessMeasureOperation(Target(), null, "SELECT 1", [], 30, 1),
         new SqlHarnessPlanOperation("<ShowPlanXML/>", new OutputFootprint(0, 0)),
-        new SqlHarnessSchemaOperation(Target(), null, 30),
-        new SqlHarnessPingOperation(Target(), 30),
-        new SqlHarnessCountsOperation(Target(), [], null, 25, false, 30),
-        new SqlHarnessSpaceOperation(Target(), 25, null, 30),
         new SqlHarnessWatchOperation(Target(), "SELECT 1", [], 30, 100, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(15), null, 3),
         new SqlHarnessSnapshotOperation(Target(), "SELECT 1", [], 30, 100, "before", false, false),
-        new SqlHarnessQueryStoreTopOperation(Target(), 20, 1440, 30),
-        new SqlHarnessIndexesOperation(Target(), 10, null, 30),
         new SqlHarnessArtifactReadOperation("root", "artifact", "summary"),
     ];
 
@@ -560,14 +511,8 @@ public class ContractsTests
             Identity(), 1, 2, 1, [], "rule", "warning", [],
             new MeasureCrossSetSummary(null, 0, null, 0, null, 0, null, 0, null, 0, null, 0), null),
         new DistilledPlan([]),
-        new SqlHarnessSchemaReport(Identity(), [], 0),
-        new SqlHarnessPingReport(Identity(), "s", "d", "login", 5),
-        new SqlHarnessCountsReport(Identity(), [], 0),
-        new SqlHarnessSpaceReport(Identity(), [], new(0, 0, 0), [], []),
         new SqlHarnessWatchReport(Identity(), 1, 10, WatchExitReason.ConditionMet, []),
         new SqlHarnessSnapshotReport(Identity(), "before", SnapshotVerdict.Stored, 0, []),
-        new SqlHarnessQueryStoreTopReport(Identity(), 1440, 20, [], null),
-        new SqlHarnessIndexesReport(Identity(), DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, 10, null, [], [], null),
         new SqlHarnessArtifactReadReport(new object(), null),
     ];
 
@@ -577,8 +522,7 @@ public class ContractsTests
         var reports = Reports();
         var compatible = new HashSet<(int Operation, int Report)>
         {
-            (0, 0), (1, 1), (2, 2), (3, 3), (3, 4), (4, 5), (5, 6), (6, 7),
-            (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 13), (13, 14),
+            (0, 0), (1, 1), (2, 2), (3, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8),
         };
         var cases = new List<(SqlHarnessOperation, object, bool)>();
         for (var o = 0; o < operations.Count; o++)

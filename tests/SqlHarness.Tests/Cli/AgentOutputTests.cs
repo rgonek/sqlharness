@@ -17,6 +17,16 @@ public sealed class AgentOutputTests
 
     public AgentOutputTests(ITestOutputHelper testOutput) => _testOutput = testOutput;
 
+    // A query needs SQL text; the module is a fake, so the content never reaches a database.
+    private static readonly string SqlFile = CreateSqlFile();
+
+    private static string CreateSqlFile()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sqlharness-agent-output-{Guid.NewGuid():N}.sql");
+        File.WriteAllText(path, "SELECT 1");
+        return path;
+    }
+
     [Fact]
     public void Agent_output_default_budget_is_shared_by_cli_options_and_capabilities()
     {
@@ -41,12 +51,12 @@ public sealed class AgentOutputTests
     {
         var output = new StringWriter();
         var module = new FakeModule(new SqlHarnessOutcome(SqlHarnessExitCode.Success, new { value = 7 }, null));
-        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["ping", "dev", "--output", "agent"]);
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["query", "dev", "--file", SqlFile, "--output", "agent"]);
 
         Assert.Equal(0, exit);
         using var json = JsonDocument.Parse(output.ToString());
         Assert.Equal(AgentEnvelopeSchema.Version, json.RootElement.GetProperty("schemaVersion").GetInt32());
-        Assert.Equal("ping", json.RootElement.GetProperty("command").GetString());
+        Assert.Equal("query", json.RootElement.GetProperty("command").GetString());
         Assert.Equal("success", json.RootElement.GetProperty("status").GetString());
         Assert.Equal(0, json.RootElement.GetProperty("exitCode").GetInt32());
         Assert.Equal(7, json.RootElement.GetProperty("result").GetProperty("value").GetInt32());
@@ -59,7 +69,7 @@ public sealed class AgentOutputTests
     {
         var output = new StringWriter();
         var module = new FakeModule(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null));
-        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["ping", "dev", "--output", "agent", "--unknown", "secret-value"]);
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["query", "dev", "--output", "agent", "--unknown", "secret-value"]);
 
         Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
         Assert.Empty(module.Operations);
@@ -81,7 +91,7 @@ public sealed class AgentOutputTests
             UseShellExecute = false,
         };
         start.ArgumentList.Add(cli);
-        start.ArgumentList.Add("ping");
+        start.ArgumentList.Add("query");
         start.ArgumentList.Add("dev");
         start.ArgumentList.Add("--output");
         start.ArgumentList.Add("agent");
@@ -107,7 +117,7 @@ public sealed class AgentOutputTests
     {
         var output = new StringWriter();
         var error = new SqlHarnessOutcome(SqlHarnessExitCode.Authentication, null, "Credentials were rejected.");
-        var exit = await SqlHarnessCli.Create(new FakeModule(error), output).RunAsync(["ping", "dev", "--json"]);
+        var exit = await SqlHarnessCli.Create(new FakeModule(error), output).RunAsync(["query", "dev", "--file", SqlFile, "--json"]);
 
         Assert.Equal((int)SqlHarnessExitCode.Authentication, exit);
         using var json = JsonDocument.Parse(output.ToString());
@@ -140,7 +150,7 @@ public sealed class AgentOutputTests
     {
         var output = new StringWriter();
         var module = new FakeModule(new SqlHarnessOutcome(exitCode, null, "Safe failure message."));
-        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["ping", "dev", "--output", "agent"]);
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["query", "dev", "--file", SqlFile, "--output", "agent"]);
 
         Assert.Equal((int)exitCode, exit);
         using var json = JsonDocument.Parse(output.ToString());
@@ -159,27 +169,6 @@ public sealed class AgentOutputTests
         Assert.Equal("partial", json.RootElement.GetProperty("status").GetString());
         Assert.Equal("Cell 2 failed.", json.RootElement.GetProperty("error").GetProperty("message").GetString());
         Assert.Equal("batch", json.RootElement.GetProperty("result").GetProperty("parameterName").GetString());
-    }
-
-    [Fact]
-    public void Agent_projection_bounds_large_table_reports_and_counts_omissions_with_newline()
-    {
-        var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");
-        var report = new SqlHarnessCountsReport(target,
-            Enumerable.Range(0, 1000).Select(i => new SqlHarnessCountReport("dbo", $"表{i}", i, "estimate")).ToArray(), 0);
-        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
-        var output = new StringWriter();
-
-        new Renderer().RenderAgent(outcome, "counts", new OutputCaptureWriter(output), new AgentOutputOptions(4096, 32));
-
-        var bytes = System.Text.Encoding.UTF8.GetByteCount(output.ToString());
-        _testOutput.WriteLine($"1000 table projection: {bytes} UTF-8 bytes including newline (budget 4096)");
-        Assert.InRange(bytes, 1, 4096);
-        Assert.EndsWith("\n", output.ToString(), StringComparison.Ordinal);
-        using var json = JsonDocument.Parse(output.ToString());
-        Assert.Equal(AgentEnvelopeSchema.Version, json.RootElement.GetProperty("schemaVersion").GetInt32());
-        Assert.True(json.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
-        Assert.True(json.RootElement.GetProperty("result").GetProperty("tables").GetArrayLength() < 1000);
     }
 
     [Fact]
@@ -388,7 +377,7 @@ public sealed class AgentOutputTests
     {
         var output = new StringWriter();
         var module = new FakeModule(new SqlHarnessOutcome(SqlHarnessExitCode.Success, new { value = "😀" }, null));
-        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["ping", "dev", "--output", "agent", "--max-output-bytes", "4096", "--max-cell-chars", "0"]);
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(["query", "dev", "--file", SqlFile, "--output", "agent", "--max-output-bytes", "4096", "--max-cell-chars", "0"]);
 
         Assert.Equal(0, exit);
         Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(output.ToString()), 1, 4096);
@@ -403,7 +392,7 @@ public sealed class AgentOutputTests
         var module = new FakeModule(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null));
         var largeKey = new string('a', 10000);
         var exit = await SqlHarnessCli.Create(module, output).RunAsync([
-            "schema", "prod", "--var", $"{largeKey}=one", "--var", $"{largeKey}=two",
+            "query", "prod", "--var", $"{largeKey}=one", "--var", $"{largeKey}=two",
             "--output", "agent", "--max-output-bytes", "4096", "--max-cell-chars", "128"]);
 
         Assert.Equal((int)SqlHarnessExitCode.Safety, exit);

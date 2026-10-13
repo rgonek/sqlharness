@@ -15,7 +15,6 @@ public sealed class CredentialRedactionTests
     public static TheoryData<string> Operations() =>
     [
         "query", "measure", "compare", "compare-matrix", "watch", "snapshot",
-        "schema", "ping", "counts", "space", "qstop", "indexes",
     ];
 
     [Theory]
@@ -37,9 +36,6 @@ public sealed class CredentialRedactionTests
 
     [Theory]
     [InlineData("query")]
-    [InlineData("ping")]
-    [InlineData("counts")]
-    [InlineData("space")]
     public async Task Postgres_profile_password_is_redacted(string operation)
     {
         var outcome = await RunAsync(operation, "sql", engine: "postgres", Password);
@@ -219,12 +215,6 @@ public sealed class CredentialRedactionTests
             "watch" => new SqlHarnessWatchOperation(
                 target, sql, [], 5, 10, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5), null, 3),
             "snapshot" => new SqlHarnessSnapshotOperation(target, sql, [], 5, 10, "redaction-test", false, false),
-            "schema" => new SqlHarnessSchemaOperation(target, null, 5),
-            "ping" => new SqlHarnessPingOperation(target, 5),
-            "counts" => new SqlHarnessCountsOperation(target, [], null, 10, false, 5),
-            "space" => new SqlHarnessSpaceOperation(target, 10, null, 5),
-            "qstop" => new SqlHarnessQueryStoreTopOperation(target, 10, 60, 5),
-            "indexes" => new SqlHarnessIndexesOperation(target, 10, null, 5),
             _ => throw new ArgumentOutOfRangeException(nameof(operation)),
         };
 

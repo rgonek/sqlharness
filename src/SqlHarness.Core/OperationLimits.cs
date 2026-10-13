@@ -22,12 +22,6 @@ public static class OperationLimits
     public const int RepeatMin = 1;
     public const int RepeatMax = 100;
 
-    public const int QueryStoreWindowMinutesMin = 1;
-    public const int QueryStoreWindowMinutesMax = 44640;
-    public const long QueryStoreWindowMinuteFactor = 1;
-    public const long QueryStoreWindowHourFactor = 60;
-    public const long QueryStoreWindowDayFactor = 1440;
-
     public static readonly TimeSpan WatchDurationMax = TimeSpan.FromHours(24);
 
     public static bool IsQueryTimeoutSeconds(int value) =>
@@ -42,48 +36,8 @@ public static class OperationLimits
     public static bool IsRepeat(int value) =>
         value is >= RepeatMin and <= RepeatMax;
 
-    public static bool IsQueryStoreWindowMinutes(long value) =>
-        value is >= QueryStoreWindowMinutesMin and <= QueryStoreWindowMinutesMax;
-
     public static bool IsWatchDuration(TimeSpan value) =>
         value > TimeSpan.Zero && value <= WatchDurationMax;
-
-    /// <summary>
-    /// Pure Query Store window conversion shared by both adapters: a positive
-    /// magnitude with an already-normalized lowercase m/h/d unit becomes total
-    /// minutes within 1..44640. Trimming, case folding, and suffix validation
-    /// stay in the adapters; unknown units, non-positive magnitudes,
-    /// overflowed products, and out-of-range totals fail without a message.
-    /// </summary>
-    public static bool TryConvertQueryStoreWindow(long magnitude, char unit, out int minutes)
-    {
-        minutes = 0;
-        var factor = unit switch
-        {
-            'm' => QueryStoreWindowMinuteFactor,
-            'h' => QueryStoreWindowHourFactor,
-            'd' => QueryStoreWindowDayFactor,
-            _ => 0L,
-        };
-        if (factor == 0 || magnitude <= 0)
-            return false;
-
-        long total;
-        try
-        {
-            total = checked(magnitude * factor);
-        }
-        catch (OverflowException)
-        {
-            return false;
-        }
-
-        if (!IsQueryStoreWindowMinutes(total))
-            return false;
-
-        minutes = (int)total;
-        return true;
-    }
 
     /// <summary>
     /// Pure watch duration conversion shared by both adapters: a positive

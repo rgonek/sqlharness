@@ -44,18 +44,6 @@ internal static class SqlParameterReferences
         return collector.Names.Order(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
-    internal static IReadOnlyList<SqlValidationLocation> Locations(SqlEngine engine, string sql)
-    {
-        if (engine == SqlEngine.Postgres)
-            return [];
-        var document = SqlServerDocument.Parse(sql);
-        if (document.HasErrors || document.Fragment is not TSqlScript script)
-            return [];
-        return script.Batches.SelectMany(batch => batch.Statements)
-            .Select(statement => new SqlValidationLocation(statement.StartOffset, statement.StartLine, statement.StartColumn, statement.GetType().Name))
-            .ToArray();
-    }
-
     private sealed class SqlServerReferenceCollector : TSqlFragmentVisitor
     {
         internal HashSet<string> Names { get; } = new(StringComparer.OrdinalIgnoreCase);

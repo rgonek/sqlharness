@@ -118,5 +118,5 @@ public sealed class JournalSummaryTests
 
     [Fact]
     public void Non_benchmark_reports_have_no_summary() =>
-        Assert.Null(JournalSummary.Build(new SqlHarnessPingReport(Target, "srv", "db", "login", 1)));
+        Assert.Null(JournalSummary.Build(new SqlHarnessDryRunReport("query", "read-only", [], 0)));
 }

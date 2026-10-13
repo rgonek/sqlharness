@@ -24,7 +24,8 @@ public sealed class CapabilitiesCommandTests
         var root = document.RootElement;
         Assert.Equal(2, root.GetProperty("contractVersion").GetInt32());
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("buildId").GetString()));
-        Assert.Contains(root.GetProperty("commands").EnumerateArray(), command => command.GetProperty("name").GetString() == "validate");
+        Assert.Contains(root.GetProperty("commands").EnumerateArray(), command => command.GetProperty("name").GetString() == "query");
+        Assert.DoesNotContain(root.GetProperty("commands").EnumerateArray(), command => command.GetProperty("name").GetString() is "validate" or "ping" or "schema" or "counts" or "space" or "qstop" or "indexes");
         var engines = root.GetProperty("engines").EnumerateArray().ToArray();
         Assert.Equal(["postgres", "sqlserver"], engines.Select(engine => engine.GetProperty("name").GetString()!).Order(StringComparer.Ordinal));
         Assert.All(engines, engine => Assert.Equal(["name", "summary"], engine.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal)));
@@ -37,7 +38,7 @@ public sealed class CapabilitiesCommandTests
         Assert.Equal("journal.storeSensitive", journalStorage.GetProperty("sqlTextAndPlans").GetString());
         Assert.Equal(1000000, limits.GetProperty("comparisonRowCapPerRun").GetProperty("max").GetInt32());
         Assert.Equal(2000000, limits.GetProperty("comparisonUniqueFingerprintBudgetPerCell").GetProperty("max").GetInt32());
-        foreach (var engineOnly in new[] { "sessionTempStatements", "qstopTop", "qstopWindowMinutes", "indexesTop" })
+        foreach (var engineOnly in new[] { "sessionTempStatements" })
             Assert.False(limits.TryGetProperty(engineOnly, out _), engineOnly);
     }
 
@@ -72,8 +73,6 @@ public sealed class CapabilitiesCommandTests
         var temp = limits.GetProperty("sessionTempStatements");
         Assert.Equal(JsonValueKind.Array, temp.ValueKind);
         Assert.Equal(sqlServer, temp.GetRawText().Contains("#temp", StringComparison.Ordinal));
-        foreach (var name in new[] { "qstopTop", "qstopWindowMinutes", "indexesTop" })
-            Assert.Equal(sqlServer, limits.TryGetProperty(name, out _));
         Assert.DoesNotContain("\"name\": \"" + other + "\"", output.ToString(), StringComparison.Ordinal);
     }
 
