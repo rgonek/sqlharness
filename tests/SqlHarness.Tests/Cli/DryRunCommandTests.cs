@@ -408,6 +408,80 @@ public sealed class DryRunCommandTests : IDisposable
     }
 
     [Theory]
+    [InlineData(SqlServer, "SELECT @id;")]
+    [InlineData(Postgres, "SELECT @id::int;")]
+    public async Task Missing_parameter_is_rejected_by_name_without_values(string profile, string sql)
+    {
+        var run = await Query(profile, sql);
+
+        var message = AssertRejected(run, "missing_parameters", "id");
+        Assert.Equal("safety_rejected", Report(run.Output).GetProperty("error").GetProperty("code").GetString());
+        Assert.DoesNotContain("@id", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Missing_parameters_are_listed_sorted_and_only_the_unsupplied_ones()
+    {
+        var run = await Query(SqlServer, "SELECT @b, @a, @c;", "--param", "c:int=1");
+
+        var message = AssertRejected(run, "missing_parameters");
+        Assert.EndsWith("a, b.", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Leading_at_sign_on_a_supplied_name_still_counts_as_supplied()
+    {
+        var run = await Query(SqlServer, "SELECT @id;", "--param", "@id:int=1");
+
+        AssertAllowed(run, "query");
+    }
+
+    [Fact]
+    public async Task Batch_local_declare_is_not_reported_missing()
+    {
+        var run = await Measure(SqlServer, "DECLARE @x int = 1; SELECT @x;", null);
+
+        AssertAllowed(run, "measure");
+    }
+
+    [Fact]
+    public async Task Measure_missing_parameter_is_rejected_and_setup_only_references_are_not_required()
+    {
+        var missing = await Measure(SqlServer, "SELECT @id;", "SELECT 1;");
+        var setupOnly = await Measure(SqlServer, "SELECT 1;", "SELECT @setupOnly;");
+
+        AssertRejected(missing, "missing_parameters", "id");
+        AssertAllowed(setupOnly, "measure");
+    }
+
+    [Fact]
+    public async Task Compare_missing_parameter_in_either_variant_is_rejected()
+    {
+        var baseline = await Compare(SqlServer, "SELECT @id;", "SELECT 1;", null);
+        var candidate = await Compare(Postgres, "SELECT 1;", "SELECT @id::int;", null);
+
+        AssertRejected(baseline, "missing_parameters", "id");
+        AssertRejected(candidate, "missing_parameters", "id");
+    }
+
+    [Fact]
+    public async Task Matrix_and_parameter_set_names_count_as_supplied()
+    {
+        var small = Path.Combine(_directory, "s1.json");
+        var large = Path.Combine(_directory, "s2.json");
+        File.WriteAllText(small, "{\"name\":\"small\",\"parameters\":[\"id:int=1\"]}");
+        File.WriteAllText(large, "{\"name\":\"large\",\"parameters\":[\"id:int=2\"]}");
+
+        var matrix = await Compare(SqlServer, "SELECT @id;", "SELECT @id;", null, "--matrix", "id:int=1,2");
+        var sets = await Measure(SqlServer, "SELECT @id;", null, "--param-set", small, "--param-set", large);
+        var setsMissing = await Measure(SqlServer, "SELECT @id, @other;", null, "--param-set", small, "--param-set", large);
+
+        AssertAllowed(matrix, "compare");
+        AssertAllowed(sets, "measure");
+        AssertRejected(setsMissing, "missing_parameters", "other");
+    }
+
+    [Theory]
     [InlineData(SqlServer, "SELECT @note;", "note:nvarchar=synthetic-note-7x9", "synthetic-note-7x9")]
     [InlineData(Postgres, "SELECT @id::int;", "id:int=42137", "42137")]
     public async Task Dry_run_json_never_echoes_sql_or_values(string profile, string sql, string declaration, string value)

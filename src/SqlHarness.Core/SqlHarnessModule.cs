@@ -201,7 +201,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             dialect.ValidateParameterReferences(parameters, query.Sql);
 
             if (query.DryRun)
+            {
+                MissingParameterCheck.RequireSupplied(target.Engine, parameters, query.Sql);
                 return Checked(query, DryRunOutcome("query", BenchmarkReports.ClassificationLabel(safety), parameters, 1));
+            }
 
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct, knownSecrets);
@@ -353,11 +356,14 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var target = prepared.Target;
 
             if (compare.DryRun)
+            {
+                MissingParameterCheck.RequireSupplied(target.Engine, prepared.FixedParameters, compare.BaselineSql, compare.CandidateSql);
                 return DryRunOutcome(
                     "compare",
                     prepared.Classification.Baseline,
                     prepared.FixedParameters,
                     parameterSets: 1);
+            }
 
             _artifactWriter.CheckStorage();
 
@@ -469,11 +475,14 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var target = prepared.Target;
 
             if (operation.DryRun)
+            {
+                MissingParameterCheck.RequireSupplied(target.Engine, [.. fixedParameters, matrixParameters[0]], operation.BaselineSql, operation.CandidateSql);
                 return DryRunOutcome(
                     "compare",
                     prepared.Classification.Baseline,
                     [.. fixedParameters, matrixParameters[0]],
                     matrixParameters.Count);
+            }
 
             _artifactWriter.CheckStorage();
 
@@ -617,11 +626,15 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             {
                 var boundSets = BindMeasureParameterSets(dialect, measure, parameterSets);
                 if (measure.DryRun)
+                {
+                    foreach (var boundSet in boundSets)
+                        MissingParameterCheck.RequireSupplied(target.Engine, boundSet.Parameters, measure.QuerySql);
                     return DryRunOutcome(
                         "measure",
                         BenchmarkReports.ClassificationLabel(querySafety),
                         boundSets[0].Parameters,
                         boundSets.Count);
+                }
 
                 _artifactWriter.CheckStorage();
                 phase = OperationPhase.Authentication;
@@ -659,11 +672,14 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             }
 
             if (measure.DryRun)
+            {
+                MissingParameterCheck.RequireSupplied(target.Engine, parameters, measure.QuerySql);
                 return DryRunOutcome(
                     "measure",
                     BenchmarkReports.ClassificationLabel(querySafety),
                     parameters,
                     parameterSets: 1);
+            }
 
             _artifactWriter.CheckStorage();
             phase = OperationPhase.Authentication;
