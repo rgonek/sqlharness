@@ -1257,6 +1257,7 @@ public sealed class McpMappingTests : IDisposable
         File.WriteAllText(
             Path.Combine(directory, "manifest.json"),
             "{\"manifestVersion\": 1, \"artifactKind\": \"compare\", \"reportFile\": \"report.json\", \"sections\": [\"summary\", \"metrics\", \"operators\", \"statements\"]"
+            + ", \"producerOperationRef\": \"producer-root\""
             + (ownerJson is null ? string.Empty : ", \"owner\": " + ownerJson) + "}");
         var report = new SqlHarnessCompareReport(
             new SqlHarnessTargetIdentityReport("artifact-own.invalid", "artifactdb", "artifact-own.invalid", "artifactdb", "profile"),
@@ -1292,7 +1293,7 @@ public sealed class McpMappingTests : IDisposable
         WriteArtifactTargetsFile();
         var scope = ArtifactScope(ArtifactScopeProfile);
         var id = WriteMappingArtifact("handler-own-artifact", ArtifactOwnerJson(scope));
-        var handlers = new McpToolHandlers(scope, new RecordingModule());
+        var handlers = new McpToolHandlers(scope, new SqlHarnessModule());
 
         var result = await handlers.ArtifactAsync(null!, id, "summary");
 
@@ -1305,7 +1306,7 @@ public sealed class McpMappingTests : IDisposable
         WriteArtifactTargetsFile();
         var scope = ArtifactScope(ArtifactScopeProfile);
         var id = WriteMappingArtifact("handler-own-statements-artifact", ArtifactOwnerJson(scope));
-        var handlers = new McpToolHandlers(scope, new RecordingModule());
+        var handlers = new McpToolHandlers(scope, new SqlHarnessModule());
 
         var result = await handlers.ArtifactAsync(null!, id, "statements");
         var payload = string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text));
@@ -1314,6 +1315,9 @@ public sealed class McpMappingTests : IDisposable
         Assert.Contains("statementHash", payload, StringComparison.Ordinal);
         Assert.Contains("Index Seek", payload, StringComparison.Ordinal);
         Assert.DoesNotContain("StatementText", payload, StringComparison.Ordinal);
+        using var envelope = JsonDocument.Parse(payload);
+        Assert.False(string.IsNullOrWhiteSpace(envelope.RootElement.GetProperty("operationRef").GetString()));
+        Assert.Equal("producer-root", envelope.RootElement.GetProperty("parentOperationRef").GetString());
     }
 
     [Fact]
@@ -1333,7 +1337,7 @@ public sealed class McpMappingTests : IDisposable
             repetition = 1,
             planJsonFiles = new[] { planName },
         }));
-        var handlers = new McpToolHandlers(scope, new RecordingModule());
+        var handlers = new McpToolHandlers(scope, new SqlHarnessModule());
 
         var result = await handlers.ArtifactAsync(null!, id, "plan", variant: "baseline", statement: 0,
             repetition: 1, includeText: true);
@@ -1354,7 +1358,7 @@ public sealed class McpMappingTests : IDisposable
         var owner = ArtifactScope(ArtifactScopeProfile);
         var foreign = ArtifactScope(ArtifactForeignProfile);
         var id = WriteMappingArtifact("handler-foreign-artifact", ArtifactOwnerJson(owner));
-        var handlers = new McpToolHandlers(foreign, new RecordingModule());
+        var handlers = new McpToolHandlers(foreign, new SqlHarnessModule());
 
         var result = await handlers.ArtifactAsync(null!, id, "summary");
 
@@ -1369,7 +1373,7 @@ public sealed class McpMappingTests : IDisposable
         WriteArtifactTargetsFile();
         var scope = ArtifactScope(ArtifactScopeProfile);
         var id = WriteMappingArtifact("handler-legacy-artifact", ownerJson: null);
-        var handlers = new McpToolHandlers(scope, new RecordingModule());
+        var handlers = new McpToolHandlers(scope, new SqlHarnessModule());
 
         var result = await handlers.ArtifactAsync(null!, id, "metrics");
 

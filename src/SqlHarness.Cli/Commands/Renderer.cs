@@ -26,21 +26,22 @@ public sealed class Renderer
             WriteAgent(outcome, command, output, new AgentOutputOptions());
             return;
         }
+        var report = outcome.Report is SqlHarnessArtifactReadReport artifactRead ? artifactRead.Section : outcome.Report;
         var hasError = outcome.Error is not null || !string.IsNullOrWhiteSpace(outcome.SafeError);
         if (hasError && mode is OutputMode.Json or OutputMode.JsonSummary)
         {
             var error = outcome.MachineError!;
-            var payload = new { result = mode == OutputMode.JsonSummary ? ProjectSummary(outcome.Report) : outcome.Report, error };
+            var payload = new { result = mode == OutputMode.JsonSummary ? ProjectSummary(report) : report, error };
             output.WriteLine(JsonSerializer.Serialize(payload, payload.GetType(), Json));
             return;
         }
-        if (outcome.Report is not null && mode is OutputMode.Json or OutputMode.JsonSummary)
+        if (report is not null && mode is OutputMode.Json or OutputMode.JsonSummary)
         {
-            var rendered = mode == OutputMode.JsonSummary ? ProjectSummary(outcome.Report) : outcome.Report;
+            var rendered = mode == OutputMode.JsonSummary ? ProjectSummary(report) : report;
             output.WriteLine(JsonSerializer.Serialize(rendered, rendered!.GetType(), Json));
             return;
         }
-        if (outcome.Report is SqlHarnessQueryReport query)
+        if (report is SqlHarnessQueryReport query)
         {
             output.WriteLine($"Target: {query.Target.ActualServer}/{query.Target.ActualDatabase} ({query.Target.Mode})");
             output.WriteLine($"Statement: {query.StatementClassification}; duration: {query.DurationMilliseconds} ms");
@@ -52,17 +53,17 @@ public sealed class Renderer
             }
             foreach (var message in query.Messages) output.WriteLine(message);
         }
-        else if (outcome.Report is SqlHarnessMeasureReport measure)
+        else if (report is SqlHarnessMeasureReport measure)
             output.WriteLine($"measure\t{ElapsedText(measure.Query)}\nStable results: {measure.ResultsStable}; artifacts: {measure.ArtifactDirectory ?? "none"}");
-        else if (outcome.Report is SqlHarnessMeasureSetReport measureSet)
+        else if (report is SqlHarnessMeasureSetReport measureSet)
             RenderMeasureSet(measureSet, output);
-        else if (outcome.Report is SqlHarnessCompareReport compare)
+        else if (report is SqlHarnessCompareReport compare)
             output.WriteLine($"baseline\t{ElapsedText(compare.Baseline)}\ncandidate\t{ElapsedText(compare.Candidate)}\n{FormatTechnicalEquivalence(compare.Equivalence)}; artifacts: {compare.ArtifactDirectory ?? "none"}{FormatRegressionLine(compare.Regression)}");
-        else if (outcome.Report is SqlHarnessCompareMatrixReport matrix)
+        else if (report is SqlHarnessCompareMatrixReport matrix)
             RenderMatrix(matrix, output);
-        else if (outcome.Report is DistilledPlan plan)
+        else if (report is DistilledPlan plan)
             RenderPlan(plan, output);
-        else if (outcome.Report is SqlHarnessSchemaReport schema)
+        else if (report is SqlHarnessSchemaReport schema)
         {
             output.WriteLine($"Target: {schema.Target.ActualServer}/{schema.Target.ActualDatabase} ({schema.Target.Mode})");
             foreach (var obj in schema.Objects)
@@ -74,9 +75,9 @@ public sealed class Renderer
             }
             if (schema.OmittedObjects > 0) output.WriteLine($"Omitted objects: {schema.OmittedObjects}");
         }
-        else if (outcome.Report is SqlHarnessPingReport ping)
+        else if (report is SqlHarnessPingReport ping)
             output.WriteLine($"Ready: {ping.Server}/{ping.Database} as {ping.Login}; {ping.DurationMilliseconds.ToString(CultureInfo.InvariantCulture)} ms");
-        else if (outcome.Report is SqlHarnessCountsReport counts)
+        else if (report is SqlHarnessCountsReport counts)
         {
             output.WriteLine("Schema\tName\tRows\tMethod");
             foreach (var table in counts.Tables)
@@ -84,19 +85,19 @@ public sealed class Renderer
             if (counts.Omitted > 0)
                 output.WriteLine($"Omitted tables: {counts.Omitted.ToString(CultureInfo.InvariantCulture)}");
         }
-        else if (outcome.Report is SqlHarnessSpaceReport space)
+        else if (report is SqlHarnessSpaceReport space)
             RenderSpace(space, output);
-        else if (outcome.Report is SqlHarnessWatchReport watch)
+        else if (report is SqlHarnessWatchReport watch)
             RenderWatch(watch, output);
-        else if (outcome.Report is SqlHarnessSnapshotReport snapshot)
+        else if (report is SqlHarnessSnapshotReport snapshot)
             RenderSnapshot(snapshot, output);
-        else if (outcome.Report is SqlHarnessQueryStoreTopReport queryStoreTop)
+        else if (report is SqlHarnessQueryStoreTopReport queryStoreTop)
             RenderQueryStoreTop(queryStoreTop, output);
-        else if (outcome.Report is SqlHarnessIndexesReport indexes)
+        else if (report is SqlHarnessIndexesReport indexes)
             RenderIndexes(indexes, output);
-        else if (mode == OutputMode.Text && outcome.Report is SqlHarnessCapabilities capabilities)
+        else if (mode == OutputMode.Text && report is SqlHarnessCapabilities capabilities)
             output.WriteLine($"SQLHarness {capabilities.Version} ({capabilities.BuildId}); contract {capabilities.ContractVersion}; commands: {string.Join(", ", capabilities.Commands.Select(c => c.Name))}");
-        else if (mode == OutputMode.Text && outcome.Report is SqlValidationReport validation)
+        else if (mode == OutputMode.Text && report is SqlValidationReport validation)
         {
             output.WriteLine($"{validation.Engine}: {validation.Classification}; executed: {validation.Executed}; reason: {validation.Reason ?? "none"}");
             if (!string.IsNullOrWhiteSpace(validation.Detail))
@@ -149,18 +150,20 @@ public sealed class Renderer
         if (error is not null)
             error = error with { Message = Clip(error.Message), Hint = error.Hint is null ? null : Clip(error.Hint), Location = error.Location is null ? null : error.Location with { Path = error.Location.Path is null ? null : Clip(error.Location.Path) } };
         var boundedCommand = Clip(command);
+        var report = outcome.Report is SqlHarnessArtifactReadReport artifactRead ? artifactRead.Section : outcome.Report;
         var status = error is null
             ? "success"
-            : outcome.Report is SqlHarnessCompareMatrixReport
+            : report is SqlHarnessCompareMatrixReport
                 ? "partial"
                 : "error";
         foreach (var detailLimit in AgentOutputProjection.CandidateDetailLimits)
         {
-            var result = AgentOutputProjection.Project(outcome.Report, requestedCellChars, detailLimit, out var omitted, requestedBytes);
+            var result = AgentOutputProjection.Project(report, requestedCellChars, detailLimit, out var omitted, requestedBytes);
             omitted += errorOmitted;
             var truncated = omitted > 0;
             var envelope = new SqlHarnessAgentEnvelope(AgentEnvelopeSchema.Version, boundedCommand, status, (int)outcome.ExitCode, result, error,
-                truncated ? new { omittedItems = omitted, detailLimit, maxCellChars = requestedCellChars } : null);
+                truncated ? new { omittedItems = omitted, detailLimit, maxCellChars = requestedCellChars } : null,
+                outcome.OperationRef, outcome.ParentOperationRef);
             var bytes = JsonSerializer.SerializeToUtf8Bytes(envelope, CompactJson);
             if (bytes.Length + 1 <= requestedBytes)
             {

@@ -335,11 +335,43 @@ public sealed class ActivityJournalTests
 
         Open(temp, TextWriter.Null);
 
-        Assert.Equal(6L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        Assert.Equal(7L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
         var session = JournalDb.Rows(temp.DatabasePath, "SELECT client_title, roots_json FROM sessions")[0];
         Assert.Null(session["client_title"]);
         Assert.Null(session["roots_json"]);
         Assert.Null(JournalDb.Rows(temp.DatabasePath, "SELECT cancel_reason FROM operations")[0]["cancel_reason"]);
+    }
+
+    [Fact]
+    public void Version_6_journal_migrates_to_v7_without_inventing_legacy_provenance_or_changing_bytes()
+    {
+        using var temp = new JournalTempDirectory();
+        Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
+        using (var connection = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = JournalSchema.Version1 + JournalSchema.Version2 + JournalSchema.Version3
+                + JournalSchema.Version4 + JournalSchema.Version5 + JournalSchema.Version6 + """
+                INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, first_seen, last_seen)
+                VALUES ('cli:v6', 'agent', 'cli', 'process-tree', 1, 't', 't');
+                INSERT INTO operations (session_id, operation, host_pid, started_at, updated_at, status, raw_bytes, emitted_bytes)
+                VALUES (1, 'compare', 1, 't', 't', 'succeeded', 1234, 567);
+                PRAGMA user_version = 6;
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        Open(temp, TextWriter.Null);
+
+        Assert.Equal(7L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        var row = JournalDb.Rows(temp.DatabasePath,
+            "SELECT operation_ref, parent_operation_ref, dry_run, raw_bytes, emitted_bytes FROM operations").Single();
+        Assert.Null(row["operation_ref"]);
+        Assert.Null(row["parent_operation_ref"]);
+        Assert.Equal(0L, row["dry_run"]);
+        Assert.Equal(1234L, row["raw_bytes"]);
+        Assert.Equal(567L, row["emitted_bytes"]);
     }
 
     [Fact]

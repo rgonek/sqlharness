@@ -10,6 +10,49 @@ public class ArtifactReaderTests
 {
     private const string Secret = "SECRET-9f2c-artifact-content-must-not-leak";
 
+    [Fact]
+    public void Read_section_returns_producer_reference_only_after_owner_check()
+    {
+        using var temp = new TempDirectory();
+        var id = "owned-artifact";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), JsonSerializer.Serialize(new
+        {
+            manifestVersion = 1,
+            artifactKind = "compare",
+            reportFile = "report.json",
+            sections = new[] { "matrix-cells" },
+            producerOperationRef = "producer-1",
+            owner = new { profile = "p", vars = new Dictionary<string, string>(), engine = "postgres", server = "s", database = "d" },
+        }));
+        File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), "{\"cases\":[]}");
+
+        var wrongOwner = new ArtifactOwner("other", new Dictionary<string, string>(), "postgres", "s", "d");
+        Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSectionWithMetadata(
+            temp.Path, id, "matrix-cells", wrongOwner));
+
+        var resolved = ArtifactReader.ReadSectionWithMetadata(temp.Path, id, "matrix-cells",
+            new ArtifactOwner("p", new Dictionary<string, string>(), "postgres", "s", "d"));
+        Assert.Equal("producer-1", resolved.ProducerOperationRef);
+    }
+
+    [Fact]
+    public void Legacy_manifest_read_has_unavailable_producer_reference()
+    {
+        using var temp = new TempDirectory();
+        var id = "legacy-without-producer";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"matrix-cells\"]}");
+        File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), "{\"cases\":[]}");
+
+        var resolved = ArtifactReader.ReadSectionWithMetadata(temp.Path, id, "matrix-cells");
+
+        Assert.Null(resolved.ProducerOperationRef);
+    }
+
     [Theory]
     [InlineData("measure", null)]
     [InlineData("measure-set", "set-a")]

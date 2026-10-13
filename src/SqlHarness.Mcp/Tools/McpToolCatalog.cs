@@ -312,13 +312,11 @@ public sealed class McpToolHandlers(
         [Description("Return bounded statement text and predicates in section=plan.")]
         bool includeText = false,
         CancellationToken ct = default) =>
-        RunAsync("sqlharness_artifact", ctx, _ =>
+        RunAsync("sqlharness_artifact", ctx, async token =>
         {
             ThrowIfUnknown(ctx, ["id", "section", "cursor", "variant", "statement", "parameterSet", "repetition", "includeText"]);
-            return Task.FromResult(new SqlHarnessOutcome(
-                SqlHarnessExitCode.Success,
-                McpOperationMapper.ReadArtifactSection(scope, id, section, cursor, variant, statement, parameterSet, repetition, includeText),
-                null));
+            var operation = McpOperationMapper.MapArtifactRead(scope, id, section, cursor, variant, statement, parameterSet, repetition, includeText);
+            return await module.ExecuteAsync(operation, token);
         }, ct);
 
     /// <summary>

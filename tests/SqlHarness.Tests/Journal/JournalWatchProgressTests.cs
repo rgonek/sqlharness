@@ -121,7 +121,8 @@ public sealed class JournalWatchProgressTests
 
         await new JournalingModule(inner, () => journal, () => JournalTestData.Session()).ExecuteAsync(query);
 
-        Assert.Same(query, received);
+        Assert.IsType<SqlHarnessQueryOperation>(received);
+        Assert.NotNull(received!.OperationRef);
     }
 
     private sealed class LambdaModule(Action<SqlHarnessOperation> onExecute) : ISqlHarnessModule

@@ -41,4 +41,6 @@ public sealed record SqlHarnessAgentEnvelope(
     int ExitCode,
     object? Result,
     SqlHarnessError? Error,
-    object? Truncation = null);
+    object? Truncation = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? OperationRef = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? ParentOperationRef = null);

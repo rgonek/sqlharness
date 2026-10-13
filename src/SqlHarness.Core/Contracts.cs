@@ -25,7 +25,30 @@ public interface ISqlHarnessModule
         throw new NotSupportedException("This module does not support watch NDJSON streaming.");
 }
 
-public abstract record SqlHarnessOperation;
+public abstract record SqlHarnessOperation
+{
+    [JsonIgnore]
+    public string? OperationRef { get; init; }
+}
+
+public sealed record SqlHarnessArtifactReadOperation(
+    string Root,
+    string ArtifactId,
+    string Section,
+    ArtifactOwner? Owner = null,
+    int? Cursor = null,
+    ArtifactPlanSelector? PlanSelector = null,
+    bool IncludeText = false) : SqlHarnessOperation;
+
+public sealed record SqlHarnessArtifactReadReport(object Section, string? ProducerOperationRef);
+
+internal static class SqlHarnessOperationReferences
+{
+    internal static SqlHarnessOperation Ensure(SqlHarnessOperation operation) =>
+        string.IsNullOrWhiteSpace(operation.OperationRef)
+            ? operation with { OperationRef = Guid.NewGuid().ToString("N") }
+            : operation;
+}
 
 public sealed record SqlHarnessQueryOperation(
     SqlTargetRequest Target,
@@ -497,6 +520,12 @@ public sealed record SqlHarnessOutcome(
     SqlHarnessEmissionReceipt? EmissionReceipt = null,
     SqlHarnessError? Error = null)
 {
+    [JsonIgnore]
+    public string? OperationRef { get; init; }
+
+    [JsonIgnore]
+    public string? ParentOperationRef { get; init; }
+
     /// <summary>Structured error mapped at outcome construction, before any renderer runs.</summary>
     public SqlHarnessError? MachineError { get; } = MapMachineError(ExitCode, SafeError, Error);
 

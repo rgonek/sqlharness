@@ -119,7 +119,9 @@ public static class McpResultAdapter
             SqlHarnessExitCode.SnapshotDifferences);
         var exitCode = (int)outcome.ExitCode;
 
-        var report = outcome.Report;
+        var report = outcome.Report is SqlHarnessArtifactReadReport artifactRead
+            ? artifactRead.Section
+            : outcome.Report;
         foreach (var detailLimit in AgentOutputProjection.CandidateDetailLimits)
         {
             var projected = AgentOutputProjection.Project(
@@ -130,14 +132,14 @@ public static class McpResultAdapter
             // validation) travel raw when they fit, instead of degrading to a
             // bounded placeholder while bytes remain.
             if (projected is AgentBoundedOutput && report is not null &&
-                TryEnvelopeBytes(boundedCommand, status, exitCode, report, error, null, out var rawBytes) &&
+                TryEnvelopeBytes(boundedCommand, status, exitCode, report, error, null, outcome.OperationRef, outcome.ParentOperationRef, out var rawBytes) &&
                 TryBuildWithinBudget(rawBytes, isError, maximumBytes, out var rawResult))
                 return rawResult;
 
             var truncation = totalOmitted > 0
                 ? new McpTruncationInfo(totalOmitted, detailLimit, maximumCellCharacters)
                 : null;
-            if (TryEnvelopeBytes(boundedCommand, status, exitCode, projected, error, truncation, out var envelopeBytes) &&
+            if (TryEnvelopeBytes(boundedCommand, status, exitCode, projected, error, truncation, outcome.OperationRef, outcome.ParentOperationRef, out var envelopeBytes) &&
                 TryBuildWithinBudget(envelopeBytes, isError, maximumBytes, out var built))
                 return built;
         }
@@ -182,7 +184,7 @@ public static class McpResultAdapter
     internal static bool FitsRawSuccess(object report, string command, int maximumBytes)
     {
         ArgumentNullException.ThrowIfNull(report);
-        TryEnvelopeBytes(command, "success", (int)SqlHarnessExitCode.Success, report, null, null, out var bytes);
+        TryEnvelopeBytes(command, "success", (int)SqlHarnessExitCode.Success, report, null, null, null, null, out var bytes);
         return TryBuildWithinBudget(bytes, isError: false, maximumBytes, out _);
     }
 
@@ -354,9 +356,11 @@ public static class McpResultAdapter
         object? result,
         SqlHarnessError? error,
         McpTruncationInfo? truncation,
+        string? operationRef,
+        string? parentOperationRef,
         out byte[] bytes)
     {
-        var envelope = new SqlHarnessAgentEnvelope(SchemaVersion, command, status, exitCode, result, error, truncation);
+        var envelope = new SqlHarnessAgentEnvelope(SchemaVersion, command, status, exitCode, result, error, truncation, operationRef, parentOperationRef);
         bytes = JsonSerializer.SerializeToUtf8Bytes(envelope, Json);
         return true;
     }

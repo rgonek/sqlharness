@@ -678,15 +678,31 @@ public static partial class McpOperationMapper
         ArgumentNullException.ThrowIfNull(scope);
         if (section is null || !ArtifactSections.Contains(section))
             throw new McpMappingException("Unknown artifact section. Supported sections: summary, metrics, operators, statements, matrix-cells, plan.");
+        if (section != ArtifactReader.PlanSection && (variant is not null || statement != 0 || parameterSet is not null || repetition is not null || includeText))
+            throw new McpMappingException("Plan selectors are only valid for the plan section.");
+        return ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id ?? string.Empty, section, scope.Owner, cursor,
+            BuildArtifactPlanSelector(section, variant, statement, parameterSet, repetition), includeText);
+    }
+
+    public static SqlHarnessArtifactReadOperation MapArtifactRead(McpScope scope, string? id, string? section, int? cursor = null,
+        string? variant = null, int statement = 0, string? parameterSet = null, int? repetition = null, bool includeText = false)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        if (section is null || !ArtifactSections.Contains(section))
+            throw new McpMappingException("Unknown artifact section. Supported sections: summary, metrics, operators, statements, matrix-cells, plan.");
         // The shared manifest reader pins ids to single directory names under
         // the artifact root and serves only scope-owned safe sections: no raw
         // plans, queries.jsonl, SQL, or snapshot cells can leave through it.
         if (section != ArtifactReader.PlanSection && (variant is not null || statement != 0 || parameterSet is not null || repetition is not null || includeText))
             throw new McpMappingException("Plan selectors are only valid for the plan section.");
-        var selector = section == ArtifactReader.PlanSection && (variant is not null || statement != 0 || parameterSet is not null || repetition is not null)
-            ? new ArtifactPlanSelector(variant ?? string.Empty, statement, parameterSet, repetition) : null;
-        return ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id ?? string.Empty, section, scope.Owner, cursor, selector, includeText);
+        return new SqlHarnessArtifactReadOperation(SqlHarnessPaths.CompareDir, id ?? string.Empty, section,
+            scope.Owner, cursor, BuildArtifactPlanSelector(section, variant, statement, parameterSet, repetition), includeText);
     }
+
+    private static ArtifactPlanSelector? BuildArtifactPlanSelector(string? section, string? variant, int statement,
+        string? parameterSet, int? repetition) =>
+        section == ArtifactReader.PlanSection && (variant is not null || statement != 0 || parameterSet is not null || repetition is not null)
+            ? new ArtifactPlanSelector(variant ?? string.Empty, statement, parameterSet, repetition) : null;
 
     /// <summary>
     /// Hands MCP parameters to Core as the typed model, one input per

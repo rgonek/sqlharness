@@ -13,6 +13,7 @@ internal static class OperationReportContract
     private static readonly IReadOnlyDictionary<Type, IReadOnlySet<Type>> ExpectedReports =
         new Dictionary<Type, IReadOnlySet<Type>>
         {
+            [typeof(SqlHarnessArtifactReadOperation)] = new HashSet<Type> { typeof(SqlHarnessArtifactReadReport) },
             [typeof(SqlHarnessQueryOperation)] = new HashSet<Type> { typeof(SqlHarnessQueryReport), typeof(SqlHarnessDryRunReport) },
             [typeof(SqlHarnessCompareOperation)] = new HashSet<Type> { typeof(SqlHarnessCompareReport), typeof(SqlHarnessDryRunReport) },
             [typeof(SqlHarnessCompareMatrixOperation)] = new HashSet<Type> { typeof(SqlHarnessCompareMatrixReport), typeof(SqlHarnessDryRunReport) },

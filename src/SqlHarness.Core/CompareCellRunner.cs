@@ -130,6 +130,8 @@ internal sealed record CompareCellRequest(
 
     internal ArtifactOwner? Owner { get; init; }
 
+    internal string? OperationRef { get; init; }
+
     internal SqlSafetyDecision? SetupSafety { get; init; }
 
     internal List<string> KnownSecrets { get; init; } = [];
@@ -242,7 +244,7 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
 
             phase = CompareCellPhase.Artifact;
             var publicRuns = runs.Select(run => run.Artifact).ToArray();
-            var directory = _artifacts.Write(report, publicRuns, request.Target.Database, request.Owner);
+            var directory = _artifacts.Write(report, publicRuns, request.Target.Database, request.Owner, request.OperationRef);
             report = report with { ArtifactDirectory = directory };
             return new CompareCellResult(report, publicRuns, rawFootprint);
         }

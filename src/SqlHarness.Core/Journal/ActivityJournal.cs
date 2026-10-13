@@ -75,10 +75,12 @@ public sealed class ActivityJournal : IActivityJournal
             insert.CommandText = """
                 INSERT INTO operations (session_id, operation, host_pid, host_started_at, started_at, updated_at,
                     status, profile, vars_json, mutation_requested, sql_hash, candidate_sql_hash, sql_text, candidate_sql_text,
-                    client_call_id, agent_model, agent_reasoning_effort, agent_session_id, agent_turn_id, agent_turn_trigger, agent_thread_source)
+                    client_call_id, agent_model, agent_reasoning_effort, agent_session_id, agent_turn_id, agent_turn_trigger, agent_thread_source,
+                    operation_ref, dry_run)
                 VALUES ($session, $operation, $hostPid, $hostStarted, $now, $now,
                     'running', $profile, $vars, $mutation, $sqlHash, $candidateHash, $sqlText, $candidateText,
-                    $callId, $agentModel, $agentEffort, $agentSession, $agentTurn, $agentTrigger, $agentSource)
+                    $callId, $agentModel, $agentEffort, $agentSession, $agentTurn, $agentTrigger, $agentSource,
+                    $operationRef, $dryRun)
                 RETURNING id;
                 """;
             insert.Parameters.AddWithValue("$session", sessionId);
@@ -100,6 +102,8 @@ public sealed class ActivityJournal : IActivityJournal
             insert.Parameters.AddWithValue("$agentTurn", (object?)start.Agent?.TurnId ?? DBNull.Value);
             insert.Parameters.AddWithValue("$agentTrigger", (object?)start.Agent?.TurnTrigger ?? DBNull.Value);
             insert.Parameters.AddWithValue("$agentSource", (object?)start.Agent?.ThreadSource ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$operationRef", (object?)start.OperationRef ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$dryRun", start.DryRun ? 1 : 0);
             var id = (long)insert.ExecuteScalar()!;
             transaction.Commit();
             return new JournalHandle(id);
@@ -131,7 +135,8 @@ public sealed class ActivityJournal : IActivityJournal
             update.CommandText = """
                 UPDATE operations SET status = $status, exit_code = $exit, error_kind = $error, error_message = $message, duration_ms = $duration,
                     engine = $engine, server = $server, database = $database, result_sets = $sets, rows_returned = $rows,
-                    raw_tokens = COALESCE($raw, raw_tokens), artifact_dir = $artifact, summary_json = $summary, cancel_reason = $cancel, finished_at = $now, updated_at = $now
+                    raw_tokens = COALESCE($raw, raw_tokens), artifact_dir = $artifact, summary_json = $summary, cancel_reason = $cancel,
+                    parent_operation_ref = $parentOperationRef, finished_at = $now, updated_at = $now
                 WHERE id = $id;
                 UPDATE sessions SET last_seen = $now
                 WHERE id = (SELECT session_id FROM operations WHERE id = $id);
@@ -151,6 +156,7 @@ public sealed class ActivityJournal : IActivityJournal
             update.Parameters.AddWithValue("$raw", (object?)end.RawTokens ?? DBNull.Value);
             update.Parameters.AddWithValue("$artifact", (object?)end.ArtifactDirectory ?? DBNull.Value);
             update.Parameters.AddWithValue("$summary", (object?)end.SummaryJson ?? DBNull.Value);
+            update.Parameters.AddWithValue("$parentOperationRef", (object?)end.ParentOperationRef ?? DBNull.Value);
             update.Parameters.AddWithValue("$now", now);
             update.ExecuteNonQuery();
             transaction.Commit();
@@ -349,6 +355,8 @@ public sealed class ActivityJournal : IActivityJournal
                 Execute(connection, JournalSchema.Version5);
             if (locked < 6)
                 Execute(connection, JournalSchema.Version6);
+            if (locked < 7)
+                Execute(connection, JournalSchema.Version7);
             Execute(connection, $"PRAGMA user_version = {JournalSchema.CurrentVersion};");
             Execute(connection, "COMMIT;");
         }

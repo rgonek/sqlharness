@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
+using System.Text.Json;
 
 using SqlHarness.Core.Auth;
 using SqlHarness.Core.Dialect;
@@ -117,6 +118,19 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
+        var effective = SqlHarnessOperationReferences.Ensure(operation);
+        var outcome = await ExecuteAssignedAsync(effective, ct);
+        return outcome with { OperationRef = effective.OperationRef };
+    }
+
+    private async Task<SqlHarnessOutcome> ExecuteAssignedAsync(
+        SqlHarnessOperation operation,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        if (operation is SqlHarnessArtifactReadOperation artifactRead)
+            return Checked(artifactRead, ExecuteArtifactRead(artifactRead));
 
         if (operation is SqlHarnessPlanOperation plan)
             return Checked(plan, ExecutePlan(plan));
@@ -253,6 +267,34 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         return outcome;
     }
 
+    private static SqlHarnessOutcome ExecuteArtifactRead(SqlHarnessArtifactReadOperation operation)
+    {
+        try
+        {
+            var resolved = ArtifactReader.ReadSectionWithMetadata(
+                operation.Root, operation.ArtifactId, operation.Section, operation.Owner,
+                operation.Cursor, operation.PlanSelector, operation.IncludeText);
+            var json = JsonSerializer.Serialize(resolved.Section, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            var bytes = System.Text.Encoding.UTF8.GetByteCount(json);
+            var lines = json.Length == 0 ? 0 : json.Count(character => character == '\n') + 1;
+            return WithReceipt(new SqlHarnessOutcome(
+                SqlHarnessExitCode.Success,
+                new SqlHarnessArtifactReadReport(resolved.Section, resolved.ProducerOperationRef),
+                null)
+            {
+                ParentOperationRef = resolved.ProducerOperationRef,
+            }, new OutputFootprint(bytes, lines));
+        }
+        catch (ArtifactReadException exception)
+        {
+            return WithReceipt(new SqlHarnessOutcome(exception.ExitCode, null, exception.Message), new OutputFootprint(0, 0));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return WithReceipt(new SqlHarnessOutcome(SqlHarnessExitCode.LocalStorage, null, "Artifact storage is unavailable."), new OutputFootprint(0, 0));
+        }
+    }
+
     /// <summary>
     /// Attaches the emission receipt: it carries the raw footprint for the activity journal
     /// (JournalingModule records raw and emitted footprints) and returns the outcome's exit code.
@@ -334,6 +376,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 SetupSafety = prepared.SetupSafety,
                 Owner = ArtifactOwner.From(compare.Target, prepared.Target),
                 KnownSecrets = knownSecrets,
+                OperationRef = compare.OperationRef,
             };
             _cellRunner.ComparisonMaximumRows = ComparisonMaximumRows;
 
@@ -449,6 +492,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 SetupSafety = prepared.SetupSafety,
                 Owner = ArtifactOwner.From(operation.Target, prepared.Target),
                 KnownSecrets = knownSecrets,
+                OperationRef = operation.OperationRef,
             };
             _matrixRunner.ComparisonMaximumRows = ComparisonMaximumRows;
             CompareMatrixResult result;
@@ -604,7 +648,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     setReport,
                     execution.Runs.Select(run => run.Artifact).ToArray(),
                     target.Database,
-                    ArtifactOwner.From(measure.Target, target));
+                    ArtifactOwner.From(measure.Target, target),
+                    measure.OperationRef);
                 setReport = setReport with { ArtifactDirectory = setDirectory };
                 var setSuccess = new SqlHarnessOutcome(SqlHarnessExitCode.Success, setReport, null)
                 {
@@ -659,7 +704,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             };
 
             phase = OperationPhase.Artifact;
-            var directory = _artifactWriter.Write(report, runs.Select(run => run.Artifact).ToArray(), target.Database, ArtifactOwner.From(measure.Target, target));
+            var directory = _artifactWriter.Write(report, runs.Select(run => run.Artifact).ToArray(), target.Database, ArtifactOwner.From(measure.Target, target), measure.OperationRef);
             report = report with { ArtifactDirectory = directory };
             var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null)
             {

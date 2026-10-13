@@ -10,22 +10,36 @@ namespace SqlHarness.Core;
 /// </summary>
 internal static class OperationJournalDescriber
 {
-    internal static OperationStart DescribeStart(SqlHarnessOperation operation) => operation switch
+    internal static OperationStart DescribeStart(SqlHarnessOperation operation)
     {
-        SqlHarnessQueryOperation query => Start("query", query.Target, query.AllowMutation, query.Sql, null),
-        SqlHarnessMeasureOperation measure => Start("measure", measure.Target, false, measure.QuerySql, null),
-        SqlHarnessCompareOperation compare => Start("compare", compare.Target, false, compare.BaselineSql, compare.CandidateSql),
-        SqlHarnessCompareMatrixOperation matrix => Start("compare", matrix.Target, false, matrix.BaselineSql, matrix.CandidateSql),
-        SqlHarnessWatchOperation watch => Start("watch", watch.Target, false, watch.Sql, null),
-        SqlHarnessSnapshotOperation snapshot => Start("snapshot", snapshot.Target, false, snapshot.Sql, null),
-        SqlHarnessSchemaOperation schema => Start("schema", schema.Target, false, null, null),
-        SqlHarnessPingOperation ping => Start("ping", ping.Target, false, null, null),
-        SqlHarnessCountsOperation counts => Start("counts", counts.Target, false, null, null),
-        SqlHarnessSpaceOperation space => Start("space", space.Target, false, null, null),
-        SqlHarnessQueryStoreTopOperation qstop => Start("qstop", qstop.Target, false, null, null),
-        SqlHarnessIndexesOperation indexes => Start("indexes", indexes.Target, false, null, null),
-        SqlHarnessPlanOperation => TargetFree("plan"),
-        _ => TargetFree(FallbackName(operation)),
+        var start = operation switch
+        {
+            SqlHarnessQueryOperation query => Start("query", query.Target, query.AllowMutation, query.Sql, null),
+            SqlHarnessMeasureOperation measure => Start("measure", measure.Target, false, measure.QuerySql, null),
+            SqlHarnessCompareOperation compare => Start("compare", compare.Target, false, compare.BaselineSql, compare.CandidateSql),
+            SqlHarnessCompareMatrixOperation matrix => Start("compare", matrix.Target, false, matrix.BaselineSql, matrix.CandidateSql),
+            SqlHarnessWatchOperation watch => Start("watch", watch.Target, false, watch.Sql, null),
+            SqlHarnessSnapshotOperation snapshot => Start("snapshot", snapshot.Target, false, snapshot.Sql, null),
+            SqlHarnessSchemaOperation schema => Start("schema", schema.Target, false, null, null),
+            SqlHarnessPingOperation ping => Start("ping", ping.Target, false, null, null),
+            SqlHarnessCountsOperation counts => Start("counts", counts.Target, false, null, null),
+            SqlHarnessSpaceOperation space => Start("space", space.Target, false, null, null),
+            SqlHarnessQueryStoreTopOperation qstop => Start("qstop", qstop.Target, false, null, null),
+            SqlHarnessIndexesOperation indexes => Start("indexes", indexes.Target, false, null, null),
+            SqlHarnessArtifactReadOperation => TargetFree("artifact"),
+            SqlHarnessPlanOperation => TargetFree("plan"),
+            _ => TargetFree(FallbackName(operation)),
+        };
+        return start with { OperationRef = operation.OperationRef, DryRun = IsDryRun(operation) };
+    }
+
+    private static bool IsDryRun(SqlHarnessOperation operation) => operation switch
+    {
+        SqlHarnessQueryOperation value => value.DryRun,
+        SqlHarnessMeasureOperation value => value.DryRun,
+        SqlHarnessCompareOperation value => value.DryRun,
+        SqlHarnessCompareMatrixOperation value => value.DryRun,
+        _ => false,
     };
 
     internal static OperationEnd DescribeEnd(SqlHarnessOutcome outcome, long durationMilliseconds)
@@ -56,7 +70,8 @@ internal static class OperationJournalDescriber
             outcome.EmissionReceipt?.RawFootprint?.EstimatedTokenCount,
             ArtifactDirectory: artifactDirectory,
             SummaryJson: JournalSummary.Build(outcome.Report),
-            ErrorMessage: status is "failed" or "rejected" ? Message(outcome.MachineError) : null);
+            ErrorMessage: status is "failed" or "rejected" ? Message(outcome.MachineError) : null,
+            ParentOperationRef: outcome.ParentOperationRef);
     }
 
     internal static OperationEnd Cancelled(long durationMilliseconds, string? reason = null) =>

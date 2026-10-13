@@ -337,7 +337,7 @@ internal interface ICompareArtifactWriter
     // Owner-aware publish. The default keeps existing fakes compiling
     // with their behavior unchanged; the production writer overrides it
     // to stamp the manifest. Callers always use this overload.
-    string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target, ArtifactOwner? owner) =>
+    string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target, ArtifactOwner? owner, string? operationRef = null) =>
         Write(report, runs, target);
 
     void WriteMatrixIndex(IReadOnlyList<CompareMatrixCellReport> cells) { }
@@ -420,9 +420,9 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
     }
 
     public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target) =>
-        Write(report, runs, target, owner: null);
+        Write(report, runs, target, owner: null, operationRef: null);
 
-    public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target, ArtifactOwner? owner)
+    public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target, ArtifactOwner? owner, string? operationRef = null)
     {
         ArgumentNullException.ThrowIfNull(report);
         ArgumentNullException.ThrowIfNull(runs);
@@ -439,7 +439,7 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
             _publisher.WriteText(Path.Combine(staging, "report.json"),
                 JsonSerializer.Serialize(persistedReport, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
             _publisher.WriteText(Path.Combine(staging, "manifest.json"),
-                JsonSerializer.Serialize(ArtifactManifest.ForReport(persistedReport, owner), ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
+                JsonSerializer.Serialize(ArtifactManifest.ForReport(persistedReport, owner, operationRef), ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
             var artifactKind = persistedReport switch
             {
                 SqlHarnessCompareReport => ArtifactReader.CompareKind,

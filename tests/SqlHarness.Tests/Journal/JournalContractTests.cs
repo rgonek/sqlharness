@@ -88,6 +88,8 @@ public sealed class JournalContractTests : IDisposable
         Assert.Contains("report.json", plain.Files.Keys);
         Assert.Contains("runs.jsonl", plain.Files.Keys);
         Assert.Contains("manifest.json", plain.Files.Keys);
+        // The producer identity is deliberately unique per invocation; compare artifact payloads
+        // while normalizing that one manifest field just like the random artifact directory.
         Assert.Equal(plain.Files, journaled.Files);
         // The journal really took the benchmark path: one metrics row per variant.
         var variants = JournalDb.Rows(databasePath, "SELECT variant FROM operation_metrics ORDER BY ordinal")
@@ -119,9 +121,22 @@ public sealed class JournalContractTests : IDisposable
             .Replace(directory, "<artifact>", StringComparison.Ordinal);
         var files = Directory.GetFiles(directory, "*", SearchOption.AllDirectories).ToDictionary(
             path => Path.GetRelativePath(directory, path).Replace('\\', '/'),
-            path => Normalize(File.ReadAllText(path)),
+            path => NormalizeArtifactFile(path, Normalize),
             StringComparer.Ordinal);
         return (exit, Normalize(output), files);
+    }
+
+    private static string NormalizeArtifactFile(string path, Func<string, string> normalize)
+    {
+        var text = normalize(File.ReadAllText(path));
+        if (!string.Equals(Path.GetFileName(path), "manifest.json", StringComparison.Ordinal))
+            return text;
+
+        using var manifest = System.Text.Json.JsonDocument.Parse(text);
+        var node = System.Text.Json.Nodes.JsonNode.Parse(text)!;
+        if (manifest.RootElement.TryGetProperty("producerOperationRef", out _))
+            node["producerOperationRef"] = "<operation>";
+        return node.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
     }
 
     private static IReadOnlyDictionary<string, TargetProfile> BenchmarkProfiles() =>

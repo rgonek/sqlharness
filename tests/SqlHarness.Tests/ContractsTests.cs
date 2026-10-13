@@ -399,6 +399,7 @@ public class ContractsTests
                 typeof(SqlHarnessSnapshotOperation),
                 typeof(SqlHarnessQueryStoreTopOperation),
                 typeof(SqlHarnessIndexesOperation),
+                typeof(SqlHarnessArtifactReadOperation),
             ],
             typeof(SqlHarnessOperation).Assembly.GetTypes()
                 .Where(t => t.BaseType == typeof(SqlHarnessOperation))
@@ -420,6 +421,7 @@ public class ContractsTests
         nameof(SqlHarnessSnapshotOperation) => 10,
         nameof(SqlHarnessQueryStoreTopOperation) => 11,
         nameof(SqlHarnessIndexesOperation) => 12,
+        nameof(SqlHarnessArtifactReadOperation) => 13,
         _ => int.MaxValue,
     };
 
@@ -518,7 +520,7 @@ public class ContractsTests
     public void Every_operation_accepts_only_its_own_report_types()
     {
         var cases = OperationReportCases();
-        Assert.Equal(13, cases.Select(c => c.Operation.GetType()).Distinct().Count());
+        Assert.Equal(14, cases.Select(c => c.Operation.GetType()).Distinct().Count());
         foreach (var (operation, report, compatible) in cases)
         {
             var exception = Record.Exception(() =>
@@ -545,6 +547,7 @@ public class ContractsTests
         new SqlHarnessSnapshotOperation(Target(), "SELECT 1", [], 30, 100, "before", false, false),
         new SqlHarnessQueryStoreTopOperation(Target(), 20, 1440, 30),
         new SqlHarnessIndexesOperation(Target(), 10, null, 30),
+        new SqlHarnessArtifactReadOperation("root", "artifact", "summary"),
     ];
 
     private static IReadOnlyList<object> Reports() =>
@@ -565,6 +568,7 @@ public class ContractsTests
         new SqlHarnessSnapshotReport(Identity(), "before", SnapshotVerdict.Stored, 0, []),
         new SqlHarnessQueryStoreTopReport(Identity(), 1440, 20, [], null),
         new SqlHarnessIndexesReport(Identity(), DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, 10, null, [], [], null),
+        new SqlHarnessArtifactReadReport(new object(), null),
     ];
 
     private static IReadOnlyList<(SqlHarnessOperation Operation, object Report, bool Compatible)> OperationReportCases()
@@ -574,7 +578,7 @@ public class ContractsTests
         var compatible = new HashSet<(int Operation, int Report)>
         {
             (0, 0), (1, 1), (2, 2), (3, 3), (3, 4), (4, 5), (5, 6), (6, 7),
-            (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 13),
+            (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 13), (13, 14),
         };
         var cases = new List<(SqlHarnessOperation, object, bool)>();
         for (var o = 0; o < operations.Count; o++)

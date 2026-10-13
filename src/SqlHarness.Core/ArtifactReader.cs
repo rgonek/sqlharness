@@ -20,7 +20,10 @@ public sealed record ArtifactManifest(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ArtifactOwner? Owner { get; init; }
 
-    internal static ArtifactManifest ForReport(object report, ArtifactOwner? owner = null) => (report switch
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ProducerOperationRef { get; init; }
+
+    internal static ArtifactManifest ForReport(object report, ArtifactOwner? owner = null, string? operationRef = null) => (report switch
     {
         SqlHarnessCompareReport => new ArtifactManifest(
             ArtifactReader.CurrentManifestVersion, ArtifactReader.CompareKind,
@@ -34,7 +37,7 @@ public sealed record ArtifactManifest(
         _ => throw new ArgumentOutOfRangeException(
             nameof(report), report.GetType(), "Unsupported benchmark report type."),
     }) with
-    { Owner = owner };
+    { Owner = owner, ProducerOperationRef = operationRef };
 }
 
 /// <summary>One named variant (baseline/candidate/query/set) with its measured metrics.</summary>
@@ -130,7 +133,7 @@ public sealed class ArtifactReadException(string message, SqlHarnessExitCode exi
 /// </summary>
 public static partial class ArtifactReader
 {
-    public const int CurrentManifestVersion = 1;
+    public const int CurrentManifestVersion = 2;
 
     public const string CompareKind = "compare";
     public const string MeasureKind = "measure";
@@ -170,6 +173,11 @@ public static partial class ArtifactReader
     /// </summary>
     public static object ReadSection(string root, string artifactId, string section, ArtifactOwner? owner = null, int? cursor = null,
         ArtifactPlanSelector? planSelector = null, bool includeText = false)
+        => ReadSectionWithMetadata(root, artifactId, section, owner, cursor, planSelector, includeText).Section;
+
+    public static (object Section, string? ProducerOperationRef) ReadSectionWithMetadata(
+        string root, string artifactId, string section, ArtifactOwner? owner = null, int? cursor = null,
+        ArtifactPlanSelector? planSelector = null, bool includeText = false)
     {
         if (!SupportedSections.Contains(section, StringComparer.Ordinal))
             throw new ArtifactReadException(
@@ -193,7 +201,7 @@ public static partial class ArtifactReader
                 $"Artifact section '{section}' is not available for this artifact.",
                 SqlHarnessExitCode.Safety);
 
-        return section switch
+        var result = section switch
         {
             SummarySection => ReadSummary(directory, artifactId, manifest),
             MetricsSection => ReadMetrics(directory, artifactId, manifest),
@@ -205,6 +213,8 @@ public static partial class ArtifactReader
                 $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, matrix-cells, plan.",
                 SqlHarnessExitCode.Safety),
         };
+        // Producer metadata is exposed only after the scope owner and section have been checked.
+        return (result, manifest.ProducerOperationRef);
     }
 
     private static ArtifactMatrixCellsSection ReadMatrixCells(string directory, string artifactId, int cursor)
@@ -335,7 +345,7 @@ public static partial class ArtifactReader
             || manifest.Sections.Any(section => !SupportedSections.Contains(section, StringComparer.Ordinal)))
             throw new ArtifactReadException("Artifact manifest is invalid.", SqlHarnessExitCode.Safety);
 
-        if (manifest.ManifestVersion != CurrentManifestVersion)
+        if (manifest.ManifestVersion is < 1 or > CurrentManifestVersion)
             throw new ArtifactReadException(
                 $"Unsupported artifact manifest version {manifest.ManifestVersion}.",
                 SqlHarnessExitCode.Safety);
