@@ -15,7 +15,7 @@
 
 ## Status
 
-- **Execution**: DONE on `ci/plan-028-release`, 2026-10-13 (`148355b..361e88c`); merge/push pending. Windows and WSL ext4 Linux gates passed (exit 0). Luna high implementation, Luna xhigh task reviews, Sol low whole-branch review and scoped fix review: clean. Hosted release proof remains pending the next operator-triggered tag.
+- **Execution**: DONE on `ci/plan-028-release`, 2026-10-13 (`148355b..361e88c`); locally merged to main at `8ed77af`, with post-merge Windows/Linux gates green (exit 0); no push. Luna high implementation, Luna xhigh task reviews, Sol low whole-branch review and scoped fix review: clean. Hosted release proof remains pending the next operator-triggered tag.
 
 - **Priority**: P2
 - **Effort**: S
@@ -120,3 +120,12 @@ New assertions in `ReleaseWorkflowTests.cs`: the version property, the gate depe
 - Windows: `pwsh ./scripts/verify.ps1` -> `verify: OK`, exit 0; Core 3794 passed, MCP 389 passed/4 skipped.
 - Linux ext4: `pwsh ./scripts/verify-linux.ps1` -> `verify-linux: OK`, exit 0; Core 3796 passed, MCP 401 passed/3 skipped. Live database proof is not claimed.
 - No tags, push or release publication. Signing, branch protection and the next hosted tag run remain operator follow-ups.
+
+## Local integration evidence — 2026-10-13
+
+- User selected local merge. Main base `8275304`, feature tip `1005151`, merge `8ed77af`.
+- The only conflict was the exact observed capability response size: Plan 055 added 37 bytes and Plan 028 dev metadata added 4 bytes. Integrated fixture is 7566; budget 8192 and call count remain. Luna high resolved it, Luna xhigh approved it, 45 focused tests passed.
+- Full pre-merge Windows gate passed before the conflict-resolution merge commit.
+- Post-merge Windows: `verify: OK`, exit 0; Core 3803 passed, MCP 400 passed/4 skipped.
+- Post-merge WSL ext4 Linux: `verify-linux: OK`, exit 0; Core 3803 passed, MCP 401 passed/3 skipped. Both logs contain no case-sensitive `FAILED`.
+- Local uncommitted plan-index edits were saved separately for restoration. No push, tag or release publication.
