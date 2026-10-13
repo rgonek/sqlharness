@@ -14,7 +14,7 @@
 
 ## Status
 
-- Status: TODO — implementation commits `8275304..8e50fb5`; Task 5 documentation and gates in progress.
+- Status: IN PROGRESS — implementation `8275304..8e50fb5`; Task 5 docs/capabilities committed, Windows gate passed, Linux gate pending. See [056 verification](056-verification.md).
 - Priority: P1
 - Effort: M
 - Risk: MEDIUM (binding sizes change benchmark plans; new Core operation flag)
