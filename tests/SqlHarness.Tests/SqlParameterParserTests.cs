@@ -48,7 +48,56 @@ public class SqlParameterParserTests
         Assert.Equal("@name", parameter.Name);
         Assert.Equal(SqlDbType.NVarChar, parameter.Type);
         Assert.Equal("zażółć", parameter.Value);
-        Assert.Equal(6, parameter.Size);
+        Assert.Equal(4000, parameter.Size);
+    }
+
+    [Theory]
+    [InlineData("nvarchar", "abc", 4000)]
+    [InlineData("varchar", "abc", 4000)]
+    [InlineData("nchar", "abc", 4000)]
+    [InlineData("char", "abc", 4000)]
+    [InlineData(null, "abc", 4000)]
+    [InlineData("nvarchar(26)", "abc", 26)]
+    public void Unsized_strings_bind_with_the_application_default(string? type, string value, int expected) =>
+        Assert.Equal(expected, SqlParameterParser.Bind(new SqlHarnessParameterInput("Name", type, value)).Size);
+
+    [Theory]
+    [InlineData("nvarchar")]
+    [InlineData("varchar")]
+    [InlineData("nchar")]
+    [InlineData("char")]
+    public void Unsized_strings_use_max_above_the_default(string type)
+    {
+        var parameter = SqlParameterParser.Bind(new SqlHarnessParameterInput("Name", type, new string('x', 4001)));
+
+        Assert.Equal(-1, parameter.Size);
+    }
+
+    [Theory]
+    [InlineData("nvarchar")]
+    [InlineData("varchar")]
+    [InlineData("nchar")]
+    [InlineData("char")]
+    public void Typed_null_unsized_string_binds_with_the_default(string type) =>
+        Assert.Equal(4000, SqlParameterParser.Bind(new SqlHarnessParameterInput("Name", type, null)).Size);
+
+    [Fact]
+    public void Untyped_null_string_binds_with_the_default()
+    {
+        var parameter = SqlParameterParser.Bind(new SqlHarnessParameterInput("Name", null, null));
+
+        Assert.Equal(4000, parameter.Size);
+    }
+
+    [Theory]
+    [InlineData("nvarchar", 4000)]
+    [InlineData("varchar", 4000)]
+    [InlineData(null, 4000)]
+    public void Strings_at_the_default_boundary_keep_the_application_default(string? type, int expected)
+    {
+        var parameter = SqlParameterParser.Bind(new SqlHarnessParameterInput("Name", type, new string('x', 4000)));
+
+        Assert.Equal(expected, parameter.Size);
     }
 
     [Theory]
@@ -157,7 +206,7 @@ public class SqlParameterParserTests
         Assert.Equal(SqlDbType.UniqueIdentifier, parameters[0].Type);
         Assert.Equal("witaj", parameters[1].Value);
         Assert.Equal(SqlDbType.NVarChar, parameters[1].Type);
-        Assert.Equal(5, parameters[1].Size);
+        Assert.Equal(4000, parameters[1].Size);
     }
 
     [Theory]
@@ -230,7 +279,7 @@ public class SqlParameterParserTests
         Assert.Equal(12.34m, parameters[0].Value);
         Assert.Equal(SqlDbType.Decimal, parameters[1].Type);
         Assert.Equal(SqlDbType.VarChar, parameters[2].Type);
-        Assert.Equal(5, parameters[2].Size);
+        Assert.Equal(4000, parameters[2].Size);
         Assert.Equal(SqlDbType.NVarChar, parameters[3].Type);
         Assert.Equal(-1, parameters[3].Size);
         Assert.Equal(longText, parameters[3].Value);
@@ -296,7 +345,7 @@ public class SqlParameterParserTests
         Assert.Equal("@missing", parameter.Name);
         Assert.Equal(SqlDbType.NVarChar, parameter.Type);
         Assert.Same(DBNull.Value, parameter.Value);
-        Assert.Null(parameter.Size);
+        Assert.Equal(4000, parameter.Size);
     }
 
     [Fact]

@@ -290,13 +290,13 @@ public class SqlParameterMatrixTests
             ["a=x", "b:int=42", "c:null", "d:int:null", "e=null", "f=", "g:nvarchar=p:q=r,s", "h:varchar(5):null"]);
 
         Assert.Equal(["@a", "@b", "@c", "@d", "@e", "@f", "@g", "@h"], parameters.Select(parameter => parameter.Name));
-        Assert.Equal((SqlDbType.NVarChar, "x", 1), (parameters[0].Type, parameters[0].Value, parameters[0].Size));
+        Assert.Equal((SqlDbType.NVarChar, "x", 4000), (parameters[0].Type, parameters[0].Value, parameters[0].Size));
         Assert.Equal((SqlDbType.Int, 42, null), (parameters[1].Type, parameters[1].Value, parameters[1].Size));
-        Assert.Equal((SqlDbType.NVarChar, DBNull.Value, null), (parameters[2].Type, parameters[2].Value, parameters[2].Size));
+        Assert.Equal((SqlDbType.NVarChar, DBNull.Value, 4000), (parameters[2].Type, parameters[2].Value, parameters[2].Size));
         Assert.Equal((SqlDbType.Int, DBNull.Value, null), (parameters[3].Type, parameters[3].Value, parameters[3].Size));
-        Assert.Equal((SqlDbType.NVarChar, "null", 4), (parameters[4].Type, parameters[4].Value, parameters[4].Size));
-        Assert.Equal((SqlDbType.NVarChar, "", 1), (parameters[5].Type, parameters[5].Value, parameters[5].Size));
-        Assert.Equal((SqlDbType.NVarChar, "p:q=r,s", 7), (parameters[6].Type, parameters[6].Value, parameters[6].Size));
+        Assert.Equal((SqlDbType.NVarChar, "null", 4000), (parameters[4].Type, parameters[4].Value, parameters[4].Size));
+        Assert.Equal((SqlDbType.NVarChar, "", 4000), (parameters[5].Type, parameters[5].Value, parameters[5].Size));
+        Assert.Equal((SqlDbType.NVarChar, "p:q=r,s", 4000), (parameters[6].Type, parameters[6].Value, parameters[6].Size));
         Assert.Equal((SqlDbType.VarChar, DBNull.Value, 5), (parameters[7].Type, parameters[7].Value, parameters[7].Size));
     }
 
@@ -317,12 +317,21 @@ public class SqlParameterMatrixTests
     [InlineData("name:nchar(max):null", "Unsupported SQL parameter type 'nchar(max)'.")]
     [InlineData("name:int=", "Invalid value '' for SQL parameter 'name' of type 'int'.")]
     [InlineData("name:int=nope", "Invalid value 'nope' for SQL parameter 'name' of type 'int'.")]
-    [InlineData("name:char=", "Invalid value '' for SQL parameter 'name' of type 'char'.")]
     public void Legacy_declaration_rejections_keep_their_text(string input, string expected)
     {
         var exception = Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterParser.ParseOne(input));
 
         Assert.Equal(expected, exception.Message);
+    }
+
+    [Fact]
+    public void Unsized_char_accepts_empty_string_with_default_size()
+    {
+        var parameter = SqlParameterParser.ParseOne("name:char=");
+
+        Assert.Equal(SqlDbType.Char, parameter.Type);
+        Assert.Equal(string.Empty, parameter.Value);
+        Assert.Equal(4000, parameter.Size);
     }
 
     [Theory]

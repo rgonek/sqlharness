@@ -1131,7 +1131,8 @@ internal sealed record SqlHarnessParameter(
 
 internal static partial class SqlParameterParser
 {
-    private const int MaximumNVarCharSize = 4000;
+    internal const int DefaultStringParameterSize = 4000;
+    private const int MaximumNVarCharSize = DefaultStringParameterSize;
     private const int MaximumVarCharSize = 8000;
     private const int SqlMaxSize = -1;
     private static readonly DateTime SmallDateTimeMin = new(1900, 1, 1);
@@ -1213,7 +1214,7 @@ internal static partial class SqlParameterParser
         if (type is null)
         {
             return value is null
-                ? CreateNull(name, SqlDbType.NVarChar, size: null)
+                ? CreateNull(name, SqlDbType.NVarChar, DefaultStringParameterSize)
                 : CreateUnicodeString(name, value, max: false);
         }
 
@@ -1269,8 +1270,8 @@ internal static partial class SqlParameterParser
         {
             "nvarchar" => CreateUnicodeString(name, value, max: false),
             "varchar" => CreateAnsiString(name, value, SqlDbType.VarChar, max: false),
-            "char" => CreateFixedString(name, value, SqlDbType.Char, MaximumVarCharSize),
-            "nchar" => CreateFixedString(name, value, SqlDbType.NChar, MaximumNVarCharSize),
+            "char" => CreateAnsiString(name, value, SqlDbType.Char, max: false),
+            "nchar" => CreateUnicodeString(name, value, max: false, type: SqlDbType.NChar),
             "varbinary" => CreateBinary(name, value, max: false),
             "int" => new($"@{name}", SqlDbType.Int, int.Parse(value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture), null),
             "bigint" => new($"@{name}", SqlDbType.BigInt, long.Parse(value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture), null),
@@ -1319,10 +1320,10 @@ internal static partial class SqlParameterParser
 
         return type switch
         {
-            "nvarchar" => CreateNull(name, SqlDbType.NVarChar, null),
-            "varchar" => CreateNull(name, SqlDbType.VarChar, null),
-            "char" => CreateNull(name, SqlDbType.Char, null),
-            "nchar" => CreateNull(name, SqlDbType.NChar, null),
+            "nvarchar" => CreateNull(name, SqlDbType.NVarChar, DefaultStringParameterSize),
+            "varchar" => CreateNull(name, SqlDbType.VarChar, DefaultStringParameterSize),
+            "char" => CreateNull(name, SqlDbType.Char, DefaultStringParameterSize),
+            "nchar" => CreateNull(name, SqlDbType.NChar, DefaultStringParameterSize),
             "varbinary" => CreateNull(name, SqlDbType.VarBinary, null),
             "int" => CreateNull(name, SqlDbType.Int, null),
             "bigint" => CreateNull(name, SqlDbType.BigInt, null),
@@ -1353,29 +1354,15 @@ internal static partial class SqlParameterParser
     private static SqlHarnessParameter CreateUdtNull(string name, string udtTypeName) =>
         new($"@{name}", SqlDbType.Udt, DBNull.Value, null, UdtTypeName: udtTypeName);
 
-    private static SqlHarnessParameter CreateUnicodeString(string name, string value, bool max)
-    {
-        if (max || value.Length > MaximumNVarCharSize)
-            return new($"@{name}", SqlDbType.NVarChar, value, SqlMaxSize);
+    private static SqlHarnessParameter CreateUnicodeString(
+        string name, string value, bool max, SqlDbType type = SqlDbType.NVarChar) =>
+        new($"@{name}", type, value, StringSize(value, max));
 
-        return new($"@{name}", SqlDbType.NVarChar, value, Math.Max(1, value.Length));
-    }
+    private static SqlHarnessParameter CreateAnsiString(string name, string value, SqlDbType type, bool max) =>
+        new($"@{name}", type, value, StringSize(value, max));
 
-    private static SqlHarnessParameter CreateAnsiString(string name, string value, SqlDbType type, bool max)
-    {
-        if (max || value.Length > MaximumVarCharSize)
-            return new($"@{name}", type, value, SqlMaxSize);
-
-        return new($"@{name}", type, value, Math.Max(1, value.Length));
-    }
-
-    private static SqlHarnessParameter CreateFixedString(string name, string value, SqlDbType type, int maximum)
-    {
-        if (value.Length is 0 || value.Length > maximum)
-            throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.");
-
-        return new($"@{name}", type, value, value.Length);
-    }
+    private static int StringSize(string? value, bool max) =>
+        max || value is { Length: > DefaultStringParameterSize } ? SqlMaxSize : DefaultStringParameterSize;
 
     private static SqlHarnessParameter CreateSizedType(string name, string typeBase, string sizeToken, string value)
     {
