@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 
 using ModelContextProtocol.Protocol;
@@ -289,7 +290,13 @@ public sealed class McpMappingTests : IDisposable
     public async Task Capabilities_omit_an_input_root_that_cannot_fit_any_page_and_still_terminate()
     {
         var shortBefore = CreateRoot("before");
-        var longRoot = CreateRoot(Path.Combine(Enumerable.Range(0, 24).Select(index => index.ToString(System.Globalization.CultureInfo.InvariantCulture) + new string('L', 200)).ToArray()));
+        var longRootName = Path.Combine(Enumerable.Range(0, 8)
+            .Select(index => index.ToString(System.Globalization.CultureInfo.InvariantCulture) + new string('é', 90))
+            .ToArray());
+        var longRoot = CreateRoot(longRootName);
+        var serializedRoot = JsonSerializer.Serialize(longRoot, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.True(Encoding.UTF8.GetByteCount(serializedRoot) > McpLimits.MinCallToolResultBudgetBytes,
+            "The root must exceed the minimum response budget even by itself.");
         var shortAfter = CreateRoot("after");
         var call = CapabilitiesCall(requestMode: false, [shortBefore, longRoot, shortAfter], McpLimits.MinCallToolResultBudgetBytes);
 

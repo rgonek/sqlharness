@@ -261,8 +261,8 @@ public sealed class BenchmarkSummaryTests
             .ToArray();
         var report = new SqlHarnessCompareMatrixReport("@BatchSize", "int",
         [
-            MatrixSummaryCell(0, "100", wideOperators, new ResultEquivalenceReport(ResultComparisonMode.Ordered, true, 0, 0, 0), @"C:\artifacts\cell-100"),
-            MatrixSummaryCell(1, "20", [new CompareOperatorReport(2, "Hash Match", "dbo.Lines", true, true, false)], new ResultEquivalenceReport(ResultComparisonMode.Multiset, false, null, 3, 1), @"C:\artifacts\cell-20"),
+            MatrixSummaryCell(0, "100", wideOperators, new ResultEquivalenceReport(ResultComparisonMode.Ordered, true, 0, 0, 0), Path.Combine("artifacts", "cell-100")),
+            MatrixSummaryCell(1, "20", [new CompareOperatorReport(2, "Hash Match", "dbo.Lines", true, true, false)], new ResultEquivalenceReport(ResultComparisonMode.Multiset, false, null, 3, 1), Path.Combine("artifacts", "cell-20")),
             MatrixSummaryCell(2, "1", [], new ResultEquivalenceReport(ResultComparisonMode.Off, null, null, null, null), null),
         ]);
 
