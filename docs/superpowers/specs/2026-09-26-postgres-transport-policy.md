@@ -123,6 +123,32 @@ Endpoint authentication belongs to the transport: use `sslMode: verify-full` for
 Both engines still compare the connected database (`current_database()` / `DB_NAME()`) with the resolved database using exact ordinal comparison. A database mismatch fails with `SqlTargetMismatchException` and exit 4; a server-name or address difference alone does not fail. PostgreSQL `transportPolicy` remains reported as `legacy` or `explicit` as described above.
 
 Unit tests use a fake observed server identity for PostgreSQL; no live database is needed to prove that an endpoint string difference no longer gates acceptance. TLS handshake behavior remains owned by the providers and transport configuration.
+
+## Session string lexing
+
+SQLHarness classifies PostgreSQL SQL offline with a parser that assumes `standard_conforming_strings = on`: inside `'...'`, a backslash is an ordinary character and not an escape. The classified text is then sent to the server unchanged, so parser and server must agree on where a string literal ends. When a role or a database sets the parameter off, the server reads `\'` inside a plain literal as an escaped quote, and text the classifier accepted as one harmless statement can arrive as a different statement sequence — a way to hide a write behind the per-command `READ ONLY` transaction.
+
+The session gate therefore fails closed. Before every classified command SQLHarness reads `standard_conforming_strings` from the parameters the server reports on the connection (`ParameterStatus`), which costs no extra round trip:
+
+| Reported value | Result |
+| --- | --- |
+| `on`, any casing | accepted |
+| any other value, or the parameter absent | `SqlHarnessSafetyException`, exit 2 |
+
+The message is fixed and names no value, no credential and no connection member:
+
+```text
+PostgreSQL standard_conforming_strings must be on; SQLHarness classifies SQL under standard string rules.
+```
+
+There is no profile field and no CLI option that relaxes this. A role or database configured with the parameter off has to be changed on the server; the check protects the classifier, not the transport.
+
+## Why `verify-full` for a remote server
+
+The gate above runs after `OpenAsync` has authenticated, so the credential is already spent before SQLHarness learns anything about the peer. `require` and `disable` — and the legacy mapping above, where `trustServerCertificate: true` becomes `SslMode=Disable` — encrypt without verifying the server identity. An active man-in-the-middle, or simply the wrong server, is accepted during the handshake and then sees the password authentication and the result data of every command. The connected-database comparison described above (exit 4) happens after that and is not a substitute.
+
+Use `verify-full` for a remote PostgreSQL server, and `verify-ca` only when the endpoint name cannot be matched against the certificate. `require` and `disable` remain legal for a disposable local target such as the playground, where the transport is not a boundary and nothing on the session is confidential; both stay reported as `legacy` or `explicit` in `target.transportPolicy`, and that field records the configured mode, not an authenticated peer.
+
 ## Errors and secrets
 
 Safety errors use these fixed messages:

@@ -58,7 +58,7 @@ public static class SqlHarnessCapabilitiesProvider
         new(
             SqlEngine.Postgres,
             "postgres",
-            "PostgreSQL: per-command READ ONLY; no qstop or indexes.",
+            "PostgreSQL: per-command READ ONLY; no qstop or indexes; a session that does not report standard_conforming_strings=on is refused with exit 2.",
             [.. SharedParameterTypes],
             new Dictionary<string, object>(StringComparer.Ordinal),
             [
