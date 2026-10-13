@@ -33,6 +33,27 @@ public class SqlSafetyTests
     }
 
     [Fact]
+    public void Variable_declared_inside_a_block_is_in_batch_scope()
+    {
+        var decision = ClassifyQuery("IF 1 = 1 BEGIN DECLARE @Limit int = 5; END; SET @Limit = 6; SELECT @Limit AS L;");
+        Assert.True(decision.Allowed);
+    }
+
+    [Fact]
+    public void Table_variable_used_in_a_branch_before_its_declaration_is_denied()
+    {
+        var decision = ClassifyQuery("IF 1 = 1 BEGIN SELECT Id FROM @ids; END; DECLARE @ids TABLE (Id int);");
+        Assert.False(decision.Allowed);
+    }
+
+    [Fact]
+    public void Table_variable_declared_in_a_branch_and_used_later_is_allowed()
+    {
+        var decision = ClassifyQuery("IF 1 = 1 BEGIN DECLARE @ids TABLE (Id int); INSERT @ids VALUES (1); END; SELECT Id FROM @ids;");
+        Assert.True(decision.Allowed);
+    }
+
+    [Fact]
     public void Compare_setup_allows_read_only_control_flow()
     {
         var decision = _classifier.Classify(
@@ -1142,6 +1163,8 @@ public class SqlSafetyTests
     [InlineData("DECLARE @t TABLE (Id int IDENTITY(1,1), Name nvarchar(20) DEFAULT N'x'); INSERT @t DEFAULT VALUES")]
     [InlineData("DECLARE @t TABLE (Id int IDENTITY(1,1)); INSERT INTO @t DEFAULT VALUES; SELECT Id FROM @t")]
     [InlineData("DECLARE @t TABLE (Id int); INSERT @T (Id) VALUES (1); SELECT Id FROM @T")]
+    [InlineData("BEGIN DECLARE @t TABLE (Id int) END; INSERT @t (Id) VALUES (1)")]
+    [InlineData("IF 1 = 1 BEGIN DECLARE @t TABLE (Id int) END; SELECT Id FROM @t")]
     public void T3b_Query_allows_less_common_proven_table_variable_shapes(string sql)
     {
         var decision = ClassifyQuery(sql);
@@ -1159,8 +1182,6 @@ public class SqlSafetyTests
     [InlineData("MERGE INTO @x USING (SELECT 1 AS SrcId) AS src ON Id = src.SrcId WHEN NOT MATCHED THEN INSERT (Id) VALUES (src.SrcId);")]
     [InlineData("INSERT @x DEFAULT VALUES")]
     [InlineData("DECLARE @x AS int; INSERT @x DEFAULT VALUES")]
-    [InlineData("BEGIN DECLARE @t TABLE (Id int) END; INSERT @t (Id) VALUES (1)")]
-    [InlineData("IF 1 = 1 BEGIN DECLARE @t TABLE (Id int) END; SELECT Id FROM @t")]
     [InlineData("DECLARE @v dbo.SomeType; SELECT Id FROM @v")]
     public void T3b_Query_denies_less_common_unproven_table_variable_shapes(string sql)
     {

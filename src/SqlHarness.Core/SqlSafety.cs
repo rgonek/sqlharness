@@ -560,7 +560,7 @@ internal sealed class SqlSafetyClassifier
         var scalars = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var tables = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var nonTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var statement in batch.Statements)
+        foreach (var statement in Flatten(batch.Statements))
         {
             if (statement is DeclareVariableStatement declare)
             {
@@ -583,6 +583,25 @@ internal sealed class SqlSafetyClassifier
         }
 
         return new BatchVariableScope(scalars, tables, nonTables);
+
+        static IEnumerable<TSqlStatement> Flatten(IEnumerable<TSqlStatement> statements)
+        {
+            foreach (var statement in statements)
+            {
+                yield return statement;
+                var nested = statement switch
+                {
+                    IfStatement { ElseStatement: { } elseStatement } ifStatement =>
+                        new TSqlStatement[] { ifStatement.ThenStatement, elseStatement },
+                    IfStatement ifStatement => new TSqlStatement[] { ifStatement.ThenStatement },
+                    BeginEndBlockStatement block => block.StatementList.Statements,
+                    _ => Array.Empty<TSqlStatement>(),
+                };
+
+                foreach (var inner in Flatten(nested))
+                    yield return inner;
+            }
+        }
     }
 
     private static bool HasUnprovenTableVariableUse(TSqlFragment statement, BatchVariableScope scope)
