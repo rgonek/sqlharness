@@ -4,8 +4,8 @@ Implementation and documentation landed in `d9eae367b267ceac44c56a2d4e65d02dce64
 
 ## Security review
 
-- Task 1 review verdict: **Approved**, with no critical, important, or minor findings. The review covered recursive IF/ELSE and BEGIN/END classification, propagation of nested denials, atomic-block denial, mutation accumulation across both branches, and whole-fragment inspection of predicates (including subqueries). See `.superpowers/sdd/057-tsql-control-flow-classification/task-1-review.md`.
-- Task 2 review verdict: **Approved**, with no critical, important, or minor findings. The review confirmed recursive declaration collection follows nested branches and blocks while preserving source-offset ordering, so a declaration only proves later uses. See `.superpowers/sdd/057-tsql-control-flow-classification/task-2-review.md`.
+- Task 1 review verdict: **Approved**, with no critical, important, or minor findings. The review covered recursive IF/ELSE and BEGIN/END classification, propagation of nested denials, atomic-block denial, mutation accumulation across both branches, and whole-fragment inspection of predicates (including subqueries). See `D:/temp/sqlharness-plan057-evidence-20261013/task-1-review.md`.
+- Task 2 review verdict: **Approved**, with no critical, important, or minor findings. The review confirmed recursive declaration collection follows nested branches and blocks while preserving source-offset ordering, so a declaration only proves later uses. See `D:/temp/sqlharness-plan057-evidence-20261013/task-2-review.md`.
 - Task 3 adds an end-to-end fake-session compare and public contract text; it does not alter the classifier. The compare uses the same constant-false IF/ELSE SQL for both variants, no parameters, and verifies success plus `read-only` classification for both.
 
 The blanket “no existing safety test changed its expectation” criterion is overridden for the two historical nested table-variable cases explicitly required by the Plan 057 specification and Task 2: declarations inside `BEGIN … END` and `IF … BEGIN … END` prove later uses in the same batch. The approved Task 2 review records these changes. Other denial expectations remain unchanged.
@@ -24,19 +24,29 @@ All checks ran against the Plan 057 worktree. Restore completed normally without
 | Windows `pwsh ./scripts/verify.ps1` | `verify: OK`; Core 3,865 passed, MCP 400 passed / 4 skipped, UI 148 passed |
 | Linux `pwsh ./scripts/verify-linux.ps1` | `verify-linux: OK`; Core 3,865 passed, MCP 401 passed / 3 skipped, UI 148 passed |
 
-The Linux gate synced and tested the exact implementation commit above. Linux published-x64 MCP smoke passed; three environment/platform-dependent MCP cases were skipped. Logs and the Task 3 report are preserved in the ignored `.superpowers/sdd/057-tsql-control-flow-classification/` workspace.
+The Linux gate synced and tested the exact implementation commit above. Linux published-x64 MCP smoke passed; three environment/platform-dependent MCP cases were skipped. Task 3 logs and report are in `D:/temp/sqlharness-plan057-evidence-20261013/`.
 
-## Final whole-branch review fixes
+## Final whole-branch review and closeout
 
-The final whole-branch review found three setup integration gaps and no classifier-boundary issues. The fixes share a recursive traversal for only the already accepted SQL Server `IF`/`BEGIN … END` shapes; atomic blocks remain opaque and denied. Setup splitting now detects nested local-temp creation after the parameter boundary, declaration collection follows nested setup/measured statements while preserving source offsets, and nested local declarations are excluded from typed-parameter detection. PostgreSQL behavior and public wording are unchanged. Details and RED/GREEN evidence are in `.superpowers/sdd/057-tsql-control-flow-classification/final-fix-report.md`.
+User-selected routing was Luna high for implementation, Luna xhigh for task review, and Sol low for the whole-branch review. The Sol low review at `a9b80f4` found three Important setup integration gaps and no Critical findings. One Luna high fix wave at `e05d44d` addressed all three using recursive traversal of only the already accepted SQL Server `IF`/`BEGIN … END` shapes. Atomic blocks remain opaque and denied; source-offset before-use proof remains intact. Setup splitting detects nested local-temp creation after the parameter boundary, setup/measured variable lifetime collection follows nested statements, and nested local declarations are excluded from typed-parameter detection. PostgreSQL behavior and public wording are unchanged.
 
-The added regressions reproduced four failures before the fix and passed with the focused SQL safety/setup suite afterward (449 passed, 0 failed). `dotnet format SqlHarness.sln --no-restore --include src/SqlHarness.Core/SetupSqlExecution.cs src/SqlHarness.Core/SqlSafety.cs tests/SqlHarness.Tests/SetupSqlExecutionTests.cs` completed, and `dotnet build SqlHarness.sln -warnaserror --no-restore` succeeded with 0 warnings and 0 errors.
+The final scoped Luna xhigh re-review marked all three findings **ADDRESSED**, found no new Critical or Important issues or out-of-scope observations, and left no parked findings. The final re-review and fix report are in `D:/temp/sqlharness-plan057-evidence-20261013/final-rereview.md` and `D:/temp/sqlharness-plan057-evidence-20261013/final-fix-report.md`.
 
-Both final gates ran sequentially against fix commit `e05d44d84f30ff620e7bed8e37c499016c77b279`:
+Controller rulings and costs:
+
+| Ruling | Cost if wrong |
+|---|---|
+| Task 3 also updates `Capabilities.cs` and its contract fixtures when needed, as required by `AGENTS.md`. | A small additional documentation diff. |
+| Use the user-selected Sol low whole-branch reviewer even though the skill recommends the most capable model. | Lower review depth, mitigated by the Luna xhigh task security review. |
+| Move the two historical nested BEGIN/IF declaration cases from denied to allowed as required by the spec and Task 2, despite the blanket test-expectation freeze. | Wider acceptance of those intended shapes; offset-before-use and persistent-write denials remain mandatory and reviewed. |
+
+The fix regressions reproduced four failures before the change and passed afterward. Focused SQL safety/setup tests passed 449/449; the warning-as-error build succeeded with zero warnings and errors. The touched-file formatter completed. No suites were rerun for the final scoped re-review.
+
+Both final gates ran sequentially against code commit `e05d44d84f30ff620e7bed8e37c499016c77b279`; `34601ca` contains metadata only:
 
 | Check | Result |
 |---|---|
 | Windows `pwsh ./scripts/verify.ps1` | `verify: OK`; Core 3,870 passed / 0 skipped, MCP 400 passed / 4 skipped, UI 148 passed; build 0 warnings / 0 errors |
 | Linux `pwsh ./scripts/verify-linux.ps1` | `verify-linux: OK`; Core 3,870 passed / 0 skipped, MCP 401 passed / 3 skipped, UI 148 passed; build 0 warnings / 0 errors; format `--verify-no-changes` passed |
 
-The Windows log is `.superpowers/sdd/057-tsql-control-flow-classification/final-fix-windows.log`; the Linux log is `.superpowers/sdd/057-tsql-control-flow-classification/final-fix-linux.log`. Before Linux sync, the dedicated gate clone was confirmed clean with no untracked files. The Linux sync then reset it to the exact fix commit. Final scoped review remains pending controller dispatch.
+The Windows and Linux logs, RED/GREEN evidence, all three task packets, and final reviews are archived under `D:/temp/sqlharness-plan057-evidence-20261013/`. Before Linux sync, the dedicated gate clone was confirmed clean with no untracked files; it was then synced to the exact fix commit. Final scoped review is clean and complete.
