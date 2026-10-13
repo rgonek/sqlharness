@@ -190,12 +190,16 @@ public class ArtifactReaderTests
                 "{\"statements\":[{\"root\":{\"physicalOp\":\"Scan\",\"children\":[]}}]}");
             runLines.Add(JsonSerializer.Serialize(new
             {
-                variant = "baseline", repetition, planJsonFiles = new[] { name }
+                variant = "baseline",
+                repetition,
+                planJsonFiles = new[] { name }
             }));
         }
         runLines.Add(JsonSerializer.Serialize(new
         {
-            variant = "baseline", repetition = 3, planJsonFiles = Array.Empty<string>()
+            variant = "baseline",
+            repetition = 3,
+            planJsonFiles = Array.Empty<string>()
         }));
         File.WriteAllText(Path.Combine(directory, "runs.jsonl"), string.Join(Environment.NewLine, runLines));
 
