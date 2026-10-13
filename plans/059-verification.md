@@ -29,4 +29,14 @@ Plan 059 adds single-measured-execution reference output accounting, explicit op
 - MCP: 404 passed, 3 skipped (407 total).
 - Build: 0 warnings, 0 errors. Format check passed. The production UI build emitted its existing advisory about a minified chunk over 500 kB; the gate succeeded.
 
-Full logs are in `.superpowers/sdd/059-journal-workflow-cost/task-4-build.log`, `task-4-verify-windows.log` (first run, stale-link failure), `task-4-verify-windows-rerun.log` (first rerun, format failure), `task-4-verify-windows-final.log`, and `task-4-verify-linux.log`. No live database calls or push occurred.
+Scratch logs supported the checks but are not retained as durable evidence. The commands, counts, gate results, regression diagnosis and recovery recorded above are the retained verification record. No live database calls or push occurred.
+
+## Final review correction — passed
+
+The final Task 4 review found that the documentation assigned `raw_bytes` and `emitted_bytes` to v7 and left the matrix baseline aggregation unclear. README, MCP docs and the skill now state that v7 adds operation references and `dry_run`, reuses the byte columns added in v3 without changing existing values, and uses each producer's first measured result/messages per variant and parameter set (excluding warm-ups, later repeats and plan XML). The old statement that existing rows have null v7 byte values was removed. The same review also found a transient scratch-log retention claim; the durable record now retains commands and counts without promising the scratch logs will remain.
+
+- RED: the strengthened `Workflow_cost_docs_pin_provenance_measurements_legacy_and_dry_run_accounting` test failed because the README did not state the exact v7 field list.
+- GREEN: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~DocsSyncTests|FullyQualifiedName~ContractsTests"` — 26 passed, 0 failed, 0 skipped.
+- Format: `dotnet format SqlHarness.sln --no-restore --include tests/SqlHarness.Tests/DocsSyncTests.cs`, followed by `dotnet format SqlHarness.sln --no-restore --verify-no-changes --include tests/SqlHarness.Tests/DocsSyncTests.cs` — passed.
+
+This correction changes documentation and assertions only; the previously recorded Windows/Linux runtime gates remain applicable.

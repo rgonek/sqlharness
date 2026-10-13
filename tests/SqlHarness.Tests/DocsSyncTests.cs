@@ -100,15 +100,25 @@ public sealed partial class DocsSyncTests
         var readme = ReadRepositoryFile("README.md");
         var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
 
+        const string schemaVersion = "Schema v7 adds nullable `operation_ref` and `parent_operation_ref` plus `dry_run`";
+        const string bytePreservation = "It reuses the `raw_bytes` and `emitted_bytes` columns introduced in v3; stored byte values remain intact";
+        const string baseline = "The `single-measured-execution-output` baseline includes the first measured result/messages for each variant and parameter set in the producer; it excludes warm-ups, later repeats, and plan XML";
+
         Assert.Contains("parent_operation_ref", readme, StringComparison.Ordinal);
-        Assert.Contains("Journal schema v7 adds nullable", readme, StringComparison.Ordinal);
-        Assert.Contains("byte columns already introduced in v3", readme, StringComparison.Ordinal);
-        Assert.Contains("single-measured-execution-output", readme, StringComparison.Ordinal);
+        Assert.Contains(schemaVersion, readme, StringComparison.Ordinal);
+        Assert.Contains(bytePreservation, readme, StringComparison.Ordinal);
+        Assert.Contains(baseline, readme, StringComparison.Ordinal);
+        Assert.DoesNotContain("null v7 byte values", readme, StringComparison.Ordinal);
         Assert.Contains("Dry-run responses contribute to output bytes and call counts", readme, StringComparison.Ordinal);
         Assert.Contains("legacy-artifact-volume", readme, StringComparison.Ordinal);
+        Assert.Contains(schemaVersion, mcp, StringComparison.Ordinal);
+        Assert.Contains(bytePreservation, mcp, StringComparison.Ordinal);
+        Assert.Contains(baseline, mcp, StringComparison.Ordinal);
         Assert.Contains("dry_run` flag keeps it out of database-execution counts", mcp, StringComparison.Ordinal);
         Assert.Contains("Capabilities discovery, `tools/list`", mcp, StringComparison.Ordinal);
-        Assert.Contains("Journal v7 records nullable producer references", skill, StringComparison.Ordinal);
+        Assert.Contains(schemaVersion, skill, StringComparison.Ordinal);
+        Assert.Contains(bytePreservation, skill, StringComparison.Ordinal);
+        Assert.Contains(baseline, skill, StringComparison.Ordinal);
         Assert.Contains("not actual token savings", skill, StringComparison.Ordinal);
     }
 
