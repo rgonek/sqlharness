@@ -81,11 +81,14 @@ public sealed partial class DocsSyncTests
 
         Assert.Contains("`repetition` selects an available measured repetition", mcp, StringComparison.Ordinal);
         Assert.Contains("`planShapeStable`", mcp, StringComparison.Ordinal);
-        Assert.Contains("evidence gap", mcp, StringComparison.Ordinal);
+        Assert.Contains("without an `evidenceGaps` entry when fewer than two measured repetitions", mcp, StringComparison.Ordinal);
+        Assert.Contains("multi-repetition comparison has missing or incomplete saved plan evidence", mcp, StringComparison.Ordinal);
         Assert.Contains("stable paths", mcp, StringComparison.Ordinal);
         Assert.Contains("`operators` is also paged", mcp, StringComparison.Ordinal);
         Assert.Contains("12 hex", mcp, StringComparison.Ordinal);
         Assert.Contains("last measured repetition", readme, StringComparison.Ordinal);
+        Assert.Contains("`evidenceGaps` is empty", readme, StringComparison.Ordinal);
+        Assert.Contains("multi-repetition comparison has missing or incomplete saved plan evidence", readme, StringComparison.Ordinal);
         Assert.Contains("`matrix-cells`", skill, StringComparison.Ordinal);
         Assert.Contains("`planShapeStable`", skill, StringComparison.Ordinal);
     }
