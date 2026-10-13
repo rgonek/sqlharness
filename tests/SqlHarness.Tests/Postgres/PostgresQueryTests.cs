@@ -80,19 +80,39 @@ public sealed class PostgresQueryTests
     }
 
     [Fact]
-    public async Task Postgres_unproven_temp_write_is_rejected_with_the_hint_and_no_sql_echo()
+    public async Task Postgres_unproven_temp_truncate_is_rejected_with_the_hint_and_no_sql_echo()
     {
         // 011/final (M9) end to end: exit code 2 and the reason are unchanged.
-        const string sql = "CREATE TEMP TABLE scratch_rows (id int) ON COMMIT DROP; INSERT INTO scratch_rows VALUES (1)";
+        // 047 step 3: the DML write over this name is no longer rejected here, so
+        // the hint rides on the denial that remains.
+        const string sql = "CREATE TEMP TABLE scratch_rows (id int) ON COMMIT DROP; TRUNCATE scratch_rows";
         var session = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["id"]));
         var module = new SqlHarnessModule(session, Profiles);
 
         var outcome = await module.ExecuteAsync(Query(sql));
 
         Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
-        Assert.StartsWith("SQL safety rejection: MutationNotAllowed. A TEMP table declared in this session flow is not a proven session temp", outcome.SafeError, StringComparison.Ordinal);
+        Assert.StartsWith("SQL safety rejection: NonTemporaryWrite. A TEMP table declared in this session flow is not a proven session temp", outcome.SafeError, StringComparison.Ordinal);
         Assert.DoesNotContain("scratch_rows", outcome.SafeError, StringComparison.Ordinal);
         Assert.Empty(session.Commands);
+    }
+
+    [Fact]
+    public async Task Postgres_unqualified_temp_write_runs_read_only_without_mutation_approval()
+    {
+        // 047 step 3 end to end: the batch is accepted offline as session-local
+        // work and runs in a read-only transaction, so the server, not the name,
+        // decides whether the write target is the temp or a persistent table.
+        const string sql = "CREATE TEMP TABLE scratch_rows (id int) ON COMMIT DROP; INSERT INTO scratch_rows VALUES (1)";
+        var session = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["id"]));
+        var module = new SqlHarnessModule(session, Profiles);
+
+        var outcome = await module.ExecuteAsync(Query(sql));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(sql, Assert.Single(session.Commands).Sql);
+        Assert.Equal(PostgresExecutionMode.ReadOnly, Assert.Single(session.Commands).PostgresMode);
+        Assert.Equal("session-local", Assert.IsType<SqlHarnessQueryReport>(outcome.Report).StatementClassification);
     }
 
     private static SqlHarnessQueryOperation Query(string sql) =>

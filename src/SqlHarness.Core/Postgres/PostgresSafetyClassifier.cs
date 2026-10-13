@@ -1,4 +1,4 @@
-﻿using SqlParser;
+using SqlParser;
 using SqlParser.Ast;
 
 namespace SqlHarness.Core.Postgres;
@@ -77,6 +77,19 @@ internal sealed class PostgresSafetyClassifier
         };
     }
 
+    // Whether this invocation's SQL executes read-write, which is exactly the
+    // condition under which the caller holds fresh mutation approval for the
+    // resolved database (SqlHarnessModule then selects
+    // PostgresExecutionMode.ApprovedMutation). A batch without it runs in a
+    // read-only transaction, where the server is the write boundary.
+    private static bool RunsReadWrite(
+        string? database,
+        bool allowMutation,
+        string? confirmDatabase) =>
+        allowMutation &&
+        confirmDatabase is not null &&
+        string.Equals(database, confirmDatabase, StringComparison.Ordinal);
+
     private static SqlSafetyDecision ClassifyQuery(
         List<(Statement Statement, StatementEffect Effect)> statements,
         string? database,
@@ -84,12 +97,18 @@ internal sealed class PostgresSafetyClassifier
         string? confirmDatabase,
         SessionTemps knownTemps)
     {
+        // The name proof only carries weight where no read-only transaction
+        // backstops it: the approved mutation path runs read-write (047 step 3),
+        // so a target there must be proven before approval turns the batch into
+        // a write. Everything else executes inside SET TRANSACTION READ ONLY and
+        // the server rejects a persistent target itself.
+        var proofRequired = RunsReadWrite(database, allowMutation, confirmDatabase);
         var hasMutation = false;
         var hasSessionLocal = false;
 
         foreach (var (statement, effect) in statements)
         {
-            var outcome = ClassifyStatement(statement, effect, knownTemps);
+            var outcome = ClassifyStatement(statement, effect, knownTemps, proofRequired);
             switch (outcome.Kind)
             {
                 case StatementKind.ReadOnly:
@@ -134,10 +153,13 @@ internal sealed class PostgresSafetyClassifier
         List<(Statement Statement, StatementEffect Effect)> statements,
         SessionTemps knownTemps)
     {
+        // Setup is the one phase that stays read-write: the server rejects
+        // CREATE TEMP, CREATE INDEX, TRUNCATE and DROP in a read-only
+        // transaction, so the name proof is all that is left here.
         var hasSessionLocal = false;
         foreach (var (statement, effect) in statements)
         {
-            var outcome = ClassifyStatement(statement, effect, knownTemps);
+            var outcome = ClassifyStatement(statement, effect, knownTemps, proofRequired: true);
             switch (outcome.Kind)
             {
                 case StatementKind.ReadOnly:
@@ -161,7 +183,8 @@ internal sealed class PostgresSafetyClassifier
     private static StatementOutcome ClassifyStatement(
         Statement statement,
         StatementEffect effect,
-        SessionTemps knownTemps)
+        SessionTemps knownTemps,
+        bool proofRequired)
     {
         if (effect.HasSelectInto && statement is not Statement.Select)
             return StatementOutcome.SelectInto;
@@ -171,10 +194,10 @@ internal sealed class PostgresSafetyClassifier
         switch (statement)
         {
             case Statement.Select select:
-                return ClassifySelect(select, effect, knownTemps);
+                return ClassifySelect(select, effect, knownTemps, proofRequired);
 
             case Statement.Explain explain:
-                return ClassifyExplain(explain, knownTemps);
+                return ClassifyExplain(explain, knownTemps, proofRequired);
 
             case Statement.Insert:
             case Statement.Update:
@@ -182,7 +205,7 @@ internal sealed class PostgresSafetyClassifier
             case Statement.Merge:
                 if (effect.Targets.Count == 0)
                     return StatementOutcome.Unsupported;
-                return FromWrites(effect.Targets, knownTemps);
+                return FromWrites(effect.Targets, knownTemps, proofRequired);
 
             case Statement.CreateTable create:
                 {
@@ -202,7 +225,7 @@ internal sealed class PostgresSafetyClassifier
                     // another session's.
                     var declared = create.Element.Name.Values;
                     // 019: the statement's own CTE writes resolve before this temp relation exists.
-                    var writes = FromWrites(effect.Targets, knownTemps, emptyIsSessionLocal: true);
+                    var writes = FromWrites(effect.Targets, knownTemps, proofRequired, emptyIsSessionLocal: true);
                     knownTemps.Record(
                         key,
                         declared[^1],
@@ -380,11 +403,12 @@ internal sealed class PostgresSafetyClassifier
     private static StatementOutcome ClassifySelect(
         Statement.Select select,
         StatementEffect effect,
-        SessionTemps knownTemps)
+        SessionTemps knownTemps,
+        bool proofRequired)
     {
         var into = PostgresQueryShape.TopLevelSelectInto(select.Query);
         if (into is null)
-            return effect.HasSelectInto ? StatementOutcome.SelectInto : FromWrites(effect.Targets, knownTemps);
+            return effect.HasSelectInto ? StatementOutcome.SelectInto : FromWrites(effect.Targets, knownTemps, proofRequired);
         // Unambiguous session locality only: TEMP with a single-part name and no
         // other INTO in the batch. Writes inside (for example a data-modifying
         // CTE) still count through the normal target analysis.
@@ -394,14 +418,17 @@ internal sealed class PostgresSafetyClassifier
         if (key is null)
             return StatementOutcome.Unsupported;
         // 019: the statement's own CTE writes resolve before its INTO relation exists.
-        var writes = FromWrites(effect.Targets, knownTemps);
+        var writes = FromWrites(effect.Targets, knownTemps, proofRequired);
         knownTemps.Record(key, into.Name.Values[^1], survivesCommit: true, ifNotExists: false, provesName: true);
         if (writes.Kind == StatementKind.Mutation)
             return StatementOutcome.SessionLocalMutation;
         return StatementOutcome.SessionLocal;
     }
 
-    private static StatementOutcome ClassifyExplain(Statement.Explain explain, SessionTemps knownTemps)
+    private static StatementOutcome ClassifyExplain(
+        Statement.Explain explain,
+        SessionTemps knownTemps,
+        bool proofRequired)
     {
         var innerEffect = StatementEffectVisitor.Inspect(explain.Statement);
         if (innerEffect.HasProhibitedFunction)
@@ -411,18 +438,20 @@ internal sealed class PostgresSafetyClassifier
             // A plan-only EXPLAIN never executes: allow it only over a safe SELECT
             // with no writes and no result-into of its own. A throwaway temp set
             // keeps the pure plan from registering session objects it never creates.
+            // It runs no statement, so there is no read-only transaction to lean
+            // on and the name proof stays the verdict.
             if (explain.Statement is not Statement.Select innerSelect ||
                 PostgresQueryShape.HasSelectInto(innerSelect.Query) ||
                 PostgresQueryShape.HasWrite(innerSelect.Query))
                 return StatementOutcome.Unsupported;
             var inner = ClassifyStatement(
-                explain.Statement, innerEffect, new SessionTemps(knownTemps));
+                explain.Statement, innerEffect, new SessionTemps(knownTemps), proofRequired: true);
             return inner.Kind is StatementKind.ReadOnly or StatementKind.SessionLocal
                 ? StatementOutcome.ReadOnly
                 : StatementOutcome.Unsupported;
         }
         // EXPLAIN ANALYZE executes the inner statement: full effect analysis, never auto-read.
-        return ClassifyStatement(explain.Statement, innerEffect, knownTemps);
+        return ClassifyStatement(explain.Statement, innerEffect, knownTemps, proofRequired);
     }
 
     private static bool IsExplainAnalyze(Statement.Explain explain)
@@ -445,6 +474,7 @@ internal sealed class PostgresSafetyClassifier
     private static StatementOutcome FromWrites(
         IReadOnlyList<ObjectName> targets,
         IReadOnlySet<string> knownTemps,
+        bool proofRequired,
         bool emptyIsSessionLocal = false)
     {
         if (targets.Count == 0)
@@ -452,8 +482,20 @@ internal sealed class PostgresSafetyClassifier
 
         foreach (var target in targets)
         {
-            if (!IsSessionLocal(target, knownTemps))
-                return StatementOutcome.Mutation;
+            if (IsSessionLocal(target, knownTemps))
+                continue;
+            // An unqualified name is the only shape search_path can resolve into
+            // this session's temp schema instead of onto a persistent table. Under
+            // SET TRANSACTION READ ONLY the server allows DML on a temp and
+            // rejects anything persistent with 25006
+            // (plans/047-readonly-proof.md cases 1, 2 and 6), so such a target is
+            // session-local work whose fate the server decides, not a mutation
+            // that needs an offline name proof. A foreign schema or another
+            // session's pg_temp_<N> is persistent on the server as well, so
+            // those stay mutations here.
+            if (!proofRequired && target.Values.Count == 1)
+                continue;
+            return StatementOutcome.Mutation;
         }
 
         return StatementOutcome.SessionLocal;
