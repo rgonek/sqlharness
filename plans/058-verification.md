@@ -37,3 +37,16 @@ Command: `pwsh ./scripts/verify-linux.ps1`; exit `0`, final marker `verify-linux
 Full output: `.superpowers/sdd/058-benchmark-plan-evidence/task-4-linux-verify.log`.
 
 The configured live database and non-native publish tests remain skipped; no live database evidence is claimed by these gates.
+
+## Final review correction — passed
+
+The final branch review found that `ArtifactReader` discarded measured runs with no saved plan before selecting the default repetition and comparing shape stability. Commit `986e64760f5f608f57363d495dbfd5be72306072` retains those runs in the available-repetition inventory, returns a controlled error when the selected run has no saved plan, and leaves stability null with an evidence gap when an earlier repetition is explicitly selected. It also asserts matrix continuation indexes and values in emitted order. The formatter follow-up is `6fa9c7f185b3658c8858dcfe609df9d2fe7599f3`.
+
+The regression test failed before the source fix because the default selection silently returned repetition 2 while repetition 3 had no saved plan. Focused checks then passed: Core 43 passed, MCP 29 passed, including the capability byte-budget check (8,186 observed bytes within the 8,192-byte budget). The first full Windows gate on `986e647` passed all tests but failed the format stage; the affected files were formatted and committed before rerunning either platform gate.
+
+Both final platform gates verified source SHA `6fa9c7f185b3658c8858dcfe609df9d2fe7599f3`:
+
+- Windows: `pwsh ./scripts/verify.ps1` — exit `0`, final marker `verify: OK`; Dashboard UI 148 passed; MCP 402 passed, 4 skipped (406 total); Core 3,878 passed, 11 skipped (3,889 total); build and format passed.
+- Linux: `pwsh ./scripts/verify-linux.ps1` — exit `0`, final marker `verify-linux: OK`; Dashboard UI 148 passed; MCP 403 passed, 3 skipped (406 total); Core 3,885 passed, 4 skipped (3,889 total); build and format passed.
+
+Full output: `.superpowers/sdd/058-benchmark-plan-evidence/final-fix-windows.log` and `.superpowers/sdd/058-benchmark-plan-evidence/final-fix-linux.log`. Live database checks remain skipped; no live database evidence is claimed.

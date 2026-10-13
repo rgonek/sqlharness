@@ -14,7 +14,7 @@
 
 ## Status
 
-- Status: DONE — implementation at `6260e7a..d3b4146`; Windows and Linux gates passed on the final source tree; see [verification record](058-verification.md).
+- Status: DONE — implementation and final-review correction through `6fa9c7f`; Windows and Linux gates passed on that source SHA; see [verification record](058-verification.md).
 - Priority: P1
 - Effort: M
 - Risk: LOW (read-only additions; one documented value disclosure the caller already supplied)
