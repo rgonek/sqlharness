@@ -246,7 +246,8 @@ public class ContractsTests
         Assert.Contains("ModelContextProtocol", mcp, StringComparison.Ordinal);
         Assert.Contains("2.2.0", mcp, StringComparison.Ordinal);
         Assert.Contains("2025-11-25", mcp, StringComparison.Ordinal);
-        Assert.Contains("16384", mcp, StringComparison.Ordinal);
+        Assert.Contains("65536", mcp, StringComparison.Ordinal);
+        Assert.Contains("262144", mcp, StringComparison.Ordinal);
         Assert.Contains("4096..1048576", mcp, StringComparison.Ordinal);
         Assert.Contains("32768", mcp, StringComparison.Ordinal);
         Assert.Contains("AllowMutation: false", mcp, StringComparison.Ordinal);

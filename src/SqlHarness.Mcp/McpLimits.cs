@@ -37,9 +37,8 @@ public static class McpLimits
     public const int MinCallToolResultBudgetBytes = 4096;
 
     /// <summary>
-    /// Largest result-text budget a process operator may configure
-    /// (1048576). A single tool call may only lower the process maximum,
-    /// never raise it.
+    /// Largest result-text budget a process operator or call may request
+    /// (1048576). Per-call requests above the process ceiling are clamped.
     /// </summary>
     public const int MaxCallToolResultBudgetBytes = 1048576;
 

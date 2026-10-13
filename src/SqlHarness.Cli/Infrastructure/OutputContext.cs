@@ -16,7 +16,7 @@ public sealed class OutputContext(TextWriter writer)
         Mode = OutputMode.Text;
         var values = args.ToArray();
         AgentOptions = new(
-            ReadIntegerOption(values, "--max-output-bytes", 16 * 1024),
+            ReadIntegerOption(values, "--max-output-bytes", 65_536),
             ReadIntegerOption(values, "--max-cell-chars", 512));
         Command = values.FirstOrDefault(value => !value.StartsWith("-", StringComparison.Ordinal))?.ToLowerInvariant() ?? "unknown";
         if (HasOutputValue(values, "ndjson"))

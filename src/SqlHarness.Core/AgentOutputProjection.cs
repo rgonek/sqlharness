@@ -47,7 +47,7 @@ public static class AgentEnvelopeSchema
 }
 
 /// <summary>Presentation-only bounds for the opt-in agent response.</summary>
-public sealed record AgentOutputOptions(int MaximumBytes = 16 * 1024, int MaximumCellCharacters = 512);
+public sealed record AgentOutputOptions(int MaximumBytes = 65_536, int MaximumCellCharacters = 512);
 
 /// <summary>Creates bounded, lower-priority-detail projections without changing source reports.</summary>
 public static class AgentOutputProjection
@@ -66,7 +66,7 @@ public static class AgentOutputProjection
             .ThenByDescending(pair => pair.Value.Max)
             .ThenBy(pair => pair.Key, StringComparer.Ordinal);
 
-    public static object? Project(object? report, int maximumCellCharacters, int detailLimit, out int omittedItems, int maximumBytes = 16 * 1024)
+    public static object? Project(object? report, int maximumCellCharacters, int detailLimit, out int omittedItems, int maximumBytes = 65_536)
     {
         omittedItems = 0;
         var omissions = 0;

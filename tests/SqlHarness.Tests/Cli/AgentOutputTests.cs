@@ -16,6 +16,26 @@ public sealed class AgentOutputTests
     private readonly ITestOutputHelper _testOutput;
 
     public AgentOutputTests(ITestOutputHelper testOutput) => _testOutput = testOutput;
+
+    [Fact]
+    public void Agent_output_default_budget_is_shared_by_cli_options_and_capabilities()
+    {
+        const int expectedBytes = 65536;
+
+        Assert.Equal(expectedBytes, new AgentOutputOptions().MaximumBytes);
+        Assert.Equal(expectedBytes, new QueryCommand.Settings().MaxOutputBytes);
+        Assert.Equal(expectedBytes, new PlanCommand.Settings().MaxOutputBytes);
+        Assert.Equal(expectedBytes, new ArtifactCommand.Settings().MaxOutputBytes);
+
+        var output = new OutputContext(new StringWriter());
+        output.Configure(["query", "--output", "agent"]);
+        Assert.Equal(expectedBytes, output.AgentOptions.MaximumBytes);
+
+        var advertised = Assert.IsType<int>(SqlHarnessCapabilitiesProvider.Get().Limits["agentOutputBytes"]
+            .GetType().GetProperty("defaultValue")?.GetValue(SqlHarnessCapabilitiesProvider.Get().Limits["agentOutputBytes"]));
+        Assert.Equal(expectedBytes, advertised);
+    }
+
     [Fact]
     public async Task Agent_success_uses_a_versioned_single_document_envelope()
     {
@@ -965,7 +985,7 @@ public sealed class AgentOutputTests
         new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "query",
             new OutputCaptureWriter(output), new AgentOutputOptions());
 
-        Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(output.ToString()), 1, 16384);
+        Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(output.ToString()), 1, 65536);
         using var json = JsonDocument.Parse(output.ToString());
         var result = json.RootElement.GetProperty("result");
         QueryShapeFixtures.AssertAccounted(result, report);
@@ -1003,7 +1023,7 @@ public sealed class AgentOutputTests
         new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "query",
             new OutputCaptureWriter(output), new AgentOutputOptions());
 
-        Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(output.ToString()), 1, 16384);
+        Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(output.ToString()), 1, 65536);
         using var json = JsonDocument.Parse(output.ToString());
         var truncation = json.RootElement.GetProperty("truncation");
         Assert.InRange(truncation.GetProperty("detailLimit").GetInt32(), 1, 49);

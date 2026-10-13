@@ -14,7 +14,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: IN_PROGRESS
 - Priority: P1
 - Effort: M
 - Risk: MEDIUM (shared projection for MCP and CLI agent output; wire contract version bump)

@@ -54,9 +54,8 @@ public sealed class McpScope
     public IReadOnlyList<string> InputRoots { get; }
 
     /// <summary>
-    /// Frozen process-wide cap for one serialized tool response in UTF-8
-    /// bytes. Tool calls resolve their effective budget against it and may
-    /// only lower it.
+    /// Frozen process-wide ceiling for one tool response in UTF-8 bytes.
+    /// Calls may raise or lower their default budget within this ceiling.
     /// </summary>
     public int MaxResultBytes { get; }
 
