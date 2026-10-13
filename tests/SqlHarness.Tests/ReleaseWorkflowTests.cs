@@ -8,34 +8,52 @@ public sealed class ReleaseWorkflowTests
     public void Release_build_is_gated_by_the_reusable_ci_workflow()
     {
         var workflow = File.ReadAllText(FindRepositoryFile(".github", "workflows", "release.yml"));
-        var buildJob = Regex.Match(
-            workflow,
-            @"(?ms)^  build:\r?\n(?<body>.*?)(?=^  \w+:|\z)").Groups["body"].Value;
 
-        Assert.Contains("uses: ./.github/workflows/ci.yml", workflow, StringComparison.Ordinal);
-        Assert.NotEmpty(buildJob);
-        Assert.Matches(@"(?m)^    needs:\s*gate\s*$", buildJob);
+        AssertReleaseBuildIsGated(workflow);
+    }
+
+    [Fact]
+    public void Release_build_contract_rejects_a_gate_job_that_does_not_call_ci()
+    {
+        const string workflow = """
+            jobs:
+              gate:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: echo no reusable CI
+              build:
+                needs: gate
+            """;
+
+        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertReleaseBuildIsGated(workflow));
     }
 
     [Fact]
     public void Release_write_permission_is_scoped_to_the_release_job()
     {
         var workflow = File.ReadAllText(FindRepositoryFile(".github", "workflows", "release.yml"));
-        var releaseJob = Regex.Match(
-            workflow,
-            @"(?ms)^  release:\r?\n(?<body>.*?)(?=^\S|\z)").Groups["body"].Value;
-        var topLevelPermissions = Regex.Match(
-            workflow,
-            @"(?ms)^permissions:\r?\n(?<body>(?:^  .*\r?\n)+)").Groups["body"].Value;
-        var outsideReleaseJob = Regex.Replace(
-            workflow,
-            @"(?ms)^  release:\r?\n.*?(?=^\S|\z)",
-            string.Empty);
 
-        Assert.Matches(@"(?m)^  contents:\s*read\s*$", topLevelPermissions);
-        Assert.NotEmpty(releaseJob);
-        Assert.Matches(@"(?m)^    permissions:\r?\n      contents:\s*write\s*$", releaseJob);
-        Assert.DoesNotMatch(@"(?m)^\s*contents:\s*write\s*$", outsideReleaseJob);
+        AssertReleaseWritePermissionIsScoped(workflow);
+    }
+
+    [Fact]
+    public void Release_permission_contract_rejects_a_later_write_enabled_job()
+    {
+        const string workflow = """
+            permissions:
+              contents: read
+            jobs:
+              release:
+                permissions:
+                  contents: write
+                steps: []
+              audit:
+                permissions:
+                  contents: write
+                steps: []
+            """;
+
+        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertReleaseWritePermissionIsScoped(workflow));
     }
 
     [Fact]
@@ -45,10 +63,25 @@ public sealed class ReleaseWorkflowTests
         {
             var workflow = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
 
-            Assert.Matches(
-                @"(?m)^\s*- uses: actions/checkout@[^\r\n]*\r?\n\s+with:\r?\n\s+persist-credentials: false\s*$",
-                workflow);
+            AssertEveryCheckoutDisablesPersistedCredentials(workflow);
         }
+    }
+
+    [Fact]
+    public void Checkout_contract_rejects_an_additional_checkout_without_credential_hardening()
+    {
+        const string workflow = """
+            jobs:
+              build:
+                steps:
+                  - uses: actions/checkout@v4
+                    with:
+                      persist-credentials: false
+                  - name: Fetch another source
+                    uses: actions/checkout@v4
+            """;
+
+        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertEveryCheckoutDisablesPersistedCredentials(workflow));
     }
 
     [Fact]
@@ -128,6 +161,61 @@ public sealed class ReleaseWorkflowTests
             @"(?ms)os:\s*" + Regex.Escape(os) + @"\r?\n\s*rid:\s*" + Regex.Escape(rid) + @"\b");
 
         Assert.True(pair.Success, $"The build matrix must publish {rid} on its native runner {os}.");
+    }
+
+    private static void AssertReleaseBuildIsGated(string workflow)
+    {
+        var jobs = ExtractJobs(workflow);
+        var gateJob = jobs.GetValueOrDefault("gate") ?? string.Empty;
+        var buildJob = jobs.GetValueOrDefault("build") ?? string.Empty;
+
+        Assert.NotEmpty(gateJob);
+        Assert.Matches(@"(?m)^    uses:\s*\./\.github/workflows/ci\.yml\s*$", gateJob);
+        Assert.NotEmpty(buildJob);
+        Assert.Matches(@"(?m)^    needs:\s*gate\s*$", buildJob);
+    }
+
+    private static void AssertReleaseWritePermissionIsScoped(string workflow)
+    {
+        var jobs = ExtractJobs(workflow);
+        var releaseJob = jobs.GetValueOrDefault("release") ?? string.Empty;
+        var topLevelPermissions = Regex.Match(
+            workflow,
+            @"(?ms)^permissions:\r?\n(?<body>(?:^  .*\r?\n)+)").Groups["body"].Value;
+
+        Assert.Matches(@"(?m)^  contents:\s*read\s*$", topLevelPermissions);
+        Assert.NotEmpty(releaseJob);
+        Assert.Matches(@"(?m)^    permissions:\r?\n      contents:\s*write\s*$", releaseJob);
+        foreach (var (jobName, jobBody) in jobs)
+        {
+            if (!string.Equals(jobName, "release", StringComparison.Ordinal))
+            {
+                Assert.DoesNotMatch(@"(?m)^\s*contents:\s*write\s*$", jobBody);
+            }
+        }
+    }
+
+    private static Dictionary<string, string> ExtractJobs(string workflow)
+    {
+        var jobsBody = Regex.Match(workflow, @"(?ms)^jobs:\r?\n(?<body>.*)\z").Groups["body"].Value;
+        return Regex.Matches(jobsBody, @"(?ms)^  (?<name>[\w-]+):\r?\n(?<body>.*?)(?=^  [\w-]+:\r?\n|\z)")
+            .ToDictionary(match => match.Groups["name"].Value, match => match.Groups["body"].Value, StringComparer.Ordinal);
+    }
+
+    private static void AssertEveryCheckoutDisablesPersistedCredentials(string workflow)
+    {
+        var steps = Regex.Matches(workflow, @"(?ms)^      - (?<body>.*?)(?=^      - |\z)")
+            .Select(match => match.Groups["body"].Value)
+            .Where(body => Regex.IsMatch(body, @"(?m)^\s*uses:\s*actions/checkout@"))
+            .ToArray();
+
+        Assert.NotEmpty(steps);
+        foreach (var step in steps)
+        {
+            Assert.Matches(
+                @"(?ms)^\s+with:\r?\n(?:(?!^      - ).*\r?\n)*?\s+persist-credentials:\s*false\s*$",
+                step);
+        }
     }
 
     private static void AssertReleaseJobContract(string releaseJob)
