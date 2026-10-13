@@ -93,6 +93,25 @@ public sealed partial class DocsSyncTests
         Assert.Contains("`planShapeStable`", skill, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Workflow_cost_docs_pin_provenance_measurements_legacy_and_dry_run_accounting()
+    {
+        var mcp = ReadRepositoryFile("docs", "mcp.md");
+        var readme = ReadRepositoryFile("README.md");
+        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
+
+        Assert.Contains("parent_operation_ref", readme, StringComparison.Ordinal);
+        Assert.Contains("Journal schema v7 adds nullable", readme, StringComparison.Ordinal);
+        Assert.Contains("byte columns already introduced in v3", readme, StringComparison.Ordinal);
+        Assert.Contains("single-measured-execution-output", readme, StringComparison.Ordinal);
+        Assert.Contains("Dry-run responses contribute to output bytes and call counts", readme, StringComparison.Ordinal);
+        Assert.Contains("legacy-artifact-volume", readme, StringComparison.Ordinal);
+        Assert.Contains("dry_run` flag keeps it out of database-execution counts", mcp, StringComparison.Ordinal);
+        Assert.Contains("Capabilities discovery, `tools/list`", mcp, StringComparison.Ordinal);
+        Assert.Contains("Journal v7 records nullable producer references", skill, StringComparison.Ordinal);
+        Assert.Contains("not actual token savings", skill, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("README.md")]
     [InlineData("skills/sqlharness/SKILL.md")]

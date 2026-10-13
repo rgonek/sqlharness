@@ -38,7 +38,7 @@ Exit codes: `-1` (255 on POSIX): unhandled CLI error in text mode, including com
 | [Result equivalence and compact output](README.md#result-equivalence-and-compact-output) | Choosing `--compare-results`, `--compare-nullability` or reading a summary |
 | [Safety contract](README.md#safety-contract) | A rejection, a mutation request, redaction or artifact handling |
 | [docs/mcp.md](docs/mcp.md) | Running or calling `sqlharness mcp serve` (fixed or request scope; no explicit persistent mutations) |
-| [Activity journal](README.md#activity-journal-and-savings) | Questions about what is recorded locally |
+| [Activity journal](README.md#activity-journal-and-workflow-output-cost) | Questions about what is recorded locally |
 
 ## Changing SQLHarness
 

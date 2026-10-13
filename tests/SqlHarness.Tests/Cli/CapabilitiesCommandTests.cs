@@ -35,9 +35,6 @@ public sealed class CapabilitiesCommandTests
         var journalStorage = limits.GetProperty("activityJournalStorage");
         Assert.Equal("credential-redacted error messages are stored by default", journalStorage.GetProperty("errorMessages").GetString());
         Assert.Equal("journal.storeSensitive", journalStorage.GetProperty("sqlTextAndPlans").GetString());
-        Assert.Equal("raw_bytes and emitted_bytes are authoritative; estimated tokens use utf8-bytes-div-4",
-            journalStorage.GetProperty("outputCost").GetProperty("measurements").GetString());
-        Assert.Equal("not journaled", journalStorage.GetProperty("outputCost").GetProperty("coverage").GetProperty("capabilities").GetString());
         Assert.Equal(1000000, limits.GetProperty("comparisonRowCapPerRun").GetProperty("max").GetInt32());
         Assert.Equal(2000000, limits.GetProperty("comparisonUniqueFingerprintBudgetPerCell").GetProperty("max").GetInt32());
         foreach (var engineOnly in new[] { "sessionTempStatements", "qstopTop", "qstopWindowMinutes", "indexesTop" })
