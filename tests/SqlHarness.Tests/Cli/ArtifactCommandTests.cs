@@ -177,7 +177,7 @@ public sealed class ArtifactCommandTests
         Assert.DoesNotContain("sessionTempStatements", limits.EnumerateObject().Select(property => property.Name));
         var read = limits.GetProperty("artifactRead");
         Assert.Equal(
-            ["summary", "metrics", "operators", "statements", "matrix-cells"],
+            ["summary", "metrics", "operators", "statements", "matrix-cells", "plan"],
             read.GetProperty("sections").EnumerateArray().Select(section => section.GetString()!).ToArray());
         Assert.Equal(1, read.GetProperty("manifestVersion").GetInt32());
     }

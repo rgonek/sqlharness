@@ -21,12 +21,32 @@ public sealed class ArtifactCommand(OutputContext output, Renderer renderer) : A
         public string? Id { get; set; }
 
         [CommandOption("--section <SECTION>")]
-        [Description("Safe section to read: summary, metrics, operators, statements, or matrix-cells.")]
+        [Description("Safe section to read: summary, metrics, operators, statements, matrix-cells, or plan.")]
         public string? Section { get; set; }
 
         [CommandOption("--cursor <INDEX>")]
-        [Description("Optional zero-based continuation cursor for matrix-cells pages.")]
+        [Description("Optional zero-based continuation cursor for paged artifact sections.")]
         public int? Cursor { get; set; }
+
+        [CommandOption("--variant <VARIANT>")]
+        [Description("Plan variant: baseline, candidate, or query.")]
+        public string? Variant { get; set; }
+
+        [CommandOption("--statement <INDEX>")]
+        [Description("Zero-based statement ordinal for section=plan.")]
+        public int Statement { get; set; }
+
+        [CommandOption("--parameter-set <NAME>")]
+        [Description("Measure parameter set for section=plan.")]
+        public string? ParameterSet { get; set; }
+
+        [CommandOption("--repetition <INDEX>")]
+        [Description("Measured repetition to select for section=plan.")]
+        public int? Repetition { get; set; }
+
+        [CommandOption("--include-text")]
+        [Description("Include bounded statement text and predicates for section=plan.")]
+        public bool IncludeText { get; set; }
 
         [CommandOption("--json")]
         [Description("Write the safe section as JSON.")]
@@ -73,14 +93,19 @@ public sealed class ArtifactCommand(OutputContext output, Renderer renderer) : A
         }
 
         if (string.IsNullOrWhiteSpace(settings.Id) || string.IsNullOrWhiteSpace(settings.Section))
-            return Invalid("artifact requires an artifact id and --section summary|metrics|operators|statements|matrix-cells.", mode);
-        if (settings.Cursor is < 0 || settings.Cursor is not null && !string.Equals(settings.Section, ArtifactReader.MatrixCellsSection, StringComparison.Ordinal))
-            return Invalid("--cursor is a nonnegative offset available only with --section matrix-cells.", mode);
+            return Invalid("artifact requires an artifact id and --section summary|metrics|operators|statements|matrix-cells|plan.", mode);
+        if (settings.Cursor is < 0 || settings.Cursor is not null && settings.Section is not (ArtifactReader.MatrixCellsSection or ArtifactReader.StatementsSection or ArtifactReader.OperatorsSection or ArtifactReader.PlanSection))
+            return Invalid("--cursor is a nonnegative offset for a paged artifact section.", mode);
 
         object result;
         try
         {
-            result = ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, settings.Id, settings.Section, cursor: settings.Cursor);
+            if (settings.Section != ArtifactReader.PlanSection && (settings.Variant is not null || settings.Statement != 0 || settings.ParameterSet is not null || settings.Repetition is not null || settings.IncludeText))
+                return Invalid("Plan selectors are only valid with --section plan.", mode);
+            var selector = settings.Section == ArtifactReader.PlanSection && (settings.Variant is not null || settings.Statement != 0 || settings.ParameterSet is not null || settings.Repetition is not null)
+                ? new ArtifactPlanSelector(settings.Variant ?? string.Empty, settings.Statement, settings.ParameterSet, settings.Repetition) : null;
+            result = ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, settings.Id, settings.Section, cursor: settings.Cursor,
+                planSelector: selector, includeText: settings.IncludeText);
         }
         catch (ArtifactReadException exception)
         {

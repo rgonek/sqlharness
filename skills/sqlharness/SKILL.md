@@ -59,7 +59,7 @@ sqlharness plan .\artifacts\orders.sqlplan --json
 
 **Missing indexes** (SQL Server): `indexes` before proposing an index; creating one goes through the mutation gate ([README Commands](../../README.md#commands)).
 
-**Saved benchmarks**: `artifact <id> --section summary` rereads a `measure`/`compare` result offline ([README Commands](../../README.md#commands)).
+**Saved benchmarks**: `artifact <id> --section summary` rereads a benchmark offline. Use `--section plan --variant baseline|candidate|query` with optional `--statement`, `--parameter-set`, and measured `--repetition` to inspect stored nodes in bounded continuation pages; the default is the last measured repetition. `--include-text` opts into bounded statement text and predicates. Shape stability covers saved operator/object/index/predicate structure only, never timing or row counts ([README Commands](../../README.md#commands)).
 
 **MCP.** `sqlharness mcp serve` exposes the tools to one local stdio client and runs no explicit persistent mutations; PostgreSQL TEMP setup can still reach a persistent-writing user function, so use a least-privilege principal ([details](../../docs/mcp.md#no-persistent-mutations)). In request scope the operator's `--allow-profile` list approves profile switches; different variables still need a new user request. Start, scope and limits: [docs/mcp.md](../../docs/mcp.md).
 

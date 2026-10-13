@@ -105,7 +105,7 @@ public static partial class McpOperationMapper
     private static readonly HashSet<string> SnapshotActions = new(StringComparer.OrdinalIgnoreCase)
         { "capture", "diff" };
     private static readonly HashSet<string> ArtifactSections = new(StringComparer.OrdinalIgnoreCase)
-        { "summary", "metrics", "operators", "statements", "matrix-cells" };
+        { "summary", "metrics", "operators", "statements", "matrix-cells", "plan" };
 
     private static readonly TimeSpan DefaultWatchInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan DefaultWatchMaxDuration = TimeSpan.FromMinutes(15);
@@ -672,15 +672,20 @@ public static partial class McpOperationMapper
         return new SqlHarnessPlanOperation(text, new OutputFootprint(bytes, lines));
     }
 
-    public static object ReadArtifactSection(McpScope scope, string? id, string? section, int? cursor = null)
+    public static object ReadArtifactSection(McpScope scope, string? id, string? section, int? cursor = null,
+        string? variant = null, int statement = 0, string? parameterSet = null, int? repetition = null, bool includeText = false)
     {
         ArgumentNullException.ThrowIfNull(scope);
         if (section is null || !ArtifactSections.Contains(section))
-            throw new McpMappingException("Unknown artifact section. Supported sections: summary, metrics, operators, statements, matrix-cells.");
+            throw new McpMappingException("Unknown artifact section. Supported sections: summary, metrics, operators, statements, matrix-cells, plan.");
         // The shared manifest reader pins ids to single directory names under
         // the artifact root and serves only scope-owned safe sections: no raw
         // plans, queries.jsonl, SQL, or snapshot cells can leave through it.
-        return ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id ?? string.Empty, section, scope.Owner, cursor);
+        if (section != ArtifactReader.PlanSection && (variant is not null || statement != 0 || parameterSet is not null || repetition is not null || includeText))
+            throw new McpMappingException("Plan selectors are only valid for the plan section.");
+        var selector = section == ArtifactReader.PlanSection && (variant is not null || statement != 0 || parameterSet is not null || repetition is not null)
+            ? new ArtifactPlanSelector(variant ?? string.Empty, statement, parameterSet, repetition) : null;
+        return ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id ?? string.Empty, section, scope.Owner, cursor, selector, includeText);
     }
 
     /// <summary>

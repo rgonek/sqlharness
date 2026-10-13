@@ -9,6 +9,23 @@ namespace SqlHarness.Tests;
 public sealed class PlanDistillerTests
 {
     [Fact]
+    public void Stored_plan_reader_accepts_additive_properties_and_rejects_incomplete_nodes()
+    {
+        const string json = """{"statements":[{"sql":"SELECT 1","root":{"physicalOp":"Scan","future":true}}],"futureVersion":2}""";
+        var plan = StoredPlanReader.Read(json);
+        Assert.Equal("Scan", Assert.Single(plan.Statements).Root.PhysicalOp);
+        Assert.Empty(plan.Statements[0].Root.Children);
+        Assert.Throws<JsonException>(() => StoredPlanReader.Read("""{"statements":[{"root":{"children":[]}}]}"""));
+    }
+
+    [Fact]
+    public void Stored_plan_reader_enforces_artifact_file_size_limit()
+    {
+        var oversized = "{\"statements\":[]}" + new string(' ', checked((int)ArtifactReader.MaxReportBytes));
+        Assert.Throws<JsonException>(() => StoredPlanReader.Read(oversized));
+    }
+
+    [Fact]
     public void Distills_statement_tree_runtime_warnings_and_missing_indexes()
     {
         var plan = PlanDistiller.Distill(Fixture("distiller-sample.sqlplan"));

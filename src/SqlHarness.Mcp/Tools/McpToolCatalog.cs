@@ -297,17 +297,27 @@ public sealed class McpToolHandlers(
         [Description("Artifact directory name from a saved report.")]
         string id,
         [Description("Safe section to read.")]
-        [AllowedValues("summary", "metrics", "operators", "statements", "matrix-cells")]
+        [AllowedValues("summary", "metrics", "operators", "statements", "matrix-cells", "plan")]
         string section,
-        [Description("Zero-based continuation cursor for matrix-cells and statements pages.")]
+        [Description("Zero-based continuation cursor for matrix-cells, statements, operators, and plan nodes.")]
         int? cursor = null,
+        [Description("Plan variant: baseline, candidate, or query.")]
+        string? variant = null,
+        [Description("Zero-based statement ordinal for section=plan.")]
+        int statement = 0,
+        [Description("Measure parameter set for section=plan.")]
+        string? parameterSet = null,
+        [Description("Measured repetition to select for section=plan.")]
+        int? repetition = null,
+        [Description("Return bounded statement text and predicates in section=plan.")]
+        bool includeText = false,
         CancellationToken ct = default) =>
         RunAsync("sqlharness_artifact", ctx, _ =>
         {
-            ThrowIfUnknown(ctx, ["id", "section", "cursor"]);
+            ThrowIfUnknown(ctx, ["id", "section", "cursor", "variant", "statement", "parameterSet", "repetition", "includeText"]);
             return Task.FromResult(new SqlHarnessOutcome(
                 SqlHarnessExitCode.Success,
-                McpOperationMapper.ReadArtifactSection(scope, id, section, cursor),
+                McpOperationMapper.ReadArtifactSection(scope, id, section, cursor, variant, statement, parameterSet, repetition, includeText),
                 null));
         }, ct);
 
@@ -584,7 +594,7 @@ public static class McpToolCatalog
             Tool(ToolNames[6], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
             Tool(ToolNames[7], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it. No force flag.", null, false, null, true),
             Tool(ToolNames[8], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
-            Tool(ToolNames[9], nameof(McpToolHandlers.ArtifactAsync), "Read one safe section (summary, metrics, operators, statements, matrix-cells) of a saved benchmark artifact.", true, false, true, false),
+            Tool(ToolNames[9], nameof(McpToolHandlers.ArtifactAsync), "Read a safe section (summary, metrics, operators, statements, matrix-cells, or plan) of a saved benchmark artifact.", true, false, true, false),
         };
         if (tools.Count != McpLimits.MaxTools)
             throw new InvalidOperationException($"The MCP catalog must serve exactly {McpLimits.MaxTools} tools.");

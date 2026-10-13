@@ -145,11 +145,16 @@ public sealed class McpRequestToolHandlers(
 
     public Task<CallToolResult> ArtifactAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Artifact directory name from a saved report.")] string id,
-        [Description("Safe section to read.")][AllowedValues("summary", "metrics", "operators", "statements", "matrix-cells")] string section,
+        [Description("Safe section to read.")][AllowedValues("summary", "metrics", "operators", "statements", "matrix-cells", "plan")] string section,
         [Description("Request target scope.")] McpRequestScopeArgument scope,
-        [Description("Zero-based continuation cursor for matrix-cells and statements pages.")] int? cursor = null,
+        [Description("Zero-based continuation cursor for matrix-cells, statements, operators, and plan nodes.")] int? cursor = null,
+        [Description("Plan variant: baseline, candidate, or query.")] string? variant = null,
+        [Description("Zero-based statement ordinal for section=plan.")] int statement = 0,
+        [Description("Measure parameter set for section=plan.")] string? parameterSet = null,
+        [Description("Measured repetition to select for section=plan.")] int? repetition = null,
+        [Description("Return bounded statement text and predicates in section=plan.")] bool includeText = false,
         CancellationToken ct = default) =>
-        Invoke(ctx, "sqlharness_artifact", scope, handler => handler.ArtifactAsync(ctx, id, section, cursor, ct));
+        Invoke(ctx, "sqlharness_artifact", scope, handler => handler.ArtifactAsync(ctx, id, section, cursor, variant, statement, parameterSet, repetition, includeText, ct));
 
     private Task<CallToolResult> Invoke(RequestContext<CallToolRequestParams> ctx, string command, McpRequestScopeArgument suppliedScope,
         Func<McpToolHandlers, Task<CallToolResult>> invoke)
