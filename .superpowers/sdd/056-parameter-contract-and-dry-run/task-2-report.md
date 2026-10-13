@@ -38,4 +38,18 @@ Final `dotnet test SqlHarness.sln`:
 
 ## Self-review and concerns
 
-The production change is limited to unsized string binding; explicit sized bindings still use the declared size. `git diff --check` passed. One behavior follows the supplied constraints but deserves confirmation during integration: inputs longer than 4000 for `char` and `nchar` receive `Size = -1`, although SQL Server fixed-width `char`/`nchar` types do not have a MAX declaration. No database call was made, per task scope.
+The production change is limited to unsized string binding; explicit sized bindings still use the declared size. `git diff --check` passed. No database call was made, per task scope.
+
+## Fixed-width correction after initial commit
+
+The integration ruling in `progress.md` clarified that SQL Server fixed-width types must never receive MAX metadata. `char` and `nchar` now use size 4000 through length 4000; longer valid `char` values use their actual size through 8000; `char` above 8000 and `nchar` above 4000 are rejected with parameter identity. Explicit sizes remain unchanged. This follows Microsoft's [char and varchar](https://learn.microsoft.com/en-us/sql/t-sql/data-types/char-and-varchar-transact-sql?view=sql-server-ver17) and [nchar and nvarchar](https://learn.microsoft.com/en-us/sql/t-sql/data-types/nchar-and-nvarchar-transact-sql?view=sql-server-ver17) limits.
+
+**Correction RED** — `dotnet test tests/SqlHarness.Tests --no-restore --filter "FullyQualifiedName~SqlParameterParser"`
+
+Failed as expected before the fixed-width correction: `Failed: 4, Passed: 91, Total: 95`. The new cases showed that long fixed-width values received size -1 and over-limit values were accepted.
+
+**Correction GREEN** — same command after the correction.
+
+Passed after adding the exact 4000-length fixed-width boundary cases: `Failed: 0, Passed: 97, Skipped: 0, Total: 97`.
+
+The full-solution counts above were produced before this fixed-width correction. The controller directed that only the focused parser tests be rerun after the correction; the broader gates remain for integration review.

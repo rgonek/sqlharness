@@ -64,13 +64,33 @@ public class SqlParameterParserTests
     [Theory]
     [InlineData("nvarchar")]
     [InlineData("varchar")]
-    [InlineData("nchar")]
-    [InlineData("char")]
-    public void Unsized_strings_use_max_above_the_default(string type)
+    public void Unsized_variable_width_strings_use_max_above_the_default(string type)
     {
         var parameter = SqlParameterParser.Bind(new SqlHarnessParameterInput("Name", type, new string('x', 4001)));
 
         Assert.Equal(-1, parameter.Size);
+    }
+
+    [Theory]
+    [InlineData(4001)]
+    [InlineData(8000)]
+    public void Unsized_char_above_the_default_keeps_its_actual_size(int length)
+    {
+        var parameter = SqlParameterParser.Bind(new SqlHarnessParameterInput("Name", "char", new string('x', length)));
+
+        Assert.Equal(length, parameter.Size);
+    }
+
+    [Theory]
+    [InlineData("char", 8001)]
+    [InlineData("nchar", 4001)]
+    public void Unsized_fixed_width_strings_reject_values_above_the_sql_limit(string type, int length)
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            SqlParameterParser.Bind(new SqlHarnessParameterInput("Name", type, new string('x', length))));
+
+        Assert.Equal("Name", exception.ParameterName);
+        Assert.Equal(type, exception.ExpectedType);
     }
 
     [Theory]
@@ -92,6 +112,8 @@ public class SqlParameterParserTests
     [Theory]
     [InlineData("nvarchar", 4000)]
     [InlineData("varchar", 4000)]
+    [InlineData("nchar", 4000)]
+    [InlineData("char", 4000)]
     [InlineData(null, 4000)]
     public void Strings_at_the_default_boundary_keep_the_application_default(string? type, int expected)
     {
