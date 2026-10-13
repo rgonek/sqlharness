@@ -317,6 +317,9 @@ public static class AgentOutputProjection
                         {
                             Statements = selected,
                             OmittedStatements = statements.OmittedStatements + Math.Max(0, statements.Statements.Count - selected.Length),
+                            Continuation = selected.Length < statements.Statements.Count
+                                ? statements.Cursor + selected.Length
+                                : null,
                         };
                     }
                 case ArtifactMatrixCellsSection matrixCells:

@@ -293,7 +293,7 @@ public sealed class McpToolHandlers(
         [Description("Safe section to read.")]
         [AllowedValues("summary", "metrics", "operators", "statements", "matrix-cells")]
         string section,
-        [Description("Optional zero-based continuation cursor for matrix-cells pages.")]
+        [Description("Zero-based continuation cursor for matrix-cells and statements pages.")]
         int? cursor = null,
         CancellationToken ct = default) =>
         RunAsync("sqlharness_artifact", ctx, _ =>

@@ -86,6 +86,38 @@ public class ArtifactReaderTests
     }
 
     [Fact]
+    public void Statements_section_accepts_a_continuation_cursor()
+    {
+        using var temp = new TempDirectory();
+        const string id = "statements-pages";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"statements\"]}");
+        var statements = Enumerable.Range(0, 300).Select(ordinal => new ArtifactStatementMetric(
+            "baseline", null, null, ordinal, new string('a', 64), 1, 2, 1, [])).ToArray();
+        File.WriteAllText(Path.Combine(directory, "statements.json"), JsonSerializer.Serialize(
+            new ArtifactStatementsSection(id, "compare", statements, 0),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
+        var first = Assert.IsType<ArtifactStatementsSection>(ArtifactReader.ReadSection(temp.Path, id, "statements"));
+        Assert.Equal(300, first.Statements.Count);
+        var projected = Assert.IsType<ArtifactStatementsSection>(AgentOutputProjection.Project(first, 512, 128, out _, 65536));
+        Assert.Equal(128, projected.Statements.Count);
+        Assert.Equal(128, projected.Continuation);
+
+        var second = Assert.IsType<ArtifactStatementsSection>(ArtifactReader.ReadSection(temp.Path, id, "statements", cursor: 128));
+        Assert.Equal(128, second.Statements[0].StatementOrdinal);
+        var projectedSecond = Assert.IsType<ArtifactStatementsSection>(AgentOutputProjection.Project(second, 512, 128, out _, 65536));
+        Assert.Equal(256, projectedSecond.Continuation);
+
+        var last = Assert.IsType<ArtifactStatementsSection>(ArtifactReader.ReadSection(temp.Path, id, "statements", cursor: 256));
+        var projectedLast = Assert.IsType<ArtifactStatementsSection>(AgentOutputProjection.Project(last, 512, 128, out _, 65536));
+        Assert.Equal(44, projectedLast.Statements.Count);
+        Assert.Null(projectedLast.Continuation);
+    }
+
+    [Fact]
     public void Matrix_case_inventory_pages_preserve_the_agent_case_schema_and_cursor()
     {
         using var temp = new TempDirectory();

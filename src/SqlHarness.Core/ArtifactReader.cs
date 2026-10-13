@@ -79,7 +79,14 @@ public sealed record ArtifactStatementsSection(
     string ArtifactId,
     string ArtifactKind,
     IReadOnlyList<ArtifactStatementMetric> Statements,
-    int OmittedStatements);
+    int OmittedStatements)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Continuation { get; init; }
+
+    [JsonIgnore]
+    public int Cursor { get; init; }
+}
 
 /// <summary>One safe reference to a saved compare cell, addressed only by its artifact id.</summary>
 /// <summary>A bounded page of saved case outcomes in the same schema as agent matrix inventories.</summary>
@@ -148,7 +155,7 @@ public static partial class ArtifactReader
                 $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, matrix-cells.",
                 SqlHarnessExitCode.Safety);
 
-        if (cursor is < 0 || cursor is not null && section != MatrixCellsSection)
+        if (cursor is < 0 || cursor is not null && section is not (MatrixCellsSection or StatementsSection))
             throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
 
         var directory = ResolveDirectory(root, artifactId);
@@ -167,7 +174,7 @@ public static partial class ArtifactReader
             SummarySection => ReadSummary(directory, artifactId, manifest),
             MetricsSection => ReadMetrics(directory, artifactId, manifest),
             OperatorsSection => ReadOperators(directory, artifactId, manifest),
-            StatementsSection => ReadStatements(directory, artifactId, manifest),
+            StatementsSection => ReadStatements(directory, artifactId, manifest, cursor ?? 0),
             MatrixCellsSection => ReadMatrixCells(directory, artifactId, cursor ?? 0),
             _ => throw new ArtifactReadException(
                 $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, matrix-cells.",
@@ -355,7 +362,7 @@ public static partial class ArtifactReader
         return new ArtifactOperatorsSection(artifactId, manifest.ArtifactKind, operators);
     }
 
-    private static ArtifactStatementsSection ReadStatements(string directory, string artifactId, ArtifactManifest manifest)
+    private static ArtifactStatementsSection ReadStatements(string directory, string artifactId, ArtifactManifest manifest, int cursor)
     {
         var path = Path.Combine(directory, StatementsFileName);
         if (!IsPlainFile(path))
@@ -369,7 +376,16 @@ public static partial class ArtifactReader
                 || section.Statements.Any(statement => statement is null || statement.StatementHash is null
                     || statement.Variant is null || statement.TopOperators is null))
                 throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
-            return section with { ArtifactId = artifactId, ArtifactKind = manifest.ArtifactKind };
+            if (cursor > section.Statements.Count)
+                throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
+            return section with
+            {
+                ArtifactId = artifactId,
+                ArtifactKind = manifest.ArtifactKind,
+                Statements = section.Statements.Skip(cursor).ToArray(),
+                Continuation = null,
+                Cursor = cursor,
+            };
         }
         catch (ArtifactReadException)
         {

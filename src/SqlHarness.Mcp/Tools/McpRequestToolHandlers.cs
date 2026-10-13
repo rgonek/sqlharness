@@ -144,7 +144,7 @@ public sealed class McpRequestToolHandlers(
         [Description("Artifact directory name from a saved report.")] string id,
         [Description("Safe section to read.")][AllowedValues("summary", "metrics", "operators", "statements", "matrix-cells")] string section,
         [Description("Request target scope.")] McpRequestScopeArgument scope,
-        [Description("Optional zero-based continuation cursor for matrix-cells pages.")] int? cursor = null,
+        [Description("Zero-based continuation cursor for matrix-cells and statements pages.")] int? cursor = null,
         CancellationToken ct = default) =>
         Invoke(ctx, "sqlharness_artifact", scope, handler => handler.ArtifactAsync(ctx, id, section, cursor, ct));
 
