@@ -2427,19 +2427,21 @@ public sealed class PostgresSafetyTests
     [Theory]
     // One statement that still fails denies the batch, however relaxed the DML
     // target next to it is.
-    [InlineData("INSERT INTO unproven VALUES (1); TRUNCATE unproven")]
-    [InlineData("INSERT INTO unproven VALUES (1); TRUNCATE unproven CASCADE")]
-    [InlineData("INSERT INTO unproven VALUES (1); TRUNCATE unproven RESTART IDENTITY")]
-    [InlineData("INSERT INTO unproven VALUES (1); DROP TABLE unproven")]
-    [InlineData("INSERT INTO unproven VALUES (1); CREATE INDEX ix ON unproven (id)")]
-    [InlineData("INSERT INTO unproven VALUES (1); INSERT INTO public.unproven VALUES (1)")]
-    [InlineData("INSERT INTO unproven VALUES (1); INSERT INTO pg_temp_3.unproven VALUES (1)")]
-    [InlineData("INSERT INTO unproven VALUES (1); SELECT 1 INTO public.copy")]
-    public void A_denied_statement_next_to_a_deferred_write_still_denies_the_batch(string sql)
+    [InlineData("INSERT INTO unproven VALUES (1); TRUNCATE unproven", nameof(SqlSafetyReason.NonTemporaryWrite))]
+    [InlineData("INSERT INTO unproven VALUES (1); TRUNCATE unproven CASCADE", nameof(SqlSafetyReason.UnsupportedStatement))]
+    [InlineData("INSERT INTO unproven VALUES (1); TRUNCATE unproven RESTART IDENTITY", nameof(SqlSafetyReason.UnsupportedStatement))]
+    [InlineData("INSERT INTO unproven VALUES (1); DROP TABLE unproven", nameof(SqlSafetyReason.UnsupportedStatement))]
+    [InlineData("INSERT INTO unproven VALUES (1); CREATE INDEX ix ON unproven (id)", nameof(SqlSafetyReason.UnsupportedStatement))]
+    [InlineData("INSERT INTO unproven VALUES (1); INSERT INTO public.unproven VALUES (1)", nameof(SqlSafetyReason.MutationNotAllowed))]
+    [InlineData("INSERT INTO unproven VALUES (1); INSERT INTO pg_temp_3.unproven VALUES (1)", nameof(SqlSafetyReason.MutationNotAllowed))]
+    [InlineData("INSERT INTO unproven VALUES (1); SELECT 1 INTO public.copy", nameof(SqlSafetyReason.SelectIntoNotAllowed))]
+    public void A_denied_statement_next_to_a_deferred_write_still_denies_the_batch(string sql, string expected)
     {
         var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
         Assert.False(decision.Allowed);
+        Assert.Equal(expected, decision.Reason.ToString());
     }
+
     // 031 Step 1: the offline parse that classification rests on. With
     // standard_conforming_strings=on the backslash is an ordinary character, so the
     // literal ends at the second quote and the text is two statements. Under the

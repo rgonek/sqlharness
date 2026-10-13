@@ -1,4 +1,4 @@
-using SqlParser;
+﻿using SqlParser;
 using SqlParser.Ast;
 
 namespace SqlHarness.Core.Postgres;
