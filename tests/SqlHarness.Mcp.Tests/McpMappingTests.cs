@@ -1317,6 +1317,35 @@ public sealed class McpMappingTests : IDisposable
     }
 
     [Fact]
+    public async Task Artifact_handler_maps_plan_selectors_and_rejects_them_for_other_sections()
+    {
+        WriteArtifactTargetsFile();
+        var scope = ArtifactScope(ArtifactScopeProfile);
+        var id = WriteMappingArtifact("handler-own-plan-artifact", ArtifactOwnerJson(scope));
+        var directory = Path.Combine(SqlHarnessPaths.CompareDir, id);
+        Directory.CreateDirectory(Path.Combine(directory, "plans"));
+        const string planName = "baseline-001-000-000.plan.json";
+        File.WriteAllText(Path.Combine(directory, "plans", planName),
+            "{\"statements\":[{\"sql\":\"SELECT plan\",\"root\":{\"physicalOp\":\"Seek\",\"predicate\":\"knownpred\"}}]}");
+        File.WriteAllText(Path.Combine(directory, "runs.jsonl"), JsonSerializer.Serialize(new
+        {
+            variant = "baseline", repetition = 1, planJsonFiles = new[] { planName },
+        }));
+        var handlers = new McpToolHandlers(scope, new RecordingModule());
+
+        var result = await handlers.ArtifactAsync(null!, id, "plan", variant: "baseline", statement: 0,
+            repetition: 1, includeText: true);
+        var payload = TextOf(result);
+        Assert.False(result.IsError == true);
+        Assert.Contains("explicit", payload, StringComparison.Ordinal);
+        Assert.Contains("knownpred", payload, StringComparison.Ordinal);
+        Assert.Contains("SELECT plan", payload, StringComparison.Ordinal);
+
+        var invalid = await handlers.ArtifactAsync(null!, id, "summary", variant: "baseline");
+        Assert.True(invalid.IsError == true);
+    }
+
+    [Fact]
     public async Task Artifact_handler_reports_error_for_foreign_scope()
     {
         WriteArtifactTargetsFile();

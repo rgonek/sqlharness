@@ -10,6 +10,51 @@ public class ArtifactReaderTests
 {
     private const string Secret = "SECRET-9f2c-artifact-content-must-not-leak";
 
+    [Theory]
+    [InlineData("measure", null)]
+    [InlineData("measure-set", "set-a")]
+    public void Plan_section_maps_public_query_variant_to_stored_measure_runs(string artifactKind, string? parameterSet)
+    {
+        using var temp = new TempDirectory();
+        var id = "plan-" + artifactKind;
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(Path.Combine(directory, "plans"));
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), JsonSerializer.Serialize(new
+        {
+            manifestVersion = 1, artifactKind, reportFile = "report.json", sections = new[] { "plan" },
+        }));
+        const string planName = "measure-001-000-000.plan.json";
+        File.WriteAllText(Path.Combine(directory, "plans", planName),
+            "{\"statements\":[{\"root\":{\"physicalOp\":\"Scan\"}}]}");
+        File.WriteAllText(Path.Combine(directory, "runs.jsonl"), JsonSerializer.Serialize(new
+        {
+            variant = "measure", repetition = 1, parameterSet, planJsonFiles = new[] { planName },
+        }));
+
+        var section = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("query", ParameterSet: parameterSet)));
+
+        Assert.Equal("query", section.Variant);
+        Assert.Equal(parameterSet, section.ParameterSet);
+        Assert.Equal(1, section.Repetition);
+        Assert.Equal("Scan", Assert.Single(section.Nodes).Operator.PhysicalOp);
+    }
+
+    [Fact]
+    public void Plan_section_refuses_non_object_runs_index_rows_as_corrupt_evidence()
+    {
+        using var temp = new TempDirectory();
+        const string id = "plan-non-object-run";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"plan\"]}");
+        File.WriteAllText(Path.Combine(directory, "runs.jsonl"), "[]");
+
+        Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("baseline")));
+    }
+
     [Fact]
     public void Plan_section_selects_measured_repetitions_and_paginates_every_flat_node()
     {

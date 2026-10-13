@@ -411,6 +411,9 @@ public static partial class ArtifactReader
             _ => false,
         };
         if (!validVariant) throw new ArtifactReadException("The artifact plan variant is invalid.", SqlHarnessExitCode.Safety);
+        var storedVariant = selector.Variant == "query" && manifest.ArtifactKind is (MeasureKind or MeasureSetKind)
+            ? "measure"
+            : selector.Variant;
         var path = Path.Combine(directory, "runs.jsonl");
         if (!IsPlainFile(path)) throw new ArtifactReadException("Artifact plan index is invalid.", SqlHarnessExitCode.Safety);
         try
@@ -421,10 +424,12 @@ public static partial class ArtifactReader
             {
                 using var doc = JsonDocument.Parse(line, new JsonDocumentOptions { MaxDepth = 32 });
                 var row = doc.RootElement;
+                if (row.ValueKind != JsonValueKind.Object)
+                    throw new ArtifactReadException("Artifact plan index is invalid.", SqlHarnessExitCode.Safety);
                 if (!TryString(row, "variant", out var variant) || !TryInt(row, "repetition", out var repetition))
                     throw new ArtifactReadException("Artifact plan index is invalid.", SqlHarnessExitCode.Safety);
                 var set = TryString(row, "parameterSet", out var parameterSet) ? parameterSet : null;
-                if (variant != selector.Variant || selector.ParameterSet is not null
+                if (variant != storedVariant || selector.ParameterSet is not null
                     && !string.Equals(set, selector.ParameterSet, StringComparison.Ordinal)) continue;
                 if (!TryGetProperty(row, "planJsonFiles", out var fileList) || fileList.ValueKind != JsonValueKind.Array)
                     throw new ArtifactReadException("Artifact plan index is incomplete.", SqlHarnessExitCode.Safety);

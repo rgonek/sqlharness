@@ -199,6 +199,46 @@ public sealed class McpTokenBudgetTests
     }
 
     [Fact]
+    public void Artifact_plan_pages_fit_the_mcp_budget_and_continue_by_nodes_returned()
+    {
+        const int budget = 4096;
+        const int sourcePageSize = 32;
+        var allNodes = Enumerable.Range(0, 100).Select(index => new ArtifactPlanNode(
+            index == 0 ? "0" : "0/" + (index - 1), index == 0 ? null : "0",
+            new PlanNode("Operator-" + new string('x', 90), "Logical-" + new string('y', 60),
+                "dbo.Object-" + new string('z', 40), "IX-" + new string('i', 40), 1, 1, 1, 0.1, null, [], []))).ToArray();
+        var seen = new List<string>();
+        var offset = 0;
+        while (true)
+        {
+            var pageNodes = allNodes.Skip(offset).Take(sourcePageSize).ToArray();
+            var section = new ArtifactPlanSection("artifact", "baseline", null, 0, 1, 1,
+                "last-measured", [1], null, allNodes.Length, pageNodes,
+                offset + pageNodes.Length < allNodes.Length ? offset + pageNodes.Length : null)
+            { Cursor = offset };
+            var result = McpResultAdapter.Adapt(
+                new SqlHarnessOutcome(SqlHarnessExitCode.Success, section, null),
+                "sqlharness_artifact", new McpResultBudget(budget, 64));
+            ResultTextBytes(result, budget);
+            var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+            using var document = JsonDocument.Parse(text);
+            Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
+            var projection = document.RootElement.GetProperty("result");
+            var returned = projection.GetProperty("nodes").EnumerateArray()
+                .Select(node => node.GetProperty("nodePath").GetString()!).ToArray();
+            Assert.NotEmpty(returned);
+            seen.AddRange(returned);
+            if (!projection.TryGetProperty("continuation", out var continuation) || continuation.ValueKind == JsonValueKind.Null)
+                break;
+            var next = continuation.GetInt32();
+            Assert.Equal(offset + returned.Length, next);
+            offset = next;
+        }
+        Assert.Equal(100, seen.Count);
+        Assert.Equal(100, seen.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
     public void Unicode_cells_fit_the_default_budget_with_escaping_counted()
     {
         var text = string.Concat(Enumerable.Repeat("語😀", 10000));
