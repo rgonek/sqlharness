@@ -25,3 +25,9 @@ All checks ran against the Plan 057 worktree. Restore completed normally without
 | Linux `pwsh ./scripts/verify-linux.ps1` | `verify-linux: OK`; Core 3,865 passed, MCP 401 passed / 3 skipped, UI 148 passed |
 
 The Linux gate synced and tested the exact implementation commit above. Linux published-x64 MCP smoke passed; three environment/platform-dependent MCP cases were skipped. Logs and the Task 3 report are preserved in the ignored `.superpowers/sdd/057-tsql-control-flow-classification/` workspace.
+
+## Final whole-branch review fixes
+
+The final whole-branch review found three setup integration gaps and no classifier-boundary issues. The fixes share a recursive traversal for only the already accepted SQL Server `IF`/`BEGIN … END` shapes; atomic blocks remain opaque and denied. Setup splitting now detects nested local-temp creation after the parameter boundary, declaration collection follows nested setup/measured statements while preserving source offsets, and nested local declarations are excluded from typed-parameter detection. PostgreSQL behavior and public wording are unchanged. Details and RED/GREEN evidence are in `.superpowers/sdd/057-tsql-control-flow-classification/final-fix-report.md`.
+
+The added regressions reproduced four failures before the fix and passed with the focused SQL safety/setup suite afterward (449 passed, 0 failed). `dotnet format SqlHarness.sln --no-restore --include src/SqlHarness.Core/SetupSqlExecution.cs src/SqlHarness.Core/SqlSafety.cs tests/SqlHarness.Tests/SetupSqlExecutionTests.cs` completed, and `dotnet build SqlHarness.sln -warnaserror --no-restore` succeeded with 0 warnings and 0 errors. Final Windows and Linux gates are pending against the committed fix.

@@ -560,7 +560,7 @@ internal sealed class SqlSafetyClassifier
         var scalars = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var tables = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var nonTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var statement in Flatten(batch.Statements))
+        foreach (var statement in SqlServerControlFlowTraversal.Flatten(batch.Statements))
         {
             if (statement is DeclareVariableStatement declare)
             {
@@ -583,25 +583,6 @@ internal sealed class SqlSafetyClassifier
         }
 
         return new BatchVariableScope(scalars, tables, nonTables);
-
-        static IEnumerable<TSqlStatement> Flatten(IEnumerable<TSqlStatement> statements)
-        {
-            foreach (var statement in statements)
-            {
-                yield return statement;
-                var nested = statement switch
-                {
-                    IfStatement { ElseStatement: { } elseStatement } ifStatement =>
-                        new TSqlStatement[] { ifStatement.ThenStatement, elseStatement },
-                    IfStatement ifStatement => new TSqlStatement[] { ifStatement.ThenStatement },
-                    BeginEndBlockStatement block => block.StatementList.Statements,
-                    _ => Array.Empty<TSqlStatement>(),
-                };
-
-                foreach (var inner in Flatten(nested))
-                    yield return inner;
-            }
-        }
     }
 
     private static bool HasUnprovenTableVariableUse(TSqlFragment statement, BatchVariableScope scope)
@@ -1823,6 +1804,34 @@ internal static class SqlParameterReferenceValidator
     }
 }
 
+/// <summary>
+/// Walks only the T-SQL control-flow shapes explicitly accepted by the SQL
+/// Server safety classifier. Unsupported control flow remains opaque here and
+/// is rejected by classification before these scope helpers are used.
+/// </summary>
+internal static class SqlServerControlFlowTraversal
+{
+    internal static IEnumerable<TSqlStatement> Flatten(IEnumerable<TSqlStatement> statements)
+    {
+        foreach (var statement in statements)
+        {
+            yield return statement;
+            var nested = statement switch
+            {
+                IfStatement { ElseStatement: { } elseStatement } ifStatement =>
+                    new TSqlStatement[] { ifStatement.ThenStatement, elseStatement },
+                IfStatement ifStatement => new TSqlStatement[] { ifStatement.ThenStatement },
+                BeginEndAtomicBlockStatement => Array.Empty<TSqlStatement>(),
+                BeginEndBlockStatement block => block.StatementList.Statements,
+                _ => Array.Empty<TSqlStatement>(),
+            };
+
+            foreach (var inner in Flatten(nested))
+                yield return inner;
+        }
+    }
+}
+
 internal sealed class SqlSetupVariableScopeException() : SqlHarnessSafetyException(
     "A variable declared in setup is referenced by a benchmark batch. Setup variables do not cross into benchmark batches.");
 
@@ -1876,7 +1885,7 @@ internal static class SqlSetupVariableReferenceValidator
     private static Dictionary<string, int> CollectDeclaredVariablePositions(TSqlBatch batch)
     {
         var positions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var statement in batch.Statements)
+        foreach (var statement in SqlServerControlFlowTraversal.Flatten(batch.Statements))
         {
             if (statement is DeclareVariableStatement declare)
             {
