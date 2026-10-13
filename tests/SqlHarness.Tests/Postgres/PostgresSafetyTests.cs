@@ -2175,6 +2175,59 @@ public sealed class PostgresSafetyTests
         Assert.Null(decision.Detail);
     }
 
+    // 031 Step 1: the offline parse that classification rests on. With
+    // standard_conforming_strings=on the backslash is an ordinary character, so the
+    // literal ends at the second quote and the text is two statements. Under the
+    // opposite assumption the literal would run unterminated to end of input and the
+    // parse would fail, so a successful two-statement parse is the proof the session
+    // gate needs before it can require the parameter to be on.
+    [Fact]
+    public void Parser_splits_a_standard_backslash_string_into_two_statements()
+    {
+        Assert.True(PostgresDocument.TryParse("SELECT 'a\\'; SELECT 1 --'", out var statements));
+        Assert.NotNull(statements);
+        Assert.Equal(2, statements!.Count);
+    }
+
+    // 031 Step 1: the session gate reads the server parameter, so an explicit on in
+    // any casing is the only accepted value.
+    [Theory]
+    [InlineData("on")]
+    [InlineData("ON")]
+    [InlineData("On")]
+    public void EnsureStandardStrings_passes_when_on(string value)
+    {
+        var parameters = new Dictionary<string, string> { ["standard_conforming_strings"] = value };
+
+        PostgresSessionScope.EnsureStandardStrings(parameters);
+    }
+
+    [Fact]
+    public void EnsureStandardStrings_rejects_off()
+    {
+        var parameters = new Dictionary<string, string> { ["standard_conforming_strings"] = "off" };
+
+        var exception = Assert.Throws<SqlHarnessSafetyException>(
+            () => PostgresSessionScope.EnsureStandardStrings(parameters));
+
+        Assert.Equal(
+            "PostgreSQL standard_conforming_strings must be on; SQLHarness classifies SQL under standard string rules.",
+            exception.Message);
+    }
+
+    [Fact]
+    public void EnsureStandardStrings_rejects_a_missing_parameter()
+    {
+        var parameters = new Dictionary<string, string>();
+
+        var exception = Assert.Throws<SqlHarnessSafetyException>(
+            () => PostgresSessionScope.EnsureStandardStrings(parameters));
+
+        Assert.Equal(
+            "PostgreSQL standard_conforming_strings must be on; SQLHarness classifies SQL under standard string rules.",
+            exception.Message);
+    }
+
     // Query usage without approval, then compare setup, where an unproven DML
     // target is reported as NonTemporaryWrite.
     private void AssertDeniedInBothUsages(string sql, string expected)
