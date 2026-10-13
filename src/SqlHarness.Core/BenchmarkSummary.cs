@@ -82,7 +82,8 @@ public sealed record AgentMatrixCase(
     AgentMedianMetrics Baseline,
     AgentMedianMetrics Candidate,
     AgentMedianMetrics Delta,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    string? ParameterValue = null);
 
 /// <summary>Optional per-case diagnostics; matrix-wide identity and method live on the envelope.</summary>
 public sealed record CompareMatrixCellDetailContent(
@@ -197,9 +198,9 @@ public static class BenchmarkSummaryProjector
     }
 
     public static AgentMatrixCase ProjectCase(CompareMatrixCellReport cell) =>
-        ProjectCase(cell.Index, SafeArtifactId(cell.Compare.ArtifactDirectory), cell.Compare);
+        ProjectCase(cell.Index, SafeArtifactId(cell.Compare.ArtifactDirectory), cell.Compare, cell.ParameterValue);
 
-    public static AgentMatrixCase ProjectCase(int index, string? artifactId, SqlHarnessCompareReport compare)
+    public static AgentMatrixCase ProjectCase(int index, string? artifactId, SqlHarnessCompareReport compare, string? parameterValue = null)
     {
         var equivalence = compare.Equivalence;
         var availability = equivalence.Mode == ResultComparisonMode.Off
@@ -219,7 +220,8 @@ public static class BenchmarkSummaryProjector
                 Delta(baseline.CpuMilliseconds, candidate.CpuMilliseconds),
                 Delta(baseline.ElapsedMilliseconds, candidate.ElapsedMilliseconds),
                 Delta(baseline.LogicalReads, candidate.LogicalReads)),
-            compare.Baseline.Warnings.Concat(compare.Candidate.Warnings).Distinct(StringComparer.Ordinal).ToArray());
+            compare.Baseline.Warnings.Concat(compare.Candidate.Warnings).Distinct(StringComparer.Ordinal).ToArray(),
+            parameterValue);
     }
 
     public static CompareMatrixCellDetail ProjectDetail(int index, SqlHarnessCompareReport compare)

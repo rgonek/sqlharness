@@ -399,7 +399,7 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
         var index = new
         {
             cases = orderedCells.Select((cell, position) => BenchmarkSummaryProjector.ProjectCase(
-                cell.Index, Path.GetFileName(directories[position]), cell.Compare)).ToArray(),
+                cell.Index, Path.GetFileName(directories[position]), cell.Compare, cell.ParameterValue)).ToArray(),
         };
 
         var indexPath = Path.Combine(firstDirectory, "matrix-cells.json");

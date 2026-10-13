@@ -739,6 +739,23 @@ public class CompareMatrixTests
         Assert.All(runs, run => Assert.Contains(run.Variant, new[] { "baseline", "candidate" }));
     }
 
+    [Fact]
+    public async Task Matrix_case_inventory_retains_parameter_values_when_detail_is_limited()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var outcome = await Module(new MatrixSessionFactory(), artifacts)
+            .ExecuteAsync(TypedMatrix("1", null, "20") with { TypedMatrix = new("BatchSize", "int", ["1", null, "20"]) });
+        var report = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
+
+        var projected = Assert.IsType<CompareMatrixBenchmarkSummary>(
+            AgentOutputProjection.Project(report, 128, detailLimit: 0, out _, maximumBytes: 16_384));
+
+        Assert.Equal(3, projected.Cases.Count);
+        Assert.Equal(["1", null, "20"], projected.Cases.Select(matrixCase => matrixCase.ParameterValue));
+        Assert.Empty(projected.Details);
+        Assert.Equal(3, projected.OmittedDetailCount);
+    }
+
     private static SqlHarnessCompareMatrixOperation TypedMatrix(params string?[] values) =>
         Matrix(string.Empty, parameters: []) with
         {

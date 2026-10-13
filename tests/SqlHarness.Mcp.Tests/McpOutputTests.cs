@@ -328,7 +328,8 @@ public sealed class McpOutputTests
                         + JsonSerializer.Serialize(owner, new JsonSerializerOptions(JsonSerializerDefaults.Web)) + "}");
                     File.WriteAllText(Path.Combine(directory, "report.json"),
                         JsonSerializer.Serialize(BuildCompareReport($"cell-{i}"), new JsonSerializerOptions(JsonSerializerDefaults.Web)));
-                    return new CompareMatrixCellReport(i, i.ToString(), BuildCompareReport(new string('w', 5000), directory));
+                    var parameterValue = i switch { 0 => "1", 1 => null, 2 => "20", _ => i.ToString() };
+                    return new CompareMatrixCellReport(i, parameterValue, BuildCompareReport(new string('w', 5000), directory));
                 })
                 .ToArray();
             var matrix = new SqlHarnessCompareMatrixReport("batch", "int", cells);
@@ -358,6 +359,7 @@ public sealed class McpOutputTests
                 root, matrixArtifactId!, "matrix-cells", owner with { Profile = "foreign-profile" }, projected.GetProperty("continuation").GetInt32()));
             Assert.Equal("The artifact is not available in the current scope.", foreign.Message);
             var recovered = new List<int>();
+            var recoveredValues = new List<string?>();
             foreach (var matrixCase in projectedCases.EnumerateArray())
             {
                 var id = matrixCase.GetProperty("artifactId").GetString();
@@ -365,6 +367,9 @@ public sealed class McpOutputTests
                 var section = ArtifactReader.ReadSection(root, id, "metrics", owner);
                 Assert.IsType<ArtifactMetricsSection>(section);
                 recovered.Add(matrixCase.GetProperty("index").GetInt32());
+                recoveredValues.Add(matrixCase.GetProperty("parameterValue").ValueKind == JsonValueKind.Null
+                    ? null
+                    : matrixCase.GetProperty("parameterValue").GetString());
             }
 
             var cursor = projected.TryGetProperty("continuation", out var continuation) && continuation.ValueKind == JsonValueKind.Number
@@ -384,6 +389,9 @@ public sealed class McpOutputTests
                     var section = ArtifactReader.ReadSection(root, artifactId, "metrics", owner);
                     Assert.IsType<ArtifactMetricsSection>(section);
                     recovered.Add(matrixCase.GetProperty("index").GetInt32());
+                    recoveredValues.Add(matrixCase.GetProperty("parameterValue").ValueKind == JsonValueKind.Null
+                        ? null
+                        : matrixCase.GetProperty("parameterValue").GetString());
                 }
                 cursor = pageEnvelope.GetProperty("result").TryGetProperty("continuation", out var next) && next.ValueKind == JsonValueKind.Number
                     ? next.GetInt32()
@@ -391,6 +399,8 @@ public sealed class McpOutputTests
             }
 
             Assert.Equal(Enumerable.Range(0, 100), recovered.Order());
+            Assert.Equal(Enumerable.Range(0, 100).Select(i => i switch { 0 => "1", 1 => null, 2 => "20", _ => i.ToString() }),
+                recovered.Order().Select(index => recoveredValues[recovered.IndexOf(index)]));
         }
         finally
         {
