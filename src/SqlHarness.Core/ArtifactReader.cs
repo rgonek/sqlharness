@@ -436,7 +436,6 @@ public static partial class ArtifactReader
                 matching.Add((repetition, set, fileList.EnumerateArray().Select(file => file.ValueKind == JsonValueKind.String
                     ? file.GetString()! : throw new ArtifactReadException("Artifact plan index is invalid.", SqlHarnessExitCode.Safety)).ToArray()));
             }
-            matching = matching.Where(item => item.Files.Length > 0).ToList();
             if (manifest.ArtifactKind == MeasureSetKind && selector.ParameterSet is null && matching.Count > 0)
             {
                 var selectedSet = matching.Select(item => item.ParameterSet).Where(item => item is not null)
@@ -450,6 +449,8 @@ public static partial class ArtifactReader
             var selectedRun = matching.FirstOrDefault(item => item.Repetition == selectedRepetition);
             if (selectedRun.Files is null)
                 throw new ArtifactReadException($"Repetition {selectedRepetition} is unavailable; available repetitions: {string.Join(", ", repetitions)}.", SqlHarnessExitCode.Safety);
+            if (selectedRun.Files.Length == 0)
+                throw new ArtifactReadException($"Repetition {selectedRepetition} has no saved plan evidence; available measured repetitions: {string.Join(", ", repetitions)}.", SqlHarnessExitCode.Safety);
             var plans = ReadRunPlans(directory, selectedRun.Files);
             var statements = plans.SelectMany(plan => plan.Statements).ToArray();
             if (statements.Length == 0)

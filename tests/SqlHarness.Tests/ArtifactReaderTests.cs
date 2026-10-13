@@ -174,6 +174,45 @@ public class ArtifactReaderTests
     }
 
     [Fact]
+    public void Plan_section_keeps_measured_runs_without_saved_plan_evidence_in_inventory()
+    {
+        using var temp = new TempDirectory();
+        const string id = "stored-plan-gap";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(Path.Combine(directory, "plans"));
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"plan\"]}");
+        var runLines = new List<string>();
+        foreach (var repetition in new[] { 1, 2 })
+        {
+            var name = $"baseline-{repetition:D3}-000-000.plan.json";
+            File.WriteAllText(Path.Combine(directory, "plans", name),
+                "{\"statements\":[{\"root\":{\"physicalOp\":\"Scan\",\"children\":[]}}]}");
+            runLines.Add(JsonSerializer.Serialize(new
+            {
+                variant = "baseline", repetition, planJsonFiles = new[] { name }
+            }));
+        }
+        runLines.Add(JsonSerializer.Serialize(new
+        {
+            variant = "baseline", repetition = 3, planJsonFiles = Array.Empty<string>()
+        }));
+        File.WriteAllText(Path.Combine(directory, "runs.jsonl"), string.Join(Environment.NewLine, runLines));
+
+        var defaultSelection = Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("baseline")));
+        Assert.Contains("Repetition 3", defaultSelection.Message, StringComparison.Ordinal);
+        Assert.Contains("no saved plan evidence", defaultSelection.Message, StringComparison.OrdinalIgnoreCase);
+
+        var earlierSelection = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("baseline", Repetition: 2)));
+        Assert.Equal(2, earlierSelection.Repetition);
+        Assert.Equal(new[] { 1, 2, 3 }, earlierSelection.AvailableRepetitions);
+        Assert.Null(earlierSelection.PlanShapeStable);
+        Assert.NotEmpty(earlierSelection.EvidenceGaps);
+    }
+
+    [Fact]
     public void CompareWorkflow_SummaryMatchesSavedReport_WithoutRebenchmark()
     {
         using var temp = new TempDirectory();

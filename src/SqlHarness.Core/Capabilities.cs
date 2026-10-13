@@ -160,7 +160,7 @@ public static class SqlHarnessCapabilitiesProvider
                 new("snapshot", "Capture or diff a named result."),
                 new("qstop", "Rank SQL Server Query Store consumers."),
                 new("indexes", "Inspect SQL Server missing indexes."),
-                new("plan", "Distill a saved plan offline; bounded statements and predicates."),
+                new("plan", "Saved plan reads include measured runs with missing plans."),
                 new("artifact", "Read safe sections of a saved artifact offline."),
                 new("mcp", "Serve the Core tools to one MCP client over local stdio (mcp serve). File inputs require absolute paths under configured roots; UNC paths are rejected and reads are byte-bounded."),
             ],

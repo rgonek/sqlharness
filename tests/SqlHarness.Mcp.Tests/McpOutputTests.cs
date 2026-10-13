@@ -398,9 +398,9 @@ public sealed class McpOutputTests
                     : null;
             }
 
-            Assert.Equal(Enumerable.Range(0, 100), recovered.Order());
+            Assert.Equal(Enumerable.Range(0, 100), recovered);
             Assert.Equal(Enumerable.Range(0, 100).Select(i => i switch { 0 => "1", 1 => null, 2 => "20", _ => i.ToString() }),
-                recovered.Order().Select(index => recoveredValues[recovered.IndexOf(index)]));
+                recoveredValues);
         }
         finally
         {
