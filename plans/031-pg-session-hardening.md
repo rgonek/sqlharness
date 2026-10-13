@@ -102,10 +102,10 @@ On the opt-in playground (`scripts/setup-local-postgres.ps1`, `postgres:16`, whi
 
 ## Done criteria
 
-- [ ] PG tests and the full gate pass
-- [ ] `grep -n "standard_conforming_strings" src/SqlHarness.Core/Postgres` → match
-- [ ] Transport policy spec and AGENTS.md updated
-- [ ] `plans/README.md` row updated (state whether Step 4 ran)
+- [x] PG tests and the full gate pass
+- [x] `grep -n "standard_conforming_strings" src/SqlHarness.Core/Postgres` → match
+- [ ] Transport policy spec and AGENTS.md updated — **partly, by design**: the spec carries the new `## Session string lexing` section, but `AGENTS.md` was deliberately left untouched because it no longer hosts the PostgreSQL engine notes, so the rule sentence went into `README.md` (`### PostgreSQL engine notes`) instead. Nothing is missing from the contract: the map there already points at the README section.
+- [x] `plans/README.md` row updated (state whether Step 4 ran)
 
 ## STOP conditions
 
@@ -113,4 +113,4 @@ On the opt-in playground (`scripts/setup-local-postgres.ps1`, `postgres:16`, whi
 
 ## Maintenance notes
 
-- If the parser is upgraded or replaced (see plan 019 maintenance notes), re-run the Step 1.1 assumption test first.
+- If the parser is upgraded or replaced (see plan 019 maintenance notes), re-run the Step 1.1 assumption test first. That upgrade also requires re-verifying the `EnsureStandardStrings` call site in `NpgsqlSession.ExecuteReaderAsync` (`src/SqlHarness.Core/Postgres/NpgsqlSessionFactory.cs:135`): no offline test covers that call, so deleting it would leave the suite green.
