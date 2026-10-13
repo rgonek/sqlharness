@@ -50,3 +50,11 @@ Both final gates ran sequentially against code commit `e05d44d84f30ff620e7bed8e3
 | Linux `pwsh ./scripts/verify-linux.ps1` | `verify-linux: OK`; Core 3,870 passed / 0 skipped, MCP 401 passed / 3 skipped, UI 148 passed; build 0 warnings / 0 errors; format `--verify-no-changes` passed |
 
 The Windows and Linux logs, RED/GREEN evidence, all three task packets, and final reviews are archived under `D:/temp/sqlharness-plan057-evidence-20261013/`. Before Linux sync, the dedicated gate clone was confirmed clean with no untracked files; it was then synced to the exact fix commit. Final scoped review is clean and complete.
+
+## Local integration
+
+Plan 057 was merged locally into `main` as `9c6b663` (`Merge plan 057 T-SQL control flow classification`). The merge had no conflicts and retained the intervening Plan 032 changes and plan-queue refresh. The existing uncommitted PostgreSQL safety-test edit on the main checkout was preserved and excluded from verification by testing the committed merge in the clean Plan 057 worktree.
+
+Both post-merge gates passed against `9c6b663`, sequentially. Windows `pwsh ./scripts/verify.ps1` returned `verify: OK`: Core 3,861 passed / 11 skipped; MCP 400 passed / 4 skipped; UI 148 passed; build 0 warnings / 0 errors. Linux returned `verify-linux: OK`: Core 3,868 passed / 4 skipped; MCP 401 passed / 3 skipped; UI 148 passed; build 0 warnings / 0 errors. The changed platform skip counts reflect the merged Plan 032 test conditions.
+
+Linux used an isolated ext4 clone at `/home/rgone/src/sqlharness-gate-plan057-9c6b663`. The temporary script `D:/temp/sqlharness-plan057-evidence-20261013/verify-linux-post-merge.ps1` changes only the repository-root anchor and gate-clone path from `scripts/verify-linux.ps1`; all verification stages are unchanged. Its sync log confirms `HEAD is now at 9c6b663`. Logs are `post-merge-windows.log` and `post-merge-linux.log` in the same evidence directory. This closeout changes documentation only; no push or live database operation was performed.
