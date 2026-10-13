@@ -7,6 +7,39 @@ namespace SqlHarness.Tests;
 
 public class SqlParameterParserTests
 {
+    [Theory]
+    [InlineData("ClientId")]
+    [InlineData("@ClientId")]
+    public void Typed_parameter_accepts_an_optional_at_sign(string name)
+    {
+        var bound = SqlParameterParser.Bind(new SqlHarnessParameterInput(name, "int", "7"));
+        Assert.Equal("@ClientId", bound.Name);
+    }
+
+    [Theory]
+    [InlineData("@")]
+    [InlineData("@@ClientId")]
+    [InlineData("1Client")]
+    [InlineData("")]
+    public void Invalid_names_are_rejected_with_the_name(string name)
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            SqlParameterParser.Bind(new SqlHarnessParameterInput(name, "int", "7")));
+        Assert.Contains($"'{name}'", exception.Message);
+    }
+
+    [Fact]
+    public void Duplicate_parameter_names_are_detected_after_normalization()
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            SqlParameterParser.Bind([
+                new SqlHarnessParameterInput("ClientId", "int", "7"),
+                new SqlHarnessParameterInput("@clientid", "int", "8"),
+            ]));
+
+        Assert.Equal("Duplicate SQL parameter '@clientid'.", exception.Message);
+    }
+
     [Fact]
     public void Parse_binds_untyped_value_as_bounded_nvarchar()
     {
@@ -288,7 +321,6 @@ public class SqlParameterParserTests
     [InlineData("name")]
     [InlineData("=value")]
     [InlineData("bad-name=value")]
-    [InlineData("@name=value")]
     [InlineData("name:xml=<x />")]
     [InlineData("name:int=not-an-int")]
     [InlineData("name:bit=perhaps")]

@@ -1206,10 +1206,9 @@ internal static partial class SqlParameterParser
         // A null entry has no name. Declaration text cannot produce one.
         if (input is null)
             throw new SqlHarnessSafetyException("Invalid SQL parameter name.");
-        var name = input.Name;
+        var name = SqlParameterNames.Normalize(input.Name);
         var type = input.Type;
         var value = input.Value;
-        ValidateName(name);
 
         if (type is null)
         {
@@ -1690,18 +1689,6 @@ internal static partial class SqlParameterParser
         "false" or "0" => false,
         _ => throw new FormatException("Invalid bit value."),
     };
-
-    private static void ValidateName(string name)
-    {
-        // A structured caller can hand over a null name; declaration text cannot.
-        if (name is null || !NamePattern().IsMatch(name))
-        {
-            throw new SqlHarnessSafetyException("Invalid SQL parameter name.");
-        }
-    }
-
-    [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant)]
-    private static partial Regex NamePattern();
 
     [GeneratedRegex(@"^(decimal|numeric)\((?<precision>[0-9]{1,2}),(?<scale>[0-9]{1,2})\)$", RegexOptions.CultureInvariant)]
     private static partial Regex DecimalOrNumericTypePattern();

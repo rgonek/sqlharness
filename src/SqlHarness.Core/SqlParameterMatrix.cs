@@ -1,7 +1,6 @@
 using System.Data;
 using System.Data.SqlTypes;
 using System.Globalization;
-using System.Text.RegularExpressions;
 
 using Microsoft.SqlServer.Types;
 
@@ -21,7 +20,7 @@ internal sealed record ParsedParameterMatrix(
     public SqlParameterMatrixSpec Spec => new(Name, Type, DisplayValues);
 }
 
-internal static partial class SqlParameterMatrixParser
+internal static class SqlParameterMatrixParser
 {
     /// <summary>
     /// Legacy text adapter kept for compatibility and characterization tests only (012/final
@@ -51,11 +50,11 @@ internal static partial class SqlParameterMatrixParser
 
         var equalsIndex = input.IndexOf('=');
         if (equalsIndex < 0)
-            throw new SqlHarnessSafetyException(MatrixError(TryCanonicalName(input), "must use name:type=value,value syntax."));
+            throw new SqlHarnessSafetyException(MatrixError(TryCanonicalNameFromDeclaration(input), "must use name:type=value,value syntax."));
 
         var declaration = input[..equalsIndex];
         var valueText = input[(equalsIndex + 1)..];
-        var parameterName = TryCanonicalName(declaration);
+        var parameterName = TryCanonicalNameFromDeclaration(declaration);
         var typeSeparator = declaration.IndexOf(':');
         if (typeSeparator <= 0 || typeSeparator == declaration.Length - 1)
             throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires a type."));
@@ -85,7 +84,7 @@ internal static partial class SqlParameterMatrixParser
         ArgumentNullException.ThrowIfNull(matrix);
         ArgumentNullException.ThrowIfNull(fixedParameterNames);
 
-        var parameterName = matrix.Name is not null && NamePattern().IsMatch(matrix.Name) ? "@" + matrix.Name : null;
+        var parameterName = TryCanonicalName(matrix.Name);
         if (string.IsNullOrEmpty(matrix.Type))
             throw new SqlHarnessSafetyException(MatrixError(parameterName, "requires a type."));
 
@@ -130,23 +129,31 @@ internal static partial class SqlParameterMatrixParser
     }
 
     // Same ASCII name rule as SqlParameterParser, so a rejection can name the parameter before ParseOne runs.
-    private static string? TryCanonicalName(string text)
+    private static string? TryCanonicalName(string? text)
     {
-        var typeSeparator = text.IndexOf(':');
-        var name = typeSeparator < 0 ? text : text[..typeSeparator];
-        if (name.Length == 0 || !NamePattern().IsMatch(name))
+        if (text is null)
             return null;
 
-        return "@" + name;
+        try
+        {
+            return "@" + SqlParameterNames.Normalize(text);
+        }
+        catch (SqlHarnessSafetyException)
+        {
+            return null;
+        }
+    }
+
+    private static string? TryCanonicalNameFromDeclaration(string text)
+    {
+        var typeSeparator = text.IndexOf(':');
+        return TryCanonicalName(typeSeparator < 0 ? text : text[..typeSeparator]);
     }
 
     private static string MatrixError(string? parameterName, string statement) =>
         parameterName is null
             ? "The --matrix option is invalid."
             : $"The --matrix option for SQL parameter '{parameterName}' {statement}";
-
-    [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant)]
-    private static partial Regex NamePattern();
 
     // SqlDbType, precision, scale, size, and the invariant typed value. Not the raw display text.
     // "o" keeps fractional seconds. Spatial WKT alone omits SRID, so the key includes both.

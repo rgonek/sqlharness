@@ -23,6 +23,19 @@ public sealed class ParameterSetFileReaderTests
     }
 
     [Fact]
+    public async Task ReadAsync_parameter_entry_accepts_at_prefixed_name_and_binds_canonically()
+    {
+        using var file = TempJson("""{"name":"date-set","parameters":["@Date:date=2026-06-30"]}""");
+
+        var set = await ParameterSetFileReader.ReadAsync(file.Path, CancellationToken.None);
+        var prepared = MeasureParameterSetValidator.Prepare(
+            [], [set], setupSql: null, querySql: "SELECT @Date AS Value");
+
+        Assert.Equal("@Date:date=2026-06-30", Assert.Single(set.Parameters));
+        Assert.Equal("@Date", Assert.Single(Assert.Single(prepared).Parameters).Name);
+    }
+
+    [Fact]
     public async Task ReadAsync_accepts_parameters_before_name_and_trailing_whitespace()
     {
         using var file = TempJson("""  {"parameters":["id:int=1","asOf:date=2026-06-30"],"name":"large-customer"}  """ + "\n\t");

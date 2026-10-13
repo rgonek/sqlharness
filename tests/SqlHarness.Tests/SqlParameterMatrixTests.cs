@@ -33,6 +33,15 @@ public class SqlParameterMatrixTests
     }
 
     [Fact]
+    public void Matrix_name_accepts_an_optional_at_sign()
+    {
+        var matrix = SqlParameterMatrixParser.Parse("@BatchSize:int=1,20", []);
+
+        Assert.Equal("@BatchSize", matrix.Name);
+        Assert.All(matrix.Values, value => Assert.Equal("@BatchSize", value.Name));
+    }
+
+    [Fact]
     public void Decimal_type_comma_is_not_a_value_separator()
     {
         using var _ = new TemporaryCulture("pl-PL");
@@ -209,7 +218,6 @@ public class SqlParameterMatrixTests
 
     [Theory]
     [InlineData("bad-name:int=1,2", "The --matrix option is invalid.")]
-    [InlineData("@BatchSize:int=1,2", "The --matrix option is invalid.")]
     [InlineData("BatchSize=1,2", "The --matrix option for SQL parameter '@BatchSize' requires a type.")]
     [InlineData("BatchSize:=1,2", "The --matrix option for SQL parameter '@BatchSize' requires a type.")]
     [InlineData("BatchSize:xml=1,2", "The --matrix option for SQL parameter '@BatchSize' is invalid.")]
@@ -296,10 +304,10 @@ public class SqlParameterMatrixTests
     [InlineData("name", "SQL parameter must use name=value, name:type=value, name:null, or name:type:null syntax.")]
     [InlineData(":null", "SQL parameter must use name=value, name:type=value, name:null, or name:type:null syntax.")]
     [InlineData("name:int:nil", "SQL parameter must use name=value, name:type=value, name:null, or name:type:null syntax.")]
-    [InlineData("=value", "Invalid SQL parameter name.")]
-    [InlineData("bad-name:int=1", "Invalid SQL parameter name.")]
-    [InlineData("bad-name:null", "Invalid SQL parameter name.")]
-    [InlineData("bad-name:int:null", "Invalid SQL parameter name.")]
+    [InlineData("=value", "Invalid SQL parameter name ''.")]
+    [InlineData("bad-name:int=1", "Invalid SQL parameter name 'bad-name'.")]
+    [InlineData("bad-name:null", "Invalid SQL parameter name 'bad-name'.")]
+    [InlineData("bad-name:int:null", "Invalid SQL parameter name 'bad-name'.")]
     [InlineData("name:xml=1", "Unsupported SQL parameter type 'xml'.")]
     [InlineData("name:xml:null", "Unsupported SQL parameter type 'xml'.")]
     [InlineData("name::null", "Unsupported SQL parameter type ''.")]
@@ -402,9 +410,8 @@ public class SqlParameterMatrixTests
     }
 
     [Theory]
-    [InlineData("a:b", "int", "1", "Invalid SQL parameter name.")]
-    [InlineData("a=b", null, "1", "Invalid SQL parameter name.")]
-    [InlineData("@a", "int", "1", "Invalid SQL parameter name.")]
+    [InlineData("a:b", "int", "1", "Invalid SQL parameter name 'a:b'.")]
+    [InlineData("a=b", null, "1", "Invalid SQL parameter name 'a=b'.")]
     [InlineData("a", "", "1", "Unsupported SQL parameter type ''.")]
     [InlineData("a", "int", "", "Invalid value '' for SQL parameter 'a' of type 'int'.")]
     [InlineData("a", "int", "private,audit", "Invalid value 'private,audit' for SQL parameter 'a' of type 'int'.")]
