@@ -257,6 +257,16 @@ public class ContractsTests
         Assert.Contains("Byte counts are not token counts", mcp, StringComparison.Ordinal);
         Assert.Contains("## Evidence scope", mcp, StringComparison.Ordinal);
         Assert.Contains("Not executed", mcp, StringComparison.Ordinal);
+
+        var dryRun = Section(mcp, "### Parameters and dry runs");
+        Assert.Contains("optional leading `@`", dryRun, StringComparison.Ordinal);
+        Assert.Contains("IfStatement at line 14", dryRun, StringComparison.Ordinal);
+        Assert.Contains("parameterSets", dryRun, StringComparison.Ordinal);
+        Assert.Contains("raw-token emission receipt", dryRun, StringComparison.Ordinal);
+        Assert.Contains("runtime artifact storage, authentication, connection identity, catalog contents or database permissions", dryRun, StringComparison.Ordinal);
+        Assert.Contains("plan 060 removes it", dryRun, StringComparison.Ordinal);
+        Assert.Contains("Dapper", Section(readme, "## Safety contract"), StringComparison.Ordinal);
+        Assert.Contains("Fixed-width `nchar`/`char`", Section(readme, "## Safety contract"), StringComparison.Ordinal);
     }
 
     [Fact]

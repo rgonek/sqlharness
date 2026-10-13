@@ -235,7 +235,11 @@ internal sealed class SqlSafetyClassifier
                 var hasUnprovenUse = HasUnprovenTableVariableUse(statement, scope);
                 var classification = ClassifyStatement(statement, scope);
                 if (classification.DenyReason is { } deny)
-                    return Denied(deny, hasUnprovenUse ? UnprovenTableVariableDetail : null);
+                    return Denied(
+                        deny,
+                        hasUnprovenUse
+                            ? UnprovenTableVariableDetail
+                            : deny == SqlSafetyReason.UnsupportedStatement ? StatementDetail(statement) : null);
 
                 hasMutation |= classification.HasPersistentWrite;
                 hasSessionLocal |= classification.HasSessionLocalWrite;
@@ -302,7 +306,11 @@ internal sealed class SqlSafetyClassifier
                             hasUnprovenUse ? UnprovenTableVariableDetail : null);
                     }
 
-                    return Denied(deny, hasUnprovenUse ? UnprovenTableVariableDetail : null);
+                    return Denied(
+                        deny,
+                        hasUnprovenUse
+                            ? UnprovenTableVariableDetail
+                            : deny == SqlSafetyReason.UnsupportedStatement ? StatementDetail(statement) : null);
                 }
 
                 if (classification.HasPersistentWrite)
@@ -314,7 +322,9 @@ internal sealed class SqlSafetyClassifier
                 {
                     return Denied(
                         IsWrite(statement) ? SqlSafetyReason.NonTemporaryWrite : SqlSafetyReason.UnsupportedStatement,
-                        hasUnprovenUse ? UnprovenTableVariableDetail : null);
+                        hasUnprovenUse
+                            ? UnprovenTableVariableDetail
+                            : IsWrite(statement) ? null : StatementDetail(statement));
                 }
 
                 hasSessionLocal |= classification.HasSessionLocalWrite;
@@ -807,6 +817,9 @@ internal sealed class SqlSafetyClassifier
     private static SqlSafetyDecision Denied(SqlSafetyReason reason, string? detail = null) =>
         new(false, reason, Detail: detail);
 
+    private static string StatementDetail(TSqlStatement statement) =>
+        $"{statement.GetType().Name} at line {statement.StartLine}";
+
     private sealed class NestedDmlWriteVisitor(BatchVariableScope scope) : TSqlFragmentVisitor
     {
         internal bool Unsupported { get; private set; }
@@ -1131,7 +1144,8 @@ internal sealed record SqlHarnessParameter(
 
 internal static partial class SqlParameterParser
 {
-    private const int MaximumNVarCharSize = 4000;
+    internal const int DefaultStringParameterSize = 4000;
+    private const int MaximumNVarCharSize = DefaultStringParameterSize;
     private const int MaximumVarCharSize = 8000;
     private const int SqlMaxSize = -1;
     private static readonly DateTime SmallDateTimeMin = new(1900, 1, 1);
@@ -1206,15 +1220,14 @@ internal static partial class SqlParameterParser
         // A null entry has no name. Declaration text cannot produce one.
         if (input is null)
             throw new SqlHarnessSafetyException("Invalid SQL parameter name.");
-        var name = input.Name;
+        var name = SqlParameterNames.Normalize(input.Name);
         var type = input.Type;
         var value = input.Value;
-        ValidateName(name);
 
         if (type is null)
         {
             return value is null
-                ? CreateNull(name, SqlDbType.NVarChar, size: null)
+                ? CreateNull(name, SqlDbType.NVarChar, DefaultStringParameterSize)
                 : CreateUnicodeString(name, value, max: false);
         }
 
@@ -1320,10 +1333,10 @@ internal static partial class SqlParameterParser
 
         return type switch
         {
-            "nvarchar" => CreateNull(name, SqlDbType.NVarChar, null),
-            "varchar" => CreateNull(name, SqlDbType.VarChar, null),
-            "char" => CreateNull(name, SqlDbType.Char, null),
-            "nchar" => CreateNull(name, SqlDbType.NChar, null),
+            "nvarchar" => CreateNull(name, SqlDbType.NVarChar, DefaultStringParameterSize),
+            "varchar" => CreateNull(name, SqlDbType.VarChar, DefaultStringParameterSize),
+            "char" => CreateNull(name, SqlDbType.Char, DefaultStringParameterSize),
+            "nchar" => CreateNull(name, SqlDbType.NChar, DefaultStringParameterSize),
             "varbinary" => CreateNull(name, SqlDbType.VarBinary, null),
             "int" => CreateNull(name, SqlDbType.Int, null),
             "bigint" => CreateNull(name, SqlDbType.BigInt, null),
@@ -1354,28 +1367,23 @@ internal static partial class SqlParameterParser
     private static SqlHarnessParameter CreateUdtNull(string name, string udtTypeName) =>
         new($"@{name}", SqlDbType.Udt, DBNull.Value, null, UdtTypeName: udtTypeName);
 
-    private static SqlHarnessParameter CreateUnicodeString(string name, string value, bool max)
-    {
-        if (max || value.Length > MaximumNVarCharSize)
-            return new($"@{name}", SqlDbType.NVarChar, value, SqlMaxSize);
+    private static SqlHarnessParameter CreateUnicodeString(
+        string name, string value, bool max, SqlDbType type = SqlDbType.NVarChar) =>
+        new($"@{name}", type, value, StringSize(value, max));
 
-        return new($"@{name}", SqlDbType.NVarChar, value, Math.Max(1, value.Length));
-    }
+    private static SqlHarnessParameter CreateAnsiString(string name, string value, SqlDbType type, bool max) =>
+        new($"@{name}", type, value, StringSize(value, max));
 
-    private static SqlHarnessParameter CreateAnsiString(string name, string value, SqlDbType type, bool max)
-    {
-        if (max || value.Length > MaximumVarCharSize)
-            return new($"@{name}", type, value, SqlMaxSize);
-
-        return new($"@{name}", type, value, Math.Max(1, value.Length));
-    }
+    private static int StringSize(string? value, bool max) =>
+        max || value is { Length: > DefaultStringParameterSize } ? SqlMaxSize : DefaultStringParameterSize;
 
     private static SqlHarnessParameter CreateFixedString(string name, string value, SqlDbType type, int maximum)
     {
-        if (value.Length is 0 || value.Length > maximum)
+        if (value.Length > maximum)
             throw new SqlHarnessSafetyException($"Invalid value for SQL parameter '{name}'.");
 
-        return new($"@{name}", type, value, value.Length);
+        var size = value.Length > DefaultStringParameterSize ? value.Length : DefaultStringParameterSize;
+        return new($"@{name}", type, value, size);
     }
 
     private static SqlHarnessParameter CreateSizedType(string name, string typeBase, string sizeToken, string value)
@@ -1690,18 +1698,6 @@ internal static partial class SqlParameterParser
         "false" or "0" => false,
         _ => throw new FormatException("Invalid bit value."),
     };
-
-    private static void ValidateName(string name)
-    {
-        // A structured caller can hand over a null name; declaration text cannot.
-        if (name is null || !NamePattern().IsMatch(name))
-        {
-            throw new SqlHarnessSafetyException("Invalid SQL parameter name.");
-        }
-    }
-
-    [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant)]
-    private static partial Regex NamePattern();
 
     [GeneratedRegex(@"^(decimal|numeric)\((?<precision>[0-9]{1,2}),(?<scale>[0-9]{1,2})\)$", RegexOptions.CultureInvariant)]
     private static partial Regex DecimalOrNumericTypePattern();

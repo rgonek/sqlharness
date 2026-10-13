@@ -81,6 +81,57 @@ public sealed class ValidateCommandTests
     }
 
     [Fact]
+    public void Parameter_validation_detail_names_the_rejected_parameter()
+    {
+        var report = SqlValidation.Validate(
+            new SqlTargetRequest("test", new Dictionary<string, string>()),
+            "SELECT @Name AS N;",
+            [],
+            new Dictionary<string, TargetProfile> { ["test"] = Profile("sqlserver") },
+            new ValidationOptions
+            {
+                TypedParameters = [new SqlHarnessParameterInput("1bad", "int", "1")],
+            });
+
+        Assert.False(report.Allowed);
+        Assert.Equal("parameter_validation_failed", report.Reason);
+        Assert.Contains("'1bad'", report.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Parameter_validation_detail_redacts_a_value_matching_the_resolved_profile_password()
+    {
+        const string passwordEnvVar = "SQLHARNESS_TEST_VALIDATE_PASSWORD";
+        const string profilePassword = "profile-password-used-as-bad-int-value";
+        var previousPassword = Environment.GetEnvironmentVariable(passwordEnvVar);
+        try
+        {
+            Environment.SetEnvironmentVariable(passwordEnvVar, profilePassword);
+            var profile = Profile("sqlserver") with { PasswordEnvVar = passwordEnvVar };
+            var report = SqlValidation.Validate(
+                new SqlTargetRequest("test", new Dictionary<string, string>()),
+                "SELECT @Name AS N;",
+                [],
+                new Dictionary<string, TargetProfile> { ["test"] = profile },
+                new ValidationOptions
+                {
+                    TypedParameters = [new SqlHarnessParameterInput("Name", "int", profilePassword)],
+                });
+
+            Assert.False(report.Allowed);
+            Assert.Equal("parameter_validation_failed", report.Reason);
+            Assert.DoesNotContain(profilePassword, report.Detail, StringComparison.Ordinal);
+            Assert.Contains("Invalid value '[REDACTED]'", report.Detail, StringComparison.Ordinal);
+            Assert.Contains("'Name'", report.Detail, StringComparison.Ordinal);
+            Assert.Contains("'int'", report.Detail, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(passwordEnvVar, previousPassword);
+        }
+    }
+
+    [Fact]
     public void Rejected_mutation_does_not_claim_supplied_parameters_are_missing()
     {
         var result = SqlValidation.Validate(

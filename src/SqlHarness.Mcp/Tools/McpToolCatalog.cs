@@ -132,12 +132,14 @@ public sealed class McpToolHandlers(
         int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
         int? maxOperationSeconds = null,
+        [Description("Check every argument offline and stop before connecting. Nothing runs, nothing is written.")]
+        bool dryRun = false,
         CancellationToken ct = default) =>
         RunDbAsync("sqlharness_query", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxOperationSeconds"]);
+            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
             return await module.ExecuteAsync(
-                await McpOperationMapper.MapQueryAsync(scope, sql, file, parameters, timeout, maxRows, token),
+                await McpOperationMapper.MapQueryAsync(scope, sql, file, parameters, timeout, maxRows, token, dryRun),
                 token);
         }, ct);
 
@@ -159,12 +161,14 @@ public sealed class McpToolHandlers(
         int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
         int? maxOperationSeconds = null,
+        [Description("Check every argument offline and stop before connecting. Nothing runs, nothing is written.")]
+        bool dryRun = false,
         CancellationToken ct = default) =>
         RunDbAsync("sqlharness_measure", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["query", "setup", "parameters", "paramSetFiles", "repeat", "timeout", "maxResultBytes", "maxOperationSeconds"]);
+            ThrowIfUnknown(ctx, ["query", "setup", "parameters", "paramSetFiles", "repeat", "timeout", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
             return await module.ExecuteAsync(
-                await McpOperationMapper.MapMeasureAsync(scope, query, setup, parameters, paramSetFiles, repeat, timeout, token),
+                await McpOperationMapper.MapMeasureAsync(scope, query, setup, parameters, paramSetFiles, repeat, timeout, token, dryRun),
                 token);
         }, ct);
 
@@ -193,12 +197,14 @@ public sealed class McpToolHandlers(
         int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
         int? maxOperationSeconds = null,
+        [Description("Check every argument offline and stop before connecting. Nothing runs, nothing is written.")]
+        bool dryRun = false,
         CancellationToken ct = default) =>
         RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "repeat", "timeout", "compareResults", "matrix", "compareNullability", "maxResultBytes", "maxOperationSeconds"]);
+            ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "repeat", "timeout", "compareResults", "matrix", "compareNullability", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
             return await module.ExecuteAsync(
-                await McpOperationMapper.MapCompareAsync(scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability),
+                await McpOperationMapper.MapCompareAsync(scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun),
                 token);
         }, ct);
 

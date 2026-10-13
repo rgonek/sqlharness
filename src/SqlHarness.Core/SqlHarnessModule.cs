@@ -186,6 +186,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(query.Parameters, query.TypedParameters));
             dialect.ValidateParameterReferences(parameters, query.Sql);
 
+            if (query.DryRun)
+                return Checked(query, DryRunOutcome("query", BenchmarkReports.ClassificationLabel(safety), parameters, 1));
+
             phase = OperationPhase.Authentication;
             await using var session = await _sessionFactory.ConnectAsync(target, ct, knownSecrets);
             phase = OperationPhase.Sql;
@@ -263,6 +266,22 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         return outcome with { EmissionReceipt = receipt };
     }
 
+    private static SqlHarnessOutcome DryRunOutcome(
+        string command,
+        string classification,
+        IReadOnlyList<SqlHarnessParameter> parameters,
+        int parameterSets) =>
+        WithReceipt(
+            new SqlHarnessOutcome(
+                SqlHarnessExitCode.Success,
+                new SqlHarnessDryRunReport(
+                    command,
+                    classification,
+                    BenchmarkReports.ToParameterReports(parameters),
+                    parameterSets),
+                null),
+            new OutputFootprint(0, 0));
+
     private async Task<SqlHarnessOutcome> ExecuteCompareAsync(SqlHarnessCompareOperation compare, CancellationToken ct)
     {
         var phase = OperationPhase.Validation;
@@ -290,6 +309,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 compare.CandidateSql,
                 [prepared.FixedParameters]);
             var target = prepared.Target;
+
+            if (compare.DryRun)
+                return DryRunOutcome(
+                    "compare",
+                    prepared.Classification.Baseline,
+                    prepared.FixedParameters,
+                    parameterSets: 1);
 
             _artifactWriter.CheckStorage();
 
@@ -398,6 +424,14 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 matrixParameters.Select(matrixParameter => (IReadOnlyList<SqlHarnessParameter>)[.. fixedParameters, matrixParameter]).ToArray());
 
             var target = prepared.Target;
+
+            if (operation.DryRun)
+                return DryRunOutcome(
+                    "compare",
+                    prepared.Classification.Baseline,
+                    [.. fixedParameters, matrixParameters[0]],
+                    matrixParameters.Count);
+
             _artifactWriter.CheckStorage();
 
             var template = new CompareCellRequest(
@@ -538,6 +572,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             if (measure.ParameterSets is { Count: > 0 } parameterSets)
             {
                 var boundSets = BindMeasureParameterSets(dialect, measure, parameterSets);
+                if (measure.DryRun)
+                    return DryRunOutcome(
+                        "measure",
+                        BenchmarkReports.ClassificationLabel(querySafety),
+                        boundSets[0].Parameters,
+                        boundSets.Count);
+
                 _artifactWriter.CheckStorage();
                 phase = OperationPhase.Authentication;
                 await using var multiSession = await _sessionFactory.ConnectAsync(target, ct, knownSecrets);
@@ -571,6 +612,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 };
                 return WithReceipt(setSuccess, rawFootprint);
             }
+
+            if (measure.DryRun)
+                return DryRunOutcome(
+                    "measure",
+                    BenchmarkReports.ClassificationLabel(querySafety),
+                    parameters,
+                    parameterSets: 1);
 
             _artifactWriter.CheckStorage();
             phase = OperationPhase.Authentication;

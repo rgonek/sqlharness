@@ -195,6 +195,19 @@ public sealed class CapabilitiesCommandTests
         Assert.Contains("least-privilege", query, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Query_measure_and_compare_capabilities_describe_offline_dry_run_surface()
+    {
+        var commands = SqlHarnessCapabilitiesProvider.Get().Commands.ToDictionary(c => c.Name, c => c.Description);
+
+        foreach (var command in new[] { "query", "measure", "compare" })
+        {
+            Assert.Contains("dryRun", commands[command], StringComparison.Ordinal);
+            Assert.Contains("offline", commands[command], StringComparison.Ordinal);
+            Assert.Contains("no CLI switch", commands[command], StringComparison.Ordinal);
+        }
+    }
+
     [Theory]
     [InlineData("nvarchar(10)", "nvarchar(n)", SqlDbType.NVarChar)]
     [InlineData("varchar(10)", "varchar(n)", SqlDbType.VarChar)]

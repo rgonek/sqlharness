@@ -7,6 +7,39 @@ namespace SqlHarness.Tests;
 
 public class SqlParameterParserTests
 {
+    [Theory]
+    [InlineData("ClientId")]
+    [InlineData("@ClientId")]
+    public void Typed_parameter_accepts_an_optional_at_sign(string name)
+    {
+        var bound = SqlParameterParser.Bind(new SqlHarnessParameterInput(name, "int", "7"));
+        Assert.Equal("@ClientId", bound.Name);
+    }
+
+    [Theory]
+    [InlineData("@")]
+    [InlineData("@@ClientId")]
+    [InlineData("1Client")]
+    [InlineData("")]
+    public void Invalid_names_are_rejected_with_the_name(string name)
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            SqlParameterParser.Bind(new SqlHarnessParameterInput(name, "int", "7")));
+        Assert.Contains($"'{name}'", exception.Message);
+    }
+
+    [Fact]
+    public void Duplicate_parameter_names_are_detected_after_normalization()
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            SqlParameterParser.Bind([
+                new SqlHarnessParameterInput("ClientId", "int", "7"),
+                new SqlHarnessParameterInput("@clientid", "int", "8"),
+            ]));
+
+        Assert.Equal("Duplicate SQL parameter '@clientid'.", exception.Message);
+    }
+
     [Fact]
     public void Parse_binds_untyped_value_as_bounded_nvarchar()
     {
@@ -15,7 +48,78 @@ public class SqlParameterParserTests
         Assert.Equal("@name", parameter.Name);
         Assert.Equal(SqlDbType.NVarChar, parameter.Type);
         Assert.Equal("zażółć", parameter.Value);
-        Assert.Equal(6, parameter.Size);
+        Assert.Equal(4000, parameter.Size);
+    }
+
+    [Theory]
+    [InlineData("nvarchar", "abc", 4000)]
+    [InlineData("varchar", "abc", 4000)]
+    [InlineData("nchar", "abc", 4000)]
+    [InlineData("char", "abc", 4000)]
+    [InlineData(null, "abc", 4000)]
+    [InlineData("nvarchar(26)", "abc", 26)]
+    public void Unsized_strings_bind_with_the_application_default(string? type, string value, int expected) =>
+        Assert.Equal(expected, SqlParameterParser.Bind(new SqlHarnessParameterInput("Name", type, value)).Size);
+
+    [Theory]
+    [InlineData("nvarchar")]
+    [InlineData("varchar")]
+    public void Unsized_variable_width_strings_use_max_above_the_default(string type)
+    {
+        var parameter = SqlParameterParser.Bind(new SqlHarnessParameterInput("Name", type, new string('x', 4001)));
+
+        Assert.Equal(-1, parameter.Size);
+    }
+
+    [Theory]
+    [InlineData(4001)]
+    [InlineData(8000)]
+    public void Unsized_char_above_the_default_keeps_its_actual_size(int length)
+    {
+        var parameter = SqlParameterParser.Bind(new SqlHarnessParameterInput("Name", "char", new string('x', length)));
+
+        Assert.Equal(length, parameter.Size);
+    }
+
+    [Theory]
+    [InlineData("char", 8001)]
+    [InlineData("nchar", 4001)]
+    public void Unsized_fixed_width_strings_reject_values_above_the_sql_limit(string type, int length)
+    {
+        var exception = Assert.Throws<SqlHarnessSafetyException>(() =>
+            SqlParameterParser.Bind(new SqlHarnessParameterInput("Name", type, new string('x', length))));
+
+        Assert.Equal("Name", exception.ParameterName);
+        Assert.Equal(type, exception.ExpectedType);
+    }
+
+    [Theory]
+    [InlineData("nvarchar")]
+    [InlineData("varchar")]
+    [InlineData("nchar")]
+    [InlineData("char")]
+    public void Typed_null_unsized_string_binds_with_the_default(string type) =>
+        Assert.Equal(4000, SqlParameterParser.Bind(new SqlHarnessParameterInput("Name", type, null)).Size);
+
+    [Fact]
+    public void Untyped_null_string_binds_with_the_default()
+    {
+        var parameter = SqlParameterParser.Bind(new SqlHarnessParameterInput("Name", null, null));
+
+        Assert.Equal(4000, parameter.Size);
+    }
+
+    [Theory]
+    [InlineData("nvarchar", 4000)]
+    [InlineData("varchar", 4000)]
+    [InlineData("nchar", 4000)]
+    [InlineData("char", 4000)]
+    [InlineData(null, 4000)]
+    public void Strings_at_the_default_boundary_keep_the_application_default(string? type, int expected)
+    {
+        var parameter = SqlParameterParser.Bind(new SqlHarnessParameterInput("Name", type, new string('x', 4000)));
+
+        Assert.Equal(expected, parameter.Size);
     }
 
     [Theory]
@@ -124,7 +228,7 @@ public class SqlParameterParserTests
         Assert.Equal(SqlDbType.UniqueIdentifier, parameters[0].Type);
         Assert.Equal("witaj", parameters[1].Value);
         Assert.Equal(SqlDbType.NVarChar, parameters[1].Type);
-        Assert.Equal(5, parameters[1].Size);
+        Assert.Equal(4000, parameters[1].Size);
     }
 
     [Theory]
@@ -197,7 +301,7 @@ public class SqlParameterParserTests
         Assert.Equal(12.34m, parameters[0].Value);
         Assert.Equal(SqlDbType.Decimal, parameters[1].Type);
         Assert.Equal(SqlDbType.VarChar, parameters[2].Type);
-        Assert.Equal(5, parameters[2].Size);
+        Assert.Equal(4000, parameters[2].Size);
         Assert.Equal(SqlDbType.NVarChar, parameters[3].Type);
         Assert.Equal(-1, parameters[3].Size);
         Assert.Equal(longText, parameters[3].Value);
@@ -263,7 +367,7 @@ public class SqlParameterParserTests
         Assert.Equal("@missing", parameter.Name);
         Assert.Equal(SqlDbType.NVarChar, parameter.Type);
         Assert.Same(DBNull.Value, parameter.Value);
-        Assert.Null(parameter.Size);
+        Assert.Equal(4000, parameter.Size);
     }
 
     [Fact]
@@ -288,7 +392,6 @@ public class SqlParameterParserTests
     [InlineData("name")]
     [InlineData("=value")]
     [InlineData("bad-name=value")]
-    [InlineData("@name=value")]
     [InlineData("name:xml=<x />")]
     [InlineData("name:int=not-an-int")]
     [InlineData("name:bit=perhaps")]

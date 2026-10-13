@@ -116,6 +116,8 @@ public static class SqlValidation
         var usage = options?.Usage ?? ValidationUsage.Query;
         var setupSql = usage == ValidationUsage.Setup ? null : options?.SetupSql;
         var target = TargetResolver.Resolve(targetRequest, profiles);
+        var knownSecrets = new List<string>();
+        OperationSecrets.AddCredentials(knownSecrets, target);
         var dialect = SqlDialects.For(target.Engine);
         var noTemps = new HashSet<string>(StringComparer.Ordinal);
         IReadOnlySet<string> setupTemps = noTemps;
@@ -174,9 +176,10 @@ public static class SqlValidation
                 reason = "parameter_validation_failed";
                 detail = shapeException.Message;
             }
-            catch (SqlHarnessSafetyException)
+            catch (SqlHarnessSafetyException exception)
             {
                 reason = "parameter_validation_failed";
+                detail = SecretRedactor.Redact(exception.Message, knownSecrets);
             }
         }
 
