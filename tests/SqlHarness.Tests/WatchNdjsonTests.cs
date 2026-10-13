@@ -300,6 +300,29 @@ public class WatchNdjsonTests
     }
 
     [Fact]
+    public async Task Direct_ndjson_watch_assigns_reference_and_preserves_supplied_reference()
+    {
+        var generated = await Module(FakeSession.WithScalarPolls(1, 1), new FakeWatchClock())
+            .ExecuteWatchNdjsonAsync(Watch(untilUnchanged: 1), new StringWriter());
+        var supplied = await Module(FakeSession.WithScalarPolls(1, 1), new FakeWatchClock())
+            .ExecuteWatchNdjsonAsync(Watch(untilUnchanged: 1) with { OperationRef = "caller-watch-ref" }, new StringWriter());
+
+        Assert.Equal(SqlHarnessExitCode.Success, generated.ExitCode);
+        Assert.False(string.IsNullOrWhiteSpace(generated.OperationRef));
+        Assert.Equal("caller-watch-ref", supplied.OperationRef);
+    }
+
+    [Fact]
+    public async Task Direct_ndjson_watch_failure_returns_supplied_reference()
+    {
+        var outcome = await Module(FakeSession.WithScalarPolls(1), new FakeWatchClock())
+            .ExecuteWatchNdjsonAsync(Watch(until: "invalid") with { OperationRef = "caller-watch-ref" }, new StringWriter());
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal("caller-watch-ref", outcome.OperationRef);
+    }
+
+    [Fact]
     public async Task Ndjson_typed_parameter_rejection_emits_failed_with_the_value()
     {
         var transport = new StringWriter();

@@ -140,7 +140,7 @@ internal sealed record CompareCellRequest(
 internal sealed record CompareCellResult(
     SqlHarnessCompareReport Report,
     IReadOnlyList<CompareRunArtifact> Runs,
-    OutputFootprint RawFootprint);
+    OutputFootprint? RawFootprint);
 
 internal enum CompareCellPhase
 {
@@ -215,6 +215,8 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
             }
 
             var rawFootprint = raw.Complete().Footprint;
+            if (request.Target.Engine == SqlEngine.Postgres && request.CompareResults == ResultComparisonMode.Off)
+                rawFootprint = null;
             var baselineRuns = runs.Where(run => run.Variant == "baseline").ToArray();
             var candidateRuns = runs.Where(run => run.Variant == "candidate").ToArray();
             var equivalence = ResultComparer.Compare(

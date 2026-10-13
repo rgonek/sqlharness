@@ -233,6 +233,54 @@ public sealed class BenchmarkRunTests
         Assert.Same(cleanup, exception);
     }
 
+    [Fact]
+    public async Task ExecuteRawAsync_drains_rows_without_normalizing_when_raw_is_unavailable()
+    {
+        var reader = new DrainOnlyReader();
+        var session = new DrainOnlySession(reader);
+
+        await BenchmarkRunner.ExecuteRawAsync(
+            session, new SqlExecutionCommand("SELECT 1", [], 30), raw: null, CancellationToken.None);
+
+        Assert.Equal(2, reader.ReadCalls);
+        Assert.Equal(1, reader.RowsConsumed);
+        Assert.Equal(0, reader.ValueCalls);
+        Assert.Equal(0, reader.MetadataCalls);
+    }
+
+    private sealed class DrainOnlySession(DrainOnlyReader reader) : ISqlSession
+    {
+        public IReadOnlyList<string> Messages => [];
+        public SqlHarnessTargetIdentityReport Identity { get; set; } = new("s", "d", "s", "d", "profile");
+        public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct) => Task.FromResult<ISqlReader>(reader);
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class DrainOnlyReader : ISqlReader
+    {
+        private int _reads;
+        public int ReadCalls { get; private set; }
+        public int RowsConsumed { get; private set; }
+        public int ValueCalls { get; private set; }
+        public int MetadataCalls { get; private set; }
+        public int FieldCount => 1;
+        public int RecordsAffected => -1;
+        public string GetName(int ordinal) { MetadataCalls++; throw new InvalidOperationException("metadata should not be read"); }
+        public Type GetFieldType(int ordinal) { MetadataCalls++; throw new InvalidOperationException("metadata should not be read"); }
+        public bool GetAllowNull(int ordinal) { MetadataCalls++; throw new InvalidOperationException("metadata should not be read"); }
+        public object GetValue(int ordinal) { ValueCalls++; throw new InvalidOperationException("values should not be normalized"); }
+        public Task<bool> ReadAsync(CancellationToken ct)
+        {
+            ReadCalls++;
+            var hasRow = _reads++ == 0;
+            if (hasRow)
+                RowsConsumed++;
+            return Task.FromResult(hasRow);
+        }
+        public Task<bool> NextResultAsync(CancellationToken ct) => Task.FromResult(false);
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     private sealed class FlakyMessagesSession(Exception primary) : ISqlSession
     {
         private bool _failed;

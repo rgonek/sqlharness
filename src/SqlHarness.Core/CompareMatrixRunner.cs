@@ -41,7 +41,7 @@ internal sealed class CompareMatrixCellFailedException : Exception
 
 internal sealed record CompareMatrixResult(
     SqlHarnessCompareMatrixReport Report,
-    OutputFootprint RawFootprint)
+    OutputFootprint? RawFootprint)
 {
     /// <summary>Every cell's measured runs, tagged with the zero-based cell index (never the value).</summary>
     internal IReadOnlyList<CompareRunArtifact> Runs { get; init; } = [];
@@ -61,6 +61,7 @@ internal sealed class CompareMatrixRunner(CompareCellRunner cells)
         var runs = new List<CompareRunArtifact>();
         long bytes = 0;
         long lines = 0;
+        var rawAvailable = true;
         // Sequential. The first failed cell throws and later values are not started.
         for (var index = 0; index < run.MatrixValues.Count; index++)
         {
@@ -72,8 +73,15 @@ internal sealed class CompareMatrixRunner(CompareCellRunner cells)
             try
             {
                 var cell = await _cells.RunAsync(request, ct);
-                bytes += cell.RawFootprint.Bytes;
-                lines += cell.RawFootprint.Lines;
+                if (cell.RawFootprint is { } footprint)
+                {
+                    bytes += footprint.Bytes;
+                    lines += footprint.Lines;
+                }
+                else
+                {
+                    rawAvailable = false;
+                }
                 reports.Add(new CompareMatrixCellReport(index, run.DisplayValues[index], cell.Report));
                 var cellIndex = index;
                 runs.AddRange(cell.Runs.Select(measured => measured with { MatrixCell = cellIndex }));
@@ -94,7 +102,7 @@ internal sealed class CompareMatrixRunner(CompareCellRunner cells)
 
         return new CompareMatrixResult(
             new SqlHarnessCompareMatrixReport(run.ParameterName, run.ParameterType, reports),
-            new OutputFootprint(bytes, lines))
+            rawAvailable ? new OutputFootprint(bytes, lines) : null)
         {
             Runs = runs,
         };

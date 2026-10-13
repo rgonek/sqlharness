@@ -120,6 +120,9 @@ public sealed partial class DocsSyncTests
         Assert.Contains(bytePreservation, skill, StringComparison.Ordinal);
         Assert.Contains(baseline, skill, StringComparison.Ordinal);
         Assert.Contains("not actual token savings", skill, StringComparison.Ordinal);
+        var journalSection = readme[(readme.IndexOf("### Activity journal", StringComparison.Ordinal))..];
+        Assert.Contains("`indexes`, `artifact`, `plan`; CLI or MCP", journalSection, StringComparison.Ordinal);
+        Assert.Contains("Not recorded: `validate`, `doctor`, `capabilities`, `--help`", journalSection, StringComparison.Ordinal);
     }
 
     [Theory]

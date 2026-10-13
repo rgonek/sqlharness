@@ -299,7 +299,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     /// Attaches the emission receipt: it carries the raw footprint for the activity journal
     /// (JournalingModule records raw and emitted footprints) and returns the outcome's exit code.
     /// </summary>
-    private static SqlHarnessOutcome WithReceipt(SqlHarnessOutcome outcome, OutputFootprint raw)
+    private static SqlHarnessOutcome WithReceipt(SqlHarnessOutcome outcome, OutputFootprint? raw)
     {
         var receipt = new SqlHarnessEmissionReceipt((_, _) => Task.FromResult(outcome.ExitCode))
         {
@@ -327,7 +327,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     private async Task<SqlHarnessOutcome> ExecuteCompareAsync(SqlHarnessCompareOperation compare, CancellationToken ct)
     {
         var phase = OperationPhase.Validation;
-        var rawFootprint = new OutputFootprint(0, 0);
+        OutputFootprint? rawFootprint = new OutputFootprint(0, 0);
         var knownSecrets = new List<string>();
 
         try
@@ -424,7 +424,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         CancellationToken ct)
     {
         var phase = OperationPhase.Validation;
-        var rawFootprint = new OutputFootprint(0, 0);
+        OutputFootprint? rawFootprint = new OutputFootprint(0, 0);
         var knownSecrets = new List<string>();
 
         try
@@ -894,6 +894,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     {
         ArgumentNullException.ThrowIfNull(watch);
         ArgumentNullException.ThrowIfNull(writer);
+        watch = (SqlHarnessWatchOperation)SqlHarnessOperationReferences.Ensure(watch);
 
         var phase = OperationPhase.Validation;
         var rawFootprint = new OutputFootprint(0, 0);
@@ -932,7 +933,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 ct);
             rawFootprint = raw;
             // Runner already mapped connect/SQL failures; preserve its exit code.
-            return Checked(watch, WithReceipt(outcome, rawFootprint));
+            return Checked(watch, WithReceipt(outcome, rawFootprint) with { OperationRef = watch.OperationRef });
         }
         catch (Exception exception)
         {
@@ -940,7 +941,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var message = SecretRedactor.Redact(exception, knownSecrets);
             EmitWatchNdjsonFailed(writer, exitCode, SqlHarnessError.From(exitCode, message, "validation"));
             var failure = new SqlHarnessOutcome(exitCode, null, message);
-            return Checked(watch, WithReceipt(failure, rawFootprint));
+            return Checked(watch, WithReceipt(failure, rawFootprint) with { OperationRef = watch.OperationRef });
         }
     }
 

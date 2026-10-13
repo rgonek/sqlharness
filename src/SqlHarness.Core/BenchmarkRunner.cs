@@ -66,6 +66,14 @@ internal static class BenchmarkRunner
             await using var reader = await session.ExecuteReaderAsync(command, ct);
             do
             {
+                if (raw is null)
+                {
+                    while (await reader.ReadAsync(ct))
+                    {
+                    }
+                    continue;
+                }
+
                 if (reader.FieldCount == 0)
                     continue;
                 var columns = Enumerable.Range(0, reader.FieldCount)
