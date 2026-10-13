@@ -557,8 +557,27 @@ public sealed class JournalReaderTests
         Assert.All(costs, cost => Assert.Null(cost.Comparison));
     }
 
+    [Fact]
+    public void Failed_linked_operation_without_emitted_bytes_disables_workflow_comparison()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:failed-linked");
+        var root = seed.Operation(session);
+        var successfulRead = seed.Operation(session, operation: "artifact");
+        var failedRead = seed.Operation(session, operation: "artifact", status: "failed", exitCode: 5);
+        SetFootprint(home.DatabasePath, root, "root-failed-linked", null, 4000, 1600, 1000, 400);
+        SetFootprint(home.DatabasePath, successfulRead, "read-success", "root-failed-linked", 1200, 1200, 300, 300);
+        SetFootprint(home.DatabasePath, failedRead, "read-failed", "root-failed-linked", null, null, null, null);
+
+        var workflow = Assert.Single(Reader(home).Stats(new StatsQuery()).WorkflowCosts);
+
+        Assert.Equal((2800L, 700L, 2), (workflow.OutputBytes, workflow.EstimatedOutputTokens, workflow.CallCount));
+        Assert.Null(workflow.Comparison);
+    }
+
     private static void SetFootprint(string path, JournalHandle handle, string? operationRef, string? parentRef,
-        long? rawBytes, long emittedBytes, long? rawTokens, long emittedTokens, bool dryRun = false)
+        long? rawBytes, long? emittedBytes, long? rawTokens, long? emittedTokens, bool dryRun = false)
     {
         using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path};Pooling=False");
         connection.Open();
@@ -573,9 +592,9 @@ public sealed class JournalReaderTests
         command.Parameters.AddWithValue("$parentRef", (object?)parentRef ?? DBNull.Value);
         command.Parameters.AddWithValue("$dryRun", dryRun ? 1 : 0);
         command.Parameters.AddWithValue("$rawBytes", (object?)rawBytes ?? DBNull.Value);
-        command.Parameters.AddWithValue("$emittedBytes", emittedBytes);
+        command.Parameters.AddWithValue("$emittedBytes", (object?)emittedBytes ?? DBNull.Value);
         command.Parameters.AddWithValue("$rawTokens", (object?)rawTokens ?? DBNull.Value);
-        command.Parameters.AddWithValue("$emittedTokens", emittedTokens);
+        command.Parameters.AddWithValue("$emittedTokens", (object?)emittedTokens ?? DBNull.Value);
         command.ExecuteNonQuery();
     }
 

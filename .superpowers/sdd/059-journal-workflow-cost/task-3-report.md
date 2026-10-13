@@ -30,3 +30,10 @@ Dashboard statistics now report workflow output bytes, estimated output tokens, 
 ## Limits
 
 Input tokens, discovery/tool listing, capabilities discovery, and final chat remain unmeasured. Token counts remain estimates from output bytes, not provider tokenizer measurements. No live database calls or full Windows/Linux verification gates were run.
+
+## Review fix round 1
+
+The reader now loads every in-window operation row for workflow eligibility, including operations without an emitted-byte receipt. Output byte/token totals and call counts still aggregate only measured emitted-byte rows. Any failed row in the referenced workflow now suppresses its comparison, even when that row has no emitted footprint.
+
+- RED: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~Workflow|FullyQualifiedName~Failed"` exposed the regression: `Failed_linked_operation_without_emitted_bytes_disables_workflow_comparison` failed because a non-null comparison was returned. This broad filter also ran `AgentWorkflowTests.Capability_discovery_then_schema_uses_two_bounded_calls_without_database_access`, which independently failed its byte budget (8724 actual, 8192 allowed); it is outside this reader change.
+- GREEN: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --filter "FullyQualifiedName~SqlHarness.Tests.Dashboard.JournalReaderTests.Workflow|FullyQualifiedName~SqlHarness.Tests.Dashboard.JournalReaderTests.Failed"` passed 5, skipped 0, failed 0 (880 ms).

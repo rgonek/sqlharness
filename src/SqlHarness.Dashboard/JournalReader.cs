@@ -417,20 +417,22 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                    root.raw_bytes, root.status, root.dry_run, root.operation
             FROM operations o
             LEFT JOIN operations root ON root.operation_ref = COALESCE(o.parent_operation_ref, o.operation_ref)
-            WHERE ($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to)
-              AND o.emitted_bytes IS NOT NULL;
+            WHERE ($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to);
             """, window, r => new WorkflowOutputRow(
-                NullableString(r, 0), NullableString(r, 1), r.GetString(2), r.GetString(3), r.GetInt64(4), r.GetInt64(5) != 0,
+                NullableString(r, 0), NullableString(r, 1), r.GetString(2), r.GetString(3), NullableLong(r, 4), r.GetInt64(5) != 0,
                 NullableLong(r, 6), NullableString(r, 7), !r.IsDBNull(8) && r.GetInt64(8) != 0, NullableString(r, 9)));
 
         var costs = new List<WorkflowCost>();
         foreach (var group in rows.GroupBy(row => row.ParentOperationRef ?? row.OperationRef,
                      StringComparer.Ordinal))
         {
+            var measuredRows = group.Where(row => row.EmittedBytes.HasValue).ToArray();
+            if (measuredRows.Length == 0)
+                continue;
             var referenced = group.Key is not null;
-            var outputBytes = group.Sum(row => row.EmittedBytes);
-            var estimatedTokens = group.Sum(row => OutputFootprint.EstimateTokens(row.EmittedBytes));
-            var first = group.First();
+            var outputBytes = measuredRows.Sum(row => row.EmittedBytes!.Value);
+            var estimatedTokens = measuredRows.Sum(row => OutputFootprint.EstimateTokens(row.EmittedBytes!.Value));
+            var first = measuredRows[0];
             var comparable = referenced && group.All(row => row.Status == "succeeded")
                 && first.RootRawBytes.HasValue && first.RootStatus == "succeeded"
                 && !first.RootDryRun && first.RootOperation is not null && IsDatabaseExecution(first.RootOperation);
@@ -440,9 +442,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                     OutputFootprint.EstimateTokens(baselineBytes.Value), outputBytes - baselineBytes.Value,
                     OutputFootprint.EstimateTokens(baselineBytes.Value) - estimatedTokens)
                 : null;
-            var dryRuns = group.Count(row => row.DryRun);
-            var executions = group.Count(row => !row.DryRun && IsDatabaseExecution(row.Operation));
-            costs.Add(new WorkflowCost(group.Key, outputBytes, estimatedTokens, group.Count(),
+            var dryRuns = measuredRows.Count(row => row.DryRun);
+            var executions = measuredRows.Count(row => !row.DryRun && IsDatabaseExecution(row.Operation));
+            costs.Add(new WorkflowCost(group.Key, outputBytes, estimatedTokens, measuredRows.Length,
                 OutputFootprint.EstimationMethod, referenced ? "workflow-output" : "legacy-artifact-volume",
                 new WorkflowCostCoverage("unmeasured", "unmeasured", "unmeasured"), comparison, dryRuns, executions));
         }
@@ -453,7 +455,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         "query" or "measure" or "compare" or "watch" or "snapshot" or "schema" or "ping" or "counts" or "space" or "qstop" or "indexes";
 
     private sealed record WorkflowOutputRow(string? OperationRef, string? ParentOperationRef, string Operation,
-        string Status, long EmittedBytes, bool DryRun, long? RootRawBytes, string? RootStatus, bool RootDryRun,
+        string Status, long? EmittedBytes, bool DryRun, long? RootRawBytes, string? RootStatus, bool RootDryRun,
         string? RootOperation);
 
     private static ProfileDimensionStats AggregateProfileDimensions(
