@@ -1,8 +1,8 @@
 # Plan 056 verification
 
-Branch: `feat/plan-056-parameters-dry-run`  
-Worktree: `D:/Dev/sqlharness/.worktrees/plan-056`  
-Implementation commits: `8275304..8e50fb5`  
+Branch: `feat/plan-056-parameters-dry-run`
+Worktree: `D:/Dev/sqlharness/.worktrees/plan-056`
+Implementation commits: `8275304..8e50fb5`
 Task 5 commits: `f3d48ff` documentation/capabilities; `f43782d` dry-run docs/fixture sync; `6e8232e` gate-required final-newline formatting.
 
 ## Verification state
