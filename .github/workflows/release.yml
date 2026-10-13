@@ -6,10 +6,14 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  gate:
+    uses: ./.github/workflows/ci.yml
+
   build:
+    needs: gate
     strategy:
       fail-fast: false
       matrix:
@@ -23,6 +27,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
@@ -32,11 +38,12 @@ jobs:
       - run: npm ci --prefix src/SqlHarness.Dashboard/ui
       - run: dotnet test -c Release
       - name: Publish single-file binary
+        shell: bash
         run: >-
           dotnet publish src/SqlHarness.Cli -c Release -r ${{ matrix.rid }}
           --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false
           -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None
-          -p:DebugSymbols=false -o out/${{ matrix.rid }}
+          -p:DebugSymbols=false -p:Version=${GITHUB_REF_NAME#v} -o out/${{ matrix.rid }}
       - name: Archive Windows binary
         if: matrix.rid == 'win-x64'
         shell: pwsh
@@ -54,6 +61,8 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:

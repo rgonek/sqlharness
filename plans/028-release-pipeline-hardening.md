@@ -15,6 +15,8 @@
 
 ## Status
 
+- **Execution**: DONE on `ci/plan-028-release`, 2026-10-13 (`148355b..361e88c`); merge/push pending. Windows and WSL ext4 Linux gates passed (exit 0). Luna high implementation, Luna xhigh task reviews, Sol low whole-branch review and scoped fix review: clean. Hosted release proof remains pending the next operator-triggered tag.
+
 - **Priority**: P2
 - **Effort**: S
 - **Risk**: LOW
@@ -95,10 +97,10 @@ New assertions in `ReleaseWorkflowTests.cs`: the version property, the gate depe
 
 ## Done criteria
 
-- [ ] `grep -n "contents: write" .github/workflows/release.yml` → only inside the `release:` job
-- [ ] `grep -n "uses: ./.github/workflows/ci.yml" .github/workflows/release.yml` → match
-- [ ] Workflow tests and the full gate pass
-- [ ] `plans/README.md` row updated (note: the first real proof is the next tag build, which the operator triggers)
+- [x] `grep -n "contents: write" .github/workflows/release.yml` → only inside the `release:` job
+- [x] `grep -n "uses: ./.github/workflows/ci.yml" .github/workflows/release.yml` → match
+- [x] Workflow tests and the full gate pass
+- [x] `plans/README.md` row updated (note: the first real proof is the next tag build, which the operator triggers)
 
 ## STOP conditions
 
@@ -109,3 +111,12 @@ New assertions in `ReleaseWorkflowTests.cs`: the version property, the gate depe
 
 - After merging, the operator should enable branch protection requiring the CI check, and should cut a release (plan 022's runtime update is the motivating one).
 - Authenticode/codesign is deferred: it needs a certificate and secrets the operator controls.
+
+## Execution evidence — 2026-10-13
+
+- Reconciled base: `148355b`; preserved dashboard CI/release stages added since the planned base.
+- Version check printed `9.9.9`; release publish uses Bash and the tag-derived Version property.
+- Final fix updated observed capability workflow bytes from 7525 to 7529 for the dev suffix; the 8192 budget and call checks remain. Negative workflow tests cover a wrong gate, an additional unhardened checkout and a later write-enabled job.
+- Windows: `pwsh ./scripts/verify.ps1` -> `verify: OK`, exit 0; Core 3794 passed, MCP 389 passed/4 skipped.
+- Linux ext4: `pwsh ./scripts/verify-linux.ps1` -> `verify-linux: OK`, exit 0; Core 3796 passed, MCP 401 passed/3 skipped. Live database proof is not claimed.
+- No tags, push or release publication. Signing, branch protection and the next hosted tag run remain operator follow-ups.

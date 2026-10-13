@@ -38,9 +38,10 @@ Plan [062](062-compare-context-dashboard.md) jest osobnym planem produktu: konte
 
 | Kolejność | Plan | Kategoria | Zależności |
 |---|---|---|---|
-| 2 | [028](028-release-pipeline-hardening.md) | Release: wersja, bramka CI, minimalne uprawnienia | Bez SHA-pinów, Dependabota i atestacji (odrzucone 2026-10-11) |
 | 3 | [032 — dokończenie całego planu](032-ci-matrix-and-test-hygiene.md) | CI: Windows/Linux i stabilność testów | Po 028 |
 | 4 | [036](036-live-database-ci-lane.md) | Ogólne: izolowane testy z SQL Server i PG | Oba silniki w jednym wykonaniu |
+
+028 jest DONE na `ci/plan-028-release` (361e88c); bramki Windows i Linux zielone. Scalenie czeka na decyzję; 032 wymaga wcześniejszej integracji 028.
 
 034 jest DONE i scalone lokalnie (`0d30771`); oba gate'y przeszły na tym commitcie.
 
@@ -158,7 +159,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [025](025-redaction-consistency.md) | Redact credentials (password value) in every operation; stop redacting caller-supplied SQL, parameters, vars and user (supersedes 038/W3 threshold) | P2 | M | — | DONE (branch fix/plan-025-redaction; Windows verify.ps1 OK; Linux verify-linux.ps1 pending) |
 | [026](026-watch-condition-matching.md) | `watch --until` matches bit/bool, quoted strings and exponents; keeps polling while no row exists | P2 | S | 016 | DONE (branch fix/plan-026-watch-condition; docs eb53de4, formatting fix d7d7606; Windows and Linux gates passed) |
 | [027](027-gain-store-robustness-and-mcp-gain.md) | Gain never fails a successful command; tolerant reads; MCP records gain | P2 | S–M | 016 | DONE (branch fix/plan-027-gain; plan 040 already recorded one MCP emission per call and kept accounting failures off the tool result; the journal replaced gain.jsonl; f8d1583 counts unknown operations in the total and skips unreadable rows; Windows verify.ps1 and Linux verify-linux.ps1 OK) |
-| [028](028-release-pipeline-hardening.md) | Releases are versioned, gated on CI, least-privilege, with provenance | P2 | S | 016 | TODO (revised 2026-10-11: provenance, SHA pinning and Dependabot dropped) |
+| [028](028-release-pipeline-hardening.md) | Releases are versioned, gated on CI and least-privilege | P2 | S | 016 | DONE (2026-10-13, branch ci/plan-028-release, 148355b..361e88c; Windows verify: OK exit 0, Core 3794/MCP 389 + 4 skipped; WSL ext4 verify-linux: OK exit 0, Core 3796/MCP 401 + 3 skipped; task reviews Luna xhigh, whole review Sol low clean after fixes; merge/push pending; hosted tag build proof awaits operator; no pins/provenance/Dependabot) |
 | [029](029-agent-docs-and-capabilities-drift.md) | Skill/README/AGENTS/capabilities match the shipped CLI; a sync test guards them | P2 | S | 016 (after 021/023/024/026/027 if scheduled) | DONE (branch `docs/plan-029-agent-docs`, 1cbdc14..5c07092; merged locally with Plans 051–053 at `5a1eb2a`. Original gates: `verify: OK` Core 3826, MCP 385/4 skipped; `verify-linux: OK` 3826. User decisions 2026-10-12: `capabilities [profile] --json` scoped to the profile's engine (contract v2), `dashboard` not advertised, docs written with the writing-for-agents rules; request-scope `--allow-profile` approves profile switches only. Follow-ups: SKILL parameter-set section → pointer after 053; `indexes` on PostgreSQL should reject offline) |
 | [030](030-datetime-params-and-pg-plan-depth.md) | Date/time params never shift silently; deep PG plans parse | P2 | S | 016 (after 022 if both) | DONE (A: `8feaf14` and docs follow-up `54224ff`; B: PostgreSQL UTC binding `48ed3a1` and deep-plan JSON `bb78c87`; Windows `verify.ps1` and isolated ext4 Linux `verify-linux.ps1` exited 0 at `bb78c87`—Core 3585 each, MCP 333 Windows/334 Linux with 4/3 skipped; no live PostgreSQL tests) |
 | [031](031-pg-session-hardening.md) | PG refuses non-standard string lexing; SCRAM only on unauthenticated transports | P2 | S–M | 019 (and 022) | TODO (revised 2026-10-11: SCRAM-only step dropped) |
