@@ -21,14 +21,20 @@ public class ArtifactReaderTests
         Directory.CreateDirectory(Path.Combine(directory, "plans"));
         File.WriteAllText(Path.Combine(directory, "manifest.json"), JsonSerializer.Serialize(new
         {
-            manifestVersion = 1, artifactKind, reportFile = "report.json", sections = new[] { "plan" },
+            manifestVersion = 1,
+            artifactKind,
+            reportFile = "report.json",
+            sections = new[] { "plan" },
         }));
         const string planName = "measure-001-000-000.plan.json";
         File.WriteAllText(Path.Combine(directory, "plans", planName),
             "{\"statements\":[{\"root\":{\"physicalOp\":\"Scan\"}}]}");
         File.WriteAllText(Path.Combine(directory, "runs.jsonl"), JsonSerializer.Serialize(new
         {
-            variant = "measure", repetition = 1, parameterSet, planJsonFiles = new[] { planName },
+            variant = "measure",
+            repetition = 1,
+            parameterSet,
+            planJsonFiles = new[] { planName },
         }));
 
         var section = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(temp.Path, id, "plan",
@@ -77,9 +83,19 @@ public class ArtifactReaderTests
             var name = $"baseline-{repetition:D3}-000-000.plan.json";
             var repetitionTree = repetition == 2 ? tree.Replace("\"actualRows\":2", "\"actualRows\":900", StringComparison.Ordinal) : tree;
             File.WriteAllText(Path.Combine(directory, "plans", name), "{\"statements\":[{\"root\":" + repetitionTree + "},{\"root\":{\"physicalOp\":\"Other\"}}],\"added\":true}");
-            lines.Add(JsonSerializer.Serialize(new { variant = "baseline", repetition, cpuTimeMilliseconds = repetition,
-                elapsedTimeMilliseconds = repetition, logicalReads = repetition, logicalReadsByTable = new {}, resultHash = "hash",
-                messageCount = 0, planFiles = Array.Empty<string>(), planJsonFiles = new[] { name } }));
+            lines.Add(JsonSerializer.Serialize(new
+            {
+                variant = "baseline",
+                repetition,
+                cpuTimeMilliseconds = repetition,
+                elapsedTimeMilliseconds = repetition,
+                logicalReads = repetition,
+                logicalReadsByTable = new { },
+                resultHash = "hash",
+                messageCount = 0,
+                planFiles = Array.Empty<string>(),
+                planJsonFiles = new[] { name }
+            }));
         }
         File.WriteAllText(Path.Combine(directory, "runs.jsonl"), string.Join(Environment.NewLine, lines));
 

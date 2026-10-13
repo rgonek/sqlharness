@@ -1329,7 +1329,9 @@ public sealed class McpMappingTests : IDisposable
             "{\"statements\":[{\"sql\":\"SELECT plan\",\"root\":{\"physicalOp\":\"Seek\",\"predicate\":\"knownpred\"}}]}");
         File.WriteAllText(Path.Combine(directory, "runs.jsonl"), JsonSerializer.Serialize(new
         {
-            variant = "baseline", repetition = 1, planJsonFiles = new[] { planName },
+            variant = "baseline",
+            repetition = 1,
+            planJsonFiles = new[] { planName },
         }));
         var handlers = new McpToolHandlers(scope, new RecordingModule());
 

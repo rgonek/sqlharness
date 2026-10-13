@@ -272,6 +272,7 @@ public sealed class BenchmarkSummaryTests
         Assert.Equal("@BatchSize", summary.ParameterName);
         Assert.Equal("int", summary.ParameterType);
         Assert.Equal([0, 1, 2], summary.Cases.Select(cell => cell.Index).ToArray());
+        Assert.Equal(["100", "20", "1"], summary.Cases.Select(cell => cell.ParameterValue!).ToArray());
 
         var first = summary.Details[0].Compare;
         var source = report.Cells[0].Compare;
@@ -322,7 +323,7 @@ public sealed class BenchmarkSummaryTests
             .Select(cell => cell.GetProperty("index").GetInt32())
             .ToArray();
         Assert.Equal([0, 1, 2], values);
-        Assert.DoesNotContain("parameterValue", json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("parameterValue", json, StringComparison.OrdinalIgnoreCase);
         Assert.True(document.RootElement.GetProperty("details")[0].GetProperty("compare").GetProperty("noteworthyOperators").GetArrayLength() <= 10);
     }
 

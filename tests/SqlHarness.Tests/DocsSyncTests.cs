@@ -72,6 +72,24 @@ public sealed partial class DocsSyncTests
             "SKILL.md neither links README.md#commands nor mentions in backticks: " + string.Join(", ", missing));
     }
 
+    [Fact]
+    public void Saved_artifact_docs_pin_plan_selection_pagination_and_temp_table_keys()
+    {
+        var mcp = ReadRepositoryFile("docs", "mcp.md");
+        var readme = ReadRepositoryFile("README.md");
+        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
+
+        Assert.Contains("`repetition` selects an available measured repetition", mcp, StringComparison.Ordinal);
+        Assert.Contains("`planShapeStable`", mcp, StringComparison.Ordinal);
+        Assert.Contains("evidence gap", mcp, StringComparison.Ordinal);
+        Assert.Contains("stable paths", mcp, StringComparison.Ordinal);
+        Assert.Contains("`operators` is also paged", mcp, StringComparison.Ordinal);
+        Assert.Contains("12 hex", mcp, StringComparison.Ordinal);
+        Assert.Contains("last measured repetition", readme, StringComparison.Ordinal);
+        Assert.Contains("`matrix-cells`", skill, StringComparison.Ordinal);
+        Assert.Contains("`planShapeStable`", skill, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("README.md")]
     [InlineData("skills/sqlharness/SKILL.md")]

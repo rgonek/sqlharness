@@ -180,6 +180,8 @@ public sealed class ArtifactCommandTests
             ["summary", "metrics", "operators", "statements", "matrix-cells", "plan"],
             read.GetProperty("sections").EnumerateArray().Select(section => section.GetString()!).ToArray());
         Assert.Equal(1, read.GetProperty("manifestVersion").GetInt32());
+        Assert.Equal("matrix-cells,operators,plan,statements", read.GetProperty("pagedSections").GetString());
+        Assert.Equal("variant,statement,parameterSet,repetition,includeText", read.GetProperty("planSelectors").GetString());
     }
 
     private static CompareVariantReport Variant(string name) => new(

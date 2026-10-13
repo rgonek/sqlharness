@@ -485,8 +485,12 @@ public static partial class ArtifactReader
             return new ArtifactPlanSection(artifactId, selector.Variant, selector.ParameterSet, selector.Statement,
                 statements.Length, selectedRepetition, selector.Repetition is null ? "last-measured" : "explicit",
                 repetitions, stable, allNodes.Length, nodes, cursor + nodes.Length < allNodes.Length ? cursor + nodes.Length : null)
-            { Cursor = cursor, MissingIndexes = cursor == 0 ? selected.MissingIndexes : [], StatementText = includeText && cursor == 0 ? selected.StatementText : null,
-                EvidenceGaps = hasComparisonGap ? ["One or more measured repetitions have incomplete stored plan evidence; shape stability is unavailable."] : [] };
+            {
+                Cursor = cursor,
+                MissingIndexes = cursor == 0 ? selected.MissingIndexes : [],
+                StatementText = includeText && cursor == 0 ? selected.StatementText : null,
+                EvidenceGaps = hasComparisonGap ? ["One or more measured repetitions have incomplete stored plan evidence; shape stability is unavailable."] : []
+            };
         }
         catch (ArtifactReadException) { throw; }
         catch (JsonException) { throw new ArtifactReadException("Stored plan evidence is invalid.", SqlHarnessExitCode.Safety); }

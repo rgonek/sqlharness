@@ -123,7 +123,14 @@ public static class SqlHarnessCapabilitiesProvider
                 errorMessages = "credential-redacted error messages are stored by default",
                 sqlTextAndPlans = "journal.storeSensitive",
             },
-            ["artifactRead"] = new { sections = ArtifactReader.SupportedSections, manifestVersion = ArtifactReader.CurrentManifestVersion, maxReportBytes = ArtifactReader.MaxReportBytes },
+            ["artifactRead"] = new
+            {
+                sections = ArtifactReader.SupportedSections,
+                manifestVersion = ArtifactReader.CurrentManifestVersion,
+                maxReportBytes = ArtifactReader.MaxReportBytes,
+                pagedSections = "matrix-cells,operators,plan,statements",
+                planSelectors = "variant,statement,parameterSet,repetition,includeText",
+            },
             ["watchNdjson"] = new { events = new[] { "started", "changed", "completed", "failed" }, schemaVersion = WatchNdjsonWriter.SchemaVersion, sequence = "strictly increasing; one terminal record", history = "none; every change emitted" },
         };
         if (engineLimits is not null)

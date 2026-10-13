@@ -295,16 +295,23 @@ public static class AgentOutputProjection
                         foreach (var op in operators.Operators.Take(detailLimit))
                         {
                             var item = op with { PhysicalOp = Clip(op.PhysicalOp)!, Object = Clip(op.Object) };
-                            var candidate = operators with { Operators = selected.Append(item).ToArray(),
-                                Continuation = selected.Count + 1 < operators.Operators.Count ? operators.Cursor + selected.Count + 1 : null };
+                            var candidate = operators with
+                            {
+                                Operators = selected.Append(item).ToArray(),
+                                Continuation = selected.Count + 1 < operators.Operators.Count ? operators.Cursor + selected.Count + 1 : null
+                            };
                             if (SerializedLength(candidate) + 384 > maximumBytes) break;
                             selected.Add(item);
                         }
                         if (selected.Count == 0 && operators.Operators.Count > 0)
                             throw new SqlHarnessSafetyException("The output budget cannot fit an operator page.");
                         omissions += Math.Max(0, operators.Operators.Count - selected.Count) + clippedItems;
-                        return operators with { Operators = selected, Continuation = selected.Count < operators.Operators.Count
-                            ? operators.Cursor + selected.Count : operators.Continuation };
+                        return operators with
+                        {
+                            Operators = selected,
+                            Continuation = selected.Count < operators.Operators.Count
+                            ? operators.Cursor + selected.Count : operators.Continuation
+                        };
                     }
                 case ArtifactPlanSection plan:
                     {
@@ -320,30 +327,48 @@ public static class AgentOutputProjection
                         {
                             var op = node.Operator with
                             {
-                                PhysicalOp = Clip(node.Operator.PhysicalOp)!, LogicalOp = Clip(node.Operator.LogicalOp),
-                                ObjectName = Clip(node.Operator.ObjectName), IndexName = Clip(node.Operator.IndexName),
-                                Predicate = Clip(node.Operator.Predicate), Warnings = node.Operator.Warnings.Take(detailLimit).Select(value => Clip(value)!).ToArray(),
+                                PhysicalOp = Clip(node.Operator.PhysicalOp)!,
+                                LogicalOp = Clip(node.Operator.LogicalOp),
+                                ObjectName = Clip(node.Operator.ObjectName),
+                                IndexName = Clip(node.Operator.IndexName),
+                                Predicate = Clip(node.Operator.Predicate),
+                                Warnings = node.Operator.Warnings.Take(detailLimit).Select(value => Clip(value)!).ToArray(),
                             };
                             var item = node with { Operator = op };
-                            var candidate = plan with { Nodes = selected.Append(item).ToArray(),
+                            var candidate = plan with
+                            {
+                                Nodes = selected.Append(item).ToArray(),
                                 MissingIndexes = missingIndexes,
                                 StatementText = Clip(plan.StatementText),
-                                Continuation = selected.Count + 1 < plan.Nodes.Count ? plan.Cursor + selected.Count + 1 : plan.Continuation };
+                                Continuation = selected.Count + 1 < plan.Nodes.Count ? plan.Cursor + selected.Count + 1 : plan.Continuation
+                            };
                             if (SerializedLength(candidate) + 384 > maximumBytes) break;
                             selected.Add(item);
                         }
                         if (selected.Count == 0 && plan.Nodes.Count > 0)
                         {
                             omissions += plan.Nodes.Count;
-                            return plan with { Nodes = [], Continuation = null, MissingIndexes = missingIndexes,
-                                StatementText = Clip(plan.StatementText), PageError = "The output budget cannot fit a plan node page." };
+                            return plan with
+                            {
+                                Nodes = [],
+                                Continuation = null,
+                                MissingIndexes = missingIndexes,
+                                StatementText = Clip(plan.StatementText),
+                                PageError = "The output budget cannot fit a plan node page."
+                            };
                         }
                         int? nextCursor = selected.Count < plan.Nodes.Count
                             ? plan.Cursor + selected.Count
                             : plan.Continuation;
                         omissions += Math.Max(0, plan.Nodes.Count - selected.Count) + clippedItems;
-                        return plan with { Nodes = selected, Continuation = nextCursor, MissingIndexes = missingIndexes,
-                            StatementText = Clip(plan.StatementText), PageError = null };
+                        return plan with
+                        {
+                            Nodes = selected,
+                            Continuation = nextCursor,
+                            MissingIndexes = missingIndexes,
+                            StatementText = Clip(plan.StatementText),
+                            PageError = null
+                        };
                     }
                 case ArtifactStatementsSection statements:
                     {
