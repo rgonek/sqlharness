@@ -1,4 +1,5 @@
 using SqlHarness.Core;
+using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Tests.Journal;
 
@@ -152,6 +153,45 @@ public sealed class JournalingModuleTests
         Assert.Equal(1, fake.Calls);
         Assert.NotNull(receivedRef);
         Assert.Equal(receivedRef, outcome.OperationRef);
+    }
+
+    [Fact]
+    public async Task Disabled_journal_real_module_publishes_and_reads_artifact_with_producer_reference()
+    {
+        using var artifacts = new JournalTempDirectory();
+        var profiles = new Dictionary<string, TargetProfile>
+        {
+            ["test"] = new("test-server", "testdb-{env}", new Dictionary<string, string> { ["env"] = "^a$" }, "integrated"),
+        };
+        var core = new SqlHarnessModule(
+            SqlHarnessCompareTests.FakeCompareSession.Create(plan: PlanMetricsExtractorTests.ActualPlan),
+            new CompareArtifactWriter(artifacts.Path, () => DateTimeOffset.UtcNow),
+            () => profiles);
+        var module = new JournalingModule(core, () => NullActivityJournal.Instance, () => JournalTestData.Session());
+        var producer = new SqlHarnessCompareOperation(
+            new SqlTargetRequest("test", new Dictionary<string, string> { ["env"] = "a" }),
+            "SELECT Id INTO #ids FROM dbo.Clients",
+            "SELECT Value FROM dbo.Clients",
+            "SELECT Value FROM dbo.Clients -- candidate",
+            [], 30, 1)
+        {
+            OperationRef = "disabled-journal-producer",
+        };
+
+        var published = await module.ExecuteAsync(producer);
+        Assert.True(published.ExitCode == SqlHarnessExitCode.Success, published.SafeError);
+        var comparison = Assert.IsType<SqlHarnessCompareReport>(published.Report);
+        Assert.Equal("disabled-journal-producer", published.OperationRef);
+        var artifactDirectory = Assert.IsType<string>(comparison.ArtifactDirectory);
+        Assert.True(File.Exists(Path.Combine(artifactDirectory, "manifest.json")));
+        var artifactId = Path.GetFileName(artifactDirectory);
+        var read = await module.ExecuteAsync(new SqlHarnessArtifactReadOperation(
+            artifacts.Path, artifactId, "summary"));
+
+        Assert.Equal(SqlHarnessExitCode.Success, read.ExitCode);
+        Assert.NotNull(read.OperationRef);
+        Assert.Equal("disabled-journal-producer", read.ParentOperationRef);
+        Assert.NotNull(read.Report);
     }
 
     [Fact]
