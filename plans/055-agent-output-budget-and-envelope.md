@@ -14,7 +14,7 @@
 
 ## Status
 
-- Status: DONE (implementation commits `52bdc23..f5ac90c`; Windows and Linux gates passed; final whole-branch review and local merge remain pending)
+- Status: DONE (implementation commits `52bdc23..f5ac90c`; Windows and Linux gates passed; whole-branch review/re-review clean; locally merged to main at `4bb783a`; no post-merge gates after docs/plans-only main drift)
 - Priority: P1
 - Effort: M
 - Risk: MEDIUM (shared projection for MCP and CLI agent output; wire contract version bump)
