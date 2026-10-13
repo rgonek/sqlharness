@@ -40,3 +40,16 @@ The final Task 4 review found that the documentation assigned `raw_bytes` and `e
 - Format: `dotnet format SqlHarness.sln --no-restore --include tests/SqlHarness.Tests/DocsSyncTests.cs`, followed by `dotnet format SqlHarness.sln --no-restore --verify-no-changes --include tests/SqlHarness.Tests/DocsSyncTests.cs` — passed.
 
 This correction changes documentation and assertions only; the previously recorded Windows/Linux runtime gates remain applicable.
+
+## Final correction wave — passed (`233207c`)
+
+The whole-branch review found three minor gaps alongside the important PostgreSQL compare-off baseline issue. PostgreSQL compare-off remains EXPLAIN-only and now publishes no raw comparable baseline for either a single compare or matrix; the activity journal still records emitted bytes, and the dashboard returns `comparison = null`. Direct NDJSON watch now assigns and returns one operation reference on success and mapped failure while preserving an existing reference. The README now includes artifact reads in the journal's recorded operations and removes them from the exclusion list. Setup readers with no raw accumulator drain result rows without fetching metadata or normalizing values.
+
+- Regression RED evidence: compare-off exposed a non-null 13-byte raw footprint and dashboard comparison; direct watch omitted generated/supplied references; the setup-drain test caught metadata access with a null accumulator.
+- Focused GREEN: `dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore --filter "FullyQualifiedName~ExecuteRawAsync_drains_rows_without_normalizing|FullyQualifiedName~Compare_off_runs_explain_only|FullyQualifiedName~Compare_off_keeps_journal_output_cost|FullyQualifiedName~Compare_matrix_off_does_not|FullyQualifiedName~Direct_ndjson_watch_assigns|FullyQualifiedName~Direct_ndjson_watch_failure|FullyQualifiedName~Workflow_cost_docs_pin"` — 7 passed, 0 failed, 0 skipped.
+- Broader focused groups: Postgres benchmark, compare matrix, journal, dashboard reader, watch NDJSON, DocsSync and setup-drain — 199 passed, 0 failed, 0 skipped.
+- Windows `pwsh ./scripts/verify.ps1` — exit 0, `verify: OK`; UI 144/144, build 0 warnings/errors, Core 3,904 passed/11 skipped, MCP 403 passed/4 skipped, format passed. The first run stopped at format because changed C# files had EOF newlines; those EOF CRLFs were removed byte-preservingly and the complete gate rerun passed.
+- Linux `pwsh ./scripts/verify-linux.ps1` — exit 0, `verify-linux: OK`; UI 144/144, build 0 warnings/errors, Core 3,911 passed/4 skipped, MCP 404 passed/3 skipped, format passed. Linux gate synced runtime commit `233207c`.
+- No live database calls or query sidecars were added. Emitted bytes remain measured when the comparable raw baseline is unavailable.
+
+The full correction details and self-review are in [final-fix-report.md](../.superpowers/sdd/059-journal-workflow-cost/final-fix-report.md); gate output is retained in the adjacent `final-fix-windows.log` and `final-fix-linux.log` scratch files.
