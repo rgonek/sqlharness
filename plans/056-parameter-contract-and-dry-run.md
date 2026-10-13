@@ -14,7 +14,7 @@
 
 ## Status
 
-- Status: IN PROGRESS — implementation `8275304..8e50fb5`; Task 5 docs/capabilities committed, Windows gate passed, Linux gate pending. See [056 verification](056-verification.md).
+- Status: DONE — implementation `8275304..8e50fb5`; Task 5 commits `f3d48ff..6e8232e`; Windows and Linux gates passed. Independent Task 5 review and final whole-branch review are pending. See [056 verification](056-verification.md).
 - Priority: P1
 - Effort: M
 - Risk: MEDIUM (binding sizes change benchmark plans; new Core operation flag)
@@ -363,11 +363,11 @@ git commit -m "feat(056): dryRun on query, measure and compare stops before conn
 
 ### Task 5: Documentation and gates
 
-**Files:** `docs/mcp.md` (Tools table rows for query/measure/compare, parameters paragraph), `README.md` (Safety contract parameter rules, binding sizes), `skills/sqlharness/SKILL.md`, `tests/SqlHarness.Tests/DocsSyncTests.cs` pins if affected.
+**Files:** `docs/mcp.md` (tool rows and parameters/dry-runs contract), `README.md` (Safety contract parameter rules and binding sizes), `skills/sqlharness/SKILL.md`, `Capabilities.cs` and capability/docs contract tests.
 
-- [ ] **Step 1:** Document: `@` optional in names; unsized strings bind as 4000/`max` (Dapper parity; say why: the benchmark should compile the plan the application compiles); dry run semantics and report fields; unsupported-statement detail format. Mention that `sqlharness_validate` is superseded by `dryRun` and will be removed (plan 060).
-- [ ] **Step 2:** `dotnet build SqlHarness.sln -warnaserror`; `pwsh scripts/verify.ps1` → `verify: OK`; `pwsh scripts/verify-linux.ps1` → `verify-linux: OK`.
-- [ ] **Step 3:** Status DONE with commit range; update `plans/README.md`.
+- [x] **Step 1:** Document parameter names and type-specific sizes, dry-run scope/report fields and limits, unsupported-statement detail format, and the plan 060 removal of `sqlharness_validate`.
+- [x] **Step 2:** `dotnet build SqlHarness.sln -warnaserror`; `pwsh ./scripts/verify.ps1` → `verify: OK`; `pwsh ./scripts/verify-linux.ps1` → `verify-linux: OK`.
+- [x] **Step 3:** Status DONE with commit range; update `plans/README.md`.
 
 ```bash
 git add docs README.md skills tests plans
@@ -376,11 +376,11 @@ git commit -m "docs(056): parameter names and sizes, rejection detail, dry run"
 
 ## Done criteria
 
-- [ ] `@Name` and `Name` bind identically on typed, matrix and parameter-set paths.
-- [ ] `nvarchar` without size binds as 4000.
-- [ ] A dry run of each of query, measure, compare and compare matrix makes zero connections and writes zero artifacts.
-- [ ] `WHILE` rejection reports `WhileStatement at line n`.
-- [ ] Both gates pass; README row updated.
+- [x] `@Name` and `Name` bind identically on typed, matrix and parameter-set paths.
+- [x] `nvarchar` without size binds as 4000.
+- [x] A dry run of each of query, measure, compare and compare matrix makes zero connections and writes zero artifacts.
+- [x] `WHILE` rejection reports `WhileStatement at line n`.
+- [x] Both gates pass; README row updated.
 
 ## STOP conditions
 

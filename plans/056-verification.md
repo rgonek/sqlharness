@@ -3,7 +3,7 @@
 Branch: `feat/plan-056-parameters-dry-run`
 Worktree: `D:/Dev/sqlharness/.worktrees/plan-056`
 Implementation commits: `8275304..8e50fb5`
-Task 5 commits: `f3d48ff` documentation/capabilities; `f43782d` dry-run docs/fixture sync; `6e8232e` gate-required final-newline formatting.
+Task 5 commits: `f3d48ff` documentation/capabilities; `f43782d` dry-run docs/fixture sync; `6e8232e` gate-required final-newline formatting. Evidence/status checkpoint before Linux: `58090c3`.
 
 ## Verification state
 
@@ -13,7 +13,7 @@ The complete Windows gate passed at `6e8232e`: `pwsh ./scripts/verify.ps1` retur
 
 The first Windows run found two contract-sync failures: the new documentation assertion used wording that differed from the equivalent docs phrase, and the pinned `discoveryThenSchema` UTF-8 observation changed from 7562 to 7856 bytes after adding capability descriptions. The updated observation remains below the existing 8192-byte limit. The next run found `FINALNEWLINE` diagnostics on 25 files; `.editorconfig` sets `insert_final_newline = false`. Only the terminal CRLF/LF was removed from those checker-reported files. `dotnet format SqlHarness.sln --no-restore --verify-no-changes --include <the 25 reported files>` passed, and `git diff --ignore-space-at-eol` confirmed the repair contained no other content changes. The final Windows gate then passed.
 
-Linux gate: pending on this committed status checkpoint. Run `pwsh ./scripts/verify-linux.ps1` and replace this line with the exact commit, counts, skips and result before marking the plan DONE.
+The complete Linux gate passed at `58090c3`: `pwsh ./scripts/verify-linux.ps1` returned `verify-linux: OK`. It synced that exact commit (`HEAD is now at 58090c3 docs(056): tidy verification checkpoint`). UI: 32 test files and 148 tests passed (the chart tests emitted jsdom zero-size container warnings). Core: 3837 passed, 0 failed, 0 skipped. MCP: 401 passed, 0 failed, 3 skipped; Linux x64 published-server and request-scoped smoke tests passed, while the configured live-target and native macOS checks were skipped. The build reported 0 warnings and 0 errors.
 
 ## Review routing
 
@@ -27,3 +27,5 @@ Plan routing: implementation by gpt-6-luna high; task review by gpt-6-luna xhigh
 - Task 4 returns measure dry runs before `CheckStorage` in both single-set and parameter-set paths, as compare does; artifact preflight performs writes, which conflicts with dry run's no-write contract. All argument validation stays before the return. Cost if wrong: dry run cannot predict runtime artifact-storage failures, which is documented as a limitation.
 - Task 5 updates `Capabilities.cs` and its fixture as required by `AGENTS.md`, so public capability descriptions follow the Core/MCP contract. Cost if wrong: a small additional capability/fixture diff.
 - `sqlharness_validate` remains until plan 060; the spec allocates its removal to 060 after 056 ships. Cost if wrong: the old tool remains exposed through one plan.
+
+SQL Server type references for the fixed-width correction: [char and varchar](https://learn.microsoft.com/en-us/sql/t-sql/data-types/char-and-varchar-transact-sql?view=sql-server-ver17) and [nchar and nvarchar](https://learn.microsoft.com/en-us/sql/t-sql/data-types/nchar-and-nvarchar-transact-sql?view=sql-server-ver17).
