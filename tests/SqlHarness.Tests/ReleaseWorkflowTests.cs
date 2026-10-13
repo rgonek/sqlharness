@@ -18,6 +18,40 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
+    public void Release_write_permission_is_scoped_to_the_release_job()
+    {
+        var workflow = File.ReadAllText(FindRepositoryFile(".github", "workflows", "release.yml"));
+        var releaseJob = Regex.Match(
+            workflow,
+            @"(?ms)^  release:\r?\n(?<body>.*?)(?=^\S|\z)").Groups["body"].Value;
+        var topLevelPermissions = Regex.Match(
+            workflow,
+            @"(?ms)^permissions:\r?\n(?<body>(?:^  .*\r?\n)+)").Groups["body"].Value;
+        var outsideReleaseJob = Regex.Replace(
+            workflow,
+            @"(?ms)^  release:\r?\n.*?(?=^\S|\z)",
+            string.Empty);
+
+        Assert.Matches(@"(?m)^  contents:\s*read\s*$", topLevelPermissions);
+        Assert.NotEmpty(releaseJob);
+        Assert.Matches(@"(?m)^    permissions:\r?\n      contents:\s*write\s*$", releaseJob);
+        Assert.DoesNotMatch(@"(?m)^\s*contents:\s*write\s*$", outsideReleaseJob);
+    }
+
+    [Fact]
+    public void Every_workflow_checkout_disables_persisted_credentials()
+    {
+        foreach (var path in new[] { ".github/workflows/ci.yml", ".github/workflows/release.yml" })
+        {
+            var workflow = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
+
+            Assert.Matches(
+                @"(?m)^\s*- uses: actions/checkout@[^\r\n]*\r?\n\s+with:\r?\n\s+persist-credentials: false\s*$",
+                workflow);
+        }
+    }
+
+    [Fact]
     public void Release_job_creates_the_release_with_explicit_repository_context_without_checkout()
     {
         var workflow = File.ReadAllText(FindRepositoryFile(".github", "workflows", "release.yml"));

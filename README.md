@@ -41,6 +41,8 @@ and [the audit roadmap](docs/superpowers/plans/2026-09-26-audit-roadmap.md).
 
 SQLHarness is distributed only as self-contained, single-file, untrimmed GitHub Release binaries. Those binaries embed the .NET 10 runtime. Download the archive matching your platform (`win-x64`, `linux-x64`, or `osx-arm64`) and the accompanying `SHA256SUMS` from the [GitHub Releases page](https://github.com/rgonek/sqlharness/releases). Verify the archive before extracting it, then put `sqlharness.exe` on `PATH` for Windows or `sqlharness` on `PATH` for Linux/macOS.
 
+Release binaries take their numeric version from the release tag (for example, tag `v0.4.0` produces version `0.4.0`). Local development builds report `0.0.0` with `--version`; their informational `buildId` is `0.0.0-dev` and may include a commit suffix.
+
 Example for Windows PowerShell:
 
 ```powershell

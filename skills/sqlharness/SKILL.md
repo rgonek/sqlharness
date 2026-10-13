@@ -7,6 +7,8 @@ description: Use when a coding agent needs SQL Server, Azure SQL, or PostgreSQL 
 
 SQLHarness runs bounded SQL Server and PostgreSQL work for coding agents and guards target resolution and SQL execution. [README.md](../../README.md) is the reference for every option and rule, [AGENTS.md](../../AGENTS.md) is the contract, and this skill is the order of work. Look up options and defaults with `sqlharness <command> --help`; the command list is [README Commands](../../README.md#commands).
 
+Release binaries derive their numeric version from the release tag (for example, `v0.4.0` produces `0.4.0`). Local development builds report `0.0.0` with `--version`; the informational `buildId` is `0.0.0-dev` and may include a commit suffix.
+
 ## Start offline
 
 <!-- docs-sync:example -->
