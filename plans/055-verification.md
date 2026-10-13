@@ -2,7 +2,7 @@
 
 ## Scope and implementation history
 
-Plan 055 implementation is on `feat/plan-055-agent-output` in commit range `52bdc23..f5ac90c` (base `52bdc23286efd277fedde7c577a1301ea77a571b`). The final Windows gate ran at `3d99ab6`; the only later source changes were the portable test-fixture corrections in `f5ac90c`, which were then exercised by focused Windows and Linux tests. The final Linux gate ran at `f5ac90c`.
+Plan 055 implementation is on `feat/plan-055-agent-output` in commit range `52bdc23..f5ac90c` (base `52bdc23286efd277fedde7c577a1301ea77a571b`). The final Windows gate ran at `3d99ab6`; the later behavior/test changes were the portable fixture corrections in `f5ac90c`, exercised by focused Windows and Linux tests. The final Linux gate ran at `f5ac90c`. The final review fix changes documentation and one explanatory comment only; it does not change runtime behavior.
 
 Key implementation commits:
 
@@ -20,9 +20,9 @@ Key implementation commits:
 
 ## Reviews and recorded rulings
 
-The task-level reviews and required fix-round rereviews approved the implementation; the final portability fix rereview was clean. The final whole-branch review is still pending. The user authorized local merge after completion, but the branch has not yet been merged. No push was performed or authorized.
+The task-level reviews and required fix-round rereviews approved the implementation; the final portability fix rereview was clean. The whole-branch review by gpt-6-sol (low) is complete with no Critical or Important findings and two Minor comments. This final review fix addresses both comments; re-review is pending. The user authorized local merge after completion, but the branch has not yet been merged. No push was performed or authorized.
 
-Execution allocation recorded in the SDD ledger: implementation by gpt-6-luna (high), task reviews by gpt-6-luna (xhigh), and whole-branch review assigned to gpt-6-sol (low). The latter remains outstanding.
+Execution allocation recorded in the SDD ledger: implementation by gpt-6-luna (high), task reviews by gpt-6-luna (xhigh), and whole-branch review by gpt-6-sol (low).
 
 Contract rulings retained during implementation:
 
@@ -32,6 +32,8 @@ Contract rulings retained during implementation:
 - Matrix details are indexed compact comparison objects, with matrix-shared fields represented once. Existing legacy matrix indexes remain readable, with missing metrics/equivalence explicitly unavailable.
 - Statements and matrix inventory paging are in scope. Saved-plan operators and other plan artifact pagination remain in Plan 058.
 - Existing input-root and redaction changes from the drifted branch were preserved.
+
+The whole-branch review declined to judge decisions 5–15 of the 2026-10-12 design because they belong to Plans 056–061; live SQL Server/PostgreSQL behavior and client context accounting because this branch has no live database/client proof; saved plan/operator pagination because Plan 058 owns it; and user adoption or token savings because transport bytes do not establish those outcomes. These are scope boundaries from the reviewed plan/spec, not newly waived Plan 055 work.
 
 ## Verification
 
@@ -73,4 +75,4 @@ The three MCP skips are configured environment-gated tests. No live database or 
 
 ## Remaining integration steps
 
-The implementation and platform gates are complete. Complete the assigned whole-branch review, then perform the already-authorized local merge. This record describes the feature branch and does not claim that review or merge has happened.
+The implementation and platform gates are complete. The whole-branch review found no Critical or Important issues; its two Minor comments were addressed in `README.md` and `AgentOutputProjection.cs`. Re-review is pending. Then perform the already-authorized local merge. This record describes the feature branch and does not claim that re-review or merge has happened.

@@ -697,7 +697,7 @@ public static class AgentOutputProjection
         }
     }
 
-    /// <summary>One third of the outer budget minus a fixed margin: MCP carries two representations plus metadata.</summary>
+    /// <summary>Conservative prefilter that leaves room for envelope metadata and other fields before the final text-budget fit.</summary>
     private static int PreFilterBudget(int maximumBytes) => Math.Max(0, maximumBytes / 3 - 128);
 
     private static string? ClipText(string? value, int maximumCellCharacters, ref int clippedItems)
