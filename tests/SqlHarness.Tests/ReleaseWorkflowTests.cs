@@ -52,6 +52,19 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
+    public void Publish_step_stamps_the_version_from_the_release_tag()
+    {
+        var workflow = File.ReadAllText(FindRepositoryFile(".github", "workflows", "release.yml"));
+        var publishStep = Regex.Match(
+            workflow,
+            @"(?ms)^      - name: Publish single-file binary\r?\n(?<body>.*?)(?=^      - (?:name|uses):|\z)").Groups["body"].Value;
+
+        Assert.NotEmpty(publishStep);
+        Assert.Contains("shell: bash", publishStep, StringComparison.Ordinal);
+        Assert.Contains("-p:Version=${GITHUB_REF_NAME#v}", publishStep, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Release_builds_the_ui_before_testing_and_publishing()
     {
         var workflow = File.ReadAllText(RepositoryFile.Locate(".github", "workflows", "release.yml"));
