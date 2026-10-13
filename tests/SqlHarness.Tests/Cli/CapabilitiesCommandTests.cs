@@ -202,9 +202,10 @@ public sealed class CapabilitiesCommandTests
 
         foreach (var command in new[] { "query", "measure", "compare" })
         {
+            Assert.Contains("--dry-run", commands[command], StringComparison.Ordinal);
             Assert.Contains("dryRun", commands[command], StringComparison.Ordinal);
             Assert.Contains("offline", commands[command], StringComparison.Ordinal);
-            Assert.Contains("no CLI switch", commands[command], StringComparison.Ordinal);
+            Assert.DoesNotContain("no CLI switch", commands[command], StringComparison.Ordinal);
         }
     }
 

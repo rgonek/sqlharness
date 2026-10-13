@@ -53,6 +53,8 @@ public sealed class Renderer
             }
             foreach (var message in query.Messages) output.WriteLine(message);
         }
+        else if (report is SqlHarnessDryRunReport dryRun)
+            output.WriteLine($"Dry run {dryRun.Command}: allowed; classification: {dryRun.Classification}; parameters: {dryRun.Parameters.Count}; parameter sets: {dryRun.ParameterSets}; no connection opened.");
         else if (report is SqlHarnessMeasureReport measure)
             output.WriteLine($"measure\t{ElapsedText(measure.Query)}\nStable results: {measure.ResultsStable}; artifacts: {measure.ArtifactDirectory ?? "none"}");
         else if (report is SqlHarnessMeasureSetReport measureSet)
