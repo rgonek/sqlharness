@@ -38,7 +38,6 @@ Plan [062](062-compare-context-dashboard.md) jest osobnym planem produktu: konte
 
 | Kolejność | Plan | Kategoria | Zależności |
 |---|---|---|---|
-
 | 3 | [032 — dokończenie całego planu](032-ci-matrix-and-test-hygiene.md) | CI: Windows/Linux i stabilność testów | Po 028 |
 | 4 | [036](036-live-database-ci-lane.md) | Ogólne: izolowane testy z SQL Server i PG | Oba silniki w jednym wykonaniu |
 
