@@ -5,6 +5,19 @@ namespace SqlHarness.Tests;
 public sealed class ReleaseWorkflowTests
 {
     [Fact]
+    public void Release_build_is_gated_by_the_reusable_ci_workflow()
+    {
+        var workflow = File.ReadAllText(FindRepositoryFile(".github", "workflows", "release.yml"));
+        var buildJob = Regex.Match(
+            workflow,
+            @"(?ms)^  build:\r?\n(?<body>.*?)(?=^  \w+:|\z)").Groups["body"].Value;
+
+        Assert.Contains("uses: ./.github/workflows/ci.yml", workflow, StringComparison.Ordinal);
+        Assert.NotEmpty(buildJob);
+        Assert.Matches(@"(?m)^    needs:\s*gate\s*$", buildJob);
+    }
+
+    [Fact]
     public void Release_job_creates_the_release_with_explicit_repository_context_without_checkout()
     {
         var workflow = File.ReadAllText(FindRepositoryFile(".github", "workflows", "release.yml"));
