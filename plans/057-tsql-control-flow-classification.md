@@ -14,7 +14,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: DONE
 - Priority: P2
 - Effort: S
 - Risk: HIGH (widens the safety classifier; needs a security-focused review before merge)
@@ -270,10 +270,10 @@ git commit -m "docs(057): supported T-SQL control flow"
 
 ## Done criteria
 
-- [ ] All Task 1 and Task 2 tests pass; no existing safety test changed its expectation.
-- [ ] A branching batch compares end to end on the fake session.
-- [ ] Security review verdict recorded.
-- [ ] Both gates pass; README row updated.
+- [x] All Task 1 and Task 2 tests pass. The two historical nested BEGIN/IF table-variable expectations moved to allowed as required by the specification and Task 2; see [057 verification](057-verification.md).
+- [x] A branching batch compares end to end on the fake session.
+- [x] Security review verdict recorded.
+- [x] Both gates pass; README row updated.
 
 ## STOP conditions
 
