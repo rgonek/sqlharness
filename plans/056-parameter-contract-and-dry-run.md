@@ -14,7 +14,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: TODO — implementation commits `8275304..8e50fb5`; Task 5 documentation and gates in progress.
 - Priority: P1
 - Effort: M
 - Risk: MEDIUM (binding sizes change benchmark plans; new Core operation flag)
@@ -24,7 +24,7 @@
 ## Global Constraints
 
 - Accepted parameter name: optional single leading `@`, then `^[A-Za-z_][A-Za-z0-9_]*$`. Reports always print the name with `@`.
-- Unsized `nvarchar`, `varchar`, `nchar`, `char` and untyped string values: size `4000` when the value length ≤ 4000 (or the value is NULL), otherwise `max`. Explicit sizes (`nvarchar(26)`, `nvarchar(max)`) are unchanged.
+- Unsized variable-width `nvarchar`/`varchar` and untyped string values use size `4000` when the value length ≤ 4000 (or the value is NULL), otherwise `max`, matching Dapper so the benchmark compiles the plan the application compiles. Fixed-width `nchar`/`char` have no `max`: both use size `4000` through 4000 characters (or NULL); `char` lengths 4001–8000 use actual length; `nchar` over 4000 and `char` over 8000 are rejected. Explicit sizes are unchanged.
 - Unsupported-statement detail format: `"<ScriptDom statement type> at line <n>"`, for example `"IfStatement at line 14"`.
 - `dryRun: true` never opens a connection, never writes an artifact, and returns exit code 0 when the call would be allowed.
 - The `sqlharness_validate` tool stays in this plan; plan 060 removes it.
@@ -33,7 +33,7 @@
 
 - A name of only `@` or `@@Name` must be rejected with a message naming the parameter (Task 1 test).
 - A typed NULL `nvarchar` must bind with size 4000, not null (Task 2 test).
-- A 4001-character value must bind as `max`, not be truncated (Task 2 test).
+- A 4001-character `nvarchar`/`varchar` value binds as `max`; fixed-width values follow their representable limits (`char` 4001–8000 uses its actual length; `nchar` above 4000 and `char` above 8000 reject) (Task 2 tests).
 - A dry run of a compare matrix must bind every matrix value, so a bad value fails the dry run exactly as it would fail the real call (Task 4 test).
 - A dry run with a setup batch that creates a temp table used by the measured batch must pass, as the real call does (Task 4 test).
 
