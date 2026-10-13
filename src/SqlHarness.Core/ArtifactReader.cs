@@ -79,15 +79,20 @@ public sealed record ArtifactStatementsSection(
     string ArtifactId,
     string ArtifactKind,
     IReadOnlyList<ArtifactStatementMetric> Statements,
-    int OmittedStatements);
+    int OmittedStatements)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Continuation { get; init; }
+
+    [JsonIgnore]
+    public int Cursor { get; init; }
+}
 
 /// <summary>One safe reference to a saved compare cell, addressed only by its artifact id.</summary>
-public sealed record ArtifactMatrixCellReference(int Index, string ArtifactId);
-
-/// <summary>A bounded page of saved compare-cell references.</summary>
+/// <summary>A bounded page of saved case outcomes in the same schema as agent matrix inventories.</summary>
 public sealed record ArtifactMatrixCellsSection(
     string ArtifactId,
-    IReadOnlyList<ArtifactMatrixCellReference> Cells,
+    IReadOnlyList<AgentMatrixCase> Cases,
     int? Continuation,
     int Cursor = 0);
 
@@ -150,7 +155,7 @@ public static partial class ArtifactReader
                 $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, matrix-cells.",
                 SqlHarnessExitCode.Safety);
 
-        if (cursor is < 0 || cursor is not null && section != MatrixCellsSection)
+        if (cursor is < 0 || cursor is not null && section is not (MatrixCellsSection or StatementsSection))
             throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
 
         var directory = ResolveDirectory(root, artifactId);
@@ -169,7 +174,7 @@ public static partial class ArtifactReader
             SummarySection => ReadSummary(directory, artifactId, manifest),
             MetricsSection => ReadMetrics(directory, artifactId, manifest),
             OperatorsSection => ReadOperators(directory, artifactId, manifest),
-            StatementsSection => ReadStatements(directory, artifactId, manifest),
+            StatementsSection => ReadStatements(directory, artifactId, manifest, cursor ?? 0),
             MatrixCellsSection => ReadMatrixCells(directory, artifactId, cursor ?? 0),
             _ => throw new ArtifactReadException(
                 $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, matrix-cells.",
@@ -187,28 +192,39 @@ public static partial class ArtifactReader
         try
         {
             using var document = JsonDocument.Parse(ReadBoundedText(path, MaxReportBytes));
-            if (!document.RootElement.TryGetProperty("cells", out var cells)
-                || cells.ValueKind != JsonValueKind.Array
-                || cells.GetArrayLength() > 100_000)
+            var hasCaseInventory = document.RootElement.TryGetProperty("cases", out var cases);
+            var hasLegacyCells = !hasCaseInventory && document.RootElement.TryGetProperty("cells", out cases);
+            if ((!hasCaseInventory && !hasLegacyCells)
+                || cases.ValueKind != JsonValueKind.Array
+                || cases.GetArrayLength() > 100_000)
                 throw new ArtifactReadException("Artifact matrix index is invalid.", SqlHarnessExitCode.Safety);
 
-            if (cursor > cells.GetArrayLength())
+            if (cursor > cases.GetArrayLength())
                 throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
 
             const int pageSize = 32;
-            var page = cells.EnumerateArray().Skip(cursor).Take(pageSize).Select(item =>
+            var page = cases.EnumerateArray().Skip(cursor).Take(pageSize).Select(item =>
             {
                 if (!item.TryGetProperty("index", out var index)
                     || !index.TryGetInt32(out var cellIndex)
+                    || cellIndex < 0
                     || !item.TryGetProperty("artifactId", out var id)
                     || id.ValueKind != JsonValueKind.String
                     || id.GetString() is not { } artifactCellId
                     || !ArtifactIdPattern().IsMatch(artifactCellId))
                     throw new ArtifactReadException("Artifact matrix index is invalid.", SqlHarnessExitCode.Safety);
-                return new ArtifactMatrixCellReference(cellIndex, artifactCellId);
+                var matrixCase = hasLegacyCells
+                    ? new AgentMatrixCase(cellIndex, artifactCellId, null, "unavailable",
+                        new AgentMedianMetrics(null, null, null), new AgentMedianMetrics(null, null, null),
+                        new AgentMedianMetrics(null, null, null), [])
+                    : JsonSerializer.Deserialize<AgentMatrixCase>(item.GetRawText(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                if (matrixCase is null || matrixCase.Index != cellIndex || matrixCase.ArtifactId != artifactCellId
+                    || matrixCase.Baseline is null || matrixCase.Candidate is null || matrixCase.Delta is null || matrixCase.Warnings is null)
+                    throw new ArtifactReadException("Artifact matrix index is invalid.", SqlHarnessExitCode.Safety);
+                return matrixCase;
             }).ToArray();
             var next = cursor + page.Length;
-            return new ArtifactMatrixCellsSection(artifactId, page, next < cells.GetArrayLength() ? next : null, cursor);
+            return new ArtifactMatrixCellsSection(artifactId, page, next < cases.GetArrayLength() ? next : null, cursor);
         }
         catch (ArtifactReadException)
         {
@@ -346,7 +362,7 @@ public static partial class ArtifactReader
         return new ArtifactOperatorsSection(artifactId, manifest.ArtifactKind, operators);
     }
 
-    private static ArtifactStatementsSection ReadStatements(string directory, string artifactId, ArtifactManifest manifest)
+    private static ArtifactStatementsSection ReadStatements(string directory, string artifactId, ArtifactManifest manifest, int cursor)
     {
         var path = Path.Combine(directory, StatementsFileName);
         if (!IsPlainFile(path))
@@ -360,7 +376,16 @@ public static partial class ArtifactReader
                 || section.Statements.Any(statement => statement is null || statement.StatementHash is null
                     || statement.Variant is null || statement.TopOperators is null))
                 throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
-            return section with { ArtifactId = artifactId, ArtifactKind = manifest.ArtifactKind };
+            if (cursor > section.Statements.Count)
+                throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
+            return section with
+            {
+                ArtifactId = artifactId,
+                ArtifactKind = manifest.ArtifactKind,
+                Statements = section.Statements.Skip(cursor).ToArray(),
+                Continuation = null,
+                Cursor = cursor,
+            };
         }
         catch (ArtifactReadException)
         {

@@ -35,21 +35,21 @@ internal static class QueryShapeFixtures
     public static void AssertAccounted(JsonElement result, SqlHarnessQueryReport source)
     {
         var sets = result.GetProperty("resultSets");
-        Assert.Equal(source.ResultSets.Count, sets.GetArrayLength() + result.GetProperty("omittedResultSetCount").GetInt32());
+        Assert.Equal(source.ResultSets.Count, sets.GetArrayLength() + OptionalInt32(result, "omittedResultSetCount"));
         for (var i = 0; i < sets.GetArrayLength(); i++)
         {
             var set = sets[i];
             var origin = source.ResultSets[i];
             Assert.Equal(i, set.GetProperty("ordinal").GetInt32());
             var columns = set.GetProperty("columns");
-            Assert.Equal(origin.Columns.Count, columns.GetArrayLength() + set.GetProperty("omittedColumnCount").GetInt32());
+            Assert.Equal(origin.Columns.Count, columns.GetArrayLength() + OptionalInt32(set, "omittedColumnCount"));
             for (var c = 0; c < columns.GetArrayLength(); c++)
                 Assert.Equal(origin.Columns[c].Name, columns[c].GetProperty("name").GetString());
             var rows = set.GetProperty("rows");
             Assert.Equal(origin.RowCount, set.GetProperty("rowCount").GetInt64());
-            Assert.Equal(origin.Rows.Count + origin.OmittedRowCount, rows.GetArrayLength() + set.GetProperty("omittedRowCount").GetInt64());
+            Assert.Equal(origin.Rows.Count + origin.OmittedRowCount, rows.GetArrayLength() + OptionalInt64(set, "omittedRowCount"));
             if (rows.GetArrayLength() > 0)
-                Assert.Equal(0, set.GetProperty("omittedColumnCount").GetInt32());
+                Assert.Equal(0, OptionalInt32(set, "omittedColumnCount"));
             for (var r = 0; r < rows.GetArrayLength(); r++)
             {
                 Assert.Equal(columns.GetArrayLength(), rows[r].GetArrayLength());
@@ -73,13 +73,19 @@ internal static class QueryShapeFixtures
             var origin = source.ResultSets[ordinal];
             Assert.Equal(ordinal, set.GetProperty("ordinal").GetInt32());
             Assert.Equal(origin.Columns.Count, set.GetProperty("columns").GetArrayLength());
-            Assert.Equal(0, set.GetProperty("omittedColumnCount").GetInt32());
+            Assert.Equal(0, OptionalInt32(set, "omittedColumnCount"));
             var rows = set.GetProperty("rows");
             Assert.Equal(origin.Rows.Count, rows.GetArrayLength());
-            Assert.Equal(origin.OmittedRowCount, set.GetProperty("omittedRowCount").GetInt64());
+            Assert.Equal(origin.OmittedRowCount, OptionalInt64(set, "omittedRowCount"));
             for (var r = 0; r < origin.Rows.Count; r++)
                 for (var c = 0; c < origin.Columns.Count; c++)
                     Assert.Equal((string)origin.Rows[r][c]!, rows[r][c].GetString());
         }
     }
+
+    private static int OptionalInt32(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) ? value.GetInt32() : 0;
+
+    private static long OptionalInt64(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) ? value.GetInt64() : 0;
 }

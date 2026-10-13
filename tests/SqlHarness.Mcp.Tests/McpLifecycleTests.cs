@@ -1029,7 +1029,7 @@ public sealed class McpLifecycleTests
     public void Process_budgets_default_bind_validate_and_advertise()
     {
         var defaults = new McpServerOptions { Profile = "mcp-t5" };
-        Assert.Equal(16384, defaults.MaxResultBytes);
+        Assert.Equal(262144, defaults.MaxResultBytes);
         Assert.Equal(900, defaults.MaxOperationSeconds);
 
         // Out-of-range process maxima fail closed at startup with a generic,
@@ -1057,7 +1057,8 @@ public sealed class McpLifecycleTests
             MaxOperationSeconds = 60,
         });
         var capabilities = McpOperationMapper.BuildCapabilities(scoped, includeDiagnostics: false);
-        Assert.Equal(8192, capabilities.Limits["callToolResultBudgetBytes"]);
+        Assert.Equal(65536, capabilities.Limits["defaultResultBytes"]);
+        Assert.Equal(8192, capabilities.Limits["maxResultBytes"]);
         Assert.Equal(60, capabilities.Limits["maxOperationSeconds"]);
 
         // Per-call time budgets only lower the process maximum, mirroring

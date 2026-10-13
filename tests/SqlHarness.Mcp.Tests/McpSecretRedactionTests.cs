@@ -10,7 +10,7 @@ namespace SqlHarness.Mcp.Tests;
 
 /// <summary>
 /// T4 secret handling: full fictional secrets and their connection-string
-/// fragments never reach either result representation — not via parser
+/// fragments never reach the result text — not via parser
 /// errors, not via plan content, and not via process logging — while database
 /// content stays data (preserved verbatim, never interpreted). Only synthetic
 /// fixtures and fictional secrets are used; no database is opened.
@@ -23,7 +23,7 @@ public sealed class McpSecretRedactionTests
     private static readonly SqlHarnessTargetIdentityReport Target = new("req-srv", "req-db", "srv", "db", "profile");
 
     [Fact]
-    public void Storage_preflight_secrets_do_not_reach_either_wire_representation()
+    public void Storage_preflight_secrets_do_not_reach_result_text()
     {
         var exception = new ArtifactStoragePreflightException("/tmp/" + FictionalSecret,
             new IOException("write failed: " + FictionalPassword));
@@ -37,7 +37,7 @@ public sealed class McpSecretRedactionTests
         Assert.DoesNotContain(FictionalSecret, text);
         Assert.DoesNotContain(FictionalPassword, text);
         Assert.Contains("[REDACTED]", text);
-        Assert.Equal(text, result.StructuredContent?.GetRawText());
+        Assert.Null(result.StructuredContent);
         using var document = JsonDocument.Parse(text);
         Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
     }
@@ -45,7 +45,7 @@ public sealed class McpSecretRedactionTests
     private static string TextOf(CallToolResult result)
     {
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
-        Assert.Equal(text, result.StructuredContent?.GetRawText());
+        Assert.Null(result.StructuredContent);
         return text;
     }
 

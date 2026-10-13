@@ -35,7 +35,7 @@ public abstract class TargetSettings : CommandSettings
     [CommandOption("--root-certificate <PATH>")] public string? RootCertificate { get; set; }
     [CommandOption("--json")] public bool Json { get; set; }
     [CommandOption("--output <MODE>")] public string? Output { get; set; }
-    [CommandOption("--max-output-bytes <BYTES>")][DefaultValue(16384)] public int MaxOutputBytes { get; set; } = 16384;
+    [CommandOption("--max-output-bytes <BYTES>")][DefaultValue(65536)] public int MaxOutputBytes { get; set; } = 65536;
     [CommandOption("--max-cell-chars <CHARS>")][DefaultValue(512)] public int MaxCellChars { get; set; } = 512;
 
     public bool TryTarget(out SqlTargetRequest target, out string error)

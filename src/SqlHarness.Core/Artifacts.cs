@@ -375,10 +375,11 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
     public void WriteMatrixIndex(IReadOnlyList<CompareMatrixCellReport> cells)
     {
         ArgumentNullException.ThrowIfNull(cells);
-        if (cells.Count == 0 || cells.Any(cell => string.IsNullOrWhiteSpace(cell.Compare.ArtifactDirectory)))
+        var orderedCells = cells.OrderBy(cell => cell.Index).ToArray();
+        if (orderedCells.Length == 0 || orderedCells.Any(cell => string.IsNullOrWhiteSpace(cell.Compare.ArtifactDirectory)))
             return;
 
-        var directories = cells.Select(cell => Path.GetFullPath(cell.Compare.ArtifactDirectory!)).ToArray();
+        var directories = orderedCells.Select(cell => Path.GetFullPath(cell.Compare.ArtifactDirectory!)).ToArray();
         foreach (var directory in directories)
         {
             if (!string.Equals(Path.GetDirectoryName(directory), _root, StringComparison.Ordinal)
@@ -397,11 +398,8 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
         };
         var index = new
         {
-            cells = cells.Select((cell, position) => new
-            {
-                index = cell.Index,
-                artifactId = Path.GetFileName(directories[position]),
-            }).ToArray(),
+            cases = orderedCells.Select((cell, position) => BenchmarkSummaryProjector.ProjectCase(
+                cell.Index, Path.GetFileName(directories[position]), cell.Compare)).ToArray(),
         };
 
         var indexPath = Path.Combine(firstDirectory, "matrix-cells.json");

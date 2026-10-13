@@ -62,7 +62,7 @@ public sealed class McpRequestToolHandlers(
         [Description("Parameters as {name, type, value}.")] McpParameterArgument[]? parameters = null,
         [Description("SQL timeout 1..300 seconds.")] int timeout = 30,
         [Description("Presentation row cap 0..500.")] int maxRows = 50,
-        [Description("Response cap 4096..1048576 bytes; only lowers the process maximum.")] int? maxResultBytes = null,
+        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")] int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds; only lowers the process maximum.")] int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
         Invoke(ctx, "sqlharness_query", scope, handler => handler.QueryAsync(ctx, sql, file, parameters, timeout, maxRows, maxResultBytes, maxOperationSeconds, ct));
@@ -75,7 +75,7 @@ public sealed class McpRequestToolHandlers(
         [Description("Parameter-set files under an input root.")] string[]? paramSetFiles = null,
         [Description("Repetitions 1..100.")] int repeat = 5,
         [Description("SQL timeout 1..300 seconds.")] int? timeout = null,
-        [Description("Response cap 4096..1048576 bytes.")] int? maxResultBytes = null,
+        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")] int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds.")] int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
         Invoke(ctx, "sqlharness_measure", scope, handler => handler.MeasureAsync(ctx, query, setup, parameters, paramSetFiles, repeat, timeout, maxResultBytes, maxOperationSeconds, ct));
@@ -91,7 +91,7 @@ public sealed class McpRequestToolHandlers(
         [Description("Result comparison mode.")][AllowedValues("ordered", "multiset", "set", "off")] string compareResults = "ordered",
         [Description("Optional single matrix dimension.")] McpMatrixArgument? matrix = null,
         [Description("Also require matching column nullability (allowNull) for result equivalence. Default compares observed data only and reports nullability separately. Not allowed with compareResults off.")] bool compareNullability = false,
-        [Description("Response cap 4096..1048576 bytes.")] int? maxResultBytes = null,
+        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")] int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds.")] int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
         Invoke(ctx, "sqlharness_compare", scope, handler => handler.CompareAsync(ctx, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, compareNullability, maxResultBytes, maxOperationSeconds, ct));
@@ -107,7 +107,7 @@ public sealed class McpRequestToolHandlers(
         [Description("Stop after N unchanged polls.")] int? untilUnchanged = null,
         [Description("Poll interval.")] string? interval = null,
         [Description("Maximum watch time.")] string? maxDuration = null,
-        [Description("Response cap.")] int? maxResultBytes = null,
+        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")] int? maxResultBytes = null,
         [Description("Time budget.")] int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
         Invoke(ctx, "sqlharness_watch", scope, handler => handler.WatchAsync(ctx, sql, file, parameters, timeout, maxRows, until, untilUnchanged, interval, maxDuration, maxResultBytes, maxOperationSeconds, ct));
@@ -121,7 +121,7 @@ public sealed class McpRequestToolHandlers(
         [Description("Parameters as {name, type, value}.")] McpParameterArgument[]? parameters = null,
         [Description("SQL timeout.")] int timeout = 30,
         [Description("Presentation row cap.")] int maxRows = 50,
-        [Description("Response cap.")] int? maxResultBytes = null,
+        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")] int? maxResultBytes = null,
         [Description("Time budget.")] int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
         Invoke(ctx, "sqlharness_snapshot", scope, handler => handler.SnapshotAsync(ctx, action, name, sql, file, parameters, timeout, maxRows, maxResultBytes, maxOperationSeconds, ct));
@@ -144,7 +144,7 @@ public sealed class McpRequestToolHandlers(
         [Description("Artifact directory name from a saved report.")] string id,
         [Description("Safe section to read.")][AllowedValues("summary", "metrics", "operators", "statements", "matrix-cells")] string section,
         [Description("Request target scope.")] McpRequestScopeArgument scope,
-        [Description("Optional zero-based continuation cursor for matrix-cells pages.")] int? cursor = null,
+        [Description("Zero-based continuation cursor for matrix-cells and statements pages.")] int? cursor = null,
         CancellationToken ct = default) =>
         Invoke(ctx, "sqlharness_artifact", scope, handler => handler.ArtifactAsync(ctx, id, section, cursor, ct));
 

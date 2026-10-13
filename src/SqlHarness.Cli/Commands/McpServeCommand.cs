@@ -50,8 +50,8 @@ public sealed class McpServeCommand(McpHostConsole console, IDashboardLauncher l
         public string[] InputRoots { get; set; } = [];
 
         [CommandOption("--max-result-bytes <BYTES>")]
-        [Description("Process response cap 4096..1048576 bytes. Default 16384; a call may only lower it.")]
-        public int MaxResultBytes { get; set; } = 16384;
+        [Description("Process result text ceiling 4096..1048576 bytes. Default 262144; per-call budget defaults to 65536 and is clamped to this ceiling.")]
+        public int MaxResultBytes { get; set; } = 262144;
 
         [CommandOption("--max-operation-seconds <SECONDS>")]
         [Description("Process DB time budget 1..86400 seconds. Default 900; a call may only lower it.")]

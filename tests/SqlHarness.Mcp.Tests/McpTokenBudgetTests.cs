@@ -18,9 +18,8 @@ using Xunit.Abstractions;
 namespace SqlHarness.Mcp.Tests;
 
 /// <summary>
-/// T4 token budgets, measured on the real serialized <see cref="CallToolResult"/>
-/// (both representations, JSON escaping, and SDK metadata included):
-/// 16 KiB (16384 B) by default, accepted range 4096..1048576, cell limit
+/// T4 token budgets, measured on the result text read by the model:
+/// 64 KiB (65536 B) by default, accepted range 4096..1048576, cell limit
 /// 512/4096, and a 32 KiB (32768 B) tools/list catalog. Budgets are met by
 /// bounding content, never by cutting runtime validation or truncating JSON.
 /// All data is synthetic; no database is opened.
@@ -44,38 +43,119 @@ public sealed class McpTokenBudgetTests
         _output = output;
     }
 
-    private static int WireBytes(CallToolResult result, int budget)
+    private static int ResultTextBytes(CallToolResult result, int budget)
     {
         var bytes = McpResultAdapter.MeasureBytes(result);
-        Assert.True(bytes <= budget, $"Serialized CallToolResult is {bytes} bytes, budget is {budget}.");
+        Assert.True(bytes <= budget, $"Result text is {bytes} bytes, budget is {budget}.");
         return bytes;
     }
 
     private static void AssertFitsDefaultBudget(SqlHarnessOutcome outcome, string command)
     {
         var result = McpResultAdapter.Adapt(outcome, command);
-        WireBytes(result, (int)McpLimits.CallToolResultBudgetBytes);
+        ResultTextBytes(result, (int)McpLimits.DefaultCallToolResultBudgetBytes);
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
         using var document = JsonDocument.Parse(text);
         Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
     }
 
+    private static McpProcessContext RequestProcess() => McpProcessContext.Create(new McpServerOptions
+    {
+        RequestScope = true,
+        AllowedProfiles = ["sample-country"],
+    }, () => new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+    {
+        ["sample-country"] = new("server.invalid", "sampledb",
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["tenant"] = "^[a-z]+$" }, "integrated"),
+    });
+
+    private static SqlHarnessOutcome LargeQueryOutcome(int targetBytes)
+    {
+        var rows = new List<IReadOnlyList<object?>>();
+        var resultSet = new SqlHarnessResultSetReport(
+            [new SqlHarnessColumnReport(0, "value", "text", true)], rows, 0, 0);
+        var report = new SqlHarnessQueryReport(Target, "read-only", [resultSet], [], 0, 1,
+            "raw-hash", new OutputFootprint(0, 0));
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
+        while (JsonSerializer.SerializeToUtf8Bytes(new SqlHarnessAgentEnvelope(
+                   McpResultAdapter.SchemaVersion, "query", "success", 0, report, null, null)).Length < targetBytes)
+        {
+            rows.Add([new string('x', 32)]);
+            resultSet = resultSet with { Rows = rows, RowCount = rows.Count };
+            report = report with { ResultSets = [resultSet] };
+            outcome = outcome with { Report = report };
+        }
+        return outcome;
+    }
+
+    [Fact]
+    public void Results_carry_one_text_block_and_no_structured_content()
+    {
+        var outcome = new SqlHarnessOutcome(
+            SqlHarnessExitCode.Success,
+            new SqlHarnessPingReport(Target, "srv", "db", "login", 7),
+            null);
+        var result = McpResultAdapter.Adapt(outcome, "inspect");
+
+        Assert.Null(result.StructuredContent);
+        Assert.Single(result.Content.OfType<TextContentBlock>());
+    }
+
+    [Fact]
+    public void Query_result_uses_shared_v2_compact_projection()
+    {
+        var set = new SqlHarnessResultSetReport(
+            [new SqlHarnessColumnReport(0, "when", "System.DateTime", true)],
+            [], 0, 0);
+        var report = new SqlHarnessQueryReport(Target, "read-only", [set], [], 0, 1,
+            "canonical-hash", new OutputFootprint(0, 0));
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "query");
+        var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+        using var document = JsonDocument.Parse(text);
+
+        Assert.Equal(AgentEnvelopeSchema.Version, document.RootElement.GetProperty("schemaVersion").GetInt32());
+        var query = document.RootElement.GetProperty("result");
+        Assert.Equal("db", query.GetProperty("database").GetString());
+        Assert.False(query.TryGetProperty("target", out _));
+        Assert.False(query.TryGetProperty("resultHash", out _));
+        Assert.False(query.TryGetProperty("rawFootprint", out _));
+        Assert.Equal("dateTime", query.GetProperty("resultSets")[0].GetProperty("columns")[0].GetProperty("valueType").GetString());
+        Assert.Equal(0, query.GetProperty("recordsAffected").GetInt32());
+    }
+
+    [Fact]
+    public void Budget_counts_only_the_text_the_model_reads()
+    {
+        var result = McpResultAdapter.Adapt(LargeQueryOutcome(targetBytes: 40_000), "query");
+        var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+
+        Assert.Equal(Encoding.UTF8.GetByteCount(text), McpResultAdapter.MeasureBytes(result));
+        using var document = JsonDocument.Parse(text);
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("truncation").ValueKind);
+    }
+
+    [Theory]
+    [InlineData(null, 262144, 65536)]
+    [InlineData(131072, 262144, 131072)]
+    [InlineData(900000, 262144, 262144)]
+    [InlineData(8192, 262144, 8192)]
+    [InlineData(null, 16384, 16384)]
+    public void Call_budget_resolves_within_the_process_ceiling(int? call, int ceiling, int expected) =>
+        Assert.Equal(expected, McpResultBudget.Resolve(ceiling, call).MaximumBytes);
+
+    [Fact]
+    public void Tools_advertise_no_output_schema()
+    {
+        foreach (var tool in McpToolCatalog.CreateTools(RequestProcess()).Select(tool => tool.ProtocolTool))
+            Assert.Null(tool.OutputSchema);
+    }
+
     [Fact]
     public void Request_catalog_stays_within_tools_list_budget()
     {
-        var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
-        {
-            ["sample-country"] = new("server.invalid", "sampledb",
-                new Dictionary<string, string>(StringComparer.Ordinal) { ["tenant"] = "^[a-z]+$" }, "integrated"),
-        };
-        var process = McpProcessContext.Create(new McpServerOptions
-        {
-            RequestScope = true,
-            AllowedProfiles = ["sample-country"],
-        }, () => profiles);
-
         var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(
-            McpToolCatalog.CreateTools(process).Select(tool => tool.ProtocolTool)));
+            McpToolCatalog.CreateTools(RequestProcess()).Select(tool => tool.ProtocolTool)));
 
         Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"request-mode tools/list is {bytes} bytes.");
     }
@@ -95,7 +175,7 @@ public sealed class McpTokenBudgetTests
         foreach (var (budget, cells) in new[] { (4096, 64), (16384, 512), (65536, 4096) })
         {
             var result = McpResultAdapter.Adapt(outcome, "sqlharness_plan", new McpResultBudget(budget, cells));
-            WireBytes(result, budget);
+            ResultTextBytes(result, budget);
             var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
             using var document = JsonDocument.Parse(text);
             Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
@@ -114,7 +194,7 @@ public sealed class McpTokenBudgetTests
         var hidden = McpResultAdapter.Adapt(
             new SqlHarnessOutcome(SqlHarnessExitCode.Success, McpPlanTextPolicy.Apply(plan, includeText: false), null),
             "sqlharness_plan");
-        WireBytes(hidden, (int)McpLimits.CallToolResultBudgetBytes);
+        ResultTextBytes(hidden, (int)McpLimits.DefaultCallToolResultBudgetBytes);
         Assert.DoesNotContain("qqqq", Assert.Single(hidden.Content.OfType<TextContentBlock>()).Text, StringComparison.Ordinal);
     }
 
@@ -128,7 +208,7 @@ public sealed class McpTokenBudgetTests
 
         var result = McpResultAdapter.Adapt(outcome, "sqlharness_query");
 
-        var bytes = WireBytes(result, (int)McpLimits.CallToolResultBudgetBytes);
+        var bytes = ResultTextBytes(result, (int)McpLimits.DefaultCallToolResultBudgetBytes);
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
         var projected = document.RootElement.GetProperty("result")
             .GetProperty("resultSets")[0].GetProperty("rows")[0][0].GetString()!;
@@ -146,7 +226,7 @@ public sealed class McpTokenBudgetTests
 
         var result = McpResultAdapter.Adapt(outcome, "sqlharness_inspect");
 
-        WireBytes(result, (int)McpLimits.CallToolResultBudgetBytes);
+        ResultTextBytes(result, (int)McpLimits.DefaultCallToolResultBudgetBytes);
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
         Assert.True(document.RootElement.GetProperty("result").GetProperty("tables").GetArrayLength() < 1000);
         Assert.True(document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
@@ -160,21 +240,26 @@ public sealed class McpTokenBudgetTests
         new RegressionDiagnostic(RegressionPolicy.StatusRegressed, 1000m, 2000m, 1000m, 100m),
         new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 40m, 40m, 0m, 0m));
 
-    [Fact]
-    public void Compare_result_carries_the_regression_verdict_within_the_default_budget()
+    private static SqlHarnessCompareReport BuildCompareReport(RegressionReport? regression = null)
     {
         var variant = new CompareVariantReport("variant", new CompareDistribution(1, 2, 3), new CompareDistribution(4, 5, 6),
             new CompareDistribution(7, 8, 9), new Dictionary<string, long>(), [], []);
-        var compare = new SqlHarnessCompareReport(Target, 5, 10, true, variant, variant, "/workspace/compare/artifact-001")
+        return new SqlHarnessCompareReport(Target, 5, 10, true, variant, variant, "/workspace/compare/artifact-001")
         {
             Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Multiset, true, null, 0, 0),
-            Regression = FailVerdict(),
+            Regression = regression,
         };
+    }
+
+    [Fact]
+    public void Compare_result_carries_the_regression_verdict_within_the_default_budget()
+    {
+        var compare = BuildCompareReport(FailVerdict());
 
         var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, compare, null), "sqlharness_compare");
 
-        var bytes = WireBytes(result, (int)McpLimits.CallToolResultBudgetBytes);
-        _output.WriteLine($"compare result with regression: {bytes} bytes of {McpLimits.CallToolResultBudgetBytes}");
+        var bytes = ResultTextBytes(result, (int)McpLimits.DefaultCallToolResultBudgetBytes);
+        _output.WriteLine($"compare result with regression: {bytes} bytes of {McpLimits.DefaultCallToolResultBudgetBytes}");
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
         var regression = document.RootElement.GetProperty("result").GetProperty("regression");
         Assert.Equal("fail", regression.GetProperty("verdict").GetString());
@@ -184,23 +269,81 @@ public sealed class McpTokenBudgetTests
     [Fact]
     public void Compare_matrix_result_with_regression_per_cell_fits_the_default_budget()
     {
-        var variant = new CompareVariantReport("variant", new CompareDistribution(1, 2, 3), new CompareDistribution(4, 5, 6),
-            new CompareDistribution(7, 8, 9), new Dictionary<string, long>(), [], []);
-        var compare = new SqlHarnessCompareReport(Target, 5, 10, true, variant, variant, "/workspace/compare/artifact-001")
-        {
-            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Multiset, true, null, 0, 0),
-            Regression = FailVerdict(),
-        };
+        var compare = BuildCompareReport(FailVerdict());
         var matrix = new SqlHarnessCompareMatrixReport("batch", "int",
             Enumerable.Range(0, 100).Select(i => new CompareMatrixCellReport(i, i.ToString(), compare)).ToArray());
 
         var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, matrix, null), "sqlharness_compare");
 
-        var bytes = WireBytes(result, (int)McpLimits.CallToolResultBudgetBytes);
-        _output.WriteLine($"compare matrix result with regression: {bytes} bytes of {McpLimits.CallToolResultBudgetBytes}");
+        var bytes = ResultTextBytes(result, (int)McpLimits.DefaultCallToolResultBudgetBytes);
+        _output.WriteLine($"compare matrix result with regression: {bytes} bytes of {McpLimits.DefaultCallToolResultBudgetBytes}");
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
-        var first = document.RootElement.GetProperty("result").GetProperty("cells")[0];
+        var first = document.RootElement.GetProperty("result").GetProperty("details")[0];
         Assert.Equal("fail", first.GetProperty("compare").GetProperty("regression").GetProperty("verdict").GetString());
+    }
+
+    [Fact]
+    public void Small_compare_matrix_keeps_both_cells_without_truncation()
+    {
+        var compare = BuildCompareReport();
+        var report = new SqlHarnessCompareMatrixReport("batch", "int",
+            [new CompareMatrixCellReport(0, "1", compare), new CompareMatrixCellReport(1, "2", compare)]);
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "compare");
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        var cases = document.RootElement.GetProperty("result").GetProperty("cases");
+        Assert.Equal(2, cases.GetArrayLength());
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("truncation").ValueKind);
+    }
+
+    [Theory]
+    [InlineData(4096)]
+    [InlineData(65536)]
+    public void Matrix_case_inventory_survives_optional_detail_at_minimum_and_default_budgets(int budget)
+    {
+        var matrix = new SqlHarnessCompareMatrixReport("batch", "int",
+            Enumerable.Range(0, 6).Select(index => new CompareMatrixCellReport(index, index.ToString(), MatrixInventoryCompare(index))).ToArray());
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, matrix, null),
+            "sqlharness_compare", new McpResultBudget(budget, 128));
+
+        ResultTextBytes(result, budget);
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        var projected = document.RootElement.GetProperty("result");
+        var cases = projected.GetProperty("cases");
+        Assert.Equal(6, cases.GetArrayLength());
+        Assert.Equal(6, projected.GetProperty("caseCount").GetInt32());
+        Assert.Equal(Enumerable.Range(0, 6), cases.EnumerateArray().Select(item => item.GetProperty("index").GetInt32()));
+        Assert.Equal(10m, cases[0].GetProperty("delta").GetProperty("elapsedMilliseconds").GetDecimal());
+        Assert.Equal("not-requested", cases[0].GetProperty("equivalenceAvailability").GetString());
+        Assert.Equal(JsonValueKind.Null, cases[0].GetProperty("equivalent").ValueKind);
+    }
+
+    private static SqlHarnessCompareReport MatrixInventoryCompare(int index)
+    {
+        var source = BuildCompareReport();
+        var baseline = source.Baseline with
+        {
+            CpuTimeMilliseconds = new CompareDistribution(10, 20, 30),
+            ElapsedTimeMilliseconds = new CompareDistribution(30, 40, 50),
+            LogicalReads = new CompareDistribution(5, 6, 7),
+            LogicalReadsByTable = Enumerable.Range(0, 24).ToDictionary(i => $"table-{i}", _ => new CompareDistribution(1, 2, 3)),
+            Warnings = [new string('w', 20_000)],
+            Operators = Enumerable.Range(0, 24).Select(i => new CompareOperatorReport(i, $"operator-{i}", $"dbo.t{i}", true, false, false)).ToArray(),
+        };
+        var candidate = baseline with
+        {
+            CpuTimeMilliseconds = new CompareDistribution(20, 30, 40),
+            ElapsedTimeMilliseconds = new CompareDistribution(40, 50, 60),
+            LogicalReads = new CompareDistribution(7, 8, 9),
+        };
+        return source with
+        {
+            Baseline = baseline,
+            Candidate = candidate,
+            ArtifactDirectory = $"/artifacts/case-{index}",
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Off, null, null, null, null),
+        };
     }
 
     [Fact]
@@ -221,10 +364,12 @@ public sealed class McpTokenBudgetTests
 
         var result = McpResultAdapter.Adapt(outcome, "sqlharness_compare");
 
-        WireBytes(result, (int)McpLimits.CallToolResultBudgetBytes);
+        ResultTextBytes(result, (int)McpLimits.DefaultCallToolResultBudgetBytes);
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
         Assert.DoesNotContain(path, document.RootElement.GetRawText(), StringComparison.OrdinalIgnoreCase);
-        Assert.True(document.RootElement.GetProperty("result").GetProperty("cells").GetArrayLength() < 100);
+        var projected = document.RootElement.GetProperty("result");
+        Assert.Equal(100, projected.GetProperty("caseCount").GetInt32());
+        Assert.True(projected.GetProperty("cases").GetArrayLength() <= 100);
         Assert.True(document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
     }
 
@@ -244,18 +389,18 @@ public sealed class McpTokenBudgetTests
     }
 
     [Fact]
-    public void Call_budget_may_only_lower_the_process_maximum()
+    public void Call_budget_is_clamped_to_the_process_ceiling()
     {
-        var resolved = McpResultBudget.Resolve(processMaximumBytes: 8192, callMaximumBytes: 65536);
+        var resolved = McpResultBudget.Resolve(processCeilingBytes: 8192, callMaximumBytes: 65536);
         Assert.Equal(8192, resolved.MaximumBytes);
 
-        var lowered = McpResultBudget.Resolve(processMaximumBytes: 8192, callMaximumBytes: 4096);
+        var lowered = McpResultBudget.Resolve(processCeilingBytes: 8192, callMaximumBytes: 4096);
         Assert.Equal(4096, lowered.MaximumBytes);
 
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => McpResultBudget.Resolve(processMaximumBytes: 2 * 1024 * 1024, callMaximumBytes: null));
+            () => McpResultBudget.Resolve(processCeilingBytes: 2 * 1024 * 1024, callMaximumBytes: null));
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => McpResultBudget.Resolve(processMaximumBytes: 16384, callMaximumBytes: 1000));
+            () => McpResultBudget.Resolve(processCeilingBytes: 16384, callMaximumBytes: 1000));
     }
 
     [Fact]
@@ -317,16 +462,12 @@ public sealed class McpTokenBudgetTests
         var catalogJson = JsonSerializer.Serialize(
             tools.Select(tool => tool.ProtocolTool), McpJsonUtilities.DefaultOptions);
         var bytes = Encoding.UTF8.GetByteCount(catalogJson);
-        _output.WriteLine($"tools/list wire bytes: {bytes} of {McpLimits.ToolsListBudgetBytes} ({tools.Count} tools; output schemas asserted below).");
+        _output.WriteLine($"tools/list bytes: {bytes} of {McpLimits.ToolsListBudgetBytes} ({tools.Count} tools; no output schemas).");
         Assert.Equal(McpLimits.MaxTools, tools.Count);
         Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"tools/list is {bytes} bytes.");
         Assert.DoesNotContain("AGENTS.md", catalogJson, StringComparison.Ordinal);
         foreach (var tool in tools)
-        {
-            var schema = tool.ProtocolTool.OutputSchema;
-            Assert.True(schema.HasValue, $"{tool.Name} publishes no outputSchema; the budget must hold with all 10 schemas served.");
-            Assert.Equal(JsonValueKind.Object, schema!.Value.ValueKind);
-        }
+            Assert.Null(tool.ProtocolTool.OutputSchema);
 
         // The budget holds with runtime validation intact: unknown properties
         // are still rejected instead of being dropped to save bytes.
@@ -348,10 +489,10 @@ public sealed class McpTokenBudgetTests
     }
 
     [Fact]
-    public void Minimal_success_envelope_reports_wire_bytes_within_default_budget()
+    public void Minimal_success_envelope_text_bytes_fit_within_default_budget()
     {
         // 008/T3 baseline guard: the smallest success envelope (ping) against
-        // the default 16 KiB CallToolResult budget, with the measured bytes
+        // the default 64 KiB result-text budget, with the measured bytes
         // reported for the record.
         var outcome = new SqlHarnessOutcome(
             SqlHarnessExitCode.Success,
@@ -360,28 +501,26 @@ public sealed class McpTokenBudgetTests
 
         var result = McpResultAdapter.Adapt(outcome, "sqlharness_inspect");
         var bytes = McpResultAdapter.MeasureBytes(result);
-        _output.WriteLine($"minimal success CallToolResult wire bytes: {bytes} of {McpLimits.CallToolResultBudgetBytes}.");
-        Assert.True(bytes <= McpLimits.CallToolResultBudgetBytes, $"Serialized CallToolResult is {bytes} bytes, budget is {McpLimits.CallToolResultBudgetBytes}.");
+        _output.WriteLine($"minimal success result-text bytes: {bytes} of {McpLimits.DefaultCallToolResultBudgetBytes}.");
+        Assert.True(bytes <= McpLimits.DefaultCallToolResultBudgetBytes, $"Result text is {bytes} bytes, budget is {McpLimits.DefaultCallToolResultBudgetBytes}.");
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
         Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
     }
 
     [Fact]
-    public void Raw_path_descends_when_envelope_fits_but_wire_exceeds()
+    public void Raw_path_descends_when_envelope_text_exceeds_budget()
     {
-        // Review probe for I1: a named record the shared projection does not
-        // know, carrying ~12 KiB. The raw envelope (~12.5 KiB) fits the
-        // default 16 KiB budget, but the wire (both representations plus SDK
-        // metadata) is ~2x — an envelope-only check admits it over budget.
+        // A projection-unknown report carries more than the explicit 8 KiB
+        // text budget and must be reduced to a valid bounded envelope.
         var payload = new string('p', 12 * 1024);
         var outcome = new SqlHarnessOutcome(
             SqlHarnessExitCode.Success,
             new UnprojectedProbeReport("probe", payload),
             null);
 
-        var result = McpResultAdapter.Adapt(outcome, "sqlharness_inspect");
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_inspect", new McpResultBudget(8192));
 
-        WireBytes(result, (int)McpLimits.CallToolResultBudgetBytes);
+        ResultTextBytes(result, 8192);
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
         Assert.DoesNotContain(payload, text, StringComparison.Ordinal);
         using var document = JsonDocument.Parse(text);
@@ -393,21 +532,20 @@ public sealed class McpTokenBudgetTests
     }
 
     [Fact]
-    public void Main_loop_descends_past_first_fit_level_when_wire_exceeds()
+    public void Main_loop_descends_past_first_fit_level_when_text_exceeds()
     {
-        // Boundary shape for I1: at budget 8192 with 4096-char cells the
-        // first-fit projected envelope (~6 KiB) fits, but the wire does not,
-        // so the adapter must descend to level 0 instead of emitting it.
+        // The first projection exceeds this text budget, so the adapter must
+        // descend to a lower detail level instead of emitting it.
         const int budget = 8192;
-        var cell = new string('c', 4000);
-        var message = new string('m', 2000);
+        var cell = new string('c', 4096);
+        var message = new string('m', 4096);
         var set = new SqlHarnessResultSetReport([new SqlHarnessColumnReport(0, "value", "text", true)], [[cell]], 1, 0);
         var report = new SqlHarnessQueryReport(Target, "read-only", [set], [message], 0, 1, "raw-hash", new OutputFootprint(100000, 1));
         var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
 
         var result = McpResultAdapter.Adapt(outcome, "sqlharness_query", new McpResultBudget(budget, 4096));
 
-        WireBytes(result, budget);
+        ResultTextBytes(result, budget);
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
         using var document = JsonDocument.Parse(text);
         Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
@@ -419,7 +557,7 @@ public sealed class McpTokenBudgetTests
         Assert.Equal(0, projectedSet.GetProperty("rows").GetArrayLength());
         Assert.Equal(1, projectedSet.GetProperty("columns").GetArrayLength());
         Assert.Equal(1, projectedSet.GetProperty("omittedRowCount").GetInt64());
-        Assert.Equal(0, projectedSet.GetProperty("omittedColumnCount").GetInt32());
+        Assert.False(projectedSet.TryGetProperty("omittedColumnCount", out _));
         Assert.True(document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
     }
 
