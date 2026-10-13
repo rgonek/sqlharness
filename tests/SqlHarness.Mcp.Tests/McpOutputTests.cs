@@ -76,13 +76,13 @@ public sealed class McpOutputTests
             new SqlHarnessPingReport(Target, "srv", "db", "login", 7),
             null);
 
-        var result = McpResultAdapter.Adapt(outcome, "sqlharness_inspect");
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_query");
 
         Assert.False(result.IsError == true);
         var envelope = EnvelopeOf(result);
         AssertValidEnvelope(envelope);
         Assert.Equal(2, envelope.GetProperty("schemaVersion").GetInt32());
-        Assert.Equal("sqlharness_inspect", envelope.GetProperty("command").GetString());
+        Assert.Equal("sqlharness_query", envelope.GetProperty("command").GetString());
         Assert.Equal("success", envelope.GetProperty("status").GetString());
         Assert.Equal(0, envelope.GetProperty("exitCode").GetInt32());
         Assert.Equal(JsonValueKind.Null, envelope.GetProperty("error").ValueKind);

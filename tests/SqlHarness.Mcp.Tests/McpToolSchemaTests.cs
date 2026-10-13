@@ -17,7 +17,7 @@ using SqlHarness.Mcp.Tools;
 namespace SqlHarness.Mcp.Tests;
 
 /// <summary>
-/// T3 catalog contract: exactly the 10 spec tools with strict input schemas,
+/// T3 catalog contract: exactly the 8 spec tools with strict input schemas,
 /// no target/auth/mutation surface, and unknown-property rejection without
 /// ever echoing values. Only synthetic HOME directories are used; the
 /// unreachable profile target is never connected (unknown properties are
@@ -33,8 +33,6 @@ public sealed class McpToolSchemaTests : IDisposable
     private static readonly string[] ExpectedTools =
     [
         "sqlharness_capabilities",
-        "sqlharness_inspect",
-        "sqlharness_validate",
         "sqlharness_query",
         "sqlharness_measure",
         "sqlharness_compare",
@@ -227,7 +225,7 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
-    public void Catalog_registers_exactly_the_10_spec_tools()
+    public void Catalog_registers_exactly_the_8_spec_tools()
     {
         var scope = Scope();
         var tools = McpToolCatalog.CreateTools(scope, scope.CreateModule());
@@ -235,6 +233,27 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Equal(ExpectedTools, tools.Select(tool => tool.ProtocolTool.Name));
         Assert.Equal(ExpectedTools, McpToolCatalog.ToolNames);
         Assert.Equal(ExpectedTools.Length, McpToolCatalog.ToolNames.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void Catalog_serves_the_eight_agent_tools()
+    {
+        Assert.Equal(
+            ["sqlharness_capabilities", "sqlharness_query", "sqlharness_measure", "sqlharness_compare",
+             "sqlharness_watch", "sqlharness_snapshot", "sqlharness_plan", "sqlharness_artifact"],
+            McpToolCatalog.ToolNames);
+        Assert.Equal(8, McpLimits.MaxTools);
+    }
+
+    [Theory]
+    [InlineData("sqlharness_inspect")]
+    [InlineData("sqlharness_validate")]
+    public async Task Removed_tool_returns_an_unknown_tool_error(string removed)
+    {
+        await using var served = await ServedCatalog.CreateAsync(Scope());
+        var error = await Assert.ThrowsAnyAsync<McpException>(async () =>
+            await served.Client.CallToolAsync(removed, new Dictionary<string, object?>(), cancellationToken: CancellationToken.None));
+        Assert.Contains(removed, error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -264,7 +283,7 @@ public sealed class McpToolSchemaTests : IDisposable
         var requestCompare = Properties(requestSchemas["sqlharness_compare"]).GetProperty("compareNullability");
         Assert.Equal("boolean", requestCompare.GetProperty("type").GetString());
         Assert.False(requestCompare.GetProperty("default").GetBoolean());
-        var targetTools = new[] { "sqlharness_inspect", "sqlharness_validate", "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot", "sqlharness_artifact" };
+        var targetTools = new[] { "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot", "sqlharness_artifact" };
         foreach (var tool in targetTools)
         {
             Assert.Contains("scope", Required(requestSchemas[tool]));
@@ -316,42 +335,42 @@ public sealed class McpToolSchemaTests : IDisposable
 
         var valid = new Dictionary<string, object?>
         {
-            ["usage"] = "query",
+            ["dryRun"] = true,
             ["sql"] = "SELECT 1",
             ["scope"] = new { profile = ProfileName, vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
         };
-        var first = await served.Client.CallToolAsync("sqlharness_validate", valid, cancellationToken: CancellationToken.None);
+        var first = await served.Client.CallToolAsync("sqlharness_query", valid, cancellationToken: CancellationToken.None);
         Assert.False(first.IsError == true);
-        var second = await served.Client.CallToolAsync("sqlharness_validate", new Dictionary<string, object?>
+        var second = await served.Client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
         {
-            ["usage"] = "query",
+            ["dryRun"] = true,
             ["sql"] = "SELECT 1",
             ["scope"] = new { profile = "sample-b", vars = new Dictionary<string, string> { ["tenant"] = "b" } },
         }, cancellationToken: CancellationToken.None);
         Assert.False(second.IsError == true);
-        var wrongB = await served.Client.CallToolAsync("sqlharness_validate", new Dictionary<string, object?>
+        var wrongB = await served.Client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
         {
-            ["usage"] = "query",
+            ["dryRun"] = true,
             ["sql"] = "SELECT 1",
             ["scope"] = new { profile = "sample-b", vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
         }, cancellationToken: CancellationToken.None);
-        Assert.Equal(2, ServedEnvelope(wrongB, "sqlharness_validate").GetProperty("exitCode").GetInt32());
+        Assert.Equal(2, ServedEnvelope(wrongB, "sqlharness_query").GetProperty("exitCode").GetInt32());
         var malformedScope = new Dictionary<string, object?>
         {
-            ["usage"] = "query",
+            ["dryRun"] = true,
             ["sql"] = "SELECT 1",
             ["scope"] = new { profile = ProfileName, vars = new Dictionary<string, string> { ["tenant"] = "frozen" }, extra = "sentinel" },
         };
-        var rejected = await served.Client.CallToolAsync("sqlharness_validate", malformedScope, cancellationToken: CancellationToken.None);
+        var rejected = await served.Client.CallToolAsync("sqlharness_query", malformedScope, cancellationToken: CancellationToken.None);
         Assert.True(rejected.IsError == true);
         Assert.DoesNotContain("sentinel", string.Concat(rejected.Content.OfType<TextContentBlock>().Select(block => block.Text)), StringComparison.Ordinal);
-        var noScope = await served.Client.CallToolAsync("sqlharness_validate", new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" }, cancellationToken: CancellationToken.None);
+        var noScope = await served.Client.CallToolAsync("sqlharness_query", new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1" }, cancellationToken: CancellationToken.None);
         Assert.True(noScope.IsError == true);
 
         await using var fixedServed = await ServedCatalog.CreateAsync(scope);
-        var fixedWithScope = await fixedServed.Client.CallToolAsync("sqlharness_validate", new Dictionary<string, object?>
+        var fixedWithScope = await fixedServed.Client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
         {
-            ["usage"] = "query",
+            ["dryRun"] = true,
             ["sql"] = "SELECT 1",
             ["scope"] = new { profile = ProfileName, vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
         }, cancellationToken: CancellationToken.None);
@@ -590,10 +609,8 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Theory]
-    [InlineData("sqlharness_validate", "{\"sql\":\"SELECT 1\"}")]
     [InlineData("sqlharness_measure", "{\"setup\":{\"sql\":\"SELECT 1\"}}")]
     [InlineData("sqlharness_compare", "{\"candidate\":{\"sql\":\"SELECT 1\"}}")]
-    [InlineData("sqlharness_inspect", "{}")]
     [InlineData("sqlharness_artifact", "{\"id\":\"x\"}")]
     public async Task Missing_required_arguments_are_rejected_without_echo(string tool, string argumentsJson)
     {
@@ -623,14 +640,6 @@ public sealed class McpToolSchemaTests : IDisposable
     public async Task Enum_required_and_default_shapes_are_correct()
     {
         var schemas = await ServedSchemasAsync(Scope());
-
-        var inspect = schemas["sqlharness_inspect"];
-        Assert.Equal(["kind"], Required(inspect));
-        Assert.Equal(["ping", "schema", "counts", "space", "qstop", "indexes"], EnumOf(inspect, "kind"));
-
-        var validate = schemas["sqlharness_validate"];
-        Assert.Equal(["usage"], Required(validate));
-        Assert.Equal(["query", "setup", "benchmark"], EnumOf(validate, "usage"));
 
         var query = schemas["sqlharness_query"];
         Assert.Empty(Required(query));
@@ -758,7 +767,6 @@ public sealed class McpToolSchemaTests : IDisposable
     public async Task Inline_frame_cap_is_advertised_on_sql_and_plan_tools()
     {
         var schemas = await ServedSchemasAsync(Scope());
-        Assert.Contains("1 MiB", Properties(schemas["sqlharness_validate"]).GetProperty("sql").GetProperty("description").GetString() ?? string.Empty, StringComparison.Ordinal);
         Assert.Contains("1 MiB", Properties(schemas["sqlharness_query"]).GetProperty("sql").GetProperty("description").GetString() ?? string.Empty, StringComparison.Ordinal);
         Assert.Contains("1 MiB", Properties(schemas["sqlharness_plan"]).GetProperty("content").GetProperty("description").GetString() ?? string.Empty, StringComparison.Ordinal);
     }
@@ -777,8 +785,6 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Theory]
-    [InlineData("sqlharness_validate", "{\"sql\":\"SELECT 1\",\"usage\":\"query\",\"bogus\":1}")]
-    [InlineData("sqlharness_inspect", "{\"kind\":\"ping\",\"bogus\":1}")]
     [InlineData("sqlharness_query", "{\"sql\":\"SELECT 1\",\"bogus\":1}")]
     public async Task Unknown_top_level_properties_are_rejected_without_echo(string tool, string argumentsJson)
     {
@@ -801,14 +807,13 @@ public sealed class McpToolSchemaTests : IDisposable
         var arguments = new Dictionary<string, object?>
         {
             ["sql"] = SecretSql,
-            ["usage"] = "query",
             ["parameters"] = new object[]
             {
                 new Dictionary<string, object?> { ["name"] = "id", ["type"] = "int", ["value"] = SecretValue, ["target"] = "smuggled" },
             },
         };
         await using var served = await ServedCatalog.CreateAsync(Scope());
-        var result = await served.Client.CallToolAsync("sqlharness_validate", arguments, cancellationToken: CancellationToken.None);
+        var result = await served.Client.CallToolAsync("sqlharness_query", arguments, cancellationToken: CancellationToken.None);
         var text = string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text));
         Assert.True(result.IsError == true, text);
         Assert.DoesNotContain(SecretValue, text, StringComparison.Ordinal);
@@ -868,24 +873,24 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
     }
     [Fact]
-    public async Task Served_validate_envelopes_conform_to_the_agent_contract()
+    public async Task Served_query_dry_run_envelopes_conform_to_the_agent_contract()
     {
         await using var served = await ServedCatalog.CreateAsync(Scope());
         var success = await served.Client.CallToolAsync(
-            "sqlharness_validate",
-            new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+            "sqlharness_query",
+            new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1" },
             cancellationToken: CancellationToken.None);
         Assert.False(success.IsError == true);
-        var successEnvelope = ServedEnvelope(success, "sqlharness_validate");
+        var successEnvelope = ServedEnvelope(success, "sqlharness_query");
         Assert.Empty(McpResultAdapter.ValidateEnvelope(successEnvelope));
         Assert.Equal("success", successEnvelope.GetProperty("status").GetString());
         Assert.Equal(0, successEnvelope.GetProperty("exitCode").GetInt32());
         var failure = await served.Client.CallToolAsync(
-            "sqlharness_validate",
-            new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1", ["bogus"] = 1 },
+            "sqlharness_query",
+            new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1", ["bogus"] = 1 },
             cancellationToken: CancellationToken.None);
         Assert.True(failure.IsError == true);
-        var failureEnvelope = ServedEnvelope(failure, "sqlharness_validate");
+        var failureEnvelope = ServedEnvelope(failure, "sqlharness_query");
         Assert.Empty(McpResultAdapter.ValidateEnvelope(failureEnvelope));
         Assert.Equal("error", failureEnvelope.GetProperty("status").GetString());
         Assert.Equal(2, failureEnvelope.GetProperty("exitCode").GetInt32());
@@ -944,22 +949,11 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
-    public async Task Served_validate_and_capabilities_disclose_the_static_analysis_boundary()
+    public async Task Served_capabilities_disclose_the_static_analysis_boundary()
     {
         // 009/T1 red witness: MCP clients get the same versioned boundary
-        // through the budgeted envelope results (validate report fields and
-        // the capabilities safetyAnalysis block).
+        // through the budgeted capabilities safetyAnalysis block.
         await using var served = await ServedCatalog.CreateAsync(Scope());
-        var validate = await served.Client.CallToolAsync(
-            "sqlharness_validate",
-            new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
-            cancellationToken: CancellationToken.None);
-        Assert.False(validate.IsError == true);
-        var validateResult = ServedEnvelope(validate, "sqlharness_validate").GetProperty("result");
-        Assert.Equal("static-visible-effects", validateResult.GetProperty("analysisKind").GetString());
-        Assert.Equal(1, validateResult.GetProperty("analysisContractVersion").GetInt32());
-        Assert.False(validateResult.GetProperty("hiddenEffectsVerified").GetBoolean());
-
         var capabilities = await served.Client.CallToolAsync(
             "sqlharness_capabilities",
             new Dictionary<string, object?>(),
@@ -973,7 +967,7 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
-    public void Query_and_validate_descriptions_state_the_static_visible_effects_boundary()
+    public void Query_description_states_the_static_visible_effects_boundary()
     {
         // 009/T2: tool descriptions must match the real control (static
         // check of effects visible in the text; DB account role prepared
@@ -982,19 +976,14 @@ public sealed class McpToolSchemaTests : IDisposable
         var scope = Scope();
         var tools = McpToolCatalog.CreateTools(scope, scope.CreateModule());
         var byName = tools.ToDictionary(tool => tool.ProtocolTool.Name, StringComparer.Ordinal);
-        var validate = byName["sqlharness_validate"].ProtocolTool.Description ?? string.Empty;
         var query = byName["sqlharness_query"].ProtocolTool.Description ?? string.Empty;
 
-        Assert.Contains("static", validate, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("visible", validate, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("safetyAnalysis", validate, StringComparison.Ordinal);
-        Assert.Contains("unknown", validate, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("static", query, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("visible", query, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("role", query, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("outside SQLHarness", query, StringComparison.Ordinal);
 
-        foreach (var text in new[] { validate, query })
+        foreach (var text in new[] { query })
         {
             Assert.DoesNotContain("guarantee", text, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("creates", text, StringComparison.OrdinalIgnoreCase);
@@ -1007,39 +996,12 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
-    public async Task Served_validate_reports_unknown_object_and_permission_status()
-    {
-        // 009/T3 closes the T1/T2 deferred minor: MCP validate pins
-        // objectAndPermissionStatus like CLI validate already does.
-        await using var served = await ServedCatalog.CreateAsync(Scope(), new ThrowingModule());
-        var result = await served.Client.CallToolAsync(
-            "sqlharness_validate",
-            new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
-            cancellationToken: CancellationToken.None);
-        Assert.False(result.IsError == true);
-        var validateResult = ServedEnvelope(result, "sqlharness_validate").GetProperty("result");
-        Assert.Equal(SqlSafetyAnalysis.ObjectAndPermissionStatus, validateResult.GetProperty("objectAndPermissionStatus").GetString());
-        Assert.False(validateResult.GetProperty("executed").GetBoolean());
-    }
-
-    [Fact]
-    public async Task Served_validate_and_capabilities_boundaries_match_the_shared_contract()
+    public async Task Served_capabilities_boundary_matches_the_shared_contract()
     {
         // 009/T3: MCP surfaces disclose the same versioned boundary as
         // CLI — one SqlSafetyAnalysis contract on every surface, without
         // ever dispatching (the throwing module proves no connection).
         await using var served = await ServedCatalog.CreateAsync(Scope(), new ThrowingModule());
-        var validate = await served.Client.CallToolAsync(
-            "sqlharness_validate",
-            new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
-            cancellationToken: CancellationToken.None);
-        Assert.False(validate.IsError == true);
-        var validateResult = ServedEnvelope(validate, "sqlharness_validate").GetProperty("result");
-        Assert.Equal(SqlSafetyAnalysis.AnalysisKind, validateResult.GetProperty("analysisKind").GetString());
-        Assert.Equal(SqlSafetyAnalysis.ContractVersion, validateResult.GetProperty("analysisContractVersion").GetInt32());
-        Assert.Equal(SqlSafetyAnalysis.HiddenEffectsVerified, validateResult.GetProperty("hiddenEffectsVerified").GetBoolean());
-        Assert.Equal(SqlSafetyAnalysis.ObjectAndPermissionStatus, validateResult.GetProperty("objectAndPermissionStatus").GetString());
-
         var capabilities = await served.Client.CallToolAsync(
             "sqlharness_capabilities",
             new Dictionary<string, object?>(),
@@ -1056,35 +1018,34 @@ public sealed class McpToolSchemaTests : IDisposable
     [InlineData("EXEC sp_executesql N'SELECT 1';")]
     [InlineData("EXEC xp_cmdshell 'dir';")]
     [InlineData("SELECT * FROM OPENROWSET('SQLOLEDB', 's', 'SELECT 1') AS t(x int);")]
-    public async Task Served_validate_rejects_denylisted_functions_without_dispatch(string sql)
+    public async Task Served_query_dry_run_rejects_denylisted_functions_without_dispatch(string sql)
     {
-        // 009/T3: the MCP preflight rejects the denylist offline — the
-        // throwing module would fail the test on any execution attempt.
-        await using var served = await ServedCatalog.CreateAsync(Scope(), new ThrowingModule());
+        // The dry run rejects the denylist offline: the real module with an
+        // unreachable target proves no connection is attempted.
+        await using var served = await ServedCatalog.CreateAsync(Scope());
         var result = await served.Client.CallToolAsync(
-            "sqlharness_validate",
-            new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = sql },
+            "sqlharness_query",
+            new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = sql },
             cancellationToken: CancellationToken.None);
-        Assert.False(result.IsError == true);
+        Assert.True(result.IsError == true);
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
         using var document = JsonDocument.Parse(text);
         var envelope = document.RootElement;
-        Assert.Equal("success", envelope.GetProperty("status").GetString());
-        Assert.False(envelope.GetProperty("result").GetProperty("allowed").GetBoolean());
-        Assert.False(envelope.GetProperty("result").GetProperty("executed").GetBoolean());
+        Assert.Equal("error", envelope.GetProperty("status").GetString());
+        Assert.Equal((int)SqlHarnessExitCode.Safety, envelope.GetProperty("exitCode").GetInt32());
         Assert.DoesNotContain(sql, text, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task Served_preflight_leaves_no_side_effects()
     {
-        // 009/T3: served validate/capabilities mutate no state — the
+        // 009/T3: served dry-run query/capabilities mutate no state — the
         // synthetic HOME holds exactly the files the fixture wrote.
-        await using var served = await ServedCatalog.CreateAsync(Scope(), new ThrowingModule());
+        await using var served = await ServedCatalog.CreateAsync(Scope());
         var before = Directory.GetFiles(_home, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
         await served.Client.CallToolAsync(
-            "sqlharness_validate",
-            new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+            "sqlharness_query",
+            new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1" },
             cancellationToken: CancellationToken.None);
         await served.Client.CallToolAsync(
             "sqlharness_capabilities",
@@ -1094,15 +1055,15 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
-    public void Inspect_and_watch_descriptions_make_no_read_only_claim()
+    public void Watch_description_makes_no_read_only_claim()
     {
-        // 009/T3 (closes the T1/T2 deferred minor): inspect/watch must not
+        // 009/T3 (closes the T1/T2 deferred minor): watch must not
         // claim "read-only" — the preflight only checks effects visible in
         // the text, the same reason the query description avoids the phrase.
         var scope = Scope();
         var tools = McpToolCatalog.CreateTools(scope, scope.CreateModule());
         var byName = tools.ToDictionary(tool => tool.ProtocolTool.Name, StringComparer.Ordinal);
-        foreach (var name in new[] { "sqlharness_inspect", "sqlharness_watch" })
+        foreach (var name in new[] { "sqlharness_watch" })
         {
             var description = byName[name].ProtocolTool.Description ?? string.Empty;
             Assert.DoesNotContain("read-only", description, StringComparison.OrdinalIgnoreCase);
@@ -1112,7 +1073,6 @@ public sealed class McpToolSchemaTests : IDisposable
             Assert.DoesNotContain("without mutation", description, StringComparison.OrdinalIgnoreCase);
         }
 
-        Assert.Contains("No SQL input", byName["sqlharness_inspect"].ProtocolTool.Description ?? string.Empty, StringComparison.Ordinal);
         Assert.Contains("static", byName["sqlharness_watch"].ProtocolTool.Description ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("visible", byName["sqlharness_watch"].ProtocolTool.Description ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }

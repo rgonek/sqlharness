@@ -32,29 +32,6 @@ public sealed class McpRequestToolHandlers(
             McpOperationMapper.BuildCapabilities(process, includeDiagnostics, ctx?.Server?.NegotiatedProtocolVersion, inputRootCursor), null));
     });
 
-    public Task<CallToolResult> InspectAsync(RequestContext<CallToolRequestParams> ctx,
-        [Description("Catalog inspection to run.")][AllowedValues("ping", "schema", "counts", "space", "qstop", "indexes")] string kind,
-        [Description("Request target scope.")] McpRequestScopeArgument scope,
-        [Description("Single object name or schema.name, where applicable.")] string? @object = null,
-        [Description("Schema filter pattern; schema only, exclusive with object.")] string? filter = null,
-        [Description("Table names; counts only, exclusive with like.")] string[]? tables = null,
-        [Description("Table name pattern; counts only, exclusive with tables.")] string? like = null,
-        [Description("Row cap 1..500; not for ping.")] int? top = null,
-        [Description("Exact COUNT_BIG(*) instead of estimates; counts only.")] bool exact = false,
-        [Description("Lookback like 24h; qstop only.")] string? window = null,
-        [Description("SQL timeout 1..300 seconds.")] int? timeout = null,
-        CancellationToken ct = default) =>
-        Invoke(ctx, "sqlharness_inspect", scope, handler => handler.InspectAsync(ctx, kind, @object, filter, tables, like, top, exact, window, timeout, ct));
-
-    public Task<CallToolResult> ValidateAsync(RequestContext<CallToolRequestParams> ctx,
-        [Description("Caller intent: query, setup, or benchmark.")][AllowedValues("query", "setup", "benchmark")] string usage,
-        [Description("Request target scope.")] McpRequestScopeArgument scope,
-        [Description("Inline SQL, at most 1 MiB.")] string? sql = null,
-        [Description("SQL file under an operator input root.")] string? file = null,
-        [Description("Parameters as {name, type, value}.")] McpParameterArgument[]? parameters = null,
-        CancellationToken ct = default) =>
-        Invoke(ctx, "sqlharness_validate", scope, handler => handler.ValidateAsync(ctx, usage, sql, file, parameters, ct));
-
     public Task<CallToolResult> QueryAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Request target scope.")] McpRequestScopeArgument scope,
         [Description("Inline SQL, at most 1 MiB.")] string? sql = null,

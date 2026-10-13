@@ -402,79 +402,6 @@ public sealed class McpMappingTests : IDisposable
         Assert.True(operation.DryRun);
     }
 
-    [Fact]
-    public void Inspect_mapping_matches_cli_operations_per_kind()
-    {
-        var scope = Scope();
-        Assert.Equal(
-            new SqlHarnessPingOperation(scope.TargetRequest, 5),
-            McpOperationMapper.MapInspect(scope, "ping", null, null, null, null, null, false, null, null));
-        Assert.Equal(
-            new SqlHarnessSchemaOperation(scope.TargetRequest, null, 30, 50, "dbo.Contracts"),
-            McpOperationMapper.MapInspect(scope, "schema", "dbo.Contracts", null, null, null, null, false, null, null));
-        var counts = Assert.IsType<SqlHarnessCountsOperation>(
-            McpOperationMapper.MapInspect(scope, "counts", null, null, ["dbo.A"], null, 10, true, null, 30));
-        Assert.Equal(["dbo.A"], counts.Tables.ToArray());
-        Assert.Equal(10, counts.Top);
-        Assert.True(counts.Exact);
-        var space = Assert.IsType<SqlHarnessSpaceOperation>(
-            McpOperationMapper.MapInspect(scope, "space", "dbo.A", null, null, null, null, false, null, null));
-        Assert.Equal("dbo.A", space.Object);
-        Assert.Equal(25, space.Top);
-        var qstop = Assert.IsType<SqlHarnessQueryStoreTopOperation>(
-            McpOperationMapper.MapInspect(scope, "qstop", null, null, null, null, null, false, "24h", null));
-        Assert.Equal(1440, qstop.WindowMinutes);
-        Assert.Equal(20, qstop.Top);
-        var indexes = Assert.IsType<SqlHarnessIndexesOperation>(
-            McpOperationMapper.MapInspect(scope, "indexes", null, null, null, null, 7, false, null, null));
-        Assert.Equal(7, indexes.Top);
-    }
-
-    [Fact]
-    public void Inspect_rejects_misplaced_fields_and_bad_combinations()
-    {
-        var scope = Scope();
-        Assert.Throws<McpMappingException>(() =>
-            McpOperationMapper.MapInspect(scope, "ping", null, null, null, null, 5, false, null, null));
-        Assert.Throws<McpMappingException>(() =>
-            McpOperationMapper.MapInspect(scope, "bogus", null, null, null, null, null, false, null, null));
-        Assert.Throws<McpMappingException>(() =>
-            McpOperationMapper.MapInspect(scope, "schema", "dbo.A", "dbo.%", null, null, null, false, null, null));
-        Assert.Throws<McpMappingException>(() =>
-            McpOperationMapper.MapInspect(scope, "counts", null, null, ["dbo.A"], "%A%", null, false, null, null));
-        Assert.Throws<McpMappingException>(() =>
-            McpOperationMapper.MapInspect(scope, "space", "a.b.c", null, null, null, null, false, null, null));
-        Assert.Throws<McpMappingException>(() =>
-            McpOperationMapper.MapInspect(scope, "qstop", null, null, null, null, null, false, "never", null));
-    }
-
-
-    [Theory]
-    [InlineData("1m", 1L, 'm', 1)]
-    [InlineData("24h", 24L, 'h', 1440)]
-    [InlineData("31d", 31L, 'd', 44640)]
-    [InlineData("24H", 24L, 'h', 1440)]
-    public void Inspect_window_parsing_matches_shared_core_conversion(
-        string window, long magnitude, char unit, int minutes)
-    {
-        // The MCP adapter keeps its own format policy (case folding, trim);
-        // the pure magnitude-to-minutes conversion and 1..44640 range live in
-        // Core. Both must agree on every shared input.
-        Assert.Equal(minutes, McpOperationMapper.ParseQueryStoreWindow(window));
-        Assert.True(OperationLimits.TryConvertQueryStoreWindow(magnitude, unit, out var converted));
-        Assert.Equal(minutes, converted);
-    }
-
-    [Fact]
-    public void Inspect_window_rejection_keeps_adapter_message()
-    {
-        var exception = Assert.Throws<McpMappingException>(
-            () => McpOperationMapper.ParseQueryStoreWindow("32d"));
-        Assert.Equal(
-            "The inspect window must be a positive integer with an m, h, or d suffix, totaling 1..44640 minutes.",
-            exception.Message);
-    }
-
     [Theory]
     [InlineData("10", 10)]
     [InlineData("90m", 5400)]
@@ -851,195 +778,6 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal(expected, snapshot.TypedParameters);
     }
 
-    // Offline proof that the typed parameters reach the Core binder whole:
-    // a missing-parameter verdict would mean the binder lost one, and a
-    // parameter failure would mean a separator character was reinterpreted.
-    [Theory]
-    [InlineData("a,b")]
-    [InlineData("a=b:c")]
-    [InlineData("")]
-    [InlineData(null)]
-    public async Task Validate_binds_typed_parameter_values_whole(string? value)
-    {
-        foreach (var profile in new[] { ProfileName, PgProfileName })
-        {
-            var report = await McpOperationMapper.MapValidateAsync(
-                Scope(profile), "SELECT @note;", null, "query", [P("note", "nvarchar", value)], CancellationToken.None);
-            Assert.True(report.Allowed, JsonSerializer.Serialize(report));
-            Assert.Equal("note", Assert.Single(report.Parameters).Name);
-        }
-    }
-
-    [Fact]
-    public async Task Validate_rejects_a_bad_typed_value_and_reports_caller_parameter_detail()
-    {
-        const string callerValue = "caller-owned-not-an-integer";
-        var report = await McpOperationMapper.MapValidateAsync(
-            Scope(), "SELECT @id;", null, "query", [P("id", "int", callerValue)], CancellationToken.None);
-        Assert.False(report.Allowed);
-        Assert.Equal("parameter_validation_failed", report.Reason);
-        Assert.Contains(callerValue, report.Detail, StringComparison.Ordinal);
-        Assert.Contains("'id'", report.Detail, StringComparison.Ordinal);
-        Assert.Contains("'int'", report.Detail, StringComparison.Ordinal);
-    }
-
-    [Theory]
-    [InlineData("query")]
-    [InlineData("setup")]
-    [InlineData("benchmark")]
-    [InlineData("QUERY")]
-    public async Task Validate_accepts_every_usage_offline_through_core(string usage)
-    {
-        var scope = Scope();
-        var report = await McpOperationMapper.MapValidateAsync(
-            scope, "SELECT @id;", null, usage, [P("id", "int", "42")], CancellationToken.None);
-        Assert.True(report.Allowed);
-        Assert.False(report.Executed);
-    }
-
-    [Theory]
-    [InlineData("query", "SELECT @id;", "id:int=42")]
-    [InlineData("setup", "SELECT @id;", "id:int=42")]
-    [InlineData("benchmark", "SELECT @id;", "id:int=42")]
-    [InlineData("benchmark", "SELECT 1; SELECT 2;", null)]
-    public async Task Validate_mcp_and_core_agree_on_decision_for_same_operation(
-        string usage, string sql, string? parameter)
-    {
-        // 007/T4: CLI and MCP share one Core classifier, so the same
-        // SQL+usage+engine must yield the same decision on both surfaces.
-        // The multi-statement benchmark row is allowed on SQL Server (shape
-        // check is a Postgres rule) and rejected on Postgres; both surfaces
-        // must still agree per engine.
-        foreach (var profile in new[] { ProfileName, PgProfileName })
-        {
-            var scope = Scope(profile);
-            var mcp = await McpOperationMapper.MapValidateAsync(
-                scope, sql, null, usage,
-                parameter is null ? null : [P("id", "int", "42")],
-                CancellationToken.None);
-            var core = SqlValidation.Validate(
-                scope.TargetRequest, sql,
-                parameter is null ? [] : [parameter],
-                scope.Profiles,
-                new ValidationOptions(usage.ToLowerInvariant() switch
-                {
-                    "setup" => ValidationUsage.Setup,
-                    "benchmark" => ValidationUsage.Benchmark,
-                    _ => ValidationUsage.Query,
-                }));
-            Assert.Equal(core.Allowed, mcp.Allowed);
-            Assert.Equal(core.Reason, mcp.Reason);
-            Assert.Equal(core.CheckedConditions, mcp.CheckedConditions);
-            Assert.Equal(core.ObjectAndPermissionStatus, mcp.ObjectAndPermissionStatus);
-            Assert.False(mcp.Executed);
-        }
-    }
-    [Theory]
-    [InlineData("DECLARE @v int; SET @v = 2;", false, true)]
-    [InlineData("CREATE TABLE #t (Id int); DECLARE @v int = @id; SET @v = @v + 2; INSERT #t VALUES (@v);", true, true)]
-    [InlineData("DECLARE @v int; CREATE TABLE #t (Id int); SET @v = @id; INSERT #t VALUES (@v);", true, false)]
-    [InlineData("SET @v = 2;", false, false)]
-    [InlineData("DECLARE @v int; SET @v += 2;", false, false)]
-    [InlineData("DECLARE @v int; SET @v = (SELECT MAX(Id) FROM otherdb.dbo.T);", false, false)]
-    public async Task Plan045_Validate_setup_scalar_SET_matches_core(string sql, bool parameterized, bool expectedAllowed)
-    {
-        var scope = Scope();
-        var mcp = await McpOperationMapper.MapValidateAsync(
-            scope, sql, null, "setup", parameterized ? [P("id", "int", "42")] : null, CancellationToken.None);
-        var core = SqlValidation.Validate(scope.TargetRequest, sql,
-            parameterized ? ["id:int=42"] : [], scope.Profiles, new ValidationOptions(ValidationUsage.Setup));
-
-        Assert.Equal(expectedAllowed, mcp.Allowed);
-        Assert.Equal(core.Allowed, mcp.Allowed);
-        Assert.Equal(core.Reason, mcp.Reason);
-        Assert.Equal(core.Detail, mcp.Detail);
-        Assert.Equal(core.Classification, mcp.Classification);
-        Assert.False(mcp.Executed);
-        Assert.Equal("unknown", mcp.ObjectAndPermissionStatus);
-    }
-
-    [Fact]
-    public async Task Validate_reports_core_rejections_offline_without_echo()
-    {
-        var scope = Scope();
-        var report = await McpOperationMapper.MapValidateAsync(
-            scope, "DELETE FROM dbo.T WHERE Id = @id;", null, "query", [P("id", "int", "42")], CancellationToken.None);
-        Assert.False(report.Allowed);
-        Assert.False(report.Executed);
-        await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapValidateAsync(
-            scope, "SELECT 1", null, "execute", null, CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task Validate_reports_missing_parameters_offline_without_echo()
-    {
-        var scope = Scope();
-        var report = await McpOperationMapper.MapValidateAsync(
-            scope, "SELECT @id;", null, "query", null, CancellationToken.None);
-        Assert.False(report.Allowed);
-        Assert.Equal("missing_parameters", report.Reason);
-        Assert.Equal(["id"], report.MissingParameters);
-        Assert.False(report.Executed);
-
-        var pg = Scope(PgProfileName);
-        var pgReport = await McpOperationMapper.MapValidateAsync(
-            pg, "SELECT @id::int;", null, "query", null, CancellationToken.None);
-        Assert.False(pgReport.Allowed);
-        Assert.Equal("missing_parameters", pgReport.Reason);
-        Assert.Equal(["id"], pgReport.MissingParameters);
-        Assert.False(pgReport.Executed);
-    }
-
-    [Fact]
-    public async Task Validate_never_authorizes_persistent_mutation_on_postgres()
-    {
-        var pg = Scope(PgProfileName);
-        var report = await McpOperationMapper.MapValidateAsync(
-            pg, "INSERT INTO public.items (a) VALUES (1);", null, "query", null, CancellationToken.None);
-        Assert.False(report.Allowed);
-        Assert.Equal("mutation_not_allowed", report.Reason);
-        Assert.False(report.Executed);
-    }
-
-    [Fact]
-    public async Task Validate_report_json_carries_no_sql_or_values()
-    {
-        var scope = Scope();
-        var report = await McpOperationMapper.MapValidateAsync(
-            scope, "SELECT @note;", null, "query", [P("note", "nvarchar", "synthetic-note-7x9")], CancellationToken.None);
-        Assert.True(report.Allowed, JsonSerializer.Serialize(report));
-        var json = JsonSerializer.Serialize(report);
-        Assert.False(report.Executed);
-        Assert.DoesNotContain("synthetic-note-7x9", json, StringComparison.Ordinal);
-        Assert.DoesNotContain("SELECT @note;", json, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Validate_proves_equals_value_survives_core_binding()
-    {
-        var scope = Scope();
-        var report = await McpOperationMapper.MapValidateAsync(
-            scope, "SELECT @note;", null, "query", [P("note", "nvarchar", "a=b")], CancellationToken.None);
-        Assert.True(report.Allowed, JsonSerializer.Serialize(report));
-        Assert.DoesNotContain("a=b", JsonSerializer.Serialize(report), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Validate_proves_decimal_unicode_and_null_shapes()
-    {
-        var scope = Scope();
-        var decimalReport = await McpOperationMapper.MapValidateAsync(
-            scope, "SELECT @amount;", null, "query", [P("amount", "decimal(19,4)", "1234.5600")], CancellationToken.None);
-        Assert.True(decimalReport.Allowed, JsonSerializer.Serialize(decimalReport));
-        var unicodeReport = await McpOperationMapper.MapValidateAsync(
-            scope, "SELECT @note;", null, "query", [P("note", "nvarchar", UnicodeValue)], CancellationToken.None);
-        Assert.True(unicodeReport.Allowed, JsonSerializer.Serialize(unicodeReport));
-        Assert.DoesNotContain(UnicodeValue, JsonSerializer.Serialize(unicodeReport), StringComparison.Ordinal);
-        var nullReport = await McpOperationMapper.MapValidateAsync(
-            scope, "SELECT @note;", null, "query", [P("note", "nvarchar", null)], CancellationToken.None);
-        Assert.True(nullReport.Allowed, JsonSerializer.Serialize(nullReport));
-    }
-
     [Fact]
     public async Task Duplicate_and_unknown_type_parameters_fail_in_core_without_value_echo()
     {
@@ -1095,17 +833,10 @@ public sealed class McpMappingTests : IDisposable
     }
 
     [Fact]
-    public void Postgres_gates_fire_before_any_connection()
+    public void Capabilities_report_engine_availability_without_connecting()
     {
         var pg = Scope(PgProfileName);
         Assert.Equal(SqlEngine.Postgres, pg.ResolvedTarget.Engine);
-        var qstop = Assert.Throws<McpMappingException>(() =>
-            McpOperationMapper.MapInspect(pg, "qstop", null, null, null, null, null, false, null, null));
-        Assert.Contains("SQL Server", qstop.Message, StringComparison.Ordinal);
-        var indexes = Assert.Throws<McpMappingException>(() =>
-            McpOperationMapper.MapInspect(pg, "indexes", null, null, null, null, null, false, null, null));
-        Assert.Contains("SQL Server", indexes.Message, StringComparison.Ordinal);
-
         var capabilities = McpOperationMapper.BuildCapabilities(pg, includeDiagnostics: false);
         Assert.Equal("postgres", capabilities.Engine);
         Assert.False(capabilities.QueryStoreAvailable);
@@ -1116,19 +847,6 @@ public sealed class McpMappingTests : IDisposable
         Assert.True(sqlserver.QueryStoreAvailable);
         Assert.True(sqlserver.IndexesAvailable);
         Assert.Equal(McpToolCatalog.ToolNames, sqlserver.Tools);
-    }
-
-    [Fact]
-    public async Task Postgres_rejected_parameter_types_stay_core_owned()
-    {
-        var pg = Scope(PgProfileName);
-        var report = await McpOperationMapper.MapValidateAsync(
-            pg, "SELECT @amount;", null, "query", [P("amount", "money", "5")], CancellationToken.None);
-        Assert.False(report.Allowed);
-        var sqlserver = Scope();
-        var allowed = await McpOperationMapper.MapValidateAsync(
-            sqlserver, "SELECT @amount;", null, "query", [P("amount", "money", "5")], CancellationToken.None);
-        Assert.True(allowed.Allowed, JsonSerializer.Serialize(allowed));
     }
 
     [Fact]
@@ -1381,38 +1099,5 @@ public sealed class McpMappingTests : IDisposable
         var legacyPayload = string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text));
         Assert.DoesNotContain("Index Seek", legacyPayload, StringComparison.Ordinal);
         Assert.NotNull(ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id, "metrics"));
-    }
-
-    [Fact]
-    public async Task Validate_usage_benchmark_rejects_pg_multi_statement_batch_while_query_allows()
-    {
-        // 007/T3: MapValidateAsync must carry the validated usage string into
-        // the shared Core model instead of always validating as query.
-        var pg = Scope(PgProfileName);
-
-        var query = await McpOperationMapper.MapValidateAsync(
-            pg, "SELECT 1; SELECT 2;", null, "query", null, CancellationToken.None);
-        var benchmark = await McpOperationMapper.MapValidateAsync(
-            pg, "SELECT 1; SELECT 2;", null, "benchmark", null, CancellationToken.None);
-
-        Assert.True(query.Allowed);
-        Assert.False(query.Executed);
-        Assert.False(benchmark.Allowed);
-        Assert.Equal("benchmark_batch_not_supported", benchmark.Reason);
-        Assert.False(benchmark.Executed);
-    }
-
-    [Theory]
-    [InlineData("BENCHMARK", false)]
-    [InlineData("Setup", true)]
-    public async Task Validate_usage_mapping_is_case_insensitive(string usage, bool expectedAllowed)
-    {
-        var pg = Scope(PgProfileName);
-
-        var report = await McpOperationMapper.MapValidateAsync(
-            pg, "SELECT 1; SELECT 2;", null, usage, null, CancellationToken.None);
-
-        Assert.Equal(expectedAllowed, report.Allowed);
-        Assert.False(report.Executed);
     }
 }

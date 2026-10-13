@@ -167,7 +167,7 @@ public sealed class McpLifecycleTests
     }
 
     [Fact]
-    public void Db_tool_classification_covers_exactly_the_six_gated_tools()
+    public void Db_tool_classification_covers_exactly_the_five_gated_tools()
     {
         Assert.True(McpExecutionGate.IsDbTool("sqlharness_query"));
         Assert.True(McpExecutionGate.IsDbTool("sqlharness_measure"));
@@ -175,8 +175,6 @@ public sealed class McpLifecycleTests
         Assert.True(McpExecutionGate.IsDbTool("sqlharness_watch"));
         Assert.True(McpExecutionGate.IsDbTool("sqlharness_snapshot"));
         Assert.False(McpExecutionGate.IsDbTool("sqlharness_capabilities"));
-        Assert.True(McpExecutionGate.IsDbTool("sqlharness_inspect"));
-        Assert.False(McpExecutionGate.IsDbTool("sqlharness_validate"));
         Assert.False(McpExecutionGate.IsDbTool("sqlharness_plan"));
         Assert.False(McpExecutionGate.IsDbTool("sqlharness_artifact"));
         Assert.False(McpExecutionGate.IsDbTool(null));
@@ -318,43 +316,7 @@ public sealed class McpLifecycleTests
     }
 
     [Fact]
-    public async Task Active_query_blocks_inspect_with_stable_busy()
-    {
-        var gate = new McpExecutionGate();
-        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        int calls = 0;
-        var module = new RecordingModule
-        {
-            Behavior = async (_, ct) =>
-            {
-                // Only the first (gate-holding) call parks: a concurrent
-                // second execution on old code returns at once, so RED is a
-                // clean busy assertion failure instead of a deadlock.
-                if (Interlocked.Increment(ref calls) == 1)
-                {
-                    entered.TrySetResult();
-                    await release.Task.WaitAsync(ct);
-                }
-                return new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null);
-            },
-        };
-        var handlers = new McpToolHandlers(TestScope(), module, gate);
-        using var cts = new CancellationTokenSource(Budget);
-
-        var blockedQuery = handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
-        await entered.Task.WaitAsync(Budget, cts.Token);
-
-        var busy = await handlers.InspectAsync(null!, "ping", timeout: 5, ct: cts.Token);
-        AssertBusy(busy, "sqlharness_inspect");
-
-        release.TrySetResult();
-        Assert.False((await blockedQuery).IsError == true);
-        Assert.Single(module.Operations);
-    }
-
-    [Fact]
-    public async Task Active_inspect_blocks_query_and_second_inspect()
+    public async Task Active_query_blocks_measure_and_second_query()
     {
         var gate = new McpExecutionGate();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -378,18 +340,18 @@ public sealed class McpLifecycleTests
         var handlers = new McpToolHandlers(TestScope(), module, gate);
         using var cts = new CancellationTokenSource(Budget);
 
-        var holder = handlers.InspectAsync(null!, "ping", timeout: 5, ct: cts.Token);
+        var holder = handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
         await entered.Task.WaitAsync(Budget, cts.Token);
 
-        // Both a different database tool and a second inspect get the same
+        // Both a different database tool and a second query get the same
         // stable BUSY rejection without executing.
+        var busyMeasure = await handlers.MeasureAsync(null!, new McpSqlSourceArgument { Sql = "SELECT 1" }, ct: cts.Token);
+        AssertBusy(busyMeasure, "sqlharness_measure");
         var busyQuery = await handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
         AssertBusy(busyQuery, "sqlharness_query");
-        var busyInspect = await handlers.InspectAsync(null!, "ping", timeout: 5, ct: cts.Token);
-        AssertBusy(busyInspect, "sqlharness_inspect");
+        var measureError = Envelope(busyMeasure).GetProperty("error").GetRawText();
         var queryError = Envelope(busyQuery).GetProperty("error").GetRawText();
-        var inspectError = Envelope(busyInspect).GetProperty("error").GetRawText();
-        Assert.Equal(queryError, inspectError);
+        Assert.Equal(measureError, queryError);
 
         release.TrySetResult();
         Assert.False((await holder).IsError == true);
@@ -397,34 +359,32 @@ public sealed class McpLifecycleTests
     }
 
     [Fact]
-    public async Task Inspect_mapping_rejection_releases_the_gate()
+    public async Task Query_mapping_rejection_releases_the_gate()
     {
         var gate = new McpExecutionGate();
         var module = new RecordingModule();
         var handlers = new McpToolHandlers(TestScope(), module, gate);
         using var cts = new CancellationTokenSource(Budget);
 
-        // An unknown kind never reaches the module: a stable exit-2
+        // An out-of-range timeout never reaches the module: a stable exit-2
         // contract rejection, and the gate slot is not held.
-        var rejected = await handlers.InspectAsync(null!, "bogus", ct: cts.Token);
+        var rejected = await handlers.QueryAsync(null!, "SELECT 1", timeout: 0, ct: cts.Token);
         Assert.True(rejected.IsError == true, Text(rejected));
         var rejectedEnvelope = Envelope(rejected);
         Assert.Equal("error", rejectedEnvelope.GetProperty("status").GetString());
         Assert.Equal((int)SqlHarnessExitCode.Safety, rejectedEnvelope.GetProperty("exitCode").GetInt32());
-        Assert.Equal("sqlharness_inspect", rejectedEnvelope.GetProperty("command").GetString());
+        Assert.Equal("sqlharness_query", rejectedEnvelope.GetProperty("command").GetString());
         Assert.Empty(McpResultAdapter.ValidateEnvelope(rejectedEnvelope));
         Assert.Empty(module.Operations);
 
-        // The slot is free: the next inspect and query both execute.
-        var nextInspect = await handlers.InspectAsync(null!, "ping", timeout: 5, ct: cts.Token);
-        Assert.False(nextInspect.IsError == true, Text(nextInspect));
+        // The slot is free: the next query executes.
         var nextQuery = await handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
         Assert.False(nextQuery.IsError == true, Text(nextQuery));
-        Assert.Equal(2, module.Operations.Count);
+        Assert.Single(module.Operations);
     }
 
     [Fact]
-    public async Task Inspect_core_failure_releases_the_gate()
+    public async Task Query_core_failure_releases_the_gate()
     {
         var gate = new McpExecutionGate();
         var module = new RecordingModule
@@ -434,12 +394,12 @@ public sealed class McpLifecycleTests
         var handlers = new McpToolHandlers(TestScope(), module, gate);
         using var cts = new CancellationTokenSource(Budget);
 
-        var failed = await handlers.InspectAsync(null!, "ping", timeout: 5, ct: cts.Token);
+        var failed = await handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
         Assert.True(failed.IsError == true, Text(failed));
         var failedEnvelope = Envelope(failed);
         Assert.Equal("error", failedEnvelope.GetProperty("status").GetString());
         Assert.Equal((int)SqlHarnessExitCode.SqlExecution, failedEnvelope.GetProperty("exitCode").GetInt32());
-        Assert.Equal("sqlharness_inspect", failedEnvelope.GetProperty("command").GetString());
+        Assert.Equal("sqlharness_query", failedEnvelope.GetProperty("command").GetString());
         Assert.Empty(McpResultAdapter.ValidateEnvelope(failedEnvelope));
         Assert.Single(module.Operations);
 
@@ -448,74 +408,6 @@ public sealed class McpLifecycleTests
         var next = await handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
         Assert.False(next.IsError == true, Text(next));
         Assert.Equal(2, module.Operations.Count);
-    }
-
-    [Fact]
-    public async Task Host_shutdown_cancels_an_inflight_inspect_and_releases_the_gate()
-    {
-        var gate = new McpExecutionGate();
-        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var module = new RecordingModule
-        {
-            Behavior = async (_, ct) =>
-            {
-                entered.TrySetResult();
-                // Honor the token exactly like Core: the linked host token
-                // reaches the module, so shutdown cancels the wait.
-                await Task.Delay(Timeout.Infinite, ct);
-                throw new InvalidOperationException("A cancelled wait never completes.");
-            },
-        };
-        using var hostCts = new CancellationTokenSource();
-        using var guard = new CancellationTokenSource(Budget);
-        var handlers = new McpToolHandlers(TestScope(), module, gate, hostShutdown: hostCts.Token);
-
-        var inflight = handlers.InspectAsync(null!, "ping", timeout: 5, ct: guard.Token);
-        await entered.Task.WaitAsync(Budget, guard.Token);
-
-        // Process close: the linked token reaches the module, the inspect
-        // reports cancelled, and the gate slot is released.
-        await hostCts.CancelAsync();
-        var cancelled = await inflight.WaitAsync(Budget, guard.Token);
-        Assert.True(cancelled.IsError == true, Text(cancelled));
-        var cancelledEnvelope = Envelope(cancelled);
-        Assert.Equal((int)SqlHarnessExitCode.SqlExecution, cancelledEnvelope.GetProperty("exitCode").GetInt32());
-        Assert.Equal(McpExecutionGate.CancelledCode, cancelledEnvelope.GetProperty("error").GetProperty("code").GetString());
-        Assert.Equal(McpExecutionGate.CancelledMessage, cancelledEnvelope.GetProperty("error").GetProperty("message").GetString());
-        Assert.True(gate.TryEnterDb());
-        gate.ExitDb();
-    }
-
-    [Fact]
-    public async Task Local_capabilities_and_validate_run_while_the_gate_is_held()
-    {
-        var heldEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var heldRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var localModule = new RecordingModule
-        {
-            Behavior = async (_, ct) =>
-            {
-                heldEntered.TrySetResult();
-                await heldRelease.Task.WaitAsync(ct);
-                return new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null);
-            },
-        };
-        var localHandlers = new McpToolHandlers(TestScope(), localModule, new McpExecutionGate());
-        using var localCts = new CancellationTokenSource(Budget);
-
-        var held = localHandlers.QueryAsync(null!, "SELECT 1", ct: localCts.Token);
-        await heldEntered.Task.WaitAsync(Budget, localCts.Token);
-
-        // Offline local tools share no gate and stay available while a
-        // database call holds it.
-        var capabilities = await localHandlers.CapabilitiesAsync(null!, false, ct: localCts.Token);
-        Assert.False(capabilities.IsError == true, Text(capabilities));
-        var validate = await localHandlers.ValidateAsync(null!, "query", sql: "SELECT 1", ct: localCts.Token);
-        Assert.False(validate.IsError == true, Text(validate));
-
-        heldRelease.TrySetResult();
-        Assert.False((await held).IsError == true);
-        Assert.Single(localModule.Operations);
     }
 
     [Fact]
@@ -977,8 +869,6 @@ public sealed class McpLifecycleTests
         // and snapshot capture persist data and may write, so
         // they stay unclaimed. Unknown stays null rather than guessing.
         AssertAnnotations(tools, "sqlharness_capabilities", ReadOnly: true, destructive: false, idempotent: true, openWorld: false);
-        AssertAnnotations(tools, "sqlharness_inspect", ReadOnly: true, destructive: false, idempotent: null, openWorld: true);
-        AssertAnnotations(tools, "sqlharness_validate", ReadOnly: true, destructive: false, idempotent: true, openWorld: false);
         AssertAnnotations(tools, "sqlharness_query", ReadOnly: true, destructive: false, idempotent: null, openWorld: true);
         AssertAnnotations(tools, "sqlharness_measure", ReadOnly: null, destructive: false, idempotent: null, openWorld: true);
         AssertAnnotations(tools, "sqlharness_compare", ReadOnly: null, destructive: false, idempotent: null, openWorld: true);

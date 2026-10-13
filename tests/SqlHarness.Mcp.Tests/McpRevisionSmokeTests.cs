@@ -272,14 +272,14 @@ public sealed class McpRevisionSmokeTests : IDisposable
             Assert.Equal(McpHost.SupportedProtocolVersions,
                 capabilitiesResult.GetProperty("supportedProtocolVersions").EnumerateArray().Select(value => value.GetString()!).ToArray());
 
-            var missingScope = await client.CallToolAsync("sqlharness_validate",
-                new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" }, cancellationToken: cts.Token);
+            var missingScope = await client.CallToolAsync("sqlharness_query",
+                new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1" }, cancellationToken: cts.Token);
             Assert.True(missingScope.IsError == true);
 
-            var valid = await client.CallToolAsync("sqlharness_validate", new Dictionary<string, object?>
+            var valid = await client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
             {
                 ["scope"] = new Dictionary<string, object?> { ["profile"] = "sample-a", ["vars"] = new Dictionary<string, string> { ["tenant"] = "a" } },
-                ["usage"] = "query",
+                ["dryRun"] = true,
                 ["sql"] = "SELECT 1",
             }, cancellationToken: cts.Token);
             Assert.NotEqual(true, valid.IsError);

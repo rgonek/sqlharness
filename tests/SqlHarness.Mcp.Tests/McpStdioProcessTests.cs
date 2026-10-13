@@ -436,7 +436,7 @@ internal sealed class RecordingStream(Stream inner) : Stream
 /// <summary>
 /// T6 protocol proof over a real process: the official SDK client drives the
 /// published single-file <c>sqlharness mcp serve</c> for the current RID
-/// (initialize 2025-11-25, tools/list of 10, offline validate + plan,
+/// (initialize 2025-11-25, tools/list of 8, offline dry-run query + plan,
 /// malformed input survival, shutdown). No database tool runs here.
 /// </summary>
 [Collection("McpStdioProcess")]
@@ -482,16 +482,16 @@ public sealed class McpStdioProcessTests
             Assert.Equal(McpHost.ServerName, client.ServerInfo.Name);
 
             var tools = await client.ListToolsAsync(cancellationToken: ct);
-            Assert.Equal(10, tools.Count);
+            Assert.Equal(8, tools.Count);
             Assert.Equal(
                 McpToolCatalog.ToolNames.Order(StringComparer.Ordinal),
                 tools.Select(tool => tool.Name).Order(StringComparer.Ordinal).ToArray());
-            var validateSchema = JsonSerializer.SerializeToElement(
-                Assert.Single(tools, tool => tool.Name == "sqlharness_validate").ProtocolTool)
+            var querySchema = JsonSerializer.SerializeToElement(
+                Assert.Single(tools, tool => tool.Name == "sqlharness_query").ProtocolTool)
                 .GetProperty("inputSchema");
             Assert.Contains(
                 "scope",
-                validateSchema.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
+                querySchema.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
 
             static Dictionary<string, object?> Scope(string profile) => new()
             {
@@ -502,24 +502,24 @@ public sealed class McpStdioProcessTests
             foreach (var profile in new[] { "sample-country", "sample-shared" })
             {
                 var validate = await client.CallToolAsync(
-                    "sqlharness_validate",
+                    "sqlharness_query",
                     new Dictionary<string, object?>
                     {
                         ["scope"] = Scope(profile),
-                        ["usage"] = "query",
+                        ["dryRun"] = true,
                         ["sql"] = "SELECT 1",
                     },
                     cancellationToken: ct);
-                AssertValidateSuccess(validate, "sqlharness_validate");
+                AssertValidateSuccess(validate, "sqlharness_query");
             }
 
             var missingScope = await client.CallToolAsync(
-                "sqlharness_validate",
-                new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+                "sqlharness_query",
+                new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1" },
                 cancellationToken: ct);
             Assert.True(missingScope.IsError == true);
             var missingScopeMessage = string.Concat(missingScope.Content.OfType<TextContentBlock>().Select(block => block.Text));
-            Assert.Contains("sqlharness_validate", missingScopeMessage, StringComparison.Ordinal);
+            Assert.Contains("sqlharness_query", missingScopeMessage, StringComparison.Ordinal);
 
             var unsafeArguments = await client.CallToolAsync(
                 "sqlharness_query",
@@ -642,10 +642,10 @@ public sealed class McpStdioProcessTests
                 tools.Select(tool => tool.Name).Order(StringComparer.Ordinal).ToArray());
 
             var validate = await client.CallToolAsync(
-                "sqlharness_validate",
-                new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+                "sqlharness_query",
+                new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1" },
                 cancellationToken: ct);
-            AssertValidateSuccess(validate, "sqlharness_validate");
+            AssertValidateSuccess(validate, "sqlharness_query");
 
             var planXml = File.ReadAllText(McpStdioProcessHarness.FindRepositoryFile(
                 "tests", "SqlHarness.Tests", "Fixtures", "distiller-sample.sqlplan"));
@@ -663,10 +663,10 @@ public sealed class McpStdioProcessTests
             await Task.Delay(TimeSpan.FromSeconds(2), ct);
             Assert.False(child.Process.HasExited, "The published server died on malformed input.");
             var afterGarbage = await client.CallToolAsync(
-                "sqlharness_validate",
-                new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 2" },
+                "sqlharness_query",
+                new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 2" },
                 cancellationToken: ct);
-            AssertValidateSuccess(afterGarbage, "sqlharness_validate");
+            AssertValidateSuccess(afterGarbage, "sqlharness_query");
 
             // Unknown tool is a protocol error, not a process failure.
             await Assert.ThrowsAsync<McpProtocolException>(async () => await client.CallToolAsync(
@@ -675,10 +675,10 @@ public sealed class McpStdioProcessTests
                 cancellationToken: ct));
             Assert.False(child.Process.HasExited, "The published server died after an unknown tool call.");
             var afterUnknown = await client.CallToolAsync(
-                "sqlharness_validate",
-                new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 3" },
+                "sqlharness_query",
+                new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 3" },
                 cancellationToken: ct);
-            AssertValidateSuccess(afterUnknown, "sqlharness_validate");
+            AssertValidateSuccess(afterUnknown, "sqlharness_query");
 
             await client.DisposeAsync();
             child.Process.StandardInput.Close();
@@ -766,10 +766,10 @@ public sealed class McpStdioProcessTests
             {
                 Assert.Equal(McpStdioProcessHarness.DefaultProtocolVersion, client.NegotiatedProtocolVersion);
                 var validate = await client.CallToolAsync(
-                    "sqlharness_validate",
-                    new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+                    "sqlharness_query",
+                    new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1" },
                     cancellationToken: ct);
-                AssertValidateSuccess(validate, "sqlharness_validate");
+                AssertValidateSuccess(validate, "sqlharness_query");
             }
 
             await clientToServer.Writer.CompleteAsync();
@@ -908,12 +908,6 @@ public sealed class McpStdioLiveTests
             await using var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct);
             Assert.Equal(McpStdioProcessHarness.DefaultProtocolVersion, client.NegotiatedProtocolVersion);
 
-            var ping = await client.CallToolAsync(
-                "sqlharness_inspect",
-                new Dictionary<string, object?> { ["kind"] = "ping" },
-                cancellationToken: ct);
-            Assert.False(ping.IsError == true, McpStdioProcessHarness.Envelope(ping).ToString());
-
             var query = await client.CallToolAsync(
                 "sqlharness_query",
                 new Dictionary<string, object?> { ["sql"] = "SELECT 1 AS probe" },
@@ -985,8 +979,8 @@ public sealed class McpStdioLiveTests
             Assert.False(child.Process.HasExited, "The server died after watch cancellation.");
 
             var afterCancel = await client.CallToolAsync(
-                "sqlharness_validate",
-                new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+                "sqlharness_query",
+                new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1" },
                 cancellationToken: ct);
             Assert.False(afterCancel.IsError == true, McpStdioProcessHarness.Envelope(afterCancel).ToString());
 
