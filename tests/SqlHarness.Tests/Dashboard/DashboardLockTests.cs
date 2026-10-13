@@ -1,5 +1,8 @@
+using System.Runtime.Versioning;
+
 using SqlHarness.Core;
 using SqlHarness.Dashboard;
+using SqlHarness.Tests;
 
 namespace SqlHarness.Tests.Dashboard;
 
@@ -115,11 +118,10 @@ public sealed class DashboardLockTests
         Assert.Null(endpoint);
     }
 
-    [Fact]
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
     public void Info_file_is_owner_only_on_unix()
     {
-        if (OperatingSystem.IsWindows())
-            return;
         using var home = new TempHome();
         using var held = DashboardLock.TryAcquire(home.Path)!;
 
@@ -188,11 +190,10 @@ public sealed class DashboardLockTests
         Assert.Contains("47801", text, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
     public void Publish_replaces_a_leftover_temp_file_and_stays_owner_only_on_unix()
     {
-        if (OperatingSystem.IsWindows())
-            return;
         using var home = new TempHome();
         using var held = DashboardLock.TryAcquire(home.Path)!;
         var temp = Path.Combine(home.Path, "dashboard.json.tmp");
@@ -205,11 +206,10 @@ public sealed class DashboardLockTests
         Assert.False(File.Exists(temp));
     }
 
-    [Fact]
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
     public void Lock_file_and_home_are_owner_only_on_unix()
     {
-        if (OperatingSystem.IsWindows())
-            return;
         using var home = new TempHome();
         File.SetUnixFileMode(home.Path, (UnixFileMode)0b111_101_101);
 

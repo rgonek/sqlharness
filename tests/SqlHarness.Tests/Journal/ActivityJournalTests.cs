@@ -1,8 +1,10 @@
 using System.Diagnostics;
+using System.Runtime.Versioning;
 
 using Microsoft.Data.Sqlite;
 
 using SqlHarness.Core;
+using SqlHarness.Tests;
 
 namespace SqlHarness.Tests.Journal;
 
@@ -239,11 +241,10 @@ public sealed class ActivityJournalTests
         Assert.Equal(99L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
     }
 
-    [Fact]
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
     public void Database_and_directory_are_owner_only_on_unix()
     {
-        if (OperatingSystem.IsWindows())
-            return;
         using var temp = new JournalTempDirectory();
 
         Open(temp, TextWriter.Null).Begin(JournalTestData.Session(), JournalTestData.Start());

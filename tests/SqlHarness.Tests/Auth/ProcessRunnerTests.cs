@@ -1,6 +1,7 @@
 using System.Diagnostics;
 
 using SqlHarness.Core.Auth;
+using SqlHarness.Tests;
 
 namespace SqlHarness.Tests.Auth;
 
@@ -45,12 +46,9 @@ public sealed class ProcessRunnerTests
         Assert.False(typeof(ProcessRunner).IsPublic);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task RunAsync_ClosesChildStandardInput()
     {
-        if (!OperatingSystem.IsWindows())
-            return;
-
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var runner = new ProcessRunner();
         var result = await runner.RunAsync(
@@ -63,12 +61,9 @@ public sealed class ProcessRunnerTests
         Assert.Contains("done", result.StandardOutput, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task RunAsync_CancellationTerminatesEntireProcessTree()
     {
-        if (!OperatingSystem.IsWindows())
-            return;
-
         // The space in the directory name is deliberate: it pins the quoting fix.
         var testDirectory = Path.Combine(Path.GetTempPath(), $"sqlharness test-{Guid.NewGuid():N}");
         var pidFile = Path.Combine(testDirectory, "processes.pid");
@@ -114,12 +109,9 @@ public sealed class ProcessRunnerTests
         }
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task PidPublicationError_ReportsDiagnosticsAndCleansUp()
     {
-        if (!OperatingSystem.IsWindows())
-            return;
-
         var testDirectory = Path.Combine(Path.GetTempPath(), $"sqlharness test-{Guid.NewGuid():N}");
         var pidFile = Path.Combine(testDirectory, "processes.pid");
         var childScript = Path.Combine(testDirectory, "child.ps1");
@@ -184,12 +176,9 @@ public sealed class ProcessRunnerTests
         }
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task WaitForPidsAsync_ToleratesSlowPublisher()
     {
-        if (!OperatingSystem.IsWindows())
-            return;
-
         var path = Path.Combine(Path.GetTempPath(), $"sqlharness-pids-{Guid.NewGuid():N}.pid");
 
         try

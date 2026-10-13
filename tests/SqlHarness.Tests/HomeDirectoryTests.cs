@@ -1,3 +1,5 @@
+using System.Runtime.Versioning;
+
 using SqlHarness.Core;
 
 namespace SqlHarness.Tests;
@@ -17,10 +19,10 @@ public sealed class HomeDirectoryTests : IDisposable
             Directory.Delete(_home, true);
     }
 
-    [Fact]
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
     public void EnsureHomeFor_creates_a_fresh_home_owner_only()
     {
-        if (OperatingSystem.IsWindows()) return;
         Assert.False(Directory.Exists(_home));
 
         SqlHarnessPaths.EnsureHomeFor(Path.Combine(_home, "snapshots"));
@@ -31,10 +33,10 @@ public sealed class HomeDirectoryTests : IDisposable
             File.GetUnixFileMode(_home));
     }
 
-    [Fact]
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
     public void EnsureHomeFor_leaves_an_existing_broad_home_unchanged()
     {
-        if (OperatingSystem.IsWindows()) return;
         Directory.CreateDirectory(_home);
         File.SetUnixFileMode(_home, (UnixFileMode)0b111_101_101);
 
@@ -43,10 +45,10 @@ public sealed class HomeDirectoryTests : IDisposable
         Assert.Equal((UnixFileMode)0b111_101_101, File.GetUnixFileMode(_home));
     }
 
-    [Fact]
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
     public void EnsureHomeFor_ignores_paths_outside_the_home()
     {
-        if (OperatingSystem.IsWindows()) return;
         var other = Path.Combine(Path.GetTempPath(), "sqlharness-not-home-" + Guid.NewGuid().ToString("N"));
 
         SqlHarnessPaths.EnsureHomeFor(other);
@@ -55,10 +57,10 @@ public sealed class HomeDirectoryTests : IDisposable
         Assert.False(Directory.Exists(other));
     }
 
-    [Fact]
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
     public void A_writer_creates_the_home_owner_only()
     {
-        if (OperatingSystem.IsWindows()) return;
         Assert.False(Directory.Exists(_home));
 
         SqlHarnessConfigWriter.Write(Path.Combine(_home, "config.json"), SqlHarnessConfig.Default);
@@ -69,10 +71,10 @@ public sealed class HomeDirectoryTests : IDisposable
             File.GetUnixFileMode(_home));
     }
 
-    [Fact]
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
     public void HomeMode_reports_the_existing_home_mode()
     {
-        if (OperatingSystem.IsWindows()) return;
         Directory.CreateDirectory(_home);
         File.SetUnixFileMode(_home, (UnixFileMode)0b111_101_101);
 
