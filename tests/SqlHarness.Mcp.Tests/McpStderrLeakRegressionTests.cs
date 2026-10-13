@@ -32,13 +32,15 @@ public sealed class McpStderrLeakRegressionTests
     {
         using var cts = new CancellationTokenSource(LeakBudget);
         var ct = cts.Token;
-        var exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
-        var home = McpStdioProcessHarness.CreateSyntheticHome(
-            McpStdioProcessHarness.ProfileName,
-            """{"mcp-stdio": {"server": "mcp-unreachable.invalid", "database": "mcp-stdio-db", "vars": {"tenant": "^steno-scope-var-7745$"}, "auth": "integrated"}}""");
+        string? exe = null;
+        string? home = null;
         McpStdioProcessHarness.StdioChild? child = null;
         try
         {
+            exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
+            home = McpStdioProcessHarness.CreateSyntheticHome(
+                McpStdioProcessHarness.ProfileName,
+                """{"mcp-stdio": {"server": "mcp-unreachable.invalid", "database": "mcp-stdio-db", "vars": {"tenant": "^steno-scope-var-7745$"}, "auth": "integrated"}}""");
             child = McpStdioProcessHarness.StartServer(exe, home, "mcp serve --request-scope --allow-profile mcp-stdio");
             var stdin = child.Process.StandardInput.BaseStream;
             await using var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct);
@@ -207,7 +209,10 @@ public sealed class McpStderrLeakRegressionTests
             }
 
             child?.Process.Dispose();
-            McpStdioProcessHarness.DeleteHome(home);
+            if (home is not null)
+                McpStdioProcessHarness.DeleteHome(home);
+            if (exe is not null)
+                McpStdioProcessHarness.DeletePublishOutput(exe);
         }
     }
 
@@ -219,13 +224,15 @@ public sealed class McpStderrLeakRegressionTests
     {
         using var cts = new CancellationTokenSource(LeakBudget);
         var ct = cts.Token;
-        var exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
-        var home = McpStdioProcessHarness.CreateSyntheticHome(
-            McpStdioProcessHarness.ProfileName,
-            """{"mcp-stdio": {"server": "mcp-unreachable.invalid", "database": "mcp-stdio-db", "vars": {}, "auth": "integrated"}}""");
+        string? exe = null;
+        string? home = null;
         McpStdioProcessHarness.StdioChild? child = null;
         try
         {
+            exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
+            home = McpStdioProcessHarness.CreateSyntheticHome(
+                McpStdioProcessHarness.ProfileName,
+                """{"mcp-stdio": {"server": "mcp-unreachable.invalid", "database": "mcp-stdio-db", "vars": {}, "auth": "integrated"}}""");
             child = McpStdioProcessHarness.StartServer(exe, home, "mcp serve mcp-stdio");
             var stdin = child.Process.StandardInput.BaseStream;
             var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct, revision);
@@ -260,7 +267,10 @@ public sealed class McpStderrLeakRegressionTests
             }
 
             child?.Process.Dispose();
-            McpStdioProcessHarness.DeleteHome(home);
+            if (home is not null)
+                McpStdioProcessHarness.DeleteHome(home);
+            if (exe is not null)
+                McpStdioProcessHarness.DeletePublishOutput(exe);
         }
     }
 }
