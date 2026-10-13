@@ -616,12 +616,13 @@ public sealed class PostgresSafetyTests
         Assert.Equal(CommandType.Text, command.CommandType);
         Assert.Null(command.Transaction);
 
-        Environment.SetEnvironmentVariable("SQLHARNESS_PG_PASSWORD", "secret");
+        var variable = $"SQLHARNESS_TEST_{Guid.NewGuid():N}";
+        Environment.SetEnvironmentVariable(variable, "secret");
         try
         {
             var target = new ResolvedTarget(
                 "localhost,5432", "appdb",
-                AuthSpec.Parse("sql", "sqlharness", "SQLHARNESS_PG_PASSWORD", true),
+                AuthSpec.Parse("sql", "sqlharness", variable, true),
                 "profile", SqlEngine.Postgres);
             var connectionString = PostgresConnectionString.Build(target, 15);
             Assert.DoesNotContain("default_transaction_read_only", connectionString, StringComparison.OrdinalIgnoreCase);
@@ -630,7 +631,7 @@ public sealed class PostgresSafetyTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("SQLHARNESS_PG_PASSWORD", null);
+            Environment.SetEnvironmentVariable(variable, null);
         }
     }
 

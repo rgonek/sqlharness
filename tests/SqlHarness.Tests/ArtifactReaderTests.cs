@@ -466,6 +466,7 @@ public class ArtifactReaderTests
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
         {
+            // capability guard: xUnit v2 has no dynamic skip
             // Creating links needs OS privilege; traversal batteries above always run.
             return;
         }

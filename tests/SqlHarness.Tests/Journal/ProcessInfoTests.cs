@@ -53,6 +53,7 @@ public sealed class ProcessInfoTests
     [Fact]
     public void Current_process_is_visible_on_windows_and_linux()
     {
+        // capability guard: supported on Windows and Linux; xUnit v2 has no dynamic skip.
         if (!OperatingSystem.IsWindows() && !OperatingSystem.IsLinux())
             return;
 
