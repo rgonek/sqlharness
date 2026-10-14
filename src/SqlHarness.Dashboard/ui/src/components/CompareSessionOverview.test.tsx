@@ -2,6 +2,7 @@ import { screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
 import type { CompareAttemptSummary, CompareSubjectSummary } from "@/api/types"
+import { operation, operationDetail, session } from "@/test/fixtures"
 import { renderApp, stubFetch } from "@/test/render"
 
 const attempt = (over: Partial<CompareAttemptSummary> = {}): CompareAttemptSummary => ({
@@ -72,14 +73,27 @@ test("a subject with fragments only says there is no final whole compare and leg
   ])
   // The page aggregate, rather than the page contents, owns the legacy group count.
   const calls = stubFetch({
-    "/api/sessions/7": { session: { id: 7, sessionKey: "mcp:test", transport: "mcp", source: "process-tree", agentKind: "codex", clientName: null, clientVersion: null, mcpMode: "fixed", cwd: null, firstSeen: "2026-10-12T10:00:00Z", lastSeen: "2026-10-12T12:00:00Z", operations: 2, failed: 1, rejected: 0, running: 0, abandoned: 0, clientTitle: null, roots: null, protocolVersion: null }, operations: [], compareSubjects: [subject({ scopes: ["history"], latestWhole: null, latestCompletedWhole: null, startToLatestWhole: null })], unassignedCompareCount: 3 },
+    "/api/sessions/7": { session: session({ id: 7, sessionKey: "mcp:test" }), operations: [], compareSubjects: [subject({ scopes: ["history"], latestWhole: null, latestCompletedWhole: null, startToLatestWhole: null })], unassignedCompareCount: 3 },
     "/api/sessions/7/compares": { items: [attempt({ operationId: 80, scope: null, subject: null, baselineVersion: null, candidateVersion: null })], nextCursor: null },
+    "/api/operations/80": operationDetail({ operation: operation({ id: 80, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:test" }) }),
   })
   renderApp("/sessions/7")
 
   await userEvent.click(await screen.findByText("orders", { selector: "summary" }))
   expect(await screen.findByText("No final whole compare")).toBeInTheDocument()
-  expect(screen.getByText("Unassigned context (3)", { selector: "summary" })).toBeInTheDocument()
+  const unassignedSummary = screen.getByText("Unassigned context (3)", { selector: "summary" })
+  await userEvent.click(unassignedSummary)
+  const unassignedGroup = unassignedSummary.closest("details")!
+  expect(unassignedGroup).toHaveAttribute("open")
+  const compareLink = await within(unassignedGroup).findByRole("link", { name: "Compare #80" })
+  const operationUrl = new URL(compareLink.getAttribute("href")!, "http://dashboard")
+  expect(operationUrl.searchParams.get("returnUnassigned")).toBe("true")
+  expect(operationUrl.searchParams.has("returnSubject")).toBe(false)
+  expect(operationUrl.searchParams.has("returnScope")).toBe(false)
+  await userEvent.click(compareLink)
+  await userEvent.click(await screen.findByRole("link", { name: "mcp:test" }))
+  const returnedSummary = await screen.findByText("Unassigned context (3)", { selector: "summary" })
+  expect(returnedSummary.closest("details")).toHaveAttribute("open")
   expect(calls.some(call => call.startsWith("/api/sessions/7/compares"))).toBe(true)
 })
 

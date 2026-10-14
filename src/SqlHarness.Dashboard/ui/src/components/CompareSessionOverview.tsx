@@ -17,13 +17,18 @@ function attemptVersions(attempt: CompareAttemptSummary) {
   return `${attempt.baselineVersion ?? "unknown"} → ${attempt.candidateVersion ?? "unknown"}`
 }
 
-function AttemptLink({ attempt, sessionId }: { attempt: CompareAttemptSummary; sessionId: number }) {
+function AttemptLink({ attempt, sessionId, returnUnassigned = false }: { attempt: CompareAttemptSummary; sessionId: number; returnUnassigned?: boolean }) {
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
       <Link
         to="/operations/$id"
         params={{ id: String(attempt.operationId) }}
-        search={{ returnSession: sessionId, returnSubject: attempt.subject ?? undefined, returnScope: attempt.scope ?? undefined }}
+        search={{
+          returnSession: sessionId,
+          returnSubject: returnUnassigned ? undefined : attempt.subject ?? undefined,
+          returnScope: returnUnassigned ? undefined : attempt.scope ?? undefined,
+          returnUnassigned: returnUnassigned || undefined,
+        }}
       >
         Compare #{attempt.operationId}
       </Link>
@@ -82,12 +87,13 @@ function SubjectOverview({ subject, sessionId, attempts, returnSubject, returnSc
   )
 }
 
-export function CompareSessionOverview({ sessionId, subjects, unassignedCompareCount, returnSubject, returnScope }: {
+export function CompareSessionOverview({ sessionId, subjects, unassignedCompareCount, returnSubject, returnScope, returnUnassigned = false }: {
   sessionId: number
   subjects: CompareSubjectSummary[]
   unassignedCompareCount: number
   returnSubject?: string
   returnScope?: string
+  returnUnassigned?: boolean
 }) {
   const query = useSessionCompares(sessionId)
   const attempts = query.data?.pages.flatMap(page => page.items) ?? []
@@ -107,10 +113,10 @@ export function CompareSessionOverview({ sessionId, subjects, unassignedCompareC
         <SubjectOverview key={subject.subject} subject={subject} sessionId={sessionId} attempts={attempts} returnSubject={returnSubject} returnScope={returnScope} />
       ))}
       {unassignedCompareCount > 0 && (
-        <details className="rounded-lg border p-3">
+        <details className="rounded-lg border p-3" open={returnUnassigned}>
           <summary className="cursor-pointer font-medium">Unassigned context ({unassignedCompareCount})</summary>
           <p className="mt-2 text-sm text-muted-foreground">Legacy compares without a complete subject and scope remain separate; they are not treated as whole compares.</p>
-          {unassigned.length ? <ol className="divide-y">{unassigned.map(attempt => <AttemptLink key={attempt.operationId} attempt={attempt} sessionId={sessionId} />)}</ol> : <p className="mt-2 text-sm text-muted-foreground">No unassigned attempts loaded on this page.</p>}
+          {unassigned.length ? <ol className="divide-y">{unassigned.map(attempt => <AttemptLink key={attempt.operationId} attempt={attempt} sessionId={sessionId} returnUnassigned />)}</ol> : <p className="mt-2 text-sm text-muted-foreground">No unassigned attempts loaded on this page.</p>}
         </details>
       )}
       {query.hasNextPage && <Button variant="outline" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>{query.isFetchingNextPage ? "Loading more…" : "Load more compare attempts"}</Button>}

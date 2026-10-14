@@ -15,6 +15,18 @@ test("compare operation returns to its session with the originating subject and 
   expect(target.searchParams.get("scope")).toBe("history")
 })
 
+test("compare operation returns to the unassigned group without inventing subject or scope", async () => {
+  stubFetch({ "/api/operations/10": operationDetail({ operation: operation({ id: 10, sessionId: 7, operation: "compare" }), session: session({ id: 7, sessionKey: "mcp:session" }) }) })
+  renderApp("/operations/10?returnSession=7&returnUnassigned=true")
+
+  const back = await screen.findByRole("link", { name: "mcp:session" })
+  const target = new URL(back.getAttribute("href")!, "http://dashboard")
+  expect(target.pathname).toBe("/sessions/7")
+  expect(target.searchParams.get("unassigned")).toBe("true")
+  expect(target.searchParams.has("subject")).toBe(false)
+  expect(target.searchParams.has("scope")).toBe(false)
+})
+
 test("measure shows facts, KPIs, table IO, waits and the sql-not-stored note", async () => {
   stubFetch({ "/api/operations/10": operationDetail() })
   renderApp("/operations/10")

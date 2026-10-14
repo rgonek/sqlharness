@@ -100,7 +100,7 @@ export function OperationPage() {
   return <OperationView id={id} returnSearch={search} />
 }
 
-function OperationView({ id, returnSearch }: { id: number; returnSearch: { returnSession?: number; returnSubject?: string; returnScope?: string } }) {
+function OperationView({ id, returnSearch }: { id: number; returnSearch: { returnSession?: number; returnSubject?: string; returnScope?: string; returnUnassigned?: boolean } }) {
   const query = useOperation(id)
 
   if (query.error) return <ErrorState error={query.error} />
@@ -122,7 +122,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: { retur
           </div>
           <CardDescription>
             {op.operation} by {agentLabel(op.agentKind)} in{" "}
-            <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? { subject: returnSearch.returnSubject, scope: returnSearch.returnScope } : undefined}>
+            <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? { subject: returnSearch.returnSubject, scope: returnSearch.returnScope, unassigned: returnSearch.returnUnassigned } : undefined}>
               {detail.session.sessionKey}
             </Link>
           </CardDescription>

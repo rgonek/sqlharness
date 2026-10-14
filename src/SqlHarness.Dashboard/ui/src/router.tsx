@@ -10,8 +10,8 @@ import { SessionsPage } from "@/pages/SessionsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { StatsPage } from "@/pages/StatsPage"
 
-export type SessionSearch = { subject?: string; scope?: string }
-export type OperationDetailSearch = { returnSession?: number; returnSubject?: string; returnScope?: string }
+export type SessionSearch = { subject?: string; scope?: string; unassigned?: boolean }
+export type OperationDetailSearch = { returnSession?: number; returnSubject?: string; returnScope?: string; returnUnassigned?: boolean }
 
 const rootRoute = createRootRoute({ component: AppLayout, notFoundComponent: NotFoundPage })
 
@@ -21,6 +21,7 @@ const sessionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sess
   validateSearch: (search: Record<string, unknown>): SessionSearch => ({
     subject: typeof search.subject === "string" && search.subject.length <= 64 ? search.subject : undefined,
     scope: typeof search.scope === "string" && search.scope.length <= 64 ? search.scope : undefined,
+    unassigned: search.unassigned === true || search.unassigned === "true",
   }) })
 const operationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations/$id", component: OperationPage,
   validateSearch: (search: Record<string, unknown>): OperationDetailSearch => ({
@@ -28,6 +29,7 @@ const operationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/op
       : typeof search.returnSession === "string" && /^\d+$/.test(search.returnSession) && Number.isSafeInteger(Number(search.returnSession)) ? Number(search.returnSession) : undefined,
     returnSubject: typeof search.returnSubject === "string" && search.returnSubject.length <= 64 ? search.returnSubject : undefined,
     returnScope: typeof search.returnScope === "string" && search.returnScope.length <= 64 ? search.returnScope : undefined,
+    returnUnassigned: search.returnUnassigned === true || search.returnUnassigned === "true",
   }) })
 const operationsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations", component: OperationsPage,
   validateSearch: (search: Record<string, unknown>): OperationListSearch => ({

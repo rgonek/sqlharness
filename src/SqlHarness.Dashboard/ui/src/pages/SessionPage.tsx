@@ -28,10 +28,10 @@ export function SessionPage() {
   const search = useSearch({ from: "/sessions/$id" })
   const id = parseRouteId(raw)
   if (id === null) return <ErrorState error={new NotFoundError(`/sessions/${raw}`)} />
-  return <SessionView id={id} returnSubject={search.subject} returnScope={search.scope} />
+  return <SessionView id={id} returnSubject={search.subject} returnScope={search.scope} returnUnassigned={search.unassigned} />
 }
 
-function SessionView({ id, returnSubject, returnScope }: { id: number; returnSubject?: string; returnScope?: string }) {
+function SessionView({ id, returnSubject, returnScope, returnUnassigned }: { id: number; returnSubject?: string; returnScope?: string; returnUnassigned?: boolean }) {
   const detail = useSession(id)
 
   if (detail.error) return <ErrorState error={detail.error} />
@@ -82,7 +82,7 @@ function SessionView({ id, returnSubject, returnScope }: { id: number; returnSub
           </details>
         </CardContent>
       </Card>
-      <CompareSessionOverview sessionId={id} subjects={compareSubjects} unassignedCompareCount={unassignedCompareCount} returnSubject={returnSubject} returnScope={returnScope} />
+      <CompareSessionOverview sessionId={id} subjects={compareSubjects} unassignedCompareCount={unassignedCompareCount} returnSubject={returnSubject} returnScope={returnScope} returnUnassigned={returnUnassigned} />
       <Card>
         <CardHeader>
           <CardTitle>All operations</CardTitle>
