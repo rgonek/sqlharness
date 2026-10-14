@@ -83,7 +83,7 @@ public sealed class McpProtocolNegotiationTests
     [InlineData("2025-06-18")]
     [InlineData("2025-11-25")]
     [InlineData("2026-07-28")]
-    public async Task Capabilities_tool_reports_the_negotiated_revision(string revision)
+    public async Task Capabilities_tool_leaves_protocol_revisions_to_initialize(string revision)
     {
         using var cts = new CancellationTokenSource(Budget);
         var clientToServer = new Pipe();
@@ -110,9 +110,9 @@ public sealed class McpProtocolNegotiationTests
             var envelope = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text).RootElement;
             var document = envelope.GetProperty("result");
 
-            Assert.Equal(revision, document.GetProperty("protocolVersion").GetString());
-            Assert.Equal(McpHost.SupportedProtocolVersions,
-                document.GetProperty("supportedProtocolVersions").EnumerateArray().Select(v => v.GetString()!).ToArray());
+            Assert.False(document.TryGetProperty("protocolVersion", out _));
+            Assert.False(document.TryGetProperty("supportedProtocolVersions", out _));
+            Assert.StartsWith("cfg_", document.GetProperty("configurationRef").GetString(), StringComparison.Ordinal);
         }
         finally
         {

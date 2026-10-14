@@ -68,6 +68,22 @@ investigation forward, and one wrong claim reached the operator:
     already verifies `DB_NAME()` against the resolved target (exit 4) and every result reports it. The SQL of
     the Query Store and index probes ships as versioned recipe files that `query` runs from an input root.
     The CLI keeps its commands; removing them is a separate decision.
+
+    *Amendment 2026-10-13 (operator, during plan 060).* **CLI/MCP parity:** what leaves MCP leaves the
+    CLI too; the two surfaces stay consistent with small exceptions. **No recipes:** the recipe source for
+    `query` and the embedded Query Store and index SQL are dropped; `query` sources stay `sql` and `file`.
+    `qstop` and `indexes` leave both surfaces together with `ping`, `schema`, `counts`, `space` and
+    `validate`. The CLI gains `--dry-run` on `query`, `measure` and `compare`, the same Core path as MCP
+    `dryRun`. Evidence: the activity journal for 2026-10-08..13 shows 69 CLI `query`, 1 CLI `ping` and 0
+    `qstop`/`indexes`/`schema`/`counts`/`space`/`inspect` calls on either surface. The usual workflow
+    optimizes one concrete statement, while `qstop` ranks the whole server with no lookup of one statement
+    and `indexes --object` reports every missing-index DMV group for a table since server start (other
+    statements' predicates) and returns no existing-index inventory for a table without candidates. The
+    measured plan already answers the missing-index question for the statement under test
+    (`PlanStatement.MissingIndexes`, projected in the artifact plan section). A recipe returns raw result sets only,
+    losing the assembled report, overlap verdicts and Query Store text handling, and the budget clips them.
+    Grok and Codex were consulted; all three reviewers rejected embedded recipes, and the operator chose
+    removing `qstop`/`indexes` (Codex preferred keeping them).
 13. **No busy gate.** Database tool calls run concurrently. Benchmarks are not serialized; measurement
     interference from other sessions or people is documented, as it always existed.
 14. **One parameter-set contract.** `measure` and `compare` accept the same inputs: inline `parameterSets`,
@@ -82,9 +98,16 @@ investigation forward, and one wrong claim reached the operator:
     without revealing configuration contents. Reuse known metadata on the same connection/process;
     reconnect/restart or uncertain identity invalidates it. Capability discovery and a separate ping
     are not mandatory steps before every task. Task scope is always explicit and freshly derived.
+
+    *Amendment 2026-10-13 (operator, during plan 060).* With no recipes there is nothing to detail:
+    capabilities has no `includeDetails` argument. The default document is `configurationRef`,
+    `scopeMode`, `engines`, `processLimits`, `allowedProfiles` (request scope only) and the paged input
+    roots; `includeDiagnostics` stays opt-in. The CLI `capabilities` command keeps its document, minus the
+    removed commands. Evidence: the decision 12 amendment.
+
 ## Out of scope
 
-CLI command removal; PostgreSQL control flow; journal retention; dashboard visual redesign; any change to
+CLI command removal was out of scope until the decision 12 amendment brought it in. PostgreSQL control flow; journal retention; dashboard visual redesign; any change to
 the safety rules for individual statements.
 
 ## Plans
@@ -108,5 +131,5 @@ Order: 055 → 056 → 057 → 058 → 059 → 060 → 061. 060 removes `validat
 - 059: producer identity, measured-byte coverage and optional named output-volume comparison.
 - The report draft now proposes one atomic idempotent put plus optional get, with typed evidence selectors.
   This is a draft revision, not implementation authorization.
-- Additional catalog recipes remain unaccepted. The accepted information-ownership refinement is
-  decision 15, implemented as a plan update in 060; runtime code is still not implemented.
+- Catalog recipes are rejected (decision 12 amendment). The accepted information-ownership refinement is
+  decision 15, implemented by plan 060 as amended on 2026-10-13.

@@ -1,6 +1,11 @@
+using System.IO.Pipelines;
 using System.Text.Json;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
+using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Targets;
@@ -14,8 +19,8 @@ namespace SqlHarness.Mcp.Tests;
 /// token, so cancellation fires during connect, setup, benchmark repeats,
 /// sidecars, watch delays, and artifact writes (every Core phase observes the
 /// same token). A cancelled call reports a stable cancelled result and never
-/// the natural watch-deadline exit 7; cleanup releases the gate so the next
-/// call runs. Partial artifacts follow the Core contract (owned and tested by
+/// the natural watch-deadline exit 7; after cleanup the next call runs.
+/// Concurrent calls each keep their own deadline and cancellation. Partial artifacts follow the Core contract (owned and tested by
 /// the Core suite); MCP never invents a success path before publish. All data
 /// is synthetic; no database is opened. Every wait has a 30 s backstop; the
 /// only real-time bound asserted is the 1 s process deadline.
@@ -88,8 +93,8 @@ public sealed class McpCancellationTests
         Assert.Equal((int)SqlHarnessExitCode.SqlExecution, envelope.GetProperty("exitCode").GetInt32());
         Assert.Equal(command, envelope.GetProperty("command").GetString());
         var error = envelope.GetProperty("error");
-        Assert.Equal(McpExecutionGate.CancelledCode, error.GetProperty("code").GetString());
-        Assert.Equal(McpExecutionGate.CancelledMessage, error.GetProperty("message").GetString());
+        Assert.Equal(McpCallOutcome.CancelledCode, error.GetProperty("code").GetString());
+        Assert.Equal(McpCallOutcome.CancelledMessage, error.GetProperty("message").GetString());
         Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
     }
 
@@ -106,7 +111,7 @@ public sealed class McpCancellationTests
     public async Task Precanceled_db_calls_report_cancelled_never_exit7()
     {
         var module = new CancellingModule();
-        var handlers = new McpToolHandlers(TestScope(), module, new McpExecutionGate());
+        var handlers = new McpToolHandlers(TestScope(), module);
         var precancelled = new CancellationToken(canceled: true);
 
         var query = await handlers.QueryAsync(null!, "SELECT 1", ct: precancelled);
@@ -130,7 +135,7 @@ public sealed class McpCancellationTests
     public async Task Target_free_failure_under_a_cancelled_token_reports_cancelled()
     {
         using var cts = new CancellationTokenSource(Budget);
-        var handlers = new McpToolHandlers(TestScope(), new FailingAfterCancelModule(cts), new McpExecutionGate());
+        var handlers = new McpToolHandlers(TestScope(), new FailingAfterCancelModule(cts));
 
         var result = await handlers.PlanAsync(null!, "<ShowPlanXML/>", ct: cts.Token);
 
@@ -138,11 +143,10 @@ public sealed class McpCancellationTests
     }
 
     [Fact]
-    public async Task Midflight_cancel_reaches_the_module_and_releases_the_gate()
+    public async Task Midflight_cancel_reaches_the_module()
     {
-        var gate = new McpExecutionGate();
         var module = new CancellingModule();
-        var handlers = new McpToolHandlers(TestScope(), module, gate);
+        var handlers = new McpToolHandlers(TestScope(), module);
         using var cts = new CancellationTokenSource(Budget);
 
         var inflight = handlers.MeasureAsync(
@@ -166,7 +170,7 @@ public sealed class McpCancellationTests
     }
 
     [Fact]
-    public async Task Request_scope_A_cancellation_disposes_its_session_releases_process_gate_and_allows_B()
+    public async Task Request_scope_A_cancellation_disposes_its_session_and_allows_B()
     {
         var process = McpProcessContext.Create(
             new McpServerOptions { RequestScope = true, AllowedProfiles = ["scope-a", "scope-b"] },
@@ -186,8 +190,6 @@ public sealed class McpCancellationTests
 
         AssertCancelled(await a.WaitAsync(Budget), "sqlharness_query");
         await sessions.FirstSessionDisposed.Task.WaitAsync(Budget);
-        Assert.True(process.Gate.TryEnterDb());
-        process.Gate.ExitDb();
 
         var b = await handlers.QueryAsync(null!, new McpRequestScopeArgument("scope-b", new() { ["tenant"] = "b" }), "SELECT 2");
         Assert.False(b.IsError == true, Text(b));
@@ -222,58 +224,98 @@ public sealed class McpCancellationTests
         await sessions.FirstSessionDisposed.Task.WaitAsync(Budget);
     }
 
-    private sealed class CoreSessionFactory(bool blockFirstSession) : ISqlSessionFactory
-    {
-        private int _connectedSessions;
-        public int ConnectedSessions => Volatile.Read(ref _connectedSessions);
-        public List<ResolvedTarget> Targets { get; } = [];
-        public TaskCompletionSource FirstExecuteEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public TaskCompletionSource FirstSessionDisposed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private static Dictionary<string, object?> QueryArgs(string sql) => new() { ["sql"] = sql };
 
-        public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
+    /// <summary>
+    /// Real protocol path: the fixed-scope catalog on the SDK stream transport,
+    /// the real Core module over the synthetic session factory.
+    /// </summary>
+    private sealed class TestServer : IAsyncDisposable
+    {
+        private readonly CancellationTokenSource _lifetime = new(Budget);
+        private McpServer? _server;
+        private Task? _serverTask;
+
+        public McpClient Client { get; private set; } = null!;
+
+        public static async Task<TestServer> StartAsync(ISqlSessionFactory sessions)
         {
-            ct.ThrowIfCancellationRequested();
-            var number = Interlocked.Increment(ref _connectedSessions);
-            lock (Targets) Targets.Add(target);
-            return Task.FromResult<ISqlSession>(new CoreSession(target, number == 1 && blockFirstSession, FirstExecuteEntered, () =>
-            {
-                if (number == 1) FirstSessionDisposed.TrySetResult();
-            }));
+            var started = new TestServer();
+            var clientToServer = new Pipe();
+            var serverToClient = new Pipe();
+            var options = McpHost.CreateServerOptions();
+            var scope = TestScope();
+            McpToolCatalog.Wire(options, scope, new SqlHarnessModule(sessions, scope.ProfileProvider), hostShutdown: started._lifetime.Token);
+            started._server = McpServer.Create(
+                new StreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream(), "t5-concurrency", NullLoggerFactory.Instance),
+                options, NullLoggerFactory.Instance, serviceProvider: null);
+            started._serverTask = started._server.RunAsync(started._lifetime.Token);
+            started.Client = await McpClient.CreateAsync(
+                new StreamClientTransport(clientToServer.Writer.AsStream(), serverToClient.Reader.AsStream(), NullLoggerFactory.Instance),
+                new McpClientOptions { ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" } },
+                NullLoggerFactory.Instance, started._lifetime.Token);
+            return started;
         }
-    }
 
-    private sealed class CoreSession(
-        ResolvedTarget target,
-        bool block,
-        TaskCompletionSource readEntered,
-        Action disposed) : ISqlSession
-    {
-        public IReadOnlyList<string> Messages => [];
-        public SqlHarnessTargetIdentityReport Identity { get; set; } = new(target.Server, target.Database, target.Server, target.Database, "profile");
-        public async Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
+        public async ValueTask DisposeAsync()
         {
-            if (block)
+            await _lifetime.CancelAsync();
+            if (Client is not null) await Client.DisposeAsync();
+            if (_serverTask is not null)
             {
-                readEntered.TrySetResult();
-                await Task.Delay(Timeout.Infinite, ct);
+                try { await _serverTask; } catch (OperationCanceledException) { }
             }
-            ct.ThrowIfCancellationRequested();
-            return new CoreReader();
+            if (_server is not null) await _server.DisposeAsync();
+            _lifetime.Dispose();
         }
-        public ValueTask DisposeAsync() { disposed(); return ValueTask.CompletedTask; }
     }
 
-    private sealed class CoreReader : ISqlReader
+    [Fact]
+    public async Task A_second_query_runs_while_the_first_is_blocked()
     {
-        public int FieldCount => 0;
-        public int RecordsAffected => 0;
-        public string GetName(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
-        public Type GetFieldType(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
-        public bool GetAllowNull(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
-        public object GetValue(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
-        public Task<bool> ReadAsync(CancellationToken ct) { ct.ThrowIfCancellationRequested(); return Task.FromResult(false); }
-        public Task<bool> NextResultAsync(CancellationToken ct) { ct.ThrowIfCancellationRequested(); return Task.FromResult(false); }
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        var sessions = new CoreSessionFactory(blockFirstSession: true);
+        await using var server = await TestServer.StartAsync(sessions);
+
+        var first = server.Client.CallToolAsync("sqlharness_query", QueryArgs("SELECT 1 AS A")).AsTask();
+        await sessions.SessionEntered(1).WaitAsync(Budget);
+        var second = await server.Client.CallToolAsync("sqlharness_query", QueryArgs("SELECT 2 AS A")).AsTask().WaitAsync(Budget);
+
+        Assert.False(second.IsError == true, Text(second));
+        Assert.False(first.IsCompleted);
+        sessions.ReleaseSession(1);
+        var firstResult = await first.WaitAsync(Budget);
+        Assert.False(firstResult.IsError == true, Text(firstResult));
+        Assert.Equal(2, sessions.ConnectedSessions);
+    }
+
+    [Fact]
+    public async Task Cancelling_one_call_leaves_the_concurrent_call_running()
+    {
+        var sessions = new CoreSessionFactory(blockedSessions: 2);
+        var scope = TestScope();
+        var handlers = new McpToolHandlers(scope, new SqlHarnessModule(sessions, scope.ProfileProvider));
+        using var cancelFirst = new CancellationTokenSource(Budget);
+        using var keepSecond = new CancellationTokenSource(Budget);
+
+        var first = handlers.QueryAsync(null!, "SELECT 1 AS A", ct: cancelFirst.Token);
+        await sessions.SessionEntered(1).WaitAsync(Budget);
+        var second = handlers.QueryAsync(null!, "SELECT 2 AS A", ct: keepSecond.Token);
+        // A second call that returns before reaching Core was rejected, not run.
+        await Task.WhenAny(sessions.SessionEntered(2), second).WaitAsync(Budget);
+        Assert.False(second.IsCompleted, second.IsCompleted ? Text(await second) : null);
+
+        // Both calls are parked inside Core at once. Cancel only the first.
+        await cancelFirst.CancelAsync();
+        AssertCancelled(await first.WaitAsync(Budget), "sqlharness_query");
+        await sessions.SessionDisposed(1).WaitAsync(Budget);
+        Assert.False(second.IsCompleted);
+        Assert.False(sessions.SessionDisposed(2).IsCompleted);
+
+        // The second call kept its own token: released, it completes normally.
+        sessions.ReleaseSession(2);
+        var secondResult = await second.WaitAsync(Budget);
+        Assert.False(secondResult.IsError == true, Text(secondResult));
+        await sessions.SessionDisposed(2).WaitAsync(Budget);
     }
 
     [Fact]
@@ -281,7 +323,7 @@ public sealed class McpCancellationTests
     {
         var scope = TestScope(new McpServerOptions { Profile = "mcp-t5", MaxOperationSeconds = 1 });
         var module = new CancellingModule();
-        var handlers = new McpToolHandlers(scope, module, new McpExecutionGate());
+        var handlers = new McpToolHandlers(scope, module);
         using var cts = new CancellationTokenSource(Budget);
 
         var result = await handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
@@ -294,7 +336,7 @@ public sealed class McpCancellationTests
     public async Task Per_call_deadline_lowers_the_process_maximum_only()
     {
         var module = new CancellingModule();
-        var handlers = new McpToolHandlers(TestScope(), module, new McpExecutionGate());
+        var handlers = new McpToolHandlers(TestScope(), module);
         using var cts = new CancellationTokenSource(Budget);
 
         // Out-of-range per-call requests fail closed before executing.
@@ -319,7 +361,7 @@ public sealed class McpCancellationTests
         // budget, so a natural stop stays a controlled exit 7 inside it.
         var captured = new List<SqlHarnessOperation>();
         var capturing = new CapturingModule(captured);
-        var handlers = new McpToolHandlers(TestScope(), capturing, new McpExecutionGate());
+        var handlers = new McpToolHandlers(TestScope(), capturing);
         using var cts = new CancellationTokenSource(Budget);
 
         // Process maximum (900 s) caps a 2 h watch.
@@ -355,7 +397,7 @@ public sealed class McpCancellationTests
 
         // The stub returns what Core returns on a natural watch deadline.
         var natural = new SqlHarnessOutcome(SqlHarnessExitCode.WatchMaxDuration, null, null);
-        var handlers = new McpToolHandlers(TestScope(), new FixedModule(natural), new McpExecutionGate());
+        var handlers = new McpToolHandlers(TestScope(), new FixedModule(natural));
         var result = await handlers.WatchAsync(null!, "SELECT 1", ct: cts.Token);
 
         Assert.False(result.IsError == true, Text(result));
@@ -369,54 +411,100 @@ public sealed class McpCancellationTests
         public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default) =>
             Task.FromResult(outcome);
     }
+}
 
-    [Fact]
-    public async Task Midflight_cancel_of_inspect_reports_cancelled_and_releases_the_gate()
+/// <summary>
+/// Synthetic Core session factory for the real <see cref="SqlHarnessModule"/>.
+/// The first <c>blockedSessions</c> sessions (numbered in connect order from 1)
+/// park in ExecuteReaderAsync until released or cancelled, and signal entry
+/// and disposal, so concurrency tests synchronize on signals, never on time.
+/// </summary>
+internal sealed class CoreSessionFactory : ISqlSessionFactory
+{
+    private const int TrackedSessions = 8;
+    private readonly int _blockedSessions;
+    private readonly TaskCompletionSource[] _entered = Signals();
+    private readonly TaskCompletionSource[] _released = Signals();
+    private readonly TaskCompletionSource[] _disposed = Signals();
+    private int _connectedSessions;
+
+    public CoreSessionFactory(bool blockFirstSession)
+        : this(blockFirstSession ? 1 : 0)
     {
-        var gate = new McpExecutionGate();
-        var module = new CancellingModule();
-        var handlers = new McpToolHandlers(TestScope(), module, gate);
-        using var cts = new CancellationTokenSource(Budget);
-
-        var inflight = handlers.InspectAsync(null!, "ping", ct: cts.Token);
-        await module.Entered.Task.WaitAsync(Budget, CancellationToken.None);
-
-        await cts.CancelAsync();
-        AssertCancelled(await inflight.WaitAsync(Budget), "sqlharness_inspect");
-
-        // The linked token reached the module instead of hanging.
-        await module.CancelObserved.Task.WaitAsync(Budget, CancellationToken.None);
-
-        // Cleanup ran: the gate slot is free and the next call on a fresh
-        // token executes normally.
-        Assert.True(gate.TryEnterDb());
-        gate.ExitDb();
-        module.BlockCall = _ => false;
-        using var fresh = new CancellationTokenSource(Budget);
-        var next = await handlers.InspectAsync(null!, "ping", ct: fresh.Token);
-        Assert.False(next.IsError == true, Text(next));
-        Assert.Equal(2, module.Operations.Count);
     }
 
-    [Fact]
-    public async Task Inspect_deadline_releases_the_gate()
+    public CoreSessionFactory(int blockedSessions)
     {
-        var gate = new McpExecutionGate();
-        var scope = TestScope(new McpServerOptions { Profile = "mcp-t5", MaxOperationSeconds = 1 });
-        var module = new CancellingModule();
-        var handlers = new McpToolHandlers(scope, module, gate);
-        using var cts = new CancellationTokenSource(Budget);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(blockedSessions, TrackedSessions);
+        _blockedSessions = blockedSessions;
+    }
 
-        var result = await handlers.InspectAsync(null!, "ping", ct: cts.Token);
+    public int ConnectedSessions => Volatile.Read(ref _connectedSessions);
+    public List<ResolvedTarget> Targets { get; } = [];
+    public TaskCompletionSource FirstExecuteEntered => _entered[0];
+    public TaskCompletionSource FirstSessionDisposed => _disposed[0];
 
-        AssertCancelled(result, "sqlharness_inspect");
-        await module.CancelObserved.Task.WaitAsync(Budget, CancellationToken.None);
+    /// <summary>Completes when session <paramref name="number"/> (1-based) parks in execute.</summary>
+    public Task SessionEntered(int number) => _entered[number - 1].Task;
 
-        // Cleanup ran: the next call on a fresh token executes normally.
-        module.BlockCall = _ => false;
-        using var fresh = new CancellationTokenSource(Budget);
-        var next = await handlers.QueryAsync(null!, "SELECT 1", ct: fresh.Token);
-        Assert.False(next.IsError == true, Text(next));
-        Assert.Equal(2, module.Operations.Count);
+    /// <summary>Completes when session <paramref name="number"/> (1-based) is disposed.</summary>
+    public Task SessionDisposed(int number) => _disposed[number - 1].Task;
+
+    /// <summary>Lets the parked session <paramref name="number"/> (1-based) finish its execute.</summary>
+    public void ReleaseSession(int number) => _released[number - 1].TrySetResult();
+
+    public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var number = Interlocked.Increment(ref _connectedSessions);
+        lock (Targets) Targets.Add(target);
+        var tracked = number <= TrackedSessions;
+        return Task.FromResult<ISqlSession>(new CoreSession(
+            target,
+            tracked && number <= _blockedSessions ? _entered[number - 1] : null,
+            tracked ? _released[number - 1].Task : Task.CompletedTask,
+            () =>
+            {
+                if (tracked) _disposed[number - 1].TrySetResult();
+            }));
+    }
+
+    private static TaskCompletionSource[] Signals() =>
+        Enumerable.Range(0, TrackedSessions)
+            .Select(_ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously))
+            .ToArray();
+
+    private sealed class CoreSession(
+        ResolvedTarget target,
+        TaskCompletionSource? entered,
+        Task released,
+        Action disposed) : ISqlSession
+    {
+        public IReadOnlyList<string> Messages => [];
+        public SqlHarnessTargetIdentityReport Identity { get; set; } = new(target.Server, target.Database, target.Server, target.Database, "profile");
+        public async Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
+        {
+            if (entered is not null)
+            {
+                entered.TrySetResult();
+                await released.WaitAsync(ct);
+            }
+            ct.ThrowIfCancellationRequested();
+            return new CoreReader();
+        }
+        public ValueTask DisposeAsync() { disposed(); return ValueTask.CompletedTask; }
+    }
+
+    private sealed class CoreReader : ISqlReader
+    {
+        public int FieldCount => 0;
+        public int RecordsAffected => 0;
+        public string GetName(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public Type GetFieldType(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public bool GetAllowNull(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public object GetValue(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+        public Task<bool> ReadAsync(CancellationToken ct) { ct.ThrowIfCancellationRequested(); return Task.FromResult(false); }
+        public Task<bool> NextResultAsync(CancellationToken ct) { ct.ThrowIfCancellationRequested(); return Task.FromResult(false); }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

@@ -65,18 +65,11 @@ public static class SqlHarnessCli
             c.AddCommand<CompareCommand>("compare").WithDescription("Compare baseline and candidate performance and results.");
             c.AddCommand<PlanCommand>("plan").WithDescription("Distill a saved execution plan offline.");
             c.AddCommand<ArtifactCommand>("artifact").WithDescription("Read safe sections of a saved benchmark artifact.");
-            c.AddCommand<SchemaCommand>("schema").WithDescription("Inspect database tables, columns, and relations.");
-            c.AddCommand<PingCommand>("ping").WithDescription("Check a database connection and target identity.");
-            c.AddCommand<CountsCommand>("counts").WithDescription("Inspect row counts for database tables.");
-            c.AddCommand<SpaceCommand>("space").WithDescription("Inspect database file and table storage.");
             c.AddCommand<WatchCommand>("watch").WithDescription("Poll a bounded query passing the static visible-effects text check until a condition is met.");
             c.AddCommand<SnapshotCommand>("snapshot").WithDescription("Capture or compare a named query result.");
-            c.AddCommand<QueryStoreTopCommand>("qstop").WithDescription("Rank SQL Server Query Store consumers.");
-            c.AddCommand<IndexesCommand>("indexes").WithDescription("Inspect SQL Server missing-index evidence.");
             c.AddCommand<CapabilitiesCommand>("capabilities").WithDescription("Describe local commands, engines, limits, and output modes.");
             c.AddCommand<DoctorCommand>("doctor").WithDescription("Check local installation and profile-file availability without connecting.");
             c.AddCommand<DashboardCommand>("dashboard").WithDescription("Serve the local activity dashboard on 127.0.0.1.");
-            c.AddCommand<ValidateCommand>("validate").WithDescription("Classify SQL offline using a closed profile; static visible-effects check only, never connects.");
             c.AddBranch("mcp", mcp =>
             {
                 mcp.SetDescription("Model Context Protocol adapter.");

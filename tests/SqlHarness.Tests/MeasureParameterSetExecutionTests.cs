@@ -598,11 +598,6 @@ public sealed class MeasureParameterSetExecutionTests
         public List<BenchmarkObservation> Calls { get; } = [];
 
         public SqlEngine Engine => inner.Engine;
-        public string PingSql => inner.PingSql;
-        public string CountsCatalogSql => inner.CountsCatalogSql;
-        public string SchemaSql => inner.SchemaSql;
-        public string SpaceSql => inner.SpaceSql;
-
         public SqlSafetyDecision Classify(
             string sql,
             SqlUsage usage,
@@ -622,9 +617,6 @@ public sealed class MeasureParameterSetExecutionTests
             inner.ValidateParameterReferences(parameters, batches);
 
         public void ValidateMeasuredBatch(string sql) => inner.ValidateMeasuredBatch(sql);
-
-        public string BuildCountsExactSql(IReadOnlyList<ResolvedCountObject> objects) =>
-            inner.BuildCountsExactSql(objects);
 
         public Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
             ISqlSession session,

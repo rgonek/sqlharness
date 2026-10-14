@@ -13,7 +13,6 @@ internal sealed class SqlServerDialect : ISqlDialect
     private readonly SqlSafetyClassifier _classifier = new();
 
     public SqlEngine Engine => SqlEngine.SqlServer;
-    public string PingSql => PingQuery.Sql;
 
     public SqlSafetyDecision Classify(
         string sql,
@@ -38,15 +37,6 @@ internal sealed class SqlServerDialect : ISqlDialect
     public void ValidateMeasuredBatch(string sql)
     {
     }
-
-    public string CountsCatalogSql => CountsQuery.CatalogSql;
-
-    public string BuildCountsExactSql(IReadOnlyList<ResolvedCountObject> objects) =>
-        CountsQuery.BuildExactSql(objects);
-
-    public string SchemaSql => SchemaReader.Sql;
-
-    public string SpaceSql => SpaceQuery.Sql;
 
     public async Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
         ISqlSession session,

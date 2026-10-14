@@ -62,51 +62,6 @@ public class SqlParameterReferenceValidatorTests
         Assert.Empty(required);
     }
 
-    [Theory]
-    [InlineData("INSERT @x (Id) VALUES (1)")]
-    [InlineData("SELECT Id FROM @x")]
-    [InlineData("DECLARE @t TABLE (Id int); DELETE @t OUTPUT deleted.Id INTO @x (Id)")]
-    public void T3_Validate_undeclared_table_target_is_rejected(string sql)
-    {
-        // A table-position @name can never be satisfied by a scalar --param:
-        // it is not offered as a required parameter, and the classifier denies it.
-        var required = SqlParameterReferences.Collect(SqlEngine.SqlServer, sql);
-
-        Assert.DoesNotContain("@x", required, StringComparer.OrdinalIgnoreCase);
-        var decision = new SqlSafetyClassifier().Classify(sql, SqlUsage.Query, "db", allowMutation: false, confirmDatabase: null);
-        Assert.False(decision.Allowed);
-        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
-    }
-
-    [Theory]
-    [InlineData("INSERT @x (Id) VALUES (1)")]
-    [InlineData("SELECT Id FROM @x")]
-    [InlineData("DECLARE @t TABLE (Id int); DELETE @t OUTPUT deleted.Id INTO @x (Id)")]
-    public void T3b_Validation_report_denies_undeclared_table_position_name_end_to_end(string sql)
-    {
-        // Ruling R6: "not listed as a required parameter" never means "allowed".
-        var report = ValidateOffline(sql);
-
-        Assert.False(report.Allowed);
-        Assert.Equal("rejected", report.Classification);
-        Assert.Equal("unsupported_statement", report.Reason);
-        Assert.DoesNotContain("x", report.RequiredParameters, StringComparer.OrdinalIgnoreCase);
-        Assert.Empty(report.MissingParameters);
-        Assert.False(report.Executed);
-    }
-
-    [Theory]
-    [InlineData("INSERT @x (Id) VALUES (1)")]
-    [InlineData("SELECT Id FROM @x")]
-    public void T3b_Validation_report_stays_denied_when_a_parameter_with_that_name_is_supplied(string sql)
-    {
-        var report = ValidateOffline(sql, "x:int=1");
-
-        Assert.False(report.Allowed);
-        Assert.Equal("unsupported_statement", report.Reason);
-        Assert.False(report.Executed);
-    }
-
     // 011/T3b (review Minor 1): a table variable is local to its declaring batch only.
     [Theory]
     [InlineData("DECLARE @t TABLE (Id int);\nGO\nSELECT Id FROM dbo.Clients WHERE Id = @t")]
@@ -117,34 +72,6 @@ public class SqlParameterReferenceValidatorTests
         var required = SqlParameterReferences.Collect(SqlEngine.SqlServer, sql);
 
         Assert.Equal(["@t"], required, StringComparer.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void T3b_Validation_report_rejects_a_go_separated_script()
-    {
-        // 023: a GO-separated script is unsupported before the missing-parameter check.
-        const string sql = "DECLARE @t TABLE (Id int);\nGO\nSELECT Id FROM dbo.Clients WHERE Id = @t";
-        const string detail = "Batch separators (GO) are not supported; send a single batch.";
-
-        var missing = ValidateOffline(sql);
-
-        Assert.False(missing.Allowed);
-        Assert.Equal("rejected", missing.Classification);
-        Assert.Equal("unsupported_statement", missing.Reason);
-        Assert.Equal(detail, missing.Detail);
-        Assert.DoesNotContain(sql, missing.Detail, StringComparison.Ordinal);
-        Assert.Empty(missing.MissingParameters);
-        Assert.False(missing.Executed);
-
-        var supplied = ValidateOffline(sql, "t:int=1");
-
-        Assert.False(supplied.Allowed);
-        Assert.Equal("rejected", supplied.Classification);
-        Assert.Equal("unsupported_statement", supplied.Reason);
-        Assert.Equal(detail, supplied.Detail);
-        Assert.DoesNotContain(sql, supplied.Detail, StringComparison.Ordinal);
-        Assert.Empty(supplied.MissingParameters);
-        Assert.False(supplied.Executed);
     }
 
     [Fact]
@@ -181,18 +108,6 @@ public class SqlParameterReferenceValidatorTests
 
         Assert.Empty(required);
     }
-
-    // Offline only: the profile is never connected to and its password variable is never read.
-    private static SqlValidationReport ValidateOffline(string sql, params string[] parameters) =>
-        SqlValidation.Validate(
-            new SqlTargetRequest("test", new Dictionary<string, string>()),
-            sql,
-            parameters,
-            new Dictionary<string, TargetProfile>
-            {
-                ["test"] = new(
-                    "server-unused", "database-unused", new Dictionary<string, string>(), "sql", "user-unused", "MUST_NOT_BE_READ", Engine: "sqlserver"),
-            });
 
     [Fact]
     public void Sql_server_dialect_still_rejects_postgres_only_syntax()
