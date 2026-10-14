@@ -183,7 +183,7 @@ public sealed class PostgresConnectionStringTests
 
     private static NpgsqlConnectionStringBuilder Build(bool trust, PostgresTransport? transport)
     {
-        const string variable = "SQLHARNESS_PG_BUILDER_PASSWORD";
+        var variable = $"SQLHARNESS_TEST_{Guid.NewGuid():N}";
         Environment.SetEnvironmentVariable(variable, "connection-secret");
         try
         {
@@ -194,7 +194,7 @@ public sealed class PostgresConnectionStringTests
 
     private static SqlHarnessSafetyException Reject(bool trust, PostgresTransport transport, string password)
     {
-        const string variable = "SQLHARNESS_PG_BUILDER_PASSWORD";
+        var variable = $"SQLHARNESS_TEST_{Guid.NewGuid():N}";
         Environment.SetEnvironmentVariable(variable, password);
         try
         {
