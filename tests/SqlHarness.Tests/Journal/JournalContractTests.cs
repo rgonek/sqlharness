@@ -75,7 +75,7 @@ public sealed class JournalContractTests : IDisposable
         File.WriteAllText(candidate, "SELECT Value FROM dbo.Clients -- candidate");
         string[] args = command == "measure"
             ? ["measure", "test", "--var", "env=a", "--query", baseline, "--repeat", "3", format]
-            : ["compare", "test", "--var", "env=a", "--baseline", baseline, "--candidate", candidate, "--repeat", "3", format];
+            : ["compare", "test", "--var", "env=a", "--baseline", baseline, "--candidate", candidate, "--subject", "test-query", "--scope", "whole", "--repeat", "3", format];
         var databasePath = Path.Combine(_temp.Path, "journal", "activity.db");
 
         var plain = await RunBenchmark(command, args, journal: null, Path.Combine(_temp.Path, "off"));

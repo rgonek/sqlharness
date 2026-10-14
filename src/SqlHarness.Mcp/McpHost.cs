@@ -100,12 +100,13 @@ public static class McpHost
         log = TextWriter.Synchronized(log);
 
         McpProcessContext process;
+        var config = SqlHarnessConfigLoader.Load();
         IReadOnlyList<string> knownSecrets = Array.Empty<string>();
         try
         {
             var profiles = loadProfiles();
             knownSecrets = ResolveKnownSecrets(options, profiles);
-            process = McpProcessContext.Create(options, () => profiles);
+            process = McpProcessContext.Create(options, () => profiles, config.Config.Compare);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -131,7 +132,6 @@ public static class McpHost
         using var guardedInput = process.RequestScope ? new McpDuplicateJsonFieldGuardInput(eofInput) : null;
         using var rewrittenInput = new McpProtocolVersionRewriteInput((Stream?)guardedInput ?? eofInput);
         // Activity journal: content-free stderr diagnostics only; stdout stays protocol-only.
-        var config = SqlHarnessConfigLoader.Load();
         if (config.Warning is not null)
             log.WriteLine(config.Warning);
         var journal = new Lazy<IActivityJournal>(

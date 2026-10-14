@@ -73,7 +73,34 @@ export type AgentCall = {
   turnId: string | null; turnTrigger: string | null; threadSource: string | null
 }
 
-export type SessionDetail = { session: SessionSummary; operations: OperationSummary[] }
+export type CompareAttemptSummary = {
+  operationId: number
+  subject: string | null
+  scope: string | null
+  baselineHash: string | null
+  candidateHash: string | null
+  baselineVersion: string | null
+  candidateVersion: string | null
+  status: OperationStatus
+  startedAt: string
+  regression: Record<string, unknown> | null
+  cases: Record<string, unknown>[] | null
+  conditions: Record<string, unknown> | null
+  summary: Record<string, unknown> | null
+}
+
+export type CompareSubjectSummary = {
+  subject: string
+  scopes: string[]
+  latestWhole: CompareAttemptSummary | null
+  latestCompletedWhole: CompareAttemptSummary | null
+  startToLatestWhole: CompareAttemptSummary | null
+  versionsFromRetainedHistory: boolean
+}
+
+export type SessionDetail = {
+  session: SessionSummary; operations: OperationSummary[]; compareSubjects: CompareSubjectSummary[]; unassignedCompareCount: number
+}
 
 export type Spread = { min: number; median: number; max: number }
 
@@ -145,6 +172,13 @@ export type OperationDetail = {
   variants: VariantDetail[]
   dimensions: { values: DimensionValueSummary[] }
   agent: AgentCall | null
+  compareSubject: string | null
+  compareScope: string | null
+  baselineVersion: string | null
+  candidateVersion: string | null
+  compareRegression: Record<string, unknown> | null
+  compareCases: Record<string, unknown>[] | null
+  compareConditions: Record<string, unknown> | null
 }
 
 export type KeyCount = { key: string; count: number }
@@ -242,7 +276,7 @@ export type JournalSettings = {
   retention: { enabled: boolean; maxAgeDays: number; maxSizeMb: number }
 }
 export type DashboardSettings = { autoStart: boolean; port: number; idleShutdownHours: number }
-export type Settings = { journal: JournalSettings; dashboard: DashboardSettings }
+export type Settings = { journal: JournalSettings; dashboard: DashboardSettings; compare: { requireContext: boolean } }
 export type SettingsFileStatus = "missing" | "valid" | "invalid"
 export type SettingsResponse = { status: SettingsFileStatus; path: string; settings: Settings }
 export type FieldError = { field: string; message: string }

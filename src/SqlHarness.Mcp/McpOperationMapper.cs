@@ -30,6 +30,7 @@ public sealed record McpCapabilitiesDocument(
     string ScopeMode,
     IReadOnlyList<string> Engines,
     McpProcessLimits ProcessLimits,
+    SqlHarnessCompareContextCapability CompareContext,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     IReadOnlyList<string>? AllowedProfiles = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -110,7 +111,7 @@ public static partial class McpOperationMapper
     private const int DefaultQueryMaxRows = 50;
     private const int DefaultRepeat = 5;
 
-    public static McpCapabilitiesDocument BuildCapabilities(McpScope scope, bool includeDiagnostics, int inputRootCursor = 0)
+    public static McpCapabilitiesDocument BuildCapabilities(McpScope scope, bool includeDiagnostics, int inputRootCursor = 0, CompareConfig? compareConfig = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ThrowIfInvalidInputRootCursor(scope.InputRoots, inputRootCursor);
@@ -125,6 +126,7 @@ public static partial class McpOperationMapper
             "fixed",
             [engine],
             new McpProcessLimits(scope.MaxResultBytes, scope.MaxOperationSeconds),
+            SqlHarnessCapabilitiesProvider.CompareContextPolicy(compareConfig),
             Diagnostics: includeDiagnostics ? LocalDiagnostics(scope.InputRoots) : null);
         return WithInputRootPage(document, scope.InputRoots, inputRootCursor, scope.MaxResultBytes);
     }
@@ -133,7 +135,7 @@ public static partial class McpOperationMapper
     {
         ArgumentNullException.ThrowIfNull(context);
         if (!context.RequestScope)
-            return BuildCapabilities(context.FixedScope!, includeDiagnostics, inputRootCursor);
+            return BuildCapabilities(context.FixedScope!, includeDiagnostics, inputRootCursor, context.CompareConfig);
         ThrowIfInvalidInputRootCursor(context.InputRoots, inputRootCursor);
 
         var document = new McpCapabilitiesDocument(
@@ -141,6 +143,7 @@ public static partial class McpOperationMapper
             "request",
             ["sqlserver"],
             new McpProcessLimits(context.MaxResultBytes, context.MaxOperationSeconds),
+            SqlHarnessCapabilitiesProvider.CompareContextPolicy(context.CompareConfig),
             context.AllowedProfiles,
             includeDiagnostics ? LocalDiagnostics(context.InputRoots) : null);
         return WithInputRootPage(document, context.InputRoots, inputRootCursor, context.MaxResultBytes);
@@ -300,12 +303,24 @@ public static partial class McpOperationMapper
         bool compareNullability = false,
         bool dryRun = false,
         IReadOnlyList<McpParameterSetArgument>? parameterSets = null,
-        IReadOnlyList<string>? parameterSetFiles = null)
+        IReadOnlyList<string>? parameterSetFiles = null,
+        string? subject = null,
+        string? optimizationScope = null,
+        CompareConfig? compareConfig = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(baseline);
         ArgumentNullException.ThrowIfNull(candidate);
         ValidateParameterSetChoices(parameterSets, parameterSetFiles, matrix);
+        CompareContext? context;
+        try
+        {
+            context = CompareContext.Parse(subject, optimizationScope, (compareConfig ?? SqlHarnessConfig.Default.Compare).RequireContext);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new McpMappingException(exception.Message);
+        }
         if (compareResults is null || !CompareResultModes.Contains(compareResults))
             throw new McpMappingException("Unknown compare mode. Supported modes: ordered, multiset, set, off.");
         var mode = compareResults.ToLowerInvariant() switch
@@ -331,6 +346,7 @@ public static partial class McpOperationMapper
             {
                 TypedParameters = typedParameters,
                 DryRun = dryRun,
+                Context = context,
             };
         return new SqlHarnessCompareMatrixOperation(
             scope.TargetRequest, setupSql, baselineSql, candidateSql,
@@ -340,6 +356,7 @@ public static partial class McpOperationMapper
             TypedMatrix = matrix is null ? null : MapMatrix(matrix),
             ParameterSets = parameterSetInputs,
             DryRun = dryRun,
+            Context = context,
         };
     }
 

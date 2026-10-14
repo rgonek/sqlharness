@@ -44,7 +44,8 @@ public sealed class BenchmarkSessionIntegrationTests
             "SELECT Id FROM #Req;",
             [],
             30,
-            1);
+            1)
+        { Context = new CompareContext("integration-test", "whole") };
 
         var outcome = await module.ExecuteAsync(operation);
 
@@ -96,7 +97,8 @@ public sealed class BenchmarkSessionIntegrationTests
             [],
             30,
             1,
-            "BatchSize:int=1,20");
+            "BatchSize:int=1,20")
+        { Context = new CompareContext("integration-test", "whole") };
 
         var outcome = await module.ExecuteAsync(operation);
 
@@ -191,7 +193,8 @@ public sealed class BenchmarkSessionIntegrationTests
             "SELECT @Unused AS Id UNION ALL SELECT Id FROM #Req;",
             ["Unused:int=99"],
             30,
-            2);
+            2)
+        { Context = new CompareContext("integration-test", "whole") };
 
         var outcome = await module.ExecuteAsync(operation);
 
@@ -282,7 +285,8 @@ public sealed class BenchmarkSessionIntegrationTests
             [],
             30,
             1,
-            "BatchSize:int=1,20");
+            "BatchSize:int=1,20")
+        { Context = new CompareContext("integration-test", "whole") };
 
         var outcome = await module.ExecuteAsync(operation);
 

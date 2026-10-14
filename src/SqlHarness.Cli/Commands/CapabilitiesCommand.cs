@@ -8,8 +8,8 @@ using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Cli.Commands;
 
-[Description("Describe the local SQLHarness command and engine contract; with a profile, add that engine's parameter types and limits (offline, never connects).")]
-public sealed class CapabilitiesCommand(OutputContext output, Renderer renderer) : AsyncCommand<CapabilitiesCommand.Settings>
+[Description("Describe the local SQLHarness command and engine contract plus active compare-context policy; with a profile, add that engine's parameter types and limits (offline, never connects).")]
+public sealed class CapabilitiesCommand(OutputContext output, Renderer renderer, CompareConfig compareConfig) : AsyncCommand<CapabilitiesCommand.Settings>
 {
     public sealed class Settings : CommandSettings
     {
@@ -30,7 +30,7 @@ public sealed class CapabilitiesCommand(OutputContext output, Renderer renderer)
         SqlHarnessCapabilities capabilities;
         if (string.IsNullOrWhiteSpace(settings.Profile))
         {
-            capabilities = SqlHarnessCapabilitiesProvider.Get();
+            capabilities = SqlHarnessCapabilitiesProvider.Get(compareConfig);
         }
         else
         {
@@ -39,7 +39,7 @@ public sealed class CapabilitiesCommand(OutputContext output, Renderer renderer)
                 var profiles = ProfileStore.Load();
                 if (!profiles.TryGetValue(settings.Profile, out var profile))
                     return Task.FromResult(RejectProfile("profile_unknown", UnknownProfileMessage(settings.Profile, profiles.Keys)));
-                capabilities = SqlHarnessCapabilitiesProvider.Get(settings.Profile, profile.Engine);
+                capabilities = SqlHarnessCapabilitiesProvider.Get(settings.Profile, profile.Engine, compareConfig);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {

@@ -24,21 +24,54 @@ export function comparePairs(variants: VariantDetail[]): ComparePair[] {
 
 export type CompareRow = { metric: string; baseline: number | null; candidate: number | null; delta: number | null }
 
-export function compareRows(baseline: VariantDetail, candidate: VariantDetail): CompareRow[] {
+export function compareRows(baseline: VariantDetail, candidate: VariantDetail, engine?: string | null): CompareRow[] {
   const row = (metric: string, pick: (v: VariantDetail) => number | null | undefined): CompareRow => {
     const b = pick(baseline) ?? null
     const c = pick(candidate) ?? null
     return { metric, baseline: b, candidate: c, delta: b === null || c === null || b === 0 ? null : (c - b) / b }
   }
-  return [
+  const rows = [
     row("Elapsed (median ms)", v => v.elapsedMs?.median),
     row("CPU (median ms)", v => v.cpuMs?.median),
-    row("Logical reads (median)", v => v.logicalReads?.median),
-    row("Memory grant used (KB)", v => v.grantMaxUsedKb),
-    row("Memory granted (KB)", v => v.grantGrantedKb),
-    row("Spills", v => v.spillCount),
-    row("Compile (ms)", v => v.compileTimeMs),
   ]
+  const normalizedEngine = engine?.toLowerCase()
+  if (normalizedEngine === "sqlserver" || normalizedEngine === "sql-server") {
+    rows.push(
+      row("Logical reads (median)", v => v.logicalReads?.median),
+      row("Memory grant used (KB)", v => v.grantMaxUsedKb),
+      row("Memory granted (KB)", v => v.grantGrantedKb),
+      row("Spills", v => v.spillCount),
+    )
+  } else if (normalizedEngine === "postgres" || normalizedEngine === "postgresql") {
+    rows.push(
+      row("Shared hits (median buffers)", v => v.postgres?.sharedHit),
+      row("Shared reads (median buffers)", v => v.postgres?.sharedRead),
+      row("Shared dirtied (median buffers)", v => v.postgres?.sharedDirtied),
+      row("Shared written (median buffers)", v => v.postgres?.sharedWritten),
+      row("Temp reads (median buffers)", v => v.postgres?.tempRead),
+      row("Temp written (median buffers)", v => v.postgres?.tempWritten),
+    )
+  }
+  return rows
+}
+
+export function regressionLabel(regression: Record<string, unknown> | null | undefined): string {
+  switch (regression?.verdict) {
+    case "pass": return "No regression detected"
+    case "fail": return "Regression detected"
+    case "inconclusive": return "Inconclusive"
+    default: return "No assessment"
+  }
+}
+
+export function equivalenceLabel(equivalence: Record<string, unknown> | null | undefined): string {
+  if (!equivalence) return "Equivalence unavailable (legacy record)"
+  const mode = equivalence.mode ?? equivalence.comparison
+  if (mode === "Off" || mode === "off" || mode === 3) return "Equivalence check off"
+  const result = equivalence.equivalent ?? equivalence.resultsEquivalent
+  if (result === true) return "Results equivalent"
+  if (result === false) return "Results differ"
+  return mode !== null && mode !== undefined ? "Equivalence check incomplete" : "Equivalence unavailable (legacy record)"
 }
 
 /** Relative change as a percent; "+" only when the rounded percent is above zero (never "+0%"). */

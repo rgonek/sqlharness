@@ -34,6 +34,7 @@ internal static class JournalSummary
             resultsEquivalent = compare.ResultsEquivalent,
             compareNullability = compare.Equivalence.CompareNullability,
             nullabilityEquivalent = compare.Equivalence.NullabilityEquivalent,
+            regression = compare.Regression,
             baselineOperators = Operators(compare.Baseline),
             candidateOperators = Operators(compare.Candidate),
         }),
@@ -46,6 +47,12 @@ internal static class JournalSummary
             equivalentCells = matrix.Cells.Count(cell => cell.Compare.ResultsEquivalent == true),
             // One policy applies to every cell of a matrix run.
             compareNullability = matrix.Cells.Count > 0 && matrix.Cells[0].Compare.Equivalence.CompareNullability,
+            cases = matrix.Cells.OrderBy(cell => cell.Index).Select(cell => new
+            {
+                index = cell.Index,
+                equivalence = cell.Compare.Equivalence,
+                regression = cell.Compare.Regression,
+            }),
         }),
         _ => null,
     };

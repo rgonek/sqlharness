@@ -10,12 +10,27 @@ import { SessionsPage } from "@/pages/SessionsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { StatsPage } from "@/pages/StatsPage"
 
+export type SessionSearch = { subject?: string; scope?: string; unassigned?: boolean }
+export type OperationDetailSearch = { returnSession?: number; returnSubject?: string; returnScope?: string; returnUnassigned?: boolean }
+
 const rootRoute = createRootRoute({ component: AppLayout, notFoundComponent: NotFoundPage })
 
 const liveRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: LivePage })
 const sessionsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sessions", component: SessionsPage })
-const sessionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sessions/$id", component: SessionPage })
-const operationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations/$id", component: OperationPage })
+const sessionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/sessions/$id", component: SessionPage,
+  validateSearch: (search: Record<string, unknown>): SessionSearch => ({
+    subject: typeof search.subject === "string" && search.subject.length <= 64 ? search.subject : undefined,
+    scope: typeof search.scope === "string" && search.scope.length <= 64 ? search.scope : undefined,
+    unassigned: search.unassigned === true || search.unassigned === "true",
+  }) })
+const operationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations/$id", component: OperationPage,
+  validateSearch: (search: Record<string, unknown>): OperationDetailSearch => ({
+    returnSession: typeof search.returnSession === "number" && Number.isSafeInteger(search.returnSession) && search.returnSession > 0 ? search.returnSession
+      : typeof search.returnSession === "string" && /^\d+$/.test(search.returnSession) && Number.isSafeInteger(Number(search.returnSession)) ? Number(search.returnSession) : undefined,
+    returnSubject: typeof search.returnSubject === "string" && search.returnSubject.length <= 64 ? search.returnSubject : undefined,
+    returnScope: typeof search.returnScope === "string" && search.returnScope.length <= 64 ? search.returnScope : undefined,
+    returnUnassigned: search.returnUnassigned === true || search.returnUnassigned === "true",
+  }) })
 const operationsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/operations", component: OperationsPage,
   validateSearch: (search: Record<string, unknown>): OperationListSearch => ({
     from: typeof search.from === "string" ? search.from : undefined,

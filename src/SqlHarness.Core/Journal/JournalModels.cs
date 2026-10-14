@@ -40,7 +40,24 @@ public sealed record OperationStart(
     string? CandidateSqlText,
     AgentCallMetadata? Agent = null,
     string? OperationRef = null,
-    bool DryRun = false);
+    bool DryRun = false)
+{
+    public CompareContext? Context { get; init; }
+    public CompareJournalConditions? CompareConditions { get; init; }
+}
+
+/// <summary>Compare conditions belong to this attempt. Values and setup are sensitive and opt-in.</summary>
+public sealed record CompareJournalConditions(
+    int TimeoutSeconds,
+    int Repeat,
+    ResultComparisonMode ComparisonMode,
+    bool CompareNullability,
+    string? SetupSql,
+    IReadOnlyList<string> Parameters,
+    string? MatrixText,
+    SqlHarnessParameterMatrixInput? Matrix,
+    IReadOnlyList<SqlHarnessParameterSetInput>? ParameterSets,
+    IReadOnlyList<SqlHarnessParameterInput>? TypedParameters);
 
 /// <summary>Allowlisted, client-supplied labels from tools/call _meta; never verified, never content.</summary>
 public sealed record AgentCallMetadata(

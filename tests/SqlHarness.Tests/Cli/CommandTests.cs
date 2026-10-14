@@ -380,7 +380,7 @@ public sealed class CommandTests
             Assert.IsType<SqlHarnessMeasureOperation>(module.Operations[^1]);
 
             module.Outcome = Success(CompareReport());
-            Assert.Equal(0, await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(["compare", "dev", "--baseline", query, "--candidate", candidate]));
+            Assert.Equal(0, await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", query, "--candidate", candidate]));
             var compare = Assert.IsType<SqlHarnessCompareOperation>(module.Operations[^1]);
             Assert.Equal(ResultComparisonMode.Ordered, compare.CompareResults);
         }
@@ -396,7 +396,7 @@ public sealed class CommandTests
         {
             var module = new FakeModule(Success(CompareReport()));
             var exit = await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(
-                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--compare-results", "multiset"]);
+                ["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", query, "--candidate", candidate, "--compare-results", "multiset"]);
 
             Assert.Equal(0, exit);
             var operation = Assert.IsType<SqlHarnessCompareOperation>(Assert.Single(module.Operations));
@@ -423,7 +423,7 @@ public sealed class CommandTests
             var module = new FakeModule(Success(CompareReport()));
             var output = new StringWriter();
             var exit = await SqlHarnessCli.Create(module, output).RunAsync(
-                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--compare-results", mode]);
+                ["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", query, "--candidate", candidate, "--compare-results", mode]);
 
             Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
             Assert.Empty(module.Operations);
@@ -445,15 +445,15 @@ public sealed class CommandTests
         {
             var module = new FakeModule(Success(CompareReport()));
             Assert.Equal(0, await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(
-                ["compare", "dev", "--baseline", query, "--candidate", candidate]));
+                ["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", query, "--candidate", candidate]));
             Assert.False(Assert.IsType<SqlHarnessCompareOperation>(module.Operations[^1]).CompareNullability);
 
             Assert.Equal(0, await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(
-                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--compare-nullability"]));
+                ["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", query, "--candidate", candidate, "--compare-nullability"]));
             Assert.True(Assert.IsType<SqlHarnessCompareOperation>(module.Operations[^1]).CompareNullability);
 
             Assert.Equal(0, await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(
-                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--matrix", "N:int=1,2", "--compare-results", "set", "--compare-nullability"]));
+                ["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", query, "--candidate", candidate, "--matrix", "N:int=1,2", "--compare-results", "set", "--compare-nullability"]));
             var matrix = Assert.IsType<SqlHarnessCompareMatrixOperation>(module.Operations[^1]);
             Assert.True(matrix.CompareNullability);
             Assert.Equal(ResultComparisonMode.Set, matrix.CompareResults);
@@ -477,8 +477,8 @@ public sealed class CommandTests
             var module = new FakeModule(Success(CompareReport()));
             var output = new StringWriter();
             string[] args = matrix
-                ? ["compare", "dev", "--baseline", query, "--candidate", candidate, "--matrix", "N:int=1,2", "--compare-results", "off", "--compare-nullability"]
-                : ["compare", "dev", "--baseline", query, "--candidate", candidate, "--compare-results", "off", "--compare-nullability"];
+                ? ["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", query, "--candidate", candidate, "--matrix", "N:int=1,2", "--compare-results", "off", "--compare-nullability"]
+                : ["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", query, "--candidate", candidate, "--compare-results", "off", "--compare-nullability"];
             var exit = await SqlHarnessCli.Create(module, output).RunAsync(args);
 
             Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
@@ -511,7 +511,7 @@ public sealed class CommandTests
         {
             var output = new StringWriter();
             Assert.Equal(0, await SqlHarnessCli.Create(new FakeModule(Success(report)), output).RunAsync(
-                ["compare", "dev", "--baseline", query, "--candidate", candidate]));
+                ["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", query, "--candidate", candidate]));
             Assert.Contains(expected, output.ToString(), StringComparison.Ordinal);
         }
         finally
@@ -531,7 +531,7 @@ public sealed class CommandTests
         {
             var plain = new StringWriter();
             Assert.Equal(0, await SqlHarnessCli.Create(new FakeModule(Success(CompareReport() with { Equivalence = equivalence })), plain).RunAsync(
-                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--json-summary"]));
+                ["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", query, "--candidate", candidate, "--json-summary"]));
             using var plainJson = JsonDocument.Parse(plain.ToString());
             var plainEquivalence = plainJson.RootElement.GetProperty("equivalence");
             Assert.True(plainEquivalence.GetProperty("compareNullability").GetBoolean());
@@ -541,7 +541,7 @@ public sealed class CommandTests
             var matrix = new SqlHarnessCompareMatrixReport("N", "int", [new CompareMatrixCellReport(0, "1", CompareReport() with { Equivalence = equivalence })]);
             var matrixOutput = new StringWriter();
             Assert.Equal(0, await SqlHarnessCli.Create(new FakeModule(Success(matrix)), matrixOutput).RunAsync(
-                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--matrix", "N:int=1,2", "--json-summary"]));
+                ["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", query, "--candidate", candidate, "--matrix", "N:int=1,2", "--json-summary"]));
             using var matrixJson = JsonDocument.Parse(matrixOutput.ToString());
             var cases = matrixJson.RootElement.GetProperty("cases");
             Assert.Single(cases.EnumerateArray());
@@ -580,9 +580,9 @@ public sealed class CommandTests
         try
         {
             Assert.Equal(0, await SqlHarnessCli.Create(orderedModule, orderedOutput).RunAsync(
-                ["compare", "dev", "--baseline", query, "--candidate", candidate]));
+                ["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", query, "--candidate", candidate]));
             Assert.Equal(0, await SqlHarnessCli.Create(offModule, offOutput).RunAsync(
-                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--compare-results", "off"]));
+                ["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", query, "--candidate", candidate, "--compare-results", "off"]));
         }
         finally
         {
@@ -613,7 +613,7 @@ public sealed class CommandTests
         try
         {
             Assert.Equal(0, await SqlHarnessCli.Create(new FakeModule(Success(report)), output).RunAsync(
-                ["compare", "dev", "--baseline", query, "--candidate", candidate]));
+                ["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", query, "--candidate", candidate]));
         }
         finally
         {
@@ -640,7 +640,7 @@ public sealed class CommandTests
             var output = new StringWriter();
             var exit = await SqlHarnessCli.Create(module, output).RunAsync(
             [
-                "compare", "dev",
+                "compare", "dev", "--subject", "test-query", "--scope", "whole",
                 "--baseline", query,
                 "--candidate", candidate,
                 "--json",
@@ -733,9 +733,9 @@ public sealed class CommandTests
             var fullOutput = new StringWriter();
 
             Assert.Equal(0, await SqlHarnessCli.Create(module, summaryOutput).RunAsync(
-                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--json-summary"]));
+                ["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", query, "--candidate", candidate, "--json-summary"]));
             Assert.Equal(0, await SqlHarnessCli.Create(module, fullOutput).RunAsync(
-                ["compare", "dev", "--baseline", query, "--candidate", candidate, "--json"]));
+                ["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", query, "--candidate", candidate, "--json"]));
 
             using var summary = JsonDocument.Parse(summaryOutput.ToString());
             using var full = JsonDocument.Parse(fullOutput.ToString());
@@ -788,7 +788,7 @@ public sealed class CommandTests
         {
             var module = new FakeModule(Success(CompareReport()));
             var exit = await SqlHarnessCli.Create(module, new StringWriter()).RunAsync(
-                ["compare", "dev", "--baseline", baseline, "--candidate", candidate]);
+                ["compare", "dev", "--subject", "test-query", "--scope", "whole", "--baseline", baseline, "--candidate", candidate]);
 
             Assert.Equal(0, exit);
             Assert.IsType<SqlHarnessCompareOperation>(Assert.Single(module.Operations));
@@ -809,7 +809,7 @@ public sealed class CommandTests
         {
             var module = new FakeModule(Success(CompareReport()));
             var exit = await SqlHarnessCli.Create(module, new StringWriter()).RunAsync([
-                "compare", "dev",
+                "compare", "dev", "--subject", "test-query", "--scope", "whole",
                 "--baseline", baseline,
                 "--candidate", candidate,
                 "--matrix", "BatchSize:int=1,20,100",
@@ -844,7 +844,7 @@ public sealed class CommandTests
             var module = new FakeModule(Success(CompareReport()));
             var output = new StringWriter();
             var exit = await SqlHarnessCli.Create(module, output).RunAsync([
-                "compare", "dev",
+                "compare", "dev", "--subject", "test-query", "--scope", "whole",
                 "--baseline", baseline,
                 "--candidate", candidate,
                 "--matrix", "BatchSize:int=1,20,100",
@@ -905,7 +905,7 @@ public sealed class CommandTests
         {
             var output = new StringWriter();
             var exit = await SqlHarnessCli.Create(new FakeModule(Success(report)), output).RunAsync([
-                "compare", "dev",
+                "compare", "dev", "--subject", "test-query", "--scope", "whole",
                 "--baseline", baseline,
                 "--candidate", candidate,
                 "--matrix", "BatchSize:int=100,20,1"]);
@@ -946,14 +946,14 @@ public sealed class CommandTests
             var summaryOutput = new StringWriter();
             var fullOutput = new StringWriter();
             Assert.Equal(0, await SqlHarnessCli.Create(module, summaryOutput).RunAsync([
-                "compare", "dev",
+                "compare", "dev", "--subject", "test-query", "--scope", "whole",
                 "--baseline", baseline,
                 "--candidate", candidate,
                 "--matrix", "BatchSize:int=100,20",
                 "--param", "CustomerId:int=424242",
                 "--json-summary"]));
             Assert.Equal(0, await SqlHarnessCli.Create(module, fullOutput).RunAsync([
-                "compare", "dev",
+                "compare", "dev", "--subject", "test-query", "--scope", "whole",
                 "--baseline", baseline,
                 "--candidate", candidate,
                 "--matrix", "BatchSize:int=100,20",

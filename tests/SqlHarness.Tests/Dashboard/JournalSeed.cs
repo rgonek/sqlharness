@@ -43,6 +43,23 @@ internal sealed class JournalSeed
         return handle;
     }
 
+    public JournalHandle Compare(SessionIdentity session, string? subject, string? scope, string? baselineHash,
+        string? candidateHash, string status = "succeeded", bool complete = true)
+    {
+        var start = new OperationStart("compare", "local", new Dictionary<string, string> { ["tenant"] = "acme" },
+            false, baselineHash, candidateHash, null, null)
+        {
+            Context = subject is null || scope is null ? null : new CompareContext(subject, scope),
+        };
+        var handle = _journal.Begin(session, start)!;
+        if (complete)
+        {
+            _journal.Complete(handle, new OperationEnd(status, status == "succeeded" ? 0 : 5, null, 10,
+                "sqlserver", "srv", "db", 1, 3, null, null, null));
+        }
+        return handle;
+    }
+
     public static BenchmarkJournalRecord Benchmark(long readsMedian = 5, long physical = 0, long granted = 4096, long used = 256) =>
         new(
         [

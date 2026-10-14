@@ -37,15 +37,18 @@ namespace SqlHarness.Mcp.Tools;
 /// Core.
 /// </summary>
 public sealed class McpToolHandlers(
-    McpScope scope,
+    McpScope mcpScope,
     ISqlHarnessModule module,
     IMcpClock? clock = null,
     CancellationToken hostShutdown = default,
-    bool acceptRequestScope = false)
+    bool acceptRequestScope = false,
+    CompareConfig? compareConfig = null)
 {
+    private readonly McpScope scope = mcpScope;
     private readonly IMcpClock _clock = clock ?? SystemMcpClock.Instance;
     private readonly CancellationToken _hostShutdown = hostShutdown;
     private readonly bool _acceptRequestScope = acceptRequestScope;
+    private readonly CompareConfig _compareConfig = compareConfig ?? SqlHarnessConfig.Default.Compare;
 
     public Task<CallToolResult> CapabilitiesAsync(
         RequestContext<CallToolRequestParams> ctx,
@@ -59,7 +62,7 @@ public sealed class McpToolHandlers(
             ThrowIfUnknown(ctx, ["includeDiagnostics", "inputRootCursor"]);
             return Task.FromResult(new SqlHarnessOutcome(
                 SqlHarnessExitCode.Success,
-                McpOperationMapper.BuildCapabilities(scope, includeDiagnostics, inputRootCursor),
+                McpOperationMapper.BuildCapabilities(scope, includeDiagnostics, inputRootCursor, _compareConfig),
                 null));
         }, ct);
 
@@ -129,6 +132,10 @@ public sealed class McpToolHandlers(
         McpSqlSourceArgument baseline,
         [Description("Candidate source: exactly one of sql or file.")]
         McpSqlSourceArgument candidate,
+        [Description("Short stable identifier for the SQL being optimized.")]
+        string subject,
+        [Description("SQL fragment under test, or exactly 'whole' for the full query.")]
+        string scope,
         [Description(McpToolCatalog.SetupDescription)]
         McpSqlSourceArgument? setup = null,
         [Description("Parameters as {name, type, value}; value is a culture-invariant string or JSON null.")]
@@ -157,9 +164,34 @@ public sealed class McpToolHandlers(
         CancellationToken ct = default) =>
         RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
         {
+            ThrowIfUnknown(ctx, ["baseline", "candidate", "subject", "scope", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "compareResults", "compareNullability", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
+            return await module.ExecuteAsync(
+                await McpOperationMapper.MapCompareAsync(this.scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun, parameterSets, parameterSetFiles, subject, scope, _compareConfig),
+                token);
+        }, ct);
+
+    public Task<CallToolResult> CompareWithoutContextAsync(
+        RequestContext<CallToolRequestParams> ctx,
+        McpSqlSourceArgument baseline,
+        McpSqlSourceArgument candidate,
+        McpSqlSourceArgument? setup = null,
+        McpParameterArgument[]? parameters = null,
+        int repeat = 5,
+        int? timeout = null,
+        [AllowedValues("ordered", "multiset", "set", "off")] string compareResults = "ordered",
+        McpMatrixArgument? matrix = null,
+        McpParameterSetArgument[]? parameterSets = null,
+        string[]? parameterSetFiles = null,
+        bool compareNullability = false,
+        int? maxResultBytes = null,
+        int? maxOperationSeconds = null,
+        bool dryRun = false,
+        CancellationToken ct = default) =>
+        RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
+        {
             ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "compareResults", "compareNullability", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
             return await module.ExecuteAsync(
-                await McpOperationMapper.MapCompareAsync(scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun, parameterSets, parameterSetFiles),
+                await McpOperationMapper.MapCompareAsync(this.scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun, parameterSets, parameterSetFiles, compareConfig: new CompareConfig { RequireContext = false }),
                 token);
         }, ct);
 
@@ -296,7 +328,7 @@ public sealed class McpToolHandlers(
                 }
             }
 
-            if (!recognized && _acceptRequestScope && string.Equals(key, "scope", StringComparison.OrdinalIgnoreCase))
+            if (!recognized && _acceptRequestScope && string.Equals(key, "target", StringComparison.OrdinalIgnoreCase))
                 recognized = true;
 
             if (!recognized)
@@ -430,7 +462,7 @@ public static class McpToolCatalog
 {
     /// <summary>Shared capabilities strings: one definition for the fixed and request catalogs.</summary>
     public const string CapabilitiesDescription =
-        "Runtime configuration of this server: scopeMode, engines, allowedProfiles (request scope), inputRoots (paged), processLimits, configurationRef. Call when this connection's configuration is unknown; reuse the result for this connection and call again after a reconnect or server restart.";
+        "Runtime configuration of this server: scopeMode, active compareContext policy, engines, allowedProfiles (request scope), inputRoots (paged), processLimits, configurationRef. Call when this connection's configuration is unknown; reuse the result for this connection and call again after a reconnect or server restart.";
     public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
     public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";
     public const string SetupDescription = "Optional sql or file, once per measured session. SQL Server: create #temps before the first parameter reference, populate afterwards; batch locals do not cross into measured SQL.";
@@ -438,7 +470,7 @@ public static class McpToolCatalog
     public const string ParameterSetsDescription = "2..32 named {name, parameters} sets with matching declared types. Exclusive with parameterSetFiles and matrix; fixed and per-set parameter names must not overlap.";
     public const string MatrixDescription = "One parameter: {name, type, values}, 2..32 distinct values. Exclusive with parameterSets and parameterSetFiles; name must not overlap fixed parameters.";
     public const string MeasureDescription = "Measure one query across repeats. Sets rotate on one session/shared cache; setup binds the first set once. Results report per-set stability, not cross-set equivalence.";
-    public const string CompareDescription = "Compare baseline/candidate measurements and observed rows. Each set has its own session/setup; first failure stops the run and retains completed cells. Read regression verdict/reasons separately from exitCode.";
+    public const string CompareDescription = "Compare baseline/candidate measurements and observed rows. subject and textual scope follow the frozen compare.requireContext policy reported by capabilities; request-scoped target selects the database. Each set has its own session/setup; first failure stops the run and retains completed cells. Read regression verdict/reasons separately from exitCode.";
     public const string ArtifactSectionDescription = "Safe saved section. operators is capped; planShapeStable compares plan shape, not timing or row counts; null means insufficient evidence.";
     public const string RepetitionDescription = "Measured repetition for section=plan; default is the identified last measured run. A run without a saved plan reports missing evidence, never an earlier plan.";
 
@@ -462,7 +494,7 @@ public static class McpToolCatalog
     {
         ArgumentNullException.ThrowIfNull(process);
         if (!process.RequestScope)
-            return CreateTools(process.FixedScope!, moduleFactory?.Invoke(process.FixedScope!) ?? process.Decorate(process.FixedScope!.CreateModule()), clock, hostShutdown);
+            return CreateTools(process.FixedScope!, moduleFactory?.Invoke(process.FixedScope!) ?? process.Decorate(process.FixedScope!.CreateModule(process.CompareConfig)), clock, hostShutdown, process.CompareConfig);
         var handlers = new McpRequestToolHandlers(process, clock, hostShutdown, moduleFactory);
         var type = typeof(McpRequestToolHandlers);
         McpServerTool Tool(string name, string method, string description, bool? readOnly, bool? destructive,
@@ -482,7 +514,7 @@ public static class McpToolCatalog
             Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
             Tool(ToolNames[1], nameof(McpRequestToolHandlers.QueryAsync), "Run a bounded query against the supplied request scope.", true, false, null, true),
             Tool(ToolNames[2], nameof(McpRequestToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
-            Tool(ToolNames[3], nameof(McpRequestToolHandlers.CompareAsync), CompareDescription, null, false, null, true),
+            Tool(ToolNames[3], process.CompareConfig.RequireContext ? nameof(McpRequestToolHandlers.CompareAsync) : nameof(McpRequestToolHandlers.CompareWithoutContextAsync), CompareDescription, null, false, null, true),
             Tool(ToolNames[4], nameof(McpRequestToolHandlers.WatchAsync), "Poll a bounded query against the supplied request scope.", true, false, null, true),
             Tool(ToolNames[5], nameof(McpRequestToolHandlers.SnapshotAsync), "Capture or diff a snapshot against the supplied request scope.", null, false, null, true),
             Tool(ToolNames[6], nameof(McpRequestToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
@@ -510,11 +542,13 @@ public static class McpToolCatalog
         McpScope scope,
         ISqlHarnessModule module,
         IMcpClock? clock = null,
-        CancellationToken hostShutdown = default)
+        CancellationToken hostShutdown = default,
+        CompareConfig? compareConfig = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(module);
-        var handlers = new McpToolHandlers(scope, module, clock, hostShutdown);
+        var policy = compareConfig ?? SqlHarnessConfig.Default.Compare;
+        var handlers = new McpToolHandlers(scope, module, clock, hostShutdown, compareConfig: policy);
         var type = typeof(McpToolHandlers);
         McpServerTool Tool(
             string name,
@@ -541,7 +575,7 @@ public static class McpToolCatalog
             Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
             Tool(ToolNames[1], nameof(McpToolHandlers.QueryAsync), "Run a bounded query passing the static visible-effects text check; no persistent-mutation flags are offered on this path. Hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. Exactly one of inline sql (at most 1 MiB) or a file under an input root.", true, false, null, true),
             Tool(ToolNames[2], nameof(McpToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
-            Tool(ToolNames[3], nameof(McpToolHandlers.CompareAsync), CompareDescription, null, false, null, true),
+            Tool(ToolNames[3], policy.RequireContext ? nameof(McpToolHandlers.CompareAsync) : nameof(McpToolHandlers.CompareWithoutContextAsync), CompareDescription, null, false, null, true),
             Tool(ToolNames[4], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
             Tool(ToolNames[5], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it.", null, false, null, true),
             Tool(ToolNames[6], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
@@ -557,11 +591,12 @@ public static class McpToolCatalog
         McpScope scope,
         ISqlHarnessModule module,
         IMcpClock? clock = null,
-        CancellationToken hostShutdown = default)
+        CancellationToken hostShutdown = default,
+        CompareConfig? compareConfig = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         var collection = new McpServerPrimitiveCollection<McpServerTool>();
-        foreach (var tool in CreateTools(scope, module, clock, hostShutdown))
+        foreach (var tool in CreateTools(scope, module, clock, hostShutdown, compareConfig))
             collection.Add(tool);
         options.ToolCollection = collection;
     }

@@ -273,6 +273,24 @@ internal static class McpStdioProcessHarness
         return new StdioChild(process, tee, stderr);
     }
 
+    internal static StdioChild StartDotnetDllServer(string cliDll, string home, string arguments)
+    {
+        var psi = new ProcessStartInfo("dotnet", $"\"{cliDll}\" {arguments}")
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        psi.Environment["SQLHARNESS_HOME"] = home;
+        psi.Environment.Remove("SQLHARNESS_MCP_STDIO_PROBE_PASSWORD");
+        var process = Process.Start(psi) ?? throw new InvalidOperationException("The built CLI DLL MCP server did not start.");
+        var tee = new RecordingStream(process.StandardOutput.BaseStream);
+        var stderr = process.StandardError.ReadToEndAsync();
+        return new StdioChild(process, tee, stderr);
+    }
+
     internal static async Task<McpClient> ConnectAsync(StdioChild child, Stream stdin, CancellationToken ct, string protocolVersion = DefaultProtocolVersion) =>
         await McpClient.CreateAsync(
             new StreamClientTransport(stdin, child.StdoutTee, NullLoggerFactory.Instance),
@@ -490,7 +508,7 @@ public sealed class McpStdioProcessTests
                 Assert.Single(tools, tool => tool.Name == "sqlharness_query").ProtocolTool)
                 .GetProperty("inputSchema");
             Assert.Contains(
-                "scope",
+                "target",
                 querySchema.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
 
             static Dictionary<string, object?> Scope(string profile) => new()
@@ -505,7 +523,7 @@ public sealed class McpStdioProcessTests
                     "sqlharness_query",
                     new Dictionary<string, object?>
                     {
-                        ["scope"] = Scope(profile),
+                        ["target"] = Scope(profile),
                         ["dryRun"] = true,
                         ["sql"] = "SELECT 1",
                     },
@@ -525,7 +543,7 @@ public sealed class McpStdioProcessTests
                 "sqlharness_query",
                 new Dictionary<string, object?>
                 {
-                    ["scope"] = Scope("sample-country"),
+                    ["target"] = Scope("sample-country"),
                     ["sql"] = "SELECT 1",
                     ["server"] = "raw-target.invalid",
                     ["allowMutation"] = true,
@@ -537,7 +555,7 @@ public sealed class McpStdioProcessTests
             Assert.Equal("sqlharness_query", unsafeArgumentsEnvelope.GetProperty("command").GetString());
             Assert.Equal((int)SqlHarnessExitCode.Safety, unsafeArgumentsEnvelope.GetProperty("exitCode").GetInt32());
             Assert.Equal("safety_rejected", unsafeArgumentsEnvelope.GetProperty("error").GetProperty("code").GetString());
-            Assert.StartsWith("Unknown argument.", unsafeArgumentsEnvelope.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+            Assert.Equal("The MCP request scope is invalid.", unsafeArgumentsEnvelope.GetProperty("error").GetProperty("message").GetString());
 
             var blockedStorage = Path.Combine(home, "compare");
             File.WriteAllText(blockedStorage, "existing file");
@@ -545,7 +563,7 @@ public sealed class McpStdioProcessTests
             {
                 var arguments = new Dictionary<string, object?>
                 {
-                    ["scope"] = Scope("sample-country"),
+                    ["target"] = Scope("sample-country"),
                     ["repeat"] = 1,
                     ["timeout"] = 1,
                     // 2s expires while the Linux suite saturates the CPU. That
@@ -558,6 +576,8 @@ public sealed class McpStdioProcessTests
                 {
                     arguments["baseline"] = new Dictionary<string, object?> { ["sql"] = "SELECT 1" };
                     arguments["candidate"] = new Dictionary<string, object?> { ["sql"] = "SELECT 1" };
+                    arguments["subject"] = "process-smoke";
+                    arguments["scope"] = "whole";
                 }
 
                 var denied = await client.CallToolAsync(toolName, arguments, cancellationToken: ct);
@@ -606,6 +626,129 @@ public sealed class McpStdioProcessTests
             if (exe is not null)
                 McpStdioProcessHarness.DeletePublishOutput(exe);
         }
+    }
+
+    [Fact]
+    public async Task Built_cli_child_process_exposes_compare_policy_and_request_target_over_stdio()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+        var cliDll = Path.Combine(McpStdioProcessHarness.FindRepositoryRoot(), "src", "SqlHarness.Cli", "bin", "Debug", "net10.0", "sqlharness.dll");
+        Assert.True(File.Exists(cliDll), $"Expected built CLI DLL at {cliDll}.");
+
+        static Dictionary<string, object?> Target() => new()
+        {
+            ["profile"] = "stdio-policy",
+            ["vars"] = new Dictionary<string, string> { ["tenant"] = "example" },
+        };
+
+        async Task RunPolicyHostAsync(bool requireContext)
+        {
+            string? home = null;
+            McpStdioProcessHarness.StdioChild? child = null;
+            try
+            {
+                home = McpStdioProcessHarness.CreateSyntheticHome(
+                    "stdio-policy",
+                    "{\"stdio-policy\":{\"server\":\"unreachable.invalid\",\"database\":\"stdio-db\",\"vars\":{\"tenant\":\"^example$\"},\"auth\":\"integrated\"}}");
+                SqlHarnessConfigWriter.Write(Path.Combine(home, "config.json"), new SqlHarnessConfig
+                {
+                    Compare = new CompareConfig { RequireContext = requireContext },
+                });
+                child = McpStdioProcessHarness.StartDotnetDllServer(
+                    cliDll,
+                    home,
+                    "mcp serve --request-scope --allow-profile stdio-policy");
+                var stdin = child.Process.StandardInput.BaseStream;
+                await using var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, cts.Token);
+
+                var tools = await client.ListToolsAsync(cancellationToken: cts.Token);
+                Assert.Equal(8, tools.Count);
+                var compareSchema = JsonSerializer.SerializeToElement(
+                    Assert.Single(tools, tool => tool.Name == "sqlharness_compare").ProtocolTool).GetProperty("inputSchema");
+                var compareProperties = compareSchema.GetProperty("properties");
+                var querySchema = JsonSerializer.SerializeToElement(
+                    Assert.Single(tools, tool => tool.Name == "sqlharness_query").ProtocolTool).GetProperty("inputSchema");
+                Assert.Contains("target", querySchema.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
+                Assert.Contains("target", compareSchema.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
+
+                if (requireContext)
+                {
+                    Assert.True(compareProperties.TryGetProperty("subject", out _));
+                    Assert.True(compareProperties.TryGetProperty("scope", out _));
+                    Assert.Contains("subject", compareSchema.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
+                    Assert.Contains("scope", compareSchema.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
+                }
+                else
+                {
+                    Assert.False(compareProperties.TryGetProperty("subject", out _));
+                    Assert.False(compareProperties.TryGetProperty("scope", out _));
+                }
+
+                var compareArguments = new Dictionary<string, object?>
+                {
+                    ["target"] = Target(),
+                    ["baseline"] = new { sql = "SELECT 1" },
+                    ["candidate"] = new { sql = "SELECT 1" },
+                    ["dryRun"] = true,
+                };
+                if (requireContext)
+                {
+                    compareArguments["subject"] = "stdio-policy";
+                    compareArguments["scope"] = "whole";
+                }
+
+                var validCompare = await client.CallToolAsync("sqlharness_compare", compareArguments, cancellationToken: cts.Token);
+                AssertValidateSuccess(validCompare, "sqlharness_compare");
+
+                var legacyQueryTarget = await client.CallToolAsync(
+                    "sqlharness_query",
+                    new Dictionary<string, object?> { ["target"] = Target(), ["scope"] = Target(), ["sql"] = "SELECT 1", ["dryRun"] = true },
+                    cancellationToken: cts.Token);
+                Assert.True(legacyQueryTarget.IsError == true);
+                var legacyEnvelope = McpStdioProcessHarness.Envelope(legacyQueryTarget);
+                Assert.Equal((int)SqlHarnessExitCode.Safety, legacyEnvelope.GetProperty("exitCode").GetInt32());
+                Assert.Equal("The MCP request scope is invalid.", legacyEnvelope.GetProperty("error").GetProperty("message").GetString());
+
+                if (!requireContext)
+                {
+                    var hiddenContext = new Dictionary<string, object?>(compareArguments)
+                    {
+                        ["subject"] = "hidden",
+                        ["scope"] = "whole",
+                    };
+                    var rejectedHidden = await client.CallToolAsync("sqlharness_compare", hiddenContext, cancellationToken: cts.Token);
+                    Assert.True(rejectedHidden.IsError == true);
+                    var hiddenEnvelope = McpStdioProcessHarness.Envelope(rejectedHidden);
+                    Assert.Equal((int)SqlHarnessExitCode.Safety, hiddenEnvelope.GetProperty("exitCode").GetInt32());
+                    Assert.Equal("The MCP request scope is invalid.", hiddenEnvelope.GetProperty("error").GetProperty("message").GetString());
+                }
+
+                await client.DisposeAsync();
+                child.Process.StandardInput.Close();
+                Assert.True(child.Process.WaitForExit(15_000), "The built CLI MCP child did not exit after stdin EOF.");
+                Assert.Equal(0, child.Process.ExitCode);
+                await child.StdoutTee.DrainRemainingAsync(TimeSpan.FromSeconds(5), cts.Token);
+                McpStdioProcessHarness.AssertStdoutIsPureProtocol(child.StdoutTee.Recorded);
+                var stderr = await child.Stderr.WaitAsync(TimeSpan.FromSeconds(5), cts.Token);
+                Assert.DoesNotContain("unreachable.invalid", stderr, StringComparison.Ordinal);
+                Assert.DoesNotContain("stdio-db", stderr, StringComparison.Ordinal);
+            }
+            finally
+            {
+                if (child is not null && !child.Process.HasExited)
+                {
+                    try { child.Process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+                    child.Process.WaitForExit(10_000);
+                }
+
+                child?.Process.Dispose();
+                if (home is not null)
+                    McpStdioProcessHarness.DeleteHome(home);
+            }
+        }
+
+        await RunPolicyHostAsync(requireContext: true);
+        await RunPolicyHostAsync(requireContext: false);
     }
 
     [NativeRidFact("linux-x64")]

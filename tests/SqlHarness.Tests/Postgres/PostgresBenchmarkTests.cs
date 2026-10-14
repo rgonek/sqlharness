@@ -416,6 +416,7 @@ public sealed class PostgresBenchmarkTests
         var operation = new SqlHarnessCompareMatrixOperation(
             Target(), null, "SELECT @id", "SELECT @id", [], 30, 1, string.Empty, ResultComparisonMode.Off)
         {
+            Context = new CompareContext("postgres-test", "whole"),
             TypedMatrix = new SqlHarnessParameterMatrixInput("id", "int", ["1", "2"]),
         };
 
@@ -539,7 +540,7 @@ public sealed class PostgresBenchmarkTests
         new(Target(), null, sql, [], 30, repeat);
 
     private static SqlHarnessCompareOperation Compare(string baseline, string candidate, int repeat) =>
-        new(Target(), null, baseline, candidate, [], 30, repeat);
+        new(Target(), null, baseline, candidate, [], 30, repeat) { Context = new CompareContext("postgres-test", "whole") };
 
     private static SqlTargetRequest Target() =>
         new("local-pg", new Dictionary<string, string>());

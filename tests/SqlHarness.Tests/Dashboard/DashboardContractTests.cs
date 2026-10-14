@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 using SqlHarness.Dashboard;
 
@@ -38,6 +39,14 @@ public sealed class DashboardContractTests
             ["id", "sessionKey", "agentKind", "transport", "source", "clientName", "clientVersion", "mcpMode", "cwd",
              "firstSeen", "lastSeen", "operations", "failed", "rejected", "running", "abandoned", "clientTitle", "roots", "protocolVersion"],
             Names(session));
+
+        Assert.Equal(["session", "operations", "compareSubjects", "unassignedCompareCount"],
+            Names(new SessionDetail(session, [], [], 0)));
+        Assert.Equal(["operationId", "subject", "scope", "baselineHash", "candidateHash", "baselineVersion",
+                "candidateVersion", "status", "startedAt", "regression", "cases", "conditions", "summary"],
+            Names(new CompareAttemptSummary(1, "orders", "whole", null, null, null, null, "running", "t", null, null, null, null)));
+        Assert.Equal(["subject", "scopes", "latestWhole", "latestCompletedWhole", "startToLatestWhole", "versionsFromRetainedHistory"],
+            Names(new CompareSubjectSummary("orders", [], null, null, null)));
     }
 
     [Fact]
@@ -87,5 +96,42 @@ public sealed class DashboardContractTests
     public void Operation_detail_exposes_the_agent_property()
     {
         Assert.Contains("agent", typeof(OperationDetail).GetProperties().Select(p => JsonNamingPolicy.CamelCase.ConvertName(p.Name)));
+        Assert.Equal(["operation", "session", "vars", "candidateSqlHash", "sqlText", "candidateSqlText", "rawTokens",
+                "emittedTokens", "artifactDirectory", "summary", "variants", "dimensions", "agent", "rawBytes", "emittedBytes",
+                "tokenEstimationMethod", "compareSubject", "compareScope", "baselineVersion", "candidateVersion",
+                "compareRegression", "compareCases", "compareConditions"],
+            Names(new OperationDetail(default!, default!, null, null, null, null, null, null, null, null, [], default!, null)));
+    }
+
+    [Fact]
+    public void Serialized_compare_contracts_match_the_typescript_declarations()
+    {
+        var session = new SessionSummary(1, "k", "claude", "cli", "process-tree", null, null, null, null, "f", "l", 0, 0, 0, 0, 0, null, null, null);
+        var attempt = new CompareAttemptSummary(1, "orders", "whole", "a", "b", "v0", "v1", "succeeded", "t", null, [], null, null);
+        var subject = new CompareSubjectSummary("orders", ["whole"], attempt, attempt, attempt);
+
+        AssertTypescriptFieldsMatch("CompareAttemptSummary", attempt);
+        AssertTypescriptFieldsMatch("CompareSubjectSummary", subject);
+        AssertTypescriptFieldsMatch("SessionDetail", new SessionDetail(session, [], [subject], 0));
+        AssertTypescriptFieldsMatch("OperationDetail", new OperationDetail(default!, session, null, null, null, null,
+            null, null, null, null, [], default!, null));
+    }
+
+    private static void AssertTypescriptFieldsMatch<T>(string typeName, T value)
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "src/SqlHarness.Dashboard/ui/src/api/types.ts")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var source = File.ReadAllText(Path.Combine(root!.FullName, "src/SqlHarness.Dashboard/ui/src/api/types.ts"));
+        var declaration = Regex.Match(source,
+            $@"export type {Regex.Escape(typeName)}\s*=\s*\{{(?<body>[\s\S]*?)\n\}}",
+            RegexOptions.CultureInvariant);
+        Assert.True(declaration.Success, $"Missing TypeScript declaration: {typeName}");
+        var fields = Regex.Matches(declaration.Groups["body"].Value,
+                @"(?:^|;|\r?\n)\s*(?<name>[A-Za-z][A-Za-z0-9]*)\??\s*:", RegexOptions.Multiline)
+            .Select(match => match.Groups["name"].Value)
+            .ToArray();
+        Assert.Equal(Names(value).Order(StringComparer.Ordinal), fields.Order(StringComparer.Ordinal));
     }
 }

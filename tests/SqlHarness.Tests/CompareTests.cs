@@ -282,6 +282,18 @@ public class SqlHarnessCompareTests
     }
 
     [Fact]
+    public async Task Compare_requires_context_before_opening_a_session()
+    {
+        var session = FakeCompareSession.Create();
+
+        var outcome = await Module(session).ExecuteAsync(Compare(repeat: 1) with { Context = null });
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Contains("Both --subject and --scope are required", outcome.SafeError, StringComparison.Ordinal);
+        Assert.Equal(0, session.FactoryOpenCount);
+    }
+
+    [Fact]
     public async Task Compare_validates_all_user_SQL_before_authentication_or_session_open()
     {
         var session = FakeCompareSession.Create();
@@ -563,6 +575,8 @@ public class SqlHarnessCompareTests
                 "compare", "test", "--var", "env=a",
                 "--baseline", baseline,
                 "--candidate", candidate,
+                "--subject", "test-query",
+                "--scope", "whole",
                 "--repeat", "1",
                 "--json-summary"]);
 
@@ -726,7 +740,8 @@ public class SqlHarnessCompareTests
             [],
             30,
             1,
-            "amount:decimal(19,4)=private-audit-value,1.00"));
+            "amount:decimal(19,4)=private-audit-value,1.00")
+        { Context = new CompareContext("test-query", "whole") });
 
         Assert.Equal(0, session.FactoryOpenCount);
         Assert.Empty(artifacts.Runs);
@@ -751,7 +766,8 @@ public class SqlHarnessCompareTests
             [],
             30,
             1,
-            "privateaudit:int=1,private"));
+            "privateaudit:int=1,private")
+        { Context = new CompareContext("test-query", "whole") });
 
         Assert.Equal(0, session.FactoryOpenCount);
         Assert.Empty(artifacts.Runs);
@@ -890,7 +906,8 @@ public class SqlHarnessCompareTests
         };
 
     private static SqlHarnessCompareOperation Compare(int repeat) =>
-        new(Target(), "SELECT Id INTO #ids FROM dbo.Clients", "SELECT Value FROM dbo.Clients", "SELECT Value FROM dbo.Clients -- candidate", [], 30, repeat);
+        new(Target(), "SELECT Id INTO #ids FROM dbo.Clients", "SELECT Value FROM dbo.Clients", "SELECT Value FROM dbo.Clients -- candidate", [], 30, repeat)
+        { Context = new CompareContext("test-query", "whole") };
 
     private static SqlTargetRequest Target() =>
         new("test", new Dictionary<string, string> { ["env"] = "a" });

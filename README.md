@@ -75,7 +75,7 @@ SQL Server users can instead freeze an explicit allowlist and supply a target sc
 sqlharness mcp serve --request-scope --allow-profile sample-country --allow-profile sample-shared --input-root C:\work\sqlharness-inputs
 ```
 
-The eight MCP tools mirror the CLI commands of the same names (`capabilities`, `query`, `measure`, `compare`, `watch`, `snapshot`, `plan`, `artifact`); what leaves one surface leaves the other. The exception is `capabilities`: MCP returns the server's runtime configuration, while CLI `capabilities` describes commands, engines and limits. CLI `--dry-run` is MCP `dryRun: true`. Request mode is SQL Server only: `query`, `measure`, `compare`, `watch`, `snapshot`, and `artifact` require a nested `scope` with an allowlisted profile and its variables, while `capabilities` and `plan` remain target-free. The process snapshots profiles, input roots, and budgets at startup. Tool calls run concurrently and benchmarks are not serialized ([concurrency](docs/mcp.md#concurrency-deadline-cancellation-and-progress)). SQLHarness does not register or edit client configuration. `sqlharness_capabilities` discloses the configured input roots (`inputRoots`), so callers can find where file inputs are allowed. File reads require absolute paths lexically under a configured root, reject UNC paths, and honor byte caps; the reader does not resolve links or guard against changes by the same OS user. See [the MCP contract](docs/mcp.md) for both client-entry shapes, scope behavior, and limits.
+The eight MCP tools mirror the CLI commands of the same names (`capabilities`, `query`, `measure`, `compare`, `watch`, `snapshot`, `plan`, `artifact`); what leaves one surface leaves the other. The exception is `capabilities`: MCP returns the server's runtime configuration, including its active compare-context policy, while CLI `capabilities` describes commands, engines, limits and that same policy. CLI `--dry-run` is MCP `dryRun: true`. Request mode is SQL Server only: `query`, `measure`, `compare`, `watch`, `snapshot`, and `artifact` require a nested `target` with an allowlisted profile and its variables, while `capabilities` and `plan` remain target-free. The process snapshots profiles, input roots, and budgets at startup. Tool calls run concurrently and benchmarks are not serialized ([concurrency](docs/mcp.md#concurrency-deadline-cancellation-and-progress)). SQLHarness does not register or edit client configuration. `sqlharness_capabilities` discloses the configured input roots (`inputRoots`), so callers can find where file inputs are allowed. File reads require absolute paths lexically under a configured root, reject UNC paths, and honor byte caps; the reader does not resolve links or guard against changes by the same OS user. See [the MCP contract](docs/mcp.md) for both client-entry shapes, scope behavior, and limits.
 
 ## Quick start
 
@@ -88,12 +88,16 @@ sqlharness snapshot prod-eu --var tenant=acme --var env=uat --file .\queries\cov
 sqlharness snapshot prod-eu --var tenant=acme --var env=uat --file .\queries\coverage.sql --name before-import --diff --json
 sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --json
 sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\queries\orders.sql --repeat 5 --json
-sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\before.sql --candidate .\queries\after.sql --repeat 5 --json
-sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\before.sql --candidate .\queries\after.sql --compare-results multiset --repeat 5 --json-summary
+sqlharness compare prod-eu --var tenant=acme --var env=uat --subject orders-report --scope whole --baseline .\queries\before.sql --candidate .\queries\after.sql --repeat 5 --json
+sqlharness compare prod-eu --var tenant=acme --var env=uat --subject orders-report --scope whole --baseline .\queries\before.sql --candidate .\queries\after.sql --compare-results multiset --repeat 5 --json-summary
 sqlharness plan .\artifacts\orders.sqlplan --json
 ```
 
 `plan` is offline and returns a compact tree with bounded statement text and predicates unchanged from the caller-supplied plan. Output limits clip long cells and mark truncation.
+
+Compare context identifies the optimization target (`--subject`) and the tested fragment (`--scope`). Use stable short labels; use exactly `whole` for a direct whole-query comparison. Context is enabled by default through the global `compare.requireContext` setting in `~/.sqlharness/config.json`, independently of journal enablement. With it enabled, both labels are required; when disabled, both options may be omitted or supplied together. MCP freezes this setting when the server starts, so changing it requires restarting the server and reconnecting the client. When disabled, MCP hides and rejects the textual `subject` and `scope` fields; a request-scoped `target` remains required to select the database.
+
+The dashboard assigns `v0`, `v1`, and later labels to distinct SQL hashes within one `(sessionId, subject, scope)` group, in first-seen order. These labels identify content within that group; they do not select a winner or claim that a fragment is equivalent to the whole query. Numbering uses the full retained journal history before filtering or paging. Journal retention can remove earlier observations, so version numbers may change after history expires; the dashboard shows retained history only.
 
 `compare` accepts one `--matrix` dimension:
 
@@ -101,6 +105,7 @@ sqlharness plan .\artifacts\orders.sqlplan --json
 ```powershell
 sqlharness compare prod-eu `
   --var tenant=acme --var env=uat `
+  --subject orders-report --scope whole `
   --baseline .\before.sql `
   --candidate .\after.sql `
   --matrix BatchSize:int=1,20,100 `
@@ -258,10 +263,12 @@ Regression verdict: `compare` also reports `regression` with a `verdict` of `pas
 <!-- docs-sync:example -->
 ```powershell
 sqlharness compare prod-eu --var tenant=acme --var env=uat `
+  --subject orders-report --scope whole `
   --baseline .\queries\before.sql --candidate .\queries\after.sql `
   --compare-results multiset --repeat 5 --json-summary
 
 sqlharness compare prod-eu --var tenant=acme --var env=uat `
+  --subject orders-report --scope whole `
   --baseline .\queries\before.sql --candidate .\queries\after.sql `
   --compare-results ordered --compare-nullability --repeat 5 --json-summary
 ```
@@ -270,7 +277,7 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat `
 
 | Command | Purpose |
 | --- | --- |
-| `capabilities` | Describe commands, engines, limits and output modes, offline. Pass a profile for that engine's parameter types and limits. |
+| `capabilities` | Describe commands, engines, limits, output modes and the active compare-context policy, offline. Pass a profile for that engine's parameter types and limits. |
 | `doctor` | Check the local installation and profile-file availability, offline. |
 | `watch` | Poll a bounded read-only query until `--until` / `--until-unchanged` or max duration. |
 | `snapshot` | Capture or `--diff` a named canonical result under `~/.sqlharness/snapshots` (`--force` to replace). |

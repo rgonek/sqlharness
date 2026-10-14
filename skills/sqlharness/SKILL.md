@@ -41,7 +41,7 @@ mutation approval.
 <!-- docs-sync:example -->
 ```powershell
 sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --output agent
-sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\before.sql --candidate .\after.sql --param customerId:int=42 --repeat 5 --compare-results multiset --json-summary
+sqlharness compare prod-eu --var tenant=acme --var env=uat --subject orders-report --scope whole --baseline .\before.sql --candidate .\after.sql --param customerId:int=42 --repeat 5 --compare-results multiset --json-summary
 ```
 
 ## Read enough evidence to support the conclusion

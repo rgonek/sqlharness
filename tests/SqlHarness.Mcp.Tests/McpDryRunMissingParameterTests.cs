@@ -101,13 +101,13 @@ public sealed class McpDryRunMissingParameterTests : IDisposable
 
             var missingResult = await client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
             {
-                ["scope"] = scope,
+                ["target"] = scope,
                 ["dryRun"] = true,
                 ["sql"] = "SELECT @id",
             }, cancellationToken: cts.Token);
             var suppliedResult = await client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
             {
-                ["scope"] = scope,
+                ["target"] = scope,
                 ["dryRun"] = true,
                 ["sql"] = "SELECT @id",
                 ["parameters"] = new[] { new Dictionary<string, object?> { ["name"] = "@id", ["type"] = "int", ["value"] = "1" } },

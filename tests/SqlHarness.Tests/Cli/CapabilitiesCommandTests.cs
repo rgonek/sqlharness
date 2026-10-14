@@ -22,7 +22,11 @@ public sealed class CapabilitiesCommandTests
         Assert.Empty(module.Operations);
         using var document = JsonDocument.Parse(output.ToString());
         var root = document.RootElement;
-        Assert.Equal(2, root.GetProperty("contractVersion").GetInt32());
+        Assert.Equal(3, root.GetProperty("contractVersion").GetInt32());
+        var context = root.GetProperty("compareContext");
+        Assert.True(context.GetProperty("requireContext").GetBoolean());
+        Assert.Equal("whole", context.GetProperty("wholeScope").GetString());
+        Assert.Equal("(sessionId, subject, scope)", context.GetProperty("versionIdentity").GetString());
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("buildId").GetString()));
         Assert.Contains(root.GetProperty("commands").EnumerateArray(), command => command.GetProperty("name").GetString() == "query");
         Assert.DoesNotContain(root.GetProperty("commands").EnumerateArray(), command => command.GetProperty("name").GetString() is "validate" or "ping" or "schema" or "counts" or "space" or "qstop" or "indexes");
@@ -45,8 +49,23 @@ public sealed class CapabilitiesCommandTests
     [Fact]
     public void Contract_version_is_pinned()
     {
-        Assert.Equal(2, SqlHarnessCapabilitiesProvider.ContractVersion);
-        Assert.Equal(2, SqlHarnessCapabilitiesProvider.Get().ContractVersion);
+        Assert.Equal(3, SqlHarnessCapabilitiesProvider.ContractVersion);
+        Assert.Equal(3, SqlHarnessCapabilitiesProvider.Get().ContractVersion);
+    }
+
+    [Fact]
+    public async Task Capabilities_reports_active_compare_context_policy_without_off_mode_instructions()
+    {
+        var module = new RecordingModule();
+        var output = new StringWriter();
+        var exitCode = await SqlHarnessCli.Create(module, output, compareConfig: new CompareConfig { RequireContext = false })
+            .RunAsync(["capabilities", "--json"]);
+
+        Assert.Equal(0, exitCode);
+        using var document = JsonDocument.Parse(output.ToString());
+        var context = document.RootElement.GetProperty("compareContext");
+        Assert.False(context.GetProperty("requireContext").GetBoolean());
+        Assert.Single(context.EnumerateObject());
     }
 
     [Theory]

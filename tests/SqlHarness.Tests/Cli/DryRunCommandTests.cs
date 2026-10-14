@@ -63,7 +63,7 @@ public sealed class DryRunCommandTests : IDisposable
         Run(["measure", profile, "--query", Sql(query, "m.sql"), .. (setup is null ? Array.Empty<string>() : ["--setup", Sql(setup, "setup.sql")]), "--dry-run", "--json", .. extra]);
 
     private Task<(int Exit, string Output)> Compare(string profile, string baseline, string candidate, string? setup, params string[] extra) =>
-        Run(["compare", profile, "--baseline", Sql(baseline, "b.sql"), "--candidate", Sql(candidate, "c.sql"), .. (setup is null ? Array.Empty<string>() : ["--setup", Sql(setup, "setup.sql")]), "--dry-run", "--json", .. extra]);
+        Run(["compare", profile, "--baseline", Sql(baseline, "b.sql"), "--candidate", Sql(candidate, "c.sql"), "--subject", "test-query", "--scope", "whole", .. (setup is null ? Array.Empty<string>() : ["--setup", Sql(setup, "setup.sql")]), "--dry-run", "--json", .. extra]);
 
     private static JsonElement Report(string json)
     {
@@ -170,8 +170,8 @@ public sealed class DryRunCommandTests : IDisposable
         {
             new[] { "query", SqlServer, "--file", query, "--dry-run", "--json" },
             ["measure", SqlServer, "--query", query, "--dry-run", "--json"],
-            ["compare", SqlServer, "--baseline", query, "--candidate", query, "--dry-run", "--json"],
-            ["compare", SqlServer, "--baseline", query, "--candidate", query, "--matrix", "id:int=1,2", "--dry-run", "--json"],
+            ["compare", SqlServer, "--baseline", query, "--candidate", query, "--subject", "test-query", "--scope", "whole", "--dry-run", "--json"],
+            ["compare", SqlServer, "--baseline", query, "--candidate", query, "--subject", "test-query", "--scope", "whole", "--matrix", "id:int=1,2", "--dry-run", "--json"],
         })
         {
             var exit = await SqlHarnessCli.Create(recorder, new StringWriter()).RunAsync(args);
@@ -199,7 +199,7 @@ public sealed class DryRunCommandTests : IDisposable
 
             Assert.Equal(0, (await Run("query", SqlServer, "--file", query, "--param", "id:int=42", "--dry-run", "--json")).Exit);
             Assert.Equal(0, (await Run("measure", SqlServer, "--query", query, "--param", "id:int=42", "--dry-run", "--json")).Exit);
-            Assert.Equal(0, (await Run("compare", SqlServer, "--baseline", query, "--candidate", query, "--param", "id:int=42", "--dry-run", "--json")).Exit);
+            Assert.Equal(0, (await Run("compare", SqlServer, "--baseline", query, "--candidate", query, "--subject", "test-query", "--scope", "whole", "--param", "id:int=42", "--dry-run", "--json")).Exit);
 
             Assert.Equal(before, Files(_directory));
             AssertOffline();
@@ -244,6 +244,7 @@ public sealed class DryRunCommandTests : IDisposable
         {
             TypedParameters = [new("a", "int", "1")],
             DryRun = true,
+            Context = new CompareContext("test-query", "whole"),
         };
         var core = await new SqlHarnessModule(_factory, Profiles).ExecuteAsync(mcpShaped);
 
@@ -823,8 +824,8 @@ public sealed class DryRunCommandTests : IDisposable
     [Fact]
     public async Task Compare_dry_run_json_summary_and_agent_output_carry_the_dry_run_report()
     {
-        var summary = await Run("compare", SqlServer, "--baseline", Sql("SELECT 1;", "b.sql"), "--candidate", Sql("SELECT 2;", "c.sql"), "--dry-run", "--json-summary");
-        var agent = await Run("compare", SqlServer, "--baseline", Sql("SELECT 1;", "b.sql"), "--candidate", Sql("SELECT 2;", "c.sql"), "--dry-run", "--output", "agent");
+        var summary = await Run("compare", SqlServer, "--baseline", Sql("SELECT 1;", "b.sql"), "--candidate", Sql("SELECT 2;", "c.sql"), "--subject", "test-query", "--scope", "whole", "--dry-run", "--json-summary");
+        var agent = await Run("compare", SqlServer, "--baseline", Sql("SELECT 1;", "b.sql"), "--candidate", Sql("SELECT 2;", "c.sql"), "--subject", "test-query", "--scope", "whole", "--dry-run", "--output", "agent");
 
         AssertAllowed(summary, "compare");
         Assert.Equal(0, agent.Exit);

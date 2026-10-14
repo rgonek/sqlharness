@@ -39,6 +39,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     private readonly CompareCellRunner _cellRunner;
     private readonly CompareMatrixRunner _matrixRunner;
     private readonly Func<IReadOnlyDictionary<string, TargetProfile>> _loadProfiles;
+    private readonly CompareConfig _compareConfig;
     private readonly IWatchClock _watchClock;
     private readonly ISnapshotStore _snapshotStore;
 
@@ -50,7 +51,12 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     internal int ComparisonMaximumRows { get; init; } = CanonicalComparisonAccumulator.MaximumComparedRows;
 
     public SqlHarnessModule()
-        : this(() => ProfileStore.Load())
+        : this(() => ProfileStore.Load(), SqlHarnessConfig.Default.Compare)
+    {
+    }
+
+    public SqlHarnessModule(CompareConfig compareConfig)
+        : this(() => ProfileStore.Load(), compareConfig)
     {
     }
 
@@ -61,10 +67,16 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     /// global store. Construction opens no connection and performs no auth.
     /// </summary>
     public SqlHarnessModule(Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles)
+        : this(loadProfiles, SqlHarnessConfig.Default.Compare)
+    {
+    }
+
+    public SqlHarnessModule(Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles, CompareConfig compareConfig)
         : this(
             new EngineSessionFactory(new SqlClientSessionFactory(new AzureCli()), new NpgsqlSessionFactory()),
             new CompareArtifactWriter(),
-            loadProfiles)
+            loadProfiles,
+            compareConfig: compareConfig)
     {
     }
 
@@ -72,13 +84,15 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         ISqlSessionFactory sessionFactory,
         Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
         IWatchClock? watchClock = null,
-        ISnapshotStore? snapshotStore = null)
+        ISnapshotStore? snapshotStore = null,
+        CompareConfig? compareConfig = null)
         : this(
             sessionFactory,
             new CompareArtifactWriter(),
             loadProfiles,
             watchClock,
-            snapshotStore)
+            snapshotStore,
+            compareConfig)
     {
     }
 
@@ -87,13 +101,15 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         ICompareArtifactWriter artifactWriter,
         Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
         IWatchClock? watchClock = null,
-        ISnapshotStore? snapshotStore = null)
+        ISnapshotStore? snapshotStore = null,
+        CompareConfig? compareConfig = null)
     {
         _sessionFactory = sessionFactory ?? throw new ArgumentNullException(nameof(sessionFactory));
         _artifactWriter = artifactWriter ?? throw new ArgumentNullException(nameof(artifactWriter));
         _cellRunner = new CompareCellRunner(_sessionFactory, _artifactWriter);
         _matrixRunner = new CompareMatrixRunner(_cellRunner);
         _loadProfiles = loadProfiles ?? throw new ArgumentNullException(nameof(loadProfiles));
+        _compareConfig = compareConfig ?? SqlHarnessConfig.Default.Compare;
         _watchClock = watchClock ?? new SystemWatchClock();
         _snapshotStore = snapshotStore ?? new SnapshotStore(SqlHarnessPaths.SnapshotsDir);
     }
@@ -302,6 +318,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
         try
         {
+            ValidateCompareContext(compare.Context);
             var prepared = CompareOperationPreparer.PrepareFixed(
                 compare.Target,
                 _loadProfiles(),
@@ -402,6 +419,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
 
         try
         {
+            ValidateCompareContext(operation.Context);
             var prepared = CompareOperationPreparer.PrepareFixed(
                 operation.Target,
                 _loadProfiles(),
@@ -770,6 +788,18 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             throw new SqlHarnessSafetyException("Measurement repetitions must be between 1 and 100.");
         if (measure.TypedMatrix is not null && measure.ParameterSets is not null)
             throw new SqlHarnessSafetyException("A parameter matrix and parameter sets cannot be supplied together.");
+    }
+
+    private void ValidateCompareContext(CompareContext? context)
+    {
+        try
+        {
+            CompareContext.Parse(context?.Subject, context?.Scope, _compareConfig.RequireContext);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new SqlHarnessSafetyException(exception.Message);
+        }
     }
 
     private static void ValidateBounds(SqlHarnessQueryOperation query)

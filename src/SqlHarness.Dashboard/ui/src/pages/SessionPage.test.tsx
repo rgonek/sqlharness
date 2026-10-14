@@ -1,4 +1,5 @@
 import { screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
 import { operation, session } from "@/test/fixtures"
 import { renderApp, stubFetch } from "@/test/render"
@@ -14,6 +15,7 @@ test("shows session facts and its operations", async () => {
   renderApp("/sessions/7")
 
   expect(await screen.findByText("mcp:xyz")).toBeInTheDocument()
+  await userEvent.click(await screen.findByText("Session metadata"))
   expect(screen.getByText("claude-code 2.1.0")).toBeInTheDocument()
   expect(screen.getByText("compare")).toBeInTheDocument()
 })
@@ -46,6 +48,7 @@ test("shows the client title and workspace roots", async () => {
     },
   })
   renderApp("/sessions/8")
+  await userEvent.click(await screen.findByText("Session metadata"))
   expect(await screen.findByText("Claude Code 2.1.0")).toBeInTheDocument()
   expect(screen.getByText("D:/Dev/sqlharness")).toBeInTheDocument()
   expect(screen.getByText("(sqlharness)")).toBeInTheDocument()
@@ -55,6 +58,7 @@ test("shows the client title and workspace roots", async () => {
 test("unknown roots show a dash with a hint", async () => {
   stubFetch({ "/api/sessions/9": { session: session({ id: 9, roots: null }), operations: [] } })
   renderApp("/sessions/9")
+  await userEvent.click(await screen.findByText("Session metadata"))
   const roots = await screen.findByLabelText("Workspace roots")
   expect(roots).toHaveTextContent("—")
   expect(roots).toHaveAttribute("title", expect.stringContaining("2026-07-28"))
@@ -63,6 +67,7 @@ test("unknown roots show a dash with a hint", async () => {
 test("an empty roots list shows none", async () => {
   stubFetch({ "/api/sessions/10": { session: session({ id: 10, roots: [] }), operations: [] } })
   renderApp("/sessions/10")
+  await userEvent.click(await screen.findByText("Session metadata"))
   expect(await screen.findByLabelText("Workspace roots")).toHaveTextContent("none")
 })
 
@@ -72,10 +77,12 @@ test("shows the negotiated MCP protocol, or a dash when unknown", async () => {
     "/api/sessions/12": { session: session({ id: 12, transport: "mcp", protocolVersion: null }), operations: [] },
   })
   const first = renderApp("/sessions/11")
+  await userEvent.click(await screen.findByText("Session metadata"))
   const fact = (await screen.findByText("MCP protocol")).parentElement!
   expect(fact).toHaveTextContent("2026-07-28")
   first.unmount()
 
   renderApp("/sessions/12")
+  await userEvent.click(await screen.findByText("Session metadata"))
   expect((await screen.findByText("MCP protocol")).parentElement!).toHaveTextContent("—")
 })

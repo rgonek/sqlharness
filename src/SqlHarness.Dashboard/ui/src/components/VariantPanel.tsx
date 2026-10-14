@@ -36,18 +36,19 @@ function StoredPlan({ link, engine }: { link: PlanLinkRow; engine: string | null
   )
 }
 
-export function VariantPanel({ variant, engine }: { variant: VariantDetail; engine: string | null }) {
+export function VariantPanel({ variant, engine, compareMetrics = false }: { variant: VariantDetail; engine: string | null; compareMetrics?: boolean }) {
   const plans = [...new Map(variant.plans.map(link => [link.hash, link])).values()]
+  const sqlServer = !compareMetrics || engine?.toLowerCase() === "sqlserver" || engine?.toLowerCase() === "sql-server"
   return (
     <div className="space-y-4">
       <section aria-label="Key metrics" className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Kpi label="Elapsed (median)" value={spread(variant.elapsedMs, " ms")} hint={range(variant.elapsedMs)} />
         <Kpi label="CPU (median)" value={spread(variant.cpuMs, " ms")} hint={range(variant.cpuMs)} />
-        <Kpi label="Logical reads (median)" value={spread(variant.logicalReads)} hint={range(variant.logicalReads)} />
-        <Kpi label="Memory grant used / granted" value={`${formatKb(variant.grantMaxUsedKb)} / ${formatKb(variant.grantGrantedKb)}`} />
-        <Kpi label="DOP" value={formatNumber(variant.dop)} />
-        <Kpi label="Spills" value={String(variant.spillCount)} />
-        <Kpi label="Compile" value={variant.compileTimeMs === null ? "—" : `${variant.compileTimeMs} ms`} />
+        {sqlServer && <Kpi label="Logical reads (median)" value={spread(variant.logicalReads)} hint={range(variant.logicalReads)} />}
+        {sqlServer && <Kpi label="Memory grant used / granted" value={`${formatKb(variant.grantMaxUsedKb)} / ${formatKb(variant.grantGrantedKb)}`} />}
+        {sqlServer && <Kpi label="DOP" value={formatNumber(variant.dop)} />}
+        {sqlServer && <Kpi label="Spills" value={String(variant.spillCount)} />}
+        {sqlServer && <Kpi label="Compile" value={variant.compileTimeMs === null ? "—" : `${variant.compileTimeMs} ms`} />}
         <Kpi label="Runs" value={String(variant.runs)} />
       </section>
       <div className="flex flex-wrap gap-1">
@@ -117,7 +118,7 @@ export function VariantPanel({ variant, engine }: { variant: VariantDetail; engi
           </CardContent>
         </Card>
       )}
-      {variant.postgres && (
+      {variant.postgres && (!compareMetrics || engine?.toLowerCase() === "postgres" || engine?.toLowerCase() === "postgresql") && (
         <Card>
           <CardHeader>
             <CardTitle>Buffers (median per run)</CardTitle>

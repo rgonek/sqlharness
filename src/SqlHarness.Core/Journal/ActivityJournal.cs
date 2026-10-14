@@ -17,6 +17,17 @@ public sealed class ActivityJournal : IActivityJournal
 {
     private const int SqliteCorrupt = 11;
     private const int SqliteNotADatabase = 26;
+    private const int MaximumCompareConditionsBytes = 64 * 1024;
+
+    private static readonly (string Name, Func<CompareJournalConditions, object?> Value)[] SensitiveCompareConditionFields =
+    [
+        ("setupSql", conditions => conditions.SetupSql),
+        ("parameters", conditions => conditions.Parameters),
+        ("matrixText", conditions => conditions.MatrixText),
+        ("matrix", conditions => conditions.Matrix),
+        ("parameterSets", conditions => conditions.ParameterSets),
+        ("typedParameters", conditions => conditions.TypedParameters),
+    ];
 
     private static readonly JsonSerializerOptions WaitJson = new(JsonSerializerDefaults.Web);
 
@@ -76,11 +87,11 @@ public sealed class ActivityJournal : IActivityJournal
                 INSERT INTO operations (session_id, operation, host_pid, host_started_at, started_at, updated_at,
                     status, profile, vars_json, mutation_requested, sql_hash, candidate_sql_hash, sql_text, candidate_sql_text,
                     client_call_id, agent_model, agent_reasoning_effort, agent_session_id, agent_turn_id, agent_turn_trigger, agent_thread_source,
-                    operation_ref, dry_run)
+                    operation_ref, dry_run, compare_subject, compare_scope, compare_conditions_json)
                 VALUES ($session, $operation, $hostPid, $hostStarted, $now, $now,
                     'running', $profile, $vars, $mutation, $sqlHash, $candidateHash, $sqlText, $candidateText,
                     $callId, $agentModel, $agentEffort, $agentSession, $agentTurn, $agentTrigger, $agentSource,
-                    $operationRef, $dryRun)
+                    $operationRef, $dryRun, $compareSubject, $compareScope, $compareConditions)
                 RETURNING id;
                 """;
             insert.Parameters.AddWithValue("$session", sessionId);
@@ -104,6 +115,9 @@ public sealed class ActivityJournal : IActivityJournal
             insert.Parameters.AddWithValue("$agentSource", (object?)start.Agent?.ThreadSource ?? DBNull.Value);
             insert.Parameters.AddWithValue("$operationRef", (object?)start.OperationRef ?? DBNull.Value);
             insert.Parameters.AddWithValue("$dryRun", start.DryRun ? 1 : 0);
+            insert.Parameters.AddWithValue("$compareSubject", (object?)start.Context?.Subject ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$compareScope", (object?)start.Context?.Scope ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$compareConditions", (object?)CompareConditionsJson(start.CompareConditions) ?? DBNull.Value);
             var id = (long)insert.ExecuteScalar()!;
             transaction.Commit();
             return new JournalHandle(id);
@@ -357,6 +371,8 @@ public sealed class ActivityJournal : IActivityJournal
                 Execute(connection, JournalSchema.Version6);
             if (locked < 7)
                 Execute(connection, JournalSchema.Version7);
+            if (locked < 8)
+                Execute(connection, JournalSchema.Version8);
             Execute(connection, $"PRAGMA user_version = {JournalSchema.CurrentVersion};");
             Execute(connection, "COMMIT;");
         }
@@ -535,6 +551,54 @@ public sealed class ActivityJournal : IActivityJournal
             ? null
             : JsonSerializer.Serialize(new SortedDictionary<string, string>(
                 vars.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal), StringComparer.Ordinal));
+
+    private string? CompareConditionsJson(CompareJournalConditions? conditions)
+    {
+        if (conditions is null)
+            return null;
+
+        var json = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["timeoutSeconds"] = conditions.TimeoutSeconds,
+            ["repeat"] = conditions.Repeat,
+            ["comparisonMode"] = conditions.ComparisonMode.ToString(),
+            ["compareNullability"] = conditions.CompareNullability,
+        };
+        if (!_storeSensitive)
+            return JsonSerializer.Serialize(json, WaitJson);
+
+        var omitted = new List<string>();
+        foreach (var field in SensitiveCompareConditionFields)
+        {
+            var candidate = new Dictionary<string, object?>(json, StringComparer.Ordinal)
+            {
+                [field.Name] = field.Value(conditions),
+                // Reserve room for the largest omission marker before accepting another field.
+                ["omittedSensitiveFields"] = SensitiveCompareConditionFields.Select(item => item.Name).ToArray(),
+            };
+            if (Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(candidate, WaitJson)) <= MaximumCompareConditionsBytes)
+                json = candidate;
+            else
+                omitted.Add(field.Name);
+        }
+
+        json["omittedSensitiveFields"] = omitted;
+        var serialized = JsonSerializer.Serialize(json, WaitJson);
+        if (Encoding.UTF8.GetByteCount(serialized) <= MaximumCompareConditionsBytes)
+            return serialized;
+
+        // Keep the safe settings and an explicit indication if an unexpected serializer expansion
+        // exceeds the reserved margin; never persist truncated or invalid JSON.
+        var safeFallback = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["timeoutSeconds"] = conditions.TimeoutSeconds,
+            ["repeat"] = conditions.Repeat,
+            ["comparisonMode"] = conditions.ComparisonMode.ToString(),
+            ["compareNullability"] = conditions.CompareNullability,
+            ["omittedSensitiveFields"] = SensitiveCompareConditionFields.Select(item => item.Name).ToArray(),
+        };
+        return JsonSerializer.Serialize(safeFallback, WaitJson);
+    }
 
     private static object Nullable(DateTimeOffset? value) => value is null ? DBNull.Value : Timestamp(value.Value);
 

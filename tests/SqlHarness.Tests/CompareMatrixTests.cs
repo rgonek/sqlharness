@@ -168,6 +168,7 @@ public class CompareMatrixTests
         {
             TypedParameters = [new SqlHarnessParameterInput("Tenant", "int", "7"), new SqlHarnessParameterInput("BatchSize", "int", "20")],
             DryRun = true,
+            Context = new CompareContext("matrix-test", "whole"),
         };
 
         var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
@@ -423,6 +424,7 @@ public class CompareMatrixTests
             null, sql, sql, [], 30, 1)
         {
             TypedParameters = [new SqlHarnessParameterInput("Amount", "money", "9.99")],
+            Context = new CompareContext("matrix-test", "whole"),
         };
 
         var outcome = await Module(factory, artifacts, PostgresProfiles).ExecuteAsync(operation);
@@ -777,7 +779,7 @@ public class CompareMatrixTests
         SqlHarnessOperation operation = kind switch
         {
             "query" => new SqlHarnessQueryOperation(target, sql, [], 30, 10, false, null) { TypedParameters = typed },
-            "compare" => new SqlHarnessCompareOperation(target, null, sql, sql, [], 30, 1) { TypedParameters = typed },
+            "compare" => new SqlHarnessCompareOperation(target, null, sql, sql, [], 30, 1) { TypedParameters = typed, Context = new CompareContext("matrix-test", "whole") },
             "matrix" => TypedMatrix("Q1", "Q2") with { TypedParameters = typed },
             "measure" => new SqlHarnessMeasureOperation(target, null, sql, [], 30, 1) { TypedParameters = typed },
             "measure-sets" => new SqlHarnessMeasureOperation(
@@ -944,7 +946,8 @@ public class CompareMatrixTests
             parameters ?? ["Tenant:int=7"],
             30,
             repeat,
-            matrix);
+            matrix)
+        { Context = new CompareContext("matrix-test", "whole") };
 
     private static IReadOnlyDictionary<string, TargetProfile> SqlProfiles() =>
         new Dictionary<string, TargetProfile>

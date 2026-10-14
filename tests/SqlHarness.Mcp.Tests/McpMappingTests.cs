@@ -129,9 +129,24 @@ public sealed class McpMappingTests : IDisposable
         }
 
         Assert.Equal("fixed", fixedDocument.GetProperty("scopeMode").GetString());
+        Assert.True(fixedDocument.GetProperty("compareContext").GetProperty("requireContext").GetBoolean());
+        Assert.Equal("whole", fixedDocument.GetProperty("compareContext").GetProperty("wholeScope").GetString());
         Assert.False(fixedDocument.TryGetProperty("allowedProfiles", out _));
         Assert.Equal("request", requestDocument.GetProperty("scopeMode").GetString());
+        Assert.True(requestDocument.GetProperty("compareContext").GetProperty("requireContext").GetBoolean());
         Assert.Equal([ProfileName], requestDocument.GetProperty("allowedProfiles").EnumerateArray().Select(item => item.GetString()));
+    }
+
+    [Fact]
+    public void Capabilities_omit_versioning_instructions_when_compare_context_is_disabled()
+    {
+        var document = JsonSerializer.SerializeToElement(
+            McpOperationMapper.BuildCapabilities(Scope(), includeDiagnostics: false, compareConfig: new CompareConfig { RequireContext = false }),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var context = document.GetProperty("compareContext");
+
+        Assert.False(context.GetProperty("requireContext").GetBoolean());
+        Assert.Single(context.EnumerateObject());
     }
 
     [Fact]
@@ -197,7 +212,7 @@ public sealed class McpMappingTests : IDisposable
     public async Task Compact_capabilities_are_smaller_than_a_synthetic_broad_response_with_the_same_runtime_data()
     {
         var scope = Scope();
-        var compact = McpOperationMapper.BuildCapabilities(scope, includeDiagnostics: false);
+        var compact = McpOperationMapper.BuildCapabilities(scope, includeDiagnostics: false, compareConfig: new CompareConfig { RequireContext = false });
         var broad = new
         {
             server = "sqlharness",
@@ -212,6 +227,7 @@ public sealed class McpMappingTests : IDisposable
             scopeMode = "fixed",
             supportedProtocolVersions = new[] { "2025-06-18", "2025-11-25", "2026-07-28" },
             configurationRef = compact.ConfigurationRef,
+            compareContext = compact.CompareContext,
             engines = compact.Engines,
             processLimits = compact.ProcessLimits,
             inputRoots = compact.InputRoots,
@@ -653,7 +669,7 @@ public sealed class McpMappingTests : IDisposable
             1, null, CancellationToken.None, matrix: matrix);
         var compare = await McpOperationMapper.MapCompareAsync(
             scope, new McpSqlSourceArgument { Sql = "SELECT @n" }, new McpSqlSourceArgument { Sql = "SELECT @n" },
-            null, null, 1, null, "ordered", matrix, CancellationToken.None);
+            null, null, 1, null, "ordered", matrix, CancellationToken.None, subject: "mapping-test", optimizationScope: "whole");
 
         var measureOutcome = await module.ExecuteAsync(measure);
         var compareOutcome = await module.ExecuteAsync(compare);
@@ -694,7 +710,7 @@ public sealed class McpMappingTests : IDisposable
                 1, null, CancellationToken.None, dryRun: true, matrix: matrix);
             var compare = await McpOperationMapper.MapCompareAsync(
                 scope, new McpSqlSourceArgument { Sql = "SELECT @n" }, new McpSqlSourceArgument { Sql = "SELECT @n" },
-                null, fixedParameters, 1, null, "ordered", matrix, CancellationToken.None, dryRun: true);
+                null, fixedParameters, 1, null, "ordered", matrix, CancellationToken.None, dryRun: true, subject: "mapping-test", optimizationScope: "whole");
 
             var measureOutcome = await module.ExecuteAsync(measure);
             var compareOutcome = await module.ExecuteAsync(compare);
@@ -723,7 +739,9 @@ public sealed class McpMappingTests : IDisposable
             "ordered",
             null,
             CancellationToken.None,
-            parameterSets: sets));
+            parameterSets: sets,
+            subject: "mapping-test",
+            optimizationScope: "whole"));
 
         // Inline sets use the Core resolver directly; matrix metadata remains absent.
 
@@ -776,7 +794,7 @@ public sealed class McpMappingTests : IDisposable
             scope,
             new McpSqlSourceArgument { Sql = "SELECT 1" },
             new McpSqlSourceArgument { Sql = "SELECT 2" },
-            null, [P("tenant", "nvarchar", "frozen")], 5, 30, "multiset", null, CancellationToken.None, dryRun: true);
+            null, [P("tenant", "nvarchar", "frozen")], 5, 30, "multiset", null, CancellationToken.None, dryRun: true, subject: "mapping-test", optimizationScope: "whole");
         var compare = Assert.IsType<SqlHarnessCompareOperation>(plain);
         Assert.Equal("SELECT 1", compare.BaselineSql);
         Assert.Equal("SELECT 2", compare.CandidateSql);
@@ -792,7 +810,9 @@ public sealed class McpMappingTests : IDisposable
             null, null, 5, 30, "ordered",
             new McpMatrixArgument { Name = "BatchSize", Type = "int", Values = ["1", "20", "100"] },
             CancellationToken.None,
-            dryRun: true);
+            dryRun: true,
+            subject: "mapping-test",
+            optimizationScope: "whole");
         var matrixOperation = Assert.IsType<SqlHarnessCompareMatrixOperation>(matrix);
         Assert.Equal(string.Empty, matrixOperation.Matrix);
         Assert.Empty(matrixOperation.Parameters);
@@ -815,14 +835,14 @@ public sealed class McpMappingTests : IDisposable
                 scope,
                 new McpSqlSourceArgument { Sql = "SELECT @n" },
                 new McpSqlSourceArgument { Sql = "SELECT @n" },
-                null, null, 5, 30, "ordered", malformed, CancellationToken.None));
+                null, null, 5, 30, "ordered", malformed, CancellationToken.None, subject: "mapping-test", optimizationScope: "whole"));
         }
 
         await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapCompareAsync(
             scope,
             new McpSqlSourceArgument { Sql = "SELECT @n" },
             new McpSqlSourceArgument { Sql = "SELECT @n" },
-            null, null, 5, 30, "bogus", null, CancellationToken.None));
+            null, null, 5, 30, "bogus", null, CancellationToken.None, subject: "mapping-test", optimizationScope: "whole"));
     }
 
     [Fact]
@@ -833,21 +853,21 @@ public sealed class McpMappingTests : IDisposable
         var matrixArgument = new McpMatrixArgument { Name = "N", Type = "int", Values = ["1", "2"] };
 
         var defaults = Assert.IsType<SqlHarnessCompareOperation>(
-            await McpOperationMapper.MapCompareAsync(scope, a, b, null, null, 5, 30, "ordered", null, CancellationToken.None));
+            await McpOperationMapper.MapCompareAsync(scope, a, b, null, null, 5, 30, "ordered", null, CancellationToken.None, subject: "mapping-test", optimizationScope: "whole"));
         Assert.False(defaults.CompareNullability);
 
         var strict = Assert.IsType<SqlHarnessCompareOperation>(
-            await McpOperationMapper.MapCompareAsync(scope, a, b, null, null, 5, 30, "set", null, CancellationToken.None, compareNullability: true));
+            await McpOperationMapper.MapCompareAsync(scope, a, b, null, null, 5, 30, "set", null, CancellationToken.None, compareNullability: true, subject: "mapping-test", optimizationScope: "whole"));
         Assert.True(strict.CompareNullability);
 
         var strictMatrix = Assert.IsType<SqlHarnessCompareMatrixOperation>(
-            await McpOperationMapper.MapCompareAsync(scope, a, b, null, null, 5, 30, "multiset", matrixArgument, CancellationToken.None, compareNullability: true));
+            await McpOperationMapper.MapCompareAsync(scope, a, b, null, null, 5, 30, "multiset", matrixArgument, CancellationToken.None, compareNullability: true, subject: "mapping-test", optimizationScope: "whole"));
         Assert.True(strictMatrix.CompareNullability);
 
         foreach (var matrix in new McpMatrixArgument?[] { null, matrixArgument })
         {
             var ex = await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapCompareAsync(
-                scope, a, b, null, null, 5, 30, "off", matrix, CancellationToken.None, compareNullability: true));
+                scope, a, b, null, null, 5, 30, "off", matrix, CancellationToken.None, compareNullability: true, subject: "mapping-test", optimizationScope: "whole"));
             Assert.Equal("compareNullability requires compareResults ordered, multiset, or set.", ex.Message);
         }
     }
@@ -872,6 +892,8 @@ public sealed class McpMappingTests : IDisposable
             null!,
             new McpSqlSourceArgument { Sql = "SELECT @Label" },
             new McpSqlSourceArgument { Sql = "SELECT @Label" },
+            "label-query",
+            "whole",
             matrix: matrix);
 
         Assert.False(result.IsError == true);
@@ -890,9 +912,9 @@ public sealed class McpMappingTests : IDisposable
         const string typeName = "PrivateTableTypeSentinel";
         const string value = "privateValueSentinel9384";
         var scope = Scope();
-        var handlers = new McpToolHandlers(scope, scope.CreateModule());
+        var handlers = new McpToolHandlers(scope, scope.CreateModule(new CompareConfig { RequireContext = false }));
 
-        var result = await handlers.CompareAsync(
+        var result = await handlers.CompareWithoutContextAsync(
             null!,
             new McpSqlSourceArgument { Sql = "SELECT 1" },
             new McpSqlSourceArgument { Sql = "SELECT 1" },
@@ -918,9 +940,9 @@ public sealed class McpMappingTests : IDisposable
         const string variableName = "requestVariableScopeSentinel";
         const string value = "valueScopeSentinel9384";
         var scope = Scope();
-        var handlers = new McpToolHandlers(scope, scope.CreateModule());
+        var handlers = new McpToolHandlers(scope, scope.CreateModule(new CompareConfig { RequireContext = false }));
 
-        var result = await handlers.CompareAsync(
+        var result = await handlers.CompareWithoutContextAsync(
             null!,
             new McpSqlSourceArgument { Sql = $"SELECT @{variableName}" },
             new McpSqlSourceArgument { Sql = "SELECT 1" },
@@ -952,7 +974,9 @@ public sealed class McpMappingTests : IDisposable
             null, [P("label", "int", "7")], 5, 30, "ordered",
             JsonSerializer.Deserialize<McpMatrixArgument>(
                 "{\"name\":\"Label\",\"type\":\"nvarchar(20)\",\"values\":[\"a,b\",\"\",null,\"null\"]}"),
-            CancellationToken.None);
+                CancellationToken.None,
+                subject: "mapping-test",
+                optimizationScope: "whole");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var outcome = await scope.CreateModule().ExecuteAsync(operation, cts.Token);
         Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
@@ -974,7 +998,9 @@ public sealed class McpMappingTests : IDisposable
             null, null, 5, 30, "ordered",
             JsonSerializer.Deserialize<McpMatrixArgument>(
                 "{\"name\":\"Label\",\"type\":\"" + type + "\",\"values\":" + valuesJson + "}"),
-            CancellationToken.None);
+            CancellationToken.None,
+            subject: "mapping-test",
+            optimizationScope: "whole");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var outcome = await scope.CreateModule().ExecuteAsync(operation, cts.Token);
         Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
@@ -1114,7 +1140,9 @@ public sealed class McpMappingTests : IDisposable
             new McpSqlSourceArgument { Sql = "SELECT @n" },
             null, null, 5, 30, "ordered",
             new McpMatrixArgument { Name = "n", Type = "int", Values = ["1", SecretValue] },
-            CancellationToken.None);
+            CancellationToken.None,
+            subject: "mapping-test",
+            optimizationScope: "whole");
         var outcome = await scope.CreateModule().ExecuteAsync(
             operation, new CancellationTokenSource(TimeSpan.FromSeconds(30)).Token);
         Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);

@@ -14,6 +14,8 @@ using SqlHarness.Core;
 using SqlHarness.Core.Targets;
 using SqlHarness.Mcp.Tools;
 
+using Xunit.Abstractions;
+
 namespace SqlHarness.Mcp.Tests;
 
 /// <summary>
@@ -43,11 +45,13 @@ public sealed class McpToolSchemaTests : IDisposable
     ];
 
     private readonly string _home;
+    private readonly ITestOutputHelper _output;
     private readonly string? _savedHome;
     private readonly string _targetsFile;
 
-    public McpToolSchemaTests()
+    public McpToolSchemaTests(ITestOutputHelper output)
     {
+        _output = output;
         _savedHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
         _home = Path.Combine(Path.GetTempPath(), "sqlharness-mcp-t3-schema-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_home);
@@ -94,7 +98,11 @@ public sealed class McpToolSchemaTests : IDisposable
         public McpClient Client { get; private set; } = null!;
 
         public static async Task<ServedCatalog> CreateAsync(McpScope scope) => await CreateAsync(scope, scope.CreateModule());
+        public static async Task<ServedCatalog> CreateAsync(McpScope scope, CompareConfig compareConfig) =>
+            await CreateAsync(scope, scope.CreateModule(compareConfig), compareConfig);
         public static async Task<ServedCatalog> CreateAsync(McpScope scope, ISqlHarnessModule module)
+            => await CreateAsync(scope, module, SqlHarnessConfig.Default.Compare);
+        private static async Task<ServedCatalog> CreateAsync(McpScope scope, ISqlHarnessModule module, CompareConfig compareConfig)
         {
             var catalog = new ServedCatalog();
             var serverOptions = new ModelContextProtocol.Server.McpServerOptions
@@ -102,7 +110,7 @@ public sealed class McpToolSchemaTests : IDisposable
                 ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "t3-test" },
                 ProtocolVersion = McpHost.FallbackProtocolVersion,
             };
-            McpToolCatalog.Wire(serverOptions, scope, module);
+            McpToolCatalog.Wire(serverOptions, scope, module, compareConfig: compareConfig);
             var server = McpServer.Create(
                 new StreamServerTransport(
                     catalog._clientToServer.Reader.AsStream(),
@@ -159,6 +167,48 @@ public sealed class McpToolSchemaTests : IDisposable
             {
             }
 
+            _cts.Dispose();
+        }
+    }
+
+    private sealed class HostedCatalog : IAsyncDisposable
+    {
+        private readonly CancellationTokenSource _cts;
+        private readonly Pipe _clientToServer;
+        private readonly Pipe _serverToClient;
+        private readonly Task _serverTask;
+        public McpClient Client { get; }
+
+        private HostedCatalog(CancellationTokenSource cts, Pipe clientToServer, Pipe serverToClient, Task serverTask, McpClient client)
+        {
+            _cts = cts;
+            _clientToServer = clientToServer;
+            _serverToClient = serverToClient;
+            _serverTask = serverTask;
+            Client = client;
+        }
+
+        public static async Task<HostedCatalog> CreateAsync(McpScope scope)
+        {
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var clientToServer = new Pipe();
+            var serverToClient = new Pipe();
+            var options = new McpServerOptions { RequestScope = true, AllowedProfiles = [ProfileName] };
+            var log = new StringWriter();
+            var serverTask = McpHost.RunAsync(options, clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream(), log,
+                () => scope.Profiles, cts.Token);
+            var client = await McpClient.CreateAsync(
+                new StreamClientTransport(clientToServer.Writer.AsStream(), serverToClient.Reader.AsStream(), NullLoggerFactory.Instance),
+                new McpClientOptions { ClientInfo = new Implementation { Name = "compare-policy-test", Version = "1" }, ProtocolVersion = McpHost.FallbackProtocolVersion },
+                NullLoggerFactory.Instance, cts.Token);
+            return new HostedCatalog(cts, clientToServer, serverToClient, serverTask, client);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await Client.DisposeAsync();
+            await _cts.CancelAsync();
+            try { await _serverTask; } catch (OperationCanceledException) { }
             _cts.Dispose();
         }
     }
@@ -266,14 +316,18 @@ public sealed class McpToolSchemaTests : IDisposable
         var targetTools = new[] { "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot", "sqlharness_artifact" };
         foreach (var tool in targetTools)
         {
-            Assert.Contains("scope", Required(requestSchemas[tool]));
-            Assert.True(Properties(requestSchemas[tool]).TryGetProperty("scope", out var scopeSchema), requestSchemas[tool].GetRawText());
+            Assert.Contains("target", Required(requestSchemas[tool]));
+            Assert.True(Properties(requestSchemas[tool]).TryGetProperty("target", out var scopeSchema), requestSchemas[tool].GetRawText());
             Assert.True(scopeSchema.TryGetProperty("type", out var scopeType), requestSchemas[tool].GetRawText());
             Assert.Equal("object", scopeType.GetString());
             Assert.Equal(new[] { "profile", "vars" }, scopeSchema.GetProperty("required").EnumerateArray().Select(value => value.GetString()).Order(StringComparer.Ordinal));
             Assert.True(scopeSchema.GetProperty("properties").TryGetProperty("profile", out _));
             Assert.True(scopeSchema.GetProperty("properties").TryGetProperty("vars", out _));
         }
+        Assert.Contains("subject", Required(requestSchemas["sqlharness_compare"]));
+        Assert.Contains("scope", Required(requestSchemas["sqlharness_compare"]));
+        Assert.Equal("string", Properties(requestSchemas["sqlharness_compare"]).GetProperty("subject").GetProperty("type").GetString());
+        Assert.Equal("string", Properties(requestSchemas["sqlharness_compare"]).GetProperty("scope").GetProperty("type").GetString());
         foreach (var tool in new[] { "sqlharness_capabilities", "sqlharness_plan" })
             Assert.DoesNotContain("scope", Properties(requestSchemas[tool]).EnumerateObject().Select(property => property.Name));
         var rawNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -288,7 +342,164 @@ public sealed class McpToolSchemaTests : IDisposable
         var fixedSchemas = (await fixedServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None))
             .ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
         foreach (var tool in targetTools)
-            Assert.DoesNotContain("scope", Properties(fixedSchemas[tool]).EnumerateObject().Select(property => property.Name));
+            Assert.DoesNotContain("target", Properties(fixedSchemas[tool]).EnumerateObject().Select(property => property.Name));
+        Assert.Contains("subject", Required(fixedSchemas["sqlharness_compare"]));
+        Assert.Contains("scope", Required(fixedSchemas["sqlharness_compare"]));
+    }
+
+    [Fact]
+    public async Task Compare_policy_is_frozen_per_catalog_and_rejects_hidden_or_mistyped_fields()
+    {
+        var scope = Scope();
+        var onPolicy = new CompareConfig { RequireContext = true };
+        var offPolicy = new CompareConfig { RequireContext = false };
+        var onProcess = McpProcessContext.Create(new McpServerOptions { RequestScope = true, AllowedProfiles = [ProfileName] }, () => scope.Profiles, onPolicy);
+        var offProcess = McpProcessContext.Create(new McpServerOptions { RequestScope = true, AllowedProfiles = [ProfileName] }, () => scope.Profiles, offPolicy);
+        await using var onServed = await ServedCatalog.CreateAsync(onProcess);
+        await using var offServed = await ServedCatalog.CreateAsync(offProcess);
+        var onTools = await onServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
+        var offTools = await offServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
+        var onSchema = ServedSchema(Assert.Single(onTools, tool => tool.Name == "sqlharness_compare"));
+        var offSchema = ServedSchema(Assert.Single(offTools, tool => tool.Name == "sqlharness_compare"));
+
+        Assert.Contains("subject", Required(onSchema));
+        Assert.Contains("scope", Required(onSchema));
+        Assert.DoesNotContain("subject", Properties(offSchema).EnumerateObject().Select(property => property.Name));
+        Assert.DoesNotContain("scope", Properties(offSchema).EnumerateObject().Select(property => property.Name));
+        Assert.Same(onPolicy, onProcess.CompareConfig);
+        Assert.Same(offPolicy, offProcess.CompareConfig);
+        var onBytes = Encoding.UTF8.GetByteCount(onSchema.GetRawText());
+        var offBytes = Encoding.UTF8.GetByteCount(offSchema.GetRawText());
+        _output.WriteLine($"compare inputSchema UTF-8 bytes: on={onBytes}, off={offBytes}, delta={onBytes - offBytes}");
+        Assert.True(onBytes > offBytes);
+
+        await using var fixedOffServed = await ServedCatalog.CreateAsync(scope, offPolicy);
+        var fixedOffSchema = ServedSchema(Assert.Single(await fixedOffServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None), tool => tool.Name == "sqlharness_compare"));
+        Assert.DoesNotContain("subject", Properties(fixedOffSchema).EnumerateObject().Select(property => property.Name));
+        Assert.DoesNotContain("scope", Properties(fixedOffSchema).EnumerateObject().Select(property => property.Name));
+
+        var hidden = await offServed.Client.CallToolAsync("sqlharness_compare", new Dictionary<string, object?>
+        {
+            ["baseline"] = new { sql = "SELECT 1" },
+            ["candidate"] = new { sql = "SELECT 1" },
+            ["subject"] = "query",
+            ["scope"] = "whole",
+        }, cancellationToken: CancellationToken.None);
+        Assert.True(hidden.IsError == true);
+
+        var hiddenFixed = await fixedOffServed.Client.CallToolAsync("sqlharness_compare", new Dictionary<string, object?>
+        {
+            ["baseline"] = new { sql = "SELECT 1" },
+            ["candidate"] = new { sql = "SELECT 1" },
+            ["subject"] = "query",
+            ["scope"] = "whole",
+        }, cancellationToken: CancellationToken.None);
+        Assert.True(hiddenFixed.IsError == true);
+
+        var target = new { profile = ProfileName, vars = new Dictionary<string, string> { ["tenant"] = "frozen" } };
+        var validContext = await onServed.Client.CallToolAsync("sqlharness_compare", new Dictionary<string, object?>
+        {
+            ["target"] = target,
+            ["baseline"] = new { sql = "SELECT 1" },
+            ["candidate"] = new { sql = "SELECT 1" },
+            ["subject"] = "query",
+            ["scope"] = "whole",
+            ["dryRun"] = true,
+        }, cancellationToken: CancellationToken.None);
+        Assert.False(validContext.IsError == true, string.Concat(validContext.Content.OfType<TextContentBlock>().Select(block => block.Text)));
+
+        var oldScopeAlias = await offServed.Client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
+        {
+            ["scope"] = target,
+            ["dryRun"] = true,
+            ["sql"] = "SELECT 1",
+        }, cancellationToken: CancellationToken.None);
+        Assert.True(oldScopeAlias.IsError == true);
+
+        var targetFreeOptions = new Dictionary<string, Dictionary<string, object?>>
+        {
+            ["sqlharness_query"] = new() { ["sql"] = "SELECT 1", ["dryRun"] = true },
+            ["sqlharness_measure"] = new() { ["query"] = new { sql = "SELECT 1" }, ["dryRun"] = true },
+            ["sqlharness_watch"] = new() { ["sql"] = "SELECT 1" },
+            ["sqlharness_snapshot"] = new() { ["action"] = "capture", ["name"] = "sample", ["sql"] = "SELECT 1" },
+            ["sqlharness_artifact"] = new() { ["id"] = "absent", ["section"] = "summary" },
+        };
+        foreach (var (tool, arguments) in targetFreeOptions)
+        {
+            arguments["target"] = target;
+            arguments["scope"] = "whole";
+            var textScope = await offServed.Client.CallToolAsync(tool, arguments, cancellationToken: CancellationToken.None);
+            Assert.True(textScope.IsError == true, tool);
+        }
+
+        var legacyScopeArguments = new Dictionary<string, Dictionary<string, object?>>
+        {
+            ["sqlharness_capabilities"] = new(),
+            ["sqlharness_query"] = new() { ["sql"] = "SELECT 1", ["dryRun"] = true, ["target"] = target },
+            ["sqlharness_measure"] = new() { ["query"] = new { sql = "SELECT 1" }, ["dryRun"] = true, ["target"] = target },
+            ["sqlharness_compare"] = new() { ["baseline"] = new { sql = "SELECT 1" }, ["candidate"] = new { sql = "SELECT 1" }, ["target"] = target },
+            ["sqlharness_watch"] = new() { ["sql"] = "SELECT 1", ["target"] = target },
+            ["sqlharness_snapshot"] = new() { ["action"] = "capture", ["name"] = "sample", ["sql"] = "SELECT 1", ["target"] = target },
+            ["sqlharness_plan"] = new() { ["content"] = "<a/>" },
+            ["sqlharness_artifact"] = new() { ["id"] = "absent", ["section"] = "summary", ["target"] = target },
+        };
+        Assert.Equal(McpToolCatalog.ToolNames.Order(StringComparer.Ordinal), legacyScopeArguments.Keys.Order(StringComparer.Ordinal));
+        foreach (var (tool, arguments) in legacyScopeArguments)
+        {
+            arguments["scope"] = target;
+            var oldAlias = await offServed.Client.CallToolAsync(tool, arguments, cancellationToken: CancellationToken.None);
+            Assert.True(oldAlias.IsError == true, tool);
+        }
+
+        var missingContext = await onServed.Client.CallToolAsync("sqlharness_compare", new Dictionary<string, object?>
+        {
+            ["target"] = target,
+            ["baseline"] = new { sql = "SELECT 1" },
+            ["candidate"] = new { sql = "SELECT 1" },
+            ["subject"] = "query",
+            ["dryRun"] = true,
+        }, cancellationToken: CancellationToken.None);
+        Assert.True(missingContext.IsError == true);
+
+        var wrongScopeType = await onServed.Client.CallToolAsync("sqlharness_compare", new Dictionary<string, object?>
+        {
+            ["baseline"] = new { sql = "SELECT 1" },
+            ["candidate"] = new { sql = "SELECT 1" },
+            ["subject"] = "query",
+            ["scope"] = target,
+        }, cancellationToken: CancellationToken.None);
+        Assert.True(wrongScopeType.IsError == true);
+    }
+
+    [Fact]
+    public async Task Host_freezes_config_until_restart_and_reloads_it_for_a_new_stdio_process()
+    {
+        var scope = Scope();
+        var configPath = SqlHarnessPaths.ConfigFile;
+        SqlHarnessConfigWriter.Write(configPath, new SqlHarnessConfig { Compare = new CompareConfig { RequireContext = true } });
+        await using var firstHost = await HostedCatalog.CreateAsync(scope);
+        var firstSchema = ServedSchema(Assert.Single(await firstHost.Client.ListToolsAsync(cancellationToken: CancellationToken.None), tool => tool.Name == "sqlharness_compare"));
+        Assert.Contains("subject", Required(firstSchema));
+        Assert.Contains("scope", Required(firstSchema));
+
+        SqlHarnessConfigWriter.Write(configPath, new SqlHarnessConfig { Compare = new CompareConfig { RequireContext = false } });
+        var sameHostSchema = ServedSchema(Assert.Single(await firstHost.Client.ListToolsAsync(cancellationToken: CancellationToken.None), tool => tool.Name == "sqlharness_compare"));
+        Assert.Contains("subject", Required(sameHostSchema));
+        Assert.Contains("scope", Required(sameHostSchema));
+
+        await using var restartedHost = await HostedCatalog.CreateAsync(scope);
+        var restartedSchema = ServedSchema(Assert.Single(await restartedHost.Client.ListToolsAsync(cancellationToken: CancellationToken.None), tool => tool.Name == "sqlharness_compare"));
+        Assert.DoesNotContain("subject", Properties(restartedSchema).EnumerateObject().Select(property => property.Name));
+        Assert.DoesNotContain("scope", Properties(restartedSchema).EnumerateObject().Select(property => property.Name));
+
+        var result = await restartedHost.Client.CallToolAsync("sqlharness_compare", new Dictionary<string, object?>
+        {
+            ["target"] = new { profile = ProfileName, vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
+            ["baseline"] = new { sql = "SELECT 1" },
+            ["candidate"] = new { sql = "SELECT 1" },
+            ["dryRun"] = true,
+        }, cancellationToken: CancellationToken.None);
+        Assert.False(result.IsError == true, Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
     }
 
     [Fact]
@@ -317,7 +528,7 @@ public sealed class McpToolSchemaTests : IDisposable
         {
             ["dryRun"] = true,
             ["sql"] = "SELECT 1",
-            ["scope"] = new { profile = ProfileName, vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
+            ["target"] = new { profile = ProfileName, vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
         };
         var first = await served.Client.CallToolAsync("sqlharness_query", valid, cancellationToken: CancellationToken.None);
         Assert.False(first.IsError == true);
@@ -325,21 +536,21 @@ public sealed class McpToolSchemaTests : IDisposable
         {
             ["dryRun"] = true,
             ["sql"] = "SELECT 1",
-            ["scope"] = new { profile = "sample-b", vars = new Dictionary<string, string> { ["tenant"] = "b" } },
+            ["target"] = new { profile = "sample-b", vars = new Dictionary<string, string> { ["tenant"] = "b" } },
         }, cancellationToken: CancellationToken.None);
         Assert.False(second.IsError == true);
         var wrongB = await served.Client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
         {
             ["dryRun"] = true,
             ["sql"] = "SELECT 1",
-            ["scope"] = new { profile = "sample-b", vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
+            ["target"] = new { profile = "sample-b", vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
         }, cancellationToken: CancellationToken.None);
         Assert.Equal(2, ServedEnvelope(wrongB, "sqlharness_query").GetProperty("exitCode").GetInt32());
         var malformedScope = new Dictionary<string, object?>
         {
             ["dryRun"] = true,
             ["sql"] = "SELECT 1",
-            ["scope"] = new { profile = ProfileName, vars = new Dictionary<string, string> { ["tenant"] = "frozen" }, extra = "sentinel" },
+            ["target"] = new { profile = ProfileName, vars = new Dictionary<string, string> { ["tenant"] = "frozen" }, extra = "sentinel" },
         };
         var rejected = await served.Client.CallToolAsync("sqlharness_query", malformedScope, cancellationToken: CancellationToken.None);
         Assert.True(rejected.IsError == true);
@@ -639,7 +850,7 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Equal(5, Properties(measure).GetProperty("repeat").GetProperty("default").GetInt32());
 
         var compare = schemas["sqlharness_compare"];
-        Assert.Equal(["baseline", "candidate"], Required(compare).Order().ToArray());
+        Assert.Equal(["baseline", "candidate", "scope", "subject"], Required(compare).Order().ToArray());
         Assert.Equal(["ordered", "multiset", "set", "off"], EnumOf(compare, "compareResults"));
         Assert.Equal("ordered", Properties(compare).GetProperty("compareResults").GetProperty("default").GetString());
         Assert.Equal("boolean", Properties(compare).GetProperty("compareNullability").GetProperty("type").GetString());
@@ -763,7 +974,7 @@ public sealed class McpToolSchemaTests : IDisposable
         var result = await served.Client.CallToolAsync(
             "sqlharness_compare",
             (Dictionary<string, object?>)JsonSerializer.Deserialize(
-                "{\"baseline\":{\"sql\":\"SELECT @Label\"},\"candidate\":{\"sql\":\"SELECT @Label\"},"
+                "{\"baseline\":{\"sql\":\"SELECT @Label\"},\"candidate\":{\"sql\":\"SELECT @Label\"},\"subject\":\"query\",\"scope\":\"whole\","
                 + "\"parameters\":[{\"name\":\"label\",\"type\":\"int\",\"value\":\"7\"}],"
                 + "\"matrix\":{\"name\":\"Label\",\"type\":\"nvarchar(20)\",\"values\":[\"a,b\",\"\",null,\"null\"]}}",
                 typeof(Dictionary<string, object?>))!,
@@ -922,6 +1133,8 @@ public sealed class McpToolSchemaTests : IDisposable
             {
                 ["baseline"] = new Dictionary<string, object?> { ["sql"] = "SELECT 1" },
                 ["candidate"] = new Dictionary<string, object?> { ["sql"] = "SELECT 1" },
+                ["subject"] = "query",
+                ["scope"] = "whole",
             },
             cancellationToken: CancellationToken.None);
         Assert.True(partial.IsError == true);

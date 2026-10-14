@@ -5,6 +5,18 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@media (max-width: 639px) {
+    [data-slot="tabs-list"].compare-detail-tabs {
+        height: auto !important;
+        grid-auto-rows: minmax(1.5rem, auto);
+    }
+
+    [data-slot="tabs-list"].compare-detail-tabs [data-slot="tabs-trigger"] {
+        height: auto !important;
+        min-height: 1.5rem;
+    }
+}
+
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
