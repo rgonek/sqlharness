@@ -121,8 +121,9 @@ public sealed partial class DocsSyncTests
         Assert.Contains(baseline, skill, StringComparison.Ordinal);
         Assert.Contains("not actual token savings", skill, StringComparison.Ordinal);
         var journalSection = readme[(readme.IndexOf("### Activity journal", StringComparison.Ordinal))..];
-        Assert.Contains("`indexes`, `artifact`, `plan`; CLI or MCP", journalSection, StringComparison.Ordinal);
-        Assert.Contains("Not recorded: `validate`, `doctor`, `capabilities`, `--help`", journalSection, StringComparison.Ordinal);
+        Assert.Contains("`snapshot`, `artifact`, `plan`; CLI or MCP", journalSection, StringComparison.Ordinal);
+        Assert.Contains("Not recorded: `doctor`, `capabilities`, `--help`", journalSection, StringComparison.Ordinal);
+        Assert.Contains("Rows of removed commands (`ping`, `schema`, `counts`, `space`, `qstop`, `indexes`) stay readable in the dashboard.", journalSection, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -144,13 +145,13 @@ public sealed partial class DocsSyncTests
         var failures = await CheckExamplesAsync(ExtractExamples(bad));
         Assert.Single(failures);
 
-        var badDispatching = $"{Marker}\n```powershell\nsqlharness ping prod-eu --no-such-option --json\n```\n";
+        var badDispatching = $"{Marker}\n```powershell\nsqlharness measure prod-eu --no-such-option --json\n```\n";
         Assert.Single(await CheckExamplesAsync(ExtractExamples(badDispatching)));
 
         var badServer = $"{Marker}\n```\nsqlharness mcp serve --no-such-option\n```\n";
         Assert.Single(await CheckExamplesAsync(ExtractExamples(badServer)));
 
-        var good = $"{Marker}\n```powershell\nsqlharness capabilities --json\nsqlharness query <profile> --var a=b `\n  --file .\\q.sql --param id:int=1 --json\nsqlharness ping prod-eu --var a=b --json\n```\n";
+        var good = $"{Marker}\n```powershell\nsqlharness capabilities --json\nsqlharness query <profile> --var a=b `\n  --file .\\q.sql --param id:int=1 --json\nsqlharness measure prod-eu --var a=b --json\n```\n";
         Assert.Empty(await CheckExamplesAsync(ExtractExamples(good)));
 
         var untagged = "```\nsqlharness query --no-such-option\n```\n";

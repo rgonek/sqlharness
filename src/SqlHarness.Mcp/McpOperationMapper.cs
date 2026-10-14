@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 using SqlHarness.Core;
@@ -10,30 +11,29 @@ namespace SqlHarness.Mcp;
 /// <summary>Safe mapping failure: constant text, never parameter values or SQL.</summary>
 public sealed class McpMappingException(string message) : Exception(message);
 
+/// <summary>Enforced process ceilings reported by capabilities.</summary>
+public sealed record McpProcessLimits(int MaxResultBytes, int MaxOperationSeconds);
+
 /// <summary>
-/// Capabilities document for the capabilities tool: versions, scope engine,
-/// tools, limits, the static-analysis boundary, and one page of the enforced
-/// input roots. <see cref="InputRoots"/> holds the normalized roots of this
-/// page in configured order; <see cref="InputRootCount"/> is the total;
+/// Runtime configuration for the capabilities tool. <see cref="ConfigurationRef"/>
+/// is random per process and identifies this frozen configuration; it is not
+/// authorization. <see cref="AllowedProfiles"/> exists only in request scope
+/// (fixed scope omits it). <see cref="InputRoots"/> holds the normalized roots
+/// of this page in configured order; <see cref="InputRootCount"/> is the total;
 /// <see cref="InputRootsComplete"/> is true only when this single response
 /// carries the whole inventory; <see cref="InputRootsNextCursor"/> is the
 /// next page offset (null at the end); <see cref="InputRootsOmitted"/> counts
 /// roots on this page's range that cannot fit any page within the budget.
 /// </summary>
 public sealed record McpCapabilitiesDocument(
-    string Server,
-    string ServerVersion,
-    string ProtocolVersion,
-    string Engine,
-    IReadOnlyList<string> Tools,
-    IReadOnlyDictionary<string, long> Limits,
-    bool QueryStoreAvailable,
-    bool IndexesAvailable,
-    IReadOnlyDictionary<string, string>? Diagnostics,
-    SqlHarnessSafetyAnalysis SafetyAnalysis,
-    string ScopeMode = "fixed",
+    string ConfigurationRef,
+    string ScopeMode,
+    IReadOnlyList<string> Engines,
+    McpProcessLimits ProcessLimits,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     IReadOnlyList<string>? AllowedProfiles = null,
-    IReadOnlyList<string>? SupportedProtocolVersions = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyDictionary<string, string>? Diagnostics = null,
     IReadOnlyList<string>? InputRoots = null,
     int InputRootCount = 0,
     bool InputRootsComplete = true,
@@ -89,17 +89,13 @@ public static partial class McpPlanTextPolicy
 /// composes shell commands or SQL text: SQL travels verbatim from the caller
 /// into Core operations, parameters and matrix values travel as the typed
 /// Core parameter model (never joined into or split from text), and
-/// every safety check stays inside Core (SqlValidation, dialect classifiers,
+/// every safety check stays inside Core (the dialect classifiers,
 /// the parameter binder, and module bounds). There is no second SQL
 /// validator here; argument faults below are contract checks with constant
 /// messages, and Core re-validates every bound at execution.
 /// </summary>
 public static partial class McpOperationMapper
 {
-    private static readonly HashSet<string> InspectKinds = new(StringComparer.OrdinalIgnoreCase)
-        { "ping", "schema", "counts", "space", "qstop", "indexes" };
-    private static readonly HashSet<string> ValidateUsages = new(StringComparer.OrdinalIgnoreCase)
-        { "query", "setup", "benchmark" };
     private static readonly HashSet<string> CompareResultModes = new(StringComparer.OrdinalIgnoreCase)
         { "ordered", "multiset", "set", "off" };
     private static readonly HashSet<string> SnapshotActions = new(StringComparer.OrdinalIgnoreCase)
@@ -114,7 +110,7 @@ public static partial class McpOperationMapper
     private const int DefaultQueryMaxRows = 50;
     private const int DefaultRepeat = 5;
 
-    public static McpCapabilitiesDocument BuildCapabilities(McpScope scope, bool includeDiagnostics, string? protocolVersion = null, int inputRootCursor = 0)
+    public static McpCapabilitiesDocument BuildCapabilities(McpScope scope, bool includeDiagnostics, int inputRootCursor = 0)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ThrowIfInvalidInputRootCursor(scope.InputRoots, inputRootCursor);
@@ -124,84 +120,29 @@ public static partial class McpOperationMapper
             SqlEngine.Postgres => "postgres",
             _ => throw new McpMappingException("The scoped engine is not supported."),
         };
-        var pg = string.Equals(engine, "postgres", StringComparison.Ordinal);
         var document = new McpCapabilitiesDocument(
-            McpHost.ServerName,
-            McpHost.ServerVersion,
-            protocolVersion ?? McpHost.FallbackProtocolVersion,
-            engine,
-            McpToolCatalog.ToolNames,
-            new Dictionary<string, long>(StringComparer.Ordinal)
-            {
-                ["maxSqlBytes"] = McpLimits.MaxSqlBytes,
-                ["maxPlanBytes"] = McpLimits.MaxPlanBytes,
-                ["maxParameterSetBytes"] = McpLimits.MaxParameterSetBytes,
-                ["maxInlineBytes"] = McpLimits.MaxInlineBytes,
-                ["maxTools"] = McpLimits.MaxTools,
-                ["toolsListBudgetBytes"] = McpLimits.ToolsListBudgetBytes,
-                ["maxTimeoutSeconds"] = OperationLimits.QueryTimeoutSecondsMax,
-                ["maxRepeat"] = OperationLimits.RepeatMax,
-                ["maxTop"] = OperationLimits.TopMax,
-                ["maxRows"] = OperationLimits.MaxRowsMax,
-                ["defaultResultBytes"] = McpLimits.DefaultCallToolResultBudgetBytes,
-                ["maxResultBytes"] = scope.MaxResultBytes,
-                ["maxOperationSeconds"] = scope.MaxOperationSeconds,
-            },
-            QueryStoreAvailable: !pg,
-            IndexesAvailable: !pg,
-            includeDiagnostics ? LocalDiagnostics(scope) : null,
-            new SqlHarnessSafetyAnalysis(
-                SqlSafetyAnalysis.AnalysisKind,
-                SqlSafetyAnalysis.ContractVersion,
-                SqlSafetyAnalysis.HiddenEffectsVerified,
-                SqlSafetyAnalysis.ObjectAndPermissionStatus),
-            SupportedProtocolVersions: McpHost.SupportedProtocolVersions);
+            scope.ConfigurationRef,
+            "fixed",
+            [engine],
+            new McpProcessLimits(scope.MaxResultBytes, scope.MaxOperationSeconds),
+            Diagnostics: includeDiagnostics ? LocalDiagnostics(scope.InputRoots) : null);
         return WithInputRootPage(document, scope.InputRoots, inputRootCursor, scope.MaxResultBytes);
     }
 
-    public static McpCapabilitiesDocument BuildCapabilities(McpProcessContext context, bool includeDiagnostics, string? protocolVersion = null, int inputRootCursor = 0)
+    public static McpCapabilitiesDocument BuildCapabilities(McpProcessContext context, bool includeDiagnostics, int inputRootCursor = 0)
     {
         ArgumentNullException.ThrowIfNull(context);
         if (!context.RequestScope)
-            return BuildCapabilities(context.FixedScope!, includeDiagnostics, protocolVersion, inputRootCursor);
+            return BuildCapabilities(context.FixedScope!, includeDiagnostics, inputRootCursor);
         ThrowIfInvalidInputRootCursor(context.InputRoots, inputRootCursor);
 
-        var diagnostics = includeDiagnostics
-            ? LocalDiagnostics(context.InputRoots)
-            : null;
         var document = new McpCapabilitiesDocument(
-            McpHost.ServerName,
-            McpHost.ServerVersion,
-            protocolVersion ?? McpHost.FallbackProtocolVersion,
-            "sqlserver",
-            McpToolCatalog.ToolNames,
-            new Dictionary<string, long>(StringComparer.Ordinal)
-            {
-                ["maxSqlBytes"] = McpLimits.MaxSqlBytes,
-                ["maxPlanBytes"] = McpLimits.MaxPlanBytes,
-                ["maxParameterSetBytes"] = McpLimits.MaxParameterSetBytes,
-                ["maxInlineBytes"] = McpLimits.MaxInlineBytes,
-                ["maxTools"] = McpLimits.MaxTools,
-                ["toolsListBudgetBytes"] = McpLimits.ToolsListBudgetBytes,
-                ["maxTimeoutSeconds"] = OperationLimits.QueryTimeoutSecondsMax,
-                ["maxRepeat"] = OperationLimits.RepeatMax,
-                ["maxTop"] = OperationLimits.TopMax,
-                ["maxRows"] = OperationLimits.MaxRowsMax,
-                ["defaultResultBytes"] = McpLimits.DefaultCallToolResultBudgetBytes,
-                ["maxResultBytes"] = context.MaxResultBytes,
-                ["maxOperationSeconds"] = context.MaxOperationSeconds,
-            },
-            QueryStoreAvailable: true,
-            IndexesAvailable: true,
-            diagnostics,
-            new SqlHarnessSafetyAnalysis(
-                SqlSafetyAnalysis.AnalysisKind,
-                SqlSafetyAnalysis.ContractVersion,
-                SqlSafetyAnalysis.HiddenEffectsVerified,
-                SqlSafetyAnalysis.ObjectAndPermissionStatus),
-            ScopeMode: "request",
-            AllowedProfiles: context.AllowedProfiles,
-            SupportedProtocolVersions: McpHost.SupportedProtocolVersions);
+            context.ConfigurationRef,
+            "request",
+            ["sqlserver"],
+            new McpProcessLimits(context.MaxResultBytes, context.MaxOperationSeconds),
+            context.AllowedProfiles,
+            includeDiagnostics ? LocalDiagnostics(context.InputRoots) : null);
         return WithInputRootPage(document, context.InputRoots, inputRootCursor, context.MaxResultBytes);
     }
 
@@ -266,39 +207,11 @@ public static partial class McpOperationMapper
         }
     }
 
-    private static IReadOnlyDictionary<string, string> LocalDiagnostics(McpScope scope)
-    {
-        // Local counts and existence flags only; never secrets.
-        var diagnostics = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["inputRootCount"] = scope.InputRoots.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["tools"] = McpToolCatalog.ToolNames.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        };
-        foreach (var (key, directory) in new (string, string)[]
-        {
-            ("compareDirExists", SqlHarnessPaths.CompareDir),
-            ("snapshotsDirExists", SqlHarnessPaths.SnapshotsDir),
-        })
-        {
-            try
-            {
-                diagnostics[key] = Directory.Exists(directory) ? "true" : "false";
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-            {
-                diagnostics[key] = "unknown";
-            }
-        }
-
-        return diagnostics;
-    }
-
     private static IReadOnlyDictionary<string, string> LocalDiagnostics(IReadOnlyList<string> inputRoots)
     {
         var diagnostics = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["inputRootCount"] = inputRoots.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["tools"] = McpToolCatalog.ToolNames.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
         };
         foreach (var (key, directory) in new (string, string)[]
         {
@@ -307,168 +220,6 @@ public static partial class McpOperationMapper
         })
             diagnostics[key] = Directory.Exists(directory) ? "true" : "false";
         return diagnostics;
-    }
-
-    public static SqlHarnessOperation MapInspect(
-        McpScope scope,
-        string? kind,
-        string? @object,
-        string? filter,
-        IReadOnlyList<string>? tables,
-        string? like,
-        int? top,
-        bool exact,
-        string? window,
-        int? timeout)
-    {
-        ArgumentNullException.ThrowIfNull(scope);
-        if (kind is null || !InspectKinds.Contains(kind))
-            throw new McpMappingException("Unknown inspect kind. Supported kinds: ping, schema, counts, space, qstop, indexes.");
-        var normalized = kind.ToLowerInvariant();
-        var tableList = tables ?? [];
-        if (normalized == "qstop" || normalized == "indexes")
-            ThrowIfPostgres(scope, normalized);
-        return normalized switch
-        {
-            "ping" => MapPingInspect(scope, @object, filter, tableList, like, top, exact, window, timeout),
-            "schema" => MapSchemaInspect(scope, @object, filter, tableList, like, top, exact, window, timeout),
-            "counts" => MapCountsInspect(scope, @object, filter, tableList, like, top, exact, window, timeout),
-            "space" => MapSpaceInspect(scope, @object, filter, tableList, like, top, exact, window, timeout),
-            "qstop" => MapQueryStoreInspect(scope, @object, filter, tableList, like, top, exact, window, timeout),
-            _ => MapIndexesInspect(scope, @object, filter, tableList, like, top, exact, window, timeout),
-        };
-    }
-
-    private static void RejectMisplaced(
-        string kind, string? @object, string? filter, IReadOnlyList<string> tables,
-        string? like, int? top, bool exact, string? window,
-        bool allowObject, bool allowFilter, bool allowTables, bool allowLike,
-        bool allowTop, bool allowExact, bool allowWindow)
-    {
-        if (!allowObject && !string.IsNullOrWhiteSpace(@object))
-            throw new McpMappingException($"The object argument does not apply to inspect kind '{kind}'.");
-        if (!allowFilter && !string.IsNullOrWhiteSpace(filter))
-            throw new McpMappingException($"The filter argument does not apply to inspect kind '{kind}'.");
-        if (!allowTables && tables.Count > 0)
-            throw new McpMappingException($"The tables argument does not apply to inspect kind '{kind}'.");
-        if (!allowLike && !string.IsNullOrWhiteSpace(like))
-            throw new McpMappingException($"The like argument does not apply to inspect kind '{kind}'.");
-        if (!allowTop && top is not null)
-            throw new McpMappingException($"The top argument does not apply to inspect kind '{kind}'.");
-        if (!allowExact && exact)
-            throw new McpMappingException($"The exact argument does not apply to inspect kind '{kind}'.");
-        if (!allowWindow && !string.IsNullOrWhiteSpace(window))
-            throw new McpMappingException($"The window argument does not apply to inspect kind '{kind}'.");
-    }
-
-    private static SqlHarnessOperation MapPingInspect(
-        McpScope scope, string? @object, string? filter, IReadOnlyList<string> tables,
-        string? like, int? top, bool exact, string? window, int? timeout)
-    {
-        RejectMisplaced("ping", @object, filter, tables, like, top, exact, window,
-            allowObject: false, allowFilter: false, allowTables: false, allowLike: false,
-            allowTop: false, allowExact: false, allowWindow: false);
-        return new SqlHarnessPingOperation(scope.TargetRequest, timeout ?? 5);
-    }
-
-    private static SqlHarnessOperation MapSchemaInspect(
-        McpScope scope, string? @object, string? filter, IReadOnlyList<string> tables,
-        string? like, int? top, bool exact, string? window, int? timeout)
-    {
-        RejectMisplaced("schema", @object, filter, tables, like, top, exact, window,
-            allowObject: true, allowFilter: true, allowTables: false, allowLike: false,
-            allowTop: true, allowExact: false, allowWindow: false);
-        if (!string.IsNullOrWhiteSpace(@object) && !string.IsNullOrWhiteSpace(filter))
-            throw new McpMappingException("The object and filter arguments cannot be combined.");
-        return new SqlHarnessSchemaOperation(
-            scope.TargetRequest, filter, RequireTimeout(timeout), top is null ? 50 : RequireTop(top.Value), @object);
-    }
-
-    private static SqlHarnessOperation MapCountsInspect(
-        McpScope scope, string? @object, string? filter, IReadOnlyList<string> tables,
-        string? like, int? top, bool exact, string? window, int? timeout)
-    {
-        RejectMisplaced("counts", @object, filter, tables, like, top, exact, window,
-            allowObject: false, allowFilter: false, allowTables: true, allowLike: true,
-            allowTop: true, allowExact: true, allowWindow: false);
-        if (tables.Count > 0 && !string.IsNullOrWhiteSpace(like))
-            throw new McpMappingException("The tables and like arguments cannot be combined.");
-        return new SqlHarnessCountsOperation(
-            scope.TargetRequest, tables, like, top is null ? 50 : RequireTop(top.Value), exact, RequireTimeout(timeout));
-    }
-
-    private static SqlHarnessOperation MapSpaceInspect(
-        McpScope scope, string? @object, string? filter, IReadOnlyList<string> tables,
-        string? like, int? top, bool exact, string? window, int? timeout)
-    {
-        RejectMisplaced("space", @object, filter, tables, like, top, exact, window,
-            allowObject: true, allowFilter: false, allowTables: false, allowLike: false,
-            allowTop: true, allowExact: false, allowWindow: false);
-        RequireSpaceObject(@object);
-        return new SqlHarnessSpaceOperation(
-            scope.TargetRequest, top is null ? 25 : RequireTop(top.Value), @object, RequireTimeout(timeout));
-    }
-
-    private static SqlHarnessOperation MapQueryStoreInspect(
-        McpScope scope, string? @object, string? filter, IReadOnlyList<string> tables,
-        string? like, int? top, bool exact, string? window, int? timeout)
-    {
-        RejectMisplaced("qstop", @object, filter, tables, like, top, exact, window,
-            allowObject: false, allowFilter: false, allowTables: false, allowLike: false,
-            allowTop: true, allowExact: false, allowWindow: true);
-        return new SqlHarnessQueryStoreTopOperation(
-            scope.TargetRequest, top is null ? 20 : RequireTop(top.Value),
-            ParseQueryStoreWindow(string.IsNullOrWhiteSpace(window) ? "24h" : window),
-            RequireTimeout(timeout));
-    }
-
-    private static SqlHarnessOperation MapIndexesInspect(
-        McpScope scope, string? @object, string? filter, IReadOnlyList<string> tables,
-        string? like, int? top, bool exact, string? window, int? timeout)
-    {
-        RejectMisplaced("indexes", @object, filter, tables, like, top, exact, window,
-            allowObject: true, allowFilter: false, allowTables: false, allowLike: false,
-            allowTop: true, allowExact: false, allowWindow: false);
-        if (!IndexObjectSyntax.TryParse(@object, out _, out _, out var objectError))
-            throw new McpMappingException(objectError);
-        return new SqlHarnessIndexesOperation(
-            scope.TargetRequest, top is null ? 20 : RequireTop(top.Value), @object, RequireTimeout(timeout));
-    }
-
-    private static void ThrowIfPostgres(McpScope scope, string kind)
-    {
-        if (scope.ResolvedTarget.Engine == SqlEngine.Postgres)
-            throw new McpMappingException($"The '{kind}' inspect kind is available only on SQL Server.");
-    }
-
-    public static async Task<SqlValidationReport> MapValidateAsync(
-        McpScope scope,
-        string? sql,
-        string? file,
-        string? usage,
-        IReadOnlyList<McpParameterArgument>? parameters,
-        CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(scope);
-        if (usage is null || !ValidateUsages.Contains(usage))
-            throw new McpMappingException("Unknown validate usage. Supported usages: query, setup, benchmark.");
-        // One Core offline classifier serves every usage: the already-validated
-        // usage string selects the caller intent (query/setup/benchmark) in the
-        // shared model, so no second validator exists here. The validate tool
-        // has no setup-SQL input, so query and benchmark pass no setup context:
-        // a setup-dependent batch validates under engine query rules here,
-        // the same as execution without setup.
-        var sqlText = await McpInputReader.ReadSqlAsync(sql, file, scope, ct);
-        var options = new ValidationOptions(usage!.ToLowerInvariant() switch
-        {
-            "setup" => ValidationUsage.Setup,
-            "benchmark" => ValidationUsage.Benchmark,
-            _ => ValidationUsage.Query,
-        })
-        {
-            TypedParameters = MapParameters(parameters),
-        };
-        return SqlValidation.Validate(scope.TargetRequest, sqlText, [], scope.Profiles, options);
     }
 
     public static Task<SqlHarnessQueryOperation> MapQueryAsync(
@@ -793,43 +544,6 @@ public static partial class McpOperationMapper
         OperationLimits.IsMaxRows(maxRows)
             ? maxRows
             : throw new McpMappingException("Maximum displayed rows must be between 0 and 500.");
-
-    private static int RequireTop(int top) =>
-        // Range lives in Core; the MCP message stays here.
-        OperationLimits.IsTop(top)
-            ? top
-            : throw new McpMappingException("The top limit must be between 1 and 500.");
-
-    private static void RequireSpaceObject(string? @object)
-    {
-        if (@object is null)
-            return;
-        if (string.IsNullOrWhiteSpace(@object))
-            throw new McpMappingException("The inspect object must be a single object name or schema.name.");
-        var firstDot = @object.IndexOf('.');
-        if (firstDot >= 0)
-        {
-            var lastDot = @object.LastIndexOf('.');
-            if (firstDot != lastDot || firstDot == 0 || firstDot == @object.Length - 1)
-                throw new McpMappingException("The inspect object must be a single object name or schema.name.");
-        }
-    }
-
-    internal static int ParseQueryStoreWindow(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            throw new McpMappingException("The inspect window must be a positive integer with an m, h, or d suffix, totaling 1..44640 minutes.");
-        var trimmed = text.Trim();
-        var unit = trimmed[^1];
-        if (unit is not ('m' or 'h' or 'd') && unit is not ('M' or 'H' or 'D'))
-            throw new McpMappingException("The inspect window must be a positive integer with an m, h, or d suffix, totaling 1..44640 minutes.");
-        if (!long.TryParse(trimmed[..^1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var magnitude) || magnitude <= 0)
-            throw new McpMappingException("The inspect window must be a positive integer with an m, h, or d suffix, totaling 1..44640 minutes.");
-        // Case folding stays here; the pure conversion and 1..44640 range live in Core.
-        if (!OperationLimits.TryConvertQueryStoreWindow(magnitude, char.ToLowerInvariant(unit), out var minutes))
-            throw new McpMappingException("The inspect window must be a positive integer with an m, h, or d suffix, totaling 1..44640 minutes.");
-        return minutes;
-    }
 
     internal static TimeSpan ParseWatchDuration(string? text, TimeSpan @default, string label)
     {

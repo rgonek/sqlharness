@@ -6,7 +6,7 @@
 
 ## Status
 
-- Status: DONE (`verify.ps1` → `verify: OK` and `verify-linux.ps1` → `verify-linux: OK` at `f3f7dd2`; the controller re-runs both gates after the final fix wave)
+- Status: DONE (`verify.ps1` → `verify: OK` and `verify-linux.ps1` → `verify-linux: OK` at `f3f7dd2`; both re-run after the final fix wave, `verify: OK` at `13e87ad`)
 - Priority: P2 (PostgreSQL queue)
 - Effort: M
 - Risk: MED

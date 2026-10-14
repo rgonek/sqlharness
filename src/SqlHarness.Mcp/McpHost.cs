@@ -116,8 +116,7 @@ public static class McpHost
         }
 
         // Composition reads only the frozen profile snapshot and opens no
-        // database connection. The process context owns one gate for every
-        // request scope.
+        // database connection.
 
         var loggerFactory = new McpStderrLoggerFactory(log, knownSecrets);
         var clientIdentity = new McpClientIdentity();

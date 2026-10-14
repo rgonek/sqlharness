@@ -103,24 +103,6 @@ public static class AgentOutputProjection
                         omissions += clippedItems;
                         return queryProjection;
                     }
-                case SqlHarnessCountsReport counts:
-                    var tables = Take(counts.Tables).Select(table => table with { Schema = Clip(table.Schema)!, Name = Clip(table.Name)! }).ToArray();
-                    omissions += clippedItems;
-                    return new { counts.Target, tables, omitted = counts.Omitted + omissions };
-                case SqlHarnessSchemaReport schema:
-                    var selectedObjects = Take(schema.Objects);
-                    var omittedObjects = schema.OmittedObjects + schema.Objects.Count - selectedObjects.Count;
-                    var objects = selectedObjects.Select(value => new
-                    {
-                        schema = Clip(value.Schema),
-                        name = Clip(value.Name),
-                        kind = Clip(value.Kind),
-                        columns = Take(value.Columns).Select(column => column with { Name = Clip(column.Name)!, Type = Clip(column.Type)! }).ToArray(),
-                        indexes = Take(value.Indexes).Select(i => new { name = Clip(i.Name), i.Unique, keys = Take(i.Keys).Select(Clip), includes = Take(i.Includes).Select(Clip), filter = Clip(i.Filter) }).ToArray(),
-                        foreignKeys = Take(value.ForeignKeys).Select(fk => fk with { Name = Clip(fk.Name)!, Columns = Clip(fk.Columns)!, ReferencedTable = Clip(fk.ReferencedTable)!, ReferencedColumns = Clip(fk.ReferencedColumns)! }).ToArray(),
-                    }).ToArray();
-                    omissions += clippedItems;
-                    return new { schema.Target, objects, omittedObjects, omittedItems = omissions };
                 case SqlHarnessMeasureSetReport setReport:
                     var selectedSets = Take(setReport.Sets).Select(set => new MeasureParameterSetSummary(
                         Clip(set.Name)!, set.Parameters, set.ValueHash, set.ResultsStable,
@@ -237,16 +219,6 @@ public static class AgentOutputProjection
                     omissions += planProjection.OmittedItems;
                     omissions += clippedItems;
                     return planProjection.Report;
-                case SqlHarnessPingReport ping:
-                    var pingProjection = ping with { Server = Clip(ping.Server)!, Database = Clip(ping.Database)!, Login = Clip(ping.Login)! };
-                    omissions += clippedItems;
-                    return pingProjection;
-                case SqlHarnessSpaceReport space:
-                    var files = Take(space.Files).Select(file => file with { LogicalName = Clip(file.LogicalName)!, Type = Clip(file.Type)!, PhysicalName = Clip(file.PhysicalName) }).ToArray();
-                    var spaceTables = Take(space.Tables).Select(table => table with { Schema = Clip(table.Schema)!, Name = Clip(table.Name)! }).ToArray();
-                    var indexes = Take(space.Indexes).Select(index => index with { Schema = Clip(index.Schema)!, Table = Clip(index.Table)!, Index = Clip(index.Index)!, Type = Clip(index.Type)!, Compression = Clip(index.Compression) }).ToArray();
-                    omissions += clippedItems;
-                    return new SqlHarnessSpaceReport(space.Target, files, space.Allocation, spaceTables, indexes);
                 case SqlHarnessWatchReport watch:
                     var polls = Take(watch.EmittedPolls).Select(poll => new SqlHarnessWatchPoll(poll.Poll, poll.ElapsedMilliseconds, poll.ResultHash, ProjectResultSets(poll.ResultSets))).ToArray();
                     omissions += clippedItems;
@@ -256,27 +228,6 @@ public static class AgentOutputProjection
                     var differences = Take(snapshot.Differences);
                     omissions += clippedItems;
                     return snapshot with { Name = snapshotName, Differences = differences };
-                case SqlHarnessQueryStoreTopReport queryStore:
-                    var queryItems = Take(queryStore.Queries).Select(item => item with { ObjectName = Clip(item.ObjectName) }).ToArray();
-                    var queryArtifacts = Clip(queryStore.ArtifactDirectory);
-                    omissions += clippedItems;
-                    return queryStore with { Queries = queryItems, ArtifactDirectory = queryArtifacts };
-                case SqlHarnessIndexesReport indexesReport:
-                    var candidates = Take(indexesReport.Candidates).Select(candidate => candidate with
-                    {
-                        Schema = Clip(candidate.Schema)!,
-                        Table = Clip(candidate.Table)!,
-                        EqualityColumns = Take(candidate.EqualityColumns).Select(value => Clip(value)!).ToArray(),
-                        InequalityColumns = Take(candidate.InequalityColumns).Select(value => Clip(value)!).ToArray(),
-                        IncludeColumns = Take(candidate.IncludeColumns).Select(value => Clip(value)!).ToArray(),
-                        BestExistingIndex = Clip(candidate.BestExistingIndex),
-                        MissingIncludeColumns = Take(candidate.MissingIncludeColumns).Select(value => Clip(value)!).ToArray(),
-                    }).ToArray();
-                    var indexWarnings = Take(indexesReport.Warnings).Select(value => Clip(value)!).ToArray();
-                    var indexArtifact = Clip(indexesReport.ArtifactDirectory);
-                    var objectFilter = Clip(indexesReport.ObjectFilter);
-                    omissions += clippedItems;
-                    return indexesReport with { Candidates = candidates, Warnings = indexWarnings, ArtifactDirectory = indexArtifact, ObjectFilter = objectFilter };
                 case ArtifactMetricsSection metrics:
                     {
                         var variants = Take(metrics.Variants).Select(variant => variant with

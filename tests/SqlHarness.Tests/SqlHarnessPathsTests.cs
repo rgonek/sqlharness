@@ -44,7 +44,6 @@ public class SqlHarnessPathsTests
                 Assert.Equal(Path.Combine(expectedHome, "targets.json"), SqlHarnessPaths.TargetsFile);
                 Assert.Equal(Path.Combine(expectedHome, "compare"), SqlHarnessPaths.CompareDir);
                 Assert.Equal(Path.Combine(expectedHome, "snapshots"), SqlHarnessPaths.SnapshotsDir);
-                Assert.Equal(Path.Combine(expectedHome, "query-store"), SqlHarnessPaths.QueryStoreDir);
             }
             finally
             {
@@ -68,7 +67,6 @@ public class SqlHarnessPathsTests
                 Assert.Equal(Path.Combine(home, "targets.json"), SqlHarnessPaths.TargetsFile);
                 Assert.Equal(Path.Combine(home, "compare"), SqlHarnessPaths.CompareDir);
                 Assert.Equal(Path.Combine(home, "snapshots"), SqlHarnessPaths.SnapshotsDir);
-                Assert.Equal(Path.Combine(home, "query-store"), SqlHarnessPaths.QueryStoreDir);
             }
             finally
             {

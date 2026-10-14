@@ -23,37 +23,14 @@ public sealed class McpRequestToolHandlers(
     private readonly Func<McpScope, ISqlHarnessModule> _moduleFactory = moduleFactory ?? (scope => process.Decorate(scope.CreateModule()));
 
     public Task<CallToolResult> CapabilitiesAsync(RequestContext<CallToolRequestParams> ctx,
-        [Description("Include local counts and existence flags. Never secrets.")] bool includeDiagnostics = false,
-        [Description("Zero-based offset 0..inputRootCount into the configured input roots; default 0. Follow inputRootsNextCursor until it is null; inputRootsComplete is true only when one response holds every root.")] int inputRootCursor = 0,
+        [Description(McpToolCatalog.IncludeDiagnosticsDescription)] bool includeDiagnostics = false,
+        [Description(McpToolCatalog.InputRootCursorDescription)] int inputRootCursor = 0,
         CancellationToken ct = default) => TargetFreeAsync("sqlharness_capabilities", ctx, ct, token =>
     {
         ThrowUnknown(ctx, ["includeDiagnostics", "inputRootCursor"]);
         return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success,
-            McpOperationMapper.BuildCapabilities(process, includeDiagnostics, ctx?.Server?.NegotiatedProtocolVersion, inputRootCursor), null));
+            McpOperationMapper.BuildCapabilities(process, includeDiagnostics, inputRootCursor), null));
     });
-
-    public Task<CallToolResult> InspectAsync(RequestContext<CallToolRequestParams> ctx,
-        [Description("Catalog inspection to run.")][AllowedValues("ping", "schema", "counts", "space", "qstop", "indexes")] string kind,
-        [Description("Request target scope.")] McpRequestScopeArgument scope,
-        [Description("Single object name or schema.name, where applicable.")] string? @object = null,
-        [Description("Schema filter pattern; schema only, exclusive with object.")] string? filter = null,
-        [Description("Table names; counts only, exclusive with like.")] string[]? tables = null,
-        [Description("Table name pattern; counts only, exclusive with tables.")] string? like = null,
-        [Description("Row cap 1..500; not for ping.")] int? top = null,
-        [Description("Exact COUNT_BIG(*) instead of estimates; counts only.")] bool exact = false,
-        [Description("Lookback like 24h; qstop only.")] string? window = null,
-        [Description("SQL timeout 1..300 seconds.")] int? timeout = null,
-        CancellationToken ct = default) =>
-        Invoke(ctx, "sqlharness_inspect", scope, handler => handler.InspectAsync(ctx, kind, @object, filter, tables, like, top, exact, window, timeout, ct));
-
-    public Task<CallToolResult> ValidateAsync(RequestContext<CallToolRequestParams> ctx,
-        [Description("Caller intent: query, setup, or benchmark.")][AllowedValues("query", "setup", "benchmark")] string usage,
-        [Description("Request target scope.")] McpRequestScopeArgument scope,
-        [Description("Inline SQL, at most 1 MiB.")] string? sql = null,
-        [Description("SQL file under an operator input root.")] string? file = null,
-        [Description("Parameters as {name, type, value}.")] McpParameterArgument[]? parameters = null,
-        CancellationToken ct = default) =>
-        Invoke(ctx, "sqlharness_validate", scope, handler => handler.ValidateAsync(ctx, usage, sql, file, parameters, ct));
 
     public Task<CallToolResult> QueryAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Request target scope.")] McpRequestScopeArgument scope,
@@ -172,7 +149,7 @@ public sealed class McpRequestToolHandlers(
         {
             return Task.FromResult(Failure("The MCP request scope is invalid.", command, process.MaxResultBytes));
         }
-        var handlers = new McpToolHandlers(scope, _moduleFactory(scope), process.Gate, _clock, hostShutdown, acceptRequestScope: true);
+        var handlers = new McpToolHandlers(scope, _moduleFactory(scope), _clock, hostShutdown, acceptRequestScope: true);
         return invoke(handlers);
     }
 
@@ -193,7 +170,7 @@ public sealed class McpRequestToolHandlers(
             linked.Token.ThrowIfCancellationRequested();
             return await McpResultAdapter.AdaptAndCompleteAsync(outcome, command, budget);
         }
-        catch (OperationCanceledException) { return McpExecutionGate.CancelledResult(command, budget); }
+        catch (OperationCanceledException) { return McpCallOutcome.CancelledResult(command, budget); }
         catch (Exception exception) when (exception is McpMappingException or McpInputException or ParameterSetFileException)
         { return Failure(exception.Message, command, process.MaxResultBytes); }
         catch (Exception) { return Failure(null, command, process.MaxResultBytes); }

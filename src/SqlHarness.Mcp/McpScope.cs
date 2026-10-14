@@ -30,8 +30,10 @@ public sealed class McpScope
         IReadOnlyList<string> inputRoots,
         IReadOnlyDictionary<string, TargetProfile> profiles,
         int maxResultBytes,
-        int maxOperationSeconds)
+        int maxOperationSeconds,
+        string configurationRef)
     {
+        ConfigurationRef = configurationRef;
         TargetRequest = targetRequest;
         ResolvedTarget = resolvedTarget;
         Owner = owner;
@@ -40,6 +42,12 @@ public sealed class McpScope
         MaxResultBytes = maxResultBytes;
         MaxOperationSeconds = maxOperationSeconds;
     }
+
+    /// <summary>
+    /// Opaque random identity of the frozen process configuration this scope
+    /// belongs to. Not derived from configuration content; not authorization.
+    /// </summary>
+    public string ConfigurationRef { get; }
 
     /// <summary>Closed-profile request resolved for this call.</summary>
     public SqlTargetRequest TargetRequest { get; }
@@ -153,7 +161,8 @@ public sealed class McpScope
         IReadOnlyList<string> roots,
         IReadOnlyDictionary<string, TargetProfile> profiles,
         int maxResultBytes,
-        int maxOperationSeconds)
+        int maxOperationSeconds,
+        string? configurationRef = null)
     {
         var frozenVars = new ReadOnlyDictionary<string, string>(
             request.Vars.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase));
@@ -165,8 +174,12 @@ public sealed class McpScope
             Array.AsReadOnly(roots.ToArray()),
             profiles,
             maxResultBytes,
-            maxOperationSeconds);
+            maxOperationSeconds,
+            configurationRef ?? NewConfigurationRef());
     }
+
+    internal static string NewConfigurationRef() =>
+        "cfg_" + Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(12)).ToLowerInvariant();
 
     internal static IReadOnlyList<string> ValidateOptions(McpServerOptions options)
     {

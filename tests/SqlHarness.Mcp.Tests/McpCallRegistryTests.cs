@@ -76,7 +76,7 @@ public sealed class McpCallRegistryTests : IDisposable
             () => journal,
             () => new SessionIdentity("mcp:test", "claude", "mcp-clientinfo", JournalTransport.Mcp, "c", "1", "fixed", null, null, 1, null, null),
             McpCallRegistry.Classify);
-        return (new McpToolHandlers(Scope(maxOperationSeconds), module, new McpExecutionGate(), hostShutdown: hostShutdown), inner, database);
+        return (new McpToolHandlers(Scope(maxOperationSeconds), module, hostShutdown: hostShutdown), inner, database);
     }
 
     private static string? ReasonOf(string database, string operation)

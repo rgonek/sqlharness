@@ -93,7 +93,7 @@ public sealed class McpTokenBudgetTests
     {
         var outcome = new SqlHarnessOutcome(
             SqlHarnessExitCode.Success,
-            new SqlHarnessPingReport(Target, "srv", "db", "login", 7),
+            new SqlHarnessDryRunReport("query", "read-only", [], 0),
             null);
         var result = McpResultAdapter.Adapt(outcome, "inspect");
 
@@ -257,21 +257,6 @@ public sealed class McpTokenBudgetTests
         Assert.True(bytes > Encoding.UTF8.GetByteCount(projected), "Escaping and metadata are part of the measured cost.");
     }
 
-    [Fact]
-    public void Thousand_table_counts_fit_the_default_budget()
-    {
-        var report = new SqlHarnessCountsReport(Target,
-            Enumerable.Range(0, 1000).Select(i => new SqlHarnessCountReport("dbo", $"表{i}", i, "estimate")).ToArray(), 0);
-        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
-
-        var result = McpResultAdapter.Adapt(outcome, "sqlharness_inspect");
-
-        ResultTextBytes(result, (int)McpLimits.DefaultCallToolResultBudgetBytes);
-        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
-        Assert.True(document.RootElement.GetProperty("result").GetProperty("tables").GetArrayLength() < 1000);
-        Assert.True(document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32() > 0);
-    }
-
     private static RegressionReport FailVerdict() => new(
         RegressionPolicy.Fail,
         [RegressionPolicy.ReasonElapsedRegressed],
@@ -418,14 +403,14 @@ public sealed class McpTokenBudgetTests
     {
         var outcome = new SqlHarnessOutcome(
             SqlHarnessExitCode.Success,
-            new SqlHarnessPingReport(Target, "srv", "db", "login", 7),
+            new SqlHarnessDryRunReport("query", "read-only", [], 0),
             null);
 
-        var fits = McpResultAdapter.Adapt(outcome, "sqlharness_inspect", new McpResultBudget(4096));
+        var fits = McpResultAdapter.Adapt(outcome, "sqlharness_query", new McpResultBudget(4096));
         Assert.True(McpResultAdapter.MeasureBytes(fits) <= 4096);
 
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => McpResultAdapter.Adapt(outcome, "sqlharness_inspect", new McpResultBudget(4095)));
+            () => McpResultAdapter.Adapt(outcome, "sqlharness_query", new McpResultBudget(4095)));
     }
 
     [Fact]
@@ -448,14 +433,14 @@ public sealed class McpTokenBudgetTests
     {
         var outcome = new SqlHarnessOutcome(
             SqlHarnessExitCode.Success,
-            new SqlHarnessPingReport(Target, "srv", "db", "login", 7),
+            new SqlHarnessDryRunReport("query", "read-only", [], 0),
             null);
 
-        var zero = McpResultAdapter.Adapt(outcome, "sqlharness_inspect", new McpResultBudget(16384, 0));
+        var zero = McpResultAdapter.Adapt(outcome, "sqlharness_query", new McpResultBudget(16384, 0));
         Assert.False(zero.IsError == true);
 
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => McpResultAdapter.Adapt(outcome, "sqlharness_inspect", new McpResultBudget(16384, 4097)));
+            () => McpResultAdapter.Adapt(outcome, "sqlharness_query", new McpResultBudget(16384, 4097)));
 
         var wide = McpResultBudget.Resolve(16384, null, null, 4096);
         Assert.Equal(4096, wide.MaximumCellCharacters);
@@ -512,11 +497,10 @@ public sealed class McpTokenBudgetTests
         // The budget holds with runtime validation intact: unknown properties
         // are still rejected instead of being dropped to save bytes.
         var rejected = await client.CallToolAsync(
-            "sqlharness_validate",
+            "sqlharness_query",
             new Dictionary<string, object?>
             {
                 ["sql"] = "SELECT 1",
-                ["usage"] = "query",
                 ["bogus"] = 1,
             },
             cancellationToken: CancellationToken.None);
@@ -531,15 +515,15 @@ public sealed class McpTokenBudgetTests
     [Fact]
     public void Minimal_success_envelope_text_bytes_fit_within_default_budget()
     {
-        // 008/T3 baseline guard: the smallest success envelope (ping) against
+        // 008/T3 baseline guard: the smallest success envelope (dry run) against
         // the default 64 KiB result-text budget, with the measured bytes
         // reported for the record.
         var outcome = new SqlHarnessOutcome(
             SqlHarnessExitCode.Success,
-            new SqlHarnessPingReport(Target, "srv", "db", "login", 7),
+            new SqlHarnessDryRunReport("query", "read-only", [], 0),
             null);
 
-        var result = McpResultAdapter.Adapt(outcome, "sqlharness_inspect");
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_query");
         var bytes = McpResultAdapter.MeasureBytes(result);
         _output.WriteLine($"minimal success result-text bytes: {bytes} of {McpLimits.DefaultCallToolResultBudgetBytes}.");
         Assert.True(bytes <= McpLimits.DefaultCallToolResultBudgetBytes, $"Result text is {bytes} bytes, budget is {McpLimits.DefaultCallToolResultBudgetBytes}.");
@@ -558,7 +542,7 @@ public sealed class McpTokenBudgetTests
             new UnprojectedProbeReport("probe", payload),
             null);
 
-        var result = McpResultAdapter.Adapt(outcome, "sqlharness_inspect", new McpResultBudget(8192));
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_query", new McpResultBudget(8192));
 
         ResultTextBytes(result, 8192);
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;

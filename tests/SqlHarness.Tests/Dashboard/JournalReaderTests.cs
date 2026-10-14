@@ -367,6 +367,30 @@ public sealed class JournalReaderTests
         Assert.Null(reader.Plan(new string('B', 64)));
     }
 
+    [Theory]
+    [InlineData("ping")]
+    [InlineData("schema")]
+    [InlineData("counts")]
+    [InlineData("space")]
+    [InlineData("qstop")]
+    [InlineData("indexes")]
+    public void Historical_rows_of_removed_commands_still_load(string removedOperation)
+    {
+        // Plan 060 removed these commands; journal rows written by earlier versions stay readable.
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:old");
+        seed.Operation(session, operation: removedOperation);
+        var reader = Reader(home);
+        var sessionId = reader.Sessions(new SessionQuery()).Items.Single().Id;
+
+        var page = reader.Operations(new OperationQuery(SessionId: sessionId, Operation: removedOperation));
+
+        var row = Assert.Single(page.Items);
+        Assert.Equal(removedOperation, row.Operation);
+        Assert.Equal(removedOperation, reader.Operation(row.Id)!.Operation.Operation);
+    }
+
     [Fact]
     public void Operations_filter_by_session_status_and_operation_and_page()
     {
