@@ -3,25 +3,26 @@ namespace SqlHarness.Core;
 internal sealed record CompareMatrixRun(
     CompareCellRequest Template,
     IReadOnlyList<SqlHarnessParameter> FixedParameters,
-    IReadOnlyList<SqlHarnessParameter> MatrixValues,
-    IReadOnlyList<string?> DisplayValues,
-    string ParameterName,
-    string ParameterType);
+    IReadOnlyList<ResolvedParameterSet> Sets,
+    string? ParameterName,
+    string? ParameterType);
 
 /// <summary>One failed matrix cell. The inner exception is the original cell failure.</summary>
 internal sealed class CompareMatrixCellFailedException : Exception
 {
     internal int Index { get; }
-    internal string ParameterName { get; }
+    internal string? ParameterName { get; }
+    internal string SetName { get; }
     internal CompareCellPhase Phase { get; }
     internal OutputFootprint RawFootprint { get; }
     internal SqlHarnessCompareMatrixReport? PartialReport { get; }
 
-    internal CompareMatrixCellFailedException(int index, string parameterName, string parameterType, CompareCellFailedException inner, IReadOnlyList<CompareMatrixCellReport> completedCells, OutputFootprint rawFootprint)
+    internal CompareMatrixCellFailedException(int index, string? parameterName, string? parameterType, string setName, CompareCellFailedException inner, IReadOnlyList<CompareMatrixCellReport> completedCells, OutputFootprint rawFootprint)
         : base(null, Unwrap(inner))
     {
         Index = index;
-        ParameterName = parameterName ?? throw new ArgumentNullException(nameof(parameterName));
+        ParameterName = parameterName;
+        SetName = setName;
         Phase = inner.Phase;
         RawFootprint = rawFootprint;
         PartialReport = completedCells.Count == 0
@@ -57,17 +58,18 @@ internal sealed class CompareMatrixRunner(CompareCellRunner cells)
     internal async Task<CompareMatrixResult> RunAsync(CompareMatrixRun run, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(run);
-        var reports = new List<CompareMatrixCellReport>(run.MatrixValues.Count);
+        var reports = new List<CompareMatrixCellReport>(run.Sets.Count);
         var runs = new List<CompareRunArtifact>();
         long bytes = 0;
         long lines = 0;
         var rawAvailable = true;
         // Sequential. The first failed cell throws and later values are not started.
-        for (var index = 0; index < run.MatrixValues.Count; index++)
+        for (var index = 0; index < run.Sets.Count; index++)
         {
+            var set = run.Sets[index];
             var request = run.Template with
             {
-                Parameters = [.. run.FixedParameters, run.MatrixValues[index]],
+                Parameters = [.. run.FixedParameters, .. set.Parameters],
             };
             _cells.ComparisonMaximumRows = ComparisonMaximumRows;
             try
@@ -82,7 +84,11 @@ internal sealed class CompareMatrixRunner(CompareCellRunner cells)
                 {
                     rawAvailable = false;
                 }
-                reports.Add(new CompareMatrixCellReport(index, run.DisplayValues[index], cell.Report));
+                reports.Add(new CompareMatrixCellReport(index, set.ParameterValue, cell.Report)
+                {
+                    SetName = set.Name,
+                    SetParameters = BenchmarkReports.ToParameterReports(set.Parameters),
+                });
                 var cellIndex = index;
                 runs.AddRange(cell.Runs.Select(measured => measured with { MatrixCell = cellIndex }));
             }
@@ -94,6 +100,7 @@ internal sealed class CompareMatrixRunner(CompareCellRunner cells)
                     index,
                     run.ParameterName,
                     run.ParameterType,
+                    set.Name,
                     failed,
                     reports,
                     new OutputFootprint(bytes, lines));

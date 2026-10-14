@@ -31,6 +31,59 @@ public class CompareMatrixTests
     }
 
     [Fact]
+    public async Task Compare_over_inline_sets_opens_one_session_per_set()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+        var operation = Matrix("BatchSize:int=1,20") with
+        {
+            Matrix = "",
+            TypedMatrix = null,
+            ParameterSets =
+            [
+                new("small", []) { TypedParameters = [new("BatchSize", "int", "1")] },
+                new("large", []) { TypedParameters = [new("BatchSize", "int", "100")] },
+            ],
+        };
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
+
+        var report = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
+        Assert.Null(report.ParameterName);
+        Assert.Null(report.ParameterType);
+        Assert.Equal(["small", "large"], report.Cells.Select(cell => cell.SetName));
+        Assert.All(report.Cells, cell => Assert.Equal(["@BatchSize"], cell.SetParameters.Select(parameter => parameter.Name)));
+        Assert.Equal(2, factory.ConnectCount);
+        var summary = Assert.IsType<CompareMatrixBenchmarkSummary>(
+            AgentOutputProjection.Project(report, 128, detailLimit: 0, out _, maximumBytes: 16_384));
+        Assert.Equal(["small", "large"], summary.Cases.Select(item => item.SetName));
+    }
+
+    [Fact]
+    public async Task Dry_run_over_sets_binds_every_set_without_connecting()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+        var operation = Matrix("BatchSize:int=1,20") with
+        {
+            Matrix = "",
+            TypedMatrix = null,
+            ParameterSets =
+            [
+                new("small", []) { TypedParameters = [new("BatchSize", "int", "1")] },
+                new("large", []) { TypedParameters = [new("BatchSize", "int", "100")] },
+            ],
+            DryRun = true,
+        };
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(2, Assert.IsType<SqlHarnessDryRunReport>(outcome.Report).ParameterSets);
+        Assert.Equal(0, factory.ConnectCount);
+    }
+
+    [Fact]
     public async Task Matrix_dry_run_fails_on_a_bad_value_like_the_real_call()
     {
         using var artifacts = new DirectoryArtifactWriter();

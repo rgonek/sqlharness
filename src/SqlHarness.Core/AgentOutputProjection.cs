@@ -121,8 +121,8 @@ public static class AgentOutputProjection
                     var shared = BenchmarkSummaryProjector.Project(matrix);
                     var orderedMatrixCells = matrix.Cells.OrderBy(cell => cell.Index).ToArray();
                     var matrixArtifactId = shared.MatrixArtifactId;
-                    var parameterName = Clip(matrix.ParameterName)!;
-                    var parameterType = Clip(matrix.ParameterType)!;
+                    var parameterName = Clip(matrix.ParameterName);
+                    var parameterType = Clip(matrix.ParameterType);
                     var inventoryShell = shared with
                     {
                         ParameterName = parameterName,

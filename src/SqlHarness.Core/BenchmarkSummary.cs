@@ -83,7 +83,11 @@ public sealed record AgentMatrixCase(
     AgentMedianMetrics Candidate,
     AgentMedianMetrics Delta,
     IReadOnlyList<string> Warnings,
-    string? ParameterValue = null);
+    string? ParameterValue = null)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SetName { get; init; }
+}
 
 /// <summary>Optional per-case diagnostics; matrix-wide identity and method live on the envelope.</summary>
 public sealed record CompareMatrixCellDetailContent(
@@ -101,8 +105,8 @@ public sealed record CompareMatrixBenchmarkSummary(
     CompareClassificationReport? Classification,
     IReadOnlyList<BenchmarkParameterReport> Parameters,
     ResultComparisonMode? ComparisonMode,
-    string ParameterName,
-    string ParameterType,
+    string? ParameterName,
+    string? ParameterType,
     IReadOnlyList<AgentMatrixCase> Cases,
     IReadOnlyList<CompareMatrixCellDetail> Details,
     int CaseCount,
@@ -198,9 +202,10 @@ public static class BenchmarkSummaryProjector
     }
 
     public static AgentMatrixCase ProjectCase(CompareMatrixCellReport cell) =>
-        ProjectCase(cell.Index, SafeArtifactId(cell.Compare.ArtifactDirectory), cell.Compare, cell.ParameterValue);
+        ProjectCase(cell.Index, SafeArtifactId(cell.Compare.ArtifactDirectory), cell.Compare, cell.ParameterValue,
+            string.IsNullOrEmpty(cell.SetName) ? null : cell.SetName);
 
-    public static AgentMatrixCase ProjectCase(int index, string? artifactId, SqlHarnessCompareReport compare, string? parameterValue = null)
+    public static AgentMatrixCase ProjectCase(int index, string? artifactId, SqlHarnessCompareReport compare, string? parameterValue = null, string? setName = null)
     {
         var equivalence = compare.Equivalence;
         var availability = equivalence.Mode == ResultComparisonMode.Off
@@ -221,7 +226,10 @@ public static class BenchmarkSummaryProjector
                 Delta(baseline.ElapsedMilliseconds, candidate.ElapsedMilliseconds),
                 Delta(baseline.LogicalReads, candidate.LogicalReads)),
             compare.Baseline.Warnings.Concat(compare.Candidate.Warnings).Distinct(StringComparer.Ordinal).ToArray(),
-            parameterValue);
+            parameterValue)
+        {
+            SetName = setName,
+        };
     }
 
     public static CompareMatrixCellDetail ProjectDetail(int index, SqlHarnessCompareReport compare)

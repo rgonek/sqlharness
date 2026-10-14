@@ -97,6 +97,7 @@ public sealed record SqlHarnessCompareMatrixOperation(
 
     /// <summary>Typed alternative to <see cref="Matrix"/> (012). When it is set, <see cref="Matrix"/> must be empty.</summary>
     public SqlHarnessParameterMatrixInput? TypedMatrix { get; init; }
+    public IReadOnlyList<SqlHarnessParameterSetInput>? ParameterSets { get; init; }
     public bool DryRun { get; init; }
 }
 
@@ -128,11 +129,15 @@ public sealed record SqlHarnessParameterMatrixInput(string Name, string Type, IR
 public sealed record CompareMatrixCellReport(
     int Index,
     string? ParameterValue,
-    SqlHarnessCompareReport Compare);
+    SqlHarnessCompareReport Compare)
+{
+    public string SetName { get; init; } = string.Empty;
+    public IReadOnlyList<BenchmarkParameterReport> SetParameters { get; init; } = [];
+}
 
 public sealed record SqlHarnessCompareMatrixReport(
-    string ParameterName,
-    string ParameterType,
+    string? ParameterName,
+    string? ParameterType,
     IReadOnlyList<CompareMatrixCellReport> Cells);
 
 public sealed record SqlHarnessParameterSetInput(

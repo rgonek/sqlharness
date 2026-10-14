@@ -53,7 +53,11 @@ internal static class MeasureParameterSetValidator
             if (!seenNames.Add(set.Name))
                 throw new SqlHarnessSafetyException($"Duplicate parameter set '{set.Name}'.");
 
-            var parsed = ParseShaped(set.Parameters, set.Name, set.SourcePath);
+            if (set.TypedParameters is not null && set.Parameters.Count > 0)
+                throw new SqlHarnessSafetyException($"Parameter set '{set.Name}' cannot contain both text and typed parameters.");
+            var parsed = set.TypedParameters is null
+                ? ParseShaped(set.Parameters, set.Name, set.SourcePath)
+                : ParseShaped(set.TypedParameters, set.Name, set.SourcePath);
             foreach (var parameter in parsed)
             {
                 if (fixedNames.Contains(parameter.Name))
@@ -129,8 +133,11 @@ internal static class MeasureParameterSetValidator
     }
 
     // Typed fixed parameters carry their type token; there is no declaration text to read it from.
-    private static IReadOnlyList<ShapedParameter> ParseShaped(IReadOnlyList<SqlHarnessParameterInput> inputs, string? setName = null) =>
-        Shape(Parse(inputs, setName), inputs);
+    private static IReadOnlyList<ShapedParameter> ParseShaped(
+        IReadOnlyList<SqlHarnessParameterInput> inputs,
+        string? setName = null,
+        string? sourcePath = null) =>
+        Shape(Parse(inputs, setName, sourcePath), inputs);
 
     private static IEnumerable<SqlHarnessParameterInput> Convert(IReadOnlyList<string> inputs, List<SqlHarnessParameterInput> converted)
     {

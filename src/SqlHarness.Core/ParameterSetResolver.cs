@@ -87,12 +87,17 @@ internal static partial class ParameterSetResolver
             }
             catch (SqlHarnessSafetyException exception) when (exception.IsParameterValue)
             {
-                var message = $"Parameter set '{set.Name}' SQL parameter '{exception.ParameterName}' is invalid.";
+                var message = set.SourcePath is not null
+                    ? $"Parameter set file '{set.SourcePath}' has an invalid entry for parameter '{exception.ParameterName}': {exception.Message}"
+                    : $"Parameter set '{set.Name}' is invalid: {exception.Message}";
                 throw exception.WithParameterValue(message);
             }
             catch (SqlHarnessSafetyException exception)
             {
-                throw new SqlHarnessSafetyException($"Parameter set '{set.Name}' is invalid: {exception.Message}");
+                var message = set.SourcePath is not null
+                    ? $"Parameter set file '{set.SourcePath}' has an invalid parameter entry: {exception.Message}"
+                    : $"Parameter set '{set.Name}' is invalid: {exception.Message}";
+                throw new SqlHarnessSafetyException(message);
             }
 
             foreach (var parameter in bound)

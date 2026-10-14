@@ -414,41 +414,38 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 knownSecrets,
                 operation.TypedParameters);
 
-            // The fixed parameters are already bound, so their names need no second parse.
-            var matrix = SqlParameterMatrixParser.Bind(
-                SqlParameterInputs.ResolveMatrix(operation.Matrix, operation.TypedMatrix),
-                prepared.FixedParameters.Select(parameter => parameter.Name));
             var fixedParameters = prepared.FixedParameters;
             var dialect = prepared.Dialect;
-
-            // Second bind through the dialect: the engine may reject a type the shared binder accepts.
-            var matrixName = MatrixParameterName(matrix);
-            var matrixParameters = new List<SqlHarnessParameter>(matrix.DisplayValues.Count);
-            foreach (var displayValue in matrix.DisplayValues)
-            {
-                var bound = dialect.BindParameters([new SqlHarnessParameterInput(matrixName, matrix.Type, displayValue)]);
-                if (bound.Count != 1)
-                    throw new SqlHarnessSafetyException($"The --matrix option for SQL parameter '{matrix.Name}' is invalid.");
-                matrixParameters.Add(bound[0]);
-            }
+            var matrixInput = operation.TypedMatrix is null && string.IsNullOrEmpty(operation.Matrix)
+                ? null
+                : SqlParameterInputs.ResolveMatrix(operation.Matrix, operation.TypedMatrix);
+            var sets = ParameterSetResolver.Resolve(dialect, fixedParameters, matrixInput, operation.ParameterSets);
+            if (sets.Count == 0)
+                throw new SqlHarnessSafetyException("A compare matrix or at least two parameter sets must be supplied.");
+            var parameterName = matrixInput is null ? null : "@" + SqlParameterNames.Normalize(matrixInput.Name);
+            var parameterType = matrixInput?.Type;
+            var cellParameters = sets
+                .Select(set => (IReadOnlyList<SqlHarnessParameter>)[.. fixedParameters, .. set.Parameters])
+                .ToArray();
 
             CompareOperationPreparer.ValidateVariants(
                 prepared,
                 operation.SetupSql,
                 operation.BaselineSql,
                 operation.CandidateSql,
-                matrixParameters.Select(matrixParameter => (IReadOnlyList<SqlHarnessParameter>)[.. fixedParameters, matrixParameter]).ToArray());
+                cellParameters);
 
             var target = prepared.Target;
 
             if (operation.DryRun)
             {
-                MissingParameterCheck.RequireSupplied(target.Engine, [.. fixedParameters, matrixParameters[0]], operation.BaselineSql, operation.CandidateSql);
+                foreach (var parameters in cellParameters)
+                    MissingParameterCheck.RequireSupplied(target.Engine, parameters, operation.BaselineSql, operation.CandidateSql);
                 return DryRunOutcome(
                     "compare",
                     prepared.Classification.Baseline,
-                    [.. fixedParameters, matrixParameters[0]],
-                    matrixParameters.Count);
+                    cellParameters[0],
+                    cellParameters.Length);
             }
 
             _artifactWriter.CheckStorage();
@@ -478,10 +475,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     new CompareMatrixRun(
                         template,
                         fixedParameters,
-                        matrixParameters,
-                        matrix.DisplayValues,
-                        matrix.Name,
-                        matrix.Type),
+                        sets,
+                        parameterName,
+                        parameterType),
                     ct);
             }
             catch (CompareMatrixCellFailedException failed)
@@ -541,19 +537,15 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         }
     }
 
-    private static string MatrixParameterName(ParsedParameterMatrix matrix)
-    {
-        if (matrix.Name.Length < 2 || matrix.Name[0] != '@')
-            throw new SqlHarnessSafetyException("The --matrix option is invalid.");
-        return matrix.Name[1..];
-    }
-
     private static string FormatMatrixCellError(CompareMatrixCellFailedException failed, IReadOnlyList<string> knownSecrets)
     {
         var original = failed.InnerException ?? failed;
         // Prefix the cell label after redaction so a redacted value cannot erase the index.
         var detail = SecretRedactor.Redact(original, knownSecrets);
-        return $"Comparison matrix cell {failed.Index} for SQL parameter '{failed.ParameterName}' failed. {detail}";
+        var label = failed.ParameterName is { } parameterName
+            ? $"SQL parameter '{parameterName}'"
+            : $"parameter set '{failed.SetName}'";
+        return $"Comparison matrix cell {failed.Index} for {label} failed. {detail}";
     }
 
     private async Task<SqlHarnessOutcome> ExecuteMeasureAsync(SqlHarnessMeasureOperation measure, CancellationToken ct)
@@ -717,6 +709,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         SqlHarnessMeasureOperation measure,
         IReadOnlyList<SqlHarnessParameterSetInput> parameterSets)
     {
+        var fixedParameters = dialect.BindParameters(SqlParameterInputs.Resolve(measure.Parameters, measure.TypedParameters));
+        var resolvedSets = ParameterSetResolver.Resolve(dialect, fixedParameters, null, parameterSets);
         var prepared = MeasureParameterSetValidator.Prepare(
             measure.Parameters,
             parameterSets,
@@ -727,10 +721,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         var bound = new PreparedMeasureParameterSet[prepared.Count];
         for (var index = 0; index < prepared.Count; index++)
         {
-            var parsed = dialect.BindParameters(
-                SqlParameterInputs.Resolve(measure.Parameters, measure.TypedParameters)
-                    .Concat(parameterSets[index].Parameters.Select(SqlParameterParser.ToInput)));
-            bound[index] = prepared[index] with { Parameters = parsed };
+            bound[index] = prepared[index] with { Parameters = [.. fixedParameters, .. resolvedSets[index].Parameters] };
         }
 
         return bound;

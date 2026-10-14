@@ -62,6 +62,31 @@ public class SqlHarnessMeasureTests
     }
 
     [Fact]
+    public async Task Measure_inline_parameter_sets_run_on_one_session_and_report_set_names()
+    {
+        var session = FakeMeasureSession.Create();
+        var operation = Measure(1) with
+        {
+            SetupSql = null,
+            QuerySql = "SELECT @Id AS Value",
+            ParameterSets =
+            [
+                new("small", []) { TypedParameters = [new("Id", "int", "7")] },
+                new("large", []) { TypedParameters = [new("Id", "int", "8")] },
+            ],
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(1, session.FactoryOpenCount);
+        var report = Assert.IsType<SqlHarnessMeasureSetReport>(outcome.Report);
+        Assert.Equal(["small", "large"], report.Sets.Select(set => set.Name));
+        Assert.All(report.Sets, set => Assert.Equal([new MeasureParameterMetadata("@Id", "int")], set.Parameters));
+        Assert.All(report.Sets, set => Assert.False(string.IsNullOrEmpty(set.ValueHash)));
+    }
+
+    [Fact]
     public async Task Measure_runs_setup_warmup_and_measured_queries_in_order_on_one_session()
     {
         var session = FakeMeasureSession.Create();
