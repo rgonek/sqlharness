@@ -38,6 +38,14 @@ public sealed class DashboardContractTests
             ["id", "sessionKey", "agentKind", "transport", "source", "clientName", "clientVersion", "mcpMode", "cwd",
              "firstSeen", "lastSeen", "operations", "failed", "rejected", "running", "abandoned", "clientTitle", "roots", "protocolVersion"],
             Names(session));
+
+        Assert.Equal(["session", "operations", "compareSubjects", "unassignedCompareCount"],
+            Names(new SessionDetail(session, [], [], 0)));
+        Assert.Equal(["operationId", "subject", "scope", "baselineHash", "candidateHash", "baselineVersion",
+                "candidateVersion", "status", "startedAt", "regression", "cases", "conditions", "summary"],
+            Names(new CompareAttemptSummary(1, "orders", "whole", null, null, null, null, "running", "t", null, null, null, null)));
+        Assert.Equal(["subject", "scopes", "latestWhole", "latestCompletedWhole", "startToLatestWhole", "versionsFromRetainedHistory"],
+            Names(new CompareSubjectSummary("orders", [], null, null, null)));
     }
 
     [Fact]
@@ -87,5 +95,10 @@ public sealed class DashboardContractTests
     public void Operation_detail_exposes_the_agent_property()
     {
         Assert.Contains("agent", typeof(OperationDetail).GetProperties().Select(p => JsonNamingPolicy.CamelCase.ConvertName(p.Name)));
+        Assert.Equal(["operation", "session", "vars", "candidateSqlHash", "sqlText", "candidateSqlText", "rawTokens",
+                "emittedTokens", "artifactDirectory", "summary", "variants", "dimensions", "agent", "rawBytes", "emittedBytes",
+                "tokenEstimationMethod", "compareSubject", "compareScope", "baselineVersion", "candidateVersion",
+                "compareRegression", "compareCases", "compareConditions"],
+            Names(new OperationDetail(default!, default!, null, null, null, null, null, null, null, null, [], default!, null)));
     }
 }

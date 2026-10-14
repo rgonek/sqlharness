@@ -177,6 +177,8 @@ public static partial class DashboardServer
                 : BadRequest("from/to must be ISO-8601 timestamps."));
         MapRead(api, "/sessions/{id:long}", (long id) =>
             reader.Session(id) is { } detail ? Results.Json(detail, Json) : Results.NotFound());
+        MapRead(api, "/sessions/{id:long}/compares", (long id, long? cursor, int? limit) =>
+            Results.Json(reader.CompareAttempts(id, cursor, limit ?? JournalReader.CompareHistoryPageLimit), Json));
         MapRead(api, "/operations", (long? session, string? status, string? operation, string? from, string? to, long? cursor, int? limit,
             string? profile, string? dimensions, bool? unprofiled) =>
             !TryWindow(from, to, out var window)

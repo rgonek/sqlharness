@@ -37,7 +37,8 @@ public sealed record AgentCall(
     string? CallId, string? Model, string? ReasoningEffort, string? SessionId, string? TurnId,
     string? TurnTrigger, string? ThreadSource);
 
-public sealed record SessionDetail(SessionSummary Session, IReadOnlyList<OperationSummary> Operations);
+public sealed record SessionDetail(SessionSummary Session, IReadOnlyList<OperationSummary> Operations,
+    IReadOnlyList<CompareSubjectSummary> CompareSubjects, int UnassignedCompareCount);
 
 public sealed record Spread(long Min, long Median, long Max);
 
@@ -62,7 +63,10 @@ public sealed record OperationDetail(
     string? ArtifactDirectory, JsonElement? Summary, IReadOnlyList<VariantDetail> Variants,
     OperationDimensions Dimensions,
     AgentCall? Agent, long? RawBytes = null, long? EmittedBytes = null,
-    string TokenEstimationMethod = "utf8-bytes-div-4");
+    string TokenEstimationMethod = "utf8-bytes-div-4",
+    string? CompareSubject = null, string? CompareScope = null, string? BaselineVersion = null,
+    string? CandidateVersion = null, JsonElement? CompareRegression = null,
+    IReadOnlyList<JsonElement>? CompareCases = null, JsonElement? CompareConditions = null);
 
 public sealed record StoredPlan(string Hash, string Format, string Document);
 

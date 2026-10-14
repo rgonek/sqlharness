@@ -1,6 +1,6 @@
 import { QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ConflictError, getJson, NetworkError, NotFoundError, postJson, putJson, UnauthorizedError } from "./client"
-import type { DashboardStats, DistilledPlan, KeyCount, OperationDetail, OperationSummary, Page, PricesInfo, ProfilesResponse, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
+import type { CompareAttemptSummary, DashboardStats, DistilledPlan, KeyCount, OperationDetail, OperationSummary, Page, PricesInfo, ProfilesResponse, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string }
 export type OperationFilters = { from?: string; to?: string; profile?: string; unprofiled?: boolean; dimensions?: Record<string, string | null>; status?: string; operation?: string }
@@ -11,6 +11,7 @@ export const queryKeys = {
   agents: ["agents"] as const,
   sessions: (filters: SessionFilters) => ["sessions", filters] as const,
   session: (id: number) => ["session", id] as const,
+  compares: (id: number) => ["session-compares", id] as const,
   operation: (id: number) => ["operation", id] as const,
   operations: (filters: OperationFilters) => ["operations", filters] as const,
   stats: (range: StatsRange, window: StatsWindow, profile?: string | null, dimensions?: Record<string, string | null>, rowDimension?: string, columnDimension?: string, unprofiled?: boolean) =>
@@ -58,6 +59,15 @@ export function useSessions(filters: SessionFilters) {
 
 export function useSession(id: number) {
   return useQuery({ queryKey: queryKeys.session(id), queryFn: () => getJson<SessionDetail>(`/api/sessions/${id}`) })
+}
+
+export function useSessionCompares(id: number) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.compares(id),
+    queryFn: ({ pageParam }) => getJson<Page<CompareAttemptSummary>>(`/api/sessions/${id}/compares`, { cursor: pageParam, limit: 100 }),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: page => page.nextCursor ?? undefined,
+  })
 }
 
 export function useOperation(id: number) {

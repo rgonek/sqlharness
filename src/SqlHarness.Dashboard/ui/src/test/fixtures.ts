@@ -35,7 +35,9 @@ export const operationDetail = (over: Partial<OperationDetail> = {}): OperationD
   artifactDirectory: "/artifacts/m1", summary: { kind: "measure", resultsStable: true },
   variants: [variant()], dimensions: { values: [{ name: "tenant", value: "acme", isUnknown: false, source: "recorded",
     operations: null, percentage: null, totalDurationMs: null, durationAvailableOperations: null,
-    durationUnavailableOperations: null, failed: null, rejected: null }] }, agent: null, ...over,
+    durationUnavailableOperations: null, failed: null, rejected: null }] }, agent: null,
+  compareSubject: null, compareScope: null, baselineVersion: null, candidateVersion: null,
+  compareRegression: null, compareCases: null, compareConditions: null, ...over,
 })
 
 export const stats = (over: Partial<DashboardStats> = {}): DashboardStats => ({

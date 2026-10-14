@@ -19,6 +19,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     public const int DefaultLimit = 50;
     public const int MaximumLimit = 200;
     public const int SessionOperationLimit = 500;
+    public const int CompareHistoryPageLimit = 100;
     public const int TopLimit = 20;
     internal const long OverGrantMinimumKb = 1024;
 
@@ -147,7 +148,48 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id
             WHERE o.session_id = $id ORDER BY o.id DESC LIMIT $limit;
             """, [("$id", id), ("$limit", SessionOperationLimit)], reader => ReadOperation(reader, liveness));
-        return new SessionDetail(WithRunning(connection, [session])[0], operations);
+        var compares = CompareHistoryBuilder.Build(CompareHistoryRows(connection, id));
+        return new SessionDetail(WithRunning(connection, [session])[0], operations,
+            CompareHistoryBuilder.Subjects(compares),
+            compares.Count(attempt => attempt.Subject is null || attempt.Scope is null));
+    }
+
+    /// <summary>Full retained compare history is versioned before applying the endpoint page.</summary>
+    public Page<CompareAttemptSummary> CompareAttempts(long sessionId, long? cursor = null, int limit = CompareHistoryPageLimit)
+    {
+        using var connection = OpenSnapshot();
+        if (connection is null)
+            return new Page<CompareAttemptSummary>([], null);
+        var history = CompareHistoryBuilder.Build(CompareHistoryRows(connection, sessionId));
+        var pageLimit = Math.Clamp(limit, 1, MaximumLimit);
+        var ordered = history.OrderByDescending(item => item.StartedAt, StringComparer.Ordinal)
+            .ThenByDescending(item => item.OperationId).ToArray();
+        var start = 0;
+        if (cursor is not null)
+        {
+            var anchor = Array.FindIndex(ordered, item => item.OperationId == cursor.Value);
+            if (anchor < 0)
+                return new Page<CompareAttemptSummary>([], null);
+            start = anchor + 1;
+        }
+        var page = ordered.Skip(start).Take(pageLimit).ToArray();
+        return new Page<CompareAttemptSummary>(page, start + page.Length < ordered.Length ? page[^1].OperationId : null);
+    }
+
+    private IReadOnlyList<CompareHistoryRow> CompareHistoryRows(SqliteConnection connection, long sessionId)
+    {
+        var liveness = new ProcessLiveness(processes, _dead);
+        return Query(connection, """
+        SELECT id, session_id, compare_subject, compare_scope, sql_hash, candidate_sql_hash, status, started_at,
+               summary_json, compare_conditions_json, host_pid, host_started_at
+        FROM operations
+        WHERE session_id = $session AND operation = 'compare'
+        ORDER BY started_at, id;
+        """, [("$session", sessionId)], reader => new CompareHistoryRow(
+            reader.GetInt64(0), reader.GetInt64(1), NullableString(reader, 2), NullableString(reader, 3),
+            NullableString(reader, 4), NullableString(reader, 5),
+            liveness.Status(reader.GetString(6), reader.GetInt64(10), NullableString(reader, 11)), reader.GetString(7),
+            Json(NullableString(reader, 8)), Json(NullableString(reader, 9))));
     }
 
     public Page<OperationSummary> Operations(OperationQuery query)
@@ -225,7 +267,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var extra = Query(connection, """
             SELECT vars_json, candidate_sql_hash, sql_text, candidate_sql_text, raw_tokens, emitted_tokens, artifact_dir, summary_json,
                    client_call_id, agent_model, agent_reasoning_effort, agent_session_id, agent_turn_id, agent_turn_trigger, agent_thread_source,
-                   raw_bytes, emitted_bytes
+                   raw_bytes, emitted_bytes, compare_subject, compare_scope, compare_conditions_json
             FROM operations WHERE id = $id;
             """, [("$id", id)], reader => (
                 VarsJson: NullableString(reader, 0),
@@ -238,7 +280,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 Summary: Json(NullableString(reader, 7)),
                 Agent: ReadAgent(reader),
                 RawBytes: NullableLong(reader, 15),
-                EmittedBytes: NullableLong(reader, 16))).Single();
+                EmittedBytes: NullableLong(reader, 16),
+                CompareSubject: NullableString(reader, 17), CompareScope: NullableString(reader, 18),
+                CompareConditions: Json(NullableString(reader, 19)))).Single();
         var session = Query(connection, $"SELECT {SessionColumns} FROM sessions s WHERE s.id = $id;",
             [("$id", summary.SessionId)], ReadSessionRow).Single();
 
@@ -253,6 +297,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             dimensionNames,
             recordedDimensions));
 
+        var compareVersion = CompareHistoryBuilder.Build(CompareHistoryRows(connection, summary.SessionId))
+            .FirstOrDefault(attempt => attempt.OperationId == id);
         return new OperationDetail(
             summary,
             WithRunning(connection, [session])[0],
@@ -268,7 +314,14 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             dimensions,
             extra.Agent,
             extra.RawBytes,
-            extra.EmittedBytes);
+            extra.EmittedBytes,
+            CompareSubject: extra.CompareSubject,
+            CompareScope: extra.CompareScope,
+            BaselineVersion: compareVersion?.BaselineVersion,
+            CandidateVersion: compareVersion?.CandidateVersion,
+            CompareRegression: compareVersion?.Regression,
+            CompareCases: compareVersion?.Cases,
+            CompareConditions: extra.CompareConditions);
     }
 
     private static AgentCall? ReadAgent(SqliteDataReader r)

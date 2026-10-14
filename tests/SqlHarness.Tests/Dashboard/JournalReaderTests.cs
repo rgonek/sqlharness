@@ -63,6 +63,55 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Compare_pages_have_no_gaps_and_versions_use_all_retained_history_before_paging()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:compare-history");
+        for (var index = 0; index < 501; index++)
+            seed.Compare(session, "orders", "whole", "base", $"candidate-{index}");
+
+        var reader = Reader(home);
+        var sessionId = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
+        var allIds = new HashSet<long>();
+        long? cursor = null;
+        Page<CompareAttemptSummary> page;
+        do
+        {
+            page = reader.CompareAttempts(sessionId, cursor, 73);
+            Assert.NotEmpty(page.Items);
+            Assert.All(page.Items, item => Assert.True(allIds.Add(item.OperationId)));
+            cursor = page.NextCursor;
+        } while (cursor is not null);
+
+        Assert.Equal(501, allIds.Count);
+        var latest = reader.CompareAttempts(sessionId, limit: 1).Items.Single();
+        Assert.Equal("v0", latest.BaselineVersion);
+        Assert.Equal("v501", latest.CandidateVersion);
+        Assert.Equal(500, reader.Session(sessionId)!.Operations.Count);
+        Assert.Equal(allIds.Max(), Assert.Single(reader.Session(sessionId)!.CompareSubjects).LatestWhole!.OperationId);
+    }
+
+    [Fact]
+    public void Legacy_compare_without_context_is_counted_as_unassigned_and_has_no_version()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Compare(JournalSeed.Session("cli:legacy-compare"), null, null, "h1", "h2");
+        var reader = Reader(home);
+        var sessionId = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
+
+        var detail = reader.Session(sessionId)!;
+        var attempt = Assert.Single(reader.CompareAttempts(sessionId).Items);
+
+        Assert.Empty(detail.CompareSubjects);
+        Assert.Equal(1, detail.UnassignedCompareCount);
+        Assert.Null(attempt.Subject);
+        Assert.Null(attempt.BaselineVersion);
+        Assert.Null(attempt.CandidateVersion);
+    }
+
+    [Fact]
     public void Operation_carries_the_agent_call_metadata()
     {
         using var home = new TempHome();

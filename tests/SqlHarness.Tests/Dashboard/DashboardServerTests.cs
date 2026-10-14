@@ -320,6 +320,29 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
+    public async Task Compare_history_endpoint_pages_attempt_summaries()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:compare-page");
+        seed.Compare(session, "orders", "whole", "base", "v1");
+        seed.Compare(session, "orders", "whole", "v1", "v2");
+        var id = Assert.Single(new JournalReader(home.DatabasePath, new FakeProcesses())
+            .Sessions(new SessionQuery()).Items).Id;
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        using var first = JsonDocument.Parse(await client.GetStringAsync($"/api/sessions/{id}/compares?limit=1"));
+        var firstAttempt = first.RootElement.GetProperty("items")[0];
+        var cursor = first.RootElement.GetProperty("nextCursor").GetInt64();
+        using var second = JsonDocument.Parse(await client.GetStringAsync($"/api/sessions/{id}/compares?cursor={cursor}&limit=1"));
+
+        Assert.NotEqual(firstAttempt.GetProperty("operationId").GetInt64(),
+            second.RootElement.GetProperty("items")[0].GetProperty("operationId").GetInt64());
+        Assert.Equal("orders", second.RootElement.GetProperty("items")[0].GetProperty("subject").GetString());
+    }
+
+    [Fact]
     public async Task Agents_route_lists_kinds_as_key_count_pairs_and_detail_carries_agent()
     {
         using var home = new TempHome();
