@@ -1,10 +1,11 @@
-import { useParams } from "@tanstack/react-router"
+import { useParams, useSearch } from "@tanstack/react-router"
 import { NotFoundError } from "@/api/client"
 import { useSession } from "@/api/queries"
 import { ErrorState } from "@/components/ErrorState"
 import { OperationTable } from "@/components/OperationTable"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { CompareSessionOverview } from "@/components/CompareSessionOverview"
 import { formatTimestamp } from "@/lib/format"
 import { clientLabel, rootLabel } from "@/lib/roots"
 import { agentLabel } from "@/lib/agents"
@@ -24,18 +25,19 @@ function Fact({ label, value }: { label: string; value: string | null | undefine
 
 export function SessionPage() {
   const raw = useParams({ from: "/sessions/$id" }).id
+  const search = useSearch({ from: "/sessions/$id" })
   const id = parseRouteId(raw)
   if (id === null) return <ErrorState error={new NotFoundError(`/sessions/${raw}`)} />
-  return <SessionView id={id} />
+  return <SessionView id={id} returnSubject={search.subject} returnScope={search.scope} />
 }
 
-function SessionView({ id }: { id: number }) {
+function SessionView({ id, returnSubject, returnScope }: { id: number; returnSubject?: string; returnScope?: string }) {
   const detail = useSession(id)
 
   if (detail.error) return <ErrorState error={detail.error} />
   if (detail.isPending) return <Skeleton className="h-64 w-full" />
 
-  const { session, operations } = detail.data
+  const { session, operations, compareSubjects = [], unassignedCompareCount = 0 } = detail.data
   return (
     <div className="space-y-4">
       <Card>
@@ -44,42 +46,46 @@ function SessionView({ id }: { id: number }) {
             <h1>Session {session.id}</h1>
           </CardTitle>
           <div className="font-mono">{session.sessionKey}</div>
-          <CardDescription>
-            {agentLabel(session.agentKind)} via {session.transport} ({session.source})
-          </CardDescription>
+          <CardDescription>{agentLabel(session.agentKind)} via {session.transport} ({session.source})</CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <Fact label="Client" value={clientLabel(session)} />
-          <Fact label="MCP mode" value={session.mcpMode} />
-          <Fact label="MCP protocol" value={session.protocolVersion} />
-          <Fact label="Working directory" value={session.cwd} />
-          <div className="min-w-0 md:col-span-2">
-            <div className="text-sm text-muted-foreground">Workspace roots</div>
-            {session.roots === null ? (
-              <div aria-label="Workspace roots" title={unknownRootsHint}>—</div>
-            ) : session.roots.length === 0 ? (
-              <div aria-label="Workspace roots">none</div>
-            ) : (
-              <ul aria-label="Workspace roots" className="font-mono text-sm">
-                {session.roots.map((root) => (
-                  <li key={root.uri} className="truncate">
-                    <span>{rootLabel(root.uri)}</span>
-                    {root.name && <> <span className="text-muted-foreground">({root.name})</span></>}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <Fact label="Operations" value={String(session.operations)} />
-          <Fact label="First seen" value={formatTimestamp(session.firstSeen)} />
-          <Fact label="Last seen" value={formatTimestamp(session.lastSeen)} />
-          <Fact label="Failed / rejected" value={`${session.failed} / ${session.rejected}`} />
-          <Fact label="Running / abandoned" value={`${session.running} / ${session.abandoned}`} />
+        <CardContent>
+          <details>
+            <summary className="cursor-pointer text-sm font-medium">Session metadata</summary>
+            <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+              <Fact label="Client" value={clientLabel(session)} />
+              <Fact label="MCP mode" value={session.mcpMode} />
+              <Fact label="MCP protocol" value={session.protocolVersion} />
+              <Fact label="Working directory" value={session.cwd} />
+              <div className="min-w-0 md:col-span-2">
+                <div className="text-sm text-muted-foreground">Workspace roots</div>
+                {session.roots === null ? (
+                  <div aria-label="Workspace roots" title={unknownRootsHint}>—</div>
+                ) : session.roots.length === 0 ? (
+                  <div aria-label="Workspace roots">none</div>
+                ) : (
+                  <ul aria-label="Workspace roots" className="font-mono text-sm">
+                    {session.roots.map((root) => (
+                      <li key={root.uri} className="truncate">
+                        <span>{rootLabel(root.uri)}</span>
+                        {root.name && <> <span className="text-muted-foreground">({root.name})</span></>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <Fact label="Operations" value={String(session.operations)} />
+              <Fact label="First seen" value={formatTimestamp(session.firstSeen)} />
+              <Fact label="Last seen" value={formatTimestamp(session.lastSeen)} />
+              <Fact label="Failed / rejected" value={`${session.failed} / ${session.rejected}`} />
+              <Fact label="Running / abandoned" value={`${session.running} / ${session.abandoned}`} />
+            </div>
+          </details>
         </CardContent>
       </Card>
+      <CompareSessionOverview sessionId={id} subjects={compareSubjects} unassignedCompareCount={unassignedCompareCount} returnSubject={returnSubject} returnScope={returnScope} />
       <Card>
         <CardHeader>
-          <CardTitle>Operations</CardTitle>
+          <CardTitle>All operations</CardTitle>
           <CardDescription>Newest first, up to 500.</CardDescription>
         </CardHeader>
         <CardContent>

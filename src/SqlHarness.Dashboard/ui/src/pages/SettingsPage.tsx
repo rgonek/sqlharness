@@ -57,7 +57,7 @@ function NumberField({ id, label, value, min, max, error, onCommit }: { id: stri
   )
 }
 
-type CardKey = "journal" | "dashboard"
+type CardKey = "journal" | "dashboard" | "compare"
 type Status = { state: "saving" } | { state: "saved" } | { state: "error"; message: string }
 
 function StatusLine({ status }: { status?: Status }) {
@@ -110,6 +110,7 @@ export function SettingsPage() {
   const setJournal = (next: Partial<Settings["journal"]>) => commit({ ...draft, journal: { ...journal, ...next } }, "journal")
   const setRetention = (next: Partial<Settings["journal"]["retention"]>) => setJournal({ retention: { ...journal.retention, ...next } })
   const setDashboard = (next: Partial<Settings["dashboard"]>) => commit({ ...draft, dashboard: { ...draft.dashboard, ...next } }, "dashboard")
+  const setCompare = (next: Partial<Settings["compare"]>) => commit({ ...draft, compare: { ...draft.compare, ...next } }, "compare")
 
   function apply(next: Settings, card: CardKey) {
     setEdited(next)
@@ -192,6 +193,17 @@ export function SettingsPage() {
             <span className="text-sm text-muted-foreground">Change the port in config.json; the running dashboard keeps its port.</span>
           </div>
           <StatusLine status={status.dashboard} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Compare context</CardTitle>
+          <CardDescription>CLI applies changes on the next invocation. Restart running MCP servers and reconnect their clients to apply changes; saving here does not restart them.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <Toggle id="compare-require-context" label="Require compare subject and scope" checked={draft.compare.requireContext} onChange={value => setCompare({ requireContext: value })} />
+          <p className="text-sm text-muted-foreground">When enabled, CLI compare needs both <code>--subject</code> and <code>--scope</code>, and MCP compare needs both fields. This setting is on by default.</p>
+          <StatusLine status={status.compare} />
         </CardContent>
       </Card>
       <ModelPricesCard />

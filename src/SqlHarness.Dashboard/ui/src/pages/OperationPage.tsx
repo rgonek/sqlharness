@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { Link, useParams } from "@tanstack/react-router"
+import { Link, useParams, useSearch } from "@tanstack/react-router"
 import { NotFoundError } from "@/api/client"
 import { useOperation } from "@/api/queries"
 import type { OperationDetail } from "@/api/types"
@@ -94,12 +94,13 @@ function Comparison({ detail }: { detail: OperationDetail }) {
 
 export function OperationPage() {
   const raw = useParams({ from: "/operations/$id" }).id
+  const search = useSearch({ from: "/operations/$id" })
   const id = parseRouteId(raw)
   if (id === null) return <ErrorState error={new NotFoundError(`/operations/${raw}`)} />
-  return <OperationView id={id} />
+  return <OperationView id={id} returnSearch={search} />
 }
 
-function OperationView({ id }: { id: number }) {
+function OperationView({ id, returnSearch }: { id: number; returnSearch: { returnSession?: number; returnSubject?: string; returnScope?: string } }) {
   const query = useOperation(id)
 
   if (query.error) return <ErrorState error={query.error} />
@@ -107,6 +108,7 @@ function OperationView({ id }: { id: number }) {
 
   const detail = query.data
   const op = detail.operation
+  const returnSession = returnSearch.returnSession === op.sessionId ? returnSearch.returnSession : undefined
   return (
     <div className="space-y-4">
       <Card>
@@ -120,7 +122,7 @@ function OperationView({ id }: { id: number }) {
           </div>
           <CardDescription>
             {op.operation} by {agentLabel(op.agentKind)} in{" "}
-            <Link to="/sessions/$id" params={{ id: String(op.sessionId) }}>
+            <Link to="/sessions/$id" params={{ id: String(op.sessionId) }} search={returnSession ? { subject: returnSearch.returnSubject, scope: returnSearch.returnScope } : undefined}>
               {detail.session.sessionKey}
             </Link>
           </CardDescription>

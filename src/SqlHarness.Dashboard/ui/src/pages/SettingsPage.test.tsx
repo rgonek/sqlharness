@@ -10,6 +10,7 @@ const response = (over: Partial<SettingsResponse> = {}): SettingsResponse => ({
   settings: {
     journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
     dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8 },
+    compare: { requireContext: true },
   },
   ...over,
 })
@@ -30,6 +31,22 @@ function stubSettings(initial: SettingsResponse) {
 }
 
 type Put = { journal: { storeSensitive: boolean; retention: { enabled: boolean; maxAgeDays: number } }; dashboard: { autoStart: boolean } }
+
+test("compare context is on by default and disabling it preserves other settings", async () => {
+  const puts = stubSettings(response())
+  renderApp("/settings")
+
+  const toggle = await screen.findByRole("switch", { name: "Require compare subject and scope" })
+  expect(toggle).toBeChecked()
+  const explanation = screen.getByText((_, node) => node?.tagName === "P" && Boolean(node.textContent?.startsWith("When enabled, CLI compare needs both")))
+  expect(explanation).toHaveTextContent(/CLI compare needs both.*subject.*scope.*MCP compare needs both/i)
+  expect(screen.getByText(/CLI applies changes on the next invocation.*Restart running MCP servers and reconnect/i)).toBeInTheDocument()
+  await userEvent.click(toggle)
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect((puts[0].body as Put & { compare: { requireContext: boolean } }).compare.requireContext).toBe(false)
+  expect((puts[0].body as Put).journal).toEqual(response().settings.journal)
+  expect((puts[0].body as Put).dashboard).toEqual(response().settings.dashboard)
+})
 
 test("enabling storeSensitive asks for confirmation, then saves", async () => {
   const puts = stubSettings(response())
