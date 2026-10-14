@@ -742,8 +742,7 @@ public sealed class McpToolSchemaTests : IDisposable
         }
     }
 
-    // 012/T2: a matrix value is a string or JSON null (typed NULL), and the
-    // compact parameter shorthand must stay discoverable in tools/list.
+    // 012/T2: a matrix value is a string or JSON null (typed NULL).
     [Fact]
     public async Task Matrix_values_schema_advertises_string_or_null_items_without_a_comma_limit()
     {
@@ -752,8 +751,6 @@ public sealed class McpToolSchemaTests : IDisposable
         var itemType = Properties(matrix).GetProperty("values").GetProperty("items").GetProperty("type");
         Assert.Equal(JsonValueKind.Array, itemType.ValueKind);
         Assert.Equal(["null", "string"], itemType.EnumerateArray().Select(item => item.GetString()!).Order(StringComparer.Ordinal).ToArray());
-        var description = matrix.GetProperty("description").GetString()!;
-        Assert.Equal("One-parameter shorthand: {name, type, values}.", description);
     }
 
     // The fixed-name clash is Core's last matrix check, after every value is

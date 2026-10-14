@@ -6,13 +6,13 @@ SQLHarness is a command-line optimization harness for SQL Server, Azure SQL, and
 
 ## Agent startup
 
-Start offline; none of these commands connects:
+Use capabilities when the engine or needed limits are unknown, and doctor for local configuration
+problems. These commands do not connect:
 
 <!-- docs-sync:example -->
 ```powershell
 sqlharness capabilities prod-eu --json
 sqlharness doctor --json
-sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --dry-run --json
 ```
 
 `capabilities <profile> --json` describes the commands, the output modes each command accepts
@@ -22,6 +22,17 @@ only. It never takes `--var`; an unknown or unreadable profile returns a JSON er
 `2` (`profile_unknown`, `profile_unavailable`). `doctor --json` checks the local installation and
 omits accounts and environment values. `--dry-run` on `query`, `measure` and `compare` checks the exact
 invocation offline; the dry-run rule is in the [Safety contract](#safety-contract).
+
+Execute queries and benchmarks directly; SQL complexity, setup and multiple cases do not require a
+separate dry run. Execution already validates before connecting. Use dry run optionally while preparing
+a later invocation; it does not predict execution cost or database errors.
+
+Start with compact output (`--output agent`, or benchmark `--json-summary`), then retrieve details
+needed for the conclusion. Correct ordinary SQL/argument errors within unchanged read-only scope when
+the cause is clear. Stop on safety rejection, authentication/access failure or target mismatch; do not
+automatically repeat timeouts or cancellations. A persistent-mutation attempt consumes its approval.
+Argument validation and safety rejection can share an exit code and error code: use the detailed
+message to identify the cause. Correct only a clear input error; stop on ambiguous rejections.
 
 See [the agent output contract](docs/superpowers/specs/2026-09-26-agent-output-contract.md)
 and [the audit roadmap](docs/superpowers/plans/2026-09-26-audit-roadmap.md).

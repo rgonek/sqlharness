@@ -256,11 +256,12 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
     public sealed class Settings : TargetSettings
     {
         [CommandOption("--query <PATH>")] public string? Query { get; set; }
+        [Description("Setup once on the measured session. SQL Server: create #temps before the first parameter reference, populate afterwards; batch locals do not cross into measured SQL.")]
         [CommandOption("--setup <PATH>")] public string? Setup { get; set; }
         [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
-        [Description("JSON file containing only name and parameters (64 KiB; optional BOM, comments, and trailing commas). Repeat for at least two sets. Fixed --param values are shared by every set; use --param for a single set. Unlike compare --matrix (one parameter, two query variants, a fresh connection per value), this measures one query on one session with setup once.")]
+        [Description("2..32 named JSON sets with matching declared types; only name and parameters (64 KiB; BOM/comments/trailing commas accepted). Fixed --param names must not overlap. One shared session/cache; setup binds the first set once; measured order rotates. Report per-set stability, not cross-set equivalence.")]
         [CommandOption("--param-set <PATH>")]
         public string[] ParameterSets { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;
@@ -323,15 +324,17 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
     {
         [CommandOption("--baseline <PATH>")] public string? Baseline { get; set; }
         [CommandOption("--candidate <PATH>")] public string? Candidate { get; set; }
+        [Description("Setup once per case's session. SQL Server: create #temps before the first parameter reference, populate afterwards; batch locals do not cross into measured SQL.")]
         [CommandOption("--setup <PATH>")] public string? Setup { get; set; }
         [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
-        [Description("One matrix dimension only; at least two typed values; sequential user-supplied order. A new connection and one setup per value. The first failure stops the run. Completed cell artifacts remain. Ticket SQL stays outside the application repository.")]
+        [Description("One typed parameter: 2..32 distinct, comma-separated nonempty values in supplied order; no overlap with fixed --param. A fresh session/setup per value. First failure stops the run; completed cell artifacts remain.")]
         [CommandOption("--matrix <NAME:TYPE=VALUES>")]
         public string[] Matrix { get; set; } = [];
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;
         [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
+        [Description("Compare observed rows: ordered, multiset, set, or off. Read regression verdict/reasons separately; it does not change the exit code.")]
         [CommandOption("--compare-results <MODE>")]
         [DefaultValue("ordered")]
         public string CompareResults { get; set; } = "ordered";

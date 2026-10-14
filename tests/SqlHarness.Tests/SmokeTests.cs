@@ -51,7 +51,7 @@ public sealed class SmokeTests
     }
 
     [Fact]
-    public async Task Measure_help_distinguishes_param_set_from_param_and_matrix()
+    public async Task Measure_help_exposes_parameter_set_and_benchmark_options()
     {
         var (exit, standardOutput, standardError) = await RunCliAsync("measure", "--help");
 
@@ -65,24 +65,17 @@ public sealed class SmokeTests
         Assert.Contains("--json-summary", help, StringComparison.Ordinal);
         Assert.Contains("--param-set", help, StringComparison.Ordinal);
         Assert.Contains("--param", help, StringComparison.Ordinal);
-        Assert.Contains("compare --matrix", help, StringComparison.Ordinal);
-        Assert.Contains("single set", help, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("one parameter", help, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("two query variants", help, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("fresh connection", help, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("one session", help, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task Compare_help_keeps_matrix_contract()
+    public async Task Compare_help_exposes_matrix_and_equivalence_options()
     {
         var (exit, standardOutput, standardError) = await RunCliAsync("compare", "--help");
 
         Assert.True(exit == 0, standardError);
-        Assert.Contains(
-            "One matrix dimension only; at least two typed values; sequential user-supplied order. A new connection and one setup per value. The first failure stops the run. Completed cell artifacts remain. Ticket SQL stays outside the application repository",
-            Flatten(standardOutput),
-            StringComparison.Ordinal);
+        Assert.Contains("--matrix", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--compare-results", standardOutput, StringComparison.Ordinal);
+        Assert.Contains("--setup", standardOutput, StringComparison.Ordinal);
     }
 
     private static string Flatten(string text) =>

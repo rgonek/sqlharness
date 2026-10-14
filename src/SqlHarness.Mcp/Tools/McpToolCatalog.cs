@@ -94,15 +94,15 @@ public sealed class McpToolHandlers(
         RequestContext<CallToolRequestParams> ctx,
         [Description("Measured query source: exactly one of sql or file.")]
         McpSqlSourceArgument query,
-        [Description("Optional setup source: exactly one of sql or file, or omit.")]
+        [Description(McpToolCatalog.SetupDescription)]
         McpSqlSourceArgument? setup = null,
         [Description("Parameters as {name, type, value}; value is a culture-invariant string or JSON null.")]
         McpParameterArgument[]? parameters = null,
-        [Description("Parameter-set files (.sqljson) under an input root.")]
+        [Description(McpToolCatalog.ParameterSetFilesDescription)]
         string[]? parameterSetFiles = null,
-        [Description("Inline parameter sets: 2..32 of {name, parameters}.")]
+        [Description(McpToolCatalog.ParameterSetsDescription)]
         McpParameterSetArgument[]? parameterSets = null,
-        [Description("One-parameter shorthand: {name, type, values}.")]
+        [Description(McpToolCatalog.MatrixDescription)]
         McpMatrixArgument? matrix = null,
         [Description("Repetitions 1..100.")]
         int repeat = 5,
@@ -129,7 +129,7 @@ public sealed class McpToolHandlers(
         McpSqlSourceArgument baseline,
         [Description("Candidate source: exactly one of sql or file.")]
         McpSqlSourceArgument candidate,
-        [Description("Optional setup source: exactly one of sql or file, or omit.")]
+        [Description(McpToolCatalog.SetupDescription)]
         McpSqlSourceArgument? setup = null,
         [Description("Parameters as {name, type, value}; value is a culture-invariant string or JSON null.")]
         McpParameterArgument[]? parameters = null,
@@ -140,11 +140,11 @@ public sealed class McpToolHandlers(
         [Description("Result comparison mode.")]
         [AllowedValues("ordered", "multiset", "set", "off")]
         string compareResults = "ordered",
-        [Description("One-parameter shorthand: {name, type, values}.")]
+        [Description(McpToolCatalog.MatrixDescription)]
         McpMatrixArgument? matrix = null,
-        [Description("Inline parameter sets: 2..32 of {name, parameters}.")]
+        [Description(McpToolCatalog.ParameterSetsDescription)]
         McpParameterSetArgument[]? parameterSets = null,
-        [Description("Parameter-set files (.sqljson) under an input root.")]
+        [Description(McpToolCatalog.ParameterSetFilesDescription)]
         string[]? parameterSetFiles = null,
         [Description("Also require matching column nullability (allowNull) for result equivalence. Default compares observed data only and reports nullability separately. Not allowed with compareResults off.")]
         bool compareNullability = false,
@@ -251,7 +251,7 @@ public sealed class McpToolHandlers(
         RequestContext<CallToolRequestParams> ctx,
         [Description("Artifact directory name from a saved report.")]
         string id,
-        [Description("Safe section to read.")]
+        [Description(McpToolCatalog.ArtifactSectionDescription)]
         [AllowedValues("summary", "metrics", "operators", "statements", "matrix-cells", "plan")]
         string section,
         [Description("Zero-based continuation cursor for matrix-cells, statements, operators, and plan nodes.")]
@@ -262,7 +262,7 @@ public sealed class McpToolHandlers(
         int statement = 0,
         [Description("Measure parameter set for section=plan.")]
         string? parameterSet = null,
-        [Description("Measured repetition to select for section=plan.")]
+        [Description(McpToolCatalog.RepetitionDescription)]
         int? repetition = null,
         [Description("Return bounded statement text and predicates in section=plan.")]
         bool includeText = false,
@@ -433,6 +433,14 @@ public static class McpToolCatalog
         "Runtime configuration of this server: scopeMode, engines, allowedProfiles (request scope), inputRoots (paged), processLimits, configurationRef. Call when this connection's configuration is unknown; reuse the result for this connection and call again after a reconnect or server restart.";
     public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
     public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";
+    public const string SetupDescription = "Optional sql or file, once per measured session. SQL Server: create #temps before the first parameter reference, populate afterwards; batch locals do not cross into measured SQL.";
+    public const string ParameterSetFilesDescription = "2..32 .sqljson files under an input root. Exclusive with parameterSets and matrix; fixed and per-set parameter names must not overlap.";
+    public const string ParameterSetsDescription = "2..32 named {name, parameters} sets with matching declared types. Exclusive with parameterSetFiles and matrix; fixed and per-set parameter names must not overlap.";
+    public const string MatrixDescription = "One parameter: {name, type, values}, 2..32 distinct values. Exclusive with parameterSets and parameterSetFiles; name must not overlap fixed parameters.";
+    public const string MeasureDescription = "Measure one query across repeats. Sets rotate on one session/shared cache; setup binds the first set once. Results report per-set stability, not cross-set equivalence.";
+    public const string CompareDescription = "Compare baseline/candidate measurements and observed rows. Each set has its own session/setup; first failure stops the run and retains completed cells. Read regression verdict/reasons separately from exitCode.";
+    public const string ArtifactSectionDescription = "Safe saved section. operators is capped; planShapeStable compares plan shape, not timing or row counts; null means insufficient evidence.";
+    public const string RepetitionDescription = "Measured repetition for section=plan; default is the identified last measured run. A run without a saved plan reports missing evidence, never an earlier plan.";
 
     public static readonly IReadOnlyList<string> ToolNames =
     [
@@ -473,8 +481,8 @@ public static class McpToolCatalog
         {
             Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
             Tool(ToolNames[1], nameof(McpRequestToolHandlers.QueryAsync), "Run a bounded query against the supplied request scope.", true, false, null, true),
-            Tool(ToolNames[2], nameof(McpRequestToolHandlers.MeasureAsync), "Measure one query against the supplied request scope.", null, false, null, true),
-            Tool(ToolNames[3], nameof(McpRequestToolHandlers.CompareAsync), "Compare queries against the supplied request scope.", null, false, null, true),
+            Tool(ToolNames[2], nameof(McpRequestToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
+            Tool(ToolNames[3], nameof(McpRequestToolHandlers.CompareAsync), CompareDescription, null, false, null, true),
             Tool(ToolNames[4], nameof(McpRequestToolHandlers.WatchAsync), "Poll a bounded query against the supplied request scope.", true, false, null, true),
             Tool(ToolNames[5], nameof(McpRequestToolHandlers.SnapshotAsync), "Capture or diff a snapshot against the supplied request scope.", null, false, null, true),
             Tool(ToolNames[6], nameof(McpRequestToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
@@ -532,10 +540,10 @@ public static class McpToolCatalog
         {
             Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
             Tool(ToolNames[1], nameof(McpToolHandlers.QueryAsync), "Run a bounded query passing the static visible-effects text check; no persistent-mutation flags are offered on this path. Hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. Exactly one of inline sql (at most 1 MiB) or a file under an input root.", true, false, null, true),
-            Tool(ToolNames[2], nameof(McpToolHandlers.MeasureAsync), "Measure one query across repeats with fixed parameters and one of named sets, .sqljson files, or a one-parameter matrix. Setup runs once per session.", null, false, null, true),
-            Tool(ToolNames[3], nameof(McpToolHandlers.CompareAsync), "Compare baseline and candidate with fixed parameters and one of named sets, .sqljson files, or a one-parameter matrix.", null, false, null, true),
+            Tool(ToolNames[2], nameof(McpToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
+            Tool(ToolNames[3], nameof(McpToolHandlers.CompareAsync), CompareDescription, null, false, null, true),
             Tool(ToolNames[4], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
-            Tool(ToolNames[5], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it. No force flag.", null, false, null, true),
+            Tool(ToolNames[5], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it.", null, false, null, true),
             Tool(ToolNames[6], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
             Tool(ToolNames[7], nameof(McpToolHandlers.ArtifactAsync), "Read a safe section (summary, metrics, operators, statements, matrix-cells, or plan) of a saved benchmark artifact.", true, false, true, false),
         };

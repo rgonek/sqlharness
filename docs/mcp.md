@@ -119,6 +119,10 @@ names only the failure class.
 
 Exactly 8 tools are registered explicitly by name. No assembly scanning is used, so adding a public method can never silently widen the surface.
 
+Tool and argument descriptions expose setup/session rules, mutually exclusive parameter-set inputs
+and saved-plan selection at the call site. Use capabilities for runtime configuration, and the result's
+status, omissions, continuation and evidence gaps to judge whether the returned evidence is complete.
+
 | Tool | Behavior |
 |---|---|
 | `sqlharness_capabilities` | Runtime configuration of this server process: `configurationRef`, `scopeMode` (`fixed` or `request`), `engines`, `processLimits` (`maxResultBytes`, `maxOperationSeconds`), `allowedProfiles` (request mode only) and the paged input roots (see below). `includeDiagnostics: true` adds local counts and directory existence flags. Never disclosed: secrets, environment values, the dashboard token, unrelated filesystem paths, or profiles outside the allowlist. |

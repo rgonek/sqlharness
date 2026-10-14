@@ -22,7 +22,7 @@ public sealed class ArtifactCommand(ISqlHarnessModule module, OutputContext outp
         public string? Id { get; set; }
 
         [CommandOption("--section <SECTION>")]
-        [Description("Safe section to read: summary, metrics, operators, statements, matrix-cells, or plan.")]
+        [Description("summary, metrics, operators, statements, matrix-cells, or plan. operators is capped; planShapeStable concerns shape, not timing or row counts.")]
         public string? Section { get; set; }
 
         [CommandOption("--cursor <INDEX>")]
@@ -42,7 +42,7 @@ public sealed class ArtifactCommand(ISqlHarnessModule module, OutputContext outp
         public string? ParameterSet { get; set; }
 
         [CommandOption("--repetition <INDEX>")]
-        [Description("Measured repetition to select for section=plan.")]
+        [Description("Measured repetition for section=plan; default is the identified last measured run. A missing plan is reported, never replaced by an earlier plan.")]
         public int? Repetition { get; set; }
 
         [CommandOption("--include-text")]

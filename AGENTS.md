@@ -4,16 +4,15 @@ SQLHarness runs bounded SQL Server and PostgreSQL queries for coding agents: exe
 
 ## Working against a database
 
-1. **Start offline.** `sqlharness capabilities <profile> --json`, `sqlharness doctor --json`, then check the exact invocation with `--dry-run` on `query`, `measure` or `compare`. A dry run never connects; it does not authorize a later mutation.
+1. **Resolve unknown configuration.** Use `sqlharness capabilities <profile> --json` when the engine or needed limits are unknown; `sqlharness doctor --json` diagnoses local configuration. Execute directly; `--dry-run` is an optional offline check, not execution proof or mutation approval.
 2. **Lock the scope.** One closed named profile and one `--var` set per invocation. A different profile or different variables needs a new explicit user request (in request-scope MCP, the operator's `--allow-profile` list approves profile switches; different variables still need the user). `--unsafe-direct` is for an explicit user request only, with complete `--server`, `--database` and `--auth`, and never with a profile or `--var`.
 3. **Inventory before measuring.** Pick representative cases offline: row count, cardinality distribution, ordering ties, missing history, boundary dates, empty results.
 4. **Run one batch per invocation.** Pass values as typed `--param` (types in [README Quick start](README.md#quick-start)). For `measure` and `compare`, put preparation in `--setup`, which runs once on the measured session. Any ScriptDom-parsable construct inside a top-level `SELECT` is accepted, so SQLHarness handles unfamiliar nested syntax; `sqlcmd` is not a fallback.
-5. **Read compact output.** `--json-summary` on `measure`/`compare` gives a bounded projection; `--json` gives the full report.
+5. **Read compact output.** Start with `--output agent`, or `--json-summary` on `measure`/`compare`. Check errors, omissions and clipped cells; retrieve required detail before drawing conclusions.
 6. **Judge equivalence as technical.** `compare --compare-results` checks observed rows, not domain meaning. For a domain check use two-direction `EXCEPT`, or grouped counts when duplicates matter.
 
 ```powershell
-sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --dry-run --json
-sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --json
+sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --output agent
 sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\before.sql --candidate .\after.sql --repeat 5 --json-summary
 ```
 
@@ -21,6 +20,8 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\before.s
 
 - **Read-only is the default.** A persistent mutation needs fresh, single-use user approval for the exact batch and the resolved database; then record that approval with `--allow-mutation --confirm-database <exact-resolved-name>`. Session-local work (SQL Server `#temp` and table variables, PostgreSQL `TEMP`) follows the [setup contract](README.md#benchmark-setup-contract) and needs no approval.
 - **A safety rejection is a stop.** Report it and ask the user for a narrower request or an approval. Persistent helper objects are never the way around a rejected setup.
+- **Correct errors within scope.** Stop on tool unavailability, authentication/access failure or target mismatch. Ordinary SQL/argument errors may be corrected and retried within the unchanged read-only scope when the cause is clear. Do not automatically repeat timeouts or cancellations. A persistent-mutation attempt consumes its approval.
+- **Read the error details.** Validation and safety can share an exit code and error code. Correct only a clear input error; an explicit SQL safety rejection or an ambiguous rejection is a stop.
 - **Secrets live in environment variables** named by the profile, and in process memory only.
 - **Local outputs are locally sensitive:** snapshots under `~/.sqlharness/snapshots`, compare/measure artifacts, `.sqlplan` files, `--param-set` files and `~/.sqlharness/data/activity.db`. Commit, attach or publish them only after the user reviewed them; the SQLHarness home itself is created with mode 0700 on Unix, and `doctor` warns when an existing home is broader.
 - **The dashboard** (`sqlharness dashboard`) is the operator's tool; agents leave it and its API alone.
