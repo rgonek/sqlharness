@@ -72,17 +72,17 @@ public sealed class McpToolHandlers(
         string? sql = null,
         [Description("SQL file under an operator input root. Exactly one of sql or file.")]
         string? file = null,
-        [Description("Parameters as {name, type, value}; value is a culture-invariant string or JSON null.")]
+        [Description("Typed values: culture-invariant text or JSON null.")]
         McpParameterArgument[]? parameters = null,
         [Description("SQL timeout 1..300 seconds.")]
         int timeout = 30,
         [Description("Presentation row cap 0..500.")]
         int maxRows = 50,
-        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")]
+        [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
+        [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
-        [Description("Check every argument offline and stop before connecting. Nothing runs, nothing is written.")]
+        [Description("Offline validation only; no execution or writes.")]
         bool dryRun = false,
         CancellationToken ct = default) =>
         RunDbAsync("sqlharness_query", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
@@ -95,11 +95,11 @@ public sealed class McpToolHandlers(
 
     public Task<CallToolResult> MeasureAsync(
         RequestContext<CallToolRequestParams> ctx,
-        [Description("Measured query source: exactly one of sql or file.")]
+        [Description("Exactly one of sql/file.")]
         McpSqlSourceArgument query,
         [Description(McpToolCatalog.SetupDescription)]
         McpSqlSourceArgument? setup = null,
-        [Description("Parameters as {name, type, value}; value is a culture-invariant string or JSON null.")]
+        [Description("Typed values: culture-invariant text or JSON null.")]
         McpParameterArgument[]? parameters = null,
         [Description(McpToolCatalog.ParameterSetFilesDescription)]
         string[]? parameterSetFiles = null,
@@ -111,11 +111,11 @@ public sealed class McpToolHandlers(
         int repeat = 5,
         [Description("SQL timeout 1..300 seconds.")]
         int? timeout = null,
-        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")]
+        [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
+        [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
-        [Description("Check every argument offline and stop before connecting. Nothing runs, nothing is written.")]
+        [Description("Offline validation only; no execution or writes.")]
         bool dryRun = false,
         CancellationToken ct = default) =>
         RunDbAsync("sqlharness_measure", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
@@ -128,9 +128,9 @@ public sealed class McpToolHandlers(
 
     public Task<CallToolResult> CompareAsync(
         RequestContext<CallToolRequestParams> ctx,
-        [Description("Baseline source: exactly one of sql or file.")]
+        [Description("Exactly one of sql/file.")]
         McpSqlSourceArgument baseline,
-        [Description("Candidate source: exactly one of sql or file.")]
+        [Description("Exactly one of sql/file.")]
         McpSqlSourceArgument candidate,
         [Description("Short stable identifier for the SQL being optimized.")]
         string subject,
@@ -138,7 +138,7 @@ public sealed class McpToolHandlers(
         string scope,
         [Description(McpToolCatalog.SetupDescription)]
         McpSqlSourceArgument? setup = null,
-        [Description("Parameters as {name, type, value}; value is a culture-invariant string or JSON null.")]
+        [Description("Typed values: culture-invariant text or JSON null.")]
         McpParameterArgument[]? parameters = null,
         [Description("Repetitions 1..100.")]
         int repeat = 5,
@@ -153,13 +153,13 @@ public sealed class McpToolHandlers(
         McpParameterSetArgument[]? parameterSets = null,
         [Description(McpToolCatalog.ParameterSetFilesDescription)]
         string[]? parameterSetFiles = null,
-        [Description("Also require matching column nullability (allowNull) for result equivalence. Default compares observed data only and reports nullability separately. Not allowed with compareResults off.")]
+        [Description("Require matching allowNull; otherwise reported separately. Invalid with compareResults off.")]
         bool compareNullability = false,
-        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")]
+        [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
+        [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
-        [Description("Check every argument offline and stop before connecting. Nothing runs, nothing is written.")]
+        [Description("Offline validation only; no execution or writes.")]
         bool dryRun = false,
         CancellationToken ct = default) =>
         RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
@@ -201,7 +201,7 @@ public sealed class McpToolHandlers(
         string? sql = null,
         [Description("SQL file under an operator input root. Exactly one of sql or file.")]
         string? file = null,
-        [Description("Parameters as {name, type, value}; value is a culture-invariant string or JSON null.")]
+        [Description("Typed values: culture-invariant text or JSON null.")]
         McpParameterArgument[]? parameters = null,
         [Description("SQL timeout 1..300 seconds.")]
         int timeout = 30,
@@ -215,9 +215,9 @@ public sealed class McpToolHandlers(
         string? interval = null,
         [Description("Maximum watch time like 15m (s/m/h suffix, at most 24h). Default 15m.")]
         string? maxDuration = null,
-        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")]
+        [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
+        [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
         RunDbAsync("sqlharness_watch", ctx, maxResultBytes, maxOperationSeconds, async (token, remaining) =>
@@ -242,15 +242,15 @@ public sealed class McpToolHandlers(
         string? sql = null,
         [Description("SQL file under an operator input root. Exactly one of sql or file.")]
         string? file = null,
-        [Description("Parameters as {name, type, value}; value is a culture-invariant string or JSON null.")]
+        [Description("Typed values: culture-invariant text or JSON null.")]
         McpParameterArgument[]? parameters = null,
         [Description("SQL timeout 1..300 seconds.")]
         int timeout = 30,
         [Description("Presentation row cap 0..500.")]
         int maxRows = 50,
-        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")]
+        [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
-        [Description("Time budget 1..86400 seconds; only lowers the process maximum.")]
+        [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
         RunDbAsync("sqlharness_snapshot", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
@@ -465,10 +465,10 @@ public static class McpToolCatalog
         "Runtime configuration of this server: scopeMode, active compareContext policy, engines, allowedProfiles (request scope), inputRoots (paged), processLimits, configurationRef. Call when this connection's configuration is unknown; reuse the result for this connection and call again after a reconnect or server restart.";
     public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
     public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";
-    public const string SetupDescription = "Optional sql or file, once per measured session. SQL Server: create #temps before the first parameter reference, populate afterwards; batch locals do not cross into measured SQL.";
-    public const string ParameterSetFilesDescription = "2..32 .sqljson files under an input root. Exclusive with parameterSets and matrix; fixed and per-set parameter names must not overlap.";
-    public const string ParameterSetsDescription = "2..32 named {name, parameters} sets with matching declared types. Exclusive with parameterSetFiles and matrix; fixed and per-set parameter names must not overlap.";
-    public const string MatrixDescription = "One parameter: {name, type, values}, 2..32 distinct values. Exclusive with parameterSets and parameterSetFiles; name must not overlap fixed parameters.";
+    public const string SetupDescription = "Once per measured session. SQL Server: create #temps before parameter use, then populate; setup locals do not cross batches.";
+    public const string ParameterSetFilesDescription = "2..32 .sqljson files under input roots; exclusive with parameterSets/matrix; disjoint from fixed parameters.";
+    public const string ParameterSetsDescription = "2..32 named sets, matching declared types; exclusive with parameterSetFiles/matrix; disjoint from fixed parameters.";
+    public const string MatrixDescription = "2..32 distinct values for one parameter; exclusive with parameterSets/parameterSetFiles; disjoint from fixed parameters.";
     public const string MeasureDescription = "Measure one query across repeats. Sets rotate on one session/shared cache; setup binds the first set once. Results report per-set stability, not cross-set equivalence.";
     public const string CompareDescription = "Compare baseline/candidate measurements and observed rows. subject and textual scope follow the frozen compare.requireContext policy reported by capabilities; request-scoped target selects the database. Each set has its own session/setup; first failure stops the run and retains completed cells. Read regression verdict/reasons separately from exitCode.";
     public const string ArtifactSectionDescription = "Safe saved section. operators is capped; planShapeStable compares plan shape, not timing or row counts; null means insufficient evidence.";
