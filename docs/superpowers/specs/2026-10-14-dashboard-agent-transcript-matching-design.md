@@ -55,6 +55,15 @@ CREATE TABLE agent_conversations (
     updated_at TEXT NOT NULL,
     UNIQUE (agent_kind, conversation_id)
 );
+CREATE TABLE agent_tool_calls (           -- staging: SQLHarness tool uses seen before/without a linked operation
+    agent_kind TEXT NOT NULL,
+    call_id TEXT NOT NULL,
+    conversation INTEGER NOT NULL REFERENCES agent_conversations(id) ON DELETE CASCADE,
+    model TEXT,
+    effort TEXT,
+    seen_at TEXT NOT NULL,
+    PRIMARY KEY (agent_kind, call_id)
+);
 CREATE TABLE operation_agent_links (
     operation_id INTEGER PRIMARY KEY REFERENCES operations(id) ON DELETE CASCADE,
     conversation INTEGER NOT NULL REFERENCES agent_conversations(id),
@@ -69,14 +78,14 @@ CREATE TABLE transcript_cursors (
 );
 ```
 
-Retention deletes links with their operations and conversations no link references. **Clear matched data** empties all three tables. Writes use the dashboard writer introduced in Spec A (schema-version check, short transactions).
+Claude writes the `tool_use` line before SQLHarness journals the operation, so a cycle can read the line before the operation exists; staging every SQLHarness tool use in `agent_tool_calls` lets a later cycle link it. The matcher prunes staged calls once linked or after 7 days. Retention deletes links with their operations and conversations nothing references. **Clear matched data** empties all four tables. Writes use the dashboard writer introduced in Spec A (schema-version check, short transactions).
 
 ## Presentation
 
 - Session display name: `annotation.title ?? title of the session's most recent linked conversation ?? session_key`. In the title editor the agent title is the placeholder, marked "from Claude"/"from Codex".
 - Session page: a **Conversations** list (title, agent, operation count) when a session links to one or more conversations.
 - Operation page, "Agent call" card: model/effort from the call as today; when only the transcript has them, show them with a "from transcript" marker.
-- Stats and workflow cost: model = `COALESCE(operations.agent_model, operation_agent_links.model)`; the call value wins.
+- Effective model everywhere the model is shown (operation lists, Agent call card; Stats when it starts using models): `COALESCE(operations.agent_model, operation_agent_links.model)` with a source marker; the call value wins. Stats do not use the model today.
 - `SessionSummary`/`SessionDetail`/`OperationDetail` gain the fields above; contract test updated.
 
 ## Tests
