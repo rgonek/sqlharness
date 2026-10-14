@@ -46,4 +46,13 @@ Exit codes: `-1` (255 on POSIX): unhandled CLI error in text mode, including com
 - **Protect what the caller cannot see.** The security boundary is the resolved credential and the persistent-mutation classifier. SQL text, parameters, the caller's own plan files, result data and server/database names reach the caller anyway (they supplied them, or `query` reads them), so they stay readable; bound their size with budgets instead of masking them.
 - **Done means both gates green:** `pwsh ./scripts/verify.ps1` and `pwsh ./scripts/verify-linux.ps1` (WSL ext4, provision once with `pwsh ./scripts/setup-linux-gate.ps1`). Run one gate at a time.
 - **Plans** live in `plans/`; `plans/README.md` is the index and execution queue. Update a plan's row when its work lands.
-- **Docs follow behaviour.** A behaviour change updates README.md (reference), `skills/sqlharness/SKILL.md` (agent digest) and `Capabilities.cs`; this file changes only when the contract or the map changes.
+- **Docs follow behaviour.** Update README.md (reference), tool descriptions/schemas and capabilities where affected. Update `skills/sqlharness/SKILL.md` only when the user workflow changes; this file changes only when the contract or the map changes.
+
+## User-facing skills and token budget
+
+`skills/sqlharness/SKILL.md` is a lean workflow template for ordinary users and custom use-case skills. Assume the consuming agent has no repository access and needs to do its job, not learn SQLHarness internals.
+
+- Keep the skill focused on workflow, task-specific decisions and interpreting evidence. Do not repeat tool catalogs, argument descriptions, defaults, limits or technical contracts available through tool descriptions/schemas or capabilities.
+- Put tool-specific guidance in tool descriptions/schemas and runtime policy in capabilities. Keep each surface concise and avoid duplication; minimize the total tokens needed for the user's task.
+- Essential guidance must be available through the installed skill, command help or tool metadata/capabilities. Repository-relative README, AGENTS and docs links must not be required to use the skill.
+- Apply these rules to the bundled skill, derived custom skills and future documentation changes.
