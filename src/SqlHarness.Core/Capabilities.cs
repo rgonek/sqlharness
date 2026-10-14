@@ -151,6 +151,8 @@ public static class SqlHarnessCapabilitiesProvider
                 maxReportBytes = ArtifactReader.MaxReportBytes,
                 pagedSections = "matrix-cells,operators,plan,statements",
                 planSelectors = "variant,statement,parameterSet,repetition,includeText",
+                planSourceWindowNodes = ArtifactReader.MaxPlanPageSourceNodes,
+                planPaging = "each plan response is byte-budgeted; continuation advances by nodes returned",
             },
             ["watchNdjson"] = new { events = new[] { "started", "changed", "completed", "failed" }, schemaVersion = WatchNdjsonWriter.SchemaVersion, sequence = "strictly increasing; one terminal record", history = "none; every change emitted" },
         };

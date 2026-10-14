@@ -239,6 +239,217 @@ public sealed class McpTokenBudgetTests
     }
 
     [Fact]
+    public void Artifact_plan_clipping_count_is_stable_in_the_mcp_envelope()
+    {
+        var nodes = Enumerable.Range(0, 32).Select(index => new ArtifactPlanNode(
+            index == 0 ? "0" : "0/" + (index - 1), index == 0 ? null : "0",
+            new PlanNode("Scan", null, null, null, 1, 1, 1, 0.1, null, [], []))).ToArray();
+        var section = new ArtifactPlanSection("artifact", "baseline", null, 0, 1, 1,
+            "last-measured", [1], null, nodes.Length, nodes, null)
+        { StatementText = new string('s', 600) };
+
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, section, null), "sqlharness_artifact");
+        ResultTextBytes(result, (int)McpLimits.DefaultCallToolResultBudgetBytes);
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+
+        Assert.Equal(1, document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32());
+        Assert.Equal(512, document.RootElement.GetProperty("result").GetProperty("statementText").GetString()!.Length);
+    }
+
+    [Fact]
+    public void Artifact_plan_with_37_short_nodes_fits_one_default_budget_response()
+    {
+        var (root, id) = CreateSyntheticPlanArtifact(37);
+        try
+        {
+            var seen = new List<string>();
+            var cursor = 0;
+            var calls = 0;
+            var emittedBytes = 0;
+            JsonElement lastProjection;
+            while (true)
+            {
+                var result = ReadPlanResult(root, id, cursor, includeText: false, budget: 65536);
+                emittedBytes += ResultTextBytes(result, 65536);
+                calls++;
+                using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+                var projection = document.RootElement.GetProperty("result");
+                seen.AddRange(projection.GetProperty("nodes").EnumerateArray()
+                    .Select(node => node.GetProperty("nodePath").GetString()!));
+                lastProjection = projection.Clone();
+                var continuation = projection.GetProperty("continuation");
+                if (continuation.ValueKind == JsonValueKind.Null)
+                    break;
+                cursor = continuation.GetInt32();
+            }
+
+            _output.WriteLine($"synthetic-small: nodes=37 selector=baseline/statement-0/repetition-last/includeText=false budget=65536 calls={calls} emittedUtf8Bytes={emittedBytes} estimatedTokensCeilBytesDiv4={(emittedBytes + 3) / 4}; fixture/discovery/input/chat unmeasured");
+            Assert.Equal(1, calls);
+            Assert.Equal(37, seen.Count);
+            Assert.Equal(37, seen.Distinct(StringComparer.Ordinal).Count());
+            Assert.Equal(Enumerable.Range(0, 37).Select(index => index == 0 ? "0" : $"0/{index - 1}"), seen);
+            Assert.Equal(JsonValueKind.Null, lastProjection.GetProperty("continuation").ValueKind);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Artifact_plan_continuations_reconstruct_reader_nodes_within_budget(bool includeText)
+    {
+        const int budget = 4096;
+        const int firstCursor = 0;
+        const int nodeCount = 257;
+        var (root, id) = CreateSyntheticPlanArtifact(nodeCount);
+        try
+        {
+            var seen = new List<string>();
+            var cursor = firstCursor;
+            var calls = 0;
+            var emittedBytes = 0;
+            var sawFinalPage = false;
+            while (true)
+            {
+                var result = ReadPlanResult(root, id, cursor, includeText, budget);
+                var bytes = ResultTextBytes(result, budget);
+                emittedBytes += bytes;
+                calls++;
+                var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+                using var document = JsonDocument.Parse(text);
+                Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
+                var projection = document.RootElement.GetProperty("result");
+                var returned = projection.GetProperty("nodes").EnumerateArray()
+                    .Select(node => node.GetProperty("nodePath").GetString()!).ToArray();
+                Assert.NotEmpty(returned);
+                seen.AddRange(returned);
+                if (!includeText)
+                    Assert.DoesNotContain("synthetic predicate", text, StringComparison.Ordinal);
+                else if (cursor == firstCursor)
+                    Assert.Contains("synthetic predicate", text, StringComparison.Ordinal);
+
+                var continuation = projection.GetProperty("continuation");
+                if (continuation.ValueKind == JsonValueKind.Null)
+                {
+                    sawFinalPage = true;
+                    break;
+                }
+                var next = continuation.GetInt32();
+                Assert.Equal(cursor + returned.Length, next);
+                cursor = next;
+            }
+
+            _output.WriteLine($"synthetic-large: nodes=257 selector=baseline/statement-0/repetition-last/includeText={includeText.ToString().ToLowerInvariant()}/cursor=0 budget={budget} calls={calls} emittedUtf8Bytes={emittedBytes} estimatedTokensCeilBytesDiv4={(emittedBytes + 3) / 4}; fixture/discovery/input/chat unmeasured");
+            Assert.True(sawFinalPage);
+            Assert.Equal(nodeCount, seen.Count);
+            Assert.Equal(nodeCount, seen.Distinct(StringComparer.Ordinal).Count());
+            Assert.Equal(Enumerable.Range(0, nodeCount).Select(index => index == 0 ? "0" : $"0/{index - 1}"), seen);
+
+            var nonzeroResult = ReadPlanResult(root, id, cursor: 5, includeText: includeText, budget: budget);
+            ResultTextBytes(nonzeroResult, budget);
+            using var nonzeroDocument = JsonDocument.Parse(Assert.Single(nonzeroResult.Content.OfType<TextContentBlock>()).Text);
+            var nonzeroProjection = nonzeroDocument.RootElement.GetProperty("result");
+            Assert.Equal("0/4", nonzeroProjection.GetProperty("nodes")[0].GetProperty("nodePath").GetString());
+            if (nonzeroProjection.GetProperty("continuation").ValueKind != JsonValueKind.Null)
+                Assert.Equal(5 + nonzeroProjection.GetProperty("nodes").GetArrayLength(),
+                    nonzeroProjection.GetProperty("continuation").GetInt32());
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Artifact_plan_adapter_reports_no_node_fit_when_one_source_node_exceeds_budget()
+    {
+        var (root, id) = CreateSyntheticPlanArtifact(1, warningsPerNode: 24, warningLength: 512);
+        try
+        {
+            var result = ReadPlanResult(root, id, cursor: 0, includeText: true, budget: 4096);
+            var bytes = ResultTextBytes(result, 4096);
+            using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+            var projection = document.RootElement.GetProperty("result");
+
+            _output.WriteLine($"synthetic-no-fit: nodes=1 selector=baseline/statement-0/repetition-last/includeText=true budget=4096 calls=1 emittedUtf8Bytes={bytes} estimatedTokensCeilBytesDiv4={(bytes + 3) / 4}; fixture/discovery/input/chat unmeasured");
+            Assert.Empty(projection.GetProperty("nodes").EnumerateArray());
+            Assert.Equal(JsonValueKind.Null, projection.GetProperty("continuation").ValueKind);
+            Assert.Contains("cannot fit", projection.GetProperty("pageError").GetString(), StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static CallToolResult ReadPlanResult(string root, string id, int cursor, bool includeText, int budget)
+    {
+        var section = ArtifactReader.ReadSection(root, id, "plan", cursor: cursor,
+            planSelector: new ArtifactPlanSelector("baseline"), includeText: includeText);
+        return McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, section, null),
+            "sqlharness_artifact", new McpResultBudget(budget, 512));
+    }
+
+    private static (string Root, string Id) CreateSyntheticPlanArtifact(
+        int nodeCount, int warningsPerNode = 0, int warningLength = 0)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "sqlharness-artifact-pages-" + Guid.NewGuid().ToString("N"));
+        const string id = "synthetic-plan";
+        var directory = Path.Combine(root, id);
+        Directory.CreateDirectory(Path.Combine(directory, "plans"));
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"plan\"]}");
+        var children = Enumerable.Range(1, nodeCount - 1).Select(index => new
+        {
+            physicalOp = $"Synthetic-{index:D3}",
+            logicalOp = "Scan",
+            objectName = $"public.fixture_{index:D3}",
+            indexName = "fixture_idx",
+            estimatedRows = 1,
+            actualRows = 1,
+            executions = 1,
+            costFraction = 0.1,
+            predicate = "synthetic predicate",
+            warnings = Enumerable.Repeat(new string('w', warningLength), warningsPerNode).ToArray(),
+        }).ToArray();
+        var plan = new
+        {
+            statements = new[]
+            {
+                new
+                {
+                    statementText = "SELECT fixture_value FROM public.synthetic_fixture",
+                    root = new
+                    {
+                        physicalOp = "Synthetic-Root",
+                        logicalOp = "Root",
+                        objectName = "public.synthetic_fixture",
+                        indexName = "fixture_root_idx",
+                        estimatedRows = 1,
+                        actualRows = 1,
+                        executions = 1,
+                        costFraction = 1.0,
+                        predicate = "synthetic predicate",
+                        warnings = Enumerable.Repeat(new string('w', warningLength), warningsPerNode).ToArray(),
+                        children,
+                    },
+                    missingIndexes = Array.Empty<object>(),
+                },
+            },
+        };
+        File.WriteAllText(Path.Combine(directory, "plans", "baseline-001-000-000.plan.json"),
+            JsonSerializer.Serialize(plan));
+        File.WriteAllText(Path.Combine(directory, "runs.jsonl"),
+            "{\"variant\":\"baseline\",\"repetition\":1,\"planJsonFiles\":[\"baseline-001-000-000.plan.json\"]}");
+        return (root, id);
+    }
+
+    [Fact]
     public void Unicode_cells_fit_the_default_budget_with_escaping_counted()
     {
         var text = string.Concat(Enumerable.Repeat("語😀", 10000));

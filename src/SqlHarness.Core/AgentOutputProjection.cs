@@ -266,6 +266,7 @@ public static class AgentOutputProjection
                     }
                 case ArtifactPlanSection plan:
                     {
+                        var statementText = Clip(plan.StatementText);
                         var missingIndexes = Take(plan.MissingIndexes).Select(index => index with
                         {
                             Table = Clip(index.Table)!,
@@ -273,51 +274,58 @@ public static class AgentOutputProjection
                             InequalityColumns = Take(index.InequalityColumns).Select(value => Clip(value)!).ToArray(),
                             IncludeColumns = Take(index.IncludeColumns).Select(value => Clip(value)!).ToArray(),
                         }).ToArray();
-                        var selected = new List<ArtifactPlanNode>();
-                        foreach (var node in plan.Nodes.Take(detailLimit))
+                        var preparedNodes = plan.Nodes.Take(detailLimit).Select(node =>
                         {
+                            var nodeClippedItems = 0;
+                            string? ClipNodeText(string? value) => ClipText(value, maximumCellCharacters, ref nodeClippedItems);
                             var op = node.Operator with
                             {
-                                PhysicalOp = Clip(node.Operator.PhysicalOp)!,
-                                LogicalOp = Clip(node.Operator.LogicalOp),
-                                ObjectName = Clip(node.Operator.ObjectName),
-                                IndexName = Clip(node.Operator.IndexName),
-                                Predicate = Clip(node.Operator.Predicate),
-                                Warnings = node.Operator.Warnings.Take(detailLimit).Select(value => Clip(value)!).ToArray(),
+                                PhysicalOp = ClipNodeText(node.Operator.PhysicalOp)!,
+                                LogicalOp = ClipNodeText(node.Operator.LogicalOp),
+                                ObjectName = ClipNodeText(node.Operator.ObjectName),
+                                IndexName = ClipNodeText(node.Operator.IndexName),
+                                Predicate = ClipNodeText(node.Operator.Predicate),
+                                Warnings = node.Operator.Warnings.Take(detailLimit).Select(value => ClipNodeText(value)!).ToArray(),
                             };
-                            var item = node with { Operator = op };
+                            return (Node: node with { Operator = op }, ClippedItems: nodeClippedItems);
+                        }).ToArray();
+                        var selected = new List<ArtifactPlanNode>();
+                        var selectedClippedItems = 0;
+                        foreach (var preparedNode in preparedNodes)
+                        {
                             var candidate = plan with
                             {
-                                Nodes = selected.Append(item).ToArray(),
+                                Nodes = selected.Append(preparedNode.Node).ToArray(),
                                 MissingIndexes = missingIndexes,
-                                StatementText = Clip(plan.StatementText),
+                                StatementText = statementText,
                                 Continuation = selected.Count + 1 < plan.Nodes.Count ? plan.Cursor + selected.Count + 1 : plan.Continuation
                             };
                             if (SerializedLength(candidate) + 384 > maximumBytes) break;
-                            selected.Add(item);
+                            selected.Add(preparedNode.Node);
+                            selectedClippedItems += preparedNode.ClippedItems;
                         }
                         if (selected.Count == 0 && plan.Nodes.Count > 0)
                         {
-                            omissions += plan.Nodes.Count;
+                            omissions += plan.Nodes.Count + clippedItems;
                             return plan with
                             {
                                 Nodes = [],
                                 Continuation = null,
                                 MissingIndexes = missingIndexes,
-                                StatementText = Clip(plan.StatementText),
+                                StatementText = statementText,
                                 PageError = "The output budget cannot fit a plan node page."
                             };
                         }
                         int? nextCursor = selected.Count < plan.Nodes.Count
                             ? plan.Cursor + selected.Count
                             : plan.Continuation;
-                        omissions += Math.Max(0, plan.Nodes.Count - selected.Count) + clippedItems;
+                        omissions += Math.Max(0, plan.Nodes.Count - selected.Count) + clippedItems + selectedClippedItems;
                         return plan with
                         {
                             Nodes = selected,
                             Continuation = nextCursor,
                             MissingIndexes = missingIndexes,
-                            StatementText = Clip(plan.StatementText),
+                            StatementText = statementText,
                             PageError = null
                         };
                     }

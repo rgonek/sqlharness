@@ -14,7 +14,7 @@
 
 ## Status
 
-- TODO; accepted planning scope only, not implementation, installation, integration or publication authorization.
+- IN PROGRESS — implementation and verification are recorded locally; uncommitted, integration pending. No installation, publication or push authorization is implied.
 - Planning base: `ed44649`, 2026-10-14.
 - Priority: P1 for clipping correctness; P2 for page efficiency. Effort: M; risk: MEDIUM (shared projection and pagination).
 - Owner: this follow-up; 055 and 058 are DONE historical prerequisites. Do not reopen their implementation status.
@@ -66,11 +66,11 @@ The installed responses reported 32 omissions on a page with a clipped statement
 
 **Interfaces:** Preserve `AgentOutputProjection.Project` and `ArtifactPlanSection`. Prepare clipped common fields once; tentative serialization uses already prepared values without adding counters. Final omission accounting covers the actual returned projection.
 
-- [ ] Add failing tests: one 600-character statement, short fields, 1/2/32 nodes, 65536-byte budget: one omission and 512 returned characters. Short statement plus one 600-character predicate also gives one clipped retained field.
-- [ ] Add a small-budget fixture that rejects a tentative node containing a clipped predicate; count omitted nodes and retained clipped fields, without double counting the rejected predicate. Cover empty nodes with a long statement and the explicit no-node-fit result.
-- [ ] Run `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~ArtifactReaderTests` and `dotnet test tests/SqlHarness.Mcp.Tests --filter FullyQualifiedName~McpTokenBudgetTests`; confirm the new invariant fails on the current path.
-- [ ] Implement side-effect-free fitting and once-only accounting without changing cell bounds or unrelated projections.
-- [ ] Repeat the focused tests; verify expected counts in CLI and MCP envelope paths.
+- [x] Add failing tests: one 600-character statement, short fields, 1/2/32 nodes, 65536-byte budget: one omission and 512 returned characters. Short statement plus one 600-character predicate also gives one clipped retained field.
+- [x] Add a small-budget fixture that rejects a tentative node containing a clipped predicate; count omitted nodes and retained clipped fields, without double counting the rejected predicate. Cover empty nodes with a long statement and the explicit no-node-fit result.
+- [x] Run `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~ArtifactReaderTests` and `dotnet test tests/SqlHarness.Mcp.Tests --filter FullyQualifiedName~McpTokenBudgetTests`; confirm the new invariant fails on the current path.
+- [x] Implement side-effect-free fitting and once-only accounting without changing cell bounds or unrelated projections.
+- [x] Repeat the focused tests; verify expected counts in CLI and MCP envelope paths.
 
 **Acceptance:** Omission count describes distinct omitted output content and is independent of the number of tentative node fits.
 
@@ -80,11 +80,11 @@ The installed responses reported 32 omissions on a page with a clipped statement
 
 **Interfaces:** Raise the plan reader source window from 32 to 128 nodes. Keep `cursor` and `Continuation` semantics; the shared projection chooses the fitting prefix. Other artifact section page sizes are outside scope.
 
-- [ ] Add failing synthetic reader-to-adapter tests: 37 short nodes fit one response at 65536 bytes, `continuation:null`, all unique paths present. This is a synthetic test, not a copied workload result.
-- [ ] Add a 257-node synthetic plan at 4096 bytes; reconstruct all paths through continuation with no gaps/duplicates and every response within budget. Cover `includeText:true/false`, nonzero cursor, final page and explicit no-node-fit.
-- [ ] Implement the bounded source window, retaining T1's fitting/accounting behavior.
-- [ ] Run the same focused test commands; update docs for budget-aware pages without promising a fixed returned node count or token savings.
-- [ ] Record a complete synthetic before/after workflow: input fixture, selectors, response budget, call count, emitted UTF-8 bytes and explicitly estimated tokens. Keep discovery/input/chat costs separate or label them unmeasured. More nodes per call may increase bytes; do not infer savings from call count.
+- [x] Add failing synthetic reader-to-adapter tests: 37 short nodes fit one response at 65536 bytes, `continuation:null`, all unique paths present. This is a synthetic test, not a copied workload result.
+- [x] Add a 257-node synthetic plan at 4096 bytes; reconstruct all paths through continuation with no gaps/duplicates and every response within budget. Cover `includeText:true/false`, nonzero cursor, final page and explicit no-node-fit.
+- [x] Implement the bounded source window, retaining T1's fitting/accounting behavior.
+- [x] Run the same focused test commands; update docs for budget-aware pages without promising a fixed returned node count or token savings.
+- [x] Record a complete synthetic before/after workflow: input fixture, selectors, response budget, call count, emitted UTF-8 bytes and explicitly estimated tokens. Keep discovery/input/chat costs separate or label them unmeasured. More nodes per call may increase bytes; do not infer savings from call count.
 
 **Acceptance:** Small fitting plans need one read; larger plans remain complete and bounded. The decision record retains the observed **14 = 6 first + 6 continuation + 2 repeated** calls and distinguishes this history from new synthetic measurements.
 
@@ -92,10 +92,10 @@ The installed responses reported 32 omissions on a page with a clipped statement
 
 **Files:** `plans/README.md`, this plan and a scoped verification record; relevant docs from T2.
 
-- [ ] Review full scoped diff and privacy; run `git diff --check`.
-- [ ] After relevant code changes, run `pwsh ./scripts/verify.ps1`, then `pwsh ./scripts/verify-linux.ps1`, one gate at a time. Record exit codes and actual gate outcomes; partial output is not a pass.
-- [ ] Record whether P1's correctness proof and P2's complete-workflow results justify adoption. Preserve the historical artifact-call breakdown and any remaining evidence gaps. No live database proof is required for this projection-only change.
-- [ ] Update status/index using actual evidence. Keep delivered-change commits cohesive; no intermediate red/green or agent-loop commits. Commit, integrate, install or publish only under separate authorization.
+- [x] Review full scoped diff and privacy; run `git diff --check`.
+- [x] After relevant code changes, run `pwsh ./scripts/verify.ps1`, then `pwsh ./scripts/verify-linux.ps1`, one gate at a time. Record exit codes and actual gate outcomes; partial output is not a pass. The Windows retry passed; the first requested Linux run stopped at its committed-tip UI timeout, then one retry passed at the same committed base `40a6871d`; the exact implementation snapshot's ext4 equivalent stages also passed after Git LF normalization.
+- [x] Record whether P1's correctness proof and P2's complete-workflow results justify adoption. Preserve the historical artifact-call breakdown and any remaining evidence gaps. No live database proof is required for this projection-only change.
+- [x] Update status/index using actual evidence. Keep delivered-change commits cohesive; no intermediate red/green or agent-loop commits. Commit, integrate, install or publish only under separate authorization.
 
 ## STOP conditions
 

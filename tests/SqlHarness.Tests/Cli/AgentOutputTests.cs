@@ -193,6 +193,25 @@ public sealed class AgentOutputTests
     }
 
     [Fact]
+    public void Agent_plan_projection_reports_once_only_clipping_in_cli_envelope()
+    {
+        var nodes = Enumerable.Range(0, 32).Select(index => new ArtifactPlanNode(
+            index == 0 ? "0" : "0/" + (index - 1), index == 0 ? null : "0",
+            new PlanNode("Scan", null, null, null, 1, 1, 1, 0.1, null, [], []))).ToArray();
+        var section = new ArtifactPlanSection("artifact", "baseline", null, 0, 1, 1,
+            "last-measured", [1], null, nodes.Length, nodes, null)
+        { StatementText = new string('s', 600) };
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, section, null), "artifact",
+            new OutputCaptureWriter(output), new AgentOutputOptions(65536, 512));
+
+        using var document = JsonDocument.Parse(output.ToString());
+        Assert.Equal(1, document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32());
+        Assert.Equal(512, document.RootElement.GetProperty("result").GetProperty("statementText").GetString()!.Length);
+    }
+
+    [Fact]
     public void Agent_projection_clips_unicode_cells_and_reports_safe_prefix_metadata()
     {
         var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");

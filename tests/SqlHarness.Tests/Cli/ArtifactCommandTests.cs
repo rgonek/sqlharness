@@ -182,6 +182,9 @@ public sealed class ArtifactCommandTests
         Assert.Equal(2, read.GetProperty("manifestVersion").GetInt32());
         Assert.Equal("matrix-cells,operators,plan,statements", read.GetProperty("pagedSections").GetString());
         Assert.Equal("variant,statement,parameterSet,repetition,includeText", read.GetProperty("planSelectors").GetString());
+        Assert.Equal(128, read.GetProperty("planSourceWindowNodes").GetInt32());
+        Assert.Equal("each plan response is byte-budgeted; continuation advances by nodes returned",
+            read.GetProperty("planPaging").GetString());
     }
 
     private static CompareVariantReport Variant(string name) => new(

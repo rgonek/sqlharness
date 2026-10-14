@@ -49,8 +49,10 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat --subject orders-repo
 Start with compact output: CLI `--output agent`, or `--json-summary` for benchmarks; MCP returns the
 compact envelope. Use full JSON or artifact sections only when needed. Inspect status, errors, omitted
 rows/cases and clipped cells before reporting values. Aggregate or page SQL results when rows are missing;
-follow artifact continuation to obtain the required case and plan details. Inventory alone is not evidence
-that every case or plan was reviewed. Missing metrics and plans remain explicit gaps.
+follow artifact continuation to obtain the required case and plan details. Plan pages are trimmed to each
+response's byte budget, so the number of returned nodes varies; continuation advances by nodes returned.
+Inventory alone is not evidence that every case or plan was reviewed. Missing metrics and plans remain
+explicit gaps.
 
 For optimization, measure the requested workload first and choose representative cases before making
 broader claims: cardinalities, distributions, ordering ties, missing history, boundary dates and empty

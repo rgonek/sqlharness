@@ -148,8 +148,8 @@ public class ArtifactReaderTests
         Assert.Equal("last-measured", selected.Selection);
         Assert.True(selected.PlanShapeStable);
         Assert.Equal(85, selected.NodeCount);
-        Assert.Equal(32, selected.Nodes.Count);
-        Assert.Equal(32, selected.Continuation);
+        Assert.Equal(85, selected.Nodes.Count);
+        Assert.Null(selected.Continuation);
         var noNodeSpace = Assert.IsType<ArtifactPlanSection>(AgentOutputProjection.Project(selected, 128, int.MaxValue, out _, 1));
         Assert.Empty(noNodeSpace.Nodes);
         Assert.Null(noNodeSpace.Continuation);
@@ -215,6 +215,73 @@ public class ArtifactReaderTests
         Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(temp.Path, id, "plan",
             planSelector: new ArtifactPlanSelector("baseline", Repetition: 1)));
     }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(32)]
+    public void Plan_projection_counts_a_clipped_statement_once_independent_of_node_count(int nodeCount)
+    {
+        var section = SyntheticPlanSection(
+            Enumerable.Range(0, nodeCount).Select(index => SyntheticPlanNode(index)).ToArray(),
+            new string('s', 600));
+
+        var projected = Assert.IsType<ArtifactPlanSection>(
+            AgentOutputProjection.Project(section, 512, int.MaxValue, out var omitted, 65536));
+
+        Assert.Equal(1, omitted);
+        Assert.Equal(512, projected.StatementText!.Length);
+    }
+
+    [Fact]
+    public void Plan_projection_counts_a_clipped_predicate_once()
+    {
+        var section = SyntheticPlanSection(
+            [SyntheticPlanNode(0, new string('p', 600))], "short statement");
+
+        var projected = Assert.IsType<ArtifactPlanSection>(
+            AgentOutputProjection.Project(section, 512, int.MaxValue, out var omitted, 65536));
+
+        Assert.Equal(1, omitted);
+        Assert.Equal(512, projected.Nodes[0].Operator.Predicate!.Length);
+    }
+
+    [Fact]
+    public void Plan_projection_counts_only_retained_clipping_when_a_node_does_not_fit()
+    {
+        var section = SyntheticPlanSection(
+            [SyntheticPlanNode(0, new string('p', 600))], new string('s', 600));
+
+        var projected = Assert.IsType<ArtifactPlanSection>(
+            AgentOutputProjection.Project(section, 512, int.MaxValue, out var omitted, 1));
+
+        Assert.Empty(projected.Nodes);
+        Assert.Null(projected.Continuation);
+        Assert.Contains("cannot fit", projected.PageError, StringComparison.Ordinal);
+        Assert.Equal(512, projected.StatementText!.Length);
+        Assert.Equal(2, omitted); // one omitted node and one retained clipped statement; rejected predicate is not returned.
+    }
+
+    [Fact]
+    public void Plan_projection_counts_clipped_statement_when_there_are_no_nodes()
+    {
+        var section = SyntheticPlanSection([], new string('s', 600));
+
+        var projected = Assert.IsType<ArtifactPlanSection>(
+            AgentOutputProjection.Project(section, 512, int.MaxValue, out var omitted, 65536));
+
+        Assert.Empty(projected.Nodes);
+        Assert.Equal(512, projected.StatementText!.Length);
+        Assert.Equal(1, omitted);
+    }
+
+    private static ArtifactPlanSection SyntheticPlanSection(IReadOnlyList<ArtifactPlanNode> nodes, string statementText) =>
+        new("artifact", "baseline", null, 0, 1, 1, "last-measured", [1], null, nodes.Count, nodes, null)
+        { StatementText = statementText };
+
+    private static ArtifactPlanNode SyntheticPlanNode(int index, string? predicate = null) =>
+        new(index == 0 ? "0" : $"0/{index - 1}", index == 0 ? null : "0",
+            new PlanNode("Scan", null, null, null, 1, 1, 1, 0.1, predicate, [], []));
 
     [Fact]
     public void Plan_section_keeps_measured_runs_without_saved_plan_evidence_in_inventory()

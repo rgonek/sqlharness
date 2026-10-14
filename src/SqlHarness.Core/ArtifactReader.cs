@@ -156,6 +156,9 @@ public static partial class ArtifactReader
     /// <summary>Report bound: mirrors the 16 MiB SQL input bound.</summary>
     public const long MaxReportBytes = 16L * 1024 * 1024;
 
+    /// <summary>Maximum saved plan nodes loaded for one budgeted response.</summary>
+    public const int MaxPlanPageSourceNodes = 128;
+
     public static readonly IReadOnlyList<string> SupportedSections =
         [SummarySection, MetricsSection, OperatorsSection, StatementsSection, MatrixCellsSection, PlanSection];
 
@@ -470,8 +473,7 @@ public static partial class ArtifactReader
             var selected = statements[selector.Statement];
             var allNodes = Flatten(selected.Root, null, "0").ToArray();
             if (cursor > allNodes.Length) throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
-            const int pageSize = 32;
-            var nodes = allNodes.Skip(cursor).Take(pageSize).Select(node => includeText ? node : node with
+            var nodes = allNodes.Skip(cursor).Take(MaxPlanPageSourceNodes).Select(node => includeText ? node : node with
             { Operator = node.Operator with { Predicate = null } }).ToArray();
             bool? stable = null;
             var hasComparisonGap = false;
