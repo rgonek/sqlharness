@@ -28,52 +28,45 @@ public sealed class PostgresTempTargetProofIntegrationTests
     /// <summary>Unquoted non-ASCII, so unprovable offline (047).</summary>
     private const string NonAsciiUnprovableTempName = "p47i_temp_\u00e9_rows";
 
-    [PostgresIntegrationFact(requireDisposableTargetConfirmation: true)]
+    [PostgresIntegrationTheory(requireDisposableTargetConfirmation: true)]
     [Trait("Category", "PostgresIntegration")]
-    public async Task Temp_dml_on_an_unprovable_name_runs_read_only_and_writes_the_row()
+    [InlineData(LongUnprovableTempName)]
+    [InlineData(NonAsciiUnprovableTempName)]
+    public async Task Temp_dml_on_an_unprovable_name_runs_read_only_and_writes_the_row(string tempName)
     {
         await using var proof = await PostgresProofTarget.CreateAsync();
-        try
-        {
-            foreach (var tempName in new[] { LongUnprovableTempName, NonAsciiUnprovableTempName })
-            {
-                // The declaration is made on the session the module connects to,
-                // because the batch itself cannot declare it: query SQL runs inside
-                // SET TRANSACTION READ ONLY, where CREATE TEMP is refused with
-                // 25006, and the read-write setup phase still requires the offline
-                // name proof this case is about. Only the write under test runs
-                // through the module.
-                var module = proof.Module("public, pg_temp", sessionPrelude: $"CREATE TEMP TABLE {tempName} (id int)");
 
-                var outcome = await module.ExecuteAsync(Query($"INSERT INTO {tempName} VALUES (1); SELECT count(*) AS written FROM {tempName}"));
+        // The declaration is made on the session the module connects to,
+        // because the batch itself cannot declare it: query SQL runs inside
+        // SET TRANSACTION READ ONLY, where CREATE TEMP is refused with
+        // 25006, and the read-write setup phase still requires the offline
+        // name proof this case is about. Only the write under test runs
+        // through the module.
+        var module = proof.Module("public, pg_temp", sessionPrelude: $"CREATE TEMP TABLE {tempName} (id int)");
 
-                Assert.True(
-                    outcome.ExitCode == SqlHarnessExitCode.Success,
-                    $"Unqualified temp DML over '{tempName}' returned {outcome.ExitCode}: {outcome.SafeError}");
-                var report = Assert.IsType<SqlHarnessQueryReport>(outcome.Report);
-                Assert.Equal("session-local", report.StatementClassification);
-                var rows = Assert.Single(Assert.Single(report.ResultSets).Rows);
-                Assert.Equal(1L, Convert.ToInt64(rows[0], System.Globalization.CultureInfo.InvariantCulture));
+        var outcome = await module.ExecuteAsync(Query($"INSERT INTO {tempName} VALUES (1); SELECT count(*) AS written FROM {tempName}"));
 
-                // The declaration itself is accepted offline and the temp outlives the
-                // read-only transaction, so a setup phase can create one and a measured
-                // SELECT reads it. That module has no session prelude: the setup phase
-                // makes the declaration itself.
-                var measured = await proof.Module("public, pg_temp").ExecuteAsync(Measure(
-                    $"CREATE TEMP TABLE {tempName} (id int)",
-                    $"SELECT count(*) AS written FROM {tempName}"));
-                Assert.True(
-                    measured.ExitCode == SqlHarnessExitCode.Success,
-                    $"A setup phase that declares '{tempName}' returned {measured.ExitCode}: {measured.SafeError}");
-                var measureReport = Assert.IsType<SqlHarnessMeasureReport>(measured.Report);
-                Assert.True(measureReport.ResultsStable);
-                Assert.Equal(2, measureReport.MeasuredRunCount);
-            }
-        }
-        finally
-        {
-            await proof.DisposeAsync();
-        }
+        Assert.True(
+            outcome.ExitCode == SqlHarnessExitCode.Success,
+            $"Unqualified temp DML over '{tempName}' returned {outcome.ExitCode}: {outcome.SafeError}");
+        var report = Assert.IsType<SqlHarnessQueryReport>(outcome.Report);
+        Assert.Equal("session-local", report.StatementClassification);
+        var rows = Assert.Single(Assert.Single(report.ResultSets).Rows);
+        Assert.Equal(1L, Convert.ToInt64(rows[0], System.Globalization.CultureInfo.InvariantCulture));
+
+        // The declaration itself is accepted offline and the temp outlives the
+        // read-only transaction, so a setup phase can create one and a measured
+        // SELECT reads it. That module has no session prelude: the setup phase
+        // makes the declaration itself.
+        var measured = await proof.Module("public, pg_temp").ExecuteAsync(Measure(
+            $"CREATE TEMP TABLE {tempName} (id int)",
+            $"SELECT count(*) AS written FROM {tempName}"));
+        Assert.True(
+            measured.ExitCode == SqlHarnessExitCode.Success,
+            $"A setup phase that declares '{tempName}' returned {measured.ExitCode}: {measured.SafeError}");
+        var measureReport = Assert.IsType<SqlHarnessMeasureReport>(measured.Report);
+        Assert.True(measureReport.ResultsStable, $"The measured reads of '{tempName}' were not stable.");
+        Assert.Equal(2, measureReport.MeasuredRunCount);
     }
 
     [PostgresIntegrationFact(requireDisposableTargetConfirmation: true)]
@@ -81,25 +74,18 @@ public sealed class PostgresTempTargetProofIntegrationTests
     public async Task Unqualified_write_onto_a_persistent_table_is_rejected_at_execution_and_writes_no_row()
     {
         await using var proof = await PostgresProofTarget.CreateAsync();
-        try
-        {
-            await proof.CreatePersistentTable(proof.TableName, seedRows: 1);
-            // No temp of that name exists in this session, so the unqualified name
-            // resolves to the persistent table.
-            var module = proof.Module(searchPath: $"{proof.Schema}, public, pg_temp");
+        await proof.CreatePersistentTable(proof.TableName, seedRows: 1);
+        // No temp of that name exists in this session, so the unqualified name
+        // resolves to the persistent table.
+        var module = proof.Module(searchPath: $"{proof.Schema}, public, pg_temp");
 
-            var outcome = await module.ExecuteAsync(Query($"INSERT INTO {proof.TableName} VALUES (99)"));
+        var outcome = await module.ExecuteAsync(Query($"INSERT INTO {proof.TableName} VALUES (99)"));
 
-            Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
-            Assert.Null(outcome.Report);
-            Assert.Contains("read-only transaction", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-            Assert.DoesNotContain(proof.TableName, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
-            Assert.Equal(1L, await proof.PersistentRows(proof.TableName));
-        }
-        finally
-        {
-            await proof.DisposeAsync();
-        }
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Null(outcome.Report);
+        Assert.Contains("read-only transaction", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain(proof.TableName, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Equal(1L, await proof.PersistentRows(proof.TableName));
     }
 
     [PostgresIntegrationFact(requireDisposableTargetConfirmation: true)]
@@ -109,38 +95,31 @@ public sealed class PostgresTempTargetProofIntegrationTests
         const string tableName = "p47i_shadow_rows";
 
         await using var proof = await PostgresProofTarget.CreateAsync();
-        try
-        {
-            await proof.CreatePersistentTable(tableName, seedRows: 1);
-            var sql = $"INSERT INTO {tableName} VALUES (2); SELECT count(*) AS written FROM {tableName}";
+        await proof.CreatePersistentTable(tableName, seedRows: 1);
+        var sql = $"INSERT INTO {tableName} VALUES (2); SELECT count(*) AS written FROM {tableName}";
 
-            // Persistent schema ahead of pg_temp: the unqualified write is a
-            // persistent write and the read-only transaction refuses it.
-            var shadowed = await proof
-                .Module(searchPath: $"{proof.Schema}, public, pg_temp")
-                .ExecuteAsync(Query(sql));
-            Assert.Equal(SqlHarnessExitCode.Safety, shadowed.ExitCode);
-            Assert.Contains("read-only transaction", shadowed.SafeError ?? string.Empty, StringComparison.Ordinal);
-            Assert.Equal(1L, await proof.PersistentRows(tableName));
+        // Persistent schema ahead of pg_temp: the unqualified write is a
+        // persistent write and the read-only transaction refuses it.
+        var shadowed = await proof
+            .Module(searchPath: $"{proof.Schema}, public, pg_temp")
+            .ExecuteAsync(Query(sql));
+        Assert.Equal(SqlHarnessExitCode.Safety, shadowed.ExitCode);
+        Assert.Contains("read-only transaction", shadowed.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Equal(1L, await proof.PersistentRows(tableName));
 
-            // pg_temp first: the same statement resolves to the session temp, which
-            // the read-only transaction allows.
-            var shadowing = await proof
-                .Module(searchPath: $"pg_temp, {proof.Schema}, public", sessionPrelude: $"CREATE TEMP TABLE {tableName} (id int)")
-                .ExecuteAsync(Query(sql));
-            Assert.Equal(SqlHarnessExitCode.Success, shadowing.ExitCode);
-            var report = Assert.IsType<SqlHarnessQueryReport>(shadowing.Report);
-            Assert.Equal("session-local", report.StatementClassification);
-            var rows = Assert.Single(Assert.Single(report.ResultSets).Rows);
-            Assert.Equal(1L, Convert.ToInt64(rows[0], System.Globalization.CultureInfo.InvariantCulture));
+        // pg_temp first: the same statement resolves to the session temp, which
+        // the read-only transaction allows.
+        var shadowing = await proof
+            .Module(searchPath: $"pg_temp, {proof.Schema}, public", sessionPrelude: $"CREATE TEMP TABLE {tableName} (id int)")
+            .ExecuteAsync(Query(sql));
+        Assert.Equal(SqlHarnessExitCode.Success, shadowing.ExitCode);
+        var report = Assert.IsType<SqlHarnessQueryReport>(shadowing.Report);
+        Assert.Equal("session-local", report.StatementClassification);
+        var rows = Assert.Single(Assert.Single(report.ResultSets).Rows);
+        Assert.Equal(1L, Convert.ToInt64(rows[0], System.Globalization.CultureInfo.InvariantCulture));
 
-            // The row went to the temp; the persistent table never grew.
-            Assert.Equal(1L, await proof.PersistentRows(tableName));
-        }
-        finally
-        {
-            await proof.DisposeAsync();
-        }
+        // The row went to the temp; the persistent table never grew.
+        Assert.Equal(1L, await proof.PersistentRows(tableName));
     }
 
     [PostgresIntegrationFact(requireDisposableTargetConfirmation: true)]
@@ -148,48 +127,42 @@ public sealed class PostgresTempTargetProofIntegrationTests
     public async Task Setup_ddl_on_proven_temps_still_runs_before_the_measured_select()
     {
         await using var proof = await PostgresProofTarget.CreateAsync();
-        try
-        {
-            // 047 step 3 changed the query phase only; the read-write setup phase
-            // still requires a proven temp for every target.
-            var module = proof.Module(searchPath: "public, pg_temp");
-            var setup = """
-                CREATE TEMP TABLE p47i_indexed_rows (id int);
-                INSERT INTO p47i_indexed_rows VALUES (1);
-                CREATE INDEX p47i_indexed_rows_ix ON p47i_indexed_rows (id);
-                TRUNCATE p47i_indexed_rows;
-                DROP TABLE p47i_indexed_rows;
-                CREATE TEMP TABLE p47i_kept_rows (id int);
-                INSERT INTO p47i_kept_rows VALUES (7);
-                """;
 
-            var outcome = await module.ExecuteAsync(Measure(setup, "SELECT id FROM p47i_kept_rows"));
+        // 047 step 3 changed the query phase only; the read-write setup phase
+        // still requires a proven temp for every target.
+        var module = proof.Module(searchPath: "public, pg_temp");
+        var setup = """
+            CREATE TEMP TABLE p47i_indexed_rows (id int);
+            INSERT INTO p47i_indexed_rows VALUES (1);
+            CREATE INDEX p47i_indexed_rows_ix ON p47i_indexed_rows (id);
+            TRUNCATE p47i_indexed_rows;
+            DROP TABLE p47i_indexed_rows;
+            CREATE TEMP TABLE p47i_kept_rows (id int);
+            INSERT INTO p47i_kept_rows VALUES (7);
+            """;
 
-            Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
-            var report = Assert.IsType<SqlHarnessMeasureReport>(outcome.Report);
-            Assert.True(report.ResultsStable);
-            Assert.Equal(2, report.MeasuredRunCount);
+        var outcome = await module.ExecuteAsync(Measure(setup, "SELECT id FROM p47i_kept_rows"));
 
-            // A measure report carries timings, not rows, so exit 0 plus ResultsStable
-            // would still hold if the setup's statements were quietly skipped. The
-            // same setup is therefore also compared: the baseline is the real query
-            // and the candidate states the row the setup must have left and that the
-            // dropped temp is gone. A skipped INSERT, TRUNCATE or DROP breaks either
-            // the run or the equality.
-            var compared = await module.ExecuteAsync(Compare(
-                setup,
-                "SELECT id, to_regclass('pg_temp.p47i_indexed_rows') IS NULL AS dropped FROM p47i_kept_rows",
-                "SELECT 7 AS id, true AS dropped"));
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessMeasureReport>(outcome.Report);
+        Assert.True(report.ResultsStable);
+        Assert.Equal(2, report.MeasuredRunCount);
 
-            Assert.Equal(SqlHarnessExitCode.Success, compared.ExitCode);
-            Assert.True(
-                Assert.IsType<SqlHarnessCompareReport>(compared.Report).ResultsEquivalent,
-                "The setup did not leave the row the measured SELECT is expected to return, or the dropped temp survived.");
-        }
-        finally
-        {
-            await proof.DisposeAsync();
-        }
+        // A measure report carries timings, not rows, so exit 0 plus ResultsStable
+        // would still hold if the setup's statements were quietly skipped. The
+        // same setup is therefore also compared: the baseline is the real query
+        // and the candidate states the row the setup must have left and that the
+        // dropped temp is gone. A skipped INSERT, TRUNCATE or DROP breaks either
+        // the run or the equality.
+        var compared = await module.ExecuteAsync(Compare(
+            setup,
+            "SELECT id, to_regclass('pg_temp.p47i_indexed_rows') IS NULL AS dropped FROM p47i_kept_rows",
+            "SELECT 7 AS id, true AS dropped"));
+
+        Assert.Equal(SqlHarnessExitCode.Success, compared.ExitCode);
+        Assert.True(
+            Assert.IsType<SqlHarnessCompareReport>(compared.Report).ResultsEquivalent,
+            "The setup did not leave the row the measured SELECT is expected to return, or the dropped temp survived.");
     }
 
     private static SqlHarnessQueryOperation Query(string sql) =>
@@ -307,7 +280,10 @@ public sealed class PostgresTempTargetProofIntegrationTests
     /// <summary>
     /// The proof's session. It owns the physical connection so a case can shape
     /// <c>search_path</c> and declare a session temp before the module runs; the
-    /// module's connection string is never modified.
+    /// module's connection string is never modified. It stands in for the real
+    /// factory rather than reproducing it: the identity is hand-built from the
+    /// resolved target instead of being read back from the server, so these cases
+    /// prove the read-only boundary and not identity verification.
     /// </summary>
     private sealed class ProofSessionFactory(string connectionString, string searchPath, string? sessionPrelude)
         : ISqlSessionFactory
