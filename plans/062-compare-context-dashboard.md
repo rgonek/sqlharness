@@ -12,7 +12,7 @@
 
 ## Status i zależności
 
-- DONE on feature branch; P2; nakład L; zapisano 2026-10-12 na `52bdc23`; implementacja na `feat/plan-062-compare-context`; bramki Windows/Linux zielone na `3ca11c8`; review T7 Luna xhigh i całej gałęzi Sol low zatwierdzone; bez Critical/Important; dwa Minor zapisane w dowodach.
+- DONE, locally merged to main in `818f1e4`; P2; nakład L; zapisano 2026-10-12 na `52bdc23`; implementacja na `feat/plan-062-compare-context`; bramki Windows/Linux zielone na `3ca11c8`; review T7 Luna xhigh i całej gałęzi Sol low zatwierdzone; bez Critical/Important; dwa Minor zapisane w dowodach.
 - Wymaga istniejącego werdyktu compare (051, DONE) i obecnych ustawień/journala/dashboardu.
 - 055–061 nie są twardą zależnością. Szczególnie 060/061 zmieniają ten sam katalog MCP, mappery i matrix; realizować sekwencyjnie lub z integracją aktualnej bazy. Nie przywracać usuniętych narzędzi ani starych nazw argumentów.
 - Cały plan jest jednostką wykonania: kontekst, zapis, API, oba ekrany i dokumentacja.
