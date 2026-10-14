@@ -135,9 +135,9 @@ public sealed class McpSecretRedactionTests
                         "mcp-unreachable.invalid", "reportdb",
                         new Dictionary<string, string>(), "integrated"),
                 });
-            var handlers = new McpToolHandlers(scope, scope.CreateModule());
+            var handlers = new McpToolHandlers(scope, scope.CreateModule(new CompareConfig { RequireContext = false }));
 
-            var matrix = await handlers.CompareAsync(
+            var matrix = await handlers.CompareWithoutContextAsync(
                 null!,
                 new McpSqlSourceArgument { Sql = "SELECT @n" },
                 new McpSqlSourceArgument { Sql = "SELECT @n" },

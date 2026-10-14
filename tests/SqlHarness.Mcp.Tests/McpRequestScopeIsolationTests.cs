@@ -127,7 +127,7 @@ public sealed class McpRequestScopeIsolationTests : IDisposable
 
             var matrix = await handlers.CompareAsync(
                 null!, new McpSqlSourceArgument { Sql = "SELECT @n" }, new McpSqlSourceArgument { Sql = "SELECT @n" },
-                Scope("sample-a"), matrix: new McpMatrixArgument { Name = "n", Type = "int", Values = ["1", "2"] }, repeat: 1);
+                Scope("sample-a"), "batch-query", "whole", matrix: new McpMatrixArgument { Name = "n", Type = "int", Values = ["1", "2"] }, repeat: 1);
             var parameterSets = await handlers.MeasureAsync(
                 null!, new McpSqlSourceArgument { Sql = "SELECT @n" }, Scope("sample-b"),
                 parameterSetFiles: [Path.Combine(inputRoot, "small.sqljson"), Path.Combine(inputRoot, "large.sqljson")], repeat: 1);

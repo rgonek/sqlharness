@@ -20,6 +20,7 @@ public sealed class McpProcessContext
         IReadOnlyList<string> inputRoots,
         int maxResultBytes,
         int maxOperationSeconds,
+        CompareConfig compareConfig,
         string configurationRef)
     {
         ConfigurationRef = configurationRef;
@@ -30,6 +31,7 @@ public sealed class McpProcessContext
         InputRoots = inputRoots;
         MaxResultBytes = maxResultBytes;
         MaxOperationSeconds = maxOperationSeconds;
+        CompareConfig = compareConfig;
     }
 
     /// <summary>Opaque random identity of this process configuration; every page and call returns the same value.</summary>
@@ -42,6 +44,7 @@ public sealed class McpProcessContext
     public IReadOnlyList<string> InputRoots { get; }
     public int MaxResultBytes { get; }
     public int MaxOperationSeconds { get; }
+    public CompareConfig CompareConfig { get; }
 
     private Func<ISqlHarnessModule, ISqlHarnessModule> _decorator = static module => module;
 
@@ -52,7 +55,8 @@ public sealed class McpProcessContext
     /// </summary>
     public static McpProcessContext Create(
         McpServerOptions options,
-        Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles)
+        Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
+        CompareConfig? compareConfig = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(loadProfiles);
@@ -88,6 +92,7 @@ public sealed class McpProcessContext
                 roots,
                 options.MaxResultBytes,
                 options.MaxOperationSeconds,
+                compareConfig ?? SqlHarnessConfig.Default.Compare,
                 McpScope.NewConfigurationRef());
         }
 
@@ -102,6 +107,7 @@ public sealed class McpProcessContext
             roots,
             options.MaxResultBytes,
             options.MaxOperationSeconds,
+            compareConfig ?? SqlHarnessConfig.Default.Compare,
             fixedScope.ConfigurationRef);
     }
 
@@ -192,7 +198,7 @@ public sealed class McpProcessContext
     public ISqlHarnessModule Decorate(ISqlHarnessModule module) => _decorator(module);
 
     /// <summary>Composition for target-free tools; it performs no connection.</summary>
-    public ISqlHarnessModule CreateModule() => Decorate(new SqlHarnessModule(() => Profiles));
+    public ISqlHarnessModule CreateModule() => Decorate(new SqlHarnessModule(() => Profiles, CompareConfig));
 
     private McpStartupException ProfileResolutionFailure(string profileName, string reason, Exception? inner = null)
     {

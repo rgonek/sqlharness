@@ -280,6 +280,8 @@ public sealed class McpLifecycleTests
             null!,
             new McpSqlSourceArgument { Sql = "SELECT 1" },
             new McpSqlSourceArgument { Sql = "SELECT 2" },
+            "optimized-query",
+            "whole",
             matrix: new McpMatrixArgument { Name = "batch", Type = "int", Values = ["1", "20"] },
             ct: cts.Token);
 
@@ -524,7 +526,7 @@ public sealed class McpLifecycleTests
 
         static Dictionary<string, object?> WatchArgs(string profile, string tenant) => new()
         {
-            ["scope"] = new Dictionary<string, object?>
+            ["target"] = new Dictionary<string, object?>
             {
                 ["profile"] = profile,
                 ["vars"] = new Dictionary<string, string> { ["tenant"] = tenant },

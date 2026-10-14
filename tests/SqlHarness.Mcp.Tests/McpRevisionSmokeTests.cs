@@ -269,7 +269,7 @@ public sealed class McpRevisionSmokeTests : IDisposable
 
             var valid = await client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
             {
-                ["scope"] = new Dictionary<string, object?> { ["profile"] = "sample-a", ["vars"] = new Dictionary<string, string> { ["tenant"] = "a" } },
+                ["target"] = new Dictionary<string, object?> { ["profile"] = "sample-a", ["vars"] = new Dictionary<string, string> { ["tenant"] = "a" } },
                 ["dryRun"] = true,
                 ["sql"] = "SELECT 1",
             }, cancellationToken: cts.Token);

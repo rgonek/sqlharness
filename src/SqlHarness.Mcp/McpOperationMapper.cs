@@ -300,12 +300,24 @@ public static partial class McpOperationMapper
         bool compareNullability = false,
         bool dryRun = false,
         IReadOnlyList<McpParameterSetArgument>? parameterSets = null,
-        IReadOnlyList<string>? parameterSetFiles = null)
+        IReadOnlyList<string>? parameterSetFiles = null,
+        string? subject = null,
+        string? optimizationScope = null,
+        CompareConfig? compareConfig = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(baseline);
         ArgumentNullException.ThrowIfNull(candidate);
         ValidateParameterSetChoices(parameterSets, parameterSetFiles, matrix);
+        CompareContext? context;
+        try
+        {
+            context = CompareContext.Parse(subject, optimizationScope, (compareConfig ?? SqlHarnessConfig.Default.Compare).RequireContext);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new McpMappingException(exception.Message);
+        }
         if (compareResults is null || !CompareResultModes.Contains(compareResults))
             throw new McpMappingException("Unknown compare mode. Supported modes: ordered, multiset, set, off.");
         var mode = compareResults.ToLowerInvariant() switch
@@ -331,6 +343,7 @@ public static partial class McpOperationMapper
             {
                 TypedParameters = typedParameters,
                 DryRun = dryRun,
+                Context = context,
             };
         return new SqlHarnessCompareMatrixOperation(
             scope.TargetRequest, setupSql, baselineSql, candidateSql,
@@ -340,6 +353,7 @@ public static partial class McpOperationMapper
             TypedMatrix = matrix is null ? null : MapMatrix(matrix),
             ParameterSets = parameterSetInputs,
             DryRun = dryRun,
+            Context = context,
         };
     }
 

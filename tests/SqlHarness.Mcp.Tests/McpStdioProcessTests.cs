@@ -490,7 +490,7 @@ public sealed class McpStdioProcessTests
                 Assert.Single(tools, tool => tool.Name == "sqlharness_query").ProtocolTool)
                 .GetProperty("inputSchema");
             Assert.Contains(
-                "scope",
+                "target",
                 querySchema.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
 
             static Dictionary<string, object?> Scope(string profile) => new()
@@ -505,7 +505,7 @@ public sealed class McpStdioProcessTests
                     "sqlharness_query",
                     new Dictionary<string, object?>
                     {
-                        ["scope"] = Scope(profile),
+                        ["target"] = Scope(profile),
                         ["dryRun"] = true,
                         ["sql"] = "SELECT 1",
                     },
@@ -525,7 +525,7 @@ public sealed class McpStdioProcessTests
                 "sqlharness_query",
                 new Dictionary<string, object?>
                 {
-                    ["scope"] = Scope("sample-country"),
+                    ["target"] = Scope("sample-country"),
                     ["sql"] = "SELECT 1",
                     ["server"] = "raw-target.invalid",
                     ["allowMutation"] = true,
@@ -545,7 +545,7 @@ public sealed class McpStdioProcessTests
             {
                 var arguments = new Dictionary<string, object?>
                 {
-                    ["scope"] = Scope("sample-country"),
+                    ["target"] = Scope("sample-country"),
                     ["repeat"] = 1,
                     ["timeout"] = 1,
                     // 2s expires while the Linux suite saturates the CPU. That
@@ -558,6 +558,8 @@ public sealed class McpStdioProcessTests
                 {
                     arguments["baseline"] = new Dictionary<string, object?> { ["sql"] = "SELECT 1" };
                     arguments["candidate"] = new Dictionary<string, object?> { ["sql"] = "SELECT 1" };
+                    arguments["subject"] = "process-smoke";
+                    arguments["scope"] = "whole";
                 }
 
                 var denied = await client.CallToolAsync(toolName, arguments, cancellationToken: ct);

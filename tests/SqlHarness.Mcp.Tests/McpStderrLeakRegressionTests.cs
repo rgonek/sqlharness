@@ -61,7 +61,7 @@ public sealed class McpStderrLeakRegressionTests
                 "sqlharness_query",
                 new Dictionary<string, object?>
                 {
-                    ["scope"] = RequestScope(),
+                    ["target"] = RequestScope(),
                     ["dryRun"] = true,
                     ["sql"] = $"SELECT @stenoparam, '{SqlMarker}'",
                     ["parameters"] = new object[]
@@ -88,7 +88,7 @@ public sealed class McpStderrLeakRegressionTests
                 "sqlharness_query",
                 new Dictionary<string, object?>
                 {
-                    ["scope"] = RequestScope(),
+                    ["target"] = RequestScope(),
                     ["dryRun"] = true,
                     ["file"] = $"{PathMarker}/missing.sql",
                 },
@@ -107,7 +107,7 @@ public sealed class McpStderrLeakRegressionTests
                 "sqlharness_query",
                 new Dictionary<string, object?>
                 {
-                    ["scope"] = RequestScope(),
+                    ["target"] = RequestScope(),
                     ["dryRun"] = true,
                     ["sql"] = "SELECT 1",
                     ["bogusArgument"] = ParamMarker,
@@ -127,7 +127,7 @@ public sealed class McpStderrLeakRegressionTests
                 "sqlharness_compare",
                 new Dictionary<string, object?>
                 {
-                    ["scope"] = RequestScope(),
+                    ["target"] = RequestScope(),
                     ["dryRun"] = true,
                     ["compareResults"] = "bogus-" + ExceptionMarker,
                     ["baseline"] = new Dictionary<string, object?> { ["sql"] = "SELECT 1" },
@@ -143,7 +143,7 @@ public sealed class McpStderrLeakRegressionTests
             Assert.False(child.Process.HasExited, "The published server died on rejected arguments.");
             var afterRejection = await client.CallToolAsync(
                 "sqlharness_query",
-                new Dictionary<string, object?> { ["scope"] = RequestScope(), ["dryRun"] = true, ["sql"] = "SELECT 2" },
+                new Dictionary<string, object?> { ["target"] = RequestScope(), ["dryRun"] = true, ["sql"] = "SELECT 2" },
                 cancellationToken: ct);
             Assert.False(afterRejection.IsError == true, McpStdioProcessHarness.Envelope(afterRejection).ToString());
 
@@ -156,7 +156,7 @@ public sealed class McpStderrLeakRegressionTests
             Assert.False(child.Process.HasExited, "The published server died on malformed input.");
             var afterGarbage = await client.CallToolAsync(
                 "sqlharness_query",
-                new Dictionary<string, object?> { ["scope"] = RequestScope(), ["dryRun"] = true, ["sql"] = "SELECT 3" },
+                new Dictionary<string, object?> { ["target"] = RequestScope(), ["dryRun"] = true, ["sql"] = "SELECT 3" },
                 cancellationToken: ct);
             Assert.False(afterGarbage.IsError == true, McpStdioProcessHarness.Envelope(afterGarbage).ToString());
 
