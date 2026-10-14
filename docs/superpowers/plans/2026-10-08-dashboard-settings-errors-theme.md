@@ -14,7 +14,7 @@
 
 ## Global Constraints
 
-- Do not auto-format. Never run `dotnet format` to rewrite files; touch only the lines a change needs and match local style. (`verify.ps1` runs `dotnet format --verify-no-changes`, which only checks.)
+- Formatting is enforced by the gates, not by hand: run `just fix` and let it rewrite the C# files the change touched. Do not reformat untouched code.
 - A change is done only when both `pwsh ./scripts/verify.ps1` and `pwsh ./scripts/verify-linux.ps1` are green.
 - Commit titles: one short line, no task key (this repo has none); end each commit body with the session attribution lines the harness provides.
 - Error messages are stored only with `journal.storeSensitive: true`; truncated to 4096 characters with a trailing `…`.

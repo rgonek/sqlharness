@@ -28,7 +28,7 @@ public sealed class VerifyLinuxScriptTests
             script,
             StringComparison.Ordinal);
         Assert.Contains(
-            "dotnet format SqlHarness.sln --no-restore --verify-no-changes",
+            "dotnet format SqlHarness.sln --no-restore --include \"${changedFiles[@]}\" --verify-no-changes",
             script,
             StringComparison.Ordinal);
     }
@@ -82,9 +82,9 @@ public sealed class VerifyLinuxScriptTests
     {
         var script = Script();
 
-        Assert.Contains("verify-linux: OK", script, StringComparison.Ordinal);
-        Assert.Contains("stage '$Name' failed with exit code", script, StringComparison.Ordinal);
+        Assert.Contains("Get-GateSummaryLine -Gate 'verify-linux'", script, StringComparison.Ordinal);
+        Assert.Contains("Get-StageLine -Result $result", script, StringComparison.Ordinal);
         Assert.Matches(@"\$LASTEXITCODE", script);
-        Assert.Matches(@"(?m)^\s*exit \$code\s*$", script);
+        Assert.Matches(@"(?m)^\s*exit \$result\.ExitCode\s*$", script);
     }
 }

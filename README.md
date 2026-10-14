@@ -394,13 +394,27 @@ The local MCP server over stdio is implemented: see [docs/mcp.md](docs/mcp.md).
 ## Development
 
 Run both gates before committing; they run the same four stages (restore, build, test, format) that
-CI runs, with the local non-integration test filter. `verify.ps1` covers Windows; `verify-linux.ps1`
+CI runs, with the local non-integration test filter. `just verify` covers Windows; `just verify-linux`
 runs the identical stages inside WSL on a case-sensitive ext4 filesystem and is the only way to see
 Linux-only behaviour before pushing — provision it once with `pwsh ./scripts/setup-linux-gate.ps1`
 (installs the `global.json` SDK in the distro and creates a disposable clone under `~/src`; the gate
-clone never lives under `/mnt/d`). Neither gate replaces CI, and CI itself currently runs
-only ubuntu-latest with an unfiltered test step. A change is not done until both gates are green.
-The .NET SDK version comes from `global.json` (currently `10.0.303`, `rollForward: latestPatch`). Re-release after .NET runtime security patches.
+clone never lives under `/mnt/d`). Neither gate replaces CI, which runs on ubuntu-latest and
+windows-latest. A change is not done until both gates are green. The .NET SDK version comes from
+`global.json` (currently `10.0.303`, `rollForward: latestPatch`). Re-release after .NET runtime
+security patches.
+
+Each gate prints one line per stage (`==> build ok 45.5s`) and a final `verify: OK stages=6 2m03s`;
+stage output goes to a log file, and a failed stage prints its exit code, the tail of the log and the
+log path. Add `-Stream` (`just verify -Stream`) to watch a run instead. Logs default to a directory
+under the temp path, overridable with `-LogDirectory`.
+
+The format stage is scoped to the C# files a change touched, because `dotnet format` spends nearly all
+of its time loading the MSBuild workspace: a full-solution check took 129s here against 34s scoped to
+what changed. `just verify` checks the working tree; `just verify-linux` checks what the branch changed
+relative to `origin/main`, because the gate clone is reset to the branch tip and a working-tree diff
+there is always empty. CI still runs `dotnet format --no-restore --verify-no-changes` over the whole
+solution. Note that the Linux gate syncs committed code only: it verifies the branch tip, not uncommitted
+work in the working tree. `just fix` rewrites the formatting of the same file set the gates check.
 
 `just publish` tests, builds a self-contained binary and installs it where `sqlharness` is on PATH
 (override with `SQLHARNESS_INSTALL_DIR`). On Windows, when the system host cannot resolve the
@@ -410,8 +424,9 @@ tests do not depend on the length of the user's normal temp directory. These env
 apply only to the publishing process; no terminal configuration is needed.
 
 ```powershell
-pwsh ./scripts/verify.ps1
-pwsh ./scripts/verify-linux.ps1
+just verify
+just verify-linux
+just fix
 dotnet test
 dotnet run --project src\SqlHarness.Cli -- --help
 ```
