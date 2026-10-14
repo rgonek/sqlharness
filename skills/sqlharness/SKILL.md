@@ -93,7 +93,8 @@ SQL Server control flow: Allowed control flow: IF, ELSE, BEGIN … END (any nest
 
 ## PostgreSQL
 
-- **Remote profiles** set `"sslMode": "verify-full"` explicitly. An omitted `sslMode` keeps the legacy mapping, where `trustServerCertificate: false` encrypts without verifying the certificate. Combinations, `rootCertificate` and legacy behaviour: [README PostgreSQL engine notes](../../README.md#postgresql-engine-notes).
+- **Remote profiles** set `"sslMode": "verify-full"` explicitly. An omitted `sslMode` keeps the legacy mapping, where `trustServerCertificate: false` encrypts without verifying the certificate; that legacy mapping and `require` / `disable` give a man-in-the-middle the credential and the result data, because authentication completes before any identity check. Combinations, `rootCertificate` and legacy behaviour: [README PostgreSQL engine notes](../../README.md#postgresql-engine-notes).
+- **Session lexing**: a session that does not report `standard_conforming_strings = on` is refused with exit `2` before any classified SQL runs, because the offline classifier and the server must agree on where string literals end. There is no profile opt-out; fix the role or database default on the server.
 - Each non-approved command runs in its own `READ ONLY` transaction. TEMP setup runs outside it under static checks, and a setup `SELECT` can still call a user function that writes persistently: review setup SQL.
 - Benchmarks time one statement with `EXPLAIN (ANALYZE, BUFFERS)`: `CpuTimeMs` is `0`, `logicalReads` are buffer hits plus reads, and `missingIndexes` is empty.
 - **Top statements**: rank `pg_stat_statements` with a `query`: save the SQL below as `.\queries\pg-top-statements.sql`. The extension must be installed on the server; the column names are PostgreSQL 13+.

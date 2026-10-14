@@ -93,6 +93,20 @@ internal sealed class NpgsqlSessionFactory : ISqlSessionFactory
 
 internal static class PostgresSessionScope
 {
+    // 031: classification parses the caller's SQL under standard string rules, so a
+    // session reporting standard_conforming_strings off would be classified under
+    // different lexing than the server applies. Fail closed instead of guessing:
+    // missing or off is a safety rejection, and the message names no value.
+    internal static void EnsureStandardStrings(IReadOnlyDictionary<string, string> parameters)
+    {
+        if (!parameters.TryGetValue("standard_conforming_strings", out var value)
+            || !string.Equals(value, "on", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new SqlHarnessSafetyException(
+                "PostgreSQL standard_conforming_strings must be on; SQLHarness classifies SQL under standard string rules.");
+        }
+    }
+
     internal static void BindClassifiedCommand(NpgsqlCommand command, SqlExecutionCommand execution)
     {
         command.CommandText = execution.Sql;
@@ -118,6 +132,7 @@ internal sealed class NpgsqlSession(
         NpgsqlTransaction? transaction = null;
         try
         {
+            PostgresSessionScope.EnsureStandardStrings(connection.PostgresParameters);
             BindCommand(command, execution);
             if (execution.PostgresMode is not (PostgresExecutionMode.SessionSetup or PostgresExecutionMode.ApprovedMutation))
             {

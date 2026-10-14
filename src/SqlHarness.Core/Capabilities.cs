@@ -53,7 +53,7 @@ public static class SqlHarnessCapabilitiesProvider
         new(
             SqlEngine.Postgres,
             "postgres",
-            "PostgreSQL: per-command READ ONLY.",
+            "PostgreSQL: per-command READ ONLY; a session that does not report standard_conforming_strings=on is refused with exit 2.",
             [.. SharedParameterTypes],
             new Dictionary<string, object>(StringComparer.Ordinal),
             [
