@@ -9,22 +9,12 @@ public class ContractsTests
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
     [Fact]
-    public void Skill_links_resolve_to_reference_sections()
+    public void Skill_does_not_depend_on_files_outside_its_package()
     {
         var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
-        foreach (var (file, path) in new[] { ("README.md", new[] { "README.md" }), ("docs/mcp.md", new[] { "docs", "mcp.md" }) })
-        {
-            var slugs = HeadingSlugs(ReadRepositoryFile(path));
-            var anchors = System.Text.RegularExpressions.Regex
-                .Matches(skill, @"\]\(\.\./\.\./" + System.Text.RegularExpressions.Regex.Escape(file) + @"#([^)]+)\)")
-                .Select(match => match.Groups[1].Value)
-                .ToArray();
-            if (file == "README.md")
-                Assert.NotEmpty(anchors);
-            Assert.All(anchors, anchor => Assert.Contains(anchor, slugs));
-        }
-
-        Assert.Contains("](../../docs/mcp.md)", skill, StringComparison.Ordinal);
+        var links = System.Text.RegularExpressions.Regex.Matches(skill, @"\]\(([^)]+)\)");
+        Assert.All(links.Cast<System.Text.RegularExpressions.Match>(), link =>
+            Assert.DoesNotContain("..", link.Groups[1].Value.Split('/')));
     }
 
     [Fact]
