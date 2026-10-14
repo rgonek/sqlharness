@@ -2,15 +2,12 @@ import { Link } from "@tanstack/react-router"
 import { useSessionCompares } from "@/api/queries"
 import type { CompareAttemptSummary, CompareSubjectSummary } from "@/api/types"
 import { Button } from "@/components/ui/button"
+import { regressionLabel } from "@/lib/compare"
 import { formatTimestamp } from "@/lib/format"
 
 function assessment(attempt: CompareAttemptSummary | null): string {
   if (!attempt || attempt.status !== "succeeded") return "No assessment"
-  const verdict = attempt.regression?.verdict
-  if (verdict === "pass") return "No regression detected"
-  if (verdict === "fail") return "Regression detected"
-  if (verdict === "inconclusive") return "Inconclusive"
-  return "No assessment"
+  return regressionLabel(attempt.regression)
 }
 
 function attemptVersions(attempt: CompareAttemptSummary) {

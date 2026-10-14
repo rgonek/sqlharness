@@ -56,11 +56,18 @@ export function compareRows(baseline: VariantDetail, candidate: VariantDetail, e
 }
 
 export function regressionLabel(regression: Record<string, unknown> | null | undefined): string {
-  switch (regression?.verdict) {
+  const text = verdictText(regression?.verdict)
+  if (text === null) return "No assessment"
+  const version = regression?.policyVersion
+  return typeof version === "number" && Number.isInteger(version) && version > 0 ? `${text} (policy v${version})` : text
+}
+
+function verdictText(verdict: unknown): string | null {
+  switch (verdict) {
     case "pass": return "No regression detected"
     case "fail": return "Regression detected"
     case "inconclusive": return "Inconclusive"
-    default: return "No assessment"
+    default: return null
   }
 }
 

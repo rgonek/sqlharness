@@ -55,3 +55,11 @@ test("metric rows use only metrics for the recorded engine and never divide by z
   expect(postgres.some(row => row.metric.startsWith("Shared hits"))).toBe(true)
   expect(compareRows(baseline, candidate, null).map(row => row.metric)).toEqual(["Elapsed (median ms)", "CPU (median ms)"])
 })
+
+test("regression label names the policy version only for a positive integer", () => {
+  expect(regressionLabel({ verdict: "fail", policyVersion: 2 })).toBe("Regression detected (policy v2)")
+  expect(regressionLabel({ verdict: "inconclusive", policyVersion: 1 })).toBe("Inconclusive (policy v1)")
+  expect(regressionLabel({ verdict: "pass" })).toBe("No regression detected")
+  expect(regressionLabel({ verdict: "pass", policyVersion: "2" })).toBe("No regression detected")
+  expect(regressionLabel({ policyVersion: 2 })).toBe("No assessment")
+})

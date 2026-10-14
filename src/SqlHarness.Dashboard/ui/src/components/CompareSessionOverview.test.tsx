@@ -167,3 +167,12 @@ test("loads more than 500 retained attempts without losing session context", asy
   expect(screen.getByText("Session 7")).toBeInTheDocument()
   expect(request).toBe(6)
 })
+
+test("the whole compare assessment names the regression policy version", async () => {
+  const versioned = attempt({ regression: { verdict: "pass", policyVersion: 2 } })
+  stubSession([subject({ latestWhole: versioned, latestCompletedWhole: versioned, startToLatestWhole: null })], [versioned])
+  renderApp("/sessions/7")
+
+  const group = (await screen.findByText("orders", { selector: "summary" })).closest("details")!
+  expect(within(group).getByText(/No regression detected \(policy v2\)/)).toBeInTheDocument()
+})
