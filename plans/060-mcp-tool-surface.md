@@ -29,7 +29,7 @@ Evidence and reasoning (consulted Grok and Codex; Grok and this controller chose
 
 ## Status
 
-- Status: DONE (gates pending)
+- Status: DONE (Windows gate green; Linux gate accepted by the operator)
 - Priority: P2
 - Effort: L
 - Risk: MEDIUM (removes tools and commands from published contracts; concurrency change)
