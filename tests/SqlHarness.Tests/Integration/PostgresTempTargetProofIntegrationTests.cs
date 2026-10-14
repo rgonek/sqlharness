@@ -28,7 +28,7 @@ public sealed class PostgresTempTargetProofIntegrationTests
     /// <summary>Unquoted non-ASCII, so unprovable offline (047).</summary>
     private const string NonAsciiUnprovableTempName = "p47i_temp_\u00e9_rows";
 
-    [PostgresIntegrationFact]
+    [PostgresIntegrationFact(requireDisposableTargetConfirmation: true)]
     [Trait("Category", "PostgresIntegration")]
     public async Task Temp_dml_on_an_unprovable_name_runs_read_only_and_writes_the_row()
     {
@@ -76,7 +76,7 @@ public sealed class PostgresTempTargetProofIntegrationTests
         }
     }
 
-    [PostgresIntegrationFact]
+    [PostgresIntegrationFact(requireDisposableTargetConfirmation: true)]
     [Trait("Category", "PostgresIntegration")]
     public async Task Unqualified_write_onto_a_persistent_table_is_rejected_at_execution_and_writes_no_row()
     {
@@ -102,7 +102,7 @@ public sealed class PostgresTempTargetProofIntegrationTests
         }
     }
 
-    [PostgresIntegrationFact]
+    [PostgresIntegrationFact(requireDisposableTargetConfirmation: true)]
     [Trait("Category", "PostgresIntegration")]
     public async Task Search_path_order_decides_whether_the_unqualified_write_lands_on_the_temp_or_the_table()
     {
@@ -143,7 +143,7 @@ public sealed class PostgresTempTargetProofIntegrationTests
         }
     }
 
-    [PostgresIntegrationFact]
+    [PostgresIntegrationFact(requireDisposableTargetConfirmation: true)]
     [Trait("Category", "PostgresIntegration")]
     public async Task Setup_ddl_on_proven_temps_still_runs_before_the_measured_select()
     {
@@ -169,6 +169,22 @@ public sealed class PostgresTempTargetProofIntegrationTests
             var report = Assert.IsType<SqlHarnessMeasureReport>(outcome.Report);
             Assert.True(report.ResultsStable);
             Assert.Equal(2, report.MeasuredRunCount);
+
+            // A measure report carries timings, not rows, so exit 0 plus ResultsStable
+            // would still hold if the setup's statements were quietly skipped. The
+            // same setup is therefore also compared: the baseline is the real query
+            // and the candidate states the row the setup must have left and that the
+            // dropped temp is gone. A skipped INSERT, TRUNCATE or DROP breaks either
+            // the run or the equality.
+            var compared = await module.ExecuteAsync(Compare(
+                setup,
+                "SELECT id, to_regclass('pg_temp.p47i_indexed_rows') IS NULL AS dropped FROM p47i_kept_rows",
+                "SELECT 7 AS id, true AS dropped"));
+
+            Assert.Equal(SqlHarnessExitCode.Success, compared.ExitCode);
+            Assert.True(
+                Assert.IsType<SqlHarnessCompareReport>(compared.Report).ResultsEquivalent,
+                "The setup did not leave the row the measured SELECT is expected to return, or the dropped temp survived.");
         }
         finally
         {
@@ -181,6 +197,9 @@ public sealed class PostgresTempTargetProofIntegrationTests
 
     private static SqlHarnessMeasureOperation Measure(string setup, string candidate) =>
         new(new SqlTargetRequest(ProfileName, new Dictionary<string, string>()), setup, candidate, [], 30, 2);
+
+    private static SqlHarnessCompareOperation Compare(string setup, string baseline, string candidate) =>
+        new(new SqlTargetRequest(ProfileName, new Dictionary<string, string>()), setup, baseline, candidate, [], 30, 2);
 
     /// <summary>One disposable target: its own schema on the confirmed database, dropped on dispose.</summary>
     private sealed class PostgresProofTarget : IAsyncDisposable
@@ -222,17 +241,15 @@ public sealed class PostgresTempTargetProofIntegrationTests
             var connectionString = Environment.GetEnvironmentVariable(PostgresIntegrationFactAttribute.Variable);
             Assert.False(string.IsNullOrWhiteSpace(connectionString), $"Set {PostgresIntegrationFactAttribute.Variable} to opt in.");
 
-            var builder = new NpgsqlConnectionStringBuilder(connectionString)
-            {
-                // A pooled connection can carry another test's temp tables.
-                Pooling = false,
-            };
+            var builder = new NpgsqlConnectionStringBuilder(connectionString);
             Assert.False(string.IsNullOrWhiteSpace(builder.Database), "The opt-in connection string names no database.");
-            var confirmed = Environment.GetEnvironmentVariable(PostgresIntegrationFactAttribute.DisposableTargetConfirmationVariable);
-            if (!string.IsNullOrWhiteSpace(confirmed))
-            {
-                Assert.Equal(builder.Database, confirmed, StringComparer.Ordinal);
-            }
+            // The attribute above is the single gate that the variable is set at all;
+            // this is the identity half it cannot do: the approved database is this
+            // exact resolved database. Same shape as the two 052 proof tests.
+            Assert.Equal(
+                builder.Database,
+                Environment.GetEnvironmentVariable(PostgresIntegrationFactAttribute.DisposableTargetConfirmationVariable),
+                StringComparer.Ordinal);
 
             var admin = new NpgsqlConnection(connectionString);
             await admin.OpenAsync();
