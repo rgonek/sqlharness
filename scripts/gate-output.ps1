@@ -16,6 +16,56 @@
     Used by scripts/verify.ps1 and scripts/verify-linux.ps1.
 #>
 
+function Invoke-NativeStageCommand {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$FilePath,
+        [string[]]$Arguments = @(),
+        [string]$WorkingDirectory
+    )
+
+    # wsl.exe writes to the console directly, so PowerShell's own redirection drops
+    # its output while still reporting exit code 0 - a green stage that ran nothing.
+    # Redirecting the process itself is the only way to see what actually happened.
+    $stdoutPath = [System.IO.Path]::GetTempFileName()
+    $stderrPath = [System.IO.Path]::GetTempFileName()
+    try {
+        $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+        $startInfo.FileName = $FilePath
+        foreach ($argument in $Arguments) { $null = $startInfo.ArgumentList.Add($argument) }
+        $startInfo.UseShellExecute = $false
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        if ($WorkingDirectory) { $startInfo.WorkingDirectory = $WorkingDirectory }
+
+        $process = [System.Diagnostics.Process]::Start($startInfo)
+        if ($null -eq $process) {
+            throw "'$FilePath' could not be started. A stage that cannot start must never look green."
+        }
+
+        # Both pipes are drained concurrently. Reading one to the end before the
+        # other deadlocks as soon as the second pipe buffer fills, which hung the
+        # UI check stage for 38 minutes.
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+
+        $lines = [System.Collections.Generic.List[string]]::new()
+        if (-not [string]::IsNullOrEmpty($stdout)) { $stdout.TrimEnd("`r", "`n") -split "`r?`n" | ForEach-Object { $lines.Add($_) } }
+        if (-not [string]::IsNullOrEmpty($stderr)) { $stderr.TrimEnd("`r", "`n") -split "`r?`n" | ForEach-Object { $lines.Add($_) } }
+
+        return [pscustomobject]@{
+            ExitCode = $process.ExitCode
+            Output   = $lines.ToArray()
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $stdoutPath, $stderrPath -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-GateStage {
     [CmdletBinding()]
     param(
@@ -47,24 +97,27 @@ function Invoke-GateStage {
 
     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     $global:LASTEXITCODE = 0
-    $lines = [System.Collections.Generic.List[string]]::new()
+    # Deliberately not named $lines or $action: PowerShell variable names are
+    # case-insensitive, so those would shadow the caller's variables inside a stage
+    # scriptblock and quietly run an empty stage.
+    $capturedOutput = [System.Collections.Generic.List[string]]::new()
     $exitCode = 0
 
     try {
         foreach ($item in (& $Action *>&1)) {
-            if ($null -ne $item) { $lines.Add([string]$item) }
+            if ($null -ne $item) { $capturedOutput.Add([string]$item) }
         }
         $exitCode = $global:LASTEXITCODE
     }
     catch {
-        $lines.Add($_.Exception.Message)
+        $capturedOutput.Add($_.Exception.Message)
         $exitCode = 1
     }
     finally {
         $stopwatch.Stop()
     }
 
-    Set-Content -LiteralPath $logPath -Value $lines
+    Set-Content -LiteralPath $logPath -Value $capturedOutput
 
     return [pscustomobject]@{
         Name       = $Name

@@ -142,10 +142,16 @@ function Invoke-LinuxStage {
     $result = Invoke-GateStage -Name $Name -LogDirectory $LogDirectory -Skipped:$Skipped -SkipReason $SkipReason -Action {
         # PATH is exported here rather than sourced from ~/.bashrc: Ubuntu's stock
         # .bashrc returns early in a non-interactive shell, so an rc-file PATH would
-        # silently not apply and the gate would fail for the wrong reason. The
-        # provisioned Node (~/.node/current, from scripts/setup-linux-gate.ps1) comes
+        # silently not apply and the gate would fail for the wrong reason. The line is
+        # single-quoted so bash, not PowerShell, expands $HOME: a PowerShell expansion
+        # puts a Windows path into the Linux PATH and the gate would silently test
+        # whatever node and dotnet the distro happens to carry.
+        # The provisioned Node (~/.node/current, from scripts/setup-linux-gate.ps1) comes
         # first so it wins over any Windows-interop `node`/`npm` on the WSL PATH.
-        $script = "set -euo pipefail`nexport PATH=`"$HOME/.node/current/bin:`$HOME/.dotnet:`$PATH`"`n" + ($Lines -join "`n")
+        $script = @'
+set -euo pipefail
+export PATH="$HOME/.node/current/bin:$HOME/.dotnet:$PATH"
+'@ + "`n" + ($Lines -join "`n")
 
         # The block is materialised as an LF-only, BOM-less file instead of piped on
         # stdin: PowerShell injects CRLF into native-command stdin, and a trailing CR
@@ -164,8 +170,9 @@ function Invoke-LinuxStage {
                 throw "Could not translate the stage script path into a WSL path."
             }
 
-            & wsl -d $Distro -- bash $stageWslPath @Arguments
-            $global:LASTEXITCODE = $LASTEXITCODE
+            $run = Invoke-NativeStageCommand -FilePath 'wsl.exe' -Arguments (@('-d', $Distro, '--', 'bash', $stageWslPath) + $Arguments)
+            $run.Output | ForEach-Object { Write-Host $_ }
+            if ($run.ExitCode -ne 0) { throw "wsl exited with $($run.ExitCode)" }
         }
         finally {
             Remove-Item -LiteralPath $stageFile.FullName -ErrorAction SilentlyContinue
