@@ -28,7 +28,7 @@ Lock one closed named profile and one `--var` set per invocation; a different pr
 
 1. **Inventory** representative cases offline before measuring: row count, cardinality distribution, ordering ties, missing history, boundary dates, empty results. Keep ticket SQL outside the application repository.
 2. **`query`** returns one bounded read-only batch; catalog facts (columns, row counts, existing indexes, storage) come from it too. Bind values as typed `--param name[:type]=value`; names may include one leading `@`, and reports use `@Name`. Unsized variable-width strings bind at size 4000 through 4000 characters and `max` above that, matching Dapper so the benchmark compiles the application's plan. Fixed-width `char`/`nchar` cannot use `max`: `char` accepts through 8000 (using actual length above 4000), `nchar` through 4000, and both use size 4000 up to that boundary, including NULL. Explicit sizes are unchanged. Types: [README Quick start](../../README.md#quick-start), or `capabilities <profile>`.
-3. **`measure`** collects repeated timing, IO and plan evidence for one query; **`compare`** adds baseline/candidate result equivalence and a latency `regression.verdict` (on `inconclusive`, read `reasons`; the verdict never changes the exit code). For both, put preparation in `--setup` (runs once on the measured session). One query across several parameter sets: `measure --param-set` ([README Measure parameter sets](../../README.md#measure-parameter-sets)).
+3. **`measure`** collects repeated timing, IO and plan evidence for one query; **`compare`** adds baseline/candidate result equivalence and a latency `regression.verdict` (on `inconclusive`, read `reasons`; the verdict never changes the exit code). For both, put preparation in `--setup` (runs once on the measured session). Parameter-set forms and execution rules: [README Parameter sets](../../README.md#parameter-sets).
 4. **`plan`** distills a saved showplan offline, with no scope lock.
 
 <!-- docs-sync:example -->
@@ -63,19 +63,21 @@ sqlharness snapshot prod-eu --var tenant=acme --var env=uat --file .\queries\cov
 sqlharness artifact <id> --section summary --json
 ```
 
-### Measure parameter sets
+### Parameter sets
 
-`measure --param-set` measures one query across at least two named parameter sets. Fixed `--param` values are shared by every set; per-set parameters come from each file and must not reuse a fixed name. A single scenario stays on `--param` alone.
+The CLI `measure --param-set` measures one query across at least two named parameter sets. MCP `sqlharness_measure` and `sqlharness_compare` share three mutually exclusive inputs: `parameterSets` (inline named sets), `parameterSetFiles` (`.sqljson` files), or `matrix` (one typed parameter with multiple values). Set inputs contain 2–32 sets or values; all sets use the same parameter names and declared type, size, precision and scale. Unsized declarations such as `nvarchar` may infer different value sizes. Fixed parameters combine with each set and cannot be repeated by a set. The CLI `--param-set` file grammar and `compare --matrix` text grammar keep their existing meaning.
+
+Fixed CLI `--param` values are shared by every set; per-set parameters must not reuse a fixed name. A single CLI scenario stays on `--param` alone.
 
 ```powershell
 sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\queries\orders.sql --param tenant:nvarchar=acme --param-set .\sets\small.sqljson --param-set .\sets\large.sqljson --repeat 5 --json
 ```
 
-Each `--param-set` file is JSON containing only `name` and `parameters`, at most 64 KiB. A UTF-8 BOM, JSON comments, and trailing commas are accepted. Those files are locally sensitive and remain the only SQLHarness input that contains those values. SQLHarness does not copy parameter values or source paths into reports. `.sqlplan` artifacts stay locally sensitive because server plan XML may still embed parameter values; do not publish them without review.
+Each CLI `--param-set` or MCP `parameterSetFiles` file is JSON containing only `name` and `parameters`, at most 64 KiB. A UTF-8 BOM, JSON comments, and trailing commas are accepted. Those files are locally sensitive. SQLHarness does not copy parameter values or source paths into reports. `.sqlplan` artifacts stay locally sensitive because server plan XML may still embed parameter values; do not publish them without review.
 
-Multi-set measure uses one session and setup once. Setup runs once and binds the first parameter set's merged parameters. Later sets do not re-run setup. Each set is warmed once in user-supplied order, then measured rounds rotate on that same session. In one-based round r, measured execution starts at index r modulo setCount and wraps in user-supplied order. Per-set stability is the only stability result; SQLHarness does not claim cross-set result equivalence. Parameter-set measurements use the observed server plan-cache state; SQLHarness did not clear or isolate the plan cache. Timings are order-dependent because of that shared cache.
+Multi-set measure uses one connection and setup once. Setup binds the first parameter set's merged parameters; later sets do not re-run setup. Each set is warmed once in user-supplied order, then measured rounds rotate on that same connection. In one-based round r, measured execution starts at index r modulo setCount and wraps in user-supplied order. Per-set stability is the only stability result; SQLHarness does not claim cross-set result equivalence. Parameter-set measurements use the observed server plan-cache state; SQLHarness did not clear or isolate the plan cache. Timings are order-dependent because of that shared cache. Compare uses one connection per set and runs setup once on each connection. Each compare cell reports `setName` and bound `parameters`; matrix cells also report `parameterValue` (JSON null only for a typed NULL). These fields are additive, and older matrix artifacts remain readable.
 
-This is not `compare --matrix`. Matrix mode varies one parameter across two query variants and opens a fresh connection per value. `--param-set` measures one query on one connection.
+MCP's three set forms share Core validation: matching names and declared shapes, unique set labels, and no overlap with fixed parameters. Typed matrix values are preserved as supplied; commas, empty text and JSON null remain distinct.
 
 `--json-summary` for a multi-set measure is a bounded projection: the cache warning, the rotation rule, each set name, parameter type metadata, the value hash, per-set stability, median elapsed/CPU/reads, cross-set labels, and the artifact directory. It omits parameter values, plan XML, and full run arrays. Noteworthy operators, when included, stay capped at ten.
 

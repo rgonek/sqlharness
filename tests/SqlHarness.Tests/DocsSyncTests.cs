@@ -94,6 +94,26 @@ public sealed partial class DocsSyncTests
     }
 
     [Fact]
+    public void Parameter_set_docs_and_capabilities_pin_the_shared_tool_contract()
+    {
+        var mcp = ReadRepositoryFile("docs", "mcp.md");
+        var readme = ReadRepositoryFile("README.md");
+        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
+        var commands = SqlHarnessCapabilitiesProvider.Get().Commands.ToDictionary(command => command.Name, StringComparer.Ordinal);
+
+        Assert.Contains("`parameterSets`", mcp, StringComparison.Ordinal);
+        Assert.Contains("`parameterSetFiles`", mcp, StringComparison.Ordinal);
+        Assert.Contains("`matrix`", mcp, StringComparison.Ordinal);
+        Assert.Contains("`setName`", mcp, StringComparison.Ordinal);
+        Assert.Contains("declared type, size, precision and scale", readme, StringComparison.Ordinal);
+        Assert.Contains("one connection per set", skill, StringComparison.Ordinal);
+        Assert.Contains("older matrix artifacts remain readable", skill, StringComparison.Ordinal);
+        Assert.Contains("parameterSets", commands["measure"].Description, StringComparison.Ordinal);
+        Assert.Contains("parameterSetFiles", commands["measure"].Description, StringComparison.Ordinal);
+        Assert.Contains("matrix", commands["compare"].Description, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Workflow_cost_docs_pin_provenance_measurements_legacy_and_dry_run_accounting()
     {
         var mcp = ReadRepositoryFile("docs", "mcp.md");

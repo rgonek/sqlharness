@@ -34,7 +34,7 @@ Exit codes: `-1` (255 on POSIX): unhandled CLI error in text mode, including com
 | `sqlharness <command> --help`, [README Commands](README.md#commands) | Choosing options and defaults (`watch`, `snapshot`, `plan`, `artifact`, `--dry-run`, `--output agent`) |
 | [Benchmark setup contract](README.md#benchmark-setup-contract) | Writing `--setup`, temp tables, table variables or `SET @v` |
 | [PostgreSQL engine notes](README.md#postgresql-engine-notes), [temp target proof](README.md#postgresql-temp-target-proof) | The profile has `"engine": "postgres"` |
-| [Measure parameter sets](README.md#measure-parameter-sets) | `measure --param-set` or `compare --matrix` |
+| [Parameter sets](README.md#parameter-sets) | `measure --param-set` or MCP `parameterSets`, `parameterSetFiles`, and `matrix` |
 | [Result equivalence and compact output](README.md#result-equivalence-and-compact-output) | Choosing `--compare-results`, `--compare-nullability` or reading a summary |
 | [Safety contract](README.md#safety-contract) | A rejection, a mutation request, redaction or artifact handling |
 | [docs/mcp.md](docs/mcp.md) | Running or calling `sqlharness mcp serve` (fixed or request scope; no explicit persistent mutations) |

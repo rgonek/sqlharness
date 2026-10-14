@@ -66,16 +66,17 @@ public class ContractsTests
     }
 
     [Fact]
-    public void Documentation_covers_measure_parameter_sets()
+    public void Documentation_covers_shared_measure_and_compare_parameter_sets()
     {
         var readme = ReadRepositoryFile("README.md");
         var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
+        var mcp = ReadRepositoryFile("docs", "mcp.md");
         const string example =
             "sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\\queries\\orders.sql --param tenant:nvarchar=acme --param-set .\\sets\\small.sqljson --param-set .\\sets\\large.sqljson --repeat 5 --json";
 
-        var section = Section(readme, "## Measure parameter sets");
+        var section = Section(readme, "## Parameter sets");
         Assert.Contains(example, section, StringComparison.Ordinal);
-        foreach (var token in new[] { "--param-set", "--param", "compare --matrix", "--json-summary", "64 KiB", ".sqlplan" })
+        foreach (var token in new[] { "--param-set", "--param", "parameterSets", "parameterSetFiles", "matrix", "2–32", "declared type, size, precision and scale", "inferred sizes", "one connection", "one connection per set", "64 KiB", ".sqlplan" })
             Assert.Contains(token, section, StringComparison.Ordinal);
         // Safety clauses: the files are locally sensitive and their values stay out of reports.
         Assert.Contains("files are locally sensitive", section, StringComparison.Ordinal);
@@ -84,9 +85,16 @@ public class ContractsTests
         Assert.Contains("JSON comments", section, StringComparison.Ordinal);
         Assert.Contains("trailing commas", section, StringComparison.Ordinal);
         Assert.Contains("accepted", section, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("](README.md#measure-parameter-sets)", ReadRepositoryFile("AGENTS.md"), StringComparison.Ordinal);
-        Assert.Contains("](../../README.md#measure-parameter-sets)", skill, StringComparison.Ordinal);
+        Assert.Contains("](README.md#parameter-sets)", ReadRepositoryFile("AGENTS.md"), StringComparison.Ordinal);
+        Assert.Contains("](../../README.md#parameter-sets)", skill, StringComparison.Ordinal);
         Assert.Contains(example, skill, StringComparison.Ordinal);
+        foreach (var token in new[] { "`parameterSets`", "`parameterSetFiles`", "`matrix`", "matching names", "declared shapes", "one connection per set", "older matrix artifacts remain readable" })
+            Assert.Contains(token, skill, StringComparison.Ordinal);
+        Assert.Contains("`sqlharness_measure`", mcp, StringComparison.Ordinal);
+        Assert.Contains("`sqlharness_compare`", mcp, StringComparison.Ordinal);
+        Assert.Contains("`setName`", mcp, StringComparison.Ordinal);
+        Assert.Contains("Older artifacts with only `parameterValue` remain readable", mcp, StringComparison.Ordinal);
+        Assert.Contains("2–32 distinct values", mcp, StringComparison.Ordinal);
 
         var safety = Section(readme, "## Safety contract");
         Assert.Contains("Credential-redacted operation errors are stored in the activity journal by default.", safety, StringComparison.Ordinal);
