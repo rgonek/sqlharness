@@ -39,16 +39,23 @@ public sealed record RegressionReport(
 /// Latency regression verdict for one compare pair. Pure: no I/O, clock or logging.
 /// Gates (runs, elapsed availability, result equivalence, spread) are all evaluated and every failing
 /// gate is reported in that order; any failure makes the verdict inconclusive. The elapsed threshold
-/// decides pass/fail only when no gate failed. Reads and CPU are diagnostics and never change the verdict.
+/// decides pass/fail only when no gate failed. A variant's elapsed spread is unstable only when its range
+/// exceeds both the 2 ms floor and a quarter of its median. Reads and CPU are diagnostics and never change the verdict.
 /// </summary>
 public static class RegressionPolicy
 {
-    public const int PolicyVersion = 1;
+    public const int PolicyVersion = 2;
 
     public const int MinimumRunsPerVariant = 5;
 
     /// <summary>(max - min) / median above this value makes a variant unstable.</summary>
     public const decimal MaxElapsedSpread = 0.25m;
+
+    /// <summary>
+    /// An elapsed range (max - min) at or below this many ms never makes a variant unstable:
+    /// whole-millisecond samples jitter by a tick or two regardless of the median.
+    /// </summary>
+    public const decimal ElapsedSpreadFloorMilliseconds = 2m;
 
     public const decimal ElapsedRatio = 1.10m;
     public const decimal ElapsedMinimumDeltaMilliseconds = 5m;
@@ -203,7 +210,9 @@ public static class RegressionPolicy
     {
         var median = Median(samples);
         var range = samples.Max() - samples.Min();
-        return median == 0m ? range > 0m : range / median > MaxElapsedSpread;
+        if (range <= ElapsedSpreadFloorMilliseconds)
+            return false;
+        return median == 0m || range / median > MaxElapsedSpread;
     }
 
     private static decimal Median(IReadOnlyList<decimal> samples)
