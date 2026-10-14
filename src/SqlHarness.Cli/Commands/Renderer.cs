@@ -279,8 +279,6 @@ public sealed class Renderer
         _ => reason.ToString().ToLowerInvariant(),
     };
 
-    private static string Mb(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
-    private static string DecimalText(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
     private static string Value(object? value) => value is null ? "NULL" : Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
     private static string Dist(CompareDistribution d) => $"{d.Min}/{d.Median}/{d.Max}";
 

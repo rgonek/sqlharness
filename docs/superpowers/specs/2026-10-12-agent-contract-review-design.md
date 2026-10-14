@@ -80,7 +80,7 @@ investigation forward, and one wrong claim reached the operator:
     and `indexes --object` reports every missing-index DMV group for a table since server start (other
     statements' predicates) and returns no existing-index inventory for a table without candidates. The
     measured plan already answers the missing-index question for the statement under test
-    (`PlanStatement.MissingIndexes`, projected in compact output). A recipe returns raw result sets only,
+    (`PlanStatement.MissingIndexes`, projected in the artifact plan section). A recipe returns raw result sets only,
     losing the assembled report, overlap verdicts and Query Store text handling, and the budget clips them.
     Grok and Codex were consulted; all three reviewers rejected embedded recipes, and the operator chose
     removing `qstop`/`indexes` (Codex preferred keeping them).

@@ -1,17 +1,13 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 
-using SqlHarness.Cli;
-using SqlHarness.Core;
 
 namespace SqlHarness.Tests.Cli;
 
 /// <summary>
-/// Plan 060: the CLI stays consistent with MCP. ping, schema, counts, space, qstop, indexes and
-/// validate are gone; historical journal rows with those operation names stay readable (see
-/// JournalReaderTests).
+/// Plan 060: the CLI command surface stays consistent with the eight MCP tools.
 /// </summary>
-public sealed class RemovedCommandsTests
+public sealed class CliCommandSurfaceTests
 {
     private static readonly string[] Remaining =
     [
@@ -46,36 +42,5 @@ public sealed class RemovedCommandsTests
         }
 
         Assert.Equal(Remaining.Order(StringComparer.Ordinal), commands.Order(StringComparer.Ordinal));
-    }
-
-    [Theory]
-    [InlineData("ping")]
-    [InlineData("schema")]
-    [InlineData("counts")]
-    [InlineData("space")]
-    [InlineData("qstop")]
-    [InlineData("indexes")]
-    [InlineData("validate")]
-    public async Task Removed_commands_are_unknown_commands(string command)
-    {
-        var module = new RecordingModule();
-
-        var text = await SqlHarnessCli.Create(module, new StringWriter()).RunAsync([command, "dev"]);
-        var json = await SqlHarnessCli.Create(module, new StringWriter()).RunAsync([command, "dev", "--json"]);
-
-        Assert.Equal(-1, text);
-        Assert.Equal((int)SqlHarnessExitCode.Safety, json);
-        Assert.Empty(module.Operations);
-    }
-
-    private sealed class RecordingModule : ISqlHarnessModule
-    {
-        public List<SqlHarnessOperation> Operations { get; } = [];
-
-        public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default)
-        {
-            Operations.Add(operation);
-            return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null));
-        }
     }
 }

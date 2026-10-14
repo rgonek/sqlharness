@@ -347,6 +347,24 @@ public sealed class DryRunCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Allowed_persistent_mutation_dry_run_is_classified_as_mutation_with_exit_0()
+    {
+        var run = await Query(SqlServer, "DELETE FROM dbo.T;", "--allow-mutation", "--confirm-database", "ssdb");
+
+        AssertAllowed(run, "query");
+        Assert.Equal("mutation", Report(run.Output).GetProperty("classification").GetString());
+    }
+
+    [Fact]
+    public async Task Mutation_dry_run_with_a_wrong_confirm_database_is_rejected()
+    {
+        var run = await Query(SqlServer, "DELETE FROM dbo.T;", "--allow-mutation", "--confirm-database", "otherdb");
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, run.Exit);
+        AssertOffline();
+    }
+
+    [Fact]
     public async Task Postgres_parse_error_is_rejected()
     {
         var run = await Query(Postgres, "SELECT FROM WHERE @id");

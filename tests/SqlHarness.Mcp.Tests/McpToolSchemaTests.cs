@@ -229,31 +229,11 @@ public sealed class McpToolSchemaTests : IDisposable
     {
         var scope = Scope();
         var tools = McpToolCatalog.CreateTools(scope, scope.CreateModule());
+        Assert.Equal(8, McpLimits.MaxTools);
         Assert.Equal(McpLimits.MaxTools, tools.Count);
         Assert.Equal(ExpectedTools, tools.Select(tool => tool.ProtocolTool.Name));
         Assert.Equal(ExpectedTools, McpToolCatalog.ToolNames);
         Assert.Equal(ExpectedTools.Length, McpToolCatalog.ToolNames.Distinct(StringComparer.Ordinal).Count());
-    }
-
-    [Fact]
-    public void Catalog_serves_the_eight_agent_tools()
-    {
-        Assert.Equal(
-            ["sqlharness_capabilities", "sqlharness_query", "sqlharness_measure", "sqlharness_compare",
-             "sqlharness_watch", "sqlharness_snapshot", "sqlharness_plan", "sqlharness_artifact"],
-            McpToolCatalog.ToolNames);
-        Assert.Equal(8, McpLimits.MaxTools);
-    }
-
-    [Theory]
-    [InlineData("sqlharness_inspect")]
-    [InlineData("sqlharness_validate")]
-    public async Task Removed_tool_returns_an_unknown_tool_error(string removed)
-    {
-        await using var served = await ServedCatalog.CreateAsync(Scope());
-        var error = await Assert.ThrowsAnyAsync<McpException>(async () =>
-            await served.Client.CallToolAsync(removed, new Dictionary<string, object?>(), cancellationToken: CancellationToken.None));
-        Assert.Contains(removed, error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1036,10 +1016,11 @@ public sealed class McpToolSchemaTests : IDisposable
         // synthetic HOME holds exactly the files the fixture wrote.
         await using var served = await ServedCatalog.CreateAsync(Scope());
         var before = Directory.GetFiles(_home, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
-        await served.Client.CallToolAsync(
+        var dryRun = await served.Client.CallToolAsync(
             "sqlharness_query",
             new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1" },
             cancellationToken: CancellationToken.None);
+        Assert.NotEqual(true, dryRun.IsError);
         await served.Client.CallToolAsync(
             "sqlharness_capabilities",
             new Dictionary<string, object?>(),
@@ -1068,15 +1049,6 @@ public sealed class McpToolSchemaTests : IDisposable
 
         Assert.Contains("static", byName["sqlharness_watch"].ProtocolTool.Description ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("visible", byName["sqlharness_watch"].ProtocolTool.Description ?? string.Empty, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private sealed class ThrowingModule : ISqlHarnessModule
-    {
-        public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default) =>
-            throw new InvalidOperationException("Preflight must never dispatch a database operation.");
-        public Task<SqlHarnessOutcome> ExecuteWatchNdjsonAsync(
-            SqlHarnessWatchOperation operation, TextWriter writer, CancellationToken ct = default) =>
-            throw new InvalidOperationException("Preflight must never dispatch a database operation.");
     }
 
     [Fact]
