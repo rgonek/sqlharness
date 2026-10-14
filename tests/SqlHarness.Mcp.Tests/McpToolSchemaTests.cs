@@ -9,11 +9,12 @@ using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
-using Xunit.Abstractions;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Targets;
 using SqlHarness.Mcp.Tools;
+
+using Xunit.Abstractions;
 
 namespace SqlHarness.Mcp.Tests;
 

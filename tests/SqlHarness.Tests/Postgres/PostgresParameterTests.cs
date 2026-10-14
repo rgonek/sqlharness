@@ -267,7 +267,8 @@ public sealed class PostgresParameterTests
             sql,
             ["n:int=1"],
             30,
-            1) { Context = new CompareContext("postgres-test", "whole") });
+            1)
+        { Context = new CompareContext("postgres-test", "whole") });
         Assert.Contains("Measured SQL must be a single SELECT", compare.SafeError, StringComparison.Ordinal);
 
         var measure = await Execute(new SqlHarnessMeasureOperation(
@@ -292,7 +293,8 @@ public sealed class PostgresParameterTests
             [],
             30,
             1,
-            "n:int=1,2") { Context = new CompareContext("postgres-test", "whole") }, matrixSession);
+            "n:int=1,2")
+        { Context = new CompareContext("postgres-test", "whole") }, matrixSession);
         Assert.NotEmpty(matrixSession.Commands);
         Assert.DoesNotContain("could not be parsed", matrix.SafeError ?? string.Empty, StringComparison.Ordinal);
 

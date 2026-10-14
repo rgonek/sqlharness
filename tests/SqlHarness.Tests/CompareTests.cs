@@ -740,7 +740,8 @@ public class SqlHarnessCompareTests
             [],
             30,
             1,
-            "amount:decimal(19,4)=private-audit-value,1.00") { Context = new CompareContext("test-query", "whole") });
+            "amount:decimal(19,4)=private-audit-value,1.00")
+        { Context = new CompareContext("test-query", "whole") });
 
         Assert.Equal(0, session.FactoryOpenCount);
         Assert.Empty(artifacts.Runs);
@@ -765,7 +766,8 @@ public class SqlHarnessCompareTests
             [],
             30,
             1,
-            "privateaudit:int=1,private") { Context = new CompareContext("test-query", "whole") });
+            "privateaudit:int=1,private")
+        { Context = new CompareContext("test-query", "whole") });
 
         Assert.Equal(0, session.FactoryOpenCount);
         Assert.Empty(artifacts.Runs);

@@ -211,7 +211,8 @@ public sealed class CredentialRedactionTests
             "measure" => new SqlHarnessMeasureOperation(target, null, sql, [], 5, 2),
             "compare" => new SqlHarnessCompareOperation(target, null, sql, sql, [], 5, 2) { Context = new CompareContext("redaction-test", "whole") },
             "compare-matrix" => new SqlHarnessCompareMatrixOperation(
-                target, null, "SELECT @N AS One", "SELECT @N AS One", [], 5, 2, "N:int=1,2") { Context = new CompareContext("redaction-test", "whole") },
+                target, null, "SELECT @N AS One", "SELECT @N AS One", [], 5, 2, "N:int=1,2")
+            { Context = new CompareContext("redaction-test", "whole") },
             "watch" => new SqlHarnessWatchOperation(
                 target, sql, [], 5, 10, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5), null, 3),
             "snapshot" => new SqlHarnessSnapshotOperation(target, sql, [], 5, 10, "redaction-test", false, false),

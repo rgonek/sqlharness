@@ -1,6 +1,7 @@
+using Microsoft.Data.Sqlite;
+
 using SqlHarness.Core;
 using SqlHarness.Dashboard;
-using Microsoft.Data.Sqlite;
 
 namespace SqlHarness.Tests.Dashboard;
 
