@@ -10,8 +10,8 @@ namespace SqlHarness.Mcp;
 /// host-shutdown source on the first EOF (a non-empty read returning 0 bytes,
 /// or ReadByte returning -1). The host links that source into every handler
 /// execution and into the server loop, so an EOF cancels the in-flight Core
-/// call (a stable cancelled result, never the natural watch exit 7),
-/// releases the gate, and ends the loop. No thread, no polling, no timing:
+/// calls (a stable cancelled result, never the natural watch exit 7) and
+/// ends the loop. No thread, no polling, no timing:
 /// cancellation is synchronous with the EOF read. Zero-length reads are not
 /// EOF and never signal.
 /// </summary>

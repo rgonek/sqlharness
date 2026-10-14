@@ -960,7 +960,7 @@ public sealed class McpStdioLiveTests
                 : null;
             Assert.NotEqual("safety_rejected", probeCode);
 
-            // Cancel a long watch, then prove cleanup: the gate is free, the
+            // Cancel a long watch, then prove cleanup: the server survives, the
             // next call succeeds, and EOF still shuts the process down.
             using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var watch = client.CallToolAsync(

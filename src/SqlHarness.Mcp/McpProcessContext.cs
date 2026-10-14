@@ -28,7 +28,6 @@ public sealed class McpProcessContext
         InputRoots = inputRoots;
         MaxResultBytes = maxResultBytes;
         MaxOperationSeconds = maxOperationSeconds;
-        Gate = new McpExecutionGate();
     }
 
     public bool RequestScope { get; }
@@ -38,7 +37,6 @@ public sealed class McpProcessContext
     public IReadOnlyList<string> InputRoots { get; }
     public int MaxResultBytes { get; }
     public int MaxOperationSeconds { get; }
-    public McpExecutionGate Gate { get; }
 
     private Func<ISqlHarnessModule, ISqlHarnessModule> _decorator = static module => module;
 

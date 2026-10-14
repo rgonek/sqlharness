@@ -184,7 +184,7 @@ public sealed class McpSecretRedactionTests
     /// <summary>
     /// 012/T4, reworded 012/final F1: this does NOT prove that a typed matrix value is
     /// collected and redacted on the MCP path. No production call site of
-    /// <see cref="McpResultAdapter.Adapt"/> (<c>McpToolCatalog.cs</c>, <c>McpExecutionGate.cs</c>)
+    /// <see cref="McpResultAdapter.Adapt"/> (<c>McpToolCatalog.cs</c>, <c>McpCallOutcome.cs</c>)
     /// ever supplies <c>knownSecrets</c> -- Core already redacts
     /// <see cref="SqlHarnessOutcome.MachineError"/> before MCP ever sees the outcome, so this
     /// parameter is unreachable from production. What this test proves is narrower: that

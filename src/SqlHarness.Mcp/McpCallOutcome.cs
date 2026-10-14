@@ -29,101 +29,18 @@ public sealed class SystemMcpClock : IMcpClock
 }
 
 /// <summary>
-/// Concurrency gate for one MCP server process (spec section 7): at most one
-/// active database operation at a time. The database tools are query,
-/// measure, compare, watch, and snapshot; a matrix or a parameter-set batch
-/// travels inside its single compare/measure call, so it counts as one
-/// operation. A second concurrent database call is rejected immediately with
-/// a stable BUSY result: no queue and no retry-after delay; the hint names the running tool so the client can wait for it to return.
-/// Safe local tools (capabilities, plan,
-/// artifact) run in parallel as long as they share no mutable request
-/// state: every call builds its own Core operation records, so there is no
-/// shared reader, temp, or parameter state between calls.
+/// Stable outcomes shared by every MCP tool call. Database tool calls run
+/// concurrently: each call builds its own Core operation, session, deadline
+/// and cancellation, so calls share no reader, temp, or parameter state and
+/// one call's cancellation never reaches another.
 /// </summary>
-public sealed class McpExecutionGate
+public static class McpCallOutcome
 {
-    /// <summary>Stable error code for a rejected concurrent database call.</summary>
-    public const string BusyCode = "busy";
-
     /// <summary>Stable error code for a cancelled call.</summary>
     public const string CancelledCode = "cancelled";
 
-    /// <summary>Static BUSY message: no payload, identical on every rejection.</summary>
-    public const string BusyMessage = "Another database operation is already running.";
-
     /// <summary>Static cancellation message: no payload, never an exit 7.</summary>
     public const string CancelledMessage = "The operation was cancelled.";
-
-    private static readonly HashSet<string> DbTools = new(StringComparer.Ordinal)
-    {
-        "sqlharness_query",
-        "sqlharness_measure",
-        "sqlharness_compare",
-        "sqlharness_watch",
-        "sqlharness_snapshot",
-    };
-
-    private readonly SemaphoreSlim _database = new(1, 1);
-    private string? _runningTool;
-
-    /// <summary>
-    /// True for the tools that open a database connection and therefore run
-    /// under the gate. Everything else is discovery or a safe local tool.
-    /// </summary>
-    public static bool IsDbTool(string? toolName) =>
-        toolName is not null && DbTools.Contains(toolName);
-
-    /// <summary>
-    /// Enters the single database slot without waiting. Returns false when
-    /// another database operation already holds it; the caller must then
-    /// return <see cref="BusyResult"/> instead of executing.
-    /// </summary>
-    public bool TryEnterDb(string? tool = null)
-    {
-        if (!_database.Wait(TimeSpan.Zero))
-            return false;
-        Volatile.Write(ref _runningTool, tool);
-        return true;
-    }
-
-    /// <summary>
-    /// Fixed identifier of the tool holding the database slot, or null when
-    /// none is recorded (free slot, unnamed holder, or the brief window between
-    /// taking the slot and recording the name).
-    /// </summary>
-    public string? RunningTool => Volatile.Read(ref _runningTool);
-
-    /// <summary>Releases the database slot. Callers release on every path.</summary>
-    public void ExitDb()
-    {
-        Volatile.Write(ref _runningTool, null);
-        _database.Release();
-    }
-
-    /// <summary>
-    /// Stable BUSY rejection: the call was not executed, so
-    /// <c>IsError</c> is true, the exit code is Safety (2), the error code is
-    /// <c>busy</c>, and the message is static. The hint names the running tool
-    /// (a fixed identifier, never scope or user data) when one is recorded.
-    /// </summary>
-    public static CallToolResult BusyResult(
-        string command,
-        McpResultBudget? budget = null,
-        string? runningTool = null) =>
-        McpResultAdapter.Adapt(
-            new SqlHarnessOutcome(
-                SqlHarnessExitCode.Safety,
-                null,
-                null,
-                null,
-                new SqlHarnessError(BusyCode, "execution", BusyMessage, BusyHint(runningTool))),
-            command,
-            budget ?? new McpResultBudget());
-
-    private static string BusyHint(string? runningTool) =>
-        "One database operation runs per process. Wait for the running "
-        + (string.IsNullOrEmpty(runningTool) ? "database" : runningTool)
-        + " call to return, then send the next call.";
 
     /// <summary>
     /// Stable cancellation result: the call did not run to completion, so

@@ -149,7 +149,7 @@ public sealed class McpRequestToolHandlers(
         {
             return Task.FromResult(Failure("The MCP request scope is invalid.", command, process.MaxResultBytes));
         }
-        var handlers = new McpToolHandlers(scope, _moduleFactory(scope), process.Gate, _clock, hostShutdown, acceptRequestScope: true);
+        var handlers = new McpToolHandlers(scope, _moduleFactory(scope), _clock, hostShutdown, acceptRequestScope: true);
         return invoke(handlers);
     }
 
@@ -170,7 +170,7 @@ public sealed class McpRequestToolHandlers(
             linked.Token.ThrowIfCancellationRequested();
             return await McpResultAdapter.AdaptAndCompleteAsync(outcome, command, budget);
         }
-        catch (OperationCanceledException) { return McpExecutionGate.CancelledResult(command, budget); }
+        catch (OperationCanceledException) { return McpCallOutcome.CancelledResult(command, budget); }
         catch (Exception exception) when (exception is McpMappingException or McpInputException or ParameterSetFileException)
         { return Failure(exception.Message, command, process.MaxResultBytes); }
         catch (Exception) { return Failure(null, command, process.MaxResultBytes); }

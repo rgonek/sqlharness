@@ -17,7 +17,7 @@ namespace SqlHarness.Mcp.Tests;
 
 /// <summary>
 /// One smoke per offered revision over the production server options: tools/list,
-/// a successful call, a mid-flight client cancellation that releases the gate, and
+/// a successful call, a mid-flight client cancellation followed by a successful call, and
 /// progress for a database call. Full suites stay on 2025-11-25.
 /// </summary>
 [Collection("McpScopeHome")]
@@ -137,14 +137,14 @@ public sealed class McpRevisionSmokeTests : IDisposable
         }
     }
 
-    private static async Task RunAsync(string revision, SmokeModule module, Func<McpClient, CancellationToken, Stream, Task> body, McpExecutionGate? executionGate = null)
+    private static async Task RunAsync(string revision, SmokeModule module, Func<McpClient, CancellationToken, Stream, Task> body)
     {
         using var cts = new CancellationTokenSource(Budget);
         var clientToServer = new Pipe();
         var serverToClient = new Pipe();
         await using var clientOutput = new CapturingClientOutput(clientToServer.Writer.AsStream());
         var options = McpHost.CreateServerOptions();
-        McpToolCatalog.Wire(options, Scope(), module, executionGate ?? new McpExecutionGate());
+        McpToolCatalog.Wire(options, Scope(), module);
         await using var server = McpServer.Create(
             new StreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream(), "smoke", NullLoggerFactory.Instance),
             options, NullLoggerFactory.Instance, serviceProvider: null);
@@ -178,10 +178,9 @@ public sealed class McpRevisionSmokeTests : IDisposable
 
     [Theory]
     [MemberData(nameof(Revisions))]
-    public Task Client_cancellation_reports_cancelled_and_releases_the_gate(string revision)
+    public Task Client_cancellation_reaches_the_module_and_the_next_call_runs(string revision)
     {
         var module = new SmokeModule { Block = true };
-        var gate = new McpExecutionGate();
         return RunAsync(revision, module, async (client, ct, clientOutput) =>
         {
             using var call = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -211,17 +210,10 @@ public sealed class McpRevisionSmokeTests : IDisposable
             await clientOutput.FlushAsync(ct);
             await module.CancellationObserved.Task.WaitAsync(Budget, ct);
 
-            // Client-side cancellation completes before the server finishes
-            // cancellation cleanup. Wait until the shared execution gate is
-            // observably free before sending the next database request.
-            while (!gate.TryEnterDb())
-                await Task.Delay(TimeSpan.FromMilliseconds(10), ct);
-            gate.ExitDb();
-
             module.Block = false;
             var next = await client.CallToolAsync("sqlharness_query", new Dictionary<string, object?> { ["sql"] = "SELECT 1" }, cancellationToken: ct);
             Assert.False(next.IsError == true, Assert.Single(next.Content.OfType<TextContentBlock>()).Text);
-        }, gate);
+        });
     }
 
     [Theory]

@@ -17,11 +17,10 @@ using SqlHarness.Mcp.Tools;
 namespace SqlHarness.Mcp.Tests;
 
 /// <summary>
-/// T5 lifecycle contract: one active database operation per process (a second
-/// concurrent database call gets a stable BUSY rejection without a queue),
-/// local tools run in parallel with a held gate, matrix/param-set batches
-/// count as one operation, calls share no request state, EOF shuts the host
-/// down cleanly, EOF during a call cancels it through the explicit binding
+/// T5 lifecycle contract: tool calls run concurrently (local tools run beside
+/// an in-flight database call), matrix/param-set batches count as one
+/// operation, calls share no request state, EOF shuts the host down cleanly,
+/// EOF during calls cancels every one of them through the explicit binding
 /// (the SDK alone does not propagate EOF), shutdown cancels an in-flight
 /// call so no watch hangs, MCP
 /// watch never touches the NDJSON path or stdout, progress fires only for a
@@ -153,103 +152,8 @@ public sealed class McpLifecycleTests
     private static JsonElement Envelope(CallToolResult result) =>
         JsonDocument.Parse(Text(result)).RootElement;
 
-    private static void AssertBusy(CallToolResult result, string command)
-    {
-        Assert.True(result.IsError == true, Text(result));
-        var envelope = Envelope(result);
-        Assert.Equal("error", envelope.GetProperty("status").GetString());
-        Assert.Equal((int)SqlHarnessExitCode.Safety, envelope.GetProperty("exitCode").GetInt32());
-        Assert.Equal(command, envelope.GetProperty("command").GetString());
-        var error = envelope.GetProperty("error");
-        Assert.Equal(McpExecutionGate.BusyCode, error.GetProperty("code").GetString());
-        Assert.Equal(McpExecutionGate.BusyMessage, error.GetProperty("message").GetString());
-        Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
-    }
-
     [Fact]
-    public void Db_tool_classification_covers_exactly_the_five_gated_tools()
-    {
-        Assert.True(McpExecutionGate.IsDbTool("sqlharness_query"));
-        Assert.True(McpExecutionGate.IsDbTool("sqlharness_measure"));
-        Assert.True(McpExecutionGate.IsDbTool("sqlharness_compare"));
-        Assert.True(McpExecutionGate.IsDbTool("sqlharness_watch"));
-        Assert.True(McpExecutionGate.IsDbTool("sqlharness_snapshot"));
-        Assert.False(McpExecutionGate.IsDbTool("sqlharness_capabilities"));
-        Assert.False(McpExecutionGate.IsDbTool("sqlharness_plan"));
-        Assert.False(McpExecutionGate.IsDbTool("sqlharness_artifact"));
-        Assert.False(McpExecutionGate.IsDbTool(null));
-        Assert.False(McpExecutionGate.IsDbTool("SQLHARNESS_QUERY"));
-    }
-
-    [Fact]
-    public async Task Concurrent_db_calls_run_once_and_reject_stably_without_queue()
-    {
-        var gate = new McpExecutionGate();
-        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var module = new RecordingModule
-        {
-            Behavior = async (_, ct) =>
-            {
-                entered.TrySetResult();
-                await release.Task.WaitAsync(ct);
-                return new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null);
-            },
-        };
-        var handlers = new McpToolHandlers(TestScope(), module, gate);
-        using var cts = new CancellationTokenSource(Budget);
-
-        var first = handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
-        await entered.Task.WaitAsync(Budget, cts.Token);
-
-        // Two further database calls while the first holds the gate: neither
-        // executes, both get the identical stable BUSY rejection.
-        var busyMeasure = await handlers.MeasureAsync(
-            null!, new McpSqlSourceArgument { Sql = "SELECT 2" }, ct: cts.Token);
-        var busyQuery = await handlers.QueryAsync(null!, "SELECT 3", ct: cts.Token);
-        AssertBusy(busyMeasure, "sqlharness_measure");
-        AssertBusy(busyQuery, "sqlharness_query");
-        var measureError = Envelope(busyMeasure).GetProperty("error").GetRawText();
-        var queryError = Envelope(busyQuery).GetProperty("error").GetRawText();
-        Assert.Equal(measureError, queryError);
-
-        // The hint names the tool that holds the slot, not the rejected one.
-        const string expectedHint =
-            "One database operation runs per process. Wait for the running sqlharness_query call to return, then send the next call.";
-        Assert.Equal(expectedHint, Envelope(busyMeasure).GetProperty("error").GetProperty("hint").GetString());
-        Assert.Equal(expectedHint, Envelope(busyQuery).GetProperty("error").GetProperty("hint").GetString());
-
-        release.TrySetResult();
-        Assert.False((await first).IsError == true);
-
-        // The gate is free again: the next call executes on the module.
-        var next = await handlers.QueryAsync(null!, "SELECT 4", ct: cts.Token);
-        Assert.False(next.IsError == true, Text(next));
-        Assert.Equal(2, module.Operations.Count);
-    }
-
-    [Fact]
-    public void Busy_hint_falls_back_to_generic_text_when_no_holder_is_recorded()
-    {
-        var gate = new McpExecutionGate();
-        Assert.True(gate.TryEnterDb());
-        Assert.Null(gate.RunningTool);
-
-        var result = McpExecutionGate.BusyResult("sqlharness_query", runningTool: gate.RunningTool);
-        Assert.Equal(
-            "One database operation runs per process. Wait for the running database call to return, then send the next call.",
-            Envelope(result).GetProperty("error").GetProperty("hint").GetString());
-
-        gate.ExitDb();
-        Assert.Null(gate.RunningTool);
-        Assert.True(gate.TryEnterDb("sqlharness_watch"));
-        Assert.Equal("sqlharness_watch", gate.RunningTool);
-        gate.ExitDb();
-        Assert.Null(gate.RunningTool);
-    }
-
-    [Fact]
-    public async Task Request_scopes_share_gate_while_local_capabilities_keeps_running()
+    public async Task Request_scope_capabilities_runs_while_a_database_call_is_in_flight()
     {
         var process = McpProcessContext.Create(
             new McpServerOptions { RequestScope = true, AllowedProfiles = ["sample-a", "sample-b"] },
@@ -288,7 +192,7 @@ public sealed class McpLifecycleTests
     }
 
     [Fact]
-    public async Task Local_capabilities_runs_while_a_database_call_holds_the_gate()
+    public async Task Local_capabilities_runs_while_a_database_call_is_in_flight()
     {
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -301,7 +205,7 @@ public sealed class McpLifecycleTests
                 return new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null);
             },
         };
-        var handlers = new McpToolHandlers(TestScope(), module, new McpExecutionGate());
+        var handlers = new McpToolHandlers(TestScope(), module);
         using var cts = new CancellationTokenSource(Budget);
 
         var blocked = handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
@@ -316,58 +220,14 @@ public sealed class McpLifecycleTests
     }
 
     [Fact]
-    public async Task Active_query_blocks_measure_and_second_query()
+    public async Task Query_mapping_rejection_never_reaches_the_module()
     {
-        var gate = new McpExecutionGate();
-        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        int calls = 0;
-        var module = new RecordingModule
-        {
-            Behavior = async (_, ct) =>
-            {
-                // Only the first (gate-holding) call parks: concurrent
-                // executions on old code return at once, so RED is a clean
-                // busy assertion failure instead of a deadlock.
-                if (Interlocked.Increment(ref calls) == 1)
-                {
-                    entered.TrySetResult();
-                    await release.Task.WaitAsync(ct);
-                }
-                return new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null);
-            },
-        };
-        var handlers = new McpToolHandlers(TestScope(), module, gate);
-        using var cts = new CancellationTokenSource(Budget);
-
-        var holder = handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
-        await entered.Task.WaitAsync(Budget, cts.Token);
-
-        // Both a different database tool and a second query get the same
-        // stable BUSY rejection without executing.
-        var busyMeasure = await handlers.MeasureAsync(null!, new McpSqlSourceArgument { Sql = "SELECT 1" }, ct: cts.Token);
-        AssertBusy(busyMeasure, "sqlharness_measure");
-        var busyQuery = await handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
-        AssertBusy(busyQuery, "sqlharness_query");
-        var measureError = Envelope(busyMeasure).GetProperty("error").GetRawText();
-        var queryError = Envelope(busyQuery).GetProperty("error").GetRawText();
-        Assert.Equal(measureError, queryError);
-
-        release.TrySetResult();
-        Assert.False((await holder).IsError == true);
-        Assert.Single(module.Operations);
-    }
-
-    [Fact]
-    public async Task Query_mapping_rejection_releases_the_gate()
-    {
-        var gate = new McpExecutionGate();
         var module = new RecordingModule();
-        var handlers = new McpToolHandlers(TestScope(), module, gate);
+        var handlers = new McpToolHandlers(TestScope(), module);
         using var cts = new CancellationTokenSource(Budget);
 
         // An out-of-range timeout never reaches the module: a stable exit-2
-        // contract rejection, and the gate slot is not held.
+        // contract rejection.
         var rejected = await handlers.QueryAsync(null!, "SELECT 1", timeout: 0, ct: cts.Token);
         Assert.True(rejected.IsError == true, Text(rejected));
         var rejectedEnvelope = Envelope(rejected);
@@ -377,21 +237,20 @@ public sealed class McpLifecycleTests
         Assert.Empty(McpResultAdapter.ValidateEnvelope(rejectedEnvelope));
         Assert.Empty(module.Operations);
 
-        // The slot is free: the next query executes.
+        // The next query executes.
         var nextQuery = await handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
         Assert.False(nextQuery.IsError == true, Text(nextQuery));
         Assert.Single(module.Operations);
     }
 
     [Fact]
-    public async Task Query_core_failure_releases_the_gate()
+    public async Task Query_core_failure_reports_a_stable_failure_and_the_next_call_runs()
     {
-        var gate = new McpExecutionGate();
         var module = new RecordingModule
         {
             Behavior = (_, _) => throw new InvalidOperationException("boom"),
         };
-        var handlers = new McpToolHandlers(TestScope(), module, gate);
+        var handlers = new McpToolHandlers(TestScope(), module);
         using var cts = new CancellationTokenSource(Budget);
 
         var failed = await handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
@@ -403,7 +262,7 @@ public sealed class McpLifecycleTests
         Assert.Empty(McpResultAdapter.ValidateEnvelope(failedEnvelope));
         Assert.Single(module.Operations);
 
-        // The slot is free: the next query executes on the module.
+        // The next query executes on the module.
         module.Behavior = null;
         var next = await handlers.QueryAsync(null!, "SELECT 1", ct: cts.Token);
         Assert.False(next.IsError == true, Text(next));
@@ -414,7 +273,7 @@ public sealed class McpLifecycleTests
     public async Task Compare_with_matrix_counts_as_a_single_db_operation()
     {
         var module = new RecordingModule();
-        var handlers = new McpToolHandlers(TestScope(), module, new McpExecutionGate());
+        var handlers = new McpToolHandlers(TestScope(), module);
         using var cts = new CancellationTokenSource(Budget);
 
         var result = await handlers.CompareAsync(
@@ -432,7 +291,7 @@ public sealed class McpLifecycleTests
     public async Task Calls_share_no_reader_temp_or_parameter_state()
     {
         var module = new RecordingModule();
-        var handlers = new McpToolHandlers(TestScope(), module, new McpExecutionGate());
+        var handlers = new McpToolHandlers(TestScope(), module);
         using var cts = new CancellationTokenSource(Budget);
 
         var first = await handlers.QueryAsync(
@@ -496,9 +355,8 @@ public sealed class McpLifecycleTests
     }
 
     [Fact]
-    public async Task Host_shutdown_cancels_an_inflight_call_and_releases_the_gate()
+    public async Task Host_shutdown_cancels_an_inflight_call()
     {
-        var gate = new McpExecutionGate();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var module = new RecordingModule
         {
@@ -513,7 +371,7 @@ public sealed class McpLifecycleTests
         };
         using var hostCts = new CancellationTokenSource();
         using var guard = new CancellationTokenSource(Budget);
-        var handlers = new McpToolHandlers(TestScope(), module, gate, hostShutdown: hostCts.Token);
+        var handlers = new McpToolHandlers(TestScope(), module, hostShutdown: hostCts.Token);
 
         var inflight = handlers.WatchAsync(null!, "SELECT 1", ct: guard.Token);
         await entered.Task.WaitAsync(Budget, guard.Token);
@@ -525,21 +383,13 @@ public sealed class McpLifecycleTests
         Assert.True(cancelled.IsError == true, Text(cancelled));
         var envelope = Envelope(cancelled);
         Assert.Equal((int)SqlHarnessExitCode.SqlExecution, envelope.GetProperty("exitCode").GetInt32());
-        Assert.Equal(McpExecutionGate.CancelledCode, envelope.GetProperty("error").GetProperty("code").GetString());
-        Assert.Equal(McpExecutionGate.CancelledMessage, envelope.GetProperty("error").GetProperty("message").GetString());
-
-        // Cleanup ran: the gate slot is free again. (New calls still
-        // observe the dead host token and report cancelled; recovery of a
-        // live process after client cancellation is covered by the
-        // cancellation tests.)
-        Assert.True(gate.TryEnterDb());
-        gate.ExitDb();
+        Assert.Equal(McpCallOutcome.CancelledCode, envelope.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(McpCallOutcome.CancelledMessage, envelope.GetProperty("error").GetProperty("message").GetString());
     }
 
     [Fact]
-    public async Task Eof_during_inflight_cancels_the_call_and_releases_the_gate()
+    public async Task Eof_during_inflight_cancels_the_call()
     {
-        var gate = new McpExecutionGate();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var moduleCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var moduleExited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -572,9 +422,9 @@ public sealed class McpLifecycleTests
             ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "t5-test" },
             ProtocolVersion = McpHost.FallbackProtocolVersion,
         };
-        // Same composition as McpHost.RunAsync: one process gate, one
-        // EOF-bound shutdown token, the real stream transport.
-        McpToolCatalog.Wire(serverOptions, TestScope(), module, gate, hostShutdown: lifetime.Token);
+        // Same composition as McpHost.RunAsync: one EOF-bound shutdown
+        // token, the real stream transport.
+        McpToolCatalog.Wire(serverOptions, TestScope(), module, hostShutdown: lifetime.Token);
         using var eofInput = new EofShutdownInput(clientToServer.Reader.AsStream(), eofShutdown);
         await using var server = McpServer.Create(
             new StreamServerTransport(
@@ -601,8 +451,7 @@ public sealed class McpLifecycleTests
         // propagate this (T5 fix R1 probe: handler token stayed live, server
         // loop parked); the explicit binding must cancel the in-flight watch.
         // The module observes cancellation, so the call can never complete as
-        // a natural watch exit 7; the server loop then ends and the gate slot
-        // is released.
+        // a natural watch exit 7; the server loop then ends.
         await clientToServer.Writer.CompleteAsync();
         await moduleCancelled.Task.WaitAsync(Budget, guard.Token);
         await moduleExited.Task.WaitAsync(Budget, guard.Token);
@@ -613,13 +462,11 @@ public sealed class McpLifecycleTests
         catch (OperationCanceledException)
         {
         }
-        Assert.True(gate.TryEnterDb());
-        gate.ExitDb();
         _ = inflight;
     }
 
     [Fact]
-    public async Task Request_scope_EOF_cancels_A_and_never_runs_queued_B()
+    public async Task Request_scope_EOF_cancels_every_inflight_call()
     {
         var process = McpProcessContext.Create(
             new McpServerOptions { RequestScope = true, AllowedProfiles = ["sample-a", "sample-b"] },
@@ -628,18 +475,25 @@ public sealed class McpLifecycleTests
                 ["sample-a"] = new("server-a.invalid", "database-a", new Dictionary<string, string> { ["tenant"] = "^a$" }, "integrated"),
                 ["sample-b"] = new("server-b.invalid", "database-b", new Dictionary<string, string> { ["tenant"] = "^b$" }, "integrated"),
             });
-        var gate = process.Gate;
-        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var moduleCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var moduleExited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Each call signals its own entry, cancellation and exit, in arrival order.
+        static TaskCompletionSource[] Signals() =>
+        [
+            new(TaskCreationOptions.RunContinuationsAsynchronously),
+            new(TaskCreationOptions.RunContinuationsAsynchronously),
+        ];
+        var entered = Signals();
+        var moduleCancelled = Signals();
+        var moduleExited = Signals();
+        var calls = 0;
         var module = new RecordingModule
         {
             Behavior = async (_, ct) =>
             {
-                using var reg = ct.Register(() => moduleCancelled.TrySetResult());
-                entered.TrySetResult();
+                var call = Interlocked.Increment(ref calls) - 1;
+                using var reg = ct.Register(() => moduleCancelled[call].TrySetResult());
+                entered[call].TrySetResult();
                 try { await Task.Delay(Timeout.Infinite, ct); }
-                finally { moduleExited.TrySetResult(); }
+                finally { moduleExited[call].TrySetResult(); }
                 throw new InvalidOperationException("A cancelled request never completes.");
             },
         };
@@ -678,22 +532,22 @@ public sealed class McpLifecycleTests
             ["sql"] = "SELECT 1",
         };
 
-        var inflight = client.CallToolAsync("sqlharness_watch", WatchArgs("sample-a", "a"), cancellationToken: guard.Token);
-        await entered.Task.WaitAsync(Budget, guard.Token);
-        var queuedB = await client.CallToolAsync("sqlharness_watch", WatchArgs("sample-b", "b"), cancellationToken: guard.Token);
-        Assert.True(queuedB.IsError == true, Text(queuedB));
-        Assert.Equal(McpExecutionGate.BusyCode, Envelope(queuedB).GetProperty("error").GetProperty("code").GetString());
+        var inflightA = client.CallToolAsync("sqlharness_watch", WatchArgs("sample-a", "a"), cancellationToken: guard.Token);
+        await entered[0].Task.WaitAsync(Budget, guard.Token);
+        var inflightB = client.CallToolAsync("sqlharness_watch", WatchArgs("sample-b", "b"), cancellationToken: guard.Token);
+        await entered[1].Task.WaitAsync(Budget, guard.Token);
 
+        // Both scopes are in flight at once; EOF cancels both.
         await clientToServer.Writer.CompleteAsync();
-        await moduleCancelled.Task.WaitAsync(Budget, guard.Token);
-        await moduleExited.Task.WaitAsync(Budget, guard.Token);
+        foreach (var signal in moduleCancelled.Concat(moduleExited))
+            await signal.Task.WaitAsync(Budget, guard.Token);
         try { await serverTask.WaitAsync(Budget, guard.Token); }
         catch (OperationCanceledException) { }
-        Assert.Single(module.Operations);
-        Assert.Equal("sample-a", Assert.IsType<SqlHarnessWatchOperation>(module.Operations[0]).Target.Profile);
-        Assert.True(gate.TryEnterDb());
-        gate.ExitDb();
-        _ = inflight;
+        Assert.Equal(
+            ["sample-a", "sample-b"],
+            module.Operations.Select(operation => Assert.IsType<SqlHarnessWatchOperation>(operation).Target.Profile));
+        _ = inflightA;
+        _ = inflightB;
     }
 
     [Fact]
@@ -714,7 +568,7 @@ public sealed class McpLifecycleTests
             ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "t5-test" },
             ProtocolVersion = McpHost.FallbackProtocolVersion,
         };
-        McpToolCatalog.Wire(serverOptions, TestScope(), module, new McpExecutionGate());
+        McpToolCatalog.Wire(serverOptions, TestScope(), module);
         await using var server = McpServer.Create(
             new StreamServerTransport(
                 clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream(), "t5-test-server", NullLoggerFactory.Instance),
@@ -776,7 +630,7 @@ public sealed class McpLifecycleTests
             ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "t5-test" },
             ProtocolVersion = McpHost.FallbackProtocolVersion,
         };
-        McpToolCatalog.Wire(serverOptions, TestScope(), module, new McpExecutionGate(), clock);
+        McpToolCatalog.Wire(serverOptions, TestScope(), module, clock);
         await using var server = McpServer.Create(
             new StreamServerTransport(
                 clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream(), "t5-test-server", NullLoggerFactory.Instance),
@@ -861,7 +715,7 @@ public sealed class McpLifecycleTests
     [Fact]
     public void Annotations_are_conservative_and_never_gate_access()
     {
-        var tools = McpToolCatalog.CreateTools(TestScope(), new RecordingModule(), new McpExecutionGate())
+        var tools = McpToolCatalog.CreateTools(TestScope(), new RecordingModule())
             .ToDictionary(tool => tool.ProtocolTool.Name, StringComparer.Ordinal);
         Assert.Equal(McpToolCatalog.ToolNames.Count, tools.Count);
 
@@ -900,7 +754,7 @@ public sealed class McpLifecycleTests
         // Tools without readOnlyHint still execute through the same Core
         // safety pipeline: access is decided by enforcement, not by hints.
         var module = new RecordingModule();
-        var handlers = new McpToolHandlers(TestScope(), module, new McpExecutionGate());
+        var handlers = new McpToolHandlers(TestScope(), module);
         using var cts = new CancellationTokenSource(Budget);
 
         var measure = await handlers.MeasureAsync(

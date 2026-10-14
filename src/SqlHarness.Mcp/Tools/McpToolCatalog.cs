@@ -22,29 +22,27 @@ namespace SqlHarness.Mcp.Tools;
 /// and failures all share the small budgeted agent envelope as both
 /// structured content and JSON text.
 ///
-/// Database tools (query, measure, compare, watch, snapshot) run under the
-/// process <see cref="McpExecutionGate"/>: one active database operation at a
-/// time, a second concurrent call gets a stable BUSY rejection, and a
-/// per-call time budget (the process maximum only lowered) reaches Core as a
-/// linked deadline. Cancellation propagates to Core on every path; a
-/// cancelled call reports a stable cancelled result, never the natural watch
-/// deadline exit 7. Long calls send throttled stage progress only when the
-/// client supplied a progress token, without SQL, parameters, or rows. The
-/// host shutdown token is linked into every execution, so closing the process
-/// (Ctrl+C/SIGTERM via the host token, stdin EOF via the host's explicit EOF
-/// binding -- the SDK alone does not propagate EOF) cancels an in-flight
-/// sends a protocol cancellation: no hanging watch, sessions disposed by
-/// Core, and the gate released for the next call.
+/// Database tools (query, measure, compare, watch, snapshot) run
+/// concurrently: each call gets its own per-call time budget (the process
+/// maximum only lowered), which reaches Core as a linked deadline, and its own
+/// cancellation, so cancelling one call never cancels another. Cancellation
+/// propagates to Core on every path; a cancelled call reports a stable
+/// cancelled result, never the natural watch deadline exit 7. Long calls send
+/// throttled stage progress only when the client supplied a progress token,
+/// without SQL, parameters, or rows. The host shutdown token is linked into
+/// every execution, so closing the process (Ctrl+C/SIGTERM via the host token,
+/// stdin EOF via the host's explicit EOF binding -- the SDK alone does not
+/// propagate EOF) cancels every in-flight call, as does a protocol
+/// cancellation for its own call: no hanging watch and sessions disposed by
+/// Core.
 /// </summary>
 public sealed class McpToolHandlers(
     McpScope scope,
     ISqlHarnessModule module,
-    McpExecutionGate? gate = null,
     IMcpClock? clock = null,
     CancellationToken hostShutdown = default,
     bool acceptRequestScope = false)
 {
-    private readonly McpExecutionGate _gate = gate ?? new McpExecutionGate();
     private readonly IMcpClock _clock = clock ?? SystemMcpClock.Instance;
     private readonly CancellationToken _hostShutdown = hostShutdown;
     private readonly bool _acceptRequestScope = acceptRequestScope;
@@ -303,8 +301,8 @@ public sealed class McpToolHandlers(
         var budget = new McpResultBudget(scope.MaxResultBytes);
         try
         {
-            // Discovery and local tools share no gate, but every execution is
-            // still bounded by the process time budget through this token.
+            // Discovery and local tools are bounded by the process time
+            // budget through this token.
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _hostShutdown);
             using var reason = McpCallRegistry.Track(linked, ct, _hostShutdown, McpCallMetadata.Read(context?.Params?.Meta));
             linked.CancelAfter(TimeSpan.FromSeconds(scope.MaxOperationSeconds));
@@ -315,7 +313,7 @@ public sealed class McpToolHandlers(
         }
         catch (OperationCanceledException)
         {
-            return McpExecutionGate.CancelledResult(command, budget);
+            return McpCallOutcome.CancelledResult(command, budget);
         }
         catch (Exception exception) when (exception is McpMappingException
             or McpInputException
@@ -336,10 +334,8 @@ public sealed class McpToolHandlers(
     }
 
     /// <summary>
-    /// Executes one database call under the process gate with the resolved
-    /// budgets. The gate is released on every path, so a cancelled or failed
-    /// call never blocks the next one. A concurrent second database call gets
-    /// the stable BUSY rejection without executing.
+    /// Executes one database call with the resolved budgets. Concurrent calls
+    /// each run here with their own linked deadline and cancellation.
     /// </summary>
     private async Task<CallToolResult> RunDbAsync(
         string command,
@@ -361,9 +357,6 @@ public sealed class McpToolHandlers(
         {
             return Fail(SqlHarnessExitCode.Safety, "The requested budget is invalid.", command);
         }
-
-        if (!_gate.TryEnterDb(command))
-            return McpExecutionGate.BusyResult(command, budget, _gate.RunningTool);
 
         try
         {
@@ -399,15 +392,11 @@ public sealed class McpToolHandlers(
         }
         catch (OperationCanceledException)
         {
-            return McpExecutionGate.CancelledResult(command, budget);
+            return McpCallOutcome.CancelledResult(command, budget);
         }
         catch (Exception)
         {
             return Fail(SqlHarnessExitCode.SqlExecution, null, command, budget);
-        }
-        finally
-        {
-            _gate.ExitDb();
         }
     }
 
@@ -451,7 +440,7 @@ public static class McpToolCatalog
     {
         ArgumentNullException.ThrowIfNull(process);
         if (!process.RequestScope)
-            return CreateTools(process.FixedScope!, moduleFactory?.Invoke(process.FixedScope!) ?? process.Decorate(process.FixedScope!.CreateModule()), process.Gate, clock, hostShutdown);
+            return CreateTools(process.FixedScope!, moduleFactory?.Invoke(process.FixedScope!) ?? process.Decorate(process.FixedScope!.CreateModule()), clock, hostShutdown);
         var handlers = new McpRequestToolHandlers(process, clock, hostShutdown, moduleFactory);
         var type = typeof(McpRequestToolHandlers);
         McpServerTool Tool(string name, string method, string description, bool? readOnly, bool? destructive,
@@ -498,13 +487,12 @@ public static class McpToolCatalog
     public static IReadOnlyList<McpServerTool> CreateTools(
         McpScope scope,
         ISqlHarnessModule module,
-        McpExecutionGate? gate = null,
         IMcpClock? clock = null,
         CancellationToken hostShutdown = default)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(module);
-        var handlers = new McpToolHandlers(scope, module, gate, clock, hostShutdown);
+        var handlers = new McpToolHandlers(scope, module, clock, hostShutdown);
         var type = typeof(McpToolHandlers);
         McpServerTool Tool(
             string name,
@@ -546,13 +534,12 @@ public static class McpToolCatalog
         ModelContextProtocol.Server.McpServerOptions options,
         McpScope scope,
         ISqlHarnessModule module,
-        McpExecutionGate? gate = null,
         IMcpClock? clock = null,
         CancellationToken hostShutdown = default)
     {
         ArgumentNullException.ThrowIfNull(options);
         var collection = new McpServerPrimitiveCollection<McpServerTool>();
-        foreach (var tool in CreateTools(scope, module, gate, clock, hostShutdown))
+        foreach (var tool in CreateTools(scope, module, clock, hostShutdown))
             collection.Add(tool);
         options.ToolCollection = collection;
     }
