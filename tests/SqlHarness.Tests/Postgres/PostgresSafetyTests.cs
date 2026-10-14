@@ -749,18 +749,34 @@ public sealed class PostgresSafetyTests
 
     // 019: PostgreSQL resolves the CTE write before this statement's new temp exists.
     [Theory]
-    [InlineData("Query", "WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id INTO TEMP TABLE t FROM w")]
     [InlineData("CompareSetup", "WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id INTO TEMP TABLE t FROM w")]
-    [InlineData("Query", "CREATE TEMP TABLE t AS WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id FROM w")]
     [InlineData("CompareSetup", "CREATE TEMP TABLE t AS WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id FROM w")]
-    public void Self_named_temp_cte_write_is_a_persistent_mutation(string usage, string sql)
+    public void Self_named_temp_cte_write_is_a_persistent_write_in_setup(string usage, string sql)
     {
         var decision = _classifier.Classify(sql, ParseUsage(usage), "appdb", false, null, Empty);
-        var reason = ParseUsage(usage) == SqlUsage.Query
-            ? SqlSafetyReason.MutationNotAllowed
-            : SqlSafetyReason.NonTemporaryWrite;
-        Assert.Equal(reason, decision.Reason);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, decision.Reason);
         Assert.False(decision.Allowed);
+    }
+
+    [Theory]
+    // 047 step 3: in the read-only phase the write resolves against a persistent
+    // table instead, and the server refuses it there.
+    [InlineData("WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id INTO TEMP TABLE t FROM w")]
+    [InlineData("CREATE TEMP TABLE t AS WITH w AS (INSERT INTO t (id) VALUES (1) RETURNING id) SELECT id FROM w")]
+    public void Self_named_temp_cte_write_defers_to_the_read_only_server(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+
+        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.False(setup.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, setup.Reason);
+
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.True(approved.Allowed, approved.RejectionDescription);
+        Assert.True(approved.HasMutation);
     }
 
     [Fact]
@@ -1117,17 +1133,23 @@ public sealed class PostgresSafetyTests
     [Theory]
     // 011/T4b: flipped. This guard used to pin the Unicode fold for DML / DROP /
     // CREATE INDEX as session-local; the server would address a persistent
-    // relation, so the same identifier rule as TRUNCATE now applies.
-    [InlineData("CREATE TEMP TABLE \"é\" (id int); INSERT INTO É VALUES (1)", "MutationNotAllowed")]
+    // relation, so the same identifier rule as TRUNCATE now applies. 047 step 3:
+    // DDL keeps the proof offline (see the sibling theory); DML does not, because
+    // the read-only transaction is what rejects the persistent target.
     [InlineData("CREATE TEMP TABLE \"é\" (id int); CREATE INDEX ix ON É (id)", "UnsupportedStatement")]
     [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE É", "UnsupportedStatement")]
-    [InlineData("CREATE TEMP TABLE É (id int); DELETE FROM \"é\"", "MutationNotAllowed")]
     public void T4_Non_truncate_non_ascii_fold_is_denied(string sql, string expected)
     {
         var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
         Assert.False(decision.Allowed);
         Assert.Equal(expected, decision.Reason.ToString());
     }
+
+    [Theory]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); INSERT INTO É VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE É (id int); DELETE FROM \"é\"")]
+    public void T4_Non_truncate_non_ascii_fold_write_defers_to_the_read_only_server(string sql) =>
+        AssertUnqualifiedWriteDefersToTheServer(sql);
 
     [Fact]
     public void T4_Truncate_proof_travels_only_in_a_classifier_produced_temp_set()
@@ -1183,11 +1205,10 @@ public sealed class PostgresSafetyTests
         Assert.False(truncate.Allowed);
         Assert.Equal(SqlSafetyReason.NonTemporaryWrite, truncate.Reason);
 
-        // 011/T4b: flipped. A write to the same carried name is a persistent write.
-        var insert = _classifier.Classify(
-            "INSERT INTO items VALUES (1)", SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
-        Assert.False(insert.Allowed);
-        Assert.Equal(SqlSafetyReason.MutationNotAllowed, insert.Reason);
+        // 047 step 3: the same carried name in a read-only DML target reaches the
+        // server, which refuses a persistent one; setup and approval still do not
+        // treat it as proven.
+        AssertUnqualifiedWriteDefersToTheServer("INSERT INTO items VALUES (1)", setup.SessionTempTables);
     }
 
     [Theory]
@@ -1257,50 +1278,53 @@ public sealed class PostgresSafetyTests
     // 011/T4b: the session-temp proof is the same for every statement kind.
     // PostgreSQL folds an unquoted identifier itself (ASCII only under UTF-8,
     // encoding-dependent otherwise), so an unquoted name with a non-ASCII
-    // character never proves a target and never records a provable temp.
+    // character never proves a DDL target and never records a provable temp.
     // \u00C9 / \u00E9 are E-acute upper / lower; \u212A is the Kelvin sign.
     [Theory]
-    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); INSERT INTO \u00C9 VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); UPDATE \u00C9 SET id = 1", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); DELETE FROM \u00C9", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); MERGE INTO \u00C9 USING (SELECT 1 AS id) s ON \u00C9.id = s.id WHEN MATCHED THEN DELETE", "MutationNotAllowed")]
+    // DDL keeps the proof: a read-only transaction rejects CREATE INDEX and DROP
+    // outright, so there the offline fold is the only guard there is.
     [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); DROP TABLE \u00C9", "UnsupportedStatement")]
     [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); CREATE INDEX ix ON \u00C9 (id)", "UnsupportedStatement")]
-    [InlineData("CREATE TEMP TABLE \u00C9 (id int); INSERT INTO \"\u00E9\" VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE \u00C9 (id int); UPDATE \"\u00E9\" SET id = 1", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE \u00C9 (id int); DELETE FROM \"\u00E9\"", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE \u00C9 (id int); DROP TABLE \"\u00E9\"", "UnsupportedStatement")]
     [InlineData("CREATE TEMP TABLE \u00C9 (id int); CREATE INDEX ix ON \"\u00E9\" (id)", "UnsupportedStatement")]
-    [InlineData("CREATE TEMP TABLE k (id int); INSERT INTO \u212A VALUES (1)", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE \u212A (id int); DROP TABLE k", "UnsupportedStatement")]
-    [InlineData("SELECT 1 AS id INTO TEMP TABLE \u212A; DELETE FROM k", "MutationNotAllowed")]
     // Quoted and unquoted spellings of the same non-ASCII text: equal under a
     // UTF-8 server, different under an encoding whose fold changes the letter.
-    [InlineData("CREATE TEMP TABLE \"\u00C9\" (id int); INSERT INTO \u00C9 VALUES (1)", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE \u00C9 (id int); DROP TABLE \"\u00C9\"", "UnsupportedStatement")]
-    // Unquoted on both sides: stricter than needed, same decision as TRUNCATE.
-    [InlineData("CREATE TEMP TABLE \u00C9 (id int); INSERT INTO \u00C9 VALUES (1)", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE \u00C9 (id int); CREATE INDEX ix ON \u00C9 (id)", "UnsupportedStatement")]
-    public void T4b_Non_ascii_name_never_proves_a_target_across_quoting(string sql, string expected)
+    public void T4b_Non_ascii_name_never_proves_a_ddl_target_across_quoting(string sql, string expected)
     {
-        var query = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
-        Assert.False(query.Allowed);
-        Assert.Equal(expected, query.Reason.ToString());
-
-        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "appdb", false, null, Empty);
-        Assert.False(setup.Allowed);
-        Assert.Equal(
-            expected == "MutationNotAllowed" ? "NonTemporaryWrite" : expected,
-            setup.Reason.ToString());
+        foreach (var usage in new[] { SqlUsage.Query, SqlUsage.CompareSetup })
+        {
+            var decision = _classifier.Classify(sql, usage, "appdb", false, null, Empty);
+            Assert.False(decision.Allowed);
+            Assert.Equal(expected, decision.Reason.ToString());
+        }
     }
 
     [Theory]
-    [InlineData("INSERT INTO k VALUES (1)", "MutationNotAllowed")]
-    [InlineData("UPDATE k SET id = 1", "MutationNotAllowed")]
-    [InlineData("DELETE FROM k", "MutationNotAllowed")]
+    // 047 step 3: the fold says nothing about an unqualified DML target any more,
+    // because the read-only transaction rejects the persistent relation such a
+    // name would otherwise reach. Setup runs read-write and the approved mutation
+    // path has no read-only backstop, so both keep the fold and refuse the batch.
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); INSERT INTO É VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); UPDATE É SET id = 1")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DELETE FROM É")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); MERGE INTO É USING (SELECT 1 AS id) s ON É.id = s.id WHEN MATCHED THEN DELETE")]
+    [InlineData("CREATE TEMP TABLE É (id int); INSERT INTO \"é\" VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE É (id int); UPDATE \"é\" SET id = 1")]
+    [InlineData("CREATE TEMP TABLE É (id int); DELETE FROM \"é\"")]
+    [InlineData("CREATE TEMP TABLE k (id int); INSERT INTO \u212A VALUES (1)")]
+    [InlineData("SELECT 1 AS id INTO TEMP TABLE \u212A; DELETE FROM k")]
+    [InlineData("CREATE TEMP TABLE \"É\" (id int); INSERT INTO É VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE É (id int); INSERT INTO É VALUES (1)")]
+    public void T4b_Non_ascii_name_never_proves_an_unqualified_dml_target(string sql) =>
+        AssertUnqualifiedWriteDefersToTheServer(sql);
+
+    [Theory]
     [InlineData("DROP TABLE k", "UnsupportedStatement")]
     [InlineData("CREATE INDEX ix ON k (id)", "UnsupportedStatement")]
-    public void T4b_Carried_temp_declared_with_non_ascii_unquoted_name_proves_no_target(
+    public void T4b_Carried_temp_declared_with_non_ascii_unquoted_name_proves_no_ddl_target(
         string querySql, string expected)
     {
         var setup = _classifier.Classify(
@@ -1312,6 +1336,24 @@ public sealed class PostgresSafetyTests
             querySql, SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
         Assert.False(query.Allowed);
         Assert.Equal(expected, query.Reason.ToString());
+    }
+
+    [Theory]
+    // 047 step 3: the carried set is what the write would have needed, and the
+    // read-only transaction now supplies that boundary on its own. Setup and the
+    // approved mutation path have none, so the same target keeps its old verdict.
+    [InlineData("INSERT INTO k VALUES (1)")]
+    [InlineData("UPDATE k SET id = 1")]
+    [InlineData("DELETE FROM k")]
+    public void T4b_Carried_temp_declared_with_non_ascii_unquoted_name_leaves_a_dml_target_to_the_server(
+        string querySql)
+    {
+        var setup = _classifier.Classify(
+            "CREATE TEMP TABLE \u212A (id int)", SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        Assert.DoesNotContain("k", setup.SessionTempTables);
+
+        AssertUnqualifiedWriteDefersToTheServer(querySql, setup.SessionTempTables);
     }
 
     [Theory]
@@ -1338,10 +1380,7 @@ public sealed class PostgresSafetyTests
     }
 
     [Theory]
-    [InlineData("CREATE TEMP TABLE Items (id int); INSERT INTO \"Items\" VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE \"Items\" (id int); INSERT INTO Items VALUES (1)", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE \"Items\" (id int); DROP TABLE items", "UnsupportedStatement")]
-    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); DELETE FROM \"\u00C9\"", "MutationNotAllowed")]
     public void T4b_Ascii_quoted_case_mismatch_stays_denied(string sql, string expected)
     {
         var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
@@ -1350,16 +1389,22 @@ public sealed class PostgresSafetyTests
     }
 
     [Theory]
+    // 047 step 3: a quoted/unquoted case mismatch still decides nothing offline
+    // for an unqualified DML target, because the read-only transaction refuses
+    // the persistent relation the name may reach. It keeps deciding DDL, and it
+    // keeps deciding both paths that execute read-write.
+    [InlineData("CREATE TEMP TABLE Items (id int); INSERT INTO \"Items\" VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE \"Items\" (id int); INSERT INTO Items VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); DELETE FROM \"\u00C9\"")]
+    public void T4b_Ascii_quoted_case_mismatch_leaves_a_dml_target_to_the_server(string sql) =>
+        AssertUnqualifiedWriteDefersToTheServer(sql);
+
+    [Theory]
     // An ON COMMIT DROP temp is gone when its transaction ends, so its name must
-    // not prove any later write or DDL target.
-    [InlineData("CREATE TEMP TABLE items (id int) ON COMMIT DROP", "INSERT INTO items VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE items (id int) ON COMMIT DROP", "UPDATE items SET id = 1", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE items (id int) ON COMMIT DROP", "DELETE FROM items", "MutationNotAllowed")]
+    // not prove any later DDL target.
     [InlineData("CREATE TEMP TABLE items (id int) ON COMMIT DROP", "DROP TABLE items", "UnsupportedStatement")]
     [InlineData("CREATE TEMP TABLE items (id int) ON COMMIT DROP", "CREATE INDEX ix ON items (id)", "UnsupportedStatement")]
-    [InlineData("CREATE TEMP TABLE items ON COMMIT DROP AS SELECT 1 AS id", "DELETE FROM items", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE items (id int); CREATE TEMP TABLE IF NOT EXISTS items (id int) ON COMMIT DROP", "DELETE FROM items", "MutationNotAllowed")]
-    public void T4b_Carried_on_commit_drop_temp_proves_no_target(
+    public void T4b_Carried_on_commit_drop_temp_proves_no_ddl_target(
         string setupSql, string querySql, string expected)
     {
         var setup = _classifier.Classify(setupSql, SqlUsage.CompareSetup, "appdb", false, null, Empty);
@@ -1373,16 +1418,31 @@ public sealed class PostgresSafetyTests
     }
 
     [Theory]
-    // Same batch: denied as well, the same decision as TRUNCATE. The classifier
-    // does not know where the transaction that owns the temp ends.
-    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; INSERT INTO t VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; UPDATE t SET id = 1", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; DELETE FROM t", "MutationNotAllowed")]
+    // 047 step 3: a vanished temp is why the write goes to the server, not why it
+    // is a mutation. The name reaches search_path, and the read-only transaction
+    // refuses the persistent relation it may land on. Setup and the approved
+    // mutation path execute read-write, so both keep the old verdict.
+    [InlineData("CREATE TEMP TABLE items (id int) ON COMMIT DROP", "INSERT INTO items VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE items (id int) ON COMMIT DROP", "UPDATE items SET id = 1")]
+    [InlineData("CREATE TEMP TABLE items (id int) ON COMMIT DROP", "DELETE FROM items")]
+    [InlineData("CREATE TEMP TABLE items ON COMMIT DROP AS SELECT 1 AS id", "DELETE FROM items")]
+    [InlineData("CREATE TEMP TABLE items (id int); CREATE TEMP TABLE IF NOT EXISTS items (id int) ON COMMIT DROP", "DELETE FROM items")]
+    public void T4b_Carried_on_commit_drop_temp_leaves_a_dml_target_to_the_server(
+        string setupSql, string querySql)
+    {
+        var setup = _classifier.Classify(setupSql, SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        Assert.DoesNotContain("items", setup.SessionTempTables);
+
+        AssertUnqualifiedWriteDefersToTheServer(querySql, setup.SessionTempTables);
+    }
+
+    [Theory]
+    // Same batch, DDL: denied as well, the same decision as TRUNCATE. The
+    // classifier does not know where the transaction that owns the temp ends.
     [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; DROP TABLE t", "UnsupportedStatement")]
     [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; CREATE INDEX ix ON t (id)", "UnsupportedStatement")]
-    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; EXPLAIN ANALYZE INSERT INTO t VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE t (id int); DROP TABLE t; CREATE TEMP TABLE t (id int) ON COMMIT DROP; INSERT INTO t VALUES (1)", "MutationNotAllowed")]
-    public void T4b_On_commit_drop_temp_in_the_same_batch_proves_no_target(string sql, string expected)
+    public void T4b_On_commit_drop_temp_in_the_same_batch_proves_no_ddl_target(string sql, string expected)
     {
         var query = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
         Assert.False(query.Allowed);
@@ -1390,10 +1450,19 @@ public sealed class PostgresSafetyTests
 
         var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "appdb", false, null, Empty);
         Assert.False(setup.Allowed);
-        Assert.Equal(
-            expected == "MutationNotAllowed" ? "NonTemporaryWrite" : expected,
-            setup.Reason.ToString());
+        Assert.Equal(expected, setup.Reason.ToString());
     }
+
+    [Theory]
+    // 047 step 3: in the same batch the DML target is left to the read-only
+    // transaction too, EXPLAIN ANALYZE included, because it executes the write.
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; INSERT INTO t VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; UPDATE t SET id = 1")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; DELETE FROM t")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; EXPLAIN ANALYZE INSERT INTO t VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE t (id int); DROP TABLE t; CREATE TEMP TABLE t (id int) ON COMMIT DROP; INSERT INTO t VALUES (1)")]
+    public void T4b_On_commit_drop_temp_in_the_same_batch_leaves_a_dml_target_to_the_server(string sql) =>
+        AssertUnqualifiedWriteDefersToTheServer(sql);
 
     [Theory]
     // These ON COMMIT actions keep the table itself, so the proof holds.
@@ -1411,8 +1480,6 @@ public sealed class PostgresSafetyTests
     // N1: when the name already exists as an ON COMMIT DROP temp, the server
     // treats CREATE TEMP TABLE IF NOT EXISTS as a no-op. It must not restore proof.
     [InlineData("TRUNCATE items", "NonTemporaryWrite")]
-    [InlineData("INSERT INTO items VALUES (1)", "MutationNotAllowed")]
-    [InlineData("DELETE FROM items", "MutationNotAllowed")]
     [InlineData("DROP TABLE items", "UnsupportedStatement")]
     [InlineData("CREATE INDEX ix ON items (id)", "UnsupportedStatement")]
     public void T4b_If_not_exists_does_not_restore_proof_for_an_on_commit_drop_temp(
@@ -1448,10 +1515,26 @@ public sealed class PostgresSafetyTests
     }
 
     [Theory]
+    // 047 step 3: the no-op proves nothing, and nothing is needed for a
+    // read-only DML target either way. The record still withholds the proof that
+    // setup and the approved mutation path read.
+    [InlineData("INSERT INTO items VALUES (1)")]
+    [InlineData("DELETE FROM items")]
+    public void T4b_If_not_exists_leaves_an_on_commit_drop_dml_target_to_the_server(string querySql)
+    {
+        var setup = _classifier.Classify(
+            "CREATE TEMP TABLE items (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS items (id int)",
+            SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        Assert.DoesNotContain("items", setup.SessionTempTables);
+
+        AssertUnqualifiedWriteDefersToTheServer(querySql, setup.SessionTempTables);
+    }
+
+    [Theory]
     // An unquoted non-ASCII ON COMMIT DROP name has an unknown server spelling,
     // so afterwards IF NOT EXISTS proves no non-ASCII name at all.
     [InlineData("CREATE TEMP TABLE \u00C9 (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS \"\u00E9\" (id int); TRUNCATE \"\u00E9\"", "NonTemporaryWrite")]
-    [InlineData("CREATE TEMP TABLE \u00C9 (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS \"\u00E9\" (id int); INSERT INTO \"\u00E9\" VALUES (1)", "MutationNotAllowed")]
     public void T4b_If_not_exists_after_non_ascii_on_commit_drop_proves_no_non_ascii_name(
         string sql, string expected)
     {
@@ -1459,6 +1542,14 @@ public sealed class PostgresSafetyTests
         Assert.False(decision.Allowed);
         Assert.Equal(expected, decision.Reason.ToString());
     }
+
+    [Theory]
+    // 047 step 3: it proves no DML target either, which in the read-only phase
+    // no longer needs proving.
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS \"\u00E9\" (id int); INSERT INTO \"\u00E9\" VALUES (1)")]
+    public void T4b_If_not_exists_after_non_ascii_on_commit_drop_leaves_a_dml_target_to_the_server(
+        string sql) =>
+        AssertUnqualifiedWriteDefersToTheServer(sql);
 
     [Fact]
     public void T4b_If_not_exists_without_an_on_commit_drop_record_still_proves_the_temp()
@@ -1498,7 +1589,6 @@ public sealed class PostgresSafetyTests
     // A quoted name that only looks like an escape is an ordinary identifier
     // spelled with a backslash; it is not the temp t.
     [InlineData("CREATE TEMP TABLE t (id int); TRUNCATE \"\\0074\"", "NonTemporaryWrite")]
-    [InlineData("CREATE TEMP TABLE t (id int); INSERT INTO \"\\0074\" VALUES (1)", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE t (id int); DROP TABLE \"\\0074\"", "UnsupportedStatement")]
     public void T4b_Quoted_backslash_name_is_not_decoded(string sql, string expected)
     {
@@ -1507,32 +1597,46 @@ public sealed class PostgresSafetyTests
         Assert.Equal(expected, decision.Reason.ToString());
     }
 
+    [Theory]
+    // 047 step 3: not being the temp t proves nothing about an unqualified DML
+    // target either; the read-only transaction refuses a persistent one.
+    [InlineData("CREATE TEMP TABLE t (id int); INSERT INTO \"\\0074\" VALUES (1)")]
+    public void T4b_Quoted_backslash_write_defers_to_the_server(string sql) =>
+        AssertUnqualifiedWriteDefersToTheServer(sql);
+
     // 011/T4b fix round 1 (F1): a DROP revokes proof for every tracked temp it
     // may address. `pg_temp.<unquoted non-ASCII>` has a server spelling that is
     // unknown offline, so it may have dropped any tracked temp.
     [Theory]
-    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; INSERT INTO \"é\" VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; UPDATE \"é\" SET id = 1", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; DELETE FROM \"é\"", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; MERGE INTO \"é\" USING (SELECT 1 AS id) s ON \"é\".id = s.id WHEN MATCHED THEN DELETE", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; CREATE INDEX ix ON \"é\" (id)", "UnsupportedStatement")]
     [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; DROP TABLE \"é\"", "UnsupportedStatement")]
     [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; TRUNCATE \"é\"", "NonTemporaryWrite")]
-    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; EXPLAIN ANALYZE INSERT INTO \"é\" VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE pg_temp.É; INSERT INTO \"é\" VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE \"é\" (id int); CREATE TEMP TABLE other (id int); DROP TABLE other, pg_temp.É; INSERT INTO \"é\" VALUES (1)", "MutationNotAllowed")]
     // Kelvin sign: Unicode lower-casing maps it to k; the server never does.
-    [InlineData("CREATE TEMP TABLE k (id int); DROP TABLE pg_temp.K; INSERT INTO k VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE k (id int); DROP TABLE pg_temp.K; TRUNCATE k", "NonTemporaryWrite")]
+    [InlineData("CREATE TEMP TABLE k (id int); DROP TABLE pg_temp.\u212A; TRUNCATE k", "NonTemporaryWrite")]
     // The unqualified shape of the same sequence: the DROP itself is unproven.
     [InlineData("CREATE TEMP TABLE \"pg_temp_é\" (id int); DROP TABLE PG_TEMP_É; INSERT INTO \"pg_temp_é\" VALUES (1)", "UnsupportedStatement")]
-    // When in doubt every proof goes, including an unrelated ASCII temp.
-    [InlineData("CREATE TEMP TABLE items (id int); DROP TABLE IF EXISTS pg_temp.É; INSERT INTO items VALUES (1)", "MutationNotAllowed")]
     public void T4b_Drop_with_unknown_stored_name_revokes_every_tracked_temp(string sql, string expected) =>
         AssertDeniedInBothUsages(sql, expected);
 
     [Theory]
-    [InlineData("INSERT INTO \"é\" VALUES (1)", "MutationNotAllowed")]
+    // 047 step 3: after the clear-all the write target is unqualified and
+    // unproven, which the read-only transaction resolves: it lands on the temp
+    // or is refused. The revocation still decides DDL, and it still decides the
+    // two paths that execute read-write.
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; INSERT INTO \"é\" VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; UPDATE \"é\" SET id = 1")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; DELETE FROM \"é\"")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; MERGE INTO \"é\" USING (SELECT 1 AS id) s ON \"é\".id = s.id WHEN MATCHED THEN DELETE")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE IF EXISTS pg_temp.É; EXPLAIN ANALYZE INSERT INTO \"é\" VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE pg_temp.É; INSERT INTO \"é\" VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE \"é\" (id int); CREATE TEMP TABLE other (id int); DROP TABLE other, pg_temp.É; INSERT INTO \"é\" VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE k (id int); DROP TABLE pg_temp.\u212A; INSERT INTO k VALUES (1)")]
+    // When in doubt every proof goes, including an unrelated ASCII temp.
+    [InlineData("CREATE TEMP TABLE items (id int); DROP TABLE IF EXISTS pg_temp.É; INSERT INTO items VALUES (1)")]
+    public void T4b_Drop_with_unknown_stored_name_leaves_a_tracked_temp_write_to_the_server(string sql) =>
+        AssertUnqualifiedWriteDefersToTheServer(sql);
+
+    [Theory]
     [InlineData("CREATE INDEX ix ON \"é\" (id)", "UnsupportedStatement")]
     [InlineData("TRUNCATE \"é\"", "NonTemporaryWrite")]
     public void T4b_Drop_with_unknown_stored_name_revokes_a_carried_temp(string tail, string expected)
@@ -1557,6 +1661,23 @@ public sealed class PostgresSafetyTests
         Assert.Equal(expected, later.Reason.ToString());
     }
 
+    [Fact]
+    // 047 step 3: the same revocation, on a write target: the read-only
+    // transaction is what keeps a revoked name from reaching a persistent table.
+    public void T4b_Drop_with_unknown_stored_name_leaves_a_carried_temp_write_to_the_server()
+    {
+        var setup = _classifier.Classify(
+            "CREATE TEMP TABLE \"é\" (id int)", SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+
+        var drop = _classifier.Classify(
+            "DROP TABLE IF EXISTS pg_temp.É", SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
+        Assert.True(drop.Allowed, drop.RejectionDescription);
+        Assert.Empty(drop.SessionTempTables);
+
+        AssertUnqualifiedWriteDefersToTheServer("INSERT INTO \"é\" VALUES (1)", drop.SessionTempTables);
+    }
+
     [Theory]
     // A DROP whose stored name is known revokes exactly that temp, as before.
     [InlineData("CREATE TEMP TABLE items (id int); CREATE TEMP TABLE other (id int); DROP TABLE pg_temp.other; INSERT INTO items VALUES (1); TRUNCATE items")]
@@ -1578,34 +1699,40 @@ public sealed class PostgresSafetyTests
     // never proves and is never proven. {A63} is 63 ASCII letters; {E32} is 32
     // two-byte letters (64 bytes in UTF-8); {E31} is 31 of them (62 bytes).
     [Theory]
-    [InlineData("CREATE TEMP TABLE {A63}x (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS {A63}y (id int); INSERT INTO {A63}y VALUES (1)", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE {A63}x (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS {A63}y (id int); TRUNCATE {A63}y", "NonTemporaryWrite")]
-    [InlineData("CREATE TEMP TABLE {A63}x (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS {A63} (id int); INSERT INTO {A63} VALUES (1)", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE {A63}x (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS {A63} (id int); TRUNCATE {A63}", "NonTemporaryWrite")]
     [InlineData("CREATE TEMP TABLE {A63}x (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS \"{A63}\" (id int); DROP TABLE \"{A63}\"", "UnsupportedStatement")]
-    [InlineData("CREATE TEMP TABLE {A63} (id int); CREATE TEMP TABLE IF NOT EXISTS {A63}x (id int) ON COMMIT DROP; INSERT INTO {A63} VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE {A63}x (id int); DROP TABLE pg_temp.{A63}y; INSERT INTO {A63}x VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE {A63} (id int); DROP TABLE pg_temp.{A63}y; INSERT INTO {A63} VALUES (1)", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE {A63} (id int); DROP TABLE pg_temp.{A63}y; TRUNCATE {A63}", "NonTemporaryWrite")]
     [InlineData("CREATE TEMP TABLE {A63} (id int); DROP TABLE IF EXISTS pg_temp.\"{A63}y\"; CREATE INDEX ix ON {A63} (id)", "UnsupportedStatement")]
-    // The same long spelling on both sides: safe on the server, denied by the rule.
-    [InlineData("CREATE TEMP TABLE {A63}x (id int); INSERT INTO {A63}x VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE {A63}x (id int); UPDATE {A63}x SET id = 1", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE {A63}x (id int); DELETE FROM {A63}x", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE {A63}x (id int); DROP TABLE {A63}x", "UnsupportedStatement")]
     [InlineData("CREATE TEMP TABLE {A63}x (id int); CREATE INDEX ix ON {A63}x (id)", "UnsupportedStatement")]
     [InlineData("CREATE TEMP TABLE {A63}x (id int); TRUNCATE {A63}x", "NonTemporaryWrite")]
-    [InlineData("CREATE TEMP TABLE \"{A63}x\" (id int); DELETE FROM \"{A63}x\"", "MutationNotAllowed")]
-    [InlineData("SELECT 1 AS id INTO TEMP TABLE {A63}x; DELETE FROM {A63}x", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE \"{E32}\" (id int); INSERT INTO \"{E32}\" VALUES (1)", "MutationNotAllowed")]
-    // A long declaration or target never matches its own 63-byte prefix either.
-    [InlineData("CREATE TEMP TABLE {A63}x (id int); INSERT INTO {A63} VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE {A63} (id int); INSERT INTO {A63}x VALUES (1)", "MutationNotAllowed")]
     public void T4b_Name_longer_than_63_bytes_never_proves_and_is_never_proven(string sql, string expected) =>
         AssertDeniedInBothUsages(ExpandNames(sql), expected);
 
     [Theory]
-    [InlineData("CREATE TEMP TABLE IF NOT EXISTS {A63} (id int); INSERT INTO {A63} VALUES (1)", "MutationNotAllowed")]
+    // 047 step 3: a name the server truncates proves nothing offline, and an
+    // unqualified DML target needs no proof in the read-only phase: the server
+    // refuses the persistent relation a truncated name may land on.
+    [InlineData("CREATE TEMP TABLE {A63}x (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS {A63}y (id int); INSERT INTO {A63}y VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS {A63} (id int); INSERT INTO {A63} VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE {A63} (id int); CREATE TEMP TABLE IF NOT EXISTS {A63}x (id int) ON COMMIT DROP; INSERT INTO {A63} VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); DROP TABLE pg_temp.{A63}y; INSERT INTO {A63}x VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE {A63} (id int); DROP TABLE pg_temp.{A63}y; INSERT INTO {A63} VALUES (1)")]
+    // The same long spelling on both sides: safe on the server, unprovable here.
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); INSERT INTO {A63}x VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); UPDATE {A63}x SET id = 1")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); DELETE FROM {A63}x")]
+    [InlineData("CREATE TEMP TABLE \"{A63}x\" (id int); DELETE FROM \"{A63}x\"")]
+    [InlineData("SELECT 1 AS id INTO TEMP TABLE {A63}x; DELETE FROM {A63}x")]
+    [InlineData("CREATE TEMP TABLE \"{E32}\" (id int); INSERT INTO \"{E32}\" VALUES (1)")]
+    // A long declaration or target never matches its own 63-byte prefix either.
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); INSERT INTO {A63} VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE {A63} (id int); INSERT INTO {A63}x VALUES (1)")]
+    public void T4b_Long_name_leaves_an_unqualified_dml_target_to_the_server(string sql) =>
+        AssertUnqualifiedWriteDefersToTheServer(ExpandNames(sql));
+
+    [Theory]
     [InlineData("CREATE TEMP TABLE IF NOT EXISTS items (id int); TRUNCATE items", "NonTemporaryWrite")]
     public void T4b_Carried_long_on_commit_drop_name_blocks_if_not_exists_proof(string querySql, string expected)
     {
@@ -1621,6 +1748,21 @@ public sealed class PostgresSafetyTests
             ExpandNames(querySql), SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
         Assert.False(query.Allowed);
         Assert.Equal(expected, query.Reason.ToString());
+    }
+
+    [Fact]
+    // 047 step 3: the same carried record, on a DML target the read-only
+    // transaction resolves instead of the name.
+    public void T4b_Carried_long_on_commit_drop_name_leaves_a_dml_target_to_the_server()
+    {
+        var setup = _classifier.Classify(
+            ExpandNames("CREATE TEMP TABLE \"{E32}\" (id int) ON COMMIT DROP"),
+            SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+
+        AssertUnqualifiedWriteDefersToTheServer(
+            ExpandNames("CREATE TEMP TABLE IF NOT EXISTS {A63} (id int); INSERT INTO {A63} VALUES (1)"),
+            setup.SessionTempTables);
     }
 
     [Theory]
@@ -1642,19 +1784,10 @@ public sealed class PostgresSafetyTests
     // current session. An unqualified relation merely named pg_temp_stuff is an
     // ordinary name, and pg_temp_<N> can be another session's temp schema.
     [Theory]
-    [InlineData("INSERT INTO pg_temp_stuff VALUES (1)", "MutationNotAllowed")]
-    [InlineData("UPDATE pg_temp_stuff SET id = 1", "MutationNotAllowed")]
-    [InlineData("DELETE FROM pg_temp_stuff", "MutationNotAllowed")]
-    [InlineData("MERGE INTO pg_temp_stuff USING (SELECT 1 AS id) s ON pg_temp_stuff.id = s.id WHEN MATCHED THEN DELETE", "MutationNotAllowed")]
     [InlineData("DROP TABLE pg_temp_stuff", "UnsupportedStatement")]
     [InlineData("DROP TABLE IF EXISTS pg_temp_stuff", "UnsupportedStatement")]
     [InlineData("CREATE INDEX ix ON pg_temp_stuff (id)", "UnsupportedStatement")]
-    [InlineData("EXPLAIN ANALYZE INSERT INTO pg_temp_stuff VALUES (1)", "MutationNotAllowed")]
-    [InlineData("WITH changed AS (INSERT INTO pg_temp_stuff VALUES (1) RETURNING id) SELECT id FROM changed", "MutationNotAllowed")]
-    [InlineData("INSERT INTO \"pg_temp_stuff\" VALUES (1)", "MutationNotAllowed")]
-    [InlineData("INSERT INTO PG_TEMP_STUFF VALUES (1)", "MutationNotAllowed")]
     // An unqualified relation named exactly pg_temp is not the schema alias.
-    [InlineData("INSERT INTO pg_temp VALUES (1)", "MutationNotAllowed")]
     [InlineData("DROP TABLE pg_temp", "UnsupportedStatement")]
     [InlineData("CREATE INDEX ix ON pg_temp (id)", "UnsupportedStatement")]
     // pg_temp_<N> as a schema qualifier.
@@ -1676,6 +1809,23 @@ public sealed class PostgresSafetyTests
     [InlineData("INSERT INTO \"PG_TEMP\".x VALUES (1)", "MutationNotAllowed")]
     public void T4b_Pg_temp_prefix_is_not_proof_for_any_statement(string sql, string expected) =>
         AssertDeniedInBothUsages(sql, expected);
+
+    [Theory]
+    // 047 step 3: an unqualified name that merely looks like a pg_temp relation
+    // is still just a name search_path resolves, so a read-only DML target over
+    // it reaches the server. A qualifier the proof does not accept is not that
+    // shape and stays a mutation (the theory above).
+    [InlineData("INSERT INTO pg_temp_stuff VALUES (1)")]
+    [InlineData("UPDATE pg_temp_stuff SET id = 1")]
+    [InlineData("DELETE FROM pg_temp_stuff")]
+    [InlineData("MERGE INTO pg_temp_stuff USING (SELECT 1 AS id) s ON pg_temp_stuff.id = s.id WHEN MATCHED THEN DELETE")]
+    [InlineData("EXPLAIN ANALYZE INSERT INTO pg_temp_stuff VALUES (1)")]
+    [InlineData("WITH changed AS (INSERT INTO pg_temp_stuff VALUES (1) RETURNING id) SELECT id FROM changed")]
+    [InlineData("INSERT INTO \"pg_temp_stuff\" VALUES (1)")]
+    [InlineData("INSERT INTO PG_TEMP_STUFF VALUES (1)")]
+    [InlineData("INSERT INTO pg_temp VALUES (1)")]
+    public void T4b_Unqualified_pg_temp_prefixed_write_defers_to_the_server(string sql) =>
+        AssertUnqualifiedWriteDefersToTheServer(sql);
 
     [Fact]
     public void T4b_Write_to_a_pg_temp_prefixed_name_is_an_ordinary_approvable_mutation()
@@ -1712,17 +1862,15 @@ public sealed class PostgresSafetyTests
     [Fact]
     public void T4b_Dropped_pg_temp_prefixed_temp_loses_proof()
     {
-        var decision = _classifier.Classify(
-            "CREATE TEMP TABLE pg_temp_stuff (id int); DROP TABLE pg_temp_stuff; INSERT INTO pg_temp_stuff VALUES (1)",
-            SqlUsage.Query, "appdb", false, null, Empty);
-        Assert.False(decision.Allowed);
-        Assert.Equal(SqlSafetyReason.MutationNotAllowed, decision.Reason);
+        // 047 step 3: the drop still revokes the proof, which is what decides DDL
+        // and both read-write paths; the write itself now goes to the server.
+        AssertUnqualifiedWriteDefersToTheServer(
+            "CREATE TEMP TABLE pg_temp_stuff (id int); DROP TABLE pg_temp_stuff; INSERT INTO pg_temp_stuff VALUES (1)");
     }
 
     // 011/T4b fix round 1 (F3): the "unknown stored name" record of an unquoted
     // non-ASCII ON COMMIT DROP declaration travels with the set from setup.
     [Theory]
-    [InlineData("INSERT INTO \"é\" VALUES (1)", "MutationNotAllowed")]
     [InlineData("TRUNCATE \"é\"", "NonTemporaryWrite")]
     [InlineData("DROP TABLE \"é\"", "UnsupportedStatement")]
     public void T4b_Carried_non_ascii_on_commit_drop_record_blocks_if_not_exists_proof(
@@ -1750,6 +1898,21 @@ public sealed class PostgresSafetyTests
         Assert.Equal(expected, later.Reason.ToString());
     }
 
+    [Fact]
+    // 047 step 3: the carried record still decides DDL and both read-write paths;
+    // a read-only DML target over the same name reaches the server.
+    public void T4b_Carried_non_ascii_on_commit_drop_record_leaves_a_dml_target_to_the_server()
+    {
+        var setup = _classifier.Classify(
+            "CREATE TEMP TABLE É (id int) ON COMMIT DROP", SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+        Assert.Empty(setup.SessionTempTables);
+
+        AssertUnqualifiedWriteDefersToTheServer(
+            "CREATE TEMP TABLE IF NOT EXISTS \"é\" (id int); INSERT INTO \"é\" VALUES (1)",
+            setup.SessionTempTables);
+    }
+
     // 011/final (M2): flipped. This test used to pin that an all-ASCII name is
     // still proven by IF NOT EXISTS after an unquoted non-ASCII ON COMMIT DROP
     // declaration, on the claim that the unknown stored name is non-ASCII under
@@ -1757,12 +1920,10 @@ public sealed class PostgresSafetyTests
     // U+0130 to ASCII i, so `İtems` can be stored as `items`. After such a
     // declaration IF NOT EXISTS proves no name at all.
     [Theory]
-    [InlineData("İtems", "INSERT INTO items VALUES (1)", "MutationNotAllowed")]
     [InlineData("İtems", "TRUNCATE items", "NonTemporaryWrite")]
     [InlineData("İtems", "TRUNCATE pg_temp.items", "NonTemporaryWrite")]
     [InlineData("İtems", "DROP TABLE items", "UnsupportedStatement")]
     [InlineData("İtems", "CREATE INDEX ix ON items (id)", "UnsupportedStatement")]
-    [InlineData("É", "INSERT INTO items VALUES (1)", "MutationNotAllowed")]
     [InlineData("É", "TRUNCATE items", "NonTemporaryWrite")]
     public void Final_If_not_exists_after_non_ascii_on_commit_drop_proves_no_name_at_all(
         string declared, string tail, string expected)
@@ -1783,6 +1944,24 @@ public sealed class PostgresSafetyTests
         Assert.Equal(expected, carried.Reason.ToString());
     }
 
+    [Theory]
+    // 047 step 3: the same declaration, on an unqualified DML target. The record
+    // still proves nothing, which no longer matters where the server refuses the
+    // persistent table itself.
+    [InlineData("İtems", "INSERT INTO items VALUES (1)")]
+    [InlineData("É", "INSERT INTO items VALUES (1)")]
+    public void Final_If_not_exists_after_non_ascii_on_commit_drop_leaves_a_dml_target_to_the_server(
+        string declared, string tail)
+    {
+        var setup = _classifier.Classify(
+            $"CREATE TEMP TABLE {declared} (id int) ON COMMIT DROP",
+            SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.True(setup.Allowed, setup.RejectionDescription);
+
+        AssertUnqualifiedWriteDefersToTheServer(
+            "CREATE TEMP TABLE IF NOT EXISTS items (id int); " + tail, setup.SessionTempTables);
+    }
+
     [Fact]
     public void Final_Plain_create_is_still_proven_after_a_non_ascii_on_commit_drop_declaration()
     {
@@ -1800,24 +1979,30 @@ public sealed class PostgresSafetyTests
     // than the pg_temp alias records no proof under its relation name. The
     // server rejects `public.x`; `pg_temp_3.x` may be another session's schema.
     [Theory]
-    [InlineData("CREATE TEMP TABLE public.x (id int); INSERT INTO x VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE public.x (id int); DELETE FROM x", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE public.x (id int); TRUNCATE x", "NonTemporaryWrite")]
     [InlineData("CREATE TEMP TABLE public.x (id int); TRUNCATE pg_temp.x", "NonTemporaryWrite")]
     [InlineData("CREATE TEMP TABLE public.x (id int); DROP TABLE x", "UnsupportedStatement")]
     [InlineData("CREATE TEMP TABLE public.x (id int); CREATE INDEX ix ON x (id)", "UnsupportedStatement")]
-    [InlineData("CREATE TEMP TABLE IF NOT EXISTS public.x (id int); INSERT INTO x VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE pg_temp_3.x (id int); INSERT INTO x VALUES (1)", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE pg_temp_3.x (id int); TRUNCATE x", "NonTemporaryWrite")]
     [InlineData("CREATE TEMP TABLE \"pg_temp_3\".x (id int); DROP TABLE x", "UnsupportedStatement")]
-    [InlineData("CREATE TEMP TABLE \"PG_TEMP\".x (id int); INSERT INTO x VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE appdb.pg_temp.x (id int); INSERT INTO x VALUES (1)", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE appdb.public.x (id int); TRUNCATE x", "NonTemporaryWrite")]
-    [InlineData("CREATE TEMP TABLE public.x AS SELECT 1 AS id; INSERT INTO x VALUES (1)", "MutationNotAllowed")]
-    // The withholding side of a qualified declaration is unchanged.
-    [InlineData("CREATE TEMP TABLE x (id int); CREATE TEMP TABLE public.x (id int) ON COMMIT DROP; INSERT INTO x VALUES (1)", "MutationNotAllowed")]
     public void Final_Qualified_create_temp_records_no_proof_under_its_relation_name(string sql, string expected) =>
         AssertDeniedInBothUsages(sql, expected);
+
+    [Theory]
+    // 047 step 3: the declaration still records no proof under x, and an
+    // unqualified DML target over x no longer needs one in the read-only phase.
+    [InlineData("CREATE TEMP TABLE public.x (id int); INSERT INTO x VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE public.x (id int); DELETE FROM x")]
+    [InlineData("CREATE TEMP TABLE IF NOT EXISTS public.x (id int); INSERT INTO x VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE pg_temp_3.x (id int); INSERT INTO x VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE \"PG_TEMP\".x (id int); INSERT INTO x VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE appdb.pg_temp.x (id int); INSERT INTO x VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE public.x AS SELECT 1 AS id; INSERT INTO x VALUES (1)")]
+    // The withholding side of a qualified declaration is unchanged.
+    [InlineData("CREATE TEMP TABLE x (id int); CREATE TEMP TABLE public.x (id int) ON COMMIT DROP; INSERT INTO x VALUES (1)")]
+    public void Final_Qualified_create_temp_write_defers_to_the_server(string sql) =>
+        AssertUnqualifiedWriteDefersToTheServer(sql);
 
     [Theory]
     [InlineData("CREATE TEMP TABLE public.x (id int)")]
@@ -1830,10 +2015,10 @@ public sealed class PostgresSafetyTests
         Assert.True(setup.Allowed, setup.RejectionDescription);
         Assert.Empty(setup.SessionTempTables);
 
-        var carried = _classifier.Classify(
-            "INSERT INTO x VALUES (1)", SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
-        Assert.False(carried.Allowed);
-        Assert.Equal(SqlSafetyReason.MutationNotAllowed, carried.Reason);
+        // 047 step 3: the write target no longer reads that set; the read-only
+        // transaction refuses the persistent table a qualified declaration left
+        // no proof for.
+        AssertUnqualifiedWriteDefersToTheServer("INSERT INTO x VALUES (1)", setup.SessionTempTables);
     }
 
     [Theory]
@@ -2030,13 +2215,8 @@ public sealed class PostgresSafetyTests
     // 011/final (M11): "revoke every proof" also covers a name that only a
     // caller-built plain set supplied, and a new declaration proves it again.
     [Theory]
-    [InlineData("DROP TABLE pg_temp.\u00C9; INSERT INTO t VALUES (1)", "MutationNotAllowed")]
-    [InlineData("DROP TABLE IF EXISTS pg_temp.\u00C9; DELETE FROM t", "MutationNotAllowed")]
     [InlineData("DROP TABLE pg_temp.\u00C9; CREATE INDEX ix ON t (id)", "UnsupportedStatement")]
     [InlineData("DROP TABLE pg_temp.\u00C9; DROP TABLE t", "UnsupportedStatement")]
-    [InlineData("DROP TABLE pg_temp.{A63}y; INSERT INTO t VALUES (1)", "MutationNotAllowed")]
-    // A long ON COMMIT DROP declaration takes the same clear-all path.
-    [InlineData("CREATE TEMP TABLE {A63}x (id int) ON COMMIT DROP; INSERT INTO t VALUES (1)", "MutationNotAllowed")]
     public void Final_Clear_all_revokes_a_name_from_a_caller_built_set(string sql, string expected)
     {
         var plain = new HashSet<string>(StringComparer.Ordinal) { "t" };
@@ -2053,6 +2233,21 @@ public sealed class PostgresSafetyTests
         Assert.Equal(["t"], plain);
     }
 
+    [Theory]
+    // 047 step 3: the clear-all still empties the set; what it no longer decides
+    // is an unqualified read-only DML target, which the server resolves.
+    [InlineData("DROP TABLE pg_temp.\u00C9; INSERT INTO t VALUES (1)")]
+    [InlineData("DROP TABLE IF EXISTS pg_temp.\u00C9; DELETE FROM t")]
+    [InlineData("DROP TABLE pg_temp.{A63}y; INSERT INTO t VALUES (1)")]
+    // A long ON COMMIT DROP declaration takes the same clear-all path.
+    [InlineData("CREATE TEMP TABLE {A63}x (id int) ON COMMIT DROP; INSERT INTO t VALUES (1)")]
+    public void Final_Clear_all_leaves_a_write_target_to_the_server(string sql)
+    {
+        var plain = new HashSet<string>(StringComparer.Ordinal) { "t" };
+        AssertUnqualifiedWriteDefersToTheServer(ExpandNames(sql), plain);
+        Assert.Equal(["t"], plain);
+    }
+
     [Fact]
     public void Final_Clear_all_result_carries_no_name_and_a_new_declaration_proves_again()
     {
@@ -2063,10 +2258,9 @@ public sealed class PostgresSafetyTests
         Assert.True(drop.Allowed, drop.RejectionDescription);
         Assert.Empty(drop.SessionTempTables);
 
-        var later = _classifier.Classify(
-            "INSERT INTO u VALUES (1)", SqlUsage.Query, "appdb", false, null, drop.SessionTempTables);
-        Assert.False(later.Allowed);
-        Assert.Equal(SqlSafetyReason.MutationNotAllowed, later.Reason);
+        // 047 step 3: the emptied set no longer denies the write; the read-only
+        // transaction refuses a persistent target instead.
+        AssertUnqualifiedWriteDefersToTheServer("INSERT INTO u VALUES (1)", drop.SessionTempTables);
 
         var redeclared = _classifier.Classify(
             "DROP TABLE pg_temp.\u00C9; CREATE TEMP TABLE t (id int); INSERT INTO t VALUES (1); TRUNCATE t",
@@ -2077,11 +2271,8 @@ public sealed class PostgresSafetyTests
         Assert.Equal(["t"], redeclared.SessionTempTables);
 
         // Only the redeclared name came back.
-        var other = _classifier.Classify(
-            "DROP TABLE pg_temp.\u00C9; CREATE TEMP TABLE t (id int); INSERT INTO u VALUES (1)",
-            SqlUsage.Query, "appdb", false, null, plain);
-        Assert.False(other.Allowed);
-        Assert.Equal(SqlSafetyReason.MutationNotAllowed, other.Reason);
+        AssertUnqualifiedWriteDefersToTheServer(
+            "DROP TABLE pg_temp.\u00C9; CREATE TEMP TABLE t (id int); INSERT INTO u VALUES (1)", plain);
     }
 
     // 011/final (M12): evidence that the Unicode-lower-case Forget in
@@ -2090,11 +2281,17 @@ public sealed class PostgresSafetyTests
     // Stricter than a UTF-8 server needs; removing the call would turn this
     // denial into an allow.
     [Theory]
-    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); CREATE TEMP TABLE \u00C9 (id int); INSERT INTO \"\u00E9\" VALUES (1)", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); CREATE TEMP TABLE IF NOT EXISTS \u00C9 (id int); TRUNCATE \"\u00E9\"", "NonTemporaryWrite")]
     public void Final_Unquoted_non_ascii_declaration_revokes_the_quoted_name_it_lower_cases_to(
         string sql, string expected) =>
         AssertDeniedInBothUsages(sql, expected);
+
+    [Theory]
+    // 047 step 3: the revocation is live for DDL and for both read-write paths;
+    // an unqualified read-only DML target reaches the server instead.
+    [InlineData("CREATE TEMP TABLE \"\u00E9\" (id int); CREATE TEMP TABLE \u00C9 (id int); INSERT INTO \"\u00E9\" VALUES (1)")]
+    public void Final_Unquoted_non_ascii_declaration_leaves_a_write_target_to_the_server(string sql) =>
+        AssertUnqualifiedWriteDefersToTheServer(sql);
 
     // 011/final (M9): a write denied in a flow that declared a TEMP table
     // without proof carries a fixed hint, so an agent does not ask for mutation
@@ -2106,11 +2303,7 @@ public sealed class PostgresSafetyTests
         "If it is the write target, quote or shorten its name and keep it past commit; mutation approval is not the remedy.";
 
     [Theory]
-    [InlineData("CREATE TEMP TABLE \u00C9 (id int); INSERT INTO \u00C9 VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE {A63}x (id int); DELETE FROM {A63}x", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; UPDATE t SET id = 1", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS t (id int); INSERT INTO t VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE public.t (id int); INSERT INTO t VALUES (1)", "MutationNotAllowed")]
+    // 047 step 3: TRUNCATE and the other denials that remain still carry the hint.
     [InlineData("CREATE TEMP TABLE \u00C9 (id int); TRUNCATE \u00C9", "NonTemporaryWrite")]
     [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; TRUNCATE pg_temp.t", "NonTemporaryWrite")]
     public void Final_Write_denied_after_an_unproven_temp_declaration_carries_a_hint(string sql, string expected)
@@ -2130,26 +2323,44 @@ public sealed class PostgresSafetyTests
         Assert.Equal(UnprovenTempHint, setup.Detail);
     }
 
+    [Theory]
+    // 047 step 3: the same declarations over an unqualified DML target are no
+    // longer denials, so they no longer carry a hint either.
+    [InlineData("CREATE TEMP TABLE \u00C9 (id int); INSERT INTO \u00C9 VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); DELETE FROM {A63}x")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; UPDATE t SET id = 1")]
+    [InlineData("CREATE TEMP TABLE t (id int) ON COMMIT DROP; CREATE TEMP TABLE IF NOT EXISTS t (id int); INSERT INTO t VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE public.t (id int); INSERT INTO t VALUES (1)")]
+    public void Final_Unproven_temp_declaration_no_longer_hints_a_dml_write(string sql)
+    {
+        var query = _classifier.Classify(ExpandNames(sql), SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.True(query.Allowed, query.RejectionDescription);
+        Assert.Null(query.Detail);
+    }
+
     [Fact]
-    public void Final_Write_denied_after_a_carried_on_commit_drop_declaration_carries_the_hint()
+    public void Final_Truncate_denied_after_a_carried_on_commit_drop_declaration_carries_the_hint()
     {
         var setup = _classifier.Classify(
             "CREATE TEMP TABLE t (id int) ON COMMIT DROP", SqlUsage.CompareSetup, "appdb", false, null, Empty);
         Assert.True(setup.Allowed, setup.RejectionDescription);
 
-        var query = _classifier.Classify(
-            "INSERT INTO t VALUES (1)", SqlUsage.Query, "appdb", false, null, setup.SessionTempTables);
-        Assert.False(query.Allowed);
-        Assert.Equal(SqlSafetyReason.MutationNotAllowed, query.Reason);
-        Assert.Equal(UnprovenTempHint, query.Detail);
+        var truncate = _classifier.Classify(
+            "TRUNCATE t", SqlUsage.Query, "appdb", true, "appdb", setup.SessionTempTables);
+        Assert.False(truncate.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, truncate.Reason);
+        Assert.Equal(UnprovenTempHint, truncate.Detail);
+
+        // 047 step 3: the DML write over the same carried name is no longer a
+        // denial at all, so there is no hint to carry.
+        AssertUnqualifiedWriteDefersToTheServer("INSERT INTO t VALUES (1)", setup.SessionTempTables);
     }
 
     [Theory]
-    // No unproven declaration in the flow: the text is what it was.
-    [InlineData("INSERT INTO items VALUES (1)", "MutationNotAllowed.")]
+    // No unproven declaration in the flow: the text is what it was. An
+    // unqualified DML write over an unproven name is no longer a denial at all
+    // (047 step 3), so it has no text here.
     [InlineData("TRUNCATE items", "NonTemporaryWrite.")]
-    [InlineData("CREATE TEMP TABLE t (id int); INSERT INTO items VALUES (1)", "MutationNotAllowed.")]
-    [InlineData("CREATE TEMP TABLE t (id int); DROP TABLE t; INSERT INTO t VALUES (1)", "MutationNotAllowed.")]
     // Other reasons never carry the hint, even after an unproven declaration.
     [InlineData("CREATE TEMP TABLE \u00C9 (id int); DROP TABLE \u00C9", "UnsupportedStatement.")]
     [InlineData("CREATE TEMP TABLE \u00C9 (id int); CREATE INDEX ix ON \u00C9 (id)", "UnsupportedStatement.")]
@@ -2173,6 +2384,62 @@ public sealed class PostgresSafetyTests
         Assert.True(decision.Allowed, decision.RejectionDescription);
         Assert.True(decision.HasMutation);
         Assert.Null(decision.Detail);
+    }
+
+    // 047 step 3: what the relaxation covers. A name that was never proven, for
+    // whatever reason, is a read-only DML target the server resolves.
+    [Theory]
+    [InlineData("INSERT INTO never_declared VALUES (1)")]
+    [InlineData("UPDATE never_declared SET id = 1")]
+    [InlineData("DELETE FROM never_declared")]
+    [InlineData("MERGE INTO never_declared USING (SELECT 1 AS id) s ON never_declared.id = s.id WHEN MATCHED THEN DELETE")]
+    [InlineData("WITH changed AS (INSERT INTO never_declared VALUES (1) RETURNING id) SELECT id FROM changed")]
+    [InlineData("CREATE TEMP TABLE unproven (id int) ON COMMIT DROP; INSERT INTO unproven VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE public.unproven (id int); INSERT INTO unproven VALUES (1)")]
+    public void Unqualified_dml_of_an_unproven_target_reaches_the_read_only_server(string sql) =>
+        AssertUnqualifiedWriteDefersToTheServer(sql);
+
+    [Theory]
+    // The relaxation reaches an unqualified DML target only. A qualifier the
+    // proof does not accept is persistent on the server too, so it stays a
+    // mutation and keeps needing approval.
+    [InlineData("public.unproven")]
+    [InlineData("appdb.public.unproven")]
+    [InlineData("pg_temp_3.unproven")]
+    [InlineData("pg_temp.unproven.t")]
+    public void Qualified_dml_of_an_unproven_target_still_needs_mutation_approval(string target)
+    {
+        var sql = $"INSERT INTO {target} VALUES (1)";
+
+        var denied = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(denied.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, denied.Reason);
+
+        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "appdb", false, null, Empty);
+        Assert.False(setup.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, setup.Reason);
+
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", Empty);
+        Assert.True(approved.Allowed, approved.RejectionDescription);
+        Assert.True(approved.HasMutation);
+    }
+
+    [Theory]
+    // One statement that still fails denies the batch, however relaxed the DML
+    // target next to it is.
+    [InlineData("INSERT INTO unproven VALUES (1); TRUNCATE unproven", nameof(SqlSafetyReason.NonTemporaryWrite))]
+    [InlineData("INSERT INTO unproven VALUES (1); TRUNCATE unproven CASCADE", nameof(SqlSafetyReason.UnsupportedStatement))]
+    [InlineData("INSERT INTO unproven VALUES (1); TRUNCATE unproven RESTART IDENTITY", nameof(SqlSafetyReason.UnsupportedStatement))]
+    [InlineData("INSERT INTO unproven VALUES (1); DROP TABLE unproven", nameof(SqlSafetyReason.UnsupportedStatement))]
+    [InlineData("INSERT INTO unproven VALUES (1); CREATE INDEX ix ON unproven (id)", nameof(SqlSafetyReason.UnsupportedStatement))]
+    [InlineData("INSERT INTO unproven VALUES (1); INSERT INTO public.unproven VALUES (1)", nameof(SqlSafetyReason.MutationNotAllowed))]
+    [InlineData("INSERT INTO unproven VALUES (1); INSERT INTO pg_temp_3.unproven VALUES (1)", nameof(SqlSafetyReason.MutationNotAllowed))]
+    [InlineData("INSERT INTO unproven VALUES (1); SELECT 1 INTO public.copy", nameof(SqlSafetyReason.SelectIntoNotAllowed))]
+    public void A_denied_statement_next_to_a_deferred_write_still_denies_the_batch(string sql, string expected)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, Empty);
+        Assert.False(decision.Allowed);
+        Assert.Equal(expected, decision.Reason.ToString());
     }
 
     // 031 Step 1: the offline parse that classification rests on. With
@@ -2241,6 +2508,32 @@ public sealed class PostgresSafetyTests
         Assert.Equal(
             expected == "MutationNotAllowed" ? "NonTemporaryWrite" : expected,
             setup.Reason.ToString());
+    }
+
+    // 047 step 3: an unqualified DML target needs no name proof in the read-only
+    // phase, because the server refuses a persistent target there itself.
+    private void AssertUnqualifiedWriteDefersToTheServer(string sql) =>
+        AssertUnqualifiedWriteDefersToTheServer(sql, Empty);
+
+    // The same three verdicts for a target whose name was carried from setup.
+    // Setup runs read-write and the approved mutation path has no read-only
+    // backstop, so both keep the proof: setup denies the batch, approval calls it
+    // a mutation and never a session temp.
+    private void AssertUnqualifiedWriteDefersToTheServer(
+        string sql, IReadOnlySet<string> sessionTempTables)
+    {
+        var query = _classifier.Classify(sql, SqlUsage.Query, "appdb", false, null, sessionTempTables);
+        Assert.True(query.Allowed, query.RejectionDescription);
+        Assert.True(query.HasSessionLocalWork);
+        Assert.False(query.HasMutation);
+
+        var setup = _classifier.Classify(sql, SqlUsage.CompareSetup, "appdb", false, null, sessionTempTables);
+        Assert.False(setup.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, setup.Reason);
+
+        var approved = _classifier.Classify(sql, SqlUsage.Query, "appdb", true, "appdb", sessionTempTables);
+        Assert.True(approved.Allowed, approved.RejectionDescription);
+        Assert.True(approved.HasMutation);
     }
 
     private static string ExpandNames(string sql) => sql
