@@ -21,7 +21,7 @@ Odświeżono na `a296e91`: sprawdzono main, statusy planów i worktree. Preferen
 
 | Kolejność | Plan | Kategoria | Warunek |
 |---|---|---|---|
-| 1 | [061](061-unified-parameter-sets.md) | Ogólne / P3: wspólne zestawy parametrów measure/compare | 060 jest DONE; 056/058 są DONE |
+| 1 | [061](061-unified-parameter-sets.md) | Ogólne / P3: wspólne zestawy parametrów measure/compare | DONE — feature branch gates green; evidence: [061 verification](061-verification-evidence.md) |
 
 ### Grupa 2 — historia optymalizacji i dashboard
 
@@ -189,7 +189,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [058](058-benchmark-plan-evidence.md) | Stored-plan reader, repetition identity, node/operator continuation and matrix values | P1 | M | 055 | DONE — implementation and final-review correction through `6fa9c7f`; Windows/Linux gates pass; [verification](058-verification.md) |
 | [059](059-journal-workflow-cost.md) | Explicit producer references and honest measured/estimated workflow cost | P2 | M | 055, 056, 058 | DONE — final correction `233207c`; Windows/Linux gates green; [verification](059-verification.md); no live database calls or push |
 | [060](060-mcp-tool-surface.md) | Eight MCP tools with CLI/MCP parity, `--dry-run` on the CLI, compact runtime capabilities and concurrent calls | P2 | L | 055, 056, 059 | DONE — locally merged to main; Windows `verify: OK` after merging main (031): UI 144, Core 3411/11 skipped, MCP 358/4 skipped; Linux gate accepted by the operator (run reaped by the low-memory reaper; an earlier run was disturbed by a concurrent 047 gate in the shared WSL clone); no push. Revised 2026-10-13 (operator): CLI/MCP parity and no recipes; `inspect`/`validate` left MCP and `ping`/`schema`/`counts`/`space`/`qstop`/`indexes`/`validate` left the CLI; busy gate removed; capabilities without `includeDetails`; spec decisions 12 and 15 amended |
-| [061](061-unified-parameter-sets.md) | Shared measure/compare parameter-set inputs | P3 | L | 056, 058, 060 | TODO — adapt projection to 055 case inventory; not implemented |
+| [061](061-unified-parameter-sets.md) | Shared measure/compare parameter-set inputs | P3 | L | 056, 058, 060 | DONE on feature branch `feat/plan-061-parameter-sets`; implementation at `84ff1f3`, docs `04537bf`, formatting fix `c844064`, integrated with main `a9a835b` at `51fab48`; Windows gate pass (UI 144, Core 3457/11 skipped, MCP 364/4 skipped), Linux gate pass (UI 144, Core 3462/6 skipped, MCP 365/3 skipped); build 0 warnings/errors; see [verification evidence](061-verification-evidence.md). Feature-to-main local merge awaits controller final review; no push or live DB. |
 | [062](062-compare-context-dashboard.md) | Compare context, SQL/scope/attempt history and comparison dashboard | P2 | L | 051 (DONE); coordinate with 060/061 | TODO — design agreed 2026-10-12; not implemented |
 | [063](063-missing-index-overlap.md) | Missing-index hints in the saved `plan` artifact section carry an overlap verdict against the table's existing indexes (inventory captured after measurement) | P2 | M | 060 | TODO — planned 2026-10-14 at `472d5b7` |
 

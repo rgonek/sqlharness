@@ -14,7 +14,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: DONE (implementation and both verification gates complete on `51fab48`; integrated with main `a9a835b` in the feature worktree; feature-to-main local merge awaits the controller's final review)
 - Priority: P3
 - Effort: L
 - Risk: MEDIUM (report shape of compare matrix changes; MCP argument rename)
@@ -62,7 +62,7 @@
 - Produces: `internal sealed record ResolvedParameterSet(string Name, string? ParameterValue, IReadOnlyList<SqlHarnessParameter> Parameters);`
 - Produces: `internal static IReadOnlyList<ResolvedParameterSet> ParameterSetResolver.Resolve(ISqlDialect dialect, IReadOnlyList<SqlHarnessParameter> fixedParameters, SqlHarnessParameterMatrixInput? matrix, IReadOnlyList<SqlHarnessParameterSetInput>? sets);`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```csharp
 public class ParameterSetResolverTests
@@ -130,13 +130,13 @@ public class ParameterSetResolverTests
 }
 ```
 
-- [ ] **Step 2: Run to verify failure** — build error.
+- [x] **Step 2: Run to verify failure** — build error.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `Resolve` rejects both `matrix` and `sets` together; for a matrix, delegates value binding to the existing `SqlParameterMatrix` binder and names sets `"0"`, `"1"`, …; for sets, binds each set's `TypedParameters ?? Parameters` (declarations through `SqlParameterParser.ToInput`) with `dialect.BindParameters`, checks the label with the safe-label rule, the 2..32 count, identical name sets, identical `SqlDbType` per name, and no overlap with `fixedParameters`. Messages name the set and the parameter.
 
-- [ ] **Step 4: Run** → PASS. **Step 5: Commit**
+- [x] **Step 4: Run** → PASS. **Step 5: Commit**
 
 ```bash
 git add src/SqlHarness.Core tests/SqlHarness.Tests/ParameterSetResolverTests.cs
@@ -155,7 +155,7 @@ git commit -m "feat(061): one resolver for matrix values and parameter sets"
 - Consumes: `ParameterSetResolver.Resolve`, `ResolvedParameterSet`.
 - Produces: `CompareMatrixCellReport(int Index, string? ParameterValue, SqlHarnessCompareReport Compare) { public string SetName { get; init; } public IReadOnlyList<BenchmarkParameterReport> SetParameters { get; init; } }`; `SqlHarnessCompareMatrixReport.ParameterName`/`ParameterType` become nullable (null for multi-parameter sets).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `CompareMatrixTests.cs`:
 
@@ -192,15 +192,15 @@ public async Task Dry_run_over_sets_binds_every_set_without_connecting()
 
 Write the second test's body in full following the first. `MeasureTests.cs`: a measure with inline `ParameterSets` (no files) runs both sets on one session (`ConnectCount == 1`) and reports both set names.
 
-- [ ] **Step 2: Run to verify failure** — build error / no `ParameterSets`.
+- [x] **Step 2: Run to verify failure** — build error / no `ParameterSets`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add `IReadOnlyList<SqlHarnessParameterSetInput>? ParameterSets { get; init; }` to `SqlHarnessCompareMatrixOperation` (the operation is selected when either a matrix or sets are given; rename nothing else in Core). In the module's compare-matrix path replace the matrix-binding loop with `ParameterSetResolver.Resolve(...)` and build `CompareMatrixRun` from the resolved sets (`Parameters = [.. fixed, .. set.Parameters]` per cell). In the measure path, resolve inline sets with the same resolver and pass bound sets to `MeasureParameterSetRunner` (files keep their reader, then go through the resolver for the shared checks). Cell reports carry `SetName`, `ParameterValue` (matrix only) and `SetParameters` (`BenchmarkParameterReport` of the set's parameters). The agent projection shows `setName` on each cell and omitted-cell reference.
 
-- [ ] **Step 4: Run** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~CompareMatrix|FullyQualifiedName~Measure|FullyQualifiedName~ParameterSet"` → PASS.
+- [x] **Step 4: Run** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~CompareMatrix|FullyQualifiedName~Measure|FullyQualifiedName~ParameterSet"` → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/SqlHarness.Core tests/SqlHarness.Tests
@@ -218,11 +218,11 @@ git commit -m "feat(061): compare and measure run over the same resolved paramet
 **Interfaces:**
 - Produces: `public sealed record McpParameterSetArgument(string Name, McpParameterArgument[] Parameters);`
 
-- [ ] **Step 1: Write the failing tests** — mapping: `compare` with `parameterSets` maps to `SqlHarnessCompareMatrixOperation.ParameterSets`; `measure` with `matrix` maps to measure sets named `"0"`, `"1"`; any two of `parameterSets`/`parameterSetFiles`/`matrix` together are rejected with `"Use one of parameterSets, parameterSetFiles or matrix."`; schema: both tools expose the three arguments and neither exposes `paramSetFiles`.
-- [ ] **Step 2: Run** — FAIL.
-- [ ] **Step 3: Implement** — add the three arguments to both tools in both handler classes (descriptions: `"Inline parameter sets: 2..32 of {name, parameters}."`, `"Parameter-set files (.sqljson) under an input root."`, `"One-parameter shorthand: {name, type, values}."`); update `ThrowIfUnknown` lists; map files through the existing reader into `SqlHarnessParameterSetInput`; map inline sets with `TypedParameters`. Keep tools/list within its budget; shorten descriptions rather than dropping arguments.
-- [ ] **Step 4: Run** `dotnet test tests/SqlHarness.Mcp.Tests` → PASS.
-- [ ] **Step 5: Commit**
+- [x] **Step 1: Write the failing tests** — mapping: `compare` with `parameterSets` maps to `SqlHarnessCompareMatrixOperation.ParameterSets`; `measure` with `matrix` maps to measure sets named `"0"`, `"1"`; any two of `parameterSets`/`parameterSetFiles`/`matrix` together are rejected with `"Use one of parameterSets, parameterSetFiles or matrix."`; schema: both tools expose the three arguments and neither exposes `paramSetFiles`.
+- [x] **Step 2: Run** — FAIL.
+- [x] **Step 3: Implement** — add the three arguments to both tools in both handler classes (descriptions: `"Inline parameter sets: 2..32 of {name, parameters}."`, `"Parameter-set files (.sqljson) under an input root."`, `"One-parameter shorthand: {name, type, values}."`); update `ThrowIfUnknown` lists; map files through the existing reader into `SqlHarnessParameterSetInput`; map inline sets with `TypedParameters`. Keep tools/list within its budget; shorten descriptions rather than dropping arguments.
+- [x] **Step 4: Run** `dotnet test tests/SqlHarness.Mcp.Tests` → PASS.
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/SqlHarness.Mcp tests/SqlHarness.Mcp.Tests
@@ -233,9 +233,9 @@ git commit -m "feat(061)!: measure and compare share parameterSets, parameterSet
 
 ### Task 4: Documentation and gates
 
-- [ ] **Step 1:** `docs/mcp.md` (measure/compare rows, matrix paragraph `:100` now covering sets, artifacts for cells), `README.md` ("Measure parameter sets" section becomes "Parameter sets" for both commands; state the execution difference: measure rotates on one connection, compare uses one connection per set), `skills/sqlharness/SKILL.md`, `DocsSyncTests` pins.
-- [ ] **Step 2:** `dotnet build SqlHarness.sln -warnaserror`; `pwsh scripts/verify.ps1`; `pwsh scripts/verify-linux.ps1`.
-- [ ] **Step 3:** Status DONE; `plans/README.md` row.
+- [x] **Step 1:** `docs/mcp.md` (measure/compare rows, parameter and artifact sections), `README.md` ("Parameter sets" for the shared MCP and CLI forms; measure rotates on one connection, compare uses one connection per set), `skills/sqlharness/SKILL.md`, capability and docs-contract pins.
+- [x] **Step 2:** `dotnet build SqlHarness.sln -warnaserror`; `pwsh ./scripts/verify.ps1`; `pwsh ./scripts/verify-linux.ps1` — pass on integrated commit `51fab48`; detailed counts and the initial formatting recovery are in [verification evidence](061-verification-evidence.md).
+- [x] **Step 3:** Status DONE; `plans/README.md` row updated.
 
 ```bash
 git add docs README.md skills tests plans
@@ -244,10 +244,10 @@ git commit -m "docs(061): one parameter-set contract for measure and compare"
 
 ## Done criteria
 
-- [ ] Both tools accept the three forms with identical validation messages.
-- [ ] Compare over inline sets reports one cell per set with its name and parameters.
-- [ ] Measure over a matrix rotates its values on one connection.
-- [ ] Both gates pass; README row updated.
+- [x] Both tools accept the three forms with identical validation messages.
+- [x] Compare over inline sets reports one cell per set with its name and parameters.
+- [x] Measure over a matrix rotates its values on one connection.
+- [x] Both gates pass; README row updated.
 
 ## STOP conditions
 
