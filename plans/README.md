@@ -30,7 +30,8 @@ Odświeżono na `a296e91`: sprawdzono main, statusy planów i worktree. Preferen
 |---|---|---|
 | [062](062-compare-context-dashboard.md) | Ogólne / P2: kontekst compare, historia prób, dashboard | 051 jest DONE. Nie wymaga całej fali 055–061; uzgodnić aktualną bazę po 055 i realizować sekwencyjnie względem zmian MCP w 060/061 |
 | [069](069-dashboard-session-curation.md) | Ogólne / P2: porządkowanie sesji w dashboardzie | Po 062; potem plany dla specu C (dopasowanie transkryptów) i B (compare dla reviewera) |
-| [070](070-dashboard-agent-transcript-matching.md) | Ogólne / P2: tytuły i model z transkryptów agentów (opt-in) | Po 069; plan dla specu B po 062 |
+| [070](070-dashboard-agent-transcript-matching.md) | Ogólne / P2: tytuły i model z transkryptów agentów (opt-in) | Po 069 |
+| [071](071-dashboard-compare-review.md) | Ogólne / P2: compare dla reviewera (diff SQL, IO per tabela, zmiany planu, Copy) | Po 062; przed startem potwierdzić u operatora CodeMirror 6 |
 
 062 jest odrębnym wyborem produktowym. Nie uruchamiać na podstawie samego numeru planu równolegle ze zmianami wspólnego katalogu MCP i kontraktów compare. Plan obejmuje cały kontekst, journal, API, ekrany i dokumentację.
 
@@ -202,6 +203,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [068](068-operation-phase-timings-and-diagnostics.md) | Journal phase timings (connect/setup/execute/artifact) and opt-in `diagnostics.enabled` connection events | P2 | M–L | Coordinate 062 (operation page, journal reader) | TODO — planning accepted 2026-10-14 at `ed44649`; no implementation/publication authorization |
 | [069](069-dashboard-session-curation.md) | Dashboard session curation: title, note, star/pin, archive, search (journal `session_annotations`, guarded PATCH) | P2 | M | 062 DONE first; coordinate journal schema version with 062/068 | TODO — planned 2026-10-14 at `380307c`; spec accepted; followed by Spec C (transcript matching) and Spec B (compare review, CodeMirror 6 checkpoint), not yet planned |
 | [070](070-dashboard-agent-transcript-matching.md) | Opt-in agent transcript matching: Claude/Codex conversation titles, Claude model/effort per operation (journal v10 derived tables, housekeeping cycle) | P2 | L | 062 and 069 DONE first; re-verify transcript formats | TODO — planned 2026-10-14 at `54dc621`; spec accepted |
+| [071](071-dashboard-compare-review.md) | Compare review: CodeMirror 6 SQL tabs + side-by-side/unified diff, per-table IO and plan changes, Copy Markdown for PRs, session version diff | P2 | M–L | 062 DONE; **ask the operator to confirm CodeMirror 6 before starting** | TODO — planned 2026-10-14 at `40a6871`; spec accepted |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED, SUPERSEDED or REVERTED (with one-line rationale).
 
