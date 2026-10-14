@@ -37,12 +37,14 @@ public sealed class CompareHistoryBuilderTests
         var summary = JsonDocument.Parse("""{"regression":{"verdict":"improved"},"cases":[{"index":0,"equivalence":{"status":"equal"},"regression":{"verdict":"regression"} }]}""").RootElement.Clone();
         var rows = new[]
         {
-            Row(1, 1, "orders", "whole", null, "h1", summary),
+            Row(1, 1, "orders", "whole", null, "h1"),
             Row(2, 1, null, null, "h1", "h2"),
             Row(3, 1, "orders", "whole", "h2", null),
         };
 
-        var history = CompareHistoryBuilder.Build(rows);
+        var history = CompareHistoryBuilder.Build(rows).Select(item => item.OperationId == 1
+            ? CompareHistoryBuilder.WithEvidence(item, summary, null)
+            : item).ToArray();
 
         Assert.Null(history.Single(item => item.OperationId == 1).BaselineVersion);
         Assert.Equal("v0", history.Single(item => item.OperationId == 1).CandidateVersion);
@@ -106,14 +108,19 @@ public sealed class CompareHistoryBuilderTests
         using var latestConditionsDocument = JsonDocument.Parse("""{"repeat":5,"timeoutSeconds":60,"omittedSensitiveFields":["parameters"]}""");
         var rows = new[]
         {
-            Row(1, 1, "orders", "whole", "h0", "h1", startedAt: "2026-01-01T00:00:00Z") with
-                { Conditions = firstConditionsDocument.RootElement.Clone() },
+            Row(1, 1, "orders", "whole", "h0", "h1", startedAt: "2026-01-01T00:00:00Z"),
             Row(2, 1, "orders", "whole", "h1", "h2", startedAt: "2026-01-02T00:00:00Z"),
-            Row(3, 1, "orders", "whole", "h0", "h3", startedAt: "2026-01-03T00:00:00Z") with
-                { Conditions = latestConditionsDocument.RootElement.Clone() },
+            Row(3, 1, "orders", "whole", "h0", "h3", startedAt: "2026-01-03T00:00:00Z"),
         };
+        var attempts = CompareHistoryBuilder.Build(rows).Select(item => item.OperationId switch
+        {
+            1 => CompareHistoryBuilder.WithEvidence(item, null, firstConditionsDocument.RootElement.Clone()),
+            3 => CompareHistoryBuilder.WithEvidence(item with { BaselineHash = "h0", CandidateHash = "h3" },
+                null, latestConditionsDocument.RootElement.Clone()),
+            _ => item,
+        }).ToArray();
 
-        var subject = Assert.Single(CompareHistoryBuilder.Subjects(CompareHistoryBuilder.Build(rows)));
+        var subject = Assert.Single(CompareHistoryBuilder.Subjects(attempts));
 
         Assert.Equal(3, subject.StartToLatestWhole!.OperationId);
         Assert.Equal(5, subject.StartToLatestWhole.Conditions!.Value.GetProperty("repeat").GetInt32());
@@ -121,8 +128,8 @@ public sealed class CompareHistoryBuilderTests
     }
 
     private static CompareHistoryRow Row(long id, long session, string? subject, string? scope,
-        string? baseline, string? candidate, JsonElement? summary = null, string startedAt = "2026-01-01T00:00:00Z") =>
-        new(id, session, subject, scope, baseline, candidate, "succeeded", startedAt, summary, null);
+        string? baseline, string? candidate, string startedAt = "2026-01-01T00:00:00Z") =>
+        new(id, session, subject, scope, baseline, candidate, "succeeded", startedAt);
 
     private static (string? Baseline, string? Candidate) Pair(IReadOnlyList<CompareAttemptSummary> history, long id)
     {

@@ -1,5 +1,6 @@
 using SqlHarness.Core;
 using SqlHarness.Dashboard;
+using Microsoft.Data.Sqlite;
 
 namespace SqlHarness.Tests.Dashboard;
 
@@ -109,6 +110,81 @@ public sealed class JournalReaderTests
         Assert.Null(attempt.Subject);
         Assert.Null(attempt.BaselineVersion);
         Assert.Null(attempt.CandidateVersion);
+    }
+
+    [Fact]
+    public void Compare_page_and_operation_detail_hydrate_evidence_only_for_the_selected_attempt()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:evidence-page");
+        var old = seed.Compare(session, "orders", "whole", "h0", "h1");
+        var latest = seed.Compare(session, "orders", "whole", "h1", "h2");
+        CorruptCompareEvidence(home.DatabasePath, old.OperationId);
+        var hydratedIds = new List<long>();
+        var reader = new JournalReader(home.DatabasePath, new FakeProcesses())
+        {
+            CompareEvidenceQueryObserver = ids => hydratedIds.AddRange(ids),
+        };
+        var sessionId = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
+
+        var page = reader.CompareAttempts(sessionId, limit: 1);
+        var detail = reader.Operation(latest.OperationId)!;
+
+        Assert.Equal(latest.OperationId, Assert.Single(page.Items).OperationId);
+        Assert.Null(Assert.Single(page.Items).Summary);
+        Assert.Equal("h1", detail.Operation.SqlHash);
+        Assert.Equal("orders", detail.CompareSubject);
+        Assert.DoesNotContain(old.OperationId, hydratedIds);
+        Assert.Contains(latest.OperationId, hydratedIds);
+
+        hydratedIds.Clear();
+        var sessionDetail = reader.Session(sessionId)!;
+        Assert.Equal(latest.OperationId, Assert.Single(sessionDetail.CompareSubjects).LatestWhole!.OperationId);
+        Assert.Equal([latest.OperationId], hydratedIds);
+    }
+
+    [Fact]
+    public void Noncompare_operation_detail_does_not_scan_malformed_compare_metadata()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:no-compare-scan");
+        seed.Compare(session, "orders", "whole", "h0", "h1");
+        var query = seed.Operation(session);
+        using (var connection = OpenSeedDatabase(home.DatabasePath))
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "UPDATE operations SET host_pid = X'010203' WHERE operation = 'compare';";
+            command.ExecuteNonQuery();
+        }
+
+        var hydratedIds = new List<long>();
+        var reader = new JournalReader(home.DatabasePath, new FakeProcesses())
+        {
+            CompareEvidenceQueryObserver = ids => hydratedIds.AddRange(ids),
+        };
+        var detail = reader.Operation(query.OperationId);
+
+        Assert.NotNull(detail);
+        Assert.Equal("query", detail.Operation.Operation);
+        Assert.Empty(hydratedIds);
+    }
+
+    private static void CorruptCompareEvidence(string databasePath, long operationId)
+    {
+        using var connection = OpenSeedDatabase(databasePath);
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE operations SET summary_json = X'010203', compare_conditions_json = X'010203' WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", operationId);
+        command.ExecuteNonQuery();
+    }
+
+    private static SqliteConnection OpenSeedDatabase(string databasePath)
+    {
+        var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = databasePath }.ToString());
+        connection.Open();
+        return connection;
     }
 
     [Fact]

@@ -26,6 +26,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     // Shared across reads and threads (live feed ticks, API requests): dead hosts stay dead.
     private readonly DeadProcesses _dead = new();
 
+    // Narrow test seam for proving selected evidence ids are fetched as bounded batches.
+    internal Action<IReadOnlyList<long>>? CompareEvidenceQueryObserver { get; init; }
+
     private static readonly string OperationColumns = $"""
         o.id, o.session_id, s.agent_kind, o.operation, o.status, o.exit_code, o.error_kind, o.started_at, o.updated_at,
         o.finished_at, o.duration_ms, o.profile, o.engine, o.server, o.database, o.mutation_requested, o.sql_hash,
@@ -149,8 +152,16 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             WHERE o.session_id = $id ORDER BY o.id DESC LIMIT $limit;
             """, [("$id", id), ("$limit", SessionOperationLimit)], reader => ReadOperation(reader, liveness));
         var compares = CompareHistoryBuilder.Build(CompareHistoryRows(connection, id));
+        var subjects = CompareHistoryBuilder.Subjects(compares);
+        var selectedEvidenceIds = subjects.SelectMany(subject => new[]
+                { subject.LatestWhole?.OperationId, subject.LatestCompletedWhole?.OperationId, subject.StartToLatestWhole?.OperationId })
+            .Where(operationId => operationId is not null).Select(operationId => operationId!.Value).ToHashSet();
+        var evidence = HydrateCompareEvidence(connection, compares.Where(attempt => selectedEvidenceIds.Contains(attempt.OperationId)).ToArray());
+        var evidenceById = evidence.ToDictionary(attempt => attempt.OperationId);
+        subjects = CompareHistoryBuilder.Subjects(compares.Select(attempt =>
+            evidenceById.TryGetValue(attempt.OperationId, out var hydrated) ? hydrated : attempt).ToArray());
         return new SessionDetail(WithRunning(connection, [session])[0], operations,
-            CompareHistoryBuilder.Subjects(compares),
+            subjects,
             compares.Count(attempt => attempt.Subject is null || attempt.Scope is null));
     }
 
@@ -173,6 +184,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             start = anchor + 1;
         }
         var page = ordered.Skip(start).Take(pageLimit).ToArray();
+        page = HydrateCompareEvidence(connection, page).ToArray();
         return new Page<CompareAttemptSummary>(page, start + page.Length < ordered.Length ? page[^1].OperationId : null);
     }
 
@@ -181,15 +193,43 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var liveness = new ProcessLiveness(processes, _dead);
         return Query(connection, """
         SELECT id, session_id, compare_subject, compare_scope, sql_hash, candidate_sql_hash, status, started_at,
-               summary_json, compare_conditions_json, host_pid, host_started_at
+               host_pid, host_started_at
         FROM operations
         WHERE session_id = $session AND operation = 'compare'
         ORDER BY started_at, id;
         """, [("$session", sessionId)], reader => new CompareHistoryRow(
             reader.GetInt64(0), reader.GetInt64(1), NullableString(reader, 2), NullableString(reader, 3),
             NullableString(reader, 4), NullableString(reader, 5),
-            liveness.Status(reader.GetString(6), reader.GetInt64(10), NullableString(reader, 11)), reader.GetString(7),
-            Json(NullableString(reader, 8)), Json(NullableString(reader, 9))));
+            liveness.Status(reader.GetString(6), reader.GetInt64(8), NullableString(reader, 9)), reader.GetString(7)));
+    }
+
+    private IReadOnlyList<CompareAttemptSummary> HydrateCompareEvidence(
+        SqliteConnection connection, IReadOnlyList<CompareAttemptSummary> attempts)
+    {
+        var requested = attempts.DistinctBy(attempt => attempt.OperationId).ToArray();
+        if (requested.Length == 0)
+            return [];
+
+        var evidence = new Dictionary<long, (JsonElement? Summary, JsonElement? Conditions)>();
+        foreach (var batch in requested.Chunk(200))
+        {
+            var ids = batch.Select(attempt => attempt.OperationId).ToArray();
+            CompareEvidenceQueryObserver?.Invoke(ids);
+            var parameters = ids.Select((id, index) => ($"$id{index}", (object?)id)).ToArray();
+            var placeholders = string.Join(",", parameters.Select(parameter => parameter.Item1));
+            foreach (var row in Query(connection, $"""
+                SELECT id, summary_json, compare_conditions_json
+                FROM operations WHERE operation = 'compare' AND id IN ({placeholders});
+                """, parameters, reader => (
+                    Id: reader.GetInt64(0),
+                    Summary: Json(NullableString(reader, 1)),
+                    Conditions: Json(NullableString(reader, 2)))))
+                evidence[row.Id] = (row.Summary, row.Conditions);
+        }
+
+        return requested.Select(attempt => evidence.TryGetValue(attempt.OperationId, out var row)
+            ? CompareHistoryBuilder.WithEvidence(attempt, row.Summary, row.Conditions)
+            : attempt).ToArray();
     }
 
     public Page<OperationSummary> Operations(OperationQuery query)
@@ -297,8 +337,12 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             dimensionNames,
             recordedDimensions));
 
-        var compareVersion = CompareHistoryBuilder.Build(CompareHistoryRows(connection, summary.SessionId))
-            .FirstOrDefault(attempt => attempt.OperationId == id);
+        var compareVersion = summary.Operation == "compare"
+            ? CompareHistoryBuilder.Build(CompareHistoryRows(connection, summary.SessionId))
+                .FirstOrDefault(attempt => attempt.OperationId == id)
+            : null;
+        if (compareVersion is not null)
+            compareVersion = CompareHistoryBuilder.WithEvidence(compareVersion, extra.Summary, extra.CompareConditions);
         return new OperationDetail(
             summary,
             WithRunning(connection, [session])[0],

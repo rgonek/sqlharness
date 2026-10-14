@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 using SqlHarness.Dashboard;
 
@@ -100,5 +101,37 @@ public sealed class DashboardContractTests
                 "tokenEstimationMethod", "compareSubject", "compareScope", "baselineVersion", "candidateVersion",
                 "compareRegression", "compareCases", "compareConditions"],
             Names(new OperationDetail(default!, default!, null, null, null, null, null, null, null, null, [], default!, null)));
+    }
+
+    [Fact]
+    public void Serialized_compare_contracts_match_the_typescript_declarations()
+    {
+        var session = new SessionSummary(1, "k", "claude", "cli", "process-tree", null, null, null, null, "f", "l", 0, 0, 0, 0, 0, null, null, null);
+        var attempt = new CompareAttemptSummary(1, "orders", "whole", "a", "b", "v0", "v1", "succeeded", "t", null, [], null, null);
+        var subject = new CompareSubjectSummary("orders", ["whole"], attempt, attempt, attempt);
+
+        AssertTypescriptFieldsMatch("CompareAttemptSummary", attempt);
+        AssertTypescriptFieldsMatch("CompareSubjectSummary", subject);
+        AssertTypescriptFieldsMatch("SessionDetail", new SessionDetail(session, [], [subject], 0));
+        AssertTypescriptFieldsMatch("OperationDetail", new OperationDetail(default!, session, null, null, null, null,
+            null, null, null, null, [], default!, null));
+    }
+
+    private static void AssertTypescriptFieldsMatch<T>(string typeName, T value)
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "src/SqlHarness.Dashboard/ui/src/api/types.ts")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var source = File.ReadAllText(Path.Combine(root!.FullName, "src/SqlHarness.Dashboard/ui/src/api/types.ts"));
+        var declaration = Regex.Match(source,
+            $@"export type {Regex.Escape(typeName)}\s*=\s*\{{(?<body>[\s\S]*?)\n\}}",
+            RegexOptions.CultureInvariant);
+        Assert.True(declaration.Success, $"Missing TypeScript declaration: {typeName}");
+        var fields = Regex.Matches(declaration.Groups["body"].Value,
+                @"(?:^|;|\r?\n)\s*(?<name>[A-Za-z][A-Za-z0-9]*)\??\s*:", RegexOptions.Multiline)
+            .Select(match => match.Groups["name"].Value)
+            .ToArray();
+        Assert.Equal(Names(value).Order(StringComparer.Ordinal), fields.Order(StringComparer.Ordinal));
     }
 }

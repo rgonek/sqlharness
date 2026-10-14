@@ -2,10 +2,10 @@ using System.Text.Json;
 
 namespace SqlHarness.Dashboard;
 
-/// <summary>A compare row read with bounded journal projections, before any page is applied.</summary>
+/// <summary>Lightweight compare metadata read from retained history before versioning and paging.</summary>
 public sealed record CompareHistoryRow(
     long OperationId, long SessionId, string? Subject, string? Scope, string? BaselineHash,
-    string? CandidateHash, string Status, string StartedAt, JsonElement? Summary, JsonElement? Conditions);
+    string? CandidateHash, string Status, string StartedAt);
 
 /// <summary>Compact compare history entry. Versions describe retained hash occurrences only.</summary>
 public sealed record CompareAttemptSummary(
@@ -57,20 +57,24 @@ public static class CompareHistoryBuilder
                 }
             }
 
-            var evidence = row.Summary;
-            JsonElement? regression = null;
-            IReadOnlyList<JsonElement>? cases = null;
-            if (evidence is { ValueKind: JsonValueKind.Object } summary)
-            {
-                if (summary.TryGetProperty("regression", out var report)) regression = report.Clone();
-                if (summary.TryGetProperty("cases", out var caseArray) && caseArray.ValueKind == JsonValueKind.Array)
-                    cases = caseArray.EnumerateArray().Select(item => item.Clone()).ToArray();
-            }
             attempts.Add(new CompareAttemptSummary(row.OperationId, row.Subject, row.Scope, row.BaselineHash,
-                row.CandidateHash, baselineVersion, candidateVersion, row.Status, row.StartedAt, regression, cases,
-                row.Conditions, evidence));
+                row.CandidateHash, baselineVersion, candidateVersion, row.Status, row.StartedAt, null, null, null, null));
         }
         return attempts;
+    }
+
+    public static CompareAttemptSummary WithEvidence(
+        CompareAttemptSummary attempt, JsonElement? summary, JsonElement? conditions)
+    {
+        JsonElement? regression = null;
+        IReadOnlyList<JsonElement>? cases = null;
+        if (summary is { ValueKind: JsonValueKind.Object } evidence)
+        {
+            if (evidence.TryGetProperty("regression", out var report)) regression = report.Clone();
+            if (evidence.TryGetProperty("cases", out var caseArray) && caseArray.ValueKind == JsonValueKind.Array)
+                cases = caseArray.EnumerateArray().Select(item => item.Clone()).ToArray();
+        }
+        return attempt with { Regression = regression, Cases = cases, Conditions = conditions, Summary = summary };
     }
 
     public static IReadOnlyList<CompareSubjectSummary> Subjects(IReadOnlyList<CompareAttemptSummary> attempts)
