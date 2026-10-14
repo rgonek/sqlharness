@@ -186,6 +186,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [060](060-mcp-tool-surface.md) | Eight MCP tools with CLI/MCP parity, `--dry-run` on the CLI, compact runtime capabilities and concurrent calls | P2 | L | 055, 056, 059 | DONE — locally merged to main; Windows `verify: OK` after merging main (031): UI 144, Core 3411/11 skipped, MCP 358/4 skipped; Linux gate accepted by the operator (run reaped by the low-memory reaper; an earlier run was disturbed by a concurrent 047 gate in the shared WSL clone); no push. Revised 2026-10-13 (operator): CLI/MCP parity and no recipes; `inspect`/`validate` left MCP and `ping`/`schema`/`counts`/`space`/`qstop`/`indexes`/`validate` left the CLI; busy gate removed; capabilities without `includeDetails`; spec decisions 12 and 15 amended |
 | [061](061-unified-parameter-sets.md) | Shared measure/compare parameter-set inputs | P3 | L | 056, 058, 060 | TODO — adapt projection to 055 case inventory; not implemented |
 | [062](062-compare-context-dashboard.md) | Compare context, SQL/scope/attempt history and comparison dashboard | P2 | L | 051 (DONE); coordinate with 060/061 | TODO — design agreed 2026-10-12; not implemented |
+| [063](063-missing-index-overlap.md) | Missing-index hints in the saved `plan` artifact section carry an overlap verdict against the table's existing indexes (inventory captured after measurement) | P2 | M | 060 | TODO — planned 2026-10-14 at `472d5b7` |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED, SUPERSEDED or REVERTED (with one-line rationale).
 
@@ -204,7 +205,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
 ## Policy decisions needed (not planned yet)
 
 - **Locking reads.** T-SQL `SELECT … WITH (TABLOCKX|XLOCK|UPDLOCK, HOLDLOCK)` and PostgreSQL `SELECT … FOR UPDATE/NO KEY UPDATE/SHARE/KEY SHARE` are classified read-only. They change no data, but they can block writers on production for up to timeout × repeats, and PG row locks write tuple headers and WAL. Options: deny exclusive/row-lock hints, route them to the mutation-approval path, or keep and document them. Evidence: `SqlSafety.cs:399-401`, `PostgresSafetyClassifier.cs:354-361`, `PostgresBenchmark.cs:88-96`.
-- **Missing-index hint overlap (idea from 060, not accepted).** An overlap verdict for the measured plan's own `missingIndexes` hint against the existing indexes of that table, as a field of the `plan` artifact. The classifier deleted by 060 stays in git history (`IndexOverlapClassifier.cs`).
+- **Missing-index hint overlap** is now planned as [063](063-missing-index-overlap.md).
 - **Equivalence and nullability.** Scheduled as [046](046-result-nullability-diagnostics.md): separate nullability diagnostics from default observed data equivalence and expose an explicit strict option. Implemented (046 DONE): `--compare-nullability` / `compareNullability`.
 
 ## Direction verdict recorded
