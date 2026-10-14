@@ -36,12 +36,12 @@ public sealed class McpRequestToolHandlers(
         [Description("Request target.")] McpRequestScopeArgument target,
         [Description("Inline SQL, at most 1 MiB.")] string? sql = null,
         [Description("SQL file under an operator input root.")] string? file = null,
-        [Description("Parameters as {name, type, value}.")] McpParameterArgument[]? parameters = null,
+        [Description("Typed values: culture-invariant text or JSON null.")] McpParameterArgument[]? parameters = null,
         [Description("SQL timeout 1..300 seconds.")] int timeout = 30,
         [Description("Presentation row cap 0..500.")] int maxRows = 50,
-        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")] int? maxResultBytes = null,
-        [Description("Time budget 1..86400 seconds; only lowers the process maximum.")] int? maxOperationSeconds = null,
-        [Description("Check every argument offline and stop before connecting. Nothing runs, nothing is written.")] bool dryRun = false,
+        [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")] int? maxResultBytes = null,
+        [Description("Seconds 1..86400; may only lower the process limit.")] int? maxOperationSeconds = null,
+        [Description("Offline validation only; no execution or writes.")] bool dryRun = false,
         CancellationToken ct = default) =>
         Invoke(ctx, "sqlharness_query", target, ["target", "sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxOperationSeconds", "dryRun"], handler => handler.QueryAsync(ctx, sql, file, parameters, timeout, maxRows, maxResultBytes, maxOperationSeconds, dryRun, ct));
 
@@ -49,15 +49,15 @@ public sealed class McpRequestToolHandlers(
         [Description("Query source: exactly one of inline sql or file.")] McpSqlSourceArgument query,
         [Description("Request target.")] McpRequestScopeArgument target,
         [Description(McpToolCatalog.SetupDescription)] McpSqlSourceArgument? setup = null,
-        [Description("Parameters as {name, type, value}.")] McpParameterArgument[]? parameters = null,
+        [Description("Typed values: culture-invariant text or JSON null.")] McpParameterArgument[]? parameters = null,
         [Description(McpToolCatalog.ParameterSetFilesDescription)] string[]? parameterSetFiles = null,
         [Description(McpToolCatalog.ParameterSetsDescription)] McpParameterSetArgument[]? parameterSets = null,
         [Description(McpToolCatalog.MatrixDescription)] McpMatrixArgument? matrix = null,
         [Description("Repetitions 1..100.")] int repeat = 5,
         [Description("SQL timeout 1..300 seconds.")] int? timeout = null,
-        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")] int? maxResultBytes = null,
-        [Description("Time budget 1..86400 seconds.")] int? maxOperationSeconds = null,
-        [Description("Check every argument offline and stop before connecting. Nothing runs, nothing is written.")] bool dryRun = false,
+        [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")] int? maxResultBytes = null,
+        [Description("Seconds 1..86400; may only lower the process limit.")] int? maxOperationSeconds = null,
+        [Description("Offline validation only; no execution or writes.")] bool dryRun = false,
         CancellationToken ct = default) =>
         Invoke(ctx, "sqlharness_measure", target, ["target", "query", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "maxResultBytes", "maxOperationSeconds", "dryRun"], handler => handler.MeasureAsync(ctx, query, setup, parameters, parameterSetFiles, parameterSets, matrix, repeat, timeout, maxResultBytes, maxOperationSeconds, dryRun, ct));
 
@@ -68,17 +68,17 @@ public sealed class McpRequestToolHandlers(
         [Description("Short stable identifier for the SQL being optimized.")] string subject,
         [Description("SQL fragment under test, or exactly 'whole' for the full query.")] string scope,
         [Description(McpToolCatalog.SetupDescription)] McpSqlSourceArgument? setup = null,
-        [Description("Parameters as {name, type, value}.")] McpParameterArgument[]? parameters = null,
+        [Description("Typed values: culture-invariant text or JSON null.")] McpParameterArgument[]? parameters = null,
         [Description("Repetitions 1..100.")] int repeat = 5,
         [Description("SQL timeout 1..300 seconds.")] int? timeout = null,
         [Description("Result comparison mode.")][AllowedValues("ordered", "multiset", "set", "off")] string compareResults = "ordered",
         [Description(McpToolCatalog.MatrixDescription)] McpMatrixArgument? matrix = null,
         [Description(McpToolCatalog.ParameterSetsDescription)] McpParameterSetArgument[]? parameterSets = null,
         [Description(McpToolCatalog.ParameterSetFilesDescription)] string[]? parameterSetFiles = null,
-        [Description("Also require matching column nullability (allowNull) for result equivalence. Default compares observed data only and reports nullability separately. Not allowed with compareResults off.")] bool compareNullability = false,
-        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")] int? maxResultBytes = null,
-        [Description("Time budget 1..86400 seconds.")] int? maxOperationSeconds = null,
-        [Description("Check every argument offline and stop before connecting. Nothing runs, nothing is written.")] bool dryRun = false,
+        [Description("Require matching allowNull; otherwise reported separately. Invalid with compareResults off.")] bool compareNullability = false,
+        [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")] int? maxResultBytes = null,
+        [Description("Seconds 1..86400; may only lower the process limit.")] int? maxOperationSeconds = null,
+        [Description("Offline validation only; no execution or writes.")] bool dryRun = false,
         CancellationToken ct = default) =>
         Invoke(ctx, "sqlharness_compare", target, ["target", "baseline", "candidate", "subject", "scope", "setup", "parameters", "repeat", "timeout", "compareResults", "matrix", "parameterSets", "parameterSetFiles", "compareNullability", "maxResultBytes", "maxOperationSeconds", "dryRun"], handler => handler.CompareAsync(ctx, baseline, candidate, subject, scope, setup, parameters, repeat, timeout, compareResults, matrix, parameterSets, parameterSetFiles, compareNullability, maxResultBytes, maxOperationSeconds, dryRun, ct));
 
@@ -87,7 +87,7 @@ public sealed class McpRequestToolHandlers(
         [Description("Candidate source.")] McpSqlSourceArgument candidate,
         [Description("Request target.")] McpRequestScopeArgument target,
         [Description(McpToolCatalog.SetupDescription)] McpSqlSourceArgument? setup = null,
-        [Description("Parameters as {name, type, value}.")] McpParameterArgument[]? parameters = null,
+        [Description("Typed values: culture-invariant text or JSON null.")] McpParameterArgument[]? parameters = null,
         int repeat = 5,
         int? timeout = null,
         [AllowedValues("ordered", "multiset", "set", "off")] string compareResults = "ordered",
@@ -105,14 +105,14 @@ public sealed class McpRequestToolHandlers(
         [Description("Request target.")] McpRequestScopeArgument target,
         [Description("Inline SQL, at most 1 MiB.")] string? sql = null,
         [Description("SQL file under an operator input root.")] string? file = null,
-        [Description("Parameters as {name, type, value}.")] McpParameterArgument[]? parameters = null,
+        [Description("Typed values: culture-invariant text or JSON null.")] McpParameterArgument[]? parameters = null,
         [Description("SQL timeout 1..300 seconds.")] int timeout = 30,
         [Description("Presentation row cap 0..500.")] int maxRows = 50,
         [Description("Stop predicate on the first row.")] string? until = null,
         [Description("Stop after N unchanged polls.")] int? untilUnchanged = null,
         [Description("Poll interval.")] string? interval = null,
         [Description("Maximum watch time.")] string? maxDuration = null,
-        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")] int? maxResultBytes = null,
+        [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")] int? maxResultBytes = null,
         [Description("Time budget.")] int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
         Invoke(ctx, "sqlharness_watch", target, ["target", "sql", "file", "parameters", "timeout", "maxRows", "until", "untilUnchanged", "interval", "maxDuration", "maxResultBytes", "maxOperationSeconds"], handler => handler.WatchAsync(ctx, sql, file, parameters, timeout, maxRows, until, untilUnchanged, interval, maxDuration, maxResultBytes, maxOperationSeconds, ct));
@@ -123,10 +123,10 @@ public sealed class McpRequestToolHandlers(
         [Description("Request target.")] McpRequestScopeArgument target,
         [Description("Inline SQL.")] string? sql = null,
         [Description("SQL file under an operator input root.")] string? file = null,
-        [Description("Parameters as {name, type, value}.")] McpParameterArgument[]? parameters = null,
+        [Description("Typed values: culture-invariant text or JSON null.")] McpParameterArgument[]? parameters = null,
         [Description("SQL timeout.")] int timeout = 30,
         [Description("Presentation row cap.")] int maxRows = 50,
-        [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")] int? maxResultBytes = null,
+        [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")] int? maxResultBytes = null,
         [Description("Time budget.")] int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
         Invoke(ctx, "sqlharness_snapshot", target, ["target", "action", "name", "sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxOperationSeconds"], handler => handler.SnapshotAsync(ctx, action, name, sql, file, parameters, timeout, maxRows, maxResultBytes, maxOperationSeconds, ct));

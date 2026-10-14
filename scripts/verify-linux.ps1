@@ -10,9 +10,16 @@
     stages CI runs: restore, build -warnaserror, test, and format
     --verify-no-changes.
 
-    The test stage logs skip counts, which is the signal a Windows run cannot
-    give. Stops at the first failing stage and exits with that stage's exit
-    code, naming the stage.
+    The gate clone is reset to the branch tip, so the format stage checks the
+    C# files the branch changed relative to origin/main, not the working tree:
+    a working-tree diff inside the clone is always empty. The file list is
+    resolved here, on Windows, and passed into the stage.
+
+    Output is written for an agent first: stage output goes to a log file, a
+    green stage prints one line, a red stage prints the stage, the exit code, a
+    short tail and the log path. Use -Stream to watch a run.
+
+    Stops at the first failing stage and exits with that stage's exit code.
 
     Fail-closed: this working tree is read and never written. The gate clone is
     the only thing modified. Never writes ~/.sqlharness and never connects to a
@@ -24,7 +31,13 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Distro = 'Ubuntu'
+    [string]$Distro = 'Ubuntu',
+
+    # Stream every stage instead of the compact per-stage summary.
+    [switch]$Stream,
+
+    # Where stage logs are written. Defaults to a directory under the temp path.
+    [string]$LogDirectory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -73,6 +86,12 @@ function Assert-WslDistroVersion2 {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'gate-output.ps1')
+
+if ([string]::IsNullOrWhiteSpace($LogDirectory)) {
+    $LogDirectory = Join-Path ([System.IO.Path]::GetTempPath()) 'sqlharness-gate-logs\verify-linux'
+}
+
 $branch = (& git -C $repoRoot rev-parse --abbrev-ref HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($branch)) {
     throw 'Could not determine the current branch.'
@@ -106,65 +125,79 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($wslHome)) {
 }
 $gateClone = "$wslHome/src/sqlharness-gate"
 
-function Invoke-GateStage {
+$script:stageCount = 0
+$total = [System.Diagnostics.Stopwatch]::StartNew()
+
+function Invoke-LinuxStage {
+    [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Name,
         [Parameter(Mandatory)][string[]]$Lines,
-        [string[]]$Arguments = @()
+        [string[]]$Arguments = @(),
+        [switch]$Skipped,
+        [string]$SkipReason
     )
 
-    Write-Host "==> $Name"
+    $script:stageCount++
+    $result = Invoke-GateStage -Name $Name -LogDirectory $LogDirectory -Skipped:$Skipped -SkipReason $SkipReason -Action {
+        # PATH is exported here rather than sourced from ~/.bashrc: Ubuntu's stock
+        # .bashrc returns early in a non-interactive shell, so an rc-file PATH would
+        # silently not apply and the gate would fail for the wrong reason. The
+        # provisioned Node (~/.node/current, from scripts/setup-linux-gate.ps1) comes
+        # first so it wins over any Windows-interop `node`/`npm` on the WSL PATH.
+        $script = "set -euo pipefail`nexport PATH=`"$HOME/.node/current/bin:`$HOME/.dotnet:`$PATH`"`n" + ($Lines -join "`n")
 
-    # PATH is exported here rather than sourced from ~/.bashrc: Ubuntu's stock
-    # .bashrc returns early in a non-interactive shell, so an rc-file PATH would
-    # silently not apply and the gate would fail for the wrong reason. The
-    # provisioned Node (~/.node/current, from scripts/setup-linux-gate.ps1) comes
-    # first so it wins over any Windows-interop `node`/`npm` on the WSL PATH.
-    $script = "set -euo pipefail`nexport PATH=`"`$HOME/.node/current/bin:`$HOME/.dotnet:`$PATH`"`n" + ($Lines -join "`n")
+        # The block is materialised as an LF-only, BOM-less file instead of piped on
+        # stdin: PowerShell injects CRLF into native-command stdin, and a trailing CR
+        # corrupts the last command's arguments (it made `dotnet --version` fail in
+        # scripts/setup-linux-gate.ps1). Windows separators are converted to forward
+        # slashes before wslpath for the same class of reason: WSL parses a raw
+        # backslash as a shell escape and eats it.
+        $stageFile = New-TemporaryFile
+        try {
+            [System.IO.File]::WriteAllText(
+                $stageFile.FullName,
+                ($script -replace "`r`n", "`n"),
+                [System.Text.UTF8Encoding]::new($false))
+            $stageWslPath = (& wsl -d $Distro -- wslpath -a ($stageFile.FullName -replace '\\', '/')).Trim()
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($stageWslPath)) {
+                throw "Could not translate the stage script path into a WSL path."
+            }
 
-    # The block is materialised as an LF-only, BOM-less file instead of piped on
-    # stdin: PowerShell injects CRLF into native-command stdin, and a trailing CR
-    # corrupts the last command's arguments (it made `dotnet --version` fail in
-    # scripts/setup-linux-gate.ps1). Windows separators are converted to forward
-    # slashes before wslpath for the same class of reason: WSL parses a raw
-    # backslash as a shell escape and eats it.
-    $stageFile = New-TemporaryFile
-    try {
-        [System.IO.File]::WriteAllText(
-            $stageFile.FullName,
-            ($script -replace "`r`n", "`n"),
-            [System.Text.UTF8Encoding]::new($false))
-        $stageWslPath = (& wsl -d $Distro -- wslpath -a ($stageFile.FullName -replace '\\', '/')).Trim()
-        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($stageWslPath)) {
-            throw "Could not translate the stage script path into a WSL path."
+            & wsl -d $Distro -- bash $stageWslPath @Arguments
+            $global:LASTEXITCODE = $LASTEXITCODE
         }
-
-        & wsl -d $Distro -- bash $stageWslPath @Arguments
-        $code = $LASTEXITCODE
-    }
-    finally {
-        Remove-Item -LiteralPath $stageFile.FullName -ErrorAction SilentlyContinue
+        finally {
+            Remove-Item -LiteralPath $stageFile.FullName -ErrorAction SilentlyContinue
+        }
     }
 
-    if ($code -ne 0) {
-        Write-Host "verify-linux: stage '$Name' failed with exit code $code."
-        exit $code
+    Write-Host (Get-StageLine -Result $result)
+    if ($Stream -and -not $result.Skipped -and (Test-Path -LiteralPath $result.LogPath)) {
+        Get-Content -LiteralPath $result.LogPath | ForEach-Object { Write-Host $_ }
     }
+
+    if ($result.ExitCode -eq 0) { return }
+
+    $failure = Get-StageFailureText -Result $result -TailLines 40
+    if ($failure) { Write-Host $failure }
+    Write-Host (Get-GateSummaryLine -Gate 'verify-linux' -StageCount $script:stageCount -Seconds $total.Elapsed.TotalSeconds -FailureStage $Name -FailureExitCode $result.ExitCode)
+    exit $result.ExitCode
 }
 
-Invoke-GateStage -Name 'sync' -Arguments @($gateClone, $windowsRepo, $branch) -Lines @(
+Invoke-LinuxStage -Name 'sync' -Arguments @($gateClone, $windowsRepo, $branch) -Lines @(
     'cd "$1"',
     'git fetch "$2" "$3"',
     'git reset --hard FETCH_HEAD',
     'git clean -fd'
 )
 
-Invoke-GateStage -Name 'sdk' -Arguments @($gateClone) -Lines @(
+Invoke-LinuxStage -Name 'sdk' -Arguments @($gateClone) -Lines @(
     'cd "$1"',
     'dotnet --version'
 )
 
-Invoke-GateStage -Name 'node' -Arguments @($gateClone) -Lines @(
+Invoke-LinuxStage -Name 'node' -Arguments @($gateClone) -Lines @(
     'cd "$1"',
     'node_path="$(command -v node || true)"',
     'case "$node_path" in ""|/mnt/*) echo "No Linux node on PATH (found: ${node_path:-none}); run scripts/setup-linux-gate.ps1" >&2; exit 1 ;; esac',
@@ -173,34 +206,39 @@ Invoke-GateStage -Name 'node' -Arguments @($gateClone) -Lines @(
     'test "$node_version" = "v$(cat .nvmrc)" || { echo "node $node_version differs from .nvmrc; run scripts/setup-linux-gate.ps1" >&2; exit 1; }'
 )
 
-Invoke-GateStage -Name 'ui-install' -Arguments @($gateClone) -Lines @(
+Invoke-LinuxStage -Name 'ui-install' -Arguments @($gateClone) -Lines @(
     'cd "$1"',
     'npm ci --prefix src/SqlHarness.Dashboard/ui'
 )
 
-Invoke-GateStage -Name 'ui-check' -Arguments @($gateClone) -Lines @(
+Invoke-LinuxStage -Name 'ui-check' -Arguments @($gateClone) -Lines @(
     'cd "$1"',
     'npm run check --prefix src/SqlHarness.Dashboard/ui'
 )
 
-Invoke-GateStage -Name 'restore' -Arguments @($gateClone) -Lines @(
+Invoke-LinuxStage -Name 'restore' -Arguments @($gateClone) -Lines @(
     'cd "$1"',
     'dotnet restore SqlHarness.sln'
 )
 
-Invoke-GateStage -Name 'build' -Arguments @($gateClone) -Lines @(
+Invoke-LinuxStage -Name 'build' -Arguments @($gateClone) -Lines @(
     'cd "$1"',
     'dotnet build SqlHarness.sln --no-restore -warnaserror'
 )
 
-Invoke-GateStage -Name 'test' -Arguments @($gateClone) -Lines @(
+Invoke-LinuxStage -Name 'test' -Arguments @($gateClone) -Lines @(
     'cd "$1"',
     'dotnet test SqlHarness.sln --no-build --filter "FullyQualifiedName!~Integration" --logger "console;verbosity=normal"'
 )
 
-Invoke-GateStage -Name 'format' -Arguments @($gateClone) -Lines @(
+$changedFiles = @(& (Join-Path $PSScriptRoot 'format-changed.ps1') -Mode branch -ListOnly | Where-Object { $_ -match '\.cs$' })
+Invoke-LinuxStage -Name 'format' -Skipped:($changedFiles.Count -eq 0) -SkipReason '0 changed C# files on the branch' -Arguments (@($gateClone) + $changedFiles) -Lines @(
     'cd "$1"',
-    'dotnet format SqlHarness.sln --no-restore --verify-no-changes'
+    'shift',
+    'changedFiles=("$@")',
+    'dotnet format SqlHarness.sln --no-restore --include "${changedFiles[@]}" --verify-no-changes'
 )
 
-Write-Host 'verify-linux: OK'
+$total.Stop()
+Write-Host (Get-GateSummaryLine -Gate 'verify-linux' -StageCount $script:stageCount -Seconds $total.Elapsed.TotalSeconds)
+exit 0

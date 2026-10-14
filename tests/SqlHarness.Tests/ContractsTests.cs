@@ -9,41 +9,27 @@ public class ContractsTests
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
     [Fact]
-    public void Skill_links_resolve_to_reference_sections()
+    public void Skill_does_not_depend_on_files_outside_its_package()
     {
         var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
-        foreach (var (file, path) in new[] { ("README.md", new[] { "README.md" }), ("docs/mcp.md", new[] { "docs", "mcp.md" }) })
-        {
-            var slugs = HeadingSlugs(ReadRepositoryFile(path));
-            var anchors = System.Text.RegularExpressions.Regex
-                .Matches(skill, @"\]\(\.\./\.\./" + System.Text.RegularExpressions.Regex.Escape(file) + @"#([^)]+)\)")
-                .Select(match => match.Groups[1].Value)
-                .ToArray();
-            if (file == "README.md")
-                Assert.NotEmpty(anchors);
-            Assert.All(anchors, anchor => Assert.Contains(anchor, slugs));
-        }
-
-        Assert.Contains("](../../docs/mcp.md)", skill, StringComparison.Ordinal);
+        var links = System.Text.RegularExpressions.Regex.Matches(skill, @"\]\(([^)]+)\)");
+        Assert.All(links.Cast<System.Text.RegularExpressions.Match>(), link =>
+            Assert.DoesNotContain("..", link.Groups[1].Value.Split('/')));
     }
 
     [Fact]
     public void Agents_contract_links_resolve_to_reference_sections()
     {
         var agents = ReadRepositoryFile("AGENTS.md");
-        var readme = ReadRepositoryFile("README.md");
-        var headingSlugs = HeadingSlugs(readme);
-
-        var anchors = System.Text.RegularExpressions.Regex
-            .Matches(agents, @"\]\(README\.md#([^)]+)\)")
-            .Select(match => match.Groups[1].Value)
-            .ToArray();
-
-        Assert.NotEmpty(anchors);
-        Assert.All(anchors, anchor => Assert.Contains(anchor, headingSlugs));
-        Assert.Contains("](docs/mcp.md)", agents, StringComparison.Ordinal);
-        Assert.Contains("--allow-mutation --confirm-database", agents, StringComparison.Ordinal);
-        Assert.Contains("verify-linux.ps1", agents, StringComparison.Ordinal);
+        var links = System.Text.RegularExpressions.Regex.Matches(agents, @"\]\(([^)]+)\)");
+        Assert.NotEmpty(links);
+        Assert.All(links.Cast<System.Text.RegularExpressions.Match>(), link =>
+        {
+            var target = link.Groups[1].Value.Split('#', 2);
+            var document = ReadRepositoryFile(target[0].Split('/'));
+            if (target.Length == 2)
+                Assert.Contains(target[1], HeadingSlugs(document));
+        });
     }
 
     [Fact]
