@@ -29,7 +29,7 @@ A name denylist can never be complete. PostgreSQL itself enforces "no writes to 
 - Applies to: `query` (read-only path), `watch`, `snapshot`, catalog helpers, measured and warm-up runs, the equivalence sidecar, and `EXPLAIN ANALYZE`.
 - Setup: setup DDL that creates, indexes, truncates or drops TEMP tables cannot run in a read-only transaction. Setup stays on the current name-proof and static visible-effects rules (plan 047 owns their simplification) and runs read-write; everything after setup runs read-only. This preserves an existing limitation: a setup SELECT can invoke a user-defined function that writes persistent data because static validation does not inspect function bodies. Review setup SQL and use a least-privilege setup role; neither the setup classifier nor READ ONLY guarantees that every such effect is rejected. Do not add an opaque-function whitelist in this plan; track setup hardening separately if needed.
 - Temp DML (`INSERT`/`UPDATE`/`DELETE` into a TEMP table) in query or measured SQL is allowed by PostgreSQL inside a read-only transaction; confirm in the proof.
-- A server rejection (`SQLSTATE 25006 read_only_sql_transaction`) maps to exit `2` with "PostgreSQL rejected a write in a read-only transaction; persistent writes need an approved mutation."
+- A server rejection (`SQLSTATE 25006 read_only_sql_transaction`) maps to exit `2` with the fixed text in `PostgresReadOnlyFailure.RejectionMessage` (the wording was extended by plan 047; the literal is not quoted here so this record cannot go stale; it carries no SQL and no caller value).
 
 ## Steps
 

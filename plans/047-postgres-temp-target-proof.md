@@ -6,12 +6,19 @@
 
 ## Status
 
-- Status: TODO
+- Status: DONE, final gates pending (implementation, opt-in proof tests and docs at `5acb5d2` on branch `worktree/plan-047`; `verify.ps1` / `verify-linux.ps1` are the controller's)
 - Priority: P2 (PostgreSQL queue)
 - Effort: M
 - Risk: MED
 - Depends on: 052 (DONE first); a disposable PostgreSQL for step 1
 - Planned at: `729d88f`; revised at `cadde67`, 2026-10-11
+
+Step 2 decision, recorded 2026-10-14 (details and server evidence in
+[047-readonly-proof.md](047-readonly-proof.md)): the proof holds, and **no session-level switch was
+added**. Plan 052 already wraps every non-approved, non-setup command in a per-execution
+`SET TRANSACTION READ ONLY` and maps `25006` to safety exit `2`, which is exactly the read-only
+phase this plan needs. Setup stays read-write because the server rejects `CREATE TEMP`,
+`CREATE INDEX`, `TRUNCATE` and `DROP` there (proof case 5), so those keep the name proof.
 
 ## Why this matters
 
@@ -55,10 +62,10 @@ Out of scope: SQL Server, persistent DML approval path (`--allow-mutation --conf
 
 ## Done criteria
 
-- [ ] `plans/047-readonly-proof.md` records every step-1 case with server output.
-- [ ] Either the read-only session is in place with integration tests, or the plan records why it is not and leaves rules unchanged.
-- [ ] No existing valid temp batch becomes a rejection without a documented reason.
-- [ ] Both gates pass; `plans/README.md` row updated.
+- [x] `plans/047-readonly-proof.md` records every step-1 case with server output.
+- [x] Either the read-only session is in place with integration tests, or the plan records why it is not and leaves rules unchanged. (Step 2 decision above: 052's per-execution transaction already delivers it; opt-in `PostgresTempTargetProofIntegrationTests` prove it live.)
+- [x] No existing valid temp batch becomes a rejection without a documented reason.
+- [ ] Both gates pass; `plans/README.md` row updated. (Row updated; the two gates are the controller's.)
 
 ## STOP conditions
 

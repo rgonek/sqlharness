@@ -138,6 +138,12 @@ unproven target is not session-local: DML takes the persistent-mutation path
 (`MutationNotAllowed` without approval, `NonTemporaryWrite` in compare setup); `DROP TABLE` /
 `CREATE INDEX` are `UnsupportedStatement`.
 
+Amended by [047](047-postgres-temp-target-proof.md) (commits `d46a4c9`..): query and measured SQL run in
+a read-only transaction, so there an unqualified DML target needs no proof — it reaches the server,
+which refuses a persistent target with `25006` (safety exit `2`) and allows a session temp. The DML
+verdicts in the rows below therefore describe compare setup and the approved mutation path; the
+`DROP TABLE` / `CREATE INDEX` / `TRUNCATE` verdicts are unchanged.
+
 | ID | AST node / construct | Verdict | Test |
 |---|---|---|---|
 | 011-T4-A1 | `Statement.Truncate`, every `Names[].Name` a proven temp (points 1-5 above), `Identity` null or `Continue`, `Cascade` null or `Restrict`, `OnCluster` null, `Only` true or false | ALLOW session-local (same standing as temp DML: no mutation approval needed; persistent-mutation path never engaged). `ONLY` decision: `TRUNCATE [TABLE] ONLY <temp>[, ...]` is ALLOWED on the same terms as the form without `ONLY`. `Only` is one flag for the whole statement, it only narrows the statement to the named tables (no descendants), and it does not relax the target proof: `TRUNCATE ONLY <persistent>` stays DENY `NonTemporaryWrite` (011-T4-D1). | `T4_Truncate_all_session_temps_is_session_local` (case `TRUNCATE ONLY t`), `T4_Truncate_persistent_target_is_denied` (case `TRUNCATE ONLY items`); end to end: `Postgres_truncate_of_a_proven_temp_runs_unchanged_without_mutation_approval` (`PostgresQueryTests.cs`), `Measure_and_compare_run_setup_that_truncates_a_proven_temp` (`PostgresBenchmarkTests.cs`) |
