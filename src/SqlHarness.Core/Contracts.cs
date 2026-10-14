@@ -138,6 +138,9 @@ public sealed record SqlHarnessCompareMatrixReport(
 public sealed record SqlHarnessParameterSetInput(
     string Name, IReadOnlyList<string> Parameters)
 {
+    /// <summary>Typed alternative to <see cref="Parameters"/> for inline parameter sets.</summary>
+    public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+
     [JsonIgnore]
     internal string? SourcePath { get; init; }
 }
