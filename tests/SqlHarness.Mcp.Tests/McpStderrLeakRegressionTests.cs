@@ -1,5 +1,7 @@
 using System.Text;
 
+using ModelContextProtocol.Protocol;
+
 namespace SqlHarness.Mcp.Tests;
 
 /// <summary>
@@ -119,15 +121,16 @@ public sealed class McpStderrLeakRegressionTests
                 McpStdioProcessHarness.Envelope(unknownArg).ToString(),
                 StringComparison.Ordinal);
 
-            // Invalid compare mode carrying the exception-content marker. The
-            // value travels through binder/handler exception content, but the
-            // stdout rejection stays constant and value-free; the process
+            // The disallowed compare mode carries a marker through MCP schema
+            // validation. The protocol error must not echo it, and the process
             // itself must survive.
             var badUsage = await client.CallToolAsync(
                 "sqlharness_compare",
                 new Dictionary<string, object?>
                 {
                     ["target"] = RequestScope(),
+                    ["subject"] = "stderr-policy",
+                    ["scope"] = "whole",
                     ["dryRun"] = true,
                     ["compareResults"] = "bogus-" + ExceptionMarker,
                     ["baseline"] = new Dictionary<string, object?> { ["sql"] = "SELECT 1" },
@@ -135,11 +138,8 @@ public sealed class McpStderrLeakRegressionTests
                 },
                 cancellationToken: ct);
             Assert.True(badUsage.IsError == true);
-            Assert.Equal("error", McpStdioProcessHarness.Envelope(badUsage).GetProperty("status").GetString());
-            Assert.DoesNotContain(
-                ExceptionMarker,
-                McpStdioProcessHarness.Envelope(badUsage).ToString(),
-                StringComparison.Ordinal);
+            var badUsageText = string.Concat(badUsage.Content.OfType<TextContentBlock>().Select(block => block.Text));
+            Assert.DoesNotContain(ExceptionMarker, badUsageText, StringComparison.Ordinal);
             Assert.False(child.Process.HasExited, "The published server died on rejected arguments.");
             var afterRejection = await client.CallToolAsync(
                 "sqlharness_query",
@@ -160,10 +160,10 @@ public sealed class McpStderrLeakRegressionTests
                 cancellationToken: ct);
             Assert.False(afterGarbage.IsError == true, McpStdioProcessHarness.Envelope(afterGarbage).ToString());
 
-            // Duplicate raw scope fields are stopped before SDK parsing; the
+            // Duplicate raw target fields are stopped before SDK parsing; the
             // secret value in the second occurrence must stay out of frames and stderr.
             var duplicate = Encoding.UTF8.GetBytes(
-                "{\"jsonrpc\":\"2.0\",\"id\":\"duplicate-scope\",\"method\":\"tools/call\",\"params\":{\"name\":\"sqlharness_query\",\"arguments\":{\"scope\":{\"profile\":\"mcp-stdio\",\"vars\":{\"tenant\":\"" + ScopeVarMarker + "\"}},\"scope\":{\"profile\":\"mcp-stdio\",\"vars\":{\"tenant\":\"" + DuplicateScopeMarker + "\"}},\"dryRun\":true,\"sql\":\"SELECT 1\"}}}\n");
+                "{\"jsonrpc\":\"2.0\",\"id\":\"duplicate-target\",\"method\":\"tools/call\",\"params\":{\"name\":\"sqlharness_query\",\"arguments\":{\"target\":{\"profile\":\"mcp-stdio\",\"vars\":{\"tenant\":\"" + ScopeVarMarker + "\"}},\"target\":{\"profile\":\"mcp-stdio\",\"vars\":{\"tenant\":\"" + DuplicateScopeMarker + "\"}},\"dryRun\":true,\"sql\":\"SELECT 1\"}}}\n");
             await stdin.WriteAsync(duplicate, ct);
             await stdin.FlushAsync(ct);
             var afterDuplicate = await client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: ct);

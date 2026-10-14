@@ -555,7 +555,7 @@ public sealed class McpStdioProcessTests
             Assert.Equal("sqlharness_query", unsafeArgumentsEnvelope.GetProperty("command").GetString());
             Assert.Equal((int)SqlHarnessExitCode.Safety, unsafeArgumentsEnvelope.GetProperty("exitCode").GetInt32());
             Assert.Equal("safety_rejected", unsafeArgumentsEnvelope.GetProperty("error").GetProperty("code").GetString());
-            Assert.StartsWith("Unknown argument.", unsafeArgumentsEnvelope.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+            Assert.Equal("The MCP request scope is invalid.", unsafeArgumentsEnvelope.GetProperty("error").GetProperty("message").GetString());
 
             var blockedStorage = Path.Combine(home, "compare");
             File.WriteAllText(blockedStorage, "existing file");
