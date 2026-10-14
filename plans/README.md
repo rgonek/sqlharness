@@ -20,6 +20,8 @@ Przeczytaj wybrany plan i jego spec przed wykonaniem. Wpis w kolejce nie jest zg
 | [069](069-dashboard-session-curation.md) | Dashboard session curation: title, note, star/pin, archive, search (journal `session_annotations`, guarded PATCH) | 062 DONE first; coordinate journal schema version with 062/068 | TODO |
 | [070](070-dashboard-agent-transcript-matching.md) | Opt-in agent transcript matching: Claude/Codex conversation titles, Claude model/effort per operation (journal v10 derived tables, housekeeping cycle) | 062 and 069 DONE first; re-verify transcript formats | TODO |
 | [071](071-dashboard-compare-review.md) | Compare review: CodeMirror 6 SQL tabs + side-by-side/unified diff, per-table IO and plan changes, Copy Markdown for PRs, session version diff | 062 DONE; **ask the operator to confirm CodeMirror 6 before starting** | TODO |
+| [072](072-mutation-risk-tiers.md) | Core risk tiers (`read-only`/`session`/`dml`/`schema`/`privilege`/`opaque`) via `SqlUsage.Mutation` in both engines; `tier` in dry runs; behaviour of existing commands unchanged | — | TODO |
+| [073](073-mutation-approval-broker.md) | `mutation` command/tool (CLI+MCP), per-profile modes, dashboard broker executes with writer credential, toast approval, optional WebAuthn; removes `query --allow-mutation`; supersedes tray plan 08 | 072 DONE; next free journal version | TODO |
 
 Przed rozpoczęciem 071 potwierdź u operatora CodeMirror 6. 069 i 071 wymagają zakończonego 062; 070 wymaga także 069. Koordynuj prace zmieniające wspólne kontrakty MCP, journal i dashboard według wybranego planu.
 
