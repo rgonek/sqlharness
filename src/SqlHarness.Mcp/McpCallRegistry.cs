@@ -6,8 +6,8 @@ namespace SqlHarness.Mcp;
 
 /// <summary>
 /// Maps the token an MCP run site hands to the module back to why it was cancelled.
-/// Keyed by token, not by "the current call": target-free tools take no gate and
-/// can run beside a database call.
+/// Keyed by token, not by "the current call": tool calls, database calls included,
+/// run concurrently.
 /// </summary>
 internal static class McpCallRegistry
 {

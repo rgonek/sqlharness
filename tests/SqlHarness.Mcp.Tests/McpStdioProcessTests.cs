@@ -79,61 +79,99 @@ internal static class McpStdioProcessHarness
                     return cached;
             }
 
-            var root = FindRepositoryRoot();
-            var output = Path.Combine(Path.GetTempPath(), "sqlharness-mcp-stdio-publish-" + Guid.NewGuid().ToString("N"), rid);
-            Directory.CreateDirectory(output);
-            var psi = new ProcessStartInfo(
-                "dotnet",
-                $"publish src/SqlHarness.Cli -c Release -r {rid} --self-contained true"
-                + " -p:PublishSingleFile=true -p:PublishTrimmed=false"
-                + " -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false"
-                + $" -o \"{output}\"")
-            {
-                WorkingDirectory = root,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            using var process = Process.Start(psi) ?? throw new InvalidOperationException("dotnet publish did not start.");
-            // Pipe reads use their own token. The caller token also cancels
-            // WaitForExitAsync; tying the reads to it makes a finished publish
-            // throw from ReadToEndAsync while a descendant still holds the pipe.
-            using var pipeReads = new CancellationTokenSource();
-            var stdout = process.StandardOutput.ReadToEndAsync(pipeReads.Token);
-            var stderr = process.StandardError.ReadToEndAsync(pipeReads.Token);
-            using var budget = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, budget.Token);
+            var publishRoot = Path.Combine(Path.GetTempPath(), "sqlharness-mcp-stdio-publish-" + Guid.NewGuid().ToString("N"));
+            var output = Path.Combine(publishRoot, rid);
             try
             {
-                await process.WaitForExitAsync(linked.Token);
+                Directory.CreateDirectory(output);
+                var root = FindRepositoryRoot();
+                var psi = new ProcessStartInfo(
+                    "dotnet",
+                    $"publish src/SqlHarness.Cli -c Release -r {rid} --self-contained true"
+                    + " -p:PublishSingleFile=true -p:PublishTrimmed=false"
+                    + " -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false"
+                    + $" -o \"{output}\"")
+                {
+                    WorkingDirectory = root,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+                using var process = Process.Start(psi) ?? throw new InvalidOperationException("dotnet publish did not start.");
+                // Pipe reads use their own token. The caller token also cancels
+                // WaitForExitAsync; tying the reads to it makes a finished publish
+                // throw from ReadToEndAsync while a descendant still holds the pipe.
+                using var pipeReads = new CancellationTokenSource();
+                var stdout = process.StandardOutput.ReadToEndAsync(pipeReads.Token);
+                var stderr = process.StandardError.ReadToEndAsync(pipeReads.Token);
+                using var budget = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, budget.Token);
+                try
+                {
+                    await process.WaitForExitAsync(linked.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    try { process.Kill(entireProcessTree: true); } catch { }
+                    var (cancelledOut, cancelledErr) = await DrainPipesAsync(stdout, stderr, pipeReads);
+                    var reason = ct.IsCancellationRequested
+                        ? "the caller cancelled it before the publish process exited"
+                        : "it exceeded 10 minutes";
+                    throw new InvalidOperationException(
+                        $"dotnet publish -r {rid} failed: {reason}.\nSTDOUT:\n{Tail(cancelledOut)}\nSTDERR:\n{Tail(cancelledErr)}");
+                }
+
+                var (outText, errText) = await DrainPipesAsync(stdout, stderr, pipeReads);
+                if (process.ExitCode != 0)
+                    throw new InvalidOperationException($"dotnet publish -r {rid} failed with exit {process.ExitCode}.\nSTDOUT:\n{Tail(outText)}\nSTDERR:\n{Tail(errText)}");
+
+                var exe = Path.Combine(output, OperatingSystem.IsWindows() || rid.StartsWith("win-", StringComparison.Ordinal) ? "sqlharness.exe" : "sqlharness");
+                if (!File.Exists(exe))
+                    throw new InvalidOperationException($"Publish succeeded but the single-file binary is missing: {exe}.");
+
+                lock (Published)
+                    Published[rid] = exe;
+                return exe;
             }
-            catch (OperationCanceledException)
+            catch
             {
-                try { process.Kill(entireProcessTree: true); } catch { }
-                var (cancelledOut, cancelledErr) = await DrainPipesAsync(stdout, stderr, pipeReads);
-                var reason = ct.IsCancellationRequested
-                    ? "the caller cancelled it before the publish process exited"
-                    : "it exceeded 10 minutes";
-                throw new InvalidOperationException(
-                    $"dotnet publish -r {rid} failed: {reason}.\nSTDOUT:\n{Tail(cancelledOut)}\nSTDERR:\n{Tail(cancelledErr)}");
+                DeletePublishRoot(publishRoot);
+                throw;
             }
-
-            var (outText, errText) = await DrainPipesAsync(stdout, stderr, pipeReads);
-            if (process.ExitCode != 0)
-                throw new InvalidOperationException($"dotnet publish -r {rid} failed with exit {process.ExitCode}.\nSTDOUT:\n{Tail(outText)}\nSTDERR:\n{Tail(errText)}");
-
-            var exe = Path.Combine(output, OperatingSystem.IsWindows() || rid.StartsWith("win-", StringComparison.Ordinal) ? "sqlharness.exe" : "sqlharness");
-            if (!File.Exists(exe))
-                throw new InvalidOperationException($"Publish succeeded but the single-file binary is missing: {exe}.");
-
-            lock (Published)
-                Published[rid] = exe;
-            return exe;
         }
         finally
         {
             PublishGate.Release();
+        }
+    }
+
+    internal static void DeletePublishOutput(string exe)
+    {
+        var output = Path.GetDirectoryName(exe);
+        var publishRoot = output is null ? null : Directory.GetParent(output)?.FullName;
+        if (publishRoot is not null)
+            DeletePublishRoot(publishRoot);
+    }
+
+    private static void DeletePublishRoot(string publishRoot)
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                Directory.Delete(publishRoot, recursive: true);
+                return;
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+
+            if (attempt < 2)
+                Thread.Sleep(TimeSpan.FromMilliseconds(200));
         }
     }
 
@@ -398,7 +436,7 @@ internal sealed class RecordingStream(Stream inner) : Stream
 /// <summary>
 /// T6 protocol proof over a real process: the official SDK client drives the
 /// published single-file <c>sqlharness mcp serve</c> for the current RID
-/// (initialize 2025-11-25, tools/list of 10, offline validate + plan,
+/// (initialize 2025-11-25, tools/list of 8, offline dry-run query + plan,
 /// malformed input survival, shutdown). No database tool runs here.
 /// </summary>
 [Collection("McpStdioProcess")]
@@ -424,13 +462,15 @@ public sealed class McpStdioProcessTests
     {
         using var cts = new CancellationTokenSource(SmokeBudget);
         var ct = cts.Token;
-        var exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
-        var home = McpStdioProcessHarness.CreateSyntheticHome(
-            "sample-country",
-            """{"sample-country":{"server":"country.invalid","database":"countrydb","vars":{"tenant":"^example$","env":"^test$"},"auth":"integrated"},"sample-shared":{"server":"shared.invalid","database":"shareddb","vars":{"tenant":"^example$","env":"^test$"},"auth":"integrated"}}""");
+        string? exe = null;
+        string? home = null;
         McpStdioProcessHarness.StdioChild? child = null;
         try
         {
+            exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
+            home = McpStdioProcessHarness.CreateSyntheticHome(
+                "sample-country",
+                """{"sample-country":{"server":"country.invalid","database":"countrydb","vars":{"tenant":"^example$","env":"^test$"},"auth":"integrated"},"sample-shared":{"server":"shared.invalid","database":"shareddb","vars":{"tenant":"^example$","env":"^test$"},"auth":"integrated"}}""");
             child = McpStdioProcessHarness.StartServer(
                 exe,
                 home,
@@ -442,16 +482,16 @@ public sealed class McpStdioProcessTests
             Assert.Equal(McpHost.ServerName, client.ServerInfo.Name);
 
             var tools = await client.ListToolsAsync(cancellationToken: ct);
-            Assert.Equal(10, tools.Count);
+            Assert.Equal(8, tools.Count);
             Assert.Equal(
                 McpToolCatalog.ToolNames.Order(StringComparer.Ordinal),
                 tools.Select(tool => tool.Name).Order(StringComparer.Ordinal).ToArray());
-            var validateSchema = JsonSerializer.SerializeToElement(
-                Assert.Single(tools, tool => tool.Name == "sqlharness_validate").ProtocolTool)
+            var querySchema = JsonSerializer.SerializeToElement(
+                Assert.Single(tools, tool => tool.Name == "sqlharness_query").ProtocolTool)
                 .GetProperty("inputSchema");
             Assert.Contains(
                 "scope",
-                validateSchema.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
+                querySchema.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
 
             static Dictionary<string, object?> Scope(string profile) => new()
             {
@@ -462,24 +502,24 @@ public sealed class McpStdioProcessTests
             foreach (var profile in new[] { "sample-country", "sample-shared" })
             {
                 var validate = await client.CallToolAsync(
-                    "sqlharness_validate",
+                    "sqlharness_query",
                     new Dictionary<string, object?>
                     {
                         ["scope"] = Scope(profile),
-                        ["usage"] = "query",
+                        ["dryRun"] = true,
                         ["sql"] = "SELECT 1",
                     },
                     cancellationToken: ct);
-                AssertValidateSuccess(validate, "sqlharness_validate");
+                AssertValidateSuccess(validate, "sqlharness_query");
             }
 
             var missingScope = await client.CallToolAsync(
-                "sqlharness_validate",
-                new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+                "sqlharness_query",
+                new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1" },
                 cancellationToken: ct);
             Assert.True(missingScope.IsError == true);
             var missingScopeMessage = string.Concat(missingScope.Content.OfType<TextContentBlock>().Select(block => block.Text));
-            Assert.Contains("sqlharness_validate", missingScopeMessage, StringComparison.Ordinal);
+            Assert.Contains("sqlharness_query", missingScopeMessage, StringComparison.Ordinal);
 
             var unsafeArguments = await client.CallToolAsync(
                 "sqlharness_query",
@@ -561,7 +601,10 @@ public sealed class McpStdioProcessTests
             }
 
             child?.Process.Dispose();
-            McpStdioProcessHarness.DeleteHome(home);
+            if (home is not null)
+                McpStdioProcessHarness.DeleteHome(home);
+            if (exe is not null)
+                McpStdioProcessHarness.DeletePublishOutput(exe);
         }
     }
 
@@ -577,13 +620,15 @@ public sealed class McpStdioProcessTests
     {
         using var cts = new CancellationTokenSource(SmokeBudget);
         var ct = cts.Token;
-        var exe = await McpStdioProcessHarness.PublishAsync(rid, ct);
-        var home = McpStdioProcessHarness.CreateSyntheticHome(
-            McpStdioProcessHarness.ProfileName,
-            """{"mcp-stdio": {"server": "mcp-unreachable.invalid", "database": "mcp-stdio-db", "vars": {"tenant": "^stdio$"}, "auth": "integrated"}}""");
+        string? exe = null;
+        string? home = null;
         McpStdioProcessHarness.StdioChild? child = null;
         try
         {
+            exe = await McpStdioProcessHarness.PublishAsync(rid, ct);
+            home = McpStdioProcessHarness.CreateSyntheticHome(
+                McpStdioProcessHarness.ProfileName,
+                """{"mcp-stdio": {"server": "mcp-unreachable.invalid", "database": "mcp-stdio-db", "vars": {"tenant": "^stdio$"}, "auth": "integrated"}}""");
             child = McpStdioProcessHarness.StartServer(exe, home, "mcp serve mcp-stdio --var tenant=stdio");
             var stdin = child.Process.StandardInput.BaseStream;
             await using var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct);
@@ -597,10 +642,10 @@ public sealed class McpStdioProcessTests
                 tools.Select(tool => tool.Name).Order(StringComparer.Ordinal).ToArray());
 
             var validate = await client.CallToolAsync(
-                "sqlharness_validate",
-                new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+                "sqlharness_query",
+                new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1" },
                 cancellationToken: ct);
-            AssertValidateSuccess(validate, "sqlharness_validate");
+            AssertValidateSuccess(validate, "sqlharness_query");
 
             var planXml = File.ReadAllText(McpStdioProcessHarness.FindRepositoryFile(
                 "tests", "SqlHarness.Tests", "Fixtures", "distiller-sample.sqlplan"));
@@ -618,10 +663,10 @@ public sealed class McpStdioProcessTests
             await Task.Delay(TimeSpan.FromSeconds(2), ct);
             Assert.False(child.Process.HasExited, "The published server died on malformed input.");
             var afterGarbage = await client.CallToolAsync(
-                "sqlharness_validate",
-                new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 2" },
+                "sqlharness_query",
+                new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 2" },
                 cancellationToken: ct);
-            AssertValidateSuccess(afterGarbage, "sqlharness_validate");
+            AssertValidateSuccess(afterGarbage, "sqlharness_query");
 
             // Unknown tool is a protocol error, not a process failure.
             await Assert.ThrowsAsync<McpProtocolException>(async () => await client.CallToolAsync(
@@ -630,10 +675,10 @@ public sealed class McpStdioProcessTests
                 cancellationToken: ct));
             Assert.False(child.Process.HasExited, "The published server died after an unknown tool call.");
             var afterUnknown = await client.CallToolAsync(
-                "sqlharness_validate",
-                new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 3" },
+                "sqlharness_query",
+                new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 3" },
                 cancellationToken: ct);
-            AssertValidateSuccess(afterUnknown, "sqlharness_validate");
+            AssertValidateSuccess(afterUnknown, "sqlharness_query");
 
             await client.DisposeAsync();
             child.Process.StandardInput.Close();
@@ -668,7 +713,10 @@ public sealed class McpStdioProcessTests
             }
 
             child?.Process.Dispose();
-            McpStdioProcessHarness.DeleteHome(home);
+            if (home is not null)
+                McpStdioProcessHarness.DeleteHome(home);
+            if (exe is not null)
+                McpStdioProcessHarness.DeletePublishOutput(exe);
         }
     }
 
@@ -718,10 +766,10 @@ public sealed class McpStdioProcessTests
             {
                 Assert.Equal(McpStdioProcessHarness.DefaultProtocolVersion, client.NegotiatedProtocolVersion);
                 var validate = await client.CallToolAsync(
-                    "sqlharness_validate",
-                    new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+                    "sqlharness_query",
+                    new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1" },
                     cancellationToken: ct);
-                AssertValidateSuccess(validate, "sqlharness_validate");
+                AssertValidateSuccess(validate, "sqlharness_query");
             }
 
             await clientToServer.Writer.CompleteAsync();
@@ -847,22 +895,18 @@ public sealed class McpStdioLiveTests
         using var profile = JsonDocument.Parse(profileJson);
         Assert.Equal(JsonValueKind.Object, profile.RootElement.ValueKind);
 
-        var home = McpStdioProcessHarness.CreateSyntheticHome(
-            "mcp-live", "{\"mcp-live\": " + profileJson + "}");
+        string? exe = null;
+        string? home = null;
         McpStdioProcessHarness.StdioChild? child = null;
         try
         {
-            var exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
+            home = McpStdioProcessHarness.CreateSyntheticHome(
+                "mcp-live", "{\"mcp-live\": " + profileJson + "}");
+            exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
             child = McpStdioProcessHarness.StartServer(exe, home, "mcp serve mcp-live");
             var stdin = child.Process.StandardInput.BaseStream;
             await using var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct);
             Assert.Equal(McpStdioProcessHarness.DefaultProtocolVersion, client.NegotiatedProtocolVersion);
-
-            var ping = await client.CallToolAsync(
-                "sqlharness_inspect",
-                new Dictionary<string, object?> { ["kind"] = "ping" },
-                cancellationToken: ct);
-            Assert.False(ping.IsError == true, McpStdioProcessHarness.Envelope(ping).ToString());
 
             var query = await client.CallToolAsync(
                 "sqlharness_query",
@@ -916,7 +960,7 @@ public sealed class McpStdioLiveTests
                 : null;
             Assert.NotEqual("safety_rejected", probeCode);
 
-            // Cancel a long watch, then prove cleanup: the gate is free, the
+            // Cancel a long watch, then prove cleanup: the server survives, the
             // next call succeeds, and EOF still shuts the process down.
             using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var watch = client.CallToolAsync(
@@ -935,8 +979,8 @@ public sealed class McpStdioLiveTests
             Assert.False(child.Process.HasExited, "The server died after watch cancellation.");
 
             var afterCancel = await client.CallToolAsync(
-                "sqlharness_validate",
-                new Dictionary<string, object?> { ["usage"] = "query", ["sql"] = "SELECT 1" },
+                "sqlharness_query",
+                new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1" },
                 cancellationToken: ct);
             Assert.False(afterCancel.IsError == true, McpStdioProcessHarness.Envelope(afterCancel).ToString());
 
@@ -961,7 +1005,10 @@ public sealed class McpStdioLiveTests
             }
 
             child?.Process.Dispose();
-            McpStdioProcessHarness.DeleteHome(home);
+            if (home is not null)
+                McpStdioProcessHarness.DeleteHome(home);
+            if (exe is not null)
+                McpStdioProcessHarness.DeletePublishOutput(exe);
         }
     }
 }

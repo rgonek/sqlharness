@@ -261,8 +261,8 @@ public sealed class BenchmarkSummaryTests
             .ToArray();
         var report = new SqlHarnessCompareMatrixReport("@BatchSize", "int",
         [
-            MatrixSummaryCell(0, "100", wideOperators, new ResultEquivalenceReport(ResultComparisonMode.Ordered, true, 0, 0, 0), @"C:\artifacts\cell-100"),
-            MatrixSummaryCell(1, "20", [new CompareOperatorReport(2, "Hash Match", "dbo.Lines", true, true, false)], new ResultEquivalenceReport(ResultComparisonMode.Multiset, false, null, 3, 1), @"C:\artifacts\cell-20"),
+            MatrixSummaryCell(0, "100", wideOperators, new ResultEquivalenceReport(ResultComparisonMode.Ordered, true, 0, 0, 0), Path.Combine("artifacts", "cell-100")),
+            MatrixSummaryCell(1, "20", [new CompareOperatorReport(2, "Hash Match", "dbo.Lines", true, true, false)], new ResultEquivalenceReport(ResultComparisonMode.Multiset, false, null, 3, 1), Path.Combine("artifacts", "cell-20")),
             MatrixSummaryCell(2, "1", [], new ResultEquivalenceReport(ResultComparisonMode.Off, null, null, null, null), null),
         ]);
 
@@ -271,10 +271,10 @@ public sealed class BenchmarkSummaryTests
 
         Assert.Equal("@BatchSize", summary.ParameterName);
         Assert.Equal("int", summary.ParameterType);
-        Assert.Equal(["100", "20", "1"], summary.Cells.Select(cell => cell.ParameterValue));
-        Assert.Equal([0, 1, 2], summary.Cells.Select(cell => cell.Index).ToArray());
+        Assert.Equal([0, 1, 2], summary.Cases.Select(cell => cell.Index).ToArray());
+        Assert.Equal(["100", "20", "1"], summary.Cases.Select(cell => cell.ParameterValue!).ToArray());
 
-        var first = summary.Cells[0].Compare;
+        var first = summary.Details[0].Compare;
         var source = report.Cells[0].Compare;
         Assert.Equal(source.Equivalence, first.Equivalence);
         Assert.Equal(source.Baseline.CpuTimeMilliseconds, first.Baseline.CpuTimeMilliseconds);
@@ -287,13 +287,13 @@ public sealed class BenchmarkSummaryTests
         Assert.Equal(source.Candidate.LogicalReads, first.Candidate.LogicalReads);
         Assert.Equal(source.Candidate.LogicalReadsByTable, first.Candidate.LogicalReadsByTable);
         Assert.Equal(source.Candidate.Warnings, first.Candidate.Warnings);
-        Assert.Equal(source.ArtifactDirectory, first.ArtifactDirectory);
+        Assert.Equal("cell-100", summary.Cases[0].ArtifactId);
         Assert.Equal(10, first.NoteworthyOperators.Count);
         Assert.Contains(first.NoteworthyOperators, op => op.HasWarnings);
         Assert.Contains(first.NoteworthyOperators, op => op.HasSpill);
         Assert.Contains(first.NoteworthyOperators, op => op.HasImplicitConversion);
 
-        var second = summary.Cells[1].Compare;
+        var second = summary.Details[1].Compare;
         Assert.Equal(report.Cells[1].Compare.Equivalence, second.Equivalence);
         Assert.Equal(report.Cells[1].Compare.Baseline.CpuTimeMilliseconds, second.Baseline.CpuTimeMilliseconds);
         Assert.Equal(report.Cells[1].Compare.Baseline.ElapsedTimeMilliseconds, second.Baseline.ElapsedTimeMilliseconds);
@@ -304,14 +304,13 @@ public sealed class BenchmarkSummaryTests
         Assert.Equal(report.Cells[1].Compare.Candidate.LogicalReads, second.Candidate.LogicalReads);
         Assert.Equal(report.Cells[1].Compare.Candidate.LogicalReadsByTable, second.Candidate.LogicalReadsByTable);
         Assert.Equal(report.Cells[1].Compare.Candidate.Warnings, second.Candidate.Warnings);
-        Assert.Equal(report.Cells[1].Compare.ArtifactDirectory, second.ArtifactDirectory);
+        Assert.Equal("cell-20", summary.Cases[1].ArtifactId);
         Assert.Contains(second.NoteworthyOperators, op => op.HasWarnings && op.HasSpill);
 
-        var third = summary.Cells[2].Compare;
-        Assert.Equal(ResultComparisonMode.Off, third.Equivalence.Mode);
-        Assert.Null(third.Equivalence.Equivalent);
-        Assert.Null(third.ArtifactDirectory);
-        Assert.Empty(third.NoteworthyOperators);
+        Assert.Equal("not-requested", summary.Cases[2].EquivalenceAvailability);
+        Assert.Null(summary.Cases[2].Equivalent);
+        Assert.Empty(summary.Cases[2].ArtifactId);
+        Assert.Empty(summary.Details[2].Compare.NoteworthyOperators);
 
         Assert.DoesNotContain("\"operators\"", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("runs", json, StringComparison.OrdinalIgnoreCase);
@@ -320,12 +319,12 @@ public sealed class BenchmarkSummaryTests
         Assert.DoesNotContain("TotalLogicalReadsByTable", json, StringComparison.Ordinal);
         Assert.DoesNotContain("424242", json, StringComparison.Ordinal);
         using var document = JsonDocument.Parse(json);
-        var values = document.RootElement.GetProperty("cells").EnumerateArray()
-            .Select(cell => cell.GetProperty("parameterValue").GetString()!)
+        var values = document.RootElement.GetProperty("cases").EnumerateArray()
+            .Select(cell => cell.GetProperty("index").GetInt32())
             .ToArray();
-        Assert.Equal(["100", "20", "1"], values);
-        Assert.False(document.RootElement.GetProperty("cells")[0].GetProperty("compare").GetProperty("baseline").TryGetProperty("operators", out _));
-        Assert.True(document.RootElement.GetProperty("cells")[0].GetProperty("compare").GetProperty("noteworthyOperators").GetArrayLength() <= 10);
+        Assert.Equal([0, 1, 2], values);
+        Assert.Contains("parameterValue", json, StringComparison.OrdinalIgnoreCase);
+        Assert.True(document.RootElement.GetProperty("details")[0].GetProperty("compare").GetProperty("noteworthyOperators").GetArrayLength() <= 10);
     }
 
     [Fact]

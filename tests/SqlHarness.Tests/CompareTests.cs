@@ -52,6 +52,27 @@ public class SqlHarnessCompareTests
     }
 
     [Fact]
+    public async Task Compare_classifies_if_else_batch_end_to_end_on_fake_session()
+    {
+        const string branchingSql = "DECLARE @Flag bit = 0; IF @Flag = 1 SELECT 1 AS A ELSE SELECT 2 AS A;";
+        var session = FakeCompareSession.Create();
+        var operation = Compare(repeat: 1) with
+        {
+            SetupSql = null,
+            BaselineSql = branchingSql,
+            CandidateSql = branchingSql,
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessCompareReport>(outcome.Report);
+        Assert.Equal("read-only", report.Classification.Baseline);
+        Assert.Equal("read-only", report.Classification.Candidate);
+        Assert.Contains(session.Commands, command => command.Sql == branchingSql);
+    }
+
+    [Fact]
     public async Task CompareCellRunner_repeat_two_uses_one_session_and_returns_equivalence_and_artifacts()
     {
         var session = FakeCompareSession.Create();
@@ -420,15 +441,44 @@ public class SqlHarnessCompareTests
     }
 
     [Fact]
-    public async Task Compare_raw_footprint_includes_setup_warmups_messages_and_every_plan_but_hashes_are_result_only()
+    public async Task Compare_raw_footprint_counts_only_first_measured_results_and_messages()
     {
-        var minimal = await Module(FakeCompareSession.Create()).ExecuteAsync(Compare(repeat: 1));
-        var rich = await Module(
-            FakeCompareSession.Create(includeSetupResult: true, includeSecondPlan: true, includeExtraMessage: true))
-            .ExecuteAsync(Compare(repeat: 1));
+        var plan = "<ShowPlanXML>" + new string('x', 100_000) + "</ShowPlanXML>";
+        var session = FakeCompareSession.Create(
+            includeSetupResult: true,
+            includeExtraMessage: true,
+            resultRowCount: 2,
+            plan: plan);
 
-        Assert.True(rich.EmissionReceipt!.RawFootprint!.Bytes > minimal.EmissionReceipt!.RawFootprint!.Bytes);
-        Assert.True(Assert.IsType<SqlHarnessCompareReport>(rich.Report).ResultsEquivalent);
+        var outcome = await Module(session).ExecuteAsync(Compare(repeat: 5));
+
+        using var expected = new CanonicalResultAccumulator();
+        AddResultSet(expected, "Value", "System.Int32", 42, 43);
+        foreach (var message in session.Messages.Skip(4).Take(2))
+            expected.AddMessage("sql", message);
+        AddResultSet(expected, "Value", "System.Int32", 42, 43);
+        foreach (var message in session.Messages.Skip(6).Take(2))
+            expected.AddMessage("sql", message);
+
+        Assert.Equal(expected.Complete().Footprint, outcome.EmissionReceipt!.RawFootprint);
+        Assert.True(Assert.IsType<SqlHarnessCompareReport>(outcome.Report).ResultsEquivalent);
+        Assert.Contains(plan, outcome.BenchmarkRuns!.First().PlanXmls);
+    }
+
+    [Fact]
+    public async Task Compare_raw_footprint_is_independent_of_repeat_count_and_plan_size()
+    {
+        var lowRepeat = await Module(FakeCompareSession.Create()).ExecuteAsync(Compare(repeat: 5));
+        var highRepeat = await Module(FakeCompareSession.Create(plan: "<ShowPlanXML>" + new string('x', 100_000) + "</ShowPlanXML>"))
+            .ExecuteAsync(Compare(repeat: 20));
+
+        Assert.Equal(lowRepeat.EmissionReceipt!.RawFootprint, highRepeat.EmissionReceipt!.RawFootprint);
+        Assert.Equal(
+            lowRepeat.BenchmarkRuns!.First(run => run.Variant == "baseline").ResultHash,
+            highRepeat.BenchmarkRuns!.First(run => run.Variant == "baseline").ResultHash);
+        Assert.Equal(
+            lowRepeat.BenchmarkRuns!.First(run => run.Variant == "candidate").ResultHash,
+            highRepeat.BenchmarkRuns!.First(run => run.Variant == "candidate").ResultHash);
     }
 
     [Fact]
@@ -467,26 +517,16 @@ public class SqlHarnessCompareTests
     }
 
     [Fact]
-    public async Task Measured_failure_receipt_preserves_exact_setup_and_warmup_raw_footprint()
+    public async Task Measured_failure_receipt_excludes_setup_and_warmup_output()
     {
         var session = FakeCompareSession.Create(includeSetupResult: true, failOnBenchmarkNumber: 3);
 
         var outcome = await Module(session).ExecuteAsync(Compare(repeat: 1));
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
-        using var expected = new CanonicalResultAccumulator();
-        AddResult(expected, "SetupValue", "System.String", "setup-result-value");
-        AddResult(expected, "Value", "System.Int32", 42);
-        expected.AddMessage("planXml", PlanA);
-        expected.AddMessage("sql", StatisticsMessage(5, 10, 12));
-        AddResult(expected, "Value", "System.Int32", 42);
-        expected.AddMessage("planXml", PlanB);
-        expected.AddMessage("sql", StatisticsMessage(5, 10, 12));
-        var completed = expected.Complete().Footprint;
         var raw = outcome.EmissionReceipt!.RawFootprint!;
-        Assert.Equal(completed.Bytes - 2, raw.Bytes);
-        Assert.Equal(completed.Lines, raw.Lines);
-        Assert.True(raw.Bytes > 0);
+        using var empty = new CanonicalResultAccumulator();
+        Assert.Equal(empty.SnapshotFootprint(), raw);
     }
 
     [Fact]
@@ -554,6 +594,18 @@ public class SqlHarnessCompareTests
     {
         accumulator.BeginResultSet([new CanonicalColumn(0, name, dataType, false)]);
         accumulator.AddRow([value]);
+        accumulator.EndResultSet();
+    }
+
+    private static void AddResultSet(
+        CanonicalResultAccumulator accumulator,
+        string name,
+        string dataType,
+        params object[] values)
+    {
+        accumulator.BeginResultSet([new CanonicalColumn(0, name, dataType, false)]);
+        foreach (var value in values)
+            accumulator.AddRow([value]);
         accumulator.EndResultSet();
     }
 
@@ -1037,7 +1089,7 @@ public class SqlHarnessCompareTests
                 _messages.Add(message);
             }
             if (_includeExtraMessage)
-                _messages.Add("ordinary diagnostic message");
+                _messages.Add($"ordinary diagnostic message {count}");
             var plans = _plan is not null ? new[] { _plan } : _includeSecondPlan ? new[] { PlanA, PlanB } : new[] { baseline ? PlanA : PlanB };
             if (_reorderCandidate)
             {

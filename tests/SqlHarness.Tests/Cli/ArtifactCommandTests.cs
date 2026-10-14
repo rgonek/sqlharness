@@ -25,7 +25,7 @@ public sealed class ArtifactCommandTests
     {
         var output = new StringWriter();
 
-        var exit = await SqlHarnessCli.Create(new ThrowingModule(), output)
+        var exit = await SqlHarnessCli.Create(new SqlHarnessModule(), output)
             .RunAsync(["artifact", "some-id", "--section", "plans", "--json"]);
 
         Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
@@ -60,7 +60,7 @@ public sealed class ArtifactCommandTests
     {
         var output = new StringWriter();
 
-        var exit = await SqlHarnessCli.Create(new ThrowingModule(), output)
+        var exit = await SqlHarnessCli.Create(new SqlHarnessModule(), output)
             .RunAsync(["artifact", "does-not-exist", "--section", "summary", "--json"]);
 
         Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
@@ -75,7 +75,7 @@ public sealed class ArtifactCommandTests
     {
         var output = new StringWriter();
 
-        var exit = await SqlHarnessCli.Create(new ThrowingModule(), output)
+        var exit = await SqlHarnessCli.Create(new SqlHarnessModule(), output)
             .RunAsync(["artifact", "..", "--section", "summary", "--json"]);
 
         Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
@@ -94,7 +94,7 @@ public sealed class ArtifactCommandTests
         var directory = new CompareArtifactWriter(SqlHarnessPaths.CompareDir, () => DateTimeOffset.UnixEpoch)
             .Write(report, [run], "wind");
         var id = Path.GetFileName(directory);
-        var module = new ThrowingModule();
+        var module = new SqlHarnessModule();
         var output = new StringWriter();
 
         var exit = await SqlHarnessCli.Create(module, output)
@@ -120,10 +120,10 @@ public sealed class ArtifactCommandTests
             .Write(report, [run], "wind"));
 
         var metricsOutput = new StringWriter();
-        var metricsExit = await SqlHarnessCli.Create(new ThrowingModule(), metricsOutput)
+        var metricsExit = await SqlHarnessCli.Create(new SqlHarnessModule(), metricsOutput)
             .RunAsync(["artifact", id, "--section", "metrics", "--json"]);
         var operatorsOutput = new StringWriter();
-        var operatorsExit = await SqlHarnessCli.Create(new ThrowingModule(), operatorsOutput)
+        var operatorsExit = await SqlHarnessCli.Create(new SqlHarnessModule(), operatorsOutput)
             .RunAsync(["artifact", id, "--section", "operators", "--json"]);
 
         Assert.Equal(0, metricsExit);
@@ -151,7 +151,7 @@ public sealed class ArtifactCommandTests
             .Write(report, [run], "wind"));
         var output = new StringWriter();
 
-        var exit = await SqlHarnessCli.Create(new ThrowingModule(), output).RunAsync(
+        var exit = await SqlHarnessCli.Create(new SqlHarnessModule(), output).RunAsync(
             ["artifact", id, "--section", "operators", "--output", "agent", "--max-output-bytes", "4096", "--max-cell-chars", "64"]);
 
         Assert.Equal(0, exit);
@@ -177,9 +177,11 @@ public sealed class ArtifactCommandTests
         Assert.DoesNotContain("sessionTempStatements", limits.EnumerateObject().Select(property => property.Name));
         var read = limits.GetProperty("artifactRead");
         Assert.Equal(
-            ["summary", "metrics", "operators", "statements", "matrix-cells"],
+            ["summary", "metrics", "operators", "statements", "matrix-cells", "plan"],
             read.GetProperty("sections").EnumerateArray().Select(section => section.GetString()!).ToArray());
-        Assert.Equal(1, read.GetProperty("manifestVersion").GetInt32());
+        Assert.Equal(2, read.GetProperty("manifestVersion").GetInt32());
+        Assert.Equal("matrix-cells,operators,plan,statements", read.GetProperty("pagedSections").GetString());
+        Assert.Equal("variant,statement,parameterSet,repetition,includeText", read.GetProperty("planSelectors").GetString());
     }
 
     private static CompareVariantReport Variant(string name) => new(

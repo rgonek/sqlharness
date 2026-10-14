@@ -25,7 +25,7 @@ internal static class BenchmarkRunner
         int repetition,
         string variant,
         string? parameterSet,
-        CanonicalResultAccumulator raw,
+        CanonicalResultAccumulator? raw,
         bool captureComparison,
         int comparisonMaximumRows,
         CancellationToken ct)
@@ -49,14 +49,14 @@ internal static class BenchmarkRunner
     }
 
     /// <summary>
-    /// Executes setup SQL once per session, draining results into the shared raw
-    /// accumulator. Message snapshotting is best-effort cleanup: it never masks
-    /// the primary setup failure (see <see cref="OperationFailureMapper"/>).
+    /// Executes setup SQL once per session, optionally draining results into a
+    /// raw accumulator. Message snapshotting is best-effort cleanup: it never
+    /// masks the primary setup failure (see <see cref="OperationFailureMapper"/>).
     /// </summary>
     internal static async Task ExecuteRawAsync(
         ISqlSession session,
         SqlExecutionCommand command,
-        CanonicalResultAccumulator raw,
+        CanonicalResultAccumulator? raw,
         CancellationToken ct)
     {
         var messageStart = session.Messages.Count;
@@ -66,6 +66,14 @@ internal static class BenchmarkRunner
             await using var reader = await session.ExecuteReaderAsync(command, ct);
             do
             {
+                if (raw is null)
+                {
+                    while (await reader.ReadAsync(ct))
+                    {
+                    }
+                    continue;
+                }
+
                 if (reader.FieldCount == 0)
                     continue;
                 var columns = Enumerable.Range(0, reader.FieldCount)
@@ -75,14 +83,15 @@ internal static class BenchmarkRunner
                         reader.GetFieldType(index).FullName ?? reader.GetFieldType(index).Name,
                         reader.GetAllowNull(index)))
                     .ToArray();
-                raw.BeginResultSet(columns);
+                raw?.BeginResultSet(columns);
                 while (await reader.ReadAsync(ct))
                 {
-                    raw.AddRow(Enumerable.Range(0, reader.FieldCount)
+                    var values = Enumerable.Range(0, reader.FieldCount)
                         .Select(index => BenchmarkCollector.NormalizeValue(reader.GetValue(index)))
-                        .ToArray());
+                        .ToArray();
+                    raw?.AddRow(values);
                 }
-                raw.EndResultSet();
+                raw?.EndResultSet();
             } while (await reader.NextResultAsync(ct));
         }
         catch (Exception exception)

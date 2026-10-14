@@ -14,7 +14,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: DONE — implementation `8275304..8e50fb5`; Task 5 commits `f3d48ff..6e8232e`; Windows and Linux gates passed. Independent Task 5 review and final whole-branch review are pending. See [056 verification](056-verification.md).
 - Priority: P1
 - Effort: M
 - Risk: MEDIUM (binding sizes change benchmark plans; new Core operation flag)
@@ -24,7 +24,7 @@
 ## Global Constraints
 
 - Accepted parameter name: optional single leading `@`, then `^[A-Za-z_][A-Za-z0-9_]*$`. Reports always print the name with `@`.
-- Unsized `nvarchar`, `varchar`, `nchar`, `char` and untyped string values: size `4000` when the value length ≤ 4000 (or the value is NULL), otherwise `max`. Explicit sizes (`nvarchar(26)`, `nvarchar(max)`) are unchanged.
+- Unsized variable-width `nvarchar`/`varchar` and untyped string values use size `4000` when the value length ≤ 4000 (or the value is NULL), otherwise `max`, matching Dapper so the benchmark compiles the plan the application compiles. Fixed-width `nchar`/`char` have no `max`: both use size `4000` through 4000 characters (or NULL); `char` lengths 4001–8000 use actual length; `nchar` over 4000 and `char` over 8000 are rejected. Explicit sizes are unchanged.
 - Unsupported-statement detail format: `"<ScriptDom statement type> at line <n>"`, for example `"IfStatement at line 14"`.
 - `dryRun: true` never opens a connection, never writes an artifact, and returns exit code 0 when the call would be allowed.
 - The `sqlharness_validate` tool stays in this plan; plan 060 removes it.
@@ -33,7 +33,7 @@
 
 - A name of only `@` or `@@Name` must be rejected with a message naming the parameter (Task 1 test).
 - A typed NULL `nvarchar` must bind with size 4000, not null (Task 2 test).
-- A 4001-character value must bind as `max`, not be truncated (Task 2 test).
+- A 4001-character `nvarchar`/`varchar` value binds as `max`; fixed-width values follow their representable limits (`char` 4001–8000 uses its actual length; `nchar` above 4000 and `char` above 8000 reject) (Task 2 tests).
 - A dry run of a compare matrix must bind every matrix value, so a bad value fails the dry run exactly as it would fail the real call (Task 4 test).
 - A dry run with a setup batch that creates a temp table used by the measured batch must pass, as the real call does (Task 4 test).
 
@@ -363,11 +363,11 @@ git commit -m "feat(056): dryRun on query, measure and compare stops before conn
 
 ### Task 5: Documentation and gates
 
-**Files:** `docs/mcp.md` (Tools table rows for query/measure/compare, parameters paragraph), `README.md` (Safety contract parameter rules, binding sizes), `skills/sqlharness/SKILL.md`, `tests/SqlHarness.Tests/DocsSyncTests.cs` pins if affected.
+**Files:** `docs/mcp.md` (tool rows and parameters/dry-runs contract), `README.md` (Safety contract parameter rules and binding sizes), `skills/sqlharness/SKILL.md`, `Capabilities.cs` and capability/docs contract tests.
 
-- [ ] **Step 1:** Document: `@` optional in names; unsized strings bind as 4000/`max` (Dapper parity; say why: the benchmark should compile the plan the application compiles); dry run semantics and report fields; unsupported-statement detail format. Mention that `sqlharness_validate` is superseded by `dryRun` and will be removed (plan 060).
-- [ ] **Step 2:** `dotnet build SqlHarness.sln -warnaserror`; `pwsh scripts/verify.ps1` → `verify: OK`; `pwsh scripts/verify-linux.ps1` → `verify-linux: OK`.
-- [ ] **Step 3:** Status DONE with commit range; update `plans/README.md`.
+- [x] **Step 1:** Document parameter names and type-specific sizes, dry-run scope/report fields and limits, unsupported-statement detail format, and the plan 060 removal of `sqlharness_validate`.
+- [x] **Step 2:** `dotnet build SqlHarness.sln -warnaserror`; `pwsh ./scripts/verify.ps1` → `verify: OK`; `pwsh ./scripts/verify-linux.ps1` → `verify-linux: OK`.
+- [x] **Step 3:** Status DONE with commit range; update `plans/README.md`.
 
 ```bash
 git add docs README.md skills tests plans
@@ -376,11 +376,11 @@ git commit -m "docs(056): parameter names and sizes, rejection detail, dry run"
 
 ## Done criteria
 
-- [ ] `@Name` and `Name` bind identically on typed, matrix and parameter-set paths.
-- [ ] `nvarchar` without size binds as 4000.
-- [ ] A dry run of each of query, measure, compare and compare matrix makes zero connections and writes zero artifacts.
-- [ ] `WHILE` rejection reports `WhileStatement at line n`.
-- [ ] Both gates pass; README row updated.
+- [x] `@Name` and `Name` bind identically on typed, matrix and parameter-set paths.
+- [x] `nvarchar` without size binds as 4000.
+- [x] A dry run of each of query, measure, compare and compare matrix makes zero connections and writes zero artifacts.
+- [x] `WHILE` rejection reports `WhileStatement at line n`.
+- [x] Both gates pass; README row updated.
 
 ## STOP conditions
 

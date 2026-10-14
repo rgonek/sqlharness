@@ -62,6 +62,9 @@ export type OperationSummary = {
   /** Client-supplied model label from tools/call _meta (Codex); never verified. */
   agentModel: string | null
   agentReasoningEffort: string | null
+  operationRef: string | null
+  parentOperationRef: string | null
+  dryRun: boolean
 }
 
 /** Allowlisted, client-supplied labels from tools/call _meta; never verified, never content. */
@@ -134,6 +137,9 @@ export type OperationDetail = {
   candidateSqlText: string | null
   rawTokens: number | null
   emittedTokens: number | null
+  rawBytes: number | null
+  emittedBytes: number | null
+  tokenEstimationMethod: string
   artifactDirectory: string | null
   summary: Record<string, unknown> | null
   variants: VariantDetail[]
@@ -166,9 +172,25 @@ export type ProfileDimensionStats = {
   profile: string | null; profileDefinitionAvailable: boolean; operations: number
   dimensions: DimensionStat[]; targets: TargetStat[]; targetCount: number; matrix: DimensionMatrixStats | null
 }
-export type TokenStat = {
-  raw: number; emitted: number; totalOperations: number; pairedOperations: number
-  rawOnlyOperations: number; emittedOnlyOperations: number; missingBothOperations: number
+export type WorkflowCost = {
+  rootOperationRef: string | null
+  outputBytes: number
+  estimatedOutputTokens: number
+  callCount: number
+  tokenEstimationMethod: string
+  accountingKind: "workflow-output" | "legacy-artifact-volume"
+  coverage: { input: string; discovery: string; chat: string }
+  comparison: WorkflowCostComparison | null
+  dryRunCalls: number
+  databaseExecutionCalls: number
+}
+
+export type WorkflowCostComparison = {
+  baselineKind: "single-measured-execution-output"
+  baselineBytes: number
+  baselineEstimatedTokens: number
+  outputOverheadBytes: number
+  estimatedOutputTokenDelta: number | null
 }
 
 export type DashboardStats = {
@@ -181,23 +203,11 @@ export type DashboardStats = {
   topTablesByLogicalReads: TableReadStat[]
   topWaits: WaitStat[]
   targets: TargetStat[]
-  tokens: TokenStat
   spillOperations: number
   coldCacheOperations: number
   profileOperations: ProfileOperationCount[]
   profileDimensions: ProfileDimensionStats
-  savings: SavingsStat
-}
-
-export type ModelSaving = { provider: string; model: string; operations: number; savedTokens: number; usd: number }
-
-export type SavingsStat = {
-  priceSource: string
-  pricesFetchedAt: string
-  totalUsd: number
-  byModel: ModelSaving[]
-  withoutModel: number
-  unpriced: number
+  workflowCosts: WorkflowCost[]
 }
 
 // GET /api/plans/{hash}?view=distilled (PlanDistiller / PostgresPlanDistiller, camelCase).

@@ -1,8 +1,10 @@
 using System.Diagnostics;
+using System.Runtime.Versioning;
 
 using Microsoft.Data.Sqlite;
 
 using SqlHarness.Core;
+using SqlHarness.Tests;
 
 namespace SqlHarness.Tests.Journal;
 
@@ -85,6 +87,8 @@ public sealed class ActivityJournalTests
         Assert.Equal("2026-10-06T09:00:02.000Z", done["finished_at"]);
         Assert.Equal(100L, done["raw_tokens"]);
         Assert.Equal(10L, done["emitted_tokens"]);
+        Assert.Equal(400L, done["raw_bytes"]);
+        Assert.Equal(40L, done["emitted_bytes"]);
         var session = JournalDb.Rows(temp.DatabasePath, "SELECT * FROM sessions")[0];
         Assert.Equal("claude", session["agent_kind"]);
         Assert.Equal("cli", session["transport"]);
@@ -239,11 +243,10 @@ public sealed class ActivityJournalTests
         Assert.Equal(99L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
     }
 
-    [Fact]
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
     public void Database_and_directory_are_owner_only_on_unix()
     {
-        if (OperatingSystem.IsWindows())
-            return;
         using var temp = new JournalTempDirectory();
 
         Open(temp, TextWriter.Null).Begin(JournalTestData.Session(), JournalTestData.Start());
@@ -334,11 +337,43 @@ public sealed class ActivityJournalTests
 
         Open(temp, TextWriter.Null);
 
-        Assert.Equal(6L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        Assert.Equal(7L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
         var session = JournalDb.Rows(temp.DatabasePath, "SELECT client_title, roots_json FROM sessions")[0];
         Assert.Null(session["client_title"]);
         Assert.Null(session["roots_json"]);
         Assert.Null(JournalDb.Rows(temp.DatabasePath, "SELECT cancel_reason FROM operations")[0]["cancel_reason"]);
+    }
+
+    [Fact]
+    public void Version_6_journal_migrates_to_v7_without_inventing_legacy_provenance_or_changing_bytes()
+    {
+        using var temp = new JournalTempDirectory();
+        Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
+        using (var connection = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = JournalSchema.Version1 + JournalSchema.Version2 + JournalSchema.Version3
+                + JournalSchema.Version4 + JournalSchema.Version5 + JournalSchema.Version6 + """
+                INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, first_seen, last_seen)
+                VALUES ('cli:v6', 'agent', 'cli', 'process-tree', 1, 't', 't');
+                INSERT INTO operations (session_id, operation, host_pid, started_at, updated_at, status, raw_bytes, emitted_bytes)
+                VALUES (1, 'compare', 1, 't', 't', 'succeeded', 1234, 567);
+                PRAGMA user_version = 6;
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        Open(temp, TextWriter.Null);
+
+        Assert.Equal(7L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        var row = JournalDb.Rows(temp.DatabasePath,
+            "SELECT operation_ref, parent_operation_ref, dry_run, raw_bytes, emitted_bytes FROM operations").Single();
+        Assert.Null(row["operation_ref"]);
+        Assert.Null(row["parent_operation_ref"]);
+        Assert.Equal(0L, row["dry_run"]);
+        Assert.Equal(1234L, row["raw_bytes"]);
+        Assert.Equal(567L, row["emitted_bytes"]);
     }
 
     [Fact]

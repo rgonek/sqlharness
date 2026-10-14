@@ -1,4 +1,5 @@
 using SqlHarness.Core;
+using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Tests.Journal;
 
@@ -76,6 +77,150 @@ public sealed class JournalingModuleTests
     }
 
     [Fact]
+    public async Task Module_assigns_one_reference_before_journal_and_preserves_it_in_outcome()
+    {
+        string? receivedRef = null;
+        var (module, temp) = Create(new FakeModule((operation, _) =>
+        {
+            receivedRef = operation.OperationRef;
+            return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null));
+        }));
+        using (temp)
+        {
+            var outcome = await module.ExecuteAsync(Query());
+
+            Assert.NotNull(receivedRef);
+            Assert.Equal(receivedRef, outcome.OperationRef);
+            Assert.Equal(receivedRef, JournalDb.Rows(temp.DatabasePath, "SELECT operation_ref FROM operations").Single()["operation_ref"]);
+        }
+    }
+
+    [Fact]
+    public async Task Artifact_read_journals_exact_owner_checked_parent_reference()
+    {
+        using var artifacts = new JournalTempDirectory();
+        var directory = Path.Combine(artifacts.Path, "journal-parent-artifact");
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"matrix-cells\"],\"producerOperationRef\":\"root-op-1\"}");
+        File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), "{\"cases\":[]}");
+
+        using var journalTemp = new JournalTempDirectory();
+        var journal = ActivityJournal.Open(journalTemp.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
+        var module = new JournalingModule(new SqlHarnessModule(), () => journal, () => JournalTestData.Session());
+
+        var outcome = await module.ExecuteAsync(new SqlHarnessArtifactReadOperation(
+            artifacts.Path, "journal-parent-artifact", "matrix-cells"));
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.NotNull(outcome.OperationRef);
+        Assert.Equal("root-op-1", outcome.ParentOperationRef);
+        var row = JournalDb.Rows(journalTemp.DatabasePath,
+            "SELECT operation, operation_ref, parent_operation_ref FROM operations").Single();
+        Assert.Equal("artifact", row["operation"]);
+        Assert.Equal(outcome.OperationRef, row["operation_ref"]);
+        Assert.Equal("root-op-1", row["parent_operation_ref"]);
+    }
+
+    [Fact]
+    public async Task Dry_run_metadata_is_stored_without_persisting_sql_by_default()
+    {
+        var (module, temp) = Create(new FakeModule((_, _) =>
+            Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null))));
+        using (temp)
+        {
+            await module.ExecuteAsync(Query() with { DryRun = true });
+
+            var row = JournalDb.Rows(temp.DatabasePath, "SELECT dry_run, sql_text FROM operations").Single();
+            Assert.Equal(1L, row["dry_run"]);
+            Assert.Null(row["sql_text"]);
+        }
+    }
+
+    [Fact]
+    public async Task Disabled_journal_still_passes_generated_reference_to_inner_operation()
+    {
+        string? receivedRef = null;
+        var fake = new FakeModule((operation, _) =>
+        {
+            receivedRef = operation.OperationRef;
+            return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null));
+        });
+        var module = new JournalingModule(fake, () => NullActivityJournal.Instance, () => JournalTestData.Session());
+
+        var outcome = await module.ExecuteAsync(Query());
+
+        Assert.Equal(1, fake.Calls);
+        Assert.NotNull(receivedRef);
+        Assert.Equal(receivedRef, outcome.OperationRef);
+    }
+
+    [Fact]
+    public async Task Disabled_journal_real_module_publishes_and_reads_artifact_with_producer_reference()
+    {
+        using var artifacts = new JournalTempDirectory();
+        var profiles = new Dictionary<string, TargetProfile>
+        {
+            ["test"] = new("test-server", "testdb-{env}", new Dictionary<string, string> { ["env"] = "^a$" }, "integrated"),
+        };
+        var core = new SqlHarnessModule(
+            SqlHarnessCompareTests.FakeCompareSession.Create(plan: PlanMetricsExtractorTests.ActualPlan),
+            new CompareArtifactWriter(artifacts.Path, () => DateTimeOffset.UtcNow),
+            () => profiles);
+        var module = new JournalingModule(core, () => NullActivityJournal.Instance, () => JournalTestData.Session());
+        var producer = new SqlHarnessCompareOperation(
+            new SqlTargetRequest("test", new Dictionary<string, string> { ["env"] = "a" }),
+            "SELECT Id INTO #ids FROM dbo.Clients",
+            "SELECT Value FROM dbo.Clients",
+            "SELECT Value FROM dbo.Clients -- candidate",
+            [], 30, 1)
+        {
+            OperationRef = "disabled-journal-producer",
+        };
+
+        var published = await module.ExecuteAsync(producer);
+        Assert.True(published.ExitCode == SqlHarnessExitCode.Success, published.SafeError);
+        var comparison = Assert.IsType<SqlHarnessCompareReport>(published.Report);
+        Assert.Equal("disabled-journal-producer", published.OperationRef);
+        var artifactDirectory = Assert.IsType<string>(comparison.ArtifactDirectory);
+        Assert.True(File.Exists(Path.Combine(artifactDirectory, "manifest.json")));
+        var artifactId = Path.GetFileName(artifactDirectory);
+        var read = await module.ExecuteAsync(new SqlHarnessArtifactReadOperation(
+            artifacts.Path, artifactId, "summary"));
+
+        Assert.Equal(SqlHarnessExitCode.Success, read.ExitCode);
+        Assert.NotNull(read.OperationRef);
+        Assert.Equal("disabled-journal-producer", read.ParentOperationRef);
+        Assert.NotNull(read.Report);
+    }
+
+    [Fact]
+    public async Task Wrong_scope_artifact_read_is_journaled_without_parent_reference()
+    {
+        using var artifacts = new JournalTempDirectory();
+        var directory = Path.Combine(artifacts.Path, "wrong-scope-artifact");
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"matrix-cells\"],\"producerOperationRef\":\"secret-parent\",\"owner\":{\"profile\":\"owner\",\"vars\":{},\"engine\":\"postgres\",\"server\":\"s\",\"database\":\"d\"}}");
+        File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), "{\"cases\":[]}");
+        using var journalTemp = new JournalTempDirectory();
+        var journal = ActivityJournal.Open(journalTemp.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
+        var module = new JournalingModule(new SqlHarnessModule(), () => journal, () => JournalTestData.Session());
+
+        var outcome = await module.ExecuteAsync(new SqlHarnessArtifactReadOperation(
+            artifacts.Path, "wrong-scope-artifact", "matrix-cells",
+            new ArtifactOwner("other", new Dictionary<string, string>(), "postgres", "s", "d")));
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Null(outcome.ParentOperationRef);
+        var row = JournalDb.Rows(journalTemp.DatabasePath,
+            "SELECT status, operation_ref, parent_operation_ref FROM operations").Single();
+        Assert.Equal("rejected", row["status"]);
+        Assert.Equal(outcome.OperationRef, row["operation_ref"]);
+        Assert.Null(row["parent_operation_ref"]);
+    }
+
+    [Fact]
     public async Task Throwing_call_metadata_provider_records_the_operation_without_labels()
     {
         var (module, temp) = Create(
@@ -116,7 +261,8 @@ public sealed class JournalingModuleTests
         {
             var outcome = await module.ExecuteAsync(Query(), cts.Token);
 
-            Assert.Same(failure, outcome);
+            Assert.Equal(failure.ExitCode, outcome.ExitCode);
+            Assert.NotNull(outcome.OperationRef);
             var row = JournalDb.Rows(temp.DatabasePath, "SELECT status, exit_code, error_kind, cancel_reason FROM operations").Single();
             Assert.Equal("failed", row["status"]);
             Assert.Equal(-1L, row["exit_code"]);
@@ -207,7 +353,8 @@ public sealed class JournalingModuleTests
         {
             var outcome = await module.ExecuteAsync(Query());
 
-            Assert.Same(expected, outcome);
+            Assert.Equal(expected.ExitCode, outcome.ExitCode);
+            Assert.NotNull(outcome.OperationRef);
             var row = JournalDb.Rows(temp.DatabasePath, "SELECT status, exit_code, operation FROM operations").Single();
             Assert.Equal("succeeded", row["status"]);
             Assert.Equal("query", row["operation"]);
@@ -263,7 +410,9 @@ public sealed class JournalingModuleTests
             () => throw new IOException("disk"),
             () => throw new UnauthorizedAccessException());
 
-        Assert.Same(expected, await module.ExecuteAsync(Query()));
+        var outcome = await module.ExecuteAsync(Query());
+        Assert.Equal(expected.ExitCode, outcome.ExitCode);
+        Assert.NotNull(outcome.OperationRef);
     }
 
     [Fact]
@@ -376,7 +525,9 @@ public sealed class JournalingModuleTests
         var crashing = new JournalingModule(
             new FakeModule((_, _) => throw new InvalidOperationException("boom")), () => journal, () => JournalTestData.Session());
 
-        Assert.Same(expected, await ok.ExecuteAsync(Query()));
+        var returned = await ok.ExecuteAsync(Query());
+        Assert.Equal(expected.ExitCode, returned.ExitCode);
+        Assert.NotNull(returned.OperationRef);
         await Assert.ThrowsAsync<InvalidOperationException>(() => crashing.ExecuteAsync(Query()));
     }
 

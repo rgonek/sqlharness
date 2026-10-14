@@ -5,6 +5,8 @@ using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
+using SqlHarness.Dashboard;
+using SqlHarness.Tests.Dashboard;
 
 namespace SqlHarness.Tests.Postgres;
 
@@ -386,6 +388,43 @@ public sealed class PostgresBenchmarkTests
         var report = Assert.IsType<SqlHarnessCompareReport>(outcome.Report);
         Assert.Equal(BenchmarkMetricReport.ResultNotCaptured, report.Baseline.MetricReport!.ResultRowSource);
         Assert.Equal(BenchmarkMetricText.RowsNotCaptured, report.Baseline.MetricReport.ResultRowSourceDescription);
+        Assert.Null(outcome.EmissionReceipt!.RawFootprint);
+    }
+
+    [Fact]
+    public async Task Compare_off_keeps_journal_output_cost_but_dashboard_has_no_comparison_baseline()
+    {
+        using var journalDirectory = new SqlHarness.Tests.Journal.JournalTempDirectory();
+        var journal = ActivityJournal.Open(journalDirectory.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
+        var core = Module(FakeSession.Create());
+        var module = new JournalingModule(core, () => journal, () => SqlHarness.Tests.Journal.JournalTestData.Session());
+
+        var outcome = await module.ExecuteAsync(
+            Compare("SELECT 1", "SELECT 1", repeat: 1) with { CompareResults = ResultComparisonMode.Off });
+        await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt).CompleteAsync(new OutputFootprint(88, 1));
+
+        var workflow = Assert.Single(new JournalReader(journalDirectory.DatabasePath, new FakeProcesses())
+            .Stats(new StatsQuery()).WorkflowCosts);
+        Assert.Equal((88L, 1), (workflow.OutputBytes, workflow.CallCount));
+        Assert.Null(workflow.Comparison);
+    }
+
+    [Fact]
+    public async Task Compare_matrix_off_does_not_publish_a_comparable_raw_footprint_or_run_sidecars()
+    {
+        var session = FakeSession.Create();
+        var operation = new SqlHarnessCompareMatrixOperation(
+            Target(), null, "SELECT @id", "SELECT @id", [], 30, 1, string.Empty, ResultComparisonMode.Off)
+        {
+            TypedMatrix = new SqlHarnessParameterMatrixInput("id", "int", ["1", "2"]),
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Null(outcome.EmissionReceipt!.RawFootprint);
+        Assert.All(session.Commands, command => Assert.StartsWith("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)", command.Sql));
+        Assert.Equal(8, session.Commands.Count);
     }
 
     [Fact]

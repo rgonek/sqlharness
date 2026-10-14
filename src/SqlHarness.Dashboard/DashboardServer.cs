@@ -159,7 +159,7 @@ public static partial class DashboardServer
         builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
 
         var app = builder.Build();
-        var reader = new JournalReader(options.DatabasePath, options.Processes, () => ModelPrices.Load(options.PricesPath));
+        var reader = new JournalReader(options.DatabasePath, options.Processes);
         app.Use((context, next) => DashboardSecurity.InvokeAsync(context, () => next(context), token, boundPort));
         // Only authenticated requests reach here, so probes from other local processes do not keep the dashboard alive.
         app.Use((context, next) =>

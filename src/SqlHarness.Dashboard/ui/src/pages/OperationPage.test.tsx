@@ -10,6 +10,9 @@ test("measure shows facts, KPIs, table IO, waits and the sql-not-stored note", a
 
   expect(await screen.findByRole("heading", { level: 1, name: "Operation #10" })).toBeInTheDocument()
   expect(screen.getByText("acme")).toBeInTheDocument()
+  expect(screen.getByText("Output bytes (raw / emitted)")).toBeInTheDocument()
+  expect(screen.getByText("Estimated output tokens (raw / emitted)")).toBeInTheDocument()
+  expect(screen.getByText("Token estimation method")).toBeInTheDocument()
   const kpis = screen.getByRole("region", { name: "Key metrics" })
   // Elapsed median (with its 10–14 range) and compile time are both 12 ms in the fixture.
   expect(within(kpis).getAllByText("12 ms")).toHaveLength(2)

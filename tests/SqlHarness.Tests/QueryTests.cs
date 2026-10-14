@@ -17,6 +17,91 @@ public class SqlHarnessQueryTests
     private const string Token = "eyJsynthetic.access-never-emit.signature";
 
     [Fact]
+    public async Task Query_dry_run_binds_parameters_without_authenticating_or_emitting_raw_tokens()
+    {
+        var azure = new FakeAzureCli(Token);
+        var session = FakeSqlSession.WithIdentity("test-server", "testdb-a");
+
+        var outcome = await Module(session, azure: azure).ExecuteAsync(Query("SELECT @Name AS N") with
+        {
+            TypedParameters = [new SqlHarnessParameterInput("Name", "nvarchar", "x")],
+            DryRun = true,
+        });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        Assert.Equal("query", report.Command);
+        Assert.Collection(report.Parameters, parameter =>
+        {
+            Assert.Equal("@Name", parameter.Name);
+            Assert.Equal("nvarchar", parameter.Type);
+            Assert.Equal(4000, parameter.Size);
+            Assert.Null(parameter.Precision);
+            Assert.Null(parameter.Scale);
+        });
+        Assert.Empty(azure.Calls);
+        Assert.Null(session.FactoryTarget);
+        Assert.Equal(new OutputFootprint(0, 0), outcome.EmissionReceipt?.RawFootprint);
+    }
+
+    [Fact]
+    public async Task Query_dry_run_preserves_bad_caller_parameter_detail_without_authenticating()
+    {
+        var azure = new FakeAzureCli(Token);
+        var session = FakeSqlSession.WithIdentity("test-server", "testdb-a");
+
+        var outcome = await Module(session, azure: azure).ExecuteAsync(Query("SELECT @Count") with
+        {
+            Parameters = ["Count:int=not-an-int"],
+            DryRun = true,
+        });
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Contains("not-an-int", outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+        Assert.Empty(azure.Calls);
+        Assert.Null(session.FactoryTarget);
+    }
+
+    [Fact]
+    public async Task Query_dry_run_redacts_an_exact_profile_credential_from_parameter_detail()
+    {
+        const string environmentName = "SQLHARNESS_DRY_RUN_TEST_PASSWORD";
+        const string password = "synthetic-dry-run-password-4982";
+        var previous = Environment.GetEnvironmentVariable(environmentName);
+        Environment.SetEnvironmentVariable(environmentName, password);
+        try
+        {
+            var profile = new Dictionary<string, TargetProfile>
+            {
+                ["secret"] = new("test-server", "testdb-a", new Dictionary<string, string>(), "sql", "user", environmentName),
+            };
+            var session = FakeSqlSession.WithIdentity("test-server", "testdb-a");
+            var operation = new SqlHarnessQueryOperation(
+                new SqlTargetRequest("secret", new Dictionary<string, string>()),
+                "SELECT @Count",
+                [$"Count:int={password}"],
+                30,
+                50,
+                false,
+                null)
+            {
+                DryRun = true,
+            };
+
+            var outcome = await Module(session, loadProfiles: () => profile).ExecuteAsync(operation);
+
+            Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+            Assert.Equal("Invalid value '[REDACTED]' for SQL parameter 'Count' of type 'int'.", outcome.SafeError);
+            Assert.DoesNotContain(password, outcome.SafeError ?? string.Empty, StringComparison.Ordinal);
+            Assert.Null(session.FactoryTarget);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(environmentName, previous);
+        }
+    }
+
+    [Fact]
     public async Task Target_mismatch_stops_before_user_sql()
     {
         var session = FakeSqlSession.WithIdentity("wrong-server", "master");

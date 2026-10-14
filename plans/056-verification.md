@@ -1,0 +1,44 @@
+# Plan 056 verification
+
+Branch: `feat/plan-056-parameters-dry-run`
+Worktree: `D:/Dev/sqlharness/.worktrees/plan-056`
+Implementation commits: `8275304..8e50fb5`
+Task 5 commits: `f3d48ff` documentation/capabilities; `f43782d` dry-run docs/fixture sync; `6e8232e` gate-required final-newline formatting. Evidence/status checkpoint before Linux: `58090c3`. Final cross-platform evidence/status commit: `d108ad3`. Later closeout commits are metadata-only.
+
+## Verification state
+
+The warning-as-error solution build passed at `f3d48ff`: `dotnet build SqlHarness.sln -warnaserror` reported 0 warnings and 0 errors.
+
+The complete Windows gate passed at `6e8232e`: `pwsh ./scripts/verify.ps1` returned `verify: OK`. UI: 32 test files and 148 tests passed. Core: 3837 passed, 0 failed, 0 skipped. MCP: 400 passed, 0 failed, 4 skipped. Its build reported 0 warnings and 0 errors. The four skipped MCP tests are live SQL Server/PostgreSQL stdio and published Linux/macOS smoke tests gated by their existing conditions.
+
+The first Windows run found two contract-sync failures: the new documentation assertion used wording that differed from the equivalent docs phrase, and the pinned `discoveryThenSchema` UTF-8 observation changed from 7562 to 7856 bytes after adding capability descriptions. The updated observation remains below the existing 8192-byte limit. The next run found `FINALNEWLINE` diagnostics on 25 files; `.editorconfig` sets `insert_final_newline = false`. Only the terminal CRLF/LF was removed from those checker-reported files. `dotnet format SqlHarness.sln --no-restore --verify-no-changes --include <the 25 reported files>` passed, and `git diff --ignore-space-at-eol` confirmed the repair contained no other content changes. The final Windows gate then passed.
+
+The complete Linux gate passed at `58090c3`: `pwsh ./scripts/verify-linux.ps1` returned `verify-linux: OK`. It synced that exact commit (`HEAD is now at 58090c3 docs(056): tidy verification checkpoint`). UI: 32 test files and 148 tests passed (the chart tests emitted jsdom zero-size container warnings). Core: 3837 passed, 0 failed, 0 skipped. MCP: 401 passed, 0 failed, 3 skipped; Linux x64 published-server and request-scoped smoke tests passed, while the configured live-target and native macOS checks were skipped. The build reported 0 warnings and 0 errors.
+
+## Local integration and post-merge verification
+
+Plan 056 was locally merged into `main` as `1bfac9e` (`Merge plan 056 parameter binding and dry runs`). The merge fixture conflict was resolved with the measured combined `discoveryThenSchema` output of 7860 UTF-8 bytes in two calls; the existing 8192-byte budget was unchanged. The focused `AgentWorkflowTests` check failed with the feature-side observation 7856 (`Expected: 7856`, `Actual: 7860`) and passed all 5 tests after updating the fixture to 7860. The Plan 028 capability version/buildId behavior and Plan 056 dry-run descriptions were retained. The two accidentally tracked SDD task-2/task-3 reports were excluded from the final merge tree; their files remain local and recoverable from earlier feature history. The scoped Sol low integration review found no blocking issue; its earlier Minor about the pending merge status is resolved by this merge and metadata update.
+
+The post-merge Windows gate ran `pwsh ./scripts/verify.ps1` at `1bfac9e` and returned `verify: OK`, exit 0. UI: 32 files/148 tests passed. Core: 3844 passed, 0 failed, 0 skipped. MCP: 400 passed, 0 failed, 4 skipped. Build: 0 warnings, 0 errors. Evidence: `D:/temp/sqlharness-plan056-local-integration/verify-windows.log`.
+
+The first `pwsh ./scripts/verify-linux.ps1` attempt stopped at `ui-check` with a missing `picomatch` package in the shared WSL clone. During that run, the shared clone changed HEAD from `1bfac9e` to `f241496` while another npm/vitest process was active; its log is `D:/temp/sqlharness-plan056-local-integration/verify-linux.log`. A dedicated ext4 clone at `/home/rgone/src/sqlharness-gate-plan056-1bfac9e` then ran the same Linux verification stages. The temporary script copy changed only its repository-root anchor and clone path, as shown by the two-line diff against `scripts/verify-linux.ps1`. It synced `HEAD is now at 1bfac9e` and returned `verify-linux: OK`, exit 0. UI: 32 files/148 tests passed. Core: 3844 passed, 0 failed, 0 skipped. MCP: 401 passed, 0 failed, 3 skipped. Build: 0 warnings, 0 errors. Evidence: `D:/temp/sqlharness-plan056-local-integration/verify-linux-isolated.ps1` and `verify-linux-isolated.log` in the same directory.
+
+## Review routing
+
+Plan routing: implementation by gpt-6-luna high; task review by gpt-6-luna xhigh; whole-branch review by gpt-6-sol low. Tasks 1–5 have completed task review. The whole-branch review at `d108ad3` returned Ready to merge: Yes, with no Critical, Important, or Minor findings. The earlier Vite bundle-size warning was confirmed as pre-existing and not a branch defect. Final reviewers' declined-to-judge items are resolved by existing rulings below: `sqlharness_validate` removal belongs to Plan 060, and dry-run storage/artifact preflight is intentionally excluded to preserve the no-write contract. The final reviewer also declined to establish provider-specific live binding/runtime behavior; no live database was provisioned or called, as recorded in the final ruling below. The local integration received a separate scoped Sol low review before the merge.
+
+## Recorded rulings and costs
+
+- Task 1 leaves production `ParameterSetFileReader` unchanged: it has no existing name-pattern validation to replace, and downstream preparation uses the shared normalizer with path-aware wrapping; the end-to-end `@Date` test passes. Cost if wrong: reader-only callers defer name rejection until binding, consistent with the existing reader behavior.
+- Task 2 fixed-width sizing follows SQL Server's available types: `char`/`nchar` do not have `max`; both use size 4000 for values through 4000 characters and NULL; `char` 4001–8000 uses actual length; `nchar` over 4000 and `char` over 8000 reject. Variable-width values can use `max`; explicit sizes stay unchanged. Cost if wrong: fixed-width long inputs differ from literal plan text and callers may need to choose `varchar`/`nvarchar` explicitly.
+- Task 3 keeps caller-provided invalid parameter values readable in validation details, while exact resolved credentials remain redacted. Cost if wrong: a caller sees their invalid value in the error detail; no new hidden credential source is exposed.
+- Task 4 returns measure dry runs before `CheckStorage` in both single-set and parameter-set paths, as compare does; artifact preflight performs writes, which conflicts with dry run's no-write contract. All argument validation stays before the return. Cost if wrong: dry run cannot predict runtime artifact-storage failures, which is documented as a limitation.
+- Task 5 updates `Capabilities.cs` and its fixture as required by `AGENTS.md`, so public capability descriptions follow the Core/MCP contract. Cost if wrong: a small additional capability/fixture diff.
+- `sqlharness_validate` remains until plan 060; the spec allocates its removal to 060 after 056 ships. Cost if wrong: the old tool remains exposed through one plan.
+- Final review remains offline: do not provision or call a live database — both mandated gates are offline and conditional integration targets were not authorized/provided; unit/contract tests cover Plan 056 behavior. Cost if wrong: provider-specific live binding/runtime behavior is not established by this verification.
+- Integration resumed with Sol high when Luna high hit a usage limit; the user's requested continuation and the bounded fixture conflict supported finishing the merge. Cost if wrong: higher model cost for this small integration task.
+- The SDD task-2/task-3 reports were excluded from the merge tree because they were local scratch; durable evidence remains in this verification record. Cost if wrong: those per-task reports are available only locally and in earlier feature commits.
+- Sol low performed the scoped integration review while Luna was unavailable, preserving an independent check with the user's selected whole-branch reviewer model. Cost if wrong: this small merge fix used different task-review routing than the requested Luna xhigh route.
+- The unchanged Linux gate stages ran in a dedicated ext4 clone after shared-clone interference; only the temporary script's repository-root anchor and clone path changed. Cost if wrong: an additional disposable clone and verification time were used.
+
+SQL Server type references for the fixed-width correction: [char and varchar](https://learn.microsoft.com/en-us/sql/t-sql/data-types/char-and-varchar-transact-sql?view=sql-server-ver17) and [nchar and nvarchar](https://learn.microsoft.com/en-us/sql/t-sql/data-types/nchar-and-nvarchar-transact-sql?view=sql-server-ver17).

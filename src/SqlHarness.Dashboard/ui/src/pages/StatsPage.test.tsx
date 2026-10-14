@@ -12,36 +12,22 @@ test("shows KPIs, charts and top lists, and switches range", async () => {
   const calls = stubFetch({ "/api/stats": stats(), "/api/profiles": profilesResponse() })
   renderApp("/stats")
 
-  expect(await screen.findByText("90%")).toBeInTheDocument()
-  expect(screen.getByText(/5 of 6 operations have both estimates; 1 raw only/)).toBeInTheDocument()
+  expect(await screen.findByText("Workflow output cost")).toBeInTheDocument()
+  expect(screen.getByText("single-measured-execution-output")).toBeInTheDocument()
+  expect(screen.getByText(/Input, discovery and chat are unmeasured/)).toBeInTheDocument()
+  expect(screen.getByText("Estimated output-token delta")).toBeInTheDocument()
+  expect(screen.getByText("Dry runs")).toBeInTheDocument()
+  expect(screen.getByText("Database executions")).toBeInTheDocument()
+  expect(screen.getByText(/Token estimation method: UTF-8 bytes divided by four, rounded up/)).toBeInTheDocument()
   expect(screen.getByText("Operations per day (UTC)")).toBeInTheDocument()
   expect(screen.getByText("aaaaaaaaaaaa")).toBeInTheDocument()
   expect(screen.getByRole("cell", { name: "Orders" })).toBeInTheDocument()
   expect(screen.getByRole("cell", { name: "PAGEIOLATCH_SH" })).toBeInTheDocument()
 
   await userEvent.click(screen.getByRole("tab", { name: "All time" }))
-  await screen.findByText("90%")
+  await screen.findByText("Workflow output cost")
   expect(calls.some(call => call.startsWith("/api/stats?") && !call.includes("from="))).toBe(true)
   expect(calls.some(call => call.startsWith("/api/stats?from="))).toBe(true)
-})
-
-test("shows estimated savings in USD per model with coverage notes", async () => {
-  stubFetch({
-    "/api/stats": stats({ savings: {
-      priceSource: "models.dev", pricesFetchedAt: "2026-10-11T00:00:00Z", totalUsd: 0.00144,
-      byModel: [{ provider: "openai", model: "gpt-6-sol", operations: 2, savedTokens: 720, usd: 0.00144 }],
-      withoutModel: 1, unpriced: 1,
-    } }),
-    "/api/profiles": profilesResponse(),
-  })
-  renderApp("/stats")
-
-  expect(await screen.findByText("Savings (USD)")).toBeInTheDocument()
-  expect(screen.getByRole("cell", { name: "gpt-6-sol" })).toBeInTheDocument()
-  expect(screen.getAllByText("$0.0014").length).toBeGreaterThan(0)
-  expect(screen.getByText("1 operation without a known model")).toBeInTheDocument()
-  expect(screen.getByText("1 operation with an unpriced model")).toBeInTheDocument()
-  expect(screen.getByText("at current prices (models.dev, 2026-10-11)")).toBeInTheDocument()
 })
 
 test("per-day chart keys series by index so agent kinds never reach CSS variable names", async () => {
@@ -103,36 +89,11 @@ test("no-profile activity has a distinct scope and drills down without a profile
   expect(requests[0].searchParams.get("unprofiled")).toBe("true")
 })
 
-test("explains raw-only MCP coverage and keeps missing gain unavailable", async () => {
-  stubFetch({
-    "/api/stats": stats({ tokens: { raw: 0, emitted: 0, totalOperations: 2, pairedOperations: 0,
-      rawOnlyOperations: 2, emittedOnlyOperations: 0, missingBothOperations: 0 } }),
-    "/api/profiles": profilesResponse(),
-  })
-  renderApp("/stats")
-
-  expect(await screen.findByText("Unavailable")).toBeInTheDocument()
-  expect(screen.getByText(/0 of 2 operations have both estimates; 2 raw only, 0 emitted only, 0 missing both/)).toBeInTheDocument()
-  expect(screen.getByText(/Gain unavailable because no operation has both estimates/)).toBeInTheDocument()
-  expect(screen.getByText(/Estimates use output bytes, not actual model usage/)).toBeInTheDocument()
-})
-
-test("preserves negative net savings", async () => {
-  const tokens = { raw: 100, emitted: 120, totalOperations: 1, pairedOperations: 1,
-    rawOnlyOperations: 0, emittedOnlyOperations: 0, missingBothOperations: 0 }
-  stubFetch({ "/api/stats": stats({ tokens }), "/api/profiles": profilesResponse() })
-  renderApp("/stats")
-  expect(await screen.findByText("-20%")).toBeInTheDocument()
-  expect(screen.getByText(/1 of 1 operations have both estimates/)).toBeInTheDocument()
-})
-
 test("distinguishes empty activity from incomplete estimate coverage", async () => {
-  stubFetch({ "/api/stats": stats({ operations: [], statuses: [], profileOperations: [],
-    tokens: { raw: 0, emitted: 0, totalOperations: 0, pairedOperations: 0, rawOnlyOperations: 0,
-      emittedOnlyOperations: 0, missingBothOperations: 0 } }), "/api/profiles": profilesResponse() })
+  stubFetch({ "/api/stats": stats({ operations: [], statuses: [], profileOperations: [], workflowCosts: [] }),
+    "/api/profiles": profilesResponse() })
   renderApp("/stats")
-  expect(await screen.findByText("No activity")).toBeInTheDocument()
-  expect(screen.getByText(/No operations in this time range/)).toBeInTheDocument()
+  expect(await screen.findByText("No measured workflow output in this time range.")).toBeInTheDocument()
 })
 
 test("selects a profile and shows filtered, searchable dimension matrix totals", async () => {

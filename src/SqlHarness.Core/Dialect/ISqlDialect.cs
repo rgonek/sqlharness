@@ -3,7 +3,6 @@ namespace SqlHarness.Core.Dialect;
 internal interface ISqlDialect
 {
     SqlEngine Engine { get; }
-    string PingSql { get; }
 
     SqlSafetyDecision Classify(
         string sql,
@@ -30,16 +29,8 @@ internal interface ISqlDialect
         int timeoutSeconds,
         int repetition,
         string variant,
-        CanonicalResultAccumulator raw,
+        CanonicalResultAccumulator? raw,
         bool captureComparison,
         int comparisonMaximumRows,
         CancellationToken ct);
-
-    string CountsCatalogSql { get; }
-
-    string BuildCountsExactSql(IReadOnlyList<ResolvedCountObject> objects);
-
-    string SchemaSql { get; }
-
-    string SpaceSql { get; }
 }

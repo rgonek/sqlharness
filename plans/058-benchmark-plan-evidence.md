@@ -14,7 +14,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: DONE — implementation and final-review correction through `6fa9c7f`; Windows and Linux gates passed on that source SHA; see [verification record](058-verification.md).
 - Priority: P1
 - Effort: M
 - Risk: LOW (read-only additions; one documented value disclosure the caller already supplied)
@@ -97,7 +97,7 @@ byte-budget fitting, not by a preselected page size. Keep includeText=false as t
 when true, predicates follow the current text policy and clipping is explicit. A page with no node
 space returns a controlled budget error, never a non-advancing cursor.
 
-- [ ] **Step 1: Write failing tests using synthetic stored-plan fixtures**
+- [x] **Step 1: Write failing tests using synthetic stored-plan fixtures**
 
 Assertions:
 - The reader accepts existing serializer output including unknown additive properties, rejects malformed
@@ -113,12 +113,12 @@ Assertions:
 - Old manifests with stored plans remain readable; wrong owner/scope and invalid selectors stay rejected.
 - Corrupt/incomplete saved evidence reports the gap; it does not become a stable or empty plan.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure** — historical RED was not captured before implementation; accepted with explicit disclosure and behavior-focused GREEN tests (see the task report and SDD ruling).
 
 Run: dotnet test SqlHarness.sln --filter "FullyQualifiedName~ArtifactReader|FullyQualifiedName~PlanDistiller|FullyQualifiedName~McpMapping|FullyQualifiedName~McpTokenBudget".
 Expected: missing plan-reader/pagination contract or the old unsupported deserialization path.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Read each stored document's Statements collection through StoredPlanReader, build the selected variant/set's
 measured statement inventory, then select the requested statement/repetition. Never equate file count with
@@ -131,7 +131,7 @@ Add cursor pagination to the existing operators section as well. This makes the 
 statements/operators/plan continuation promise concrete. If the persisted operators summary already contains
 only a capped subset, expose that provenance; only the plan-node section promises full saved-node coverage.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run the Step 2 filter; expected PASS. Commit scoped source/tests with
 feat(058): stored plan reader with explicit repetition evidence and node pagination.
@@ -150,7 +150,7 @@ Reading a plan never asserts that a human/agent reviewed it.
 **Interfaces:**
 - Produces: `internal static string TempTableKey.Normalize(string table)` in `Diagnostics.cs`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```csharp
 [Theory]
@@ -173,9 +173,9 @@ public void Repeated_runs_share_one_temp_table_key()
 
 Use the property name `StatisticsIo` exposes on HEAD for per-table reads.
 
-- [ ] **Step 2: Run to verify failure** — `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~Temp_table|FullyQualifiedName~Repeated_runs"` → FAIL.
+- [x] **Step 2: Run to verify failure** — `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~Temp_table|FullyQualifiedName~Repeated_runs"` → FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```csharp
 internal static partial class TempTableKey
@@ -199,7 +199,7 @@ internal static partial class TempTableKey
 
 In both parsers wrap the extracted name: `var table = TempTableKey.Normalize(match.Groups["table"].Value.Replace("''", "'", StringComparison.Ordinal));`. When two lines of one run normalize to the same key (two temp tables of the same name cannot coexist in one session, but a dropped and recreated one can), sum their reads, as the parsers already do for repeated table lines.
 
-- [ ] **Step 4: Run and commit** — `dotnet test tests/SqlHarness.Tests` → PASS.
+- [x] **Step 4: Run and commit** — `dotnet test tests/SqlHarness.Tests` → PASS.
 
 ```bash
 git add src/SqlHarness.Core/Diagnostics.cs tests
@@ -221,16 +221,16 @@ tests/SqlHarness.Mcp.Tests/McpOutputTests.cs.
 **Interfaces:** Add ParameterValue to AgentMatrixCase and matrix-case continuation references.
 Source the value from the bound source cell; a typed NULL remains null.
 
-- [ ] Step 1: Add a synthetic matrix with int values "1", null, "20".
+- [x] Step 1: Add a synthetic matrix with int values "1", null, "20".
   Assert that cases and all continued references retain those exact values. Under a detail-limited
   projection the complete inventory remains intact if it fits; when the inventory itself cannot fit,
   continuation recovers all values once in index order. No data value is redacted merely for being data.
-- [ ] Step 2: Run dotnet test SqlHarness.sln --filter "FullyQualifiedName~CompareMatrix|FullyQualifiedName~McpOutput".
+- [x] Step 2: Run dotnet test SqlHarness.sln --filter "FullyQualifiedName~CompareMatrix|FullyQualifiedName~McpOutput".
   Expected: missing case-value property or all-null projection.
-- [ ] Step 3: Populate values in inventory and continuation, sharing plan 055's schema.
+- [x] Step 3: Populate values in inventory and continuation, sharing plan 055's schema.
   Document case/detail omission separately. Plan 061 later adds set labels to the same inventory.
-- [ ] Step 4: Run the Step 2 filter; expected PASS.
-- [ ] Step 5: Commit fix(058): matrix case inventory retains measured parameter values.
+- [x] Step 4: Run the Step 2 filter; expected PASS.
+- [x] Step 5: Commit fix(058): matrix case inventory retains measured parameter values.
 
 **Acceptance:** Visible case identity includes the supplied matrix value, and optional-detail limits
 never erase another case's identity.
@@ -238,9 +238,9 @@ never erase another case's identity.
 ---
 ### Task 4: Documentation and gates
 
-- [ ] **Step 1:** `docs/mcp.md` Artifacts section and Tools table: the `plan` section, its arguments and explicit repetition selection, shape-availability diagnostics and node/operator pagination; temp-table key normalization in the per-table reads description. `README.md` artifact section; `skills/sqlharness/SKILL.md` artifact sections list; `DocsSyncTests` pins.
-- [ ] **Step 2:** `dotnet build SqlHarness.sln -warnaserror`; `pwsh scripts/verify.ps1`; `pwsh scripts/verify-linux.ps1`.
-- [ ] **Step 3:** Status DONE; `plans/README.md` row.
+- [x] **Step 1:** `docs/mcp.md` Artifacts section and Tools table: the `plan` section, its arguments and explicit repetition selection, shape-availability diagnostics and node/operator pagination; temp-table key normalization in the per-table reads description. `README.md` artifact section; `skills/sqlharness/SKILL.md` artifact sections list; `DocsSyncTests` pins.
+- [x] **Step 2:** `dotnet build SqlHarness.sln -warnaserror`; `pwsh scripts/verify.ps1`; `pwsh scripts/verify-linux.ps1`.
+- [x] **Step 3:** Status DONE; `plans/README.md` row.
 
 ```bash
 git add docs README.md skills tests plans
@@ -249,11 +249,11 @@ git commit -m "docs(058): plan section, temp-table keys, matrix values"
 
 ## Done criteria
 
-- [ ] `artifact(section: plan, variant: baseline, statement: n)` returns operators with object and index names for a real compare artifact.
-- [ ] A temp table measured over 20 repetitions has one key whose median equals its per-run reads.
-- [ ] Matrix cases/overview and continuation references show their values (adapt to plan 055 inventory contract).
-- [ ] Paged plan nodes reconstruct the whole saved hierarchy; stored JSON is read without unsupported model deserialization.
-- [ ] Both gates pass; README row updated.
+- [x] `artifact(section: plan, variant: baseline, statement: n)` returns operators with object and index names for a saved compare artifact (covered by saved-plan reader tests; no live database artifact was used).
+- [x] A temp table measured over 20 repetitions has one key whose median equals its per-run reads (normalization is covered by both parser paths; no live database run was used).
+- [x] Matrix cases/overview and continuation references show their values (adapt to plan 055 inventory contract).
+- [x] Paged plan nodes reconstruct the whole saved hierarchy; stored JSON is read without unsupported model deserialization.
+- [x] Both gates pass; README row updated.
 
 ## STOP conditions
 

@@ -1,11 +1,13 @@
 ---
 name: sqlharness
-description: Use when a coding agent needs SQL Server, Azure SQL, or PostgreSQL evidence through SQLHarness — offline validate and capabilities, bounded queries, measure/compare benchmarks with result equivalence, plan distillation, schema, ping, counts, space, watch, snapshot, qstop, missing indexes, saved artifact sections, or the MCP server.
+description: Use when a coding agent needs SQL Server, Azure SQL, or PostgreSQL evidence through SQLHarness — dry runs, bounded queries, measure/compare benchmarks with result equivalence, plan distillation, missing indexes, watch, snapshot, saved artifact sections, or the MCP server.
 ---
 
 # SQLHarness
 
 SQLHarness runs bounded SQL Server and PostgreSQL work for coding agents and guards target resolution and SQL execution. [README.md](../../README.md) is the reference for every option and rule, [AGENTS.md](../../AGENTS.md) is the contract, and this skill is the order of work. Look up options and defaults with `sqlharness <command> --help`; the command list is [README Commands](../../README.md#commands).
+
+Release binaries derive their numeric version from the release tag (for example, `v0.4.0` produces `0.4.0`). Local development builds report `0.0.0` with `--version`; the informational `buildId` is `0.0.0-dev` and may include a commit suffix.
 
 ## Start offline
 
@@ -13,10 +15,10 @@ SQLHarness runs bounded SQL Server and PostgreSQL work for coding agents and gua
 ```powershell
 sqlharness capabilities prod-eu --json
 sqlharness doctor --json
-sqlharness validate prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --json
+sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --dry-run --json
 ```
 
-None of these connects. `capabilities <profile>` adds that profile's engine, parameter types and limits; without a profile it returns engine-neutral discovery only. `validate` classifies the SQL for the profile and reports required parameters: classify setup with `--usage setup` and a measured batch with `--usage benchmark --setup <file>`. A passing `validate` never authorizes a later mutation. Details: [README Agent startup](../../README.md#agent-startup).
+None of these connects. `capabilities <profile>` adds that profile's engine, parameter types and limits; without a profile it returns engine-neutral discovery only. `--dry-run` (MCP `dryRun: true`) is the offline preflight of the exact `query`, `measure` or `compare` invocation ([README dry-run rule](../../README.md#safety-contract)).
 
 ## Scope lock
 
@@ -25,17 +27,12 @@ Lock one closed named profile and one `--var` set per invocation; a different pr
 ## Workflow
 
 1. **Inventory** representative cases offline before measuring: row count, cardinality distribution, ordering ties, missing history, boundary dates, empty results. Keep ticket SQL outside the application repository.
-2. **Helpers** come before ad-hoc SQL: `ping` (readiness), `counts` (approximate partition estimates; `--exact` for `COUNT_BIG(*)`), `schema` (`--object` for one table or view), `space` (storage). They run fixed internal SQL and never accept arbitrary SQL.
-3. **`query`** returns one bounded read-only batch. Bind values as typed `--param name[:type]=value` (types: [README Quick start](../../README.md#quick-start), or `capabilities <profile>`).
-4. **`measure`** collects repeated timing, IO and plan evidence for one query; **`compare`** adds baseline/candidate result equivalence and a latency `regression.verdict` (on `inconclusive`, read `reasons`; the verdict never changes the exit code). For both, put preparation in `--setup` (runs once on the measured session). One query across several parameter sets: `measure --param-set` ([README Measure parameter sets](../../README.md#measure-parameter-sets)).
-5. **`plan`** distills a saved showplan offline, with no scope lock.
+2. **`query`** returns one bounded read-only batch; catalog facts (columns, row counts, existing indexes, storage) come from it too. Bind values as typed `--param name[:type]=value`; names may include one leading `@`, and reports use `@Name`. Unsized variable-width strings bind at size 4000 through 4000 characters and `max` above that, matching Dapper so the benchmark compiles the application's plan. Fixed-width `char`/`nchar` cannot use `max`: `char` accepts through 8000 (using actual length above 4000), `nchar` through 4000, and both use size 4000 up to that boundary, including NULL. Explicit sizes are unchanged. Types: [README Quick start](../../README.md#quick-start), or `capabilities <profile>`.
+3. **`measure`** collects repeated timing, IO and plan evidence for one query; **`compare`** adds baseline/candidate result equivalence and a latency `regression.verdict` (on `inconclusive`, read `reasons`; the verdict never changes the exit code). For both, put preparation in `--setup` (runs once on the measured session). One query across several parameter sets: `measure --param-set` ([README Measure parameter sets](../../README.md#measure-parameter-sets)).
+4. **`plan`** distills a saved showplan offline, with no scope lock.
 
 <!-- docs-sync:example -->
 ```powershell
-sqlharness ping prod-eu --var tenant=acme --var env=uat --json
-sqlharness counts prod-eu --var tenant=acme --var env=uat --table Contracts --table SourceFiles --exact --json
-sqlharness schema prod-eu --var tenant=acme --var env=uat --object dbo.Contracts --json
-sqlharness space prod-eu --var tenant=acme --var env=uat --top 25 --json
 sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --json
 sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\queries\orders.sql --setup .\queries\setup.sql --repeat 5 --json-summary
 sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\before.sql --candidate .\queries\after.sql --compare-results multiset --repeat 5 --json-summary
@@ -43,21 +40,19 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\before.s
 sqlharness plan .\artifacts\orders.sqlplan --json
 ```
 
-`space` diagnoses storage only through read-only DMVs and `--object dbo.Contracts` adds per-index detail; shrink, recovery-model, compression and index changes go through an approved `query --allow-mutation` batch. `compare --matrix` varies one parameter, opening a new connection and running setup once per value; its rules sit next to the matrix example in [README Quick start](../../README.md#quick-start).
+`compare --matrix` varies one parameter, opening a new connection and running setup once per value; its rules sit next to the matrix example in [README Quick start](../../README.md#quick-start).
 
-**Output.** Prefer `--json`; on `measure` and `compare`, `--json-summary` is the bounded projection. A byte-budgeted envelope (`--output agent`): [README Commands](../../README.md#commands).
+**Output.** Prefer `--json`; on `measure` and `compare`, `--json-summary` is the bounded projection. `--output agent` and MCP use one compact schema version 2 JSON text block. Both default to 65536 UTF-8 bytes per report; MCP `--max-result-bytes` sets a process ceiling of 262144 bytes, and a call may raise or lower its budget up to that ceiling. Every report uses the detail ladder `unbounded, 128, 64, 32, 16, 8, 4, 2, 1, 0`. Query projections identify CLR value types and every clipped retained cell by row, column, original length and returned length. Compare matrices retain their case inventory before optional details; per-table reads are ordered by median reads. See [README Commands](../../README.md#commands) and [MCP output contract](../../docs/mcp.md#result-envelope-errors-and-budgets).
 
 **Polling.** `watch` replaces a loop of ad-hoc `query` calls: it stops on `--until <predicate>` or `--until-unchanged <polls>`, and exits `7` when `--max-duration` elapses first. `watch --output ndjson` streams a `started` event, a `changed` event per change, and one terminal `completed` or `failed` record ([README Commands](../../README.md#commands)).
 
 **Before/after results.** `snapshot --name` stores a canonical result under `~/.sqlharness/snapshots` (`--force` to replace a name). `snapshot --diff` reports locations and kinds without cell values: exit `8` means a valid comparison found differences rather than an execution failure ([README Commands](../../README.md#commands)).
 
-**Query Store** (SQL Server). `qstop` ranks consumers by total duration; one item aggregates all plans and runtime intervals of one `query_id`. A high rank is a lead to `measure`, `compare` and `plan`, not proof the query is defective. An empty readable window exits `0`; unavailable Query Store (`OFF`, `ERROR`) exits `5`. Stdout has no SQL text; the text sits in `artifactDirectory/queries.jsonl` ([README Commands](../../README.md#commands)).
+**Missing indexes** (SQL Server): read the measured plan's `missingIndexes` (artifact `plan` section via `sqlharness artifact <id> --section plan --variant query|candidate` / `sqlharness_artifact`, or `plan <file> --json` on a saved `.sqlplan`; not in `--json-summary`), then check the table's existing indexes with a scoped `query` on `sys.indexes` and `sys.index_columns` before proposing one; creating an index goes through the mutation gate.
 
-**Missing indexes** (SQL Server): `indexes` before proposing an index; creating one goes through the mutation gate ([README Commands](../../README.md#commands)).
+**Saved benchmarks**: `artifact <id> --section <section>` reads `summary`, `metrics`, `operators`, `statements`, `matrix-cells`, or `plan` offline. Paged sections use `--cursor`. For `plan`, select `--variant baseline|candidate|query`, optional zero-based `--statement`, `--parameter-set`, and available measured `--repetition`; by default the last measured repetition is identified in the response. Available repetitions include measured runs with no saved plan; selecting such a run reports the missing evidence instead of falling back to an earlier run. `--include-text` opts into bounded statement text and predicates. Saved nodes continue in preorder pages; `planShapeStable` describes comparable saved operator/object/index/predicate shape, never timing or row-count stability, and reports unavailable evidence as `null`. The noteworthy `operators` list is capped even though it is paged ([README Commands](../../README.md#commands)). SQL Server per-table read keys normalize session-suffixed temp-table names before aggregation.
 
-**Saved benchmarks**: `artifact <id> --section summary` rereads a `measure`/`compare` result offline ([README Commands](../../README.md#commands)).
-
-**MCP.** `sqlharness mcp serve` exposes the tools to one local stdio client and runs no explicit persistent mutations; PostgreSQL TEMP setup can still reach a persistent-writing user function, so use a least-privilege principal ([details](../../docs/mcp.md#no-persistent-mutations)). In request scope the operator's `--allow-profile` list approves profile switches; different variables still need a new user request. Start, scope and limits: [docs/mcp.md](../../docs/mcp.md).
+**MCP.** `sqlharness mcp serve` exposes the tools to one local stdio client and runs no explicit persistent mutations; PostgreSQL TEMP setup can still reach a persistent-writing user function, so use a least-privilege principal ([details](../../docs/mcp.md#no-persistent-mutations)). In request scope the operator's `--allow-profile` list approves profile switches; different variables still need a new user request. Call `sqlharness_capabilities` when this connection's runtime configuration (scope mode, allowed profiles, input roots, limits) is unknown; reuse the result for the connection and call again after a reconnect or server restart. Calls run concurrently and nothing serializes benchmarks, so measure while the server is quiet and repeat a close comparison. Start, scope and limits: [docs/mcp.md](../../docs/mcp.md).
 
 <!-- docs-sync:example -->
 ```powershell
@@ -65,8 +60,6 @@ sqlharness watch prod-eu --var tenant=acme --var env=uat --file .\queries\progre
 sqlharness watch prod-eu --var tenant=acme --var env=uat --file .\queries\progress.sql --until-unchanged 3 --output ndjson
 sqlharness snapshot prod-eu --var tenant=acme --var env=uat --file .\queries\coverage.sql --name before-import --json
 sqlharness snapshot prod-eu --var tenant=acme --var env=uat --file .\queries\coverage.sql --name before-import --diff --json
-sqlharness qstop prod-eu --var tenant=acme --var env=uat --top 20 --window 24h --json
-sqlharness indexes prod-eu --var tenant=acme --var env=uat --object dbo.Contracts --json
 sqlharness artifact <id> --section summary --json
 ```
 
@@ -92,16 +85,18 @@ For `measure` and for `compare` without `--matrix`, `--setup` runs once on the m
 
 Any ScriptDom-parsable construct inside a top-level `SELECT` is accepted, so SQLHarness handles unfamiliar nested syntax; report a safe nested fragment it rejects as a SQLHarness compatibility bug. `sqlcmd` is not a fallback.
 
+SQL Server control flow: Allowed control flow: IF, ELSE, BEGIN … END (any nesting). Still denied: WHILE, BREAK, CONTINUE, GOTO, labels, RETURN, TRY … CATCH, WAITFOR, THROW, RAISERROR. A branch is classified even when its predicate is constant false: classifier never evaluates predicates. SQL Server only. PostgreSQL unchanged.
+
 ## Equivalence
 
 `compare --compare-results` (default `ordered`; also `multiset`, `set`, `off`) checks observed rows: technical equivalence, not domain equivalence. For a domain check use two-direction `EXCEPT`, or grouped counts when duplicates matter. Modes, nullability and limits: [README Result equivalence](../../README.md#result-equivalence-and-compact-output).
 
 ## PostgreSQL
 
-- **Remote profiles** set `"sslMode": "verify-full"` explicitly. An omitted `sslMode` keeps the legacy mapping, where `trustServerCertificate: false` encrypts without verifying the certificate. Combinations, `rootCertificate` and legacy behaviour: [README PostgreSQL engine notes](../../README.md#postgresql-engine-notes).
+- **Remote profiles** set `"sslMode": "verify-full"` explicitly. An omitted `sslMode` keeps the legacy mapping, where `trustServerCertificate: false` encrypts without verifying the certificate; that legacy mapping and `require` / `disable` give a man-in-the-middle the credential and the result data, because authentication completes before any identity check. Combinations, `rootCertificate` and legacy behaviour: [README PostgreSQL engine notes](../../README.md#postgresql-engine-notes).
+- **Session lexing**: a session that does not report `standard_conforming_strings = on` is refused with exit `2` before any classified SQL runs, because the offline classifier and the server must agree on where string literals end. There is no profile opt-out; fix the role or database default on the server.
 - Each non-approved command runs in its own `READ ONLY` transaction. TEMP setup runs outside it under static checks, and a setup `SELECT` can still call a user function that writes persistently: review setup SQL.
-- Benchmarks time one statement with `EXPLAIN (ANALYZE, BUFFERS)`: `CpuTimeMs` is `0`, `logicalReads` are buffer hits plus reads, and `missingIndexes` is empty. `qstop` and `indexes` are SQL Server only.
-- Catalog matching (`--like`, `--filter`, `--object`) is case-sensitive as stored.
+- Benchmarks time one statement with `EXPLAIN (ANALYZE, BUFFERS)`: `CpuTimeMs` is `0`, `logicalReads` are buffer hits plus reads, and `missingIndexes` is empty.
 - **Top statements**: rank `pg_stat_statements` with a `query`: save the SQL below as `.\queries\pg-top-statements.sql`. The extension must be installed on the server; the column names are PostgreSQL 13+.
 
 ```sql
@@ -132,7 +127,9 @@ MCP file inputs require an absolute path lexically under a configured `--input-r
 
 ## Local outputs and exit codes
 
-Locally sensitive outputs are pasted, attached or published only after the user's explicit review: `.sqlplan` files, measure/compare artifacts, snapshots under `~/.sqlharness/snapshots` (result data), `qstop`'s `queries.jsonl` (SQL text), `--param-set` files and `~/.sqlharness/data/activity.db`. Secrets live in the environment variables the profile names, and in process memory only.
+Locally sensitive outputs are pasted, attached or published only after the user's explicit review: `.sqlplan` files, measure/compare artifacts, snapshots under `~/.sqlharness/snapshots` (result data), `--param-set` files and `~/.sqlharness/data/activity.db`. Secrets live in the environment variables the profile names, and in process memory only.
 
 Exit codes, redaction and artifact rules: [README Safety contract](../../README.md#safety-contract). Every output replaces the profile password and Azure SQL token fetched by Azure CLI for the current operation; other text, including caller SQL quoted in server errors, stays readable. `2` is a validation or safety stop, `5` a SQL execution failure.
-The activity journal stores credential-redacted error messages by default; SQL text and full plans require `journal.storeSensitive` ([Activity journal](../../README.md#activity-journal-and-savings)).
+The activity journal stores credential-redacted error messages by default; SQL text and full plans require `journal.storeSensitive` ([Activity journal](../../README.md#activity-journal-and-workflow-output-cost)).
+
+Dashboard workflow cost uses persisted output bytes as authoritative measurements and labels `utf8-bytes-div-4` token values as estimates. The `single-measured-execution-output` baseline includes the first measured result/messages for each variant and parameter set in the producer; it excludes warm-ups, later repeats, and plan XML. The comparison describes output volume, not actual token savings. Dry-run responses add output bytes and call counts but not database-execution counts, and cannot be baselines. Input, discovery and chat are unmeasured. Artifact reads link to producers through exact operation references; unreferenced history stays `legacy-artifact-volume`, with no inferred lineage. Schema v7 adds nullable `operation_ref` and `parent_operation_ref` plus `dry_run` (`NOT NULL DEFAULT 0`). It reuses the `raw_bytes` and `emitted_bytes` columns introduced in v3; stored byte values remain intact, and legacy token columns remain readable. See [workflow output cost](../../README.md#activity-journal-and-workflow-output-cost).

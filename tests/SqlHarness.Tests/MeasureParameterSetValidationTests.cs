@@ -203,8 +203,8 @@ public sealed class MeasureParameterSetValidationTests
             null,
             "select @name");
 
-        Assert.Equal(1, sets[0].Parameters.Single().Size);
-        Assert.Equal(4, sets[1].Parameters.Single().Size);
+        Assert.Equal(4000, sets[0].Parameters.Single().Size);
+        Assert.Equal(4000, sets[1].Parameters.Single().Size);
         Assert.Equal("a", sets[0].Parameters.Single().Value);
         Assert.Equal("abcd", sets[1].Parameters.Single().Value);
         Assert.NotEqual(sets[0].ValueHash, sets[1].ValueHash);

@@ -9,70 +9,6 @@ public class ContractsTests
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
     [Fact]
-    public void Documentation_covers_read_only_database_helpers()
-    {
-        var readme = ReadRepositoryFile("README.md");
-        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
-
-        foreach (var doc in new[] { readme, skill })
-        {
-            Assert.Contains("ping", doc, StringComparison.Ordinal);
-            Assert.Contains("counts", doc, StringComparison.Ordinal);
-            Assert.Contains("--exact", doc, StringComparison.Ordinal);
-            Assert.Contains("--object", doc, StringComparison.Ordinal);
-            Assert.True(
-                doc.Contains("partition", StringComparison.OrdinalIgnoreCase)
-                || doc.Contains("approximate", StringComparison.OrdinalIgnoreCase),
-                "Helper docs must describe counts partition/approximate defaults.");
-            Assert.True(
-                doc.Contains("arbitrary SQL", StringComparison.OrdinalIgnoreCase)
-                || doc.Contains("no user SQL", StringComparison.OrdinalIgnoreCase)
-                || doc.Contains("never accept arbitrary", StringComparison.OrdinalIgnoreCase)
-                || doc.Contains("does not accept arbitrary", StringComparison.OrdinalIgnoreCase)
-                || doc.Contains("fixed internal", StringComparison.OrdinalIgnoreCase),
-                "Helper docs must state that helpers do not accept arbitrary SQL.");
-        }
-
-        Assert.Contains("Prefer `--json`", skill, StringComparison.Ordinal);
-        Assert.Contains("sqlharness ping prod-eu", readme, StringComparison.Ordinal);
-        Assert.Contains("sqlharness schema prod-eu", skill, StringComparison.Ordinal);
-        Assert.Contains("--object dbo.Contracts", skill, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Documentation_covers_database_space_inspection()
-    {
-        var readme = ReadRepositoryFile("README.md");
-        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
-
-        foreach (var doc in new[] { readme, skill })
-        {
-            Assert.Contains("space", doc, StringComparison.Ordinal);
-            Assert.Contains("--top", doc, StringComparison.Ordinal);
-            Assert.Contains("--object", doc, StringComparison.Ordinal);
-            Assert.True(
-                doc.Contains("DMV", StringComparison.OrdinalIgnoreCase)
-                || doc.Contains("dm_db", StringComparison.OrdinalIgnoreCase),
-                "Space docs must describe read-only DMV inspection.");
-            Assert.True(
-                doc.Contains("shrink", StringComparison.OrdinalIgnoreCase)
-                && doc.Contains("recovery", StringComparison.OrdinalIgnoreCase)
-                && doc.Contains("compression", StringComparison.OrdinalIgnoreCase),
-                "Space docs must prohibit shrink/recovery/compression mutation.");
-            Assert.True(
-                doc.Contains("diagnos", StringComparison.OrdinalIgnoreCase)
-                || doc.Contains("storage only", StringComparison.OrdinalIgnoreCase),
-                "Space docs must state that the command diagnoses storage only.");
-            Assert.Contains("allow-mutation", doc, StringComparison.OrdinalIgnoreCase);
-        }
-
-        Assert.Contains("sqlharness space prod-eu", readme, StringComparison.Ordinal);
-        Assert.Contains("sqlharness space prod-eu", skill, StringComparison.Ordinal);
-        Assert.Contains("--top 25", skill, StringComparison.Ordinal);
-        Assert.Contains("--object dbo.Contracts", skill, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void Documentation_covers_watch_and_snapshot_workflows()
     {
         var readme = ReadRepositoryFile("README.md");
@@ -129,30 +65,6 @@ public class ContractsTests
         Assert.Contains("--diff", skill, StringComparison.Ordinal);
     }
 
-    // Structural pins (plan 029 Step 5): README owns the wording; the skill links the canonical
-    // section, and both carry the runnable command. Sentences are not pinned in two documents.
-    [Fact]
-    public void Documentation_covers_query_store_top_consumers()
-    {
-        var readme = ReadRepositoryFile("README.md");
-        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
-        const string example =
-            "sqlharness qstop prod-eu --var tenant=acme --var env=uat --top 20 --window 24h --json";
-
-        Assert.Contains(example, readme, StringComparison.Ordinal);
-        Assert.Contains(example, skill, StringComparison.Ordinal);
-        foreach (var token in new[] { "`qstop`", "`query_id`", "queries.jsonl", "--window", "--top" })
-            Assert.Contains(token, readme, StringComparison.Ordinal);
-        Assert.Contains("`qstop`", Section(readme, "## Commands"), StringComparison.Ordinal);
-        // Safety clause: Query Store text is published only after explicit review.
-        Assert.Contains("`queries.jsonl` without explicit review", Section(readme, "## Safety contract"), StringComparison.Ordinal);
-
-        var qstop = Paragraph(skill, "**Query Store**");
-        Assert.Contains("](../../README.md#commands)", qstop, StringComparison.Ordinal);
-        Assert.Contains("queries.jsonl", qstop, StringComparison.Ordinal);
-        Assert.Contains("no SQL text", qstop, StringComparison.Ordinal);
-    }
-
     [Fact]
     public void Documentation_covers_measure_parameter_sets()
     {
@@ -185,7 +97,6 @@ public class ContractsTests
             "Parameter-sniffing checks in `measure` across multiple parameter sets.",
             readme,
             StringComparison.Ordinal);
-        // Overlap analysis ships as `indexes` (plan 029): the roadmap no longer lists it.
         Assert.DoesNotContain("Missing-index overlap analysis", readme, StringComparison.Ordinal);
         Assert.DoesNotContain("A thin MCP facade over `SqlHarness.Core`.", readme, StringComparison.Ordinal);
     }
@@ -227,8 +138,6 @@ public class ContractsTests
         foreach (var tool in new[]
         {
             "sqlharness_capabilities",
-            "sqlharness_inspect",
-            "sqlharness_validate",
             "sqlharness_query",
             "sqlharness_measure",
             "sqlharness_compare",
@@ -246,16 +155,41 @@ public class ContractsTests
         Assert.Contains("ModelContextProtocol", mcp, StringComparison.Ordinal);
         Assert.Contains("2.2.0", mcp, StringComparison.Ordinal);
         Assert.Contains("2025-11-25", mcp, StringComparison.Ordinal);
-        Assert.Contains("16384", mcp, StringComparison.Ordinal);
+        Assert.Contains("65536", mcp, StringComparison.Ordinal);
+        Assert.Contains("262144", mcp, StringComparison.Ordinal);
         Assert.Contains("4096..1048576", mcp, StringComparison.Ordinal);
         Assert.Contains("32768", mcp, StringComparison.Ordinal);
         Assert.Contains("AllowMutation: false", mcp, StringComparison.Ordinal);
-        Assert.Contains("busy", mcp, StringComparison.Ordinal);
+        Assert.Contains("Exactly 8 tools are registered", mcp, StringComparison.Ordinal);
+        Assert.Contains("Tool calls run concurrently", mcp, StringComparison.Ordinal);
+        Assert.Contains("SQLHarness does not serialize benchmarks", mcp, StringComparison.Ordinal);
+        foreach (var removed in new[] { "sqlharness_inspect", "sqlharness_validate", "busy", "includeDetails" })
+            Assert.DoesNotContain(removed, mcp, StringComparison.Ordinal);
         Assert.Contains("watch_max_duration", mcp, StringComparison.Ordinal);
         Assert.Contains("snapshot_differences", mcp, StringComparison.Ordinal);
         Assert.Contains("Byte counts are not token counts", mcp, StringComparison.Ordinal);
         Assert.Contains("## Evidence scope", mcp, StringComparison.Ordinal);
         Assert.Contains("Not executed", mcp, StringComparison.Ordinal);
+
+        var dryRun = Section(mcp, "### Parameters and dry runs");
+        Assert.Contains("optional leading `@`", dryRun, StringComparison.Ordinal);
+        Assert.Contains("same check as CLI `--dry-run`", dryRun, StringComparison.Ordinal);
+        Assert.Contains("](../README.md#safety-contract)", dryRun, StringComparison.Ordinal);
+        // README Safety contract owns the dry-run rule; the MCP doc and the skill point to it.
+        var safety = Section(readme, "## Safety contract");
+        foreach (var fact in new[]
+        {
+            "IfStatement at line 14",
+            "parameterSets",
+            "raw-token emission receipt",
+            "runtime artifact storage, authentication, connection identity, catalog contents or database permissions",
+            "missing_parameters",
+            "never authorizes a later mutation",
+            "The first executed result's `database` is the verified target",
+        })
+            Assert.Contains(fact, safety, StringComparison.Ordinal);
+        Assert.Contains("Dapper", Section(readme, "## Safety contract"), StringComparison.Ordinal);
+        Assert.Contains("Fixed-width `nchar`/`char`", Section(readme, "## Safety contract"), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -380,14 +314,9 @@ public class ContractsTests
                 typeof(SqlHarnessCompareMatrixOperation),
                 typeof(SqlHarnessMeasureOperation),
                 typeof(SqlHarnessPlanOperation),
-                typeof(SqlHarnessSchemaOperation),
-                typeof(SqlHarnessPingOperation),
-                typeof(SqlHarnessCountsOperation),
-                typeof(SqlHarnessSpaceOperation),
                 typeof(SqlHarnessWatchOperation),
                 typeof(SqlHarnessSnapshotOperation),
-                typeof(SqlHarnessQueryStoreTopOperation),
-                typeof(SqlHarnessIndexesOperation),
+                typeof(SqlHarnessArtifactReadOperation),
             ],
             typeof(SqlHarnessOperation).Assembly.GetTypes()
                 .Where(t => t.BaseType == typeof(SqlHarnessOperation))
@@ -401,14 +330,9 @@ public class ContractsTests
         nameof(SqlHarnessCompareMatrixOperation) => 2,
         nameof(SqlHarnessMeasureOperation) => 3,
         nameof(SqlHarnessPlanOperation) => 4,
-        nameof(SqlHarnessSchemaOperation) => 5,
-        nameof(SqlHarnessPingOperation) => 6,
-        nameof(SqlHarnessCountsOperation) => 7,
-        nameof(SqlHarnessSpaceOperation) => 8,
-        nameof(SqlHarnessWatchOperation) => 9,
-        nameof(SqlHarnessSnapshotOperation) => 10,
-        nameof(SqlHarnessQueryStoreTopOperation) => 11,
-        nameof(SqlHarnessIndexesOperation) => 12,
+        nameof(SqlHarnessWatchOperation) => 5,
+        nameof(SqlHarnessSnapshotOperation) => 6,
+        nameof(SqlHarnessArtifactReadOperation) => 7,
         _ => int.MaxValue,
     };
 
@@ -507,7 +431,7 @@ public class ContractsTests
     public void Every_operation_accepts_only_its_own_report_types()
     {
         var cases = OperationReportCases();
-        Assert.Equal(13, cases.Select(c => c.Operation.GetType()).Distinct().Count());
+        Assert.Equal(8, cases.Select(c => c.Operation.GetType()).Distinct().Count());
         foreach (var (operation, report, compatible) in cases)
         {
             var exception = Record.Exception(() =>
@@ -526,14 +450,9 @@ public class ContractsTests
         new SqlHarnessCompareMatrixOperation(Target(), null, "SELECT 1", "SELECT 2", [], 30, 1, "BatchSize:int=1,2"),
         new SqlHarnessMeasureOperation(Target(), null, "SELECT 1", [], 30, 1),
         new SqlHarnessPlanOperation("<ShowPlanXML/>", new OutputFootprint(0, 0)),
-        new SqlHarnessSchemaOperation(Target(), null, 30),
-        new SqlHarnessPingOperation(Target(), 30),
-        new SqlHarnessCountsOperation(Target(), [], null, 25, false, 30),
-        new SqlHarnessSpaceOperation(Target(), 25, null, 30),
         new SqlHarnessWatchOperation(Target(), "SELECT 1", [], 30, 100, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(15), null, 3),
         new SqlHarnessSnapshotOperation(Target(), "SELECT 1", [], 30, 100, "before", false, false),
-        new SqlHarnessQueryStoreTopOperation(Target(), 20, 1440, 30),
-        new SqlHarnessIndexesOperation(Target(), 10, null, 30),
+        new SqlHarnessArtifactReadOperation("root", "artifact", "summary"),
     ];
 
     private static IReadOnlyList<object> Reports() =>
@@ -546,14 +465,9 @@ public class ContractsTests
             Identity(), 1, 2, 1, [], "rule", "warning", [],
             new MeasureCrossSetSummary(null, 0, null, 0, null, 0, null, 0, null, 0, null, 0), null),
         new DistilledPlan([]),
-        new SqlHarnessSchemaReport(Identity(), [], 0),
-        new SqlHarnessPingReport(Identity(), "s", "d", "login", 5),
-        new SqlHarnessCountsReport(Identity(), [], 0),
-        new SqlHarnessSpaceReport(Identity(), [], new(0, 0, 0), [], []),
         new SqlHarnessWatchReport(Identity(), 1, 10, WatchExitReason.ConditionMet, []),
         new SqlHarnessSnapshotReport(Identity(), "before", SnapshotVerdict.Stored, 0, []),
-        new SqlHarnessQueryStoreTopReport(Identity(), 1440, 20, [], null),
-        new SqlHarnessIndexesReport(Identity(), DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, 10, null, [], [], null),
+        new SqlHarnessArtifactReadReport(new object(), null),
     ];
 
     private static IReadOnlyList<(SqlHarnessOperation Operation, object Report, bool Compatible)> OperationReportCases()
@@ -562,8 +476,7 @@ public class ContractsTests
         var reports = Reports();
         var compatible = new HashSet<(int Operation, int Report)>
         {
-            (0, 0), (1, 1), (2, 2), (3, 3), (3, 4), (4, 5), (5, 6), (6, 7),
-            (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 13),
+            (0, 0), (1, 1), (2, 2), (3, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8),
         };
         var cases = new List<(SqlHarnessOperation, object, bool)>();
         for (var o = 0; o < operations.Count; o++)

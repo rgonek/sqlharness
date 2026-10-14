@@ -1,97 +1,72 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace SqlHarness.Core;
 
 public sealed record AgentBoundedOutput(string ReportType, int OmittedItems);
 public sealed record AgentBinaryValue(long ByteLength, string Base64Prefix, bool Truncated);
 
+/// <summary>A query column with its CLR value type alias and source nullability.</summary>
+public sealed record AgentQueryColumn(string Name, string ValueType, bool AllowNull);
+
+public sealed record AgentClippedCell(int Row, int Column, long OriginalLength, int ReturnedLength, string Unit);
+
 /// <summary>
 /// One query result set in the agent projection. <c>Ordinal</c> is the
-/// zero-based position in the source report (the snapshot-diff convention).
-/// Every emitted row has exactly <c>Columns.Count</c> cells. Rows not emitted
-/// are counted in <c>OmittedRowCount</c>; columns dropped by the detail-limit-0
-/// fallback (always the trailing ones) are counted in <c>OmittedColumnCount</c>,
-/// and a set with omitted columns carries no rows.
+/// zero-based position in the source report. Every emitted row has exactly
+/// <c>Columns.Count</c> cells. Omitted rows and columns are counted; a set with
+/// omitted columns carries no rows.
 /// </summary>
-public sealed record AgentQueryResultSet(
+public sealed record AgentCompactResultSet(
     int Ordinal,
-    IReadOnlyList<SqlHarnessColumnReport> Columns,
+    IReadOnlyList<AgentQueryColumn> Columns,
     IReadOnlyList<IReadOnlyList<object?>> Rows,
     long RowCount,
-    long OmittedRowCount,
-    int OmittedColumnCount);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] long OmittedRowCount = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int OmittedColumnCount = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<AgentClippedCell>? ClippedCells = null);
 
 /// <summary>
-/// Agent projection of a query report. <c>ResultSets</c> is a prefix of the
-/// source result sets; <c>OmittedResultSetCount</c> counts the trailing sets
-/// that did not fit.
+/// Compact agent projection of a query report. <c>Database</c> is the
+/// resolved database name; <c>ResultSets</c> is a prefix of the source sets,
+/// with trailing omitted sets counted in <c>OmittedResultSetCount</c>.
 /// </summary>
-public sealed record AgentQueryProjection(
-    SqlHarnessTargetIdentityReport Target,
+public sealed record AgentCompactQuery(
+    string Database,
     string StatementClassification,
-    IReadOnlyList<AgentQueryResultSet> ResultSets,
-    int OmittedResultSetCount,
-    IReadOnlyList<string?> Messages,
-    int RecordsAffected,
-    long DurationMilliseconds,
-    string ResultHash,
-    OutputFootprint RawFootprint);
+    IReadOnlyList<AgentCompactResultSet> ResultSets,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int OmittedResultSetCount = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string?>? Messages = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? RecordsAffected = null,
+    long DurationMilliseconds = 0);
+
+/// <summary>The version shared by CLI and MCP agent response envelopes.</summary>
+public static class AgentEnvelopeSchema
+{
+    public const int Version = 2;
+}
 
 /// <summary>Presentation-only bounds for the opt-in agent response.</summary>
-public sealed record AgentOutputOptions(int MaximumBytes = 16 * 1024, int MaximumCellCharacters = 512);
+public sealed record AgentOutputOptions(int MaximumBytes = 65_536, int MaximumCellCharacters = 512);
 
 /// <summary>Creates bounded, lower-priority-detail projections without changing source reports.</summary>
 public static class AgentOutputProjection
 {
     private static readonly JsonSerializerOptions ProjectionJson = new(JsonSerializerDefaults.Web);
 
-    public static int CalculateDetailLimit(int maximumBytes, int maximumCellCharacters)
-    {
-        var perItemEstimate = Math.Max(128L, (long)Math.Max(1, maximumCellCharacters) * 16);
-        perItemEstimate = Math.Max(perItemEstimate, 128L);
-        var estimate = Math.Max(1d, maximumBytes / (double)perItemEstimate);
-        return Math.Clamp((int)Math.Pow(estimate, 0.2), 1, 128);
-    }
-
-    private static readonly int[] QueryRowSampleLadder = [128, 64, 32, 16, 8, 4, 2, 1, 0];
-
     /// <summary>
-    /// Candidate detail limits for the agent projection degradation loop.
-    /// The first candidate is <see cref="int.MaxValue"/>, which projects the
-    /// report without truncation. If that does not fit the byte budget, the
-    /// loop descends through conservative estimates down to 1, then 0.
-    /// A query report instead descends through bounded per-result-set row
-    /// samples (128, 64, 32, 16, 8, 4, 2, 1) and ends with the budget-aware
-    /// inventory, schema and row allocation at 0.
+    /// Detail limits tried in order until the rendered envelope fits the budget. The first
+    /// entry renders the report without truncation. Every report type uses the same steps.
     /// </summary>
-    public static IEnumerable<int> GetCandidateDetailLimits(object? report, int maximumBytes, int maximumCellCharacters) =>
-        report is SqlHarnessQueryReport
-            ? QueryCandidateDetailLimits()
-            : DefaultCandidateDetailLimits(maximumBytes, maximumCellCharacters);
+    public static IReadOnlyList<int> CandidateDetailLimits { get; } = [int.MaxValue, 128, 64, 32, 16, 8, 4, 2, 1, 0];
 
-    private static IEnumerable<int> QueryCandidateDetailLimits()
-    {
-        yield return int.MaxValue;
-        foreach (var level in QueryRowSampleLadder)
-            yield return level;
-    }
+    internal static IEnumerable<KeyValuePair<string, CompareDistribution>> BySignificance(
+        IReadOnlyDictionary<string, CompareDistribution> reads) =>
+        reads.OrderByDescending(pair => pair.Value.Median)
+            .ThenByDescending(pair => pair.Value.Max)
+            .ThenBy(pair => pair.Key, StringComparer.Ordinal);
 
-    private static IEnumerable<int> DefaultCandidateDetailLimits(int maximumBytes, int maximumCellCharacters)
-    {
-        yield return int.MaxValue;
-        var level = CalculateDetailLimit(maximumBytes, maximumCellCharacters);
-        while (level > 0)
-        {
-            yield return level;
-            if (level == 1)
-                break;
-            level = Math.Max(1, level / 2);
-        }
-
-        yield return 0;
-    }
-
-    public static object? Project(object? report, int maximumCellCharacters, int detailLimit, out int omittedItems, int maximumBytes = 16 * 1024)
+    public static object? Project(object? report, int maximumCellCharacters, int detailLimit, out int omittedItems, int maximumBytes = 65_536)
     {
         omittedItems = 0;
         var omissions = 0;
@@ -128,24 +103,6 @@ public static class AgentOutputProjection
                         omissions += clippedItems;
                         return queryProjection;
                     }
-                case SqlHarnessCountsReport counts:
-                    var tables = Take(counts.Tables).Select(table => table with { Schema = Clip(table.Schema)!, Name = Clip(table.Name)! }).ToArray();
-                    omissions += clippedItems;
-                    return new { counts.Target, tables, omitted = counts.Omitted + omissions };
-                case SqlHarnessSchemaReport schema:
-                    var selectedObjects = Take(schema.Objects);
-                    var omittedObjects = schema.OmittedObjects + schema.Objects.Count - selectedObjects.Count;
-                    var objects = selectedObjects.Select(value => new
-                    {
-                        schema = Clip(value.Schema),
-                        name = Clip(value.Name),
-                        kind = Clip(value.Kind),
-                        columns = Take(value.Columns).Select(column => column with { Name = Clip(column.Name)!, Type = Clip(column.Type)! }).ToArray(),
-                        indexes = Take(value.Indexes).Select(i => new { name = Clip(i.Name), i.Unique, keys = Take(i.Keys).Select(Clip), includes = Take(i.Includes).Select(Clip), filter = Clip(i.Filter) }).ToArray(),
-                        foreignKeys = Take(value.ForeignKeys).Select(fk => fk with { Name = Clip(fk.Name)!, Columns = Clip(fk.Columns)!, ReferencedTable = Clip(fk.ReferencedTable)!, ReferencedColumns = Clip(fk.ReferencedColumns)! }).ToArray(),
-                    }).ToArray();
-                    omissions += clippedItems;
-                    return new { schema.Target, objects, omittedObjects, omittedItems = omissions };
                 case SqlHarnessMeasureSetReport setReport:
                     var selectedSets = Take(setReport.Sets).Select(set => new MeasureParameterSetSummary(
                         Clip(set.Name)!, set.Parameters, set.ValueHash, set.ResultsStable,
@@ -161,26 +118,70 @@ public static class AgentOutputProjection
                     omissions += clippedItems;
                     return new MeasureSetBenchmarkSummary(setReport.Target, setReport.MeasuredOrderRule, planCacheWarning, selectedSets, setReport.CrossSetSummary, artifactDirectory);
                 case SqlHarnessCompareMatrixReport matrix:
-                    var nestedOmitted = 0;
-                    var cells = Take(matrix.Cells).Select(cell =>
-                    {
-                        var projected = Project(cell.Compare, maximumCellCharacters, detailLimit, out var cellOmitted, maximumBytes);
-                        nestedOmitted += cellOmitted;
-                        var compareSummary = (CompareBenchmarkSummary)projected!;
-                        return new CompareMatrixCellSummary(cell.Index, null,
-                            compareSummary with { ArtifactDirectory = SafeArtifactId(cell.Compare.ArtifactDirectory) });
-                    }).ToArray();
-                    omissions += nestedOmitted;
+                    var shared = BenchmarkSummaryProjector.Project(matrix);
+                    var orderedMatrixCells = matrix.Cells.OrderBy(cell => cell.Index).ToArray();
+                    var matrixArtifactId = shared.MatrixArtifactId;
                     var parameterName = Clip(matrix.ParameterName)!;
                     var parameterType = Clip(matrix.ParameterType)!;
-                    var omittedCellReferences = BuildOmittedCellReferences(
-                        matrix.Cells, cells, parameterName, parameterType, maximumBytes, out var referenceOmissions, out var continuation);
-                    omissions += referenceOmissions;
-                    omissions += clippedItems;
-                    var matrixArtifactId = matrix.Cells.Count == 0
-                        ? null
-                        : SafeArtifactId(matrix.Cells[0].Compare.ArtifactDirectory);
-                    return new CompareMatrixBenchmarkSummary(parameterName, parameterType, cells, omittedCellReferences, continuation, matrixArtifactId);
+                    var inventoryShell = shared with
+                    {
+                        ParameterName = parameterName,
+                        ParameterType = parameterType,
+                        Cases = [],
+                        Details = [],
+                        OmittedCaseCount = orderedMatrixCells.Length,
+                        OmittedDetailCount = orderedMatrixCells.Length,
+                        Continuation = null,
+                    };
+                    var cases = new List<AgentMatrixCase>();
+                    var omittedCaseWarnings = 0;
+                    var availableCases = orderedMatrixCells.Select(BenchmarkSummaryProjector.ProjectCase)
+                        .Select(item =>
+                        {
+                            var warnings = item.Warnings.Take(1)
+                                .Select(value => ClipText(value, Math.Min(128, maximumCellCharacters), ref clippedItems)!).ToArray();
+                            omittedCaseWarnings += item.Warnings.Count - warnings.Length;
+                            return item with { Warnings = warnings };
+                        }).ToArray();
+                    omissions += omittedCaseWarnings;
+                    foreach (var item in availableCases)
+                    {
+                        var candidateCases = cases.Append(item).ToArray();
+                        var omittedCaseCount = orderedMatrixCells.Length - candidateCases.Length;
+                        var candidate = inventoryShell with
+                        {
+                            Cases = candidateCases,
+                            OmittedCaseCount = omittedCaseCount,
+                            Continuation = omittedCaseCount > 0 && matrixArtifactId is not null ? candidateCases.Length : null,
+                        };
+                        // Leave room for the outer command/status/error/truncation envelope.
+                        if (SerializedLength(candidate) + 384 > maximumBytes)
+                            break;
+                        cases.Add(item);
+                    }
+
+                    var omittedCases = orderedMatrixCells.Length - cases.Count;
+                    var selectedDetails = new List<CompareMatrixCellDetail>();
+                    var nestedOmitted = 0;
+                    foreach (var cell in orderedMatrixCells.Take(cases.Count).Take(detailLimit))
+                    {
+                        var projected = Project(BenchmarkSummaryProjector.Project(cell.Compare), maximumCellCharacters, detailLimit,
+                            out var cellOmitted, maximumBytes);
+                        nestedOmitted += cellOmitted;
+                        var summary = (CompareBenchmarkSummary)projected!;
+                        selectedDetails.Add(new CompareMatrixCellDetail(cell.Index, new CompareMatrixCellDetailContent(
+                            summary.Baseline, summary.Candidate, summary.Equivalence, summary.NoteworthyOperators, summary.Regression)));
+                    }
+                    var omittedDetails = orderedMatrixCells.Length - selectedDetails.Count;
+                    omissions += omittedCases + omittedDetails + nestedOmitted + clippedItems;
+                    return inventoryShell with
+                    {
+                        Cases = cases,
+                        Details = selectedDetails,
+                        OmittedCaseCount = omittedCases,
+                        OmittedDetailCount = omittedDetails,
+                        Continuation = omittedCases > 0 && matrixArtifactId is not null ? cases.Count : null,
+                    };
                 case SqlHarnessCompareReport compare:
                     {
                         var nestedProjection = Project(BenchmarkSummaryProjector.Project(compare), maximumCellCharacters, detailLimit, out var compareSummaryOmitted, maximumBytes);
@@ -218,16 +219,6 @@ public static class AgentOutputProjection
                     omissions += planProjection.OmittedItems;
                     omissions += clippedItems;
                     return planProjection.Report;
-                case SqlHarnessPingReport ping:
-                    var pingProjection = ping with { Server = Clip(ping.Server)!, Database = Clip(ping.Database)!, Login = Clip(ping.Login)! };
-                    omissions += clippedItems;
-                    return pingProjection;
-                case SqlHarnessSpaceReport space:
-                    var files = Take(space.Files).Select(file => file with { LogicalName = Clip(file.LogicalName)!, Type = Clip(file.Type)!, PhysicalName = Clip(file.PhysicalName) }).ToArray();
-                    var spaceTables = Take(space.Tables).Select(table => table with { Schema = Clip(table.Schema)!, Name = Clip(table.Name)! }).ToArray();
-                    var indexes = Take(space.Indexes).Select(index => index with { Schema = Clip(index.Schema)!, Table = Clip(index.Table)!, Index = Clip(index.Index)!, Type = Clip(index.Type)!, Compression = Clip(index.Compression) }).ToArray();
-                    omissions += clippedItems;
-                    return new SqlHarnessSpaceReport(space.Target, files, space.Allocation, spaceTables, indexes);
                 case SqlHarnessWatchReport watch:
                     var polls = Take(watch.EmittedPolls).Select(poll => new SqlHarnessWatchPoll(poll.Poll, poll.ElapsedMilliseconds, poll.ResultHash, ProjectResultSets(poll.ResultSets))).ToArray();
                     omissions += clippedItems;
@@ -237,33 +228,12 @@ public static class AgentOutputProjection
                     var differences = Take(snapshot.Differences);
                     omissions += clippedItems;
                     return snapshot with { Name = snapshotName, Differences = differences };
-                case SqlHarnessQueryStoreTopReport queryStore:
-                    var queryItems = Take(queryStore.Queries).Select(item => item with { ObjectName = Clip(item.ObjectName) }).ToArray();
-                    var queryArtifacts = Clip(queryStore.ArtifactDirectory);
-                    omissions += clippedItems;
-                    return queryStore with { Queries = queryItems, ArtifactDirectory = queryArtifacts };
-                case SqlHarnessIndexesReport indexesReport:
-                    var candidates = Take(indexesReport.Candidates).Select(candidate => candidate with
-                    {
-                        Schema = Clip(candidate.Schema)!,
-                        Table = Clip(candidate.Table)!,
-                        EqualityColumns = Take(candidate.EqualityColumns).Select(value => Clip(value)!).ToArray(),
-                        InequalityColumns = Take(candidate.InequalityColumns).Select(value => Clip(value)!).ToArray(),
-                        IncludeColumns = Take(candidate.IncludeColumns).Select(value => Clip(value)!).ToArray(),
-                        BestExistingIndex = Clip(candidate.BestExistingIndex),
-                        MissingIncludeColumns = Take(candidate.MissingIncludeColumns).Select(value => Clip(value)!).ToArray(),
-                    }).ToArray();
-                    var indexWarnings = Take(indexesReport.Warnings).Select(value => Clip(value)!).ToArray();
-                    var indexArtifact = Clip(indexesReport.ArtifactDirectory);
-                    var objectFilter = Clip(indexesReport.ObjectFilter);
-                    omissions += clippedItems;
-                    return indexesReport with { Candidates = candidates, Warnings = indexWarnings, ArtifactDirectory = indexArtifact, ObjectFilter = objectFilter };
                 case ArtifactMetricsSection metrics:
                     {
                         var variants = Take(metrics.Variants).Select(variant => variant with
                         {
                             Name = Clip(variant.Name)!,
-                            LogicalReadsByTable = Take(variant.LogicalReadsByTable.ToArray()).ToDictionary(
+                            LogicalReadsByTable = Take(BySignificance(variant.LogicalReadsByTable).ToArray()).ToDictionary(
                                 pair => Clip(pair.Key)!, pair => pair.Value, StringComparer.Ordinal),
                             Warnings = Take(variant.Warnings).Select(warning => Clip(warning)!).ToArray(),
                         }).ToArray();
@@ -272,13 +242,84 @@ public static class AgentOutputProjection
                     }
                 case ArtifactOperatorsSection operators:
                     {
-                        var selected = Take(operators.Operators).Select(op => op with
+                        var selected = new List<NoteworthyOperatorSummary>();
+                        foreach (var op in operators.Operators.Take(detailLimit))
                         {
-                            PhysicalOp = Clip(op.PhysicalOp)!,
-                            Object = Clip(op.Object),
+                            var item = op with { PhysicalOp = Clip(op.PhysicalOp)!, Object = Clip(op.Object) };
+                            var candidate = operators with
+                            {
+                                Operators = selected.Append(item).ToArray(),
+                                Continuation = selected.Count + 1 < operators.Operators.Count ? operators.Cursor + selected.Count + 1 : null
+                            };
+                            if (SerializedLength(candidate) + 384 > maximumBytes) break;
+                            selected.Add(item);
+                        }
+                        if (selected.Count == 0 && operators.Operators.Count > 0)
+                            throw new SqlHarnessSafetyException("The output budget cannot fit an operator page.");
+                        omissions += Math.Max(0, operators.Operators.Count - selected.Count) + clippedItems;
+                        return operators with
+                        {
+                            Operators = selected,
+                            Continuation = selected.Count < operators.Operators.Count
+                            ? operators.Cursor + selected.Count : operators.Continuation
+                        };
+                    }
+                case ArtifactPlanSection plan:
+                    {
+                        var missingIndexes = Take(plan.MissingIndexes).Select(index => index with
+                        {
+                            Table = Clip(index.Table)!,
+                            EqualityColumns = Take(index.EqualityColumns).Select(value => Clip(value)!).ToArray(),
+                            InequalityColumns = Take(index.InequalityColumns).Select(value => Clip(value)!).ToArray(),
+                            IncludeColumns = Take(index.IncludeColumns).Select(value => Clip(value)!).ToArray(),
                         }).ToArray();
-                        omissions += clippedItems;
-                        return operators with { Operators = selected };
+                        var selected = new List<ArtifactPlanNode>();
+                        foreach (var node in plan.Nodes.Take(detailLimit))
+                        {
+                            var op = node.Operator with
+                            {
+                                PhysicalOp = Clip(node.Operator.PhysicalOp)!,
+                                LogicalOp = Clip(node.Operator.LogicalOp),
+                                ObjectName = Clip(node.Operator.ObjectName),
+                                IndexName = Clip(node.Operator.IndexName),
+                                Predicate = Clip(node.Operator.Predicate),
+                                Warnings = node.Operator.Warnings.Take(detailLimit).Select(value => Clip(value)!).ToArray(),
+                            };
+                            var item = node with { Operator = op };
+                            var candidate = plan with
+                            {
+                                Nodes = selected.Append(item).ToArray(),
+                                MissingIndexes = missingIndexes,
+                                StatementText = Clip(plan.StatementText),
+                                Continuation = selected.Count + 1 < plan.Nodes.Count ? plan.Cursor + selected.Count + 1 : plan.Continuation
+                            };
+                            if (SerializedLength(candidate) + 384 > maximumBytes) break;
+                            selected.Add(item);
+                        }
+                        if (selected.Count == 0 && plan.Nodes.Count > 0)
+                        {
+                            omissions += plan.Nodes.Count;
+                            return plan with
+                            {
+                                Nodes = [],
+                                Continuation = null,
+                                MissingIndexes = missingIndexes,
+                                StatementText = Clip(plan.StatementText),
+                                PageError = "The output budget cannot fit a plan node page."
+                            };
+                        }
+                        int? nextCursor = selected.Count < plan.Nodes.Count
+                            ? plan.Cursor + selected.Count
+                            : plan.Continuation;
+                        omissions += Math.Max(0, plan.Nodes.Count - selected.Count) + clippedItems;
+                        return plan with
+                        {
+                            Nodes = selected,
+                            Continuation = nextCursor,
+                            MissingIndexes = missingIndexes,
+                            StatementText = Clip(plan.StatementText),
+                            PageError = null
+                        };
                     }
                 case ArtifactStatementsSection statements:
                     {
@@ -298,20 +339,46 @@ public static class AgentOutputProjection
                         {
                             Statements = selected,
                             OmittedStatements = statements.OmittedStatements + Math.Max(0, statements.Statements.Count - selected.Length),
+                            Continuation = selected.Length < statements.Statements.Count
+                                ? statements.Cursor + selected.Length
+                                : null,
                         };
                     }
                 case ArtifactMatrixCellsSection matrixCells:
                     {
-                        var selected = Take(matrixCells.Cells);
-                        omissions += clippedItems;
+                        var selected = new List<AgentMatrixCase>();
+                        foreach (var matrixCase in matrixCells.Cases)
+                        {
+                            var projectedCase = matrixCase with
+                            {
+                                Warnings = matrixCase.Warnings.Take(1)
+                                    .Select(value => ClipText(value, Math.Min(128, maximumCellCharacters), ref clippedItems)!)
+                                    .ToArray(),
+                            };
+                            var candidateCases = selected.Append(projectedCase).ToArray();
+                            var candidate = matrixCells with
+                            {
+                                Cases = candidateCases,
+                                Continuation = candidateCases.Length < matrixCells.Cases.Count
+                                    ? matrixCells.Cursor + candidateCases.Length
+                                    : matrixCells.Continuation,
+                            };
+                            if (SerializedLength(candidate) + 384 > maximumBytes)
+                                break;
+                            selected.Add(projectedCase);
+                            omissions += Math.Max(0, matrixCase.Warnings.Count - projectedCase.Warnings.Count);
+                        }
+                        omissions += matrixCells.Cases.Count - selected.Count + clippedItems;
                         return matrixCells with
                         {
-                            Cells = selected,
-                            Continuation = selected.Count < matrixCells.Cells.Count
+                            Cases = selected,
+                            Continuation = selected.Count < matrixCells.Cases.Count
                                 ? matrixCells.Cursor + selected.Count
                                 : matrixCells.Continuation,
                         };
                     }
+                case SqlHarnessDryRunReport dryRun:
+                    return dryRun;
                 default:
                     if (report is null) return null;
                     if (report.GetType().IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), inherit: false))
@@ -342,7 +409,7 @@ public static class AgentOutputProjection
 
         BenchmarkVariantSummary ClipVariant(BenchmarkVariantSummary variant)
         {
-            var reads = Take(variant.LogicalReadsByTable.ToArray()).ToDictionary(p => Clip(p.Key)!, p => p.Value, StringComparer.Ordinal);
+            var reads = Take(BySignificance(variant.LogicalReadsByTable).ToArray()).ToDictionary(p => Clip(p.Key)!, p => p.Value, StringComparer.Ordinal);
             var warnings = Take(variant.Warnings).Select(w => Clip(w)!).ToArray();
             return variant with { LogicalReadsByTable = reads, Warnings = warnings };
         }
@@ -370,7 +437,7 @@ public static class AgentOutputProjection
     /// nothing. Every other set is sampled to <paramref name="rowLimit"/> rows.
     /// The caller's real measurement stays the authority.
     /// </summary>
-    private static AgentQueryProjection ProjectQueryRowSample(
+    private static AgentCompactQuery ProjectQueryRowSample(
         SqlHarnessQueryReport query,
         IReadOnlyList<string?> messages,
         int rowLimit,
@@ -380,11 +447,11 @@ public static class AgentOutputProjection
     {
         var count = query.ResultSets.Count;
         var caches = query.ResultSets.Select(set => new QueryRowCache(set, maximumCellCharacters)).ToArray();
-        var rowless = new AgentQueryResultSet[count];
+        var rowless = new AgentCompactResultSet[count];
         for (var ordinal = 0; ordinal < count; ordinal++)
         {
             var set = query.ResultSets[ordinal];
-            rowless[ordinal] = new AgentQueryResultSet(ordinal, set.Columns.ToArray(), [], set.RowCount, set.OmittedRowCount + set.Rows.Count, 0);
+            rowless[ordinal] = new AgentCompactResultSet(ordinal, set.Columns.Select(CompactColumn).ToArray(), [], set.RowCount, set.OmittedRowCount + set.Rows.Count, 0);
         }
 
         long reserve = PreFilterBudget(maximumBytes) - SerializedLength(QueryShell(query, rowless, 0, messages));
@@ -407,17 +474,18 @@ public static class AgentOutputProjection
         }
 
         var omitted = 0;
-        var sets = new AgentQueryResultSet[count];
+        var sets = new AgentCompactResultSet[count];
         for (var ordinal = 0; ordinal < count; ordinal++)
         {
             var take = whole[ordinal] ? caches[ordinal].Count : Math.Min(caches[ordinal].Count, rowLimit);
-            var rows = caches[ordinal].Prefix(take, out var clipped);
+            var rows = caches[ordinal].Prefix(take, out var clipped, out var clippedCells);
             var setOmitted = caches[ordinal].Count - take;
             omitted += setOmitted + clipped;
             sets[ordinal] = rowless[ordinal] with
             {
                 Rows = rows,
                 OmittedRowCount = query.ResultSets[ordinal].OmittedRowCount + setOmitted,
+                ClippedCells = clippedCells,
             };
         }
 
@@ -447,7 +515,7 @@ public static class AgentOutputProjection
     /// wide detail set's column prefix or row sample. Nothing partial is ever
     /// unaccounted: every dropped set, column, and row is counted.
     /// </summary>
-    private static AgentQueryProjection ProjectQueryInventory(
+    private static AgentCompactQuery ProjectQueryInventory(
         SqlHarnessQueryReport query,
         IReadOnlyList<string?> messages,
         int maximumCellCharacters,
@@ -460,7 +528,7 @@ public static class AgentOutputProjection
         var kept = 0;
         foreach (var set in query.ResultSets)
         {
-            var inventory = new AgentQueryResultSet(kept, [], [], set.RowCount, set.OmittedRowCount + set.Rows.Count, set.Columns.Count);
+            var inventory = new AgentCompactResultSet(kept, [], [], set.RowCount, set.OmittedRowCount + set.Rows.Count, set.Columns.Count);
             var cost = SerializedLength(inventory) + 1;
             if (cost > remaining)
                 break;
@@ -543,24 +611,28 @@ public static class AgentOutputProjection
         }
 
         var omitted = source.Count - kept;
-        var sets = new AgentQueryResultSet[kept];
+        var sets = new AgentCompactResultSet[kept];
         for (var ordinal = 0; ordinal < kept; ordinal++)
         {
             var set = source[ordinal];
             var clipped = 0;
-            IReadOnlyList<IReadOnlyList<object?>> rows = caches[ordinal] is { } cache
-                ? cache.Prefix(rowCounts[ordinal], out clipped)
-                : [];
+            IReadOnlyList<AgentClippedCell>? retainedClippedCells = null;
+            IReadOnlyList<IReadOnlyList<object?>> rows;
+            if (caches[ordinal] is { } cache)
+                rows = cache.Prefix(rowCounts[ordinal], out clipped, out retainedClippedCells);
+            else
+                rows = [];
             var omittedColumns = set.Columns.Count - columnCounts[ordinal];
             var omittedRows = set.Rows.Count - rows.Count;
             omitted += omittedColumns + omittedRows + clipped;
-            sets[ordinal] = new AgentQueryResultSet(
+            sets[ordinal] = new AgentCompactResultSet(
                 ordinal,
-                set.Columns.Take(columnCounts[ordinal]).ToArray(),
+                set.Columns.Take(columnCounts[ordinal]).Select(CompactColumn).ToArray(),
                 rows,
                 set.RowCount,
                 set.OmittedRowCount + omittedRows,
-                omittedColumns);
+                omittedColumns,
+                retainedClippedCells);
         }
 
         omittedItems = omitted;
@@ -575,7 +647,7 @@ public static class AgentOutputProjection
     /// </summary>
     private sealed class QueryRowCache(SqlHarnessResultSetReport set, int maximumCellCharacters)
     {
-        private readonly List<(IReadOnlyList<object?> Cells, int Clipped, int Cost)> rows = [];
+        private readonly List<(IReadOnlyList<object?> Cells, int Clipped, int Cost, IReadOnlyList<AgentClippedCell> ClippedCells)> rows = [];
 
         public int Count => set.Rows.Count;
 
@@ -595,37 +667,61 @@ public static class AgentOutputProjection
             return total;
         }
 
-        public IReadOnlyList<IReadOnlyList<object?>> Prefix(int length, out int clipped)
+        public IReadOnlyList<IReadOnlyList<object?>> Prefix(int length, out int clipped, out IReadOnlyList<AgentClippedCell>? clippedCells)
         {
             var selected = new IReadOnlyList<object?>[length];
+            var metadata = new List<AgentClippedCell>();
             clipped = 0;
             for (var index = 0; index < length; index++)
             {
                 var row = Get(index);
                 selected[index] = row.Cells;
                 clipped += row.Clipped;
+                metadata.AddRange(row.ClippedCells);
             }
 
+            clippedCells = metadata.Count == 0 ? null : metadata;
             return selected;
         }
 
-        private (IReadOnlyList<object?> Cells, int Clipped, int Cost) Get(int index)
+        private (IReadOnlyList<object?> Cells, int Clipped, int Cost, IReadOnlyList<AgentClippedCell> ClippedCells) Get(int index)
         {
             while (rows.Count <= index)
             {
                 var source = set.Rows[rows.Count];
                 var clipped = 0;
+                var clippedCells = new List<AgentClippedCell>();
                 var cells = new object?[source.Count];
                 for (var cell = 0; cell < cells.Length; cell++)
-                    cells[cell] = ProjectCellValue(source[cell], maximumCellCharacters, ref clipped);
-                rows.Add((cells, clipped, SerializedLength(cells) + 1));
+                {
+                    var value = source[cell];
+                    if (value is string text && text.Length > maximumCellCharacters)
+                    {
+                        var prefixLength = SafeTextPrefixLength(text, maximumCellCharacters);
+                        cells[cell] = text[..prefixLength];
+                        clippedCells.Add(new AgentClippedCell(rows.Count, cell, text.Length, prefixLength, "utf16-code-units"));
+                        clipped++;
+                    }
+                    else if (value is byte[] bytes && ((long)bytes.Length + 2) / 3 * 4 > maximumCellCharacters)
+                    {
+                        var prefixLength = Math.Min(bytes.Length, maximumCellCharacters / 4 * 3);
+                        cells[cell] = new AgentBinaryValue(bytes.LongLength, Convert.ToBase64String(bytes.AsSpan(0, prefixLength)), Truncated: true);
+                        clippedCells.Add(new AgentClippedCell(rows.Count, cell, bytes.LongLength, prefixLength, "bytes"));
+                        clipped++;
+                    }
+                    else
+                    {
+                        cells[cell] = ProjectCellValue(value, maximumCellCharacters, ref clipped);
+                    }
+                }
+                rows.Add((cells, clipped, SerializedLength(cells) + 1, clippedCells));
             }
 
             return rows[index];
         }
     }
 
-    /// <summary>One third of the outer budget minus a fixed margin: MCP carries two representations plus metadata.</summary>
+    /// <summary>Conservative prefilter that leaves room for envelope metadata and other fields before the final text-budget fit.</summary>
     private static int PreFilterBudget(int maximumBytes) => Math.Max(0, maximumBytes / 3 - 128);
 
     private static string? ClipText(string? value, int maximumCellCharacters, ref int clippedItems)
@@ -633,8 +729,15 @@ public static class AgentOutputProjection
         if (value is null || value.Length <= maximumCellCharacters) return value;
         clippedItems++;
         var length = maximumCellCharacters;
-        if (length > 0 && char.IsHighSurrogate(value[length - 1])) length--;
+        length = SafeTextPrefixLength(value, length);
         return value[..length];
+    }
+
+    private static int SafeTextPrefixLength(string value, int maximumLength)
+    {
+        var length = Math.Min(value.Length, maximumLength);
+        if (length > 0 && length < value.Length && char.IsHighSurrogate(value[length - 1])) length--;
+        return length;
     }
 
     private static object? ProjectCellValue(object? value, int maximumCellCharacters, ref int clippedItems)
@@ -656,68 +759,35 @@ public static class AgentOutputProjection
         }
     }
 
-    private static AgentQueryProjection QueryShell(
+    private static AgentCompactQuery QueryShell(
         SqlHarnessQueryReport query,
-        IReadOnlyList<AgentQueryResultSet> sets,
+        IReadOnlyList<AgentCompactResultSet> sets,
         int omittedResultSets,
         IReadOnlyList<string?> messages) =>
-        new(query.Target, query.StatementClassification, sets, omittedResultSets, messages,
-            query.RecordsAffected, query.DurationMilliseconds, query.ResultHash, query.RawFootprint);
+        new(query.Target.ActualDatabase, query.StatementClassification, sets, omittedResultSets,
+            messages.Count == 0 ? null : messages,
+            query.RecordsAffected < 0 ? null : query.RecordsAffected,
+            query.DurationMilliseconds);
+
+    private static AgentQueryColumn CompactColumn(SqlHarnessColumnReport column) =>
+        new(column.Name, ValueTypeName(column.DataType), column.AllowNull);
+
+    public static string ValueTypeName(string clrType) => clrType switch
+    {
+        "System.DateTime" or "DateTime" => "dateTime",
+        "System.DateTimeOffset" or "DateTimeOffset" => "dateTimeOffset",
+        "System.String" or "String" => "string",
+        "System.Int16" or "Int16" => "int16",
+        "System.Int32" or "Int32" => "int32",
+        "System.Int64" or "Int64" => "int64",
+        "System.Boolean" or "Boolean" => "boolean",
+        "System.Decimal" or "Decimal" => "decimal",
+        "System.Byte[]" or "Byte[]" => "bytes",
+        _ => clrType,
+    };
 
     private static int SerializedLength<T>(T value) =>
         JsonSerializer.SerializeToUtf8Bytes(value, ProjectionJson).Length;
-
-    private static IReadOnlyList<CompareMatrixCellReference>? BuildOmittedCellReferences(
-        IReadOnlyList<CompareMatrixCellReport> allCells,
-        IReadOnlyList<CompareMatrixCellSummary> selectedCells,
-        string parameterName,
-        string parameterType,
-        int maximumBytes,
-        out int omittedReferences,
-        out int? continuation)
-    {
-        omittedReferences = 0;
-        continuation = null;
-        if (selectedCells.Count >= allCells.Count)
-            return null;
-
-        var selectedIndexes = selectedCells.Select(cell => cell.Index).ToHashSet();
-        var references = allCells
-            .Where(cell => !selectedIndexes.Contains(cell.Index))
-            .Select(cell => new CompareMatrixCellReference(cell.Index, null, SafeArtifactId(cell.Compare.ArtifactDirectory)))
-            .ToArray();
-
-        // Keep the reference list itself inside the byte budget. The full envelope is
-        // measured by the caller, so this is a conservative pre-filter that lets the
-        // degradation loop land on a references-only projection (detailLimit=0) when
-        // full cells do not fit. If references still do not fit, page them with an
-        // explicit continuation marker so the caller never assumes completeness.
-        // MCP serializes both text and structured content plus SDK metadata.
-        // Reserve one third of the outer wire budget for this summary estimate.
-        var availableForSummary = Math.Max(0, maximumBytes / 3 - 128);
-        var emptySummary = new CompareMatrixBenchmarkSummary(parameterName, parameterType, selectedCells);
-        var emptyBytes = JsonSerializer.SerializeToUtf8Bytes(emptySummary, ProjectionJson).Length;
-        var remaining = Math.Max(0, availableForSummary - emptyBytes);
-        if (references.Length == 0)
-            return references;
-
-        if (remaining <= 0)
-        {
-            omittedReferences = references.Length;
-            continuation = selectedCells.Count;
-            return [];
-        }
-
-        var sampleBytes = JsonSerializer.SerializeToUtf8Bytes(references[0], ProjectionJson).Length;
-        var estimatedPerReference = sampleBytes + 8;
-        var maxReferences = Math.Max(0, remaining / Math.Max(estimatedPerReference, 1));
-        if (references.Length <= maxReferences)
-            return references;
-
-        omittedReferences = references.Length - maxReferences;
-        continuation = selectedCells.Count + maxReferences;
-        return references.Take(maxReferences).ToArray();
-    }
 
     private static (DistilledPlan Report, int OmittedItems) ProjectPlan(DistilledPlan plan, int detailLimit, Func<string?, string?> clip, Func<IReadOnlyList<PlanNode>, IReadOnlyList<PlanNode>> takeNodes, int maximumNodes)
     {

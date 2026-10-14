@@ -26,21 +26,22 @@ public sealed class Renderer
             WriteAgent(outcome, command, output, new AgentOutputOptions());
             return;
         }
+        var report = outcome.Report is SqlHarnessArtifactReadReport artifactRead ? artifactRead.Section : outcome.Report;
         var hasError = outcome.Error is not null || !string.IsNullOrWhiteSpace(outcome.SafeError);
         if (hasError && mode is OutputMode.Json or OutputMode.JsonSummary)
         {
             var error = outcome.MachineError!;
-            var payload = new { result = mode == OutputMode.JsonSummary ? ProjectSummary(outcome.Report) : outcome.Report, error };
+            var payload = new { result = mode == OutputMode.JsonSummary ? ProjectSummary(report) : report, error };
             output.WriteLine(JsonSerializer.Serialize(payload, payload.GetType(), Json));
             return;
         }
-        if (outcome.Report is not null && mode is OutputMode.Json or OutputMode.JsonSummary)
+        if (report is not null && mode is OutputMode.Json or OutputMode.JsonSummary)
         {
-            var rendered = mode == OutputMode.JsonSummary ? ProjectSummary(outcome.Report) : outcome.Report;
+            var rendered = mode == OutputMode.JsonSummary ? ProjectSummary(report) : report;
             output.WriteLine(JsonSerializer.Serialize(rendered, rendered!.GetType(), Json));
             return;
         }
-        if (outcome.Report is SqlHarnessQueryReport query)
+        if (report is SqlHarnessQueryReport query)
         {
             output.WriteLine($"Target: {query.Target.ActualServer}/{query.Target.ActualDatabase} ({query.Target.Mode})");
             output.WriteLine($"Statement: {query.StatementClassification}; duration: {query.DurationMilliseconds} ms");
@@ -52,56 +53,24 @@ public sealed class Renderer
             }
             foreach (var message in query.Messages) output.WriteLine(message);
         }
-        else if (outcome.Report is SqlHarnessMeasureReport measure)
+        else if (report is SqlHarnessDryRunReport dryRun)
+            output.WriteLine($"Dry run {dryRun.Command}: allowed; classification: {dryRun.Classification}; parameters: {dryRun.Parameters.Count}; parameter sets: {dryRun.ParameterSets}; no connection opened.");
+        else if (report is SqlHarnessMeasureReport measure)
             output.WriteLine($"measure\t{ElapsedText(measure.Query)}\nStable results: {measure.ResultsStable}; artifacts: {measure.ArtifactDirectory ?? "none"}");
-        else if (outcome.Report is SqlHarnessMeasureSetReport measureSet)
+        else if (report is SqlHarnessMeasureSetReport measureSet)
             RenderMeasureSet(measureSet, output);
-        else if (outcome.Report is SqlHarnessCompareReport compare)
+        else if (report is SqlHarnessCompareReport compare)
             output.WriteLine($"baseline\t{ElapsedText(compare.Baseline)}\ncandidate\t{ElapsedText(compare.Candidate)}\n{FormatTechnicalEquivalence(compare.Equivalence)}; artifacts: {compare.ArtifactDirectory ?? "none"}{FormatRegressionLine(compare.Regression)}");
-        else if (outcome.Report is SqlHarnessCompareMatrixReport matrix)
+        else if (report is SqlHarnessCompareMatrixReport matrix)
             RenderMatrix(matrix, output);
-        else if (outcome.Report is DistilledPlan plan)
+        else if (report is DistilledPlan plan)
             RenderPlan(plan, output);
-        else if (outcome.Report is SqlHarnessSchemaReport schema)
-        {
-            output.WriteLine($"Target: {schema.Target.ActualServer}/{schema.Target.ActualDatabase} ({schema.Target.Mode})");
-            foreach (var obj in schema.Objects)
-            {
-                output.WriteLine($"{obj.Kind}\t{obj.Schema}.{obj.Name}");
-                foreach (var c in obj.Columns) output.WriteLine($"c\t{c.Name}\t{c.Type}\t{(c.Nullable ? "null" : "not-null")}{(c.InPrimaryKey ? "\tpk" : "")}");
-                foreach (var i in obj.Indexes) output.WriteLine($"i\t{i.Name}\t{(i.Unique ? "unique" : "nonunique")}\tkeys={string.Join(',', i.Keys)}\tinclude={string.Join(',', i.Includes)}{(i.Filter is null ? "" : $"\tfilter={i.Filter}")}");
-                foreach (var f in obj.ForeignKeys) output.WriteLine($"fk\t{f.Name}\t{f.Columns}->{f.ReferencedTable}({f.ReferencedColumns})");
-            }
-            if (schema.OmittedObjects > 0) output.WriteLine($"Omitted objects: {schema.OmittedObjects}");
-        }
-        else if (outcome.Report is SqlHarnessPingReport ping)
-            output.WriteLine($"Ready: {ping.Server}/{ping.Database} as {ping.Login}; {ping.DurationMilliseconds.ToString(CultureInfo.InvariantCulture)} ms");
-        else if (outcome.Report is SqlHarnessCountsReport counts)
-        {
-            output.WriteLine("Schema\tName\tRows\tMethod");
-            foreach (var table in counts.Tables)
-                output.WriteLine($"{table.Schema}\t{table.Name}\t{table.Rows.ToString(CultureInfo.InvariantCulture)}\t{table.Method}");
-            if (counts.Omitted > 0)
-                output.WriteLine($"Omitted tables: {counts.Omitted.ToString(CultureInfo.InvariantCulture)}");
-        }
-        else if (outcome.Report is SqlHarnessSpaceReport space)
-            RenderSpace(space, output);
-        else if (outcome.Report is SqlHarnessWatchReport watch)
+        else if (report is SqlHarnessWatchReport watch)
             RenderWatch(watch, output);
-        else if (outcome.Report is SqlHarnessSnapshotReport snapshot)
+        else if (report is SqlHarnessSnapshotReport snapshot)
             RenderSnapshot(snapshot, output);
-        else if (outcome.Report is SqlHarnessQueryStoreTopReport queryStoreTop)
-            RenderQueryStoreTop(queryStoreTop, output);
-        else if (outcome.Report is SqlHarnessIndexesReport indexes)
-            RenderIndexes(indexes, output);
-        else if (mode == OutputMode.Text && outcome.Report is SqlHarnessCapabilities capabilities)
+        else if (mode == OutputMode.Text && report is SqlHarnessCapabilities capabilities)
             output.WriteLine($"SQLHarness {capabilities.Version} ({capabilities.BuildId}); contract {capabilities.ContractVersion}; commands: {string.Join(", ", capabilities.Commands.Select(c => c.Name))}");
-        else if (mode == OutputMode.Text && outcome.Report is SqlValidationReport validation)
-        {
-            output.WriteLine($"{validation.Engine}: {validation.Classification}; executed: {validation.Executed}; reason: {validation.Reason ?? "none"}");
-            if (!string.IsNullOrWhiteSpace(validation.Detail))
-                output.WriteLine($"Detail: {validation.Detail}");
-        }
         if (!string.IsNullOrWhiteSpace(outcome.SafeError))
             output.WriteLine($"SQLHarness {outcome.ExitCode}: {SecretRedactor.Redact(outcome.SafeError, [])}");
     }
@@ -149,18 +118,20 @@ public sealed class Renderer
         if (error is not null)
             error = error with { Message = Clip(error.Message), Hint = error.Hint is null ? null : Clip(error.Hint), Location = error.Location is null ? null : error.Location with { Path = error.Location.Path is null ? null : Clip(error.Location.Path) } };
         var boundedCommand = Clip(command);
+        var report = outcome.Report is SqlHarnessArtifactReadReport artifactRead ? artifactRead.Section : outcome.Report;
         var status = error is null
             ? "success"
-            : outcome.Report is SqlHarnessCompareMatrixReport
+            : report is SqlHarnessCompareMatrixReport
                 ? "partial"
                 : "error";
-        foreach (var detailLimit in AgentOutputProjection.GetCandidateDetailLimits(outcome.Report, requestedBytes, requestedCellChars).Distinct())
+        foreach (var detailLimit in AgentOutputProjection.CandidateDetailLimits)
         {
-            var result = AgentOutputProjection.Project(outcome.Report, requestedCellChars, detailLimit, out var omitted, requestedBytes);
+            var result = AgentOutputProjection.Project(report, requestedCellChars, detailLimit, out var omitted, requestedBytes);
             omitted += errorOmitted;
             var truncated = omitted > 0;
-            var envelope = new SqlHarnessAgentEnvelope(1, boundedCommand, status, (int)outcome.ExitCode, result, error,
-                truncated ? new { omittedItems = omitted, detailLimit, maxCellChars = requestedCellChars } : null);
+            var envelope = new SqlHarnessAgentEnvelope(AgentEnvelopeSchema.Version, boundedCommand, status, (int)outcome.ExitCode, result, error,
+                truncated ? new { omittedItems = omitted, detailLimit, maxCellChars = requestedCellChars } : null,
+                outcome.OperationRef, outcome.ParentOperationRef);
             var bytes = JsonSerializer.SerializeToUtf8Bytes(envelope, CompactJson);
             if (bytes.Length + 1 <= requestedBytes)
             {
@@ -170,7 +141,7 @@ public sealed class Renderer
             }
         }
 
-        var minimal = new SqlHarnessAgentEnvelope(1, boundedCommand, "error", (int)SqlHarnessExitCode.Safety, null,
+        var minimal = new SqlHarnessAgentEnvelope(AgentEnvelopeSchema.Version, boundedCommand, "error", (int)SqlHarnessExitCode.Safety, null,
             new SqlHarnessError("output_budget_too_small", "render", "The minimum agent response does not fit the configured byte budget."),
             new { omittedItems = 1, maxOutputBytes = requestedBytes });
         var minimalBytes = JsonSerializer.SerializeToUtf8Bytes(minimal, CompactJson);
@@ -182,7 +153,7 @@ public sealed class Renderer
         else
         {
             // Minimum accepted budget is 4096 bytes, so this is defensive only.
-            output.WriteLine("{\"schemaVersion\":1,\"command\":\"unknown\",\"status\":\"error\",\"exitCode\":2,\"result\":null,\"error\":{\"code\":\"output_budget_too_small\",\"phase\":\"render\",\"message\":\"Agent output unavailable.\"},\"truncation\":null}");
+            output.WriteLine($"{{\"schemaVersion\":{AgentEnvelopeSchema.Version},\"command\":\"unknown\",\"status\":\"error\",\"exitCode\":2,\"result\":null,\"error\":{{\"code\":\"output_budget_too_small\",\"phase\":\"render\",\"message\":\"Agent output unavailable.\"}},\"truncation\":null}}");
         }
     }
 
@@ -308,155 +279,6 @@ public sealed class Renderer
         _ => reason.ToString().ToLowerInvariant(),
     };
 
-    private static void RenderQueryStoreTop(SqlHarnessQueryStoreTopReport report, TextWriter output)
-    {
-        var minutes = report.WindowMinutes.ToString(CultureInfo.InvariantCulture);
-        output.WriteLine($"Target: {report.Target.ActualServer}/{report.Target.ActualDatabase} ({report.Target.Mode})");
-        output.WriteLine($"Window: {minutes} minutes");
-        output.WriteLine($"Artifacts: {report.ArtifactDirectory ?? "none"}");
-        if (report.Queries.Count == 0)
-        {
-            output.WriteLine($"No Query Store runtime data in the selected {minutes}-minute window.");
-            return;
-        }
-
-        output.WriteLine(string.Join('\t',
-            "QueryId", "Hash", "Object", "Executions", "Plans",
-            "TotalDuration", "AverageDuration", "MaximumDuration",
-            "TotalCpu", "AverageCpu", "MaximumCpu",
-            "TotalLogicalReads", "AverageLogicalReads", "MaximumLogicalReads",
-            "LastExecution"));
-        foreach (var query in report.Queries)
-        {
-            output.WriteLine(string.Join('\t',
-                query.QueryId.ToString(CultureInfo.InvariantCulture),
-                query.QueryHash,
-                query.ObjectName ?? string.Empty,
-                query.ExecutionCount.ToString(CultureInfo.InvariantCulture),
-                query.PlanCount.ToString(CultureInfo.InvariantCulture),
-                DecimalText(query.TotalDurationMilliseconds),
-                DecimalText(query.AverageDurationMilliseconds),
-                DecimalText(query.MaximumDurationMilliseconds),
-                DecimalText(query.TotalCpuMilliseconds),
-                DecimalText(query.AverageCpuMilliseconds),
-                DecimalText(query.MaximumCpuMilliseconds),
-                DecimalText(query.TotalLogicalReads),
-                DecimalText(query.AverageLogicalReads),
-                DecimalText(query.MaximumLogicalReads),
-                query.LastExecutionAt.ToString("O", CultureInfo.InvariantCulture)));
-        }
-    }
-
-    private static void RenderIndexes(SqlHarnessIndexesReport report, TextWriter output)
-    {
-        output.WriteLine($"Target: {report.Target.ActualServer}/{report.Target.ActualDatabase} ({report.Target.Mode})");
-        output.WriteLine($"Top: {report.Top.ToString(CultureInfo.InvariantCulture)}");
-        output.WriteLine($"Object: {report.ObjectFilter ?? "all"}");
-        output.WriteLine($"Artifacts: {report.ArtifactDirectory ?? "none"}");
-        foreach (var warning in report.Warnings)
-            output.WriteLine($"Warning: {warning}");
-        if (report.Candidates.Count == 0)
-        {
-            output.WriteLine(report.ObjectFilter is null
-                ? "No missing-index candidates in the current DMV evidence."
-                : $"No missing-index candidates for {report.ObjectFilter} in the current DMV evidence.");
-            return;
-        }
-
-        output.WriteLine(string.Join('\t',
-            "CandidateId", "Table", "Classification", "Equality", "Inequality", "Include",
-            "Seeks", "Scans", "AverageCost", "AverageImpact", "Score",
-            "BestIndex", "MatchedKeys", "CandidateKeys", "MissingInclude",
-            "Disabled", "Filtered", "FilterHash", "LastSeek", "LastScan"));
-        foreach (var candidate in report.Candidates)
-        {
-            output.WriteLine(string.Join('\t',
-                candidate.CandidateId.ToString(CultureInfo.InvariantCulture),
-                candidate.Schema + "." + candidate.Table,
-                ClassificationText(candidate.Classification),
-                string.Join(',', candidate.EqualityColumns),
-                string.Join(',', candidate.InequalityColumns),
-                string.Join(',', candidate.IncludeColumns),
-                candidate.UserSeeks.ToString(CultureInfo.InvariantCulture),
-                candidate.UserScans.ToString(CultureInfo.InvariantCulture),
-                DecimalText(candidate.AverageTotalUserCost),
-                DecimalText(candidate.AverageUserImpactPercent),
-                DecimalText(candidate.CumulativeImpactScore),
-                candidate.BestExistingIndex ?? string.Empty,
-                candidate.MatchedKeyColumnCount.ToString(CultureInfo.InvariantCulture),
-                candidate.CandidateKeyColumnCount.ToString(CultureInfo.InvariantCulture),
-                string.Join(',', candidate.MissingIncludeColumns),
-                BoolText(candidate.ExistingIndexDisabled),
-                BoolText(candidate.ExistingIndexHasFilter),
-                candidate.ExistingIndexFilterHash ?? string.Empty,
-                candidate.LastUserSeek?.ToString("O", CultureInfo.InvariantCulture) ?? string.Empty,
-                candidate.LastUserScan?.ToString("O", CultureInfo.InvariantCulture) ?? string.Empty));
-        }
-    }
-
-    private static string ClassificationText(IndexOverlapClassification classification) => classification switch
-    {
-        IndexOverlapClassification.Covered => "covered",
-        IndexOverlapClassification.IncludeGap => "include-gap",
-        IndexOverlapClassification.PartialKey => "partial-key",
-        IndexOverlapClassification.NewShape => "new-shape",
-        _ => classification.ToString().ToLowerInvariant(),
-    };
-
-    private static string BoolText(bool? value) => value is null ? string.Empty : value.Value ? "true" : "false";
-
-    private static void RenderSpace(SqlHarnessSpaceReport space, TextWriter output)
-    {
-        output.WriteLine("Files");
-        foreach (var file in space.Files)
-        {
-            output.WriteLine(string.Join('\t',
-                file.LogicalName,
-                file.Type,
-                file.PhysicalName ?? string.Empty,
-                Mb(file.SizeMb),
-                Mb(file.UsedMb),
-                Mb(file.FreeMb)));
-        }
-
-        output.WriteLine("Allocation");
-        output.WriteLine(string.Join('\t',
-            Mb(space.Allocation.ReservedMb),
-            Mb(space.Allocation.UsedMb),
-            Mb(space.Allocation.DataMb)));
-
-        output.WriteLine("Tables");
-        foreach (var table in space.Tables)
-        {
-            output.WriteLine(string.Join('\t',
-                table.Schema,
-                table.Name,
-                table.Rows.ToString(CultureInfo.InvariantCulture),
-                Mb(table.ReservedMb),
-                Mb(table.UsedMb),
-                Mb(table.DataMb)));
-        }
-
-        if (space.Indexes.Count == 0)
-            return;
-
-        output.WriteLine("Indexes");
-        foreach (var index in space.Indexes)
-        {
-            output.WriteLine(string.Join('\t',
-                index.Schema,
-                index.Table,
-                index.Index,
-                index.Type,
-                Mb(index.ReservedMb),
-                Mb(index.UsedMb),
-                Mb(index.DataMb),
-                index.Compression ?? string.Empty));
-        }
-    }
-
-    private static string Mb(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
-    private static string DecimalText(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
     private static string Value(object? value) => value is null ? "NULL" : Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
     private static string Dist(CompareDistribution d) => $"{d.Min}/{d.Median}/{d.Max}";
 

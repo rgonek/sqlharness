@@ -21,7 +21,7 @@ baseline and exclude unmeasured input/discovery costs rather than silently claim
 
 ## Status
 
-- Status: TODO
+- Status: DONE — implementation and documentation through `ccbb4d7`; final evidence in [059 verification](059-verification.md).
 - Priority: P2
 - Effort: M
 - Risk: MEDIUM (journal migration, provenance propagation, statistics semantics)
@@ -66,15 +66,15 @@ Test tests/SqlHarness.Tests/CompareTests.cs, MeasureTests.cs.
 **Interfaces:** Existing CanonicalResultAccumulator is unchanged; raw accumulation is optional after
 the first measured execution of each variant/set. Result hashing and equivalence remain independent.
 
-- [ ] Step 1: Add synthetic tests with identical results and large saved plans.
+- [x] Step 1: Add synthetic tests with identical results and large saved plans.
   Assert reference output bytes for repeat=5 equal repeat=20; XML and warm-up contribute zero;
   each variant/set contributes exactly its first measured rows/messages; result hashes are unchanged.
-- [ ] Step 2: Run dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~Compare|FullyQualifiedName~Measure".
+- [x] Step 2: Run dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~Compare|FullyQualifiedName~Measure".
   Expected: FAIL on current accumulated raw footprint.
-- [ ] Step 3: Count only first measured output, removing plan text from this accumulator.
+- [x] Step 3: Count only first measured output, removing plan text from this accumulator.
   Apply SQL Server and PostgreSQL paths consistently; preserve saved artifacts and plan diagnostics.
-- [ ] Step 4: Run the same filter; expected PASS.
-- [ ] Step 5: Commit fix(059): comparable single-execution reference output volume.
+- [x] Step 4: Run the same filter; expected PASS.
+- [x] Step 5: Commit fix(059): comparable single-execution reference output volume.
 
 **Acceptance:** Repeat count and plan size cannot inflate the reference output baseline.
 
@@ -103,19 +103,19 @@ Journal/ActivityJournalTests.cs, Journal/JournalingModuleTests.cs, tests/SqlHarn
 - Produces: optional operationRef in agent outcome envelopes and parentOperationRef in artifact-read
   evidence. A reference is an identity, not proof that a journal row exists.
 
-- [ ] Step 1: Add tests asserting:
+- [x] Step 1: Add tests asserting:
   producer and all matrix-cell manifests have the same root reference; later-session reads link exactly;
   similar paths and wildcard characters do not affect identity; concurrent producers never cross-link;
   legacy manifests remain readable and give null producer; disabled journal still executes and publishes;
   an unknown/wrong-scope artifact read is journaled as failed without attributing it to a producer.
-- [ ] Step 2: Run dotnet test SqlHarness.sln --filter "FullyQualifiedName~Artifact|FullyQualifiedName~Journal".
+- [x] Step 2: Run dotnet test SqlHarness.sln --filter "FullyQualifiedName~Artifact|FullyQualifiedName~Journal".
   Expected: missing producer/reference contract.
-- [ ] Step 3: Add the v7 migration and propagate references explicitly through the execution/publication path.
+- [x] Step 3: Add the v7 migration and propagate references explicitly through the execution/publication path.
   Artifact read becomes a module operation. Resolve ownership before reading producer metadata.
   Use exact reference equality in journal joins, not directory LIKE, prefix, newest-row or timestamp matching.
   Include the new fields in CLI/MCP emission accounting; record failed reads without inventing a parent.
-- [ ] Step 4: Run the Step 2 filter; expected PASS; legacy artifact tests continue passing.
-- [ ] Step 5: Commit feat(059): explicit producer references and journaled artifact reads.
+- [x] Step 4: Run the Step 2 filter; expected PASS; legacy artifact tests continue passing.
+- [x] Step 5: Commit feat(059): explicit producer references and journaled artifact reads.
 
 **Acceptance:** New provenance is deterministic even across sessions and without a live journal.
 Historical provenance is unavailable rather than guessed.
@@ -140,19 +140,19 @@ tests/SqlHarness.Tests/Dashboard/JournalReaderTests.cs and neighboring UI tests.
   and remain outside new comparable totals.
 - Dry runs have dry_run=1, count in output cost/call count and are excluded from database-execution counts.
 
-- [ ] Step 1: Synthetic reader tests:
+- [x] Step 1: Synthetic reader tests:
   root output 400 estimated tokens plus two reads of 300 each yields total 1000;
   reference baseline 1000 yields zero estimated output delta, not claimed avoided agent tokens;
   a larger emitted query output reports positive overhead; missing baseline has comparison=null;
   mixed legacy/new windows do not sum incompatible baseline kinds; dry runs cost output but no DB execution.
   Producer outside the selected time window remains linkable; count each in-window response once.
-- [ ] Step 2: Run dotnet test SqlHarness.sln --filter "FullyQualifiedName~Journal|FullyQualifiedName~Dashboard".
+- [x] Step 2: Run dotnet test SqlHarness.sln --filter "FullyQualifiedName~Journal|FullyQualifiedName~Dashboard".
   Expected: old savings contract fails the coverage/comparability assertions.
-- [ ] Step 3: Persist actual raw/emitted byte counts alongside estimates, expose coverage and baseline kind,
+- [x] Step 3: Persist actual raw/emitted byte counts alongside estimates, expose coverage and baseline kind,
   group by explicit references and update UI labels. Do not fabricate input/tool-discovery measurements.
   Capabilities remains unjournaled in this plan and is explicitly excluded from reported coverage.
-- [ ] Step 4: Run the filter and UI tests; expected PASS.
-- [ ] Step 5: Commit feat(059): workflow output cost with explicit estimate and baseline coverage.
+- [x] Step 4: Run the filter and UI tests; expected PASS.
+- [x] Step 5: Commit feat(059): workflow output cost with explicit estimate and baseline coverage.
 
 **Acceptance:** The dashboard distinguishes measured bytes, estimated tokens and a named output comparison;
 an incomplete cost measurement is visibly incomplete.
@@ -162,19 +162,19 @@ an incomplete cost measurement is visibly incomplete.
 **Files:** README.md, docs/mcp.md, skills/sqlharness/SKILL.md, tests/SqlHarness.Tests/DocsSyncTests.cs,
 plans/README.md.
 
-- [ ] Step 1: Document refs, producer provenance, v7 fields, baseline kind, estimation method, excluded costs,
+- [x] Step 1: Document refs, producer provenance, v7 fields, baseline kind, estimation method, excluded costs,
   legacy display and dry-run execution counts. Report/storage implementation remains outside this plan.
-- [ ] Step 2: Run dotnet build SqlHarness.sln -warnaserror; pwsh scripts/verify.ps1;
+- [x] Step 2: Run dotnet build SqlHarness.sln -warnaserror; pwsh scripts/verify.ps1;
   pwsh scripts/verify-linux.ps1 sequentially. Expected: 0 warnings, verify: OK and verify-linux: OK.
-- [ ] Step 3: Commit docs(059): provenance and honest workflow cost; mark DONE with evidence in the index.
+- [x] Step 3: Commit docs(059): provenance and honest workflow cost; mark DONE with evidence in the index.
 
 ## Done criteria
 
-- [ ] Repeat and plan XML size cannot inflate the named reference output baseline.
-- [ ] New matrix-cell artifacts reference their root producer exactly; legacy reads do not infer one.
-- [ ] Output cost includes linked reads and dry runs, without double counting.
-- [ ] Byte measurements, token estimates and coverage are distinct; no unsupported claim of actual savings.
-- [ ] Both gates pass; index updated.
+- [x] Repeat and plan XML size cannot inflate the named reference output baseline.
+- [x] New matrix-cell artifacts reference their root producer exactly; legacy reads do not infer one.
+- [x] Output cost includes linked reads and dry runs, without double counting.
+- [x] Byte measurements, token estimates and coverage are distinct; no unsupported claim of actual savings.
+- [x] Both gates pass; index updated.
 
 ## STOP conditions
 

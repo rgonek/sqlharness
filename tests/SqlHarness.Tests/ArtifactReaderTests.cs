@@ -11,6 +11,255 @@ public class ArtifactReaderTests
     private const string Secret = "SECRET-9f2c-artifact-content-must-not-leak";
 
     [Fact]
+    public void Read_section_returns_producer_reference_only_after_owner_check()
+    {
+        using var temp = new TempDirectory();
+        var id = "owned-artifact";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), JsonSerializer.Serialize(new
+        {
+            manifestVersion = 1,
+            artifactKind = "compare",
+            reportFile = "report.json",
+            sections = new[] { "matrix-cells" },
+            producerOperationRef = "producer-1",
+            owner = new { profile = "p", vars = new Dictionary<string, string>(), engine = "postgres", server = "s", database = "d" },
+        }));
+        File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), "{\"cases\":[]}");
+
+        var wrongOwner = new ArtifactOwner("other", new Dictionary<string, string>(), "postgres", "s", "d");
+        Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSectionWithMetadata(
+            temp.Path, id, "matrix-cells", wrongOwner));
+
+        var resolved = ArtifactReader.ReadSectionWithMetadata(temp.Path, id, "matrix-cells",
+            new ArtifactOwner("p", new Dictionary<string, string>(), "postgres", "s", "d"));
+        Assert.Equal("producer-1", resolved.ProducerOperationRef);
+    }
+
+    [Fact]
+    public void Legacy_manifest_read_has_unavailable_producer_reference()
+    {
+        using var temp = new TempDirectory();
+        var id = "legacy-without-producer";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"matrix-cells\"]}");
+        File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), "{\"cases\":[]}");
+
+        var resolved = ArtifactReader.ReadSectionWithMetadata(temp.Path, id, "matrix-cells");
+
+        Assert.Null(resolved.ProducerOperationRef);
+    }
+
+    [Theory]
+    [InlineData("measure", null)]
+    [InlineData("measure-set", "set-a")]
+    public void Plan_section_maps_public_query_variant_to_stored_measure_runs(string artifactKind, string? parameterSet)
+    {
+        using var temp = new TempDirectory();
+        var id = "plan-" + artifactKind;
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(Path.Combine(directory, "plans"));
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), JsonSerializer.Serialize(new
+        {
+            manifestVersion = 1,
+            artifactKind,
+            reportFile = "report.json",
+            sections = new[] { "plan" },
+        }));
+        const string planName = "measure-001-000-000.plan.json";
+        File.WriteAllText(Path.Combine(directory, "plans", planName),
+            "{\"statements\":[{\"root\":{\"physicalOp\":\"Scan\"}}]}");
+        File.WriteAllText(Path.Combine(directory, "runs.jsonl"), JsonSerializer.Serialize(new
+        {
+            variant = "measure",
+            repetition = 1,
+            parameterSet,
+            planJsonFiles = new[] { planName },
+        }));
+
+        var section = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("query", ParameterSet: parameterSet)));
+
+        Assert.Equal("query", section.Variant);
+        Assert.Equal(parameterSet, section.ParameterSet);
+        Assert.Equal(1, section.Repetition);
+        Assert.Equal("Scan", Assert.Single(section.Nodes).Operator.PhysicalOp);
+    }
+
+    [Fact]
+    public void Plan_section_refuses_non_object_runs_index_rows_as_corrupt_evidence()
+    {
+        using var temp = new TempDirectory();
+        const string id = "plan-non-object-run";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"plan\"]}");
+        File.WriteAllText(Path.Combine(directory, "runs.jsonl"), "[]");
+
+        Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("baseline")));
+    }
+
+    [Fact]
+    public void Plan_section_selects_measured_repetitions_and_paginates_every_flat_node()
+    {
+        using var temp = new TempDirectory();
+        const string id = "stored-plan-pages";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(Path.Combine(directory, "plans"));
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"plan\"]}");
+        var deepBranch = "{\"physicalOp\":\"Deep0\",\"children\":[]}";
+        for (var depth = 1; depth < 15; depth++)
+            deepBranch = "{\"physicalOp\":\"Deep" + depth + "\",\"children\":[" + deepBranch + "]}";
+        var children = new[] { deepBranch }.Concat(Enumerable.Range(1, 69)
+            .Select(i => "{\"physicalOp\":\"Scan\",\"objectName\":\"dbo.T" + i + "\",\"predicate\":\"id > 0\"}"));
+        var tree = "{\"physicalOp\":\"Join\",\"logicalOp\":\"Inner\",\"indexName\":\"IX_root\",\"estimatedRows\":1,\"actualRows\":2,\"children\":[" +
+            string.Join(',', children) + "]}";
+        var lines = new List<string>();
+        foreach (var repetition in new[] { 1, 2 })
+        {
+            var name = $"baseline-{repetition:D3}-000-000.plan.json";
+            var repetitionTree = repetition == 2 ? tree.Replace("\"actualRows\":2", "\"actualRows\":900", StringComparison.Ordinal) : tree;
+            File.WriteAllText(Path.Combine(directory, "plans", name), "{\"statements\":[{\"root\":" + repetitionTree + "},{\"root\":{\"physicalOp\":\"Other\"}}],\"added\":true}");
+            lines.Add(JsonSerializer.Serialize(new
+            {
+                variant = "baseline",
+                repetition,
+                cpuTimeMilliseconds = repetition,
+                elapsedTimeMilliseconds = repetition,
+                logicalReads = repetition,
+                logicalReadsByTable = new { },
+                resultHash = "hash",
+                messageCount = 0,
+                planFiles = Array.Empty<string>(),
+                planJsonFiles = new[] { name }
+            }));
+        }
+        File.WriteAllText(Path.Combine(directory, "runs.jsonl"), string.Join(Environment.NewLine, lines));
+
+        var selected = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("baseline", Statement: 0)));
+        Assert.Equal(2, selected.Repetition);
+        Assert.Equal("last-measured", selected.Selection);
+        Assert.True(selected.PlanShapeStable);
+        Assert.Equal(85, selected.NodeCount);
+        Assert.Equal(32, selected.Nodes.Count);
+        Assert.Equal(32, selected.Continuation);
+        var noNodeSpace = Assert.IsType<ArtifactPlanSection>(AgentOutputProjection.Project(selected, 128, int.MaxValue, out _, 1));
+        Assert.Empty(noNodeSpace.Nodes);
+        Assert.Null(noNodeSpace.Continuation);
+        Assert.Contains("cannot fit", noNodeSpace.PageError, StringComparison.Ordinal);
+        Assert.Empty(selected.Nodes[0].Operator.Children);
+        Assert.Null(selected.Nodes[0].Operator.Predicate);
+        Assert.Equal("0", selected.Nodes[1].ParentPath);
+        Assert.DoesNotContain("<ShowPlanXML", JsonSerializer.Serialize(selected), StringComparison.Ordinal);
+
+        var seen = new List<string>();
+        ArtifactPlanSection page = selected;
+        while (true)
+        {
+            var projected = Assert.IsType<ArtifactPlanSection>(AgentOutputProjection.Project(page, 128, int.MaxValue, out _, 4096));
+            seen.AddRange(projected.Nodes.Select(node => node.NodePath));
+            if (projected.Continuation is not int next) break;
+            Assert.Equal(page.Cursor + projected.Nodes.Count, next);
+            page = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(temp.Path, id, "plan",
+                cursor: next, planSelector: new ArtifactPlanSelector("baseline", Statement: 0)));
+        }
+        Assert.Equal(85, seen.Distinct().Count());
+        Assert.Equal("0", seen[0]);
+        Assert.Equal("0/0", seen[1]);
+        Assert.Equal("0/69", seen[^1]);
+        Assert.Contains("0/0/0/0/0/0/0/0/0", seen);
+        var textIncluded = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("baseline", Statement: 0, Repetition: 1), includeText: true));
+        Assert.Equal("id > 0", textIncluded.Nodes[16].Operator.Predicate);
+
+        var explicitSelection = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("baseline", Statement: 1, Repetition: 1, ParameterSet: null), includeText: true));
+        Assert.Equal(1, explicitSelection.Repetition);
+        Assert.Equal("explicit", explicitSelection.Selection);
+        Assert.Equal(2, explicitSelection.StatementCount);
+        Assert.Equal("Other", Assert.Single(explicitSelection.Nodes).Operator.PhysicalOp);
+        File.WriteAllText(Path.Combine(directory, "plans", "baseline-002-000-000.plan.json"),
+            "{\"statements\":[{\"root\":" + tree.Replace("Join", "Hash Join", StringComparison.Ordinal) + "},{\"root\":{\"physicalOp\":\"Other\"}}]}");
+        var changedShape = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("baseline", Statement: 0)));
+        Assert.False(changedShape.PlanShapeStable);
+        var repetitionTwoPath = Path.Combine(directory, "plans", "baseline-002-000-000.plan.json");
+        var changedIndexPlan = tree.Replace("\"actualRows\":2", "\"actualRows\":900", StringComparison.Ordinal)
+            .Replace("IX_root", "IX_other", StringComparison.Ordinal);
+        File.WriteAllText(repetitionTwoPath, "{\"statements\":[{\"root\":" + changedIndexPlan + "},{\"root\":{\"physicalOp\":\"Other\"}}]}");
+        var changedIndex = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("baseline", Statement: 0)));
+        Assert.False(changedIndex.PlanShapeStable);
+        var changedPredicatePlan = changedIndexPlan.Replace("id > 0", "id > 1", StringComparison.Ordinal);
+        File.WriteAllText(repetitionTwoPath, "{\"statements\":[{\"root\":" + changedPredicatePlan + "},{\"root\":{\"physicalOp\":\"Other\"}}]}");
+        var changedPredicate = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("baseline", Statement: 0)));
+        Assert.False(changedPredicate.PlanShapeStable);
+        var missingRepetition = Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("baseline", Repetition: 9)));
+        Assert.Contains("available repetitions: 1, 2", missingRepetition.Message, StringComparison.Ordinal);
+
+        File.WriteAllText(Path.Combine(directory, "plans", "baseline-001-000-000.plan.json"),
+            "{\"statements\":[{\"root\":{\"children\":[]}}]}");
+        var incompleteComparison = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("baseline", Repetition: 2)));
+        Assert.Null(incompleteComparison.PlanShapeStable);
+        Assert.NotEmpty(incompleteComparison.EvidenceGaps);
+        Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("baseline", Repetition: 1)));
+    }
+
+    [Fact]
+    public void Plan_section_keeps_measured_runs_without_saved_plan_evidence_in_inventory()
+    {
+        using var temp = new TempDirectory();
+        const string id = "stored-plan-gap";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(Path.Combine(directory, "plans"));
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"plan\"]}");
+        var runLines = new List<string>();
+        foreach (var repetition in new[] { 1, 2 })
+        {
+            var name = $"baseline-{repetition:D3}-000-000.plan.json";
+            File.WriteAllText(Path.Combine(directory, "plans", name),
+                "{\"statements\":[{\"root\":{\"physicalOp\":\"Scan\",\"children\":[]}}]}");
+            runLines.Add(JsonSerializer.Serialize(new
+            {
+                variant = "baseline",
+                repetition,
+                planJsonFiles = new[] { name }
+            }));
+        }
+        runLines.Add(JsonSerializer.Serialize(new
+        {
+            variant = "baseline",
+            repetition = 3,
+            planJsonFiles = Array.Empty<string>()
+        }));
+        File.WriteAllText(Path.Combine(directory, "runs.jsonl"), string.Join(Environment.NewLine, runLines));
+
+        var defaultSelection = Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("baseline")));
+        Assert.Contains("Repetition 3", defaultSelection.Message, StringComparison.Ordinal);
+        Assert.Contains("no saved plan evidence", defaultSelection.Message, StringComparison.OrdinalIgnoreCase);
+
+        var earlierSelection = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(temp.Path, id, "plan",
+            planSelector: new ArtifactPlanSelector("baseline", Repetition: 2)));
+        Assert.Equal(2, earlierSelection.Repetition);
+        Assert.Equal(new[] { 1, 2, 3 }, earlierSelection.AvailableRepetitions);
+        Assert.Null(earlierSelection.PlanShapeStable);
+        Assert.NotEmpty(earlierSelection.EvidenceGaps);
+    }
+
+    [Fact]
     public void CompareWorkflow_SummaryMatchesSavedReport_WithoutRebenchmark()
     {
         using var temp = new TempDirectory();
@@ -86,7 +335,39 @@ public class ArtifactReaderTests
     }
 
     [Fact]
-    public void Matrix_cell_index_pages_return_safe_ids_and_a_consumable_cursor()
+    public void Statements_section_accepts_a_continuation_cursor()
+    {
+        using var temp = new TempDirectory();
+        const string id = "statements-pages";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"statements\"]}");
+        var statements = Enumerable.Range(0, 300).Select(ordinal => new ArtifactStatementMetric(
+            "baseline", null, null, ordinal, new string('a', 64), 1, 2, 1, [])).ToArray();
+        File.WriteAllText(Path.Combine(directory, "statements.json"), JsonSerializer.Serialize(
+            new ArtifactStatementsSection(id, "compare", statements, 0),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
+        var first = Assert.IsType<ArtifactStatementsSection>(ArtifactReader.ReadSection(temp.Path, id, "statements"));
+        Assert.Equal(300, first.Statements.Count);
+        var projected = Assert.IsType<ArtifactStatementsSection>(AgentOutputProjection.Project(first, 512, 128, out _, 65536));
+        Assert.Equal(128, projected.Statements.Count);
+        Assert.Equal(128, projected.Continuation);
+
+        var second = Assert.IsType<ArtifactStatementsSection>(ArtifactReader.ReadSection(temp.Path, id, "statements", cursor: 128));
+        Assert.Equal(128, second.Statements[0].StatementOrdinal);
+        var projectedSecond = Assert.IsType<ArtifactStatementsSection>(AgentOutputProjection.Project(second, 512, 128, out _, 65536));
+        Assert.Equal(256, projectedSecond.Continuation);
+
+        var last = Assert.IsType<ArtifactStatementsSection>(ArtifactReader.ReadSection(temp.Path, id, "statements", cursor: 256));
+        var projectedLast = Assert.IsType<ArtifactStatementsSection>(AgentOutputProjection.Project(last, 512, 128, out _, 65536));
+        Assert.Equal(44, projectedLast.Statements.Count);
+        Assert.Null(projectedLast.Continuation);
+    }
+
+    [Fact]
+    public void Matrix_case_inventory_pages_preserve_the_agent_case_schema_and_cursor()
     {
         using var temp = new TempDirectory();
         const string id = "matrix-index";
@@ -94,19 +375,38 @@ public class ArtifactReaderTests
         Directory.CreateDirectory(directory);
         File.WriteAllText(Path.Combine(directory, "manifest.json"),
             "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"matrix-cells\"]}");
+        var cases = Enumerable.Range(0, 40).Select(index => new AgentMatrixCase(index, $"cell-{index:D3}", true, "compared",
+            new AgentMedianMetrics(1, 2, 3), new AgentMedianMetrics(4, 5, 6), new AgentMedianMetrics(3, 3, 3), ["warning"])).ToArray();
+        var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), JsonSerializer.Serialize(new
         {
-            cells = Enumerable.Range(0, 40).Select(index => new { index, artifactId = $"cell-{index:D3}" }).ToArray(),
-        }));
+            cases,
+        }, jsonOptions));
 
         var first = ArtifactReader.ReadSection(temp.Path, id, "matrix-cells");
         using var json = JsonDocument.Parse(JsonSerializer.Serialize(first, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
-        Assert.Equal(32, json.RootElement.GetProperty("cells").GetArrayLength());
+        Assert.Equal(32, json.RootElement.GetProperty("cases").GetArrayLength());
+        Assert.Equal(4m, json.RootElement.GetProperty("cases")[0].GetProperty("candidate").GetProperty("cpuMilliseconds").GetDecimal());
         Assert.Equal(32, json.RootElement.GetProperty("continuation").GetInt32());
         var second = Assert.IsType<ArtifactMatrixCellsSection>(ArtifactReader.ReadSection(temp.Path, id, "matrix-cells", cursor: 32));
-        Assert.Equal(8, second.Cells.Count);
+        Assert.Equal(8, second.Cases.Count);
         Assert.Null(second.Continuation);
-        Assert.Equal(Enumerable.Range(32, 8), second.Cells.Select(cell => cell.Index));
+        Assert.Equal(Enumerable.Range(32, 8), second.Cases.Select(cell => cell.Index));
+
+        var smallPage = Assert.IsType<ArtifactMatrixCellsSection>(AgentOutputProjection.Project(first, 128, 0, out _, 4096));
+        Assert.InRange(JsonSerializer.SerializeToUtf8Bytes(smallPage, jsonOptions).Length, 1, 4096);
+        Assert.InRange(smallPage.Cases.Count, 1, 31);
+        Assert.Equal(smallPage.Cases.Count, smallPage.Continuation);
+
+        File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), JsonSerializer.Serialize(new
+        {
+            cells = Enumerable.Range(0, 40).Select(index => new { index, artifactId = $"cell-{index:D3}" }).ToArray(),
+        }, jsonOptions));
+        var legacy = Assert.IsType<ArtifactMatrixCellsSection>(ArtifactReader.ReadSection(temp.Path, id, "matrix-cells"));
+        Assert.Equal("unavailable", legacy.Cases[0].EquivalenceAvailability);
+        Assert.Null(legacy.Cases[0].Equivalent);
+        Assert.Null(legacy.Cases[0].Baseline.CpuMilliseconds);
+        Assert.Equal("cell-000", legacy.Cases[0].ArtifactId);
     }
 
     [Fact]
@@ -415,6 +715,7 @@ public class ArtifactReaderTests
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
         {
+            // capability guard: xUnit v2 has no dynamic skip
             // Creating links needs OS privilege; traversal batteries above always run.
             return;
         }

@@ -43,11 +43,10 @@ public sealed class OperationJournalDescriberTests
     {
         var direct = new SqlTargetRequest(null, new Dictionary<string, string>(), "srv", "db", "integrated", UnsafeDirect: true);
 
-        var start = OperationJournalDescriber.DescribeStart(new SqlHarnessPingOperation(direct, 5));
+        var start = OperationJournalDescriber.DescribeStart(new SqlHarnessQueryOperation(direct, "SELECT 1", [], 5, 10, false, null));
 
-        Assert.Equal("ping", start.Operation);
+        Assert.Equal("query", start.Operation);
         Assert.Null(start.Profile);
-        Assert.Null(start.SqlHash);
     }
 
     [Fact]

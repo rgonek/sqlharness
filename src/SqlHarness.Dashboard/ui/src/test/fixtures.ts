@@ -12,7 +12,8 @@ export const operation = (over: Partial<OperationSummary> = {}): OperationSummar
   startedAt: "2026-10-07T09:00:00.000Z", updatedAt: "2026-10-07T09:00:01.000Z", finishedAt: "2026-10-07T09:00:01.000Z",
   durationMs: 1200, profile: "local", engine: "sqlserver", server: "srv", database: "db", mutationRequested: false,
   sqlHash: "sha256:0123456789abcdef", rowsReturned: 3, logicalReadsMedian: null, hasSpill: false, coldCache: false,
-  overGranted: false, progress: null, errorMessage: null, cancelReason: null, agentModel: null, agentReasoningEffort: null, ...over,
+  overGranted: false, progress: null, errorMessage: null, cancelReason: null, agentModel: null, agentReasoningEffort: null,
+  operationRef: null, parentOperationRef: null, dryRun: false, ...over,
 })
 
 export const variant = (over: Partial<VariantDetail> = {}): VariantDetail => ({
@@ -30,7 +31,8 @@ export const variant = (over: Partial<VariantDetail> = {}): VariantDetail => ({
 export const operationDetail = (over: Partial<OperationDetail> = {}): OperationDetail => ({
   operation: operation({ operation: "measure", logicalReadsMedian: 50, hasSpill: true, coldCache: true, overGranted: true }),
   session: session(), vars: { tenant: "acme" }, candidateSqlHash: null, sqlText: null, candidateSqlText: null,
-  rawTokens: 100, emittedTokens: 10, artifactDirectory: "/artifacts/m1", summary: { kind: "measure", resultsStable: true },
+  rawTokens: 100, emittedTokens: 10, rawBytes: 400, emittedBytes: 40, tokenEstimationMethod: "utf8-bytes-div-4",
+  artifactDirectory: "/artifacts/m1", summary: { kind: "measure", resultsStable: true },
   variants: [variant()], dimensions: { values: [{ name: "tenant", value: "acme", isUnknown: false, source: "recorded",
     operations: null, percentage: null, totalDurationMs: null, durationAvailableOperations: null,
     durationUnavailableOperations: null, failed: null, rejected: null }] }, agent: null, ...over,
@@ -50,8 +52,12 @@ export const stats = (over: Partial<DashboardStats> = {}): DashboardStats => ({
   topTablesByLogicalReads: [{ table: "Orders", logicalReads: 210, operations: 1 }],
   topWaits: [{ waitType: "PAGEIOLATCH_SH", totalWaitMs: 120 }],
   targets: [{ profile: "local", database: "db", count: 6, engine: "sqlserver", server: "srv" }],
-  tokens: { raw: 400, emitted: 40, totalOperations: 6, pairedOperations: 5, rawOnlyOperations: 1,
-    emittedOnlyOperations: 0, missingBothOperations: 0 }, spillOperations: 1, coldCacheOperations: 1,
+  workflowCosts: [{ rootOperationRef: "root-1", outputBytes: 4000, estimatedOutputTokens: 1000, callCount: 3,
+    tokenEstimationMethod: "utf8-bytes-div-4", accountingKind: "workflow-output",
+    coverage: { input: "unmeasured", discovery: "unmeasured", chat: "unmeasured" },
+    comparison: { baselineKind: "single-measured-execution-output", baselineBytes: 4000,
+      baselineEstimatedTokens: 1000, outputOverheadBytes: 0, estimatedOutputTokenDelta: 0 },
+    dryRunCalls: 0, databaseExecutionCalls: 1 }], spillOperations: 1, coldCacheOperations: 1,
   profileOperations: [{ profile: "local", operations: 6 }],
   profileDimensions: {
     profile: "local", profileDefinitionAvailable: true, operations: 6,
@@ -59,6 +65,5 @@ export const stats = (over: Partial<DashboardStats> = {}): DashboardStats => ({
       operations: 6, percentage: 100, totalDurationMs: 7200, durationAvailableOperations: 6, durationUnavailableOperations: 0, failed: 0, rejected: 0 }] }],
     targets: [{ profile: "local", database: "db", count: 6, engine: "sqlserver", server: "srv" }], targetCount: 1, matrix: null,
   },
-  savings: { priceSource: "models.dev", pricesFetchedAt: "2026-10-11T00:00:00Z", totalUsd: 0, byModel: [], withoutModel: 0, unpriced: 0 },
   ...over,
 })

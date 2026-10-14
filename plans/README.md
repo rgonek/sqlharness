@@ -3,55 +3,50 @@
 Zapis: 2026-09-29, skill improve. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
 Źródło: [audyt](2026-09-28-project-audit.md). Użytkownik zlecił zapis wszystkich ustaleń; plany nie są jeszcze wdrożone.
 
-## Aktualna kolejka wykonania — 2026-10-12
+## Aktualna kolejka wykonania — 2026-10-13
 
-Odświeżono po weryfikacji Plan 049 na `58fab51`. Preferencja użytkownika: plany ogólne i SQL Server mają pierwszeństwo przed planami wyłącznie PostgreSQL. **Jednostką wykonania jest cały plan.** Jego kroki są kolejnością wewnętrzną, a nie osobnymi zadaniami odkładanymi na później. Plany mieszane wykonuje się w całości, również z częścią PG; o niższej kolejce decyduje wyłącznie zakres całego planu.
+Odświeżono na `a296e91`: sprawdzono main, statusy planów i worktree. Preferencja: ogólne i SQL Server przed wyłącznie PostgreSQL. **Każdy plan jest wykonywany w całości**, bez osobno odkładanych faz.
 
 ### W wykonaniu
 
-| Plan | Kategoria | Status i źródło |
+| Plan | Kategoria | Dowód |
 |---|---|---|
-| [024](024-canonical-results-common-types.md) | Ogólne / SQL Server / PG: pełna obsługa typów wyników | DONE — scalony do main `232ec01` |
-| [Ceny modeli i ustawienia](../docs/superpowers/plans/2026-10-11-model-prices-settings.md) | Dashboard, wycena tokenów, konfiguracja, katalog CLI/MCP | DONE — scalony do main; bramki Windows i Linux zielone (potwierdzone przez użytkownika 2026-10-12) |
-| [051](051-compare-regression-verdict.md) | Ogólne: werdykt regresji w wyniku compare | DONE — scalony do main `e05da9b`; bramki Windows i Linux zielone (potwierdzone przez użytkownika 2026-10-12) |
+| [047](047-postgres-temp-target-proof.md) | PostgreSQL: uproszczenie dowodu TEMP dla setupu | IN PROGRESS — potwierdzenie użytkownika 2026-10-13; cały zakres planu |
 
-020, 026, 029, 030, 041, 042, 043, 044, 046, 049, 050, 052, 053 i 054 mają już DONE w aktualnym indeksie i nie wracają do kolejki. Starsze dowody zachowano bez ponownego uruchamiania bramek przy odświeżaniu dokumentacji; Plan 049 uzyskał świeże zielone bramki Windows i Linux na `58fab51`. DONE nie stanowi dodatkowej zgody na push.
+### Zakończone od poprzedniej kolejki
 
-### Grupa 1 — bezpieczeństwo i podstawowa praca agenta
+028, 029, 031, 034, 049–060 są DONE według aktualnego indeksu. Ograniczenia weryfikacji pozostają zapisane w wierszach historycznych. 049 jest już w main (sprawdzono przodka `58fab51`); starsze „not merged” jest nieaktualne. 024/045/046 i ceny modeli również zakończone. Zachowano źródła i ograniczenia dowodów w tabeli historycznej; przy tym odświeżeniu nie uruchamiano bramek.
 
-| Kolejność | Plan | Kategoria | Warunek wykonania |
+### Grupa 1 — kontrakt i skuteczność pracy agenta
+
+| Kolejność | Plan | Kategoria | Warunek |
 |---|---|---|---|
+| 1 | [061](061-unified-parameter-sets.md) | Ogólne / P3: wspólne zestawy parametrów measure/compare | 060 jest DONE; 056/058 są DONE |
 
+### Grupa 2 — historia optymalizacji i dashboard
 
-024 i 045 scalone do main (`232ec01`, `3e8236f`); 046 ma DONE.
+| Plan | Kategoria | Warunek |
+|---|---|---|
+| [062](062-compare-context-dashboard.md) | Ogólne / P2: kontekst compare, historia prób, dashboard | 051 jest DONE. Nie wymaga całej fali 055–061; uzgodnić aktualną bazę po 055 i realizować sekwencyjnie względem zmian MCP w 060/061 |
 
-### Grupa 2 — SQL Server i automatyzacja optymalizacji
-
-Plan 051 is DONE. New local contract plans are indexed below and remain TODO:
-055 -> 056 -> 057 -> 058 -> 059 -> 060 -> 061. Accepted refinements update 055/058/059;
-this order describes dependencies and grants no execution, commit or publication authorization.
-The report API remains a separate draft.
+062 jest odrębnym wyborem produktowym. Nie uruchamiać na podstawie samego numeru planu równolegle ze zmianami wspólnego katalogu MCP i kontraktów compare. Plan obejmuje cały kontekst, journal, API, ekrany i dokumentację.
 
 ### Grupa 3 — dostarczanie i utrzymanie
 
-| Kolejność | Plan | Kategoria | Zależności |
+| Kolejność | Plan | Kategoria | Warunek |
 |---|---|---|---|
-| 2 | [028](028-release-pipeline-hardening.md) | Release: wersja, bramka CI, minimalne uprawnienia | Bez SHA-pinów, Dependabota i atestacji (odrzucone 2026-10-11) |
-| 3 | [032 — dokończenie całego planu](032-ci-matrix-and-test-hygiene.md) | CI: Windows/Linux i stabilność testów | Po 028 |
-| 4 | [036](036-live-database-ci-lane.md) | Ogólne: izolowane testy z SQL Server i PG | Oba silniki w jednym wykonaniu |
+| 2 | [032](032-ci-matrix-and-test-hygiene.md) | CI Windows/Linux i stabilność testów | DONE — lokalnie scalono do main w `d4ea971` (`15c1b9c`, `0fd0958`); zintegrowane bramki Windows i Linux zielone; dowód CI oczekuje na pierwszy push; [weryfikacja](032-verification.md) |
+| 3 | [036](036-live-database-ci-lane.md) | Izolowane testy SQL Server + PG | TODO; oba silniki w jednym wykonaniu |
 
-034 jest DONE i scalone lokalnie (`0d30771`); oba gate'y przeszły na tym commitcie.
+028 jest DONE i lokalnie scalone do main (`8ed77af`); post-merge bramki Windows i Linux zielone, exit 0. Bez push; zależność 032 od 028 jest spełniona.
 
-### Grupa 4 — wyłącznie PostgreSQL, późniejsza kolejka
+Pomysł szerszej automatyzacji PR/release/updater pozostaje odłożony zgodnie z decyzją użytkownika do czasu wejścia 028/032; nie jest nowym zleceniem implementacji.
 
-| Kolejność w grupie | Plan | Kategoria |
-|---|---|---|
-| 1 | [031](031-pg-session-hardening.md) | PG: standard_conforming_strings (krok SCRAM usunięty; nadal potrzebny przy 052) |
-| 2 | [047](047-postgres-temp-target-proof.md) | PG: uproszczenie dowodu TEMP tylko dla setupu, po 052 |
+### Grupa 4 — wyłącznie PostgreSQL
 
-Odrzucone/zastąpione w przeglądzie krytycznym 2026-10-11 (wieczór): 033 → 050, 035 → 051, 014 i 037 (pgstop) odrzucone, 048 wycofany revertem. Szczegóły w sekcjach „Critical review 2” i „Rule review 3”.
+047 jest w toku (tabela powyżej), a 031 jest DONE. Brak innych oczekujących planów w tej grupie.
 
-Po scaleniu cen modeli dostosuj plany do rzeczywistego katalogu MCP i usuniętego gain. Nie przywracaj komendy ani starej liczby narzędzi przez piny, fixture czy historyczne fragmenty dokumentacji. Zachowaj granice sekretów, target scope i budżetów.
+033 zastąpiony przez 050, 035 przez 051; 014/037 odrzucone; 048 wycofany. Draft report API nie jest planem implementacji. Nie przywracać usuniętego gain ani historycznych nazw i liczby narzędzi MCP.
 
 ## Kolejność i status
 
@@ -156,18 +151,18 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [025](025-redaction-consistency.md) | Redact credentials (password value) in every operation; stop redacting caller-supplied SQL, parameters, vars and user (supersedes 038/W3 threshold) | P2 | M | — | DONE (branch fix/plan-025-redaction; Windows verify.ps1 OK; Linux verify-linux.ps1 pending) |
 | [026](026-watch-condition-matching.md) | `watch --until` matches bit/bool, quoted strings and exponents; keeps polling while no row exists | P2 | S | 016 | DONE (branch fix/plan-026-watch-condition; docs eb53de4, formatting fix d7d7606; Windows and Linux gates passed) |
 | [027](027-gain-store-robustness-and-mcp-gain.md) | Gain never fails a successful command; tolerant reads; MCP records gain | P2 | S–M | 016 | DONE (branch fix/plan-027-gain; plan 040 already recorded one MCP emission per call and kept accounting failures off the tool result; the journal replaced gain.jsonl; f8d1583 counts unknown operations in the total and skips unreadable rows; Windows verify.ps1 and Linux verify-linux.ps1 OK) |
-| [028](028-release-pipeline-hardening.md) | Releases are versioned, gated on CI, least-privilege, with provenance | P2 | S | 016 | TODO (revised 2026-10-11: provenance, SHA pinning and Dependabot dropped) |
+| [028](028-release-pipeline-hardening.md) | Releases are versioned, gated on CI and least-privilege | P2 | S | 016 | DONE — locally merged main `8ed77af` (2026-10-13); post-merge Windows `verify: OK` exit 0 (Core 3803, MCP 400/4 skipped), WSL ext4 Linux `verify-linux: OK` exit 0 (Core 3803, MCP 401/3 skipped); fixture reconciled with 055 at 7566 bytes within 8192; Luna xhigh task/conflict review and Sol low whole review clean; no push, tags or live DB; hosted tag proof awaits operator |
 | [029](029-agent-docs-and-capabilities-drift.md) | Skill/README/AGENTS/capabilities match the shipped CLI; a sync test guards them | P2 | S | 016 (after 021/023/024/026/027 if scheduled) | DONE (branch `docs/plan-029-agent-docs`, 1cbdc14..5c07092; merged locally with Plans 051–053 at `5a1eb2a`. Original gates: `verify: OK` Core 3826, MCP 385/4 skipped; `verify-linux: OK` 3826. User decisions 2026-10-12: `capabilities [profile] --json` scoped to the profile's engine (contract v2), `dashboard` not advertised, docs written with the writing-for-agents rules; request-scope `--allow-profile` approves profile switches only. Follow-ups: SKILL parameter-set section → pointer after 053; `indexes` on PostgreSQL should reject offline) |
 | [030](030-datetime-params-and-pg-plan-depth.md) | Date/time params never shift silently; deep PG plans parse | P2 | S | 016 (after 022 if both) | DONE (A: `8feaf14` and docs follow-up `54224ff`; B: PostgreSQL UTC binding `48ed3a1` and deep-plan JSON `bb78c87`; Windows `verify.ps1` and isolated ext4 Linux `verify-linux.ps1` exited 0 at `bb78c87`—Core 3585 each, MCP 333 Windows/334 Linux with 4/3 skipped; no live PostgreSQL tests) |
-| [031](031-pg-session-hardening.md) | PG refuses non-standard string lexing; SCRAM only on unauthenticated transports | P2 | S–M | 019 (and 022) | TODO (revised 2026-10-11: SCRAM-only step dropped) |
-| [032](032-ci-matrix-and-test-hygiene.md) | CI on Windows and Linux; honest skips; no env races; no publish leak; Pester runs | P2 | M | 016, 028 | PARTIAL (local Linux gate + parity guard landed on ci/plan-032-matrix; CI matrix withheld on the plan-005 MCP flake; Steps 1-3, Pester, .gitattributes remain) |
+| [031](031-pg-session-hardening.md) | PG refuses non-standard string lexing; SCRAM only on unauthenticated transports (second half dropped 2026-10-11) | P2 | S–M | 019 (and 022) | DONE (branch fix/plan-031-pg-session, fdd788e..2ffe8ae; Step 1 at `72d10b8`: `PostgresSessionScope.EnsureStandardStrings` runs before every classified command and throws `SqlHarnessSafetyException` (exit 2) unless the server reports `standard_conforming_strings` as `on` (any casing), refusing a missing parameter too; 6 offline test cases (4 methods, one a 3-case theory). Step 3 records the rule in the transport policy spec, README PostgreSQL engine notes, the SKILL digest and the capabilities engine summary; AGENTS.md deliberately untouched — it no longer hosts the PostgreSQL engine notes. Step 2 dropped 2026-10-11. Step 4 (opt-in playground live check) NOT run — no operator approval this session, so no live PostgreSQL run; Windows `verify: OK`; not pushed) |
+| [032](032-ci-matrix-and-test-hygiene.md) | CI on Windows and Linux; honest skips; no env races; no publish leak; Pester runs | P2 | M | 016, 028 | DONE; followup merged locally into main in `d4ea971`; integrated Windows and Linux gates passed. Original implementation merged locally into main in `0cb5038` from `ci/plan-032-complete` (`846f4fa..f241496`). Original Steps 1-4: `WindowsFact`/`UnixFact` skips replace silent returns, unique per-test PG password variables, best-effort publish temp cleanup, CI OS matrix + `concurrency` + `timeout-minutes` + trx upload + Windows `pwsh` Pester step, `.gitattributes`. Prior platform gates were green on pre-followup `f241496`: Windows `verify: OK` (Core 3794/11 skipped, MCP 400/4 skipped), Linux `verify-linux: OK` (3801/4 skipped), Pester 21/21, GateParity 28/28, `git add --renormalize .` empty. Followup branch `fix/plan-032-env-followup` (`15c1b9c`, `0fd0958`) changes shared Build/Reject env names in `PostgresConnectionStringTests`; focused repeats passed (3 x 621). The followup Windows full gate then failed at ProcessRunnerTests cleanup deleting locked child.stderr.log (SqlHarness.Tests 3909 passed/1 failed/11 skipped; MCP 403 passed/4 skipped); the log does not identify the handle owner or show a surviving PID. Test-only bounded cleanup retry and two lock regressions pass ProcessRunnerTests 8/8. Fresh gates on `0fd0958`: Windows `verify: OK` (UI 144, Core 3912/11 skipped, MCP 403/4 skipped), Linux `verify-linux: OK` (UI 144, Core 3917/6 skipped, MCP 404/3 skipped). Original final whole-branch review approved to merge. Task and whole-branch Luna xhigh followup reviews found no major findings; one minor generic `IOException` retry ruling retained. Integrated Windows gate on the pre-merge-commit source tree: `verify: OK`, exit 0 (UI 144, Core 3413/11 skipped, MCP 358/4 skipped); integrated Linux gate on `d4ea971`: `verify-linux: OK`, exit 0 (UI 144, Core 3418/6 skipped, MCP 359/3 skipped). CI proof pending first push; not pushed. [Verification](032-verification.md) |
 | [033](033-sqlserver-target-identity.md) | Explicit SQL Server identity for aliases/listeners; preserve DNS labels and exact database confirmation | P2 | M | 016 | REJECTED (2026-10-11: server-name check cannot catch a wrong profile; superseded by 050) |
 | [034](034-private-sqlharness-home.md) | Private creation before sensitive writes; current journal DB/WAL/SHM and artifact lifecycle | P2 | M | 016 (existing Linux gate provides proof; coordinate 032) | DONE (branch fix/plan-034-private-home, 0d30771; one 0700 home via `HomeDirectory.EnsureFor`, wired at all `CreateDirectory` sites in Core and Dashboard; doctor warns on a broad home; Unix-only tests execute on the Linux gate; Windows `verify: OK`, Linux `verify-linux: OK` on 0d30771 — 3739 Tests + 384 MCP passed, 3 live opt-in skipped, `dotnet format` clean; no live DB checks; not pushed) |
 | [035](035-implement-regress-decider.md) | Offline latency regression decision; explicit counts first, optional cost diagnostics | P2 | M–L | 016; 046 before execution | SUPERSEDED by 051 (2026-10-11: verdict computed inside compare; implemented on `feat/plan-051-regression-verdict`) |
 | [036](036-live-database-ci-lane.md) | Direction: opt-in CI lane against throwaway PG/SQL Server containers | P2 | M | 016 (028 for pins) | TODO |
 | [037](037-rescope-pgstop-current-pg-versions.md) | PG17/18 capability fixtures and source evidence; versions do not gate compatible runtime shapes | P2 | S–M | Revised 014 contract | REJECTED (2026-10-11: pgstop not built; query reads pg_stat_statements) |
 | [038](038-agent-session-friction-fixes.md) | Live-session friction: one-item/matrix/artifact truncation, setup `#temp` scope, variable diagnostics/batch guard, redaction, input-path hint, per-statement metrics, token guard, XML false positives | P1–P3 | S–M per item | — | DONE (merged locally; Windows and Linux verify gates green after MCP host log synchronization) |
-| [039](039-busy-result-hint.md) | BUSY rejection carries a hint naming the running tool; gate stays non-blocking | P2 | S | — | DONE (branch fix/plan-039-busy-hint) |
+| [039](039-busy-result-hint.md) | BUSY rejection carries a hint naming the running tool; gate stays non-blocking | P2 | S | — | SUPERSEDED by 060 (the busy gate is removed; MCP calls run concurrently). Was DONE on branch fix/plan-039-busy-hint |
 | [040](040-profile-dimensions-ui.md) | Dynamic profile dimensions, target matrix, and MCP emitted estimates | P2 | L | — | DONE (implementation complete; Windows and Linux verification confirmed by the user on 2026-10-10) |
 | [041](041-query-projection-preserve-shape.md) | Oversized query projections preserve useful result-set and row/schema structure | P2 | M | 038/W1 | DONE (merged locally 498c3dd from feat/plan-041-query-projection; commits 5370a2a, beb1cfe, bb025b6, 75e2477; Windows and Linux gates green on merged main) |
 | [042](042-mcp-plan-diagnostic-text.md) | Useful bounded MCP plan statement text and predicates, with an explicit metadata mode | P2 | M | 043 | DONE (merged locally to main 3f425ef from feat/plan-042-mcp-plan-text; Windows `verify: OK` (3619 + 382 passed) and Linux `verify-linux: OK` on merged 3f425ef; branch 8a088fb..1938f5f: 82ad046 includeText + handler-owned policy, 8676769 docs, 1938f5f final-review fix: MCP-local credential-column literal rule, e.g. `[Password]=N'x'`); Windows verify.ps1 `verify: OK` (Mcp.Tests 382 passed/4 skipped, SqlHarness.Tests 3611 passed) and Linux verify-linux.ps1 `verify-linux: OK` on 1938f5f; an earlier Windows run failed only McpStderrLeakRegressionTests(2026-07-28) handshake flake, which passed 4/4 alone; git diff --check: 0; no live DB checks; known gap: literals behind CONVERT_IMPLICIT/`::text` wrappers, IN lists and `[PasswordHash]` are not masked (follow-up: [048](048-plan-text-credential-column-coverage.md)); not pushed) |
@@ -175,21 +170,23 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [044](044-mcp-input-root-discovery.md) | MCP callers discover the actual configured file-input roots | P2 | S | — | DONE (merged locally 8a088fb from feat/plan-044-input-root-discovery; commits ba00213, 64c82dc, 2be2f67, 48a85f3, 542173b, f8f1393; branch: `verify: OK` and `verify-linux: OK`; merged main: `verify: OK`, Linux gate on merged main stopped by host memory pressure, not re-run) |
 | [045](045-scalar-set-in-benchmark-setup.md) | Proven same-batch scalar SET works in SQL Server benchmark setup | P2 | S | — | DONE (implementation merged to main `3e8236f`; branch `eb64089`: Windows exit 0, `verify: OK`, Core 3705 passed, MCP 390 passed/4 skipped; Linux WSL ext4 exit 0, `verify-linux: OK`, Core 3705 passed, MCP 391 passed/3 skipped; task and whole-branch reviews approved; no live DB checks; gates do not cover later main changes) |
 | [046](046-result-nullability-diagnostics.md) | Nullability diagnostics are separate from observed data equivalence; optional strict comparison | P2 | M | — | DONE (merged locally to main fdfc072 from feat/plan-046-nullability (3f425ef..66e70b6: 45bd63a core, 878bcd7 CLI/MCP/journal, 7a4fab1 docs, d4259ab/7500da7/5d9b5de final-review fixes incl. provider-unknown nullability → unavailable, 66e70b6 format); Windows verify.ps1 `verify: OK` (Mcp.Tests 384 passed/4 skipped, SqlHarness.Tests 3678 passed) and Linux verify-linux.ps1 `verify-linux: OK` (388 total/385 passed/3 skipped; 3678 passed) on 66e70b6; git diff --check: 0; snapshots unchanged; no live DB checks; not pushed) |
-| [047](047-postgres-temp-target-proof.md) | Explicit pg_temp write targets and a bounded proof before simplifying TRUNCATE | P2 | M | Live proof required for TRUNCATE relaxation | TODO (narrowed 2026-10-11: setup-only proof simplification after 052) |
+| [047](047-postgres-temp-target-proof.md) | Explicit pg_temp write targets and a bounded proof before simplifying TRUNCATE | P2 | M | Live proof required for TRUNCATE relaxation | IN PROGRESS — potwierdzenie użytkownika 2026-10-13; cały zakres po 052 |
 | [048](048-plan-text-credential-column-coverage.md) | MCP plan text masks credential-column literals behind wrappers, PG operators, lists, reversed order and compound names | P2 | S | 042 (DONE) | REVERTED (merged a74b485, reverted cadde67: caller already holds the plan file; follow-up 049) |
-| [049](049-plan-text-without-literal-masking.md) | MCP plan text is returned as supplied, within size bounds; no literal masking | P2 | S | 048 reverted | DONE (feature branch `feat/plan-049-plan-text`; commits `932d4ad`, `c12aeb4`, `58fab51`; Windows `verify: OK` Core 3722, MCP 383 passed/4 skipped; Linux `verify-linux: OK` Core 3722, MCP 384 passed/3 skipped on WSL ext4; task, whole-branch, fixture and formatting reviews clean; no live DB checks; not merged) |
+| [049](049-plan-text-without-literal-masking.md) | MCP plan text is returned as supplied, within size bounds; no literal masking | P2 | S | 048 reverted | DONE (feature branch `feat/plan-049-plan-text`; commits `932d4ad`, `c12aeb4`, `58fab51`; Windows `verify: OK` Core 3722, MCP 383 passed/4 skipped; Linux `verify-linux: OK` Core 3722, MCP 384 passed/3 skipped on WSL ext4; task, whole-branch, fixture and formatting reviews clean; no live DB checks; merged into current main (ancestry checked 2026-10-13)) |
 | [050](050-sqlserver-server-name-informational.md) | SQL Server and PostgreSQL report connected server identity without blocking | P2 | M | — | DONE (commits e6b7d01, 1ecc7d6, e87882a, 7f6f1d0; locally merged in 761f2ab; post-merge Windows `verify: OK` Core 3713, MCP 383/4 skipped; Linux `verify-linux: OK` Core 3713, MCP 384/3 skipped; no push/live DB proof) |
 | [051](051-compare-regression-verdict.md) | `compare` reports a latency regression verdict from its own samples | P2 | M | 046 | DONE (merged to main `e05da9b` from `feat/plan-051-regression-verdict`; `regression` verdict in compare JSON, summary, matrix cells, MCP and CLI text; supersedes 035 and the offline-reader part of 013; Windows and Linux gates green, confirmed by the user 2026-10-12) |
 | [052](052-postgres-read-only-transactions.md) | Every non-approved PostgreSQL command uses a per-command READ ONLY transaction | P1 | M | Disposable PostgreSQL 18.6 proof | DONE at frozen `c07f001`; integrated tip `9082149` (Windows and isolated Linux gates passed; see [052-verification](052-verification.md)); locally merged to main by fast-forward at `f09a614`; not pushed |
 | [053](053-specific-errors-for-the-caller.md) | Errors name what went wrong when the reader already holds the data | P2 | M | — | DONE — locally merged to main `5a1eb2a`; proof: [053-verification](053-verification.md); Windows/Linux gates passed; not pushed |
 | [054](054-simplify-redaction-and-mcp-input-guards.md) | Redaction is exact known-secret replacement; MCP input guards match a same-user threat model | P2 | M | 049 (DONE) | DONE (local merge main 6ff68d3, journal docs fix f5aef96; post-merge Windows verify: OK Core3787/MCP389+4 skipped; Linux verify-linux: OK Core3787/MCP390+3 skipped; duplicate JSON guard retained for proven SDK differential; no push/live DB) |
-| [055](055-agent-output-budget-and-envelope.md) | Text-only budgeted output, inventory-first matrix cases, honest query value types and clipping metadata | P1 | M | — | TODO — accepted output refinements; not implemented |
-| [056](056-parameter-contract-and-dry-run.md) | Parameter normalization, binding parity and dry runs of exact operation arguments | P1 | M | 055 | TODO — existing local plan, not implemented |
-| [057](057-tsql-control-flow-classification.md) | Recursive IF/BEGIN classification under existing statement rules | P2 | S | 056 | TODO — existing local plan, not implemented |
-| [058](058-benchmark-plan-evidence.md) | Stored-plan reader, repetition identity, node/operator continuation and matrix values | P1 | M | 055 | TODO — accepted evidence refinements; not implemented |
-| [059](059-journal-workflow-cost.md) | Explicit producer references and honest measured/estimated workflow cost | P2 | M | 055, 056, 058 | TODO — accepted provenance/accounting refinements; not implemented |
-| [060](060-mcp-tool-surface.md) | Smaller MCP surface, compact runtime capabilities, built-in recipes and concurrent calls | P2 | M | 055, 056, 059 | TODO — accepted compact-capabilities refinement; additional recipes not accepted |
+| [055](055-agent-output-budget-and-envelope.md) | Text-only budgeted output, inventory-first matrix cases, honest query value types and clipping metadata | P1 | M | — | DONE — locally merged to main `4bb783a`; implementation `52bdc23..f5ac90c`; Windows/Linux gates passed, whole-branch re-review clean; see [055 verification](055-verification.md); no post-merge gates after docs/plans-only main drift; no push/live DB |
+| [056](056-parameter-contract-and-dry-run.md) | Parameter normalization, binding parity and dry runs of exact operation arguments | P1 | M | 055 | DONE — locally merged to main `1bfac9e`; implementation `8275304..8e50fb5`, Task 5 `f3d48ff..6e8232e`; task, whole-branch and scoped integration reviews complete; post-merge Windows/Linux gates green (UI 148, Core 3844, MCP 400/4 skipped on Windows and 401/3 skipped on Linux); no push or live DB; see [056 verification](056-verification.md) |
+| [057](057-tsql-control-flow-classification.md) | Recursive IF/BEGIN classification under existing statement rules | P2 | S | 056 | DONE; locally merged `9c6b663`; final fix `e05d44d`; Sol low whole-review's 3 Important findings fixed in one Luna high wave; Luna xhigh re-review clean; post-merge Windows/Linux gates green; no push/live DB; see [057 verification](057-verification.md) |
+| [058](058-benchmark-plan-evidence.md) | Stored-plan reader, repetition identity, node/operator continuation and matrix values | P1 | M | 055 | DONE — implementation and final-review correction through `6fa9c7f`; Windows/Linux gates pass; [verification](058-verification.md) |
+| [059](059-journal-workflow-cost.md) | Explicit producer references and honest measured/estimated workflow cost | P2 | M | 055, 056, 058 | DONE — final correction `233207c`; Windows/Linux gates green; [verification](059-verification.md); no live database calls or push |
+| [060](060-mcp-tool-surface.md) | Eight MCP tools with CLI/MCP parity, `--dry-run` on the CLI, compact runtime capabilities and concurrent calls | P2 | L | 055, 056, 059 | DONE — locally merged to main; Windows `verify: OK` after merging main (031): UI 144, Core 3411/11 skipped, MCP 358/4 skipped; Linux gate accepted by the operator (run reaped by the low-memory reaper; an earlier run was disturbed by a concurrent 047 gate in the shared WSL clone); no push. Revised 2026-10-13 (operator): CLI/MCP parity and no recipes; `inspect`/`validate` left MCP and `ping`/`schema`/`counts`/`space`/`qstop`/`indexes`/`validate` left the CLI; busy gate removed; capabilities without `includeDetails`; spec decisions 12 and 15 amended |
 | [061](061-unified-parameter-sets.md) | Shared measure/compare parameter-set inputs | P3 | L | 056, 058, 060 | TODO — adapt projection to 055 case inventory; not implemented |
+| [062](062-compare-context-dashboard.md) | Compare context, SQL/scope/attempt history and comparison dashboard | P2 | L | 051 (DONE); coordinate with 060/061 | TODO — design agreed 2026-10-12; not implemented |
+| [063](063-missing-index-overlap.md) | Missing-index hints in the saved `plan` artifact section carry an overlap verdict against the table's existing indexes (inventory captured after measurement) | P2 | M | 060 | TODO — planned 2026-10-14 at `472d5b7` |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED, SUPERSEDED or REVERTED (with one-line rationale).
 
@@ -208,6 +205,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
 ## Policy decisions needed (not planned yet)
 
 - **Locking reads.** T-SQL `SELECT … WITH (TABLOCKX|XLOCK|UPDLOCK, HOLDLOCK)` and PostgreSQL `SELECT … FOR UPDATE/NO KEY UPDATE/SHARE/KEY SHARE` are classified read-only. They change no data, but they can block writers on production for up to timeout × repeats, and PG row locks write tuple headers and WAL. Options: deny exclusive/row-lock hints, route them to the mutation-approval path, or keep and document them. Evidence: `SqlSafety.cs:399-401`, `PostgresSafetyClassifier.cs:354-361`, `PostgresBenchmark.cs:88-96`.
+- **Missing-index hint overlap** is now planned as [063](063-missing-index-overlap.md).
 - **Equivalence and nullability.** Scheduled as [046](046-result-nullability-diagnostics.md): separate nullability diagnostics from default observed data equivalence and expose an explicit strict option. Implemented (046 DONE): `--compare-nullability` / `compareNullability`.
 
 ## Direction verdict recorded
@@ -223,7 +221,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
 - `Microsoft.SqlServer.Types` native spatial DLL on Linux/macOS: LOW confidence and already documented; at most a misleading exit code.
 - `--password-env-var` accepting any variable name on `--unsafe-direct`: a CLI agent with a shell can read env vars anyway, and MCP has no direct path.
 - Missing `packages.lock.json`: direct versions are exact-pinned centrally.
-- **Not planned by user choice (P3, available for a later run):** double row hashing and repeated plan/SQL parsing (perf); extracting the duplicated single-SQL pipeline from `SqlHarnessModule` and adding one command-descriptor table (tech debt); playground script hardening (password on the `docker exec` argv, 0.0.0.0 port binding, unpinned downloads); index overlap ignoring clustered coverage; `PlanDistiller` rejecting plan-less `StmtSimple`; missing `OperationFailureMapper`/JWT/`PlanIdentity` tests; CLI `qstop`/`indexes` on PG refusing only after connect; the STATISTICS TIME double count for `sp_executesql` (needs a live check).
+- **Not planned by user choice (P3, available for a later run):** double row hashing and repeated plan/SQL parsing (perf); extracting the duplicated single-SQL pipeline from `SqlHarnessModule` and adding one command-descriptor table (tech debt); playground script hardening (password on the `docker exec` argv, 0.0.0.0 port binding, unpinned downloads); index overlap ignoring clustered coverage (moot: 060 removed `indexes`); `PlanDistiller` rejecting plan-less `StmtSimple`; missing `OperationFailureMapper`/JWT/`PlanIdentity` tests; CLI `qstop`/`indexes` on PG refusing only after connect (moot: 060 removed both); the STATISTICS TIME double count for `sp_executesql` (needs a live check).
 
 ## Critical policy review, 2026-10-11
 
@@ -245,7 +243,7 @@ Planning base: `729d88f`. The user requested plans/corrections for all findings 
 | Minor: private-home plan describes removed gain store | Revised 034 | Cover the actual journal and sensitive artifact creation paths |
 | Minor: mechanical drift STOP and unnecessary repeated full gates | Revised pending plan headers and 030/032 | Inspect and adapt drift; use focused repeats for an actual flake and final Windows/Linux gates |
 
-Current execution order is in **Aktualna kolejka wykonania — 2026-10-12** above. Execute whole plans; no separately deferred A/B scopes. 024 is in progress; 046 and 049 are done; 020/026/030/041/042/043/044/046/049 are done. Preserve 046 → 051 and 028 → 032. Reconcile MCP/schema/docs work with the model-prices changes already merged into main. Required provider proof remains an internal prerequisite of 047.
+Current execution order is in **Aktualna kolejka wykonania — 2026-10-13** above. Execute whole plans; no separately deferred A/B scopes. 060 and 047 are IN PROGRESS (user-confirmed 2026-10-13); 055–059 are DONE. 061 waits for 060; coordinate 062 with 060/061. Preserve actual dependencies of 056–061 and 028 → 032. Coordinate 062 with the active MCP contract changes; do not infer a dependency solely from plan numbering.
 
 For pending execution plans, historical snippets and tests are evidence to inspect. A changed file alone is not a reason to stop or request permission. Keep the approved intent and update obsolete details; stop for an incompatible contract, missing required proof or actions beyond authorization. Run the final Windows and Linux gates after relevant code changes. Repeat complete gates only for a concrete remaining risk. Documentation-only revisions use diff/link/consistency checks; they do not require application builds or live database calls.
 
@@ -279,7 +277,7 @@ Framing: in CLI mode the agent shares the shell's environment, so closed profile
 | `standard_conforming_strings` | Kept: a lexing split could hide `COMMIT;` and escape 052 | 031 |
 | T-SQL server-filesystem denylist incomplete (`fn_dump_dblog`) | Not chased; server permissions are the control (029 framing) | — |
 
-Kept as right: T-SQL classifier and its closed bypass shapes, typed parameter binding, exact `--confirm-database`, MCP budgets and busy gate, dashboard host/cookie/origin/CSP, owner-only journal files, exits 7/8, offline validate.
+Kept as right: T-SQL classifier and its closed bypass shapes, typed parameter binding, exact `--confirm-database`, MCP budgets and busy gate (the busy gate was later removed by 060), dashboard host/cookie/origin/CSP, owner-only journal files, exits 7/8, offline validate.
 
 ## Calendar dates
 

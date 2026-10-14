@@ -1,6 +1,7 @@
 using System.Diagnostics;
 
 using SqlHarness.Core.Auth;
+using SqlHarness.Tests;
 
 namespace SqlHarness.Tests.Auth;
 
@@ -11,6 +12,8 @@ public sealed class ProcessRunnerTests
     // surfaces fast via the ERROR line below, so this budget only prices true hangs.
     private const int PidPublicationWaitAttempts = 480;
     private const int PidPublicationWaitDelayMs = 25;
+    private const int DirectoryDeleteRetryAttempts = 10;
+    private const int DirectoryDeleteRetryDelayMs = 100;
 
     // Publisher contract, args: [0]=pidFile, [1]=childScript, [2]=childStderr, [3]=childExe.
     // The child -File path is embedded in quotes because Windows PowerShell 5.1
@@ -45,12 +48,9 @@ public sealed class ProcessRunnerTests
         Assert.False(typeof(ProcessRunner).IsPublic);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task RunAsync_ClosesChildStandardInput()
     {
-        if (!OperatingSystem.IsWindows())
-            return;
-
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var runner = new ProcessRunner();
         var result = await runner.RunAsync(
@@ -63,12 +63,9 @@ public sealed class ProcessRunnerTests
         Assert.Contains("done", result.StandardOutput, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task RunAsync_CancellationTerminatesEntireProcessTree()
     {
-        if (!OperatingSystem.IsWindows())
-            return;
-
         // The space in the directory name is deliberate: it pins the quoting fix.
         var testDirectory = Path.Combine(Path.GetTempPath(), $"sqlharness test-{Guid.NewGuid():N}");
         var pidFile = Path.Combine(testDirectory, "processes.pid");
@@ -114,12 +111,9 @@ public sealed class ProcessRunnerTests
         }
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task PidPublicationError_ReportsDiagnosticsAndCleansUp()
     {
-        if (!OperatingSystem.IsWindows())
-            return;
-
         var testDirectory = Path.Combine(Path.GetTempPath(), $"sqlharness test-{Guid.NewGuid():N}");
         var pidFile = Path.Combine(testDirectory, "processes.pid");
         var childScript = Path.Combine(testDirectory, "child.ps1");
@@ -184,12 +178,9 @@ public sealed class ProcessRunnerTests
         }
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task WaitForPidsAsync_ToleratesSlowPublisher()
     {
-        if (!OperatingSystem.IsWindows())
-            return;
-
         var path = Path.Combine(Path.GetTempPath(), $"sqlharness-pids-{Guid.NewGuid():N}.pid");
 
         try
@@ -208,12 +199,86 @@ public sealed class ProcessRunnerTests
         }
     }
 
+    [WindowsFact]
+    public async Task CleanupTreeAsync_RetriesDeletionAfterLockedFileIsReleased()
+    {
+        var testDirectory = Path.Combine(Path.GetTempPath(), $"sqlharness cleanup-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(testDirectory);
+        var lockedFile = new FileStream(
+            Path.Combine(testDirectory, "locked.log"),
+            FileMode.CreateNew,
+            FileAccess.ReadWrite,
+            FileShare.None);
+        var retries = 0;
+        using var cancellation = new CancellationTokenSource();
+
+        try
+        {
+            await CleanupTreeAsync(
+                null,
+                cancellation,
+                [],
+                Path.Combine(testDirectory, "missing.pid"),
+                testDirectory,
+                onDirectoryDeleteRetry: () =>
+                {
+                    retries++;
+                    if (retries == 1)
+                        lockedFile.Dispose();
+                });
+
+            Assert.Equal(1, retries);
+            Assert.False(Directory.Exists(testDirectory));
+        }
+        finally
+        {
+            lockedFile.Dispose();
+            if (Directory.Exists(testDirectory))
+                Directory.Delete(testDirectory, recursive: true);
+        }
+    }
+
+    [WindowsFact]
+    public async Task CleanupTreeAsync_ReportsDeletionFailureAfterRetryBudget()
+    {
+        var testDirectory = Path.Combine(Path.GetTempPath(), $"sqlharness cleanup-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(testDirectory);
+        var lockedFile = new FileStream(
+            Path.Combine(testDirectory, "locked.log"),
+            FileMode.CreateNew,
+            FileAccess.ReadWrite,
+            FileShare.None);
+        var retries = 0;
+        using var cancellation = new CancellationTokenSource();
+
+        try
+        {
+            await Assert.ThrowsAsync<IOException>(() => CleanupTreeAsync(
+                null,
+                cancellation,
+                [],
+                Path.Combine(testDirectory, "missing.pid"),
+                testDirectory,
+                onDirectoryDeleteRetry: () => retries++));
+
+            Assert.Equal(DirectoryDeleteRetryAttempts - 1, retries);
+            Assert.True(Directory.Exists(testDirectory));
+        }
+        finally
+        {
+            lockedFile.Dispose();
+            if (Directory.Exists(testDirectory))
+                Directory.Delete(testDirectory, recursive: true);
+        }
+    }
+
     private static async Task CleanupTreeAsync(
         Task<ProcessResult>? run,
         CancellationTokenSource cancellation,
         int[] knownProcessIds,
         string pidFile,
-        string testDirectory)
+        string testDirectory,
+        Action? onDirectoryDeleteRetry = null)
     {
         cancellation.Cancel();
         if (run is not null)
@@ -235,7 +300,24 @@ public sealed class ProcessRunnerTests
             await KillAndWaitForExitAsync(pid);
 
         if (Directory.Exists(testDirectory))
-            Directory.Delete(testDirectory, recursive: true);
+            await DeleteDirectoryWithRetryAsync(testDirectory, onDirectoryDeleteRetry);
+    }
+
+    private static async Task DeleteDirectoryWithRetryAsync(string path, Action? onRetry)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                Directory.Delete(path, recursive: true);
+                return;
+            }
+            catch (IOException) when (attempt < DirectoryDeleteRetryAttempts - 1)
+            {
+                onRetry?.Invoke();
+                await Task.Delay(DirectoryDeleteRetryDelayMs);
+            }
+        }
     }
 
     private static Task<int[]> ReadPublishedPidsAsync(string path) =>

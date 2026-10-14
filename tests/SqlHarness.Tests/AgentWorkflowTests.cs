@@ -18,76 +18,6 @@ public sealed class AgentWorkflowTests
     public AgentWorkflowTests(ITestOutputHelper output) => _output = output;
 
     [Fact]
-    public async Task Capability_discovery_then_schema_uses_two_bounded_calls_without_database_access()
-    {
-        var module = new WorkflowModule();
-        var capabilityOutput = NewOutput();
-        var home = Path.Combine(Path.GetTempPath(), $"sqlharness-workflow-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(home);
-        var originalHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
-        Environment.SetEnvironmentVariable("SQLHARNESS_HOME", home);
-        List<int> exitCodes;
-        try
-        {
-            await File.WriteAllTextAsync(Path.Combine(home, "targets.json"),
-                "{\"local\":{\"server\":\"offline.invalid\",\"database\":\"unused\",\"vars\":{},\"auth\":\"sql\",\"sqlUser\":\"unused\",\"passwordEnvVar\":\"UNUSED_SQLHARNESS_PASSWORD\"}}");
-            // What an agent runs once it holds a profile: the profile-scoped document.
-            exitCodes = [await SqlHarnessCli.Create(module, capabilityOutput).RunAsync(["capabilities", "local", "--json"])];
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("SQLHARNESS_HOME", originalHome);
-            Directory.Delete(home, recursive: true);
-        }
-        var schemaOutput = NewOutput();
-        exitCodes.Add(await SqlHarnessCli.Create(module, schemaOutput).RunAsync(["schema", "local", "--object", "dbo.Orders", "--json"]));
-
-        Assert.All(exitCodes, code => Assert.Equal(0, code));
-        Assert.Contains("schema", capabilityOutput.ToString(), StringComparison.Ordinal);
-        Assert.IsType<SqlHarnessSchemaOperation>(Assert.Single(module.Operations));
-        AssertBytesWithinBudget("discoveryThenSchema", capabilityOutput.ToString() + schemaOutput.ToString(), exitCodes);
-    }
-
-    [Fact]
-    public async Task Offline_validation_rejects_then_accepts_corrected_input_in_two_calls()
-    {
-        var home = Path.Combine(Path.GetTempPath(), $"sqlharness-workflow-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(home);
-        var originalHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
-        Environment.SetEnvironmentVariable("SQLHARNESS_HOME", home);
-        try
-        {
-            await File.WriteAllTextAsync(Path.Combine(home, "targets.json"),
-                "{\"local\":{\"server\":\"offline.invalid\",\"database\":\"unused\",\"vars\":{},\"auth\":\"sql\",\"sqlUser\":\"unused\",\"passwordEnvVar\":\"UNUSED_SQLHARNESS_PASSWORD\"}}");
-            var module = new WorkflowModule();
-            var deniedOutput = NewOutput();
-            var exitCodes = new List<int>
-            {
-                await SqlHarnessCli.Create(module, deniedOutput).RunAsync([
-                    "validate", "local", "--file", Fixture("validate-denied.sql"), "--json"]),
-            };
-            var correctedOutput = NewOutput();
-            exitCodes.Add(await SqlHarnessCli.Create(module, correctedOutput).RunAsync([
-                "validate", "local", "--file", Fixture("validate-corrected.sql"), "--json"]));
-
-            Assert.All(exitCodes, code => Assert.Equal(0, code));
-            using var denied = JsonDocument.Parse(deniedOutput.ToString());
-            using var corrected = JsonDocument.Parse(correctedOutput.ToString());
-            Assert.False(denied.RootElement.GetProperty("allowed").GetBoolean());
-            Assert.True(corrected.RootElement.GetProperty("allowed").GetBoolean());
-            Assert.False(denied.RootElement.GetProperty("executed").GetBoolean());
-            Assert.False(corrected.RootElement.GetProperty("executed").GetBoolean());
-            Assert.Empty(module.Operations);
-            AssertBytesWithinBudget("validationCorrection", deniedOutput.ToString() + correctedOutput.ToString(), exitCodes);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("SQLHARNESS_HOME", originalHome);
-            Directory.Delete(home, recursive: true);
-        }
-    }
-
-    [Fact]
     public async Task Compare_summary_points_to_existing_artifacts_and_leaves_detail_lookup_for_plan_06_t2()
     {
         var artifactDirectory = Path.Combine(Path.GetTempPath(), $"sqlharness-artifacts-{Guid.NewGuid():N}");
@@ -169,9 +99,6 @@ public sealed class AgentWorkflowTests
             Operations.Add(operation);
             object report = operation switch
             {
-                SqlHarnessSchemaOperation => new SqlHarnessSchemaReport(
-                    new("offline.invalid", "unused", "offline.invalid", "unused", "profile"),
-                    [new SchemaObjectReport("dbo", "Orders", "table", [], [], [])], 0),
                 SqlHarnessCompareOperation => CompareReport(artifactDirectory!),
                 _ => throw new InvalidOperationException($"Unexpected workflow operation: {operation.GetType().Name}"),
             };

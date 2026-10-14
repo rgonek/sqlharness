@@ -69,8 +69,8 @@ public sealed class McpProtocolTests
     {
         const string sentinel = "duplicate-scope-secret-marker";
         var input = Encoding.UTF8.GetBytes(
-            "{\"jsonrpc\":\"2.0\",\"id\":41,\"method\":\"tools/call\",\"params\":{\"name\":\"sqlharness_validate\",\"arguments\":{\"scope\":{\"profile\":\"sample-a\",\"profile\":\"" + sentinel + "\",\"vars\":{\"tenant\":\"x\"}},\"usage\":\"query\",\"sql\":\"SELECT 1\"}}}\n" +
-            "{\"jsonrpc\":\"2.0\",\"id\":43,\"method\":\"tools/call\",\"params\":{\"name\":\"sqlharness_validate\",\"arguments\":{\"scope\":{\"profile\":\"sample-a\",\"vars\":{\"tenant\":\"x\",\"Tenant\":\"" + sentinel + "\"}},\"usage\":\"query\",\"sql\":\"SELECT 1\"}}}\n" +
+            "{\"jsonrpc\":\"2.0\",\"id\":41,\"method\":\"tools/call\",\"params\":{\"name\":\"sqlharness_query\",\"arguments\":{\"scope\":{\"profile\":\"sample-a\",\"profile\":\"" + sentinel + "\",\"vars\":{\"tenant\":\"x\"}},\"dryRun\":true,\"sql\":\"SELECT 1\"}}}\n" +
+            "{\"jsonrpc\":\"2.0\",\"id\":43,\"method\":\"tools/call\",\"params\":{\"name\":\"sqlharness_query\",\"arguments\":{\"scope\":{\"profile\":\"sample-a\",\"vars\":{\"tenant\":\"x\",\"Tenant\":\"" + sentinel + "\"}},\"dryRun\":true,\"sql\":\"SELECT 1\"}}}\n" +
             "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"ping\",\"params\":{}}\n");
         await using var guarded = new McpDuplicateJsonFieldGuardInput(new MemoryStream(input));
         using var output = new MemoryStream();
@@ -139,7 +139,7 @@ public sealed class McpProtocolTests
             }, NullLoggerFactory.Instance, cts.Token);
 
         const string sentinel = "outer-scope-duplicate-secret";
-        var raw = "{\"jsonrpc\":\"2.0\",\"id\":\"raw-duplicate-first\",\"id\":\"raw-duplicate-last\",\"method\":\"tools/call\",\"params\":{\"name\":\"sqlharness_validate\",\"arguments\":{\"scope\":{\"profile\":\"sample-a\",\"vars\":{\"tenant\":\"abc\"}},\"scope\":{\"profile\":\"sample-a\",\"vars\":{\"tenant\":\"" + sentinel + "\"}},\"usage\":\"query\",\"sql\":\"SELECT 1\"}}}\n";
+        var raw = "{\"jsonrpc\":\"2.0\",\"id\":\"raw-duplicate-first\",\"id\":\"raw-duplicate-last\",\"method\":\"tools/call\",\"params\":{\"name\":\"sqlharness_query\",\"arguments\":{\"scope\":{\"profile\":\"sample-a\",\"vars\":{\"tenant\":\"abc\"}},\"scope\":{\"profile\":\"sample-a\",\"vars\":{\"tenant\":\"" + sentinel + "\"}},\"dryRun\":true,\"sql\":\"SELECT 1\"}}}\n";
         var sdkMessage = JsonSerializer.Deserialize<JsonRpcMessage>(raw.TrimEnd());
         Assert.Equal("raw-duplicate-last", Assert.IsType<string>(Assert.IsType<JsonRpcRequest>(sdkMessage).Id.Id));
         var rawBytes = Encoding.UTF8.GetBytes(raw);

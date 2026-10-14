@@ -82,6 +82,46 @@ public class ArtifactWriterTests
     }
 
     [Fact]
+    public void Writer_persists_producer_operation_reference_in_manifest()
+    {
+        using var temp = new TempDirectory();
+        var report = new SqlHarnessMeasureReport(
+            new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile"),
+            1, 1, true, Variant("measure"), null);
+        var run = new CompareRunArtifact("measure", 1, 1, 2, 3,
+            new Dictionary<string, long>(), "HASH", [FixturePlan()], 0);
+
+        var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+            .Write(report, [run], "wind", owner: null, operationRef: "producer-root");
+
+        using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "manifest.json")));
+        Assert.Equal("producer-root", manifest.RootElement.GetProperty("producerOperationRef").GetString());
+    }
+
+    [Fact]
+    public async Task Concurrent_matrix_cell_publications_keep_the_explicit_root_reference()
+    {
+        using var temp = new TempDirectory();
+        var report = new SqlHarnessCompareReport(
+            new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile"),
+            1, 2, true, Variant("baseline"), Variant("candidate"), null);
+        var run = new CompareRunArtifact("baseline", 1, 1, 2, 3,
+            new Dictionary<string, long>(), "HASH", [FixturePlan()], 0);
+        var writer = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch);
+
+        var writes = await Task.WhenAll(
+            Task.Run(() => writer.Write(report, [run], "cell*one", owner: null, operationRef: "matrix-root")),
+            Task.Run(() => writer.Write(report, [run], "cell?one", owner: null, operationRef: "matrix-root")));
+
+        Assert.Equal(2, writes.Distinct(StringComparer.Ordinal).Count());
+        foreach (var directory in writes)
+        {
+            using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "manifest.json")));
+            Assert.Equal("matrix-root", manifest.RootElement.GetProperty("producerOperationRef").GetString());
+        }
+    }
+
+    [Fact]
     public void Writer_creates_one_unique_artifact_for_each_plan_in_a_run()
     {
         using var temp = new TempDirectory();

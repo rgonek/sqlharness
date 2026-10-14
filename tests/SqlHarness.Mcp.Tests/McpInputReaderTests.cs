@@ -469,6 +469,7 @@ public sealed class McpInputReaderTests : IDisposable
     {
         var probe = Path.Combine(_home, "caseprobe-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(probe);
+        // capability guard: xUnit v2 has no dynamic skip
         if (Directory.Exists(probe.ToUpperInvariant()))
             return; // Case-insensitive FS: no proof possible here. See T1 report.
 

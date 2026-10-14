@@ -7,7 +7,6 @@ internal sealed class PostgresDialect : ISqlDialect
     private readonly PostgresSafetyClassifier _classifier = new();
 
     public SqlEngine Engine => SqlEngine.Postgres;
-    public string PingSql => PostgresPing.Sql;
 
     public SqlSafetyDecision Classify(
         string sql,
@@ -34,15 +33,6 @@ internal sealed class PostgresDialect : ISqlDialect
 
     public void ValidateMeasuredBatch(string sql) => PostgresBenchmark.ValidateMeasuredBatch(sql);
 
-    public string CountsCatalogSql => PostgresCounts.CatalogSql;
-
-    public string BuildCountsExactSql(IReadOnlyList<ResolvedCountObject> objects) =>
-        PostgresCounts.BuildExactSql(objects);
-
-    public string SchemaSql => PostgresSchema.Sql;
-
-    public string SpaceSql => PostgresSpace.Sql;
-
     public Task<CollectedCompareRun> ExecuteBenchmarkRunAsync(
         ISqlSession session,
         string sql,
@@ -50,7 +40,7 @@ internal sealed class PostgresDialect : ISqlDialect
         int timeoutSeconds,
         int repetition,
         string variant,
-        CanonicalResultAccumulator raw,
+        CanonicalResultAccumulator? raw,
         bool captureComparison,
         int comparisonMaximumRows,
         CancellationToken ct) =>

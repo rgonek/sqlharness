@@ -14,6 +14,54 @@ public class SqlHarnessMeasureTests
     private const string Plan = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></BatchSequence></ShowPlanXML>";
 
     [Fact]
+    public async Task Measure_dry_run_validates_temp_setup_and_parameter_without_connecting_or_preflighting_artifacts()
+    {
+        var session = FakeMeasureSession.Create();
+        var writer = new CapturingArtifactWriter();
+        var operation = Measure(1) with
+        {
+            SetupSql = "CREATE TABLE #ids (Id int); INSERT #ids VALUES (1);",
+            QuerySql = "SELECT Id FROM #ids WHERE Id = @Id",
+            TypedParameters = [new SqlHarnessParameterInput("Id", "int", "1")],
+            DryRun = true,
+        };
+
+        var outcome = await Module(session, writer: writer).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        Assert.Equal("measure", report.Command);
+        Assert.Equal(1, report.ParameterSets);
+        Assert.Equal(0, session.FactoryOpenCount);
+        Assert.Equal(0, writer.PreflightCount);
+        Assert.Empty(writer.Runs);
+    }
+
+    [Fact]
+    public async Task Measure_parameter_set_dry_run_binds_every_set_without_connecting_or_preflighting_artifacts()
+    {
+        var session = FakeMeasureSession.Create();
+        var writer = new CapturingArtifactWriter();
+        var operation = Measure(1) with
+        {
+            SetupSql = null,
+            QuerySql = "SELECT @Id",
+            ParameterSets = [new("small", ["Id:int=1"]), new("large", ["Id:int=2"])],
+            DryRun = true,
+        };
+
+        var outcome = await Module(session, writer: writer).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        Assert.Equal("measure", report.Command);
+        Assert.Equal(2, report.ParameterSets);
+        Assert.Equal(0, session.FactoryOpenCount);
+        Assert.Equal(0, writer.PreflightCount);
+        Assert.Empty(writer.Runs);
+    }
+
+    [Fact]
     public async Task Measure_runs_setup_warmup_and_measured_queries_in_order_on_one_session()
     {
         var session = FakeMeasureSession.Create();
@@ -266,20 +314,70 @@ public class SqlHarnessMeasureTests
     }
 
     [Fact]
-    public async Task Measure_receipt_raw_footprint_includes_setup_warmup_and_measured_runs()
+    public async Task Measure_raw_footprint_counts_only_first_measured_result_and_messages()
     {
-        var lean = await Module(FakeMeasureSession.Create()).ExecuteAsync(Measure(1));
-        var rich = await Module(FakeMeasureSession.Create(includeSetupResult: true, includeExtraMessage: true))
-            .ExecuteAsync(Measure(1));
+        var plan = "<ShowPlanXML>" + new string('x', 100_000) + "</ShowPlanXML>";
+        var session = FakeMeasureSession.Create(
+                includeSetupResult: true,
+                includeExtraMessage: true,
+                resultRowCount: 2,
+                plan: plan);
+        var outcome = await Module(session).ExecuteAsync(Measure(1));
 
-        await Assert.IsType<SqlHarnessEmissionReceipt>(lean.EmissionReceipt).CompleteAsync(new OutputFootprint(1, 1));
-        await Assert.IsType<SqlHarnessEmissionReceipt>(rich.EmissionReceipt).CompleteAsync(new OutputFootprint(80, 4));
+        using var expected = new CanonicalResultAccumulator();
+        AddResultSet(expected, "Value", "System.Int32", 42, 43);
+        foreach (var message in session.Messages.Skip(2).Take(2))
+            expected.AddMessage("sql", message);
 
-        Assert.True(rich.EmissionReceipt!.RawFootprint!.Bytes > lean.EmissionReceipt!.RawFootprint!.Bytes);
+        Assert.Equal(expected.Complete().Footprint, outcome.EmissionReceipt!.RawFootprint);
+        Assert.Contains(plan, outcome.BenchmarkRuns!.First().PlanXmls);
     }
 
     [Fact]
-    public async Task Measure_partial_failure_receipt_preserves_prior_raw_snapshot()
+    public async Task Measure_raw_footprint_is_independent_of_repeat_count_and_plan_size()
+    {
+        var lowRepeat = await Module(FakeMeasureSession.Create()).ExecuteAsync(Measure(5));
+        var highRepeat = await Module(FakeMeasureSession.Create(plan: "<ShowPlanXML>" + new string('x', 100_000) + "</ShowPlanXML>"))
+            .ExecuteAsync(Measure(20));
+
+        Assert.Equal(lowRepeat.EmissionReceipt!.RawFootprint, highRepeat.EmissionReceipt!.RawFootprint);
+        Assert.Equal(lowRepeat.BenchmarkRuns!.First().ResultHash, highRepeat.BenchmarkRuns!.First().ResultHash);
+    }
+
+    [Fact]
+    public async Task Measure_parameter_set_raw_footprint_counts_the_first_run_for_each_set()
+    {
+        var lowSession = FakeMeasureSession.Create();
+        var lowRepeat = await Module(lowSession).ExecuteAsync(Measure(5) with
+        {
+            SetupSql = null,
+            QuerySql = "SELECT @n AS Value",
+            ParameterSets = [new("small", ["n:int=7"]), new("large", ["n:int=8"])],
+        });
+        var highSession = FakeMeasureSession.Create(
+            plan: "<ShowPlanXML>" + new string('x', 100_000) + "</ShowPlanXML>");
+        var highRepeat = await Module(highSession).ExecuteAsync(Measure(20) with
+        {
+            SetupSql = null,
+            QuerySql = "SELECT @n AS Value",
+            ParameterSets = [new("small", ["n:int=7"]), new("large", ["n:int=8"])],
+        });
+
+        using var expected = new CanonicalResultAccumulator();
+        AddResult(expected, "Value", "System.Int32", 42);
+        expected.AddMessage("sql", lowSession.Messages[2]);
+        AddResult(expected, "Value", "System.Int32", 42);
+        expected.AddMessage("sql", lowSession.Messages[3]);
+
+        Assert.Equal(expected.Complete().Footprint, lowRepeat.EmissionReceipt!.RawFootprint);
+        Assert.Equal(lowRepeat.EmissionReceipt.RawFootprint, highRepeat.EmissionReceipt!.RawFootprint);
+        Assert.Equal(
+            lowRepeat.BenchmarkRuns!.Take(2).Select(run => run.ResultHash),
+            highRepeat.BenchmarkRuns!.Take(2).Select(run => run.ResultHash));
+    }
+
+    [Fact]
+    public async Task Measure_failure_receipt_excludes_setup_and_warmup_output()
     {
         var outcome = await Module(FakeMeasureSession.Create(includeSetupResult: true, failOnQueryNumber: 2))
             .ExecuteAsync(Measure(2));
@@ -287,7 +385,8 @@ public class SqlHarnessMeasureTests
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt).CompleteAsync(new OutputFootprint(1, 1));
 
         Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
-        Assert.True(outcome.EmissionReceipt!.RawFootprint!.Bytes > 0);
+        using var empty = new CanonicalResultAccumulator();
+        Assert.Equal(empty.SnapshotFootprint(), outcome.EmissionReceipt!.RawFootprint);
     }
 
     [Fact]
@@ -299,9 +398,6 @@ public class SqlHarnessMeasureTests
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt).CompleteAsync(new OutputFootprint(1, 1));
 
         using var expected = new CanonicalResultAccumulator();
-        AddResult(expected, "Value", "System.Int32", 42);
-        expected.AddMessage("planXml", Plan);
-        expected.AddMessage("sql", StatisticsMessage(5, 10, 12));
         expected.AddMessage("sql", "diagnostic before query failure");
         var footprint = expected.SnapshotFootprint();
         var record = outcome.EmissionReceipt!.RawFootprint!;
@@ -317,12 +413,9 @@ public class SqlHarnessMeasureTests
 
         await Assert.IsType<SqlHarnessEmissionReceipt>(outcome.EmissionReceipt).CompleteAsync(new OutputFootprint(1, 1));
 
-        using var expected = new CanonicalResultAccumulator();
-        expected.AddMessage("sql", "diagnostic before setup failure");
-        var footprint = expected.SnapshotFootprint();
         var record = outcome.EmissionReceipt!.RawFootprint!;
-        Assert.Equal(footprint.Bytes, record.Bytes);
-        Assert.Equal(footprint.Lines, record.Lines);
+        using var empty = new CanonicalResultAccumulator();
+        Assert.Equal(empty.SnapshotFootprint(), record);
     }
 
     [Fact]
@@ -534,6 +627,14 @@ public class SqlHarnessMeasureTests
         accumulator.EndResultSet();
     }
 
+    private static void AddResultSet(CanonicalResultAccumulator accumulator, string name, string dataType, params object[] values)
+    {
+        accumulator.BeginResultSet([new CanonicalColumn(0, name, dataType, false)]);
+        foreach (var value in values)
+            accumulator.AddRow([value]);
+        accumulator.EndResultSet();
+    }
+
     private static string StatisticsMessage(long reads, int cpu, int elapsed, string table = "Clients") =>
         $"Table '{table}'. Scan count 1, logical reads {reads}, physical reads 0, lob logical reads 0.\nSQL Server Execution Times: CPU time = {cpu} ms, elapsed time = {elapsed} ms.";
 
@@ -562,7 +663,8 @@ public class SqlHarnessMeasureTests
 
     private sealed class CapturingArtifactWriter : ICompareArtifactWriter
     {
-        public void CheckStorage() { /* This test writer stores artifacts in memory. */ }
+        public int PreflightCount { get; private set; }
+        public void CheckStorage() { PreflightCount++; /* This test writer stores artifacts in memory. */ }
 
         public IReadOnlyList<CompareRunArtifact> Runs { get; private set; } = [];
         public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target)
@@ -692,7 +794,7 @@ public class SqlHarnessMeasureTests
             var reads = _tableReadsForMeasured?.Invoke(measured) ?? measured * 5L;
             _messages.Add(StatisticsMessage(reads, measured * 10, measured * 10 + 2, _ioTable));
             if (_includeExtraMessage)
-                _messages.Add("ordinary diagnostic message");
+                _messages.Add($"ordinary diagnostic message {queryNumber}");
             var value = _changeLastResult && queryNumber == 4 ? 43 : 42;
             object?[][] rows = Enumerable.Range(0, _resultRowCount)
                 .Select(index => new object?[] { value + index })

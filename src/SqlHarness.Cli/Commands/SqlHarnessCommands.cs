@@ -35,7 +35,7 @@ public abstract class TargetSettings : CommandSettings
     [CommandOption("--root-certificate <PATH>")] public string? RootCertificate { get; set; }
     [CommandOption("--json")] public bool Json { get; set; }
     [CommandOption("--output <MODE>")] public string? Output { get; set; }
-    [CommandOption("--max-output-bytes <BYTES>")][DefaultValue(16384)] public int MaxOutputBytes { get; set; } = 16384;
+    [CommandOption("--max-output-bytes <BYTES>")][DefaultValue(65536)] public int MaxOutputBytes { get; set; } = 65536;
     [CommandOption("--max-cell-chars <CHARS>")][DefaultValue(512)] public int MaxCellChars { get; set; } = 512;
 
     public bool TryTarget(out SqlTargetRequest target, out string error)
@@ -229,6 +229,8 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
         [CommandOption("--max-rows <COUNT>")][DefaultValue(50)] public int MaxRows { get; set; } = 50;
         [CommandOption("--allow-mutation")] public bool AllowMutation { get; set; }
         [CommandOption("--confirm-database <DATABASE>")] public string? ConfirmDatabase { get; set; }
+        [Description("Check the exact arguments offline (bounds, safety classification, parameter binding, setup shape) and stop before connecting, authenticating or writing. Same report as MCP dryRun; exit 0 when allowed, 2 when rejected.")]
+        [CommandOption("--dry-run")] public bool DryRun { get; set; }
     }
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken ct)
     {
@@ -241,7 +243,7 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
         try
         {
             var sql = hasFile ? await SqlInputReader.ReadFileAsync(settings.File!, ct) : await SqlInputReader.ReadStdinAsync(input.Stdin, ct);
-            return await Dispatch(new SqlHarnessQueryOperation(target, sql, settings.Parameters, settings.Timeout, settings.MaxRows, settings.AllowMutation, settings.ConfirmDatabase), ResolveOutputMode(settings.Json, output: settings.Output), ct, new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
+            return await Dispatch(new SqlHarnessQueryOperation(target, sql, settings.Parameters, settings.Timeout, settings.MaxRows, settings.AllowMutation, settings.ConfirmDatabase) { DryRun = settings.DryRun }, ResolveOutputMode(settings.Json, output: settings.Output), ct, new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
         }
         catch (OperationCanceledException) { throw; }
         catch (SqlInputTooLargeException) { return InvalidInputTooLarge(); }
@@ -264,6 +266,8 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         [CommandOption("--repeat <COUNT>")][DefaultValue(5)] public int Repeat { get; set; } = 5;
         [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
         [CommandOption("--json-summary")] public bool JsonSummary { get; set; }
+        [Description("Check the exact arguments offline (bounds, safety classification, parameter binding, setup shape) and stop before connecting, authenticating or writing. Same report as MCP dryRun; exit 0 when allowed, 2 when rejected.")]
+        [CommandOption("--dry-run")] public bool DryRun { get; set; }
     }
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings s, CancellationToken ct)
     {
@@ -278,7 +282,7 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
         {
             var parameterSets = setPaths.Length == 0 ? null : await ReadParameterSetsAsync(setPaths, ct);
             return await Dispatch(
-                new SqlHarnessMeasureOperation(target, await Read(s.Setup, ct), (await Read(s.Query, ct))!, s.Parameters, s.Timeout, s.Repeat, parameterSets),
+                new SqlHarnessMeasureOperation(target, await Read(s.Setup, ct), (await Read(s.Query, ct))!, s.Parameters, s.Timeout, s.Repeat, parameterSets) { DryRun = s.DryRun },
                 ResolveOutputMode(s.Json, s.JsonSummary, s.Output),
                 ct,
                 new AgentOutputOptions(s.MaxOutputBytes, s.MaxCellChars));
@@ -335,6 +339,8 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
         [CommandOption("--compare-nullability")]
         public bool CompareNullability { get; set; }
         [CommandOption("--json-summary")] public bool JsonSummary { get; set; }
+        [Description("Check the exact arguments offline (bounds, safety classification, parameter binding, setup shape) and stop before connecting, authenticating or writing. Same report as MCP dryRun; exit 0 when allowed, 2 when rejected.")]
+        [CommandOption("--dry-run")] public bool DryRun { get; set; }
     }
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings s, CancellationToken ct)
     {
@@ -354,8 +360,8 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
             var baseline = (await Read(s.Baseline, ct))!;
             var candidate = (await Read(s.Candidate, ct))!;
             SqlHarnessOperation operation = matrix.Length == 1
-                ? new SqlHarnessCompareMatrixOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, matrix[0], compareResults, s.CompareNullability)
-                : new SqlHarnessCompareOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, compareResults, s.CompareNullability);
+                ? new SqlHarnessCompareMatrixOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, matrix[0], compareResults, s.CompareNullability) { DryRun = s.DryRun }
+                : new SqlHarnessCompareOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, compareResults, s.CompareNullability) { DryRun = s.DryRun };
             return await Dispatch(operation, ResolveOutputMode(s.Json, s.JsonSummary, s.Output), ct, new AgentOutputOptions(s.MaxOutputBytes, s.MaxCellChars));
         }
         catch (OperationCanceledException) { throw; }

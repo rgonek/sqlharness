@@ -72,6 +72,60 @@ public sealed partial class DocsSyncTests
             "SKILL.md neither links README.md#commands nor mentions in backticks: " + string.Join(", ", missing));
     }
 
+    [Fact]
+    public void Saved_artifact_docs_pin_plan_selection_pagination_and_temp_table_keys()
+    {
+        var mcp = ReadRepositoryFile("docs", "mcp.md");
+        var readme = ReadRepositoryFile("README.md");
+        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
+
+        Assert.Contains("`repetition` selects an available measured repetition", mcp, StringComparison.Ordinal);
+        Assert.Contains("`planShapeStable`", mcp, StringComparison.Ordinal);
+        Assert.Contains("without an `evidenceGaps` entry when fewer than two measured repetitions", mcp, StringComparison.Ordinal);
+        Assert.Contains("multi-repetition comparison has missing or incomplete saved plan evidence", mcp, StringComparison.Ordinal);
+        Assert.Contains("stable paths", mcp, StringComparison.Ordinal);
+        Assert.Contains("`operators` is also paged", mcp, StringComparison.Ordinal);
+        Assert.Contains("12 hex", mcp, StringComparison.Ordinal);
+        Assert.Contains("last measured repetition", readme, StringComparison.Ordinal);
+        Assert.Contains("`evidenceGaps` is empty", readme, StringComparison.Ordinal);
+        Assert.Contains("multi-repetition comparison has missing or incomplete saved plan evidence", readme, StringComparison.Ordinal);
+        Assert.Contains("`matrix-cells`", skill, StringComparison.Ordinal);
+        Assert.Contains("`planShapeStable`", skill, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Workflow_cost_docs_pin_provenance_measurements_legacy_and_dry_run_accounting()
+    {
+        var mcp = ReadRepositoryFile("docs", "mcp.md");
+        var readme = ReadRepositoryFile("README.md");
+        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
+
+        const string schemaVersion = "Schema v7 adds nullable `operation_ref` and `parent_operation_ref` plus `dry_run`";
+        const string bytePreservation = "It reuses the `raw_bytes` and `emitted_bytes` columns introduced in v3; stored byte values remain intact";
+        const string baseline = "The `single-measured-execution-output` baseline includes the first measured result/messages for each variant and parameter set in the producer; it excludes warm-ups, later repeats, and plan XML";
+
+        Assert.Contains("parent_operation_ref", readme, StringComparison.Ordinal);
+        Assert.Contains(schemaVersion, readme, StringComparison.Ordinal);
+        Assert.Contains(bytePreservation, readme, StringComparison.Ordinal);
+        Assert.Contains(baseline, readme, StringComparison.Ordinal);
+        Assert.DoesNotContain("null v7 byte values", readme, StringComparison.Ordinal);
+        Assert.Contains("Dry-run responses contribute to output bytes and call counts", readme, StringComparison.Ordinal);
+        Assert.Contains("legacy-artifact-volume", readme, StringComparison.Ordinal);
+        Assert.Contains(schemaVersion, mcp, StringComparison.Ordinal);
+        Assert.Contains(bytePreservation, mcp, StringComparison.Ordinal);
+        Assert.Contains(baseline, mcp, StringComparison.Ordinal);
+        Assert.Contains("dry_run` flag keeps it out of database-execution counts", mcp, StringComparison.Ordinal);
+        Assert.Contains("Capabilities discovery, `tools/list`", mcp, StringComparison.Ordinal);
+        Assert.Contains(schemaVersion, skill, StringComparison.Ordinal);
+        Assert.Contains(bytePreservation, skill, StringComparison.Ordinal);
+        Assert.Contains(baseline, skill, StringComparison.Ordinal);
+        Assert.Contains("not actual token savings", skill, StringComparison.Ordinal);
+        var journalSection = readme[(readme.IndexOf("### Activity journal", StringComparison.Ordinal))..];
+        Assert.Contains("`snapshot`, `artifact`, `plan`; CLI or MCP", journalSection, StringComparison.Ordinal);
+        Assert.Contains("Not recorded: `doctor`, `capabilities`, `--help`", journalSection, StringComparison.Ordinal);
+        Assert.Contains("Rows of removed commands (`ping`, `schema`, `counts`, `space`, `qstop`, `indexes`) stay readable in the dashboard.", journalSection, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("README.md")]
     [InlineData("skills/sqlharness/SKILL.md")]
@@ -91,13 +145,13 @@ public sealed partial class DocsSyncTests
         var failures = await CheckExamplesAsync(ExtractExamples(bad));
         Assert.Single(failures);
 
-        var badDispatching = $"{Marker}\n```powershell\nsqlharness ping prod-eu --no-such-option --json\n```\n";
+        var badDispatching = $"{Marker}\n```powershell\nsqlharness measure prod-eu --no-such-option --json\n```\n";
         Assert.Single(await CheckExamplesAsync(ExtractExamples(badDispatching)));
 
         var badServer = $"{Marker}\n```\nsqlharness mcp serve --no-such-option\n```\n";
         Assert.Single(await CheckExamplesAsync(ExtractExamples(badServer)));
 
-        var good = $"{Marker}\n```powershell\nsqlharness capabilities --json\nsqlharness query <profile> --var a=b `\n  --file .\\q.sql --param id:int=1 --json\nsqlharness ping prod-eu --var a=b --json\n```\n";
+        var good = $"{Marker}\n```powershell\nsqlharness capabilities --json\nsqlharness query <profile> --var a=b `\n  --file .\\q.sql --param id:int=1 --json\nsqlharness measure prod-eu --var a=b --json\n```\n";
         Assert.Empty(await CheckExamplesAsync(ExtractExamples(good)));
 
         var untagged = "```\nsqlharness query --no-such-option\n```\n";

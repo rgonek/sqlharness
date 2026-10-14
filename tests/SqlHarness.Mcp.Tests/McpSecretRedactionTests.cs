@@ -10,7 +10,7 @@ namespace SqlHarness.Mcp.Tests;
 
 /// <summary>
 /// T4 secret handling: full fictional secrets and their connection-string
-/// fragments never reach either result representation — not via parser
+/// fragments never reach the result text — not via parser
 /// errors, not via plan content, and not via process logging — while database
 /// content stays data (preserved verbatim, never interpreted). Only synthetic
 /// fixtures and fictional secrets are used; no database is opened.
@@ -23,7 +23,7 @@ public sealed class McpSecretRedactionTests
     private static readonly SqlHarnessTargetIdentityReport Target = new("req-srv", "req-db", "srv", "db", "profile");
 
     [Fact]
-    public void Storage_preflight_secrets_do_not_reach_either_wire_representation()
+    public void Storage_preflight_secrets_do_not_reach_result_text()
     {
         var exception = new ArtifactStoragePreflightException("/tmp/" + FictionalSecret,
             new IOException("write failed: " + FictionalPassword));
@@ -37,7 +37,7 @@ public sealed class McpSecretRedactionTests
         Assert.DoesNotContain(FictionalSecret, text);
         Assert.DoesNotContain(FictionalPassword, text);
         Assert.Contains("[REDACTED]", text);
-        Assert.Equal(text, result.StructuredContent?.GetRawText());
+        Assert.Null(result.StructuredContent);
         using var document = JsonDocument.Parse(text);
         Assert.Empty(McpResultAdapter.ValidateEnvelope(document.RootElement));
     }
@@ -45,7 +45,7 @@ public sealed class McpSecretRedactionTests
     private static string TextOf(CallToolResult result)
     {
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
-        Assert.Equal(text, result.StructuredContent?.GetRawText());
+        Assert.Null(result.StructuredContent);
         return text;
     }
 
@@ -71,7 +71,7 @@ public sealed class McpSecretRedactionTests
             null,
             $"Parser error near '{FictionalSecret}' at position 4.");
 
-        var text = TextOf(McpResultAdapter.Adapt(outcome, "sqlharness_validate", knownSecrets: [FictionalSecret]));
+        var text = TextOf(McpResultAdapter.Adapt(outcome, "sqlharness_query", knownSecrets: [FictionalSecret]));
 
         Assert.DoesNotContain(FictionalSecret, text, StringComparison.Ordinal);
         Assert.Contains("[REDACTED]", text, StringComparison.Ordinal);
@@ -184,7 +184,7 @@ public sealed class McpSecretRedactionTests
     /// <summary>
     /// 012/T4, reworded 012/final F1: this does NOT prove that a typed matrix value is
     /// collected and redacted on the MCP path. No production call site of
-    /// <see cref="McpResultAdapter.Adapt"/> (<c>McpToolCatalog.cs</c>, <c>McpExecutionGate.cs</c>)
+    /// <see cref="McpResultAdapter.Adapt"/> (<c>McpToolCatalog.cs</c>, <c>McpCallOutcome.cs</c>)
     /// ever supplies <c>knownSecrets</c> -- Core already redacts
     /// <see cref="SqlHarnessOutcome.MachineError"/> before MCP ever sees the outcome, so this
     /// parameter is unreachable from production. What this test proves is narrower: that
@@ -229,7 +229,7 @@ public sealed class McpSecretRedactionTests
             null,
             $"Login failed; connection used password={FictionalPassword}; check the vault.");
 
-        var text = TextOf(McpResultAdapter.Adapt(outcome, "sqlharness_inspect"));
+        var text = TextOf(McpResultAdapter.Adapt(outcome, "sqlharness_query"));
 
         Assert.Contains(FictionalPassword, text, StringComparison.Ordinal);
         Assert.Contains($"password={FictionalPassword}", text, StringComparison.Ordinal);

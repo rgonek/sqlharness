@@ -38,7 +38,9 @@ public sealed record OperationStart(
     string? CandidateSqlHash,
     string? SqlText,
     string? CandidateSqlText,
-    AgentCallMetadata? Agent = null);
+    AgentCallMetadata? Agent = null,
+    string? OperationRef = null,
+    bool DryRun = false);
 
 /// <summary>Allowlisted, client-supplied labels from tools/call _meta; never verified, never content.</summary>
 public sealed record AgentCallMetadata(
@@ -65,7 +67,8 @@ public sealed record OperationEnd(
     string? ArtifactDirectory = null,
     string? SummaryJson = null,
     string? ErrorMessage = null,
-    string? CancelReason = null);
+    string? CancelReason = null,
+    string? ParentOperationRef = null);
 
 public sealed record JournalHandle(long OperationId);
 

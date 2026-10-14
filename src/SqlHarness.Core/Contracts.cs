@@ -25,7 +25,30 @@ public interface ISqlHarnessModule
         throw new NotSupportedException("This module does not support watch NDJSON streaming.");
 }
 
-public abstract record SqlHarnessOperation;
+public abstract record SqlHarnessOperation
+{
+    [JsonIgnore]
+    public string? OperationRef { get; init; }
+}
+
+public sealed record SqlHarnessArtifactReadOperation(
+    string Root,
+    string ArtifactId,
+    string Section,
+    ArtifactOwner? Owner = null,
+    int? Cursor = null,
+    ArtifactPlanSelector? PlanSelector = null,
+    bool IncludeText = false) : SqlHarnessOperation;
+
+public sealed record SqlHarnessArtifactReadReport(object Section, string? ProducerOperationRef);
+
+internal static class SqlHarnessOperationReferences
+{
+    internal static SqlHarnessOperation Ensure(SqlHarnessOperation operation) =>
+        string.IsNullOrWhiteSpace(operation.OperationRef)
+            ? operation with { OperationRef = Guid.NewGuid().ToString("N") }
+            : operation;
+}
 
 public sealed record SqlHarnessQueryOperation(
     SqlTargetRequest Target,
@@ -38,6 +61,7 @@ public sealed record SqlHarnessQueryOperation(
 {
     /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
     public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+    public bool DryRun { get; init; }
 }
 
 public sealed record SqlHarnessCompareOperation(
@@ -53,6 +77,7 @@ public sealed record SqlHarnessCompareOperation(
 {
     /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
     public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+    public bool DryRun { get; init; }
 }
 
 public sealed record SqlHarnessCompareMatrixOperation(
@@ -72,6 +97,7 @@ public sealed record SqlHarnessCompareMatrixOperation(
 
     /// <summary>Typed alternative to <see cref="Matrix"/> (012). When it is set, <see cref="Matrix"/> must be empty.</summary>
     public SqlHarnessParameterMatrixInput? TypedMatrix { get; init; }
+    public bool DryRun { get; init; }
 }
 
 /// <summary>
@@ -128,72 +154,21 @@ public sealed record SqlHarnessMeasureOperation(
 {
     /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
     public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+    public bool DryRun { get; init; }
 }
+
+/// <summary>
+/// Result of a dry run: the call passed every offline check a real call performs
+/// (bounds, safety classification, parameter binding and references, setup shape,
+/// matrix or parameter-set binding) and stopped before connecting.
+/// </summary>
+public sealed record SqlHarnessDryRunReport(
+    string Command,
+    string Classification,
+    IReadOnlyList<BenchmarkParameterReport> Parameters,
+    int ParameterSets);
 
 public sealed record SqlHarnessPlanOperation(string ShowplanXml, OutputFootprint RawFootprint) : SqlHarnessOperation;
-
-public sealed record SqlHarnessSchemaOperation(
-    SqlTargetRequest Target,
-    string? Filter,
-    int TimeoutSeconds,
-    int MaxObjects = 50,
-    string? Object = null) : SqlHarnessOperation;
-
-public sealed record SqlHarnessPingOperation(
-    SqlTargetRequest Target, int TimeoutSeconds) : SqlHarnessOperation;
-
-public sealed record SqlHarnessCountsOperation(
-    SqlTargetRequest Target, IReadOnlyList<string> Tables, string? Like,
-    int Top, bool Exact, int TimeoutSeconds) : SqlHarnessOperation;
-
-public sealed record SqlHarnessSpaceOperation(
-    SqlTargetRequest Target, int Top, string? Object,
-    int TimeoutSeconds) : SqlHarnessOperation;
-
-public sealed record SqlHarnessQueryStoreTopOperation(
-    SqlTargetRequest Target, int Top, int WindowMinutes,
-    int TimeoutSeconds) : SqlHarnessOperation;
-
-public sealed record SqlHarnessIndexesOperation(
-    SqlTargetRequest Target, int Top, string? Object,
-    int TimeoutSeconds) : SqlHarnessOperation;
-
-public static class IndexObjectSyntax
-{
-    private const string InvalidObject = "indexes --object must be a single object name or schema.name.";
-
-    public static bool TryParse(string? objectSpec, out string? schema, out string? name, out string error)
-    {
-        schema = null;
-        name = null;
-        error = string.Empty;
-        if (objectSpec is null)
-            return true;
-
-        if (string.IsNullOrWhiteSpace(objectSpec))
-        {
-            error = InvalidObject;
-            return false;
-        }
-
-        var firstDot = objectSpec.IndexOf('.');
-        if (firstDot < 0)
-        {
-            name = objectSpec;
-            return true;
-        }
-
-        if (firstDot != objectSpec.LastIndexOf('.') || firstDot == 0 || firstDot == objectSpec.Length - 1)
-        {
-            error = InvalidObject;
-            return false;
-        }
-
-        schema = objectSpec[..firstDot];
-        name = objectSpec[(firstDot + 1)..];
-        return true;
-    }
-}
 
 public sealed record SqlHarnessWatchOperation(
     SqlTargetRequest Target, string Sql, IReadOnlyList<string> Parameters,
@@ -245,120 +220,6 @@ public sealed record SqlHarnessSnapshotDifference(
 public sealed record SqlHarnessSnapshotReport(
     SqlHarnessTargetIdentityReport Target, string Name, SnapshotVerdict Verdict,
     int DifferenceCount, IReadOnlyList<SqlHarnessSnapshotDifference> Differences);
-
-public sealed record DatabaseFileSpaceReport(
-    string LogicalName, string Type, string? PhysicalName,
-    decimal SizeMb, decimal UsedMb, decimal FreeMb);
-
-public sealed record DatabaseAllocationReport(
-    decimal ReservedMb, decimal UsedMb, decimal DataMb);
-
-public sealed record TableSpaceReport(
-    string Schema, string Name, long Rows,
-    decimal ReservedMb, decimal UsedMb, decimal DataMb);
-
-public sealed record IndexSpaceReport(
-    string Schema, string Table, string Index, string Type,
-    decimal ReservedMb, decimal UsedMb, decimal DataMb, string? Compression);
-
-public sealed record SqlHarnessSpaceReport(
-    SqlHarnessTargetIdentityReport Target,
-    IReadOnlyList<DatabaseFileSpaceReport> Files,
-    DatabaseAllocationReport Allocation,
-    IReadOnlyList<TableSpaceReport> Tables,
-    IReadOnlyList<IndexSpaceReport> Indexes);
-
-public sealed record QueryStoreTopItemReport(
-    long QueryId,
-    string QueryHash,
-    string? ObjectName,
-    long ExecutionCount,
-    int PlanCount,
-    decimal TotalDurationMilliseconds,
-    decimal AverageDurationMilliseconds,
-    decimal MaximumDurationMilliseconds,
-    decimal TotalCpuMilliseconds,
-    decimal AverageCpuMilliseconds,
-    decimal MaximumCpuMilliseconds,
-    decimal TotalLogicalReads,
-    decimal AverageLogicalReads,
-    decimal MaximumLogicalReads,
-    DateTimeOffset LastExecutionAt);
-
-public sealed record SqlHarnessQueryStoreTopReport(
-    SqlHarnessTargetIdentityReport Target,
-    int WindowMinutes,
-    int Top,
-    IReadOnlyList<QueryStoreTopItemReport> Queries,
-    string? ArtifactDirectory);
-
-[JsonConverter(typeof(IndexOverlapClassificationConverter))]
-public enum IndexOverlapClassification
-{
-    Covered, IncludeGap, PartialKey, NewShape
-}
-
-public sealed class IndexOverlapClassificationConverter : JsonConverter<IndexOverlapClassification>
-{
-    public override IndexOverlapClassification Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        if (reader.TokenType != JsonTokenType.String)
-            throw new JsonException("Unknown index overlap classification.");
-
-        return reader.GetString() switch
-        {
-            "covered" => IndexOverlapClassification.Covered,
-            "include-gap" => IndexOverlapClassification.IncludeGap,
-            "partial-key" => IndexOverlapClassification.PartialKey,
-            "new-shape" => IndexOverlapClassification.NewShape,
-            _ => throw new JsonException("Unknown index overlap classification."),
-        };
-    }
-
-    public override void Write(Utf8JsonWriter writer, IndexOverlapClassification value, JsonSerializerOptions options) =>
-        writer.WriteStringValue(value switch
-        {
-            IndexOverlapClassification.Covered => "covered",
-            IndexOverlapClassification.IncludeGap => "include-gap",
-            IndexOverlapClassification.PartialKey => "partial-key",
-            IndexOverlapClassification.NewShape => "new-shape",
-            _ => throw new JsonException("Unknown index overlap classification."),
-        });
-}
-
-public sealed record IndexCandidateReport(
-    long CandidateId, string Schema, string Table,
-    IReadOnlyList<string> EqualityColumns,
-    IReadOnlyList<string> InequalityColumns,
-    IReadOnlyList<string> IncludeColumns,
-    long UserSeeks, long UserScans,
-    decimal AverageTotalUserCost, decimal AverageUserImpactPercent,
-    decimal CumulativeImpactScore,
-    DateTimeOffset? LastUserSeek, DateTimeOffset? LastUserScan,
-    IndexOverlapClassification Classification,
-    string? BestExistingIndex,
-    int MatchedKeyColumnCount, int CandidateKeyColumnCount,
-    IReadOnlyList<string> MissingIncludeColumns,
-    bool? ExistingIndexDisabled, bool? ExistingIndexHasFilter,
-    string? ExistingIndexFilterHash);
-
-public sealed record SqlHarnessIndexesReport(
-    SqlHarnessTargetIdentityReport Target,
-    DateTimeOffset ObservationSince, DateTimeOffset ObservedAt,
-    int Top, string? ObjectFilter, IReadOnlyList<string> Warnings,
-    IReadOnlyList<IndexCandidateReport> Candidates,
-    string? ArtifactDirectory);
-
-public sealed record SqlHarnessPingReport(
-    SqlHarnessTargetIdentityReport Target, string Server, string Database,
-    string Login, long DurationMilliseconds);
-
-public sealed record SqlHarnessCountReport(
-    string Schema, string Name, long Rows, string Method);
-
-public sealed record SqlHarnessCountsReport(
-    SqlHarnessTargetIdentityReport Target,
-    IReadOnlyList<SqlHarnessCountReport> Tables, int Omitted);
 
 public sealed record SqlTargetRequest(
     string? Profile,
@@ -482,6 +343,12 @@ public sealed record SqlHarnessOutcome(
     SqlHarnessEmissionReceipt? EmissionReceipt = null,
     SqlHarnessError? Error = null)
 {
+    [JsonIgnore]
+    public string? OperationRef { get; init; }
+
+    [JsonIgnore]
+    public string? ParentOperationRef { get; init; }
+
     /// <summary>Structured error mapped at outcome construction, before any renderer runs.</summary>
     public SqlHarnessError? MachineError { get; } = MapMachineError(ExitCode, SafeError, Error);
 

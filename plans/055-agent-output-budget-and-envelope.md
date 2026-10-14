@@ -14,7 +14,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: DONE (implementation commits `52bdc23..f5ac90c`; Windows and Linux gates passed; whole-branch review/re-review clean; locally merged to main at `4bb783a`; no post-merge gates after docs/plans-only main drift)
 - Priority: P1
 - Effort: M
 - Risk: MEDIUM (shared projection for MCP and CLI agent output; wire contract version bump)
@@ -72,7 +72,7 @@ have envelope overhead larger than their row data. Private workload counts/resul
 - Produces: `public static IReadOnlyList<int> AgentOutputProjection.CandidateDetailLimits` (replaces `GetCandidateDetailLimits` and `CalculateDetailLimit`).
 - Produces: `internal static IEnumerable<KeyValuePair<string, CompareDistribution>> AgentOutputProjection.BySignificance(IReadOnlyDictionary<string, CompareDistribution> reads)`.
 
-- [ ] **Step 1: Replace the pinned ladder test and add the ordering test**
+- [x] **Step 1: Replace the pinned ladder test and add the ordering test**
 
 Replace `Query_candidate_ladder_samples_rows_before_dropping_shape` with:
 
@@ -102,12 +102,12 @@ public void Per_table_reads_order_by_median_then_max_then_name()
 }
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~AgentOutputTests.Every_report|FullyQualifiedName~AgentOutputTests.Per_table"`
 Expected: build error, `CandidateDetailLimits` and `BySignificance` do not exist.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `AgentOutputProjection.cs`, delete `CalculateDetailLimit`, `QueryRowSampleLadder`, `GetCandidateDetailLimits`, `QueryCandidateDetailLimits`, `DefaultCandidateDetailLimits` and add:
 
@@ -129,7 +129,7 @@ In `ClipVariant` and the `ArtifactMetricsSection` case replace `variant.LogicalR
 
 In `Renderer.cs:157` and `McpResultAdapter.cs:172` replace `AgentOutputProjection.GetCandidateDetailLimits(...).Distinct()` with `AgentOutputProjection.CandidateDetailLimits`. Fix the remaining compile errors in tests that call the removed members (`AgentOutputTests.cs:620` loop → iterate `CandidateDetailLimits`).
 
-- [ ] **Step 4: Add the behavior test for a two-cell matrix**
+- [x] **Step 4: Add the behavior test for a two-cell matrix**
 
 In `tests/SqlHarness.Mcp.Tests/McpTokenBudgetTests.cs` add a test that builds a `SqlHarnessCompareMatrixReport` with two cells from the existing compare fixture helpers in that file (search for `SqlHarnessCompareMatrixReport(` in the test project and reuse the nearest builder) and asserts:
 
@@ -143,12 +143,12 @@ Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("truncation").
 
 If `SqlHarnessOutcome.Success` has a different factory name, use the one the neighbouring tests use.
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 Run: `dotnet test SqlHarness.sln --filter "FullyQualifiedName~AgentOutput|FullyQualifiedName~McpTokenBudget|FullyQualifiedName~McpOutput"`
 Expected: PASS. A test that asserted `detailLimit: 1` for a small report is a pin of the defect: change it to assert the untruncated result and say so in the commit body.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/SqlHarness.Core/AgentOutputProjection.cs src/SqlHarness.Cli/Commands/Renderer.cs src/SqlHarness.Mcp/McpResultAdapter.cs tests
@@ -172,7 +172,7 @@ git commit -m "fix(055): one stepped detail ladder for every report; reads by si
 - Produces: `McpResultBudget.Resolve(int processCeilingBytes, int? callBytes, ...)` → `min(callBytes ?? DefaultCallToolResultBudgetBytes, processCeilingBytes)`.
 - Produces: `McpResultAdapter.MeasureBytes(CallToolResult)` returns the UTF-8 byte count of the text block(s).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```csharp
 [Fact]
@@ -212,12 +212,12 @@ public void Tools_advertise_no_output_schema()
 
 `LargeQueryOutcome(targetBytes)` builds a `SqlHarnessQueryReport` with one result set of short string rows until its serialized envelope is about `targetBytes` (use `QueryShapeFixtures` if the MCP test project references it; otherwise build rows in a loop in a private helper). `RequestProcess()` is the `McpProcessContext.Create(...)` block from `Request_catalog_stays_within_tools_list_budget`, extracted into a private helper. Replace the `SqlHarnessPingReport` constructor arguments with whatever the record takes on HEAD.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `dotnet test tests/SqlHarness.Mcp.Tests --filter "FullyQualifiedName~McpTokenBudget|FullyQualifiedName~McpToolSchema"`
 Expected: FAIL — structured content present; 40 KB report truncated; resolve rejects 900000 / returns 16384 for null.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `McpLimits.cs`:
 
@@ -281,12 +281,12 @@ private static CallToolResult Build(byte[] envelopeUtf8, bool isError) => new()
 
 Capabilities (`McpOperationMapper.BuildCapabilities`, both overloads): replace `["callToolResultBudgetBytes"]` with `["defaultResultBytes"] = McpLimits.DefaultCallToolResultBudgetBytes` and `["maxResultBytes"] = context.MaxResultBytes`.
 
-- [ ] **Step 4: Run focused tests, then fix pins**
+- [x] **Step 4: Run focused tests, then fix pins**
 
 Run: `dotnet test SqlHarness.sln --filter "FullyQualifiedName~Mcp"`
 Expected: new tests PASS. Existing tests that assert `StructuredContent`, `OutputSchema`, `callToolResultBudgetBytes`, or the 16384 default fail; update each to the new contract (no structured content; budget 65536; ceiling 262144). Do not delete a test that checks a budget is enforced — lower its budget explicitly instead.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/SqlHarness.Mcp src/SqlHarness.Cli/Commands/McpServeCommand.cs tests/SqlHarness.Mcp.Tests
@@ -327,7 +327,7 @@ omission counters, absent clippedCells, and recordsAffected only when negative. 
 and empty-result columns. Do not alter the canonical schema used by hashing or equivalence.
 Provider SQL metadata is outside this task; never guess it from CLR names.
 
-- [ ] **Step 1: Write failing behavior tests**
+- [x] **Step 1: Write failing behavior tests**
 
 Synthetic fixtures assert:
 - System.DateTime -> dateTime, System.DateTimeOffset -> dateTimeOffset, System.String -> string,
@@ -343,18 +343,18 @@ Synthetic fixtures assert:
 - Empty results keep columns; recordsAffected=0 is present and -1 absent.
 - A compact envelope that fits is retained even when the previous verbose envelope would not fit.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~AgentOutputTests".
 Expected: compact types/aliases absent or clipping positions missing.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Construct clipping metadata while projecting retained cells, then compact before the final fit check.
 Use JsonIgnore defaults only for the named fields. Introduce one shared agent-envelope version constant
 with value 2 for MCP and CLI; fitting and emitted-byte accounting use the same final serialization.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: dotnet test SqlHarness.sln --filter "FullyQualifiedName~AgentOutput|FullyQualifiedName~McpTokenBudget|FullyQualifiedName~Canonical|FullyQualifiedName~Equivalence".
 Expected: PASS. Commit scoped source/tests with feat(055): compact query values with explicit clipping metadata.
@@ -394,7 +394,7 @@ per-table reads, distributions and operators. The detail ladder applies to optio
 If the inventory itself cannot fit, page it in index order through the scope-owned artifact reader.
 Keep individual-cell reads. Plan 058 adds visible parameter values; 061 adds labels additively.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Synthetic six-case matrix with large per-table/operator detail, budgets 4096 and 65536:
 all cases survive whenever the shared envelope plus inventory fits, even when detail does not;
@@ -402,17 +402,17 @@ identities, medians, deltas and equivalence match source; unavailable CPU is nul
 is not equivalent=true. A larger inventory pages each case exactly once. A partial run preserves
 root status/error and contains outcomes only for completed cases.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: dotnet test SqlHarness.sln --filter "FullyQualifiedName~AgentOutput|FullyQualifiedName~McpTokenBudget".
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add inventory-first matrix projection; spend remaining budget on optional detail. Preserve scope checks.
 Preserve existing latency-regression diagnostics in case details. Do not add an adoption verdict: a metrics overview is not plan review. Update pins of the old nested
 cell format. The inventory and its artifact continuation share one schema.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run the Step 2 filter; expected PASS. Commit feat(055): matrix case inventory before optional detail.
 
@@ -431,7 +431,7 @@ for an experiment that executed only one case.
 **Interfaces:**
 - Produces: `ArtifactStatementsSection(..., int OmittedStatements) { int? Continuation { get; init; } }`; `ReadSection(..., cursor)` accepts a cursor for `statements` and `matrix-cells`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Using the existing artifact fixture builder in the artifact tests (search `StatementsFileName` or `statements.json` in `tests/`), write an artifact with 300 statements and assert:
 
@@ -447,12 +447,12 @@ Assert.Equal(128, second.Statements[0].StatementOrdinal);
 
 Use the ordinal property name the record has on HEAD.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~Artifact"`
 Expected: FAIL — "The artifact cursor is invalid."
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `ReadSection`: allow a cursor when `section is MatrixCellsSection or StatementsSection`. `ReadStatements(directory, artifactId, manifest, cursor ?? 0)` skips `cursor` statements and records `Cursor`. Add to the record:
 
@@ -465,7 +465,7 @@ public int Cursor { get; init; }
 
 In the projection case set `Continuation = selected.Length < statements.Statements.Count ? statements.Cursor + selected.Length : null`. Update the cursor parameter description: `"Zero-based continuation cursor for matrix-cells and statements pages."`.
 
-- [ ] **Step 4: Run and commit**
+- [x] **Step 4: Run and commit**
 
 Run: `dotnet test SqlHarness.sln --filter "FullyQualifiedName~Artifact"` → PASS.
 
@@ -481,15 +481,15 @@ git commit -m "feat(055): statements artifact section pages with a cursor"
 **Files:**
 - Modify: `docs/mcp.md` (Start, Tools table note, Result envelope/budgets, query fallback paragraph, Context cost), `README.md` (agent output, budgets), `skills/sqlharness/SKILL.md`, `tests/SqlHarness.Tests/DocsSyncTests.cs` pins if they quote changed text.
 
-- [ ] **Step 1: Update docs**
+- [x] **Step 1: Update docs**
 
 State: one text block; budget = UTF-8 bytes of that text, default 65536, ceiling `--max-result-bytes` default 262144, a call may raise or lower within the ceiling; ladder `unbounded, 128, …, 1, 0` for every report; per-table reads ordered by median reads; compact query valueType and clippedCells fields; inventory-first matrix projection; `schemaVersion` 2; `statements` paging. Remove every claim about `structuredContent`, `outputSchema`, "both representations" and the 16384 default. In "Context cost", state that emitted bytes are the text the model reads.
 
-- [ ] **Step 2: Run gates**
+- [x] **Step 2: Run gates**
 
 Run: `dotnet build SqlHarness.sln -warnaserror` → 0 warnings. `pwsh scripts/verify.ps1` → `verify: OK`. `pwsh scripts/verify-linux.ps1` → `verify-linux: OK`.
 
-- [ ] **Step 3: Commit and index**
+- [x] **Step 3: Commit and index**
 
 Set this plan's Status to DONE with the commit range; update the row in `plans/README.md`.
 
@@ -500,11 +500,11 @@ git commit -m "docs(055): text-only results, 64 KiB budget, stepped lists, compa
 
 ## Done criteria
 
-- [ ] `rg -n "StructuredContent|OutputSchema|CalculateDetailLimit|CallToolResultBudgetBytes" src` → no matches.
-- [ ] A two-cell compare matrix and a 40 KB query report arrive untruncated under the default budget.
-- [ ] Per-table reads list the largest table first.
-- [ ] Matrix inventories precede detail; clipping identifies exact cells without guessing SQL types.
-- [ ] Both gates pass; README row updated.
+- [x] Removed MCP output schema and structured content assignments; removed obsolete detail-limit and old call-budget symbols. The source check treats names as exact symbols, so the required `DefaultCallToolResultBudgetBytes` is not a false positive for the removed `CallToolResultBudgetBytes` name.
+- [x] A two-cell compare matrix and a 40 KB query report arrive untruncated under the default budget.
+- [x] Per-table reads list the largest table first.
+- [x] Matrix inventories precede detail; clipping identifies exact cells without guessing SQL types.
+- [x] Both gates pass; README row updated.
 
 ## STOP conditions
 

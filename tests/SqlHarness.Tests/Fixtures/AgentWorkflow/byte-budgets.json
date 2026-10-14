@@ -1,19 +1,13 @@
 {
   "estimationMethod": "utf8-bytes-div-4",
   "budgets": {
-    "discoveryThenSchema": 8192,
-    "validationCorrection": 4096,
     "compareSummary": 8192
   },
   "observedUtf8Bytes": {
-    "discoveryThenSchema": 7525,
-    "validationCorrection": 1336,
     "compareSummary": 1040
   },
   "calls": {
-    "discoveryThenSchema": 2,
-    "validationCorrection": 2,
     "compareSummary": 1
   },
-  "compareArtifactDetail": "future plan 06/T2 contract; current test checks only the existing compare summary and artifact paths. Discovery bytes include the matrix-cells artifact section added by plan 038."
+  "compareArtifactDetail": "future plan 06/T2 contract; current test checks only the existing compare summary and artifact paths."
 }

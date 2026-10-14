@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Targets;
@@ -11,6 +12,66 @@ public class CompareMatrixTests
     private const string BaselineSql = "SELECT Value FROM dbo.Clients WHERE BatchSize = @BatchSize AND Tenant = @Tenant";
     private const string CandidateSql = "SELECT Value FROM dbo.Clients WHERE BatchSize = @BatchSize AND Tenant = @Tenant -- candidate";
     private const string Plan = "<ShowPlanXML><BatchSequence><RelOp NodeId=\"1\" PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[Clients]\" /></IndexScan></RelOp></BatchSequence></ShowPlanXML>";
+
+    [Fact]
+    public async Task Matrix_dry_run_binds_every_value_without_connecting_or_preflighting_artifacts()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix("BatchSize:int=1,20,100") with { DryRun = true });
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        Assert.Equal("compare", report.Command);
+        Assert.Equal(3, report.ParameterSets);
+        Assert.Equal(0, factory.ConnectCount);
+        Assert.Equal(0, artifacts.PreflightCount);
+        Assert.Empty(artifacts.Directories);
+    }
+
+    [Fact]
+    public async Task Matrix_dry_run_fails_on_a_bad_value_like_the_real_call()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix("BatchSize:int=1,abc") with { DryRun = true });
+
+        Assert.NotEqual(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(0, factory.ConnectCount);
+        Assert.Equal(0, artifacts.PreflightCount);
+    }
+
+    [Fact]
+    public async Task Compare_dry_run_validates_setup_and_parameters_without_connecting_or_preflighting_artifacts()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory();
+        var operation = new SqlHarnessCompareOperation(
+            new SqlTargetRequest("test", new Dictionary<string, string> { ["env"] = "a" }),
+            "CREATE TABLE #ids (Id int); INSERT #ids (Id) SELECT Id FROM dbo.Clients WHERE Tenant = @Tenant",
+            "SELECT Value FROM dbo.Clients WHERE BatchSize = @BatchSize AND Tenant = @Tenant",
+            "SELECT Value FROM dbo.Clients WHERE BatchSize = @BatchSize AND Tenant = @Tenant -- candidate",
+            [],
+            30,
+            1)
+        {
+            TypedParameters = [new SqlHarnessParameterInput("Tenant", "int", "7"), new SqlHarnessParameterInput("BatchSize", "int", "20")],
+            DryRun = true,
+        };
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessDryRunReport>(outcome.Report);
+        Assert.Equal("compare", report.Command);
+        Assert.Equal(1, report.ParameterSets);
+        Assert.Equal(2, report.Parameters.Count);
+        Assert.Equal(0, factory.ConnectCount);
+        Assert.Equal(0, artifacts.PreflightCount);
+        Assert.Empty(artifacts.Directories);
+    }
 
     [Fact]
     public async Task Matrix_propagates_the_nullability_policy_into_every_cell()
@@ -79,6 +140,49 @@ public class CompareMatrixTests
             Assert.True(Directory.Exists(cell.Compare.ArtifactDirectory));
             Assert.Equal(["@Tenant", "@BatchSize"], cell.Compare.Parameters.Select(parameter => parameter.Name));
         });
+    }
+
+    [Fact]
+    public async Task Concurrent_matrix_operations_publish_every_cell_under_their_own_root_reference()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var writer = new CompareArtifactWriter(artifacts.Root, () => DateTimeOffset.UtcNow);
+        var validPlan = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "distiller-sample.sqlplan"));
+        var firstModule = Module(new MatrixSessionFactory(plan: validPlan), writer);
+        var secondModule = Module(new MatrixSessionFactory(plan: validPlan), writer);
+        using var start = new Barrier(2);
+        var firstOperation = Matrix("BatchSize:int=1,20") with { OperationRef = "matrix-producer-a" };
+        var secondOperation = Matrix("BatchSize:int=100,200") with { OperationRef = "matrix-producer-b" };
+
+        var outcomes = await Task.WhenAll(
+            Task.Run(async () => { start.SignalAndWait(); return await firstModule.ExecuteAsync(firstOperation); }),
+            Task.Run(async () => { start.SignalAndWait(); return await secondModule.ExecuteAsync(secondOperation); }));
+
+        Assert.True(outcomes[0].ExitCode == SqlHarnessExitCode.Success, outcomes[0].SafeError);
+        Assert.True(outcomes[1].ExitCode == SqlHarnessExitCode.Success, outcomes[1].SafeError);
+        Assert.Equal(firstOperation.OperationRef, outcomes[0].OperationRef);
+        Assert.Equal(secondOperation.OperationRef, outcomes[1].OperationRef);
+        var published = new List<(string Directory, string Producer)>();
+        foreach (var (outcome, expectedProducer) in new[]
+                 {
+                     (outcomes[0], firstOperation.OperationRef!),
+                     (outcomes[1], secondOperation.OperationRef!),
+                 })
+        {
+            var report = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
+            Assert.Equal(2, report.Cells.Count);
+            foreach (var cell in report.Cells)
+            {
+                var directory = Assert.IsType<string>(cell.Compare.ArtifactDirectory);
+                using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "manifest.json")));
+                Assert.Equal(expectedProducer, manifest.RootElement.GetProperty("producerOperationRef").GetString());
+                published.Add((directory, expectedProducer));
+            }
+        }
+
+        Assert.Equal(4, published.Select(item => item.Directory).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(2, published.Count(item => item.Producer == firstOperation.OperationRef));
+        Assert.Equal(2, published.Count(item => item.Producer == secondOperation.OperationRef));
     }
 
     [Fact]
@@ -679,6 +783,23 @@ public class CompareMatrixTests
         Assert.All(runs, run => Assert.Contains(run.Variant, new[] { "baseline", "candidate" }));
     }
 
+    [Fact]
+    public async Task Matrix_case_inventory_retains_parameter_values_when_detail_is_limited()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var outcome = await Module(new MatrixSessionFactory(), artifacts)
+            .ExecuteAsync(TypedMatrix("1", null, "20") with { TypedMatrix = new("BatchSize", "int", ["1", null, "20"]) });
+        var report = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
+
+        var projected = Assert.IsType<CompareMatrixBenchmarkSummary>(
+            AgentOutputProjection.Project(report, 128, detailLimit: 0, out _, maximumBytes: 16_384));
+
+        Assert.Equal(3, projected.Cases.Count);
+        Assert.Equal(["1", null, "20"], projected.Cases.Select(matrixCase => matrixCase.ParameterValue));
+        Assert.Empty(projected.Details);
+        Assert.Equal(3, projected.OmittedDetailCount);
+    }
+
     private static SqlHarnessCompareMatrixOperation TypedMatrix(params string?[] values) =>
         Matrix(string.Empty, parameters: []) with
         {
@@ -741,7 +862,12 @@ public class CompareMatrixTests
 
     private sealed class DirectoryArtifactWriter : ICompareArtifactWriter, IDisposable
     {
-        public void CheckStorage() => new ArtifactStoragePreflight().Check(Root);
+        public int PreflightCount { get; private set; }
+        public void CheckStorage()
+        {
+            PreflightCount++;
+            new ArtifactStoragePreflight().Check(Root);
+        }
 
         public List<string> Directories { get; } = [];
         public string Root { get; } = Path.Combine(Path.GetTempPath(), "sqlharness-matrix-" + Guid.NewGuid().ToString("N"));
@@ -769,17 +895,20 @@ public class CompareMatrixTests
         private readonly bool _failConnect;
         private readonly int _resultRowCount;
         private readonly string _echoParameterName;
+        private readonly string? _plan;
 
         public MatrixSessionFactory(
             int? failSqlAt = null,
             bool failConnect = false,
             int resultRowCount = 1,
-            string echoParameterName = "@BatchSize")
+            string echoParameterName = "@BatchSize",
+            string? plan = null)
         {
             _failSqlAt = failSqlAt;
             _failConnect = failConnect;
             _resultRowCount = resultRowCount;
             _echoParameterName = echoParameterName;
+            _plan = plan;
         }
 
         public int ConnectCount { get; private set; }
@@ -792,7 +921,7 @@ public class CompareMatrixTests
             if (_failConnect)
                 return Task.FromException<ISqlSession>(new InvalidOperationException("login failed"));
 
-            var session = new MatrixSession(failSql: _failSqlAt == index, _resultRowCount, _echoParameterName);
+            var session = new MatrixSession(failSql: _failSqlAt == index, _resultRowCount, _echoParameterName, _plan);
             Sessions.Add(session);
             return Task.FromResult<ISqlSession>(session);
         }
@@ -803,13 +932,15 @@ public class CompareMatrixTests
         private readonly bool _failSql;
         private readonly int _resultRowCount;
         private readonly string _echoParameterName;
+        private readonly string _plan;
         private readonly List<string> _messages = [];
 
-        public MatrixSession(bool failSql, int resultRowCount, string echoParameterName = "@BatchSize")
+        public MatrixSession(bool failSql, int resultRowCount, string echoParameterName = "@BatchSize", string? plan = null)
         {
             _failSql = failSql;
             _resultRowCount = resultRowCount;
             _echoParameterName = echoParameterName;
+            _plan = plan ?? Plan;
         }
 
         public List<SqlExecutionCommand> Commands { get; } = [];
@@ -855,7 +986,7 @@ public class CompareMatrixTests
             var rows = Enumerable.Range(0, _resultRowCount)
                 .Select(index => new object?[] { 42 + index })
                 .ToArray();
-            return Task.FromResult<ISqlReader>(MatrixReader.WithPlan(["Value"], rows, Plan));
+            return Task.FromResult<ISqlReader>(MatrixReader.WithPlan(["Value"], rows, _plan));
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;

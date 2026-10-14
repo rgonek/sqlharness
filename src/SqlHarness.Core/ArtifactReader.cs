@@ -20,7 +20,10 @@ public sealed record ArtifactManifest(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ArtifactOwner? Owner { get; init; }
 
-    internal static ArtifactManifest ForReport(object report, ArtifactOwner? owner = null) => (report switch
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ProducerOperationRef { get; init; }
+
+    internal static ArtifactManifest ForReport(object report, ArtifactOwner? owner = null, string? operationRef = null) => (report switch
     {
         SqlHarnessCompareReport => new ArtifactManifest(
             ArtifactReader.CurrentManifestVersion, ArtifactReader.CompareKind,
@@ -34,7 +37,7 @@ public sealed record ArtifactManifest(
         _ => throw new ArgumentOutOfRangeException(
             nameof(report), report.GetType(), "Unsupported benchmark report type."),
     }) with
-    { Owner = owner };
+    { Owner = owner, ProducerOperationRef = operationRef };
 }
 
 /// <summary>One named variant (baseline/candidate/query/set) with its measured metrics.</summary>
@@ -61,7 +64,27 @@ public sealed record ArtifactMetricsSection(
 public sealed record ArtifactOperatorsSection(
     string ArtifactId,
     string ArtifactKind,
-    IReadOnlyList<NoteworthyOperatorSummary> Operators);
+    IReadOnlyList<NoteworthyOperatorSummary> Operators)
+{
+    public int? Continuation { get; init; }
+    public int Cursor { get; init; }
+    public bool SourceIsCapped { get; init; } = true;
+}
+
+public sealed record ArtifactPlanSelector(string Variant, int Statement = 0, string? ParameterSet = null, int? Repetition = null);
+public sealed record ArtifactPlanNode(string NodePath, string? ParentPath, PlanNode Operator);
+public sealed record ArtifactPlanSection(string ArtifactId, string Variant, string? ParameterSet, int Statement,
+    int StatementCount, int Repetition, string Selection, IReadOnlyList<int> AvailableRepetitions,
+    bool? PlanShapeStable, int NodeCount, IReadOnlyList<ArtifactPlanNode> Nodes, int? Continuation)
+{
+    [JsonIgnore]
+    public int Cursor { get; init; }
+    public IReadOnlyList<MissingIndex> MissingIndexes { get; init; } = [];
+    public string? StatementText { get; init; }
+    public IReadOnlyList<string> EvidenceGaps { get; init; } = [];
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PageError { get; init; }
+}
 
 /// <summary>Bounded per-statement plan diagnostics. SQL text is never included.</summary>
 public sealed record ArtifactStatementMetric(
@@ -79,15 +102,20 @@ public sealed record ArtifactStatementsSection(
     string ArtifactId,
     string ArtifactKind,
     IReadOnlyList<ArtifactStatementMetric> Statements,
-    int OmittedStatements);
+    int OmittedStatements)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Continuation { get; init; }
+
+    [JsonIgnore]
+    public int Cursor { get; init; }
+}
 
 /// <summary>One safe reference to a saved compare cell, addressed only by its artifact id.</summary>
-public sealed record ArtifactMatrixCellReference(int Index, string ArtifactId);
-
-/// <summary>A bounded page of saved compare-cell references.</summary>
+/// <summary>A bounded page of saved case outcomes in the same schema as agent matrix inventories.</summary>
 public sealed record ArtifactMatrixCellsSection(
     string ArtifactId,
-    IReadOnlyList<ArtifactMatrixCellReference> Cells,
+    IReadOnlyList<AgentMatrixCase> Cases,
     int? Continuation,
     int Cursor = 0);
 
@@ -98,15 +126,14 @@ public sealed class ArtifactReadException(string message, SqlHarnessExitCode exi
 }
 
 /// <summary>
-/// Offline selective reader for existing benchmark artifacts. Reads only
-/// <c>manifest.json</c> and <c>report.json</c> under a fixed root: the
-/// artifact id is a single manifest-bound directory name, never an arbitrary
-/// path. Opens no connection and never loads run arrays, plan files,
-/// queries.jsonl, or source SQL.
+/// Offline selective reader for existing benchmark artifacts. The artifact
+/// id is a single manifest-bound directory name, never an arbitrary path.
+/// Opens no connection and reads only bounded report, index, and distilled
+/// plan JSON files; it never reads raw plan XML, queries.jsonl, or source SQL.
 /// </summary>
 public static partial class ArtifactReader
 {
-    public const int CurrentManifestVersion = 1;
+    public const int CurrentManifestVersion = 2;
 
     public const string CompareKind = "compare";
     public const string MeasureKind = "measure";
@@ -117,6 +144,7 @@ public static partial class ArtifactReader
     public const string OperatorsSection = "operators";
     public const string StatementsSection = "statements";
     public const string MatrixCellsSection = "matrix-cells";
+    public const string PlanSection = "plan";
 
     internal const string ReportFileName = "report.json";
     internal const string StatementsFileName = "statements.json";
@@ -129,7 +157,7 @@ public static partial class ArtifactReader
     public const long MaxReportBytes = 16L * 1024 * 1024;
 
     public static readonly IReadOnlyList<string> SupportedSections =
-        [SummarySection, MetricsSection, OperatorsSection, StatementsSection, MatrixCellsSection];
+        [SummarySection, MetricsSection, OperatorsSection, StatementsSection, MatrixCellsSection, PlanSection];
 
     private static readonly IReadOnlySet<string> SupportedKinds =
         new HashSet<string>(StringComparer.Ordinal) { CompareKind, MeasureKind, MeasureSetKind };
@@ -143,15 +171,23 @@ public static partial class ArtifactReader
     /// owner is supplied (MCP always supplies the frozen scope owner;
     /// the offline CLI passes none and keeps reading by name).
     /// </summary>
-    public static object ReadSection(string root, string artifactId, string section, ArtifactOwner? owner = null, int? cursor = null)
+    public static object ReadSection(string root, string artifactId, string section, ArtifactOwner? owner = null, int? cursor = null,
+        ArtifactPlanSelector? planSelector = null, bool includeText = false)
+        => ReadSectionWithMetadata(root, artifactId, section, owner, cursor, planSelector, includeText).Section;
+
+    public static (object Section, string? ProducerOperationRef) ReadSectionWithMetadata(
+        string root, string artifactId, string section, ArtifactOwner? owner = null, int? cursor = null,
+        ArtifactPlanSelector? planSelector = null, bool includeText = false)
     {
         if (!SupportedSections.Contains(section, StringComparer.Ordinal))
             throw new ArtifactReadException(
-                $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, matrix-cells.",
+                $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, matrix-cells, plan.",
                 SqlHarnessExitCode.Safety);
 
-        if (cursor is < 0 || cursor is not null && section != MatrixCellsSection)
+        if (cursor is < 0 || cursor is not null && section is not (MatrixCellsSection or StatementsSection or OperatorsSection or PlanSection))
             throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
+        if (section != PlanSection && (planSelector is not null || includeText))
+            throw new ArtifactReadException("Plan selectors are only valid for the plan section.", SqlHarnessExitCode.Safety);
 
         var directory = ResolveDirectory(root, artifactId);
         var manifest = ReadManifest(directory, artifactId);
@@ -159,22 +195,26 @@ public static partial class ArtifactReader
             throw new ArtifactReadException(
                 "The artifact is not available in the current scope.",
                 SqlHarnessExitCode.Safety);
-        if (!manifest.Sections.Contains(section, StringComparer.Ordinal))
+        if (!manifest.Sections.Contains(section, StringComparer.Ordinal)
+            && !(section == PlanSection && manifest.ArtifactKind is CompareKind or MeasureKind or MeasureSetKind))
             throw new ArtifactReadException(
                 $"Artifact section '{section}' is not available for this artifact.",
                 SqlHarnessExitCode.Safety);
 
-        return section switch
+        var result = section switch
         {
             SummarySection => ReadSummary(directory, artifactId, manifest),
             MetricsSection => ReadMetrics(directory, artifactId, manifest),
-            OperatorsSection => ReadOperators(directory, artifactId, manifest),
-            StatementsSection => ReadStatements(directory, artifactId, manifest),
+            OperatorsSection => ReadOperators(directory, artifactId, manifest, cursor ?? 0),
+            StatementsSection => ReadStatements(directory, artifactId, manifest, cursor ?? 0),
             MatrixCellsSection => ReadMatrixCells(directory, artifactId, cursor ?? 0),
+            PlanSection => ReadPlan(directory, artifactId, manifest, planSelector ?? new ArtifactPlanSelector(DefaultVariant(manifest.ArtifactKind)), cursor ?? 0, includeText),
             _ => throw new ArtifactReadException(
-                $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, matrix-cells.",
+                $"Unknown artifact section '{section}'. Supported sections: summary, metrics, operators, statements, matrix-cells, plan.",
                 SqlHarnessExitCode.Safety),
         };
+        // Producer metadata is exposed only after the scope owner and section have been checked.
+        return (result, manifest.ProducerOperationRef);
     }
 
     private static ArtifactMatrixCellsSection ReadMatrixCells(string directory, string artifactId, int cursor)
@@ -187,28 +227,39 @@ public static partial class ArtifactReader
         try
         {
             using var document = JsonDocument.Parse(ReadBoundedText(path, MaxReportBytes));
-            if (!document.RootElement.TryGetProperty("cells", out var cells)
-                || cells.ValueKind != JsonValueKind.Array
-                || cells.GetArrayLength() > 100_000)
+            var hasCaseInventory = document.RootElement.TryGetProperty("cases", out var cases);
+            var hasLegacyCells = !hasCaseInventory && document.RootElement.TryGetProperty("cells", out cases);
+            if ((!hasCaseInventory && !hasLegacyCells)
+                || cases.ValueKind != JsonValueKind.Array
+                || cases.GetArrayLength() > 100_000)
                 throw new ArtifactReadException("Artifact matrix index is invalid.", SqlHarnessExitCode.Safety);
 
-            if (cursor > cells.GetArrayLength())
+            if (cursor > cases.GetArrayLength())
                 throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
 
             const int pageSize = 32;
-            var page = cells.EnumerateArray().Skip(cursor).Take(pageSize).Select(item =>
+            var page = cases.EnumerateArray().Skip(cursor).Take(pageSize).Select(item =>
             {
                 if (!item.TryGetProperty("index", out var index)
                     || !index.TryGetInt32(out var cellIndex)
+                    || cellIndex < 0
                     || !item.TryGetProperty("artifactId", out var id)
                     || id.ValueKind != JsonValueKind.String
                     || id.GetString() is not { } artifactCellId
                     || !ArtifactIdPattern().IsMatch(artifactCellId))
                     throw new ArtifactReadException("Artifact matrix index is invalid.", SqlHarnessExitCode.Safety);
-                return new ArtifactMatrixCellReference(cellIndex, artifactCellId);
+                var matrixCase = hasLegacyCells
+                    ? new AgentMatrixCase(cellIndex, artifactCellId, null, "unavailable",
+                        new AgentMedianMetrics(null, null, null), new AgentMedianMetrics(null, null, null),
+                        new AgentMedianMetrics(null, null, null), [])
+                    : JsonSerializer.Deserialize<AgentMatrixCase>(item.GetRawText(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                if (matrixCase is null || matrixCase.Index != cellIndex || matrixCase.ArtifactId != artifactCellId
+                    || matrixCase.Baseline is null || matrixCase.Candidate is null || matrixCase.Delta is null || matrixCase.Warnings is null)
+                    throw new ArtifactReadException("Artifact matrix index is invalid.", SqlHarnessExitCode.Safety);
+                return matrixCase;
             }).ToArray();
             var next = cursor + page.Length;
-            return new ArtifactMatrixCellsSection(artifactId, page, next < cells.GetArrayLength() ? next : null, cursor);
+            return new ArtifactMatrixCellsSection(artifactId, page, next < cases.GetArrayLength() ? next : null, cursor);
         }
         catch (ArtifactReadException)
         {
@@ -294,7 +345,7 @@ public static partial class ArtifactReader
             || manifest.Sections.Any(section => !SupportedSections.Contains(section, StringComparer.Ordinal)))
             throw new ArtifactReadException("Artifact manifest is invalid.", SqlHarnessExitCode.Safety);
 
-        if (manifest.ManifestVersion != CurrentManifestVersion)
+        if (manifest.ManifestVersion is < 1 or > CurrentManifestVersion)
             throw new ArtifactReadException(
                 $"Unsupported artifact manifest version {manifest.ManifestVersion}.",
                 SqlHarnessExitCode.Safety);
@@ -334,7 +385,7 @@ public static partial class ArtifactReader
             report.Sets.Select(set => Of(set.Name, set.Metrics)).ToArray());
     }
 
-    private static ArtifactOperatorsSection ReadOperators(string directory, string artifactId, ArtifactManifest manifest)
+    private static ArtifactOperatorsSection ReadOperators(string directory, string artifactId, ArtifactManifest manifest, int cursor)
     {
         IReadOnlyList<NoteworthyOperatorSummary> operators = manifest.ArtifactKind switch
         {
@@ -343,10 +394,170 @@ public static partial class ArtifactReader
             MeasureSetKind => FlattenMeasureSet(ReadReport<SqlHarnessMeasureSetReport>(directory)),
             _ => throw new ArtifactReadException("Artifact manifest is invalid.", SqlHarnessExitCode.Safety),
         };
-        return new ArtifactOperatorsSection(artifactId, manifest.ArtifactKind, operators);
+        if (cursor > operators.Count) throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
+        const int pageSize = 32;
+        var page = operators.Skip(cursor).Take(pageSize).ToArray();
+        return new ArtifactOperatorsSection(artifactId, manifest.ArtifactKind, page)
+        { Cursor = cursor, Continuation = cursor + page.Length < operators.Count ? cursor + page.Length : null };
     }
 
-    private static ArtifactStatementsSection ReadStatements(string directory, string artifactId, ArtifactManifest manifest)
+    private static string DefaultVariant(string artifactKind) => artifactKind switch
+    {
+        CompareKind => "baseline",
+        MeasureKind or MeasureSetKind => "query",
+        _ => throw new ArtifactReadException("A parameter-set variant must be selected for this artifact.", SqlHarnessExitCode.Safety),
+    };
+
+    private static ArtifactPlanSection ReadPlan(string directory, string artifactId, ArtifactManifest manifest,
+        ArtifactPlanSelector selector, int cursor, bool includeText)
+    {
+        if (selector.Statement < 0 || selector.Repetition is < 1)
+            throw new ArtifactReadException("The artifact plan selector is invalid.", SqlHarnessExitCode.Safety);
+        var validVariant = manifest.ArtifactKind switch
+        {
+            CompareKind => selector.Variant is "baseline" or "candidate",
+            MeasureKind => selector.Variant == "query",
+            MeasureSetKind => selector.Variant == "query",
+            _ => false,
+        };
+        if (!validVariant) throw new ArtifactReadException("The artifact plan variant is invalid.", SqlHarnessExitCode.Safety);
+        var storedVariant = selector.Variant == "query" && manifest.ArtifactKind is (MeasureKind or MeasureSetKind)
+            ? "measure"
+            : selector.Variant;
+        var path = Path.Combine(directory, "runs.jsonl");
+        if (!IsPlainFile(path)) throw new ArtifactReadException("Artifact plan index is invalid.", SqlHarnessExitCode.Safety);
+        try
+        {
+            var text = ReadBoundedText(path, MaxReportBytes);
+            var matching = new List<(int Repetition, string? ParameterSet, string[] Files)>();
+            foreach (var line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                using var doc = JsonDocument.Parse(line, new JsonDocumentOptions { MaxDepth = 32 });
+                var row = doc.RootElement;
+                if (row.ValueKind != JsonValueKind.Object)
+                    throw new ArtifactReadException("Artifact plan index is invalid.", SqlHarnessExitCode.Safety);
+                if (!TryString(row, "variant", out var variant) || !TryInt(row, "repetition", out var repetition))
+                    throw new ArtifactReadException("Artifact plan index is invalid.", SqlHarnessExitCode.Safety);
+                var set = TryString(row, "parameterSet", out var parameterSet) ? parameterSet : null;
+                if (variant != storedVariant || selector.ParameterSet is not null
+                    && !string.Equals(set, selector.ParameterSet, StringComparison.Ordinal)) continue;
+                if (!TryGetProperty(row, "planJsonFiles", out var fileList) || fileList.ValueKind != JsonValueKind.Array)
+                    throw new ArtifactReadException("Artifact plan index is incomplete.", SqlHarnessExitCode.Safety);
+                matching.Add((repetition, set, fileList.EnumerateArray().Select(file => file.ValueKind == JsonValueKind.String
+                    ? file.GetString()! : throw new ArtifactReadException("Artifact plan index is invalid.", SqlHarnessExitCode.Safety)).ToArray()));
+            }
+            if (manifest.ArtifactKind == MeasureSetKind && selector.ParameterSet is null && matching.Count > 0)
+            {
+                var selectedSet = matching.Select(item => item.ParameterSet).Where(item => item is not null)
+                    .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).FirstOrDefault();
+                matching = matching.Where(item => item.ParameterSet == selectedSet).ToList();
+            }
+            if (matching.Count == 0)
+                throw new ArtifactReadException("The selected plan variant or parameter set is unavailable.", SqlHarnessExitCode.Safety);
+            var repetitions = matching.Select(item => item.Repetition).Distinct().Order().ToArray();
+            var selectedRepetition = selector.Repetition ?? repetitions[^1];
+            var selectedRun = matching.FirstOrDefault(item => item.Repetition == selectedRepetition);
+            if (selectedRun.Files is null)
+                throw new ArtifactReadException($"Repetition {selectedRepetition} is unavailable; available repetitions: {string.Join(", ", repetitions)}.", SqlHarnessExitCode.Safety);
+            if (selectedRun.Files.Length == 0)
+                throw new ArtifactReadException($"Repetition {selectedRepetition} has no saved plan evidence; available measured repetitions: {string.Join(", ", repetitions)}.", SqlHarnessExitCode.Safety);
+            var plans = ReadRunPlans(directory, selectedRun.Files);
+            var statements = plans.SelectMany(plan => plan.Statements).ToArray();
+            if (statements.Length == 0)
+                throw new ArtifactReadException("The selected repetition contains no saved statement evidence.", SqlHarnessExitCode.Safety);
+            if (selector.Statement >= statements.Length)
+                throw new ArtifactReadException($"Statement {selector.Statement} is unavailable; available statement range: 0..{Math.Max(-1, statements.Length - 1)}.", SqlHarnessExitCode.Safety);
+            var selected = statements[selector.Statement];
+            var allNodes = Flatten(selected.Root, null, "0").ToArray();
+            if (cursor > allNodes.Length) throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
+            const int pageSize = 32;
+            var nodes = allNodes.Skip(cursor).Take(pageSize).Select(node => includeText ? node : node with
+            { Operator = node.Operator with { Predicate = null } }).ToArray();
+            bool? stable = null;
+            var hasComparisonGap = false;
+            if (repetitions.Length >= 2)
+            {
+                var comparable = new List<PlanStatement>();
+                foreach (var repetition in repetitions)
+                {
+                    var run = matching.First(item => item.Repetition == repetition);
+                    try
+                    {
+                        var candidates = ReadRunPlans(directory, run.Files).SelectMany(plan => plan.Statements).ToArray();
+                        if (selector.Statement < candidates.Length) comparable.Add(candidates[selector.Statement]);
+                        else hasComparisonGap = true;
+                    }
+                    catch (Exception exception) when (exception is ArtifactReadException or JsonException)
+                    { hasComparisonGap = true; }
+                }
+                if (comparable.Count >= 2 && !hasComparisonGap)
+                    stable = comparable.All(statement => Shape(statement.Root) == Shape(comparable[0].Root));
+            }
+            return new ArtifactPlanSection(artifactId, selector.Variant, selector.ParameterSet, selector.Statement,
+                statements.Length, selectedRepetition, selector.Repetition is null ? "last-measured" : "explicit",
+                repetitions, stable, allNodes.Length, nodes, cursor + nodes.Length < allNodes.Length ? cursor + nodes.Length : null)
+            {
+                Cursor = cursor,
+                MissingIndexes = cursor == 0 ? selected.MissingIndexes : [],
+                StatementText = includeText && cursor == 0 ? selected.StatementText : null,
+                EvidenceGaps = hasComparisonGap ? ["One or more measured repetitions have incomplete stored plan evidence; shape stability is unavailable."] : []
+            };
+        }
+        catch (ArtifactReadException) { throw; }
+        catch (JsonException) { throw new ArtifactReadException("Stored plan evidence is invalid.", SqlHarnessExitCode.Safety); }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        { throw new ArtifactReadException("Artifact storage is unavailable.", SqlHarnessExitCode.LocalStorage); }
+
+        static IEnumerable<ArtifactPlanNode> Flatten(PlanNode node, string? parent, string path)
+        {
+            yield return new ArtifactPlanNode(path, parent, node with { Children = [] });
+            for (var index = 0; index < node.Children.Count; index++)
+                foreach (var child in Flatten(node.Children[index], path, path + "/" + index)) yield return child;
+        }
+        static string Shape(PlanNode root) => JsonSerializer.Serialize(Flatten(root, null, "0").Select(node => new[]
+        {
+            node.Operator.PhysicalOp, node.Operator.LogicalOp, node.Operator.ObjectName, node.Operator.IndexName, node.Operator.Predicate,
+        }));
+    }
+
+    private static IReadOnlyList<DistilledPlan> ReadRunPlans(string directory, IReadOnlyList<string> names)
+    {
+        if (names.Count > 100_000) throw new ArtifactReadException("Artifact plan index is invalid.", SqlHarnessExitCode.Safety);
+        var plans = new List<DistilledPlan>();
+        foreach (var name in names)
+        {
+            if (name.Length > 256 || !name.EndsWith(".plan.json", StringComparison.Ordinal)
+                || !string.Equals(name, Path.GetFileName(name), StringComparison.Ordinal))
+                throw new ArtifactReadException("Artifact plan index is invalid.", SqlHarnessExitCode.Safety);
+            var plansDirectory = Path.Combine(directory, "plans");
+            if (!IsPlainDirectory(plansDirectory)) throw new ArtifactReadException("Stored plan evidence is missing.", SqlHarnessExitCode.Safety);
+            var planPath = Path.Combine(plansDirectory, name);
+            if (!IsPlainFile(planPath)) throw new ArtifactReadException("Stored plan evidence is missing.", SqlHarnessExitCode.Safety);
+            plans.Add(StoredPlanReader.Read(ReadBoundedText(planPath, MaxReportBytes)));
+        }
+        return plans;
+    }
+
+    private static bool TryString(JsonElement element, string name, out string value)
+    {
+        value = string.Empty;
+        return TryGetProperty(element, name, out var property) && property.ValueKind == JsonValueKind.String
+            && (value = property.GetString()!) is not null;
+    }
+    private static bool TryInt(JsonElement element, string name, out int value)
+    {
+        value = 0;
+        return TryGetProperty(element, name, out var property) && property.TryGetInt32(out value);
+    }
+    private static bool TryGetProperty(JsonElement element, string name, out JsonElement value)
+    {
+        if (element.TryGetProperty(name, out value)) return true;
+        foreach (var property in element.EnumerateObject())
+            if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)) { value = property.Value; return true; }
+        value = default; return false;
+    }
+
+    private static ArtifactStatementsSection ReadStatements(string directory, string artifactId, ArtifactManifest manifest, int cursor)
     {
         var path = Path.Combine(directory, StatementsFileName);
         if (!IsPlainFile(path))
@@ -360,7 +571,16 @@ public static partial class ArtifactReader
                 || section.Statements.Any(statement => statement is null || statement.StatementHash is null
                     || statement.Variant is null || statement.TopOperators is null))
                 throw new ArtifactReadException("Artifact statements are invalid.", SqlHarnessExitCode.Safety);
-            return section with { ArtifactId = artifactId, ArtifactKind = manifest.ArtifactKind };
+            if (cursor > section.Statements.Count)
+                throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
+            return section with
+            {
+                ArtifactId = artifactId,
+                ArtifactKind = manifest.ArtifactKind,
+                Statements = section.Statements.Skip(cursor).ToArray(),
+                Continuation = null,
+                Cursor = cursor,
+            };
         }
         catch (ArtifactReadException)
         {
@@ -449,6 +669,17 @@ public static partial class ArtifactReader
         {
             return false;
         }
+    }
+
+    private static bool IsPlainDirectory(string path)
+    {
+        try
+        {
+            var info = new DirectoryInfo(path);
+            return info.Exists && (info.Attributes & FileAttributes.Directory) != 0 && !IsLinkOrReparse(info);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        { return false; }
     }
 
     private static string ReadBoundedText(string path, long maxBytes)

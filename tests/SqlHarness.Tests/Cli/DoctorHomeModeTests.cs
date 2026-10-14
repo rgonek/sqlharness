@@ -1,7 +1,9 @@
+using System.Runtime.Versioning;
 using System.Text.Json;
 
 using SqlHarness.Cli;
 using SqlHarness.Core;
+using SqlHarness.Tests;
 
 namespace SqlHarness.Tests.Cli;
 
@@ -26,12 +28,10 @@ public sealed class DoctorHomeModeTests : IDisposable
         }
     }
 
-    [Fact]
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
     public async Task Doctor_warns_when_an_existing_home_is_broad()
     {
-        if (OperatingSystem.IsWindows())
-            return;
-
         File.SetUnixFileMode(_home, (UnixFileMode)0b111_101_101);
 
         var output = new StringWriter();
@@ -48,12 +48,10 @@ public sealed class DoctorHomeModeTests : IDisposable
         Assert.Contains(_home, warnings[0].GetString() ?? string.Empty, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
     public async Task Does_not_warn_about_a_private_home()
     {
-        if (OperatingSystem.IsWindows())
-            return;
-
         File.SetUnixFileMode(_home, (UnixFileMode)0b111_000_000);
 
         var output = new StringWriter();

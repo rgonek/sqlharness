@@ -104,7 +104,7 @@ internal static class SetupSqlExecution
         IReadOnlyList<SqlHarnessParameter> parameters,
         int timeoutSeconds,
         ISqlSession session,
-        CanonicalResultAccumulator raw,
+        CanonicalResultAccumulator? raw,
         CancellationToken ct,
         SqlSafetyDecision? setupSafety = null)
     {
@@ -163,7 +163,8 @@ internal static class SetupSqlExecution
 
         for (var index = firstParameterReferenceIndex; index < statements.Count; index++)
         {
-            if (IsTempCreatingStatement(statements[index]))
+            if (SqlServerControlFlowTraversal.Flatten([statements[index]])
+                .Any(IsTempCreatingStatement))
             {
                 throw new SetupSqlShapeException(
                     "Setup creates a session-local temp table at or after a statement that references a parameter. " +
@@ -224,7 +225,7 @@ internal static class SetupSqlExecution
     private static bool StatementReferencesParameter(TSqlStatement statement, TSqlBatch batch)
     {
         var locals = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var declaration in batch.Statements)
+        foreach (var declaration in SqlServerControlFlowTraversal.Flatten(batch.Statements))
         {
             if (declaration is DeclareVariableStatement declare)
             {

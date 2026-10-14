@@ -6,7 +6,7 @@
 
 ## Status
 
-- Status: TODO
+- Status: IN PROGRESS — user-confirmed 2026-10-13; execute the whole plan.
 - Priority: P2 (PostgreSQL queue)
 - Effort: M
 - Risk: MED

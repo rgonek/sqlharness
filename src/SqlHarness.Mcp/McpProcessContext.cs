@@ -19,8 +19,10 @@ public sealed class McpProcessContext
         McpScope? fixedScope,
         IReadOnlyList<string> inputRoots,
         int maxResultBytes,
-        int maxOperationSeconds)
+        int maxOperationSeconds,
+        string configurationRef)
     {
+        ConfigurationRef = configurationRef;
         RequestScope = requestScope;
         Profiles = profiles;
         AllowedProfiles = allowedProfiles;
@@ -28,8 +30,10 @@ public sealed class McpProcessContext
         InputRoots = inputRoots;
         MaxResultBytes = maxResultBytes;
         MaxOperationSeconds = maxOperationSeconds;
-        Gate = new McpExecutionGate();
     }
+
+    /// <summary>Opaque random identity of this process configuration; every page and call returns the same value.</summary>
+    public string ConfigurationRef { get; }
 
     public bool RequestScope { get; }
     public IReadOnlyDictionary<string, TargetProfile> Profiles { get; }
@@ -38,7 +42,6 @@ public sealed class McpProcessContext
     public IReadOnlyList<string> InputRoots { get; }
     public int MaxResultBytes { get; }
     public int MaxOperationSeconds { get; }
-    public McpExecutionGate Gate { get; }
 
     private Func<ISqlHarnessModule, ISqlHarnessModule> _decorator = static module => module;
 
@@ -84,7 +87,8 @@ public sealed class McpProcessContext
                 null,
                 roots,
                 options.MaxResultBytes,
-                options.MaxOperationSeconds);
+                options.MaxOperationSeconds,
+                McpScope.NewConfigurationRef());
         }
 
         if (allowedProfiles.Count != 0)
@@ -97,7 +101,8 @@ public sealed class McpProcessContext
             fixedScope,
             roots,
             options.MaxResultBytes,
-            options.MaxOperationSeconds);
+            options.MaxOperationSeconds,
+            fixedScope.ConfigurationRef);
     }
 
     /// <summary>
@@ -176,7 +181,8 @@ public sealed class McpProcessContext
             InputRoots,
             Profiles,
             MaxResultBytes,
-            MaxOperationSeconds);
+            MaxOperationSeconds,
+            ConfigurationRef);
     }
 
     /// <summary>Installs the host's module decorator (activity journal); call before wiring tools.</summary>

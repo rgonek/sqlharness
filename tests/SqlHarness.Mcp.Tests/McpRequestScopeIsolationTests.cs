@@ -77,60 +77,32 @@ public sealed class McpRequestScopeIsolationTests : IDisposable
         File.WriteAllText(Path.Combine(directory, name + ".json"), json);
     }
 
-    private sealed class RecordingModule : ISqlHarnessModule
-    {
-        public List<SqlHarnessOperation> Operations { get; } = [];
-        public Func<SqlHarnessOperation, CancellationToken, Task<SqlHarnessOutcome>>? Behavior { get; init; }
-
-        public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default)
-        {
-            lock (Operations) Operations.Add(operation);
-            return Behavior is null
-                ? Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null))
-                : Behavior(operation, ct);
-        }
-    }
-
     [Fact]
-    public async Task Request_facade_uses_one_process_gate_across_distinct_scopes()
+    public async Task Concurrent_queries_on_two_request_scopes_each_return_their_own_database()
     {
         var process = Process();
-        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var connections = 0;
-        var module = new RecordingModule
-        {
-            Behavior = async (_, token) =>
-            {
-                Interlocked.Increment(ref connections);
-                entered.TrySetResult();
-                await release.Task.WaitAsync(token);
-                return new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null);
-            },
-        };
-        var handlers = new McpRequestToolHandlers(process, moduleFactory: _ => module);
+        var sessions = new CoreSessionFactory(blockedSessions: 2);
+        var handlers = new McpRequestToolHandlers(process, moduleFactory: scope => new SqlHarnessModule(sessions, scope.ProfileProvider));
+        var budget = TimeSpan.FromSeconds(30);
 
-        var first = handlers.QueryAsync(null!, Scope("sample-a"), "SELECT 1");
-        var firstOutcome = await Task.WhenAny(entered.Task, first).WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.True(ReferenceEquals(entered.Task, firstOutcome), first.IsCompleted ? Text(await first) : "The fake module was not entered.");
-        var busy = await handlers.QueryAsync(null!, Scope("sample-b"), "SELECT 2");
+        var first = handlers.QueryAsync(null!, Scope("sample-a"), "SELECT 1 AS A");
+        await sessions.SessionEntered(1).WaitAsync(budget);
+        var second = handlers.QueryAsync(null!, Scope("sample-b"), "SELECT 2 AS A");
+        // A second call that returns before reaching Core was rejected, not run.
+        await Task.WhenAny(sessions.SessionEntered(2), second).WaitAsync(budget);
+        Assert.False(second.IsCompleted, second.IsCompleted ? Text(await second) : null);
 
-        Assert.True(busy.IsError == true, Text(busy));
-        Assert.Equal(McpExecutionGate.BusyCode, Envelope(busy).GetProperty("error").GetProperty("code").GetString());
-        Assert.Single(module.Operations);
-        Assert.Equal(1, Volatile.Read(ref connections));
-        var operation = Assert.IsType<SqlHarnessQueryOperation>(Assert.Single(module.Operations));
-        Assert.Equal("sample-a", operation.Target.Profile);
-        Assert.Equal("server-a", process.ResolveScope(new McpRequestScope("sample-a", new Dictionary<string, string> { ["tenant"] = "example" })).ResolvedTarget.Server);
+        // Both scopes are executing inside Core at the same time.
+        Assert.Equal(["database-a", "database-b"], sessions.Targets.Select(target => target.Database));
+        sessions.ReleaseSession(2);
+        sessions.ReleaseSession(1);
+        var secondResult = await second.WaitAsync(budget);
+        var firstResult = await first.WaitAsync(budget);
 
-        release.TrySetResult();
-        Assert.False((await first).IsError == true);
-
-        var second = await handlers.QueryAsync(null!, Scope("sample-b"), "SELECT 3");
-        Assert.False(second.IsError == true, Text(second));
-        Assert.Equal(2, module.Operations.Count);
-        Assert.Equal(2, Volatile.Read(ref connections));
-        Assert.Equal("sample-b", Assert.IsType<SqlHarnessQueryOperation>(module.Operations[1]).Target.Profile);
+        Assert.False(firstResult.IsError == true, Text(firstResult));
+        Assert.False(secondResult.IsError == true, Text(secondResult));
+        Assert.Equal("database-a", Envelope(firstResult).GetProperty("result").GetProperty("database").GetString());
+        Assert.Equal("database-b", Envelope(secondResult).GetProperty("result").GetProperty("database").GetString());
     }
 
     [Fact]

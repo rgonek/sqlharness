@@ -18,6 +18,84 @@ public class SqlSafetyTests
         Assert.True(ClassifyQuery(sql).Allowed);
 
     [Theory]
+    [InlineData("DECLARE @UseGroup bit = 0; IF (@UseGroup = 1) BEGIN SELECT 1 AS A; END ELSE BEGIN SELECT 2 AS A; END;")]
+    [InlineData("DECLARE @X int = 1; IF @X = 1 SELECT 1 AS A;")]
+    [InlineData("DECLARE @X int = 1; IF @X = 1 BEGIN IF @X = 2 SELECT 1 AS A; ELSE SELECT 2 AS A; END")]
+    [InlineData("BEGIN SELECT 1 AS A; END")]
+    public void Query_allows_branching_reads(string sql) =>
+        Assert.True(ClassifyQuery(sql).Allowed);
+
+    [Fact]
+    public void Query_allows_temp_work_inside_branches()
+    {
+        var decision = ClassifyQuery("DECLARE @X int = 1; CREATE TABLE #t (Id int); IF @X = 1 BEGIN INSERT #t VALUES (1); END ELSE BEGIN INSERT #t VALUES (2); END; SELECT Id FROM #t;");
+        Assert.True(decision.Allowed);
+    }
+
+    [Fact]
+    public void Variable_declared_inside_a_block_is_in_batch_scope()
+    {
+        var decision = ClassifyQuery("IF 1 = 1 BEGIN DECLARE @Limit int = 5; END; SET @Limit = 6; SELECT @Limit AS L;");
+        Assert.True(decision.Allowed);
+    }
+
+    [Fact]
+    public void Table_variable_used_in_a_branch_before_its_declaration_is_denied()
+    {
+        var decision = ClassifyQuery("IF 1 = 1 BEGIN SELECT Id FROM @ids; END; DECLARE @ids TABLE (Id int);");
+        Assert.False(decision.Allowed);
+    }
+
+    [Fact]
+    public void Table_variable_declared_in_a_branch_and_used_later_is_allowed()
+    {
+        var decision = ClassifyQuery("IF 1 = 1 BEGIN DECLARE @ids TABLE (Id int); INSERT @ids VALUES (1); END; SELECT Id FROM @ids;");
+        Assert.True(decision.Allowed);
+    }
+
+    [Fact]
+    public void Compare_setup_allows_read_only_control_flow()
+    {
+        var decision = _classifier.Classify(
+            "IF 1 = 1 BEGIN SELECT 1 AS A; END ELSE BEGIN SELECT 2 AS A; END;",
+            SqlUsage.CompareSetup,
+            "db",
+            false,
+            null);
+        Assert.True(decision.Allowed);
+    }
+
+    [Theory]
+    [InlineData("IF 1 = 0 UPDATE dbo.Clients SET Active = 0;")]
+    [InlineData("IF 1 = 1 SELECT 1 AS A; ELSE DELETE dbo.Clients;")]
+    [InlineData("IF 1 = 1 BEGIN SELECT 1 AS A; END ELSE BEGIN INSERT dbo.Clients (Id) VALUES (1); END")]
+    public void Query_denies_a_persistent_write_in_any_branch(string sql)
+    {
+        var decision = _classifier.Classify(sql, SqlUsage.Query, "db", false, null);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.MutationNotAllowed, decision.Reason);
+    }
+
+    [Theory]
+    [InlineData("IF EXISTS (SELECT 1 FROM OtherDb.dbo.Clients) SELECT 1 AS A;")]
+    [InlineData("IF 1 = 1 EXEC dbo.DoWork;")]
+    [InlineData("IF 1 = 1 SELECT * FROM OPENROWSET('SQLNCLI', 'x', 'SELECT 1');")]
+    public void Query_denies_unsafe_content_in_predicates_and_branches(string sql) =>
+        Assert.False(ClassifyQuery(sql).Allowed);
+
+    [Theory]
+    [InlineData("WHILE 1 = 0 SELECT 1 AS A;", "WhileStatement")]
+    [InlineData("BEGIN TRY SELECT 1 AS A; END TRY BEGIN CATCH SELECT 2 AS A; END CATCH", "TryCatchStatement")]
+    [InlineData("IF 1 = 1 WAITFOR DELAY '00:00:01';", "WaitForStatement")]
+    [InlineData("IF 1 = 1 RETURN;", "ReturnStatement")]
+    public void Query_still_denies_other_control_flow(string sql, string kind)
+    {
+        var decision = ClassifyQuery(sql);
+        Assert.False(decision.Allowed);
+        Assert.StartsWith(kind, decision.Detail);
+    }
+
+    [Theory]
     [InlineData("CREATE TABLE #ids(Id int)")]
     [InlineData("INSERT #ids(Id) VALUES (1)")]
     [InlineData("UPDATE #ids SET Id = 2")]
@@ -74,6 +152,31 @@ public class SqlSafetyTests
     [Fact]
     public void Query_denies_stateful_NEXT_VALUE_FOR_expression() =>
         Assert.False(ClassifyQuery("SELECT NEXT VALUE FOR dbo.Seq").Allowed);
+
+    [Fact]
+    public void Unsupported_statement_names_its_kind_and_line()
+    {
+        var decision = ClassifyQuery("SELECT 1 AS A;\nWHILE 1 = 0 BEGIN SELECT 2 AS B; END;");
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.Equal("WhileStatement at line 2", decision.Detail);
+    }
+
+    [Fact]
+    public void Compare_setup_unsupported_statement_names_its_kind_and_line()
+    {
+        var decision = _classifier.Classify(
+            "SELECT 1 AS A;\nWHILE 1 = 0 BEGIN SELECT 2 AS B; END;",
+            SqlUsage.CompareSetup,
+            "db",
+            false,
+            null);
+
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+        Assert.Equal("WhileStatement at line 2", decision.Detail);
+    }
 
     [Theory]
     [InlineData(false)]
@@ -1060,6 +1163,8 @@ public class SqlSafetyTests
     [InlineData("DECLARE @t TABLE (Id int IDENTITY(1,1), Name nvarchar(20) DEFAULT N'x'); INSERT @t DEFAULT VALUES")]
     [InlineData("DECLARE @t TABLE (Id int IDENTITY(1,1)); INSERT INTO @t DEFAULT VALUES; SELECT Id FROM @t")]
     [InlineData("DECLARE @t TABLE (Id int); INSERT @T (Id) VALUES (1); SELECT Id FROM @T")]
+    [InlineData("BEGIN DECLARE @t TABLE (Id int) END; INSERT @t (Id) VALUES (1)")]
+    [InlineData("IF 1 = 1 BEGIN DECLARE @t TABLE (Id int) END; SELECT Id FROM @t")]
     public void T3b_Query_allows_less_common_proven_table_variable_shapes(string sql)
     {
         var decision = ClassifyQuery(sql);
@@ -1077,8 +1182,6 @@ public class SqlSafetyTests
     [InlineData("MERGE INTO @x USING (SELECT 1 AS SrcId) AS src ON Id = src.SrcId WHEN NOT MATCHED THEN INSERT (Id) VALUES (src.SrcId);")]
     [InlineData("INSERT @x DEFAULT VALUES")]
     [InlineData("DECLARE @x AS int; INSERT @x DEFAULT VALUES")]
-    [InlineData("BEGIN DECLARE @t TABLE (Id int) END; INSERT @t (Id) VALUES (1)")]
-    [InlineData("IF 1 = 1 BEGIN DECLARE @t TABLE (Id int) END; SELECT Id FROM @t")]
     [InlineData("DECLARE @v dbo.SomeType; SELECT Id FROM @v")]
     public void T3b_Query_denies_less_common_unproven_table_variable_shapes(string sql)
     {

@@ -33,6 +33,15 @@ public class SqlParameterMatrixTests
     }
 
     [Fact]
+    public void Matrix_name_accepts_an_optional_at_sign()
+    {
+        var matrix = SqlParameterMatrixParser.Parse("@BatchSize:int=1,20", []);
+
+        Assert.Equal("@BatchSize", matrix.Name);
+        Assert.All(matrix.Values, value => Assert.Equal("@BatchSize", value.Name));
+    }
+
+    [Fact]
     public void Decimal_type_comma_is_not_a_value_separator()
     {
         using var _ = new TemporaryCulture("pl-PL");
@@ -209,7 +218,6 @@ public class SqlParameterMatrixTests
 
     [Theory]
     [InlineData("bad-name:int=1,2", "The --matrix option is invalid.")]
-    [InlineData("@BatchSize:int=1,2", "The --matrix option is invalid.")]
     [InlineData("BatchSize=1,2", "The --matrix option for SQL parameter '@BatchSize' requires a type.")]
     [InlineData("BatchSize:=1,2", "The --matrix option for SQL parameter '@BatchSize' requires a type.")]
     [InlineData("BatchSize:xml=1,2", "The --matrix option for SQL parameter '@BatchSize' is invalid.")]
@@ -282,13 +290,13 @@ public class SqlParameterMatrixTests
             ["a=x", "b:int=42", "c:null", "d:int:null", "e=null", "f=", "g:nvarchar=p:q=r,s", "h:varchar(5):null"]);
 
         Assert.Equal(["@a", "@b", "@c", "@d", "@e", "@f", "@g", "@h"], parameters.Select(parameter => parameter.Name));
-        Assert.Equal((SqlDbType.NVarChar, "x", 1), (parameters[0].Type, parameters[0].Value, parameters[0].Size));
+        Assert.Equal((SqlDbType.NVarChar, "x", 4000), (parameters[0].Type, parameters[0].Value, parameters[0].Size));
         Assert.Equal((SqlDbType.Int, 42, null), (parameters[1].Type, parameters[1].Value, parameters[1].Size));
-        Assert.Equal((SqlDbType.NVarChar, DBNull.Value, null), (parameters[2].Type, parameters[2].Value, parameters[2].Size));
+        Assert.Equal((SqlDbType.NVarChar, DBNull.Value, 4000), (parameters[2].Type, parameters[2].Value, parameters[2].Size));
         Assert.Equal((SqlDbType.Int, DBNull.Value, null), (parameters[3].Type, parameters[3].Value, parameters[3].Size));
-        Assert.Equal((SqlDbType.NVarChar, "null", 4), (parameters[4].Type, parameters[4].Value, parameters[4].Size));
-        Assert.Equal((SqlDbType.NVarChar, "", 1), (parameters[5].Type, parameters[5].Value, parameters[5].Size));
-        Assert.Equal((SqlDbType.NVarChar, "p:q=r,s", 7), (parameters[6].Type, parameters[6].Value, parameters[6].Size));
+        Assert.Equal((SqlDbType.NVarChar, "null", 4000), (parameters[4].Type, parameters[4].Value, parameters[4].Size));
+        Assert.Equal((SqlDbType.NVarChar, "", 4000), (parameters[5].Type, parameters[5].Value, parameters[5].Size));
+        Assert.Equal((SqlDbType.NVarChar, "p:q=r,s", 4000), (parameters[6].Type, parameters[6].Value, parameters[6].Size));
         Assert.Equal((SqlDbType.VarChar, DBNull.Value, 5), (parameters[7].Type, parameters[7].Value, parameters[7].Size));
     }
 
@@ -296,10 +304,10 @@ public class SqlParameterMatrixTests
     [InlineData("name", "SQL parameter must use name=value, name:type=value, name:null, or name:type:null syntax.")]
     [InlineData(":null", "SQL parameter must use name=value, name:type=value, name:null, or name:type:null syntax.")]
     [InlineData("name:int:nil", "SQL parameter must use name=value, name:type=value, name:null, or name:type:null syntax.")]
-    [InlineData("=value", "Invalid SQL parameter name.")]
-    [InlineData("bad-name:int=1", "Invalid SQL parameter name.")]
-    [InlineData("bad-name:null", "Invalid SQL parameter name.")]
-    [InlineData("bad-name:int:null", "Invalid SQL parameter name.")]
+    [InlineData("=value", "Invalid SQL parameter name ''.")]
+    [InlineData("bad-name:int=1", "Invalid SQL parameter name 'bad-name'.")]
+    [InlineData("bad-name:null", "Invalid SQL parameter name 'bad-name'.")]
+    [InlineData("bad-name:int:null", "Invalid SQL parameter name 'bad-name'.")]
     [InlineData("name:xml=1", "Unsupported SQL parameter type 'xml'.")]
     [InlineData("name:xml:null", "Unsupported SQL parameter type 'xml'.")]
     [InlineData("name::null", "Unsupported SQL parameter type ''.")]
@@ -309,12 +317,21 @@ public class SqlParameterMatrixTests
     [InlineData("name:nchar(max):null", "Unsupported SQL parameter type 'nchar(max)'.")]
     [InlineData("name:int=", "Invalid value '' for SQL parameter 'name' of type 'int'.")]
     [InlineData("name:int=nope", "Invalid value 'nope' for SQL parameter 'name' of type 'int'.")]
-    [InlineData("name:char=", "Invalid value '' for SQL parameter 'name' of type 'char'.")]
     public void Legacy_declaration_rejections_keep_their_text(string input, string expected)
     {
         var exception = Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterParser.ParseOne(input));
 
         Assert.Equal(expected, exception.Message);
+    }
+
+    [Fact]
+    public void Unsized_char_accepts_empty_string_with_default_size()
+    {
+        var parameter = SqlParameterParser.ParseOne("name:char=");
+
+        Assert.Equal(SqlDbType.Char, parameter.Type);
+        Assert.Equal(string.Empty, parameter.Value);
+        Assert.Equal(4000, parameter.Size);
     }
 
     [Theory]
@@ -402,9 +419,8 @@ public class SqlParameterMatrixTests
     }
 
     [Theory]
-    [InlineData("a:b", "int", "1", "Invalid SQL parameter name.")]
-    [InlineData("a=b", null, "1", "Invalid SQL parameter name.")]
-    [InlineData("@a", "int", "1", "Invalid SQL parameter name.")]
+    [InlineData("a:b", "int", "1", "Invalid SQL parameter name 'a:b'.")]
+    [InlineData("a=b", null, "1", "Invalid SQL parameter name 'a=b'.")]
     [InlineData("a", "", "1", "Unsupported SQL parameter type ''.")]
     [InlineData("a", "int", "", "Invalid value '' for SQL parameter 'a' of type 'int'.")]
     [InlineData("a", "int", "private,audit", "Invalid value 'private,audit' for SQL parameter 'a' of type 'int'.")]
@@ -508,69 +524,6 @@ public class SqlParameterMatrixTests
 
         Assert.Equal("The --matrix option for SQL parameter '@BatchSize' requires at least two values.", exception.Message);
     }
-
-    // Offline validation: the typed list and the declaration text end in the same binder.
-    [Theory]
-    [InlineData("sqlserver", "int", "42", "id:int=42", true, null)]
-    [InlineData("postgres", "int", "42", "id:int=42", true, null)]
-    [InlineData("sqlserver", "int", "x1", "id:int=x1", false, "parameter_validation_failed")]
-    [InlineData("sqlserver", "frobnicate", "1", "id:frobnicate=1", false, "parameter_validation_failed")]
-    [InlineData("postgres", "money", "5", "id:money=5", false, "parameter_validation_failed")]
-    [InlineData("sqlserver", "nvarchar", null, "id:nvarchar:null", true, null)]
-    public void Validation_gives_typed_parameters_the_verdict_of_the_declaration_text(
-        string engine, string type, string? value, string declaration, bool allowed, string? reason)
-    {
-        var (request, profiles) = ValidationTarget(engine);
-
-        var text = SqlValidation.Validate(request, "SELECT @id;", [declaration], profiles, new ValidationOptions());
-        var typed = SqlValidation.Validate(
-            request, "SELECT @id;", [], profiles,
-            new ValidationOptions { TypedParameters = [new SqlHarnessParameterInput("id", type, value)] });
-
-        Assert.Equal(allowed, typed.Allowed);
-        Assert.Equal(reason, typed.Reason);
-        Assert.Equal(text.Allowed, typed.Allowed);
-        Assert.Equal(text.Reason, typed.Reason);
-        Assert.Equal(text.Parameters, typed.Parameters);
-    }
-
-    [Theory]
-    [InlineData("a,b")]
-    [InlineData("a=b:c")]
-    [InlineData("")]
-    public void Validation_binds_a_typed_value_whole(string value)
-    {
-        var (request, profiles) = ValidationTarget("sqlserver");
-
-        var report = SqlValidation.Validate(
-            request, "SELECT @note;", [], profiles,
-            new ValidationOptions { TypedParameters = [new SqlHarnessParameterInput("note", "nvarchar", value)] });
-
-        Assert.True(report.Allowed);
-        Assert.Equal([new SqlValidationParameter("note", "nvarchar")], report.Parameters);
-    }
-
-    [Fact]
-    public void Validation_rejects_declaration_text_together_with_typed_parameters()
-    {
-        var (request, profiles) = ValidationTarget("sqlserver");
-
-        var report = SqlValidation.Validate(
-            request, "SELECT @id;", ["id:int=1"], profiles,
-            new ValidationOptions { TypedParameters = [new SqlHarnessParameterInput("id", "int", "1")] });
-
-        Assert.False(report.Allowed);
-        Assert.Equal("parameter_validation_failed", report.Reason);
-    }
-
-    private static (SqlTargetRequest Request, Dictionary<string, TargetProfile> Profiles) ValidationTarget(string engine) =>
-        (new SqlTargetRequest("test", new Dictionary<string, string>()),
-            new Dictionary<string, TargetProfile>
-            {
-                ["test"] = new(
-                    "server-unused", "database-unused", new Dictionary<string, string>(),
-                    "sql", "user-unused", "MUST_NOT_BE_READ", Engine: engine),
-            });
 
     private static SqlHarnessSafetyException Reject(string input, params string[] fixedParameters) =>
         Assert.Throws<SqlHarnessSafetyException>(() => SqlParameterMatrixParser.Parse(input, fixedParameters));

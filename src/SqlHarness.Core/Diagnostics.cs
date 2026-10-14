@@ -7,6 +7,24 @@ namespace SqlHarness.Core;
 
 internal sealed record StatisticsIo(long LogicalReads, IReadOnlyDictionary<string, long> Tables);
 
+internal static partial class TempTableKey
+{
+    internal static string Normalize(string table)
+    {
+        var bracketed = Bracketed().Match(table);
+        if (bracketed.Success)
+            return bracketed.Groups["head"].Value + "]";
+        var bare = Bare().Match(table);
+        return bare.Success ? bare.Groups["head"].Value : table;
+    }
+
+    [GeneratedRegex(@"^(?<head>(?:\[[^\]]+\]\.)?\[#.+?)_{2,}[0-9A-Fa-f]{12}\]$", RegexOptions.CultureInvariant)]
+    private static partial Regex Bracketed();
+
+    [GeneratedRegex(@"^(?<head>#.+?)_{2,}[0-9A-Fa-f]{12}$", RegexOptions.CultureInvariant)]
+    private static partial Regex Bare();
+}
+
 internal static class StatisticsIoParser
 {
     private static readonly Regex IoLine = new(
@@ -23,7 +41,7 @@ internal static class StatisticsIoParser
 
         foreach (Match match in IoLine.Matches(text))
         {
-            var table = match.Groups["table"].Value.Replace("''", "'", StringComparison.Ordinal);
+            var table = TempTableKey.Normalize(match.Groups["table"].Value.Replace("''", "'", StringComparison.Ordinal));
             var reads = ParseLong(match.Groups["logical"].Value);
             var lobMatch = LobLogicalReads.Match(match.Groups["tail"].Value);
             if (lobMatch.Success)
@@ -75,7 +93,7 @@ internal static class StatisticsIoDetailParser
         var order = new List<string>();
         foreach (Match line in TableLine.Matches(text))
         {
-            var table = line.Groups["table"].Value.Replace("''", "'", StringComparison.Ordinal);
+            var table = TempTableKey.Normalize(line.Groups["table"].Value.Replace("''", "'", StringComparison.Ordinal));
             var values = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
             foreach (var segment in line.Groups["counters"].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
             {

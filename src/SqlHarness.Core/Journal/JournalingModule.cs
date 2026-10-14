@@ -47,6 +47,7 @@ public sealed class JournalingModule : ISqlHarnessModule
 
     private async Task<SqlHarnessOutcome> RunAsync(SqlHarnessOperation operation, Func<SqlHarnessOperation, Task<SqlHarnessOutcome>> run, CancellationToken ct)
     {
+        operation = SqlHarnessOperationReferences.Ensure(operation);
         var journal = _journal.Value;
         var handle = Begin(journal, operation, ct);
         var effective = journal is not null && handle is not null && operation is SqlHarnessWatchOperation watch
@@ -74,7 +75,7 @@ public sealed class JournalingModule : ISqlHarnessModule
         if (ct.IsCancellationRequested && IsCancellableFailure(outcome.ExitCode))
         {
             Complete(journal, handle, () => OperationJournalDescriber.Cancelled(stopwatch.ElapsedMilliseconds, Reason(ct)));
-            return outcome;
+            return outcome with { OperationRef = operation.OperationRef };
         }
 
         var completed = Complete(journal, handle, () => OperationJournalDescriber.DescribeEnd(outcome, stopwatch.ElapsedMilliseconds));
@@ -84,7 +85,7 @@ public sealed class JournalingModule : ISqlHarnessModule
         // A failed completion (busy or broken journal) skips the emission write, so one
         // operation never waits on a locked journal a second time.
         if (!completed || journal is null || handle is null || outcome.EmissionReceipt is not { } inner)
-            return outcome;
+            return outcome with { OperationRef = operation.OperationRef };
 
         var wrapped = new SqlHarnessEmissionReceipt(async (emitted, ct) =>
         {
@@ -103,7 +104,7 @@ public sealed class JournalingModule : ISqlHarnessModule
         {
             RawFootprint = inner.RawFootprint,
         };
-        return outcome with { EmissionReceipt = wrapped };
+        return outcome with { EmissionReceipt = wrapped, OperationRef = operation.OperationRef };
     }
 
     private JournalHandle? Begin(IActivityJournal? journal, SqlHarnessOperation operation, CancellationToken ct)

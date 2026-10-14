@@ -1,4 +1,5 @@
 using System.IO.Pipelines;
+using System.Text.Json;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -9,6 +10,7 @@ using ModelContextProtocol.Protocol;
 using SqlHarness.Core;
 using SqlHarness.Core.Targets;
 using SqlHarness.Mcp;
+using SqlHarness.Mcp.Tools;
 
 namespace SqlHarness.Mcp.Tests;
 
@@ -36,6 +38,71 @@ public sealed class McpJournalTests : IDisposable
     }
 
     public static TheoryData<string> Modes => new() { "fixed", "request" };
+
+    [Fact]
+    public async Task Artifact_tool_journals_own_and_parent_references_for_success_and_failure()
+    {
+        var profile = new TargetProfile("artifact-host.invalid", "artifact-db", new Dictionary<string, string>(), "integrated");
+        var scope = McpScope.Create(new McpServerOptions { Profile = "artifact-profile" },
+            new Dictionary<string, TargetProfile> { ["artifact-profile"] = profile });
+        var successId = WriteArtifact("journal-artifact-success", scope.Owner, "artifact-producer-success");
+        var failureId = WriteArtifact("journal-artifact-failure", scope.Owner with { Profile = "other-profile" }, "artifact-producer-secret");
+        var journal = ActivityJournal.Open(new JournalConfig(), TextWriter.Null);
+        var module = new JournalingModule(new SqlHarnessModule(), () => journal,
+            () => new SessionIdentity("mcp:artifact-test", "codex", "mcp-clientinfo", JournalTransport.Mcp,
+                "codex-test", "1", "fixed", Environment.ProcessId, DateTimeOffset.UtcNow,
+                Environment.ProcessId, DateTimeOffset.UtcNow, Directory.GetCurrentDirectory()));
+        var handlers = new McpToolHandlers(scope, module);
+
+        var success = await handlers.ArtifactAsync(null!, successId, "matrix-cells");
+        var successEnvelope = JsonDocument.Parse(McpText(success));
+        var successOperationRef = successEnvelope.RootElement.GetProperty("operationRef").GetString();
+        Assert.False(success.IsError == true);
+        Assert.False(string.IsNullOrWhiteSpace(successOperationRef));
+        Assert.Equal("artifact-producer-success", successEnvelope.RootElement.GetProperty("parentOperationRef").GetString());
+
+        var failure = await handlers.ArtifactAsync(null!, failureId, "matrix-cells");
+        var failureEnvelope = JsonDocument.Parse(McpText(failure));
+        var failureOperationRef = failureEnvelope.RootElement.GetProperty("operationRef").GetString();
+        Assert.True(failure.IsError == true);
+        Assert.False(string.IsNullOrWhiteSpace(failureOperationRef));
+        Assert.True(!failureEnvelope.RootElement.TryGetProperty("parentOperationRef", out var parent) || parent.ValueKind == JsonValueKind.Null);
+
+        using var connection = new SqliteConnection($"Data Source={Path.Combine(_home, "data", "activity.db")};Mode=ReadOnly;Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT operation_ref, parent_operation_ref, status FROM operations ORDER BY id";
+        using var reader = command.ExecuteReader();
+        Assert.True(reader.Read());
+        Assert.Equal(successOperationRef, reader.GetString(0));
+        Assert.Equal("artifact-producer-success", reader.GetString(1));
+        Assert.Equal("succeeded", reader.GetString(2));
+        Assert.True(reader.Read());
+        Assert.Equal(failureOperationRef, reader.GetString(0));
+        Assert.True(reader.IsDBNull(1));
+        Assert.Equal("rejected", reader.GetString(2));
+        Assert.False(reader.Read());
+    }
+
+    private static string McpText(ModelContextProtocol.Protocol.CallToolResult result) =>
+        string.Join("\n", result.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>().Select(block => block.Text));
+
+    private static string WriteArtifact(string id, ArtifactOwner owner, string producerOperationRef)
+    {
+        var directory = Path.Combine(SqlHarnessPaths.CompareDir, id);
+        Directory.CreateDirectory(directory);
+        var manifest = new ArtifactManifest(ArtifactReader.CurrentManifestVersion, ArtifactReader.CompareKind,
+            ArtifactReader.ReportFileName, [ArtifactReader.MatrixCellsSection])
+        {
+            Owner = owner,
+            ProducerOperationRef = producerOperationRef,
+        };
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            System.Text.Json.JsonSerializer.Serialize(manifest, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
+        File.WriteAllText(Path.Combine(directory, ArtifactReader.ReportFileName), "{}");
+        File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), "{\"cases\":[]}");
+        return id;
+    }
 
     [Theory]
     [MemberData(nameof(Modes))]

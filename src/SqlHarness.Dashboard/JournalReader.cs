@@ -14,7 +14,7 @@ namespace SqlHarness.Dashboard;
 /// unpooled read-only connection; a missing database reads as empty. Running
 /// rows are reported as <c>abandoned</c> when their host process is gone.
 /// </summary>
-public sealed class JournalReader(string databasePath, IProcessInfo processes, Func<ModelPriceTable>? prices = null)
+public sealed class JournalReader(string databasePath, IProcessInfo processes)
 {
     public const int DefaultLimit = 50;
     public const int MaximumLimit = 200;
@@ -35,7 +35,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes, F
                 WHERE m.operation_id = o.id AND t.cold_runs > 0) AS cold_cache,
         EXISTS (SELECT 1 FROM operation_metrics m WHERE m.operation_id = o.id AND m.grant_granted_kb >= {OverGrantMinimumKb}
                 AND m.grant_max_used_kb IS NOT NULL AND m.grant_max_used_kb * 4 < m.grant_granted_kb) AS over_granted,
-        o.error_message, o.cancel_reason, o.agent_model, o.agent_reasoning_effort
+        o.error_message, o.cancel_reason, o.agent_model, o.agent_reasoning_effort,
+        o.operation_ref, o.parent_operation_ref, o.dry_run
         """;
 
     private const string SessionColumns = """
@@ -191,7 +192,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes, F
                 """,
                 parameters,
                 reader => (Operation: ReadOperation(reader, liveness),
-                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 29))));
+                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 32))));
             var filteredRows = rows.Where(row => !variableFiltered
                 || OperationDimensionResolver.Matches(query.Dimensions, row.Variables));
             matches.AddRange(liveFiltered
@@ -223,7 +224,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes, F
 
         var extra = Query(connection, """
             SELECT vars_json, candidate_sql_hash, sql_text, candidate_sql_text, raw_tokens, emitted_tokens, artifact_dir, summary_json,
-                   client_call_id, agent_model, agent_reasoning_effort, agent_session_id, agent_turn_id, agent_turn_trigger, agent_thread_source
+                   client_call_id, agent_model, agent_reasoning_effort, agent_session_id, agent_turn_id, agent_turn_trigger, agent_thread_source,
+                   raw_bytes, emitted_bytes
             FROM operations WHERE id = $id;
             """, [("$id", id)], reader => (
                 VarsJson: NullableString(reader, 0),
@@ -234,7 +236,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes, F
                 Emitted: NullableLong(reader, 5),
                 Artifact: NullableString(reader, 6),
                 Summary: Json(NullableString(reader, 7)),
-                Agent: ReadAgent(reader))).Single();
+                Agent: ReadAgent(reader),
+                RawBytes: NullableLong(reader, 15),
+                EmittedBytes: NullableLong(reader, 16))).Single();
         var session = Query(connection, $"SELECT {SessionColumns} FROM sessions s WHERE s.id = $id;",
             [("$id", summary.SessionId)], ReadSessionRow).Single();
 
@@ -262,7 +266,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes, F
             extra.Summary,
             Variants(connection, id),
             dimensions,
-            extra.Agent);
+            extra.Agent,
+            extra.RawBytes,
+            extra.EmittedBytes);
     }
 
     private static AgentCall? ReadAgent(SqliteDataReader r)
@@ -291,10 +297,9 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes, F
     {
         using var connection = OpenSnapshot();
         if (connection is null)
-            return new DashboardStats([], [], [], [], [], [], [], [], [], new TokenStat(0, 0), 0, 0, [],
+            return new DashboardStats([], [], [], [], [], [], [], [], [], 0, 0, [],
                 new ProfileDimensionStats(query.Profile,
-                    query.Profile is not null && profileDimensions?.ContainsKey(query.Profile) == true, 0, [], [], 0),
-                new SavingsStat(ModelPrices.Embedded.Source, ModelPrices.Embedded.FetchedAt, 0, [], 0, 0));
+                    query.Profile is not null && profileDimensions?.ContainsKey(query.Profile) == true, 0, [], [], 0), []);
         (string, object?)[] window = [("$from", Iso(query.From)), ("$to", Iso(query.To))];
         const string inWindow = "($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to)";
 
@@ -378,17 +383,6 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes, F
                 r.GetString(4), NullableLong(r, 5), NullableString(r, 6),
                 OperationDimensionResolver.ReadRecordedValues(NullableString(r, 6))));
         var dimensionStats = AggregateProfileDimensions(query, dimensionRows, profileDimensions);
-        var tokens = Query(connection, $"""
-            SELECT COALESCE(SUM(CASE WHEN o.raw_tokens IS NOT NULL AND o.emitted_tokens IS NOT NULL THEN o.raw_tokens ELSE 0 END), 0),
-                   COALESCE(SUM(CASE WHEN o.raw_tokens IS NOT NULL AND o.emitted_tokens IS NOT NULL THEN o.emitted_tokens ELSE 0 END), 0),
-                   COUNT(*),
-                   COALESCE(SUM(CASE WHEN o.raw_tokens IS NOT NULL AND o.emitted_tokens IS NOT NULL THEN 1 ELSE 0 END), 0),
-                   COALESCE(SUM(CASE WHEN o.raw_tokens IS NOT NULL AND o.emitted_tokens IS NULL THEN 1 ELSE 0 END), 0),
-                   COALESCE(SUM(CASE WHEN o.raw_tokens IS NULL AND o.emitted_tokens IS NOT NULL THEN 1 ELSE 0 END), 0),
-                   COALESCE(SUM(CASE WHEN o.raw_tokens IS NULL AND o.emitted_tokens IS NULL THEN 1 ELSE 0 END), 0)
-            FROM operations o WHERE {inWindow};
-            """, window, r => new TokenStat(r.GetInt64(0), r.GetInt64(1), r.GetInt32(2), r.GetInt32(3),
-                r.GetInt32(4), r.GetInt32(5), r.GetInt32(6))).Single();
         var spills = Scalar<long>(connection, $"""
             SELECT COUNT(DISTINCT o.id) FROM operations o JOIN operation_metrics m ON m.operation_id = o.id
             WHERE {inWindow} AND m.spill_count > 0;
@@ -409,59 +403,60 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes, F
             waits.OrderByDescending(w => w.Value).ThenBy(w => w.Key, StringComparer.Ordinal).Take(TopLimit)
                 .Select(w => new WaitStat(w.Key, w.Value)).ToArray(),
             targets,
-            tokens,
             (int)spills,
             (int)cold,
             profileOperations,
             dimensionStats,
-            Savings(connection, window));
+            WorkflowCosts(connection, window));
     }
 
-    private SavingsStat Savings(SqliteConnection connection, (string, object?)[] window)
+    private static IReadOnlyList<WorkflowCost> WorkflowCosts(SqliteConnection connection, (string, object?)[] window)
     {
-        ModelPriceTable table;
-        try
-        {
-            table = prices?.Invoke() ?? ModelPrices.Embedded;
-        }
-        catch
-        {
-            table = ModelPrices.Embedded;
-        }
+        var rows = Query(connection, $"""
+            SELECT o.operation_ref, o.parent_operation_ref, o.operation, o.status, o.emitted_bytes, o.dry_run,
+                   root.raw_bytes, root.status, root.dry_run, root.operation
+            FROM operations o
+            LEFT JOIN operations root ON root.operation_ref = COALESCE(o.parent_operation_ref, o.operation_ref)
+            WHERE ($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to);
+            """, window, r => new WorkflowOutputRow(
+                NullableString(r, 0), NullableString(r, 1), r.GetString(2), r.GetString(3), NullableLong(r, 4), r.GetInt64(5) != 0,
+                NullableLong(r, 6), NullableString(r, 7), !r.IsDBNull(8) && r.GetInt64(8) != 0, NullableString(r, 9)));
 
-        var groups = Query(connection, $"""
-            SELECT s.agent_kind, o.agent_model, COUNT(*), SUM(o.raw_tokens - o.emitted_tokens)
-            FROM operations o JOIN sessions s ON s.id = o.session_id
-            WHERE ($from IS NULL OR o.started_at >= $from) AND ($to IS NULL OR o.started_at < $to)
-              AND o.raw_tokens IS NOT NULL AND o.emitted_tokens IS NOT NULL
-            GROUP BY s.agent_kind, o.agent_model;
-            """, window, r => (Kind: r.GetString(0), Model: NullableString(r, 1), Count: r.GetInt32(2), Saved: r.GetInt64(3)));
-        var byModel = new Dictionary<(string, string), (int Ops, long Saved, decimal Usd)>();
-        int withoutModel = 0, unpriced = 0;
-        foreach (var g in groups)
+        var costs = new List<WorkflowCost>();
+        foreach (var group in rows.GroupBy(row => row.ParentOperationRef ?? row.OperationRef,
+                     StringComparer.Ordinal))
         {
-            if (string.IsNullOrWhiteSpace(g.Model))
-            {
-                withoutModel += g.Count;
+            var measuredRows = group.Where(row => row.EmittedBytes.HasValue).ToArray();
+            if (measuredRows.Length == 0)
                 continue;
-            }
-
-            if (table.Find(g.Kind, g.Model) is not { } price)
-            {
-                unpriced += g.Count;
-                continue;
-            }
-
-            var key = (price.Provider, price.Model);
-            var current = byModel.GetValueOrDefault(key);
-            byModel[key] = (current.Ops + g.Count, current.Saved + g.Saved, current.Usd + g.Saved * price.InputPerMillion / 1_000_000m);
+            var referenced = group.Key is not null;
+            var outputBytes = measuredRows.Sum(row => row.EmittedBytes!.Value);
+            var estimatedTokens = measuredRows.Sum(row => OutputFootprint.EstimateTokens(row.EmittedBytes!.Value));
+            var first = measuredRows[0];
+            var comparable = referenced && group.All(row => row.Status == "succeeded")
+                && first.RootRawBytes.HasValue && first.RootStatus == "succeeded"
+                && !first.RootDryRun && first.RootOperation is not null && IsDatabaseExecution(first.RootOperation);
+            var baselineBytes = comparable ? first.RootRawBytes!.Value : (long?)null;
+            var comparison = comparable
+                ? new WorkflowCostComparison("single-measured-execution-output", baselineBytes!.Value,
+                    OutputFootprint.EstimateTokens(baselineBytes.Value), outputBytes - baselineBytes.Value,
+                    OutputFootprint.EstimateTokens(baselineBytes.Value) - estimatedTokens)
+                : null;
+            var dryRuns = measuredRows.Count(row => row.DryRun);
+            var executions = measuredRows.Count(row => !row.DryRun && IsDatabaseExecution(row.Operation));
+            costs.Add(new WorkflowCost(group.Key, outputBytes, estimatedTokens, measuredRows.Length,
+                OutputFootprint.EstimationMethod, referenced ? "workflow-output" : "legacy-artifact-volume",
+                new WorkflowCostCoverage("unmeasured", "unmeasured", "unmeasured"), comparison, dryRuns, executions));
         }
-
-        return new SavingsStat(table.Source, table.FetchedAt, byModel.Values.Sum(v => v.Usd),
-            byModel.Select(p => new ModelSaving(p.Key.Item1, p.Key.Item2, p.Value.Ops, p.Value.Saved, p.Value.Usd))
-                .OrderByDescending(m => m.Usd).ThenBy(m => m.Model, StringComparer.Ordinal).ToArray(),
-            withoutModel, unpriced);
+        return costs.OrderBy(cost => cost.RootOperationRef, StringComparer.Ordinal).ToArray();
     }
+
+    private static bool IsDatabaseExecution(string operation) => operation is
+        "query" or "measure" or "compare" or "watch" or "snapshot" or "schema" or "ping" or "counts" or "space" or "qstop" or "indexes";
+
+    private sealed record WorkflowOutputRow(string? OperationRef, string? ParentOperationRef, string Operation,
+        string Status, long? EmittedBytes, bool DryRun, long? RootRawBytes, string? RootStatus, bool RootDryRun,
+        string? RootOperation);
 
     private static ProfileDimensionStats AggregateProfileDimensions(
         StatsQuery query,
@@ -674,7 +669,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes, F
         NullableLong(r, 10), NullableString(r, 11), NullableString(r, 12), NullableString(r, 13), NullableString(r, 14),
         r.GetInt64(15) != 0, NullableString(r, 16), NullableLong(r, 17), NullableLong(r, 21),
         r.GetInt64(22) != 0, r.GetInt64(23) != 0, r.GetInt64(24) != 0, Json(NullableString(r, 18)),
-        NullableString(r, 25), NullableString(r, 26), NullableString(r, 27), NullableString(r, 28));
+        NullableString(r, 25), NullableString(r, 26), NullableString(r, 27), NullableString(r, 28),
+        NullableString(r, 29), NullableString(r, 30), r.GetInt64(31) != 0);
 
     private static IReadOnlyList<SessionRoot>? Roots(string? json)
     {

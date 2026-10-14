@@ -6,7 +6,7 @@ namespace SqlHarness.Mcp.Tests;
 /// 001/T1 process regression: request content sent through real stdio —
 /// inline SQL, a parameter value, a file path, and binder exception content —
 /// plus a malformed frame must never reach stderr, while stdout stays pure
-/// protocol. Offline tools only (<c>sqlharness_validate</c>); no database is
+/// protocol. Offline calls only (<c>sqlharness_query</c> with <c>dryRun</c>); no database is
 /// opened. All markers are fictional and synthetic; no real secrets are used.
 /// These tests FAIL on the old McpHost logger (all levels enabled, SDK
 /// formatter rendered to stderr) and define the oracle T2/T3 must satisfy.
@@ -32,13 +32,15 @@ public sealed class McpStderrLeakRegressionTests
     {
         using var cts = new CancellationTokenSource(LeakBudget);
         var ct = cts.Token;
-        var exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
-        var home = McpStdioProcessHarness.CreateSyntheticHome(
-            McpStdioProcessHarness.ProfileName,
-            """{"mcp-stdio": {"server": "mcp-unreachable.invalid", "database": "mcp-stdio-db", "vars": {"tenant": "^steno-scope-var-7745$"}, "auth": "integrated"}}""");
+        string? exe = null;
+        string? home = null;
         McpStdioProcessHarness.StdioChild? child = null;
         try
         {
+            exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
+            home = McpStdioProcessHarness.CreateSyntheticHome(
+                McpStdioProcessHarness.ProfileName,
+                """{"mcp-stdio": {"server": "mcp-unreachable.invalid", "database": "mcp-stdio-db", "vars": {"tenant": "^steno-scope-var-7745$"}, "auth": "integrated"}}""");
             child = McpStdioProcessHarness.StartServer(exe, home, "mcp serve --request-scope --allow-profile mcp-stdio");
             var stdin = child.Process.StandardInput.BaseStream;
             await using var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct);
@@ -53,14 +55,14 @@ public sealed class McpStderrLeakRegressionTests
             Assert.Equal(McpStdioProcessHarness.DefaultProtocolVersion, client.NegotiatedProtocolVersion);
             Assert.Equal(McpHost.ServerName, client.ServerInfo.Name);
 
-            // Valid validate carrying the SQL and parameter markers. Offline
-            // classifier only; no database is opened.
+            // Valid dry-run query carrying the SQL and parameter markers. Offline
+            // checks only; no database is opened.
             var valid = await client.CallToolAsync(
-                "sqlharness_validate",
+                "sqlharness_query",
                 new Dictionary<string, object?>
                 {
                     ["scope"] = RequestScope(),
-                    ["usage"] = "query",
+                    ["dryRun"] = true,
                     ["sql"] = $"SELECT @stenoparam, '{SqlMarker}'",
                     ["parameters"] = new object[]
                     {
@@ -83,11 +85,11 @@ public sealed class McpStderrLeakRegressionTests
             // input roots, so the path is refused with a constant message that
             // never echoes it back on stdout.
             var badPath = await client.CallToolAsync(
-                "sqlharness_validate",
+                "sqlharness_query",
                 new Dictionary<string, object?>
                 {
                     ["scope"] = RequestScope(),
-                    ["usage"] = "query",
+                    ["dryRun"] = true,
                     ["file"] = $"{PathMarker}/missing.sql",
                 },
                 cancellationToken: ct);
@@ -102,11 +104,11 @@ public sealed class McpStderrLeakRegressionTests
             // contract rejects it with constant text (supported names only);
             // the value must survive nowhere but the request itself.
             var unknownArg = await client.CallToolAsync(
-                "sqlharness_validate",
+                "sqlharness_query",
                 new Dictionary<string, object?>
                 {
                     ["scope"] = RequestScope(),
-                    ["usage"] = "query",
+                    ["dryRun"] = true,
                     ["sql"] = "SELECT 1",
                     ["bogusArgument"] = ParamMarker,
                 },
@@ -117,17 +119,19 @@ public sealed class McpStderrLeakRegressionTests
                 McpStdioProcessHarness.Envelope(unknownArg).ToString(),
                 StringComparison.Ordinal);
 
-            // Invalid usage value carrying the exception-content marker. The
+            // Invalid compare mode carrying the exception-content marker. The
             // value travels through binder/handler exception content, but the
             // stdout rejection stays constant and value-free; the process
             // itself must survive.
             var badUsage = await client.CallToolAsync(
-                "sqlharness_validate",
+                "sqlharness_compare",
                 new Dictionary<string, object?>
                 {
                     ["scope"] = RequestScope(),
-                    ["usage"] = "bogus-" + ExceptionMarker,
-                    ["sql"] = "SELECT 1",
+                    ["dryRun"] = true,
+                    ["compareResults"] = "bogus-" + ExceptionMarker,
+                    ["baseline"] = new Dictionary<string, object?> { ["sql"] = "SELECT 1" },
+                    ["candidate"] = new Dictionary<string, object?> { ["sql"] = "SELECT 1" },
                 },
                 cancellationToken: ct);
             Assert.True(badUsage.IsError == true);
@@ -138,8 +142,8 @@ public sealed class McpStderrLeakRegressionTests
                 StringComparison.Ordinal);
             Assert.False(child.Process.HasExited, "The published server died on rejected arguments.");
             var afterRejection = await client.CallToolAsync(
-                "sqlharness_validate",
-                new Dictionary<string, object?> { ["scope"] = RequestScope(), ["usage"] = "query", ["sql"] = "SELECT 2" },
+                "sqlharness_query",
+                new Dictionary<string, object?> { ["scope"] = RequestScope(), ["dryRun"] = true, ["sql"] = "SELECT 2" },
                 cancellationToken: ct);
             Assert.False(afterRejection.IsError == true, McpStdioProcessHarness.Envelope(afterRejection).ToString());
 
@@ -151,15 +155,15 @@ public sealed class McpStderrLeakRegressionTests
             await Task.Delay(TimeSpan.FromSeconds(2), ct);
             Assert.False(child.Process.HasExited, "The published server died on malformed input.");
             var afterGarbage = await client.CallToolAsync(
-                "sqlharness_validate",
-                new Dictionary<string, object?> { ["scope"] = RequestScope(), ["usage"] = "query", ["sql"] = "SELECT 3" },
+                "sqlharness_query",
+                new Dictionary<string, object?> { ["scope"] = RequestScope(), ["dryRun"] = true, ["sql"] = "SELECT 3" },
                 cancellationToken: ct);
             Assert.False(afterGarbage.IsError == true, McpStdioProcessHarness.Envelope(afterGarbage).ToString());
 
             // Duplicate raw scope fields are stopped before SDK parsing; the
             // secret value in the second occurrence must stay out of frames and stderr.
             var duplicate = Encoding.UTF8.GetBytes(
-                "{\"jsonrpc\":\"2.0\",\"id\":\"duplicate-scope\",\"method\":\"tools/call\",\"params\":{\"name\":\"sqlharness_validate\",\"arguments\":{\"scope\":{\"profile\":\"mcp-stdio\",\"vars\":{\"tenant\":\"" + ScopeVarMarker + "\"}},\"scope\":{\"profile\":\"mcp-stdio\",\"vars\":{\"tenant\":\"" + DuplicateScopeMarker + "\"}},\"usage\":\"query\",\"sql\":\"SELECT 1\"}}}\n");
+                "{\"jsonrpc\":\"2.0\",\"id\":\"duplicate-scope\",\"method\":\"tools/call\",\"params\":{\"name\":\"sqlharness_query\",\"arguments\":{\"scope\":{\"profile\":\"mcp-stdio\",\"vars\":{\"tenant\":\"" + ScopeVarMarker + "\"}},\"scope\":{\"profile\":\"mcp-stdio\",\"vars\":{\"tenant\":\"" + DuplicateScopeMarker + "\"}},\"dryRun\":true,\"sql\":\"SELECT 1\"}}}\n");
             await stdin.WriteAsync(duplicate, ct);
             await stdin.FlushAsync(ct);
             var afterDuplicate = await client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: ct);
@@ -207,7 +211,10 @@ public sealed class McpStderrLeakRegressionTests
             }
 
             child?.Process.Dispose();
-            McpStdioProcessHarness.DeleteHome(home);
+            if (home is not null)
+                McpStdioProcessHarness.DeleteHome(home);
+            if (exe is not null)
+                McpStdioProcessHarness.DeletePublishOutput(exe);
         }
     }
 
@@ -219,13 +226,15 @@ public sealed class McpStderrLeakRegressionTests
     {
         using var cts = new CancellationTokenSource(LeakBudget);
         var ct = cts.Token;
-        var exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
-        var home = McpStdioProcessHarness.CreateSyntheticHome(
-            McpStdioProcessHarness.ProfileName,
-            """{"mcp-stdio": {"server": "mcp-unreachable.invalid", "database": "mcp-stdio-db", "vars": {}, "auth": "integrated"}}""");
+        string? exe = null;
+        string? home = null;
         McpStdioProcessHarness.StdioChild? child = null;
         try
         {
+            exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
+            home = McpStdioProcessHarness.CreateSyntheticHome(
+                McpStdioProcessHarness.ProfileName,
+                """{"mcp-stdio": {"server": "mcp-unreachable.invalid", "database": "mcp-stdio-db", "vars": {}, "auth": "integrated"}}""");
             child = McpStdioProcessHarness.StartServer(exe, home, "mcp serve mcp-stdio");
             var stdin = child.Process.StandardInput.BaseStream;
             var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct, revision);
@@ -260,7 +269,10 @@ public sealed class McpStderrLeakRegressionTests
             }
 
             child?.Process.Dispose();
-            McpStdioProcessHarness.DeleteHome(home);
+            if (home is not null)
+                McpStdioProcessHarness.DeleteHome(home);
+            if (exe is not null)
+                McpStdioProcessHarness.DeletePublishOutput(exe);
         }
     }
 }

@@ -11,7 +11,7 @@ internal static class BenchmarkCollector
 
     internal static async Task<CollectedCompare> CollectCompareAsync(
         ISqlReader reader,
-        CanonicalResultAccumulator raw,
+        CanonicalResultAccumulator? raw,
         bool captureComparison,
         int comparisonMaximumRows,
         CancellationToken ct)
@@ -31,7 +31,6 @@ internal static class BenchmarkCollector
                 {
                     var planXml = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty;
                     planXmls.Add(planXml);
-                    raw.AddMessage("planXml", planXml);
                 }
                 continue;
             }
@@ -43,7 +42,7 @@ internal static class BenchmarkCollector
             comparison?.BeginResultSet(
                 columns,
                 nullabilityKnown: Enumerable.Range(0, reader.FieldCount).All(index => reader.GetReportedAllowNull(index) is not null));
-            raw.BeginResultSet(columns);
+            raw?.BeginResultSet(columns);
             while (await reader.ReadAsync(ct))
             {
                 var values = Enumerable.Range(0, reader.FieldCount)
@@ -51,11 +50,11 @@ internal static class BenchmarkCollector
                     .ToArray();
                 canonical.AddRow(values);
                 comparison?.AddRow(values);
-                raw.AddRow(values);
+                raw?.AddRow(values);
             }
             canonical.EndResultSet();
             comparison?.EndResultSet();
-            raw.EndResultSet();
+            raw?.EndResultSet();
         } while (await reader.NextResultAsync(ct));
         return new CollectedCompare(
             canonical.Complete(),
@@ -63,8 +62,10 @@ internal static class BenchmarkCollector
             planXmls);
     }
 
-    internal static void AppendMessages(ISqlSession session, int messageStart, CanonicalResultAccumulator raw)
+    internal static void AppendMessages(ISqlSession session, int messageStart, CanonicalResultAccumulator? raw)
     {
+        if (raw is null)
+            return;
         foreach (var message in session.Messages.Skip(messageStart))
             raw.AddMessage("sql", message);
     }

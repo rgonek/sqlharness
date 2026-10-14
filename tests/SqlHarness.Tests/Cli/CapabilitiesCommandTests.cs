@@ -24,7 +24,8 @@ public sealed class CapabilitiesCommandTests
         var root = document.RootElement;
         Assert.Equal(2, root.GetProperty("contractVersion").GetInt32());
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("buildId").GetString()));
-        Assert.Contains(root.GetProperty("commands").EnumerateArray(), command => command.GetProperty("name").GetString() == "validate");
+        Assert.Contains(root.GetProperty("commands").EnumerateArray(), command => command.GetProperty("name").GetString() == "query");
+        Assert.DoesNotContain(root.GetProperty("commands").EnumerateArray(), command => command.GetProperty("name").GetString() is "validate" or "ping" or "schema" or "counts" or "space" or "qstop" or "indexes");
         var engines = root.GetProperty("engines").EnumerateArray().ToArray();
         Assert.Equal(["postgres", "sqlserver"], engines.Select(engine => engine.GetProperty("name").GetString()!).Order(StringComparer.Ordinal));
         Assert.All(engines, engine => Assert.Equal(["name", "summary"], engine.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal)));
@@ -37,7 +38,7 @@ public sealed class CapabilitiesCommandTests
         Assert.Equal("journal.storeSensitive", journalStorage.GetProperty("sqlTextAndPlans").GetString());
         Assert.Equal(1000000, limits.GetProperty("comparisonRowCapPerRun").GetProperty("max").GetInt32());
         Assert.Equal(2000000, limits.GetProperty("comparisonUniqueFingerprintBudgetPerCell").GetProperty("max").GetInt32());
-        foreach (var engineOnly in new[] { "sessionTempStatements", "qstopTop", "qstopWindowMinutes", "indexesTop" })
+        foreach (var engineOnly in new[] { "sessionTempStatements" })
             Assert.False(limits.TryGetProperty(engineOnly, out _), engineOnly);
     }
 
@@ -72,8 +73,6 @@ public sealed class CapabilitiesCommandTests
         var temp = limits.GetProperty("sessionTempStatements");
         Assert.Equal(JsonValueKind.Array, temp.ValueKind);
         Assert.Equal(sqlServer, temp.GetRawText().Contains("#temp", StringComparison.Ordinal));
-        foreach (var name in new[] { "qstopTop", "qstopWindowMinutes", "indexesTop" })
-            Assert.Equal(sqlServer, limits.TryGetProperty(name, out _));
         Assert.DoesNotContain("\"name\": \"" + other + "\"", output.ToString(), StringComparison.Ordinal);
     }
 
@@ -195,6 +194,20 @@ public sealed class CapabilitiesCommandTests
         Assert.Contains("least-privilege", query, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Query_measure_and_compare_capabilities_describe_offline_dry_run_surface()
+    {
+        var commands = SqlHarnessCapabilitiesProvider.Get().Commands.ToDictionary(c => c.Name, c => c.Description);
+
+        foreach (var command in new[] { "query", "measure", "compare" })
+        {
+            Assert.Contains("--dry-run", commands[command], StringComparison.Ordinal);
+            Assert.Contains("dryRun", commands[command], StringComparison.Ordinal);
+            Assert.Contains("offline", commands[command], StringComparison.Ordinal);
+            Assert.DoesNotContain("no CLI switch", commands[command], StringComparison.Ordinal);
+        }
+    }
+
     [Theory]
     [InlineData("nvarchar(10)", "nvarchar(n)", SqlDbType.NVarChar)]
     [InlineData("varchar(10)", "varchar(n)", SqlDbType.VarChar)]
@@ -289,6 +302,18 @@ public sealed class CapabilitiesCommandTests
             ],
             SessionTempStatements(SqlEngine.Postgres).Where(entry => !IsPostgresProofEntry(entry)));
         Assert.Single(SessionTempStatements(SqlEngine.Postgres), IsPostgresProofEntry);
+    }
+
+    [Fact]
+    public void Capabilities_describe_sqlserver_control_flow_without_changing_postgres_summary()
+    {
+        var sqlServerSummary = SqlHarnessCapabilitiesProvider.Get(SqlEngine.SqlServer, "p").Engines.Single().Summary;
+        var postgresSummary = SqlHarnessCapabilitiesProvider.Get(SqlEngine.Postgres, "p").Engines.Single().Summary;
+
+        Assert.Contains("IF/ELSE/BEGIN…END (nested) allowed", sqlServerSummary, StringComparison.Ordinal);
+        Assert.Contains("scan every branch regardless of predicate", sqlServerSummary, StringComparison.Ordinal);
+        Assert.Contains("WHILE/BREAK/CONTINUE/GOTO/labels/RETURN/TRY…CATCH/WAITFOR/THROW/RAISERROR denied", sqlServerSummary, StringComparison.Ordinal);
+        Assert.DoesNotContain("Allowed control flow", postgresSummary, StringComparison.Ordinal);
     }
 
     // 011/final (M8): the plan 011 entries hold no character that the JSON
