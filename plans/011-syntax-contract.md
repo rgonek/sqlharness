@@ -134,9 +134,9 @@ and a name supplied in a caller-built plain set still proves it. Nothing else ab
 spelling counts (011/T4b fix round 1): an unqualified name such as
 `pg_temp_stuff` or `pg_temp` must be proven like any other temp, a `pg_temp_<N>` schema
 qualifier is never proof, and a name with three or more parts is never session-local. An
-unproven target is not session-local: DML takes the persistent-mutation path
-(`MutationNotAllowed` without approval, `NonTemporaryWrite` in compare setup); `DROP TABLE` /
-`CREATE INDEX` are `UnsupportedStatement`.
+unproven target is not session-local: in compare setup and on the approved mutation path DML takes
+the persistent-mutation path (`MutationNotAllowed` without approval, `NonTemporaryWrite` in compare
+setup); `DROP TABLE` / `CREATE INDEX` are `UnsupportedStatement`.
 
 Amended by [047](047-postgres-temp-target-proof.md) (commits `d46a4c9`..): query and measured SQL run in
 a read-only transaction, so there an unqualified DML target needs no proof — it reaches the server,

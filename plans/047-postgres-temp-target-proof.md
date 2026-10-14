@@ -22,22 +22,20 @@ phase this plan needs. Setup stays read-write because the server rejects `CREATE
 
 ## Why this matters
 
-The PostgreSQL classifier decides offline whether a write target is a current-session temp table by tracking names: unqualified names recorded from `CREATE TEMP TABLE`, quoting and 63-byte limits, `pg_temp_<N>` exclusions, `DROP TABLE` revoking proofs, and a known `search_path` hole for unqualified names. TRUNCATE uses a stricter rule than DML. The AGENTS.md paragraph describing this is the longest rule in the file, and agents still trip on it.
+The PostgreSQL classifier decides offline whether a write target is a current-session temp table by tracking names: unqualified names recorded from `CREATE TEMP TABLE`, quoting and 63-byte limits, `pg_temp_<N>` exclusions, `DROP TABLE` revoking proofs, and a known `search_path` hole for unqualified names. TRUNCATE uses a stricter rule than DML. The README section describing this (`PostgreSQL temp target proof`, mapped from `AGENTS.md`) is the longest rule in the reference, and agents still trip on it.
 
 PostgreSQL itself refuses writes to non-temporary tables inside a `READ ONLY` transaction, while allowing DML on temporary tables. If that holds for the statement shapes SQLHarness runs, the server enforces the persistent-write boundary independently of name resolution and `search_path`, and the name proof can shrink to the DDL that a read-only transaction rejects.
-
-This is **unverified**. Step 1 is the proof; the design depends on it.
 
 ## Current state
 
 - `src/SqlHarness.Core/Postgres/PostgresSafetyClassifier.cs`: `IsProvenSessionTemp` (TRUNCATE) and `IsSessionLocal` (DML/DROP/CREATE INDEX) implement the name proof.
-- `src/SqlHarness.Core/Postgres/NpgsqlSessionFactory.cs`: `BindClassifiedCommand` sends classified text with "no transaction wrapper, role change, privilege change, or search_path edit".
+- `src/SqlHarness.Core/Postgres/NpgsqlSessionFactory.cs`: `BindClassifiedCommand` sends classified text unchanged; since 052 it sits inside the per-command `SET TRANSACTION READ ONLY` wrapper for every non-approved, non-setup execution (no role change, privilege change or `search_path` edit).
 - Measured statements run under `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`; equivalence uses an unmeasured sidecar.
-- Docs: AGENTS.md PostgreSQL engine notes; `plans/011-syntax-contract.md`; `plans/009-strict-profile-assessment.md`.
+- Docs: `README.md` PostgreSQL engine notes and PostgreSQL temp target proof (both mapped from `AGENTS.md`); `skills/sqlharness/SKILL.md`; `docs/mcp.md`; `Capabilities.cs`; `plans/011-syntax-contract.md`; `plans/009-strict-profile-assessment.md`.
 
 ## Scope
 
-In scope: the classifier, `NpgsqlSessionFactory.cs`, `PostgresQuery`/`PostgresBenchmark` execution paths, PostgreSQL safety and opt-in integration tests, AGENTS.md PostgreSQL notes, `docs/mcp.md`, `Capabilities.cs`, `plans/011-syntax-contract.md`.
+In scope: the classifier, `NpgsqlSessionFactory.cs`, `PostgresQuery`/`PostgresBenchmark` execution paths, PostgreSQL safety and opt-in integration tests, the README PostgreSQL engine notes and temp target proof sections, `docs/mcp.md`, `Capabilities.cs`, `plans/011-syntax-contract.md`.
 
 Out of scope: SQL Server, persistent DML approval path (`--allow-mutation --confirm-database` keeps running read-write).
 
