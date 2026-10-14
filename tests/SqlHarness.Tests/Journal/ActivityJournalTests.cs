@@ -47,6 +47,83 @@ public sealed class ActivityJournalTests
     }
 
     [Fact]
+    public void Compare_context_and_conditions_follow_journal_sensitivity()
+    {
+        using var hashOnly = new JournalTempDirectory();
+        using var sensitive = new JournalTempDirectory();
+        var operation = new SqlHarnessCompareOperation(
+            new SqlTargetRequest("local", new Dictionary<string, string> { ["tenant"] = "acme" }),
+            "CREATE TABLE #t (value nvarchar(20)); -- SQLH_SETUP_MARKER",
+            "SELECT @id", "SELECT @id", ["id:nvarchar=SQLH_VALUE_MARKER"], 30, 5,
+            ResultComparisonMode.Multiset, true)
+        {
+            Context = new CompareContext("orders-report", "whole"),
+        };
+        var start = OperationJournalDescriber.DescribeStart(operation);
+
+        var hashOnlyJournal = Open(hashOnly, TextWriter.Null);
+        hashOnlyJournal.Begin(JournalTestData.Session(), start);
+        Open(sensitive, TextWriter.Null, storeSensitive: true).Begin(JournalTestData.Session(), start);
+
+        var hashOnlyRow = JournalDb.Rows(hashOnly.DatabasePath,
+            "SELECT compare_subject, compare_scope, compare_conditions_json FROM operations").Single();
+        Assert.Equal("orders-report", hashOnlyRow["compare_subject"]);
+        Assert.Equal("whole", hashOnlyRow["compare_scope"]);
+        var hashOnlyBytes = JournalDb.AllBytes(hashOnly.DatabasePath);
+        Assert.False(JournalDb.Contains(hashOnlyBytes, "SQLH_SETUP_MARKER"));
+        Assert.False(JournalDb.Contains(hashOnlyBytes, "SQLH_VALUE_MARKER"));
+        Assert.True(JournalDb.Contains(hashOnlyBytes, "Multiset"));
+        Assert.True(JournalDb.Contains(hashOnlyBytes, "orders-report"));
+
+        var sensitiveBytes = JournalDb.AllBytes(sensitive.DatabasePath);
+        Assert.True(JournalDb.Contains(sensitiveBytes, "SQLH_SETUP_MARKER"));
+        Assert.True(JournalDb.Contains(sensitiveBytes, "SQLH_VALUE_MARKER"));
+        Assert.Equal(8L, JournalDb.Rows(sensitive.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+
+        var matrix = new SqlHarnessCompareMatrixOperation(
+            new SqlTargetRequest("local", new Dictionary<string, string>()), null,
+            "SELECT @tenant", "SELECT @tenant", [], 20, 3, "tenant:int=1,2")
+        {
+            Context = new CompareContext("orders-report", "history"),
+        };
+        var matrixStart = OperationJournalDescriber.DescribeStart(matrix);
+        hashOnlyJournal.Begin(JournalTestData.Session(), matrixStart);
+        var matrixRow = JournalDb.Rows(hashOnly.DatabasePath,
+            "SELECT compare_subject, compare_scope, compare_conditions_json FROM operations ORDER BY id DESC LIMIT 1").Single();
+        Assert.Equal("orders-report", matrixRow["compare_subject"]);
+        Assert.Equal("history", matrixRow["compare_scope"]);
+        Assert.DoesNotContain("1,2", (string)matrixRow["compare_conditions_json"]!);
+    }
+
+    [Fact]
+    public void Known_compare_context_survives_rejected_and_failed_completion()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, TextWriter.Null);
+        var context = new CompareContext("orders-report", "aggregation");
+        var rejected = journal.Begin(JournalTestData.Session(), JournalTestData.Start() with
+        {
+            Operation = "compare",
+            Context = context,
+        });
+        var failed = journal.Begin(JournalTestData.Session(), JournalTestData.Start() with
+        {
+            Operation = "compare",
+            Context = context with { Scope = "whole" },
+        });
+
+        Assert.True(journal.Complete(rejected, new OperationEnd("rejected", 2, "safety_rejected", 1,
+            null, null, null, null, null)));
+        Assert.True(journal.Complete(failed, new OperationEnd("failed", 5, "sql_execution_failed", 1,
+            null, null, null, null, null)));
+
+        var rows = JournalDb.Rows(temp.DatabasePath,
+            "SELECT status, compare_subject, compare_scope FROM operations ORDER BY id");
+        Assert.Equal([("rejected", "orders-report", "aggregation"), ("failed", "orders-report", "whole")],
+            rows.Select(row => ((string)row["status"]!, (string)row["compare_subject"]!, (string)row["compare_scope"]!)).ToArray());
+    }
+
+    [Fact]
     public void Disabled_config_returns_null_journal_and_creates_no_file()
     {
         using var temp = new JournalTempDirectory();
@@ -337,15 +414,20 @@ public sealed class ActivityJournalTests
 
         Open(temp, TextWriter.Null);
 
-        Assert.Equal(7L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        Assert.Equal(8L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
         var session = JournalDb.Rows(temp.DatabasePath, "SELECT client_title, roots_json FROM sessions")[0];
         Assert.Null(session["client_title"]);
         Assert.Null(session["roots_json"]);
-        Assert.Null(JournalDb.Rows(temp.DatabasePath, "SELECT cancel_reason FROM operations")[0]["cancel_reason"]);
+        var operation = JournalDb.Rows(temp.DatabasePath,
+            "SELECT cancel_reason, compare_subject, compare_scope, compare_conditions_json FROM operations")[0];
+        Assert.Null(operation["cancel_reason"]);
+        Assert.Null(operation["compare_subject"]);
+        Assert.Null(operation["compare_scope"]);
+        Assert.Null(operation["compare_conditions_json"]);
     }
 
     [Fact]
-    public void Version_6_journal_migrates_to_v7_without_inventing_legacy_provenance_or_changing_bytes()
+    public void Version_6_journal_migrates_to_v8_without_inventing_legacy_provenance_or_changing_bytes()
     {
         using var temp = new JournalTempDirectory();
         Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
@@ -366,14 +448,17 @@ public sealed class ActivityJournalTests
 
         Open(temp, TextWriter.Null);
 
-        Assert.Equal(7L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        Assert.Equal(8L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
         var row = JournalDb.Rows(temp.DatabasePath,
-            "SELECT operation_ref, parent_operation_ref, dry_run, raw_bytes, emitted_bytes FROM operations").Single();
+            "SELECT operation_ref, parent_operation_ref, dry_run, raw_bytes, emitted_bytes, compare_subject, compare_scope, compare_conditions_json FROM operations").Single();
         Assert.Null(row["operation_ref"]);
         Assert.Null(row["parent_operation_ref"]);
         Assert.Equal(0L, row["dry_run"]);
         Assert.Equal(1234L, row["raw_bytes"]);
         Assert.Equal(567L, row["emitted_bytes"]);
+        Assert.Null(row["compare_subject"]);
+        Assert.Null(row["compare_scope"]);
+        Assert.Null(row["compare_conditions_json"]);
     }
 
     [Fact]

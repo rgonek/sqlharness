@@ -28,7 +28,12 @@ public sealed class OperationJournalDescriberTests
     [Fact]
     public void Compare_start_carries_both_variants()
     {
-        var operation = new SqlHarnessCompareOperation(Target, null, "SELECT 1", "SELECT 2", [], 30, 5);
+        var operation = new SqlHarnessCompareOperation(Target, "CREATE TABLE #t (id int)", "SELECT 1", "SELECT 2", ["id:int=SQLH_PARAM_MARKER"], 30, 5)
+        {
+            Context = new CompareContext("orders-report", "whole"),
+            CompareResults = ResultComparisonMode.Multiset,
+            CompareNullability = true,
+        };
 
         var start = OperationJournalDescriber.DescribeStart(operation);
 
@@ -36,6 +41,13 @@ public sealed class OperationJournalDescriberTests
         Assert.Equal("SELECT 1", start.SqlText);
         Assert.Equal("SELECT 2", start.CandidateSqlText);
         Assert.NotEqual(start.SqlHash, start.CandidateSqlHash);
+        Assert.Equal(new CompareContext("orders-report", "whole"), start.Context);
+        Assert.Equal("CREATE TABLE #t (id int)", start.CompareConditions!.SetupSql);
+        Assert.Equal(["id:int=SQLH_PARAM_MARKER"], start.CompareConditions.Parameters);
+        Assert.Equal(30, start.CompareConditions.TimeoutSeconds);
+        Assert.Equal(5, start.CompareConditions.Repeat);
+        Assert.Equal(ResultComparisonMode.Multiset, start.CompareConditions.ComparisonMode);
+        Assert.True(start.CompareConditions.CompareNullability);
     }
 
     [Fact]

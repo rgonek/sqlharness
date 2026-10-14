@@ -106,6 +106,49 @@ public sealed class JournalSummaryTests
     }
 
     [Fact]
+    public void Compare_summaries_preserve_the_existing_regression_and_each_matrix_cell_verdict()
+    {
+        var regression = new RegressionReport(
+            RegressionPolicy.Fail,
+            [RegressionPolicy.ReasonElapsedRegressed],
+            RegressionPolicy.PolicyVersion,
+            new RegressionDiagnostic(RegressionPolicy.StatusRegressed, 10, 20, 10, 100),
+            new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 100, 100, 0, 0),
+            new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 2, 2, 0, 0));
+        var failedCell = Compare(false) with { Regression = regression };
+        var uncheckedCell = Compare(null) with
+        {
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Off, null, null, null, null),
+        };
+        var incompleteCell = Compare(null) with
+        {
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Ordered, null, null, null, null),
+        };
+        var report = new SqlHarnessCompareMatrixReport("Tenant", "int",
+        [
+            new CompareMatrixCellReport(0, "SQLH_PRIVATE_VALUE", Compare(true)),
+            new CompareMatrixCellReport(1, "SQLH_PRIVATE_VALUE_2", failedCell),
+            new CompareMatrixCellReport(2, "SQLH_PRIVATE_VALUE_3", uncheckedCell),
+            new CompareMatrixCellReport(3, "SQLH_PRIVATE_VALUE_4", incompleteCell),
+        ]);
+
+        using var plainJson = JsonDocument.Parse(JournalSummary.Build(failedCell)!);
+        using var matrixJson = JsonDocument.Parse(JournalSummary.Build(report)!);
+
+        Assert.Equal("fail", plainJson.RootElement.GetProperty("regression").GetProperty("verdict").GetString());
+        var cases = matrixJson.RootElement.GetProperty("cases").EnumerateArray().ToArray();
+        Assert.Equal(4, cases.Length);
+        Assert.True(cases[0].GetProperty("equivalence").GetProperty("equivalent").GetBoolean());
+        Assert.False(cases[1].GetProperty("equivalence").GetProperty("equivalent").GetBoolean());
+        Assert.Equal("fail", cases[1].GetProperty("regression").GetProperty("verdict").GetString());
+        Assert.Equal((int)ResultComparisonMode.Off, cases[2].GetProperty("equivalence").GetProperty("mode").GetInt32());
+        Assert.Equal(JsonValueKind.Null, cases[2].GetProperty("equivalence").GetProperty("equivalent").ValueKind);
+        Assert.Equal((int)ResultComparisonMode.Ordered, cases[3].GetProperty("equivalence").GetProperty("mode").GetInt32());
+        Assert.Equal(JsonValueKind.Null, cases[3].GetProperty("equivalence").GetProperty("equivalent").ValueKind);
+        Assert.DoesNotContain("SQLH_PRIVATE_VALUE", matrixJson.RootElement.GetRawText());
+    }
+
+    [Fact]
     public void Operators_are_capped()
     {
         var operators = Enumerable.Range(1, 15).Select(i => new CompareOperatorReport(i, "Sort", "T", true, false, false)).ToArray();

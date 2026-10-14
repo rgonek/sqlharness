@@ -76,11 +76,11 @@ public sealed class ActivityJournal : IActivityJournal
                 INSERT INTO operations (session_id, operation, host_pid, host_started_at, started_at, updated_at,
                     status, profile, vars_json, mutation_requested, sql_hash, candidate_sql_hash, sql_text, candidate_sql_text,
                     client_call_id, agent_model, agent_reasoning_effort, agent_session_id, agent_turn_id, agent_turn_trigger, agent_thread_source,
-                    operation_ref, dry_run)
+                    operation_ref, dry_run, compare_subject, compare_scope, compare_conditions_json)
                 VALUES ($session, $operation, $hostPid, $hostStarted, $now, $now,
                     'running', $profile, $vars, $mutation, $sqlHash, $candidateHash, $sqlText, $candidateText,
                     $callId, $agentModel, $agentEffort, $agentSession, $agentTurn, $agentTrigger, $agentSource,
-                    $operationRef, $dryRun)
+                    $operationRef, $dryRun, $compareSubject, $compareScope, $compareConditions)
                 RETURNING id;
                 """;
             insert.Parameters.AddWithValue("$session", sessionId);
@@ -104,6 +104,9 @@ public sealed class ActivityJournal : IActivityJournal
             insert.Parameters.AddWithValue("$agentSource", (object?)start.Agent?.ThreadSource ?? DBNull.Value);
             insert.Parameters.AddWithValue("$operationRef", (object?)start.OperationRef ?? DBNull.Value);
             insert.Parameters.AddWithValue("$dryRun", start.DryRun ? 1 : 0);
+            insert.Parameters.AddWithValue("$compareSubject", (object?)start.Context?.Subject ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$compareScope", (object?)start.Context?.Scope ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$compareConditions", (object?)CompareConditionsJson(start.CompareConditions) ?? DBNull.Value);
             var id = (long)insert.ExecuteScalar()!;
             transaction.Commit();
             return new JournalHandle(id);
@@ -357,6 +360,8 @@ public sealed class ActivityJournal : IActivityJournal
                 Execute(connection, JournalSchema.Version6);
             if (locked < 7)
                 Execute(connection, JournalSchema.Version7);
+            if (locked < 8)
+                Execute(connection, JournalSchema.Version8);
             Execute(connection, $"PRAGMA user_version = {JournalSchema.CurrentVersion};");
             Execute(connection, "COMMIT;");
         }
@@ -535,6 +540,35 @@ public sealed class ActivityJournal : IActivityJournal
             ? null
             : JsonSerializer.Serialize(new SortedDictionary<string, string>(
                 vars.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal), StringComparer.Ordinal));
+
+    private string? CompareConditionsJson(CompareJournalConditions? conditions)
+    {
+        if (conditions is null)
+            return null;
+
+        var safe = new
+        {
+            timeoutSeconds = conditions.TimeoutSeconds,
+            repeat = conditions.Repeat,
+            comparisonMode = conditions.ComparisonMode.ToString(),
+            compareNullability = conditions.CompareNullability,
+        };
+        object value = _storeSensitive
+            ? new
+            {
+                safe.timeoutSeconds,
+                safe.repeat,
+                safe.comparisonMode,
+                safe.compareNullability,
+                setupSql = conditions.SetupSql,
+                parameters = conditions.Parameters,
+                matrix = conditions.Matrix,
+                parameterSets = conditions.ParameterSets,
+                typedParameters = conditions.TypedParameters,
+            }
+            : safe;
+        return JsonSerializer.Serialize(value, WaitJson);
+    }
 
     private static object Nullable(DateTimeOffset? value) => value is null ? DBNull.Value : Timestamp(value.Value);
 
