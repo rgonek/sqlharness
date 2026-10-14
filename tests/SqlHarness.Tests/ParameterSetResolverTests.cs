@@ -16,6 +16,16 @@ public sealed class ParameterSetResolverTests
     }
 
     [Fact]
+    public void Matrix_resolution_excludes_fixed_parameters()
+    {
+        var fixedParameters = Dialect.BindParameters([new SqlHarnessParameterInput("Tenant", "nvarchar", "acme")]);
+
+        var sets = ParameterSetResolver.Resolve(Dialect, fixedParameters, new("BatchSize", "int", ["1", "20"]), null);
+
+        Assert.All(sets, set => Assert.Equal(["@BatchSize"], set.Parameters.Select(parameter => parameter.Name)));
+    }
+
+    [Fact]
     public void Inline_sets_bind_typed_parameters_including_null()
     {
         var sets = ParameterSetResolver.Resolve(Dialect, [], null,
@@ -25,6 +35,20 @@ public sealed class ParameterSetResolverTests
         ]);
         Assert.Equal(DBNull.Value, sets[0].Parameters.Single(p => p.Name == "@Note").Value);
         Assert.Equal(4000, sets[0].Parameters.Single(p => p.Name == "@Note").Size);
+    }
+
+    [Fact]
+    public void Inline_set_resolution_excludes_fixed_parameters()
+    {
+        var fixedParameters = Dialect.BindParameters([new SqlHarnessParameterInput("Tenant", "nvarchar", "acme")]);
+
+        var sets = ParameterSetResolver.Resolve(Dialect, fixedParameters, null,
+        [
+            new("small", []) { TypedParameters = [new("ClientId", "int", "1")] },
+            new("large", []) { TypedParameters = [new("ClientId", "int", "20")] },
+        ]);
+
+        Assert.All(sets, set => Assert.Equal(["@ClientId"], set.Parameters.Select(parameter => parameter.Name)));
     }
 
     [Fact]
@@ -90,5 +114,22 @@ public sealed class ParameterSetResolverTests
             [],
             new("Amount", "money", ["1", "2"]),
             null));
+    }
+
+    [Fact]
+    public void Oversized_matrix_is_rejected_before_binding_values()
+    {
+        var values = new string?[33];
+        values[0] = "not-an-int";
+        for (var index = 1; index < values.Length; index++)
+            values[index] = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        var error = Assert.Throws<SqlHarnessSafetyException>(() => ParameterSetResolver.Resolve(
+            Dialect,
+            [],
+            new("BatchSize", "int", values),
+            null));
+
+        Assert.Contains("more than 32 values", error.Message);
     }
 }

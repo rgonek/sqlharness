@@ -26,9 +26,10 @@ internal static partial class ParameterSetResolver
 
         if (matrix is not null)
         {
+            if (matrix.Values is { Count: > MaximumSetCount })
+                throw new SqlHarnessSafetyException($"The SQL parameter matrix cannot contain more than {MaximumSetCount} values.");
+
             var parsed = SqlParameterMatrixParser.Bind(matrix, fixedParameters.Select(parameter => parameter.Name));
-            if (parsed.Values.Count > MaximumSetCount)
-                throw new SqlHarnessSafetyException($"The SQL parameter matrix '{parsed.Name}' cannot contain more than {MaximumSetCount} values.");
             var output = new ResolvedParameterSet[parsed.Values.Count];
             for (var index = 0; index < parsed.Values.Count; index++)
             {
@@ -54,7 +55,7 @@ internal static partial class ParameterSetResolver
                 output[index] = new ResolvedParameterSet(
                     index.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     parsed.DisplayValues[index],
-                    fixedParameters.Concat(dialectBound).ToArray());
+                    dialectBound);
             }
 
             return output;
@@ -123,7 +124,7 @@ internal static partial class ParameterSetResolver
                 }
             }
 
-            resolved.Add(new ResolvedParameterSet(set.Name, null, fixedParameters.Concat(bound).ToArray()));
+            resolved.Add(new ResolvedParameterSet(set.Name, null, bound));
         }
 
         return resolved;
