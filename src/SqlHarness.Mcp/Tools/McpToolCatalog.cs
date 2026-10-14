@@ -49,9 +49,9 @@ public sealed class McpToolHandlers(
 
     public Task<CallToolResult> CapabilitiesAsync(
         RequestContext<CallToolRequestParams> ctx,
-        [Description("Include local counts and existence flags. Never secrets.")]
+        [Description(McpToolCatalog.IncludeDiagnosticsDescription)]
         bool includeDiagnostics = false,
-        [Description("Zero-based offset 0..inputRootCount into the configured input roots; default 0. Follow inputRootsNextCursor until it is null; inputRootsComplete is true only when one response holds every root.")]
+        [Description(McpToolCatalog.InputRootCursorDescription)]
         int inputRootCursor = 0,
         CancellationToken ct = default) =>
         RunAsync("sqlharness_capabilities", ctx, _ =>
@@ -59,7 +59,7 @@ public sealed class McpToolHandlers(
             ThrowIfUnknown(ctx, ["includeDiagnostics", "inputRootCursor"]);
             return Task.FromResult(new SqlHarnessOutcome(
                 SqlHarnessExitCode.Success,
-                McpOperationMapper.BuildCapabilities(scope, includeDiagnostics, ctx?.Server?.NegotiatedProtocolVersion, inputRootCursor),
+                McpOperationMapper.BuildCapabilities(scope, includeDiagnostics, inputRootCursor),
                 null));
         }, ct);
 
@@ -420,6 +420,12 @@ public sealed class McpToolHandlers(
 /// </summary>
 public static class McpToolCatalog
 {
+    /// <summary>Shared capabilities strings: one definition for the fixed and request catalogs.</summary>
+    public const string CapabilitiesDescription =
+        "Runtime configuration of this server: scopeMode, engines, allowedProfiles (request scope), inputRoots (paged), processLimits, configurationRef. Call when this connection's configuration is unknown; reuse the result while configurationRef is unchanged.";
+    public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
+    public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";
+
     public static readonly IReadOnlyList<string> ToolNames =
     [
         "sqlharness_capabilities",
@@ -457,7 +463,7 @@ public static class McpToolCatalog
             });
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
-            Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), "Describe server versions, request-scope mode, allowlisted profiles, configured input roots (paged), tools, and limits. Never secrets or env values.", true, false, true, false),
+            Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
             Tool(ToolNames[1], nameof(McpRequestToolHandlers.QueryAsync), "Run a bounded query against the supplied request scope.", true, false, null, true),
             Tool(ToolNames[2], nameof(McpRequestToolHandlers.MeasureAsync), "Measure one query against the supplied request scope.", null, false, null, true),
             Tool(ToolNames[3], nameof(McpRequestToolHandlers.CompareAsync), "Compare queries against the supplied request scope.", null, false, null, true),
@@ -516,7 +522,7 @@ public static class McpToolCatalog
                 });
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
-            Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), "Describe server versions, scope engine, input roots, tools, and limits. Optional local diagnostics. Never secrets or env values.", true, false, true, false),
+            Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
             Tool(ToolNames[1], nameof(McpToolHandlers.QueryAsync), "Run a bounded query passing the static visible-effects text check; no persistent-mutation flags are offered on this path. Hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. Exactly one of inline sql (at most 1 MiB) or a file under an input root.", true, false, null, true),
             Tool(ToolNames[2], nameof(McpToolHandlers.MeasureAsync), "Measure one query across repeats, optionally with .sqljson parameter-set files. Setup runs once per session.", null, false, null, true),
             Tool(ToolNames[3], nameof(McpToolHandlers.CompareAsync), "Compare baseline vs candidate with the CLI sessions and equivalence rules. Optional single matrix dimension.", null, false, null, true),

@@ -93,24 +93,138 @@ public sealed class McpMappingTests : IDisposable
         var json = JsonSerializer.Serialize(document);
 
         Assert.Equal("request", document.ScopeMode);
-        Assert.Equal("sqlserver", document.Engine);
         Assert.Equal([ProfileName], document.AllowedProfiles);
-        Assert.Equal(65536, document.Limits["defaultResultBytes"]);
-        Assert.Equal(8192, document.Limits["maxResultBytes"]);
-        Assert.Equal(30, document.Limits["maxOperationSeconds"]);
+        Assert.Equal(["sqlserver"], document.Engines);
+        Assert.Equal(new McpProcessLimits(8192, 30), document.ProcessLimits);
         Assert.DoesNotContain("frozen", json, StringComparison.Ordinal);
         Assert.DoesNotContain(PgProfileName, json, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Capabilities_carry_negotiated_and_supported_versions()
-    {
-        var negotiated = McpOperationMapper.BuildCapabilities(Scope(), includeDiagnostics: false, protocolVersion: "2026-07-28");
-        var unknown = McpOperationMapper.BuildCapabilities(Scope(), includeDiagnostics: false);
+    private static readonly string[] BroadFieldNames =
+    [
+        "tools", "supportedProtocolVersions", "protocolVersion", "server", "serverVersion",
+        "limits", "safetyAnalysis", "queryStoreAvailable", "indexesAvailable", "maxTools",
+    ];
 
-        Assert.Equal("2026-07-28", negotiated.ProtocolVersion);
-        Assert.Equal(McpHost.FallbackProtocolVersion, unknown.ProtocolVersion);
-        Assert.Equal(McpHost.SupportedProtocolVersions, negotiated.SupportedProtocolVersions);
+    private McpProcessContext RequestProcess() =>
+        McpProcessContext.Create(
+            new McpServerOptions { RequestScope = true, AllowedProfiles = [ProfileName] },
+            () => ProfileStore.Load(_targetsFile));
+
+    [Fact]
+    public void Default_capabilities_are_runtime_configuration_only_in_both_modes()
+    {
+        var fixedDocument = JsonSerializer.SerializeToElement(McpOperationMapper.BuildCapabilities(Scope(), includeDiagnostics: false), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var requestDocument = JsonSerializer.SerializeToElement(McpOperationMapper.BuildCapabilities(RequestProcess(), includeDiagnostics: false), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        foreach (var document in new[] { fixedDocument, requestDocument })
+        {
+            foreach (var name in BroadFieldNames)
+                Assert.False(document.TryGetProperty(name, out _), name);
+            Assert.False(document.TryGetProperty("diagnostics", out _));
+            Assert.StartsWith("cfg_", document.GetProperty("configurationRef").GetString(), StringComparison.Ordinal);
+            Assert.True(document.GetProperty("processLimits").GetProperty("maxResultBytes").GetInt32() > 0);
+            Assert.True(document.GetProperty("processLimits").GetProperty("maxOperationSeconds").GetInt32() > 0);
+            Assert.True(document.TryGetProperty("inputRoots", out _));
+        }
+
+        Assert.Equal("fixed", fixedDocument.GetProperty("scopeMode").GetString());
+        Assert.False(fixedDocument.TryGetProperty("allowedProfiles", out _));
+        Assert.Equal("request", requestDocument.GetProperty("scopeMode").GetString());
+        Assert.Equal([ProfileName], requestDocument.GetProperty("allowedProfiles").EnumerateArray().Select(item => item.GetString()));
+    }
+
+    [Fact]
+    public void Diagnostics_add_only_the_nonsecret_local_fields()
+    {
+        var plain = JsonSerializer.SerializeToElement(McpOperationMapper.BuildCapabilities(Scope(), includeDiagnostics: false), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var diagnosed = JsonSerializer.SerializeToElement(McpOperationMapper.BuildCapabilities(Scope(), includeDiagnostics: true), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        var added = diagnosed.EnumerateObject().Select(property => property.Name)
+            .Except(plain.EnumerateObject().Select(property => property.Name)).ToArray();
+        Assert.Equal(["diagnostics"], added);
+        foreach (var name in BroadFieldNames)
+            Assert.False(diagnosed.TryGetProperty(name, out _), name);
+        Assert.False(diagnosed.GetProperty("diagnostics").TryGetProperty("tools", out _));
+    }
+
+    [Fact]
+    public void Configuration_ref_is_stable_per_context_distinct_across_contexts_and_opaque()
+    {
+        var root = CreateRoot("ref-root-" + Guid.NewGuid().ToString("N"));
+        var process = RequestProcessWithRoots([root]);
+        var scope = ScopeWithRoots([root]);
+
+        var first = McpOperationMapper.BuildCapabilities(process, includeDiagnostics: false).ConfigurationRef;
+        var again = McpOperationMapper.BuildCapabilities(process, includeDiagnostics: true, inputRootCursor: 1).ConfigurationRef;
+        Assert.Equal(first, again);
+        Assert.NotEqual(first, McpOperationMapper.BuildCapabilities(RequestProcessWithRoots([root]), includeDiagnostics: false).ConfigurationRef);
+        Assert.Equal(
+            McpOperationMapper.BuildCapabilities(scope, includeDiagnostics: false).ConfigurationRef,
+            McpOperationMapper.BuildCapabilities(scope, includeDiagnostics: false, inputRootCursor: 1).ConfigurationRef);
+        Assert.NotEqual(
+            scope.ConfigurationRef,
+            ScopeWithRoots([root]).ConfigurationRef);
+        Assert.Equal(first, process.ResolveScope(new McpRequestScope(ProfileName, new Dictionary<string, string> { ["tenant"] = "frozen" })).ConfigurationRef);
+
+        foreach (var value in new[] { first, scope.ConfigurationRef })
+        {
+            Assert.DoesNotContain(Path.GetFileName(root), value, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(ProfileName, value, StringComparison.OrdinalIgnoreCase);
+            Assert.Matches("^cfg_[0-9a-f]{24}$", value);
+        }
+
+        var fixedViaProcess = McpProcessContext.Create(
+            new McpServerOptions { Profile = ProfileName, Vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
+            () => ProfileStore.Load(_targetsFile));
+        Assert.Equal(fixedViaProcess.FixedScope!.ConfigurationRef, McpOperationMapper.BuildCapabilities(fixedViaProcess, includeDiagnostics: false).ConfigurationRef);
+    }
+
+    [Fact]
+    public async Task Configuration_ref_is_the_same_on_every_input_root_page()
+    {
+        var roots = CreateRoots(6, 60);
+        const int budget = McpLimits.MinCallToolResultBudgetBytes;
+        foreach (var requestMode in new[] { false, true })
+        {
+            var pages = await CollectRootPagesAsync(CapabilitiesCall(requestMode, roots, budget), budget);
+            Assert.True(pages.Count >= 1);
+            Assert.Single(pages.Select(page => page.GetProperty("configurationRef").GetString()).Distinct());
+        }
+    }
+
+    [Fact]
+    public async Task Compact_capabilities_are_smaller_than_a_synthetic_broad_response_with_the_same_runtime_data()
+    {
+        var scope = Scope();
+        var compact = McpOperationMapper.BuildCapabilities(scope, includeDiagnostics: false);
+        var broad = new
+        {
+            server = "sqlharness",
+            serverVersion = "0.0.0",
+            protocolVersion = "2025-11-25",
+            engine = "sqlserver",
+            tools = McpToolCatalog.ToolNames,
+            limits = Enumerable.Range(0, 13).ToDictionary(index => "limit" + index, index => (long)index * 1000),
+            queryStoreAvailable = true,
+            indexesAvailable = true,
+            safetyAnalysis = new { analysisKind = "static-visible-effects", analysisContractVersion = 1, hiddenEffectsVerified = false, objectAndPermissionStatus = "unknown" },
+            scopeMode = "fixed",
+            supportedProtocolVersions = new[] { "2025-06-18", "2025-11-25", "2026-07-28" },
+            configurationRef = compact.ConfigurationRef,
+            engines = compact.Engines,
+            processLimits = compact.ProcessLimits,
+            inputRoots = compact.InputRoots,
+            inputRootCount = compact.InputRootCount,
+            inputRootsComplete = true,
+            inputRootsNextCursor = (int?)null,
+            inputRootsOmitted = 0,
+        };
+
+        var compactBytes = McpResultAdapter.MeasureBytes(McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, compact, null), "sqlharness_capabilities"));
+        var broadBytes = McpResultAdapter.MeasureBytes(McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, broad, null), "sqlharness_capabilities"));
+        Assert.True(compactBytes < broadBytes, $"{compactBytes} >= {broadBytes}");
+        await Task.CompletedTask;
     }
 
     private McpScope ScopeWithRoots(IReadOnlyList<string> roots, int maxResultBytes = McpLimits.DefaultProcessResultCeilingBytes) =>
@@ -838,15 +952,11 @@ public sealed class McpMappingTests : IDisposable
         var pg = Scope(PgProfileName);
         Assert.Equal(SqlEngine.Postgres, pg.ResolvedTarget.Engine);
         var capabilities = McpOperationMapper.BuildCapabilities(pg, includeDiagnostics: false);
-        Assert.Equal("postgres", capabilities.Engine);
-        Assert.False(capabilities.QueryStoreAvailable);
-        Assert.False(capabilities.IndexesAvailable);
+        Assert.Equal(["postgres"], capabilities.Engines);
+        Assert.Equal("fixed", capabilities.ScopeMode);
 
         var sqlserver = McpOperationMapper.BuildCapabilities(Scope(), includeDiagnostics: false);
-        Assert.Equal("sqlserver", sqlserver.Engine);
-        Assert.True(sqlserver.QueryStoreAvailable);
-        Assert.True(sqlserver.IndexesAvailable);
-        Assert.Equal(McpToolCatalog.ToolNames, sqlserver.Tools);
+        Assert.Equal(["sqlserver"], sqlserver.Engines);
     }
 
     [Fact]

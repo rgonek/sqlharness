@@ -13,9 +13,6 @@ public static class OperationLimits
     public const int QueryTimeoutSecondsMin = 1;
     public const int QueryTimeoutSecondsMax = 300;
 
-    public const int TopMin = 1;
-    public const int TopMax = 500;
-
     public const int MaxRowsMin = 0;
     public const int MaxRowsMax = 500;
 
@@ -26,9 +23,6 @@ public static class OperationLimits
 
     public static bool IsQueryTimeoutSeconds(int value) =>
         value is >= QueryTimeoutSecondsMin and <= QueryTimeoutSecondsMax;
-
-    public static bool IsTop(int value) =>
-        value is >= TopMin and <= TopMax;
 
     public static bool IsMaxRows(int value) =>
         value is >= MaxRowsMin and <= MaxRowsMax;

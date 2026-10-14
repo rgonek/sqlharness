@@ -685,6 +685,36 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.True(Properties(capabilities).TryGetProperty("includeDiagnostics", out _));
         Assert.Equal("integer", Properties(capabilities).GetProperty("inputRootCursor").GetProperty("type").GetString());
         Assert.Equal(0, Properties(capabilities).GetProperty("inputRootCursor").GetProperty("default").GetInt32());
+        Assert.False(Properties(capabilities).TryGetProperty("includeDetails", out _));
+    }
+
+    [Fact]
+    public async Task Served_capabilities_use_one_shared_description_and_reject_include_details_in_both_modes()
+    {
+        var scope = Scope();
+        var process = McpProcessContext.Create(new McpServerOptions
+        {
+            RequestScope = true,
+            AllowedProfiles = [ProfileName],
+        }, () => scope.Profiles);
+        await using var fixedServed = await ServedCatalog.CreateAsync(scope);
+        await using var requestServed = await ServedCatalog.CreateAsync(process);
+        foreach (var served in new[] { fixedServed, requestServed })
+        {
+            var tools = await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
+            var tool = tools.Single(item => item.Name == "sqlharness_capabilities");
+            Assert.Equal(McpToolCatalog.CapabilitiesDescription, tool.Description);
+            var schema = ServedSchema(tool);
+            Assert.Equal(McpToolCatalog.IncludeDiagnosticsDescription, Properties(schema).GetProperty("includeDiagnostics").GetProperty("description").GetString());
+            Assert.Equal(McpToolCatalog.InputRootCursorDescription, Properties(schema).GetProperty("inputRootCursor").GetProperty("description").GetString());
+
+            var rejected = await served.Client.CallToolAsync(
+                "sqlharness_capabilities",
+                new Dictionary<string, object?> { ["includeDetails"] = true },
+                cancellationToken: CancellationToken.None);
+            Assert.True(rejected.IsError == true);
+            Assert.Equal("safety_rejected", ServedEnvelope(rejected, "sqlharness_capabilities").GetProperty("error").GetProperty("code").GetString());
+        }
     }
 
     [Fact]
@@ -949,24 +979,6 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
-    public async Task Served_capabilities_disclose_the_static_analysis_boundary()
-    {
-        // 009/T1 red witness: MCP clients get the same versioned boundary
-        // through the budgeted capabilities safetyAnalysis block.
-        await using var served = await ServedCatalog.CreateAsync(Scope());
-        var capabilities = await served.Client.CallToolAsync(
-            "sqlharness_capabilities",
-            new Dictionary<string, object?>(),
-            cancellationToken: CancellationToken.None);
-        Assert.False(capabilities.IsError == true);
-        var safety = ServedEnvelope(capabilities, "sqlharness_capabilities").GetProperty("result").GetProperty("safetyAnalysis");
-        Assert.Equal("static-visible-effects", safety.GetProperty("analysisKind").GetString());
-        Assert.Equal(1, safety.GetProperty("analysisContractVersion").GetInt32());
-        Assert.False(safety.GetProperty("hiddenEffectsVerified").GetBoolean());
-        Assert.Equal("unknown", safety.GetProperty("objectAndPermissionStatus").GetString());
-    }
-
-    [Fact]
     public void Query_description_states_the_static_visible_effects_boundary()
     {
         // 009/T2: tool descriptions must match the real control (static
@@ -993,25 +1005,6 @@ public sealed class McpToolSchemaTests : IDisposable
         }
 
         Assert.DoesNotContain("read-only query", query, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task Served_capabilities_boundary_matches_the_shared_contract()
-    {
-        // 009/T3: MCP surfaces disclose the same versioned boundary as
-        // CLI — one SqlSafetyAnalysis contract on every surface, without
-        // ever dispatching (the throwing module proves no connection).
-        await using var served = await ServedCatalog.CreateAsync(Scope(), new ThrowingModule());
-        var capabilities = await served.Client.CallToolAsync(
-            "sqlharness_capabilities",
-            new Dictionary<string, object?>(),
-            cancellationToken: CancellationToken.None);
-        Assert.False(capabilities.IsError == true);
-        var safety = ServedEnvelope(capabilities, "sqlharness_capabilities").GetProperty("result").GetProperty("safetyAnalysis");
-        Assert.Equal(SqlSafetyAnalysis.AnalysisKind, safety.GetProperty("analysisKind").GetString());
-        Assert.Equal(SqlSafetyAnalysis.ContractVersion, safety.GetProperty("analysisContractVersion").GetInt32());
-        Assert.Equal(SqlSafetyAnalysis.HiddenEffectsVerified, safety.GetProperty("hiddenEffectsVerified").GetBoolean());
-        Assert.Equal(SqlSafetyAnalysis.ObjectAndPermissionStatus, safety.GetProperty("objectAndPermissionStatus").GetString());
     }
 
     [Theory]

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 using SqlHarness.Core;
@@ -10,30 +11,29 @@ namespace SqlHarness.Mcp;
 /// <summary>Safe mapping failure: constant text, never parameter values or SQL.</summary>
 public sealed class McpMappingException(string message) : Exception(message);
 
+/// <summary>Enforced process ceilings reported by capabilities.</summary>
+public sealed record McpProcessLimits(int MaxResultBytes, int MaxOperationSeconds);
+
 /// <summary>
-/// Capabilities document for the capabilities tool: versions, scope engine,
-/// tools, limits, the static-analysis boundary, and one page of the enforced
-/// input roots. <see cref="InputRoots"/> holds the normalized roots of this
-/// page in configured order; <see cref="InputRootCount"/> is the total;
+/// Runtime configuration for the capabilities tool. <see cref="ConfigurationRef"/>
+/// is random per process and identifies this frozen configuration; it is not
+/// authorization. <see cref="AllowedProfiles"/> exists only in request scope
+/// (fixed scope omits it). <see cref="InputRoots"/> holds the normalized roots
+/// of this page in configured order; <see cref="InputRootCount"/> is the total;
 /// <see cref="InputRootsComplete"/> is true only when this single response
 /// carries the whole inventory; <see cref="InputRootsNextCursor"/> is the
 /// next page offset (null at the end); <see cref="InputRootsOmitted"/> counts
 /// roots on this page's range that cannot fit any page within the budget.
 /// </summary>
 public sealed record McpCapabilitiesDocument(
-    string Server,
-    string ServerVersion,
-    string ProtocolVersion,
-    string Engine,
-    IReadOnlyList<string> Tools,
-    IReadOnlyDictionary<string, long> Limits,
-    bool QueryStoreAvailable,
-    bool IndexesAvailable,
-    IReadOnlyDictionary<string, string>? Diagnostics,
-    SqlHarnessSafetyAnalysis SafetyAnalysis,
-    string ScopeMode = "fixed",
+    string ConfigurationRef,
+    string ScopeMode,
+    IReadOnlyList<string> Engines,
+    McpProcessLimits ProcessLimits,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     IReadOnlyList<string>? AllowedProfiles = null,
-    IReadOnlyList<string>? SupportedProtocolVersions = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyDictionary<string, string>? Diagnostics = null,
     IReadOnlyList<string>? InputRoots = null,
     int InputRootCount = 0,
     bool InputRootsComplete = true,
@@ -89,7 +89,7 @@ public static partial class McpPlanTextPolicy
 /// composes shell commands or SQL text: SQL travels verbatim from the caller
 /// into Core operations, parameters and matrix values travel as the typed
 /// Core parameter model (never joined into or split from text), and
-/// every safety check stays inside Core (SqlValidation, dialect classifiers,
+/// every safety check stays inside Core (the dialect classifiers,
 /// the parameter binder, and module bounds). There is no second SQL
 /// validator here; argument faults below are contract checks with constant
 /// messages, and Core re-validates every bound at execution.
@@ -110,7 +110,7 @@ public static partial class McpOperationMapper
     private const int DefaultQueryMaxRows = 50;
     private const int DefaultRepeat = 5;
 
-    public static McpCapabilitiesDocument BuildCapabilities(McpScope scope, bool includeDiagnostics, string? protocolVersion = null, int inputRootCursor = 0)
+    public static McpCapabilitiesDocument BuildCapabilities(McpScope scope, bool includeDiagnostics, int inputRootCursor = 0)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ThrowIfInvalidInputRootCursor(scope.InputRoots, inputRootCursor);
@@ -120,84 +120,29 @@ public static partial class McpOperationMapper
             SqlEngine.Postgres => "postgres",
             _ => throw new McpMappingException("The scoped engine is not supported."),
         };
-        var pg = string.Equals(engine, "postgres", StringComparison.Ordinal);
         var document = new McpCapabilitiesDocument(
-            McpHost.ServerName,
-            McpHost.ServerVersion,
-            protocolVersion ?? McpHost.FallbackProtocolVersion,
-            engine,
-            McpToolCatalog.ToolNames,
-            new Dictionary<string, long>(StringComparer.Ordinal)
-            {
-                ["maxSqlBytes"] = McpLimits.MaxSqlBytes,
-                ["maxPlanBytes"] = McpLimits.MaxPlanBytes,
-                ["maxParameterSetBytes"] = McpLimits.MaxParameterSetBytes,
-                ["maxInlineBytes"] = McpLimits.MaxInlineBytes,
-                ["maxTools"] = McpLimits.MaxTools,
-                ["toolsListBudgetBytes"] = McpLimits.ToolsListBudgetBytes,
-                ["maxTimeoutSeconds"] = OperationLimits.QueryTimeoutSecondsMax,
-                ["maxRepeat"] = OperationLimits.RepeatMax,
-                ["maxTop"] = OperationLimits.TopMax,
-                ["maxRows"] = OperationLimits.MaxRowsMax,
-                ["defaultResultBytes"] = McpLimits.DefaultCallToolResultBudgetBytes,
-                ["maxResultBytes"] = scope.MaxResultBytes,
-                ["maxOperationSeconds"] = scope.MaxOperationSeconds,
-            },
-            QueryStoreAvailable: !pg,
-            IndexesAvailable: !pg,
-            includeDiagnostics ? LocalDiagnostics(scope) : null,
-            new SqlHarnessSafetyAnalysis(
-                SqlSafetyAnalysis.AnalysisKind,
-                SqlSafetyAnalysis.ContractVersion,
-                SqlSafetyAnalysis.HiddenEffectsVerified,
-                SqlSafetyAnalysis.ObjectAndPermissionStatus),
-            SupportedProtocolVersions: McpHost.SupportedProtocolVersions);
+            scope.ConfigurationRef,
+            "fixed",
+            [engine],
+            new McpProcessLimits(scope.MaxResultBytes, scope.MaxOperationSeconds),
+            Diagnostics: includeDiagnostics ? LocalDiagnostics(scope.InputRoots) : null);
         return WithInputRootPage(document, scope.InputRoots, inputRootCursor, scope.MaxResultBytes);
     }
 
-    public static McpCapabilitiesDocument BuildCapabilities(McpProcessContext context, bool includeDiagnostics, string? protocolVersion = null, int inputRootCursor = 0)
+    public static McpCapabilitiesDocument BuildCapabilities(McpProcessContext context, bool includeDiagnostics, int inputRootCursor = 0)
     {
         ArgumentNullException.ThrowIfNull(context);
         if (!context.RequestScope)
-            return BuildCapabilities(context.FixedScope!, includeDiagnostics, protocolVersion, inputRootCursor);
+            return BuildCapabilities(context.FixedScope!, includeDiagnostics, inputRootCursor);
         ThrowIfInvalidInputRootCursor(context.InputRoots, inputRootCursor);
 
-        var diagnostics = includeDiagnostics
-            ? LocalDiagnostics(context.InputRoots)
-            : null;
         var document = new McpCapabilitiesDocument(
-            McpHost.ServerName,
-            McpHost.ServerVersion,
-            protocolVersion ?? McpHost.FallbackProtocolVersion,
-            "sqlserver",
-            McpToolCatalog.ToolNames,
-            new Dictionary<string, long>(StringComparer.Ordinal)
-            {
-                ["maxSqlBytes"] = McpLimits.MaxSqlBytes,
-                ["maxPlanBytes"] = McpLimits.MaxPlanBytes,
-                ["maxParameterSetBytes"] = McpLimits.MaxParameterSetBytes,
-                ["maxInlineBytes"] = McpLimits.MaxInlineBytes,
-                ["maxTools"] = McpLimits.MaxTools,
-                ["toolsListBudgetBytes"] = McpLimits.ToolsListBudgetBytes,
-                ["maxTimeoutSeconds"] = OperationLimits.QueryTimeoutSecondsMax,
-                ["maxRepeat"] = OperationLimits.RepeatMax,
-                ["maxTop"] = OperationLimits.TopMax,
-                ["maxRows"] = OperationLimits.MaxRowsMax,
-                ["defaultResultBytes"] = McpLimits.DefaultCallToolResultBudgetBytes,
-                ["maxResultBytes"] = context.MaxResultBytes,
-                ["maxOperationSeconds"] = context.MaxOperationSeconds,
-            },
-            QueryStoreAvailable: true,
-            IndexesAvailable: true,
-            diagnostics,
-            new SqlHarnessSafetyAnalysis(
-                SqlSafetyAnalysis.AnalysisKind,
-                SqlSafetyAnalysis.ContractVersion,
-                SqlSafetyAnalysis.HiddenEffectsVerified,
-                SqlSafetyAnalysis.ObjectAndPermissionStatus),
-            ScopeMode: "request",
-            AllowedProfiles: context.AllowedProfiles,
-            SupportedProtocolVersions: McpHost.SupportedProtocolVersions);
+            context.ConfigurationRef,
+            "request",
+            ["sqlserver"],
+            new McpProcessLimits(context.MaxResultBytes, context.MaxOperationSeconds),
+            context.AllowedProfiles,
+            includeDiagnostics ? LocalDiagnostics(context.InputRoots) : null);
         return WithInputRootPage(document, context.InputRoots, inputRootCursor, context.MaxResultBytes);
     }
 
@@ -262,39 +207,11 @@ public static partial class McpOperationMapper
         }
     }
 
-    private static IReadOnlyDictionary<string, string> LocalDiagnostics(McpScope scope)
-    {
-        // Local counts and existence flags only; never secrets.
-        var diagnostics = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["inputRootCount"] = scope.InputRoots.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["tools"] = McpToolCatalog.ToolNames.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        };
-        foreach (var (key, directory) in new (string, string)[]
-        {
-            ("compareDirExists", SqlHarnessPaths.CompareDir),
-            ("snapshotsDirExists", SqlHarnessPaths.SnapshotsDir),
-        })
-        {
-            try
-            {
-                diagnostics[key] = Directory.Exists(directory) ? "true" : "false";
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-            {
-                diagnostics[key] = "unknown";
-            }
-        }
-
-        return diagnostics;
-    }
-
     private static IReadOnlyDictionary<string, string> LocalDiagnostics(IReadOnlyList<string> inputRoots)
     {
         var diagnostics = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["inputRootCount"] = inputRoots.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["tools"] = McpToolCatalog.ToolNames.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
         };
         foreach (var (key, directory) in new (string, string)[]
         {

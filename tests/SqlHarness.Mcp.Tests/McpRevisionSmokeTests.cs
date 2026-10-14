@@ -258,11 +258,10 @@ public sealed class McpRevisionSmokeTests : IDisposable
             var capabilities = await client.CallToolAsync("sqlharness_capabilities", new Dictionary<string, object?>(), cancellationToken: cts.Token);
             Assert.NotEqual(true, capabilities.IsError);
             var capabilitiesResult = JsonDocument.Parse(Assert.Single(capabilities.Content.OfType<TextContentBlock>()).Text).RootElement.GetProperty("result");
-            Assert.Equal(revision, capabilitiesResult.GetProperty("protocolVersion").GetString());
+            Assert.False(capabilitiesResult.TryGetProperty("protocolVersion", out _));
             Assert.Equal("request", capabilitiesResult.GetProperty("scopeMode").GetString());
             Assert.Equal(new[] { "sample-a" }, capabilitiesResult.GetProperty("allowedProfiles").EnumerateArray().Select(value => value.GetString()!).ToArray());
-            Assert.Equal(McpHost.SupportedProtocolVersions,
-                capabilitiesResult.GetProperty("supportedProtocolVersions").EnumerateArray().Select(value => value.GetString()!).ToArray());
+            Assert.False(capabilitiesResult.TryGetProperty("supportedProtocolVersions", out _));
 
             var missingScope = await client.CallToolAsync("sqlharness_query",
                 new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1" }, cancellationToken: cts.Token);

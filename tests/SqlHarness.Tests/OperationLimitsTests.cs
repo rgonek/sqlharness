@@ -36,8 +36,6 @@ public sealed class OperationLimitsTests
     {
         Assert.Equal(1, OperationLimits.QueryTimeoutSecondsMin);
         Assert.Equal(300, OperationLimits.QueryTimeoutSecondsMax);
-        Assert.Equal(1, OperationLimits.TopMin);
-        Assert.Equal(500, OperationLimits.TopMax);
         Assert.Equal(0, OperationLimits.MaxRowsMin);
         Assert.Equal(500, OperationLimits.MaxRowsMax);
         Assert.Equal(1, OperationLimits.RepeatMin);
@@ -71,14 +69,6 @@ public sealed class OperationLimitsTests
     [InlineData(301, false)]
     public void QueryTimeout_predicate_enforces_one_to_three_hundred(int value, bool expected) =>
         Assert.Equal(expected, OperationLimits.IsQueryTimeoutSeconds(value));
-
-    [Theory]
-    [InlineData(1, true)]
-    [InlineData(500, true)]
-    [InlineData(0, false)]
-    [InlineData(501, false)]
-    public void Top_predicate_enforces_one_to_five_hundred(int value, bool expected) =>
-        Assert.Equal(expected, OperationLimits.IsTop(value));
 
     [Theory]
     [InlineData(0, true)]

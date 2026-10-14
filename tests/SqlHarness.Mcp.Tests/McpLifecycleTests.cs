@@ -801,9 +801,7 @@ public sealed class McpLifecycleTests
             MaxOperationSeconds = 60,
         });
         var capabilities = McpOperationMapper.BuildCapabilities(scoped, includeDiagnostics: false);
-        Assert.Equal(65536, capabilities.Limits["defaultResultBytes"]);
-        Assert.Equal(8192, capabilities.Limits["maxResultBytes"]);
-        Assert.Equal(60, capabilities.Limits["maxOperationSeconds"]);
+        Assert.Equal(new McpProcessLimits(8192, 60), capabilities.ProcessLimits);
 
         // Per-call time budgets only lower the process maximum, mirroring
         // the T4 byte budget: above-maximum clamps, below-minimum throws.
