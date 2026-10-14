@@ -2,18 +2,17 @@ import type { ReactNode } from "react"
 import { Link, useParams, useSearch } from "@tanstack/react-router"
 import { NotFoundError } from "@/api/client"
 import { useOperation } from "@/api/queries"
-import type { OperationDetail } from "@/api/types"
 import { ErrorState } from "@/components/ErrorState"
 import { FlagBadges } from "@/components/FlagBadges"
 import { SqlBlock } from "@/components/SqlBlock"
 import { StatusBadge } from "@/components/StatusBadge"
 import { VariantPanel } from "@/components/VariantPanel"
+import { CompareDetail } from "@/components/CompareDetail"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { comparePairs, compareRows, formatChange, variantLabel } from "@/lib/compare"
+import { variantLabel } from "@/lib/compare"
 import { formatDuration, formatNumber, formatTimestamp, shortHash } from "@/lib/format"
 import { agentLabel } from "@/lib/agents"
 import { parseRouteId } from "@/lib/routeId"
@@ -48,47 +47,6 @@ function SummaryFacts({ summary }: { summary: Record<string, unknown> }) {
       )}
       {typeof summary.cells === "number" && <span className="text-sm">{summary.equivalentCells as number}/{summary.cells} cells equivalent</span>}
     </div>
-  )
-}
-
-function Comparison({ detail }: { detail: OperationDetail }) {
-  const pairs = comparePairs(detail.variants)
-  if (pairs.length === 0) return null
-  return (
-    <Card role="region" aria-label="Baseline vs candidate">
-      <CardHeader>
-        <CardTitle>Baseline vs candidate</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4 overflow-x-auto">
-        {pairs.map(pair => (
-          <div key={pair.label} className="space-y-2">
-            {pairs.length > 1 && <div className="text-sm text-muted-foreground">{pair.label}</div>}
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Metric</TableHead>
-                  <TableHead className="text-right">Baseline</TableHead>
-                  <TableHead className="text-right">Candidate</TableHead>
-                  <TableHead className="text-right">Change</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {compareRows(pair.baseline, pair.candidate).map(row => (
-                  <TableRow key={row.metric}>
-                    <TableCell>{row.metric}</TableCell>
-                    <TableCell className="text-right">{formatNumber(row.baseline)}</TableCell>
-                    <TableCell className="text-right">{formatNumber(row.candidate)}</TableCell>
-                    <TableCell className="text-right">
-                      {formatChange(row.delta)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
   )
 }
 
@@ -167,7 +125,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: { retur
               </Link>
             })}
           </div>}
-          {detail.summary && <SummaryFacts summary={detail.summary} />}
+          {detail.summary && op.operation !== "compare" && <SummaryFacts summary={detail.summary} />}
         </CardContent>
       </Card>
 
@@ -191,10 +149,10 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: { retur
         </Card>
       )}
 
-      <Comparison detail={detail} />
+      {op.operation === "compare" && <CompareDetail detail={detail} />}
 
-      {detail.variants.length === 1 && <VariantPanel variant={detail.variants[0]} engine={op.engine} />}
-      {detail.variants.length > 1 && (
+      {op.operation !== "compare" && detail.variants.length === 1 && <VariantPanel variant={detail.variants[0]} engine={op.engine} />}
+      {op.operation !== "compare" && detail.variants.length > 1 && (
         <Tabs defaultValue={String(detail.variants[0].ordinal)}>
           <TabsList>
             {detail.variants.map(v => (
@@ -211,7 +169,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: { retur
         </Tabs>
       )}
 
-      <Card>
+      {op.operation !== "compare" && <Card>
         <CardHeader>
           <CardTitle>SQL</CardTitle>
         </CardHeader>
@@ -225,7 +183,7 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: { retur
             </>
           )}
         </CardContent>
-      </Card>
+      </Card>}
     </div>
   )
 }
