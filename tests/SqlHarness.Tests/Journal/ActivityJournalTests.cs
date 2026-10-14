@@ -63,7 +63,8 @@ public sealed class ActivityJournalTests
 
         var hashOnlyJournal = Open(hashOnly, TextWriter.Null);
         hashOnlyJournal.Begin(JournalTestData.Session(), start);
-        Open(sensitive, TextWriter.Null, storeSensitive: true).Begin(JournalTestData.Session(), start);
+        var sensitiveJournal = Open(sensitive, TextWriter.Null, storeSensitive: true);
+        sensitiveJournal.Begin(JournalTestData.Session(), start);
 
         var hashOnlyRow = JournalDb.Rows(hashOnly.DatabasePath,
             "SELECT compare_subject, compare_scope, compare_conditions_json FROM operations").Single();
@@ -75,24 +76,52 @@ public sealed class ActivityJournalTests
         Assert.True(JournalDb.Contains(hashOnlyBytes, "Multiset"));
         Assert.True(JournalDb.Contains(hashOnlyBytes, "orders-report"));
 
-        var sensitiveBytes = JournalDb.AllBytes(sensitive.DatabasePath);
-        Assert.True(JournalDb.Contains(sensitiveBytes, "SQLH_SETUP_MARKER"));
-        Assert.True(JournalDb.Contains(sensitiveBytes, "SQLH_VALUE_MARKER"));
-        Assert.Equal(8L, JournalDb.Rows(sensitive.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
-
         var matrix = new SqlHarnessCompareMatrixOperation(
             new SqlTargetRequest("local", new Dictionary<string, string>()), null,
-            "SELECT @tenant", "SELECT @tenant", [], 20, 3, "tenant:int=1,2")
+            "SELECT @tenant", "SELECT @tenant", [], 20, 3, "tenant:nvarchar=SQLH_CLI_MATRIX_MARKER")
         {
             Context = new CompareContext("orders-report", "history"),
         };
         var matrixStart = OperationJournalDescriber.DescribeStart(matrix);
         hashOnlyJournal.Begin(JournalTestData.Session(), matrixStart);
+        sensitiveJournal.Begin(JournalTestData.Session(), matrixStart);
         var matrixRow = JournalDb.Rows(hashOnly.DatabasePath,
             "SELECT compare_subject, compare_scope, compare_conditions_json FROM operations ORDER BY id DESC LIMIT 1").Single();
         Assert.Equal("orders-report", matrixRow["compare_subject"]);
         Assert.Equal("history", matrixRow["compare_scope"]);
-        Assert.DoesNotContain("1,2", (string)matrixRow["compare_conditions_json"]!);
+        Assert.DoesNotContain("SQLH_CLI_MATRIX_MARKER", (string)matrixRow["compare_conditions_json"]!);
+        Assert.False(JournalDb.Contains(JournalDb.AllBytes(hashOnly.DatabasePath), "SQLH_CLI_MATRIX_MARKER"));
+
+        var sensitiveBytes = JournalDb.AllBytes(sensitive.DatabasePath);
+        Assert.True(JournalDb.Contains(sensitiveBytes, "SQLH_SETUP_MARKER"));
+        Assert.True(JournalDb.Contains(sensitiveBytes, "SQLH_VALUE_MARKER"));
+        Assert.True(JournalDb.Contains(sensitiveBytes, "SQLH_CLI_MATRIX_MARKER"));
+        Assert.Equal(8L, JournalDb.Rows(sensitive.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+    }
+
+    [Fact]
+    public void Oversized_sensitive_conditions_remain_valid_bounded_json_with_omission_metadata()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp, TextWriter.Null, storeSensitive: true);
+        var operation = new SqlHarnessCompareOperation(
+            new SqlTargetRequest("local", new Dictionary<string, string>()),
+            new string('\0', 12_000), "SELECT @id", "SELECT @id", ["id:int=SQLH_RETAIN_MARKER"], 30, 5);
+        var start = OperationJournalDescriber.DescribeStart(operation);
+
+        journal.Begin(JournalTestData.Session(), start);
+
+        var jsonText = (string)JournalDb.Rows(temp.DatabasePath,
+            "SELECT compare_conditions_json FROM operations").Single()["compare_conditions_json"]!;
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(jsonText) <= 64 * 1024);
+        using var json = System.Text.Json.JsonDocument.Parse(jsonText);
+        var root = json.RootElement;
+        Assert.Equal(30, root.GetProperty("timeoutSeconds").GetInt32());
+        Assert.Equal(5, root.GetProperty("repeat").GetInt32());
+        Assert.Equal("Ordered", root.GetProperty("comparisonMode").GetString());
+        Assert.Contains("setupSql", root.GetProperty("omittedSensitiveFields").EnumerateArray().Select(value => value.GetString()));
+        Assert.Contains("SQLH_RETAIN_MARKER", root.GetProperty("parameters").GetRawText());
+        Assert.False(root.TryGetProperty("setupSql", out _));
     }
 
     [Fact]

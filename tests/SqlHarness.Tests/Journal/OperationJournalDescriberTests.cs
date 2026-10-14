@@ -51,6 +51,21 @@ public sealed class OperationJournalDescriberTests
     }
 
     [Fact]
+    public void Compare_matrix_start_retains_legacy_cli_matrix_text_for_sensitive_persistence()
+    {
+        var operation = new SqlHarnessCompareMatrixOperation(
+            Target, null, "SELECT @tenant", "SELECT @tenant", [], 30, 5, "tenant:nvarchar=acme,contoso")
+        {
+            Context = new CompareContext("orders-report", "whole"),
+        };
+
+        var start = OperationJournalDescriber.DescribeStart(operation);
+
+        Assert.Equal(new CompareContext("orders-report", "whole"), start.Context);
+        Assert.Equal("tenant:nvarchar=acme,contoso", start.CompareConditions!.MatrixText);
+    }
+
+    [Fact]
     public void Unsafe_direct_start_has_no_profile()
     {
         var direct = new SqlTargetRequest(null, new Dictionary<string, string>(), "srv", "db", "integrated", UnsafeDirect: true);

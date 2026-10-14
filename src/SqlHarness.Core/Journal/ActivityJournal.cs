@@ -17,6 +17,17 @@ public sealed class ActivityJournal : IActivityJournal
 {
     private const int SqliteCorrupt = 11;
     private const int SqliteNotADatabase = 26;
+    private const int MaximumCompareConditionsBytes = 64 * 1024;
+
+    private static readonly (string Name, Func<CompareJournalConditions, object?> Value)[] SensitiveCompareConditionFields =
+    [
+        ("setupSql", conditions => conditions.SetupSql),
+        ("parameters", conditions => conditions.Parameters),
+        ("matrixText", conditions => conditions.MatrixText),
+        ("matrix", conditions => conditions.Matrix),
+        ("parameterSets", conditions => conditions.ParameterSets),
+        ("typedParameters", conditions => conditions.TypedParameters),
+    ];
 
     private static readonly JsonSerializerOptions WaitJson = new(JsonSerializerDefaults.Web);
 
@@ -546,28 +557,47 @@ public sealed class ActivityJournal : IActivityJournal
         if (conditions is null)
             return null;
 
-        var safe = new
+        var json = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
-            timeoutSeconds = conditions.TimeoutSeconds,
-            repeat = conditions.Repeat,
-            comparisonMode = conditions.ComparisonMode.ToString(),
-            compareNullability = conditions.CompareNullability,
+            ["timeoutSeconds"] = conditions.TimeoutSeconds,
+            ["repeat"] = conditions.Repeat,
+            ["comparisonMode"] = conditions.ComparisonMode.ToString(),
+            ["compareNullability"] = conditions.CompareNullability,
         };
-        object value = _storeSensitive
-            ? new
+        if (!_storeSensitive)
+            return JsonSerializer.Serialize(json, WaitJson);
+
+        var omitted = new List<string>();
+        foreach (var field in SensitiveCompareConditionFields)
+        {
+            var candidate = new Dictionary<string, object?>(json, StringComparer.Ordinal)
             {
-                safe.timeoutSeconds,
-                safe.repeat,
-                safe.comparisonMode,
-                safe.compareNullability,
-                setupSql = conditions.SetupSql,
-                parameters = conditions.Parameters,
-                matrix = conditions.Matrix,
-                parameterSets = conditions.ParameterSets,
-                typedParameters = conditions.TypedParameters,
-            }
-            : safe;
-        return JsonSerializer.Serialize(value, WaitJson);
+                [field.Name] = field.Value(conditions),
+                // Reserve room for the largest omission marker before accepting another field.
+                ["omittedSensitiveFields"] = SensitiveCompareConditionFields.Select(item => item.Name).ToArray(),
+            };
+            if (Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(candidate, WaitJson)) <= MaximumCompareConditionsBytes)
+                json = candidate;
+            else
+                omitted.Add(field.Name);
+        }
+
+        json["omittedSensitiveFields"] = omitted;
+        var serialized = JsonSerializer.Serialize(json, WaitJson);
+        if (Encoding.UTF8.GetByteCount(serialized) <= MaximumCompareConditionsBytes)
+            return serialized;
+
+        // Keep the safe settings and an explicit indication if an unexpected serializer expansion
+        // exceeds the reserved margin; never persist truncated or invalid JSON.
+        var safeFallback = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["timeoutSeconds"] = conditions.TimeoutSeconds,
+            ["repeat"] = conditions.Repeat,
+            ["comparisonMode"] = conditions.ComparisonMode.ToString(),
+            ["compareNullability"] = conditions.CompareNullability,
+            ["omittedSensitiveFields"] = SensitiveCompareConditionFields.Select(item => item.Name).ToArray(),
+        };
+        return JsonSerializer.Serialize(safeFallback, WaitJson);
     }
 
     private static object Nullable(DateTimeOffset? value) => value is null ? DBNull.Value : Timestamp(value.Value);

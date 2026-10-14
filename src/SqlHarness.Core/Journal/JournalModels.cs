@@ -54,6 +54,7 @@ public sealed record CompareJournalConditions(
     bool CompareNullability,
     string? SetupSql,
     IReadOnlyList<string> Parameters,
+    string? MatrixText,
     SqlHarnessParameterMatrixInput? Matrix,
     IReadOnlyList<SqlHarnessParameterSetInput>? ParameterSets,
     IReadOnlyList<SqlHarnessParameterInput>? TypedParameters);

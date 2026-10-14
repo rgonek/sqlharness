@@ -31,14 +31,14 @@ internal static class OperationJournalDescriber
                 Context = compare.Context,
                 CompareConditions = new CompareJournalConditions(
                     compare.TimeoutSeconds, compare.Repeat, compare.CompareResults, compare.CompareNullability,
-                    compare.SetupSql, compare.Parameters, null, null, compare.TypedParameters),
+                    compare.SetupSql, compare.Parameters, null, null, null, compare.TypedParameters),
             },
             SqlHarnessCompareMatrixOperation matrix => start with
             {
                 Context = matrix.Context,
                 CompareConditions = new CompareJournalConditions(
                     matrix.TimeoutSeconds, matrix.Repeat, matrix.CompareResults, matrix.CompareNullability,
-                    matrix.SetupSql, matrix.Parameters, matrix.TypedMatrix, matrix.ParameterSets, matrix.TypedParameters),
+                    matrix.SetupSql, matrix.Parameters, matrix.Matrix, matrix.TypedMatrix, matrix.ParameterSets, matrix.TypedParameters),
             },
             _ => start,
         };
