@@ -28,6 +28,19 @@ investigation forward, and one wrong claim reached the operator:
 
 ## Decisions (operator, 2026-10-12)
 
+### Accepted follow-up, 2026-10-14
+
+[Plan 065](../../../plans/065-artifact-plan-pages-and-clipping.md) owns a follow-up to decisions 3 and 9:
+count each clipped retained field once, independently of tentative fitting, and use a bounded 128-node
+source window for plan pages with the existing byte-aware projection and advancing cursor. Keep cell limits,
+selectors, scope ownership and explicit missing evidence. Preserve historical observations and DONE statuses.
+Its evidence records 14 artifact reads (6 first pages, 6 continuation pages, 2 agent repeats); retain this
+breakdown when judging the delivered solution. Compare complete equivalent evidence workflows and keep
+call counts separate from byte/token savings. Planning is accepted; implementation/publication require
+separate authorization.
+
+### Original decisions (preserved)
+
 1. **One representation.** Tool results carry only the text block. `outputSchema` and
    `structuredContent` are removed. The envelope contract stays in `docs/mcp.md` and is pinned by tests.
 2. **Budget.** The budget measures the UTF-8 bytes of the text the model reads. Default 64 KiB per call;

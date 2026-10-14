@@ -20,6 +20,42 @@ Append one anonymized entry per reviewed session with:
 - Cost coverage: observed work/calls, unmeasured costs and separately labeled modeled actions.
 - Optional API implications: new need, counterexample, no new need or insufficient evidence.
 
+### Comparable fields (template revision 2026-10-14)
+
+Later synthesis must decide whether one report API covers most sessions, so entries must be comparable.
+Entries written before this revision keep their original form; do not rewrite them. From 2026-10-14 each
+entry starts with one classification line and adds three fields to the list above:
+
+- **Classification line:** `Kind:` optimization / verification / diagnosis / other · `Outcome:` adopt /
+  reject / partial / needsEvidence / pass / fail / none · `Scopes:` count · `System label:` stable label or
+  unmapped.
+- **Report blocks:** which blocks the final report contained: results table (state its axes, e.g. variant ×
+  case), recommendation with trade-offs, decision, questions for a human, limits, follow-up offer, corrections.
+- **Content provenance:** approximate counts of report statements by source: journal-backed metrics
+  (measure/compare), `query` result rows, artifact sections or files, application code/docs, agent inference.
+  Name which ones were transcribed by hand and which decision content has no journal operation at all.
+- **Corrections:** claims corrected after delivery: count and cause (stale memory, unlabeled inference,
+  misread output, tool defect). Zero is a valid value.
+
+Then add one row to the synthesis table below. Counts are approximate observations, not measurements of
+the tool. Keep workload values out.
+
+### Synthesis table (append-only)
+
+| Entry | Kind | Outcome | Scopes | Report blocks | Journal-backed / total numeric statements | Decision content without journal operation | Corrections | API implication |
+|---|---|---|---|---|---|---|---|---|
+| 2026-10-07 System1 batch optimization | optimization | needsEvidence | not recorded | not recorded | not recorded | not recorded | not recorded | batching |
+| 2026-10-07 System2 validation-query optimization | optimization | reject | not recorded | not recorded | not recorded | not recorded | not recorded | batching, cell identity, report-level context |
+| 2026-10-08 System2 deployment verification | verification | pass | 5 | not recorded | not recorded | not recorded | not recorded | multi-scope, verification verdicts |
+| Evidence: sync-delay diagnosis | diagnosis | not recorded | 5 | not recorded | not recorded | yes (hypothesis) | not recorded | none |
+| Evidence: full-import recalculation diagnosis | diagnosis | not recorded | not recorded | not recorded | not recorded | yes (source code) | not recorded | none |
+| 2026-10-12 System1 optimization | optimization | none | 1 | not recorded | not recorded | not recorded | not recorded | put/get |
+| 2026-10-14 System1 negative optimization | optimization | reject | not recorded | table, limits | not recorded | not recorded | 1 (retro clarification) | none |
+| 2026-10-14 point-lookup query (unmapped) | optimization | adopt (marginal) + reject | 1 | variant × case table, recommendation with trade-offs, question for a human, limits, follow-up offer | ~12 / ~15 | yes (trade-offs, cache argument, semantic question) | 3 | none; counterexample to journal-only rendering |
+
+Rows for entries before the revision contain only what those entries state; "not recorded" means the
+original entry did not record the field, not that the value was zero.
+
 If a report or transcript is unavailable, record that limit; do not invent observed content.
 Preserve existing entries verbatim. Append dated corrections or follow-ups with a reference to the
 original entry. Design revisions must retain observations even when recorded outside the evidence log.
@@ -314,3 +350,77 @@ corrections rather than rewriting earlier agents' observations.
 - **API edits:** replace the six-action lifecycle with put/get; make put atomic and idempotent; use closed
   typed evidence selectors; reuse producer references and coverage semantics from plan 059. This entry
   supersedes the earlier retrospective's API unchanged verdict for this session.
+
+### 2026-10-14 — System1 negative optimization result and plan-reading cost
+
+- **Actual report:** One medium-size query, one candidate and three parameter sets. The final chat used a
+  before/after table of logical reads and elapsed medians, reported observed equivalence and rejected the
+  candidate for a measured latency regression. It linked a local report and stated measurement-order limits.
+  No product or database changes. The negative result advanced the investigation.
+- **Evidence and interpretation:** Repeated multiset comparison, actual-plan node pages and a separate
+  two-direction difference query. Metrics were manually transcribed into chat and a local document.
+  Changed operators and estimation discrepancies did not prove the cause of the slowdown. The retrospective
+  clarified that all node pages were read but most reads omitted predicates; full node coverage does not
+  establish full predicate review. Preserve that clarification with the original conclusion.
+- **Dashboard usefulness:** Retain rejected attempts, per-case equivalence/regression, decisions, evidence
+  references and limits. A reference establishes available evidence, not completed review or causation.
+  The dashboard was not used or inspected; usability gains remain a hypothesis.
+- **Observed workflow cost:** capabilities x1, query x4, compare x1, artifact x14: **20 calls**. Artifact work
+  was **6 required first pages + 6 required continuation pages + 2 repeated first pages**: 12 necessary reads
+  under the existing source-page contract and 2 agent organization errors. Repeats used a different text
+  option. Preserve this breakdown in the final decision for [plan 065](../../../plans/065-artifact-plan-pages-and-clipping.md).
+  Do not credit the tool with eliminating agent repeats. Subsequent retro/discovery calls are excluded.
+- **Cost coverage:** Four exact-text responses had measured UTF-8 bytes. Twelve plan pages were retained as
+  parsed JSON; reconstructed size is not exact emitted-byte evidence. Remaining response bytes, inputs,
+  tools/list discovery, final chat and retro costs were unmeasured. No complete measured token total or savings
+  baseline exists. Byte-based token estimates are not tokenizer measurements. No workload values or output-size
+  measurements are published here.
+- **Optional API implications:** Retain decisions and limits from negative sessions; no evidence for extra
+  report lifecycle actions or API readiness. A six-call plan-reading workflow is hypothetical and conditional
+  on all required evidence fitting one response per selection. It was not executed. Call reduction, dashboard
+  usefulness and token savings are separate questions. The draft remains collecting observations without API
+  changes or implementation approval.
+
+### 2026-10-14 — small point-lookup query: marginal accepted candidate, rejected reshape
+
+System label: unmapped. This entry does not assert identity with the System1/System2 entries above.
+
+- **Actual report:** The agent chose one medium-size count query itself (no user-named target) and measured a
+  baseline, then compared two candidates over a five-value matrix: one parameter replacing a settings lookup,
+  and an existence-test reshape. The final chat had a variant table (result equivalence per case, per-case
+  read deltas, elapsed), a recommendation with trade-offs (the replaced pattern recurs in other queries, so it
+  should be changed everywhere or nowhere), a business-semantics question about a filter inside `TOP (1)`,
+  limits (an untested code branch and setting value, a sub-resolution timing, local evidence paths) and an offer
+  of follow-up work. Outcome: one candidate recommended with a marginal gain, one rejected. No product change.
+- **Evidence and interpretation:** Catalog queries (indexes, types, distributions), one measure, two compares.
+  Per-table reads in the compare response identified the source of both deltas without artifact reads.
+  Measure plan nodes and per-table reads were read from local artifact files outside the tool. Report numbers
+  were transcribed by hand from tool responses. The recommendation's trade-offs, the cache claim and the
+  semantic question came from application source code, not journal evidence. Corrections after delivery: an
+  interim message wrongly said concurrent calls return `busy` (stale agent memory). Two report claims were code
+  inferences presented without that label: a removed type conversion and the absence of an extra round trip.
+- **Dashboard usefulness:** Retain the variant × case equivalence/read table, the rejected reshape with its
+  reason, the recommendation's trade-offs, the open semantic question and the corrections. 9 of 10 regression
+  verdicts were `inconclusive` because of whole-millisecond jitter, and a large relative read increase was labelled
+  `not-regressed`. Both needed manual explanation in chat ([plan 066](../../../plans/066-regression-resolution-floor-and-cost-thresholds.md)).
+  A rendered verdict would have repeated that misleading summary unless it carried the same caveats. The dashboard
+  was not used.
+- **Observed workflow cost:** capabilities x1, query x6 (one agent SQL error, one re-query after a 512-character
+  cell clip), measure x1, compare x2, artifact x0 plus two local file reads: **10 tool calls**. One compare ran
+  several times longer than the other with the database idle and moved to the background. Its cause was not
+  established. Retro calls (one query, journal and artifact-timestamp reads) are excluded.
+- **Cost coverage:** Journal token columns exist for these operations but were not summed for publication.
+  Response bytes were only estimated. Inputs, tools/list discovery, final chat and retro were unmeasured.
+  No workload values are published here.
+- **Optional API implications:** No new report-API need. Counterexample to journal-only rendering: the main
+  decision content (trade-offs, a semantic question, a cache argument) has no journal operation. A report needs
+  agent-authored context with its source kind (code, data, inference), as the earlier finding/hypothesis
+  distinction already suggests. Regression and threshold presentation is a tool-contract issue, not a report-API one.
+- **Follow-up 2026-10-14 (same retro, comparable fields added after the template revision):**
+  `Kind:` optimization · `Outcome:` adopt (marginal) + reject · `Scopes:` 1 · `System label:` unmapped.
+  Report blocks: variant × case table, recommendation with trade-offs, question for a human, limits,
+  follow-up offer. Content provenance: about 12 numeric statements came from measure/compare responses,
+  2 from `query` rows and 1 from artifact files read outside the tool, all transcribed by hand.
+  Decision content without any journal operation came from application code (pattern recurrence, cache
+  behavior, filter semantics) and agent inference (recommendation). Corrections: 3 (one from stale agent
+  memory, two unlabeled code inferences).
