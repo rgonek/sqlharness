@@ -711,10 +711,12 @@ public class SqlHarnessQueryTests
     [InlineData("anotherdb")]
     public async Task Postgres_mutation_without_exact_database_approval_never_reaches_the_session(string? confirmation)
     {
+        // 047 step 3: an unqualified target is no longer a mutation here, so the
+        // schema-qualified shape is what still needs the exact approval.
         var session = FakeSqlSession.WithIdentity("localhost", "appdb");
         var operation = new SqlHarnessQueryOperation(
             new SqlTargetRequest("local-pg", new Dictionary<string, string>()),
-            "INSERT INTO items (id) VALUES (1)",
+            "INSERT INTO public.items (id) VALUES (1)",
             [],
             30,
             50,

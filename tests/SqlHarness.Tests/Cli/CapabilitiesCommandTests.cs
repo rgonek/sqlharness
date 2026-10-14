@@ -259,7 +259,7 @@ public sealed class CapabilitiesCommandTests
         "DECLARE @t TABLE (...) then INSERT/UPDATE/DELETE/MERGE/SELECT against it, declared earlier in the same batch. A table variable from --setup is not visible to measured SQL (separate batch): carry data in #temp. OUTPUT INTO @t only when the primary target is also proven local (persistent primary target: MutationNotAllowed). Aliased DML targets and user-defined table types stay denied";
 
     private const string CapabilityPostgresTruncateEntry =
-        "TRUNCATE [ONLY] of proven current-session temps only, named unqualified or as pg_temp.name; not ON COMMIT DROP. Persistent, mixed, CASCADE, RESTART IDENTITY and other schema-qualified targets stay denied";
+        "TRUNCATE [ONLY] of proven current-session temps only, in --setup only; named unqualified or as pg_temp.name; not ON COMMIT DROP. Persistent, mixed, CASCADE, RESTART IDENTITY and other schema-qualified targets stay denied";
 
     // Plan 029 Step 5: the PostgreSQL temp-proof entry is checked by the facts it must carry, not
     // pinned verbatim; README "PostgreSQL temp target proof" owns the wording.
@@ -297,7 +297,7 @@ public sealed class CapabilitiesCommandTests
             [
                 "EXPLAIN over a safe SELECT (plan-only, read-only)",
                 "EXPLAIN ANALYZE with full inner-statement effect analysis",
-                "SELECT INTO TEMP TABLE with unambiguous single-part name",
+                "SELECT INTO TEMP TABLE with unambiguous single-part name, in --setup only",
                 CapabilityPostgresTruncateEntry,
             ],
             SessionTempStatements(SqlEngine.Postgres).Where(entry => !IsPostgresProofEntry(entry)));
@@ -539,18 +539,14 @@ public sealed class CapabilitiesCommandTests
 
     [Theory]
     // Unquoted non-ASCII where declared or where used: never proven.
-    [InlineData("CREATE TEMP TABLE É (id int); INSERT INTO É VALUES (1)", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE \"é\" (id int); DROP TABLE É", "UnsupportedStatement")]
     [InlineData("CREATE TEMP TABLE É (id int); CREATE INDEX ix ON \"é\" (id)", "UnsupportedStatement")]
     [InlineData("CREATE TEMP TABLE É (id int); TRUNCATE É", "NonTemporaryWrite")]
     // Longer than 63 UTF-8 bytes: never proven, quoted or not.
-    [InlineData("CREATE TEMP TABLE {A63}x (id int); INSERT INTO {A63}x VALUES (1)", "MutationNotAllowed")]
-    [InlineData("CREATE TEMP TABLE \"{A63}x\" (id int); DELETE FROM \"{A63}x\"", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE {A63}x (id int); DROP TABLE {A63}x", "UnsupportedStatement")]
     [InlineData("CREATE TEMP TABLE {A63}x (id int); CREATE INDEX ix ON {A63}x (id)", "UnsupportedStatement")]
     [InlineData("CREATE TEMP TABLE {A63}x (id int); TRUNCATE {A63}x", "NonTemporaryWrite")]
     // DROP TABLE of a name unknown offline revokes every proof, unrelated names too.
-    [InlineData("CREATE TEMP TABLE items (id int); DROP TABLE IF EXISTS pg_temp.É; INSERT INTO items VALUES (1)", "MutationNotAllowed")]
     [InlineData("CREATE TEMP TABLE items (id int); DROP TABLE pg_temp.{A63}y; TRUNCATE items", "NonTemporaryWrite")]
     public void SessionTempStatements_postgres_proof_entry_denies_what_it_names(string sql, string expected)
     {
@@ -561,11 +557,41 @@ public sealed class CapabilitiesCommandTests
         Assert.Equal(expected, decision.Reason.ToString());
     }
 
+    [Theory]
+    // 047 step 3: the entries above still deny DDL over an unproven name. The
+    // DML shapes they used to deny now run read-only, where the server refuses a
+    // persistent target itself.
+    [InlineData("CREATE TEMP TABLE É (id int); INSERT INTO É VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE {A63}x (id int); INSERT INTO {A63}x VALUES (1)")]
+    [InlineData("CREATE TEMP TABLE \"{A63}x\" (id int); DELETE FROM \"{A63}x\"")]
+    [InlineData("CREATE TEMP TABLE items (id int); DROP TABLE IF EXISTS pg_temp.É; INSERT INTO items VALUES (1)")]
+    public void SessionTempStatements_postgres_proof_entry_defers_temp_dml_to_the_read_only_server(string sql)
+    {
+        Assert.Contains(SessionTempStatements(SqlEngine.Postgres), IsPostgresProofEntry);
+
+        var classifier = new PostgresSafetyClassifier();
+        var decision = classifier.Classify(ExpandNames(sql), SqlUsage.Query, "appdb", allowMutation: false, confirmDatabase: null, NoCarriedTemps);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.True(decision.HasSessionLocalWork);
+        Assert.False(decision.HasMutation);
+
+        // The paths that execute read-write keep the name proof.
+        var setup = classifier.Classify(ExpandNames(sql), SqlUsage.CompareSetup, "appdb", allowMutation: false, confirmDatabase: null, NoCarriedTemps);
+        Assert.False(setup.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, setup.Reason);
+
+        var approved = classifier.Classify(ExpandNames(sql), SqlUsage.Query, "appdb", allowMutation: true, confirmDatabase: "appdb", NoCarriedTemps);
+        Assert.True(approved.Allowed, approved.RejectionDescription);
+        Assert.True(approved.HasMutation);
+    }
+
     [Fact]
     public void SessionTempStatements_postgres_proof_is_name_based_and_reads_no_search_path()
     {
-        // The search_path clause is a stated limitation, not a verdict: the
-        // classifier is offline, so a recorded name is all the proof there is.
+        // The search_path clause is a stated limitation for the paths that keep
+        // the proof: setup DDL and the approved mutation path are read-write, so a
+        // recorded name is all the proof there is. A read-only DML target is
+        // decided by the server instead.
         Assert.Contains(SessionTempStatements(SqlEngine.Postgres), IsPostgresProofEntry);
 
         var classifier = new PostgresSafetyClassifier();
@@ -578,8 +604,12 @@ public sealed class CapabilitiesCommandTests
         Assert.False(proven.HasMutation);
 
         var unproven = classifier.Classify("INSERT INTO t VALUES (1)", SqlUsage.Query, "appdb", allowMutation: false, confirmDatabase: null, NoCarriedTemps);
-        Assert.False(unproven.Allowed);
-        Assert.Equal(SqlSafetyReason.MutationNotAllowed, unproven.Reason);
+        Assert.True(unproven.Allowed, unproven.RejectionDescription);
+        Assert.False(unproven.HasMutation);
+
+        var unprovenTruncate = classifier.Classify("TRUNCATE t", SqlUsage.Query, "appdb", allowMutation: false, confirmDatabase: null, NoCarriedTemps);
+        Assert.False(unprovenTruncate.Allowed);
+        Assert.Equal(SqlSafetyReason.NonTemporaryWrite, unprovenTruncate.Reason);
     }
 
     private sealed class TempProfiles : IDisposable

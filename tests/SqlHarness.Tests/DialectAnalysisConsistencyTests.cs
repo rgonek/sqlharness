@@ -47,7 +47,9 @@ public class DialectAnalysisConsistencyTests
         new("SELECT 1; SELECT 2", true, SqlSafetyReason.Allowed, true, SqlSafetyReason.Allowed, false),
         new("CREATE TEMP TABLE t (a int); INSERT INTO t (a) VALUES (1); SELECT a FROM t", true, SqlSafetyReason.Allowed, true, SqlSafetyReason.Allowed, false),
         new("SELECT a INTO TEMP TABLE t FROM s", true, SqlSafetyReason.Allowed, true, SqlSafetyReason.Allowed, false),
-        new("INSERT INTO t (a) VALUES (1)", false, SqlSafetyReason.MutationNotAllowed, false, SqlSafetyReason.NonTemporaryWrite, false),
+        // 047 step 3: an unqualified DML target is read-only work the server decides.
+        new("INSERT INTO t (a) VALUES (1)", true, SqlSafetyReason.Allowed, false, SqlSafetyReason.NonTemporaryWrite, false),
+        new("INSERT INTO public.t (a) VALUES (1)", false, SqlSafetyReason.MutationNotAllowed, false, SqlSafetyReason.NonTemporaryWrite, false),
         new("SELECT pg_sleep(1)", false, SqlSafetyReason.UnsupportedStatement, false, SqlSafetyReason.UnsupportedStatement, true),
     ];
 

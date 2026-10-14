@@ -1,28 +1,141 @@
 # Draft: agent-authored session report in the dashboard
 
-Status: **idea under observation — not approved for implementation.** The accepted design refinement
-below replaces the earlier six-action lifecycle. No report tool exists yet. Historical evidence-log
-entries describe the API considered at the time; their call counts are not the current proposed contract.
+Status: **collecting observations — not approved for implementation.** The purpose is to collect
+experiences from many SQLHarness sessions, then analyze recurring reporting needs and exceptions.
+Only that synthesis should determine whether a shared API and dashboard report are worthwhile.
+No report tool exists yet. API sketches below are hypotheses, not a required observation format.
 
-## Problem and purpose
+## Collection purpose and workflow
 
-An agent interprets SQLHarness evidence in chat, sometimes manually copying numbers or overstating what
-was verified. The interpretation should remain linked to its operations in a local report. SQLHarness
-renders available metrics from evidence; it does not certify the interpretation.
+Agents often finish an investigation with a chat report: a results table, what worked, what changed,
+conclusions, comments and limitations. Capture what those reports actually contain and what would be
+useful to retain in the dashboard, including successful sessions, negative results and partial work.
+Do not require reporting friction or fit observations to an existing API.
 
-A useful report must cost less than reconstructing the session. Fitting several sessions to one API,
-or collecting consecutive API unchanged entries, is not proof that the API is simple or ready to build.
-Evaluate correctness, workflow cost and an operator's need for the feature before implementation.
+Append one anonymized entry per reviewed session with:
 
-## Boundaries
+- Actual report: question, table/report shape, result, agent comments, limitations and open items.
+- Evidence and interpretation: sources, references, manual transcription, findings and hypotheses.
+- Dashboard usefulness: content worth retaining, missing information and reconstruction effort.
+- Cost coverage: observed work/calls, unmeasured costs and separately labeled modeled actions.
+- Optional API implications: new need, counterexample, no new need or insufficient evidence.
 
-- Dashboard stays GET/HEAD-only. Report writes, if implemented, go through MCP into local journal storage.
-- Reports are explicitly requested; ordinary SQL operations require no report-write ceremony.
-- Store report text as locally sensitive under an explicit policy. Do not publish SQL, values or identifiers.
-- Missing evidence, a preflight rejection and a source-code hypothesis remain distinguishable.
-- An operation reference proves identity, not correctness, full-domain equivalence or completed plan review.
-- Plans 055/058 provide retrievable evidence; 059 provides producer/operation references and honest cost
-  coverage. A report must reuse them, not implement a second benchmark/provenance/metrics subsystem.
+If a report or transcript is unavailable, record that limit; do not invent observed content.
+Preserve existing entries verbatim. Append dated corrections or follow-ups with a reference to the
+original entry. Design revisions must retain observations even when recorded outside the evidence log.
+
+Dashboard usefulness and token savings are separate questions. Persistence and readability may be
+valuable even if reporting adds tokens. Compare the complete workflow with final chat and the existing
+journal: discovery/tool schemas, arguments, responses, follow-up reads and duplicated report text.
+Design-stage estimates need explicit assumptions and coverage; call counts alone do not prove savings.
+Benchmark after implementation unless complete measured bounds already establish a direction under
+explicit assumptions. Repeated API unchanged verdicts are not a readiness or approval criterion.
+
+## Recovered founding observations and idea
+
+The following sections are restored from commit c9e069b (before the 2026-10-12 rewrite). They preserve
+the first session's observations and early design rationale; references to then-current internals
+are historical, not verified claims about the installed tool today.
+
+## Problem
+
+At the end of a measurement session the agent writes a summary into the chat: chosen query, baseline vs
+candidate numbers, equivalence, trade-offs, open risks. Observed in the first session (2026-10-07):
+
+- The agent copied numbers by hand from tool JSON and on-disk artifacts, which invites transcription errors.
+- One stated hypothesis turned out to be wrong: "LOB reads are probably not counted"; `StatisticsIoParser` does count them.
+- The summary disappears into the transcript; it is not linked to the journal rows it is based on.
+- The data is sensitive (SQL, plans, parameters), so publishing the summary outside the workstation is wrong.
+
+## Idea
+
+The agent writes **interpretation**; SQLHarness renders **numbers** from the journal. The dashboard shows a report
+per investigation: question, attached operations (baseline/candidate/evidence), metrics and deltas pulled from
+`operation_metrics` / `operation_table_io` (and per-statement rows, plan 038 W5), the agent's annotations, the
+verdict, and open items. A claim that cites no journal evidence is visibly marked.
+
+## Constraints from the existing design
+
+- The dashboard HTTP API stays **GET/HEAD-only** (`2026-10-06-activity-dashboard-design.md`). Writes go through
+  MCP into the journal; the dashboard keeps reading. The security model (loopback, token cookie, Host check) is unchanged.
+- "Agents send nothing extra" holds for the activity journal. A report is an explicit, opt-in tool call; the
+  agent knows about it only through a skill.
+- Sensitivity: report text can contain SQL or values. Store it under `journal.storeSensitive`, or always and
+  documented as locally sensitive (open question Q3). Render Markdown without raw HTML.
+
+## Interpretation and evidence boundaries
+
+An operation reference proves identity and available evidence, not correctness, full-domain equivalence
+or completed plan review. Keep missing evidence, preflight rejections and source-code hypotheses distinct.
+Plans 055/058 propose retrievable evidence and 059 proposes producer references and honest cost coverage;
+a report design should reuse that work rather than duplicate benchmark, provenance or metrics storage.
+Verify plan status and installed behavior before treating any prerequisite as available.
+Report writes remain explicitly requested; ordinary SQL operations require no report-write ceremony.
+
+## Design hypotheses and revision history
+
+The six-action v0 sketch is retained below to explain historical entries and recover removed questions.
+The 2026-10-12 refinement preferred atomic put/get over that lifecycle; its rationale and evidence remain
+valid material for later synthesis. Neither sketch fixes the shape of future observation entries or
+authorizes implementation. Historical schema/status assertions need current verification before use.
+
+### Earlier v0 sketch and open questions (restored from c9e069b)
+
+## Proposed API (v0)
+
+### Prerequisite: `operationRef`
+
+Every target-dependent tool response returns an opaque `operationRef` for its journal row. Today only `measure`
+and `compare` expose `artifactDirectory`, and `query` exposes nothing a report could reference.
+
+### MCP tool `sqlharness_report`
+
+| action | input | effect |
+|---|---|---|
+| `create` | `scope`, `title`, `question`, `subject?` (e.g. `File.cs:252`) | returns `reportRef`; owned by the MCP session and scope like artifacts |
+| `attach` | `reportRef`, `items: [{ operationRef, role, label }]`; role is `baseline`/`candidate`/`evidence`/`context` | attaches a bounded batch; dashboard pulls metrics, deltas and equivalence from the journal |
+| `annotate` | `reportRef`, `items: [{ target, kind, confidence, text }]`; target is report / operation / matrix cell / statement / table / operator; kind is `finding`/`hypothesis`/`decision`/`risk` | a bounded batch; `hypothesis` renders distinctly from `finding`; report targets need no operationRef |
+| `claim` | `reportRef`, `items: [{ text, evidence: [{ operationRef, cellIndex?, metric }] }]` (`metric` like `candidate.logicalReads.median`) | a bounded batch; dashboard resolves journal values for the selected cell and flags missing evidence |
+| `conclude` | `reportRef`, `verdict` (`adopt`/`reject`/`needsEvidence`), `summary`, `openItems[]` | |
+| `get` | `reportRef` | read back for the agent (phase 2: includes operator comments) |
+
+Accepted draft refinements from the second session: batch attach/annotate/claim to avoid one call per row or
+annotation. Arrays must be bounded; exact item/text limits and atomicity remain to be settled before implementation.
+For matrix evidence, `cellIndex` is a nonnegative index into the attached operation, not a parameter value; require
+it for cell metrics and reject nonexistent cells. Operation-level evidence omits it. Annotation targets use the
+same operation/cell identity when relevant. A report-level annotation can describe a preflight rejection that has
+no journal operation: render it as agent-reported context, not journal-backed execution evidence.
+
+### Journal
+
+`reports(id, session_id, scope_json, title, question, subject, verdict, summary, created_at, updated_at)`,
+`report_items(report_id, operation_id, role, label)`, `report_annotations(report_id, target_json, kind,
+confidence, text, created_at)`, `report_claims(report_id, text, evidence_json)`, plus `operation_statements` from
+plan 038 W5.
+
+### Dashboard
+
+`GET /api/reports?session=&from=&to=&cursor=`, `GET /api/reports/{id}` (report joined with live metrics), a
+Reports list and a report detail view reusing the compare side-by-side component.
+
+### Phase 2 (deliberately later)
+
+Operator comments in the dashboard flowing back to the agent through `get`. This needs the first non-GET
+endpoint (`POST /api/reports/{id}/comments`) with CSRF protection (SameSite=Strict plus a custom header), which
+reopens the dashboard threat model.
+
+## Open questions
+
+- Q1. Is one report per investigation right, or one per session with several questions?
+- Q2. Should `claim` metric paths be a closed vocabulary (validated) or free strings (best-effort)?
+- Q3. Where does report text sit relative to `storeSensitive`?
+- Q4. Token cost: how many extra MCP calls per session are acceptable (budget guess: ≤ 6)?
+- Q5. Export: Markdown export of a report for a ticket or PR, with SQL stripped?
+
+### 2026-10-12 refinement (retained)
+
+The following design sections retain the later put/get proposal. This was an accepted draft refinement,
+not implementation approval; earlier modeled workflows remain historical observations.
 
 ## Proposed API (v1 draft): atomic document, optional read
 
@@ -99,10 +212,13 @@ get does not imply that comments or a report-editing product must be built.
 - Does one put plus optional get measurably reduce caller work compared with final chat and existing journal?
 
 Resolve these before an implementation plan. API unchanged entries are observations, not approval.
+
 ## Evidence log
 
-One entry per reviewed session. For each: what the agent would have reported, which actions it would have
-called, and what the API lacked or did not need. Record API edits here with their reason.
+Existing entries below are preserved verbatim, including their historical API terminology and modeled
+call counts. They do not establish that a report API was executed or that its token cost was measured.
+New entries use the collection template above; API conclusions are optional. Append experiences and
+corrections rather than rewriting earlier agents' observations.
 
 ### 2026-10-07 — System1 batch optimization
 

@@ -43,7 +43,7 @@ public sealed class PostgresReadOnlyRuntimeIntegrationTests
                 while (await rejected.NextResultAsync(CancellationToken.None))
                     while (await rejected.ReadAsync(CancellationToken.None)) { }
             });
-            Assert.Equal("PostgreSQL rejected a write in a read-only transaction; persistent writes need an approved mutation.", failure.Message);
+            Assert.Equal(PostgresReadOnlyFailure.RejectionMessage, failure.Message);
             Assert.Equal(0L, await ScalarAsync<long>(connection, $"SELECT count(*) FROM {schema}.effects"));
 
             var setupTable = "sqlharness_setup_" + Guid.NewGuid().ToString("N");
