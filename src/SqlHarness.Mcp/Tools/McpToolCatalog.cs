@@ -62,7 +62,7 @@ public sealed class McpToolHandlers(
             ThrowIfUnknown(ctx, ["includeDiagnostics", "inputRootCursor"]);
             return Task.FromResult(new SqlHarnessOutcome(
                 SqlHarnessExitCode.Success,
-                McpOperationMapper.BuildCapabilities(scope, includeDiagnostics, inputRootCursor),
+                McpOperationMapper.BuildCapabilities(scope, includeDiagnostics, inputRootCursor, _compareConfig),
                 null));
         }, ct);
 
@@ -462,7 +462,7 @@ public static class McpToolCatalog
 {
     /// <summary>Shared capabilities strings: one definition for the fixed and request catalogs.</summary>
     public const string CapabilitiesDescription =
-        "Runtime configuration of this server: scopeMode, engines, allowedProfiles (request scope), inputRoots (paged), processLimits, configurationRef. Call when this connection's configuration is unknown; reuse the result for this connection and call again after a reconnect or server restart.";
+        "Runtime configuration of this server: scopeMode, active compareContext policy, engines, allowedProfiles (request scope), inputRoots (paged), processLimits, configurationRef. Call when this connection's configuration is unknown; reuse the result for this connection and call again after a reconnect or server restart.";
     public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
     public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";
     public const string SetupDescription = "Optional sql or file, once per measured session. SQL Server: create #temps before the first parameter reference, populate afterwards; batch locals do not cross into measured SQL.";
@@ -470,7 +470,7 @@ public static class McpToolCatalog
     public const string ParameterSetsDescription = "2..32 named {name, parameters} sets with matching declared types. Exclusive with parameterSetFiles and matrix; fixed and per-set parameter names must not overlap.";
     public const string MatrixDescription = "One parameter: {name, type, values}, 2..32 distinct values. Exclusive with parameterSets and parameterSetFiles; name must not overlap fixed parameters.";
     public const string MeasureDescription = "Measure one query across repeats. Sets rotate on one session/shared cache; setup binds the first set once. Results report per-set stability, not cross-set equivalence.";
-    public const string CompareDescription = "Compare baseline/candidate measurements and observed rows. Each set has its own session/setup; first failure stops the run and retains completed cells. Read regression verdict/reasons separately from exitCode.";
+    public const string CompareDescription = "Compare baseline/candidate measurements and observed rows. subject and textual scope follow the frozen compare.requireContext policy reported by capabilities; request-scoped target selects the database. Each set has its own session/setup; first failure stops the run and retains completed cells. Read regression verdict/reasons separately from exitCode.";
     public const string ArtifactSectionDescription = "Safe saved section. operators is capped; planShapeStable compares plan shape, not timing or row counts; null means insufficient evidence.";
     public const string RepetitionDescription = "Measured repetition for section=plan; default is the identified last measured run. A run without a saved plan reports missing evidence, never an earlier plan.";
 

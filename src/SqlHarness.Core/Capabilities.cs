@@ -13,8 +13,17 @@ public sealed record SqlHarnessCapabilities(
     IReadOnlyList<string> OutputModes,
     SqlHarnessSafetyAnalysis SafetyAnalysis,
     IReadOnlyDictionary<string, IReadOnlyList<string>> OutputModesByCommand,
+    SqlHarnessCompareContextCapability CompareContext,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SqlHarnessProfileCapability? Profile = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? ParameterTypes = null);
+
+public sealed record SqlHarnessCompareContextCapability(
+    bool RequireContext,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LabelPattern = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? WholeScope = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? VersionIdentity = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? VersionAssignment = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? HistoryBoundary = null);
 
 public sealed record SqlHarnessCommandCapability(string Name, string Description);
 
@@ -26,7 +35,22 @@ public static class SqlHarnessCapabilitiesProvider
 {
     // Bump when the document shape changes. 2: engines became a short { name, summary } list;
     // parameter types, session-temp rules and engine-only limits moved behind a profile.
-    public const int ContractVersion = 2;
+    // 3: report the active compare-context requirement and version/history semantics.
+    public const int ContractVersion = 3;
+
+    public static SqlHarnessCompareContextCapability CompareContextPolicy(CompareConfig? config = null)
+    {
+        if (!(config ?? SqlHarnessConfig.Default.Compare).RequireContext)
+            return new SqlHarnessCompareContextCapability(false);
+
+        return new SqlHarnessCompareContextCapability(
+            true,
+            "^[a-z0-9][a-z0-9._-]{0,63}$",
+            "whole",
+            "(sessionId, subject, scope)",
+            "First-seen SQL hash; baseline precedes candidate on a tie; reused hashes keep their label",
+            "Uses full retained journal history before filtering and paging; retention can change labels over time");
+    }
 
     // Parameter types both engines accept; an engine detail adds only what is its own.
     private static readonly string[] SharedParameterTypes =
@@ -64,12 +88,12 @@ public static class SqlHarnessCapabilitiesProvider
                 "Temp DML runs in a read-only transaction, where PostgreSQL refuses a persistent target itself, so an unqualified INSERT/UPDATE/DELETE/MERGE target needs no proof; the server reports the miss as exit 2. Session-temp proof for setup DDL (CREATE TEMP recording, DROP TABLE, CREATE INDEX, TRUNCATE) and for the approved mutation path is name-based. That DDL classifies as allowed in every phase but executes only in --setup, the one read-write phase: in query and measured SQL the server refuses it in the read-only transaction (exit 2). An unqualified name assumes the default search_path (pg_temp first) and is not checked against the server; when search_path may differ, write to pg_temp.name, which does not depend on it. A name must be quoted or all-ASCII-unquoted and at most 63 UTF-8 bytes where declared and where used, else never proven (quote or shorten). DROP TABLE of a name unknown offline revokes every proof. See README.md"]),
     ];
 
-    /// <summary>Engine-neutral document: commands, modes, shared limits and a one-line summary per engine.</summary>
-    public static SqlHarnessCapabilities Get() =>
-        Build(Details.Select(d => new SqlHarnessEngineSummary(d.Name, d.Summary)).ToList(), null, null, null, null);
+    /// <summary>Engine-neutral document: commands, active compare-context policy, modes, shared limits and engine summaries.</summary>
+    public static SqlHarnessCapabilities Get(CompareConfig? compareConfig = null) =>
+        Build(Details.Select(d => new SqlHarnessEngineSummary(d.Name, d.Summary)).ToList(), null, null, null, null, compareConfig);
 
     /// <summary>Document scoped to one engine; the profile name is echoed back. Offline, no connection.</summary>
-    public static SqlHarnessCapabilities Get(SqlEngine engine, string profileName)
+    public static SqlHarnessCapabilities Get(SqlEngine engine, string profileName, CompareConfig? compareConfig = null)
     {
         var detail = Details.Single(d => d.Engine == engine);
         return Build(
@@ -77,12 +101,13 @@ public static class SqlHarnessCapabilitiesProvider
             new SqlHarnessProfileCapability(profileName, detail.Name),
             detail.ParameterTypes,
             detail.EngineLimits,
-            detail.SessionTempStatements);
+            detail.SessionTempStatements,
+            compareConfig);
     }
 
     /// <summary>Scoped document for a profile's declared engine string (null or empty means sqlserver).</summary>
-    public static SqlHarnessCapabilities Get(string profileName, string? profileEngine) =>
-        Get(SqlEngineNames.Parse(profileEngine), profileName);
+    public static SqlHarnessCapabilities Get(string profileName, string? profileEngine, CompareConfig? compareConfig = null) =>
+        Get(SqlEngineNames.Parse(profileEngine), profileName, compareConfig);
 
     private sealed record EngineDetail(
         SqlEngine Engine,
@@ -97,7 +122,8 @@ public static class SqlHarnessCapabilitiesProvider
         SqlHarnessProfileCapability? profile,
         IReadOnlyList<string>? parameterTypes,
         IReadOnlyDictionary<string, object>? engineLimits,
-        IReadOnlyList<string>? sessionTempStatements)
+        IReadOnlyList<string>? sessionTempStatements,
+        CompareConfig? compareConfig = null)
     {
         var assembly = typeof(SqlHarnessCapabilitiesProvider).Assembly;
         var version = assembly.GetName().Version?.ToString(3) ?? "0.0.0";
@@ -141,7 +167,7 @@ public static class SqlHarnessCapabilitiesProvider
             buildId,
             ContractVersion,
             [
-                new("capabilities", "Describe commands, engines, limits, modes. Pass a profile for the parameter types and limits of its engine."),
+                new("capabilities", "Describe commands, engines, limits, modes, and the active compare-context policy. Pass a profile for the parameter types and limits of its engine."),
                 new("doctor", "Check installation and profiles."),
                 new("query", "Run a bounded query; CLI --dry-run and MCP dryRun check exact arguments offline; no connection or writes. Every output replaces the profile password and Azure CLI access token fetched for the operation; other text, including SQL quoted in server errors, stays readable. PostgreSQL: per-command READ ONLY, known administrative effects denied; TEMP setup is read-write under static checks; user functions can hide effects (setup SELECTs too), so use a least-privilege role."),
                 new("measure", "Measure one query across repeats; CLI --param-set or MCP parameterSets, parameterSetFiles or matrix vary inputs. Sets share a session/cache and rotate; setup binds the first set once. Optional offline check: CLI --dry-run or MCP dryRun. Use command help for arguments."),
@@ -163,6 +189,7 @@ public static class SqlHarnessCapabilitiesProvider
             // Per-command modes. "outputModes" above stays the global union; no command accepts
             // two of --json, --json-summary and --output together; a list without text needs one of its flags.
             OutputModesByCommand(),
+            CompareContextPolicy(compareConfig),
             profile,
             parameterTypes);
     }

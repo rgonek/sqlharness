@@ -129,9 +129,24 @@ public sealed class McpMappingTests : IDisposable
         }
 
         Assert.Equal("fixed", fixedDocument.GetProperty("scopeMode").GetString());
+        Assert.True(fixedDocument.GetProperty("compareContext").GetProperty("requireContext").GetBoolean());
+        Assert.Equal("whole", fixedDocument.GetProperty("compareContext").GetProperty("wholeScope").GetString());
         Assert.False(fixedDocument.TryGetProperty("allowedProfiles", out _));
         Assert.Equal("request", requestDocument.GetProperty("scopeMode").GetString());
+        Assert.True(requestDocument.GetProperty("compareContext").GetProperty("requireContext").GetBoolean());
         Assert.Equal([ProfileName], requestDocument.GetProperty("allowedProfiles").EnumerateArray().Select(item => item.GetString()));
+    }
+
+    [Fact]
+    public void Capabilities_omit_versioning_instructions_when_compare_context_is_disabled()
+    {
+        var document = JsonSerializer.SerializeToElement(
+            McpOperationMapper.BuildCapabilities(Scope(), includeDiagnostics: false, compareConfig: new CompareConfig { RequireContext = false }),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var context = document.GetProperty("compareContext");
+
+        Assert.False(context.GetProperty("requireContext").GetBoolean());
+        Assert.Single(context.EnumerateObject());
     }
 
     [Fact]
@@ -197,7 +212,7 @@ public sealed class McpMappingTests : IDisposable
     public async Task Compact_capabilities_are_smaller_than_a_synthetic_broad_response_with_the_same_runtime_data()
     {
         var scope = Scope();
-        var compact = McpOperationMapper.BuildCapabilities(scope, includeDiagnostics: false);
+        var compact = McpOperationMapper.BuildCapabilities(scope, includeDiagnostics: false, compareConfig: new CompareConfig { RequireContext = false });
         var broad = new
         {
             server = "sqlharness",
@@ -212,6 +227,7 @@ public sealed class McpMappingTests : IDisposable
             scopeMode = "fixed",
             supportedProtocolVersions = new[] { "2025-06-18", "2025-11-25", "2026-07-28" },
             configurationRef = compact.ConfigurationRef,
+            compareContext = compact.CompareContext,
             engines = compact.Engines,
             processLimits = compact.ProcessLimits,
             inputRoots = compact.InputRoots,
