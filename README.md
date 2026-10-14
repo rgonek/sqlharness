@@ -468,6 +468,8 @@ For successful `measure` and `compare` runs the journal also stores per-variant 
 
 Metrics a run marks unavailable are stored as null, and `STATISTICS IO` lines without logical reads (localized output, columnstore segment lines) are not recorded. Per-statement rows contain hashes and plan details without SQL text; CPU and elapsed values come from SQL Server `QueryTimeStats`. A stored plan is the first actual plan observed for its shape (`PlanIdentity`); per-run metrics are kept separately, so later runs with the same shape do not store another copy.
 
+Schema v9 adds operator annotations of sessions (title, note, star, archive). Only the dashboard writes them; retention deletes them with their session, and a star does not protect a session from retention.
+
 `sqlharness doctor --json` reports whether the config file is present and valid, the effective journal settings, and whether the journal file exists.
 
 ```json
@@ -507,7 +509,9 @@ One dashboard runs per SQLHarness home; a second invocation opens the running on
 
 The token persists in an owner-only `dashboard-token` file in the SQLHarness home (delete it to rotate), so the URL is bookmarkable; open tabs show a reconnect banner and recover after a restart. The browser is opened through an owner-only `dashboard-open.html` redirect page in the SQLHarness home, so the token never appears in process arguments; the page is deleted when the dashboard stops.
 
-The page shows live activity (running operations, active sessions, recent operations), session history, per-operation detail (key metrics, per-table IO, waits, memory grant, baseline-versus-candidate comparison, stored plans with an operator view when `journal.storeSensitive` is on), and statistics over 24 hours, 7 days, 30 days, or all time. The read-only API under `/api` serves the same data. Running operations whose process ended show as `abandoned`. The data it serves is the activity journal and is locally sensitive.
+The page shows live activity (running operations, active sessions, recent operations), session history, per-operation detail (key metrics, per-table IO, waits, memory grant, baseline-versus-candidate comparison, stored plans with an operator view when `journal.storeSensitive` is on), and statistics over 24 hours, 7 days, 30 days, or all time. The API under `/api` serves the same data and is read-only except for settings, the price refresh and session annotations. Running operations whose process ended show as `abandoned`. The data it serves is the activity journal and is locally sensitive.
+
+The Sessions page searches title, note, directory, session key and client title, switches between Active and Archived sessions, and pins starred sessions at the top. On a session page click the title (or the pencil) to rename it, star or archive the session, and keep a note. Archiving only hides a session from the Sessions list; Live, Operations and Stats still count it. The dashboard refuses these edits when the journal schema differs from this sqlharness and never migrates it.
 
 Browsers do not isolate cookies by port, so the session cookie is also sent to other services on `127.0.0.1`/`localhost` opened in the same browser; use the dashboard on a single-user workstation. Press Ctrl+C (or send SIGTERM) to stop it; it exits `0`. It exits `6` when another dashboard holds the lock without publishing its address, when it cannot bind a loopback port, or when the activity journal schema does not match this sqlharness (newer, or older and not upgraded).
 

@@ -1,6 +1,6 @@
 # Dashboard session curation (Spec A)
 
-Status: design agreed with the operator, 2026-10-14. Implementation plan: not yet written. Order: after Plan 062; this spec (A) → [agent transcript matching](2026-10-14-dashboard-agent-transcript-matching-design.md) (C) → [compare review](2026-10-14-dashboard-compare-review-design.md) (B).
+Status: design agreed with the operator, 2026-10-14. Implemented by Plan 069. Order: after Plan 062; this spec (A) → [agent transcript matching](2026-10-14-dashboard-agent-transcript-matching-design.md) (C) → [compare review](2026-10-14-dashboard-compare-review-design.md) (B).
 
 ## Goal
 
