@@ -173,12 +173,21 @@ public class ContractsTests
 
         var dryRun = Section(mcp, "### Parameters and dry runs");
         Assert.Contains("optional leading `@`", dryRun, StringComparison.Ordinal);
-        Assert.Contains("IfStatement at line 14", dryRun, StringComparison.Ordinal);
-        Assert.Contains("parameterSets", dryRun, StringComparison.Ordinal);
-        Assert.Contains("raw-token emission receipt", dryRun, StringComparison.Ordinal);
-        Assert.Contains("runtime artifact storage, authentication, connection identity, catalog contents or database permissions", dryRun, StringComparison.Ordinal);
-        Assert.Contains("The CLI runs the same check with `--dry-run`", dryRun, StringComparison.Ordinal);
-        Assert.Contains("missing_parameters", dryRun, StringComparison.Ordinal);
+        Assert.Contains("same check as CLI `--dry-run`", dryRun, StringComparison.Ordinal);
+        Assert.Contains("](../README.md#safety-contract)", dryRun, StringComparison.Ordinal);
+        // README Safety contract owns the dry-run rule; the MCP doc and the skill point to it.
+        var safety = Section(readme, "## Safety contract");
+        foreach (var fact in new[]
+        {
+            "IfStatement at line 14",
+            "parameterSets",
+            "raw-token emission receipt",
+            "runtime artifact storage, authentication, connection identity, catalog contents or database permissions",
+            "missing_parameters",
+            "never authorizes a later mutation",
+            "The first executed result's `database` is the verified target",
+        })
+            Assert.Contains(fact, safety, StringComparison.Ordinal);
         Assert.Contains("Dapper", Section(readme, "## Safety contract"), StringComparison.Ordinal);
         Assert.Contains("Fixed-width `nchar`/`char`", Section(readme, "## Safety contract"), StringComparison.Ordinal);
     }

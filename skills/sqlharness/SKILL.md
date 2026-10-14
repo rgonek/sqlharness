@@ -18,7 +18,7 @@ sqlharness doctor --json
 sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --dry-run --json
 ```
 
-None of these connects. `capabilities <profile>` adds that profile's engine, parameter types and limits; without a profile it returns engine-neutral discovery only. `--dry-run` (MCP `dryRun: true`) on `query`, `measure` or `compare` checks the exact arguments, setup, matrix values and parameter sets included: exit `0` allowed, `2` rejected, and `missing_parameters` names every referenced parameter without a value. Safety denials name the ScriptDom statement type and starting line, such as `IfStatement at line 14`. A passing dry run never authorizes a later mutation and cannot see authentication, catalog contents or permissions. The first executed result's `database` is the verified target: every connection checks it against the resolved database (exit `4`). Details: [README Agent startup](../../README.md#agent-startup).
+None of these connects. `capabilities <profile>` adds that profile's engine, parameter types and limits; without a profile it returns engine-neutral discovery only. `--dry-run` (MCP `dryRun: true`) is the offline preflight of the exact `query`, `measure` or `compare` invocation ([README dry-run rule](../../README.md#safety-contract)).
 
 ## Scope lock
 
