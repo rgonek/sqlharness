@@ -1,5 +1,7 @@
 # SQLHarness agent contract
 
+These instructions govern development of SQLHarness in this repository.
+
 ## Repository changes
 
 - **Plans:** read [plans/README.md](plans/README.md) before plan-backed work; update the plan and index when work lands.
@@ -9,9 +11,8 @@
 
 ## Conditional context
 
-- **Database execution:** before using SQLHarness against a database, read [database work](docs/agents/database-work.md) for scope, approval and failure boundaries, and [the user skill](skills/sqlharness/SKILL.md) for the evidence workflow.
 - **MCP:** before changing server startup, request targets or file inputs, read [the MCP contract](docs/mcp.md).
 
-## User-facing skills
+## Writing user-facing skills
 
 The bundled skill and derived use-case skills serve ordinary users without repository access. Keep workflow, task decisions and evidence completion criteria in the skill; put interface details in tool descriptions/schemas and runtime policy in capabilities. Each meaning has one authoritative home. Essential user guidance must be reachable through the installed skill or interface. Minimize tokens across these surfaces.
