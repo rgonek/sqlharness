@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 using SqlHarness.Core.Dialect;
@@ -70,6 +71,7 @@ internal static partial class ParameterSetResolver
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var resolved = new List<ResolvedParameterSet>(sets.Count);
         IReadOnlyDictionary<string, SqlHarnessParameter>? baselineByName = null;
+        IReadOnlyDictionary<string, DeclaredParameterShape>? baselineShapes = null;
         string? baselineName = null;
 
         foreach (var set in sets)
@@ -81,9 +83,11 @@ internal static partial class ParameterSetResolver
                 throw new SqlHarnessSafetyException($"Duplicate parameter set '{set.Name}'.");
 
             IReadOnlyList<SqlHarnessParameter> bound;
+            IReadOnlyList<SqlHarnessParameterInput> inputs;
             try
             {
-                bound = dialect.BindParameters(SqlParameterInputs.Resolve(set.Parameters, set.TypedParameters));
+                inputs = SqlParameterInputs.Resolve(set.Parameters, set.TypedParameters).ToArray();
+                bound = dialect.BindParameters(inputs);
             }
             catch (SqlHarnessSafetyException exception) when (exception.IsParameterValue)
             {
@@ -105,11 +109,18 @@ internal static partial class ParameterSetResolver
                 if (fixedNames.Contains(parameter.Name))
                     throw new SqlHarnessSafetyException($"Parameter set '{set.Name}' repeats fixed SQL parameter '{parameter.Name}'.");
             }
+            if (bound.Count != inputs.Count)
+                throw new SqlHarnessSafetyException($"Parameter set '{set.Name}' is invalid.");
 
             var byName = bound.ToDictionary(parameter => parameter.Name, StringComparer.OrdinalIgnoreCase);
+            var shapes = new Dictionary<string, DeclaredParameterShape>(StringComparer.OrdinalIgnoreCase);
+            for (var index = 0; index < bound.Count; index++)
+                shapes.Add(bound[index].Name, DeclaredParameterShape.From(inputs[index].Type));
+
             if (baselineByName is null)
             {
                 baselineByName = byName;
+                baselineShapes = shapes;
                 baselineName = set.Name;
             }
             else
@@ -120,6 +131,17 @@ internal static partial class ParameterSetResolver
                         throw new SqlHarnessSafetyException($"Parameter set '{set.Name}' is missing SQL parameter '{parameter.Name}'.");
                     if (candidate.Type != parameter.Type)
                         throw new SqlHarnessSafetyException($"Parameter set '{set.Name}' SQL parameter '{candidate.Name}' has a different type than parameter set '{baselineName}'.");
+
+                    var baselineShape = baselineShapes![parameter.Name];
+                    var candidateShape = shapes[candidate.Name];
+                    if (baselineShape.Type != candidateShape.Type)
+                        throw new SqlHarnessSafetyException($"Parameter set '{set.Name}' SQL parameter '{candidate.Name}' has a different type than parameter set '{baselineName}'.");
+                    if (baselineShape.Size != candidateShape.Size)
+                        throw new SqlHarnessSafetyException($"Parameter set '{set.Name}' SQL parameter '{candidate.Name}' has a different size than parameter set '{baselineName}'.");
+                    if (baselineShape.Precision != candidateShape.Precision)
+                        throw new SqlHarnessSafetyException($"Parameter set '{set.Name}' SQL parameter '{candidate.Name}' has a different precision than parameter set '{baselineName}'.");
+                    if (baselineShape.Scale != candidateShape.Scale)
+                        throw new SqlHarnessSafetyException($"Parameter set '{set.Name}' SQL parameter '{candidate.Name}' has a different scale than parameter set '{baselineName}'.");
                 }
 
                 foreach (var parameter in bound)
@@ -137,4 +159,46 @@ internal static partial class ParameterSetResolver
 
     [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", RegexOptions.CultureInvariant)]
     private static partial Regex SafeSetLabel();
+
+    // Compare declared type tokens, not bound size. Unsized strings can produce different
+    // bound sizes from their values while retaining the same declared SQL shape.
+    private readonly record struct DeclaredParameterShape(string Type, int? Size, byte? Precision, byte? Scale)
+    {
+        public static DeclaredParameterShape From(string? token)
+        {
+            if (string.IsNullOrEmpty(token))
+                return new("nvarchar", null, null, null);
+
+            token = token.ToLowerInvariant();
+            var open = token.IndexOf('(');
+            if (open < 0)
+                return new(token is "numeric" ? "decimal" : token, null, null, null);
+
+            if (!token.EndsWith(')') || open == 0)
+                throw new SqlHarnessSafetyException("SQL parameter shape is invalid.");
+
+            var head = token[..open];
+            var body = token[(open + 1)..^1];
+            if (head is "decimal" or "numeric")
+            {
+                var comma = body.IndexOf(',');
+                if (comma <= 0
+                    || !byte.TryParse(body[..comma], NumberStyles.None, CultureInfo.InvariantCulture, out var precision)
+                    || !byte.TryParse(body[(comma + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var scale))
+                {
+                    throw new SqlHarnessSafetyException("SQL parameter shape is invalid.");
+                }
+
+                return new("decimal", null, precision, scale);
+            }
+
+            if (body == "max")
+                return new(head, -1, null, null);
+
+            if (!int.TryParse(body, NumberStyles.None, CultureInfo.InvariantCulture, out var size))
+                throw new SqlHarnessSafetyException("SQL parameter shape is invalid.");
+
+            return new(head, size, null, null);
+        }
+    }
 }

@@ -492,10 +492,10 @@ public sealed class MeasureParameterSetValidationTests
         using var _ = new TemporaryCulture(culture);
         var sets = MeasureParameterSetValidator.Prepare(
             fixedParameters,
-            [new("only", setParameters)],
+            [new("only", setParameters), new("same-shape", setParameters)],
             null,
             "select @b, @Amount, @c, @d");
-        return Assert.Single(sets).ValueHash;
+        return sets[0].ValueHash;
     }
 
     private static SqlHarnessSafetyException Reject(

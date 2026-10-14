@@ -709,22 +709,13 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         SqlHarnessMeasureOperation measure,
         IReadOnlyList<SqlHarnessParameterSetInput> parameterSets)
     {
-        var fixedParameters = dialect.BindParameters(SqlParameterInputs.Resolve(measure.Parameters, measure.TypedParameters));
-        var resolvedSets = ParameterSetResolver.Resolve(dialect, fixedParameters, null, parameterSets);
-        var prepared = MeasureParameterSetValidator.Prepare(
+        return MeasureParameterSetValidator.Prepare(
             measure.Parameters,
             parameterSets,
             measure.SetupSql,
             measure.QuerySql,
             dialect,
             measure.TypedParameters);
-        var bound = new PreparedMeasureParameterSet[prepared.Count];
-        for (var index = 0; index < prepared.Count; index++)
-        {
-            bound[index] = prepared[index] with { Parameters = [.. fixedParameters, .. resolvedSets[index].Parameters] };
-        }
-
-        return bound;
     }
 
     private Task<CollectedBenchmarkRun> ExecuteBenchmarkRunAsync(

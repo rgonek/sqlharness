@@ -72,6 +72,38 @@ public sealed class ParameterSetResolverTests
         ]));
     }
 
+    [Theory]
+    [InlineData("varchar(12)", "varchar(40)", "short", "a longer value")]
+    [InlineData("decimal(10,2)", "decimal(12,2)", "1.25", "123.45")]
+    [InlineData("decimal(10,2)", "decimal(10,4)", "1.25", "1.2345")]
+    public void Declared_size_precision_and_scale_must_match(
+        string firstType,
+        string secondType,
+        string firstValue,
+        string secondValue)
+    {
+        var error = Assert.Throws<SqlHarnessSafetyException>(() => ParameterSetResolver.Resolve(Dialect, [], null,
+        [
+            new("first", []) { TypedParameters = [new("Value", firstType, firstValue)] },
+            new("second", []) { TypedParameters = [new("Value", secondType, secondValue)] },
+        ]));
+
+        Assert.Contains("different", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Unsized_declarations_ignore_value_inferred_bound_sizes()
+    {
+        var sets = ParameterSetResolver.Resolve(Dialect, [], null,
+        [
+            new("short", []) { TypedParameters = [new("Value", "varchar", "x")] },
+            new("long", []) { TypedParameters = [new("Value", "varchar", new string('x', 4001))] },
+        ]);
+
+        Assert.Equal(4000, sets[0].Parameters.Single().Size);
+        Assert.NotEqual(sets[0].Parameters.Single().Size, sets[1].Parameters.Single().Size);
+    }
+
     [Fact]
     public void A_single_set_is_rejected_like_a_single_matrix_value()
     {

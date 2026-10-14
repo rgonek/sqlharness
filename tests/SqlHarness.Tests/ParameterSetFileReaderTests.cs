@@ -29,10 +29,10 @@ public sealed class ParameterSetFileReaderTests
 
         var set = await ParameterSetFileReader.ReadAsync(file.Path, CancellationToken.None);
         var prepared = MeasureParameterSetValidator.Prepare(
-            [], [set], setupSql: null, querySql: "SELECT @Date AS Value");
+            [], [set, set with { Name = "date-set-copy" }], setupSql: null, querySql: "SELECT @Date AS Value");
 
         Assert.Equal("@Date:date=2026-06-30", Assert.Single(set.Parameters));
-        Assert.Equal("@Date", Assert.Single(Assert.Single(prepared).Parameters).Name);
+        Assert.Equal("@Date", Assert.Single(prepared[0].Parameters).Name);
     }
 
     [Fact]
@@ -295,7 +295,7 @@ public sealed class ParameterSetFileReaderTests
         var set = await ParameterSetFileReader.ReadAsync(file.Path, CancellationToken.None);
 
         var exception = Assert.Throws<SqlHarnessSafetyException>(() => MeasureParameterSetValidator.Prepare(
-            [], [set], setupSql: null, querySql: "SELECT @customerId AS Value"));
+            [], [set, new("valid", ["customerId:int=1"])], setupSql: null, querySql: "SELECT @customerId AS Value"));
         Assert.Contains(file.Path, exception.Message, StringComparison.Ordinal);
         Assert.Contains("invalid entry for parameter 'customerId'", exception.Message, StringComparison.Ordinal);
         Assert.Contains("private-entry-value", exception.Message, StringComparison.Ordinal);

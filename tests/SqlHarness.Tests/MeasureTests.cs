@@ -86,6 +86,56 @@ public class SqlHarnessMeasureTests
         Assert.All(report.Sets, set => Assert.False(string.IsNullOrEmpty(set.ValueHash)));
     }
 
+    [Theory]
+    [InlineData("varchar(12)", "varchar(40)", "short", "a longer value")]
+    [InlineData("decimal(10,2)", "decimal(12,2)", "1.25", "123.45")]
+    [InlineData("decimal(10,2)", "decimal(10,4)", "1.25", "1.2345")]
+    public async Task Measure_rejects_parameter_sets_with_different_declared_shapes(
+        string firstType,
+        string secondType,
+        string firstValue,
+        string secondValue)
+    {
+        var session = FakeMeasureSession.Create();
+        var operation = Measure(1) with
+        {
+            SetupSql = null,
+            QuerySql = "SELECT @Value",
+            ParameterSets =
+            [
+                new("first", []) { TypedParameters = [new("Value", firstType, firstValue)] },
+                new("second", []) { TypedParameters = [new("Value", secondType, secondValue)] },
+            ],
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal(0, session.FactoryOpenCount);
+        Assert.Contains("different", outcome.SafeError, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Measure_accepts_unsized_same_type_with_different_value_inferred_sizes()
+    {
+        var session = FakeMeasureSession.Create();
+        var operation = Measure(1) with
+        {
+            SetupSql = null,
+            QuerySql = "SELECT @Value",
+            ParameterSets =
+            [
+                new("short", []) { TypedParameters = [new("Value", "varchar", "x")] },
+                new("long", []) { TypedParameters = [new("Value", "varchar", new string('x', 4001))] },
+            ],
+        };
+
+        var outcome = await Module(session).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(1, session.FactoryOpenCount);
+    }
+
     [Fact]
     public async Task Measure_runs_setup_warmup_and_measured_queries_in_order_on_one_session()
     {

@@ -83,6 +83,62 @@ public class CompareMatrixTests
         Assert.Equal(0, factory.ConnectCount);
     }
 
+    [Theory]
+    [InlineData("varchar(12)", "varchar(40)", "short", "a longer value")]
+    [InlineData("decimal(10,2)", "decimal(12,2)", "1.25", "123.45")]
+    [InlineData("decimal(10,2)", "decimal(10,4)", "1.25", "1.2345")]
+    public async Task Compare_rejects_parameter_sets_with_different_declared_shapes(
+        string firstType,
+        string secondType,
+        string firstValue,
+        string secondValue)
+    {
+        var factory = new MatrixSessionFactory();
+        using var artifacts = new DirectoryArtifactWriter();
+        var operation = Matrix("") with
+        {
+            SetupSql = null,
+            BaselineSql = "SELECT @Value",
+            CandidateSql = "SELECT @Value -- candidate",
+            Parameters = [],
+            ParameterSets =
+            [
+                new("first", []) { TypedParameters = [new("Value", firstType, firstValue)] },
+                new("second", []) { TypedParameters = [new("Value", secondType, secondValue)] },
+            ],
+        };
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Safety, outcome.ExitCode);
+        Assert.Equal(0, factory.ConnectCount);
+        Assert.Contains("different", outcome.SafeError, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Compare_accepts_unsized_same_type_with_different_value_inferred_sizes()
+    {
+        var factory = new MatrixSessionFactory();
+        using var artifacts = new DirectoryArtifactWriter();
+        var operation = Matrix("") with
+        {
+            SetupSql = null,
+            BaselineSql = "SELECT @Value",
+            CandidateSql = "SELECT @Value -- candidate",
+            Parameters = [],
+            ParameterSets =
+            [
+                new("short", []) { TypedParameters = [new("Value", "varchar", "x")] },
+                new("long", []) { TypedParameters = [new("Value", "varchar", new string('x', 4001))] },
+            ],
+        };
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(operation);
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(2, factory.ConnectCount);
+    }
+
     [Fact]
     public async Task Matrix_dry_run_fails_on_a_bad_value_like_the_real_call()
     {

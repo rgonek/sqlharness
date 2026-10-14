@@ -376,7 +376,10 @@ public class ArtifactReaderTests
         File.WriteAllText(Path.Combine(directory, "manifest.json"),
             "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"matrix-cells\"]}");
         var cases = Enumerable.Range(0, 40).Select(index => new AgentMatrixCase(index, $"cell-{index:D3}", true, "compared",
-            new AgentMedianMetrics(1, 2, 3), new AgentMedianMetrics(4, 5, 6), new AgentMedianMetrics(3, 3, 3), ["warning"])).ToArray();
+            new AgentMedianMetrics(1, 2, 3), new AgentMedianMetrics(4, 5, 6), new AgentMedianMetrics(3, 3, 3), ["warning"])
+        {
+            SetName = $"set-{index:D2}",
+        }).ToArray();
         var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), JsonSerializer.Serialize(new
         {
@@ -386,12 +389,14 @@ public class ArtifactReaderTests
         var first = ArtifactReader.ReadSection(temp.Path, id, "matrix-cells");
         using var json = JsonDocument.Parse(JsonSerializer.Serialize(first, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
         Assert.Equal(32, json.RootElement.GetProperty("cases").GetArrayLength());
+        Assert.Equal("set-00", json.RootElement.GetProperty("cases")[0].GetProperty("setName").GetString());
         Assert.Equal(4m, json.RootElement.GetProperty("cases")[0].GetProperty("candidate").GetProperty("cpuMilliseconds").GetDecimal());
         Assert.Equal(32, json.RootElement.GetProperty("continuation").GetInt32());
         var second = Assert.IsType<ArtifactMatrixCellsSection>(ArtifactReader.ReadSection(temp.Path, id, "matrix-cells", cursor: 32));
         Assert.Equal(8, second.Cases.Count);
         Assert.Null(second.Continuation);
         Assert.Equal(Enumerable.Range(32, 8), second.Cases.Select(cell => cell.Index));
+        Assert.Equal(Enumerable.Range(32, 8).Select(index => $"set-{index:D2}"), second.Cases.Select(cell => cell.SetName));
 
         var smallPage = Assert.IsType<ArtifactMatrixCellsSection>(AgentOutputProjection.Project(first, 128, 0, out _, 4096));
         Assert.InRange(JsonSerializer.SerializeToUtf8Bytes(smallPage, jsonOptions).Length, 1, 4096);
@@ -407,6 +412,7 @@ public class ArtifactReaderTests
         Assert.Null(legacy.Cases[0].Equivalent);
         Assert.Null(legacy.Cases[0].Baseline.CpuMilliseconds);
         Assert.Equal("cell-000", legacy.Cases[0].ArtifactId);
+        Assert.Null(legacy.Cases[0].SetName);
     }
 
     [Fact]
