@@ -438,8 +438,13 @@ internal sealed class PostgresSafetyClassifier
             // A plan-only EXPLAIN never executes: allow it only over a safe SELECT
             // with no writes and no result-into of its own. A throwaway temp set
             // keeps the pure plan from registering session objects it never creates.
-            // It runs no statement, so there is no read-only transaction to lean
-            // on and the name proof stays the verdict.
+            // It runs no statement, so the name proof stays the verdict; the
+            // command still executes inside the read-only transaction, but
+            // nothing inside it can write. Passing proofRequired: true is
+            // therefore harmless here: the guard above has already reduced the
+            // inner statement to a SELECT with no writes and no result-into, so
+            // the recursive call has no write target that the server could ever
+            // be asked to arbitrate.
             if (explain.Statement is not Statement.Select innerSelect ||
                 PostgresQueryShape.HasSelectInto(innerSelect.Query) ||
                 PostgresQueryShape.HasWrite(innerSelect.Query))

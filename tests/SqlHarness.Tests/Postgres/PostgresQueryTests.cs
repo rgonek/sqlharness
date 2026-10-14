@@ -103,7 +103,14 @@ public sealed class PostgresQueryTests
         // 047 step 3 end to end: the batch is accepted offline as session-local
         // work and runs in a read-only transaction, so the server, not the name,
         // decides whether the write target is the temp or a persistent table.
-        const string sql = "CREATE TEMP TABLE scratch_rows (id int) ON COMMIT DROP; INSERT INTO scratch_rows VALUES (1)";
+        // The batch carries no DDL on purpose: the query phase is read-only and
+        // the server refuses CREATE TEMP there with SQLSTATE 25006 (proof case
+        // 5), so a "CREATE TEMP TABLE ...; INSERT ..." shape could only ever
+        // succeed against this fake session and would be a false end-to-end
+        // claim. scratch_rows here is the session temp a setup phase declared;
+        // PostgresTempTargetProofIntegrationTests runs the real declaration and
+        // the real write against a live server.
+        const string sql = "INSERT INTO scratch_rows VALUES (1)";
         var session = FakeSession.WithIdentity("localhost", "appdb", FakeReader.Rows(["id"]));
         var module = new SqlHarnessModule(session, Profiles);
 

@@ -6,7 +6,7 @@
 
 ## Status
 
-- Status: DONE, final gates pending (implementation, opt-in proof tests and docs at `5acb5d2` on branch `worktree/plan-047`; `verify.ps1` / `verify-linux.ps1` are the controller's)
+- Status: DONE (`verify.ps1` → `verify: OK` and `verify-linux.ps1` → `verify-linux: OK` at `f3f7dd2`; the controller re-runs both gates after the final fix wave)
 - Priority: P2 (PostgreSQL queue)
 - Effort: M
 - Risk: MED
@@ -55,7 +55,7 @@ Out of scope: SQL Server, persistent DML approval path (`--allow-mutation --conf
 
 - `dotnet build SqlHarness.sln -warnaserror` — 0 warnings.
 - `dotnet test tests/SqlHarness.Tests --no-build --filter "FullyQualifiedName~PostgresSafety|FullyQualifiedName~PostgresQuery|FullyQualifiedName~PostgresBenchmark"` — pass.
-- Opt-in: `SQLHARNESS_PG_INTEGRATION_CONNECTION_STRING` set to the playground, `dotnet test tests/SqlHarness.Tests --filter "Category=PostgresIntegration"` — pass. A skipped integration run is not proof for step 2.
+- Opt-in: `SQLHARNESS_PG_INTEGRATION_CONNECTION_STRING` set to the playground, `dotnet test tests/SqlHarness.Tests --filter "Category=PostgresIntegration"` — pass. A skipped integration run is not proof for step 2. This holds for the four `PostgresTempTargetProofIntegrationTests` facts only, and it is not a claim about the whole category: on the disposable trust-auth cluster `PostgresSessionIntegrationTests.Connect_via_NpgsqlSessionFactory_reads_identity` fails (it asserts a non-empty password) and `PostgresReadOnlyProofTests.Server_enforces_read_only_transaction_proof` needs its own evidence variable (`SQLHARNESS_PG_READONLY_PROOF_REPORT`, produced by `scripts/prove-postgres-readonly.ps1`). Both predate this plan and belong to other files.
 - Final `scripts/verify.ps1` → `verify: OK`; `scripts/verify-linux.ps1` → `verify-linux: OK`.
 
 ## Done criteria
@@ -63,7 +63,7 @@ Out of scope: SQL Server, persistent DML approval path (`--allow-mutation --conf
 - [x] `plans/047-readonly-proof.md` records every step-1 case with server output.
 - [x] Either the read-only session is in place with integration tests, or the plan records why it is not and leaves rules unchanged. (Step 2 decision above: 052's per-execution transaction already delivers it; opt-in `PostgresTempTargetProofIntegrationTests` prove it live.)
 - [x] No existing valid temp batch becomes a rejection without a documented reason.
-- [ ] Both gates pass; `plans/README.md` row updated. (Row updated; the two gates are the controller's.)
+- [x] Both gates pass; `plans/README.md` row updated. Row updated. `scripts/verify.ps1` reported `verify: OK` and `scripts/verify-linux.ps1` reported `verify-linux: OK` at `f3f7dd2`; the controller re-runs both gates after this fix wave.
 
 ## STOP conditions
 

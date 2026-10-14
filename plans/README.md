@@ -209,7 +209,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
 - **028 before 032**: both edit `ci.yml` (028 adds `workflow_call` and permissions; 032 adds the OS matrix).
 - **029 last among the docs-touching plans**: its `DocsSyncTests` then enforces documentation for any new command.
 - **051** (which supersedes 035) executes after 046 as one plan.
-- **036** provides the live proof that 017, 019, 021, 022 and 024 list as pending; 047's READ ONLY proof can use the playground or this lane.
+- **036** provides the live proof that 017, 019, 021, 022 and 024 list as pending; 047's READ ONLY proof has since been run and recorded (2026-10-14) on a disposable PostgreSQL 18.6 cluster in this lane, not the playground — see [047-readonly-proof.md](047-readonly-proof.md).
 
 ## Policy decisions needed (not planned yet)
 

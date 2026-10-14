@@ -259,7 +259,7 @@ public sealed class CapabilitiesCommandTests
         "DECLARE @t TABLE (...) then INSERT/UPDATE/DELETE/MERGE/SELECT against it, declared earlier in the same batch. A table variable from --setup is not visible to measured SQL (separate batch): carry data in #temp. OUTPUT INTO @t only when the primary target is also proven local (persistent primary target: MutationNotAllowed). Aliased DML targets and user-defined table types stay denied";
 
     private const string CapabilityPostgresTruncateEntry =
-        "TRUNCATE [ONLY] of proven current-session temps only, named unqualified or as pg_temp.name; not ON COMMIT DROP. Persistent, mixed, CASCADE, RESTART IDENTITY and other schema-qualified targets stay denied";
+        "TRUNCATE [ONLY] of proven current-session temps only, in --setup only; named unqualified or as pg_temp.name; not ON COMMIT DROP. Persistent, mixed, CASCADE, RESTART IDENTITY and other schema-qualified targets stay denied";
 
     // Plan 029 Step 5: the PostgreSQL temp-proof entry is checked by the facts it must carry, not
     // pinned verbatim; README "PostgreSQL temp target proof" owns the wording.
@@ -297,7 +297,7 @@ public sealed class CapabilitiesCommandTests
             [
                 "EXPLAIN over a safe SELECT (plan-only, read-only)",
                 "EXPLAIN ANALYZE with full inner-statement effect analysis",
-                "SELECT INTO TEMP TABLE with unambiguous single-part name",
+                "SELECT INTO TEMP TABLE with unambiguous single-part name, in --setup only",
                 CapabilityPostgresTruncateEntry,
             ],
             SessionTempStatements(SqlEngine.Postgres).Where(entry => !IsPostgresProofEntry(entry)));
