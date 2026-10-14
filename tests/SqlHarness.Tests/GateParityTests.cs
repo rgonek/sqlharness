@@ -86,7 +86,7 @@ public sealed class GateParityTests
         var windows = StageCommand(File.ReadAllText(RepositoryFile.Locate("scripts", "verify.ps1")), "format");
         var linux = StageCommand(File.ReadAllText(RepositoryFile.Locate("scripts", "verify-linux.ps1")), "format");
 
-        Assert.Equal(windows, linux);
+        Assert.Equal(FormatShape(linux), FormatShape(windows));
     }
 
     [Fact]
@@ -238,8 +238,85 @@ public sealed class GateParityTests
         Assert.Equal("dotnet build SqlHarness.sln --no-restore -warnaserror", StageCommand(linux, "build"));
         Assert.Equal("dotnet test SqlHarness.sln --no-build --filter \"FullyQualifiedName!~Integration\"", StageCommand(windows, "test"));
         Assert.Equal("dotnet test SqlHarness.sln --no-build --filter \"FullyQualifiedName!~Integration\" --logger \"console;verbosity=normal\"", StageCommand(linux, "test"));
-        Assert.Equal("dotnet format SqlHarness.sln --no-restore --verify-no-changes", StageCommand(windows, "format"));
-        Assert.Equal("dotnet format SqlHarness.sln --no-restore --verify-no-changes", StageCommand(linux, "format"));
+        Assert.Equal("dotnet format SqlHarness.sln --no-restore --include $changedFiles --verify-no-changes", FormatShape(StageCommand(windows, "format")));
+        Assert.Equal("dotnet format SqlHarness.sln --no-restore --include $changedFiles --verify-no-changes", FormatShape(StageCommand(linux, "format")));
+    }
+
+    [Theory]
+    [InlineData("scripts/verify.ps1")]
+    [InlineData("scripts/verify-linux.ps1")]
+    public void Every_local_gate_scopes_the_format_check_to_changed_files(string path)
+    {
+        var command = StageCommand(File.ReadAllText(RepositoryFile.Locate(path.Split('/'))), "format");
+
+        Assert.Contains("--include", command, StringComparison.Ordinal);
+        Assert.Contains("--verify-no-changes", command, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("scripts/verify.ps1")]
+    [InlineData("scripts/verify-linux.ps1")]
+    public void Every_local_gate_routes_stage_output_through_the_shared_gate_output(string path)
+    {
+        var content = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
+
+        Assert.Contains("gate-output.ps1", content, StringComparison.Ordinal);
+        Assert.Contains("Invoke-GateStage", content, StringComparison.Ordinal);
+        Assert.Contains("Get-GateSummaryLine", content, StringComparison.Ordinal);
+        Assert.Contains("Get-StageFailureText", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_windows_gate_checks_the_files_the_working_tree_changed()
+    {
+        var content = File.ReadAllText(RepositoryFile.Locate("scripts", "verify.ps1"));
+
+        Assert.Contains("format-changed.ps1", content, StringComparison.Ordinal);
+        Assert.Contains("-ListOnly", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("-Mode branch", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_linux_gate_checks_the_files_the_branch_changed_because_the_clone_only_holds_commits()
+    {
+        // The gate clone is reset to the branch tip, so a working-tree diff there is
+        // always empty. Scope the check to what the branch changed over origin/main.
+        var content = File.ReadAllText(RepositoryFile.Locate("scripts", "verify-linux.ps1"));
+
+        Assert.Contains("format-changed.ps1", content, StringComparison.Ordinal);
+        Assert.Contains("-Mode branch", content, StringComparison.Ordinal);
+        Assert.Contains("-ListOnly", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Ci_still_checks_formatting_over_the_whole_solution()
+    {
+        var content = File.ReadAllText(RepositoryFile.Locate(".github", "workflows", "ci.yml"));
+
+        Assert.Equal("dotnet format --no-restore --verify-no-changes", StageCommand(content, "format"));
+    }
+
+    [Fact]
+    public void The_justfile_runs_the_gates_and_can_rewrite_formatting()
+    {
+        var justfile = File.ReadAllText(RepositoryFile.Locate("justfile"));
+
+        Assert.Matches(@"(?m)^verify\b", justfile);
+        Assert.Matches(@"(?m)^verify-linux\b", justfile);
+        Assert.Matches(@"(?m)^fix\b", justfile);
+        Assert.Contains("scripts/verify.ps1", justfile, StringComparison.Ordinal);
+        Assert.Contains("scripts/verify-linux.ps1", justfile, StringComparison.Ordinal);
+        Assert.Contains("scripts/format-changed.ps1 -Fix", justfile, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_verification_contract_uses_the_justfile_rather_than_the_raw_scripts()
+    {
+        var verification = ReadRepositoryFile("docs", "agents", "verification.md");
+
+        Assert.Contains("just verify", verification, StringComparison.Ordinal);
+        Assert.Contains("just verify-linux", verification, StringComparison.Ordinal);
+        Assert.Contains("just fix", verification, StringComparison.Ordinal);
     }
 
     private static readonly string[] UiCommands =
@@ -301,8 +378,38 @@ public sealed class GateParityTests
 
     private const string VerbGroup = @"(?<verb>restore|build|test|format)";
     private const string Body = @"(?:[^""'\}\r\n]|""[^""]*""|'[^']*')*";
+
+    // The bash array expansion "${changedFiles[@]}" is a double-quoted token, which
+    // the Linux body already accepts; single-quoted bash lines are literal here.
     private const string LinuxBody = @"(?:[^""'\r\n]|""[^""]*"")*";
     private const string YamlBody = @"(?:[^""'\r\n]|""[^""]*""|'[^']*')*";
+
+    internal static string FormatShape(string command) =>
+        Regex.Replace(
+            command,
+            "--include\\s+(?:\"\\$\\{changedFiles\\[@\\]\\}\"|\\$changedFiles)",
+            "--include $changedFiles");
+
+    private static string ReadRepositoryFile(params string[] parts) =>
+        File.ReadAllText(RepositoryFile.Locate(parts));
+
+    [Fact]
+    public void FormatShape_hides_only_the_expansion_syntax_of_the_include_list()
+    {
+        var windows = "dotnet format SqlHarness.sln --no-restore --include $changedFiles --verify-no-changes";
+        var linux = "dotnet format SqlHarness.sln --no-restore --include \"${changedFiles[@]}\" --verify-no-changes";
+
+        Assert.Equal(windows, FormatShape(linux));
+    }
+
+    [Fact]
+    public void FormatShape_keeps_drift_in_the_format_flags_visible()
+    {
+        var windows = "dotnet format SqlHarness.sln --no-restore --include $changedFiles --verify-no-changes";
+        var linux = "dotnet format SqlHarness.sln --no-restore --include \"${changedFiles[@]}\"";
+
+        Assert.NotEqual(windows, FormatShape(linux));
+    }
 
     internal static string[] StageVerbs(string content)
     {

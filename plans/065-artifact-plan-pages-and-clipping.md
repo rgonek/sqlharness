@@ -14,7 +14,7 @@
 
 ## Status
 
-- IN PROGRESS — implementation and verification are recorded locally; uncommitted, integration pending. No installation, publication or push authorization is implied.
+- IN PROGRESS — implementation is committed as `0b6dce4`; feature-branch verification is recorded in [verification](../docs/verification/plan-065.md). Integration verification is underway after merging main. No installation, publication or push authorization is implied.
 - Planning base: `ed44649`, 2026-10-14.
 - Priority: P1 for clipping correctness; P2 for page efficiency. Effort: M; risk: MEDIUM (shared projection and pagination).
 - Owner: this follow-up; 055 and 058 are DONE historical prerequisites. Do not reopen their implementation status.

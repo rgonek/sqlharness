@@ -40,8 +40,8 @@ rows per measured variant run; warm-ups never participate.
 > **Accepted follow-up, 2026-10-14 (operator):** [plan 066](../../../plans/066-regression-resolution-floor-and-cost-thresholds.md)
 > moves the implemented policy (plan 051, time-only verdict) to version 2: an elapsed range of at most 2 ms
 > never makes a variant unstable, so whole-millisecond jitter on small statements no longer forces
-> `inconclusive`. Reads/CPU stay non-deciding diagnostics; README documents their thresholds. Status: accepted
-> planning only, not implemented. The v1 text below is preserved as the original design.
+> `inconclusive`. Reads/CPU stay non-deciding diagnostics; README documents their thresholds. Status: implemented in 36f2213.
+> The v1 text below is preserved as the original design.
 
 A metric regresses only when **both** gates fire (relative AND absolute):
 

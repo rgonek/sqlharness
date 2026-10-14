@@ -134,6 +134,67 @@ public class RegressionPolicyTests
     }
 
     [Fact]
+    public void Range_within_the_resolution_floor_is_stable_at_small_medians()
+    {
+        // median 1, range 1 -> relative spread 1.0, but within 2 ms
+        var report = Run(Variant([1m, 1m, 2m, 1m, 1m, 1m, 1m]), Variant([1m, 1m, 1m, 2m, 1m, 1m, 1m]));
+
+        Assert.Equal(RegressionPolicy.Pass, report.Verdict);
+        Assert.Empty(report.Reasons);
+    }
+
+    [Fact]
+    public void Range_exactly_at_the_floor_is_stable()
+    {
+        var report = Run(Variant([1m, 1m, 3m, 1m, 1m]), Variant(Flat(1m)));
+
+        Assert.Equal(RegressionPolicy.Pass, report.Verdict);
+    }
+
+    [Fact]
+    public void Range_above_the_floor_and_above_a_quarter_is_unstable()
+    {
+        // median 4, range 3 -> 0.75 and above 2 ms
+        var report = Run(Variant([4m, 4m, 7m, 4m, 4m]), Variant(Flat(4m)));
+
+        Assert.Equal(RegressionPolicy.Inconclusive, report.Verdict);
+        Assert.Equal([RegressionPolicy.ReasonUnstableElapsed], report.Reasons);
+    }
+
+    [Fact]
+    public void Zero_median_within_the_floor_is_stable()
+    {
+        var report = Run(Variant([0m, 0m, 0m, 0m, 1m]), Variant(Flat(0m)));
+
+        Assert.Equal(RegressionPolicy.Pass, report.Verdict);
+    }
+
+    [Fact]
+    public void Floor_stable_zero_baseline_still_fails_above_five_milliseconds()
+    {
+        var report = Run(Variant([0m, 0m, 0m, 0m, 1m]), Variant([6m, 6m, 7m, 6m, 6m]));
+
+        Assert.Equal(RegressionPolicy.Fail, report.Verdict);
+        Assert.Equal([RegressionPolicy.ReasonElapsedRegressed], report.Reasons);
+    }
+
+    [Fact]
+    public void Floor_stable_variants_still_fail_on_a_real_regression()
+    {
+        // both ranges 1 ms; candidate median +9 ms and x10
+        var report = Run(Variant([1m, 1m, 2m, 1m, 1m]), Variant([10m, 10m, 11m, 10m, 10m]));
+
+        Assert.Equal(RegressionPolicy.Fail, report.Verdict);
+        Assert.Equal([RegressionPolicy.ReasonElapsedRegressed], report.Reasons);
+    }
+
+    [Fact]
+    public void Policy_version_is_two()
+    {
+        Assert.Equal(2, RegressionPolicy.PolicyVersion);
+    }
+
+    [Fact]
     public void Zero_median_with_a_positive_maximum_is_unstable()
     {
         var report = Run(Variant([0m, 0m, 0m, 0m, 4m]), Variant(Flat(0m)));
@@ -362,7 +423,7 @@ public class RegressionPolicyTests
         var json = System.Text.Json.JsonSerializer.Serialize(report, System.Text.Json.JsonSerializerOptions.Web);
 
         Assert.Contains("\"verdict\":\"pass\"", json);
-        Assert.Contains("\"policyVersion\":1", json);
+        Assert.Contains("\"policyVersion\":2", json);
         Assert.Contains("\"logicalReads\":{", json);
     }
 }

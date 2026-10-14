@@ -14,8 +14,8 @@
 // Untagged fences and prose are never checked.
 //
 // Command coverage: every command registered with Spectre must appear in capabilities, and in the
-// README "## Commands" table; the skill must mention each command in backticks or link to that
-// table (README.md#commands).
+// README "## Commands" table. The user-facing skill discovers the installed interface rather
+// than duplicating its command catalog or requiring access to repository documentation.
 
 using System.Diagnostics;
 using System.Text;
@@ -54,22 +54,6 @@ public sealed partial class DocsSyncTests
 
         var missing = registered.Where(c => !table.Contains(c)).ToArray();
         Assert.True(missing.Length == 0, "README '## Commands' table is missing: " + string.Join(", ", missing));
-    }
-
-    [Fact]
-    public async Task Skill_lists_every_registered_command_or_links_the_readme_table()
-    {
-        var registered = await RegisteredCommandsAsync();
-        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
-
-        if (skill.Contains("README.md#commands", StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        var missing = registered.Where(c => !Regex.IsMatch(skill, $@"`{Regex.Escape(c)}[` ]")).ToArray();
-        Assert.True(missing.Length == 0,
-            "SKILL.md neither links README.md#commands nor mentions in backticks: " + string.Join(", ", missing));
     }
 
     [Theory]

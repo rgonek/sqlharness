@@ -2,226 +2,68 @@
 
 One `sqlharness` process can serve the SQLHarness diagnostics and benchmarks to an MCP client over local stdio. The server is part of the same single-file distribution, calls into `SqlHarness.Core` through the same module the CLI uses, and enforces the same safety rules. Only local stdio is supported, one client per process. There is no HTTP/SSE transport, no ports, no OAuth, no sampling, prompts, elicitation, or experimental tasks.
 
+Read the section needed for the change or configuration task.
+
 ## Start
 
-The server supports a fixed-profile mode and a SQL Server-only request-scoped mode. Each process serves one local stdio client.
-
-Fixed-profile mode keeps the existing command shape:
-
-```powershell
-sqlharness mcp serve <profile> --var key=value [--input-root <absolute-directory>]
-```
-
-- `<profile>` is a closed target profile from the operator's profile store, with fixed `--var key=value` pairs resolved once at startup.
-- `--input-root` is repeatable and takes an absolute directory that allows file inputs. By default no input roots are configured, which means no file inputs are admitted at all.
-- `--max-result-bytes` sets the process response ceiling in bytes: default 262144, accepted range 4096..1048576. Each call defaults to a 65536-byte budget and may raise or lower that budget up to the process ceiling.
-- `--max-operation-seconds` sets the process database time budget in seconds: default 900, accepted range 1..86400. A single tool call may only lower it.
-- `--unsafe-direct` is blocked for `mcp serve` and rejected with exit 2. Direct server/database targets are not available on this path.
-
-Request-scoped mode selects one of the explicitly allowed SQL Server profiles on each target-dependent call:
-
-```powershell
-sqlharness mcp serve --request-scope --allow-profile sample-country --allow-profile sample-shared --input-root C:\work\sqlharness-inputs
-```
-
-The nonempty `--allow-profile` list is required and repeatable. Do not provide a startup profile or `--var` in this mode. Startup rejects duplicate profile names and any allowlisted profile that resolves to Postgres. The process snapshots the allowed profile definitions, file roots, and budgets once; editing the profile store or changing the allowlist requires a restart. Startup does not connect to a database or perform interactive login. Request-scoped mode is not available for Postgres.
+Read [start](mcp/startup.md#start).
 
 ## Benchmark artifact storage
 
-`measure` (including parameter sets) and `compare` (including matrices) check the benchmark artifact directory after input validation and before opening a database session. The check creates a unique probe directory, writes a nonsensitive marker, renames the directory, and removes the probe. It uses the same storage root as artifact publication and leaves existing artifacts untouched.
-
-The process account must be able to create directories, write files, rename directories, and delete its files and directories under the artifact root (by default `~/.sqlharness/compare`). On Windows, an MCP client may launch a restricted process whose effective permissions differ from those of an interactive terminal. Check the actual MCP process identity and token before changing access rules; keep any access grant limited to the required artifact directory.
-
-A failed probe returns `local_storage_failed`, exit code `6`, phase `artifact-preflight`, a redacted storage location, and a permissions hint. SQLHarness never changes ACLs or elevates the process. A successful check does not guarantee a later write will succeed: permissions, disk space, or other filesystem conditions may change during the benchmark. Publication failures still retain completed matrix cells and use the existing staging cleanup behavior.
-
-`SQLHARNESS_HOME` changes the whole SQLHarness home, including configuration and profiles, not just the artifact directory. Changing it requires deliberate operator configuration. Read-only `query` does not run this benchmark storage check.
+Read [benchmark artifact storage](mcp/artifacts.md#benchmark-artifact-storage).
 
 ## Client configuration
 
-SQLHarness never installs or edits a client configuration automatically. To register the server, paste an entry manually into the MCP client configuration file. Neutral shape (field names vary by client):
-
-Fixed-profile client entry:
-
-```json
-{
-  "command": "sqlharness",
-  "args": ["mcp", "serve", "sample-country", "--var", "tenant=example", "--var", "env=test", "--input-root", "C:\\work\\sqlharness-inputs"],
-  "env": {}
-}
-```
-
-Request-scoped client entry:
-
-```json
-{
-  "command": "C:\\tools\\sqlharness.exe",
-  "args": ["mcp", "serve", "--request-scope", "--allow-profile", "sample-country", "--allow-profile", "sample-shared", "--input-root", "C:\\work\\sqlharness-inputs"],
-  "env": {}
-}
-```
+Read [client configuration](mcp/startup.md#client-configuration).
 
 ## Protect local agent configuration
 
-`~/.sqlharness/dashboard.json` and `~/.sqlharness/dashboard-token` contain a live dashboard access token. Do not print, paste, or expose those files. Avoid broad reads such as `cat ~/.sqlharness/*.json`; name `targets.json` explicitly when you need to inspect profiles. On Windows, the corresponding dashboard path is `%USERPROFILE%\.sqlharness\dashboard.json` (and `dashboard-token` beside it).
-
-The sample hooks in [`scripts/hooks`](../scripts/hooks) block common Claude Code and Codex shell reads of `dashboard.json` and `~/.sqlharness/*.json`, while allowing an explicit `targets.json` read. They are optional guardrails for shell commands, not a filesystem access boundary. Review and merge the relevant example into your existing client hook configuration; do not replace other settings. Claude Code hooks use the repo-local script path in `claude-settings.example.json`. For Codex, copy `protect_sqlharness_config.py` to `~/.codex/hooks/` and merge `codex-hooks.example.json` into `~/.codex/hooks.json`; review and trust the hook when Codex prompts.
-
-Connection secrets stay in the process environment and the operator's profile store. In fixed mode, tool arguments never carry a profile or vars. In request-scoped mode, profile and vars may appear only inside the required nested `target`. In both modes, tool arguments never carry raw server or database, auth, engine, `unsafeDirect`, `allowMutation`, `confirmDatabase`, or password fields, and unknown argument keys are rejected before execution.
+Read [protect local agent configuration](mcp/startup.md#protect-local-agent-configuration).
 
 ## Scope lifetime
 
-In fixed mode, the operator supplies the profile and vars once at process start. The server resolves and freezes one immutable scope for all calls; a different profile, variables, or target requires a restart.
-
-In request-scoped mode, each target-dependent call supplies a nested `target`, for example `{"target":{"profile":"sample-country","vars":{"tenant":"example","env":"test"}}}`. The target is required for `query`, `measure`, `compare`, `watch`, `snapshot`, and `artifact`. Each call resolves the selected allowlisted profile against the immutable startup snapshot and builds a fresh scoped handler/module. The other two tools (`capabilities` and `plan`) remain target-free; in particular, offline plan distillation does not invent a target. Fixed mode retains its existing schemas and rejects the request-only `target` argument. Matrix and parameter-set values are execution parameters and cannot change the target.
-
-This is a breaking MCP input change: every request-scoped target-dependent tool now calls the database-selection object `target`; `scope` is not accepted as an alias. For `sqlharness_compare`, `scope` is reserved for the textual optimization fragment and `subject` names the SQL being optimized. With the default `compare.requireContext: true`, both string fields appear in the compare schema and are required. Use stable short ASCII labels, and use exactly `whole` for a direct whole-query comparison. `compare.requireContext` is global, independent of journal enablement, and is frozen for the MCP process. Change it in `~/.sqlharness/config.json` and restart the server, then reconnect the client. When false, the compare schema hides and rejects `subject` and textual `scope`; request-scoped `target` remains required. Other tools accept neither `subject` nor textual `scope`.
-
-Example request-scoped compare call with context enabled:
-
-```json
-{
-  "target": { "profile": "sample-country", "vars": { "tenant": "example", "env": "test" } },
-  "subject": "orders-report",
-  "scope": "whole",
-  "baseline": { "sql": "SELECT ..." },
-  "candidate": { "sql": "SELECT ..." }
-}
-```
-
-The dashboard groups comparisons by `(sessionId, subject, scope)` and assigns SQL-content versions from hashes in first-seen order. `v0`, `v1`, and later labels are local to that group; they do not select a winner or establish a relationship between a fragment and the whole query. Numbering uses the full retained journal history before pagination. Journal retention can remove earlier observations and change version numbers; the dashboard presents retained history only.
-
-Capabilities identify `scopeMode` as `fixed` or `request` and report the frozen `compareContext` policy. It includes `requireContext`; when true it also describes the label pattern, `whole` label, hash-based version identity and retained-history boundary. When false, only `requireContext: false` is returned. Request mode reports the SQL Server engine and the permitted profile names from the explicit allowlist; neither mode reports resolved database lists, variable values, credentials, or local paths other than the configured input roots (`inputRoots`). The operator's `--allow-profile` list is the approval for switching profiles: a client selects any allowlisted profile per call without a new user request, and confirms the intended profile and target before SQL. The list approves profiles only: changing the vars within an allowlisted profile still needs a new explicit user request. A profile outside the list needs the operator to restart the server with a new list. A dry run stays offline and does not prove live identity, object existence, or database permissions. On a successful connection, the server name/address is reported as observed context; TLS certificate validation authenticates the endpoint (`trustServerCertificate: false` for SQL Server, `sslMode: verify-full` for PostgreSQL). Exit 4 means the connected database differs from the resolved database using exact ordinal comparison.
-
-Each resolved scope carries an artifact owner tuple built from its profile request and resolved target: `{ profile, canonical vars, engine, server, database }`. In fixed mode the scope comes from the startup request; in request-scoped mode it comes from that tool call. Vars are stored case-insensitively with deterministic (ordinal-sorted) order, so the same scope serializes stably. The owner holds no auth material and no secrets: passwords and environment values never land in owner metadata or reports. Matching is exact and fails closed: profile, engine, server, and database compare ordinal; var keys compare case-insensitively with exact values; the full var set must agree (count included). Malformed candidate metadata simply does not match and never throws. The owner survives a restart because it is persisted in the artifact, not in server memory: a new process with the same profile, canonical vars, and resolved engine/server/database matches again without any in-memory state.
+Read [scope lifetime](mcp/startup.md#scope-lifetime).
 
 ## Input roots and file inputs
 
-Inline input works without filesystem access. File input requires an absolute path lexically under an `--input-root` directory frozen at startup. UNC and network paths are rejected, and each file is opened once with a bounded read. The reader does not resolve links or reparse points, reject alternate data streams, or detect same-user replacement while reading: the roots scope caller-supplied paths, while the same OS user can read or change filesystem entries directly.
-
-`sqlharness_capabilities` discloses the configured input roots in both modes, so a caller can find a permitted location without reading client configuration:
-
-- `inputRoots`: a page of the normalized absolute roots, in configured order. An empty array means file inputs are disabled (no `--input-root` was configured); pass content inline instead.
-- `inputRootCount`: the total number of configured roots.
-- `inputRootsComplete`: `true` only when this single response holds every root (first page, nothing omitted, no next page).
-- `inputRootsNextCursor`: the offset to pass as `inputRootCursor` for the next page, or `null` on the last page. The page size follows the result byte budget. To get the full inventory, repeat the call with `inputRootCursor` set to the previous `inputRootsNextCursor` until it is `null`. A cursor outside `0..inputRootCount` is rejected.
-- `inputRootsOmitted`: roots skipped because a single root path is too long to fit any page; they stay enforced but cannot be listed.
-
-Discovery workflow: call `sqlharness_capabilities`, pick a root from `inputRoots`, place the file under that root, and pass its absolute path as `file`. Roots are fixed at startup. SQLHarness never reads client configuration, never creates directories, and MCP `roots/list` never widens the allowlist.
-
-Input-path rejections name the reason and echo the caller path (credential-filtered, control characters replaced, URL or UNC `user:password@` userinfo masked, truncated at 120 characters), for example `The input path was rejected: not an absolute path. Path: ...`. A well-formed path outside every configured input root reports `The input path is outside every configured input root` and lists the configured roots when they fit a small bound (at most 8 roots and 150 characters of root text); when only a prefix fits it says `First K of N configured roots: ...` and points to the `sqlharness_capabilities` `inputRoots` pages (`inputRootCursor`) for the rest, and when not even one root fits it states the count and points to those pages. Every rejection message stays within the 512-character cell limit. With no roots configured the message says file inputs are disabled.
-
-- SQL tools take exactly one of inline `sql` or `file`; the plan tool takes exactly one of inline `content` or `file`. Inline payloads above 1 MiB are rejected and must arrive as files under an input root. SQL and plan files are admitted up to 16 MiB, matching the CLI/Core SQL bound.
-- Parameter-set files must use the `.sqljson` extension, are limited to 64 KiB, and are parsed with the shared Core parser: only `name` and `parameters`; a UTF-8 BOM, JSON comments, and trailing commas are accepted. Values are never copied into reports.
-- Parameters travel as `{name, type, value}` triples with culture-invariant string values or JSON null. The adapter maps them onto the existing Core binder and keeps its name, duplicate, and type validation; there is no second SQL validator and no second type list.
-- A matrix argument carries a typed name and type plus a `values` array of at least two distinct elements, each a culture-invariant string or JSON null. Every element reaches the Core binder whole: a comma is an ordinary character, an empty string is a text value, and JSON null is a typed NULL of the matrix type (`null`, `""`, and the text `"null"` are three distinct values). Parameters and matrix values are never joined into or split from text on this path; the CLI `--matrix name:type=v1,v2` text grammar is unchanged. The same null carries through to the result: a compare-matrix cell's `parameterValue` is JSON null only for the cell that bound a typed NULL matrix value, and a plain string for every other cell.
+Read [input roots and file inputs](mcp/inputs.md#input-roots-and-file-inputs).
 
 ## Client workspace roots
 
-On the handshake revisions (`2025-06-18`, `2025-11-25`), when the client
-declares the `roots` capability, SQLHarness requests `roots/list` after
-`initialized`, and again on `roots/list_changed` only if the client declared
-`listChanged`. At most 32 roots are kept. On `2026-07-28` a server-to-client
-`roots/list` succeeds only while the originating `tools/call` is still waiting
-for it, and a background fetch hangs until the 5 s timeout. Because a roots
-fetch must never block a tool call, SQLHarness does not request roots on
-`2026-07-28` sessions: their roots stay unknown (NULL). MRTR and
-`subscriptions/listen` are not implemented. A successful answer is recorded in
-the local activity journal for the dashboard and nothing else: client roots
-never widen `--input-root`, never authorize a file input, and never change a
-tool result. A failed or slow (5 s) request keeps the previous snapshot; stderr
-names only the failure class.
+Read [client workspace roots](mcp/inputs.md#client-workspace-roots).
 
 ## Tools
 
-Exactly 8 tools are registered explicitly by name. No assembly scanning is used, so adding a public method can never silently widen the surface.
-
-Tool and argument descriptions expose setup/session rules, mutually exclusive parameter-set inputs
-and saved-plan selection at the call site. Use capabilities for runtime configuration, and the result's
-status, omissions, continuation and evidence gaps to judge whether the returned evidence is complete.
-
-| Tool | Behavior |
-|---|---|
-| `sqlharness_capabilities` | Runtime configuration of this server process: `configurationRef`, `scopeMode` (`fixed` or `request`), active `compareContext` policy, `engines`, `processLimits` (`maxResultBytes`, `maxOperationSeconds`), `allowedProfiles` (request mode only) and the paged input roots (see below). `includeDiagnostics: true` adds local counts and directory existence flags. Never disclosed: secrets, environment values, the dashboard token, unrelated filesystem paths, or profiles outside the allowlist. |
-| `sqlharness_query` | Bounded query passing the static visible-effects text check, with timeout and row cap. Optional `dryRun: true` (see below). No persistent-mutation flags are offered on this path; hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. |
-| `sqlharness_measure` | Measure one query across repeats. Accepts exactly one of `parameterSets`, `parameterSetFiles`, or `matrix`, plus optional setup. Parameter sets rotate across measured rounds on one connection; setup runs once. Optional `dryRun: true` checks the exact sets offline. |
-| `sqlharness_compare` | Compare baseline versus candidate with the CLI equivalence rules. With `compareContext.requireContext: true`, requires textual `subject` and optimization `scope`; request-scoped calls also require `target`. With it false, the two context fields are absent from the schema and rejected, while request-scoped `target` remains required. Accepts exactly one of `parameterSets`, `parameterSetFiles`, or `matrix`; each set uses one connection and setup runs once on that connection. Output retains an ordered cell inventory with set labels before optional per-cell detail. Optional `dryRun: true` checks the exact sets offline. Optional `compareNullability` (boolean, default `false`) also requires matching column nullability (`allowNull`) for equivalence; it is rejected with `compareResults: "off"` (`compareNullability requires compareResults ordered, multiset, or set.`). Results always carry `compareNullability`, `nullabilityEquivalent` (`true`, `false`, or `null` when not comparable or unavailable, including when the provider reported no nullability for a compared column; that column's `allowNull` elsewhere still reads `true`) and `mismatchReason` (`"nullability"` only when strict mode alone caused the mismatch) in the equivalence object, including matrix cells. Artifacts written before this change lack these fields: `sqlharness_artifact` reads `compareNullability` as `false` and `nullabilityEquivalent` as unavailable. |
-| `sqlharness_watch` | Poll a bounded query passing the static visible-effects text check until `until` or `untilUnchanged`, within interval and max-duration bounds. The watch deadline is capped by the remaining request budget. |
-| `sqlharness_snapshot` | Capture a named result, which never overwrites an existing name, or diff live results against it without printing cell values. There is no force flag. |
-| `sqlharness_plan` | Offline plan-document distillation. Optional `includeText` (boolean, default `true`, fixed and request modes) returns bounded statement text and predicates unchanged; `false` returns metadata only. Cell-limit clipping and truncation indicators still apply; the input document is never returned or persisted. Errors stay credential-filtered. |
-| `sqlharness_artifact` | Read one safe section (`summary`, `metrics`, `operators`, `statements`, `matrix-cells`, `plan`) of a saved benchmark artifact. Paged sections accept an optional zero-based `cursor`. For `section: "plan"`, `variant` is `baseline`, `candidate`, or `query` (measure); `statement` is a zero-based statement ordinal (default `0`); `parameterSet` selects a measure set; `repetition` selects an available measured repetition; and `includeText` opts into bounded statement text and predicates (default `false`). With no repetition, the last measured repetition is selected and identified in the response. Available repetitions list all measured runs, including runs without a saved plan; selecting one without plan evidence returns an explicit unavailable-evidence error rather than falling back. The response reports available repetitions and `planShapeStable`. It is `null` without an `evidenceGaps` entry when fewer than two measured repetitions are available, because there is not enough evidence to compare. If a multi-repetition comparison has missing or incomplete saved plan evidence, stability is also `null` and `evidenceGaps` describes the gap. Nodes are flattened in preorder with stable paths; each response is limited by its byte budget, and continuation advances by nodes returned. Raw XML is never read. The `operators` summary also accepts `cursor`, but exposes only its capped noteworthy-operator list. |
-
-Tool annotations are conservative local-effect hints only: benchmarks write artifacts, and snapshot capture writes data, so those tools never claim read-only. Hints never replace policy enforcement.
-
-### Parameters and dry runs
-
-Parameter names may include one optional leading `@` (for example, `Name` and `@Name` bind identically). Reports use the canonical `@Name` form. This applies to typed parameters, all three set forms and `.sqljson` parameter-set files. The `@` is accepted only once; the remaining name must start with a letter or underscore and contain only letters, digits or underscores.
-
-Both benchmark tools accept the same mutually exclusive forms: `parameterSets` is an inline array of `{name, parameters: [{name, type, value}]}`, `parameterSetFiles` is an array of `.sqljson` paths under a configured input root, and `matrix` is `{name, type, values}` for one parameter. Set names follow the safe-label rule. Inline sets and files require 2–32 sets; matrix requires 2–32 distinct values. Each set must use the same parameter names and declared type, size, precision and scale; unsized types such as `nvarchar` may infer different bound value sizes. A missing or unexpected name, shape mismatch, fixed-parameter overlap, or invalid set label is rejected by the shared Core validation. Set values are typed strings or JSON null. Matrix commas, empty strings and typed NULL remain distinct. The CLI `--param-set` and `--matrix` text grammars are unchanged.
-
-Set `dryRun: true` on `sqlharness_query`, `sqlharness_measure` or `sqlharness_compare` to dry-run the exact call, setup and selected parameter-set form, including every inline set or matrix value; parameter-set files are included too. It is the same check as CLI `--dry-run`. Its checks, report fields and limits are in the dry-run rule of the [README Safety contract](../README.md#safety-contract).
-
-Calls that reach Core, including dry runs, are journal operations. A dry run's displayed response contributes to workflow output bytes and call counts, while its `dry_run` flag keeps it out of database-execution counts and it cannot be a comparison baseline. Capabilities discovery, `tools/list`, input tokens and final chat are outside the output-cost coverage. The `single-measured-execution-output` baseline includes the first measured result/messages for each variant and parameter set in the producer; it excludes warm-ups, later repeats, and plan XML. The dashboard joins artifact reads to producers through exact opaque operation references. A top-level call has an `operation_ref`; an artifact read has its own reference and sets `parent_operation_ref` to the producer. Missing references on old rows mean unavailable provenance, never a path or timestamp guess. Schema v7 adds nullable `operation_ref` and `parent_operation_ref` plus `dry_run` (`NOT NULL DEFAULT 0`). It reuses the `raw_bytes` and `emitted_bytes` columns introduced in v3; stored byte values remain intact. Existing rows have null references and `dry_run = 0`, while legacy token columns remain readable; no historical provenance is inferred or backfilled. The dashboard labels unreferenced history `legacy-artifact-volume` and excludes it from comparable workflow totals. Output-byte measurements are authoritative; displayed tokens use `ceil(UTF-8 bytes / 4)` and remain estimates, not actual savings or provider tokenization. See [workflow output cost](../README.md#activity-journal-and-workflow-output-cost) for coverage and comparison semantics.
+Read [tools](mcp/tools.md#tools).
 
 ## No persistent mutations
 
-SQL Server control flow: Allowed control flow: IF, ELSE, BEGIN … END (any nesting). Still denied: WHILE, BREAK, CONTINUE, GOTO, labels, RETURN, TRY … CATCH, WAITFOR, THROW, RAISERROR. A branch is classified even when its predicate is constant false: classifier never evaluates predicates. SQL Server only. PostgreSQL unchanged.
-
-The MCP server v1 exposes no explicit persistent DML or DDL statement path. Query operations use `AllowMutation: false` with no confirmation database, and the Core classifier enforces the static visible-effects check. Every non-approved PostgreSQL command also runs in its own `READ ONLY` transaction; PostgreSQL rejects persistent table and sequence writes, including writes reached through user functions (SQLSTATE `25006`, safety exit `2`). Allowed Postgres TEMP setup runs outside that per-command wrapper and relies on the existing static visible-effects and temp-target checks; nextval and setval remain denied in setup. Static validation does not inspect user-defined function bodies, so setup SQL can call a persistent-writing function. Review setup SQL and use a least-privilege role, but do not treat validation as proof that every effect is rejected. `READ ONLY` does not contain every administrative or external effect: the classifier denies known residual calls such as statistics resets, promotion and backup operations, and least-privilege database roles must constrain other effects hidden in user functions. The `read-only` validation label means no visible mutation and no session-local work; it is not proof that arbitrary user functions have no hidden effects. Snapshot capture stores under a fresh name only. Session-local temporary objects follow the same Core rules as the CLI (SQL Server local `#temp`, Postgres native `TEMP`). On SQL Server, plain `SET @v = <expr>` is allowed in setup when its scalar local is declared earlier in the same batch; the RHS retains external, stateful and cross-database checks. Compound, cursor, member and session/transaction option SET stay denied. Setup that references parameters is split at the first statement that references a parameter: statements before that point run in a parameter-free root-scope command in their original order, and the remainder runs parameterized on the same session. Every `CREATE TABLE #t` and `SELECT ... INTO #t` must come before the first parameter-referencing statement; any temp-creating statement at or after that point is rejected offline. A local variable declared before this split cannot be referenced after it and is rejected offline. `CREATE TABLE #t (...); INSERT #t ... VALUES (@p)` is supported, while `SELECT ... INTO #t ... WHERE ... = @p` or a parameterized `CREATE TABLE` definition is rejected. Setup variables do not cross into baseline, candidate, or measured batches; pass a supported typed parameter or declare the local in each batch that uses it. An unproven table-position variable remains denied, and named user-defined table types do not prove an inline table variable. Explicit persistent mutation statements stay behind the future separate approval-tray contract (plan 08); a client-side approval text is never accepted as authorization. Exception: PostgreSQL TEMP setup runs read-write under static visible-effects checks, and a setup SELECT may invoke an opaque user-defined function that writes persistently without approval. Review setup SQL; static validation does not inspect the function body.
+Read [no persistent mutations](mcp/tools.md#no-persistent-mutations).
 
 ## Result envelope, errors, and budgets
 
-Every tool returns a schema version 2 agent envelope (`schemaVersion`, `command`, `status`, `exitCode`, `result`, `error`, `truncation`) in one text block containing compact JSON. The CLI `--output agent` uses the same version and query projection.
-
-- Statuses: `success`, `partial` (failed matrix-cell batch), `error`, `watch_max_duration` (exit 7), and `snapshot_differences` (exit 8). The two controlled outcomes are valid results with `isError=false`; only failures set `isError=true`.
-- Budgets are enforced on the UTF-8 bytes of the single text block the model reads, including JSON escaping. Each call defaults to 65536 bytes and accepts 4096..1048576, bounded by the process ceiling; a call may raise or lower its budget. The tools/list catalog budget is 32768 bytes for at most 8 tools. Cell values are clipped to 512 characters; neither `mcp serve` nor a tool call has an option to change it, and a truncated result reports it as `truncation.maxCellChars`. (The CLI `--output agent` envelope takes `--max-cell-chars` 0..4096.)
-- JSON is never cut mid-document: every report uses the same detail ladder `unbounded, 128, 64, 32, 16, 8, 4, 2, 1, 0` until the envelope fits, and `truncation.detailLimit` reports the selected level. If even the minimum envelope does not fit, SQLHarness emits `output_budget_too_small`.
-- Query fallback priorities (`sqlharness_query`; the CLI agent output uses the same projection). Query values are compacted before the final budget check: the resolved database and CLR `valueType` aliases are retained, while the rest of `target`, `resultHash`, and `rawFootprint` are omitted. `valueType` describes the CLR value and does not infer a SQL type. Above level 0 every result set and column stays, emitted rows keep all cells aligned with the full schema, and each set emits a leading row prefix. A set with more rows than the limit is emitted whole when complete rows fit a conservative reserve: one third of the budget minus the rowless shell (all set inventories and schemas), assigned by complete-row cost then ordinal, whole set or nothing. Other sets are sampled, so a small summary set is not cut to a wide detail set's sample. Messages are capped at the same limit; dropped messages count in `truncation.omittedItems`. Clipped strings remain prefixes with UTF-16 surrogate pairs intact; binary cells whose base64 exceeds the cell limit use `{byteLength, base64Prefix, truncated}`, and shorter binary cells remain plain base64. Every clipped retained cell has a `clippedCells` entry with its set-local zero-based row and column, original and returned lengths, and unit (`utf16-code-units` or `bytes`); omitted rows have no cell entries. At level 0 the fallback spends a conservative budget share (the final serialization remains authoritative) in this order: inventories for leading sets that fit; whole schemas, cheapest first then ordinal; whole rows for retained schemas, cheapest set first then ordinal; leading column prefixes for schemas that did not fit whole, with no rows; then leading row prefixes for full-schema sets. Small summary sets therefore keep their schemas and rows ahead of a wide detail set. Per-table read details are ordered by descending median reads, then descending maximum, then table name.
-- Query results use the compact projection before the final budget check. Column `valueType` names CLR values (for example, `System.DateTime` becomes `dateTime`); it does not infer SQL types. The resolved `database` is retained while the rest of `target`, `resultHash`, and `rawFootprint` are omitted. A clipped retained cell stays a string prefix or the existing binary-prefix object, and `clippedCells` records its zero-based row and column within that result set, original and returned lengths, and unit (`utf16-code-units` or `bytes`). Omitted rows have no cell entries. Empty messages and zero omission counters are omitted; `recordsAffected: 0` and empty-result columns remain present. The shared query projection keeps result-set ordinals and column order, and its row/detail fallback follows the same priorities described here.
-- Nonzero accounting fields identify trailing omitted result sets, columns, and rows. `omittedRowCount` is the source omitted count plus rows not emitted: `rows.length + omittedRowCount` equals the source rows plus the source omitted rows. Zero omission counters and empty messages are omitted. `truncation.omittedItems` is an aggregate: an omitted result set counts 1, each omitted column counts 1, each omitted row of a kept set counts 1, and clipped cells and dropped messages count too. Explicit per-set and per-query counts give the authoritative row/column/set accounting; nothing implies a set, column or row exists unless the counts say so.
-- `compare` over any set form keeps an ordered cell inventory containing each cell index, artifact id and `setName`; matrix cells also carry displayed `parameterValue` (JSON null only for a typed NULL). Cell reports include the set-only bound parameters. `detailLimit` controls optional per-cell diagnostics and never removes cell identity. If the inventory itself exceeds the response budget, `matrixArtifactId` and a continuation cursor fetch the remaining cells through the scope-owned `matrix-cells` section; each page uses the same cell schema. Filesystem paths stay out of the projection.
-- Every output replaces the resolved profile password and Azure SQL access token fetched for the operation. Other text, including caller SQL quoted in server errors, stays readable.
+Read [result envelope, errors, and budgets](mcp/runtime.md#result-envelope-errors-and-budgets).
 
 ## Concurrency, deadline, cancellation, and progress
 
-Tool calls run concurrently, across request scopes too; each call builds its own operation and keeps its own deadline and cancellation. SQLHarness does not serialize benchmarks: any other load on the server (another call, another session, a colleague, a tester) can disturb a measurement, as it always could. Run `measure` and `compare` while the server is quiet, and repeat a comparison before trusting a close verdict. Every execution is bounded by the process time budget (default 900 s, range 1..86400 s) through a linked deadline that always reaches Core.
-
-Cancellation propagates to connection, execution, reads, delays, and artifact writes. Closing the process (host shutdown) or stdin EOF cancels an in-flight call, which reports a stable cancelled result (`isError=true`), never the natural watch-deadline exit 7. Cancelling one call leaves every other call running.
-
-Progress notifications go out at most once per second per call, only when the client supplied a progress token, and carry only the command and stage: never SQL, parameters, or rows. Watch does not emit NDJSON on the MCP path; NDJSON stays a CLI-only surface.
-
-The activity journal records why a call was cancelled: `client` (the client sent
-`notifications/cancelled`), `shutdown` (stdin closed or the host stopped), or
-`deadline` (the call time budget ran out).
+Read [concurrency, deadline, cancellation, and progress](mcp/runtime.md#concurrency-deadline-cancellation-and-progress).
 
 ## Artifacts
 
-Benchmark and snapshot artifacts are read through the shared controlled reader with a scope-bound opaque id: a call can only address artifacts of its own scope, never arbitrary paths or other profiles' artifacts. The safe benchmark sections are `summary`, `metrics`, `operators`, `statements`, `matrix-cells`, and `plan`. `statements` reports each variant's statement ordinal, SQL hash, CPU and elapsed time from SQL Server `QueryTimeStats`, degree of parallelism, and up to ten operators ranked by actual rows and executions. It omits statement text and carries an omitted-statement count when the bounded projection is truncated. PostgreSQL plans do not provide this SQL Server statement section, so it is empty for those artifacts. Compare cell inventories carry each cell index, its artifact id and additive `setName`; matrix cells also carry displayed `parameterValue`, with JSON null for a typed NULL. Older artifacts with only `parameterValue` remain readable. If an oversized compare result continues onto another page, `sqlharness_artifact` with `section: "matrix-cells"` returns the remaining cell references in the same schema, then each returned cell id can be read through `summary`, `metrics`, `operators`, or `statements`. Every page repeats the same scope-owner check, and wire budgets apply to each response. The `plan` section reads saved distilled plan JSON only, when the artifact contains it; it does not read or regenerate raw XML. It accepts `variant` (`baseline`, `candidate`, or `query` for measure), zero-based `statement` (default `0`), `parameterSet` for measure-set artifacts, measured `repetition`, and `includeText` (default `false`). Without `repetition`, it selects and labels the last measured repetition. Available repetitions list all measured runs, including runs without a saved plan; selecting one without plan evidence returns an explicit error instead of falling back. The response gives the available measured repetitions and `planShapeStable`; stability is `true` or `false` when comparable plan evidence exists. With fewer than two measured repetitions, stability is `null` and `evidenceGaps` is empty because there is not enough evidence to compare. For a multi-repetition comparison with missing or incomplete saved plan evidence, stability is also `null` and `evidenceGaps` describes the gap. It compares operator/object/index/predicate shape, not costs, row counts, or timing. Nodes are flattened in deterministic preorder with stable paths and paged by the zero-based `cursor`, so following continuation reconstructs the saved hierarchy. `operators` is also paged, but its saved noteworthy-operator source is capped and does not promise full-plan coverage. Per-table read details normalize SQL Server session-suffixed temp-table names (`[schema].[#name<underscores><12 hex>]` to `[schema].[#name]`, or `#name<underscores><12 hex>` to `#name`) before aggregation across repetitions; other table names are unchanged. There are no MCP resources in v1; the single artifact tool is the only detail surface. Raw plans and snapshot cells are never exposed.
-
-Every live publish stamps the frozen scope owner into versioned metadata written by the trusted Core writer (the MCP adapter and the CLI never stamp it themselves): the benchmark `ArtifactManifest` and the `SnapshotDocument` each carry a strictly additive, nullable `owner` field (`profile`, `vars`, `engine`, `server`, `database`, camelCase in JSON). Reports (`report.json`, `runs.jsonl`) are unchanged; the bounded `statements.json` artifact section contains hashes and plan metrics but no SQL text. Scope vars and fixed parameter values are never copied into reports. Matrix parameter values appear in the explicitly scoped matrix-cells inventory so each case remains identifiable. The owner check is namespacing, not access control: it keeps each MCP scope to its own artifacts and snapshots, while any local process running as the operator (a CLI agent with a shell included) reads the files directly. The check is opt-in per call inside Core, before any report projection: MCP always passes the frozen scope owner, the CLI passes none and keeps working by name. A scope mismatch is refused with a constant content-free message (`"The artifact is not available in the current scope."`, exit 2 `Safety`; snapshots: `"The snapshot is not available in the current scope."`, exit 2) with `isError=true` and no projection, so no operator names, index names, or cell values leak. Unavailable storage stays exit 6 `LocalStorage`. Snapshot capture additionally refuses before connecting when the existing name belongs to another scope (no self-grant), and scoped diff refuses a foreign baseline before connecting; a scoped capture over the scope's own existing name without force still runs the query and then reports `LocalStorage` (no overwrite), exactly like the CLI.
-
-`compare --matrix` cells inherit the calling scope's owner (same profile/vars/engine/server/database; the matrix value is an execution parameter, not scope identity). `measure --param-set` carries one scope owner for the whole `measure-set` artifact; individual sets (name, value hash, types) are data inside, not separate owners. Legacy compatibility: v1 artifacts and snapshots without an owner stay byte-identical on write (the key is omitted, not nulled) and remain readable by the CLI by name, but MCP refuses them — fail closed, with no automatic migration and no way for MCP to grant itself access by name. The local process-privileged writer is outside the integrity boundary: the manifest is scope metadata for one trusted host, not a cryptographic proof against manual local edits.
+Read [artifacts](mcp/artifacts.md#artifacts).
 
 ## Stdout and stderr
 
-Stdout carries only protocol frames. Logging goes to stderr. SDK entries sent to stderr are limited to `Warning`, `Error`, and `Critical`; their message and exception text are rendered through `SecretRedactor` with the resolved profile credentials, while category, level, and numeric event ID remain available. This replaces known credentials; other caller-provided SQL or parameter data in a diagnostic may remain visible. SQLHarness may also write stderr lines for a pre-handshake startup failure (exit 2), an unexpected transport failure (exit 1), a failed detached-dashboard launch, or a roots diagnostic naming a count (`kept N of M`) or failure class (`roots/list timed out`, `roots/list failed (<ExceptionType>)`). Clean shutdown on EOF or cancellation exits 0. Tool calls that reach the SQLHarness module (query, measure, compare, watch, snapshot, plan, artifact) are recorded in the local activity journal with the client's `clientInfo` name, version and title, the negotiated protocol revision, and a raw token estimate. Credential-redacted error messages are stored by default and may include caller-supplied SQL or data values; SQL text and full plans are stored only when `journal.storeSensitive` is enabled. The MCP handler records emitted bytes from the UTF-8 text block the model reads after applying the result budget. The `ceil(bytes / 4)` value estimates output size; it is not actual model tokenization. Historical raw-only MCP rows stay unavailable and are not backfilled. Each recorded call also keeps allowlisted `tools/call._meta` labels: the client's call id (Claude Code `claudecode/toolUseId`, Codex `callId`), opencode `ai.opencode/sessionID` as the agent session id, and from Codex `x-codex-turn-metadata` the model, reasoning effort, agent session id, turn id, turn trigger and thread source; other `_meta` keys are never stored. `sqlharness_capabilities` is not recorded; journal diagnostics go to stderr only, and journal failures never change a tool result.
-
-With `dashboard.autoStart: true` in `~/.sqlharness/config.json`, a validated startup (an invalid startup configuration never launches anything) also launches `sqlharness dashboard --background` as a detached process that inherits none of the server's standard handles, with the SQLHarness home as working directory, when no dashboard is running for that home, and starts one journal retention pass in the background (it does anything only with `journal.retention.enabled: true`). Both happen before the transport starts, neither writes to stdout, and a failed launch writes one line to stderr and never changes the server's behavior. The MCP client still sees EOF when the server exits, while the dashboard keeps running until it idle-exits after `dashboard.idleShutdownHours` (default 8). Known limitation: the dashboard is not placed in a new session or process group, so Ctrl+C or SIGHUP delivered to the client's process group (or closing its console on Windows) also stops it; the next `mcp serve` relaunches it.
+Read [stdout and stderr](mcp/runtime.md#stdout-and-stderr).
 
 ## Versions
 
-- MCP SDK: `ModelContextProtocol` 2.2.0 (`ModelContextProtocol.Core` 2.2.0), pinned in `Directory.Packages.props`.
-- Offered protocol revisions: `2025-06-18`, `2025-11-25`, `2026-07-28`. The server negotiates: an `initialize` for `2025-06-18` or `2025-11-25` gets that revision; an `initialize` for an older revision gets `2025-11-25`; a `2026-07-28` client uses `server/discover` and per-request `_meta`.
-- The server version travels in the `initialize` result's `serverInfo` (or `server/discover`); `sqlharness_capabilities` reports runtime configuration only.
-- Real-client check before release: `pwsh ./scripts/mcp-client-acceptance.ps1 -Sqlharness <worktree build>` (manual; covers Claude Code, Codex, Copilot CLI, opencode and Grok Build, each skippable with `-Skip<Client>`; `-OpencodeModel` picks a free opencode model when the default hits a usage limit; the Grok run trusts its scratch folder in `~/.grok/trusted_folders.toml` for the duration and restores the file byte for byte).
+Read [versions](mcp/startup.md#versions).
 
 ## Context cost
 
-Emitted bytes count the UTF-8 bytes of the single text block the model reads, including JSON escaping. Token estimates reuse the Core `OutputFootprint.EstimateTokens` heuristic (`utf8-bytes-div-4`: bytes divided by four, rounded up). Byte counts are not token counts; do not report bytes as actual tokens.
-
-Scenario comparison counts the whole MCP run: tools/list discovery plus the call plus any follow-up artifact read, against the CLI agent output for the same outcome. Discovery stays a separate visible cost and is never folded into saved data. The offline comparison asserts only that the scenario total exceeds the single call and that each side fits its budget (call within 65536 bytes by default, discovery within 32768 bytes). MCP is not promised to be cheaper per call.
+Read [context cost](mcp/runtime.md#context-cost).
 
 ## Evidence scope
 
-Executed: published single-file stdio smokes for both fixed and request-scoped modes on the native win-x64 runner. The request-mode proof uses two synthetic profiles and exercises per-call validation; it does not register or launch the server through an MCP client's private configuration. The MCP test project passed its offline tests, with live-database and non-native RID cases skipped. The full solution offline run exposed two failures in `SqlHarness.Tests`: one output-size fixture mismatch also reproduced on the request-scope implementation's base commit, and one transient artifact-directory `IOException` that passed on focused rerun. The cost comparison above comes from offline tests on synthetic data, without opening a database.
-
-Not executed: published-binary runs on linux-x64 and osx-arm64 (binaries build; the per-RID smoke tests Skip without native runners), live SQL Server and Postgres stdio drives (Skip without explicit disposable-database authorization), or private client registration/startup. A stdio driver is protocol evidence, not actual-client evidence. Live scenarios, client registration, and additional RIDs must not be reported as passing.
+Read [evidence scope](mcp/runtime.md#evidence-scope).

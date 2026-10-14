@@ -7,13 +7,17 @@ set shell := ["pwsh", "-NoLogo", "-NoProfile", "-Command"]
 default:
     @just --list
 
-# Run the local CI gate (UI check, build, tests, format check)
-verify:
-    pwsh ./scripts/verify.ps1
+# Run the local CI gate (UI check, build, tests, format check of the changed C# files)
+verify *args:
+    pwsh ./scripts/verify.ps1 {{args}}
 
 # Run the CI gate on Linux inside WSL
-verify-linux:
-    pwsh ./scripts/verify-linux.ps1
+verify-linux *args:
+    pwsh ./scripts/verify-linux.ps1 {{args}}
+
+# Rewrite the formatting of the C# files this working tree changed (what the gates check)
+fix:
+    pwsh ./scripts/format-changed.ps1 -Fix
 
 # Test, publish a single-file binary, and install it where sqlharness is on PATH (override with SQLHARNESS_INSTALL_DIR)
 publish *args:

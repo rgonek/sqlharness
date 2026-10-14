@@ -14,7 +14,7 @@
 
 ## Status
 
-- TODO; planning accepted 2026-10-14 (operator). No implementation, installation, integration or publication authorization.
+- DONE 2026-10-14; merged locally to main from `feat/plan-066-regression-floor` (`36f2213` T1 floor + v2, `e85e8c5` T2 docs, `b1867da` final-review fixes, `aba5e34` T4 dashboard label shows `(policy vN)`, operator-requested). Windows `verify.ps1` on `aba5e34`: `verify: OK` (UI 163, Core 3494 passed/11 skipped, MCP 369 passed/4 skipped). Linux gate waived by the operator: the run on `aba5e34` was invalidated when another session reset the shared WSL clone to `653a222` mid-run (7 failures, all in files outside this plan). No push, no live DB.
 - Planning base: `ed44649`, 2026-10-14.
 - Priority: P2. Effort: S. Risk: LOW (pure policy function; one constant and one condition; documentation).
 - Owner: this plan. 051 is DONE and is not reopened.
