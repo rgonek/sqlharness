@@ -1,8 +1,10 @@
 import { QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ConflictError, getJson, NetworkError, NotFoundError, postJson, putJson, UnauthorizedError } from "./client"
-import type { CompareAttemptSummary, DashboardStats, DistilledPlan, KeyCount, OperationDetail, OperationSummary, Page, PricesInfo, ProfilesResponse, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
+import { ConflictError, getJson, NetworkError, NotFoundError, patchJson, postJson, putJson, UnauthorizedError } from "./client"
+import type { AnnotationPatch, CompareAttemptSummary, DashboardStats, DistilledPlan, KeyCount, OperationDetail, OperationSummary, Page, PricesInfo, ProfilesResponse, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
 
-export type SessionFilters = { agent?: string; transport?: string }
+export type SessionFilters = { agent?: string; transport?: string; archived?: boolean; starred?: boolean; q?: string }
+
+const flag = (value: boolean | undefined) => (value === undefined ? undefined : String(value))
 export type OperationFilters = { from?: string; to?: string; profile?: string; unprofiled?: boolean; dimensions?: Record<string, string | null>; status?: string; operation?: string }
 export type StatsRange = "24h" | "7d" | "30d" | "all"
 export type StatsWindow = { from?: string; to?: string }
@@ -51,9 +53,44 @@ export function useAgentKinds() {
 export function useSessions(filters: SessionFilters) {
   return useInfiniteQuery({
     queryKey: queryKeys.sessions(filters),
-    queryFn: ({ pageParam }) => getJson<Page<SessionSummary>>("/api/sessions", { ...filters, cursor: pageParam, limit: 50 }),
+    queryFn: ({ pageParam }) => getJson<Page<SessionSummary>>("/api/sessions", {
+      agent: filters.agent, transport: filters.transport,
+      archived: flag(filters.archived), starred: flag(filters.starred), q: filters.q,
+      cursor: pageParam, limit: 50,
+    }),
     initialPageParam: undefined as number | undefined,
     getNextPageParam: last => last.nextCursor ?? undefined,
+  })
+}
+
+export function useUpdateSessionAnnotation(id: number) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (patch: AnnotationPatch) => patchJson<SessionAnnotation>(`/api/sessions/${id}/annotation`, patch),
+    onMutate: async patch => {
+      await client.cancelQueries({ queryKey: queryKeys.session(id) })
+      const previous = client.getQueryData<SessionDetail>(queryKeys.session(id))
+      if (previous) {
+        client.setQueryData<SessionDetail>(queryKeys.session(id), {
+          ...previous,
+          note: patch.note !== undefined ? patch.note : previous.note,
+          session: {
+            ...previous.session,
+            ...(patch.title !== undefined ? { title: patch.title } : {}),
+            ...(patch.starred !== undefined ? { starred: patch.starred } : {}),
+            ...(patch.archived !== undefined ? { archived: patch.archived } : {}),
+          },
+        })
+      }
+      return { previous }
+    },
+    onError: (_error, _patch, context) => {
+      if (context?.previous) client.setQueryData(queryKeys.session(id), context.previous)
+    },
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: ["sessions"] })
+      void client.invalidateQueries({ queryKey: queryKeys.session(id) })
+    },
   })
 }
 

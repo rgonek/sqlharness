@@ -70,7 +70,7 @@ export class ConflictError extends Error {
   }
 }
 
-/** The dashboard's only write; the custom header is what the server's write guard requires. */
+/** A settings write; the custom header is what the server's write guard requires. */
 export async function putJson<T>(path: string, body: unknown, params?: QueryParams): Promise<T> {
   const url = withQuery(path, params)
   const response = await send(url, {
@@ -97,5 +97,29 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
   if (response.status === 401) throw new UnauthorizedError()
   if (response.status === 502) throw new Error(((await response.json()) as { error: string }).error)
   if (!response.ok) throw new Error(`Request failed with ${response.status}: ${path}`)
+  return (await response.json()) as T
+}
+
+/** A write whose failure carries the server's `error` text, shown to the operator as is. */
+export class RequestError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "RequestError"
+  }
+}
+
+export async function patchJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await send(path, {
+    method: "PATCH",
+    credentials: "same-origin",
+    headers: { Accept: "application/json", "Content-Type": "application/json", "X-SqlHarness-Dashboard": "1" },
+    body: JSON.stringify(body),
+  })
+  if (response.status === 401) throw new UnauthorizedError()
+  if (response.status === 404) throw new NotFoundError(path)
+  if (!response.ok) {
+    const error = await response.json().then((data: { error?: string }) => data.error, () => undefined)
+    throw new RequestError(error ?? `Request failed with ${response.status}: ${path}`)
+  }
   return (await response.json()) as T
 }

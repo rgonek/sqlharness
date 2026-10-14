@@ -106,6 +106,10 @@ export type SessionDetail = {
   session: SessionSummary; operations: OperationSummary[]; compareSubjects: CompareSubjectSummary[]; unassignedCompareCount: number; note: string | null
 }
 
+export type SessionAnnotation = { title: string | null; note: string | null; starred: boolean; archived: boolean }
+
+export type AnnotationPatch = Partial<{ title: string | null; note: string | null; starred: boolean; archived: boolean }>
+
 export type Spread = { min: number; median: number; max: number }
 
 export type TableIoRow = {

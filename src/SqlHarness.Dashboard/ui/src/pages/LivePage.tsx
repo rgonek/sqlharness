@@ -82,7 +82,7 @@ export function LivePage() {
         <CardContent>
           {sessions.isPending ? <Skeleton className="h-16 w-full" /> : active.length === 0
             ? <p className="text-sm text-muted-foreground">No session was active in the last 15 minutes.</p>
-            : <SessionTable sessions={active} now={now} />}
+            : <SessionTable pinned={[]} sessions={active} now={now} />}
         </CardContent>
       </Card>
       <Card role="region" aria-label="Recent operations">
