@@ -14,7 +14,7 @@ test("shows session facts and its operations", async () => {
 
   renderApp("/sessions/7")
 
-  expect(await screen.findByText("mcp:xyz")).toBeInTheDocument()
+  expect(await screen.findByRole("heading", { level: 1, name: "mcp:xyz" })).toBeInTheDocument()
   await userEvent.click(await screen.findByText("Session metadata"))
   expect(screen.getByText("claude-code 2.1.0")).toBeInTheDocument()
   expect(screen.getByText("compare")).toBeInTheDocument()
@@ -29,7 +29,7 @@ test("unknown session shows not found", async () => {
 test("session detail has a heading", async () => {
   stubFetch({ "/api/sessions/7": { session: session({ id: 7 }), operations: [] } })
   renderApp("/sessions/7")
-  expect(await screen.findByRole("heading", { level: 1, name: "Session 7" })).toBeInTheDocument()
+  expect(await screen.findByRole("heading", { level: 1, name: "cli:abc" })).toBeInTheDocument()
 })
 
 test("a non-decimal session id shows not found without calling the api", async () => {
@@ -108,16 +108,33 @@ test("edits the title inline: Enter saves, Escape cancels, empty clears", async 
   await userEvent.type(screen.getByRole("textbox", { name: "Session title" }), "BSI-1{Enter}")
   expect(await screen.findByRole("heading", { level: 1, name: "BSI-1" })).toBeInTheDocument()
   await waitFor(() => expect(bodies).toEqual([{ title: "BSI-1" }]))
+  await userEvent.click(screen.getByRole("button", { name: "Edit title" }))
+  await userEvent.clear(screen.getByRole("textbox", { name: "Session title" }))
+  await userEvent.keyboard("{Enter}")
+  expect(await screen.findByRole("heading", { level: 1, name: "cli:abc" })).toBeInTheDocument()
+  await waitFor(() => expect(bodies).toEqual([{ title: "BSI-1" }, { title: null }]))
+})
+
+test("clicking the title text starts editing", async () => {
+  stubFetch({ "/api/sessions/1": { session: session({ id: 1, sessionKey: "cli:abc" }), operations: [], note: null } })
+  renderApp("/sessions/1")
+  await userEvent.click(await screen.findByRole("heading", { level: 1, name: "cli:abc" }))
+  expect(screen.getByRole("textbox", { name: "Session title" })).toBeInTheDocument()
 })
 
 test("a failed save rolls back and shows the server message", async () => {
+  let fail!: () => void
+  const pending = new Promise<Response>(resolve => {
+    fail = () => resolve(new Response(JSON.stringify({ error: "The journal is busy; try again." }), { status: 503 }))
+  })
   stubFetch({
     "/api/sessions/1": { session: session({ id: 1, sessionKey: "cli:abc", starred: false }), operations: [], note: null },
-    "/api/sessions/1/annotation": () =>
-      new Response(JSON.stringify({ error: "The journal is busy; try again." }), { status: 503 }),
+    "/api/sessions/1/annotation": () => pending,
   })
   renderApp("/sessions/1")
   await userEvent.click(await screen.findByRole("button", { name: "Star session" }))
+  expect(await screen.findByRole("button", { name: "Unstar session" })).toHaveAttribute("aria-pressed", "true")
+  fail()
   expect(await screen.findByText("The journal is busy; try again.")).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Star session" })).toHaveAttribute("aria-pressed", "false")
 })

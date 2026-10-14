@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { sessionDisplayName } from "@/lib/sessionName"
 
 export function SessionAnnotationHeader({ session }: { session: SessionSummary }) {
   const update = useUpdateSessionAnnotation(session.id)
@@ -22,7 +23,7 @@ export function SessionAnnotationHeader({ session }: { session: SessionSummary }
       <div className="flex flex-wrap items-center gap-2">
         {draft === null ? (
           <>
-            <h1>{session.title ?? `Session ${session.id}`}</h1>
+            <h1 className="cursor-text" onClick={() => setDraft(session.title ?? "")}>{sessionDisplayName(session)}</h1>
             <Button variant="ghost" size="icon" aria-label="Edit title" onClick={() => setDraft(session.title ?? "")}>
               <Pencil />
             </Button>

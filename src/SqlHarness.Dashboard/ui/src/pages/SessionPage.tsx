@@ -45,7 +45,7 @@ function SessionView({ id, returnSubject, returnScope, returnUnassigned }: { id:
       <Card>
         <CardHeader>
           <CardTitle>
-            <SessionAnnotationHeader session={session} />
+            <SessionAnnotationHeader key={session.id} session={session} />
           </CardTitle>
           <div className="font-mono">{session.sessionKey}</div>
           <CardDescription>{agentLabel(session.agentKind)} via {session.transport} ({session.source})</CardDescription>
@@ -84,7 +84,7 @@ function SessionView({ id, returnSubject, returnScope, returnUnassigned }: { id:
           </details>
         </CardContent>
       </Card>
-      <SessionNoteCard sessionId={session.id} note={note} />
+      <SessionNoteCard key={session.id} sessionId={session.id} note={note} />
       <CompareSessionOverview sessionId={id} subjects={compareSubjects} unassignedCompareCount={unassignedCompareCount} returnSubject={returnSubject} returnScope={returnScope} returnUnassigned={returnUnassigned} />
       <Card>
         <CardHeader>
