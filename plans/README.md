@@ -5,30 +5,24 @@ Zapis: 2026-09-29, skill improve. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17
 
 ## Aktualna kolejka wykonania — 2026-10-13
 
-Odświeżono na `148355b`: sprawdzono main, statusy planów i worktree. Preferencja: ogólne i SQL Server przed wyłącznie PostgreSQL. **Każdy plan jest wykonywany w całości**, bez osobno odkładanych faz.
+Odświeżono na `a296e91`: sprawdzono main, statusy planów i worktree. Preferencja: ogólne i SQL Server przed wyłącznie PostgreSQL. **Każdy plan jest wykonywany w całości**, bez osobno odkładanych faz.
 
 ### W wykonaniu
 
 | Plan | Kategoria | Dowód |
 |---|---|---|
-| [055](055-agent-output-budget-and-envelope.md) | Ogólne / CLI / MCP: budżet, envelope, listy, artefakty | DONE — lokalnie scalono do main w `4bb783a`; implementacja `52bdc23..f5ac90c`; Windows `verify: OK` (UI 148, Core 3796, MCP 400/4 skipped), Linux `verify-linux: OK` (UI 148, Core 3796, MCP 401/3 skipped); re-review bez uwag; bez ponownych bramek po zmianach dokumentacji/planów na main; zob. [weryfikacja 055](055-verification.md); bez push/live DB |
+| [060](060-mcp-tool-surface.md) | Ogólne / MCP: katalog narzędzi, recipes, współbieżność | IN PROGRESS — potwierdzenie użytkownika 2026-10-13; branch `feat/plan-060-mcp-surface` |
+| [047](047-postgres-temp-target-proof.md) | PostgreSQL: uproszczenie dowodu TEMP dla setupu | IN PROGRESS — potwierdzenie użytkownika 2026-10-13; cały zakres planu |
 
 ### Zakończone od poprzedniej kolejki
 
-029, 034 i 049–054 są DONE. 049 jest już w main (sprawdzono przodka `58fab51`); starsze „not merged” jest nieaktualne. 024/045/046 i ceny modeli również zakończone. Zachowano źródła i ograniczenia dowodów w tabeli historycznej; przy tym odświeżeniu nie uruchamiano bramek.
+028, 029, 031, 034, 049–059 są DONE według aktualnego indeksu. Ograniczenia weryfikacji pozostają zapisane w wierszach historycznych. 049 jest już w main (sprawdzono przodka `58fab51`); starsze „not merged” jest nieaktualne. 024/045/046 i ceny modeli również zakończone. Zachowano źródła i ograniczenia dowodów w tabeli historycznej; przy tym odświeżeniu nie uruchamiano bramek.
 
 ### Grupa 1 — kontrakt i skuteczność pracy agenta
 
 | Kolejność | Plan | Kategoria | Warunek |
 |---|---|---|---|
-| 1 | [056](056-parameter-contract-and-dry-run.md) | Ogólne / P1: parametry, zgodność bindowania, dry-run | Po 055 |
-| 2 | [058](058-benchmark-plan-evidence.md) | Ogólne / P1: dowody benchmarków i odczyt zapisanych planów | Po 055; nie wymaga 057 |
-| 3 | [057](057-tsql-control-flow-classification.md) | SQL Server / P2: IF/BEGIN i klasyfikacja instrukcji | DONE — lokalnie scalono `9c6b663`; obie bramki po scaleniu zielone |
-| 4 | [059](059-journal-workflow-cost.md) | Ogólne / P2: pochodzenie danych i koszt workflow | Po 055/056/058 |
-| 5 | [060](060-mcp-tool-surface.md) | Ogólne / MCP / P2: katalog narzędzi, recipes, współbieżność | Po 055/056/059 |
-| 6 | [061](061-unified-parameter-sets.md) | Ogólne / P3: wspólne zestawy parametrów measure/compare | Po 056/058/060 |
-
-To zalecana kolejność całych planów, a nie dodatkowe zależności. Twarde zależności wskazuje ostatnia kolumna.
+| 1 | [061](061-unified-parameter-sets.md) | Ogólne / P3: wspólne zestawy parametrów measure/compare | Po zakończeniu 060; 056/058 są DONE |
 
 ### Grupa 2 — historia optymalizacji i dashboard
 
@@ -51,10 +45,7 @@ Pomysł szerszej automatyzacji PR/release/updater pozostaje odłożony zgodnie z
 
 ### Grupa 4 — wyłącznie PostgreSQL
 
-| Kolejność | Plan | Kategoria | Warunek |
-|---|---|---|---|
-| 1 | [031](031-pg-session-hardening.md) | standard_conforming_strings | DONE (branch fix/plan-031-pg-session, fdd788e..2ffe8ae; Windows verify: OK; Krok 4 (playground live) NIEuruchomiony — brak zgody operatora w tej sesji; bez push) |
-| 2 | [047](047-postgres-temp-target-proof.md) | Uproszczenie dowodu TEMP dla setupu | TODO; 052 DONE, wymagany dowód przed zmianą reguł |
+047 jest w toku (tabela powyżej), a 031 jest DONE. Brak innych oczekujących planów w tej grupie.
 
 033 zastąpiony przez 050, 035 przez 051; 014/037 odrzucone; 048 wycofany. Draft report API nie jest planem implementacji. Nie przywracać usuniętego gain ani historycznych nazw i liczby narzędzi MCP.
 
@@ -180,7 +171,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [044](044-mcp-input-root-discovery.md) | MCP callers discover the actual configured file-input roots | P2 | S | — | DONE (merged locally 8a088fb from feat/plan-044-input-root-discovery; commits ba00213, 64c82dc, 2be2f67, 48a85f3, 542173b, f8f1393; branch: `verify: OK` and `verify-linux: OK`; merged main: `verify: OK`, Linux gate on merged main stopped by host memory pressure, not re-run) |
 | [045](045-scalar-set-in-benchmark-setup.md) | Proven same-batch scalar SET works in SQL Server benchmark setup | P2 | S | — | DONE (implementation merged to main `3e8236f`; branch `eb64089`: Windows exit 0, `verify: OK`, Core 3705 passed, MCP 390 passed/4 skipped; Linux WSL ext4 exit 0, `verify-linux: OK`, Core 3705 passed, MCP 391 passed/3 skipped; task and whole-branch reviews approved; no live DB checks; gates do not cover later main changes) |
 | [046](046-result-nullability-diagnostics.md) | Nullability diagnostics are separate from observed data equivalence; optional strict comparison | P2 | M | — | DONE (merged locally to main fdfc072 from feat/plan-046-nullability (3f425ef..66e70b6: 45bd63a core, 878bcd7 CLI/MCP/journal, 7a4fab1 docs, d4259ab/7500da7/5d9b5de final-review fixes incl. provider-unknown nullability → unavailable, 66e70b6 format); Windows verify.ps1 `verify: OK` (Mcp.Tests 384 passed/4 skipped, SqlHarness.Tests 3678 passed) and Linux verify-linux.ps1 `verify-linux: OK` (388 total/385 passed/3 skipped; 3678 passed) on 66e70b6; git diff --check: 0; snapshots unchanged; no live DB checks; not pushed) |
-| [047](047-postgres-temp-target-proof.md) | Explicit pg_temp write targets and a bounded proof before simplifying TRUNCATE | P2 | M | Live proof required for TRUNCATE relaxation | TODO (narrowed 2026-10-11: setup-only proof simplification after 052) |
+| [047](047-postgres-temp-target-proof.md) | Explicit pg_temp write targets and a bounded proof before simplifying TRUNCATE | P2 | M | Live proof required for TRUNCATE relaxation | IN PROGRESS — potwierdzenie użytkownika 2026-10-13; cały zakres po 052 |
 | [048](048-plan-text-credential-column-coverage.md) | MCP plan text masks credential-column literals behind wrappers, PG operators, lists, reversed order and compound names | P2 | S | 042 (DONE) | REVERTED (merged a74b485, reverted cadde67: caller already holds the plan file; follow-up 049) |
 | [049](049-plan-text-without-literal-masking.md) | MCP plan text is returned as supplied, within size bounds; no literal masking | P2 | S | 048 reverted | DONE (feature branch `feat/plan-049-plan-text`; commits `932d4ad`, `c12aeb4`, `58fab51`; Windows `verify: OK` Core 3722, MCP 383 passed/4 skipped; Linux `verify-linux: OK` Core 3722, MCP 384 passed/3 skipped on WSL ext4; task, whole-branch, fixture and formatting reviews clean; no live DB checks; merged into current main (ancestry checked 2026-10-13)) |
 | [050](050-sqlserver-server-name-informational.md) | SQL Server and PostgreSQL report connected server identity without blocking | P2 | M | — | DONE (commits e6b7d01, 1ecc7d6, e87882a, 7f6f1d0; locally merged in 761f2ab; post-merge Windows `verify: OK` Core 3713, MCP 383/4 skipped; Linux `verify-linux: OK` Core 3713, MCP 384/3 skipped; no push/live DB proof) |
@@ -193,7 +184,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [057](057-tsql-control-flow-classification.md) | Recursive IF/BEGIN classification under existing statement rules | P2 | S | 056 | DONE; locally merged `9c6b663`; final fix `e05d44d`; Sol low whole-review's 3 Important findings fixed in one Luna high wave; Luna xhigh re-review clean; post-merge Windows/Linux gates green; no push/live DB; see [057 verification](057-verification.md) |
 | [058](058-benchmark-plan-evidence.md) | Stored-plan reader, repetition identity, node/operator continuation and matrix values | P1 | M | 055 | DONE — implementation and final-review correction through `6fa9c7f`; Windows/Linux gates pass; [verification](058-verification.md) |
 | [059](059-journal-workflow-cost.md) | Explicit producer references and honest measured/estimated workflow cost | P2 | M | 055, 056, 058 | DONE — final correction `233207c`; Windows/Linux gates green; [verification](059-verification.md); no live database calls or push |
-| [060](060-mcp-tool-surface.md) | Smaller MCP surface, compact runtime capabilities, built-in recipes and concurrent calls | P2 | M | 055, 056, 059 | TODO — accepted compact-capabilities refinement; additional recipes not accepted |
+| [060](060-mcp-tool-surface.md) | Smaller MCP surface, compact runtime capabilities, built-in recipes and concurrent calls | P2 | M | 055, 056, 059 | IN PROGRESS — potwierdzenie użytkownika 2026-10-13; branch `feat/plan-060-mcp-surface` |
 | [061](061-unified-parameter-sets.md) | Shared measure/compare parameter-set inputs | P3 | L | 056, 058, 060 | TODO — adapt projection to 055 case inventory; not implemented |
 | [062](062-compare-context-dashboard.md) | Compare context, SQL/scope/attempt history and comparison dashboard | P2 | L | 051 (DONE); coordinate with 060/061 | TODO — design agreed 2026-10-12; not implemented |
 
@@ -251,7 +242,7 @@ Planning base: `729d88f`. The user requested plans/corrections for all findings 
 | Minor: private-home plan describes removed gain store | Revised 034 | Cover the actual journal and sensitive artifact creation paths |
 | Minor: mechanical drift STOP and unnecessary repeated full gates | Revised pending plan headers and 030/032 | Inspect and adapt drift; use focused repeats for an actual flake and final Windows/Linux gates |
 
-Current execution order is in **Aktualna kolejka wykonania — 2026-10-13** above. Execute whole plans; no separately deferred A/B scopes. 055 is DONE; 024/045/046, 029/034 and 049–054 are DONE. Preserve actual dependencies of 056–061 and 028 → 032. Coordinate 062 with the active MCP contract changes; do not infer a dependency solely from plan numbering.
+Current execution order is in **Aktualna kolejka wykonania — 2026-10-13** above. Execute whole plans; no separately deferred A/B scopes. 060 and 047 are IN PROGRESS (user-confirmed 2026-10-13); 055–059 are DONE. 061 waits for 060; coordinate 062 with 060/061. Preserve actual dependencies of 056–061 and 028 → 032. Coordinate 062 with the active MCP contract changes; do not infer a dependency solely from plan numbering.
 
 For pending execution plans, historical snippets and tests are evidence to inspect. A changed file alone is not a reason to stop or request permission. Keep the approved intent and update obsolete details; stop for an incompatible contract, missing required proof or actions beyond authorization. Run the final Windows and Linux gates after relevant code changes. Repeat complete gates only for a concrete remaining risk. Documentation-only revisions use diff/link/consistency checks; they do not require application builds or live database calls.
 
