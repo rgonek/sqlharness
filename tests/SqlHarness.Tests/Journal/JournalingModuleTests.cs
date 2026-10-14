@@ -176,6 +176,7 @@ public sealed class JournalingModuleTests
             [], 30, 1)
         {
             OperationRef = "disabled-journal-producer",
+            Context = new CompareContext("journal-test", "whole"),
         };
 
         var published = await module.ExecuteAsync(producer);

@@ -22,6 +22,8 @@ public sealed class SqlHarnessConfigTests : IDisposable
         Assert.False(result.Config.Journal.Retention.Enabled);
         Assert.False(result.Config.Dashboard.AutoStart);
         Assert.Equal(47800, result.Config.Dashboard.Port);
+        Assert.True(System.Text.Json.JsonDocument.Parse(SqlHarnessConfigWriter.Serialize(result.Config)).RootElement
+            .GetProperty("compare").GetProperty("requireContext").GetBoolean());
     }
 
     [Fact]
@@ -41,6 +43,32 @@ public sealed class SqlHarnessConfigTests : IDisposable
         Assert.True(result.Config.Journal.StoreSensitive);
         Assert.Equal(7, result.Config.Journal.Retention.MaxAgeDays);
         Assert.Equal(48000, result.Config.Dashboard.Port);
+    }
+
+    [Fact]
+    public void Compare_policy_round_trips_and_defaults_to_required()
+    {
+        var defaults = SqlHarnessConfigLoader.Parse("{}"u8.ToArray()).Config!;
+        Assert.True(System.Text.Json.JsonDocument.Parse(SqlHarnessConfigWriter.Serialize(defaults)).RootElement
+            .GetProperty("compare").GetProperty("requireContext").GetBoolean());
+
+        foreach (var required in new[] { true, false })
+        {
+            var json = $"{{ \"compare\": {{ \"requireContext\": {required.ToString().ToLowerInvariant()} }} }}";
+            var parsed = SqlHarnessConfigLoader.Parse(System.Text.Encoding.UTF8.GetBytes(json));
+
+            Assert.Empty(parsed.Errors);
+            Assert.Equal(required, System.Text.Json.JsonDocument.Parse(SqlHarnessConfigWriter.Serialize(parsed.Config!))
+                .RootElement.GetProperty("compare").GetProperty("requireContext").GetBoolean());
+        }
+    }
+
+    [Theory]
+    [InlineData("{ \"compare\": { \"requireContext\": \"true\" } }")]
+    [InlineData("{ \"compare\": { \"unknown\": false } }")]
+    public void Compare_policy_rejects_wrong_types_and_unknown_fields(string json)
+    {
+        Assert.NotEmpty(SqlHarnessConfigLoader.Parse(System.Text.Encoding.UTF8.GetBytes(json)).Errors);
     }
 
     [Fact]

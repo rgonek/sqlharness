@@ -77,8 +77,8 @@ public sealed class ArtifactStorageOperationTests
         var target = new SqlTargetRequest("test", new Dictionary<string, string>());
         return mode switch
         {
-            "compare" => new SqlHarnessCompareOperation(target, null, "SELECT 1", "SELECT 1", [], 30, 1),
-            "matrix" => new SqlHarnessCompareMatrixOperation(target, null, "SELECT @Value", "SELECT @Value", [], 30, 1, "Value:int=1000000001,1000000002"),
+            "compare" => new SqlHarnessCompareOperation(target, null, "SELECT 1", "SELECT 1", [], 30, 1) { Context = new CompareContext("artifact-test", "whole") },
+            "matrix" => new SqlHarnessCompareMatrixOperation(target, null, "SELECT @Value", "SELECT @Value", [], 30, 1, "Value:int=1000000001,1000000002") { Context = new CompareContext("artifact-test", "whole") },
             "measure" => new SqlHarnessMeasureOperation(target, null, "SELECT 1", [], 30, 1),
             "sets" => new SqlHarnessMeasureOperation(target, null, "SELECT @Value", [], 30, 1,
                 [new("first", ["Value:int=1000000001"]), new("second", ["Value:int=1000000002"])]),

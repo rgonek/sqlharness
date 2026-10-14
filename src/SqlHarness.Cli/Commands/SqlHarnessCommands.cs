@@ -318,12 +318,14 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
     }
 }
 
-public sealed class CompareCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer) : SqlHarnessCommand<CompareCommand.Settings>(module, output, renderer)
+public sealed class CompareCommand(ISqlHarnessModule module, OutputContext output, Renderer renderer, CompareConfig compareConfig) : SqlHarnessCommand<CompareCommand.Settings>(module, output, renderer)
 {
     public sealed class Settings : TargetSettings
     {
         [CommandOption("--baseline <PATH>")] public string? Baseline { get; set; }
         [CommandOption("--candidate <PATH>")] public string? Candidate { get; set; }
+        [CommandOption("--subject <LABEL>")] public string? Subject { get; set; }
+        [CommandOption("--scope <LABEL>")] public string? Scope { get; set; }
         [Description("Setup once per case's session. SQL Server: create #temps before the first parameter reference, populate afterwards; batch locals do not cross into measured SQL.")]
         [CommandOption("--setup <PATH>")] public string? Setup { get; set; }
         [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
@@ -357,14 +359,23 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
             return Invalid("--compare-results must be ordered, multiset, set, or off.");
         if (s.CompareNullability && compareResults == ResultComparisonMode.Off)
             return Invalid("--compare-nullability requires --compare-results ordered, multiset, or set.");
+        CompareContext? compareContext;
+        try
+        {
+            compareContext = CompareContext.Parse(s.Subject, s.Scope, compareConfig.RequireContext);
+        }
+        catch (ArgumentException exception)
+        {
+            return Invalid(exception.Message);
+        }
         try
         {
             var setup = await Read(s.Setup, ct);
             var baseline = (await Read(s.Baseline, ct))!;
             var candidate = (await Read(s.Candidate, ct))!;
             SqlHarnessOperation operation = matrix.Length == 1
-                ? new SqlHarnessCompareMatrixOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, matrix[0], compareResults, s.CompareNullability) { DryRun = s.DryRun }
-                : new SqlHarnessCompareOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, compareResults, s.CompareNullability) { DryRun = s.DryRun };
+                ? new SqlHarnessCompareMatrixOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, matrix[0], compareResults, s.CompareNullability) { DryRun = s.DryRun, Context = compareContext }
+                : new SqlHarnessCompareOperation(target, setup, baseline, candidate, s.Parameters, s.Timeout, s.Repeat, compareResults, s.CompareNullability) { DryRun = s.DryRun, Context = compareContext };
             return await Dispatch(operation, ResolveOutputMode(s.Json, s.JsonSummary, s.Output), ct, new AgentOutputOptions(s.MaxOutputBytes, s.MaxCellChars));
         }
         catch (OperationCanceledException) { throw; }

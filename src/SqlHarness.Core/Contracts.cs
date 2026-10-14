@@ -75,6 +75,7 @@ public sealed record SqlHarnessCompareOperation(
     ResultComparisonMode CompareResults = ResultComparisonMode.Ordered,
     bool CompareNullability = false) : SqlHarnessOperation
 {
+    public CompareContext? Context { get; init; }
     /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
     public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
     public bool DryRun { get; init; }
@@ -92,6 +93,7 @@ public sealed record SqlHarnessCompareMatrixOperation(
     ResultComparisonMode CompareResults = ResultComparisonMode.Ordered,
     bool CompareNullability = false) : SqlHarnessOperation
 {
+    public CompareContext? Context { get; init; }
     /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
     public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
 

@@ -6,8 +6,8 @@ if (config.Warning is not null && !SqlHarnessCli.PrintsOwnConfigWarning(args))
     Console.Error.WriteLine(config.Warning);
 
 var module = new JournalingModule(
-    new SqlHarnessModule(),
+    new SqlHarnessModule(config.Config.Compare),
     () => ActivityJournal.Open(config.Config.Journal, Console.Error),
     () => SessionIdentities.Cli(ProcessInfo.Current));
 
-return await SqlHarnessCli.Create(module).RunAsync(args);
+return await SqlHarnessCli.Create(module, compareConfig: config.Config.Compare).RunAsync(args);

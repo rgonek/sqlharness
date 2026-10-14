@@ -31,7 +31,7 @@ public sealed class AgentWorkflowTests
             var exitCodes = new List<int>
             {
                 await SqlHarnessCli.Create(module, output).RunAsync([
-                    "compare", "local", "--baseline", Fixture("baseline.sql"), "--candidate", Fixture("candidate.sql"), "--output", "agent"]),
+                    "compare", "local", "--baseline", Fixture("baseline.sql"), "--candidate", Fixture("candidate.sql"), "--subject", "workflow-query", "--scope", "whole", "--output", "agent"]),
             };
 
             Assert.All(exitCodes, code => Assert.Equal(0, code));
