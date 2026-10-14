@@ -44,7 +44,7 @@ $ErrorActionPreference = 'Stop'
 
 function Assert-WslDistroVersion2 {
     param(
-        [Parameter(Mandatory)[string]$Distro
+        [Parameter(Mandatory)][string]$Distro
     )
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
