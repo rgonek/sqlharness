@@ -39,7 +39,7 @@ class FakeEventSource {
 
 const RECENT = "/api/operations?limit=100"
 const RUNNING = "/api/operations?status=running&limit=200"
-const SESSIONS = "/api/sessions?limit=100"
+const SESSIONS = "/api/sessions?archived=any&limit=100"
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } })
 const page = (items: unknown[]) => ({ items, nextCursor: null })
 const count = (calls: string[], url: string) => calls.filter(call => call === url).length
@@ -72,6 +72,18 @@ test("live page shows running, recent and pushed operations", async () => {
   const recent = screen.getByRole("region", { name: "Recent operations" })
   expect(await within(recent).findByText("measure")).toBeInTheDocument()
   expect(screen.getByText("connected")).toBeInTheDocument()
+})
+
+test("an archived session that is still active stays on the live page", async () => {
+  useFakeEventSource()
+  stubFetch({
+    [RECENT]: page([]),
+    [RUNNING]: page([]),
+    [SESSIONS]: page([session({ id: 9, sessionKey: "cli:archived", archived: true, lastSeen: new Date().toISOString() })]),
+  })
+  renderApp("/")
+  const active = await screen.findByRole("region", { name: "Active sessions" })
+  expect(await within(active).findByText("cli:archived")).toBeInTheDocument()
 })
 
 test("the feed shows connecting until it first opens", async () => {

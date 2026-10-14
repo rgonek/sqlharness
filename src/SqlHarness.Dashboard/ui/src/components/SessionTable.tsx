@@ -37,6 +37,7 @@ function SessionRow({ session, now }: { session: SessionSummary; now: number }) 
           )}
         </div>
         {session.title && <div className="font-mono text-sm text-muted-foreground">{session.sessionKey}</div>}
+        {update.error && <div role="alert" className="text-sm text-destructive">{update.error.message}</div>}
       </TableCell>
       <TableCell>
         {agentLabel(session.agentKind)}

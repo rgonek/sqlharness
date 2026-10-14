@@ -127,7 +127,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             ("$to", Iso(query.To)),
             ("$cursor", query.Cursor),
             ("$limit", limit + 1),
-            ("$archived", query.Archived ? 1 : 0),
+            ("$archived", query.Archived is null ? null : query.Archived.Value ? 1 : 0),
             ("$starred", query.Starred is null ? null : query.Starred.Value ? 1 : 0),
             ("$q", query.Search is null ? null : "%" + EscapeLike(query.Search) + "%"),
         ];
@@ -139,7 +139,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
               AND ($from IS NULL OR s.last_seen >= $from)
               AND ($to IS NULL OR s.first_seen < $to)
               AND ($cursor IS NULL OR s.id < $cursor)
-              AND EXISTS (SELECT 1 FROM session_annotations a WHERE a.session_id = s.id AND a.archived_at IS NOT NULL) = $archived
+              AND ($archived IS NULL OR EXISTS (SELECT 1 FROM session_annotations a WHERE a.session_id = s.id AND a.archived_at IS NOT NULL) = $archived)
               AND ($starred IS NULL OR COALESCE((SELECT a.starred FROM session_annotations a WHERE a.session_id = s.id), 0) = $starred)
               AND ($q IS NULL
                    OR s.session_key LIKE $q ESCAPE '\' OR s.cwd LIKE $q ESCAPE '\' OR s.client_title LIKE $q ESCAPE '\'

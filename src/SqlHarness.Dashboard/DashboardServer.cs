@@ -175,12 +175,14 @@ public static partial class DashboardServer
         var api = app.MapGroup("/api");
         MapRead(api, "/agents", () => Results.Json(reader.AgentKinds(), Json));
         MapRead(api, "/sessions", (string? agent, string? transport, string? from, string? to, long? cursor, int? limit,
-            bool? archived, bool? starred, string? q) =>
+            string? archived, bool? starred, string? q) =>
             q is { Length: > JournalReader.MaximumSearchLength }
                 ? BadRequest("q must be at most 200 characters.")
+                : !TryArchived(archived, out var archivedFilter)
+                    ? BadRequest("archived must be true, false or any.")
                 : TryWindow(from, to, out var window)
                     ? Results.Json(reader.Sessions(new SessionQuery(agent, transport, window.From, window.To, cursor,
-                        limit ?? JournalReader.DefaultLimit, archived ?? false, starred, string.IsNullOrWhiteSpace(q) ? null : q.Trim())), Json)
+                        limit ?? JournalReader.DefaultLimit, archivedFilter, starred, string.IsNullOrWhiteSpace(q) ? null : q.Trim())), Json)
                     : BadRequest("from/to must be ISO-8601 timestamps."));
         MapRead(api, "/sessions/{id:long}", (long id) =>
             reader.Session(id) is { } detail ? Results.Json(detail, Json) : Results.NotFound());
@@ -312,6 +314,12 @@ public static partial class DashboardServer
         {
             return false;
         }
+    }
+
+    private static bool TryArchived(string? value, out bool? archived)
+    {
+        archived = value switch { null or "false" => false, "true" => true, _ => null };
+        return value is null or "true" or "false" or "any";
     }
 
     private static bool TryWindow(string? from, string? to, out (DateTimeOffset? From, DateTimeOffset? To) window)

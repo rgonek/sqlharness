@@ -7,11 +7,12 @@ public sealed record Page<T>(IReadOnlyList<T> Items, long? NextCursor);
 /// <summary>
 /// Session list filter. With <c>Starred</c> set the list is ordered by id and the id cursor is exact; unfiltered, starred
 /// sessions sort first so the id cursor is not exact across the star boundary and only the first page is reliable.
+/// <c>Archived</c> null lists archived and active sessions together.
 /// </summary>
 public sealed record SessionQuery(
     string? Agent = null, string? Transport = null, DateTimeOffset? From = null, DateTimeOffset? To = null,
     long? Cursor = null, int Limit = JournalReader.DefaultLimit,
-    bool Archived = false, bool? Starred = null, string? Search = null);
+    bool? Archived = false, bool? Starred = null, string? Search = null);
 
 public sealed record OperationQuery(
     long? SessionId = null, string? Status = null, string? Operation = null, DateTimeOffset? From = null,

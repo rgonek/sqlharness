@@ -46,7 +46,7 @@ export function LivePage() {
   const sessions = useQuery({
     queryKey: queryKeys.liveSessions,
     queryFn: async () => {
-      const page = await getJson<Page<SessionSummary>>("/api/sessions", { limit: 100 })
+      const page = await getJson<Page<SessionSummary>>("/api/sessions", { archived: "any", limit: 100 })
       return mergeSessions(client.getQueryData<SessionSummary[]>(queryKeys.liveSessions) ?? [], page.items)
     },
     staleTime: Infinity,

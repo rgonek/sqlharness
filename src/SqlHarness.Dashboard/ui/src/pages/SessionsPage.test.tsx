@@ -95,3 +95,16 @@ test("a note shows an icon with its first line", async () => {
   renderApp("/sessions")
   expect(await screen.findByLabelText("Note: reads down 40%")).toBeInTheDocument()
 })
+
+test("a failed save shows the server message and re-enables the button", async () => {
+  stubFetch({
+    "/api/agents": [],
+    "/api/sessions?archived=false&starred=true&limit=50": { items: [], nextCursor: null },
+    "/api/sessions?archived=false&starred=false&limit=50": { items: [session({ id: 9, sessionKey: "cli:busy" })], nextCursor: null },
+    "/api/sessions/9/annotation": () => new Response(JSON.stringify({ error: "The journal is busy; try again." }), { status: 503 }),
+  })
+  renderApp("/sessions")
+  await userEvent.click(await screen.findByRole("button", { name: "Star session cli:busy" }))
+  expect(await screen.findByRole("alert")).toHaveTextContent("The journal is busy; try again.")
+  expect(screen.getByRole("button", { name: "Star session cli:busy" })).toBeEnabled()
+})

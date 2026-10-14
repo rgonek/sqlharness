@@ -1000,6 +1000,7 @@ public sealed class JournalReaderTests
         Assert.Equal(["cli:arch"], Keys(new SessionQuery(Archived: true, Starred: false)));
         Assert.Equal(["cli:star-arch"], Keys(new SessionQuery(Archived: true, Starred: true)));
         Assert.Equal(["cli:star", "cli:plain"], Keys(new SessionQuery()));
+        Assert.Equal(["cli:star-arch", "cli:star", "cli:arch", "cli:plain"], Keys(new SessionQuery(Archived: null)));
     }
 
     [Fact]
