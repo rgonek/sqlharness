@@ -9,39 +9,6 @@ public class ContractsTests
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
     [Fact]
-    public void Documentation_covers_database_space_inspection()
-    {
-        var readme = ReadRepositoryFile("README.md");
-        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
-
-        foreach (var doc in new[] { readme, skill })
-        {
-            Assert.Contains("space", doc, StringComparison.Ordinal);
-            Assert.Contains("--top", doc, StringComparison.Ordinal);
-            Assert.Contains("--object", doc, StringComparison.Ordinal);
-            Assert.True(
-                doc.Contains("DMV", StringComparison.OrdinalIgnoreCase)
-                || doc.Contains("dm_db", StringComparison.OrdinalIgnoreCase),
-                "Space docs must describe read-only DMV inspection.");
-            Assert.True(
-                doc.Contains("shrink", StringComparison.OrdinalIgnoreCase)
-                && doc.Contains("recovery", StringComparison.OrdinalIgnoreCase)
-                && doc.Contains("compression", StringComparison.OrdinalIgnoreCase),
-                "Space docs must prohibit shrink/recovery/compression mutation.");
-            Assert.True(
-                doc.Contains("diagnos", StringComparison.OrdinalIgnoreCase)
-                || doc.Contains("storage only", StringComparison.OrdinalIgnoreCase),
-                "Space docs must state that the command diagnoses storage only.");
-            Assert.Contains("allow-mutation", doc, StringComparison.OrdinalIgnoreCase);
-        }
-
-        Assert.Contains("sqlharness space prod-eu", readme, StringComparison.Ordinal);
-        Assert.Contains("sqlharness space prod-eu", skill, StringComparison.Ordinal);
-        Assert.Contains("--top 25", skill, StringComparison.Ordinal);
-        Assert.Contains("--object dbo.Contracts", skill, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void Documentation_covers_watch_and_snapshot_workflows()
     {
         var readme = ReadRepositoryFile("README.md");
@@ -98,30 +65,6 @@ public class ContractsTests
         Assert.Contains("--diff", skill, StringComparison.Ordinal);
     }
 
-    // Structural pins (plan 029 Step 5): README owns the wording; the skill links the canonical
-    // section, and both carry the runnable command. Sentences are not pinned in two documents.
-    [Fact]
-    public void Documentation_covers_query_store_top_consumers()
-    {
-        var readme = ReadRepositoryFile("README.md");
-        var skill = ReadRepositoryFile("skills", "sqlharness", "SKILL.md");
-        const string example =
-            "sqlharness qstop prod-eu --var tenant=acme --var env=uat --top 20 --window 24h --json";
-
-        Assert.Contains(example, readme, StringComparison.Ordinal);
-        Assert.Contains(example, skill, StringComparison.Ordinal);
-        foreach (var token in new[] { "`qstop`", "`query_id`", "queries.jsonl", "--window", "--top" })
-            Assert.Contains(token, readme, StringComparison.Ordinal);
-        Assert.Contains("`qstop`", Section(readme, "## Commands"), StringComparison.Ordinal);
-        // Safety clause: Query Store text is published only after explicit review.
-        Assert.Contains("`queries.jsonl` without explicit review", Section(readme, "## Safety contract"), StringComparison.Ordinal);
-
-        var qstop = Paragraph(skill, "**Query Store**");
-        Assert.Contains("](../../README.md#commands)", qstop, StringComparison.Ordinal);
-        Assert.Contains("queries.jsonl", qstop, StringComparison.Ordinal);
-        Assert.Contains("no SQL text", qstop, StringComparison.Ordinal);
-    }
-
     [Fact]
     public void Documentation_covers_measure_parameter_sets()
     {
@@ -154,7 +97,6 @@ public class ContractsTests
             "Parameter-sniffing checks in `measure` across multiple parameter sets.",
             readme,
             StringComparison.Ordinal);
-        // Overlap analysis ships as `indexes` (plan 029): the roadmap no longer lists it.
         Assert.DoesNotContain("Missing-index overlap analysis", readme, StringComparison.Ordinal);
         Assert.DoesNotContain("A thin MCP facade over `SqlHarness.Core`.", readme, StringComparison.Ordinal);
     }
@@ -196,8 +138,6 @@ public class ContractsTests
         foreach (var tool in new[]
         {
             "sqlharness_capabilities",
-            "sqlharness_inspect",
-            "sqlharness_validate",
             "sqlharness_query",
             "sqlharness_measure",
             "sqlharness_compare",
@@ -220,7 +160,11 @@ public class ContractsTests
         Assert.Contains("4096..1048576", mcp, StringComparison.Ordinal);
         Assert.Contains("32768", mcp, StringComparison.Ordinal);
         Assert.Contains("AllowMutation: false", mcp, StringComparison.Ordinal);
-        Assert.Contains("busy", mcp, StringComparison.Ordinal);
+        Assert.Contains("Exactly 8 tools are registered", mcp, StringComparison.Ordinal);
+        Assert.Contains("Tool calls run concurrently", mcp, StringComparison.Ordinal);
+        Assert.Contains("SQLHarness does not serialize benchmarks", mcp, StringComparison.Ordinal);
+        foreach (var removed in new[] { "sqlharness_inspect", "sqlharness_validate", "busy", "includeDetails" })
+            Assert.DoesNotContain(removed, mcp, StringComparison.Ordinal);
         Assert.Contains("watch_max_duration", mcp, StringComparison.Ordinal);
         Assert.Contains("snapshot_differences", mcp, StringComparison.Ordinal);
         Assert.Contains("Byte counts are not token counts", mcp, StringComparison.Ordinal);
@@ -233,7 +177,8 @@ public class ContractsTests
         Assert.Contains("parameterSets", dryRun, StringComparison.Ordinal);
         Assert.Contains("raw-token emission receipt", dryRun, StringComparison.Ordinal);
         Assert.Contains("runtime artifact storage, authentication, connection identity, catalog contents or database permissions", dryRun, StringComparison.Ordinal);
-        Assert.Contains("plan 060 removes it", dryRun, StringComparison.Ordinal);
+        Assert.Contains("The CLI runs the same check with `--dry-run`", dryRun, StringComparison.Ordinal);
+        Assert.Contains("missing_parameters", dryRun, StringComparison.Ordinal);
         Assert.Contains("Dapper", Section(readme, "## Safety contract"), StringComparison.Ordinal);
         Assert.Contains("Fixed-width `nchar`/`char`", Section(readme, "## Safety contract"), StringComparison.Ordinal);
     }

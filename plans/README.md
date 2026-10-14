@@ -25,7 +25,7 @@ Odświeżono na `148355b`: sprawdzono main, statusy planów i worktree. Preferen
 | 2 | [058](058-benchmark-plan-evidence.md) | Ogólne / P1: dowody benchmarków i odczyt zapisanych planów | Po 055; nie wymaga 057 |
 | 3 | [057](057-tsql-control-flow-classification.md) | SQL Server / P2: IF/BEGIN i klasyfikacja instrukcji | DONE — lokalnie scalono `9c6b663`; obie bramki po scaleniu zielone |
 | 4 | [059](059-journal-workflow-cost.md) | Ogólne / P2: pochodzenie danych i koszt workflow | Po 055/056/058 |
-| 5 | [060](060-mcp-tool-surface.md) | Ogólne / MCP / P2: katalog narzędzi, recipes, współbieżność | Po 055/056/059 |
+| 5 | [060](060-mcp-tool-surface.md) | Ogólne / CLI / MCP / P2: osiem narzędzi, parytet CLI/MCP, dry run, współbieżność | DONE — bramki w toku; rewizja 2026-10-13: parytet CLI/MCP, bez recipes |
 | 6 | [061](061-unified-parameter-sets.md) | Ogólne / P3: wspólne zestawy parametrów measure/compare | Po 056/058/060 |
 
 To zalecana kolejność całych planów, a nie dodatkowe zależności. Twarde zależności wskazuje ostatnia kolumna.
@@ -172,7 +172,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [036](036-live-database-ci-lane.md) | Direction: opt-in CI lane against throwaway PG/SQL Server containers | P2 | M | 016 (028 for pins) | TODO |
 | [037](037-rescope-pgstop-current-pg-versions.md) | PG17/18 capability fixtures and source evidence; versions do not gate compatible runtime shapes | P2 | S–M | Revised 014 contract | REJECTED (2026-10-11: pgstop not built; query reads pg_stat_statements) |
 | [038](038-agent-session-friction-fixes.md) | Live-session friction: one-item/matrix/artifact truncation, setup `#temp` scope, variable diagnostics/batch guard, redaction, input-path hint, per-statement metrics, token guard, XML false positives | P1–P3 | S–M per item | — | DONE (merged locally; Windows and Linux verify gates green after MCP host log synchronization) |
-| [039](039-busy-result-hint.md) | BUSY rejection carries a hint naming the running tool; gate stays non-blocking | P2 | S | — | DONE (branch fix/plan-039-busy-hint) |
+| [039](039-busy-result-hint.md) | BUSY rejection carries a hint naming the running tool; gate stays non-blocking | P2 | S | — | SUPERSEDED by 060 (the busy gate is removed; MCP calls run concurrently). Was DONE on branch fix/plan-039-busy-hint |
 | [040](040-profile-dimensions-ui.md) | Dynamic profile dimensions, target matrix, and MCP emitted estimates | P2 | L | — | DONE (implementation complete; Windows and Linux verification confirmed by the user on 2026-10-10) |
 | [041](041-query-projection-preserve-shape.md) | Oversized query projections preserve useful result-set and row/schema structure | P2 | M | 038/W1 | DONE (merged locally 498c3dd from feat/plan-041-query-projection; commits 5370a2a, beb1cfe, bb025b6, 75e2477; Windows and Linux gates green on merged main) |
 | [042](042-mcp-plan-diagnostic-text.md) | Useful bounded MCP plan statement text and predicates, with an explicit metadata mode | P2 | M | 043 | DONE (merged locally to main 3f425ef from feat/plan-042-mcp-plan-text; Windows `verify: OK` (3619 + 382 passed) and Linux `verify-linux: OK` on merged 3f425ef; branch 8a088fb..1938f5f: 82ad046 includeText + handler-owned policy, 8676769 docs, 1938f5f final-review fix: MCP-local credential-column literal rule, e.g. `[Password]=N'x'`); Windows verify.ps1 `verify: OK` (Mcp.Tests 382 passed/4 skipped, SqlHarness.Tests 3611 passed) and Linux verify-linux.ps1 `verify-linux: OK` on 1938f5f; an earlier Windows run failed only McpStderrLeakRegressionTests(2026-07-28) handshake flake, which passed 4/4 alone; git diff --check: 0; no live DB checks; known gap: literals behind CONVERT_IMPLICIT/`::text` wrappers, IN lists and `[PasswordHash]` are not masked (follow-up: [048](048-plan-text-credential-column-coverage.md)); not pushed) |
@@ -193,7 +193,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [057](057-tsql-control-flow-classification.md) | Recursive IF/BEGIN classification under existing statement rules | P2 | S | 056 | DONE; locally merged `9c6b663`; final fix `e05d44d`; Sol low whole-review's 3 Important findings fixed in one Luna high wave; Luna xhigh re-review clean; post-merge Windows/Linux gates green; no push/live DB; see [057 verification](057-verification.md) |
 | [058](058-benchmark-plan-evidence.md) | Stored-plan reader, repetition identity, node/operator continuation and matrix values | P1 | M | 055 | DONE — implementation and final-review correction through `6fa9c7f`; Windows/Linux gates pass; [verification](058-verification.md) |
 | [059](059-journal-workflow-cost.md) | Explicit producer references and honest measured/estimated workflow cost | P2 | M | 055, 056, 058 | DONE — final correction `233207c`; Windows/Linux gates green; [verification](059-verification.md); no live database calls or push |
-| [060](060-mcp-tool-surface.md) | Smaller MCP surface, compact runtime capabilities, built-in recipes and concurrent calls | P2 | M | 055, 056, 059 | TODO — accepted compact-capabilities refinement; additional recipes not accepted |
+| [060](060-mcp-tool-surface.md) | Eight MCP tools with CLI/MCP parity, `--dry-run` on the CLI, compact runtime capabilities and concurrent calls | P2 | L | 055, 056, 059 | DONE — gates pending. Revised 2026-10-13 (operator): CLI/MCP parity and no recipes; `inspect`/`validate` left MCP and `ping`/`schema`/`counts`/`space`/`qstop`/`indexes`/`validate` left the CLI; busy gate removed; capabilities without `includeDetails`; spec decisions 12 and 15 amended |
 | [061](061-unified-parameter-sets.md) | Shared measure/compare parameter-set inputs | P3 | L | 056, 058, 060 | TODO — adapt projection to 055 case inventory; not implemented |
 | [062](062-compare-context-dashboard.md) | Compare context, SQL/scope/attempt history and comparison dashboard | P2 | L | 051 (DONE); coordinate with 060/061 | TODO — design agreed 2026-10-12; not implemented |
 
@@ -214,6 +214,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
 ## Policy decisions needed (not planned yet)
 
 - **Locking reads.** T-SQL `SELECT … WITH (TABLOCKX|XLOCK|UPDLOCK, HOLDLOCK)` and PostgreSQL `SELECT … FOR UPDATE/NO KEY UPDATE/SHARE/KEY SHARE` are classified read-only. They change no data, but they can block writers on production for up to timeout × repeats, and PG row locks write tuple headers and WAL. Options: deny exclusive/row-lock hints, route them to the mutation-approval path, or keep and document them. Evidence: `SqlSafety.cs:399-401`, `PostgresSafetyClassifier.cs:354-361`, `PostgresBenchmark.cs:88-96`.
+- **Missing-index hint overlap (idea from 060, not accepted).** An overlap verdict for the measured plan's own `missingIndexes` hint against the existing indexes of that table, as a field of the `plan` artifact. The classifier deleted by 060 stays in git history (`IndexOverlapClassifier.cs`).
 - **Equivalence and nullability.** Scheduled as [046](046-result-nullability-diagnostics.md): separate nullability diagnostics from default observed data equivalence and expose an explicit strict option. Implemented (046 DONE): `--compare-nullability` / `compareNullability`.
 
 ## Direction verdict recorded
@@ -229,7 +230,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
 - `Microsoft.SqlServer.Types` native spatial DLL on Linux/macOS: LOW confidence and already documented; at most a misleading exit code.
 - `--password-env-var` accepting any variable name on `--unsafe-direct`: a CLI agent with a shell can read env vars anyway, and MCP has no direct path.
 - Missing `packages.lock.json`: direct versions are exact-pinned centrally.
-- **Not planned by user choice (P3, available for a later run):** double row hashing and repeated plan/SQL parsing (perf); extracting the duplicated single-SQL pipeline from `SqlHarnessModule` and adding one command-descriptor table (tech debt); playground script hardening (password on the `docker exec` argv, 0.0.0.0 port binding, unpinned downloads); index overlap ignoring clustered coverage; `PlanDistiller` rejecting plan-less `StmtSimple`; missing `OperationFailureMapper`/JWT/`PlanIdentity` tests; CLI `qstop`/`indexes` on PG refusing only after connect; the STATISTICS TIME double count for `sp_executesql` (needs a live check).
+- **Not planned by user choice (P3, available for a later run):** double row hashing and repeated plan/SQL parsing (perf); extracting the duplicated single-SQL pipeline from `SqlHarnessModule` and adding one command-descriptor table (tech debt); playground script hardening (password on the `docker exec` argv, 0.0.0.0 port binding, unpinned downloads); index overlap ignoring clustered coverage (moot: 060 removed `indexes`); `PlanDistiller` rejecting plan-less `StmtSimple`; missing `OperationFailureMapper`/JWT/`PlanIdentity` tests; CLI `qstop`/`indexes` on PG refusing only after connect (moot: 060 removed both); the STATISTICS TIME double count for `sp_executesql` (needs a live check).
 
 ## Critical policy review, 2026-10-11
 
@@ -285,7 +286,7 @@ Framing: in CLI mode the agent shares the shell's environment, so closed profile
 | `standard_conforming_strings` | Kept: a lexing split could hide `COMMIT;` and escape 052 | 031 |
 | T-SQL server-filesystem denylist incomplete (`fn_dump_dblog`) | Not chased; server permissions are the control (029 framing) | — |
 
-Kept as right: T-SQL classifier and its closed bypass shapes, typed parameter binding, exact `--confirm-database`, MCP budgets and busy gate, dashboard host/cookie/origin/CSP, owner-only journal files, exits 7/8, offline validate.
+Kept as right: T-SQL classifier and its closed bypass shapes, typed parameter binding, exact `--confirm-database`, MCP budgets and busy gate (the busy gate was later removed by 060), dashboard host/cookie/origin/CSP, owner-only journal files, exits 7/8, offline validate.
 
 ## Calendar dates
 

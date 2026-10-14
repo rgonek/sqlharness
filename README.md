@@ -2,7 +2,7 @@
 
 Measure, compare, and prove SQL changes.
 
-SQLHarness is a command-line optimization harness for SQL Server, Azure SQL, and PostgreSQL. It gives coding agents and engineers bounded query execution, repeated measurements, baseline/candidate equivalence checks, compact execution-plan distillation, schema inspection, and locally recorded workflow output-cost evidence. The engine is a property of the locked target profile (omit `engine` for SQL Server; set `"engine": "postgres"` for Postgres).
+SQLHarness is a command-line optimization harness for SQL Server, Azure SQL, and PostgreSQL. It gives coding agents and engineers bounded query execution, repeated measurements, baseline/candidate equivalence checks, compact execution-plan distillation, and locally recorded workflow output-cost evidence. The engine is a property of the locked target profile (omit `engine` for SQL Server; set `"engine": "postgres"` for Postgres).
 
 ## Agent startup
 
@@ -12,7 +12,7 @@ Start offline; none of these commands connects:
 ```powershell
 sqlharness capabilities prod-eu --json
 sqlharness doctor --json
-sqlharness validate prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --json
+sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --dry-run --json
 ```
 
 `capabilities <profile> --json` describes the commands, the output modes each command accepts
@@ -20,19 +20,13 @@ sqlharness validate prod-eu --var tenant=acme --var env=uat --file .\queries\ord
 session-temp statements and engine-only limits. Without a profile it returns engine-neutral discovery
 only. It never takes `--var`; an unknown or unreadable profile returns a JSON error envelope with exit
 `2` (`profile_unknown`, `profile_unavailable`). `doctor --json` checks the local installation and
-omits accounts and environment values. `validate` classifies a SQL file with the selected closed
-profile and reports required parameters without executing it. Database permissions and referenced
-object existence remain unknown, and its result does not authorize a later mutation.
-
-`validate` accepts a caller intent: `--usage query|setup|benchmark` (default `query`). `query` applies the
-engine query rules; `setup` classifies the batch as session-local preparation; `benchmark` adds the
-measured-batch shape check of the execution path (`benchmark_batch_not_supported`: on Postgres a
-multi-statement batch is rejected, on SQL Server the check is a no-op). `--setup <PATH>` supplies setup-SQL
-session-temp context for `query`/`benchmark` validation and is ignored for `--usage setup`. The JSON report
-carries the decision (`allowed`, safe `reason` codes such as `missing_parameters` or `mutation_not_allowed`,
-statement-level `astLocations` on SQL Server) and the explicit `checkedConditions` scope for the usage. It
-never prints SQL or parameter values; `objectAndPermissionStatus` stays `"unknown"` and `executed` stays
-`false` because offline validation never connects.
+omits accounts and environment values. `--dry-run` on `query`, `measure` and `compare` checks the exact
+arguments offline: argument bounds, SQL safety classification, parameter binding and references, setup
+shape, matrix and parameter-set binding. Exit `0` means allowed, `2` rejected; a referenced parameter
+without a value is rejected as `missing_parameters` with its names. It cannot see authentication,
+connected identity, catalog contents or database permissions, and it does not authorize a later
+mutation ([Safety contract](#safety-contract)). The first executed result's `database` is the verified
+target: every connection compares it with the resolved database (exit `4` on a mismatch).
 
 See [the agent output contract](docs/superpowers/specs/2026-09-26-agent-output-contract.md)
 and [the audit roadmap](docs/superpowers/plans/2026-09-26-audit-roadmap.md).
@@ -75,7 +69,7 @@ SQL Server users can instead freeze an explicit allowlist and supply a target sc
 sqlharness mcp serve --request-scope --allow-profile sample-country --allow-profile sample-shared --input-root C:\work\sqlharness-inputs
 ```
 
-Request mode is SQL Server only. It keeps the existing ten tool names; `inspect`, `validate`, `query`, `measure`, `compare`, `watch`, `snapshot`, and `artifact` require a nested `scope` with an allowlisted profile and its variables. `capabilities` and `plan` remain target-free. The process snapshots profiles, input roots, and budgets at startup, and one process-wide gate allows one database operation at a time across all request scopes. SQLHarness does not register or edit client configuration. `sqlharness_capabilities` discloses the configured input roots (`inputRoots`), so callers can find where file inputs are allowed. File reads require absolute paths lexically under a configured root, reject UNC paths, and honor byte caps; the reader does not resolve links or guard against changes by the same OS user. See [the MCP contract](docs/mcp.md) for both client-entry shapes, scope behavior, and limits.
+The eight MCP tools mirror the CLI commands of the same names (`capabilities`, `query`, `measure`, `compare`, `watch`, `snapshot`, `plan`, `artifact`); what leaves one surface leaves the other. CLI `--dry-run` is MCP `dryRun: true`. Request mode is SQL Server only: `query`, `measure`, `compare`, `watch`, `snapshot`, and `artifact` require a nested `scope` with an allowlisted profile and its variables, while `capabilities` and `plan` remain target-free. The process snapshots profiles, input roots, and budgets at startup. Tool calls run concurrently and benchmarks are not serialized ([concurrency](docs/mcp.md#concurrency-deadline-cancellation-and-progress)). SQLHarness does not register or edit client configuration. `sqlharness_capabilities` discloses the configured input roots (`inputRoots`), so callers can find where file inputs are allowed. File reads require absolute paths lexically under a configured root, reject UNC paths, and honor byte caps; the reader does not resolve links or guard against changes by the same OS user. See [the MCP contract](docs/mcp.md) for both client-entry shapes, scope behavior, and limits.
 
 ## Quick start
 
@@ -83,17 +77,9 @@ Create `~/.sqlharness/targets.json` from [docs/example-targets.json](docs/exampl
 
 <!-- docs-sync:example -->
 ```powershell
-sqlharness ping prod-eu --var tenant=acme --var env=uat --json
-sqlharness counts prod-eu --var tenant=acme --var env=uat --table Contracts --table SourceFiles --exact --json
-sqlharness counts prod-eu --var tenant=acme --var env=uat --like "%Sync%" --json
-sqlharness schema prod-eu --var tenant=acme --var env=uat --object dbo.Contracts --json
-sqlharness schema prod-eu --var tenant=acme --var env=uat --json
-sqlharness space prod-eu --var tenant=acme --var env=uat --top 25 --json
-sqlharness space prod-eu --var tenant=acme --var env=uat --object dbo.Contracts --json
 sqlharness watch prod-eu --var tenant=acme --var env=uat --file .\queries\progress.sql --param target:int=1000 --until "Imported >= 1000" --interval 30 --max-duration 45m --json
 sqlharness snapshot prod-eu --var tenant=acme --var env=uat --file .\queries\coverage.sql --name before-import --json
 sqlharness snapshot prod-eu --var tenant=acme --var env=uat --file .\queries\coverage.sql --name before-import --diff --json
-sqlharness qstop prod-eu --var tenant=acme --var env=uat --top 20 --window 24h --json
 sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --param customerId:int=42 --json
 sqlharness measure prod-eu --var tenant=acme --var env=uat --query .\queries\orders.sql --repeat 5 --json
 sqlharness compare prod-eu --var tenant=acme --var env=uat --baseline .\queries\before.sql --candidate .\queries\after.sql --repeat 5 --json
@@ -126,13 +112,11 @@ sqlharness compare prod-eu `
 - completed cell artifacts remain;
 - ticket SQL stays outside the application repository.
 
-Read-only database helpers (`ping`, `counts`, `schema --object`, and `space`) use fixed internal catalog/probe/DMV SQL only: they never accept an arbitrary user SQL batch or mutations. `counts` defaults to approximate row counts from partition statistics; pass `--exact` for `COUNT_BIG(*)`. `space` diagnoses storage only (files, aggregate allocation, top tables by reserved space, optional per-index detail for `--object`); it never performs shrink, recovery-model change, compression change, or index mutation—any mutation still requires a separately approved `query --allow-mutation` batch. Prefer `--json` for machine-readable reports.
-
 `watch` polls a bounded read-only query until a stop condition: exactly one of `--until` (predicate on the first row of the first result set) or `--until-unchanged` (stable hash across consecutive polls; default when neither is supplied is `--until-unchanged 3`). Values compare numerically when both sides parse as numbers (exponents allowed); `bit`/`boolean` compare as `1`/`0` (`true`/`false` accepted); quote a string operand to force text comparison; no row or a NULL value means the condition is not met yet. Defaults: `--interval 30` seconds and `--max-duration 15m` (positive integral `s`/`m`/`h`, max 24h). Exit `0` when the condition is met or results stay unchanged; exit `7` when the max duration elapses without a stop condition. `snapshot` stores a named canonical result under `~/.sqlharness/snapshots` (sensitive result data—treat like comparison artifacts). Capture with `--name`; replace an existing name only with `--force`. `--diff` compares the live query against the stored snapshot without printing cell values (locations and kinds only): exit `0` when identical, exit `8` when a valid comparison found differences rather than an execution failure. Both accept the same single SQL source and `--param` pipeline as `query` (mutation classification rejects with exit `2`).
 
-`qstop` ranks SQL Server Query Store consumers by total duration, then total CPU, then executions, then `query_id`. It is read-only, accepts no user SQL, and has no mutation flags. Defaults: `--top 20`, `--window 24h` (1440 minutes), and `--timeout 30`. `--window` is a positive integer with an `m`, `h`, or `d` suffix totaling 1..44640 minutes; `--top` is 1..500; `--timeout` is 1..300. Target scope is the usual profile, `--var`, or `--unsafe-direct` options. One item aggregates all plans and runtime intervals into that one `query_id`. An empty result from a readable window exits 0; unavailable Query Store (`OFF`, `ERROR`, or malformed results) and Postgres exit 5; an artifact write failure exits 6. Stdout has ids, hashes, and metrics only and has no SQL text. SQL text is only in `artifactDirectory/queries.jsonl`. That artifact is locally sensitive and must not be pasted or published without explicit review. A high rank is a lead to `measure`, `compare`, and `plan`, not proof the query is defective.
-
 `plan --json` emits a compact, deterministic plan contract: `statements` preserves input order; each statement has optional `sql`, a `root` node, and optional `missingIndexes`. Nodes retain `physicalOp`, optional `logicalOp`, operator metadata and runtime values, warnings (with their Showplan attributes), and child nodes. Persisted `*.plan.json` files from `compare` and `measure` use this same schema, including `sql`. This output is serialization-only; it is not accepted as plan input.
+
+Missing indexes (SQL Server): the measured plan's `missingIndexes` (in `--json-summary`, `plan --json` and the artifact `plan` section) names the table, equality, inequality and include columns, and impact for the statement under test. Check the table's existing indexes with a scoped `query` on `sys.indexes` and `sys.index_columns` before proposing one; creating an index is a persistent mutation under the [Safety contract](#safety-contract).
 
 Use `--json` for the full report (automation and artifacts). For agent-sized stdout on `measure` / `compare`, use `--json-summary` instead: a bounded projection (target, classification, distributions, table reads, warnings, at most ten noteworthy operators, equivalence and regression verdict for compare, artifact directory) without full operator/run arrays, plan XML, or result hashes. A command accepts one output flag ([Commands](#commands) lists the modes). `query` reads SQL from exactly one source: `--file` or redirected stdin. SQLHarness sends one batch; `GO` separators are rejected. Split work into separate invocations; for `measure` and `compare`, put preparation in `--setup` (see [Benchmark setup contract](#benchmark-setup-contract)). Bind runtime values with repeatable `--param name[:type]=value`, never by string interpolation.
 
@@ -172,8 +156,6 @@ sqlharness measure prod-eu --var tenant=acme --var env=uat `
 - Omitted `sslMode` and `rootCertificate` keep the historical mapping, and a successful report sets `target.transportPolicy` to `legacy`: `trustServerCertificate: true` → Npgsql `SslMode=Disable`, `false` → `SslMode=Require`. An explicit `sslMode` of `verify-full`, `verify-ca`, `require`, or `disable` is authoritative. A mode that contradicts `trustServerCertificate` is rejected (`true` agrees only with `disable`; `false` agrees with `require` and the verifying modes). `rootCertificate` is accepted only with `verify-full` or `verify-ca` and must be a readable certificate file. SQL Server profiles that set either field are rejected. `--ssl-mode` and `--root-certificate` are direct options (`--unsafe-direct` only). New remote examples use `verify-full`. Details: `docs/superpowers/specs/2026-09-26-postgres-transport-policy.md`.
 - Both engines report the server identity observed on the connected session (`SERVERPROPERTY('ServerName')` for SQL Server and `inet_server_addr()` for Postgres). That value is informational; it is not compared with the profile host. TLS certificate validation authenticates the endpoint: use `trustServerCertificate: false` for SQL Server and `sslMode: verify-full` for Postgres when hostname verification is required. Both engines still require the observed database name to equal the resolved database with exact ordinal comparison; this is the only connected-target mismatch that returns exit 4.
 - `measure` / `compare` time a single EXPLAIN-able statement via `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`. Result equivalence uses an unmeasured sidecar SELECT. `CpuTimeMs` is `0`; `logicalReads` are shared/local buffer hits+reads; `missingIndexes` is empty.
-- Catalog helpers (`counts`, `schema`, `space`) use fixed `pg_catalog` SQL. Unquoted identifiers and `--like` / `--filter` patterns are case-sensitive as stored (`Contracts` does not match `contracts`).
-- `space` field analogs: Files = one `DATA` row from `pg_database_size` / `data_directory`; Allocation `ReservedMb` = database size while `UsedMb`/`DataMb` sum user relation sizes (they need not equal Reserved); Tables = top N by `pg_total_relation_size` with `Rows` from `reltuples`; `--object` indexes use access-method `Type` and null `Compression`.
 
 ```json
 {
@@ -256,7 +238,7 @@ This is not `compare --matrix`. Matrix mode varies one parameter across two quer
 | `set` | Same schema and distinct-row set; duplicates and order ignored. |
 | `off` | Skip result comparison; equivalence fields are null. |
 
-Equivalence compares data and column ordinal/name/type per result set; it ignores column nullability (`allowNull`) by default. Every report's equivalence object carries `compareNullability` (policy), `nullabilityEquivalent` (`true` when every measured run matches the first baseline measured run, `false` when a difference was observed, `null` when comparison is off, evidence is absent, the provider reported no nullability for a compared column (it is never read as nullable here, although `allowNull` in query, schema and snapshot output still shows `true`), or result shapes/types differ; never inferred `true`) and `mismatchReason` (`"nullability"` only when strict mode alone caused the mismatch, otherwise `null`). Artifacts written before this change lack these fields: they read `compareNullability` as `false` (even though those comparisons effectively included nullability) and their `nullabilityEquivalent` is unavailable. CLI text output labels strict runs `Technical equivalence (<mode>, strict nullability)`, appends `; nullability: True|False|unavailable` to the equivalence line, and adds `; mismatch reason: nullability` when strict mode alone caused the mismatch. Snapshots (`snapshot --diff`) are unchanged.
+Equivalence compares data and column ordinal/name/type per result set; it ignores column nullability (`allowNull`) by default. Every report's equivalence object carries `compareNullability` (policy), `nullabilityEquivalent` (`true` when every measured run matches the first baseline measured run, `false` when a difference was observed, `null` when comparison is off, evidence is absent, the provider reported no nullability for a compared column (it is never read as nullable here, although `allowNull` in query and snapshot output still shows `true`), or result shapes/types differ; never inferred `true`) and `mismatchReason` (`"nullability"` only when strict mode alone caused the mismatch, otherwise `null`). Artifacts written before this change lack these fields: they read `compareNullability` as `false` (even though those comparisons effectively included nullability) and their `nullabilityEquivalent` is unavailable. CLI text output labels strict runs `Technical equivalence (<mode>, strict nullability)`, appends `; nullability: True|False|unavailable` to the equivalence line, and adds `; mismatch reason: nullability` when strict mode alone caused the mismatch. Snapshots (`snapshot --diff`) are unchanged.
 
 Add `--compare-nullability` (MCP: `compareNullability`, default `false`) to require matching nullability as well: Equivalent then needs data equivalence and `nullabilityEquivalent` true. It is rejected with exit `2` under `--compare-results off`.
 
@@ -283,26 +265,17 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat `
 | --- | --- |
 | `capabilities` | Describe commands, engines, limits and output modes, offline. Pass a profile for that engine's parameter types and limits. |
 | `doctor` | Check the local installation and profile-file availability, offline. |
-| `validate` | Classify SQL offline for a closed profile. Usages: `query`, `setup`, `benchmark`. |
-| `ping` | Verify connection readiness with a fixed internal probe (no user SQL). |
-| `counts` | Inventory table row counts (partition estimates by default; `--exact` for `COUNT_BIG(*)`). |
-| `space` | Diagnose storage via read-only DMVs (files, allocation, top tables; `--object` for per-index detail). |
-| `qstop` | Rank SQL Server Query Store consumers by total duration (read-only; one `query_id` per item). |
 | `watch` | Poll a bounded read-only query until `--until` / `--until-unchanged` or max duration. |
 | `snapshot` | Capture or `--diff` a named canonical result under `~/.sqlharness/snapshots` (`--force` to replace). |
-| `query` | Run one bounded, classified SQL batch. |
+| `query` | Run one bounded, classified SQL batch. `query`, `measure` and `compare` take `--dry-run`. |
 | `measure` | Collect repeated timing, IO, and plan evidence for one query. |
 | `compare` | Compare baseline and candidate queries, including result equivalence. |
-| `schema` | Return a compact read-only catalog description (`--object` for one table/view). |
-| `indexes` | Inspect SQL Server missing-index evidence, classified against existing indexes. |
 | `plan` | Distill a showplan XML file or stdin without connecting to a database. |
 | `artifact` | Read safe sections of a saved benchmark artifact, offline. |
 | `mcp serve` | Serve the Core tools to one MCP client over local stdio ([MCP contract](docs/mcp.md)). |
 | `dashboard` | Operator tool: serve the local activity dashboard on 127.0.0.1 ([Dashboard](#dashboard)). Agents leave it and its API alone. |
 
 Run `sqlharness <command> --help` for the final option surface.
-
-`indexes` (SQL Server only; a PostgreSQL target exits `5`) reads missing-index DMV evidence and classifies each candidate against the table's existing indexes as `covered`, `include-gap`, `partial-key` or `new-shape`; `--object` narrows it to one table and `--top` caps the list. Creating an index is a persistent mutation under the approval gate in the [Safety contract](#safety-contract).
 
 `artifact <id> --section <section>` reads one safe section (`summary`, `metrics`, `operators`, `statements`, `matrix-cells`, `plan`) of a saved benchmark artifact without connecting. `<id>` is the directory name from the report's `artifactDirectory`; `operators`, `statements`, `matrix-cells`, and `plan` continue with `--cursor`. For `--section plan`, select `--variant baseline|candidate|query` (query is a measure artifact), optional zero-based `--statement` (default `0`), `--parameter-set` for a measure-set artifact, or an available measured `--repetition`. The default is the last measured repetition and the response identifies that selection and lists available repetitions, including measured runs without saved plans. If the selected run has no saved plan, the reader reports that repetition's missing evidence instead of falling back to an earlier run. `--include-text` opts into bounded statement text and predicates. The section reads saved distilled `.plan.json` evidence when present; it never reads or regenerates raw XML. Plan nodes are flattened in preorder with stable paths and paged so following continuations reconstructs the saved hierarchy. `planShapeStable` compares saved operator shape, object/index identity, and predicates, excluding costs, timing, and row counts. It is `null` when fewer than two measured repetitions are available, because there is not enough evidence to compare; in that case `evidenceGaps` is empty. If a multi-repetition comparison has missing or incomplete saved plan evidence, `planShapeStable` is also `null` and `evidenceGaps` describes the gap. The `operators` section is paged too, but its noteworthy-operator source is capped and does not represent the full plan.
 
@@ -312,7 +285,6 @@ Output modes: `--json` writes the full report; `measure` and `compare` add the b
 
 <!-- docs-sync:example -->
 ```powershell
-sqlharness indexes prod-eu --var tenant=acme --var env=uat --object dbo.Contracts --json
 sqlharness artifact 20261012T101500123Z-prod-eu-0f3c2a9d4b6e4f1a8c7d5e3b2a190876 --section summary --json
 sqlharness query prod-eu --var tenant=acme --var env=uat --file .\queries\orders.sql --output agent --max-output-bytes 8192 --max-cell-chars 256
 sqlharness watch prod-eu --var tenant=acme --var env=uat --file .\queries\progress.sql --until-unchanged 3 --output ndjson
@@ -330,11 +302,11 @@ The classifier and the mutation flags prevent accidents. For enforcement, point 
 | Mutations | Read-only is the default. Explicit persistent-object mutation requires fresh, single-use user approval for the exact batch and exact resolved database. After that approval the agent supplies `--allow-mutation --confirm-database <exact-resolved-name>`: a deliberate-act check that records the approval, not a prompt to the user. Exception: read-write PostgreSQL TEMP setup can statically accept a setup `SELECT` that invokes an opaque user-defined function which writes persistently, without approval; review setup SQL (see PostgreSQL execution). |
 | PostgreSQL execution | Each non-approved command runs in a per-command `READ ONLY` transaction; the server rejects persistent table and sequence writes (SQLSTATE `25006`, safety exit `2`). Allowed TEMP setup is the exception and runs outside that wrapper under static visible-effects and temp-target checks; `nextval` and `setval` remain denied in setup. A setup `SELECT` can still execute a user-defined function that writes persistently because static validation does not inspect its body. Review setup SQL and use a least-privilege role, but do not treat validation or that role choice as proof that every effect is rejected. `READ ONLY` also does not contain every administrative or external effect, so SQLHarness denies known residual calls. PostgreSQL benchmark timings use server `EXPLAIN` planning and execution time and exclude client wrapper cost. |
 | Session `#temp` / `TEMP` | SQL Server: local `#temp` setup/DML/indexes are session-only and do not require mutation confirmation, plus scalar `DECLARE`, table variables declared earlier in the same batch, `TRUNCATE TABLE #t`, and `ALTER TABLE #t` add/drop columns with local constraints; plain `SET @v = <expr>` to a same-batch scalar local in query, measured SQL and setup. Postgres: use native `CREATE TEMP TABLE` / `TEMPORARY` (no `#temp` translation), `SELECT INTO TEMP TABLE` with an unambiguous name, `TRUNCATE [ONLY]` of proven current-session temps, plan-only `EXPLAIN` over a safe `SELECT`, and `EXPLAIN ANALYZE` with full effect analysis. Setup runs once per connection and shares that session with warm-up and measured runs. |
-| SQL input | Use exactly one query source (`--file` or stdin) and bound `--param` values. Parameter names accept an optional single leading `@` and reports print the canonical `@Name`. Unsized `nvarchar`/`varchar` values bind with size 4000 when the value is at most 4000 characters (including NULL), and as `max` when longer, matching Dapper so a benchmark compiles the plan the application compiles. Fixed-width `nchar`/`char` have no `max`: they use size 4000 through 4000 characters (including NULL); `char` values of 4001–8000 characters use their actual length, and values beyond the type limit are rejected (`nchar` over 4000, `char` over 8000). Explicit sizes are unchanged. Parsed syntax inside a top-level `SELECT` is accepted without a fragment allowlist; independent safety checks still reject cross-database access, external or stateful sources, dynamic SQL, and writes outside the approved local-`#temp` or mutation contracts. Helpers (`ping`, `counts`, `schema`, `space`) never accept arbitrary user SQL. `space` is read-only DMV diagnosis only—no shrink, recovery-model, compression, or index mutation; mutations need a separately approved `query --allow-mutation` batch. |
-| MCP dry run | `query`, `measure`, and `compare` accept `dryRun: true` to perform offline argument/bounds checks, safety classification, parameter binding/references, setup-shape checks and matrix/parameter-set binding, then return before connection or artifact storage. Success returns `command`, `classification`, `parameters` (canonical name, type, size, precision and scale), and `parameterSets`, with exit `0`; it creates no raw-token emission receipt. It cannot check runtime storage, authentication, connected identity, catalog contents or database permissions. This is a Core/MCP flag with no CLI switch. For exact operation arguments it supersedes MCP `sqlharness_validate`; that tool remains until plan 060. Safety rejection details identify the ScriptDom statement type and starting line, such as `IfStatement at line 14` ([MCP contract](docs/mcp.md#parameters-and-dry-runs)). |
+| SQL input | Use exactly one query source (`--file` or stdin) and bound `--param` values. Parameter names accept an optional single leading `@` and reports print the canonical `@Name`. Unsized `nvarchar`/`varchar` values bind with size 4000 when the value is at most 4000 characters (including NULL), and as `max` when longer, matching Dapper so a benchmark compiles the plan the application compiles. Fixed-width `nchar`/`char` have no `max`: they use size 4000 through 4000 characters (including NULL); `char` values of 4001–8000 characters use their actual length, and values beyond the type limit are rejected (`nchar` over 4000, `char` over 8000). Explicit sizes are unchanged. Parsed syntax inside a top-level `SELECT` is accepted without a fragment allowlist; independent safety checks still reject cross-database access, external or stateful sources, dynamic SQL, and writes outside the approved local-`#temp` or mutation contracts. |
+| Dry run | `query`, `measure`, and `compare` accept a dry run (CLI `--dry-run`, MCP `dryRun: true`): offline argument/bounds checks, safety classification, parameter binding/references, setup-shape checks and matrix/parameter-set binding, then a return before connection or artifact storage. Success returns `command`, `classification`, `parameters` (canonical name, type, size, precision and scale), and `parameterSets`, with exit `0`; a rejection exits `2`, and a referenced parameter without a value is `missing_parameters` with its names. It creates no raw-token emission receipt. It cannot check runtime storage, authentication, connected identity, catalog contents or database permissions, and it never authorizes a later mutation. Safety rejection details identify the ScriptDom statement type and starting line, such as `IfStatement at line 14` ([MCP contract](docs/mcp.md#parameters-and-dry-runs)). |
 | Secrets | Known credentials (the profile's password and the Azure token) are replaced in every output. Other text, including SQL quoted in server errors, is shown as is. Credential-redacted operation errors are stored in the activity journal by default. |
 
-| Artifacts | Comparison artifacts, `.sqlplan` files, named snapshots under `~/.sqlharness/snapshots`, Query Store text in `queries.jsonl`, and runtime parameter material are locally sensitive because they can embed SQL text, parameter values, and result data. `snapshot --diff` never prints cell values. Do not paste or publish `queries.jsonl` without explicit review. |
+| Artifacts | Comparison artifacts, `.sqlplan` files, named snapshots under `~/.sqlharness/snapshots`, and runtime parameter material are locally sensitive because they can embed SQL text, parameter values, and result data. `snapshot --diff` never prints cell values. |
 
 Keep passwords and tokens out of command-line arguments, configuration output, logs, reports, and artifacts. Store profile passwords in the environment variables named by the profile.
 
@@ -348,7 +320,7 @@ For newly referenced workflows, artifact reads join to their producer by exact o
 
 ### Activity journal
 
-Every operation that reaches the SQLHarness module (`query`, `measure`, `compare`, `watch`, `snapshot`, `schema`, `counts`, `space`, `ping`, `qstop`, `indexes`, `artifact`, `plan`; CLI or MCP) is recorded in a local activity journal (`~/.sqlharness/data/activity.db`, owner-only on Unix): operation, scope, target identity, status, timings, measured raw/emitted bytes and their estimates, opaque operation references, dry-run state, and a SHA-256 hash of the SQL. Schema v7 adds nullable `operation_ref` and `parent_operation_ref` plus `dry_run` (`NOT NULL DEFAULT 0`). It reuses the `raw_bytes` and `emitted_bytes` columns introduced in v3; stored byte values remain intact. Existing rows have null references and `dry_run = 0`, while existing token columns remain readable; no historical provenance is inferred or backfilled. Not recorded: `validate`, `doctor`, `capabilities`, `--help`, and rejections before the module runs. The `capabilities` command is outside reported workflow-cost coverage. Session identity is implicit (MCP `clientInfo`, or the CLI's nearest `claude`/`codex` ancestor process); agents send nothing extra. Credential-redacted error messages are stored by default, truncated to the journal limit; they can still quote caller-supplied SQL or data values. SQL text is stored only with `journal.storeSensitive: true` in `~/.sqlharness/config.json`, as are full plans; plans may embed statement text and parameter values, including `--param-set` and matrix values (`ParameterCompiledValue` / `ParameterRuntimeValue`, or literals in Postgres plans). Parameter values, secrets, and result cells are never stored as journal fields. An invalid `config.json` falls back to defaults (hash-only SQL and plans, with redacted error messages). Journal failures never change output or exit codes. Treat `activity.db` as locally sensitive. For successful `measure` and `compare` runs the journal also stores per-variant medians, memory grant, DOP, compile, spill and wait diagnostics, per-table `STATISTICS IO` reads (SQL Server only: scan count and logical, physical, page-server, read-ahead, and LOB logical/physical/read-ahead reads; page-server read-ahead and LOB page-server counters are not kept; Postgres rows store relation buffer reads as logical reads and leave the detail counters null), per-statement SQL hashes and plan metrics, and plan identity hashes; metric rows identify matrix cells by index only, never by value. Metrics a run marks unavailable are stored as null, and `STATISTICS IO` lines without logical reads (localized output, columnstore segment lines) are not recorded. Per-statement rows contain hashes and plan details without SQL text; CPU and elapsed values come from SQL Server `QueryTimeStats`. A stored plan is the first actual plan observed for its shape (`PlanIdentity`); per-run metrics are kept separately, so later runs with the same shape do not store another copy. `sqlharness doctor --json` reports whether the config file is present and valid, the effective journal settings, and whether the journal file exists.
+Every operation that reaches the SQLHarness module (`query`, `measure`, `compare`, `watch`, `snapshot`, `artifact`, `plan`; CLI or MCP) is recorded in a local activity journal (`~/.sqlharness/data/activity.db`, owner-only on Unix): operation, scope, target identity, status, timings, measured raw/emitted bytes and their estimates, opaque operation references, dry-run state, and a SHA-256 hash of the SQL. Schema v7 adds nullable `operation_ref` and `parent_operation_ref` plus `dry_run` (`NOT NULL DEFAULT 0`). It reuses the `raw_bytes` and `emitted_bytes` columns introduced in v3; stored byte values remain intact. Existing rows have null references and `dry_run = 0`, while existing token columns remain readable; no historical provenance is inferred or backfilled. Not recorded: `doctor`, `capabilities`, `--help`, and rejections before the module runs. Rows of removed commands (`ping`, `schema`, `counts`, `space`, `qstop`, `indexes`) stay readable in the dashboard. The `capabilities` command is outside reported workflow-cost coverage. Session identity is implicit (MCP `clientInfo`, or the CLI's nearest `claude`/`codex` ancestor process); agents send nothing extra. Credential-redacted error messages are stored by default, truncated to the journal limit; they can still quote caller-supplied SQL or data values. SQL text is stored only with `journal.storeSensitive: true` in `~/.sqlharness/config.json`, as are full plans; plans may embed statement text and parameter values, including `--param-set` and matrix values (`ParameterCompiledValue` / `ParameterRuntimeValue`, or literals in Postgres plans). Parameter values, secrets, and result cells are never stored as journal fields. An invalid `config.json` falls back to defaults (hash-only SQL and plans, with redacted error messages). Journal failures never change output or exit codes. Treat `activity.db` as locally sensitive. For successful `measure` and `compare` runs the journal also stores per-variant medians, memory grant, DOP, compile, spill and wait diagnostics, per-table `STATISTICS IO` reads (SQL Server only: scan count and logical, physical, page-server, read-ahead, and LOB logical/physical/read-ahead reads; page-server read-ahead and LOB page-server counters are not kept; Postgres rows store relation buffer reads as logical reads and leave the detail counters null), per-statement SQL hashes and plan metrics, and plan identity hashes; metric rows identify matrix cells by index only, never by value. Metrics a run marks unavailable are stored as null, and `STATISTICS IO` lines without logical reads (localized output, columnstore segment lines) are not recorded. Per-statement rows contain hashes and plan details without SQL text; CPU and elapsed values come from SQL Server `QueryTimeStats`. A stored plan is the first actual plan observed for its shape (`PlanIdentity`); per-run metrics are kept separately, so later runs with the same shape do not store another copy. `sqlharness doctor --json` reports whether the config file is present and valid, the effective journal settings, and whether the journal file exists.
 
 ```json
 {
@@ -394,7 +366,6 @@ Measured raw/emitted byte examples will be added from real runs.
 - Activity journal: `~/.sqlharness/data/activity.db` (locally sensitive)
 - Comparison artifacts: `~/.sqlharness/compare/`
 - Named snapshots: `~/.sqlharness/snapshots/` (sensitive result data; replace only with `snapshot --force`)
-- Query Store artifacts: `~/.sqlharness/query-store/` (`artifactDirectory/queries.jsonl` holds SQL text and is locally sensitive)
 
 Set `SQLHARNESS_HOME` to relocate these paths, for example in an isolated test environment.
 
@@ -472,13 +443,6 @@ Keep `SQLHARNESS_PLAYGROUND_PASSWORD` set in the process that runs `sqlharness` 
 
 #### Read-only CLI smoke checks
 
-Use the installed command first:
-
-<!-- docs-sync:example -->
-```powershell
-sqlharness schema local-playground --json
-```
-
 Create the local smoke query outside tracked repository paths:
 
 ```powershell
@@ -490,6 +454,8 @@ WHERE p.ListPrice > @minimumPrice
 ORDER BY p.ListPrice DESC;
 '@ | Set-Content $smokeQuery -Encoding utf8
 
+sqlharness query local-playground --file $smokeQuery --param minimumPrice:decimal=100 --json
+
 sqlharness measure local-playground `
     --query $smokeQuery `
     --param minimumPrice:decimal=100 `
@@ -497,7 +463,7 @@ sqlharness measure local-playground `
     --json
 ```
 
-Expected: both commands exit `0`; schema identifies `AdventureWorks2022`, and measure returns bounded JSON output.
+Expected: both commands exit `0`; the query result names `AdventureWorks2022` as its database, and measure returns bounded JSON output.
 
 #### Opt-in SQL Server integration tests
 

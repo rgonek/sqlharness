@@ -29,7 +29,7 @@ Evidence and reasoning (consulted Grok and Codex; Grok and this controller chose
 
 ## Status
 
-- Status: TODO
+- Status: DONE (gates pending)
 - Priority: P2
 - Effort: L
 - Risk: MEDIUM (removes tools and commands from published contracts; concurrency change)

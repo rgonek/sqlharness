@@ -121,8 +121,9 @@ public sealed partial class DocsSyncTests
         Assert.Contains(baseline, skill, StringComparison.Ordinal);
         Assert.Contains("not actual token savings", skill, StringComparison.Ordinal);
         var journalSection = readme[(readme.IndexOf("### Activity journal", StringComparison.Ordinal))..];
-        Assert.Contains("`indexes`, `artifact`, `plan`; CLI or MCP", journalSection, StringComparison.Ordinal);
-        Assert.Contains("Not recorded: `validate`, `doctor`, `capabilities`, `--help`", journalSection, StringComparison.Ordinal);
+        Assert.Contains("`snapshot`, `artifact`, `plan`; CLI or MCP", journalSection, StringComparison.Ordinal);
+        Assert.Contains("Not recorded: `doctor`, `capabilities`, `--help`", journalSection, StringComparison.Ordinal);
+        Assert.Contains("Rows of removed commands (`ping`, `schema`, `counts`, `space`, `qstop`, `indexes`) stay readable in the dashboard.", journalSection, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -133,10 +134,6 @@ public sealed partial class DocsSyncTests
         var examples = ExtractExamples(ReadRepositoryFile(file.Split('/')));
         Assert.True(examples.Count > 0, $"{file} has no examples tagged with {Marker}; tag the runnable sqlharness examples.");
 
-        // Plan 060 Task 3 removed these commands; README/SKILL still carry their examples until Task 6
-        // rewrites the docs. Task 6 deletes this filter together with the examples.
-        string[] removedPendingDocs = ["ping", "schema", "counts", "space", "qstop", "indexes", "validate"];
-        examples = examples.Where(example => !removedPendingDocs.Contains(Tokenize(example).ElementAtOrDefault(1), StringComparer.Ordinal)).ToList();
         var failures = await CheckExamplesAsync(examples);
         Assert.True(failures.Count == 0, $"{file} examples drifted from the CLI:{Environment.NewLine}" + string.Join(Environment.NewLine, failures));
     }
