@@ -48,7 +48,7 @@ Risks accepted: retention deletes annotations; deleting `activity.db` deletes th
 - `GET /api/sessions` gains:
   - `archived=false|true` (default `false`);
   - `q`: case-insensitive substring over title, note, `cwd`, `session_key`, `client_title` (finds ticket keys like `BSI-12345`). Bound the length of `q` (e.g. 200) and escape `LIKE` wildcards.
-  - Ordering: `starred DESC`, then the existing order. The cursor encodes the star so pages never duplicate or skip a session across the starred/unstarred boundary.
+  - `starred=true|false` filter. The UI shows starred sessions as a separate pinned list above the regular one (two filtered requests, each paged with the existing id cursor), so paging never crosses the starred/unstarred boundary. Without the filter the order is `starred DESC`, then the existing order (first page only; documented).
 - `PATCH /api/sessions/{id}/annotation` with a partial body `{ title?, note?, starred?, archived? }` (`archived: true` sets `archived_at = now`, `false` clears it). Goes through the existing `DashboardSecurity` token/origin checks like `PUT /api/settings`. Responses: 200 with the updated annotation; 400 validation (length, unknown fields, wrong types); 404 unknown session; 409 schema version mismatch, with a readable message.
 - `SessionSummary` gains `title` (display-ready user title, nullable), `starred`, `archived`, `hasNote`; `SessionDetail` additionally carries `note`. C#/TS types pinned by the existing contract test.
 
@@ -63,7 +63,7 @@ Sessions list:
 Session page:
 - Header: inline-editable title (click or pencil; Enter saves, Esc cancels, empty falls back to the next display-name source), star, Archive button; an "Archived" badge when archived.
 - **Note** card: textarea, Save/Cancel, character counter, "Saved" confirmation. Collapsed to an "Add note" button when empty.
-- Optimistic updates in the TanStack Query cache; on error roll back and show a toast with the server message.
+- Optimistic updates of the session detail in the TanStack Query cache; lists refetch after the save. On error roll back and show the server message inline (destructive alert next to the control; the dashboard has no toast component).
 - Icon buttons have accessible labels and are keyboard-operable.
 
 ## Tests

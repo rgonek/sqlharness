@@ -29,6 +29,7 @@ Odświeżono na `a296e91`: sprawdzono main, statusy planów i worktree. Preferen
 | Plan | Kategoria | Warunek |
 |---|---|---|
 | [062](062-compare-context-dashboard.md) | Ogólne / P2: kontekst compare, historia prób, dashboard | 051 jest DONE. Nie wymaga całej fali 055–061; uzgodnić aktualną bazę po 055 i realizować sekwencyjnie względem zmian MCP w 060/061 |
+| [069](069-dashboard-session-curation.md) | Ogólne / P2: porządkowanie sesji w dashboardzie | Po 062; potem plany dla specu C (dopasowanie transkryptów) i B (compare dla reviewera) |
 
 062 jest odrębnym wyborem produktowym. Nie uruchamiać na podstawie samego numeru planu równolegle ze zmianami wspólnego katalogu MCP i kontraktów compare. Plan obejmuje cały kontekst, journal, API, ekrany i dokumentację.
 
@@ -198,6 +199,7 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [066](066-regression-resolution-floor-and-cost-thresholds.md) | Regression policy v2: 2 ms elapsed spread floor; documented reads/CPU diagnostic thresholds | P2 | S | 051 DONE; coordinate 064 descriptions | TODO — planning accepted 2026-10-14 at `ed44649`; no implementation/publication authorization |
 | [067](067-cell-limit-parity-and-default.md) | MCP `maxCellChars` 0..4096 with CLI parity; shared default 2048 | P2 | S–M | 060 DONE; coordinate 064/065 | TODO — planning accepted 2026-10-14 at `ed44649`; no implementation/publication authorization |
 | [068](068-operation-phase-timings-and-diagnostics.md) | Journal phase timings (connect/setup/execute/artifact) and opt-in `diagnostics.enabled` connection events | P2 | M–L | Coordinate 062 (operation page, journal reader) | TODO — planning accepted 2026-10-14 at `ed44649`; no implementation/publication authorization |
+| [069](069-dashboard-session-curation.md) | Dashboard session curation: title, note, star/pin, archive, search (journal `session_annotations`, guarded PATCH) | P2 | M | 062 DONE first; coordinate journal schema version with 062/068 | TODO — planned 2026-10-14 at `380307c`; spec accepted; followed by Spec C (transcript matching) and Spec B (compare review, CodeMirror 6 checkpoint), not yet planned |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED, SUPERSEDED or REVERTED (with one-line rationale).
 
