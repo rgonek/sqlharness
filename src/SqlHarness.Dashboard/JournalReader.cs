@@ -17,6 +17,7 @@ namespace SqlHarness.Dashboard;
 public sealed class JournalReader(string databasePath, IProcessInfo processes)
 {
     public const int DefaultLimit = 50;
+    internal const int MaximumSearchLength = 200;
     public const int MaximumLimit = 200;
     public const int SessionOperationLimit = 500;
     public const int CompareHistoryPageLimit = 100;
@@ -49,7 +50,12 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         (SELECT COUNT(*) FROM operations o WHERE o.session_id = s.id) AS ops,
         (SELECT COUNT(*) FROM operations o WHERE o.session_id = s.id AND o.status = 'failed') AS failed,
         (SELECT COUNT(*) FROM operations o WHERE o.session_id = s.id AND o.status = 'rejected') AS rejected,
-        s.client_title, s.roots_json, s.protocol_version
+        s.client_title, s.roots_json, s.protocol_version,
+        (SELECT a.title FROM session_annotations a WHERE a.session_id = s.id) AS title,
+        COALESCE((SELECT a.starred FROM session_annotations a WHERE a.session_id = s.id), 0) AS starred,
+        EXISTS (SELECT 1 FROM session_annotations a WHERE a.session_id = s.id AND a.archived_at IS NOT NULL) AS archived,
+        (SELECT substr(rtrim(CASE WHEN instr(a.note, char(10)) > 0 THEN substr(a.note, 1, instr(a.note, char(10)) - 1) ELSE a.note END, char(13)), 1, 120)
+         FROM session_annotations a WHERE a.session_id = s.id) AS note_preview
         """;
 
     public long? SchemaVersion()
@@ -121,7 +127,11 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             ("$to", Iso(query.To)),
             ("$cursor", query.Cursor),
             ("$limit", limit + 1),
+            ("$archived", query.Archived ? 1 : 0),
+            ("$starred", query.Starred is null ? null : query.Starred.Value ? 1 : 0),
+            ("$q", query.Search is null ? null : "%" + EscapeLike(query.Search) + "%"),
         ];
+        var order = query.Starred is null ? "starred DESC, s.id DESC" : "s.id DESC";
         var rows = Query(connection, $"""
             SELECT {SessionColumns} FROM sessions s
             WHERE ($agent IS NULL OR s.agent_kind = $agent)
@@ -129,7 +139,13 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
               AND ($from IS NULL OR s.last_seen >= $from)
               AND ($to IS NULL OR s.first_seen < $to)
               AND ($cursor IS NULL OR s.id < $cursor)
-            ORDER BY s.id DESC LIMIT $limit;
+              AND EXISTS (SELECT 1 FROM session_annotations a WHERE a.session_id = s.id AND a.archived_at IS NOT NULL) = $archived
+              AND ($starred IS NULL OR COALESCE((SELECT a.starred FROM session_annotations a WHERE a.session_id = s.id), 0) = $starred)
+              AND ($q IS NULL
+                   OR s.session_key LIKE $q ESCAPE '\' OR s.cwd LIKE $q ESCAPE '\' OR s.client_title LIKE $q ESCAPE '\'
+                   OR EXISTS (SELECT 1 FROM session_annotations a WHERE a.session_id = s.id
+                              AND (a.title LIKE $q ESCAPE '\' OR a.note LIKE $q ESCAPE '\')))
+            ORDER BY {order} LIMIT $limit;
             """,
             parameters,
             ReadSessionRow);
@@ -160,9 +176,11 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var evidenceById = evidence.ToDictionary(attempt => attempt.OperationId);
         subjects = CompareHistoryBuilder.Subjects(compares.Select(attempt =>
             evidenceById.TryGetValue(attempt.OperationId, out var hydrated) ? hydrated : attempt).ToArray());
+        var note = Query(connection, "SELECT note FROM session_annotations WHERE session_id = $id;", [("$id", id)],
+            r => NullableString(r, 0)).FirstOrDefault();
         return new SessionDetail(WithRunning(connection, [session])[0], operations,
             subjects,
-            compares.Count(attempt => attempt.Subject is null || attempt.Scope is null));
+            compares.Count(attempt => attempt.Subject is null || attempt.Scope is null), note);
     }
 
     /// <summary>Full retained compare history is versioned before applying the endpoint page.</summary>
@@ -757,7 +775,11 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetString(4), NullableString(r, 5),
         NullableString(r, 6), NullableString(r, 7), NullableString(r, 8), r.GetString(9), r.GetString(10),
         r.GetInt32(11), r.GetInt32(12), r.GetInt32(13), 0, 0,
-        NullableString(r, 14), Roots(NullableString(r, 15)), NullableString(r, 16));
+        NullableString(r, 14), Roots(NullableString(r, 15)), NullableString(r, 16),
+        NullableString(r, 17), r.GetInt64(18) != 0, r.GetInt64(19) != 0, NullableString(r, 20));
+
+    private static string EscapeLike(string value) =>
+        value.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
 
     private static OperationSummary ReadOperation(SqliteDataReader r, ProcessLiveness liveness) => new(
         r.GetInt64(0), r.GetInt64(1), r.GetString(2), r.GetString(3),

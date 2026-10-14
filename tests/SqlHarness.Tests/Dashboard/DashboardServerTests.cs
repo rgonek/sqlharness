@@ -548,4 +548,16 @@ public sealed class DashboardServerTests
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             DashboardServer.StartAsync(new DashboardServerOptions(home.DatabasePath, port, new FakeProcesses()), CancellationToken.None));
     }
+
+    [Fact]
+    public async Task Sessions_reject_an_overlong_search()
+    {
+        using var home = new TempHome();
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        var response = await client.GetAsync("/api/sessions?q=" + new string('a', 201));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

@@ -968,4 +968,83 @@ public sealed class JournalReaderTests
         Assert.Equal("Invalid column name 'x'.", operation.ErrorMessage);
     }
 
+    [Fact]
+    public void Sessions_carry_annotations_and_the_detail_carries_the_note()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:a"));
+        JournalSeed.Annotate(home.DatabasePath, "cli:a", title: "BSI-1 orders", note: "first line\r\nsecond", starred: true);
+        var reader = new JournalReader(home.DatabasePath, new FakeProcesses());
+
+        var summary = reader.Sessions(new SessionQuery(Starred: true)).Items.Single();
+        Assert.Equal(("BSI-1 orders", true, false, "first line"), (summary.Title, summary.Starred, summary.Archived, summary.NotePreview));
+        Assert.Equal("first line\r\nsecond", reader.Session(summary.Id)!.Note);
+    }
+
+    [Fact]
+    public void Session_lists_split_by_star_and_archive()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        foreach (var key in new[] { "cli:plain", "cli:star", "cli:arch", "cli:star-arch" })
+            seed.Operation(JournalSeed.Session(key));
+        JournalSeed.Annotate(home.DatabasePath, "cli:star", starred: true);
+        JournalSeed.Annotate(home.DatabasePath, "cli:arch", archived: true);
+        JournalSeed.Annotate(home.DatabasePath, "cli:star-arch", starred: true, archived: true);
+        var reader = new JournalReader(home.DatabasePath, new FakeProcesses());
+
+        string[] Keys(SessionQuery query) => reader.Sessions(query).Items.Select(s => s.SessionKey).ToArray();
+        Assert.Equal(["cli:plain"], Keys(new SessionQuery(Starred: false)));
+        Assert.Equal(["cli:star"], Keys(new SessionQuery(Starred: true)));
+        Assert.Equal(["cli:arch"], Keys(new SessionQuery(Archived: true, Starred: false)));
+        Assert.Equal(["cli:star-arch"], Keys(new SessionQuery(Archived: true, Starred: true)));
+        Assert.Equal(["cli:star", "cli:plain"], Keys(new SessionQuery()));
+    }
+
+    [Fact]
+    public void Search_matches_title_note_cwd_key_and_client_title_literally()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:title"));
+        seed.Operation(JournalSeed.Session("cli:note"));
+        seed.Operation(JournalSeed.Session("cli:wild"));
+        JournalSeed.Annotate(home.DatabasePath, "cli:title", title: "BSI_123 orders");
+        JournalSeed.Annotate(home.DatabasePath, "cli:note", note: "reads down 50% on Orders");
+        JournalSeed.Annotate(home.DatabasePath, "cli:wild", title: "BSIX123");
+        var reader = new JournalReader(home.DatabasePath, new FakeProcesses());
+
+        string[] Keys(string q) => reader.Sessions(new SessionQuery(Search: q)).Items.Select(s => s.SessionKey).Order().ToArray();
+        Assert.Equal(["cli:title"], Keys("bsi_123"));
+        Assert.Equal(["cli:note"], Keys("50%"));
+        Assert.Equal(["cli:note", "cli:title", "cli:wild"], Keys("cli:"));
+        Assert.Equal(["cli:note", "cli:title", "cli:wild"], Keys("/work"));
+    }
+
+    [Fact]
+    public void Starred_list_pages_with_the_id_cursor_without_gaps()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        for (var i = 0; i < 520; i++)
+        {
+            seed.Operation(JournalSeed.Session($"cli:{i:D3}"));
+            if (i % 2 == 0)
+                JournalSeed.Annotate(home.DatabasePath, $"cli:{i:D3}", starred: true);
+        }
+        var reader = new JournalReader(home.DatabasePath, new FakeProcesses());
+
+        var seen = new List<string>();
+        long? cursor = null;
+        do
+        {
+            var page = reader.Sessions(new SessionQuery(Starred: true, Cursor: cursor, Limit: 100));
+            seen.AddRange(page.Items.Select(s => s.SessionKey));
+            cursor = page.NextCursor;
+        } while (cursor is not null);
+
+        Assert.Equal(260, seen.Count);
+        Assert.Equal(seen.Count, seen.Distinct().Count());
+    }
 }
