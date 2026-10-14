@@ -262,22 +262,26 @@ public static partial class McpOperationMapper
         McpSqlSourceArgument query,
         McpSqlSourceArgument? setup,
         IReadOnlyList<McpParameterArgument>? parameters,
-        IReadOnlyList<string>? paramSetFiles,
+        IReadOnlyList<string>? parameterSetFiles,
         int repeat,
         int? timeout,
         CancellationToken ct,
-        bool dryRun = false)
+        bool dryRun = false,
+        IReadOnlyList<McpParameterSetArgument>? parameterSets = null,
+        McpMatrixArgument? matrix = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(query);
+        ValidateParameterSetChoices(parameterSets, parameterSetFiles, matrix);
         var querySql = await McpInputReader.ReadSqlAsync(query.Sql, query.File, scope, ct);
         var setupSql = await ReadOptionalSourceAsync(setup, scope, "setup", ct);
-        var sets = await ReadParameterSetsOrNullAsync(paramSetFiles, scope, ct);
+        var sets = await MapParameterSetsAsync(parameterSets, parameterSetFiles, scope, ct);
         return new SqlHarnessMeasureOperation(
             scope.TargetRequest, setupSql, querySql, [],
             RequireTimeout(timeout), RequireRepeat(repeat), sets)
         {
             TypedParameters = MapParameters(parameters),
+            TypedMatrix = matrix is null ? null : MapMatrix(matrix),
             DryRun = dryRun,
         };
     }
@@ -294,11 +298,14 @@ public static partial class McpOperationMapper
         McpMatrixArgument? matrix,
         CancellationToken ct,
         bool compareNullability = false,
-        bool dryRun = false)
+        bool dryRun = false,
+        IReadOnlyList<McpParameterSetArgument>? parameterSets = null,
+        IReadOnlyList<string>? parameterSetFiles = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(baseline);
         ArgumentNullException.ThrowIfNull(candidate);
+        ValidateParameterSetChoices(parameterSets, parameterSetFiles, matrix);
         if (compareResults is null || !CompareResultModes.Contains(compareResults))
             throw new McpMappingException("Unknown compare mode. Supported modes: ordered, multiset, set, off.");
         var mode = compareResults.ToLowerInvariant() switch
@@ -314,9 +321,10 @@ public static partial class McpOperationMapper
         var candidateSql = await McpInputReader.ReadSqlAsync(candidate.Sql, candidate.File, scope, ct);
         var setupSql = await ReadOptionalSourceAsync(setup, scope, "setup", ct);
         var typedParameters = MapParameters(parameters);
+        var parameterSetInputs = await MapParameterSetsAsync(parameterSets, parameterSetFiles, scope, ct);
         var validatedTimeout = RequireTimeout(timeout);
         var validatedRepeat = RequireRepeat(repeat);
-        if (matrix is null)
+        if (matrix is null && parameterSetInputs is null)
             return new SqlHarnessCompareOperation(
                 scope.TargetRequest, setupSql, baselineSql, candidateSql,
                 [], validatedTimeout, validatedRepeat, mode, compareNullability)
@@ -329,7 +337,8 @@ public static partial class McpOperationMapper
             [], validatedTimeout, validatedRepeat, string.Empty, mode, compareNullability)
         {
             TypedParameters = typedParameters,
-            TypedMatrix = MapMatrix(matrix),
+            TypedMatrix = matrix is null ? null : MapMatrix(matrix),
+            ParameterSets = parameterSetInputs,
             DryRun = dryRun,
         };
     }
@@ -516,11 +525,50 @@ public static partial class McpOperationMapper
     private static async Task<IReadOnlyList<SqlHarnessParameterSetInput>?> ReadParameterSetsOrNullAsync(
         IReadOnlyList<string>? paths, McpScope scope, CancellationToken ct)
     {
-        if (paths is null || paths.Count == 0)
+        if (paths is null)
             return null;
-        if (paths.Count == 1)
-            throw new McpMappingException("Exactly one parameter-set file is invalid. Omit paramSetFiles for a single set.");
         return await McpInputReader.ReadParameterSetsAsync(paths, scope, ct);
+    }
+
+    private static void ValidateParameterSetChoices(
+        IReadOnlyList<McpParameterSetArgument>? parameterSets,
+        IReadOnlyList<string>? parameterSetFiles,
+        McpMatrixArgument? matrix)
+    {
+        var supplied = (parameterSets is not null ? 1 : 0)
+            + (parameterSetFiles is not null ? 1 : 0)
+            + (matrix is not null ? 1 : 0);
+        if (supplied > 1)
+            throw new McpMappingException("Use one of parameterSets, parameterSetFiles or matrix.");
+
+        var setCount = parameterSets?.Count ?? parameterSetFiles?.Count;
+        if (setCount is not null and (< 2 or > 32))
+            throw new McpMappingException("Parameter sets must contain between 2 and 32 sets.");
+    }
+
+    private static async Task<IReadOnlyList<SqlHarnessParameterSetInput>?> MapParameterSetsAsync(
+        IReadOnlyList<McpParameterSetArgument>? parameterSets,
+        IReadOnlyList<string>? parameterSetFiles,
+        McpScope scope,
+        CancellationToken ct)
+    {
+        if (parameterSets is not null)
+        {
+            var mapped = new SqlHarnessParameterSetInput[parameterSets.Count];
+            for (var index = 0; index < parameterSets.Count; index++)
+            {
+                var set = parameterSets[index];
+                if (set is null)
+                    throw new McpMappingException("Each parameter set requires a name and parameters.");
+                mapped[index] = new SqlHarnessParameterSetInput(set.Name, [])
+                {
+                    TypedParameters = MapParameters(set.Parameters),
+                };
+            }
+            return mapped;
+        }
+
+        return await ReadParameterSetsOrNullAsync(parameterSetFiles, scope, ct);
     }
 
     private static int RequireTimeout(int? timeout)

@@ -50,14 +50,16 @@ public sealed class McpRequestToolHandlers(
         [Description("Request target scope.")] McpRequestScopeArgument scope,
         [Description("Optional setup source.")] McpSqlSourceArgument? setup = null,
         [Description("Parameters as {name, type, value}.")] McpParameterArgument[]? parameters = null,
-        [Description("Parameter-set files under an input root.")] string[]? paramSetFiles = null,
+        [Description("Parameter-set files (.sqljson) under an input root.")] string[]? parameterSetFiles = null,
+        [Description("Inline parameter sets: 2..32 of {name, parameters}.")] McpParameterSetArgument[]? parameterSets = null,
+        [Description("One-parameter shorthand: {name, type, values}.")] McpMatrixArgument? matrix = null,
         [Description("Repetitions 1..100.")] int repeat = 5,
         [Description("SQL timeout 1..300 seconds.")] int? timeout = null,
         [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")] int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds.")] int? maxOperationSeconds = null,
         [Description("Check every argument offline and stop before connecting. Nothing runs, nothing is written.")] bool dryRun = false,
         CancellationToken ct = default) =>
-        Invoke(ctx, "sqlharness_measure", scope, handler => handler.MeasureAsync(ctx, query, setup, parameters, paramSetFiles, repeat, timeout, maxResultBytes, maxOperationSeconds, dryRun, ct));
+        Invoke(ctx, "sqlharness_measure", scope, handler => handler.MeasureAsync(ctx, query, setup, parameters, parameterSetFiles, parameterSets, matrix, repeat, timeout, maxResultBytes, maxOperationSeconds, dryRun, ct));
 
     public Task<CallToolResult> CompareAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Baseline source.")] McpSqlSourceArgument baseline,
@@ -68,13 +70,15 @@ public sealed class McpRequestToolHandlers(
         [Description("Repetitions 1..100.")] int repeat = 5,
         [Description("SQL timeout 1..300 seconds.")] int? timeout = null,
         [Description("Result comparison mode.")][AllowedValues("ordered", "multiset", "set", "off")] string compareResults = "ordered",
-        [Description("Optional single matrix dimension.")] McpMatrixArgument? matrix = null,
+        [Description("One-parameter shorthand: {name, type, values}.")] McpMatrixArgument? matrix = null,
+        [Description("Inline parameter sets: 2..32 of {name, parameters}.")] McpParameterSetArgument[]? parameterSets = null,
+        [Description("Parameter-set files (.sqljson) under an input root.")] string[]? parameterSetFiles = null,
         [Description("Also require matching column nullability (allowNull) for result equivalence. Default compares observed data only and reports nullability separately. Not allowed with compareResults off.")] bool compareNullability = false,
         [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")] int? maxResultBytes = null,
         [Description("Time budget 1..86400 seconds.")] int? maxOperationSeconds = null,
         [Description("Check every argument offline and stop before connecting. Nothing runs, nothing is written.")] bool dryRun = false,
         CancellationToken ct = default) =>
-        Invoke(ctx, "sqlharness_compare", scope, handler => handler.CompareAsync(ctx, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, compareNullability, maxResultBytes, maxOperationSeconds, dryRun, ct));
+        Invoke(ctx, "sqlharness_compare", scope, handler => handler.CompareAsync(ctx, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, parameterSets, parameterSetFiles, compareNullability, maxResultBytes, maxOperationSeconds, dryRun, ct));
 
     public Task<CallToolResult> WatchAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Request target scope.")] McpRequestScopeArgument scope,

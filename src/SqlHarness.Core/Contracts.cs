@@ -162,6 +162,9 @@ public sealed record SqlHarnessMeasureOperation(
 {
     /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
     public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
+
+    /// <summary>Typed one-parameter matrix, resolved by Core into indexed measure sets.</summary>
+    public SqlHarnessParameterMatrixInput? TypedMatrix { get; init; }
     public bool DryRun { get; init; }
 }
 

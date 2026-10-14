@@ -33,6 +33,17 @@ public sealed record McpParameterArgument
     public string? Value { get; init; }
 }
 
+/// <summary>One named set of typed parameter values for measure or compare.</summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record McpParameterSetArgument
+{
+    [JsonPropertyName("name")]
+    public required string Name { get; init; }
+
+    [JsonPropertyName("parameters")]
+    public required McpParameterArgument[] Parameters { get; init; }
+}
+
 /// <summary>
 /// Small shared SQL source object: exactly one of inline sql or a file under
 /// an operator input root. Used for query/setup/baseline/candidate inputs.

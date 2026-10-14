@@ -592,6 +592,183 @@ public sealed class McpMappingTests : IDisposable
     }
 
     [Fact]
+    public async Task Measure_matrix_dry_run_uses_core_resolution_for_typed_nulls_and_indexes()
+    {
+        var scope = Scope();
+        var operation = await McpOperationMapper.MapMeasureAsync(
+            scope,
+            new McpSqlSourceArgument { Sql = "SELECT @n" },
+            null,
+            null,
+            null,
+            5,
+            null,
+            CancellationToken.None,
+            dryRun: true,
+            matrix: new McpMatrixArgument { Name = "n", Type = "int", Values = ["1", null] });
+
+        Assert.Empty(operation.ParameterSets ?? []);
+        Assert.Equal("n", operation.TypedMatrix!.Name);
+        Assert.Equal("int", operation.TypedMatrix.Type);
+        Assert.Equal(new string?[] { "1", null }, operation.TypedMatrix.Values.ToArray());
+
+        var outcome = await scope.CreateModule().ExecuteAsync(operation);
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        Assert.Equal(2, Assert.IsType<SqlHarnessDryRunReport>(outcome.Report).ParameterSets);
+    }
+
+    [Fact]
+    public async Task Measure_matrix_uses_one_session_and_reports_zero_based_set_names()
+    {
+        var scope = Scope();
+        var sessions = new CoreSessionFactory(blockFirstSession: false);
+        var module = new SqlHarnessModule(sessions, scope.ProfileProvider);
+        var operation = await McpOperationMapper.MapMeasureAsync(
+            scope,
+            new McpSqlSourceArgument { Sql = "SELECT @n" },
+            null,
+            null,
+            null,
+            1,
+            null,
+            CancellationToken.None,
+            matrix: new McpMatrixArgument { Name = "n", Type = "int", Values = ["1", null] });
+
+        var outcome = await module.ExecuteAsync(operation);
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var report = Assert.IsType<SqlHarnessMeasureSetReport>(outcome.Report);
+        Assert.Equal(["0", "1"], report.Sets.Select(set => set.Name).ToArray());
+        Assert.Equal(1, sessions.ConnectedSessions);
+    }
+
+    [Fact]
+    public async Task Measure_matrix_reuses_compare_matrix_duplicate_validation_before_connecting()
+    {
+        var scope = Scope();
+        var sessions = new CoreSessionFactory(blockFirstSession: false);
+        var module = new SqlHarnessModule(sessions, scope.ProfileProvider);
+        var matrix = new McpMatrixArgument { Name = "n", Type = "int", Values = ["1", "01"] };
+        var measure = await McpOperationMapper.MapMeasureAsync(
+            scope, new McpSqlSourceArgument { Sql = "SELECT @n" }, null, null, null,
+            1, null, CancellationToken.None, matrix: matrix);
+        var compare = await McpOperationMapper.MapCompareAsync(
+            scope, new McpSqlSourceArgument { Sql = "SELECT @n" }, new McpSqlSourceArgument { Sql = "SELECT @n" },
+            null, null, 1, null, "ordered", matrix, CancellationToken.None);
+
+        var measureOutcome = await module.ExecuteAsync(measure);
+        var compareOutcome = await module.ExecuteAsync(compare);
+        var expected = "The --matrix option for SQL parameter '@n' contains a duplicate value.";
+        Assert.Equal(SqlHarnessExitCode.Safety, measureOutcome.ExitCode);
+        Assert.Equal(expected, measureOutcome.SafeError);
+        Assert.Equal(expected, compareOutcome.SafeError);
+
+        var tooManyValues = new McpMatrixArgument
+        {
+            Name = "n",
+            Type = "int",
+            Values = Enumerable.Range(0, 33).Select(value => value.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToArray(),
+        };
+        var overLimit = await module.ExecuteAsync(await McpOperationMapper.MapMeasureAsync(
+            scope, new McpSqlSourceArgument { Sql = "SELECT @n" }, null, null, null,
+            1, null, CancellationToken.None, matrix: tooManyValues));
+        Assert.Equal(SqlHarnessExitCode.Safety, overLimit.ExitCode);
+        Assert.Equal("The SQL parameter matrix cannot contain more than 32 values.", overLimit.SafeError);
+        Assert.Equal(0, sessions.ConnectedSessions);
+    }
+
+    [Fact]
+    public async Task Measure_matrix_reuses_compare_matrix_value_and_fixed_overlap_validation()
+    {
+        var scope = Scope();
+        var module = scope.CreateModule();
+        var cases = new[]
+        {
+            (new McpMatrixArgument { Name = "n", Type = "int", Values = ["1", "bad"] }, (IReadOnlyList<McpParameterArgument>?)null),
+            (new McpMatrixArgument { Name = "n", Type = "int", Values = ["1", "2"] }, (IReadOnlyList<McpParameterArgument>)[P("n", "int", "9")]),
+        };
+
+        foreach (var (matrix, fixedParameters) in cases)
+        {
+            var measure = await McpOperationMapper.MapMeasureAsync(
+                scope, new McpSqlSourceArgument { Sql = "SELECT @n" }, null, fixedParameters, null,
+                1, null, CancellationToken.None, dryRun: true, matrix: matrix);
+            var compare = await McpOperationMapper.MapCompareAsync(
+                scope, new McpSqlSourceArgument { Sql = "SELECT @n" }, new McpSqlSourceArgument { Sql = "SELECT @n" },
+                null, fixedParameters, 1, null, "ordered", matrix, CancellationToken.None, dryRun: true);
+
+            var measureOutcome = await module.ExecuteAsync(measure);
+            var compareOutcome = await module.ExecuteAsync(compare);
+            Assert.Equal(SqlHarnessExitCode.Safety, measureOutcome.ExitCode);
+            Assert.Equal(compareOutcome.SafeError, measureOutcome.SafeError);
+        }
+    }
+
+    [Fact]
+    public async Task Compare_mapping_accepts_inline_parameter_sets_as_typed_core_sets()
+    {
+        var sets = new[]
+        {
+            new McpParameterSetArgument { Name = "small", Parameters = [P("id", "int", "1")] },
+            new McpParameterSetArgument { Name = "large", Parameters = [P("id", "int", "20")] },
+        };
+
+        var operation = Assert.IsType<SqlHarnessCompareMatrixOperation>(await McpOperationMapper.MapCompareAsync(
+            Scope(),
+            new McpSqlSourceArgument { Sql = "SELECT @id" },
+            new McpSqlSourceArgument { Sql = "SELECT @id" },
+            null,
+            null,
+            5,
+            null,
+            "ordered",
+            null,
+            CancellationToken.None,
+            parameterSets: sets));
+
+        // Inline sets use the Core resolver directly; matrix metadata remains absent.
+
+        Assert.Null(operation.TypedMatrix);
+        var mappedSets = operation.ParameterSets!;
+        Assert.Equal(["small", "large"], mappedSets.Select(set => set.Name).ToArray());
+        Assert.Equal(
+            [new SqlHarnessParameterInput("id", "int", "1"), new SqlHarnessParameterInput("id", "int", "20")],
+            mappedSets.SelectMany(set => set.TypedParameters!).ToArray());
+    }
+
+    [Fact]
+    public async Task Measure_and_compare_mapping_reject_multiple_parameter_set_sources()
+    {
+        var scope = Scope();
+        var sets = new[]
+        {
+            new McpParameterSetArgument { Name = "a", Parameters = [P("id", "int", "1")] },
+            new McpParameterSetArgument { Name = "b", Parameters = [P("id", "int", "2")] },
+        };
+        var matrix = new McpMatrixArgument { Name = "id", Type = "int", Values = ["1", "2"] };
+        var query = new McpSqlSourceArgument { Sql = "SELECT @id" };
+
+        var measure = await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapMeasureAsync(
+            scope, query, null, null, null, 5, null, CancellationToken.None,
+            parameterSets: sets, matrix: matrix));
+        Assert.Equal("Use one of parameterSets, parameterSetFiles or matrix.", measure.Message);
+
+        var compare = await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapCompareAsync(
+            scope, query, query, null, null, 5, null, "ordered", matrix, CancellationToken.None,
+            parameterSets: sets));
+        Assert.Equal("Use one of parameterSets, parameterSetFiles or matrix.", compare.Message);
+
+        var emptyInlineSets = await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapMeasureAsync(
+            scope, query, null, null, null, 5, null, CancellationToken.None,
+            parameterSets: Array.Empty<McpParameterSetArgument>()));
+        Assert.Equal("Parameter sets must contain between 2 and 32 sets.", emptyInlineSets.Message);
+
+        var emptyFileList = await Assert.ThrowsAsync<McpMappingException>(() => McpOperationMapper.MapCompareAsync(
+            scope, query, query, null, null, 5, null, "ordered", null, CancellationToken.None,
+            parameterSetFiles: Array.Empty<string>()));
+        Assert.Equal("Parameter sets must contain between 2 and 32 sets.", emptyFileList.Message);
+    }
+
+    [Fact]
     public async Task Compare_mapping_builds_plain_and_matrix_variants_like_cli()
     {
         var scope = Scope();

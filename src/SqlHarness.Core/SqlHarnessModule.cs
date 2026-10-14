@@ -575,13 +575,14 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 measure.QuerySql, SqlUsage.Query, target.Database, false, null, setupTemps);
             CompareOperationPreparer.EnsureSafe(querySafety, "query");
             var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(measure.Parameters, measure.TypedParameters));
-            if (dialect.Engine == SqlEngine.SqlServer && measure.ParameterSets is not { Count: > 0 })
+            var parameterSets = ResolveMeasureParameterSets(measure, dialect, parameters);
+            if (dialect.Engine == SqlEngine.SqlServer && parameterSets is null)
                 SqlSetupVariableReferenceValidator.Validate(measure.SetupSql, parameters, measure.QuerySql);
             dialect.ValidateParameterReferences(parameters, measure.SetupSql, measure.QuerySql);
             SetupSqlExecution.Validate(dialect.Engine, measure.SetupSql, parameters);
             dialect.ValidateMeasuredBatch(measure.QuerySql);
 
-            if (measure.ParameterSets is { Count: > 0 } parameterSets)
+            if (parameterSets is not null)
             {
                 var boundSets = BindMeasureParameterSets(dialect, measure, parameterSets);
                 if (measure.DryRun)
@@ -718,6 +719,24 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             measure.TypedParameters);
     }
 
+    private static IReadOnlyList<SqlHarnessParameterSetInput>? ResolveMeasureParameterSets(
+        SqlHarnessMeasureOperation measure,
+        ISqlDialect dialect,
+        IReadOnlyList<SqlHarnessParameter> fixedParameters)
+    {
+        if (measure.TypedMatrix is null)
+            return measure.ParameterSets is { Count: > 0 } ? measure.ParameterSets : null;
+
+        var matrix = SqlParameterInputs.ResolveMatrix(string.Empty, measure.TypedMatrix);
+        var resolved = ParameterSetResolver.Resolve(dialect, fixedParameters, matrix, measure.ParameterSets);
+        return resolved
+            .Select(set => new SqlHarnessParameterSetInput(set.Name, [])
+            {
+                TypedParameters = [new SqlHarnessParameterInput(matrix.Name, matrix.Type, set.ParameterValue)],
+            })
+            .ToArray();
+    }
+
     private Task<CollectedBenchmarkRun> ExecuteBenchmarkRunAsync(
         ISqlDialect dialect,
         ISqlSession session,
@@ -749,6 +768,8 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             throw new SqlHarnessSafetyException("SQL timeout must be between 1 and 300 seconds.");
         if (measure.Repeat is < 1 or > 100)
             throw new SqlHarnessSafetyException("Measurement repetitions must be between 1 and 100.");
+        if (measure.TypedMatrix is not null && measure.ParameterSets is not null)
+            throw new SqlHarnessSafetyException("A parameter matrix and parameter sets cannot be supplied together.");
     }
 
     private static void ValidateBounds(SqlHarnessQueryOperation query)

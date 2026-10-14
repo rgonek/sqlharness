@@ -98,8 +98,12 @@ public sealed class McpToolHandlers(
         McpSqlSourceArgument? setup = null,
         [Description("Parameters as {name, type, value}; value is a culture-invariant string or JSON null.")]
         McpParameterArgument[]? parameters = null,
-        [Description("At least two .sqljson parameter-set files under input roots; omit for a single set.")]
-        string[]? paramSetFiles = null,
+        [Description("Parameter-set files (.sqljson) under an input root.")]
+        string[]? parameterSetFiles = null,
+        [Description("Inline parameter sets: 2..32 of {name, parameters}.")]
+        McpParameterSetArgument[]? parameterSets = null,
+        [Description("One-parameter shorthand: {name, type, values}.")]
+        McpMatrixArgument? matrix = null,
         [Description("Repetitions 1..100.")]
         int repeat = 5,
         [Description("SQL timeout 1..300 seconds.")]
@@ -113,9 +117,9 @@ public sealed class McpToolHandlers(
         CancellationToken ct = default) =>
         RunDbAsync("sqlharness_measure", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["query", "setup", "parameters", "paramSetFiles", "repeat", "timeout", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
+            ThrowIfUnknown(ctx, ["query", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
             return await module.ExecuteAsync(
-                await McpOperationMapper.MapMeasureAsync(scope, query, setup, parameters, paramSetFiles, repeat, timeout, token, dryRun),
+                await McpOperationMapper.MapMeasureAsync(scope, query, setup, parameters, parameterSetFiles, repeat, timeout, token, dryRun, parameterSets, matrix),
                 token);
         }, ct);
 
@@ -136,8 +140,12 @@ public sealed class McpToolHandlers(
         [Description("Result comparison mode.")]
         [AllowedValues("ordered", "multiset", "set", "off")]
         string compareResults = "ordered",
-        [Description("Optional single matrix dimension {name, type, values}: at least two distinct values, each a culture-invariant string or JSON null.")]
+        [Description("One-parameter shorthand: {name, type, values}.")]
         McpMatrixArgument? matrix = null,
+        [Description("Inline parameter sets: 2..32 of {name, parameters}.")]
+        McpParameterSetArgument[]? parameterSets = null,
+        [Description("Parameter-set files (.sqljson) under an input root.")]
+        string[]? parameterSetFiles = null,
         [Description("Also require matching column nullability (allowNull) for result equivalence. Default compares observed data only and reports nullability separately. Not allowed with compareResults off.")]
         bool compareNullability = false,
         [Description("Response budget 4096..1048576 bytes of result text; default 65536; clamped to the process ceiling.")]
@@ -149,9 +157,9 @@ public sealed class McpToolHandlers(
         CancellationToken ct = default) =>
         RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "repeat", "timeout", "compareResults", "matrix", "compareNullability", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
+            ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "compareResults", "compareNullability", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
             return await module.ExecuteAsync(
-                await McpOperationMapper.MapCompareAsync(scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun),
+                await McpOperationMapper.MapCompareAsync(scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun, parameterSets, parameterSetFiles),
                 token);
         }, ct);
 
@@ -524,8 +532,8 @@ public static class McpToolCatalog
         {
             Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
             Tool(ToolNames[1], nameof(McpToolHandlers.QueryAsync), "Run a bounded query passing the static visible-effects text check; no persistent-mutation flags are offered on this path. Hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. Exactly one of inline sql (at most 1 MiB) or a file under an input root.", true, false, null, true),
-            Tool(ToolNames[2], nameof(McpToolHandlers.MeasureAsync), "Measure one query across repeats, optionally with .sqljson parameter-set files. Setup runs once per session.", null, false, null, true),
-            Tool(ToolNames[3], nameof(McpToolHandlers.CompareAsync), "Compare baseline vs candidate with the CLI sessions and equivalence rules. Optional single matrix dimension.", null, false, null, true),
+            Tool(ToolNames[2], nameof(McpToolHandlers.MeasureAsync), "Measure one query across repeats with fixed parameters and one of named sets, .sqljson files, or a one-parameter matrix. Setup runs once per session.", null, false, null, true),
+            Tool(ToolNames[3], nameof(McpToolHandlers.CompareAsync), "Compare baseline and candidate with fixed parameters and one of named sets, .sqljson files, or a one-parameter matrix.", null, false, null, true),
             Tool(ToolNames[4], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
             Tool(ToolNames[5], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it. No force flag.", null, false, null, true),
             Tool(ToolNames[6], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),

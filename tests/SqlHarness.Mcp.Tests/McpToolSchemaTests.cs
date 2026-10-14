@@ -628,7 +628,14 @@ public sealed class McpToolSchemaTests : IDisposable
 
         var measure = schemas["sqlharness_measure"];
         Assert.Equal(["query"], Required(measure));
-        Assert.True(Properties(measure).TryGetProperty("paramSetFiles", out _));
+        foreach (var tool in new[] { measure, schemas["sqlharness_compare"] })
+        {
+            var properties = Properties(tool);
+            Assert.True(properties.TryGetProperty("parameterSets", out _));
+            Assert.True(properties.TryGetProperty("parameterSetFiles", out _));
+            Assert.True(properties.TryGetProperty("matrix", out _));
+            Assert.False(properties.TryGetProperty("paramSetFiles", out _));
+        }
         Assert.Equal(5, Properties(measure).GetProperty("repeat").GetProperty("default").GetInt32());
 
         var compare = schemas["sqlharness_compare"];
@@ -735,8 +742,8 @@ public sealed class McpToolSchemaTests : IDisposable
         }
     }
 
-    // 012/T2: a matrix value is a string or JSON null (typed NULL); the
-    // served schema and description must say so and no longer forbid commas.
+    // 012/T2: a matrix value is a string or JSON null (typed NULL), and the
+    // compact parameter shorthand must stay discoverable in tools/list.
     [Fact]
     public async Task Matrix_values_schema_advertises_string_or_null_items_without_a_comma_limit()
     {
@@ -746,8 +753,7 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Equal(JsonValueKind.Array, itemType.ValueKind);
         Assert.Equal(["null", "string"], itemType.EnumerateArray().Select(item => item.GetString()!).Order(StringComparer.Ordinal).ToArray());
         var description = matrix.GetProperty("description").GetString()!;
-        Assert.DoesNotContain("no commas", description, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("null", description, StringComparison.Ordinal);
+        Assert.Equal("One-parameter shorthand: {name, type, values}.", description);
     }
 
     // The fixed-name clash is Core's last matrix check, after every value is
@@ -1055,7 +1061,7 @@ public sealed class McpToolSchemaTests : IDisposable
     public void Handler_and_dto_members_name_no_target_auth_mutation_or_force_field()
     {
         var banned = new[] { "target", "auth", "mutation", "allowmutation", "confirmdatabase", "unsafedirect", "server", "database", "password", "secret", "credential", "engine", "vars", "force" };
-        var dtoTypes = new[] { typeof(McpParameterArgument), typeof(McpSqlSourceArgument), typeof(McpMatrixArgument) };
+        var dtoTypes = new[] { typeof(McpParameterArgument), typeof(McpParameterSetArgument), typeof(McpSqlSourceArgument), typeof(McpMatrixArgument) };
         foreach (var type in dtoTypes)
         {
             foreach (var member in type.GetMembers(BindingFlags.Public | BindingFlags.Instance))

@@ -130,7 +130,7 @@ public sealed class McpRequestScopeIsolationTests : IDisposable
                 Scope("sample-a"), matrix: new McpMatrixArgument { Name = "n", Type = "int", Values = ["1", "2"] }, repeat: 1);
             var parameterSets = await handlers.MeasureAsync(
                 null!, new McpSqlSourceArgument { Sql = "SELECT @n" }, Scope("sample-b"),
-                paramSetFiles: [Path.Combine(inputRoot, "small.sqljson"), Path.Combine(inputRoot, "large.sqljson")], repeat: 1);
+                parameterSetFiles: [Path.Combine(inputRoot, "small.sqljson"), Path.Combine(inputRoot, "large.sqljson")], repeat: 1);
 
             Assert.False(matrix.IsError == true, Text(matrix));
             Assert.False(parameterSets.IsError == true, Text(parameterSets));
