@@ -170,6 +170,15 @@ public class RegressionPolicyTests
     }
 
     [Fact]
+    public void Floor_stable_zero_baseline_still_fails_above_five_milliseconds()
+    {
+        var report = Run(Variant([0m, 0m, 0m, 0m, 1m]), Variant([6m, 6m, 7m, 6m, 6m]));
+
+        Assert.Equal(RegressionPolicy.Fail, report.Verdict);
+        Assert.Equal([RegressionPolicy.ReasonElapsedRegressed], report.Reasons);
+    }
+
+    [Fact]
     public void Floor_stable_variants_still_fail_on_a_real_regression()
     {
         // both ranges 1 ms; candidate median +9 ms and x10
