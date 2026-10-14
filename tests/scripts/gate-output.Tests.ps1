@@ -5,6 +5,7 @@ $ErrorActionPreference = 'Stop'
 
 $script:RepoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $script:GateOutput = Join-Path $script:RepoRoot 'scripts\gate-output.ps1'
+$script:GateOutput = Join-Path $script:RepoRoot 'scripts\gate-output.ps1'
 
 . $script:GateOutput
 
@@ -26,6 +27,73 @@ function New-FailingAction {
     param([int]$ExitCode = 3)
 
     return { & cmd.exe /c "exit $ExitCode" }.GetNewClosure()
+}
+
+Describe 'gate-output.ps1 native command capture' {
+    $work = $null
+
+    BeforeEach { $work = New-TempDirectory -Prefix 'sqlharness-native-' }
+    AfterEach { if ($work -and (Test-Path $work)) { Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue } }
+
+    It 'captures the standard output of a native command' {
+        $result = Invoke-NativeStageCommand -FilePath $env:ComSpec -Arguments @('/c', 'echo captured-line')
+
+        $result.ExitCode | Should Be 0
+        ($result.Output -join "`n") | Should Match 'captured-line'
+    }
+
+    It 'captures what a native command writes to standard error' {
+        $result = Invoke-NativeStageCommand -FilePath $env:ComSpec -Arguments @('/c', 'echo oops 1>&2')
+
+        ($result.Output -join "`n") | Should Match 'oops'
+    }
+
+    It 'returns the exit code of a native command' {
+        $result = Invoke-NativeStageCommand -FilePath $env:ComSpec -Arguments @('/c', 'exit 7')
+
+        $result.ExitCode | Should Be 7
+    }
+
+    It 'captures a command that floods standard error while writing to standard output' {
+        # Reading stdout to the end before stderr deadlocks once the stderr pipe
+        # buffer fills; the Linux gate hung on the UI check stage for 38 minutes.
+        # The job bounds the test so a regression fails instead of hanging CI.
+        $job = Start-Job -ScriptBlock {
+            param($GateOutput)
+            . $GateOutput
+            $result = Invoke-NativeStageCommand -FilePath $env:ComSpec -Arguments @('/c', 'for /L %i in (1,1,20000) do @echo stderr-line-%i 1>&2 & echo stdout-line')
+            return @{
+                ExitCode  = $result.ExitCode
+                Count     = $result.Output.Count
+                HasStdout = (($result.Output -join "`n") -match 'stdout-line')
+            }
+        } -ArgumentList $script:GateOutput
+
+        $finished = Wait-Job -Job $job -Timeout 120
+        $isFinished = $null -ne $finished
+        $payload = if ($isFinished) { Receive-Job -Job $job } else { $null }
+        Stop-Job -Job $job -ErrorAction SilentlyContinue
+        Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+
+        $isFinished | Should Be $true
+        $payload.Count | Should BeGreaterThan 19990
+        $payload.HasStdout | Should Be $true
+    }
+
+    It 'never reports success for a command that could not start' {
+        # wsl.exe writes outside PowerShell's redirection and a wedged WSL service
+        # produced empty output with a zero exit code, which read as a green stage.
+        $threw = $false
+        try {
+            $result = Invoke-NativeStageCommand -FilePath 'sqlharness-no-such-command-9f3a.exe' -Arguments @()
+            if ($result.ExitCode -eq 0) { throw "a command that never started reported success" }
+        }
+        catch {
+            $threw = $true
+        }
+
+        $threw | Should Be $true
+    }
 }
 
 Describe 'gate-output.ps1' {
@@ -84,6 +152,19 @@ Describe 'gate-output.ps1' {
         $text | Should Match ([regex]::Escape($result.LogPath))
         # Everything is still in the log for when the tail is not enough.
         (Get-Content -Raw -LiteralPath $result.LogPath) | Should Match 'line 1\b'
+    }
+
+    It 'lets a stage action read caller variables that a stage name could shadow' {
+        # PowerShell variable names are case-insensitive, so an internal accumulator
+        # called $lines silently replaced the caller's $Lines. A Linux stage then ran
+        # an empty script and reported green.
+        $Lines = @('echo one', 'echo two')
+        $result = Invoke-GateStage -Name 'stage' -LogDirectory $logDir -Action {
+            $Lines | ForEach-Object { Write-Host $_ }
+        }
+
+        (Get-Content -Raw -LiteralPath $result.LogPath) | Should Match 'one'
+        (Get-Content -Raw -LiteralPath $result.LogPath) | Should Match 'two'
     }
 
     It 'says nothing more than the ok line when a stage succeeds' {
