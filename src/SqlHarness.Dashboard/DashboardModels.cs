@@ -145,3 +145,5 @@ public sealed record DashboardStats(
     IReadOnlyList<ProfileOperationCount> ProfileOperations,
     ProfileDimensionStats ProfileDimensions,
     IReadOnlyList<WorkflowCost> WorkflowCosts);
+
+public sealed record SessionAnnotation(string? Title, string? Note, bool Starred, bool Archived);

@@ -39,6 +39,9 @@ public sealed record DashboardServerOptions(string DatabasePath, int PreferredPo
 
     /// <summary>Supplies the models.dev JSON on a refresh; null performs the HTTPS download. Tests inject this.</summary>
     public Func<CancellationToken, Task<Stream>>? PricesFetcher { get; init; }
+
+    /// <summary>Clock for operator writes (annotation timestamps).</summary>
+    public TimeProvider Time { get; init; } = TimeProvider.System;
 }
 
 public sealed class RunningDashboard : IAsyncDisposable
@@ -221,11 +224,14 @@ public static partial class DashboardServer
         });
         MapRead(api, "/settings", () => Results.Json(DashboardSettings.Read(options.ConfigPath), Json));
         MapRead(api, "/profiles", () => Results.Json(DashboardProfiles.Read(options.TargetsPath), Json));
-        // The two write routes (PUT settings, POST prices refresh); DashboardSecurity admits only these, with its extra checks.
+        // The three write routes (PUT settings, POST prices refresh, PATCH session annotation); DashboardSecurity admits only these, with its extra checks.
         api.MapMethods("/settings", [HttpMethods.Put], (Delegate)((HttpContext context) => DashboardSettings.PutAsync(context, options.ConfigPath, Json)));
         MapRead(api, "/prices", () => Results.Json(DashboardPrices.Describe(options.PricesPath), Json));
         api.MapMethods("/prices/refresh", [HttpMethods.Post], (Delegate)((HttpContext context) =>
             DashboardPrices.RefreshAsync(options.PricesPath, options.PricesFetcher ?? DashboardPrices.FetchModelsDevAsync, Json, context.RequestAborted)));
+        var annotationWriter = new SessionAnnotationWriter(options.DatabasePath, options.Time);
+        api.MapMethods("/sessions/{id:long}/annotation", [HttpMethods.Patch], (Delegate)((HttpContext context, long id) =>
+            SessionAnnotations.PatchAsync(context, id, annotationWriter, Json)));
         MapRead(api, "/{**rest}", () => Results.NotFound());
 
         var assets = DashboardAssets.Default;
