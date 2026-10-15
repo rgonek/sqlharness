@@ -12,6 +12,7 @@ public sealed class PostgresSafetyTierTests
     [InlineData("UPDATE public.orders SET total = 0 WHERE id = 1", SqlRiskTier.Dml)]
     [InlineData("DROP TABLE public.orders", SqlRiskTier.Schema)]
     [InlineData("TRUNCATE public.orders", SqlRiskTier.Schema)]
+    [InlineData("TRUNCATE orders", SqlRiskTier.Schema)]
     [InlineData("CREATE INDEX ix_orders_id ON public.orders (id)", SqlRiskTier.Schema)]
     [InlineData("ALTER TABLE public.orders ADD COLUMN note text", SqlRiskTier.Schema)]
     [InlineData("CREATE VIEW public.order_totals AS SELECT 1 AS total", SqlRiskTier.Schema)]
@@ -51,6 +52,20 @@ public sealed class PostgresSafetyTierTests
         Assert.Equal(["app_user", "Reader", "app_user"], decision.Grantees);
     }
 
+    [Fact]
+    public void Create_and_alter_role_nodes_report_folded_target_principals()
+    {
+        var create = Classify("CREATE ROLE New_User", SqlUsage.Mutation);
+        Assert.True(create.Allowed, create.RejectionDescription);
+        Assert.Equal(SqlRiskTier.Privilege, create.Tier);
+        Assert.Equal(["new_user"], create.Grantees);
+
+        var alter = Classify("ALTER ROLE Existing_User LOGIN", SqlUsage.Mutation);
+        Assert.True(alter.Allowed, alter.RejectionDescription);
+        Assert.Equal(SqlRiskTier.Privilege, alter.Tier);
+        Assert.Equal(["existing_user"], alter.Grantees);
+    }
+
     [Theory]
     [InlineData("CREATE EXTENSION dblink")]
     [InlineData("COPY public.orders FROM PROGRAM 'cat x'")]
@@ -75,6 +90,8 @@ public sealed class PostgresSafetyTierTests
     [InlineData("ALTER VIEW public.order_totals RENAME TO order_totals_v2")]
     [InlineData("CREATE PROCEDURE app.refresh_orders() LANGUAGE sql AS 'SELECT 1'")]
     [InlineData("ANALYZE public.orders")]
+    [InlineData("CREATE USER New_User")]
+    [InlineData("ALTER USER Existing_User WITH LOGIN")]
     public void Valid_postgres_utility_forms_missing_from_parser_remain_parse_errors(string sql) =>
         Assert.Equal(SqlSafetyReason.ParseError, Classify(sql, SqlUsage.Mutation).Reason);
 

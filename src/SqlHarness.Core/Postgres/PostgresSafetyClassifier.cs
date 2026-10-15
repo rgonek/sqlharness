@@ -424,8 +424,7 @@ internal sealed class PostgresSafetyClassifier
         {
             if (!IsProvenSessionTemp(target.Name, knownTemps))
             {
-                var definitelyPersistent = target.Name.Values.Count > 1 && !IsPgTempAlias(target.Name.Values[0]);
-                if (usage == SqlUsage.Mutation && definitelyPersistent)
+                if (usage == SqlUsage.Mutation)
                     return StatementOutcome.Schema;
                 return StatementOutcome.NonTemporaryWrite;
             }
@@ -636,8 +635,12 @@ internal sealed class PostgresSafetyClassifier
     {
         Statement.Grant grant => grant.Grantees.Select(FoldIdent),
         Statement.Revoke revoke => revoke.Grantees.Select(FoldIdent),
+        Statement.CreateRole createRole => createRole.Names
+            .SelectMany(static name => name.Values.TakeLast(1))
+            .Select(FoldIdent),
         Statement.AlterRole { Operation: AlterRoleOperation.AddMember addMember } =>
             [FoldIdent(addMember.MemberName)],
+        Statement.AlterRole alterRole => [FoldIdent(alterRole.Name)],
         _ => [],
     };
 
