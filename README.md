@@ -468,7 +468,9 @@ For successful `measure` and `compare` runs the journal also stores per-variant 
 
 Metrics a run marks unavailable are stored as null, and `STATISTICS IO` lines without logical reads (localized output, columnstore segment lines) are not recorded. Per-statement rows contain hashes and plan details without SQL text; CPU and elapsed values come from SQL Server `QueryTimeStats`. A stored plan is the first actual plan observed for its shape (`PlanIdentity`); per-run metrics are kept separately, so later runs with the same shape do not store another copy.
 
-Schema v9 adds operator annotations of sessions (title, note, star, archive). Only the dashboard writes them; titles and notes are stored as plain text regardless of `journal.storeSensitive`; retention deletes them with their session, and a star does not protect a session from retention.
+Schema v9 adds operator annotations of sessions (title, note, star, archive). Only the dashboard writes them; titles and notes are stored as plain text regardless of `journal.storeSensitive`; retention deletes them with their session, and a star does not protect a session from retention. Schema v10 adds `operation_phases` aggregates (`operation_id`, `phase`, `count`, `total_ms`, `max_ms`) to every journaled operation; phases are `connect`, `setup`, `execute`, `artifact`, and `other`, whose total reconciles to the operation wall time.
+
+When `diagnostics.enabled` is true, schema v10 also stores bounded `operation_events` for connection attempts and artifact writes. Its fields are `operation_id`, `seq`, `offset_ms`, `phase`, `duration_ms`, `outcome`, `error_number`, and `detail_json`; details are limited to 512 characters and contain safe metadata such as a client connection ID, authentication strategy, attempt number, or artifact file count. Event capture is off by default and capped at 256 events per operation. Neither phase aggregates nor diagnostic events store SQL text, parameter or result values, credentials, or tokens.
 
 `sqlharness doctor --json` reports whether the config file is present and valid, the effective journal settings, and whether the journal file exists.
 
@@ -483,6 +485,7 @@ Schema v9 adds operator annotations of sessions (title, note, star, archive). On
 ```json
 {
   "journal": { "retention": { "enabled": true, "maxAgeDays": 30, "maxSizeMb": 500 } },
+  "diagnostics": { "enabled": false },
   "dashboard": { "autoStart": true, "idleShutdownHours": 8 }
 }
 ```
@@ -517,7 +520,7 @@ Browsers do not isolate cookies by port, so the session cookie is also sent to o
 
 Snap-confined browsers (for example Firefox or Chromium from a snap on Ubuntu) may not be allowed to open the redirect page under the hidden SQLHarness home directory; open the printed URL instead.
 
-Settings retains the optional model-price reference refresh (`POST /api/prices/refresh`); it is separate from workflow output measurements and does not produce savings estimates. The Settings page edits the operator settings in `config.json` (journal, retention, dashboard auto-start and idle shutdown) and autosaves (there is no Save button; numbers apply on blur or Enter); `dashboard.port` is not editable, and enabling `journal.storeSensitive`, enabling retention, or lowering retention limits while retention is on asks for confirmation first.
+Settings retains the optional model-price reference refresh (`POST /api/prices/refresh`); it is separate from workflow output measurements and does not produce savings estimates. The Settings page edits the operator settings in `config.json` (journal, retention, connection diagnostics, dashboard auto-start and idle shutdown) and autosaves (there is no Save button; numbers apply on blur or Enter); `dashboard.port` is not editable, and enabling `journal.storeSensitive`, enabling retention, or lowering retention limits while retention is on asks for confirmation first. Connection diagnostics records bounded connection and artifact metadata in the journal; it excludes credentials and target names and never stores SQL, parameter values, or tokens.
 
 Saved settings apply to new processes, so restart running `mcp serve` sessions. The Profiles page lists the `targets.json` profiles read-only and shows password variable names, never values. A failed or rejected operation shows its credential-redacted error in a tooltip on the status badge and in a details dialog; legacy rows without a message show that no message is available. Error messages may quote SQL and data values.
 
