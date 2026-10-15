@@ -6,6 +6,6 @@ The final Windows command, `just verify -LogDirectory D:/temp/sqlharness-plan067
 
 Linux verification was explicitly waived by the operator. A previous Linux attempt reached build, then the test stage was stopped after about 15 minutes without a result. Linux tests and formatting remain unverified.
 
-An earlier Windows gate passed at `3388917` with Core/CLI 3513 passed and 11 skipped, and MCP 381 passed and 4 skipped. The final run above supersedes it. The final fix aligned the CLI diagnostic for invalid cell limits with MCP; its focused RED/GREEN test, 85 focused tests, and formatting check are recorded in the final-fix report.
+An earlier Windows gate passed at `3388917` with Core/CLI 3513 passed and 11 skipped, and MCP 381 passed and 4 skipped. The final run above supersedes it. The final fix aligned the CLI diagnostic for invalid cell limits with MCP. Its regression test failed as expected before the fix (6 failed, 0 passed) and passed afterward (6 passed, 0 failed); the focused AgentOutput, PlanCommand, and ArtifactCommand tests passed 85/85. Formatting passed for the three changed C# files with `just fix`, and a later branch-scoped format check passed for 16 C# files after whitespace-only changes (`pwsh -NoProfile ./scripts/format-changed.ps1 -Mode branch -BaseRef cf0e7c4`).
 
 No merge, push, installation, publication, or live database work was performed. The final gate logs are in `D:/temp/sqlharness-plan067-final-verify-3ae4dc5`.
