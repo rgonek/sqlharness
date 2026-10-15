@@ -51,10 +51,11 @@ public sealed class McpDashboardAutostartTests : IDisposable
             }
         }
 
-        public void Launch(DashboardLaunchCommand command, string workingDirectory)
+        public DashboardLaunchIdentity Launch(DashboardLaunchCommand command, string workingDirectory)
         {
             lock (_launches)
                 _launches.Add((command, workingDirectory));
+            return new DashboardLaunchIdentity(Environment.ProcessId, DateTimeOffset.UtcNow);
         }
     }
 

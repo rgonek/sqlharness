@@ -31,9 +31,16 @@ public sealed record DashboardLaunchCommand(string FileName, IReadOnlyList<strin
             System.Reflection.Assembly.GetEntryAssembly()?.Location);
 }
 
+public sealed record DashboardLaunchIdentity(int Pid, DateTimeOffset StartedAt)
+{
+    public bool Matches(DashboardEndpoint endpoint) => endpoint.Pid == Pid
+        && endpoint.StartedAt is { } startedAt
+        && (startedAt - StartedAt).Duration() <= DashboardLock.StartTimeTolerance;
+}
+
 public interface IDashboardLauncher
 {
-    void Launch(DashboardLaunchCommand command, string workingDirectory);
+    DashboardLaunchIdentity Launch(DashboardLaunchCommand command, string workingDirectory);
 }
 
 /// <summary>
@@ -44,17 +51,19 @@ public interface IDashboardLauncher
 /// </summary>
 public sealed class DetachedDashboardLauncher : IDashboardLauncher
 {
-    public void Launch(DashboardLaunchCommand command, string workingDirectory)
+    public DashboardLaunchIdentity Launch(DashboardLaunchCommand command, string workingDirectory)
     {
         var windows = OperatingSystem.IsWindows();
         using var process = Process.Start(StartInfo(command, workingDirectory, windows))
             ?? throw new InvalidOperationException("The dashboard process did not start.");
+        var identity = new DashboardLaunchIdentity(process.Id, new DateTimeOffset(process.StartTime));
         if (!windows)
         {
             process.StandardInput.Close();
             process.StandardOutput.Close();
             process.StandardError.Close();
         }
+        return identity;
     }
 
     internal static ProcessStartInfo StartInfo(DashboardLaunchCommand command, string workingDirectory, bool windows)

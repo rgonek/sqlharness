@@ -14,6 +14,21 @@ public enum DashboardStopStatus
 
 public sealed record DashboardStopResult(DashboardStopStatus Status, string? Error);
 
+public interface IDashboardLifecycle
+{
+    Task<DashboardStopResult> StopAsync(string home, TimeSpan timeout, CancellationToken ct);
+    Task<DashboardEndpoint?> WaitForRunningAsync(string home, TimeSpan timeout, CancellationToken ct);
+}
+
+public sealed class DashboardLifecycleService(IProcessInfo processes) : IDashboardLifecycle
+{
+    public Task<DashboardStopResult> StopAsync(string home, TimeSpan timeout, CancellationToken ct) =>
+        DashboardLifecycle.StopAsync(home, processes, timeout, ct);
+
+    public Task<DashboardEndpoint?> WaitForRunningAsync(string home, TimeSpan timeout, CancellationToken ct) =>
+        DashboardLock.WaitForRunningAsync(home, processes, timeout, ct);
+}
+
 public static class DashboardLifecycle
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(50);

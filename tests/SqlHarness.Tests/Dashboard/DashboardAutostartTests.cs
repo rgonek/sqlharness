@@ -10,11 +10,12 @@ public sealed class DashboardAutostartTests
     private sealed class RecordingLauncher(Exception? failure = null) : IDashboardLauncher
     {
         public List<(DashboardLaunchCommand Command, string WorkingDirectory)> Launches { get; } = [];
-        public void Launch(DashboardLaunchCommand command, string workingDirectory)
+        public DashboardLaunchIdentity Launch(DashboardLaunchCommand command, string workingDirectory)
         {
             if (failure is not null)
                 throw failure;
             Launches.Add((command, workingDirectory));
+            return new DashboardLaunchIdentity(Environment.ProcessId, DateTimeOffset.UtcNow);
         }
     }
 

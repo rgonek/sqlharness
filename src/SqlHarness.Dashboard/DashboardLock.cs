@@ -37,7 +37,7 @@ public sealed class DashboardLock : IDisposable
     internal const string InfoFileName = "dashboard.json";
     private const UnixFileMode OwnerReadWrite = UnixFileMode.UserRead | UnixFileMode.UserWrite;
     private const int DeleteAttempts = 5;
-    private static readonly TimeSpan StartTolerance = TimeSpan.FromSeconds(2);
+    public static TimeSpan StartTimeTolerance { get; } = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan AcquireRetryDelay = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan DeleteRetryDelay = TimeSpan.FromMilliseconds(50);
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -190,7 +190,7 @@ public sealed class DashboardLock : IDisposable
                 // (macOS) cannot tell, so the held lock is the only evidence and is trusted.
                 return processes is SelfOnlyProcessInfo ? endpoint : null;
             if (endpoint.StartedAt is { } published && process.StartedAt is { } actual
-                && (actual - published).Duration() > StartTolerance)
+                && (actual - published).Duration() > StartTimeTolerance)
                 return null;
             return endpoint;
         }

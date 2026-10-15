@@ -88,7 +88,7 @@ public static class DashboardHost
             var existing = await DashboardLock.WaitForRunningAsync(options.Home, options.Processes, ExistingInstanceWait, ct);
             if (existing is not null)
             {
-                Announce(options, existing.OpenUri);
+                DashboardAnnouncement.Announce(options.Home, existing.OpenUri, options.Output, options.Error, options.OpenBrowser, options.Browser, options.Quiet);
                 return (int)SqlHarnessExitCode.Success;
             }
 
@@ -181,7 +181,7 @@ public static class DashboardHost
                     return (int)SqlHarnessExitCode.LocalStorage;
                 }
 
-                Announce(options, running.OpenUri);
+                DashboardAnnouncement.Announce(options.Home, running.OpenUri, options.Output, options.Error, options.OpenBrowser, options.Browser, options.Quiet);
                 options.Started?.Invoke(running);
 
                 // Ctrl+C cancels ct; SIGTERM/SIGQUIT reach the host lifetime and signal Stopping.
@@ -285,28 +285,32 @@ public static class DashboardHost
         }
     }
 
-    private static void Announce(DashboardHostOptions options, Uri uri)
+}
+
+public static class DashboardAnnouncement
+{
+    public static void Announce(string home, Uri uri, TextWriter output, TextWriter error, bool openBrowser, IBrowserLauncher browser, bool quiet = false)
     {
-        if (!options.Quiet)
+        if (!quiet)
         {
-            options.Output.WriteLine($"SQLHarness dashboard: {uri}");
-            options.Output.Flush();
+            output.WriteLine($"SQLHarness dashboard: {uri}");
+            output.Flush();
         }
 
-        if (!options.OpenBrowser)
+        if (!openBrowser)
             return;
         Uri page;
         try
         {
-            page = DashboardOpenPage.Write(options.Home, uri);
+            page = DashboardOpenPage.Write(home, uri);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // Never fall back to launching the token URL: its arguments are visible to other users.
-            options.Error.WriteLine("sqlharness: could not prepare the browser page; open the URL above.");
+            error.WriteLine("sqlharness: could not prepare the browser page; open the URL above.");
             return;
         }
 
-        options.Browser.Open(page);
+        browser.Open(page);
     }
 }
