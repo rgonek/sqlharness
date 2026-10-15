@@ -115,6 +115,34 @@ public sealed class JournalRetentionTests
     }
 
     [Fact]
+    public void Retention_removes_links_with_operations_and_unreferenced_conversations()
+    {
+        using var temp = new JournalTempDirectory();
+        Seed(temp, Now.AddDays(-40), key: "cli:old");
+        Seed(temp, Now.AddDays(-1), key: "cli:new");
+        using (var connection = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO agent_conversations (id, agent_kind, conversation_id, title, updated_at) VALUES
+                    (1, 'claude', 'old-conv', 'old', 't'), (2, 'claude', 'new-conv', 'new', 't'), (3, 'claude', 'staged', null, 't');
+                INSERT INTO operation_agent_links (operation_id, conversation, model)
+                SELECT id, CASE WHEN started_at < '2026-09-20' THEN 1 ELSE 2 END, 'm' FROM operations;
+                INSERT INTO agent_tool_calls (agent_kind, call_id, conversation, seen_at) VALUES ('claude', 'toolu_x', 3, 't');
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        JournalRetention.Run(temp.DatabasePath, Config(maxAgeDays: 30), new Processes(), new FixedTimeProvider(Now));
+
+        Assert.Equal(new[] { "new-conv", "staged" },
+            JournalDb.Rows(temp.DatabasePath, "SELECT conversation_id FROM agent_conversations ORDER BY conversation_id")
+                .Select(row => (string)row["conversation_id"]!));
+        Assert.Equal(1, Count(temp, "operation_agent_links"));
+    }
+
+    [Fact]
     public void Retention_never_deletes_live_running_operations()
     {
         using var temp = new JournalTempDirectory();

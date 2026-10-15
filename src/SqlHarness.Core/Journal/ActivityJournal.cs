@@ -375,6 +375,8 @@ public sealed class ActivityJournal : IActivityJournal
                 Execute(connection, JournalSchema.Version8);
             if (locked < 9)
                 Execute(connection, JournalSchema.Version9);
+            if (locked < 10)
+                Execute(connection, JournalSchema.Version10);
             Execute(connection, $"PRAGMA user_version = {JournalSchema.CurrentVersion};");
             Execute(connection, "COMMIT;");
         }
