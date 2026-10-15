@@ -12,8 +12,8 @@
 
 ## Status
 
-- TODO; prepared 2026-10-15 against `c3ab3f51b0a5c39886a548db8350ece4194bc8f0`.
-- Planning only. No implementation, publishing, or running-dashboard shutdown authorized by this document.
+- IN PROGRESS on `feat/plan-075-dashboard-lifecycle`; implementation started 2026-10-15 from `d78ee8f`.
+- Operator authorized implementation using Luna high, task review Luna xhigh, whole-branch review Sol low. Tests use isolated homes; publishing and operator dashboard shutdown remain outside scope.
 - Before execution, reread repository instructions, inspect status/worktrees, create an isolated worktree, and check for concurrent dashboard changes (especially plans 070/071/073).
 
 ## Global Constraints and operator contract
@@ -62,34 +62,34 @@
 
 **Interfaces:** Produce `POST /api/shutdown`, returning 202 with an empty body; schedule `IHostApplicationLifetime.StopApplication()` after response completion. Keep the method/path allowlist exact and apply all existing guarded-write authentication checks. `GET /api/shutdown` must not stop the host.
 
-- [ ] Add failing integration tests to `DashboardServerTests`: correct cookie/header/JSON returns 202 and signals `RunningDashboard.Stopping`; missing/wrong cookie returns 401; missing header, foreign Origin or query token returns 403; unsupported method returns 405. Assert rejected requests never signal stopping. Update the exact endpoint inventory from three guarded writes to four.
-- [ ] Add a host test which opens a live stream, requests shutdown, and asserts host returns 0 within the deadline, lock can be acquired and endpoint/open-page artifacts are gone. Persistent token remains.
-- [ ] Run `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~DashboardServerTests|FullyQualifiedName~DashboardHostTests"`; capture relevant RED failure.
-- [ ] Implement the exact route and security allowlist change using the existing host lifetime. Update comments describing the write routes. Do not bypass `DashboardSecurity` or relax other routes.
-- [ ] Rerun the focused command; expect all selected tests passing. Commit the task.
+- [x] Add failing integration tests to `DashboardServerTests`: correct cookie/header/JSON returns 202 and signals `RunningDashboard.Stopping`; missing/wrong cookie returns 401; missing header, foreign Origin or query token returns 403; unsupported method returns 405. Assert rejected requests never signal stopping. Update the exact endpoint inventory from three guarded writes to four.
+- [x] Add a host test which opens a live stream, requests shutdown, and asserts host returns 0 within the deadline, lock can be acquired and endpoint/open-page artifacts are gone. Persistent token remains.
+- [x] Run `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~DashboardServerTests|FullyQualifiedName~DashboardHostTests"`; capture relevant RED failure.
+- [x] Implement the exact route and security allowlist change using the existing host lifetime. Update comments describing the write routes. Do not bypass `DashboardSecurity` or relax other routes.
+- [x] Rerun the focused command; expect all selected tests passing. Commit the task.
 
 ## Task 2: Safe lifecycle client and bounded stop confirmation
 
 **Interfaces:** Create `public enum DashboardStopStatus { AlreadyStopped, Stopped, Failed }` and `public sealed record DashboardStopResult(DashboardStopStatus Status, string? Error)`. Produce `public static Task<DashboardStopResult> DashboardLifecycle.StopAsync(string home, IProcessInfo processes, TimeSpan timeout, CancellationToken ct)`. Internal injectable HTTP/time hooks may support deterministic failure tests; keep production callers simple. Errors contain no token. Cancellation propagates for the CLI to handle consistently.
 
-- [ ] Add failing tests named for these outcomes: no holder -> AlreadyStopped; real published host -> Stopped and lock released; held/unpublished or corrupt metadata -> Failed by timeout; stale PID/start time -> no HTTP to stale endpoint; 404/405 -> Failed with older-version/PID guidance; 401, connection failure and timeout -> Failed unless actual shutdown is independently confirmed; replacement endpoint -> Failed rather than shutting down the replacement.
-- [ ] Add HTTP transport assertions: exact loopback destination, cookie/header/JSON, no redirects/proxy, no token in URL or returned errors. Test an endpoint redirect never reaches the redirect destination.
-- [ ] Run `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~DashboardLifecycleTests`; capture RED.
-- [ ] Implement discovery using `DashboardLock.ReadRunning` and PID/start-time validation. For a null discovery result, prove the home lock is acquirable before returning AlreadyStopped; otherwise retry within the same deadline. Keep probe scopes short and dispose acquired locks. Do not mistake `ReadRunning == null` for shutdown.
-- [ ] Send one guarded shutdown request to the captured instance, then poll for lock release within the remaining deadline. Confirm the captured process identity is gone before reporting Stopped, so publishing is not racing process exit; if identity cannot be verified, report failure rather than claim process exit. Detect changed published identity and stop with a race diagnostic. Never delete a replacement's files or kill a process.
-- [ ] Rerun focused lifecycle, lock and host tests; expect pass. Commit the task.
+- [x] Add failing tests named for these outcomes: no holder -> AlreadyStopped; real published host -> Stopped and lock released; held/unpublished or corrupt metadata -> Failed by timeout; stale PID/start time -> no HTTP to stale endpoint; 404/405 -> Failed with older-version/PID guidance; 401, connection failure and timeout -> Failed unless actual shutdown is independently confirmed; replacement endpoint -> Failed rather than shutting down the replacement.
+- [x] Add HTTP transport assertions: exact loopback destination, cookie/header/JSON, no redirects/proxy, no token in URL or returned errors. Test an endpoint redirect never reaches the redirect destination.
+- [x] Run `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~DashboardLifecycleTests`; capture RED.
+- [x] Implement discovery using `DashboardLock.ReadRunning` and PID/start-time validation. For a null discovery result, prove the home lock is acquirable before returning AlreadyStopped; otherwise retry within the same deadline. Keep probe scopes short and dispose acquired locks. Do not mistake `ReadRunning == null` for shutdown.
+- [x] Send one guarded shutdown request to the captured instance, then poll for lock release within the remaining deadline. Confirm the captured process identity is gone before reporting Stopped, so publishing is not racing process exit; if identity cannot be verified, report failure rather than claim process exit. Detect changed published identity and stop with a race diagnostic. Never delete a replacement's files or kill a process.
+- [x] Rerun focused lifecycle, lock and host tests; expect pass. Commit the task.
 
 ## Task 3: CLI stop/restart and operator documentation
 
 **Interfaces:** Extend `DashboardCommand.Settings` with bool `Stop` (`--stop`) and bool `Restart` (`--restart`). Consume Task 2's `StopAsync`. In `DashboardAutostart.cs`, add `public sealed record DashboardLaunchIdentity(int Pid, DateTimeOffset StartedAt)` and change `IDashboardLauncher.Launch(DashboardLaunchCommand command, string workingDirectory)` to return `DashboardLaunchIdentity`, captured from the started process before disposing its handle. Existing autostart discards the result; update all launcher fakes. Reuse/refactor existing announcement behavior rather than copying browser token logic. Inject only the lifecycle/launch seams needed for meaningful CLI tests.
 
-- [ ] Add failing CLI tests for the flag matrix in Global Constraints, exit 0 for already stopped, exit 6 for stop failure, no launcher/browser on stop, no launcher after failed stop, and exactly one launch after successful stop/no instance on restart.
-- [ ] Add restart tests asserting the launcher receives the caller's executable/entry assembly and effective home, uses detached background mode, waits up to 10 seconds for publication, and fails for launch exception/no publication. Use existing launch-command tests for native and `dotnet <assembly>` forms.
-- [ ] Add a real isolated-home restart acceptance test: stop an instance, launch the replacement from the invoked test command, assert new PID/start identity and usable authenticated API; cleanup in finally. Concurrent different-instance publication must return failure and never silently announce current-version success. Do not use or stop the operator's real dashboard.
-- [ ] Run `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~DashboardCommandTests|FullyQualifiedName~DashboardAutostartTests"`; capture RED.
-- [ ] Implement early argument validation, bounded stop and restart orchestration, and clear status/error output. After launch, require the published PID/start identity to match `DashboardLaunchIdentity` using existing start-time tolerance; publication alone proves only that some dashboard is running. Extend launcher tests and MCP autostart tests for the return-contract change. Keep MCP stdio unchanged.
-- [ ] Update README Dashboard examples: `sqlharness dashboard --stop`; `sqlharness dashboard --restart`; `sqlharness dashboard --restart --no-open`. Explain `stop -> just publish -> dashboard`, or `just publish -> dashboard --restart` after bootstrap; background idle behavior, first-upgrade limitation, home scope and older MCP processes. CLI help owns option details. Do not expand MCP tool catalogs or user-facing skills for an operator-only command.
-- [ ] Rerun focused CLI/dashboard tests and `dotnet test tests/SqlHarness.Mcp.Tests --filter FullyQualifiedName~McpDashboardAutostartTests` when shared launcher wiring changes; expect pass. Commit the task.
+- [x] Add failing CLI tests for the flag matrix in Global Constraints, exit 0 for already stopped, exit 6 for stop failure, no launcher/browser on stop, no launcher after failed stop, and exactly one launch after successful stop/no instance on restart.
+- [x] Add restart tests asserting the launcher receives the caller's executable/entry assembly and effective home, uses detached background mode, waits up to 10 seconds for publication, and fails for launch exception/no publication. Use existing launch-command tests for native and `dotnet <assembly>` forms.
+- [x] Add a real isolated-home restart acceptance test: stop an instance, launch the replacement from the invoked test command, assert new PID/start identity and usable authenticated API; cleanup in finally. Concurrent different-instance publication must return failure and never silently announce current-version success. Do not use or stop the operator's real dashboard.
+- [x] Run `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~DashboardCommandTests|FullyQualifiedName~DashboardAutostartTests"`; capture RED.
+- [x] Implement early argument validation, bounded stop and restart orchestration, and clear status/error output. After launch, require the published PID/start identity to match `DashboardLaunchIdentity` using existing start-time tolerance; publication alone proves only that some dashboard is running. Extend launcher tests and MCP autostart tests for the return-contract change. Keep MCP stdio unchanged.
+- [x] Update README Dashboard examples: `sqlharness dashboard --stop`; `sqlharness dashboard --restart`; `sqlharness dashboard --restart --no-open`. Explain `stop -> just publish -> dashboard`, or `just publish -> dashboard --restart` after bootstrap; background idle behavior, first-upgrade limitation, home scope and older MCP processes. CLI help owns option details. Do not expand MCP tool catalogs or user-facing skills for an operator-only command.
+- [x] Rerun focused CLI/dashboard tests and `dotnet test tests/SqlHarness.Mcp.Tests --filter FullyQualifiedName~McpDashboardAutostartTests` when shared launcher wiring changes; expect pass. Commit the task.
 
 ## Completion and verification
 
