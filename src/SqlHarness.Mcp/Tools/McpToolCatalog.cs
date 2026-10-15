@@ -466,7 +466,8 @@ public static class McpToolCatalog
     public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
     public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";
     /// <summary>Common setup text; each catalog appends its engine's setup guidance.</summary>
-    public const string SetupDescription = "Once per measured session; setup locals and batch variables do not carry into measured SQL.";
+    private const string SetupParameterName = "setup";
+    public const string SetupDescription = "Once per measured session; setup locals do not carry into measured SQL.";
     public const string ParameterSetFilesDescription = "2..32 .sqljson files under input roots; exclusive with parameterSets/matrix; disjoint from fixed parameters.";
     public const string ParameterSetsDescription = "2..32 named sets, matching declared types; exclusive with parameterSetFiles/matrix; disjoint from fixed parameters.";
     public const string MatrixDescription = "2..32 distinct values for one parameter; exclusive with parameterSets/parameterSetFiles; disjoint from fixed parameters.";
@@ -590,11 +591,11 @@ public static class McpToolCatalog
             var setup = SetupDescription + " " + _guidance.Setup;
             _schemaOptions = AIJsonSchemaCreateOptions.Default with
             {
-                ParameterDescriptionProvider = parameter => parameter.Name == "setup" ? setup : null,
+                ParameterDescriptionProvider = parameter => parameter.Name == SetupParameterName ? setup : null,
             };
         }
 
-        public string QueryDescription(string common) => common + " " + _guidance.Query;
+        public string QueryDescription(string common) => string.IsNullOrEmpty(_guidance.Query) ? common : common + " " + _guidance.Query;
 
         public McpServerTool Tool(string name, string method, string description, bool? readOnly, bool? destructive, bool? idempotent, bool? openWorld) =>
             McpServerTool.Create(

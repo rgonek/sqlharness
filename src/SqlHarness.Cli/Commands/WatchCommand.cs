@@ -21,7 +21,7 @@ public sealed class WatchCommand(ISqlHarnessModule module, OutputContext output,
     public sealed class Settings : TargetSettings
     {
         [CommandOption("--file <PATH>")] public string? File { get; set; }
-        [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
+        [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, date, time, datetime, datetime2, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), varbinary(n), binary(n). SQL Server only: money, smallmoney, smalldatetime, hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
         [CommandOption("--timeout <SECONDS>")][DefaultValue(DefaultTimeoutSeconds)] public int Timeout { get; set; } = DefaultTimeoutSeconds;

@@ -223,7 +223,7 @@ public sealed class CapabilitiesCommandTests
         }
         Assert.Null(caps.Profile);
         Assert.Null(caps.EngineGuidance);
-        Assert.DoesNotContain("engineGuidance", Serialize(caps), StringComparison.Ordinal);
+        Assert.DoesNotContain("\"engineGuidance\":", Serialize(caps), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -235,8 +235,9 @@ public sealed class CapabilitiesCommandTests
 
         Assert.Contains("TEMP", guidance.Setup, StringComparison.Ordinal);
         Assert.Contains("least-privilege", guidance.Setup, StringComparison.Ordinal);
+        Assert.Contains("least-privilege", guidance.Query, StringComparison.Ordinal);
         Assert.Contains("READ ONLY", guidance.Query, StringComparison.Ordinal);
-        Assert.Contains("sslMode", guidance.TargetServer, StringComparison.Ordinal);
+        Assert.Contains("sslMode", caps.Limits["targetIdentity"].ToString()!, StringComparison.Ordinal);
         Assert.DoesNotContain("#temp", all, StringComparison.Ordinal);
         Assert.DoesNotContain("sqlserver", all, StringComparison.Ordinal);
     }
@@ -262,7 +263,12 @@ public sealed class CapabilitiesCommandTests
         {
             var scoped = SqlHarnessCapabilitiesProvider.Get(engine, "any-profile");
             Assert.Equal(neutral.Commands, scoped.Commands);
-            Assert.Equal(neutral.Limits["targetIdentity"].ToString(), scoped.Limits["targetIdentity"].ToString());
+            // The selected engine's server-identity fact replaces the generic one in place; no second home.
+            var targetIdentity = scoped.Limits["targetIdentity"].ToString()!;
+            Assert.Equal(engine == SqlEngine.Postgres, targetIdentity.Contains("sslMode", StringComparison.Ordinal));
+            if (engine == SqlEngine.SqlServer)
+                Assert.Equal(neutral.Limits["targetIdentity"].ToString(), targetIdentity);
+            Assert.DoesNotContain("targetServer", Serialize(scoped), StringComparison.OrdinalIgnoreCase);
             Assert.Equal(neutral.Limits["queryMaxRows"], scoped.Limits["queryMaxRows"]);
             Assert.Contains("nvarchar(n)", scoped.ParameterTypes!);
         }
@@ -274,9 +280,8 @@ public sealed class CapabilitiesCommandTests
         foreach (var engine in Enum.GetValues<SqlEngine>())
         {
             var guidance = SqlHarnessCapabilitiesProvider.GuidanceFor(engine);
-            Assert.False(string.IsNullOrWhiteSpace(guidance.Query), engine.ToString());
+            Assert.NotNull(guidance.Query);
             Assert.False(string.IsNullOrWhiteSpace(guidance.Setup), engine.ToString());
-            Assert.False(string.IsNullOrWhiteSpace(guidance.TargetServer), engine.ToString());
         }
         Assert.Throws<InvalidOperationException>(() => SqlHarnessCapabilitiesProvider.GuidanceFor((SqlEngine)999));
         Assert.Throws<InvalidOperationException>(() => SqlHarnessCapabilitiesProvider.Get((SqlEngine)999, "p"));
