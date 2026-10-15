@@ -10,7 +10,7 @@
 
 ## Status and base
 
-- Status: TODO; implementation belongs to a separate session.
+- Status: implemented on branch feat/plan-064-engine-guidance, pending final verification.
 - Priority: P2; effort: M; risk: MEDIUM (changes discovery metadata, not SQL execution).
 - Planning base: `8a08859`, 2026-10-14, plus the pending operator-skill/description edits. Preserve those edits or start from their eventual integrated commit. Inspect drift before execution.
 - Relevant files: `src/SqlHarness.Core/Capabilities.cs`, `src/SqlHarness.Mcp/Tools/McpToolCatalog.cs`, `src/SqlHarness.Mcp/Tools/McpRequestToolHandlers.cs`, `src/SqlHarness.Mcp/McpProcessContext.cs`, `src/SqlHarness.Mcp/McpScope.cs`, `src/SqlHarness.Cli/Commands/CapabilitiesCommand.cs`, `src/SqlHarness.Cli/Commands/SqlHarnessCommands.cs`.
@@ -36,10 +36,10 @@ CLI `capabilities <profile>` already selects one engine's summary, parameter typ
 
 **Files:** `Capabilities.cs`; tests in `tests/SqlHarness.Tests/Cli/CapabilitiesCommandTests.cs`.
 
-- [ ] Add failing tests for SQL Server and PostgreSQL profiles and engine-neutral discovery. Use fictional profile names. Verify selected-engine identity and operation guidance, absence of foreign-engine details, unchanged parameter types/limits and command coverage.
-- [ ] Extend the existing engine entries with operation/parameter guidance used by both adapters. Keep `Get()` neutral and `Get(engine, profileName)` selective. Remove engine-specific facts from common `targetIdentity` and command descriptions; supply them only through the selected entry.
-- [ ] Add a registry-completeness check against registered `SqlEngine` values so adding another engine requires one guidance entry. Preserve unknown-engine rejection and the current default for a profile with no explicit engine.
-- [ ] Run capabilities, target and parameter tests. Check response budgets or measured discovery fixtures if they cover the changed output. Do not pin whole English sentences.
+- [x] Add failing tests for SQL Server and PostgreSQL profiles and engine-neutral discovery. Use fictional profile names. Verify selected-engine identity and operation guidance, absence of foreign-engine details, unchanged parameter types/limits and command coverage.
+- [x] Extend the existing engine entries with operation/parameter guidance used by both adapters. Keep `Get()` neutral and `Get(engine, profileName)` selective. Remove engine-specific facts from common `targetIdentity` and command descriptions; supply them only through the selected entry.
+- [x] Add a registry-completeness check against registered `SqlEngine` values so adding another engine requires one guidance entry. Preserve unknown-engine rejection and the current default for a profile with no explicit engine.
+- [x] Run capabilities, target and parameter tests. Check response budgets or measured discovery fixtures if they cover the changed output. Do not pin whole English sentences.
 
 **Completion:** CLI discovery is selective without a connection or secrets, and a new engine has one guidance owner.
 
@@ -47,11 +47,11 @@ CLI `capabilities <profile>` already selects one engine's summary, parameter typ
 
 **Files:** `Tools/McpToolCatalog.cs`, `Tools/McpRequestToolHandlers.cs`; existing `McpToolSchemaTests.cs` and `McpTokenBudgetTests.cs`.
 
-- [ ] Add tests for a fixed SQL Server process, a fixed PostgreSQL process and a SQL Server request-scoped process. Inspect descriptions returned through the served `tools/list`, not only provider strings. Verify engine-specific setup facts and no foreign-engine facts.
-- [ ] Determine the supported metadata-customization mechanism in the installed SDK before coding. Apply selected-engine guidance during catalog construction, before registration; avoid text search/replace across serialized schemas or mutating a shared toolset after it is served.
-- [ ] Keep structural input schemas, required fields, allowed values, defaults and tool annotations unchanged. Use common operation descriptions plus the selected registry entry; do not duplicate engine switches in fixed/request handlers.
-- [ ] Verify two independently configured catalogs do not share mutable descriptions. Retain the existing request-scope SQL Server restriction and per-call scope isolation.
-- [ ] Run schema, request-scope, parameter binding, token-budget and stdio tests. Check actual `tools/list` bytes against the existing ceiling.
+- [x] Add tests for a fixed SQL Server process, a fixed PostgreSQL process and a SQL Server request-scoped process. Inspect descriptions returned through the served `tools/list`, not only provider strings. Verify engine-specific setup facts and no foreign-engine facts.
+- [x] Determine the supported metadata-customization mechanism in the installed SDK before coding. Apply selected-engine guidance during catalog construction, before registration; avoid text search/replace across serialized schemas or mutating a shared toolset after it is served.
+- [x] Keep structural input schemas, required fields, allowed values, defaults and tool annotations unchanged. Use common operation descriptions plus the selected registry entry; do not duplicate engine switches in fixed/request handlers.
+- [x] Verify two independently configured catalogs do not share mutable descriptions. Retain the existing request-scope SQL Server restriction and per-call scope isolation.
+- [x] Run schema, request-scope, parameter binding, token-budget and stdio tests. Check actual `tools/list` bytes against the existing ceiling.
 
 **Completion:** MCP callers receive relevant call-site guidance without repository access or cross-process metadata leakage.
 
@@ -59,11 +59,11 @@ CLI `capabilities <profile>` already selects one engine's summary, parameter typ
 
 **Files:** `SqlHarnessCommands.cs`, `CapabilitiesCommand.cs`, relevant CLI description attributes, `README.md`, `docs/mcp.md`, `skills/sqlharness/SKILL.md`, `AGENTS.md` when its routing contract changes.
 
-- [ ] Keep unscoped CLI help generic and concise. Direct users to profile-scoped capabilities for native setup and engine caveats; preserve useful operational help and executable examples.
-- [ ] Remove unconditional PostgreSQL/SQL Server technical paragraphs from the generic skill when equivalent selected-engine guidance is exposed. Keep operation choice, scope, approvals, error handling and evidence interpretation in the skill.
-- [ ] Update the README and MCP reference to state what is neutral, what is profile/process-scoped and which surface owns the rules. Keep complete engine reference sections there, loaded only when relevant.
-- [ ] Run help/example parsing, command coverage and reference-link tests. Check that docs can be reworded without literal-prose test failures. Inspect engine-neutral help and both scoped outputs manually for irrelevant detail.
-- [ ] If downstream private adaptations are updated in the implementation session, keep them outside this public repository and self-contained. Publication of the binary and restart of running MCP processes remain separate operator actions.
+- [x] Keep unscoped CLI help generic and concise. Direct users to profile-scoped capabilities for native setup and engine caveats; preserve useful operational help and executable examples.
+- [x] Remove unconditional PostgreSQL/SQL Server technical paragraphs from the generic skill when equivalent selected-engine guidance is exposed. Keep operation choice, scope, approvals, error handling and evidence interpretation in the skill.
+- [x] Update the README and MCP reference to state what is neutral, what is profile/process-scoped and which surface owns the rules. Keep complete engine reference sections there, loaded only when relevant.
+- [x] Run help/example parsing, command coverage and reference-link tests. Check that docs can be reworded without literal-prose test failures. Inspect engine-neutral help and both scoped outputs manually for irrelevant detail.
+- [x] If downstream private adaptations are updated in the implementation session, keep them outside this public repository and self-contained. Publication of the binary and restart of running MCP processes remain separate operator actions.
 
 **Completion:** the tool user receives needed selected-engine rules without unrelated engine material or implementation knowledge.
 

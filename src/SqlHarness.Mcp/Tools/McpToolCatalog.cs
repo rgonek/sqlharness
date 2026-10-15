@@ -466,7 +466,7 @@ public static class McpToolCatalog
     public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
     public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";
     /// <summary>Common setup text; each catalog appends its engine's setup guidance.</summary>
-    public const string SetupDescription = "Once per measured session.";
+    public const string SetupDescription = "Once per measured session; setup locals and batch variables do not carry into measured SQL.";
     public const string ParameterSetFilesDescription = "2..32 .sqljson files under input roots; exclusive with parameterSets/matrix; disjoint from fixed parameters.";
     public const string ParameterSetsDescription = "2..32 named sets, matching declared types; exclusive with parameterSetFiles/matrix; disjoint from fixed parameters.";
     public const string MatrixDescription = "2..32 distinct values for one parameter; exclusive with parameterSets/parameterSetFiles; disjoint from fixed parameters.";

@@ -2,6 +2,7 @@ using System.IO.Pipelines;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -1312,7 +1313,12 @@ public sealed class McpToolSchemaTests : IDisposable
             ArgumentDescription(tools, "sqlharness_compare", "setup"),
         };
         foreach (var setup in setups)
+        {
             Assert.Contains("once per measured session", setup, StringComparison.OrdinalIgnoreCase);
+            // Engine-neutral fact (plan 064 decision 6): stated for every engine, once.
+            Assert.Contains("do not carry", setup, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(1, Regex.Count(setup, "do not (carry|cross)", RegexOptions.IgnoreCase));
+        }
         var query = ToolDescription(tools, "sqlharness_query");
         var guided = string.Join("\n", setups.Append(query));
         foreach (var token in expected)

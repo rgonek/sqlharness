@@ -78,7 +78,7 @@ public static class SqlHarnessCapabilitiesProvider
             new Dictionary<string, object>(StringComparer.Ordinal),
             new SqlHarnessEngineGuidance(
                 "Batch locals and table variables live in one batch; carry data across batches in #temp.",
-                "Create #temps before the first parameter reference, populate afterwards; batch locals do not cross into measured SQL.",
+                "Create #temps before the first parameter reference, populate afterwards.",
                 "informational; authentication depends on transport"),
             [
                 "DECLARE scalar variables with analyzed initializers",
