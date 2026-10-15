@@ -55,7 +55,7 @@ function OperationTimings({ detail }: { detail: OperationDetail }) {
   const { phases, events } = detail
   const durationMs = detail.operation.durationMs
   return <>
-    {phases.length > 0 && <Card>
+    <Card>
       <CardHeader>
         <CardTitle><h2>Time breakdown</h2></CardTitle>
       </CardHeader>
@@ -66,7 +66,9 @@ function OperationTimings({ detail }: { detail: OperationDetail }) {
               <th className="py-2 pr-4">Phase</th><th className="py-2 pr-4">Count</th>
               <th className="py-2 pr-4">Total</th><th className="py-2 pr-4">Max</th><th className="py-2">Share of wall time</th>
             </tr></thead>
-            <tbody>{phases.map(phase => {
+            <tbody>{phases.length === 0 ? <tr>
+              <td colSpan={5} className="py-3 text-muted-foreground">No phase timing data was recorded for this operation.</td>
+            </tr> : phases.map(phase => {
               const share = durationMs !== null && durationMs > 0
                 ? `${Number((phase.totalMs * 100 / durationMs).toFixed(1))}%`
                 : "—"
@@ -79,7 +81,7 @@ function OperationTimings({ detail }: { detail: OperationDetail }) {
           </table>
         </div>
       </CardContent>
-    </Card>}
+    </Card>
     {events && events.length > 0 && <Card>
       <CardContent className="pt-4">
         <details>

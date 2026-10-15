@@ -75,6 +75,19 @@ test("operation details show phase timing shares and expandable connection diagn
   expect(screen.getByText("3 connection events omitted")).toBeInTheDocument()
 })
 
+test("legacy operation details show an empty time breakdown without zero-valued phases", async () => {
+  stubFetch({ "/api/operations/10": operationDetail({
+    operation: operation({ durationMs: 100 }),
+    phases: [],
+  }) })
+  renderApp("/operations/10")
+
+  const timing = await screen.findByRole("region", { name: "Time breakdown" })
+  expect(within(timing).getByRole("columnheader", { name: "Phase" })).toBeInTheDocument()
+  expect(within(timing).getByText("No phase timing data was recorded for this operation.")).toBeInTheDocument()
+  expect(within(timing).queryByRole("cell", { name: "0 ms" })).not.toBeInTheDocument()
+})
+
 test("compare shows baseline versus candidate and stored plans with operators", async () => {
   const hash = "B".repeat(64)
   stubFetch({
