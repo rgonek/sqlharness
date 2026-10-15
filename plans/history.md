@@ -2,6 +2,9 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
+## Plan 065 completion — 2026-10-15
+
+Plan 065 is DONE and integrated locally into `main` at `cf0e7c4d45c64105677c14563aed910aefe47788`. Post-merge verification passed on that exact revision: Windows `just verify` exit 0 (Core 3,511 passed/11 skipped; MCP 374 passed/4 skipped; format skipped with 0 changed C# files) and Linux `just verify-linux` exit 0 (9 stages; UI 163 tests; Core 3,516 passed/6 skipped; MCP 375 passed/3 skipped; build 0 warnings/errors; format passed for 7 changed C# files). Full stage details: [Plan 065 verification](../docs/verification/plan-065.md). This is local integration evidence; no push, install or publication was performed.
 # Plany po audycie SQLHarness 2026-09-28
 
 Zapis: 2026-09-29, skill improve. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.

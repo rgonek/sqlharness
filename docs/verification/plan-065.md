@@ -74,4 +74,15 @@ At `7acf039`, corrected Linux attempt 1 synced the clone to the exact revision, 
 | test | passed, 5m18s; Core 3,516 passed/6 skipped/3,522 total; MCP 375 passed/3 skipped/378 total |
 | format | passed, 2m02s; all 7 changed C# files |
 
-The corrected retry ran as `just verify-linux -LogDirectory <dedicated-log-directory>`; it exited 0 with `verify-linux: OK stages=9 10m16s`. Its stage output is retained under the corrected-retry log set. The earlier corrected attempt's unknown UI check failure remains part of the record. No database was opened. This proves the feature tree at `7acf039`; no feature-to-main merge or integrated-main gate was performed.
+The corrected retry ran as `just verify-linux -LogDirectory <dedicated-log-directory>`; it exited 0 with `verify-linux: OK stages=9 10m16s`. Its stage output is retained under the corrected-retry log set. The earlier corrected attempt's unknown UI check failure remains part of the record. No database was opened. This records only the feature tree at `7acf039`; at the time this feature-only record was written, no feature-to-main merge or integrated-main gate had been performed. The later integrated-main result is recorded below.
+
+## Integrated-main verification (2026-10-15)
+
+After the locally authorized feature-to-main merge, both gates passed on integrated `main` at `cf0e7c4d45c64105677c14563aed910aefe47788`. The Linux ext4 gate clone synced to and finished at that exact revision with a clean status. No product source changed after the gates.
+
+| Gate | Exit | Stages and results |
+|---|---:|---|
+| `just verify` | 0 | UI install 25.4s; UI check 1m08s; restore 6.1s; build 15.2s; tests 2m46s (Core 3,511 passed/11 skipped; MCP 374 passed/4 skipped); format skipped because the clean tree had 0 changed C# files |
+| `just verify-linux` | 0 | 9 stages, 8m15s: sync 1.6s; SDK 1.6s; Node 0.5s; UI install 19.1s; UI check 1m02s (35 files, 163 tests); restore 8.3s; build 57.6s (0 warnings/errors); tests 4m18s (Core 3,516 passed/6 skipped; MCP 375 passed/3 skipped); format 1m26s (7 changed C# files) |
+
+These are integrated-main results, separate from the earlier feature-tree evidence. No database was opened, and no push, installation or publication was performed.
