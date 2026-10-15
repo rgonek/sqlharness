@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 
+using Microsoft.Extensions.AI;
+
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -97,7 +99,6 @@ public sealed class McpToolHandlers(
         RequestContext<CallToolRequestParams> ctx,
         [Description("Exactly one of sql/file.")]
         McpSqlSourceArgument query,
-        [Description(McpToolCatalog.SetupDescription)]
         McpSqlSourceArgument? setup = null,
         [Description("Typed values: culture-invariant text or JSON null.")]
         McpParameterArgument[]? parameters = null,
@@ -136,7 +137,6 @@ public sealed class McpToolHandlers(
         string subject,
         [Description("SQL fragment under test, or exactly 'whole' for the full query.")]
         string scope,
-        [Description(McpToolCatalog.SetupDescription)]
         McpSqlSourceArgument? setup = null,
         [Description("Typed values: culture-invariant text or JSON null.")]
         McpParameterArgument[]? parameters = null,
@@ -465,7 +465,8 @@ public static class McpToolCatalog
         "Runtime configuration of this server: scopeMode, active compareContext policy, engines, allowedProfiles (request scope), inputRoots (paged), processLimits, configurationRef. Call when this connection's configuration is unknown; reuse the result for this connection and call again after a reconnect or server restart.";
     public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
     public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";
-    public const string SetupDescription = "Once per measured session. SQL Server: create #temps before parameter use, then populate; setup locals do not cross batches.";
+    /// <summary>Common setup text; each catalog appends its engine's setup guidance.</summary>
+    public const string SetupDescription = "Once per measured session.";
     public const string ParameterSetFilesDescription = "2..32 .sqljson files under input roots; exclusive with parameterSets/matrix; disjoint from fixed parameters.";
     public const string ParameterSetsDescription = "2..32 named sets, matching declared types; exclusive with parameterSetFiles/matrix; disjoint from fixed parameters.";
     public const string MatrixDescription = "2..32 distinct values for one parameter; exclusive with parameterSets/parameterSetFiles; disjoint from fixed parameters.";
@@ -486,6 +487,9 @@ public static class McpToolCatalog
         "sqlharness_artifact",
     ];
 
+    /// <summary>Request scope admits SQL Server profiles only (startup check), so its catalog carries SQL Server guidance.</summary>
+    private const SqlEngine RequestScopeEngine = SqlEngine.SqlServer;
+
     public static IReadOnlyList<McpServerTool> CreateTools(
         McpProcessContext process,
         IMcpClock? clock = null,
@@ -495,30 +499,17 @@ public static class McpToolCatalog
         ArgumentNullException.ThrowIfNull(process);
         if (!process.RequestScope)
             return CreateTools(process.FixedScope!, moduleFactory?.Invoke(process.FixedScope!) ?? process.Decorate(process.FixedScope!.CreateModule(process.CompareConfig)), clock, hostShutdown, process.CompareConfig);
-        var handlers = new McpRequestToolHandlers(process, clock, hostShutdown, moduleFactory);
-        var type = typeof(McpRequestToolHandlers);
-        McpServerTool Tool(string name, string method, string description, bool? readOnly, bool? destructive,
-            bool? idempotent, bool? openWorld) => McpServerTool.Create(
-            type.GetMethod(method) ?? throw new InvalidOperationException($"Unknown MCP tool method '{method}'."), handlers,
-            new McpServerToolCreateOptions
-            {
-                Name = name,
-                Description = description,
-                ReadOnly = readOnly,
-                Destructive = destructive,
-                Idempotent = idempotent,
-                OpenWorld = openWorld,
-            });
+        var factory = new ToolFactory(new McpRequestToolHandlers(process, clock, hostShutdown, moduleFactory), RequestScopeEngine);
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
-            Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
-            Tool(ToolNames[1], nameof(McpRequestToolHandlers.QueryAsync), "Run a bounded query against the supplied request scope.", true, false, null, true),
-            Tool(ToolNames[2], nameof(McpRequestToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
-            Tool(ToolNames[3], process.CompareConfig.RequireContext ? nameof(McpRequestToolHandlers.CompareAsync) : nameof(McpRequestToolHandlers.CompareWithoutContextAsync), CompareDescription, null, false, null, true),
-            Tool(ToolNames[4], nameof(McpRequestToolHandlers.WatchAsync), "Poll a bounded query against the supplied request scope.", true, false, null, true),
-            Tool(ToolNames[5], nameof(McpRequestToolHandlers.SnapshotAsync), "Capture or diff a snapshot against the supplied request scope.", null, false, null, true),
-            Tool(ToolNames[6], nameof(McpRequestToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
-            Tool(ToolNames[7], nameof(McpRequestToolHandlers.ArtifactAsync), "Read a safe section of an artifact against the supplied request scope.", true, false, true, false),
+            factory.Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
+            factory.Tool(ToolNames[1], nameof(McpRequestToolHandlers.QueryAsync), factory.QueryDescription("Run a bounded query against the supplied request scope."), true, false, null, true),
+            factory.Tool(ToolNames[2], nameof(McpRequestToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
+            factory.Tool(ToolNames[3], process.CompareConfig.RequireContext ? nameof(McpRequestToolHandlers.CompareAsync) : nameof(McpRequestToolHandlers.CompareWithoutContextAsync), CompareDescription, null, false, null, true),
+            factory.Tool(ToolNames[4], nameof(McpRequestToolHandlers.WatchAsync), "Poll a bounded query against the supplied request scope.", true, false, null, true),
+            factory.Tool(ToolNames[5], nameof(McpRequestToolHandlers.SnapshotAsync), "Capture or diff a snapshot against the supplied request scope.", null, false, null, true),
+            factory.Tool(ToolNames[6], nameof(McpRequestToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
+            factory.Tool(ToolNames[7], nameof(McpRequestToolHandlers.ArtifactAsync), "Read a safe section of an artifact against the supplied request scope.", true, false, true, false),
         };
         if (tools.Count != McpLimits.MaxTools)
             throw new InvalidOperationException($"The MCP catalog must serve exactly {McpLimits.MaxTools} tools.");
@@ -548,38 +539,17 @@ public static class McpToolCatalog
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(module);
         var policy = compareConfig ?? SqlHarnessConfig.Default.Compare;
-        var handlers = new McpToolHandlers(scope, module, clock, hostShutdown, compareConfig: policy);
-        var type = typeof(McpToolHandlers);
-        McpServerTool Tool(
-            string name,
-            string method,
-            string description,
-            bool? readOnly,
-            bool? destructive,
-            bool? idempotent,
-            bool? openWorld) =>
-            McpServerTool.Create(
-                type.GetMethod(method) ?? throw new InvalidOperationException($"Unknown MCP tool method '{method}'."),
-                handlers,
-                new McpServerToolCreateOptions
-                {
-                    Name = name,
-                    Description = description,
-                    ReadOnly = readOnly,
-                    Destructive = destructive,
-                    Idempotent = idempotent,
-                    OpenWorld = openWorld,
-                });
+        var factory = new ToolFactory(new McpToolHandlers(scope, module, clock, hostShutdown, compareConfig: policy), scope.ResolvedTarget.Engine);
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
-            Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
-            Tool(ToolNames[1], nameof(McpToolHandlers.QueryAsync), "Run a bounded query passing the static visible-effects text check; no persistent-mutation flags are offered on this path. Hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. Exactly one of inline sql (at most 1 MiB) or a file under an input root.", true, false, null, true),
-            Tool(ToolNames[2], nameof(McpToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
-            Tool(ToolNames[3], policy.RequireContext ? nameof(McpToolHandlers.CompareAsync) : nameof(McpToolHandlers.CompareWithoutContextAsync), CompareDescription, null, false, null, true),
-            Tool(ToolNames[4], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
-            Tool(ToolNames[5], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it.", null, false, null, true),
-            Tool(ToolNames[6], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
-            Tool(ToolNames[7], nameof(McpToolHandlers.ArtifactAsync), "Read a safe section (summary, metrics, operators, statements, matrix-cells, or plan) of a saved benchmark artifact.", true, false, true, false),
+            factory.Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
+            factory.Tool(ToolNames[1], nameof(McpToolHandlers.QueryAsync), factory.QueryDescription("Run a bounded query passing the static visible-effects text check; no persistent-mutation flags are offered on this path. Hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. Exactly one of inline sql (at most 1 MiB) or a file under an input root."), true, false, null, true),
+            factory.Tool(ToolNames[2], nameof(McpToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
+            factory.Tool(ToolNames[3], policy.RequireContext ? nameof(McpToolHandlers.CompareAsync) : nameof(McpToolHandlers.CompareWithoutContextAsync), CompareDescription, null, false, null, true),
+            factory.Tool(ToolNames[4], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
+            factory.Tool(ToolNames[5], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it.", null, false, null, true),
+            factory.Tool(ToolNames[6], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
+            factory.Tool(ToolNames[7], nameof(McpToolHandlers.ArtifactAsync), "Read a safe section (summary, metrics, operators, statements, matrix-cells, or plan) of a saved benchmark artifact.", true, false, true, false),
         };
         if (tools.Count != McpLimits.MaxTools)
             throw new InvalidOperationException($"The MCP catalog must serve exactly {McpLimits.MaxTools} tools.");
@@ -599,5 +569,46 @@ public static class McpToolCatalog
         foreach (var tool in CreateTools(scope, module, clock, hostShutdown, compareConfig))
             collection.Add(tool);
         options.ToolCollection = collection;
+    }
+
+    /// <summary>
+    /// Builds one catalog's tools with the selected engine's guidance from the Core registry.
+    /// The engine's setup text enters through the SDK schema-creation options while each input
+    /// schema is inferred, before registration; served schemas are never rewritten. Each catalog
+    /// owns its options, so independently built catalogs share no description state.
+    /// </summary>
+    private sealed class ToolFactory
+    {
+        private readonly object _handlers;
+        private readonly SqlHarnessEngineGuidance _guidance;
+        private readonly AIJsonSchemaCreateOptions _schemaOptions;
+
+        public ToolFactory(object handlers, SqlEngine engine)
+        {
+            _handlers = handlers;
+            _guidance = SqlHarnessCapabilitiesProvider.GuidanceFor(engine);
+            var setup = SetupDescription + " " + _guidance.Setup;
+            _schemaOptions = AIJsonSchemaCreateOptions.Default with
+            {
+                ParameterDescriptionProvider = parameter => parameter.Name == "setup" ? setup : null,
+            };
+        }
+
+        public string QueryDescription(string common) => common + " " + _guidance.Query;
+
+        public McpServerTool Tool(string name, string method, string description, bool? readOnly, bool? destructive, bool? idempotent, bool? openWorld) =>
+            McpServerTool.Create(
+                _handlers.GetType().GetMethod(method) ?? throw new InvalidOperationException($"Unknown MCP tool method '{method}'."),
+                _handlers,
+                new McpServerToolCreateOptions
+                {
+                    Name = name,
+                    Description = description,
+                    ReadOnly = readOnly,
+                    Destructive = destructive,
+                    Idempotent = idempotent,
+                    OpenWorld = openWorld,
+                    SchemaCreateOptions = _schemaOptions,
+                });
     }
 }
