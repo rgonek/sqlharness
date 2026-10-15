@@ -7,7 +7,6 @@ Przeczytaj wybrany plan i jego spec przed wykonaniem. Wpis w kolejce nie jest zg
 | Plan | Zakres | Zależności | Status |
 |---|---|---|---|
 | [065](065-artifact-plan-pages-and-clipping.md) | Accurate clipping counts and budget-aware saved-plan pages; preserve artifact-read cost | 055/058 DONE; coordinate projection drift | IN PROGRESS — feature tree verified at `7acf039`; feature-to-main integration and verification pending authorization |
-| [067](067-cell-limit-parity-and-default.md) | MCP `maxCellChars` 0..4096 with CLI parity; shared default 2048 | 060 DONE; coordinate 064/065 | IN PROGRESS — Task 3 docs committed; Windows verify green, Linux pending |
 
 ## Oczekujące
 

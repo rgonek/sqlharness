@@ -2,6 +2,12 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
+## Completed since the 2026-10-14 snapshot
+
+| Plan | Evidence |
+|---|---|
+| [067](067-cell-limit-parity-and-default.md) | DONE on feature branch `feat/plan-067-cell-limit` at `3388917`; Windows verify passed (Core/CLI 3513/11 skipped; MCP 381/4 skipped). Linux reached build, then its test stage was waived by the operator and interrupted after about 15 minutes without a result; Linux tests and format are unverified. No integration, installation or publication. Full details: [Task 3 report](../.superpowers/sdd/067-cell-limit-parity-and-default/task-3-report.md). |
+
 # Plany po audycie SQLHarness 2026-09-28
 
 Zapis: 2026-09-29, skill improve. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
