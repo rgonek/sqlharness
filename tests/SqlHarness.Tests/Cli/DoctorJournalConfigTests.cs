@@ -38,7 +38,21 @@ public sealed class DoctorJournalConfigTests : IDisposable
         Assert.False(root.GetProperty("configValid").GetBoolean());
         Assert.True(root.GetProperty("journalEnabled").GetBoolean());
         Assert.False(root.GetProperty("journalStoreSensitive").GetBoolean());
+        Assert.False(root.GetProperty("diagnosticsEnabled").GetBoolean());
         Assert.False(root.GetProperty("activityJournalPresent").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Doctor_reports_effective_diagnostics_setting()
+    {
+        File.WriteAllText(Path.Combine(_home, "config.json"), """{ "diagnostics": { "enabled": true } }""");
+        var output = new StringWriter();
+
+        var exitCode = await SqlHarnessCli.Create(new NoopModule(), output).RunAsync(["doctor", "--json"]);
+
+        Assert.Equal(0, exitCode);
+        using var document = JsonDocument.Parse(output.ToString());
+        Assert.True(document.RootElement.GetProperty("diagnosticsEnabled").GetBoolean());
     }
 
     [Fact]

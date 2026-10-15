@@ -12,7 +12,8 @@ public sealed class DashboardSettingsTests
     private const string ValidBody = """
         { "journal": { "enabled": true, "storeSensitive": true,
                        "retention": { "enabled": true, "maxAgeDays": 7, "maxSizeMb": 100 } },
-          "dashboard": { "autoStart": true, "port": 50000, "idleShutdownHours": 2 } }
+          "dashboard": { "autoStart": true, "port": 50000, "idleShutdownHours": 2 },
+          "diagnostics": { "enabled": true } }
         """;
 
     private static string ConfigPath(TempHome home) => Path.Combine(home.Path, "config.json");
@@ -43,6 +44,7 @@ public sealed class DashboardSettingsTests
         Assert.Equal(ConfigPath(home), body.GetProperty("path").GetString());
         Assert.False(body.GetProperty("settings").GetProperty("journal").GetProperty("storeSensitive").GetBoolean());
         Assert.Equal(47800, body.GetProperty("settings").GetProperty("dashboard").GetProperty("port").GetInt32());
+        Assert.False(body.GetProperty("settings").GetProperty("diagnostics").GetProperty("enabled").GetBoolean());
     }
 
     [Fact]
@@ -73,6 +75,7 @@ public sealed class DashboardSettingsTests
         Assert.Equal(SqlHarnessConfigStatus.Valid, loaded.Status);
         Assert.True(loaded.Config.Journal.StoreSensitive);
         Assert.Equal(7, loaded.Config.Journal.Retention.MaxAgeDays);
+        Assert.True(loaded.Config.Diagnostics.Enabled);
         Assert.Equal(47800, loaded.Config.Dashboard.Port);
         Assert.Equal("valid", (await Json(response)).GetProperty("status").GetString());
     }

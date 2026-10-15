@@ -284,7 +284,8 @@ export type JournalSettings = {
   retention: { enabled: boolean; maxAgeDays: number; maxSizeMb: number }
 }
 export type DashboardSettings = { autoStart: boolean; port: number; idleShutdownHours: number }
-export type Settings = { journal: JournalSettings; dashboard: DashboardSettings; compare: { requireContext: boolean } }
+export type DiagnosticsSettings = { enabled: boolean }
+export type Settings = { journal: JournalSettings; dashboard: DashboardSettings; compare: { requireContext: boolean }; diagnostics: DiagnosticsSettings }
 export type SettingsFileStatus = "missing" | "valid" | "invalid"
 export type SettingsResponse = { status: SettingsFileStatus; path: string; settings: Settings }
 export type FieldError = { field: string; message: string }

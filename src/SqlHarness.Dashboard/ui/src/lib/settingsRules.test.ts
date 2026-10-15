@@ -6,6 +6,7 @@ const make = (enabled: boolean, maxAgeDays = 30, maxSizeMb = 500): Settings => (
   journal: { enabled: true, storeSensitive: false, retention: { enabled, maxAgeDays, maxSizeMb } },
   dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8 },
   compare: { requireContext: true },
+  diagnostics: { enabled: false },
 })
 
 test("enabling retention is destructive", () => expect(isDestructive(make(false), make(true))).toBe(true))

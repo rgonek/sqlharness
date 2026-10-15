@@ -104,6 +104,7 @@ public sealed class SqlHarnessConfigTests : IDisposable
     [InlineData("""{ "journal": { "storeSensitive": true, "retention": { "maxAgeDays": 0 } } }""")]
     [InlineData("""{ "journal": { "storeSensitive": "true" } }""")]
     [InlineData("""{ "journal": null }""")]
+    [InlineData("""{ "diagnostics": { "enabled": true, "unknown": 1 } }""")]
     [InlineData("""{ "journal": { "storeSensitive": true }, } """)]
     [InlineData("// comment\n        { \"journal\": { \"storeSensitive\": true } }")]
     [InlineData("not json")]
@@ -117,6 +118,7 @@ public sealed class SqlHarnessConfigTests : IDisposable
         Assert.NotNull(result.Warning);
         Assert.False(result.Config.Journal.StoreSensitive);
         Assert.False(result.Config.Dashboard.AutoStart);
+        Assert.False(result.Config.Diagnostics.Enabled);
         Assert.True(result.Config.Journal.Enabled);
     }
 
@@ -170,6 +172,7 @@ public sealed class SqlHarnessConfigTests : IDisposable
         {
             Journal = new JournalConfig { StoreSensitive = true, Retention = new JournalRetentionConfig { Enabled = true, MaxAgeDays = 7 } },
             Dashboard = new DashboardConfig { AutoStart = true, IdleShutdownHours = 2 },
+            Diagnostics = new DiagnosticsConfig { Enabled = true },
         };
 
         SqlHarnessConfigWriter.Write(ConfigPath, config);
