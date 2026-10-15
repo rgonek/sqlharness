@@ -108,8 +108,19 @@ public static class DashboardLifecycle
             };
             request.Headers.TryAddWithoutValidation(DashboardSecurity.WriteHeader, "1");
             request.Headers.TryAddWithoutValidation("Cookie", $"{DashboardSecurity.CookieName}={endpoint.Token}");
+            request.Headers.TryAddWithoutValidation(DashboardSecurity.ShutdownProcessIdHeader,
+                endpoint.Pid.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            request.Headers.TryAddWithoutValidation(DashboardSecurity.ShutdownStartedAtTicksHeader,
+                endpoint.StartedAt.Value.UtcTicks.ToString(System.Globalization.CultureInfo.InvariantCulture));
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
             responseStatus = response.StatusCode;
+            if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                var current = DashboardLock.ReadRunning(home, processes);
+                return current is not null && !SameEndpoint(endpoint, current)
+                    ? Failed($"Dashboard PID {endpoint.Pid} was replaced during shutdown; the replacement was left running.")
+                    : Failed($"Dashboard PID {endpoint.Pid} refused shutdown because its process identity changed.");
+            }
             if (response.StatusCode is not (HttpStatusCode.Accepted or HttpStatusCode.OK or HttpStatusCode.NoContent))
             {
                 if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed)

@@ -241,6 +241,9 @@ public static partial class DashboardServer
         }));
         api.MapMethods("/shutdown", [HttpMethods.Post], (Delegate)((HttpContext context) =>
         {
+            if (!MatchesExpectedShutdownIdentity(context.Request, options.Processes))
+                return Results.Conflict();
+
             context.Response.OnCompleted(() =>
             {
                 app.Lifetime.StopApplication();
@@ -258,6 +261,27 @@ public static partial class DashboardServer
 
     private static void MapRead(IEndpointRouteBuilder routes, string pattern, Delegate handler) =>
         routes.MapMethods(pattern, ReadMethods, handler);
+
+    private static bool MatchesExpectedShutdownIdentity(HttpRequest request, IProcessInfo processes)
+    {
+        var hasPid = request.Headers.ContainsKey(DashboardSecurity.ShutdownProcessIdHeader);
+        var hasStartedAt = request.Headers.ContainsKey(DashboardSecurity.ShutdownStartedAtTicksHeader);
+        if (!hasPid && !hasStartedAt)
+            return true;
+
+        var pidValues = request.Headers[DashboardSecurity.ShutdownProcessIdHeader];
+        var startedAtValues = request.Headers[DashboardSecurity.ShutdownStartedAtTicksHeader];
+        if (pidValues.Count != 1 || startedAtValues.Count != 1
+            || !int.TryParse(pidValues[0], System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var expectedPid)
+            || !long.TryParse(startedAtValues[0], System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var expectedStartedAtTicks)
+            || expectedPid != Environment.ProcessId)
+            return false;
+
+        var actual = processes.Get(expectedPid);
+        return actual?.StartedAt is { } startedAt && startedAt.UtcTicks == expectedStartedAtTicks;
+    }
 
     private static IResult Plan(JournalReader reader, string hash, string? view)
     {

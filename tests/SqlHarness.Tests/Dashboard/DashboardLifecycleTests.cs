@@ -89,29 +89,31 @@ public sealed class DashboardLifecycleTests
     }
 
     [Fact]
-    public async Task Stale_pid_returns_AlreadyStopped_without_contacting_its_endpoint()
+    public async Task Stale_pid_with_held_lock_fails_without_contacting_its_endpoint()
     {
         using var home = new TempHome();
-        using (var held = DashboardLock.TryAcquire(home.Path)!)
-            held.Publish(new DashboardEndpoint(4242, Started, 1, "stale-token"));
+        using var endpointServer = new StatusServer(HttpStatusCode.Accepted);
+        using var held = DashboardLock.TryAcquire(home.Path)!;
+        held.Publish(new DashboardEndpoint(4242, Started, endpointServer.Port, "stale-token"));
 
-        var result = await DashboardLifecycle.StopAsync(home.Path, new FakeProcesses(), TimeSpan.FromSeconds(1), CancellationToken.None);
+        var result = await DashboardLifecycle.StopAsync(home.Path, new FakeProcesses(), TimeSpan.FromMilliseconds(250), CancellationToken.None);
 
-        Assert.Equal(DashboardStopStatus.AlreadyStopped, result.Status);
+        Assert.Equal(DashboardStopStatus.Failed, result.Status);
+        Assert.Empty(endpointServer.RequestText);
     }
 
     [Fact]
-    public async Task Stale_start_time_returns_AlreadyStopped_without_contacting_its_endpoint()
+    public async Task Stale_start_time_with_held_lock_fails_without_contacting_its_endpoint()
     {
         using var home = new TempHome();
         var processes = new FakeProcesses().Alive(4242, Started.AddHours(1));
         using var endpointServer = new StatusServer(HttpStatusCode.Accepted);
-        using (var held = DashboardLock.TryAcquire(home.Path)!)
-            held.Publish(new DashboardEndpoint(4242, Started, endpointServer.Port, "stale-start-token"));
+        using var held = DashboardLock.TryAcquire(home.Path)!;
+        held.Publish(new DashboardEndpoint(4242, Started, endpointServer.Port, "stale-start-token"));
 
-        var result = await DashboardLifecycle.StopAsync(home.Path, processes, TimeSpan.FromSeconds(1), CancellationToken.None);
+        var result = await DashboardLifecycle.StopAsync(home.Path, processes, TimeSpan.FromMilliseconds(250), CancellationToken.None);
 
-        Assert.Equal(DashboardStopStatus.AlreadyStopped, result.Status);
+        Assert.Equal(DashboardStopStatus.Failed, result.Status);
         Assert.Empty(endpointServer.RequestText);
     }
 
@@ -181,6 +183,8 @@ public sealed class DashboardLifecycleTests
         Assert.Contains($"Host: 127.0.0.1:{redirect.Port}", redirect.RequestText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Cookie: sqlharness_dashboard=private-stop-token", redirect.RequestText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("X-SqlHarness-Dashboard: 1", redirect.RequestText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("X-SqlHarness-Dashboard-Pid: 4242", redirect.RequestText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains($"X-SqlHarness-Dashboard-StartedAtTicks: {Started.UtcTicks}", redirect.RequestText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Content-Type: application/json", redirect.RequestText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Content-Length: 2", redirect.RequestText, StringComparison.OrdinalIgnoreCase);
         Assert.EndsWith("{}", redirect.RequestText);
@@ -259,6 +263,61 @@ public sealed class DashboardLifecycleTests
     }
 
     [Fact]
+    public async Task Reused_port_replacement_rejects_captured_identity_and_remains_live()
+    {
+        using var home = new TempHome();
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        var currentPid = Environment.ProcessId;
+        var originalStarted = new DateTimeOffset(self.StartTime);
+        var replacementStarted = originalStarted.AddMinutes(1);
+        var processes = new FakeProcesses().Alive(currentPid, originalStarted);
+        const string token = "same-persistent-home-token";
+        var original = await DashboardServer.StartAsync(
+            new DashboardServerOptions(home.DatabasePath, 0, processes) { Token = token }, CancellationToken.None);
+        DashboardLock? originalLock = DashboardLock.TryAcquire(home.Path);
+        originalLock!.Publish(new DashboardEndpoint(currentPid, originalStarted, original.Port, token));
+        RunningDashboard? replacement = null;
+        DashboardLock? replacementLock = null;
+        using var handler = new ReusedPortReplacementHandler(async () =>
+        {
+            await original.DisposeAsync();
+            originalLock.Dispose();
+            originalLock = null;
+
+            processes.Alive(currentPid, replacementStarted);
+            replacement = await DashboardServer.StartAsync(
+                new DashboardServerOptions(home.DatabasePath, original.Port, processes) { Token = token }, CancellationToken.None);
+            replacementLock = DashboardLock.TryAcquire(home.Path)!;
+            replacementLock.Publish(new DashboardEndpoint(currentPid, replacementStarted, replacement.Port, token));
+        });
+
+        try
+        {
+            var result = await DashboardLifecycle.StopAsync(home.Path, processes, TimeSpan.FromSeconds(3), handler, CancellationToken.None);
+
+            Assert.Equal(DashboardStopStatus.Failed, result.Status);
+            Assert.Contains("replacement", result.Error, StringComparison.OrdinalIgnoreCase);
+            Assert.NotNull(replacement);
+            Assert.Equal(original.Port, replacement!.Port);
+            Assert.True(handler.ResponseStatus.HasValue, handler.Failure?.ToString() ?? "The replacement request received no HTTP response.");
+            Assert.Equal(HttpStatusCode.Conflict, handler.ResponseStatus);
+            Assert.False(replacement!.Stopping.IsCancellationRequested);
+            Assert.False(replacement.Stopping.WaitHandle.WaitOne(TimeSpan.FromMilliseconds(250)));
+            using var verify = new HttpClient { BaseAddress = replacement.BaseUri };
+            verify.DefaultRequestHeaders.Add("Cookie", $"{DashboardSecurity.CookieName}={token}");
+            Assert.Equal(HttpStatusCode.OK, (await verify.GetAsync("/api/agents")).StatusCode);
+        }
+        finally
+        {
+            if (replacement is not null)
+                await replacement.DisposeAsync();
+            replacementLock?.Dispose();
+            originalLock?.Dispose();
+            await original.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task Lost_shutdown_response_returns_Stopped_after_lock_and_process_exit_are_confirmed()
     {
         using var home = new TempHome();
@@ -331,6 +390,51 @@ public sealed class DashboardLifecycleTests
         {
             stopCapturedInstance();
             return Task.FromException<HttpResponseMessage>(new HttpRequestException("connection lost after shutdown"));
+        }
+    }
+
+    private sealed class ReusedPortReplacementHandler(Func<Task> replace) : HttpMessageHandler
+    {
+        private readonly HttpClient _client = new(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false });
+        public HttpStatusCode? ResponseStatus { get; private set; }
+        public Exception? Failure { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await replace();
+            try
+            {
+                using var forwarded = new HttpRequestMessage(request.Method, request.RequestUri)
+                {
+                    Version = request.Version,
+                    VersionPolicy = request.VersionPolicy,
+                };
+                foreach (var header in request.Headers)
+                    forwarded.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                if (request.Content is not null)
+                {
+                    var content = new ByteArrayContent(await request.Content.ReadAsByteArrayAsync(cancellationToken));
+                    foreach (var header in request.Content.Headers)
+                        content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                    forwarded.Content = content;
+                }
+
+                var response = await _client.SendAsync(forwarded, cancellationToken);
+                ResponseStatus = response.StatusCode;
+                return response;
+            }
+            catch (Exception exception)
+            {
+                Failure = exception;
+                throw;
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                _client.Dispose();
+            base.Dispose(disposing);
         }
     }
 

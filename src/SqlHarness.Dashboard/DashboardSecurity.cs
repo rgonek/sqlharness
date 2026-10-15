@@ -16,6 +16,8 @@ internal static class DashboardSecurity
 {
     internal const string CookieName = "sqlharness_dashboard";
     internal const string WriteHeader = "X-SqlHarness-Dashboard";
+    internal const string ShutdownProcessIdHeader = "X-SqlHarness-Dashboard-Pid";
+    internal const string ShutdownStartedAtTicksHeader = "X-SqlHarness-Dashboard-StartedAtTicks";
     internal const string SettingsPath = "/api/settings";
     internal const string PricesRefreshPath = "/api/prices/refresh";
     internal const string ShutdownPath = "/api/shutdown";
