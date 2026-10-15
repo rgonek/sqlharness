@@ -63,8 +63,11 @@ function Cases({ detail }: { detail: OperationDetail }) {
 
 function SetupSql({ detail }: { detail: OperationDetail }) {
   const conditions = object(detail.compareConditions)
-  const setup = conditions?.setupSql
-  const omitted = Array.isArray(conditions?.omittedSensitiveFields) && conditions.omittedSensitiveFields.includes("setupSql")
+  const recordedSetup = conditions?.setupSql
+  // Pre-v12 journals kept setup only inside bounded compare conditions.
+  const setup = detail.setupSqlText ?? (typeof recordedSetup === "string" ? recordedSetup : null)
+  const omittedFields = conditions?.omittedSensitiveFields
+  const omitted = Array.isArray(omittedFields) && omittedFields.includes("setupSql")
   return <section aria-label="Setup SQL" className="space-y-2">
     <h3 className="font-medium">Setup SQL</h3>
     {typeof setup === "string" && setup.trim() !== "" ? (
