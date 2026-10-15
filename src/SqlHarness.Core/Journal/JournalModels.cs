@@ -44,6 +44,7 @@ public sealed record OperationStart(
 {
     public CompareContext? Context { get; init; }
     public CompareJournalConditions? CompareConditions { get; init; }
+    public string? SetupSqlText { get; init; }
 }
 
 /// <summary>Compare conditions belong to this attempt. Values and setup are sensitive and opt-in.</summary>
