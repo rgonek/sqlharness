@@ -1,14 +1,14 @@
 # Plan 071: Dashboard compare review (SQL diff editor, IO and plan deltas, Copy for PR)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Completed steps use checkbox (`- [x]`) syntax for tracking.
 >
-> **Editor decision recorded before implementation:** Monaco Editor via `@monaco-editor/react` and `monaco-editor`, behind provider-neutral SQL editor contracts. No operator checkpoint remains.
+> **Editor decision recorded before implementation:** Monaco Editor via `@monaco-editor/react` and `monaco-editor`, behind provider-neutral SQL editor contracts. The read-only diff widget uses Monaco's API directly so the widget is detached before its models are disposed. No operator checkpoint remains.
 >
 > **Drift check (run first):** `git diff --stat 40a6871..HEAD -- src/SqlHarness.Dashboard README.md`. Plan 062 is DONE (`818f1e4`); this plan builds on its `CompareDetail`, `SqlDiff`, `CompareSessionOverview`, `lib/compare.ts` and `/api/sessions/{id}/compares`. Plans 069/070 may land before this one: they touch `SessionPage.tsx`, `DashboardSecurity.cs` and `JournalReader.cs`, not the compare components; merge around them. This plan has no journal schema change.
 
 **Goal:** A reviewer-ready compare page: SQL in Baseline/Candidate/Diff tabs with side-by-side and unified diff, per-table reads and plan changes between the two sides, a one-click Markdown copy for the PR, and a version-to-version SQL diff on the session page.
 
-**Architecture:** A provider-neutral, read-only SQL editor contract is exposed by `components/SqlEditors.tsx`; its lazy adapter loads a local `components/sql-editor/monaco.tsx` implementation with `@monaco-editor/react` and `monaco-editor`. A pure unified-diff helper in `lib/` is independent of Monaco so diff text and copying do not initialize the editor, and the adapter owns SQL tokenization and worker setup. Pure functions in `lib/` compute table IO deltas, plan changes and PR Markdown; small components render them inside 062's `CompareDetail` tabs. One new bounded read endpoint returns a session's SQL text by hash for the version diff.
+**Architecture:** A provider-neutral, read-only SQL editor contract is exposed by `components/SqlEditors.tsx`; its lazy adapter loads a local `components/sql-editor/monaco.tsx` implementation using `@monaco-editor/react` for SQL viewers and Monaco's API for the diff widget. The diff adapter detaches and disposes the widget before disposing its models to avoid Monaco model lifecycle errors. A pure unified-diff helper in `lib/` is independent of Monaco so diff text and copying do not initialize the editor, and the adapter owns SQL tokenization and worker setup. Pure functions in `lib/` compute table IO deltas, plan changes and PR Markdown; small components render them inside 062's `CompareDetail` tabs. One new bounded read endpoint returns a session's SQL text by hash for the version diff.
 
 **Tech Stack:** React 19, TypeScript, Vite 8, TanStack Query, `@monaco-editor/react`, `monaco-editor`, `diff` (bounded pure unified diff), existing `sql-formatter`, Vitest + Testing Library; .NET 10 minimal API, xUnit.
 
@@ -16,7 +16,7 @@
 
 ## Status
 
-- TODO; planned 2026-10-14 at `40a6871` after 062 landed; spec accepted by the operator 2026-10-14. Before Task 1, editor decision updated to Monaco with a provider-neutral contract.
+- DONE on branch `plan-071`; implementation range `47a303d..218f39e` after Plan 062. `just verify` passed all six stages on `218f39e`; UI check passed 231 tests and build emitted separate main/editor/worker assets (1,329.06/2,722.79/303.93 kB). Synthetic browser fixture passed 18/18 checks, including same-origin worker success and zero page, console, or CSP errors. Linux gate omitted per `docs/agents/verification.md`. Monaco remains behind the provider-neutral contract; its diff widget uses explicit API lifecycle ordering. See [Plan 071 history](history.md).
 - Priority P2. Effort M–L. Risk LOW–MEDIUM (new frontend dependency in the embedded bundle; CSP; clipboard).
 
 ## Global Constraints
@@ -78,7 +78,7 @@
   - `components/sql-editor/monaco.tsx`: named `SqlViewer(props: SqlViewerProps)` and `SqlMergeView(props: SqlMergeViewProps)` implementations; Monaco imports and types are private to this adapter.
   - `components/SqlEditors.tsx`: `LazySqlViewer`, `LazySqlMergeView` (the same provider-neutral props), and stable `loadUnifiedDiffText(): Promise<typeof unifiedDiffText>`. The helper is imported from `lib/unifiedDiff.ts` and calling it does not load the editor adapter.
 
-- [ ] **Step 1: Install dependencies** (in `ui/`):
+- [x] **Step 1: Install dependencies** (in `ui/`):
 
 ```bash
 npm install @monaco-editor/react monaco-editor diff
@@ -86,7 +86,7 @@ npm install @monaco-editor/react monaco-editor diff
 
 Keep the caret ranges npm writes (repo convention). The repository's CSP in `DashboardSecurity.ApplyHeaders` currently permits same-origin scripts with `script-src 'self'`, inline styles, and `data:` images. Leave those headers unchanged. Read the upstream [`@monaco-editor/react` Vite/npm setup](https://github.com/suren-atoyan/monaco-react#loader-config) and Microsoft's [Vite worker example](https://github.com/microsoft/monaco-editor/blob/main/samples/browser-esm-vite-react/src/userWorker.ts) for the local package and `?worker` integration.
 
-- [ ] **Step 2: Failing tests.** `lib/sqlDiff.test.ts` must include these exact assertions:
+- [x] **Step 2: Failing tests.** `lib/sqlDiff.test.ts` must include these exact assertions:
 
 ```ts
 expect(diffTooLarge("a", "b")).toBe(false)
@@ -121,19 +121,19 @@ expect(unifiedDiffText("SELECT 1", "SELECT 1\nUNION ALL SELECT 2", 3)).toBe(
 
 Also cover deleting the final line and two distant edits producing separate hunks with their unchanged context lines.
 
-- [ ] **Step 3: RED** — `npm run test -- src/lib/sqlDiff.test.ts src/lib/unifiedDiff.test.ts`.
+- [x] **Step 3: RED** — `npm run test -- src/lib/sqlDiff.test.ts src/lib/unifiedDiff.test.ts`.
 
-- [ ] **Step 4: Implement `lib/sqlDiff.ts` and `lib/unifiedDiff.ts`.** Move `MAX_DIFF_BYTES`, `MAX_DIFF_LINES`, `PREVIEW_CHARS`, `boundedPreview`, `utf8BytesWithin`, and `lineLimitExceeded` from `SqlDiff.tsx` unchanged. Add the existing `diffTooLarge`, `SqlDialect`, `dialectOf`, `normalizeForDiff`, `DiffMode`, `SqlTab`, and preference APIs using `sql-formatter`; normalize line endings to LF before optional formatting and preserve raw normalized text with `formatFailed: true` on formatter errors. Define provider-neutral editor prop types here. Implement `unifiedDiffText` in the pure helper using `diff` to build bounded line hunks and format standard unified headers/context; it must not import React, Monaco, or `SqlEditors`. Check the 256 KiB combined UTF-8 and 4,000-line limits before calling `diff`; reject oversized direct helper calls with `RangeError`, and require UI callers to show the existing limit message after `diffTooLarge` returns true. Make `SqlDiff.tsx` import the moved helpers without changing its behavior in this task.
+- [x] **Step 4: Implement `lib/sqlDiff.ts` and `lib/unifiedDiff.ts`.** Move `MAX_DIFF_BYTES`, `MAX_DIFF_LINES`, `PREVIEW_CHARS`, `boundedPreview`, `utf8BytesWithin`, and `lineLimitExceeded` from `SqlDiff.tsx` unchanged. Add the existing `diffTooLarge`, `SqlDialect`, `dialectOf`, `normalizeForDiff`, `DiffMode`, `SqlTab`, and preference APIs using `sql-formatter`; normalize line endings to LF before optional formatting and preserve raw normalized text with `formatFailed: true` on formatter errors. Define provider-neutral editor prop types here. Implement `unifiedDiffText` in the pure helper using `diff` to build bounded line hunks and format standard unified headers/context; it must not import React, Monaco, or `SqlEditors`. Check the 256 KiB combined UTF-8 and 4,000-line limits before calling `diff`; reject oversized direct helper calls with `RangeError`, and require UI callers to show the existing limit message after `diffTooLarge` returns true. Make `SqlDiff.tsx` import the moved helpers without changing its behavior in this task.
 
-- [ ] **Step 5: Implement `components/sql-editor/monaco.tsx`.** Import `Editor`, `DiffEditor`, and `loader` from `@monaco-editor/react`; import Monaco's editor API and only the minimal core contributions required by the wrapper, not the package root barrel with unused language contributions; import only `monaco-editor/esm/vs/editor/editor.worker?worker` for the worker. Install a `MonacoEnvironment.getWorker` that returns `new EditorWorker()` and configure the wrapper with `loader.config({ monaco })` before the editor initializes. The Vite `?worker` import must emit a same-origin worker asset. Do not configure or use CDN paths, blob/data worker URLs, or an `eval` bootstrap; upstream packages may retain inert fallback strings or code. Do not add language workers/contributions not used by SQL display.
+- [x] **Step 5: Implement `components/sql-editor/monaco.tsx`.** SQL viewers use `Editor` from `@monaco-editor/react`; the diff widget uses `monaco.editor.createDiffEditor` directly so cleanup detaches the model before disposing the widget and then disposes both models. Import Monaco's editor API and only the minimal core contributions required by the wrapper, not the package root barrel with unused language contributions; import only `monaco-editor/esm/vs/editor/editor.worker?worker` for the worker. Install a `MonacoEnvironment.getWorker` that returns `new EditorWorker()` and configure the wrapper with `loader.config({ monaco })` before the editor initializes. The Vite `?worker` import emits a same-origin worker asset. Do not configure or use CDN paths, blob/data worker URLs, or an `eval` bootstrap; upstream packages may retain inert fallback strings or code. Do not add language workers/contributions not used by SQL display.
 
   Register provider-owned Monarch tokenizers for PostgreSQL and T-SQL under private language IDs in this module. `SqlDialect` selects the language ID explicitly; never infer PostgreSQL/T-SQL from Monaco's labels and never expose `monaco.languages.*`, `monaco.editor.*`, or vendor types through the shared props. Set both editor and diff editor to read-only with minimap, suggest, hover, and unused features disabled; map the existing ThemeMenu light/dark state to provider theme names. `SqlMergeView` uses `DiffEditor` with original/modified values and `renderSideBySide: mode === "side-by-side"`; `SqlViewer` uses `Editor`. Keep current bounded container heights and make both fit the existing theme tokens.
 
-- [ ] **Step 6: Implement `components/SqlEditors.tsx`.** Define lazy component types from `SqlViewerProps` and `SqlMergeViewProps` in `lib/sqlDiff.ts`; dynamically import only `components/sql-editor/monaco.tsx` for the two React.lazy adapters and retain a loading fallback. Export `loadUnifiedDiffText` by returning the pure `unifiedDiffText` from `lib/unifiedDiff.ts`; do not import the Monaco adapter in this code path.
+- [x] **Step 6: Implement `components/SqlEditors.tsx`.** Define lazy component types from `SqlViewerProps` and `SqlMergeViewProps` in `lib/sqlDiff.ts`; dynamically import only `components/sql-editor/monaco.tsx` for the two React.lazy adapters and retain a loading fallback. Export `loadUnifiedDiffText` by returning the pure `unifiedDiffText` from `lib/unifiedDiff.ts`; do not import the Monaco adapter in this code path.
 
-- [ ] **Step 7: GREEN and bundle evidence** — Step 3 command, then `npm run check` and `npm run build`. Confirm the emitted build contains a separate lazily loaded Monaco/editor chunk and a same-origin editor worker asset, and that the main `index-*.js` does not include the editor payload. Record main/editor/worker sizes and inspect the active runtime references: the configured adapter must use the local Monaco instance and the relative emitted worker asset, without an active CDN load, `blob:`/`data:` worker, or `eval` bootstrap. Inert fallback strings/code from upstream packages may remain in the vendor chunk. Verify the exact `DashboardSecurity.ApplyHeaders` CSP remains unchanged. Task 7's browser fixture check must confirm that the worker request succeeds from the same origin and the console has no CSP violations.
+- [x] **Step 7: GREEN and bundle evidence** — Step 3 command, then `npm run check` and `npm run build`. Confirm the emitted build contains a separate lazily loaded Monaco/editor chunk and a same-origin editor worker asset, and that the main `index-*.js` does not include the editor payload. Record main/editor/worker sizes and inspect the active runtime references: the configured adapter must use the local Monaco instance and the relative emitted worker asset, without an active CDN load, `blob:`/`data:` worker, or `eval` bootstrap. Inert fallback strings/code from upstream packages may remain in the vendor chunk. Verify the exact `DashboardSecurity.ApplyHeaders` CSP remains unchanged. Task 7's browser fixture check must confirm that the worker request succeeds from the same origin and the console has no CSP violations.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/SqlHarness.Dashboard/ui/package.json src/SqlHarness.Dashboard/ui/package-lock.json src/SqlHarness.Dashboard/ui/src
@@ -152,7 +152,7 @@ git add src/SqlHarness.Dashboard/ui/package.json src/SqlHarness.Dashboard/ui/pac
   - `CopyButton({ label, getText }: { label: string; getText: () => string | Promise<string> })` — icon button (`lucide-react` `Copy`, then `Check` for 2 s), `aria-label={label}`, tooltip text `label`; on clipboard failure opens a `Dialog` titled "Copy manually" with a read-only `textarea` (`aria-label="Text to copy"`) whose content is selected on open.
   - `SqlDiff({ baseline, candidate, engine }: { baseline: string | null; candidate: string | null; engine: string | null })`.
 
-- [ ] **Step 1: Failing tests.** In tests mock the lazy editor module so jsdom does not need layout:
+- [x] **Step 1: Failing tests.** In tests mock the lazy editor module so jsdom does not need layout:
 
 ```tsx
 vi.mock("@/components/SqlEditors", () => ({
@@ -224,11 +224,11 @@ test("copying the diff gives a unified text diff", async () => {
 
 Clear `localStorage` in `afterEach`. Keep the 062 test for the "Show full SQL versions" bounded preview only if the behaviour is kept (it is replaced by the Baseline/Candidate tabs — remove that test and the toggle).
 
-- [ ] **Step 2: RED** — `npm run test -- src/components/SqlDiff.test.tsx src/components/CopyButton.test.tsx`.
+- [x] **Step 2: RED** — `npm run test -- src/components/SqlDiff.test.tsx src/components/CopyButton.test.tsx`.
 
-- [ ] **Step 3: Implement `CopyButton.tsx`** (use `Button` `variant="ghost" size="icon"`, `Dialog` from `components/ui/dialog`, a `role="status"` visually-hidden span that says "Copied" for 2 s; select the textarea content in an effect when the dialog opens).
+- [x] **Step 3: Implement `CopyButton.tsx`** (use `Button` `variant="ghost" size="icon"`, `Dialog` from `components/ui/dialog`, a `role="status"` visually-hidden span that says "Copied" for 2 s; select the textarea content in an effect when the dialog opens).
 
-- [ ] **Step 4: Implement `SqlDiff.tsx`:**
+- [x] **Step 4: Implement `SqlDiff.tsx`:**
   - Without both texts: keep 062's message; render Baseline/Candidate tabs only for the side that exists (or just the message when both are null).
   - Tabs (`components/ui/tabs`): `baseline`, `candidate`, `diff`; initial tab `readPreference("sqlharness.sqlDiff.tab", ["baseline","candidate","diff"], "diff")`, written on change.
   - Diff tab content: a radio group (`role="radiogroup"` with two `role="radio"` buttons or the existing toggle pattern) "Side by side" / "Unified" (preference `sqlharness.sqlDiff.mode`), a checkbox "Ignore formatting" (preference `sqlharness.sqlDiff.ignoreFormatting`, values `"true"`/`"false"`), then `LazySqlMergeView` with `normalizeForDiff` of both sides; if either side's `formatFailed`, show "Formatting failed; showing the SQL as written." Over the limit (`diffTooLarge` on the raw texts): 062's message and 062's two bounded previews.
@@ -236,9 +236,9 @@ Clear `localStorage` in `afterEach`. Keep the 062 test for the "Show full SQL ve
   - Copy icons: in each side tab `CopyButton label="Copy baseline SQL"|"Copy candidate SQL"` (raw text); in the Diff tab `CopyButton label="Copy diff"` → `loadUnifiedDiffText().then(f => f(a.text, b.text))` using the currently normalised texts.
   - Pass `engine={detail.operation.engine}` from `CompareDetail`.
 
-- [ ] **Step 5: GREEN** — Step 2 command plus `src/components/CompareDetail.test.tsx src/pages/OperationPage.test.tsx` (mock `SqlEditors` there too if they render the SQL tab).
+- [x] **Step 5: GREEN** — Step 2 command plus `src/components/CompareDetail.test.tsx src/pages/OperationPage.test.tsx` (mock `SqlEditors` there too if they render the SQL tab).
 
-- [ ] **Step 6: Commit** — `git commit -m "feat(dashboard-ui): SQL tabs with side-by-side and unified diff, copy icons"`.
+- [x] **Step 6: Commit** — `git commit -m "feat(dashboard-ui): SQL tabs with side-by-side and unified diff, copy icons"`.
 
 ---
 
@@ -255,7 +255,7 @@ Clear `localStorage` in `afterEach`. Keep the 062 test for the "Show full SQL ve
   - `tableIoDelta(baseline: TableIoRow[], candidate: TableIoRow[]): { rows: TableIoDeltaRow[]; total: { baseline: number; candidate: number; delta: number | null } }`, rows sorted by absolute logical-read change (`|c - b|`, missing side = 0) descending, then table name.
   - `TableIoComparison({ pairs, engine }: { pairs: ComparePair[]; engine: string | null })`.
 
-- [ ] **Step 1: Failing tests** (`tableIoDelta.test.ts`):
+- [x] **Step 1: Failing tests** (`tableIoDelta.test.ts`):
 
 ```ts
 import { expect, test } from "vitest"
@@ -284,15 +284,15 @@ test("zero baseline gives no percentage", () => {
 
 `TableIoComparison.test.tsx`: renders one table per pair labelled with `pair.label` when `pairs.length > 1` (matrix): a cell where `Orders` rises from 100 to 400 shows `+300%` on that cell's `Orders` row even though another cell improves; a PostgreSQL pair shows a "Buffers" table (shared hit/read, temp read/written B | C | Change) and no per-table section; empty `tableIo` on both sides shows "No table IO recorded for this pair."
 
-- [ ] **Step 2: RED** — `npm run test -- src/lib/tableIoDelta.test.ts src/components/TableIoComparison.test.tsx`.
+- [x] **Step 2: RED** — `npm run test -- src/lib/tableIoDelta.test.ts src/components/TableIoComparison.test.tsx`.
 
-- [ ] **Step 3: Implement** `tableIoDelta` (Map by table name, ordinal comparison) and `TableIoComparison`: card "Table IO: baseline vs candidate"; per pair a table with columns Table | Logical reads B | C | Change | Scans B | C; a `<details>` "More" row section with physical, read-ahead and LOB reads B | C; one-sided rows show a `Badge` "only in baseline"/"only in candidate"; a bold Total row; `formatNumber`/`formatChange` from existing libs. PostgreSQL (`engine === "postgres"`): rows from `PostgresBuffers` fields with the same delta rule.
+- [x] **Step 3: Implement** `tableIoDelta` (Map by table name, ordinal comparison) and `TableIoComparison`: card "Table IO: baseline vs candidate"; per pair a table with columns Table | Logical reads B | C | Change | Scans B | C; a `<details>` "More" row section with physical, read-ahead and LOB reads B | C; one-sided rows show a `Badge` "only in baseline"/"only in candidate"; a bold Total row; `formatNumber`/`formatChange` from existing libs. PostgreSQL (`engine === "postgres"`): rows from `PostgresBuffers` fields with the same delta rule.
 
-- [ ] **Step 4: Wire** in `CompareDetail` Plans and IO tab: render `<TableIoComparison pairs={pairs} engine={detail.operation.engine} />` above the existing per-side `VariantPanel` grid.
+- [x] **Step 4: Wire** in `CompareDetail` Plans and IO tab: render `<TableIoComparison pairs={pairs} engine={detail.operation.engine} />` above the existing per-side `VariantPanel` grid.
 
-- [ ] **Step 5: GREEN** — Step 2 command plus `src/components/CompareDetail.test.tsx`.
+- [x] **Step 5: GREEN** — Step 2 command plus `src/components/CompareDetail.test.tsx`.
 
-- [ ] **Step 6: Commit** — `git commit -m "feat(dashboard-ui): per-table IO comparison for compare pairs"`.
+- [x] **Step 6: Commit** — `git commit -m "feat(dashboard-ui): per-table IO comparison for compare pairs"`.
 
 ---
 
@@ -396,30 +396,30 @@ export type PrMarkdownInput = {
 }
 ```
 
-- [ ] **Step 1: Failing tests** (`prMarkdown.test.ts`): build an input with one pair (Orders 1000 → 100 reads, elapsed 120 → 30 ms), regression `{ verdict: "pass" }`, equivalence equivalent, plan changes with a scan → seek, `sqlDiff: "@@ -1,1 +1,1 @@\n-SELECT 1\n+SELECT 2"`. Assert the Markdown:
+- [x] **Step 1: Failing tests** (`prMarkdown.test.ts`): build an input with one pair (Orders 1000 → 100 reads, elapsed 120 → 30 ms), regression `{ verdict: "pass" }`, equivalence equivalent, plan changes with a scan → seek, `sqlDiff: "@@ -1,1 +1,1 @@\n-SELECT 1\n+SELECT 2"`. Assert the Markdown:
   - starts with `### SQL compare: orders-report / whole (v0 → v3)`;
   - contains a line with `Engine: SQL Server` (map `sqlserver`/`postgres` to display names), the execution status, the regression and equivalence labels (from `regressionLabel`/`equivalenceLabel`), and `Runs: <n>`;
   - contains a Markdown table header `| Metric | Baseline | Candidate | Change |` and a `| Logical reads |` row;
   - contains `| Table | Logical reads (baseline) | Logical reads (candidate) | Change |` with `| Orders | 1,000 | 100 | -90% |` (use `formatNumber`/`formatChange` outputs exactly);
-  - contains `**Plan changes**` and `dbo.Orders.PK_Orders: Clustered Index Scan → —`;
+  - contains `**Plan changes**` and `dbo.Orders.IX_Orders: Clustered Index Scan → Index Seek` for the supplied same-object/index fixture;
   - ends with a fenced block starting ```` ```diff ```` containing the diff;
   - **does not** contain any of: the server name, database name, profile, a var value, a parameter value, setup SQL text, the artifact directory (put distinctive strings into the `OperationDetail` the test builds the input from and assert absence on the final string).
   Matrix input with two cells, one regressing on `Lines`: the Markdown has `#### Cell 0` and `#### Cell 1` sections and the regressing cell's `Lines` row shows the increase. `sqlDiff: null` → no diff block and the line `SQL diff not included (SQL text not stored or over the size limit).`
 
 `CompareDetail.test.tsx`: the header has a button named `Copy` (tooltip "Copy"); clicking it with stubbed `navigator.clipboard.writeText` writes Markdown starting with `### SQL compare:`; with `sqlText: null` it still copies (without the diff block).
 
-- [ ] **Step 2: RED** — `npm run test -- src/lib/prMarkdown.test.ts src/components/CompareDetail.test.tsx`.
+- [x] **Step 2: RED** — `npm run test -- src/lib/prMarkdown.test.ts src/components/CompareDetail.test.tsx`.
 
-- [ ] **Step 3: Implement `buildPrMarkdown`** as a pure function (no React), escaping `|` in table cells (`\|`) and backticks in inline code. Build `PrMarkdownInput` in `CompareDetail` from `detail` exactly the way `Cases` builds its cards (reuse that mapping by extracting it to a small function `compareCards(detail)` in `CompareDetail.tsx` and using it in both places).
+- [x] **Step 3: Implement `buildPrMarkdown`** as a pure function (no React), escaping `|` in table cells (`\|`) and backticks in inline code. Build `PrMarkdownInput` in `CompareDetail` from `detail` exactly the way `Cases` builds its cards (reuse that mapping by extracting it to a small function `compareCards(detail)` in `CompareDetail.tsx` and using it in both places).
 
-- [ ] **Step 4: Copy action.** In the `CompareDetail` header add `<CopyButton label="Copy" getText={copyMarkdown} />` where `copyMarkdown` (async):
+- [x] **Step 4: Copy action.** In the `CompareDetail` header add `<CopyButton label="Copy" getText={copyMarkdown} />` where `copyMarkdown` (async):
   1. For each pair, compute plan changes: if `firstPlanHash` equal → `"same"`; if either null → `"unavailable"`; else `queryClient.fetchQuery({ queryKey: queryKeys.plan(hash), queryFn: ..., staleTime: Infinity })` for both (reuse `useDistilledPlan`'s query function by exporting it from `queries.ts` as `fetchDistilledPlan(hash)`), catching errors → `"unavailable"`.
   2. SQL diff: when both texts exist and `!diffTooLarge(...)`, `normalizeForDiff(..., false)` both and `await loadUnifiedDiffText()`; else `null`.
   3. Return `buildPrMarkdown(...)`.
 
-- [ ] **Step 5: GREEN** — Step 2 command, then `npm run test`.
+- [x] **Step 5: GREEN** — Step 2 command, then `npm run test`.
 
-- [ ] **Step 6: Commit** — `git commit -m "feat(dashboard-ui): copy compare evidence as Markdown for a PR"`.
+- [x] **Step 6: Commit** — `git commit -m "feat(dashboard-ui): copy compare evidence as Markdown for a PR"`.
 
 ---
 
@@ -440,11 +440,11 @@ export type PrMarkdownInput = {
   - `versionOptions(attempts: CompareAttemptSummary[], subject: string, scope: string): { version: string; hash: string }[]` (exported from `SessionVersionDiff.tsx` or `lib/compare.ts`) — distinct `(version, hash)` from baseline and candidate sides, sorted by the numeric part of `vN`.
   - `SessionVersionDiff({ sessionId, engine, options }: { sessionId: number; engine: string | null; options: { version: string; hash: string }[] })`.
 
-- [ ] **Step 1: Failing C# tests.** Reader: seed (with `storeSensitive: true`) two compare operations in one session whose baseline/candidate hashes and texts differ (use the 062 seed helpers for compare operations if present; otherwise seed `operations` rows with raw SQL setting `sql_hash`, `sql_text`, `candidate_sql_hash`, `candidate_sql_text`), then assert: baseline hash → baseline text; candidate hash → candidate text; a hash from another session → null; hash-only seed → `Text == null, TooLarge == false`; a 300 KiB text → `TooLarge == true, Text == null`. Also seed an operation where the same hash matches both sides, `sql_text` is null and `candidate_sql_text` is present; assert the candidate text is returned. Server: malformed hash (`abc`, `sha256:XYZ`) → 400; unknown → 404.
+- [x] **Step 1: Failing C# tests.** Reader: seed (with `storeSensitive: true`) two compare operations in one session whose baseline/candidate hashes and texts differ (use the 062 seed helpers for compare operations if present; otherwise seed `operations` rows with raw SQL setting `sql_hash`, `sql_text`, `candidate_sql_hash`, `candidate_sql_text`), then assert: baseline hash → baseline text; candidate hash → candidate text; a hash from another session → null; hash-only seed → `Text == null, TooLarge == false`; a 300 KiB text → `TooLarge == true, Text == null`. Also seed an operation where the same hash matches both sides, `sql_text` is null and `candidate_sql_text` is present; assert the candidate text is returned. Server: malformed hash (`abc`, `sha256:XYZ`) → 400; unknown → 404.
 
-- [ ] **Step 2: RED** — `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~SessionSqlText|FullyQualifiedName~Session_sql"`.
+- [x] **Step 2: RED** — `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~SessionSqlText|FullyQualifiedName~Session_sql"`.
 
-- [ ] **Step 3: Implement.**
+- [x] **Step 3: Implement.**
 
 ```csharp
     internal const int MaximumSqlVersionBytes = 256 * 1024;
@@ -496,15 +496,15 @@ Route (next to `/sessions/{id:long}/compares`):
 
 with `[GeneratedRegex("^sha256:[0-9a-f]{64}$")] private static partial Regex SqlHashPattern();` (`DashboardServer` is already `partial`). Add the record to `DashboardModels.cs` and a names test to `DashboardContractTests` (`hash`, `text`, `tooLarge`).
 
-- [ ] **Step 4: GREEN (C#)** — Step 2 filter plus `FullyQualifiedName~Dashboard`.
+- [x] **Step 4: GREEN (C#)** — Step 2 filter plus `FullyQualifiedName~Dashboard`.
 
-- [ ] **Step 5: Failing UI tests** (`SessionVersionDiff.test.tsx`, mock `SqlEditors` as in Task 2): with options `v0, v1, v3` the selects default to `v0` and `v3`, both texts are fetched from `/api/sessions/5/sql?hash=…`, and the merge view shows both; changing the right select to `v1` refetches only that hash; a `{ text: null, tooLarge: false }` response shows "SQL text for v0 is not stored (journal.storeSensitive was off)."; `tooLarge: true` shows "v3 is larger than 256 KiB; open a compare to see a bounded preview."; a 404 shows "v0 is no longer in the retained history." In `CompareSessionOverview.test.tsx`: each scope group with ≥ 2 versions has a "Diff versions" button that reveals `SessionVersionDiff`; a group with one version has no button.
+- [x] **Step 5: Failing UI tests** (`SessionVersionDiff.test.tsx`, mock `SqlEditors` as in Task 2): with options `v0, v1, v3` the selects default to `v0` and `v3`, both texts are fetched from `/api/sessions/5/sql?hash=…`, and the merge view shows both; changing the right select to `v1` refetches only that hash; a `{ text: null, tooLarge: false }` response shows "SQL text for v0 is not stored (journal.storeSensitive was off)."; `tooLarge: true` shows "v3 is larger than 256 KiB; open a compare to see a bounded preview."; a 404 shows "v0 is no longer in the retained history." In `CompareSessionOverview.test.tsx`: each scope group with ≥ 2 versions has a "Diff versions" button that reveals `SessionVersionDiff`; a group with one version has no button.
 
-- [ ] **Step 6: Implement UI.** `useSessionSqlText` (`useQuery`, key `["session-sql", sessionId, hash]`, `enabled: hash !== null`, `staleTime: Infinity`, 404 → `NotFoundError` handled by the component). `SessionVersionDiff`: two labelled `<select>`s ("From version", "To version"), then `LazySqlMergeView` (mode from the same `sqlharness.sqlDiff.mode` preference, with the Side by side / Unified radios and Ignore formatting from Task 2 — extract those controls into a small `DiffControls` component in `SqlDiff.tsx` and reuse it), `diffTooLarge` guard, and `CopyButton label="Copy diff"`. Under it the muted note "SQL only. Metrics live on each compare; different compares are not compared with each other." In `CompareSessionOverview`, inside each scope `<details>`, add the "Diff versions" toggle button and render `SessionVersionDiff` with `versionOptions(attempts, subject, scope)` and the session engine (pass `engine` down from `SessionPage`: use the most recent compare operation's `engine` from `SessionDetail.operations`, or `null`).
+- [x] **Step 6: Implement UI.** `useSessionSqlText` (`useQuery`, key `["session-sql", sessionId, hash]`, `enabled: hash !== null`, `staleTime: Infinity`, 404 → `NotFoundError` handled by the component). `SessionVersionDiff`: two labelled `<select>`s ("From version", "To version"), then `LazySqlMergeView` (mode from the same `sqlharness.sqlDiff.mode` preference, with the Side by side / Unified radios and Ignore formatting from Task 2 — extract those controls into a small `DiffControls` component in `SqlDiff.tsx` and reuse it), `diffTooLarge` guard, and `CopyButton label="Copy diff"`. Under it the muted note "SQL only. Metrics live on each compare; different compares are not compared with each other." In `CompareSessionOverview`, inside each scope `<details>`, add the "Diff versions" toggle button and render `SessionVersionDiff` with `versionOptions(attempts, subject, scope)` and the session engine (pass `engine` down from `SessionPage`: use the most recent compare operation's `engine` from `SessionDetail.operations`, or `null`).
 
-- [ ] **Step 7: GREEN** — `npm run test -- src/components/SessionVersionDiff.test.tsx src/components/CompareSessionOverview.test.tsx src/pages/SessionPage.test.tsx`, then `npm run check`.
+- [x] **Step 7: GREEN** — `npm run test -- src/components/SessionVersionDiff.test.tsx src/components/CompareSessionOverview.test.tsx src/pages/SessionPage.test.tsx`, then `npm run check`.
 
-- [ ] **Step 8: Commit** — `git commit -m "feat(dashboard): diff SQL versions within a session"`.
+- [x] **Step 8: Commit** — `git commit -m "feat(dashboard): diff SQL versions within a session"`.
 
 ---
 
@@ -513,10 +513,10 @@ with `[GeneratedRegex("^sha256:[0-9a-f]{64}$")] private static partial Regex Sql
 **Files:**
 - Modify: `README.md`, `plans/README.md`, `docs/superpowers/specs/2026-10-14-dashboard-compare-review-design.md` (status line)
 
-- [ ] **Step 1: Manual fixture check.** Build (`npm run build`) and run the dashboard against a **temporary** SQLHarness home seeded by a throwaway script or test helper (not the operator's home, no real data): one plain compare, one matrix compare with a regressing cell, one hash-only compare, one compare with a 300 KiB SQL. In a browser at desktop width and at 390 px: tab through SQL tabs, diff mode radios, Ignore formatting, Copy (check the clipboard text), Plans and IO cards, session "Diff versions"; switch light/dark via the theme menu. Open the browser devtools console: no CSP violations; confirm the worker request is same-origin and succeeds. This browser observation is the active-runtime evidence for the worker/CSP requirement; inert upstream fallback strings in the emitted vendor chunk do not fail it. Record what was checked in the task report; do not commit screenshots or the fixture home.
-- [ ] **Step 2: README.** Dashboard section: compare review (SQL tabs, side-by-side/unified diff, Ignore formatting, copy icons), Table IO and Plan changes cards, **Copy** Markdown contents and its exclusions (server, database, profile, vars, parameters, setup, artifact paths), session version diff (SQL only), new endpoint `GET /api/sessions/{id}/sql?hash=` in the dashboard API list if README lists endpoints. Not agent-facing: `Capabilities.cs`, `skills/sqlharness/SKILL.md` unchanged.
-- [ ] **Step 3: Gates.** `npm run check` and `npm run build` in `ui/`; then `just verify`. Record exit codes and pass lines; search logs case-sensitively for `FAILED`. `just verify-linux` is optional under current repository CI policy documented in `docs/agents/verification.md`; run it if practical and report it separately.
-- [ ] **Step 4: Plan row and spec status** — 071 DONE with commit range, gate results, the Monaco/provider-neutral decision and the main/editor/worker bundle sizes from Task 1 Step 7; spec `Status:` "implemented by Plan 071".
-- [ ] **Step 5: Commit** — `git commit -m "docs: dashboard compare review (plan 071)"`.
+- [x] **Step 1: Manual fixture check.** Build (`npm run build`) and run the dashboard against a **temporary** SQLHarness home seeded by a throwaway script or test helper (not the operator's home, no real data): one plain compare, one matrix compare with a regressing cell, one hash-only compare, one compare with a 300 KiB SQL. In a browser at desktop width and at 390 px: tab through SQL tabs, diff mode radios, Ignore formatting, Copy (check the clipboard text), Plans and IO cards, session "Diff versions"; switch light/dark via the theme menu. Open the browser devtools console: no CSP violations; confirm the worker request is same-origin and succeeds. This browser observation is the active-runtime evidence for the worker/CSP requirement; inert upstream fallback strings in the emitted vendor chunk do not fail it. Record what was checked in the task report; do not commit screenshots or the fixture home.
+- [x] **Step 2: README.** Dashboard section: compare review (SQL tabs, side-by-side/unified diff, Ignore formatting, copy icons), Table IO and Plan changes cards, **Copy** Markdown contents and its exclusions (server, database, profile, vars, parameters, setup, artifact paths), session version diff (SQL only), new endpoint `GET /api/sessions/{id}/sql?hash=` in the dashboard API list if README lists endpoints. Not agent-facing: `Capabilities.cs`, `skills/sqlharness/SKILL.md` unchanged.
+- [x] **Step 3: Gates.** `npm run check` and `npm run build` in `ui/`; then `just verify`. Record exit codes and pass lines; search logs case-sensitively for `FAILED`. `just verify-linux` is optional under current repository CI policy documented in `docs/agents/verification.md`; run it if practical and report it separately.
+- [x] **Step 4: Plan row and spec status** — 071 DONE with commit range, gate results, the Monaco/provider-neutral decision and the main/editor/worker bundle sizes from Task 1 Step 7; spec `Status:` "implemented by Plan 071".
+- [x] **Step 5: Commit** — `git commit -m "docs: dashboard compare review (plan 071)"`.
 
 Integration into `main` and any push only on a separate operator instruction.

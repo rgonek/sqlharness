@@ -1,6 +1,6 @@
 # Dashboard compare review (Spec B)
 
-Status: design agreed with the operator, 2026-10-14; editor decision updated before implementation to Monaco behind a provider-neutral SQL editor contract. Implementation plan: [Plan 071](../../../plans/071-dashboard-compare-review.md). Order: after Plan 062, [session curation](2026-10-14-dashboard-session-curation-design.md) (A) and [agent transcript matching](2026-10-14-dashboard-agent-transcript-matching-design.md) (C).
+Status: implemented by Plan 071. Implementation plan: [Plan 071](../../../plans/071-dashboard-compare-review.md). Order: after Plan 062, [session curation](2026-10-14-dashboard-session-curation-design.md) (A) and [agent transcript matching](2026-10-14-dashboard-agent-transcript-matching-design.md) (C).
 
 ## Goal
 
