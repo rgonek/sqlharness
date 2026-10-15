@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using Microsoft.Data.Sqlite;
 
 using SqlHarness.Core;
+using SqlHarness.Dashboard.Transcripts;
 
 namespace SqlHarness.Dashboard;
 
@@ -40,6 +41,10 @@ public sealed record DashboardHostOptions(
 
     /// <summary>Test hook invoked after each housekeeping pass that did not end the dashboard.</summary>
     internal Action? Housekept { get; init; }
+
+    internal AgentHomes? AgentHomes { get; init; }
+
+    internal Func<string, bool>? AgentDirectoryProbe { get; init; }
 }
 
 /// <summary>
@@ -157,6 +162,9 @@ public static class DashboardHost
                     ConfigPath = options.ConfigPath ?? Path.Combine(options.Home, "config.json"),
                     TargetsPath = Path.Combine(options.Home, "targets.json"),
                     PricesPath = Path.Combine(options.Home, "data", "model-prices.json"),
+                    Time = options.Time,
+                    AgentHomes = options.AgentHomes ?? AgentHomes.Current(),
+                    AgentDirectoryProbe = options.AgentDirectoryProbe,
                 },
                 ct);
         }
@@ -188,7 +196,7 @@ public static class DashboardHost
                 using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct, running.Stopping);
                 try
                 {
-                    await HousekeepAsync(options, reader, activity, stop.Token);
+                    await HousekeepAsync(options, reader, activity, running, stop.Token);
                 }
                 catch (OperationCanceledException)
                 {
@@ -210,7 +218,7 @@ public static class DashboardHost
     /// (PRAGMA data_version on a held read-only connection), no authenticated request, and no
     /// open live stream.
     /// </summary>
-    private static async Task HousekeepAsync(DashboardHostOptions options, JournalReader reader, DashboardActivity activity, CancellationToken ct)
+    private static async Task HousekeepAsync(DashboardHostOptions options, JournalReader reader, DashboardActivity activity, RunningDashboard running, CancellationToken ct)
     {
         DateTimeOffset? lastRetention = null;
         var lastJournalChange = options.Time.GetUtcNow();
@@ -243,11 +251,12 @@ public static class DashboardHost
             while (true)
             {
                 var now = options.Time.GetUtcNow();
+                // Settings saved from the settings page apply from the next pass; an invalid file means defaults.
+                var config = options.ConfigPath is null ? options.Config.Config : SqlHarnessConfigLoader.Load(options.ConfigPath).Config;
                 if (lastRetention is not { } last || now - last >= options.RetentionInterval)
                 {
                     lastRetention = now;
-                    // Settings saved from the settings page apply from the next pass; an invalid file means defaults.
-                    var journal = options.ConfigPath is null ? options.Config.Config.Journal : SqlHarnessConfigLoader.Load(options.ConfigPath).Config.Journal;
+                    var journal = config.Journal;
                     if (journal.Enabled && journal.Retention.Enabled)
                     {
                         // Agent commits since the last check would be hidden by the post-retention
@@ -261,6 +270,17 @@ public static class DashboardHost
                         // Retention's own commits are not activity: take the version after it as the baseline.
                         lastVersion = ReadVersion();
                     }
+                }
+
+                if (config.Dashboard.AgentTranscripts.Enabled)
+                {
+                    // Count agent commits since the last check before the matcher's own commits hide them.
+                    var beforeMatching = ReadVersion();
+                    if (beforeMatching is not null && lastVersion is not null && beforeMatching != lastVersion)
+                        lastJournalChange = now;
+                    await Task.Run(() => running.Transcripts.RunCycle(enabled: true), ct);
+                    // The matcher's commits are not activity: baseline after it.
+                    lastVersion = ReadVersion();
                 }
 
                 var version = ReadVersion();

@@ -15,6 +15,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using SqlHarness.Core;
+using SqlHarness.Dashboard.Transcripts;
 
 namespace SqlHarness.Dashboard;
 
@@ -42,18 +43,23 @@ public sealed record DashboardServerOptions(string DatabasePath, int PreferredPo
 
     /// <summary>Clock for operator writes (annotation timestamps).</summary>
     public TimeProvider Time { get; init; } = TimeProvider.System;
+
+    internal AgentHomes AgentHomes { get; init; } = AgentHomes.Current();
+
+    internal Func<string, bool>? AgentDirectoryProbe { get; init; }
 }
 
 public sealed class RunningDashboard : IAsyncDisposable
 {
     private readonly WebApplication _app;
 
-    internal RunningDashboard(WebApplication app, int port, string token, DashboardActivity activity)
+    internal RunningDashboard(WebApplication app, int port, string token, DashboardActivity activity, TranscriptMatcher transcripts)
     {
         _app = app;
         Port = port;
         Token = token;
         Activity = activity;
+        Transcripts = transcripts;
     }
 
     public int Port { get; }
@@ -61,6 +67,8 @@ public sealed class RunningDashboard : IAsyncDisposable
     public string Token { get; }
 
     internal DashboardActivity Activity { get; }
+
+    internal TranscriptMatcher Transcripts { get; }
 
     public Uri BaseUri => new($"http://127.0.0.1:{Port}/");
 
@@ -114,7 +122,7 @@ public static partial class DashboardServer
         foreach (var candidate in candidates)
         {
             var boundPort = 0;
-            var app = Build(options, activity, token, candidate, () => boundPort);
+            var app = Build(options, activity, token, candidate, () => boundPort, out var transcripts);
             try
             {
                 await app.StartAsync(ct);
@@ -132,13 +140,13 @@ public static partial class DashboardServer
                 throw;
             }
 
-            return new RunningDashboard(app, boundPort, token, activity);
+            return new RunningDashboard(app, boundPort, token, activity, transcripts);
         }
 
         throw new IOException("No free loopback port for the dashboard.", last);
     }
 
-    private static WebApplication Build(DashboardServerOptions options, DashboardActivity activity, string token, int port, Func<int> boundPort)
+    private static WebApplication Build(DashboardServerOptions options, DashboardActivity activity, string token, int port, Func<int> boundPort, out TranscriptMatcher transcripts)
     {
         // The empty builder reads no command line, environment variables, or appsettings files,
         // so nothing outside this method can add a Kestrel endpoint, change the environment,
@@ -163,6 +171,11 @@ public static partial class DashboardServer
 
         var app = builder.Build();
         var reader = new JournalReader(options.DatabasePath, options.Processes);
+        var matcher = new TranscriptMatcher(options.DatabasePath, options.AgentHomes, options.Time)
+        {
+            DirectoryExists = options.AgentDirectoryProbe ?? Directory.Exists,
+        };
+        transcripts = matcher;
         app.Use((context, next) => DashboardSecurity.InvokeAsync(context, () => next(context), token, boundPort));
         // Only authenticated requests reach here, so probes from other local processes do not keep the dashboard alive.
         app.Use((context, next) =>
@@ -226,7 +239,8 @@ public static partial class DashboardServer
         });
         MapRead(api, "/settings", () => Results.Json(DashboardSettings.Read(options.ConfigPath), Json));
         MapRead(api, "/profiles", () => Results.Json(DashboardProfiles.Read(options.TargetsPath), Json));
-        // The three write routes (PUT settings, POST prices refresh, PATCH session annotation); DashboardSecurity admits only these, with its extra checks.
+        MapRead(api, "/transcripts", () => Results.Json(matcher.Status(TranscriptsEnabled(options.ConfigPath)), Json));
+        // The guarded writes (PUT settings, POST prices refresh, PATCH session annotation, POST transcript clear); DashboardSecurity admits only these, with its extra checks.
         api.MapMethods("/settings", [HttpMethods.Put], (Delegate)((HttpContext context) => DashboardSettings.PutAsync(context, options.ConfigPath, Json)));
         MapRead(api, "/prices", () => Results.Json(DashboardPrices.Describe(options.PricesPath), Json));
         api.MapMethods("/prices/refresh", [HttpMethods.Post], (Delegate)((HttpContext context) =>
@@ -234,6 +248,10 @@ public static partial class DashboardServer
         var annotationWriter = new SessionAnnotationWriter(options.DatabasePath, options.Time);
         api.MapMethods("/sessions/{id:long}/annotation", [HttpMethods.Patch], (Delegate)((HttpContext context, long id) =>
             SessionAnnotations.PatchAsync(context, id, annotationWriter, Json)));
+        api.MapMethods("/transcripts/clear", [HttpMethods.Post], (Delegate)(() =>
+            matcher.Clear()
+                ? Results.Json(matcher.Status(TranscriptsEnabled(options.ConfigPath)), Json)
+                : Results.Json(new { error = "The journal is busy; try again." }, Json, statusCode: StatusCodes.Status503ServiceUnavailable)));
         MapRead(api, "/{**rest}", () => Results.NotFound());
 
         var assets = DashboardAssets.Default;
@@ -244,6 +262,9 @@ public static partial class DashboardServer
 
     private static void MapRead(IEndpointRouteBuilder routes, string pattern, Delegate handler) =>
         routes.MapMethods(pattern, ReadMethods, handler);
+
+    private static bool TranscriptsEnabled(string configPath) =>
+        SqlHarnessConfigLoader.Load(configPath).Config.Dashboard.AgentTranscripts.Enabled;
 
     private static IResult Plan(JournalReader reader, string hash, string? view)
     {
