@@ -316,6 +316,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         using var connection = OpenSnapshot();
         if (connection is null)
             return null;
+        var schemaVersion = Scalar<long>(connection, "PRAGMA user_version;", []);
         var liveness = new ProcessLiveness(processes, _dead);
         var summary = Query(connection, $"""
             SELECT {OperationColumns} FROM operations o JOIN sessions s ON s.id = o.session_id WHERE o.id = $id;
@@ -355,6 +356,15 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var dimensions = new OperationDimensions(OperationDimensionResolver.Resolve(
             dimensionNames,
             recordedDimensions));
+        List<OperationPhaseSummary> phases = schemaVersion >= 10 ? Query(connection, """
+            SELECT phase, count, total_ms, max_ms FROM operation_phases
+            WHERE operation_id = $id ORDER BY phase;
+            """, [("$id", id)], reader => new OperationPhaseSummary(
+                reader.GetString(0), reader.GetInt32(1), reader.GetInt64(2), reader.GetInt64(3))) : [];
+        List<OperationEventSummary> events = schemaVersion >= 10 ? Query(connection, """
+            SELECT offset_ms, phase, duration_ms, outcome, error_number, detail_json
+            FROM operation_events WHERE operation_id = $id ORDER BY seq LIMIT 257;
+            """, [("$id", id)], ReadOperationEvent) : [];
 
         var compareVersion = summary.Operation == "compare"
             ? CompareHistoryBuilder.Build(CompareHistoryRows(connection, summary.SessionId))
@@ -384,7 +394,40 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             CandidateVersion: compareVersion?.CandidateVersion,
             CompareRegression: compareVersion?.Regression,
             CompareCases: compareVersion?.Cases,
-            CompareConditions: extra.CompareConditions);
+            CompareConditions: extra.CompareConditions,
+            Phases: phases,
+            Events: events.Count == 0 ? null : events);
+    }
+
+    private static OperationEventSummary ReadOperationEvent(SqliteDataReader reader)
+    {
+        var detail = NullableString(reader, 5);
+        string? clientConnectionId = null;
+        int? droppedCount = null;
+        if (detail is not null)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(detail, new JsonDocumentOptions { MaxDepth = 4 });
+                if (document.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    if (document.RootElement.TryGetProperty("clientConnectionId", out var connectionId)
+                        && connectionId.ValueKind == JsonValueKind.String)
+                        clientConnectionId = connectionId.GetString();
+                    if (document.RootElement.TryGetProperty("dropped", out var dropped)
+                        && dropped.TryGetInt32(out var count) && count > 0)
+                        droppedCount = count;
+                }
+            }
+            catch (JsonException)
+            {
+                // Corrupt or future diagnostic detail must not break the operation page.
+            }
+        }
+
+        return new OperationEventSummary(
+            reader.GetInt64(0), reader.GetString(1), reader.GetInt64(2), reader.GetString(3),
+            reader.IsDBNull(4) ? null : reader.GetInt32(4), clientConnectionId, droppedCount);
     }
 
     private static AgentCall? ReadAgent(SqliteDataReader r)

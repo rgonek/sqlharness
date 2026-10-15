@@ -187,6 +187,14 @@ export type OperationDetail = {
   compareRegression: Record<string, unknown> | null
   compareCases: Record<string, unknown>[] | null
   compareConditions: Record<string, unknown> | null
+  phases: OperationPhaseSummary[]
+  events?: OperationEventSummary[]
+}
+
+export type OperationPhaseSummary = { phase: string; count: number; totalMs: number; maxMs: number }
+export type OperationEventSummary = {
+  offsetMs: number; phase: string; durationMs: number; outcome: string; errorNumber: number | null
+  clientConnectionId: string | null; droppedCount: number | null
 }
 
 export type KeyCount = { key: string; count: number }

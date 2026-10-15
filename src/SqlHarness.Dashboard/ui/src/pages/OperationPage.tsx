@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import type { OperationDetail } from "@/api/types"
 import { Link, useParams, useSearch } from "@tanstack/react-router"
 import { NotFoundError } from "@/api/client"
 import { useOperation } from "@/api/queries"
@@ -48,6 +49,57 @@ function SummaryFacts({ summary }: { summary: Record<string, unknown> }) {
       {typeof summary.cells === "number" && <span className="text-sm">{summary.equivalentCells as number}/{summary.cells} cells equivalent</span>}
     </div>
   )
+}
+
+function OperationTimings({ detail }: { detail: OperationDetail }) {
+  const { phases, events } = detail
+  const durationMs = detail.operation.durationMs
+  return <>
+    {phases.length > 0 && <Card>
+      <CardHeader>
+        <CardTitle><h2>Time breakdown</h2></CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div role="region" aria-label="Time breakdown" className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b text-left">
+              <th className="py-2 pr-4">Phase</th><th className="py-2 pr-4">Count</th>
+              <th className="py-2 pr-4">Total</th><th className="py-2 pr-4">Max</th><th className="py-2">Share of wall time</th>
+            </tr></thead>
+            <tbody>{phases.map(phase => {
+              const share = durationMs !== null && durationMs > 0
+                ? `${Number((phase.totalMs * 100 / durationMs).toFixed(1))}%`
+                : "—"
+              return <tr key={phase.phase} className="border-b last:border-0">
+                <td className="py-2 pr-4">{phase.phase}</td><td className="py-2 pr-4">{formatNumber(phase.count)}</td>
+                <td className="py-2 pr-4">{formatDuration(phase.totalMs)}</td><td className="py-2 pr-4">{formatDuration(phase.maxMs)}</td>
+                <td className="py-2">{share}</td>
+              </tr>
+            })}</tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>}
+    {events && events.length > 0 && <Card>
+      <CardContent className="pt-4">
+        <details>
+          <summary className="cursor-pointer font-medium">Connection events</summary>
+          <ol className="mt-3 space-y-2 text-sm">
+            {events.map((event, index) => <li key={`${event.phase}:${event.offsetMs}:${index}`} className="rounded-md border p-3">
+              {event.outcome === "truncated" && event.droppedCount !== null ? (
+                <span>{formatNumber(event.droppedCount)} connection events omitted</span>
+              ) : <div className="flex flex-wrap gap-x-4 gap-y-1">
+                <span>{event.phase}</span><span>Offset {formatDuration(event.offsetMs)}</span>
+                <span>Duration {formatDuration(event.durationMs)}</span><span>Outcome: {event.outcome}</span>
+                {event.errorNumber !== null && <span>Error number: {event.errorNumber}</span>}
+                {event.clientConnectionId && <span className="font-mono">{event.clientConnectionId}</span>}
+              </div>}
+            </li>)}
+          </ol>
+        </details>
+      </CardContent>
+    </Card>}
+  </>
 }
 
 export function OperationPage() {
@@ -128,6 +180,8 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: { retur
           {detail.summary && op.operation !== "compare" && <SummaryFacts summary={detail.summary} />}
         </CardContent>
       </Card>
+
+      <OperationTimings detail={detail} />
 
       {detail.agent && (
         <Card>
