@@ -72,7 +72,7 @@ test("operation details show phase timing shares and expandable connection diagn
   expect(screen.getByText("Offset 12 ms")).toBeInTheDocument()
   expect(screen.getByText("Duration 8 ms")).toBeInTheDocument()
   expect(screen.getByText("Outcome: failed")).toBeInTheDocument()
-  expect(screen.getByText("3 connection events omitted")).toBeInTheDocument()
+  expect(screen.getByText("3 diagnostic events omitted")).toBeInTheDocument()
 })
 
 test("legacy operation details show an empty time breakdown without zero-valued phases", async () => {
