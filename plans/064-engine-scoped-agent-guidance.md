@@ -10,7 +10,7 @@
 
 ## Status and base
 
-- Status: DONE on branch `feat/plan-064-engine-guidance` (66bf672); Windows `just verify` OK; awaiting local merge to main.
+- Status: DONE on branch `feat/plan-064-engine-guidance` (66bf672); Windows `just verify` OK; integrated locally into main after merging main (plan 067); gate OK on `1b1c0b4`.
 - Priority: P2; effort: M; risk: MEDIUM (changes discovery metadata, not SQL execution).
 - Planning base: `8a08859`, 2026-10-14, plus the pending operator-skill/description edits. Preserve those edits or start from their eventual integrated commit. Inspect drift before execution.
 - Relevant files: `src/SqlHarness.Core/Capabilities.cs`, `src/SqlHarness.Mcp/Tools/McpToolCatalog.cs`, `src/SqlHarness.Mcp/Tools/McpRequestToolHandlers.cs`, `src/SqlHarness.Mcp/McpProcessContext.cs`, `src/SqlHarness.Mcp/McpScope.cs`, `src/SqlHarness.Cli/Commands/CapabilitiesCommand.cs`, `src/SqlHarness.Cli/Commands/SqlHarnessCommands.cs`.
