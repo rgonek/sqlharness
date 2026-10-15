@@ -178,6 +178,7 @@ public sealed record SqlHarnessMeasureOperation(
 public sealed record SqlHarnessDryRunReport(
     string Command,
     string Classification,
+    string Tier,
     IReadOnlyList<BenchmarkParameterReport> Parameters,
     int ParameterSets);
 

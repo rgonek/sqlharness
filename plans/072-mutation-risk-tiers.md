@@ -19,7 +19,7 @@ No command reaches `SqlUsage.Mutation` in this plan. Plan 073 wires it to the `m
 
 ## Status
 
-- TODO; planned 2026-10-14 at `488598d`. Plan 073 depends on it.
+- IN PROGRESS; planned 2026-10-14 at `488598d`. Task 6 implementation is committed; final Windows and Linux gates remain pending before DONE. Plan 073 depends on it.
 - Priority P1. Effort M. Risk MEDIUM: safety classifier code, but `Query` and `CompareSetup` behaviour must not change.
 
 ## Global Constraints
@@ -562,24 +562,24 @@ git commit -m "Classify PostgreSQL schema, privilege and opaque statements under
 **Interfaces:**
 - Produces: `SqlHarnessDryRunReport(string Command, string Classification, string Tier, IReadOnlyList<BenchmarkParameterReport> Parameters, int ParameterSets)`. `Tier` is a `SqlRiskTiers.Label` value. For `measure`/`compare` it is the maximum over the measured SQL and the setup.
 
-- [ ] **Step 1: Write the failing test** in `DryRunCommandTests`: `query --dry-run` over `CREATE TABLE #t (Id int); SELECT 1 AS A;` emits `"tier":"session"`, and over `SELECT 1 AS A` emits `"tier":"read-only"`. Mirror the existing assertions in that file for JSON output.
+- [x] **Step 1: Write the failing test** in `DryRunCommandTests`: `query --dry-run` over `CREATE TABLE #t (Id int); SELECT 1 AS A;` emits `"tier":"session"`, and over `SELECT 1 AS A` emits `"tier":"read-only"`. Mirror the existing assertions in that file for JSON output.
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~DryRunCommandTests`
 Expected: FAIL (no `tier`).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   1. Add `Tier` after `Classification` in the record and fill it from the decision(s).
   2. Update every JSON shape test that pins the dry-run report.
   3. README › Dry run: add `tier` to the listed report fields: "`tier` (`read-only`, `session`, `dml`, `schema`, `privilege`, `opaque`; the highest-risk statement wins)".
 
-- [ ] **Step 4: Run both test projects**
+- [x] **Step 4: Run both test projects**
 
 Run: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~DryRun|FullyQualifiedName~Contracts|FullyQualifiedName~DocsSync"` and `dotnet test tests/SqlHarness.Mcp.Tests`
 Expected: PASS.
 
-- [ ] **Step 5: Gates, then commit**
+- [ ] **Step 5: Final gates and completion bookkeeping** — implementation commit is recorded in `task-6-report.md`; run `just verify` then `just verify-linux` on the reviewed product tree before marking the plan DONE.
 
 Run `just verify`, then `just verify-linux`, one at a time.
 

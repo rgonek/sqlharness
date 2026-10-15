@@ -73,7 +73,7 @@ public sealed class McpOutputTests
     {
         var outcome = new SqlHarnessOutcome(
             SqlHarnessExitCode.Success,
-            new SqlHarnessDryRunReport("query", "read-only", [], 0),
+            new SqlHarnessDryRunReport("query", "read-only", "read-only", [], 0),
             null);
 
         var result = McpResultAdapter.Adapt(outcome, "sqlharness_query");
