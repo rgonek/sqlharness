@@ -449,6 +449,13 @@ internal sealed class SqlSafetyClassifier
         if (SqlMutationStatementMap.PrivilegeStatementTypes.Any(statementType.IsAssignableTo))
             return StatementClassification.Privilege;
 
+        if (statement is ExecuteStatement executeStatement)
+        {
+            return SqlMutationStatementMap.IsAllowedOpaque(executeStatement)
+                ? StatementClassification.Opaque
+                : StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement, statement);
+        }
+
         if (classification.DenyReason is null)
             return classification;
 
@@ -967,6 +974,7 @@ internal sealed class SqlSafetyClassifier
         internal static StatementClassification Persistent { get; } = new(null, false, true, Tier: SqlRiskTier.Dml);
         internal static StatementClassification Schema { get; } = new(null, false, true, Tier: SqlRiskTier.Schema);
         internal static StatementClassification Privilege { get; } = new(null, false, true, Tier: SqlRiskTier.Privilege);
+        internal static StatementClassification Opaque { get; } = new(null, false, true, Tier: SqlRiskTier.Opaque);
         internal static StatementClassification Denied(SqlSafetyReason reason, TSqlStatement? deniedStatement = null) =>
             new(reason, false, false, deniedStatement);
     }

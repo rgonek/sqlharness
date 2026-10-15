@@ -100,6 +100,37 @@ internal static class SqlMutationStatementMap
         }
     }
 
+    internal static bool IsAllowedOpaque(ExecuteStatement statement)
+    {
+        var executeSpecification = statement.ExecuteSpecification;
+        if (executeSpecification.LinkedServer is not null)
+            return false;
+
+        return executeSpecification.ExecutableEntity switch
+        {
+            ExecutableStringList => true,
+            ExecutableProcedureReference executableProcedure => IsAllowedOpaque(executableProcedure),
+            _ => false,
+        };
+    }
+
+    private static bool IsAllowedOpaque(ExecutableProcedureReference executableProcedure)
+    {
+        var procedureReferenceName = executableProcedure.ProcedureReference;
+        if (procedureReferenceName.ProcedureVariable is not null ||
+            procedureReferenceName.ProcedureReference is not { } procedureReference)
+            return false;
+
+        var name = procedureReference.Name;
+        if (name.Identifiers.Count > 2)
+            return false;
+
+        var baseIdentifier = name.BaseIdentifier.Value;
+        return !baseIdentifier.StartsWith("xp_", StringComparison.OrdinalIgnoreCase) &&
+            (!baseIdentifier.StartsWith("sp_", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(baseIdentifier, "sp_executesql", StringComparison.OrdinalIgnoreCase));
+    }
+
     internal static IReadOnlySet<Type> RejectedStatementTypes { get; } = new HashSet<Type>
     {
         typeof(CreateLoginStatement),

@@ -146,6 +146,35 @@ public class SqlSafetyTierTests
             Mutation("CREATE PROCEDURE dbo.P AS SELECT * FROM otherdb.dbo.T").Reason);
 
     [Theory]
+    [InlineData("EXEC dbo.RebuildTotals @From = 1")]
+    [InlineData("EXEC sp_executesql N'UPDATE dbo.T SET Id = 1'")]
+    [InlineData("DECLARE @s nvarchar(100) = N'SELECT 1'; EXEC(@s);")]
+    [InlineData("IF 1 = 1 EXEC dbo.P")]
+    [InlineData("BEGIN EXEC dbo.P; END")]
+    public void Procedures_and_dynamic_sql_are_opaque(string sql)
+    {
+        var decision = Mutation(sql);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.Equal(SqlRiskTier.Opaque, decision.Tier);
+    }
+
+    [Theory]
+    [InlineData("EXEC sp_configure 'show advanced options', 1")]
+    [InlineData("EXEC master.dbo.xp_cmdshell 'dir'")]
+    [InlineData("EXEC xp_cmdshell 'dir'")]
+    [InlineData("EXEC otherdb.dbo.P")]
+    [InlineData("EXEC server.otherdb.dbo.P")]
+    [InlineData("EXEC ('SELECT 1') AT LinkedSrv")]
+    [InlineData("DECLARE @p sysname = N'dbo.P'; EXEC @p;")]
+    [InlineData("INSERT dbo.T EXEC dbo.P")]
+    public void Dangerous_execs_stay_rejected(string sql) =>
+        Assert.False(Mutation(sql).Allowed);
+
+    [Fact]
+    public void Query_usage_still_rejects_exec() =>
+        Assert.False(Query("EXEC dbo.P").Allowed);
+
+    [Theory]
     [InlineData("SELECT 1 AS A", SqlRiskTier.ReadOnly)]
     [InlineData("CREATE TABLE #t (Id int);", SqlRiskTier.Session)]
     public void Compare_setup_reports_tier(string sql, object expected)
