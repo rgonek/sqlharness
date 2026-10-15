@@ -21,7 +21,7 @@
 
 - Case-insensitive, accent-sensitive: `łódź` matches `ŁÓDŹ`; `lodz` does NOT match `Łódź`. Accent-insensitive search is out of scope.
 - Folding is `value.Normalize(NormalizationForm.FormC).ToLowerInvariant()`, applied identically to the query and to every searched column. It never depends on the process culture.
-- Searched columns stay exactly: `sessions.session_key`, `sessions.cwd`, `sessions.client_title`, `session_annotations.title`, `session_annotations.note`.
+- Searched columns stay exactly: `sessions.session_key`, `sessions.cwd`, `sessions.client_title`, `session_annotations.title`, `session_annotations.note`, and `agent_conversations.title`. The existing conversation-title arm (the `operation_agent_links` / `agent_conversations` EXISTS already in `Sessions`) stays and uses the same fold.
 - `%`, `_` and `\` in `q` stay literal (existing tests `Search_matches_title_note_cwd_key_and_client_title_literally` and `Search_treats_backslash_and_underscore_literally_and_matches_the_client_title` pass unchanged).
 - `q` length limit stays 200 characters, checked on the raw query as today.
 - The dashboard opens the journal read-only; registering a function writes nothing.
