@@ -22,6 +22,13 @@ public sealed record DashboardConfig
     public bool AutoStart { get; init; }
     public int Port { get; init; } = 47800;
     public int IdleShutdownHours { get; init; } = 8;
+    public AgentTranscriptsConfig AgentTranscripts { get; init; } = new();
+}
+
+public sealed record AgentTranscriptsConfig
+{
+    /// <summary>Read local Claude/Codex transcripts for titles, model and effort. Off by default.</summary>
+    public bool Enabled { get; init; }
 }
 
 public sealed record CompareConfig
@@ -115,7 +122,7 @@ public static class SqlHarnessConfigLoader
         }
 
         if (config is null || !IsComplete(config))
-            return Failed("$", "The journal, journal.retention, dashboard and compare sections must be objects.");
+            return Failed("$", "The journal, journal.retention, dashboard and dashboard.agentTranscripts sections must be objects.");
 
         var errors = new List<SqlHarnessConfigFieldError>();
         if (config.Journal.Retention.MaxAgeDays is < 1 or > 3650)
@@ -136,5 +143,6 @@ public static class SqlHarnessConfigLoader
 
     // Explicit JSON nulls bypass initializers; treat them as invalid.
     private static bool IsComplete(SqlHarnessConfig config) =>
-        config.Journal is not null && config.Journal.Retention is not null && config.Dashboard is not null && config.Compare is not null;
+        config.Journal is not null && config.Journal.Retention is not null && config.Dashboard is not null &&
+        config.Dashboard.AgentTranscripts is not null && config.Compare is not null;
 }

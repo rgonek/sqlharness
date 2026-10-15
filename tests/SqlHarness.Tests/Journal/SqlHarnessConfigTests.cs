@@ -188,4 +188,23 @@ public sealed class SqlHarnessConfigTests : IDisposable
 
         Assert.True(File.Exists(nested));
     }
+
+    [Fact]
+    public void Agent_transcripts_default_off_and_round_trip()
+    {
+        Assert.False(SqlHarnessConfig.Default.Dashboard.AgentTranscripts.Enabled);
+        var parsed = SqlHarnessConfigLoader.Parse("""{"dashboard":{"agentTranscripts":{"enabled":true}}}"""u8.ToArray());
+        Assert.True(parsed.Config!.Dashboard.AgentTranscripts.Enabled);
+        var again = SqlHarnessConfigLoader.Parse(System.Text.Encoding.UTF8.GetBytes(SqlHarnessConfigWriter.Serialize(parsed.Config)));
+        Assert.True(again.Config!.Dashboard.AgentTranscripts.Enabled);
+    }
+
+    [Theory]
+    [InlineData("""{"dashboard":{"agentTranscripts":null}}""")]
+    [InlineData("""{"dashboard":{"agentTranscripts":{"enabled":"yes"}}}""")]
+    [InlineData("""{"dashboard":{"agentTranscripts":{"enabled":true,"paths":[]}}}""")]
+    public void Invalid_agent_transcripts_section_is_rejected(string json)
+    {
+        Assert.Null(SqlHarnessConfigLoader.Parse(System.Text.Encoding.UTF8.GetBytes(json)).Config);
+    }
 }
