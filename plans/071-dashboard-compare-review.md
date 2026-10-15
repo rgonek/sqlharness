@@ -307,12 +307,13 @@ test("zero baseline gives no percentage", () => {
 - Produces:
   - `firstPlanHash(variant: VariantDetail): string | null` — the stored link with the lowest `(repetition, ordinal)`; null when none is stored.
   - `type AccessChange = { object: string; baseline: string[]; candidate: string[] }` — physical operators touching the object (`objectName` + `.indexName` when present), deduplicated, in plan order.
+  - `type AccessObjectDetail = { object: string; baseline: { physicalOp: string; actualRows: number | null; executions: number | null }[]; candidate: { physicalOp: string; actualRows: number | null; executions: number | null }[] }` — per-node execution details for changed access objects; missing values are unavailable.
   - `type WarningChange = { warning: string; baseline: number; candidate: number }` — counts of each warning text (`PlanNode.warnings`) plus `"Missing index"` from `missingIndexes` length.
   - `type TopOperator = { physicalOp: string; object: string | null; costFraction: number }`.
-  - `planChanges(baseline: DistilledPlan, candidate: DistilledPlan): { access: AccessChange[]; warnings: WarningChange[]; topBaseline: TopOperator[]; topCandidate: TopOperator[] }` — `access` lists only objects whose operator lists differ; `warnings` only where counts differ; top 5 by `costFraction`.
+  - `planChanges(baseline: DistilledPlan, candidate: DistilledPlan): { access: AccessChange[]; accessDetails: AccessObjectDetail[]; warnings: WarningChange[]; topBaseline: TopOperator[]; topCandidate: TopOperator[] }` — `access` preserves its operator-only shape and lists only objects whose operator lists differ; `accessDetails` carries per-side node operator, actual rows, and executions for those objects; `warnings` only where counts differ; top 5 by `costFraction`.
   - `PlanChanges({ pair }: { pair: ComparePair })`.
 
-- [ ] **Step 1: Failing tests** (`planChanges.test.ts`):
+- [x] **Step 1: Failing tests** (`planChanges.test.ts`):
 
 ```ts
 import { expect, test } from "vitest"
@@ -336,8 +337,8 @@ test("scan to seek, resolved missing index and implicit conversion", () => {
   const changes = planChanges(before, after)
 
   expect(changes.access).toEqual([
-    { object: "dbo.Orders.PK_Orders", baseline: ["Clustered Index Scan"], candidate: [] },
     { object: "dbo.Orders.IX_Orders_Customer", baseline: [], candidate: ["Index Seek"] },
+    { object: "dbo.Orders.PK_Orders", baseline: ["Clustered Index Scan"], candidate: [] },
   ])
   expect(changes.warnings).toEqual([
     { warning: "Implicit conversion", baseline: 1, candidate: 0 },
@@ -356,15 +357,15 @@ Sort `access` by object name (ordinal) and `warnings` by warning name so the exp
 
 `PlanChanges.test.tsx` (stub `fetch` for `/api/plans/<hash>?view=distilled` with `stubFetch` from `test/render` — or render inside a `QueryClientProvider` with `getJson` stubbed): equal hashes → "Same plan" and exactly **one** plan request; a side without a stored plan → "Plan not stored for the candidate."; a fetch error → the `ErrorState` message; success → a table "Access changes" with `Clustered Index Scan → —` style rows and a "Warnings" list (`Missing index: resolved` when baseline > 0 and candidate = 0, `introduced` for the reverse).
 
-- [ ] **Step 2: RED** — `npm run test -- src/lib/planChanges.test.ts src/components/PlanChanges.test.tsx`.
+- [x] **Step 2: RED** — `npm run test -- src/lib/planChanges.test.ts src/components/PlanChanges.test.tsx`.
 
-- [ ] **Step 3: Implement** `planChanges` over all statements of each plan (walk with `flattenPlan`), and `PlanChanges`: header "Plan changes" per pair; hashes via `firstPlanHash`; `useDistilledPlan(hashB, hashB !== null)`, `useDistilledPlan(hashC, hashC !== null && hashC !== hashB)`; states: same plan / not stored / loading skeleton / error / changes (access table "Object | Baseline | Candidate", warnings list with resolved/introduced/changed wording, two small top-5 lists side by side).
+- [x] **Step 3: Implement** `planChanges` over all statements of each plan (walk with `flattenPlan`), and `PlanChanges`: header "Plan changes" per pair; hashes via `firstPlanHash`; `useDistilledPlan(hashB, hashB !== null)`, `useDistilledPlan(hashC, hashC !== null && hashC !== hashB)`; states: same plan / not stored / loading skeleton / error / changes (access table "Object | Baseline | Candidate", warnings list with resolved/introduced/changed wording, two small top-5 lists side by side). Controller correction: access detail rows show physical operator, actual rows, and executions by side; absent values display as unavailable, preserving the existing `access` rows for Markdown consumers.
 
-- [ ] **Step 4: Wire** below `TableIoComparison` in the Plans and IO tab, one `PlanChanges` per pair.
+- [x] **Step 4: Wire** below `TableIoComparison` in the Plans and IO tab, one `PlanChanges` per pair.
 
-- [ ] **Step 5: GREEN** — Step 2 command plus `src/components/CompareDetail.test.tsx`.
+- [x] **Step 5: GREEN** — `npm run test -- src/lib/planChanges.test.ts src/components/PlanChanges.test.tsx src/components/CompareDetail.test.tsx` (12 tests passed).
 
-- [ ] **Step 6: Commit** — `git commit -m "feat(dashboard-ui): plan changes between compare sides"`.
+- [x] **Step 6: Commit** — `git commit -m "feat(dashboard-ui): plan changes between compare sides"`.
 
 ---
 

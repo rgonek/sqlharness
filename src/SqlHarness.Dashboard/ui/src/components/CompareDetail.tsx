@@ -9,6 +9,7 @@ import { comparePairs, compareRows, equivalenceLabel, formatChange, regressionLa
 import { formatNumber } from "@/lib/format"
 import { SqlDiff } from "@/components/SqlDiff"
 import { TableIoComparison } from "@/components/TableIoComparison"
+import { PlanChanges } from "@/components/PlanChanges"
 
 type JsonObject = Record<string, unknown>
 const object = (value: unknown): JsonObject | null => value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : null
@@ -100,7 +101,7 @@ export function CompareDetail({ detail }: { detail: OperationDetail }) {
         </TabsList>
         <TabsContent value="cases"><Cases detail={detail} /></TabsContent>
         <TabsContent value="sql"><SqlDiff baseline={detail.sqlText} candidate={detail.candidateSqlText} engine={detail.operation.engine} /></TabsContent>
-        <TabsContent value="plans"><div className="space-y-4"><TableIoComparison pairs={pairs} engine={detail.operation.engine} /><div className="grid gap-4 xl:grid-cols-2">{pairs.map(pair => <section key={pair.label} aria-label={`${pair.label} plans and IO`} className="min-w-0 space-y-2"><h2 className="font-medium">{pair.label}</h2><div className="grid gap-4 lg:grid-cols-2"><div><h3 className="mb-2 text-sm font-medium">Baseline</h3><VariantPanel variant={pair.baseline} engine={detail.operation.engine} compareMetrics /></div><div><h3 className="mb-2 text-sm font-medium">Candidate</h3><VariantPanel variant={pair.candidate} engine={detail.operation.engine} compareMetrics /></div></div></section>)}</div></div>{pairs.length === 0 && <p className="text-sm text-muted-foreground">No paired plans or IO are available.</p>}</TabsContent>
+        <TabsContent value="plans"><div className="space-y-4"><TableIoComparison pairs={pairs} engine={detail.operation.engine} />{pairs.map(pair => <PlanChanges key={`${pair.label}-plan-changes`} pair={pair} />)}<div className="grid gap-4 xl:grid-cols-2">{pairs.map(pair => <section key={pair.label} aria-label={`${pair.label} plans and IO`} className="min-w-0 space-y-2"><h2 className="font-medium">{pair.label}</h2><div className="grid gap-4 lg:grid-cols-2"><div><h3 className="mb-2 text-sm font-medium">Baseline</h3><VariantPanel variant={pair.baseline} engine={detail.operation.engine} compareMetrics /></div><div><h3 className="mb-2 text-sm font-medium">Candidate</h3><VariantPanel variant={pair.candidate} engine={detail.operation.engine} compareMetrics /></div></div></section>)}</div></div>{pairs.length === 0 && <p className="text-sm text-muted-foreground">No paired plans or IO are available.</p>}</TabsContent>
         <TabsContent value="conditions"><Conditions detail={detail} /></TabsContent>
       </Tabs>
     </CardContent>

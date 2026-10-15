@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { CompareDetail } from "./CompareDetail"
 import { operation, operationDetail, variant } from "@/test/fixtures"
 
@@ -45,13 +46,14 @@ test("shows missing historic conditions and unrecorded equivalence without borro
 })
 
 test("shows plans and table IO from both compare sides", async () => {
-  render(<CompareDetail detail={operationDetail({
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(<QueryClientProvider client={queryClient}><CompareDetail detail={operationDetail({
     operation: operation({ operation: "compare" }),
     variants: [
       variant({ ordinal: 0, variant: "baseline", tableIo: [{ ...variant().tableIo[0], table: "BeforeRows" }], plans: [{ repetition: 1, ordinal: 0, hash: "A".repeat(64), stored: false }] }),
       variant({ ordinal: 1, variant: "candidate", tableIo: [{ ...variant().tableIo[0], table: "AfterRows" }], plans: [{ repetition: 1, ordinal: 1, hash: "B".repeat(64), stored: false }] }),
     ],
-  })} />)
+  })} /></QueryClientProvider>)
   await userEvent.click(screen.getByRole("tab", { name: "Plans and IO" }))
   expect(screen.getAllByText("BeforeRows")).toHaveLength(3)
   expect(screen.getAllByText("AfterRows")).toHaveLength(3)
