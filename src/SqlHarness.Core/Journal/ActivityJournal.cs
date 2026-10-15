@@ -5,6 +5,8 @@ using System.Text.Json;
 
 using Microsoft.Data.Sqlite;
 
+using SqlHarness.Core.Journal;
+
 namespace SqlHarness.Core;
 
 /// <summary>
@@ -18,6 +20,8 @@ public sealed class ActivityJournal : IActivityJournal
     private const int SqliteCorrupt = 11;
     private const int SqliteNotADatabase = 26;
     private const int MaximumCompareConditionsBytes = 64 * 1024;
+    private const int MaximumPhaseEventDetailLength = 512;
+    private const int MaximumPhaseEvents = OperationPhaseRecorder.MaximumEvents;
 
     private static readonly (string Name, Func<CompareJournalConditions, object?> Value)[] SensitiveCompareConditionFields =
     [
@@ -173,6 +177,24 @@ public sealed class ActivityJournal : IActivityJournal
             update.Parameters.AddWithValue("$parentOperationRef", (object?)end.ParentOperationRef ?? DBNull.Value);
             update.Parameters.AddWithValue("$now", now);
             update.ExecuteNonQuery();
+
+            using (var other = connection.CreateCommand())
+            {
+                other.Transaction = transaction;
+                other.CommandText = """
+                    INSERT INTO operation_phases (operation_id, phase, count, total_ms, max_ms)
+                    SELECT $id, 'other', 1,
+                        MAX(0, $duration - COALESCE(SUM(total_ms), 0)),
+                        MAX(0, $duration - COALESCE(SUM(total_ms), 0))
+                    FROM operation_phases WHERE operation_id = $id AND phase <> 'other'
+                    ON CONFLICT(operation_id, phase) DO UPDATE SET
+                        count = excluded.count, total_ms = excluded.total_ms, max_ms = excluded.max_ms;
+                    """;
+                other.Parameters.AddWithValue("$id", handle.OperationId);
+                other.Parameters.AddWithValue("$duration", Math.Max(0, end.DurationMilliseconds));
+                other.ExecuteNonQuery();
+            }
+
             transaction.Commit();
             return true;
         }
@@ -181,6 +203,84 @@ public sealed class ActivityJournal : IActivityJournal
             Warn();
             return false;
         }
+    }
+
+    public void RecordPhases(
+        JournalHandle? handle,
+        IReadOnlyList<PhaseAggregate> phases,
+        IReadOnlyList<PhaseEvent> events,
+        int droppedEvents)
+    {
+        if (handle is null)
+            return;
+        try
+        {
+            using var connection = Connect();
+            using var transaction = connection.BeginTransaction();
+            foreach (var phase in phases)
+            {
+                using var insert = Command(connection, transaction, """
+                    INSERT INTO operation_phases (operation_id, phase, count, total_ms, max_ms)
+                    VALUES ($operation, $phase, $count, $total, $max)
+                    ON CONFLICT(operation_id, phase) DO UPDATE SET
+                        count = excluded.count, total_ms = excluded.total_ms, max_ms = excluded.max_ms;
+                    """);
+                insert.Parameters.AddWithValue("$operation", handle.OperationId);
+                insert.Parameters.AddWithValue("$phase", phase.Phase.ToString().ToLowerInvariant());
+                insert.Parameters.AddWithValue("$count", Math.Max(0, phase.Count));
+                insert.Parameters.AddWithValue("$total", Math.Max(0, phase.TotalMilliseconds));
+                insert.Parameters.AddWithValue("$max", Math.Max(0, phase.MaxMilliseconds));
+                insert.ExecuteNonQuery();
+            }
+
+            var orderedEvents = events.OrderBy(phaseEvent => phaseEvent.Sequence).Take(MaximumPhaseEvents).ToArray();
+            var eventCount = orderedEvents.Length;
+            for (var index = 0; index < eventCount; index++)
+                InsertPhaseEvent(connection, transaction, handle.OperationId, orderedEvents[index], index + 1);
+
+            if (droppedEvents > 0)
+            {
+                using var insert = Command(connection, transaction, """
+                    INSERT INTO operation_events (operation_id, seq, offset_ms, phase, duration_ms, outcome, error_number, detail_json)
+                    VALUES ($operation, $seq, 0, 'other', 0, 'truncated', NULL, $detail);
+                    """);
+                insert.Parameters.AddWithValue("$operation", handle.OperationId);
+                insert.Parameters.AddWithValue("$seq", eventCount + 1);
+                insert.Parameters.AddWithValue("$detail", $$"""{"dropped":{{droppedEvents}}}""");
+                insert.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
+        }
+        catch (Exception)
+        {
+            Warn();
+        }
+    }
+
+    private static void InsertPhaseEvent(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        long operationId,
+        PhaseEvent phaseEvent,
+        int sequence)
+    {
+        using var insert = Command(connection, transaction, """
+            INSERT INTO operation_events (operation_id, seq, offset_ms, phase, duration_ms, outcome, error_number, detail_json)
+            VALUES ($operation, $seq, $offset, $phase, $duration, $outcome, $error, $detail);
+            """);
+        insert.Parameters.AddWithValue("$operation", operationId);
+        insert.Parameters.AddWithValue("$seq", sequence);
+        insert.Parameters.AddWithValue("$offset", Math.Max(0, phaseEvent.OffsetMilliseconds));
+        insert.Parameters.AddWithValue("$phase", phaseEvent.Phase.ToString().ToLowerInvariant());
+        insert.Parameters.AddWithValue("$duration", Math.Max(0, phaseEvent.DurationMilliseconds));
+        insert.Parameters.AddWithValue("$outcome", phaseEvent.Outcome);
+        insert.Parameters.AddWithValue("$error", (object?)phaseEvent.ErrorNumber ?? DBNull.Value);
+        var detail = phaseEvent.DetailJson;
+        insert.Parameters.AddWithValue("$detail", (object?)(detail is { Length: > MaximumPhaseEventDetailLength }
+            ? detail[..MaximumPhaseEventDetailLength]
+            : detail) ?? DBNull.Value);
+        insert.ExecuteNonQuery();
     }
 
     public void RecordEmission(JournalHandle? handle, OutputFootprint? raw, OutputFootprint emitted)
@@ -375,6 +475,8 @@ public sealed class ActivityJournal : IActivityJournal
                 Execute(connection, JournalSchema.Version8);
             if (locked < 9)
                 Execute(connection, JournalSchema.Version9);
+            if (locked < 10)
+                Execute(connection, JournalSchema.Version10);
             Execute(connection, $"PRAGMA user_version = {JournalSchema.CurrentVersion};");
             Execute(connection, "COMMIT;");
         }

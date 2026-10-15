@@ -1,5 +1,7 @@
 using SqlHarness.Core;
+using SqlHarness.Core.Journal;
 using SqlHarness.Core.Targets;
+using OperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Tests.Journal;
 
@@ -28,11 +30,12 @@ public sealed class JournalingModuleTests
         bool storeSensitive = false,
         Func<CancellationToken, string?>? cancelReason = null,
         Func<string?>? rootsJson = null,
-        Func<CancellationToken, AgentCallMetadata?>? callMetadata = null)
+        Func<CancellationToken, AgentCallMetadata?>? callMetadata = null,
+        DiagnosticsConfig? diagnostics = null)
     {
         var temp = new JournalTempDirectory();
         var journal = ActivityJournal.Open(temp.DatabasePath, new JournalConfig { StoreSensitive = storeSensitive }, TextWriter.Null, TimeProvider.System);
-        return (new JournalingModule(inner, () => journal, () => JournalTestData.Session(), cancelReason, rootsJson, callMetadata), temp);
+        return (new JournalingModule(inner, () => journal, () => JournalTestData.Session(), cancelReason, rootsJson, callMetadata, diagnostics), temp);
     }
 
     [Theory]
@@ -530,6 +533,74 @@ public sealed class JournalingModuleTests
         Assert.Equal(expected.ExitCode, returned.ExitCode);
         Assert.NotNull(returned.OperationRef);
         await Assert.ThrowsAsync<InvalidOperationException>(() => crashing.ExecuteAsync(Query()));
+    }
+
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(true, 1)]
+    public async Task Failed_operations_record_phase_rows_and_capture_events_only_when_enabled(bool captureEvents, int expectedEvents)
+    {
+        var (module, temp) = Create(new FakeModule(async (_, _) =>
+        {
+            using var phase = OperationPhaseRecorder.Current!.Start(OperationPhase.Connect);
+            phase.Detail("""{"client":"postgres"}""");
+            phase.Fail(28_064);
+            await Task.Yield();
+            throw new InvalidOperationException("primary operation failure");
+        }), diagnostics: new DiagnosticsConfig { Enabled = captureEvents });
+        using (temp)
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => module.ExecuteAsync(Query()));
+
+            Assert.Equal("primary operation failure", error.Message);
+            var phases = JournalDb.Rows(temp.DatabasePath,
+                "SELECT phase, count, total_ms FROM operation_phases ORDER BY phase");
+            Assert.Contains(phases, row => Equals(row["phase"], "connect") && Equals(row["count"], 1L));
+            Assert.Contains(phases, row => Equals(row["phase"], "other"));
+            Assert.Equal("failed", JournalDb.Rows(temp.DatabasePath, "SELECT status FROM operations").Single()["status"]);
+            Assert.Equal((long)expectedEvents, JournalDb.Rows(temp.DatabasePath,
+                "SELECT COUNT(*) AS n FROM operation_events").Single()["n"]);
+        }
+    }
+
+    [Fact]
+    public async Task Concurrent_module_calls_keep_their_phase_journals_isolated()
+    {
+        var (module, temp) = Create(new FakeModule(async (_, _) =>
+        {
+            using (OperationPhaseRecorder.Current!.Start(OperationPhase.Connect))
+                await Task.Delay(5);
+            return new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null);
+        }), diagnostics: new DiagnosticsConfig { Enabled = true });
+        using (temp)
+        {
+            await Task.WhenAll(module.ExecuteAsync(Query()), module.ExecuteAsync(Query()));
+
+            Assert.Equal(2L, JournalDb.Rows(temp.DatabasePath,
+                "SELECT COUNT(*) AS n FROM operation_phases WHERE phase = 'connect'").Single()["n"]);
+            Assert.Equal(2L, JournalDb.Rows(temp.DatabasePath,
+                "SELECT COUNT(*) AS n FROM operation_events").Single()["n"]);
+            Assert.Equal(2L, JournalDb.Rows(temp.DatabasePath,
+                "SELECT COUNT(DISTINCT operation_id) AS n FROM operation_phases WHERE phase = 'connect'").Single()["n"]);
+        }
+    }
+
+    [Fact]
+    public async Task Disabled_journal_does_not_open_a_phase_recorder()
+    {
+        var observedRecorder = true;
+        var module = new JournalingModule(
+            new FakeModule((_, _) =>
+            {
+                observedRecorder = OperationPhaseRecorder.Current is not null;
+                return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null));
+            }),
+            () => NullActivityJournal.Instance,
+            () => JournalTestData.Session());
+
+        await module.ExecuteAsync(Query());
+
+        Assert.False(observedRecorder);
     }
 
     [Fact]

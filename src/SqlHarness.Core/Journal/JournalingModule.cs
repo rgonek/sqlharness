@@ -1,5 +1,7 @@
 using System.Diagnostics;
 
+using SqlHarness.Core.Journal;
+
 namespace SqlHarness.Core;
 
 /// <summary>
@@ -17,6 +19,7 @@ public sealed class JournalingModule : ISqlHarnessModule
     private readonly Func<CancellationToken, string?>? _cancelReason;
     private readonly Func<string?>? _rootsJson;
     private readonly Func<CancellationToken, AgentCallMetadata?>? _callMetadata;
+    private readonly DiagnosticsConfig _diagnostics;
 
     public JournalingModule(
         ISqlHarnessModule inner,
@@ -24,7 +27,8 @@ public sealed class JournalingModule : ISqlHarnessModule
         Func<SessionIdentity> session,
         Func<CancellationToken, string?>? cancelReason = null,
         Func<string?>? rootsJson = null,
-        Func<CancellationToken, AgentCallMetadata?>? callMetadata = null)
+        Func<CancellationToken, AgentCallMetadata?>? callMetadata = null,
+        DiagnosticsConfig? diagnostics = null)
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         ArgumentNullException.ThrowIfNull(journal);
@@ -34,6 +38,7 @@ public sealed class JournalingModule : ISqlHarnessModule
         _cancelReason = cancelReason;
         _rootsJson = rootsJson;
         _callMetadata = callMetadata;
+        _diagnostics = diagnostics ?? new DiagnosticsConfig();
     }
 
     public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default) =>
@@ -50,61 +55,83 @@ public sealed class JournalingModule : ISqlHarnessModule
         operation = SqlHarnessOperationReferences.Ensure(operation);
         var journal = _journal.Value;
         var handle = Begin(journal, operation, ct);
-        var effective = journal is not null && handle is not null && operation is SqlHarnessWatchOperation watch
-            ? watch with { Progress = ProgressRecorder(journal, handle) }
-            : operation;
-        var stopwatch = Stopwatch.StartNew();
-        SqlHarnessOutcome outcome;
-        try
+        IDisposable? phaseRecording = null;
+        OperationPhaseRecorder? phaseRecorder = null;
+        if (journal is not null && handle is not null)
         {
-            outcome = await run(effective);
-        }
-        catch (OperationCanceledException)
-        {
-            Complete(journal, handle, () => OperationJournalDescriber.Cancelled(stopwatch.ElapsedMilliseconds, Reason(ct)));
-            throw;
-        }
-        catch (Exception)
-        {
-            Complete(journal, handle, () => OperationJournalDescriber.Crashed(stopwatch.ElapsedMilliseconds));
-            throw;
-        }
-
-        // Core maps a cancellation during SQL to an ordinary failed outcome after disposing
-        // its session; MCP reports such a call as cancelled, so the journal does too.
-        if (ct.IsCancellationRequested && IsCancellableFailure(outcome.ExitCode))
-        {
-            Complete(journal, handle, () => OperationJournalDescriber.Cancelled(stopwatch.ElapsedMilliseconds, Reason(ct)));
-            return outcome with { OperationRef = operation.OperationRef };
-        }
-
-        var completed = Complete(journal, handle, () => OperationJournalDescriber.DescribeEnd(outcome, stopwatch.ElapsedMilliseconds));
-        if (completed && journal is not null && handle is not null && outcome.BenchmarkRuns is { Count: > 0 } runs)
-            RecordBenchmark(journal, handle, runs);
-
-        // A failed completion (busy or broken journal) skips the emission write, so one
-        // operation never waits on a locked journal a second time.
-        if (!completed || journal is null || handle is null || outcome.EmissionReceipt is not { } inner)
-            return outcome with { OperationRef = operation.OperationRef };
-
-        var wrapped = new SqlHarnessEmissionReceipt(async (emitted, ct) =>
-        {
-            var exitCode = await inner.CompleteAsync(emitted, ct);
             try
             {
-                journal.RecordEmission(handle, inner.RawFootprint, emitted);
+                phaseRecording = OperationPhaseRecorder.Begin(TimeProvider.System, _diagnostics.Enabled);
+                phaseRecorder = OperationPhaseRecorder.Current;
+            }
+            catch
+            {
+                // Timing must never turn an operation failure into a journaling failure.
+            }
+        }
+
+        try
+        {
+            var effective = journal is not null && handle is not null && operation is SqlHarnessWatchOperation watch
+                ? watch with { Progress = ProgressRecorder(journal, handle) }
+                : operation;
+            var stopwatch = Stopwatch.StartNew();
+            SqlHarnessOutcome outcome;
+            try
+            {
+                outcome = await run(effective);
+            }
+            catch (OperationCanceledException)
+            {
+                Complete(journal, handle, phaseRecorder, () => OperationJournalDescriber.Cancelled(stopwatch.ElapsedMilliseconds, Reason(ct)));
+                throw;
             }
             catch (Exception)
             {
-                // IActivityJournal implementations do not throw; this guards third-party implementations.
+                Complete(journal, handle, phaseRecorder, () => OperationJournalDescriber.Crashed(stopwatch.ElapsedMilliseconds));
+                throw;
             }
 
-            return exitCode;
-        })
+            // Core maps a cancellation during SQL to an ordinary failed outcome after disposing
+            // its session; MCP reports such a call as cancelled, so the journal does too.
+            if (ct.IsCancellationRequested && IsCancellableFailure(outcome.ExitCode))
+            {
+                Complete(journal, handle, phaseRecorder, () => OperationJournalDescriber.Cancelled(stopwatch.ElapsedMilliseconds, Reason(ct)));
+                return outcome with { OperationRef = operation.OperationRef };
+            }
+
+            var completed = Complete(journal, handle, phaseRecorder, () => OperationJournalDescriber.DescribeEnd(outcome, stopwatch.ElapsedMilliseconds));
+            if (completed && journal is not null && handle is not null && outcome.BenchmarkRuns is { Count: > 0 } runs)
+                RecordBenchmark(journal, handle, runs);
+
+            // A failed completion (busy or broken journal) skips the emission write, so one
+            // operation never waits on a locked journal a second time.
+            if (!completed || journal is null || handle is null || outcome.EmissionReceipt is not { } inner)
+                return outcome with { OperationRef = operation.OperationRef };
+
+            var wrapped = new SqlHarnessEmissionReceipt(async (emitted, ct) =>
+            {
+                var exitCode = await inner.CompleteAsync(emitted, ct);
+                try
+                {
+                    journal.RecordEmission(handle, inner.RawFootprint, emitted);
+                }
+                catch (Exception)
+                {
+                    // IActivityJournal implementations do not throw; this guards third-party implementations.
+                }
+
+                return exitCode;
+            })
+            {
+                RawFootprint = inner.RawFootprint,
+            };
+            return outcome with { EmissionReceipt = wrapped, OperationRef = operation.OperationRef };
+        }
+        finally
         {
-            RawFootprint = inner.RawFootprint,
-        };
-        return outcome with { EmissionReceipt = wrapped, OperationRef = operation.OperationRef };
+            phaseRecording?.Dispose();
+        }
     }
 
     private JournalHandle? Begin(IActivityJournal? journal, SqlHarnessOperation operation, CancellationToken ct)
@@ -171,7 +198,11 @@ public sealed class JournalingModule : ISqlHarnessModule
         }
     }
 
-    private static bool Complete(IActivityJournal? journal, JournalHandle? handle, Func<OperationEnd> end)
+    private static bool Complete(
+        IActivityJournal? journal,
+        JournalHandle? handle,
+        OperationPhaseRecorder? phases,
+        Func<OperationEnd> end)
     {
         if (journal is null || handle is null)
             return false;
@@ -179,7 +210,18 @@ public sealed class JournalingModule : ISqlHarnessModule
         {
             // The end row is described inside the guard: a describer failure must neither turn
             // a success into an exception nor replace the operation's own exception.
-            return journal.Complete(handle, end());
+            var operationEnd = end();
+            try
+            {
+                journal.RecordPhases(handle, phases?.Aggregates() ?? Array.Empty<PhaseAggregate>(),
+                    phases?.Events() ?? Array.Empty<PhaseEvent>(), phases?.DroppedEvents ?? 0);
+            }
+            catch (Exception)
+            {
+                // Phase detail is best-effort and cannot replace the operation result.
+            }
+
+            return journal.Complete(handle, operationEnd);
         }
         catch (Exception)
         {
