@@ -223,7 +223,7 @@ test("measure operation shows recorded setup SQL before the measured query", asy
   }) })
   renderApp("/operations/10")
   const section = await screen.findByRole("region", { name: "Setup SQL" })
-  expect(within(section).getByTestId("sql-code")).toHaveTextContent(setup)
+  expect(within(section).getByTestId("sql-code").textContent).toBe(setup)
   expect(within(section).getByRole("button", { name: "Show formatted" })).toBeInTheDocument()
   expect(within(section).getByRole("button", { name: "Copy" })).toBeInTheDocument()
   expect(within(section).getByText(/same database session/)).toBeInTheDocument()
