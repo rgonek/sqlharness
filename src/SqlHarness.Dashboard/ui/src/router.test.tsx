@@ -10,5 +10,5 @@ test("unknown urls keep the navigation and show not found", async () => {
   expect(screen.getByRole("link", { name: "Statistics" })).toHaveAttribute("href", "/stats")
   expect(screen.getByRole("link", { name: "SQLHarness home" })).toHaveAttribute("href", "/")
   expect(screen.getByText("SQL")).toBeInTheDocument()
-  expect(screen.getByText("Harness")).toHaveClass("text-[#1765FF]")
+  expect(screen.getByText("Harness")).toHaveClass("text-[#10AC61]")
 })
