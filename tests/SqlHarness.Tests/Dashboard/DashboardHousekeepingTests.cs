@@ -369,6 +369,60 @@ public sealed class DashboardHousekeepingTests
     }
 
     [Fact]
+    public async Task External_journal_commit_during_matching_refreshes_the_idle_window()
+    {
+        using var home = new TempHome();
+        using var agents = new TempHome();
+        var homes = new AgentHomes(Path.Combine(agents.Path, "claude"), Path.Combine(agents.Path, "codex"));
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("mcp:in-cycle", "claude");
+        seed.Operation(session, agent: new AgentCallMetadata("toolu_stays_pending", null, null, null, null, null, null));
+        var project = homes.ClaudeProjectDirectory("/work");
+        Directory.CreateDirectory(project);
+        File.WriteAllLines(Path.Combine(project, "conv-in-cycle.jsonl"), [ClaudeFixtures.Assistant("conv-in-cycle", "model", null, ("toolu_external_during_scan", "mcp__sqlharness__query"))]);
+
+        var clock = Clock();
+        var passes = new Passes();
+        var triggerWrite = 0;
+        var wroteDuringScan = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var injected = 0;
+        bool Probe(string directory)
+        {
+            if (Volatile.Read(ref triggerWrite) != 0 && Interlocked.CompareExchange(ref injected, 1, 0) == 0)
+            {
+                seed.Operation(session, agent: new AgentCallMetadata("toolu_external_during_scan", null, null, null, null, null, null));
+                wroteDuringScan.TrySetResult();
+            }
+            return Directory.Exists(directory);
+        }
+
+        var config = SqlHarnessConfig.Default with
+        {
+            Dashboard = SqlHarnessConfig.Default.Dashboard with { AgentTranscripts = new AgentTranscriptsConfig { Enabled = true } },
+        };
+        var run = DashboardHost.RunAsync(Options(home, TimeSpan.FromMinutes(2), clock, passes, config) with
+        {
+            AgentHomes = homes,
+            AgentDirectoryProbe = Probe,
+        }, CancellationToken.None);
+        await passes.MoreAsync();
+        clock.Advance(TimeSpan.FromMinutes(1).Add(TimeSpan.FromSeconds(50)));
+        Volatile.Write(ref triggerWrite, 1);
+        await wroteDuringScan.Task.WaitAsync(TimeSpan.FromSeconds(20));
+        await passes.MoreAsync();
+        Assert.Single(Journal.JournalDb.Rows(home.DatabasePath, "SELECT operation_id FROM operation_agent_links"));
+
+        var nextPass = passes.MoreAsync();
+        clock.Advance(TimeSpan.FromSeconds(10));
+        Assert.Same(nextPass, await Task.WhenAny(run, nextPass));
+        await nextPass;
+        Assert.False(run.IsCompleted, "the in-cycle external commit starts a new idle window");
+
+        clock.Advance(TimeSpan.FromMinutes(1).Add(TimeSpan.FromSeconds(50)));
+        Assert.Equal(0, await run.WaitAsync(TimeSpan.FromSeconds(20)));
+    }
+
+    [Fact]
     public async Task Disabled_matcher_does_not_probe_agent_directories()
     {
         using var home = new TempHome();

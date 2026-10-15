@@ -1,3 +1,5 @@
+using Microsoft.Data.Sqlite;
+
 using SqlHarness.Core;
 using SqlHarness.Dashboard.Transcripts;
 using SqlHarness.Tests.Dashboard;
@@ -46,6 +48,13 @@ public sealed class TranscriptMatcherTests
     private static AgentCallMetadata Call(string? callId = null, string? sessionId = null, string? model = null) =>
         new(callId, model, null, sessionId, null, null, null);
 
+    private static long DataVersion(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA data_version;";
+        return (long)command.ExecuteScalar()!;
+    }
+
     [Fact]
     public void Claude_operation_links_by_tool_use_id_with_model_effort_and_title()
     {
@@ -60,6 +69,27 @@ public sealed class TranscriptMatcherTests
         var link = Assert.Single(f.Links());
         Assert.Equal(("claude", "conv-1", "Optimize orders", "claude-opus-5-5", "high"),
             ((string)link["agent_kind"]!, (string)link["conversation_id"]!, (string?)link["title"], (string?)link["model"], (string?)link["effort"]));
+    }
+
+    [Fact]
+    public void Shared_observer_connection_ignores_matcher_commits_but_sees_external_commits()
+    {
+        using var f = new Fixture();
+        var session = JournalSeed.Session("mcp:shared-observer", "claude");
+        f.Seed.Operation(session, agent: Call("toolu_shared"));
+        f.ClaudeFile("conv-shared", ClaudeFixtures.Assistant("conv-shared", "model", null, ("toolu_shared", "mcp__s__sqlharness_query")));
+        var matcher = f.Matcher();
+        using var connection = matcher.OpenJournalConnection()!;
+        var before = DataVersion(connection);
+
+        matcher.RunCycle(enabled: true, journalConnection: connection);
+
+        Assert.Equal(before, DataVersion(connection));
+        Assert.Single(f.Links());
+
+        f.Seed.Operation(session, agent: Call("toolu_external"));
+
+        Assert.NotEqual(before, DataVersion(connection));
     }
 
     [Fact]

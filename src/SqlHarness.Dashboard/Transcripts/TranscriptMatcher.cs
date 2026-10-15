@@ -26,7 +26,10 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
 
     internal Func<string, bool> DirectoryExists { get; init; } = Directory.Exists;
 
-    internal void RunCycle(bool enabled)
+    /// <summary>Opens an existing journal for the host's shared idle observer and matcher transactions.</summary>
+    internal SqliteConnection? OpenJournalConnection() => Open();
+
+    internal void RunCycle(bool enabled, SqliteConnection? journalConnection = null)
     {
         if (!enabled)
             return;
@@ -36,7 +39,8 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
             _readErrors = 0;
             try
             {
-                using var connection = Open();
+                using var ownedConnection = journalConnection is null ? Open() : null;
+                var connection = journalConnection ?? ownedConnection;
                 if (connection is null || !SchemaMatches(connection))
                     return;
 

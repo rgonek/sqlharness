@@ -196,7 +196,7 @@ public static class DashboardHost
                 using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct, running.Stopping);
                 try
                 {
-                    await HousekeepAsync(options, reader, activity, running, stop.Token);
+                    await HousekeepAsync(options, activity, running, stop.Token);
                 }
                 catch (OperationCanceledException)
                 {
@@ -215,22 +215,23 @@ public static class DashboardHost
     /// <summary>
     /// Runs retention at start and every RetentionInterval, and in background mode returns
     /// once nothing happened for IdleShutdown: no journal commit other than its own retention
-    /// (PRAGMA data_version on a held read-only connection), no authenticated request, and no
+    /// (PRAGMA data_version on a held journal connection), no authenticated request, and no
     /// open live stream.
     /// </summary>
-    private static async Task HousekeepAsync(DashboardHostOptions options, JournalReader reader, DashboardActivity activity, RunningDashboard running, CancellationToken ct)
+    private static async Task HousekeepAsync(DashboardHostOptions options, DashboardActivity activity, RunningDashboard running, CancellationToken ct)
     {
         DateTimeOffset? lastRetention = null;
         var lastJournalChange = options.Time.GetUtcNow();
         long? lastVersion = null;
         SqliteConnection? watch = null;
 
-        // PRAGMA data_version on the held connection changes when any other connection commits.
+        // PRAGMA data_version changes for other connections. Matching uses this same connection,
+        // so SQLite excludes matcher-owned commits while retaining external commits during a cycle.
         long? ReadVersion()
         {
             try
             {
-                watch ??= reader.OpenReadOnly();
+                watch ??= running.Transcripts.OpenJournalConnection();
                 if (watch is null)
                     return null;
                 using var command = watch.CreateCommand();
@@ -278,9 +279,8 @@ public static class DashboardHost
                     var beforeMatching = ReadVersion();
                     if (beforeMatching is not null && lastVersion is not null && beforeMatching != lastVersion)
                         lastJournalChange = now;
-                    await Task.Run(() => running.Transcripts.RunCycle(enabled: true), ct);
-                    // The matcher's commits are not activity: baseline after it.
-                    lastVersion = ReadVersion();
+                    if (watch is not null)
+                        await Task.Run(() => running.Transcripts.RunCycle(enabled: true, journalConnection: watch), ct);
                 }
 
                 var version = ReadVersion();
