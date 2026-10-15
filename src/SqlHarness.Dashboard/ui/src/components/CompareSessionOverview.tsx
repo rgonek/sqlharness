@@ -1,8 +1,10 @@
 import { Link } from "@tanstack/react-router"
+import { useState } from "react"
 import { useSessionCompares } from "@/api/queries"
 import type { CompareAttemptSummary, CompareSubjectSummary } from "@/api/types"
 import { Button } from "@/components/ui/button"
-import { regressionLabel } from "@/lib/compare"
+import { SessionVersionDiff } from "@/components/SessionVersionDiff"
+import { regressionLabel, versionOptions } from "@/lib/compare"
 import { formatTimestamp } from "@/lib/format"
 
 function assessment(attempt: CompareAttemptSummary | null): string {
@@ -36,9 +38,38 @@ function AttemptLink({ attempt, sessionId, returnUnassigned = false }: { attempt
   )
 }
 
-function SubjectOverview({ subject, sessionId, attempts, returnSubject, returnScope }: {
+function ScopeOverview({ subject, scope, sessionId, engine, attempts, shouldOpen }: {
+  subject: string
+  scope: string
+  sessionId: number
+  engine: string | null
+  attempts: CompareAttemptSummary[]
+  shouldOpen: boolean
+}) {
+  const [showDiff, setShowDiff] = useState(false)
+  const options = versionOptions(attempts, subject, scope)
+  const group = attempts.filter(item => item.subject === subject && item.scope === scope)
+    .sort((left, right) => left.startedAt.localeCompare(right.startedAt) || left.operationId - right.operationId)
+  return <details className="rounded-md border px-3" open={shouldOpen}>
+    <summary className="cursor-pointer py-2">{scope}</summary>
+    {group.length ? <>
+      {options.length >= 2 && <div className="py-2">
+        <Button type="button" variant="outline" size="sm" aria-expanded={showDiff} onClick={() => setShowDiff(value => !value)}>
+          {showDiff ? "Hide version diff" : "Diff versions"}
+        </Button>
+        {showDiff && <div className="mt-3"><SessionVersionDiff sessionId={sessionId} engine={engine} options={options} /></div>}
+      </div>}
+      <ol className="divide-y" aria-label={`${subject} ${scope} compare attempts`}>
+        {group.map(attempt => <AttemptLink key={attempt.operationId} attempt={attempt} sessionId={sessionId} />)}
+      </ol>
+    </> : <p className="pb-2 text-sm text-muted-foreground">No attempts loaded for this scope yet.</p>}
+  </details>
+}
+
+function SubjectOverview({ subject, sessionId, engine, attempts, returnSubject, returnScope }: {
   subject: CompareSubjectSummary
   sessionId: number
+  engine: string | null
   attempts: CompareAttemptSummary[]
   returnSubject?: string
   returnScope?: string
@@ -66,26 +97,17 @@ function SubjectOverview({ subject, sessionId, attempts, returnSubject, returnSc
           <p className="text-muted-foreground">SQL hashes define versions; no winning version is selected.</p>
         </div>
         {scopes.map(scope => {
-          const group = attempts.filter(item => item.subject === subject.subject && item.scope === scope)
-            .sort((left, right) => left.startedAt.localeCompare(right.startedAt) || left.operationId - right.operationId)
-          return (
-            <details key={scope} className="rounded-md border px-3" open={shouldOpen && returnScope === scope}>
-              <summary className="cursor-pointer py-2">{scope}</summary>
-              {group.length ? (
-                <ol className="divide-y" aria-label={`${subject.subject} ${scope} compare attempts`}>
-                  {group.map(attempt => <AttemptLink key={attempt.operationId} attempt={attempt} sessionId={sessionId} />)}
-                </ol>
-              ) : <p className="pb-2 text-sm text-muted-foreground">No attempts loaded for this scope yet.</p>}
-            </details>
-          )
+          return <ScopeOverview key={scope} subject={subject.subject} scope={scope} sessionId={sessionId} engine={engine}
+            attempts={attempts} shouldOpen={shouldOpen && returnScope === scope} />
         })}
       </div>
     </details>
   )
 }
 
-export function CompareSessionOverview({ sessionId, subjects, unassignedCompareCount, returnSubject, returnScope, returnUnassigned = false }: {
+export function CompareSessionOverview({ sessionId, engine, subjects, unassignedCompareCount, returnSubject, returnScope, returnUnassigned = false }: {
   sessionId: number
+  engine: string | null
   subjects: CompareSubjectSummary[]
   unassignedCompareCount: number
   returnSubject?: string
@@ -107,7 +129,7 @@ export function CompareSessionOverview({ sessionId, subjects, unassignedCompareC
       {query.error && <div role="alert" className="flex flex-wrap items-center gap-3"><span>Could not load compare attempts: {query.error.message}</span><Button variant="outline" onClick={() => void query.refetch()}>Retry</Button></div>}
       {!query.isPending && !query.error && attempts.length === 0 && subjects.length === 0 && unassignedCompareCount === 0 && <p>No compare attempts in this session.</p>}
       {subjects.map(subject => (
-        <SubjectOverview key={subject.subject} subject={subject} sessionId={sessionId} attempts={attempts} returnSubject={returnSubject} returnScope={returnScope} />
+        <SubjectOverview key={subject.subject} subject={subject} sessionId={sessionId} engine={engine} attempts={attempts} returnSubject={returnSubject} returnScope={returnScope} />
       ))}
       {unassignedCompareCount > 0 && (
         <details className="rounded-lg border p-3" open={returnUnassigned}>

@@ -41,6 +41,7 @@ function SessionView({ id, returnSubject, returnScope, returnUnassigned }: { id:
   if (detail.isPending) return <Skeleton className="h-64 w-full" />
 
   const { session, operations, note = null, compareSubjects = [], unassignedCompareCount = 0, conversations = [] } = detail.data
+  const engine = operations.find(operation => operation.operation === "compare")?.engine ?? null
   return (
     <div className="space-y-4">
       <Card>
@@ -87,7 +88,7 @@ function SessionView({ id, returnSubject, returnScope, returnUnassigned }: { id:
       </Card>
       <SessionNoteCard key={session.id} sessionId={session.id} note={note} />
       {conversations.length > 0 && <SessionConversations conversations={conversations} />}
-      <CompareSessionOverview sessionId={id} subjects={compareSubjects} unassignedCompareCount={unassignedCompareCount} returnSubject={returnSubject} returnScope={returnScope} returnUnassigned={returnUnassigned} />
+      <CompareSessionOverview sessionId={id} engine={engine} subjects={compareSubjects} unassignedCompareCount={unassignedCompareCount} returnSubject={returnSubject} returnScope={returnScope} returnUnassigned={returnUnassigned} />
       <Card>
         <CardHeader>
           <CardTitle>All operations</CardTitle>

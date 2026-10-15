@@ -112,6 +112,8 @@ export type SessionDetail = {
   conversations: AgentConversation[]
 }
 
+export type SqlVersionText = { hash: string; text: string | null; tooLarge: boolean }
+
 export type SessionAnnotation = { title: string | null; note: string | null; starred: boolean; archived: boolean }
 
 export type AnnotationPatch = Partial<{ title: string | null; note: string | null; starred: boolean; archived: boolean }>

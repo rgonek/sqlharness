@@ -51,6 +51,12 @@ public sealed class DashboardContractTests
     }
 
     [Fact]
+    public void Session_sql_text_names_match_the_ui()
+    {
+        Assert.Equal(["hash", "text", "tooLarge"], Names(new SqlVersionText("sha256:" + new string('a', 64), null, false)));
+    }
+
+    [Fact]
     public void Variant_and_stats_names_match_the_ui()
     {
         var variant = new VariantDetail(0, "measure", null, null, 1, null, null, null, null, null, null, null, null, null,

@@ -53,6 +53,8 @@ public sealed record SessionDetail(SessionSummary Session, IReadOnlyList<Operati
     IReadOnlyList<CompareSubjectSummary> CompareSubjects, int UnassignedCompareCount, string? Note,
     IReadOnlyList<AgentConversation> Conversations);
 
+public sealed record SqlVersionText(string Hash, string? Text, bool TooLarge);
+
 public sealed record Spread(long Min, long Median, long Max);
 
 public sealed record TableIoRow(

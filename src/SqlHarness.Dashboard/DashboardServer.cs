@@ -201,6 +201,10 @@ public static partial class DashboardServer
             reader.Session(id) is { } detail ? Results.Json(detail, Json) : Results.NotFound());
         MapRead(api, "/sessions/{id:long}/compares", (long id, long? cursor, int? limit) =>
             Results.Json(reader.CompareAttempts(id, cursor, limit ?? JournalReader.CompareHistoryPageLimit), Json));
+        MapRead(api, "/sessions/{id:long}/sql", (long id, string? hash) =>
+            hash is null || !SqlHashPattern().IsMatch(hash)
+                ? BadRequest("hash must be sha256:<64 lowercase hex>.")
+                : reader.SessionSqlText(id, hash) is { } text ? Results.Json(text, Json) : Results.NotFound());
         MapRead(api, "/operations", (long? session, string? status, string? operation, string? from, string? to, long? cursor, int? limit,
             string? profile, string? dimensions, bool? unprofiled) =>
             !TryWindow(from, to, out var window)
@@ -427,4 +431,7 @@ public static partial class DashboardServer
 
     [GeneratedRegex("^[0-9A-Fa-f]{64}$", RegexOptions.CultureInvariant)]
     private static partial Regex PlanHash();
+
+    [GeneratedRegex(@"\Asha256:[0-9a-f]{64}\z")]
+    private static partial Regex SqlHashPattern();
 }

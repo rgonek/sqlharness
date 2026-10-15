@@ -13,6 +13,51 @@ public sealed class JournalReaderTests
         new(home.DatabasePath, processes ?? new FakeProcesses());
 
     [Fact]
+    public void Session_sql_text_reads_only_the_requested_hash_and_prefers_available_text_within_a_session()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath, storeSensitive: true);
+        var session = JournalSeed.Session("cli:session-sql");
+        var first = seed.Compare(session, "orders", "whole", "sha256:" + new string('a', 64), "sha256:" + new string('b', 64));
+        var second = seed.Compare(session, "orders", "whole", "sha256:" + new string('c', 64), "sha256:" + new string('d', 64));
+        var other = seed.Compare(JournalSeed.Session("cli:other-session"), "orders", "whole", "sha256:" + new string('e', 64), "sha256:" + new string('f', 64));
+        var hashOnly = seed.Compare(session, "orders", "whole", "sha256:" + new string('1', 64), "sha256:" + new string('2', 64));
+        var oversized = seed.Compare(session, "orders", "whole", "sha256:" + new string('3', 64), "sha256:" + new string('4', 64));
+        var sharedHash = seed.Compare(session, "orders", "whole", "sha256:" + new string('5', 64), "sha256:" + new string('5', 64));
+        SetSqlText(home.DatabasePath, first.OperationId, "baseline SQL", "candidate SQL");
+        SetSqlText(home.DatabasePath, second.OperationId, "candidate SQL v1", "candidate SQL v2");
+        SetSqlText(home.DatabasePath, other.OperationId, "private other session", "private other session candidate");
+        SetSqlText(home.DatabasePath, hashOnly.OperationId, null, null);
+        SetSqlText(home.DatabasePath, oversized.OperationId, new string('x', 300 * 1024), null);
+        SetSqlText(home.DatabasePath, sharedHash.OperationId, null, "candidate wins when baseline text is absent");
+
+        var sessionId = Assert.Single(Reader(home).Sessions(new SessionQuery()).Items, item => item.SessionKey == "cli:session-sql").Id;
+        var reader = Reader(home);
+
+        Assert.Equal("baseline SQL", reader.SessionSqlText(sessionId, "sha256:" + new string('a', 64))!.Text);
+        Assert.Equal("candidate SQL v2", reader.SessionSqlText(sessionId, "sha256:" + new string('d', 64))!.Text);
+        Assert.Null(reader.SessionSqlText(sessionId, "sha256:" + new string('e', 64)));
+        var missingText = reader.SessionSqlText(sessionId, "sha256:" + new string('1', 64))!;
+        Assert.Null(missingText.Text);
+        Assert.False(missingText.TooLarge);
+        var tooLarge = reader.SessionSqlText(sessionId, "sha256:" + new string('3', 64))!;
+        Assert.Null(tooLarge.Text);
+        Assert.True(tooLarge.TooLarge);
+        Assert.Equal("candidate wins when baseline text is absent", reader.SessionSqlText(sessionId, "sha256:" + new string('5', 64))!.Text);
+    }
+
+    private static void SetSqlText(string databasePath, long operationId, string? baseline, string? candidate)
+    {
+        using var connection = OpenSeedDatabase(databasePath);
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE operations SET sql_text = $baseline, candidate_sql_text = $candidate WHERE id = $id;";
+        command.Parameters.AddWithValue("$baseline", (object?)baseline ?? DBNull.Value);
+        command.Parameters.AddWithValue("$candidate", (object?)candidate ?? DBNull.Value);
+        command.Parameters.AddWithValue("$id", operationId);
+        Assert.Equal(1, command.ExecuteNonQuery());
+    }
+
+    [Fact]
     public void Agent_kinds_list_only_kinds_present_with_session_counts()
     {
         using var home = new TempHome();

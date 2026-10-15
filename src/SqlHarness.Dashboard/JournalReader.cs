@@ -22,6 +22,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     public const int SessionOperationLimit = 500;
     public const int CompareHistoryPageLimit = 100;
     public const int TopLimit = 20;
+    internal const int MaximumSqlVersionBytes = 256 * 1024;
     internal const long OverGrantMinimumKb = 1024;
 
     // Shared across reads and threads (live feed ticks, API requests): dead hosts stay dead.
@@ -200,6 +201,33 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         return new SessionDetail(WithRunning(connection, [session])[0], operations,
             subjects,
             compares.Count(attempt => attempt.Subject is null || attempt.Scope is null), note, conversations);
+    }
+
+    public SqlVersionText? SessionSqlText(long sessionId, string hash)
+    {
+        using var connection = OpenSnapshot();
+        if (connection is null)
+            return null;
+        var rows = Query(connection, """
+            SELECT text
+            FROM (
+                SELECT sql_text AS text, id, 0 AS side
+                FROM operations
+                WHERE session_id = $session AND sql_hash = $hash
+                UNION ALL
+                SELECT candidate_sql_text AS text, id, 1 AS side
+                FROM operations
+                WHERE session_id = $session AND candidate_sql_hash = $hash
+            ) AS matching_texts
+            ORDER BY (text IS NULL), id DESC, side ASC
+            LIMIT 1;
+            """, [("$session", sessionId), ("$hash", hash)], r => NullableString(r, 0));
+        if (rows.Count == 0)
+            return null;
+        var text = rows[0];
+        if (text is not null && Encoding.UTF8.GetByteCount(text) > MaximumSqlVersionBytes)
+            return new SqlVersionText(hash, null, true);
+        return new SqlVersionText(hash, text, false);
     }
 
     /// <summary>Full retained compare history is versioned before applying the endpoint page.</summary>

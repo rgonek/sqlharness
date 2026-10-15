@@ -1,13 +1,29 @@
-import { useState } from "react"
+import { useId, useState } from "react"
 import { CopyButton } from "@/components/CopyButton"
 import { LazySqlMergeView, LazySqlViewer, loadUnifiedDiffText } from "@/components/SqlEditors"
-import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { boundedPreview, diffTooLarge, dialectOf, MAX_DIFF_BYTES, normalizeForDiff, readPreference, utf8BytesWithin, writePreference, type DiffMode, type SqlTab } from "@/lib/sqlDiff"
 
 const TAB_KEY = "sqlharness.sqlDiff.tab"
 const MODE_KEY = "sqlharness.sqlDiff.mode"
 const FORMATTING_KEY = "sqlharness.sqlDiff.ignoreFormatting"
+
+export function DiffControls({ mode, onModeChange, ignoreFormatting, onIgnoreFormattingChange }: {
+  mode: DiffMode
+  onModeChange: (mode: DiffMode) => void
+  ignoreFormatting: boolean
+  onIgnoreFormattingChange: (value: boolean) => void
+}) {
+  const radioName = useId()
+  return <div className="flex flex-wrap items-center gap-3">
+    <fieldset role="radiogroup" aria-label="Diff mode" className="flex gap-2">
+      <legend className="sr-only">Diff mode</legend>
+      <label className="flex items-center gap-1"><input type="radio" name={radioName} value="side-by-side" checked={mode === "side-by-side"} onChange={() => onModeChange("side-by-side")} />Side by side</label>
+      <label className="flex items-center gap-1"><input type="radio" name={radioName} value="unified" checked={mode === "unified"} onChange={() => onModeChange("unified")} />Unified</label>
+    </fieldset>
+    <label className="flex items-center gap-2"><input type="checkbox" checked={ignoreFormatting} onChange={event => onIgnoreFormattingChange(event.target.checked)} />Ignore formatting</label>
+  </div>
+}
 
 function SideContent({ label, sql, engine }: { label: "baseline" | "candidate"; sql: string; engine: string | null }) {
   return <div className="space-y-2">
@@ -93,11 +109,7 @@ export function SqlDiff({ baseline, candidate, engine }: { baseline: string | nu
       {hasBoth && <TabsContent value="diff" className="space-y-3">
         {tooLargeRaw ? <TooLargeMessage baseline={baseline} candidate={candidate} /> : tooLargeNormalized ? <TooLargeMessage baseline={baseline} candidate={candidate} /> : <>
           <div className="flex flex-wrap items-center gap-3">
-            <div role="radiogroup" aria-label="Diff mode" className="flex gap-1">
-              <Button type="button" variant="outline" size="sm" role="radio" aria-checked={mode === "side-by-side"} onClick={() => changeMode("side-by-side")}>Side by side</Button>
-              <Button type="button" variant="outline" size="sm" role="radio" aria-checked={mode === "unified"} onClick={() => changeMode("unified")}>Unified</Button>
-            </div>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={ignoreFormatting} onChange={event => changeIgnoreFormatting(event.target.checked)} />Ignore formatting</label>
+            <DiffControls mode={mode} onModeChange={changeMode} ignoreFormatting={ignoreFormatting} onIgnoreFormattingChange={changeIgnoreFormatting} />
             <CopyButton label="Copy diff" getText={getDiffText} />
           </div>
           {formatFailed && <p className="text-sm text-muted-foreground">Formatting failed; showing the SQL as written.</p>}

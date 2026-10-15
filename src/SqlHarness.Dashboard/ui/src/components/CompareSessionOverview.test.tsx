@@ -52,6 +52,26 @@ test("groups subjects, scopes and chronological attempts while linking back to t
   expect(within(group).getByText("SQL hashes define versions; no winning version is selected.")).toBeInTheDocument()
 })
 
+test("offers a session SQL diff only when a scope has at least two distinct versions", async () => {
+  const oneVersion = attempt({ operationId: 90, scope: "single", baselineVersion: "v4", candidateVersion: "v4", baselineHash: "same", candidateHash: "same" })
+  stubSession([subject({ scopes: ["whole", "single"] })], [
+    attempt({ operationId: 91, scope: "whole", baselineVersion: "v0", candidateVersion: "v1", baselineHash: "hash0", candidateHash: "hash1" }),
+    attempt({ operationId: 92, scope: "whole", baselineVersion: "v1", candidateVersion: "v3", baselineHash: "hash1", candidateHash: "hash3" }),
+    oneVersion,
+  ])
+  renderApp("/sessions/7")
+
+  const group = (await screen.findByText("orders", { selector: "summary" })).closest("details")!
+  await userEvent.click(within(group).getByText("orders", { selector: "summary" }))
+  const whole = within(group).getByText("whole", { selector: "summary" }).closest("details")!
+  await userEvent.click(within(whole).getByText("whole", { selector: "summary" }))
+  expect(within(whole).getByRole("button", { name: "Diff versions" })).toBeInTheDocument()
+
+  const single = within(group).getByText("single", { selector: "summary" }).closest("details")!
+  await userEvent.click(within(single).getByText("single", { selector: "summary" }))
+  expect(within(single).queryByRole("button", { name: "Diff versions" })).not.toBeInTheDocument()
+})
+
 test("a failed latest completed whole compare never borrows an earlier pass", async () => {
   const failed = attempt({ operationId: 71, status: "failed", regression: null, startedAt: "2026-10-12T11:00:00Z" })
   stubSession([subject({ latestWhole: attempt({ status: "running" }), latestCompletedWhole: failed, startToLatestWhole: null })], [

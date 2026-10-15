@@ -438,6 +438,23 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
+    public async Task Session_sql_route_rejects_malformed_hashes_and_returns_not_found_for_unknown_hashes()
+    {
+        using var home = new TempHome();
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/sessions/5/sql?hash=abc")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/sessions/5/sql?hash=sha256%3AXYZ")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await client.GetAsync("/api/sessions/5/sql?hash=sha256%3A" + new string('A', 64))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await client.GetAsync("/api/sessions/5/sql?hash=sha256%3A" + new string('a', 64) + "%0A")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync("/api/sessions/5/sql?hash=sha256%3A" + new string('a', 64))).StatusCode);
+    }
+
+    [Fact]
     public async Task Agents_route_lists_kinds_as_key_count_pairs_and_detail_carries_agent()
     {
         using var home = new TempHome();

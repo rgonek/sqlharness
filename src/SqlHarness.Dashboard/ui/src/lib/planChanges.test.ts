@@ -1,5 +1,6 @@
 import { expect, test } from "vitest"
-import type { DistilledPlan, PlanNode, VariantDetail } from "@/api/types"
+import type { DistilledPlan, PlanNode } from "@/api/types"
+import { variant as variantFixture } from "@/test/fixtures"
 import { planChanges, firstPlanHash } from "./planChanges"
 
 const plan = (root: PlanNode, missing = 0): DistilledPlan => ({
@@ -65,14 +66,14 @@ test("identical plans have no access or warning changes", () => {
 })
 
 test("firstPlanHash chooses the earliest stored repetition and ordinal", () => {
-  const variant = {
+  const withPlans = variantFixture({
     plans: [
       { repetition: 2, ordinal: 0, hash: "later-repetition", stored: true },
       { repetition: 1, ordinal: 3, hash: "later-ordinal", stored: true },
       { repetition: 1, ordinal: 1, hash: "first", stored: true },
       { repetition: 0, ordinal: 0, hash: "not-stored", stored: false },
     ],
-  } as VariantDetail
-  expect(firstPlanHash(variant)).toBe("first")
-  expect(firstPlanHash({ plans: [] } as VariantDetail)).toBeNull()
+  })
+  expect(firstPlanHash(withPlans)).toBe("first")
+  expect(firstPlanHash(variantFixture({ plans: [] }))).toBeNull()
 })

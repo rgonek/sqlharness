@@ -1,6 +1,6 @@
 import { keepPreviousData, QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ConflictError, getJson, NetworkError, NotFoundError, patchJson, postJson, putJson, UnauthorizedError } from "./client"
-import type { AnnotationPatch, CompareAttemptSummary, DashboardStats, DistilledPlan, KeyCount, OperationDetail, OperationSummary, Page, PricesInfo, ProfilesResponse, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, TranscriptStatus } from "./types"
+import type { AnnotationPatch, CompareAttemptSummary, DashboardStats, DistilledPlan, KeyCount, OperationDetail, OperationSummary, Page, PricesInfo, ProfilesResponse, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string; archived?: boolean; starred?: boolean; q?: string }
 
@@ -108,6 +108,15 @@ export function useSessionCompares(id: number) {
     queryFn: ({ pageParam }) => getJson<Page<CompareAttemptSummary>>(`/api/sessions/${id}/compares`, { cursor: pageParam, limit: 100 }),
     initialPageParam: undefined as number | undefined,
     getNextPageParam: page => page.nextCursor ?? undefined,
+  })
+}
+
+export function useSessionSqlText(sessionId: number, hash: string | null) {
+  return useQuery({
+    queryKey: ["session-sql", sessionId, hash],
+    queryFn: () => getJson<SqlVersionText>(`/api/sessions/${sessionId}/sql`, { hash }),
+    enabled: hash !== null,
+    staleTime: Infinity,
   })
 }
 
