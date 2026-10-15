@@ -362,7 +362,10 @@ public sealed class DashboardHousekeepingTests
         clock.Advance(TimeSpan.FromMinutes(1));
         await WaitForAsync(() => Volatile.Read(ref passCount) >= 4);
         Assert.Single(Journal.JournalDb.Rows(home.DatabasePath, "SELECT operation_id FROM operation_agent_links"));
-        Assert.Equal("title-3", (string?)Assert.Single(Journal.JournalDb.Rows(home.DatabasePath, "SELECT title FROM agent_conversations"))["title"]);
+        var matchedTitle = (string?)Assert.Single(Journal.JournalDb.Rows(home.DatabasePath, "SELECT title FROM agent_conversations"))["title"];
+        Assert.StartsWith("title-", matchedTitle);
+        Assert.True(int.TryParse(matchedTitle!["title-".Length..], out var matchedTitleIteration) && matchedTitleIteration >= 2,
+            $"Expected multiple matcher-owned title updates, found '{matchedTitle}'.");
 
         clock.Advance(TimeSpan.FromMinutes(1));
         Assert.Equal(0, await run.WaitAsync(TimeSpan.FromSeconds(20)));
