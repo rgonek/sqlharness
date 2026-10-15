@@ -182,40 +182,36 @@ internal sealed class TranscriptMatcher(string databasePath, AgentHomes homes, T
             if (!DirectoryExists(directory))
                 continue;
 
-            IEnumerable<string> paths;
             try
             {
-                paths = Directory.EnumerateFiles(directory, "*.jsonl", SearchOption.AllDirectories).ToArray();
+                foreach (var path in Directory.EnumerateFiles(directory, "*.jsonl", SearchOption.AllDirectories))
+                {
+                    if (budget <= 0)
+                        break;
+                    if (HasMemorySegment(path))
+                        continue;
+
+                    try
+                    {
+                        var info = new FileInfo(path);
+                        var mtime = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero);
+                        if (mtime < oldest - MtimeSlack)
+                            continue;
+
+                        var result = IncrementalTail.Read(path, LoadCursor(connection, path), budget,
+                            line => Collect(batch, TranscriptLines.ParseClaude(line)));
+                        batch.Cursors[path] = result.Cursor;
+                        budget -= result.BytesRead;
+                    }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                    {
+                        _readErrors++;
+                    }
+                }
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 _readErrors++;
-                continue;
-            }
-
-            foreach (var path in paths)
-            {
-                if (budget <= 0)
-                    break;
-                if (HasMemorySegment(path))
-                    continue;
-
-                try
-                {
-                    var info = new FileInfo(path);
-                    var mtime = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero);
-                    if (mtime < oldest - MtimeSlack)
-                        continue;
-
-                    var result = IncrementalTail.Read(path, LoadCursor(connection, path), budget,
-                        line => Collect(batch, TranscriptLines.ParseClaude(line)));
-                    batch.Cursors[path] = result.Cursor;
-                    budget -= result.BytesRead;
-                }
-                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-                {
-                    _readErrors++;
-                }
             }
         }
 
