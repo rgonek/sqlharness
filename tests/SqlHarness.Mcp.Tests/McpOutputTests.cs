@@ -280,6 +280,39 @@ public sealed class McpOutputTests
         Assert.Equal(3, resultSets[0].GetProperty("rows").GetArrayLength());
     }
 
+    [Theory]
+    [InlineData(null, 2048)]
+    [InlineData(0, 0)]
+    [InlineData(2048, 2048)]
+    [InlineData(4096, 4096)]
+    public void Resolved_cell_limit_is_applied_and_reported(int? requested, int expected)
+    {
+        var budget = McpResultBudget.Resolve(65536, null, requested, AgentOutputLimits.MaximumCellCharacters);
+        var text = new string('x', 5000);
+        var set = new SqlHarnessResultSetReport(
+            [new SqlHarnessColumnReport(0, "value", "text", true)], [[text]], 1, 0);
+        var report = new SqlHarnessQueryReport(Target, "read-only", [set], [], 0, 1, "hash", new OutputFootprint(5000, 1));
+
+        var result = McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null),
+            "sqlharness_query", budget);
+
+        var envelope = EnvelopeOf(result);
+        Assert.Equal(expected, envelope.GetProperty("truncation").GetProperty("maxCellChars").GetInt32());
+        Assert.Equal(expected, envelope.GetProperty("result").GetProperty("resultSets")[0]
+            .GetProperty("rows")[0][0].GetString()!.Length);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(4097)]
+    public void Resolved_cell_limit_rejects_values_outside_contract(int requested)
+    {
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            McpResultBudget.Resolve(65536, null, requested, AgentOutputLimits.MaximumCellCharacters));
+
+        Assert.Contains("Cell limit must be 0..4096 characters.", exception.Message);
+    }
+
     [Fact]
     public void Large_query_projection_truncates_within_explicit_text_budget()
     {

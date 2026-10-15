@@ -48,11 +48,16 @@ public sealed record McpResultBudget(
     {
         var ceiling = new McpResultBudget(processCeilingBytes, processMaximumCellCharacters);
         ceiling.Validate();
+        if (callMaximumCellCharacters is < 0 or > McpLimits.MaxCellCharactersLimit)
+            throw new ArgumentOutOfRangeException(
+                nameof(callMaximumCellCharacters),
+                callMaximumCellCharacters,
+                $"Cell limit must be 0..{McpLimits.MaxCellCharactersLimit} characters.");
         var requestedBytes = callMaximumBytes ?? McpLimits.DefaultCallToolResultBudgetBytes;
         var effectiveBytes = Math.Min(requestedBytes, ceiling.MaximumBytes);
-        var effectiveCells = callMaximumCellCharacters.HasValue
-            ? Math.Min(callMaximumCellCharacters.Value, ceiling.MaximumCellCharacters)
-            : ceiling.MaximumCellCharacters;
+        var effectiveCells = Math.Min(
+            callMaximumCellCharacters ?? McpLimits.DefaultMaximumCellCharacters,
+            ceiling.MaximumCellCharacters);
         var resolved = new McpResultBudget(effectiveBytes, effectiveCells);
         resolved.Validate();
         return resolved;
