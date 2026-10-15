@@ -16,8 +16,16 @@ using SqlHarness.Mcp.Tools;
 
 namespace SqlHarness.Mcp.Tests;
 
+/// <summary>
+/// Owns the published server binary for this collection. The publish is cached per
+/// RID for the whole run and deleted here, once. Individual tests used to delete it,
+/// which made each of them pay a fresh 60-80 second self-contained publish.
+/// </summary>
 [CollectionDefinition("McpStdioProcess", DisableParallelization = true)]
-public sealed class McpStdioProcessCollection;
+public sealed class McpStdioProcessCollection : IDisposable
+{
+    public void Dispose() => McpStdioProcessHarness.DeleteAllPublishOutput();
+}
 
 /// <summary>
 /// Shared harness for T6: publish the real single-file CLI and drive it as a
@@ -154,6 +162,22 @@ internal static class McpStdioProcessHarness
             DeletePublishRoot(publishRoot);
     }
 
+    /// <summary>
+    /// Drops every published binary and the per-run cache. Called once when the
+    /// McpStdioProcess collection ends. Individual tests must not delete it: the
+    /// publish is cached per RID, and deleting after each test made every test pay a
+    /// fresh 60-80 second self-contained publish (five of them, ~350 seconds).
+    /// </summary>
+    internal static void DeleteAllPublishOutput()
+    {
+        lock (Published)
+        {
+            foreach (var exe in Published.Values)
+                DeletePublishOutput(exe);
+            Published.Clear();
+        }
+    }
+
     private static void DeletePublishRoot(string publishRoot)
     {
         for (var attempt = 0; attempt < 3; attempt++)
@@ -271,6 +295,27 @@ internal static class McpStdioProcessHarness
         var tee = new RecordingStream(process.StandardOutput.BaseStream);
         var stderr = process.StandardError.ReadToEndAsync();
         return new StdioChild(process, tee, stderr);
+    }
+
+    /// <summary>
+    /// The built CLI assembly, which runs as a child process exactly like the
+    /// published single-file binary does. Tests that only need a server process
+    /// use this; a self-contained publish costs 60-80 seconds and is reserved for
+    /// the tests whose subject is the published artifact itself.
+    /// </summary>
+    internal static string BuiltCliDll()
+    {
+        // The configuration comes from the built test assembly, so the path matches a
+        // Release run too instead of assuming Debug.
+        var configuration = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyConfigurationAttribute>(
+            typeof(McpStdioProcessHarness).Assembly)!.Configuration;
+        var cliDll = Path.Combine(FindRepositoryRoot(), "src", "SqlHarness.Cli", "bin", configuration, "net10.0", "sqlharness.dll");
+        if (!File.Exists(cliDll))
+        {
+            throw new FileNotFoundException(
+                $"Expected the built CLI DLL at {cliDll}. Build the solution before the tests.", cliDll);
+        }
+        return cliDll;
     }
 
     internal static StdioChild StartDotnetDllServer(string cliDll, string home, string arguments)
@@ -623,8 +668,6 @@ public sealed class McpStdioProcessTests
             child?.Process.Dispose();
             if (home is not null)
                 McpStdioProcessHarness.DeleteHome(home);
-            if (exe is not null)
-                McpStdioProcessHarness.DeletePublishOutput(exe);
         }
     }
 
@@ -632,10 +675,7 @@ public sealed class McpStdioProcessTests
     public async Task Built_cli_child_process_exposes_compare_policy_and_request_target_over_stdio()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-        var configuration = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyConfigurationAttribute>(
-            typeof(McpStdioProcessTests).Assembly)!.Configuration;
-        var cliDll = Path.Combine(McpStdioProcessHarness.FindRepositoryRoot(), "src", "SqlHarness.Cli", "bin", configuration, "net10.0", "sqlharness.dll");
-        Assert.True(File.Exists(cliDll), $"Expected built CLI DLL at {cliDll}.");
+        var cliDll = McpStdioProcessHarness.BuiltCliDll();
 
         static Dictionary<string, object?> Target() => new()
         {
@@ -860,8 +900,6 @@ public sealed class McpStdioProcessTests
             child?.Process.Dispose();
             if (home is not null)
                 McpStdioProcessHarness.DeleteHome(home);
-            if (exe is not null)
-                McpStdioProcessHarness.DeletePublishOutput(exe);
         }
     }
 
@@ -1152,8 +1190,6 @@ public sealed class McpStdioLiveTests
             child?.Process.Dispose();
             if (home is not null)
                 McpStdioProcessHarness.DeleteHome(home);
-            if (exe is not null)
-                McpStdioProcessHarness.DeletePublishOutput(exe);
         }
     }
 }

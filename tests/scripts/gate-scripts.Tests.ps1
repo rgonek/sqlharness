@@ -33,9 +33,20 @@ Describe 'the local gates' {
             foreach ($verb in @('restore', 'build', 'test', 'format')) {
                 if ($gate -notmatch "dotnet $verb ") { throw "a gate is missing the '$verb' stage" }
             }
-            foreach ($uiCommand in @('npm ci --prefix src/SqlHarness.Dashboard/ui', 'npm run check --prefix src/SqlHarness.Dashboard/ui')) {
+            foreach ($uiCommand in @('npm run check', 'npm ci')) {
                 if ($gate -notmatch [regex]::Escape($uiCommand)) { throw "a gate is missing '$uiCommand'" }
             }
         }
+    }
+
+    It 'skips the UI install when the lockfile is unchanged, in both gates' {
+        # npm ci took 64s and 54s per run for an unchanged tree.
+        $windows = [IO.File]::ReadAllText((Join-Path $script:ScriptsDirectory 'verify.ps1'))
+        $linux = [IO.File]::ReadAllText((Join-Path $script:ScriptsDirectory 'verify-linux.ps1'))
+        $installer = [IO.File]::ReadAllText((Join-Path $script:ScriptsDirectory 'ui-install.ps1'))
+
+        if ($windows -notmatch 'Get-UiInstallState') { throw 'the Windows gate always reinstalls the UI' }
+        if ($linux -notmatch '\.sqlharness-install-stamp') { throw 'the Linux gate always reinstalls the UI' }
+        if ($installer -notmatch '\.sqlharness-install-stamp') { throw 'the installer does not define the shared stamp name' }
     }
 }
