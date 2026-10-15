@@ -40,6 +40,12 @@ internal sealed class TimedSessionFactory(ISqlSessionFactory inner) : ISqlSessio
         List<string>? knownSecrets = null)
     {
         var scope = recorder.Start(JournalOperationPhase.Connect);
+        Dictionary<string, object?>? detail = null;
+        if (recorder.CapturesEvents)
+        {
+            detail = ConnectionDetail(target, clientConnectionId: null);
+            SetDetail(ref scope, detail);
+        }
         try
         {
             var session = knownSecrets is null
@@ -49,15 +55,8 @@ internal sealed class TimedSessionFactory(ISqlSessionFactory inner) : ISqlSessio
             {
                 try
                 {
-                    var detail = new Dictionary<string, object?>
-                    {
-                        ["clientConnectionId"] = session.ClientConnectionId,
-                        ["attempt"] = 1,
-                    };
-                    var authStrategy = AuthStrategyLabel(target);
-                    if (authStrategy is not null)
-                        detail["authStrategy"] = authStrategy;
-                    scope.Detail(JsonSerializer.Serialize(detail));
+                    detail = ConnectionDetail(target, session.ClientConnectionId);
+                    SetDetail(ref scope, detail);
                 }
                 catch
                 {
@@ -70,14 +69,21 @@ internal sealed class TimedSessionFactory(ISqlSessionFactory inner) : ISqlSessio
         catch (Exception exception)
         {
             int? errorNumber = null;
-            try
+            if (recorder.CapturesEvents)
             {
-                if (exception is SqlException sqlException)
-                    errorNumber = sqlException.Number;
-            }
-            catch
-            {
-                // Reading a provider error number is best-effort diagnostic work.
+                try
+                {
+                    if (exception is SqlException sqlException)
+                    {
+                        errorNumber = sqlException.Number;
+                        detail = ConnectionDetail(target, sqlException.ClientConnectionId.ToString());
+                    }
+                }
+                catch
+                {
+                    // Reading provider diagnostics is best-effort and never masks the connection failure.
+                }
+                SetDetail(ref scope, detail ?? ConnectionDetail(target, clientConnectionId: null));
             }
             scope.Fail(errorNumber);
             throw;
@@ -85,6 +91,31 @@ internal sealed class TimedSessionFactory(ISqlSessionFactory inner) : ISqlSessio
         finally
         {
             scope.Dispose();
+        }
+    }
+
+    private static Dictionary<string, object?> ConnectionDetail(ResolvedTarget target, string? clientConnectionId)
+    {
+        var detail = new Dictionary<string, object?>
+        {
+            ["clientConnectionId"] = clientConnectionId,
+            ["attempt"] = 1,
+        };
+        var authStrategy = AuthStrategyLabel(target);
+        if (authStrategy is not null)
+            detail["authStrategy"] = authStrategy;
+        return detail;
+    }
+
+    private static void SetDetail(ref PhaseScope scope, Dictionary<string, object?> detail)
+    {
+        try
+        {
+            scope.Detail(JsonSerializer.Serialize(detail));
+        }
+        catch
+        {
+            // Diagnostic detail is best-effort and cannot fail a connection.
         }
     }
 

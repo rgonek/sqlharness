@@ -5,6 +5,7 @@ using System.Globalization;
 using Microsoft.Data.SqlClient;
 
 using SqlHarness.Core.Auth;
+using SqlHarness.Core.Journal;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Core;
@@ -214,7 +215,29 @@ internal sealed class SqlClientSessionFactory : ISqlSessionFactory
         string? accessToken = null;
         if (target.Auth.RequiresAccessToken)
         {
-            accessToken = ReadAccessToken(await _azureCli.RunJsonAsync(AccessTokenArguments, ct));
+            var recorder = OperationPhaseRecorder.Current;
+            var tokenScope = recorder?.CapturesEvents == true
+                ? recorder.StartDiagnosticEvent(SqlHarness.Core.Journal.OperationPhase.Connect)
+                : default;
+            System.Text.Json.JsonElement tokenResponse;
+            try
+            {
+                tokenResponse = await _azureCli.RunJsonAsync(AccessTokenArguments, ct);
+                if (recorder?.CapturesEvents == true)
+                    tokenScope.Detail("{\"authStrategy\":\"azure-cli\",\"attempt\":1}");
+            }
+            catch
+            {
+                tokenScope.Fail(null);
+                if (recorder?.CapturesEvents == true)
+                    tokenScope.Detail("{\"authStrategy\":\"azure-cli\",\"attempt\":1}");
+                throw;
+            }
+            finally
+            {
+                tokenScope.Dispose();
+            }
+            accessToken = ReadAccessToken(tokenResponse);
             knownSecrets.Add(accessToken);
         }
 

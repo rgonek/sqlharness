@@ -59,6 +59,24 @@ public sealed class OperationPhaseRecorderTests
     }
 
     [Fact]
+    public void Diagnostic_only_event_does_not_change_phase_aggregates()
+    {
+        var time = new ManualTime();
+        using (OperationPhaseRecorder.Begin(time, captureEvents: true))
+        {
+            var recorder = OperationPhaseRecorder.Current!;
+            using (var phase = recorder.StartDiagnosticEvent(OperationPhase.Connect))
+            {
+                time.Advance(7);
+                phase.Detail("{\"attempt\":1}");
+            }
+
+            Assert.Empty(recorder.Aggregates());
+            Assert.Single(recorder.Events());
+        }
+    }
+
+    [Fact]
     public void Event_detail_is_clipped_to_512_characters()
     {
         var time = new ManualTime();

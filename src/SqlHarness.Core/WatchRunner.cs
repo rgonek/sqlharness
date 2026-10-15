@@ -1,6 +1,8 @@
 using System.Diagnostics;
 
+using SqlHarness.Core.Journal;
 using SqlHarness.Core.Targets;
+using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Core;
 
@@ -354,7 +356,8 @@ internal sealed class WatchRunner(ISqlSessionFactory sessions, IWatchClock clock
             CollectedQueryResult collected;
             try
             {
-                collected = await QueryResultCollector.CollectAsync(
+                using (OperationPhaseRecorder.Current?.Start(JournalOperationPhase.Execute))
+                    collected = await QueryResultCollector.CollectAsync(
                     session,
                     execution,
                     operation.MaxRows,

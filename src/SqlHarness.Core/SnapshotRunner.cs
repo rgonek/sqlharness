@@ -1,4 +1,6 @@
+using SqlHarness.Core.Journal;
 using SqlHarness.Core.Targets;
+using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Core;
 
@@ -77,7 +79,9 @@ internal sealed class SnapshotRunner(ISqlSessionFactory sessions, ISnapshotStore
             phase = OperationPhase.Sql;
 
             var execution = new SqlExecutionCommand(operation.Sql, parameters, operation.TimeoutSeconds);
-            var collected = await QueryResultCollector.CollectAsync(
+            CollectedQueryResult collected;
+            using (OperationPhaseRecorder.Current?.Start(JournalOperationPhase.Execute))
+                collected = await QueryResultCollector.CollectAsync(
                 session,
                 execution,
                 operation.MaxRows,
@@ -120,7 +124,26 @@ internal sealed class SnapshotRunner(ISqlSessionFactory sessions, ISnapshotStore
 
             try
             {
-                _store.Save(operation.Name, document, operation.Force);
+                var artifactScope = OperationPhaseRecorder.Current is { } artifactRecorder
+                    ? artifactRecorder.Start(JournalOperationPhase.Artifact)
+                    : default;
+                try
+                {
+                    _store.Save(operation.Name, document, operation.Force);
+                    if (OperationPhaseRecorder.Current?.CapturesEvents == true)
+                        artifactScope.Detail("{\"fileCount\":1}");
+                }
+                catch
+                {
+                    artifactScope.Fail(null);
+                    if (OperationPhaseRecorder.Current?.CapturesEvents == true)
+                        artifactScope.Detail("{\"fileCount\":0}");
+                    throw;
+                }
+                finally
+                {
+                    artifactScope.Dispose();
+                }
             }
             catch (Exception exception) when (IsLocalStorage(exception))
             {

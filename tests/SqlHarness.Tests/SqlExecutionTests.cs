@@ -7,6 +7,10 @@ using SqlHarness.Core;
 using SqlHarness.Core.Auth;
 using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
+using SqlHarness.Core.Journal;
+using SqlHarness.Tests.Journal;
+
+using OperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Tests;
 
@@ -61,6 +65,33 @@ public sealed class SqlExecutionTests
         Assert.Equal("azure-token", connector.AccessToken);
         Assert.Contains("azure-token", knownSecrets);
         Assert.Equal("profile", session.Identity.Mode);
+    }
+
+    [Fact]
+    public async Task Azure_cli_token_timing_is_diagnostic_only_and_outer_connect_is_not_double_counted()
+    {
+        var time = new ManualTime();
+        var cli = new AdvancingAzureCli(time, 7, "safe-test-token");
+        var connector = new FakeConnector("server", "database");
+        var factory = new TimedSessionFactory(new SqlClientSessionFactory(cli, (connectionString, accessToken, ct) =>
+        {
+            time.Advance(11);
+            return connector.ConnectAsync(connectionString, accessToken, ct);
+        }));
+        var target = new ResolvedTarget("server", "database", AuthSpec.Parse("azure-cli", null, null, false), "profile");
+        using (OperationPhaseRecorder.Begin(time, captureEvents: true))
+        {
+            await using var session = await factory.ConnectAsync(target, CancellationToken.None);
+
+            var recorder = OperationPhaseRecorder.Current!;
+            Assert.Equal(new PhaseAggregate(OperationPhase.Connect, 1, 18, 18), Assert.Single(recorder.Aggregates()));
+            var events = recorder.Events();
+            Assert.Equal(2, events.Count);
+            Assert.Equal(7, events[0].DurationMilliseconds);
+            Assert.Contains("\"authStrategy\":\"azure-cli\"", events[0].DetailJson!);
+            Assert.Contains("\"attempt\":1", events[0].DetailJson!);
+            Assert.DoesNotContain("safe-test-token", string.Join(" ", events.Select(item => item.DetailJson)));
+        }
     }
 
     [Fact]
@@ -295,6 +326,16 @@ public sealed class SqlExecutionTests
         {
             RunCount++;
             LastArgs = args;
+            return Task.FromResult(JsonSerializer.SerializeToElement(new { accessToken = token }));
+        }
+    }
+
+    private sealed class AdvancingAzureCli(ManualTime time, int milliseconds, string token) : IAzureCli
+    {
+        public Task<bool> IsLoggedInAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public Task<JsonElement> RunJsonAsync(IReadOnlyList<string> args, CancellationToken cancellationToken = default)
+        {
+            time.Advance(milliseconds);
             return Task.FromResult(JsonSerializer.SerializeToElement(new { accessToken = token }));
         }
     }

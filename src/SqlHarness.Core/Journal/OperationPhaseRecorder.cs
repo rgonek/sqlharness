@@ -63,7 +63,21 @@ public sealed class OperationPhaseRecorder
     {
         try
         {
-            return new PhaseScope(this, phase, _time.GetTimestamp());
+            return new PhaseScope(this, phase, _time.GetTimestamp(), recordAggregate: true);
+        }
+        catch
+        {
+            return default;
+        }
+    }
+
+    internal PhaseScope StartDiagnosticEvent(OperationPhase phase)
+    {
+        if (_events is null)
+            return default;
+        try
+        {
+            return new PhaseScope(this, phase, _time.GetTimestamp(), recordAggregate: false);
         }
         catch
         {
@@ -111,22 +125,26 @@ public sealed class OperationPhaseRecorder
         long startedAt,
         string outcome,
         int? errorNumber,
-        string? detailJson)
+        string? detailJson,
+        bool recordAggregate)
     {
         var endedAt = _time.GetTimestamp();
         var duration = ElapsedMilliseconds(_time, startedAt, endedAt);
         var offset = ElapsedMilliseconds(_time, _startedAt, endedAt);
         lock (_sync)
         {
-            if (!_aggregates.TryGetValue(phase, out var aggregate))
+            if (recordAggregate && !_aggregates.TryGetValue(phase, out _))
             {
-                aggregate = new MutableAggregate();
-                _aggregates.Add(phase, aggregate);
+                _aggregates.Add(phase, new MutableAggregate());
             }
 
-            aggregate.Count++;
-            aggregate.TotalMilliseconds += duration;
-            aggregate.MaxMilliseconds = Math.Max(aggregate.MaxMilliseconds, duration);
+            if (recordAggregate)
+            {
+                var aggregate = _aggregates[phase];
+                aggregate.Count++;
+                aggregate.TotalMilliseconds += duration;
+                aggregate.MaxMilliseconds = Math.Max(aggregate.MaxMilliseconds, duration);
+            }
 
             if (_events is null || phase is not (OperationPhase.Connect or OperationPhase.Artifact))
                 return;
@@ -175,16 +193,18 @@ public struct PhaseScope : IDisposable
     private readonly OperationPhaseRecorder? _recorder;
     private readonly OperationPhase _phase;
     private readonly long _startedAt;
+    private readonly bool _recordAggregate;
     private string? _detailJson;
     private int? _errorNumber;
     private bool _failed;
     private bool _disposed;
 
-    internal PhaseScope(OperationPhaseRecorder recorder, OperationPhase phase, long startedAt)
+    internal PhaseScope(OperationPhaseRecorder recorder, OperationPhase phase, long startedAt, bool recordAggregate)
     {
         _recorder = recorder;
         _phase = phase;
         _startedAt = startedAt;
+        _recordAggregate = recordAggregate;
         _detailJson = null;
         _errorNumber = null;
         _failed = false;
@@ -215,7 +235,8 @@ public struct PhaseScope : IDisposable
                 _startedAt,
                 _failed ? "failed" : "succeeded",
                 _errorNumber,
-                _detailJson);
+                _detailJson,
+                _recordAggregate);
         }
         catch
         {

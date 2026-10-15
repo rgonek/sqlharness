@@ -89,7 +89,7 @@ function OperationTimings({ detail }: { detail: OperationDetail }) {
           <ol className="mt-3 space-y-2 text-sm">
             {events.map((event, index) => <li key={`${event.phase}:${event.offsetMs}:${index}`} className="rounded-md border p-3">
               {event.outcome === "truncated" && event.droppedCount !== null ? (
-                <span>{formatNumber(event.droppedCount)} connection events omitted</span>
+                <span>{formatNumber(event.droppedCount)} diagnostic events omitted</span>
               ) : <div className="flex flex-wrap gap-x-4 gap-y-1">
                 <span>{event.phase}</span><span>Offset {formatDuration(event.offsetMs)}</span>
                 <span>Duration {formatDuration(event.durationMs)}</span><span>Outcome: {event.outcome}</span>

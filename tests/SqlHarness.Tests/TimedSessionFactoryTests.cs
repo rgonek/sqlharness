@@ -78,6 +78,9 @@ public sealed class TimedSessionFactoryTests
             var phaseEvent = Assert.Single(recorder.Events());
             Assert.Equal("failed", phaseEvent.Outcome);
             Assert.Equal(failure.Number, phaseEvent.ErrorNumber);
+            Assert.Contains("\"authStrategy\":\"azure-cli\"", phaseEvent.DetailJson!);
+            Assert.Contains("\"attempt\":1", phaseEvent.DetailJson!);
+            Assert.Contains("\"clientConnectionId\"", phaseEvent.DetailJson!);
         }
     }
 
