@@ -48,4 +48,30 @@ Windows `verify.ps1` first stopped at `ui-check`: the unchanged `CompareSessionO
 
 The first requested `verify-linux.ps1` run synced committed tip `40a6871d` and stopped at `ui-check` with the same unchanged 20-second UI timeout (160 passed, 1 failed). One authorized full retry at the same committed base passed: UI 161/161; restore; build with 0 warnings/errors; Core 3,492 passed/6 skipped; MCP 370 passed/3 skipped; format. The retry validates the committed base, not the uncommitted implementation. To validate the implementation, the exact working-tree snapshot was separately copied to ext4. Its UI, restore, build, and test stages passed: UI 161/161; build 0 warnings/errors; Core 3,499 passed/6 skipped; MCP 375 passed/3 skipped. The raw Windows-byte copy preserved CRLF, so its first Linux format check reported 19 whitespace diagnostics across seven files. `git ls-files --eol` confirmed `i/lf w/crlf attr/text=auto`, including unchanged files. Repeating only format on a second snapshot with those text files normalized to Git's Linux LF checkout form passed. Thus the retry is a green Linux gate at committed base `40a6871d`; the implementation snapshot's ext4 equivalent stages passed after applying Git's normal text checkout conversion.
 
-Snapshot identifiers: raw archive SHA-256 `3f99050d5616ef36d95e50f9a23524a51285391ad7de1437ad054437b3959c40`; raw extracted-file manifest SHA-256 `bc4a50cc9ff590de47343559ccfdf1c9d155183861e978e72cd63c0e5205aff4`; Git-normalized manifest SHA-256 `57c54b3b10a774f01b04ed7f00479115cc9519e565bbe287ca71fa3c539b87c9`. These identify the validation snapshot captured after the reviewed EOF correction. Later verification, plan/index, and skill wording edits did not change implementation or test source bytes. The normalized copy changes only CRLF to LF for `text=auto` paths. No database was opened. The implementation is committed as `0b6dce4`; feature-branch verification and its limits remain as recorded above, with integration verification underway after merging main.
+Snapshot identifiers: raw archive SHA-256 `3f99050d5616ef36d95e50f9a23524a51285391ad7de1437ad054437b3959c40`; raw extracted-file manifest SHA-256 `bc4a50cc9ff590de47343559ccfdf1c9d155183861e978e72cd63c0e5205aff4`; Git-normalized manifest SHA-256 `57c54b3b10a774f01b04ed7f00479115cc9519e565bbe287ca71fa3c539b87c9`. These identify the validation snapshot captured after the reviewed EOF correction. Later verification, plan/index, and skill wording edits did not change implementation or test source bytes. The normalized copy changes only CRLF to LF for `text=auto` paths. No database was opened. The implementation is committed as `0b6dce4`; the feature branch is verified as recorded below. Feature-to-main integration and verification on integrated `main` remain pending authorization.
+
+## Additional feature-branch verification (2026-10-15)
+
+The feature branch had `main` merged in commit `488598d`. Windows verification ran first on that revision:
+
+| Command | Exit | Stages and results |
+|---|---:|---|
+| `just verify` | 0 | UI install 1m15s; UI check 2m39s; restore 32.9s; build 2m07s; tests 4m24s (Core 3,511 passed/11 skipped; MCP 374 passed/4 skipped); format skipped because the clean working tree had 0 changed C# files |
+
+The first `just verify-linux` at `488598d` printed `OK stages=9 16.1s`, but this was a false green and is not verification evidence. The shared clone stayed at `8849049`, `FETCH_HEAD` remained on `main`, and the stage logs were empty. The feature's then-current Linux gate used a local `$lines` accumulator whose case-insensitive name shadowed the caller's `$Lines` parameter, leaving each Linux stage script empty. It also lacked reliable native `wsl.exe` output and exit capture. The reviewed gate-only fix `8849049` was cherry-picked as `7acf039`; no unrelated main commits were brought in. The focused `pwsh ./tests/scripts/gate-output.Tests.ps1` passed 13/13.
+
+At `7acf039`, corrected Linux attempt 1 synced the clone to the exact revision, passed sync/SDK/Node/UI install, then failed UI check (exit 1, 4m37s). Its log contained only `wsl exited with 1`, so the cause is unknown. A bounded direct rerun of the same UI command against the unchanged clone passed: 35 files and 163 tests, exit 0, 50.30s; existing chart container-size warnings were emitted. One full retry was authorized and run at the same revision; no further retry was made.
+
+| Corrected retry stage | Result |
+|---|---|
+| sync | passed, 0.6s; clone HEAD verified as `7acf0395bd3fef494833d2c46e0f00fc77819aa8` |
+| SDK | passed, 0.8s |
+| Node | passed, 0.4s |
+| UI install | passed, 23.7s |
+| UI check | passed, 1m05s; 35 files, 163 tests |
+| restore | passed, 8.3s |
+| build | passed, 1m18s; 0 warnings/errors |
+| test | passed, 5m18s; Core 3,516 passed/6 skipped/3,522 total; MCP 375 passed/3 skipped/378 total |
+| format | passed, 2m02s; all 7 changed C# files |
+
+The corrected retry ran as `just verify-linux -LogDirectory <dedicated-log-directory>`; it exited 0 with `verify-linux: OK stages=9 10m16s`. Its stage output is retained under the corrected-retry log set. The earlier corrected attempt's unknown UI check failure remains part of the record. No database was opened. This proves the feature tree at `7acf039`; no feature-to-main merge or integrated-main gate was performed.
