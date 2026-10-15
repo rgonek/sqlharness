@@ -9,7 +9,12 @@ export function CopyButton({ label, getText }: { label: string; getText: () => s
   const textarea = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    if (manualText !== null) textarea.current?.select()
+    if (manualText === null) return
+    const timeout = window.setTimeout(() => {
+      textarea.current?.focus()
+      textarea.current?.select()
+    }, 0)
+    return () => window.clearTimeout(timeout)
   }, [manualText])
 
   useEffect(() => {
@@ -41,7 +46,7 @@ export function CopyButton({ label, getText }: { label: string; getText: () => s
     <Dialog open={manualText !== null} onOpenChange={open => { if (!open) setManualText(null) }}>
       <DialogContent>
         <DialogHeader><DialogTitle>Copy manually</DialogTitle></DialogHeader>
-        <textarea ref={textarea} aria-label="Text to copy" readOnly value={manualText ?? ""} className="min-h-40 w-full rounded border bg-background p-2 font-mono text-xs" />
+        <textarea ref={textarea} aria-label="Text to copy" readOnly value={manualText ?? ""} onFocus={event => event.currentTarget.select()} className="min-h-40 w-full rounded border bg-background p-2 font-mono text-xs" />
       </DialogContent>
     </Dialog>
   </>

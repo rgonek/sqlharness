@@ -1,7 +1,7 @@
-import { DiffEditor, Editor, loader } from "@monaco-editor/react"
+import { Editor, loader } from "@monaco-editor/react"
 import * as monaco from "monaco-editor/editor/editor.api"
 import EditorWorker from "monaco-editor/editor/editor.worker?worker"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { editor as MonacoEditorApi } from "monaco-editor"
 import type { SqlMergeViewProps, SqlViewerProps } from "@/lib/sqlDiff"
 
@@ -151,23 +151,65 @@ export function SqlViewer({ sql, dialect }: SqlViewerProps) {
 
 export function SqlMergeView({ baseline, candidate, dialect, mode }: SqlMergeViewProps) {
   const theme = useSqlTheme()
+  const modeRef = useRef(mode)
+  const container = useRef<HTMLDivElement>(null)
+  const diffEditor = useRef<MonacoEditorApi.IStandaloneDiffEditor | null>(null)
+  const originalModel = useRef<MonacoEditorApi.ITextModel | null>(null)
+  const modifiedModel = useRef<MonacoEditorApi.ITextModel | null>(null)
+
+  useEffect(() => {
+    modeRef.current = mode
+  }, [mode])
+
+  useEffect(() => {
+    if (!container.current) return
+    const original = monaco.editor.createModel("", postgresLanguage)
+    const modified = monaco.editor.createModel("", postgresLanguage)
+    const editor = monaco.editor.createDiffEditor(container.current, {
+      ...editorOptions,
+      automaticLayout: true,
+      renderSideBySide: modeRef.current === "side-by-side",
+      originalEditable: false,
+      diffCodeLens: false,
+      enableSplitViewResizing: false,
+    })
+    originalModel.current = original
+    modifiedModel.current = modified
+    diffEditor.current = editor
+    editor.setModel({ original, modified })
+    return () => {
+      editor.setModel(null)
+      editor.dispose()
+      original.dispose()
+      modified.dispose()
+      diffEditor.current = null
+      originalModel.current = null
+      modifiedModel.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    originalModel.current?.setValue(baseline)
+    modifiedModel.current?.setValue(candidate)
+  }, [baseline, candidate])
+
+  useEffect(() => {
+    const language = languageFor(dialect)
+    if (originalModel.current) monaco.editor.setModelLanguage(originalModel.current, language)
+    if (modifiedModel.current) monaco.editor.setModelLanguage(modifiedModel.current, language)
+  }, [dialect])
+
+  useEffect(() => {
+    diffEditor.current?.updateOptions({ renderSideBySide: mode === "side-by-side" })
+  }, [mode])
+
+  useEffect(() => {
+    monaco.editor.setTheme(theme)
+  }, [theme])
+
   return (
     <div className="h-[32rem] max-h-[32rem] overflow-hidden rounded border">
-      <DiffEditor
-        height="32rem"
-        language={languageFor(dialect)}
-        original={baseline}
-        modified={candidate}
-        theme={theme}
-        options={{
-          ...editorOptions,
-          renderSideBySide: mode === "side-by-side",
-          readOnly: true,
-          originalEditable: false,
-          diffCodeLens: false,
-          enableSplitViewResizing: false,
-        }}
-      />
+      <div ref={container} className="h-[32rem] w-full" />
     </div>
   )
 }
