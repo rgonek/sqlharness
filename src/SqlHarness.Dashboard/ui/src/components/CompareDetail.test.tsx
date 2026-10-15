@@ -68,7 +68,7 @@ test("shows original setup SQL with an independent copy control beside compare S
   })} />)
   await userEvent.click(screen.getByRole("tab", { name: "SQL changes" }))
   const panel = screen.getByRole("region", { name: "Setup SQL" })
-  expect(within(panel).getByTestId("sql-code")).toHaveTextContent(setup)
+  expect(within(panel).getByTestId("sql-code").textContent).toBe(setup)
   expect(within(panel).getByRole("button", { name: "Show formatted" })).toBeInTheDocument()
   expect(within(panel).getByRole("button", { name: "Copy" })).toBeInTheDocument()
   expect(within(panel).getByText(/same database session/)).toBeInTheDocument()
