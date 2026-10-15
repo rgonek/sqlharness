@@ -71,6 +71,35 @@ public sealed class OperationPhaseRecorderTests
             Assert.Equal(512, Assert.Single(recorder.Events()).DetailJson!.Length);
         }
     }
+
+    [Fact]
+    public void Setup_and_execute_aggregate_without_consuming_event_cap()
+    {
+        var time = new ManualTime();
+        using (OperationPhaseRecorder.Begin(time, captureEvents: true))
+        {
+            var recorder = OperationPhaseRecorder.Current!;
+            for (var index = 0; index < OperationPhaseRecorder.MaximumEvents + 5; index++)
+            {
+                using (recorder.Start(OperationPhase.Setup)) { }
+                using (recorder.Start(OperationPhase.Execute)) { }
+            }
+
+            using (recorder.Start(OperationPhase.Connect)) { }
+            using (recorder.Start(OperationPhase.Artifact)) { }
+
+            Assert.Equal(
+                OperationPhaseRecorder.MaximumEvents + 5,
+                recorder.Aggregates().Single(aggregate => aggregate.Phase == OperationPhase.Setup).Count);
+            Assert.Equal(
+                OperationPhaseRecorder.MaximumEvents + 5,
+                recorder.Aggregates().Single(aggregate => aggregate.Phase == OperationPhase.Execute).Count);
+            Assert.Equal(
+                [OperationPhase.Connect, OperationPhase.Artifact],
+                recorder.Events().Select(phaseEvent => phaseEvent.Phase));
+            Assert.Equal(0, recorder.DroppedEvents);
+        }
+    }
 }
 
 internal sealed class ManualTime : TimeProvider

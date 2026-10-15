@@ -37,3 +37,24 @@ The full-suite process built and ran before the final auth-label and additional 
 - Concurrent async flows keep their recorders separate.
 - Event capture respects the 256-event cap and reports dropped events; detail is clipped at 512 characters.
 - Timed connect covers both overloads, success and `SqlException` failure, error-number reporting, diagnostic labels, session connection ID exposure, and pass-through with no recorder.
+
+## Review fix round 1
+
+Restricted detailed events to `Connect` and `Artifact`; aggregate counts and durations continue to record `Setup` and `Execute`. Added `Setup_and_execute_aggregate_without_consuming_event_cap`, which records more than 256 Setup and Execute scopes and then confirms Connect and Artifact still appear, both high-volume phases retain their aggregates, and `DroppedEvents` stays at zero.
+
+RED command:
+
+```text
+dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~OperationPhaseRecorderTests|FullyQualifiedName~TimedSessionFactoryTests" --no-restore
+Failed: 1, Passed: 10, Skipped: 0, Total: 11
+Expected events: Connect, Artifact; actual events began with Setup, Execute.
+```
+
+GREEN command on the corrected tree:
+
+```text
+dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~OperationPhaseRecorderTests|FullyQualifiedName~TimedSessionFactoryTests" --no-restore
+Passed: 11, Failed: 0, Skipped: 0, Total: 11
+```
+
+Covering files: `src/SqlHarness.Core/Journal/OperationPhaseRecorder.cs` and `tests/SqlHarness.Tests/Journal/OperationPhaseRecorderTests.cs`. `git diff --check` passed. No full suite or global gates were run for this review fix.

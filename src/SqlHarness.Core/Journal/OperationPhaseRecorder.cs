@@ -128,7 +128,7 @@ public sealed class OperationPhaseRecorder
             aggregate.TotalMilliseconds += duration;
             aggregate.MaxMilliseconds = Math.Max(aggregate.MaxMilliseconds, duration);
 
-            if (_events is null)
+            if (_events is null || phase is not (OperationPhase.Connect or OperationPhase.Artifact))
                 return;
             if (_events.Count >= MaximumEvents)
             {
