@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Journal;
+
 using OperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Tests.Journal;

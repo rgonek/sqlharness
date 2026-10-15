@@ -4,6 +4,7 @@ using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 using SqlHarness.Core.Dialect;
 using SqlHarness.Core.Journal;
+
 using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Core;

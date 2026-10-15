@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.Data.Sqlite;
 
 using SqlHarness.Core.Journal;
+
 using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Core;

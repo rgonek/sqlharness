@@ -5,6 +5,7 @@ using SqlHarness.Core.Auth;
 using SqlHarness.Core.Journal;
 using SqlHarness.Core.Targets;
 using SqlHarness.Tests.Journal;
+
 using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Tests;

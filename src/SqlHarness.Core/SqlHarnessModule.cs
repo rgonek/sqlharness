@@ -5,9 +5,10 @@ using System.Text.Json;
 
 using SqlHarness.Core.Auth;
 using SqlHarness.Core.Dialect;
-using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Journal;
+using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
+
 using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Core;

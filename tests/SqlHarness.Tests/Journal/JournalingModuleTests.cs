@@ -1,6 +1,7 @@
 using SqlHarness.Core;
 using SqlHarness.Core.Journal;
 using SqlHarness.Core.Targets;
+
 using OperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Tests.Journal;
