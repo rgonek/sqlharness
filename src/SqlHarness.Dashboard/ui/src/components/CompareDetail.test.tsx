@@ -57,3 +57,35 @@ test("shows plans and table IO from both compare sides", async () => {
   expect(screen.getByText("AfterRows")).toBeInTheDocument()
   expect(screen.getAllByText(/plan not stored/)).toHaveLength(2)
 })
+
+test("shows original setup SQL with an independent copy control beside compare SQL", async () => {
+  const setup = "CREATE TABLE #session_data (id int);\nINSERT INTO #session_data VALUES (1);"
+  render(<CompareDetail detail={operationDetail({
+    operation: operation({ operation: "compare" }),
+    sqlText: "SELECT id FROM #session_data",
+    candidateSqlText: "SELECT id FROM #session_data WHERE id > 0",
+    compareConditions: { setupSql: setup, timeoutSeconds: 30 },
+  })} />)
+  await userEvent.click(screen.getByRole("tab", { name: "SQL changes" }))
+  const panel = screen.getByRole("region", { name: "Setup SQL" })
+  expect(within(panel).getByTestId("sql-code")).toHaveTextContent(setup)
+  expect(within(panel).getByRole("button", { name: "Show formatted" })).toBeInTheDocument()
+  expect(within(panel).getByRole("button", { name: "Copy" })).toBeInTheDocument()
+  expect(within(panel).getByText(/same database session/)).toBeInTheDocument()
+  expect(screen.getByLabelText("SQL diff")).toBeInTheDocument()
+})
+
+test("explains when setup SQL is unavailable or omitted by journal limits", async () => {
+  const { rerender } = render(<CompareDetail detail={operationDetail({
+    operation: operation({ operation: "compare" }),
+    compareConditions: { timeoutSeconds: 30 },
+  })} />)
+  await userEvent.click(screen.getByRole("tab", { name: "SQL changes" }))
+  expect(screen.getByText(/Setup SQL is not stored/)).toBeInTheDocument()
+  rerender(<CompareDetail detail={operationDetail({
+    operation: operation({ operation: "compare" }),
+    compareConditions: { omittedSensitiveFields: ["setupSql"], timeoutSeconds: 30 },
+  })} />)
+  expect(screen.getByText(/Setup SQL was omitted/)).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Copy" })).not.toBeInTheDocument()
+})
