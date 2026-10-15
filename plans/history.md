@@ -6,7 +6,7 @@ Snapshot of the previous index, archived on 2026-10-14. Status and queue notes b
 
 | Plan | Evidence |
 |---|---|
-| [067](067-cell-limit-parity-and-default.md) | DONE on feature branch `feat/plan-067-cell-limit` at `3388917`; Windows verify passed (Core/CLI 3513/11 skipped; MCP 381/4 skipped), and a later branch-scoped Windows format check passed after whitespace-only changes (16 C# files; tests not rerun). Linux reached build, then its test stage was explicitly waived and interrupted after about 15 minutes without a result; Linux tests and format are unverified. No integration, installation or publication. Full details: [Task 3 report](../.superpowers/sdd/067-cell-limit-parity-and-default/task-3-report.md). |
+| [067](067-cell-limit-parity-and-default.md) | DONE on feature branch `feat/plan-067-cell-limit` at implementation HEAD `3ae4dc5`; final Windows `just verify` passed on that exact revision (UI 163; Core/CLI 3519 passed, 11 skipped; MCP 381 passed, 4 skipped; build 0 warnings/errors; format skipped because no C# files changed). Linux was explicitly waived and remains unverified. No integration, installation or publication. See durable [final completion report](../final-completion-report.md). |
 
 # Plany po audycie SQLHarness 2026-09-28
 

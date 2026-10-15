@@ -14,7 +14,7 @@
 
 ## Status
 
-- DONE on feature branch `feat/plan-067-cell-limit`, at `3388917`. Windows `just verify` passed. A later branch-scoped Windows format check passed after whitespace-only changes (`pwsh -NoProfile ./scripts/format-changed.ps1 -Mode branch -BaseRef cf0e7c4`, 16 C# files in scope); tests were not rerun for formatting. The operator explicitly waived Linux after its test stage ran for about 15 minutes without completing; Linux tests and formatting remain unverified. No integration, installation or publication performed.
+- DONE on feature branch `feat/plan-067-cell-limit` at implementation HEAD `3ae4dc5`. Final Windows `just verify -LogDirectory D:/temp/sqlharness-plan067-final-verify-3ae4dc5` passed on that exact revision: UI 163 passed; Core/CLI 3519 passed, 11 skipped; MCP 381 passed, 4 skipped; build had 0 warnings and 0 errors. All six stages completed in 8m36s; format was skipped because no C# files changed. Linux was explicitly waived and remains unverified. No integration, installation or publication performed.
 - Planning base: `ed44649`, 2026-10-14.
 - Priority: P2. Effort: S–M. Risk: LOW–MEDIUM (tool schema change; larger default output).
 - Owner: this plan.
@@ -134,15 +134,16 @@ Add a schema test asserting `maxCellChars` exists on the seven tools and not on 
 - [x] MCP runtime/tools docs describe the 2048 default, `maxCellChars` 0..4096, and applied `truncation.maxCellChars`; the former rejection-note wording is absent from the reorganized docs.
 - [x] `README.md` and the agent-output contract spec describe the shared 2048 default and MCP `maxCellChars`; removed the obsolete accepted-follow-up note.
 - [x] `rg -n "512" skills` found no matches, so no skill changes were needed.
-- [x] Windows gate: `just verify -LogDirectory D:/temp/sqlharness-plan067-verify` passed at `3388917`; Core/CLI 3513 passed, 11 skipped; MCP 381 passed, 4 skipped. All six stages completed in 7m04s; format was skipped because no C# files changed.
+- [x] Earlier Windows gate: `just verify -LogDirectory D:/temp/sqlharness-plan067-verify` passed at `3388917`; Core/CLI 3513 passed, 11 skipped; MCP 381 passed, 4 skipped. Superseded by final verification on `3ae4dc5` below.
 - [x] Linux gate: `just verify-linux -LogDirectory D:/temp/sqlharness-plan067-linux` synchronized `3388917` and passed sync, SDK, Node, UI install, UI check, restore, and build. The Core/CLI test stage ran for about 15 minutes with an active testhost but produced no result or `test.log`. The operator waived Linux; the gate was interrupted through its own process session. Linux tests and format are not verified.
 
 ### Completion evidence
 
 - Implemented on feature branch `feat/plan-067-cell-limit`; no integration, installation or publication performed.
-- Windows gate passed on `3388917`: Core/CLI 3513 passed, 11 skipped; MCP 381 passed, 4 skipped; 0 failed.
+- Final Windows gate passed on `3ae4dc5f4fdc735079c0bdd44ee37d4ad9c19029`: UI 163 passed; Core/CLI 3519 passed, 11 skipped; MCP 381 passed, 4 skipped; 0 failed. All six stages completed in 8m36s; build had 0 warnings/errors and format was skipped because no C# files changed. Logs: `D:/temp/sqlharness-plan067-final-verify-3ae4dc5`.
+- An earlier Windows gate passed on `3388917` (Core/CLI 3513 passed, 11 skipped; MCP 381 passed, 4 skipped); it is superseded by the final run above.
 - Linux gate reached build on `3388917`; test stage was waived and interrupted by operator direction after about 15 minutes without a result. No Linux test or format result is claimed.
-- Task 3 report: [gate results, test counts and documentation checks](../.superpowers/sdd/067-cell-limit-parity-and-default/task-3-report.md).
+- Full final completion report: [`final-completion-report.md`](../final-completion-report.md).
 
 ## Acceptance
 
