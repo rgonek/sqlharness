@@ -34,16 +34,19 @@ public sealed class McpStderrLeakRegressionTests
     {
         using var cts = new CancellationTokenSource(LeakBudget);
         var ct = cts.Token;
-        string? exe = null;
         string? home = null;
         McpStdioProcessHarness.StdioChild? child = null;
         try
         {
-            exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
+            // The subject here is what the server writes to stdout and stderr, not how
+            // it is packaged. Running the built assembly as a child process exercises
+            // the same logger path; a self-contained publish would add 60-80 seconds
+            // to every one of these tests and prove nothing extra.
             home = McpStdioProcessHarness.CreateSyntheticHome(
                 McpStdioProcessHarness.ProfileName,
                 """{"mcp-stdio": {"server": "mcp-unreachable.invalid", "database": "mcp-stdio-db", "vars": {"tenant": "^steno-scope-var-7745$"}, "auth": "integrated"}}""");
-            child = McpStdioProcessHarness.StartServer(exe, home, "mcp serve --request-scope --allow-profile mcp-stdio");
+            child = McpStdioProcessHarness.StartDotnetDllServer(
+                McpStdioProcessHarness.BuiltCliDll(), home, "mcp serve --request-scope --allow-profile mcp-stdio");
             var stdin = child.Process.StandardInput.BaseStream;
             await using var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct);
 
@@ -213,8 +216,6 @@ public sealed class McpStderrLeakRegressionTests
             child?.Process.Dispose();
             if (home is not null)
                 McpStdioProcessHarness.DeleteHome(home);
-            if (exe is not null)
-                McpStdioProcessHarness.DeletePublishOutput(exe);
         }
     }
 
@@ -226,16 +227,17 @@ public sealed class McpStderrLeakRegressionTests
     {
         using var cts = new CancellationTokenSource(LeakBudget);
         var ct = cts.Token;
-        string? exe = null;
         string? home = null;
         McpStdioProcessHarness.StdioChild? child = null;
         try
         {
-            exe = await McpStdioProcessHarness.PublishAsync(McpStdioProcessHarness.CurrentRid, ct);
+            // Same reasoning as above: the subject is the logger's stream discipline,
+            // not the published artifact.
             home = McpStdioProcessHarness.CreateSyntheticHome(
                 McpStdioProcessHarness.ProfileName,
                 """{"mcp-stdio": {"server": "mcp-unreachable.invalid", "database": "mcp-stdio-db", "vars": {}, "auth": "integrated"}}""");
-            child = McpStdioProcessHarness.StartServer(exe, home, "mcp serve mcp-stdio");
+            child = McpStdioProcessHarness.StartDotnetDllServer(
+                McpStdioProcessHarness.BuiltCliDll(), home, "mcp serve mcp-stdio");
             var stdin = child.Process.StandardInput.BaseStream;
             var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, ct, revision);
             Assert.Equal(revision, client.NegotiatedProtocolVersion);
@@ -271,8 +273,6 @@ public sealed class McpStderrLeakRegressionTests
             child?.Process.Dispose();
             if (home is not null)
                 McpStdioProcessHarness.DeleteHome(home);
-            if (exe is not null)
-                McpStdioProcessHarness.DeletePublishOutput(exe);
         }
     }
 }

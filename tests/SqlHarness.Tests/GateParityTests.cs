@@ -319,11 +319,31 @@ public sealed class GateParityTests
         Assert.Contains("just fix", verification, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void The_linux_gate_is_optional_until_ci_moves_to_github_actions()
+    {
+        // The decision: while CI runs on the local machine, one gate is enough. The
+        // command stays, and the contract says when it becomes required again.
+        var verification = ReadRepositoryFile("docs", "agents", "verification.md");
+
+        Assert.Contains("just verify`;", verification, StringComparison.Ordinal);
+        Assert.DoesNotContain("Run `just verify`, then `just verify-linux`", verification, StringComparison.Ordinal);
+        Assert.Contains("GitHub Actions", verification, StringComparison.Ordinal);
+    }
+
     private static readonly string[] UiCommands =
     [
-        "npm ci --prefix src/SqlHarness.Dashboard/ui",
         "npm run check --prefix src/SqlHarness.Dashboard/ui",
     ];
+
+    // The Windows gate installs through scripts/ui-install.ps1, the Linux gate with
+    // its own stamp logic in bash, CI with a plain npm ci.
+    private static string UiInstallMarker(string path) => path switch
+    {
+        "scripts/verify.ps1" => "ui-install.ps1",
+        "scripts/verify-linux.ps1" => "npm ci",
+        _ => "npm ci --prefix src/SqlHarness.Dashboard/ui",
+    };
 
     [Theory]
     [InlineData("scripts/verify.ps1")]
@@ -335,12 +355,34 @@ public sealed class GateParityTests
         var restore = content.IndexOf("dotnet restore", StringComparison.Ordinal);
 
         Assert.True(restore > 0, "the gate must restore");
+        var install = UiInstallMarker(path);
+        var installIndex = content.IndexOf(install, StringComparison.Ordinal);
+
+        Assert.True(installIndex >= 0, $"{path} must install the UI with '{install}'");
+        Assert.True(installIndex < restore, $"{path} must install the UI before dotnet restore");
         foreach (var command in UiCommands)
         {
             var index = content.IndexOf(command, StringComparison.Ordinal);
             Assert.True(index >= 0, $"{path} must run '{command}'");
             Assert.True(index < restore, $"{path} must run '{command}' before dotnet restore");
         }
+    }
+
+    [Fact]
+    public void Both_local_gates_skip_the_ui_install_when_the_lockfile_is_unchanged()
+    {
+        // npm ci deleted and reinstalled node_modules on every run: 64s on Windows,
+        // 54s in WSL. The stamp contract lives in scripts/ui-install.ps1 and is
+        // mirrored in bash for the gate clone, where PowerShell cannot run.
+        var installer = File.ReadAllText(RepositoryFile.Locate("scripts", "ui-install.ps1"));
+        var windows = File.ReadAllText(RepositoryFile.Locate("scripts", "verify.ps1"));
+        var linux = File.ReadAllText(RepositoryFile.Locate("scripts", "verify-linux.ps1"));
+
+        Assert.Contains(".sqlharness-install-stamp", installer, StringComparison.Ordinal);
+        Assert.Contains("package-lock.json", installer, StringComparison.Ordinal);
+        Assert.Contains("Get-UiInstallState", windows, StringComparison.Ordinal);
+        Assert.Contains(".sqlharness-install-stamp", linux, StringComparison.Ordinal);
+        Assert.Contains("sha256sum", linux, StringComparison.Ordinal);
     }
 
     [Fact]

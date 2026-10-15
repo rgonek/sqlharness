@@ -214,8 +214,20 @@ Invoke-LinuxStage -Name 'node' -Arguments @($gateClone) -Lines @(
 )
 
 Invoke-LinuxStage -Name 'ui-install' -Arguments @($gateClone) -Lines @(
-    'cd "$1"',
-    'npm ci --prefix src/SqlHarness.Dashboard/ui'
+    'ui="$1/src/SqlHarness.Dashboard/ui"',
+    # The same stamp contract as scripts/ui-install.ps1: npm ci only when
+    # node_modules is missing or package-lock.json changed. It cost 54s a run.
+    'lock_hash="$(sha256sum "$ui/package-lock.json" | cut -d" " -f1)"',
+    'stamp="$ui/node_modules/.sqlharness-install-stamp"',
+    'if [ -d "$ui/node_modules" ] && [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$lock_hash" ]; then',
+    '  echo "ui: up to date (lockfile unchanged)"',
+    '  exit 0',
+    'fi',
+    'cd "$ui"',
+    'npm ci --no-fund --no-audit',
+    # npm ci can report success while leaving a tree without its bin shims.
+    '[ -d "$ui/node_modules/.bin" ] || { echo "npm ci did not produce node_modules/.bin" >&2; exit 1; }',
+    'printf %s "$lock_hash" > "$stamp"'
 )
 
 Invoke-LinuxStage -Name 'ui-check' -Arguments @($gateClone) -Lines @(

@@ -65,7 +65,14 @@ function Add-Stage {
     exit $result.ExitCode
 }
 
-Add-Stage -Name 'ui-install' -Action { npm ci --prefix src/SqlHarness.Dashboard/ui }
+# npm ci deletes and reinstalls node_modules, which cost 64s on every run. The
+# install runs only when node_modules is missing or the lockfile changed.
+. (Join-Path $PSScriptRoot 'ui-install.ps1')
+$uiState = Get-UiInstallState -UiDirectory (Join-Path $repoRoot 'src\SqlHarness.Dashboard\ui')
+Add-Stage -Name 'ui-install' -Skipped:$uiState.Installed -SkipReason $uiState.Reason -Action {
+    $install = Install-UiDependencies -UiDirectory (Join-Path $repoRoot 'src\SqlHarness.Dashboard\ui')
+    if ($install.ExitCode -ne 0) { exit $install.ExitCode }
+}
 Add-Stage -Name 'ui-check' -Action { npm run check --prefix src/SqlHarness.Dashboard/ui }
 Add-Stage -Name 'restore' -Action { dotnet restore SqlHarness.sln }
 Add-Stage -Name 'build' -Action { dotnet build SqlHarness.sln --no-restore -warnaserror }

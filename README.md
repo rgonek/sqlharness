@@ -555,11 +555,13 @@ The local MCP server over stdio is implemented: see [docs/mcp.md](docs/mcp.md).
 
 ## Development
 
-Before marking implementation complete, run both gates. They run the same four stages (restore, build, test, format) as CI, with the local non-integration test filter. `just verify` covers Windows; `just verify-linux` runs the identical stages inside WSL on a case-sensitive ext4 filesystem to check Linux-specific behaviour before pushing. Provision it once with `pwsh ./scripts/setup-linux-gate.ps1` (installs the `global.json` SDK in the distro and creates a disposable clone under `~/src`; the gate clone never lives under `/mnt/d`).
+Before marking implementation complete, run `just verify`. It runs the same four stages (restore, build, test, format) as CI, with the local non-integration test filter. A change is not done until it is green. The .NET SDK version comes from `global.json` (currently `10.0.303`, `rollForward: latestPatch`). Re-release after .NET runtime security patches.
 
-Neither gate replaces CI, which runs on ubuntu-latest and windows-latest. A change is not done until both gates are green. The .NET SDK version comes from `global.json` (currently `10.0.303`, `rollForward: latestPatch`). Re-release after .NET runtime security patches.
+`just verify-linux` still runs the identical stages inside WSL on a case-sensitive ext4 filesystem to check Linux-specific behaviour. It is not required for completion while CI runs on the local machine, and comes back into the completion criteria when CI moves to GitHub Actions. Provision it once with `pwsh ./scripts/setup-linux-gate.ps1` (installs the `global.json` SDK in the distro and creates a disposable clone under `~/src`; the gate clone never lives under `/mnt/d`). It syncs committed code only: it verifies the branch tip, not uncommitted work.
 
-Each gate prints one line per stage (`==> build ok 45.5s`) and a final `verify: OK stages=6 2m03s`;
+Neither gate replaces CI, which runs on ubuntu-latest and windows-latest.
+
+The gate prints one line per stage (`==> build ok 45.5s`) and a final `verify: OK stages=6 2m03s`;
 stage output goes to a log file, and a failed stage prints its exit code, the tail of the log and the
 log path. Add `-Stream` (`just verify -Stream`) to watch a run instead. Logs default to a directory
 under the temp path, overridable with `-LogDirectory`.

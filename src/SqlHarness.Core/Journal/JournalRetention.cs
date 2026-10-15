@@ -31,8 +31,21 @@ public static class JournalRetention
     public static RetentionResult Run(string databasePath, JournalConfig journal, IProcessInfo processes, TimeProvider time) =>
         Run(databasePath, journal, processes, time, onBatchCommitted: null);
 
+    /// <param name="batchSize">
+    /// Rows per transaction. Production always uses <see cref="BatchSize"/>; the batch
+    /// boundary tests pass a small value so they can cross a boundary without seeding
+    /// hundreds of rows. It is a parameter rather than a mutable field on purpose:
+    /// xUnit runs test classes in parallel in one process, and a shared static would
+    /// let one test change the batch size under another.
+    /// </param>
+    /// <param name="sizeStep">
+    /// Operations removed per size-cap step. Production uses <see cref="SizeStep"/>;
+    /// the size-cap test passes a small value so the "stop once under the limit"
+    /// behaviour is visible with a small fixture. Passed per call for the same
+    /// reason as <paramref name="batchSize"/>.
+    /// </param>
     internal static RetentionResult Run(string databasePath, JournalConfig journal, IProcessInfo processes, TimeProvider time, Action? onBatchCommitted,
-        Action<int>? onOperationBatchCommitted = null)
+        Action<int>? onOperationBatchCommitted = null, int batchSize = BatchSize, int sizeStep = SizeStep)
     {
         ArgumentNullException.ThrowIfNull(journal);
         if (!journal.Enabled || !journal.Retention.Enabled || !File.Exists(databasePath))
@@ -53,14 +66,14 @@ public static class JournalRetention
             var cutoff = time.GetUtcNow().AddDays(-journal.Retention.MaxAgeDays).UtcDateTime
                 .ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
 
-            DeleteOperations(connection, liveness, "AND started_at < $cutoff", cutoff, int.MaxValue, totals);
-            DeleteOrphans(connection, cutoff, totals);
+            DeleteOperations(connection, liveness, "AND started_at < $cutoff", cutoff, int.MaxValue, batchSize, totals);
+            DeleteOrphans(connection, cutoff, batchSize, totals);
 
             var limit = (long)journal.Retention.MaxSizeMb * 1024 * 1024;
             while (UsedBytes(connection) > limit)
             {
-                var deleted = DeleteOperations(connection, liveness, string.Empty, cutoff, SizeStep, totals);
-                DeleteOrphans(connection, cutoff: null, totals);
+                var deleted = DeleteOperations(connection, liveness, string.Empty, cutoff, sizeStep, batchSize, totals);
+                DeleteOrphans(connection, cutoff: null, batchSize, totals);
                 if (deleted == 0)
                     break;
             }
@@ -102,7 +115,7 @@ public static class JournalRetention
     /// Deletes oldest-first in batches; returns the number of operations deleted (at most <paramref name="max"/>).
     /// Live running rows are skipped by id (keyset), so they never block older deletable rows behind them.
     /// </summary>
-    private static int DeleteOperations(SqliteConnection connection, ProcessLiveness liveness, string extraFilter, string cutoff, int max, Totals totals)
+    private static int DeleteOperations(SqliteConnection connection, ProcessLiveness liveness, string extraFilter, string cutoff, int max, int batchSize, Totals totals)
     {
         var deleted = 0;
         var after = 0L;
@@ -117,7 +130,7 @@ public static class JournalRetention
                     """;
                 select.Parameters.AddWithValue("$after", after);
                 select.Parameters.AddWithValue("$cutoff", cutoff);
-                select.Parameters.AddWithValue("$limit", BatchSize);
+                select.Parameters.AddWithValue("$limit", batchSize);
                 using var reader = select.ExecuteReader();
                 while (reader.Read())
                     candidates.Add((reader.GetInt64(0), reader.GetString(1), reader.GetInt64(2), reader.IsDBNull(3) ? null : reader.GetString(3)));
@@ -153,30 +166,30 @@ public static class JournalRetention
                 totals.CommittedOperations(ids.Length);
             }
 
-            if (candidates.Count < BatchSize)
+            if (candidates.Count < batchSize)
                 return deleted;
         }
 
         return deleted;
     }
 
-    /// <summary>Deletes unreferenced plans, then empty sessions, each in batches of at most <see cref="BatchSize"/> rows.</summary>
-    private static void DeleteOrphans(SqliteConnection connection, string? cutoff, Totals totals)
+    /// <summary>Deletes unreferenced plans, then empty sessions, each in batches of at most <paramref name="batchSize"/> rows.</summary>
+    private static void DeleteOrphans(SqliteConnection connection, string? cutoff, int batchSize, Totals totals)
     {
-        DeleteInBatches(connection, null, totals.CommittedPlans, $"""
+        DeleteInBatches(connection, null, totals.CommittedPlans, batchSize, $"""
             DELETE FROM plans WHERE rowid IN (
-                SELECT rowid FROM plans WHERE hash NOT IN (SELECT plan_hash FROM operation_plans) LIMIT {BatchSize});
+                SELECT rowid FROM plans WHERE hash NOT IN (SELECT plan_hash FROM operation_plans) LIMIT {batchSize});
             """);
-        DeleteInBatches(connection, cutoff, totals.CommittedSessions, $"""
+        DeleteInBatches(connection, cutoff, totals.CommittedSessions, batchSize, $"""
             DELETE FROM sessions WHERE id IN (
                 SELECT id FROM sessions
                 WHERE NOT EXISTS (SELECT 1 FROM operations o WHERE o.session_id = sessions.id)
                   AND ($cutoff IS NULL OR last_seen < $cutoff)
-                LIMIT {BatchSize});
+                LIMIT {batchSize});
             """);
     }
 
-    private static void DeleteInBatches(SqliteConnection connection, string? cutoff, Action<int> committed, string sql)
+    private static void DeleteInBatches(SqliteConnection connection, string? cutoff, Action<int> committed, int batchSize, string sql)
     {
         int changed;
         do
@@ -200,7 +213,7 @@ public static class JournalRetention
             if (changed > 0)
                 committed(changed);
         }
-        while (changed >= BatchSize);
+        while (changed >= batchSize);
     }
 
     /// <summary>

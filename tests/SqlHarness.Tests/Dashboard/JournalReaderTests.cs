@@ -70,7 +70,12 @@ public sealed class JournalReaderTests
         using var home = new TempHome();
         var seed = new JournalSeed(home.DatabasePath);
         var session = JournalSeed.Session("cli:compare-history");
-        for (var index = 0; index < 501; index++)
+        // More rows than JournalReader.CompareHistoryPageLimit (100) so the history
+        // has to be read across an internal page boundary, and more than one user page
+        // at the limit below, so the cursor has to advance. That is the property; the
+        // session operation cap is a different test.
+        const int attempts = 137;
+        for (var index = 0; index < attempts; index++)
             seed.Compare(session, "orders", "whole", "base", $"candidate-{index}");
 
         var reader = Reader(home);
@@ -80,18 +85,51 @@ public sealed class JournalReaderTests
         Page<CompareAttemptSummary> page;
         do
         {
-            page = reader.CompareAttempts(sessionId, cursor, 73);
+            page = reader.CompareAttempts(sessionId, cursor, 20);
             Assert.NotEmpty(page.Items);
             Assert.All(page.Items, item => Assert.True(allIds.Add(item.OperationId)));
             cursor = page.NextCursor;
         } while (cursor is not null);
 
-        Assert.Equal(501, allIds.Count);
+        Assert.Equal(attempts, allIds.Count);
         var latest = reader.CompareAttempts(sessionId, limit: 1).Items.Single();
         Assert.Equal("v0", latest.BaselineVersion);
-        Assert.Equal("v501", latest.CandidateVersion);
-        Assert.Equal(500, reader.Session(sessionId)!.Operations.Count);
+        Assert.Equal($"v{attempts}", latest.CandidateVersion);
         Assert.Equal(allIds.Max(), Assert.Single(reader.Session(sessionId)!.CompareSubjects).LatestWhole!.OperationId);
+    }
+
+    [Fact]
+    public void Session_operations_are_capped_and_keep_the_newest()
+    {
+        using var home = new TempHome();
+        // The cap is a LIMIT in the reader's SQL, so the filler rows are inserted
+        // directly: writing them through the journal API costs a transaction with an
+        // fsync each and made this test 42 seconds for the same 501 rows. The session
+        // itself is created through the API, so the row stays schema-correct.
+        const int seeded = JournalReader.SessionOperationLimit + 1;
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:operation-cap"));
+        using (var connection = OpenSeedDatabase(home.DatabasePath))
+        using (var command = connection.CreateCommand())
+        {
+            for (var index = 2; index <= seeded; index++)
+            {
+                command.CommandText = $"""
+                    INSERT INTO operations (id, session_id, operation, host_pid, started_at, updated_at, finished_at, status)
+                    VALUES ({index}, 1, 'query', 5151, '2026-10-07T08:00:00.000Z', '2026-10-07T08:00:01.000Z', '2026-10-07T08:00:01.000Z', 'succeeded');
+                    """;
+                command.ExecuteNonQuery();
+            }
+        }
+
+        var reader = Reader(home);
+        var sessionId = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
+
+        var operations = reader.Session(sessionId)!.Operations;
+        Assert.Equal(JournalReader.SessionOperationLimit, operations.Count);
+        // Newest first, and only the oldest row (id 1) falls outside the cap.
+        Assert.Equal(seeded, operations[0].Id);
+        Assert.Equal(2, operations[^1].Id);
     }
 
     [Fact]

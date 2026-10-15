@@ -8,6 +8,14 @@ public sealed class JournalRetentionTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 7, 12, 0, 0, TimeSpan.Zero);
 
+    /// <summary>
+    /// Batch size the boundary tests cross. Production uses
+    /// <see cref="JournalRetention.BatchSize"/> (500); a small value proves the same
+    /// boundary behaviour with 30 seeded rows instead of 1010. It is passed per call,
+    /// never set globally, because xUnit runs classes in parallel in one process.
+    /// </summary>
+    private const int TestBatchSize = 10;
+
     private sealed class Processes(params int[] alive) : IProcessInfo
     {
         public int CurrentPid => Environment.ProcessId;
@@ -27,6 +35,42 @@ public sealed class JournalRetentionTests
         if (benchmark is not null)
             journal.RecordBenchmark(handle, benchmark);
         return handle;
+    }
+
+    /// <summary>One seeded row; the batch tests vary the clock and sometimes the payload.</summary>
+    private sealed record Row(
+        DateTimeOffset At,
+        int HostPid = 5151,
+        bool Complete = true,
+        string Key = "cli:a",
+        BenchmarkJournalRecord? Benchmark = null,
+        string? Payload = null);
+
+    /// <summary>
+    /// Seeds many rows through a single journal handle. Seeding opened the database
+    /// once per row, and every open re-ran the migration check, the pragmas and a
+    /// fsync; the batch-boundary tests need more than
+    /// more rows than the batch size, which made them 90 seconds
+    /// each. What is under test is <see cref="JournalRetention.Run"/>, not the
+    /// seeding. The fixed clock is advanced per row, so the rows still land with
+    /// the timestamps the assertions depend on.
+    /// </summary>
+    private static void SeedMany(JournalTempDirectory temp, int count, Func<int, Row> shape)
+    {
+        var clock = new FixedTimeProvider(shape(0).At);
+        var journal = ActivityJournal.Open(temp.DatabasePath, new JournalConfig { StoreSensitive = true }, TextWriter.Null, clock);
+
+        for (var i = 0; i < count; i++)
+        {
+            var row = shape(i);
+            clock.Now = row.At;
+            var session = JournalTestData.Session(row.Key) with { HostPid = row.HostPid };
+            var handle = journal.Begin(session, JournalTestData.Start(row.Payload ?? "SELECT 1"))!;
+            if (row.Complete)
+                journal.Complete(handle, JournalTestData.End());
+            if (row.Benchmark is not null)
+                journal.RecordBenchmark(handle, row.Benchmark);
+        }
     }
 
     private static BenchmarkJournalRecord Benchmark(string hash) => new(
@@ -89,37 +133,40 @@ public sealed class JournalRetentionTests
     {
         using var temp = new JournalTempDirectory();
         var big = new string('x', 64 * 1024);
-        for (var i = 0; i < 400; i++)
-        {
-            var journal = ActivityJournal.Open(temp.DatabasePath, new JournalConfig { StoreSensitive = true }, TextWriter.Null, new FixedTimeProvider(Now.AddMinutes(-400 + i)));
-            journal.Begin(JournalTestData.Session(), JournalTestData.Start(big + i));
-        }
+        // 40 rows of 64 KB is 2.6 MB against a 1 MB cap. The production fixture wrote
+        // 25 MB to cross a 10 MB cap because the production step is 100 rows, so the
+        // whole table fitted in one step and nothing was left to inspect. A small
+        // step keeps the property under test visible: oldest first, stop under the
+        // limit, rows still present afterwards.
+        SeedMany(temp, 40, i => new Row(Now.AddMinutes(-40 + i), Payload: big + i));
 
         // Rows are "running" from a dead pid (5151 is not alive here), so they count as abandoned and deletable.
-        var result = JournalRetention.Run(temp.DatabasePath, Config(maxAgeDays: 3650, maxSizeMb: 10), new Processes(), new FixedTimeProvider(Now));
+        var result = JournalRetention.Run(temp.DatabasePath, Config(maxAgeDays: 3650, maxSizeMb: 1), new Processes(), new FixedTimeProvider(Now),
+            onBatchCommitted: null, sizeStep: 5);
 
         Assert.True(result.DeletedOperations > 0);
+        Assert.True(result.DeletedOperations % 5 == 0, "rows go out in steps of the configured size");
         var remaining = JournalDb.Rows(temp.DatabasePath, "SELECT MIN(id) AS lo FROM operations")[0]["lo"];
         Assert.True((long)remaining! > 1, "the oldest operations go first");
+        Assert.True((long)remaining! > result.DeletedOperations, "retention stops once under the limit");
         var used = JournalDb.Rows(temp.DatabasePath, "SELECT (page_count - freelist_count) * page_size AS used FROM pragma_page_count, pragma_freelist_count, pragma_page_size")[0]["used"];
-        Assert.True((long)used! <= 10L * 1024 * 1024);
+        Assert.True((long)used! <= 1L * 1024 * 1024);
     }
 
     [Fact]
     public void Retention_deletes_in_short_transactions()
     {
         using var temp = new JournalTempDirectory();
-        for (var i = 0; i < JournalRetention.BatchSize * 2 + 10; i++)
-            Seed(temp, Now.AddDays(-40).AddSeconds(i));
+        SeedMany(temp, TestBatchSize * 2 + 10, i => new Row(Now.AddDays(-40).AddSeconds(i)));
         var operationBatches = new List<int>();
 
         var result = JournalRetention.Run(temp.DatabasePath, Config(maxAgeDays: 30), new Processes(), new FixedTimeProvider(Now),
-            onBatchCommitted: null, onOperationBatchCommitted: operationBatches.Add);
+            onBatchCommitted: null, onOperationBatchCommitted: operationBatches.Add, batchSize: TestBatchSize);
 
-        Assert.Equal(JournalRetention.BatchSize * 2 + 10, result.DeletedOperations);
+        Assert.Equal(TestBatchSize * 2 + 10, result.DeletedOperations);
         Assert.Equal(result.DeletedOperations, operationBatches.Sum());
         Assert.True(operationBatches.Count >= 3, $"expected at least 3 operation batches, saw {operationBatches.Count}");
-        Assert.All(operationBatches, size => Assert.InRange(size, 1, JournalRetention.BatchSize));
+        Assert.All(operationBatches, size => Assert.InRange(size, 1, TestBatchSize));
     }
 
     [Fact]
@@ -145,14 +192,13 @@ public sealed class JournalRetentionTests
     public void Live_running_rows_at_the_head_do_not_block_older_deletable_rows()
     {
         using var temp = new JournalTempDirectory();
-        for (var i = 0; i < JournalRetention.BatchSize + 5; i++)
-            Seed(temp, Now.AddDays(-50).AddSeconds(i), hostPid: 100, complete: false, key: "cli:live");
+        SeedMany(temp, TestBatchSize + 5, i => new Row(Now.AddDays(-50).AddSeconds(i), HostPid: 100, Complete: false, Key: "cli:live"));
         Seed(temp, Now.AddDays(-40), key: "cli:old");
 
         var result = JournalRetention.Run(temp.DatabasePath, Config(maxAgeDays: 30), new Processes(100), new FixedTimeProvider(Now));
 
         Assert.Equal(1, result.DeletedOperations);
-        Assert.Equal(JournalRetention.BatchSize + 5, Count(temp, "operations"));
+        Assert.Equal(TestBatchSize + 5, Count(temp, "operations"));
         Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT 1 FROM operations WHERE status <> 'running'"));
     }
 
@@ -179,8 +225,7 @@ public sealed class JournalRetentionTests
     public void A_run_failing_partway_reports_what_it_already_deleted()
     {
         using var temp = new JournalTempDirectory();
-        for (var i = 0; i < JournalRetention.BatchSize + 10; i++)
-            Seed(temp, Now.AddDays(-40).AddSeconds(i));
+        SeedMany(temp, TestBatchSize + 10, i => new Row(Now.AddDays(-40).AddSeconds(i)));
         var batches = 0;
 
         var result = JournalRetention.Run(temp.DatabasePath, Config(maxAgeDays: 30), new Processes(), new FixedTimeProvider(Now),
@@ -188,10 +233,11 @@ public sealed class JournalRetentionTests
             {
                 if (++batches == 1)
                     throw new SqliteException("database is locked", 5);
-            });
+            },
+            batchSize: TestBatchSize);
 
         Assert.True(result.Ran);
-        Assert.Equal(JournalRetention.BatchSize, result.DeletedOperations);
+        Assert.Equal(TestBatchSize, result.DeletedOperations);
         Assert.Equal(10, Count(temp, "operations"));
     }
 
@@ -199,17 +245,22 @@ public sealed class JournalRetentionTests
     public void Orphan_plans_are_deleted_in_short_transactions()
     {
         using var temp = new JournalTempDirectory();
-        var plans = JournalRetention.BatchSize + 20;
-        for (var i = 0; i < plans; i++)
-            Seed(temp, Now.AddDays(-40).AddSeconds(i), benchmark: Benchmark(i.ToString("X64", System.Globalization.CultureInfo.InvariantCulture)));
+        var plans = TestBatchSize + 20;
+        SeedMany(temp, plans, i => new Row(
+            Now.AddDays(-40).AddSeconds(i),
+            Benchmark: Benchmark(i.ToString("X64", System.Globalization.CultureInfo.InvariantCulture))));
         var writes = 0;
 
         var result = JournalRetention.Run(temp.DatabasePath, Config(maxAgeDays: 30), new Processes(), new FixedTimeProvider(Now),
-            onBatchCommitted: () => writes++);
+            onBatchCommitted: () => writes++, batchSize: TestBatchSize);
 
         Assert.Equal((plans, plans, 1), (result.DeletedOperations, result.DeletedPlans, result.DeletedSessions));
         Assert.Equal(0, Count(temp, "plans"));
-        // Two operation batches, two plan batches, one session batch; an unbatched orphan delete would give at most four.
-        Assert.Equal(5, writes);
+        // One write transaction per batch, per table: operations and plans need the
+        // same number of batches, sessions need one. Deleting orphans unbatched would
+        // commit three times, once per table, whatever the row count.
+        var batchesPerTable = (plans + TestBatchSize - 1) / TestBatchSize;
+        Assert.Equal(batchesPerTable + batchesPerTable + 1, writes);
+        Assert.True(writes > 3, "an unbatched orphan delete would commit only three times");
     }
 }
