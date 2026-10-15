@@ -46,8 +46,10 @@ export function LivePage() {
   const sessions = useQuery({
     queryKey: queryKeys.liveSessions,
     queryFn: async () => {
-      const page = await getJson<Page<SessionSummary>>("/api/sessions", { archived: "any", limit: 100 })
-      return mergeSessions(client.getQueryData<SessionSummary[]>(queryKeys.liveSessions) ?? [], page.items)
+      // Starred and unstarred separately: each is an id-ordered list the server can stop early on.
+      const [starred, unstarred] = await Promise.all(["true", "false"].map(value =>
+        getJson<Page<SessionSummary>>("/api/sessions", { archived: "any", starred: value, limit: 100 })))
+      return mergeSessions(client.getQueryData<SessionSummary[]>(queryKeys.liveSessions) ?? [], [...starred.items, ...unstarred.items])
     },
     staleTime: Infinity,
   })

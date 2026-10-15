@@ -47,7 +47,7 @@ function SessionView({ id, returnSubject, returnScope, returnUnassigned }: { id:
           <CardTitle>
             <SessionAnnotationHeader key={session.id} session={session} />
           </CardTitle>
-          <div className="font-mono">{session.sessionKey}</div>
+          {session.title && <div className="font-mono">{session.sessionKey}</div>}
           <CardDescription>{agentLabel(session.agentKind)} via {session.transport} ({session.source})</CardDescription>
         </CardHeader>
         <CardContent>

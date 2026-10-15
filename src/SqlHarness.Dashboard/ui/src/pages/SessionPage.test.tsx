@@ -30,6 +30,14 @@ test("session detail has a heading", async () => {
   stubFetch({ "/api/sessions/7": { session: session({ id: 7 }), operations: [] } })
   renderApp("/sessions/7")
   expect(await screen.findByRole("heading", { level: 1, name: "cli:abc" })).toBeInTheDocument()
+  expect(screen.getAllByText("cli:abc")).toHaveLength(1)
+})
+
+test("a titled session shows its key under the title", async () => {
+  stubFetch({ "/api/sessions/7": { session: session({ id: 7, title: "BSI-1 orders" }), operations: [] } })
+  renderApp("/sessions/7")
+  expect(await screen.findByRole("heading", { level: 1, name: "BSI-1 orders" })).toBeInTheDocument()
+  expect(screen.getByText("cli:abc")).toBeInTheDocument()
 })
 
 test("a non-decimal session id shows not found without calling the api", async () => {
@@ -137,6 +145,17 @@ test("a failed save rolls back and shows the server message", async () => {
   fail()
   expect(await screen.findByText("The journal is busy; try again.")).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "Star session" })).toHaveAttribute("aria-pressed", "false")
+})
+
+test("a save for a session that no longer exists shows the server message", async () => {
+  stubFetch({
+    "/api/sessions/1": { session: session({ id: 1, starred: false }), operations: [], note: null },
+    "/api/sessions/1/annotation": () => new Response(JSON.stringify({ error: "The session no longer exists." }), { status: 404 }),
+  })
+  renderApp("/sessions/1")
+  await userEvent.click(await screen.findByRole("button", { name: "Star session" }))
+  expect(await screen.findByText("The session no longer exists.")).toBeInTheDocument()
+  expect(screen.queryByText(/\/annotation/)).not.toBeInTheDocument()
 })
 
 test("archive shows a badge and the button turns into Unarchive", async () => {

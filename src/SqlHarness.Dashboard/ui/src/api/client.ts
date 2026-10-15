@@ -116,7 +116,7 @@ export async function patchJson<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   })
   if (response.status === 401) throw new UnauthorizedError()
-  if (response.status === 404) throw new NotFoundError(path)
+  // Any other failure, 404 included, shows the server's message (e.g. "The session no longer exists.").
   if (!response.ok) {
     const error = await response.json().then((data: { error?: string }) => data.error, () => undefined)
     throw new RequestError(error ?? `Request failed with ${response.status}: ${path}`)

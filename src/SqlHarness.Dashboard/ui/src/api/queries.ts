@@ -1,4 +1,4 @@
-import { QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ConflictError, getJson, NetworkError, NotFoundError, patchJson, postJson, putJson, UnauthorizedError } from "./client"
 import type { AnnotationPatch, CompareAttemptSummary, DashboardStats, DistilledPlan, KeyCount, OperationDetail, OperationSummary, Page, PricesInfo, ProfilesResponse, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
 
@@ -60,6 +60,8 @@ export function useSessions(filters: SessionFilters) {
     }),
     initialPageParam: undefined as number | undefined,
     getNextPageParam: last => last.nextCursor ?? undefined,
+    // A search or view change keeps the current table until the new list arrives.
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -90,6 +92,8 @@ export function useUpdateSessionAnnotation(id: number) {
     onSettled: () => {
       void client.invalidateQueries({ queryKey: ["sessions"] })
       void client.invalidateQueries({ queryKey: queryKeys.session(id) })
+      // The live feed does not resend a session after an annotation write.
+      void client.invalidateQueries({ queryKey: queryKeys.liveSessions })
     },
   })
 }
