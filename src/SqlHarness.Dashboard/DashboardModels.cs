@@ -31,7 +31,7 @@ public sealed record SessionSummary(
     string? ClientVersion, string? McpMode, string? Cwd, string FirstSeen, string LastSeen,
     int Operations, int Failed, int Rejected, int Running, int Abandoned,
     string? ClientTitle, IReadOnlyList<SessionRoot>? Roots, string? ProtocolVersion,
-    string? Title, bool Starred, bool Archived, string? NotePreview);
+    string? Title, bool Starred, bool Archived, string? NotePreview, string? AgentTitle = null);
 
 public sealed record OperationSummary(
     long Id, long SessionId, string AgentKind, string Operation, string Status, int? ExitCode, string? ErrorKind,
@@ -39,14 +39,18 @@ public sealed record OperationSummary(
     string? Server, string? Database, bool MutationRequested, string? SqlHash, long? RowsReturned,
     long? LogicalReadsMedian, bool HasSpill, bool ColdCache, bool OverGranted, JsonElement? Progress,
     string? ErrorMessage, string? CancelReason, string? AgentModel, string? AgentReasoningEffort,
-    string? OperationRef = null, string? ParentOperationRef = null, bool DryRun = false);
+    string? OperationRef = null, string? ParentOperationRef = null, bool DryRun = false, string? AgentModelSource = null);
 
 public sealed record AgentCall(
     string? CallId, string? Model, string? ReasoningEffort, string? SessionId, string? TurnId,
-    string? TurnTrigger, string? ThreadSource);
+    string? TurnTrigger, string? ThreadSource, string? TranscriptModel = null, string? TranscriptReasoningEffort = null,
+    string? ConversationTitle = null);
+
+public sealed record AgentConversation(string AgentKind, string ConversationId, string? Title, int Operations);
 
 public sealed record SessionDetail(SessionSummary Session, IReadOnlyList<OperationSummary> Operations,
-    IReadOnlyList<CompareSubjectSummary> CompareSubjects, int UnassignedCompareCount, string? Note);
+    IReadOnlyList<CompareSubjectSummary> CompareSubjects, int UnassignedCompareCount, string? Note,
+    IReadOnlyList<AgentConversation> Conversations);
 
 public sealed record Spread(long Min, long Median, long Max);
 

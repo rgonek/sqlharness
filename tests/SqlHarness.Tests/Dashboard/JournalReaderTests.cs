@@ -1083,6 +1083,94 @@ public sealed class JournalReaderTests
     }
 
     [Fact]
+    public void Agent_title_comes_from_the_newest_linked_conversation_with_a_title()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:agent-title");
+        var older = seed.Operation(session);
+        var newer = seed.Operation(session);
+        JournalSeed.Link(home.DatabasePath, older.OperationId, "claude", "older", "Older title");
+        JournalSeed.Link(home.DatabasePath, newer.OperationId, "claude", "newer", "Newer title");
+        var reader = Reader(home);
+        var sessionId = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
+
+        Assert.Equal("Newer title", reader.Session(sessionId)!.Session.AgentTitle);
+
+        JournalSeed.Link(home.DatabasePath, newer.OperationId, "claude", "newer", null);
+
+        Assert.Equal("Older title", reader.Session(sessionId)!.Session.AgentTitle);
+    }
+
+    [Fact]
+    public void Session_detail_lists_its_conversations_newest_first_with_operation_counts()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:agent-conversations");
+        var first = seed.Operation(session);
+        var second = seed.Operation(session);
+        var third = seed.Operation(session);
+        JournalSeed.Link(home.DatabasePath, first.OperationId, "claude", "conversation-a", "A");
+        JournalSeed.Link(home.DatabasePath, second.OperationId, "claude", "conversation-a", "A");
+        JournalSeed.Link(home.DatabasePath, third.OperationId, "codex", "conversation-b", "B");
+        var sessionId = Assert.Single(Reader(home).Sessions(new SessionQuery()).Items).Id;
+
+        Assert.Equal(
+            [new AgentConversation("codex", "conversation-b", "B", 1), new AgentConversation("claude", "conversation-a", "A", 2)],
+            Reader(home).Session(sessionId)!.Conversations);
+    }
+
+    [Fact]
+    public void Effective_model_prefers_the_call_and_reports_its_source()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:effective-model");
+        var call = seed.Operation(session, agent: new AgentCallMetadata("call-a", "gpt", "high", "s", "t", "exec", "user"));
+        var transcriptOnly = seed.Operation(session);
+        var neither = seed.Operation(session);
+        JournalSeed.Link(home.DatabasePath, call.OperationId, "claude", "conversation-a", "A", "x", "low");
+        JournalSeed.Link(home.DatabasePath, transcriptOnly.OperationId, "claude", "conversation-b", "B", "claude-opus-5-5", "high");
+        var sessionId = Assert.Single(Reader(home).Sessions(new SessionQuery()).Items).Id;
+
+        var operations = Reader(home).Session(sessionId)!.Operations.ToDictionary(operation => operation.Id);
+
+        Assert.Equal(("gpt", "call"), (operations[call.OperationId].AgentModel, operations[call.OperationId].AgentModelSource));
+        Assert.Equal(("claude-opus-5-5", "transcript"),
+            (operations[transcriptOnly.OperationId].AgentModel, operations[transcriptOnly.OperationId].AgentModelSource));
+        Assert.Equal((null, null), (operations[neither.OperationId].AgentModel, operations[neither.OperationId].AgentModelSource));
+    }
+
+    [Fact]
+    public void Operation_detail_carries_transcript_model_and_conversation_title()
+    {
+        using var home = new TempHome();
+        var operation = new JournalSeed(home.DatabasePath).Operation(JournalSeed.Session("cli:transcript-detail"));
+        JournalSeed.Link(home.DatabasePath, operation.OperationId, "claude", "conversation", "Transcript title", "claude-opus-5-5", "high");
+
+        var agent = Reader(home).Operation(operation.OperationId)!.Agent;
+
+        Assert.NotNull(agent);
+        Assert.Equal(("claude-opus-5-5", "high", "Transcript title"),
+            (agent.TranscriptModel, agent.TranscriptReasoningEffort, agent.ConversationTitle));
+        Assert.Null(agent.Model);
+        Assert.Null(agent.ReasoningEffort);
+    }
+
+    [Fact]
+    public void Search_matches_the_agent_title()
+    {
+        using var home = new TempHome();
+        var operation = new JournalSeed(home.DatabasePath).Operation(JournalSeed.Session("cli:search-agent-title"));
+        JournalSeed.Link(home.DatabasePath, operation.OperationId, "claude", "search-conversation", "Project Phoenix");
+
+        var matches = Reader(home).Sessions(new SessionQuery(Search: "Phoenix")).Items;
+
+        Assert.Equal("cli:search-agent-title", Assert.Single(matches).SessionKey);
+    }
+
+    [Fact]
     public void Note_preview_is_the_first_non_blank_line()
     {
         using var home = new TempHome();

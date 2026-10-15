@@ -88,6 +88,43 @@ internal sealed class JournalSeed
         command.Parameters.AddWithValue("$key", sessionKey);
         Assert.Equal(1, command.ExecuteNonQuery());
     }
+
+    public static void Link(string databasePath, long operationId, string kind, string conversationId, string? title,
+        string? model = null, string? effort = null)
+    {
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath};Pooling=False");
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        using (var conversation = connection.CreateCommand())
+        {
+            conversation.Transaction = transaction;
+            conversation.CommandText = """
+                INSERT INTO agent_conversations (agent_kind, conversation_id, title, updated_at)
+                VALUES ($kind, $conversationId, $title, '2026-10-07T09:00:00.000Z')
+                ON CONFLICT (agent_kind, conversation_id) DO UPDATE SET title = excluded.title;
+                """;
+            conversation.Parameters.AddWithValue("$kind", kind);
+            conversation.Parameters.AddWithValue("$conversationId", conversationId);
+            conversation.Parameters.AddWithValue("$title", (object?)title ?? DBNull.Value);
+            conversation.ExecuteNonQuery();
+        }
+        using (var link = connection.CreateCommand())
+        {
+            link.Transaction = transaction;
+            link.CommandText = """
+                INSERT OR REPLACE INTO operation_agent_links (operation_id, conversation, model, effort)
+                SELECT $operationId, id, $model, $effort FROM agent_conversations
+                WHERE agent_kind = $kind AND conversation_id = $conversationId;
+                """;
+            link.Parameters.AddWithValue("$operationId", operationId);
+            link.Parameters.AddWithValue("$kind", kind);
+            link.Parameters.AddWithValue("$conversationId", conversationId);
+            link.Parameters.AddWithValue("$model", (object?)model ?? DBNull.Value);
+            link.Parameters.AddWithValue("$effort", (object?)effort ?? DBNull.Value);
+            Assert.Equal(1, link.ExecuteNonQuery());
+        }
+        transaction.Commit();
+    }
 }
 
 /// <summary>Which token counts a seeded operation carries: both, raw only (MCP-style), or emitted only.</summary>
