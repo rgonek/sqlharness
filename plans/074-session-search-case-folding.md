@@ -14,14 +14,14 @@
 
 ## Status
 
-- TODO; planned 2026-10-15 at `a99ac3f`.
+- DONE. Implementation commit `de721be` on branch `feat/plan-074-session-search-case-folding`. Windows gate exit 0 on `de721be`; literal pass line `verify: OK  stages=6  3m01s`. Linux gate waived by docs/agents/verification.md; not run.
 - Priority P3. Effort S. Risk LOW: read path only, no schema change, no API change.
 
 ## Global Constraints
 
 - Case-insensitive, accent-sensitive: `łódź` matches `ŁÓDŹ`; `lodz` does NOT match `Łódź`. Accent-insensitive search is out of scope.
 - Folding is `value.Normalize(NormalizationForm.FormC).ToLowerInvariant()`, applied identically to the query and to every searched column. It never depends on the process culture.
-- Searched columns stay exactly: `sessions.session_key`, `sessions.cwd`, `sessions.client_title`, `session_annotations.title`, `session_annotations.note`.
+- Searched columns stay exactly: `sessions.session_key`, `sessions.cwd`, `sessions.client_title`, `session_annotations.title`, `session_annotations.note`, and `agent_conversations.title`. The existing conversation-title arm (the `operation_agent_links` / `agent_conversations` EXISTS already in `Sessions`) stays and uses the same fold.
 - `%`, `_` and `\` in `q` stay literal (existing tests `Search_matches_title_note_cwd_key_and_client_title_literally` and `Search_treats_backslash_and_underscore_literally_and_matches_the_client_title` pass unchanged).
 - `q` length limit stays 200 characters, checked on the raw query as today.
 - The dashboard opens the journal read-only; registering a function writes nothing.

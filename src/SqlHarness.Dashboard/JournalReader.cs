@@ -128,6 +128,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         using var connection = OpenSnapshot();
         if (connection is null)
             return new Page<SessionSummary>([], null);
+        // SQLite resolves the name when the statement is prepared, including when $q is null.
+        connection.CreateFunction<string?, string?>("sqlh_fold", FoldForSearch, isDeterministic: true);
         var limit = Clamp(query.Limit);
         (string, object?)[] parameters =
         [
@@ -139,7 +141,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             ("$limit", limit + 1),
             ("$archived", query.Archived is null ? null : query.Archived.Value ? 1 : 0),
             ("$starred", query.Starred is null ? null : query.Starred.Value ? 1 : 0),
-            ("$q", query.Search is null ? null : "%" + EscapeLike(query.Search) + "%"),
+            ("$q", query.Search is null ? null : "%" + EscapeLike(FoldForSearch(query.Search)!) + "%"),
         ];
         var order = query.Starred is null ? "starred DESC, s.id DESC" : "s.id DESC";
         var rows = Query(connection, $"""
@@ -152,12 +154,13 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
               AND ($archived IS NULL OR EXISTS (SELECT 1 FROM session_annotations a WHERE a.session_id = s.id AND a.archived_at IS NOT NULL) = $archived)
               AND ($starred IS NULL OR COALESCE((SELECT a.starred FROM session_annotations a WHERE a.session_id = s.id), 0) = $starred)
               AND ($q IS NULL
-                   OR s.session_key LIKE $q ESCAPE '\' OR s.cwd LIKE $q ESCAPE '\' OR s.client_title LIKE $q ESCAPE '\'
+                   OR sqlh_fold(s.session_key) LIKE $q ESCAPE '\' OR sqlh_fold(s.cwd) LIKE $q ESCAPE '\'
+                   OR sqlh_fold(s.client_title) LIKE $q ESCAPE '\'
                    OR EXISTS (SELECT 1 FROM session_annotations a WHERE a.session_id = s.id
-                              AND (a.title LIKE $q ESCAPE '\' OR a.note LIKE $q ESCAPE '\'))
+                              AND (sqlh_fold(a.title) LIKE $q ESCAPE '\' OR sqlh_fold(a.note) LIKE $q ESCAPE '\'))
                    OR EXISTS (SELECT 1 FROM operation_agent_links l JOIN agent_conversations c ON c.id = l.conversation
                               JOIN operations o3 ON o3.id = l.operation_id
-                              WHERE o3.session_id = s.id AND c.title LIKE $q ESCAPE '\'))
+                              WHERE o3.session_id = s.id AND sqlh_fold(c.title) LIKE $q ESCAPE '\'))
             ORDER BY {order} LIMIT $limit;
             """,
             parameters,
@@ -845,6 +848,14 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         r.GetInt32(11), r.GetInt32(12), r.GetInt32(13), 0, 0,
         NullableString(r, 14), Roots(NullableString(r, 15)), NullableString(r, 16),
         NullableString(r, 17), r.GetInt64(18) != 0, r.GetInt64(19) != 0, NullableString(r, 20), NullableString(r, 21));
+
+    /// <summary>
+    /// Search folding shared by the query and every searched column: NFC, then invariant
+    /// lower case, so "łódź" finds "ŁÓDŹ". SQLite's own LIKE folds ASCII letters only.
+    /// Accents still have to match.
+    /// </summary>
+    internal static string? FoldForSearch(string? value) =>
+        value?.Normalize(NormalizationForm.FormC).ToLowerInvariant();
 
     private static string EscapeLike(string value) =>
         value.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
