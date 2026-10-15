@@ -53,7 +53,7 @@ test("shows plans and table IO from both compare sides", async () => {
     ],
   })} />)
   await userEvent.click(screen.getByRole("tab", { name: "Plans and IO" }))
-  expect(screen.getByText("BeforeRows")).toBeInTheDocument()
-  expect(screen.getByText("AfterRows")).toBeInTheDocument()
+  expect(screen.getAllByText("BeforeRows")).toHaveLength(3)
+  expect(screen.getAllByText("AfterRows")).toHaveLength(3)
   expect(screen.getAllByText(/plan not stored/)).toHaveLength(2)
 })
