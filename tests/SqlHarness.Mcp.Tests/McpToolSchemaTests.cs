@@ -297,6 +297,55 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
+    public async Task Cell_limit_is_forwarded_by_watch_snapshot_plan_and_artifact_tools()
+    {
+        var text = new string('x', 5000);
+        var set = new SqlHarnessResultSetReport([new SqlHarnessColumnReport(0, "value", "text", true)], [[text]], 1, 0);
+        var report = new SqlHarnessQueryReport(ConformanceTarget, "read-only", [set], [], 0, 1, "cell-limit", new OutputFootprint(5000, 1));
+        var module = new CannedModule(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null));
+        await using var served = await ServedCatalog.CreateAsync(Scope(), module);
+
+        var watch = await served.Client.CallToolAsync("sqlharness_watch", new Dictionary<string, object?>
+        {
+            ["sql"] = "SELECT 1",
+            ["untilUnchanged"] = 1,
+            ["maxCellChars"] = 2048,
+        }, cancellationToken: CancellationToken.None);
+        var snapshot = await served.Client.CallToolAsync("sqlharness_snapshot", new Dictionary<string, object?>
+        {
+            ["action"] = "diff",
+            ["name"] = "sample",
+            ["sql"] = "SELECT 1",
+            ["maxCellChars"] = 4096,
+        }, cancellationToken: CancellationToken.None);
+        var plan = await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?>
+        {
+            ["content"] = "<ShowPlanXML />",
+            ["maxCellChars"] = 0,
+        }, cancellationToken: CancellationToken.None);
+        var artifact = await served.Client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
+        {
+            ["id"] = "artifact1",
+            ["section"] = "summary",
+            ["cursor"] = 1,
+            ["maxCellChars"] = 100,
+        }, cancellationToken: CancellationToken.None);
+        var rejected = await served.Client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
+        {
+            ["sql"] = "SELECT 1",
+            ["maxCellChars"] = 4097,
+        }, cancellationToken: CancellationToken.None);
+
+        Assert.Equal(2048, ServedEnvelope(watch, "sqlharness_watch").GetProperty("truncation").GetProperty("maxCellChars").GetInt32());
+        Assert.Equal(4096, ServedEnvelope(snapshot, "sqlharness_snapshot").GetProperty("truncation").GetProperty("maxCellChars").GetInt32());
+        using (var planDocument = JsonDocument.Parse(Assert.Single(plan.Content.OfType<TextContentBlock>()).Text))
+            Assert.Equal(0, planDocument.RootElement.GetProperty("truncation").GetProperty("maxCellChars").GetInt32());
+        Assert.Equal(100, ServedEnvelope(artifact, "sqlharness_artifact").GetProperty("truncation").GetProperty("maxCellChars").GetInt32());
+        Assert.True(rejected.IsError == true);
+        Assert.Contains("Cell limit must be 0..4096 characters.", ServedEnvelope(rejected, "sqlharness_query").GetProperty("error").GetProperty("message").GetString());
+    }
+
+    [Fact]
     public async Task Request_scope_schema_is_required_only_on_the_eight_target_tools()
     {
         var scope = Scope();
@@ -310,6 +359,10 @@ public sealed class McpToolSchemaTests : IDisposable
             .ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
         Assert.Equal(["summary", "metrics", "operators", "statements", "matrix-cells", "plan"], EnumOf(requestSchemas["sqlharness_artifact"], "section"));
         Assert.Contains("cursor", Properties(requestSchemas["sqlharness_artifact"]).EnumerateObject().Select(property => property.Name));
+        var projectedTools = new[] { "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot", "sqlharness_plan", "sqlharness_artifact" };
+        foreach (var tool in projectedTools)
+            Assert.True(Properties(requestSchemas[tool]).TryGetProperty("maxCellChars", out _), $"{tool} must expose maxCellChars.");
+        Assert.False(Properties(requestSchemas["sqlharness_capabilities"]).TryGetProperty("maxCellChars", out _));
         var requestCompare = Properties(requestSchemas["sqlharness_compare"]).GetProperty("compareNullability");
         Assert.Equal("boolean", requestCompare.GetProperty("type").GetString());
         Assert.False(requestCompare.GetProperty("default").GetBoolean());
@@ -343,6 +396,9 @@ public sealed class McpToolSchemaTests : IDisposable
             .ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
         foreach (var tool in targetTools)
             Assert.DoesNotContain("target", Properties(fixedSchemas[tool]).EnumerateObject().Select(property => property.Name));
+        foreach (var tool in projectedTools)
+            Assert.True(Properties(fixedSchemas[tool]).TryGetProperty("maxCellChars", out _), $"{tool} must expose maxCellChars.");
+        Assert.False(Properties(fixedSchemas["sqlharness_capabilities"]).TryGetProperty("maxCellChars", out _));
         Assert.Contains("subject", Required(fixedSchemas["sqlharness_compare"]));
         Assert.Contains("scope", Required(fixedSchemas["sqlharness_compare"]));
     }

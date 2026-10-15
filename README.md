@@ -362,7 +362,7 @@ The `operators` section is paged too, but its noteworthy-operator source is capp
 
 SQL Server per-table read summaries normalize session-suffixed temporary table names before aggregating repetitions: `[schema].[#name<underscores><12 hex>]` becomes `[schema].[#name]`, and `#name<underscores><12 hex>` becomes `#name`. Other table names are unchanged.
 
-Output modes: `--json` writes the full report; `measure` and `compare` add the bounded `--json-summary`. `--output agent` writes schema version 2 (the MCP result shape), shrunk to `--max-output-bytes` (4096..1048576, default 65536) with each cell clipped to `--max-cell-chars` (0..4096, default 512).
+Output modes: `--json` writes the full report; `measure` and `compare` add the bounded `--json-summary`. `--output agent` writes schema version 2 (the MCP result shape), shrunk to `--max-output-bytes` (4096..1048576, default 65536) with each cell clipped to `--max-cell-chars` (0..4096, default 2048). The seven MCP tools that return projected output accept the matching `maxCellChars` limit; truncated results report the applied value as `truncation.maxCellChars`.
 
 Query projections retain the resolved database name, use CLR value aliases, omit the rest of the target identity and canonical hash/footprint, and identify every retained clipped cell by result-set-local row and column plus original/returned length; default omission counters and empty messages are left out while zero `recordsAffected` and empty-result columns remain. See [docs/mcp.md](docs/mcp.md#result-envelope-errors-and-budgets) for the shared projection rules.
 

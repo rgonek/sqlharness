@@ -47,7 +47,7 @@ public static class AgentEnvelopeSchema
 }
 
 /// <summary>Presentation-only bounds for the opt-in agent response.</summary>
-public sealed record AgentOutputOptions(int MaximumBytes = 65_536, int MaximumCellCharacters = 512);
+public sealed record AgentOutputOptions(int MaximumBytes = 65_536, int MaximumCellCharacters = AgentOutputLimits.DefaultCellCharacters);
 
 /// <summary>Creates bounded, lower-priority-detail projections without changing source reports.</summary>
 public static class AgentOutputProjection

@@ -14,7 +14,7 @@
 
 ## Status
 
-- TODO; planning accepted 2026-10-14 (operator). No implementation, installation, integration or publication authorization.
+- DONE on feature branch `feat/plan-067-cell-limit` at implementation HEAD `3ae4dc5`. Final Windows `just verify -LogDirectory D:/temp/sqlharness-plan067-final-verify-3ae4dc5` passed on that exact revision: UI 163 passed; Core/CLI 3519 passed, 11 skipped; MCP 381 passed, 4 skipped; build had 0 warnings and 0 errors. All six stages completed in 8m36s; format was skipped because no C# files changed. Linux was explicitly waived and remains unverified. No integration, installation or publication performed.
 - Planning base: `ed44649`, 2026-10-14.
 - Priority: P2. Effort: S–M. Risk: LOW–MEDIUM (tool schema change; larger default output).
 - Owner: this plan.
@@ -131,10 +131,19 @@ Add a schema test asserting `maxCellChars` exists on the seven tools and not on 
 
 ### Task 3: Documentation and gates
 
-- [ ] `docs/mcp.md:160`: replace "Cell values are clipped to 512 characters; neither `mcp serve` nor a tool call has an option to change it ... (The CLI `--output agent` envelope takes `--max-cell-chars` 0..4096.)" with "Cell values are clipped to 2048 characters by default; each tool that returns projected output accepts `maxCellChars` 0..4096, matching CLI `--max-cell-chars`. A truncated result reports the applied value as `truncation.maxCellChars`." Update the line-95 note "Every rejection message stays within the 512-character cell limit" to name the minimum guarantee (512 still holds as a lower bound for messages) only if tests rely on it; otherwise "within the cell limit".
-- [ ] `README.md` and `docs/superpowers/specs/2026-09-26-agent-output-contract.md:17`: default 512 → 2048; mention MCP `maxCellChars`.
-- [ ] `skills/sqlharness/SKILL.md`: only if it states 512 (`rg -n "512" skills`).
-- [ ] Run Windows and Linux gates per AGENTS.md; record counts. Update Status and the `plans/README.md` row.
+- [x] MCP runtime/tools docs describe the 2048 default, `maxCellChars` 0..4096, and applied `truncation.maxCellChars`; the former rejection-note wording is absent from the reorganized docs.
+- [x] `README.md` and the agent-output contract spec describe the shared 2048 default and MCP `maxCellChars`; removed the obsolete accepted-follow-up note.
+- [x] `rg -n "512" skills` found no matches, so no skill changes were needed.
+- [x] Earlier Windows gate: `just verify -LogDirectory D:/temp/sqlharness-plan067-verify` passed at `3388917`; Core/CLI 3513 passed, 11 skipped; MCP 381 passed, 4 skipped. Superseded by final verification on `3ae4dc5` below.
+- [x] Linux gate: `just verify-linux -LogDirectory D:/temp/sqlharness-plan067-linux` synchronized `3388917` and passed sync, SDK, Node, UI install, UI check, restore, and build. The Core/CLI test stage ran for about 15 minutes with an active testhost but produced no result or `test.log`. The operator waived Linux; the gate was interrupted through its own process session. Linux tests and format are not verified.
+
+### Completion evidence
+
+- Implemented on feature branch `feat/plan-067-cell-limit`; no integration, installation or publication performed.
+- Final Windows gate passed on `3ae4dc5f4fdc735079c0bdd44ee37d4ad9c19029`: UI 163 passed; Core/CLI 3519 passed, 11 skipped; MCP 381 passed, 4 skipped; 0 failed. All six stages completed in 8m36s; build had 0 warnings/errors and format was skipped because no C# files changed. Logs: `D:/temp/sqlharness-plan067-final-verify-3ae4dc5`.
+- An earlier Windows gate passed on `3388917` (Core/CLI 3513 passed, 11 skipped; MCP 381 passed, 4 skipped); it is superseded by the final run above.
+- Linux gate reached build on `3388917`; test stage was waived and interrupted by operator direction after about 15 minutes without a result. No Linux test or format result is claimed.
+- Full final completion report: [`final-completion-report.md`](../final-completion-report.md).
 
 ## Acceptance
 

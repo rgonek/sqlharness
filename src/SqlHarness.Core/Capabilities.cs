@@ -137,7 +137,7 @@ public static class SqlHarnessCapabilitiesProvider
             ["repeat"] = new { min = OperationLimits.RepeatMin, max = OperationLimits.RepeatMax },
             ["targetIdentity"] = new { server = "informational; authentication depends on transport; PostgreSQL hostname check needs sslMode: verify-full", database = "must match the resolved database (ordinal); mismatch is exit 4" },
             ["agentOutputBytes"] = new { min = 4096, max = 1048576, defaultValue = 65536 },
-            ["agentCellChars"] = new { min = 0, max = 4096, defaultValue = 512 },
+            ["agentCellChars"] = new { min = 0, max = AgentOutputLimits.MaximumCellCharacters, defaultValue = AgentOutputLimits.DefaultCellCharacters },
             ["agentEnvelopeSchemaVersion"] = AgentEnvelopeSchema.Version,
             ["activityJournalStorage"] = new
             {
