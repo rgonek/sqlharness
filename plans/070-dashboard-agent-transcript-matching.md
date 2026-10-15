@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
-> **Drift check (run first):** `git diff --stat 54dc621..HEAD -- src/SqlHarness.Core/Journal src/SqlHarness.Core/SqlHarnessConfig.cs src/SqlHarness.Dashboard tests/SqlHarness.Tests/Dashboard tests/SqlHarness.Tests/Journal README.md`. **Plans 062 and 069 must be DONE first** (069 adds `session_annotations`, `SessionSummary.Title/Starred/Archived/NotePreview`, `sessionDisplayName`, `SessionAnnotationHeader`, the annotation writer pattern). This plan uses journal schema **`Version10`**; if 10 is taken, use the next free number everywhere — adaptation, not a STOP. Positional records gain fields **at the end**, after whatever 062/069 appended; update `ReadSessionRow`/`ReadOperation` ordinals accordingly.
+> **Drift check (run first):** `git diff --stat 54dc621..HEAD -- src/SqlHarness.Core/Journal src/SqlHarness.Core/SqlHarnessConfig.cs src/SqlHarness.Dashboard tests/SqlHarness.Tests/Dashboard tests/SqlHarness.Tests/Journal README.md`. **Plans 062 and 069 must be DONE first** (069 adds `session_annotations`, `SessionSummary.Title/Starred/Archived/NotePreview`, `sessionDisplayName`, `SessionAnnotationHeader`, the annotation writer pattern). The feature branch introduced transcript tables as `Version10`; integration preserved Plan 068's published `Version10` and moved these tables to `Version11`, with a v10-to-v11 migration. Positional records gain fields **at the end**, after whatever 062/069 appended; update `ReadSessionRow`/`ReadOperation` ordinals accordingly.
 >
 > **Re-verify the external formats before Task 3** (they are unversioned): run the inspection in Task 3 Step 0 against the operator's real `~/.claude` and `~/.codex` (keys and types only, never content). If a key moved, adapt the parser and its fixtures; record the observed shape in the commit message.
 
@@ -16,7 +16,7 @@
 
 ## Status
 
-- DONE on branch `feat/plan-070-agent-transcripts`; implementation and corrected Windows verification range `54dc621..64bbec5`. `just verify` passed at `64bbec5`; the operator explicitly waived Linux verification on 2026-10-15. Sol's final low-effort whole-branch review passed spec compliance and code quality with no critical or important findings; it recorded two minor test coverage gaps. Evidence: [Plan 070 verification](070-verification-evidence.md).
+- DONE; feature branch `feat/plan-070-agent-transcripts` (`54dc621..64bbec5`) was locally integrated at `cebef32d52678e16bd1e6e54b5ec9ba4f8511dd6`. Feature-branch schema v10 became integrated schema v11 because Plan 068 owns v10. Integrated Windows `just verify` passed all six stages (UI 189; Core 3,677 passed/11 skipped; MCP 386 passed/4 skipped; formatter 27 C# files); Sol's integration review approved the final fixes. Linux verification remains explicitly waived and unrun. See [Plan 070 verification](070-verification-evidence.md) for separate feature and integration results.
 - Priority P2. Effort L. Risk MEDIUM (reads foreign, unversioned files; second dashboard writer into the journal; idle-shutdown accounting).
 
 ## Evidence (2026-10-14, keys/types only)
@@ -54,7 +54,7 @@
 | File | Responsibility |
 |---|---|
 | `src/SqlHarness.Core/SqlHarnessConfig.cs` | `AgentTranscriptsConfig`, `DashboardConfig.AgentTranscripts`, completeness check |
-| `src/SqlHarness.Core/Journal/JournalSchema.cs`, `ActivityJournal.cs` | `Version10` tables |
+| `src/SqlHarness.Core/Journal/JournalSchema.cs`, `ActivityJournal.cs` | `Version11` tables in the integrated tree (the feature branch initially used v10) |
 | `src/SqlHarness.Core/Journal/JournalRetention.cs` | orphan conversations |
 | `src/SqlHarness.Dashboard/Transcripts/AgentHomes.cs` (new) | resolve Claude/Codex homes; Claude project dir encoding |
 | `src/SqlHarness.Dashboard/Transcripts/TranscriptLines.cs` (new) | allowlisted line parsers (Claude, Codex index) |
@@ -195,7 +195,7 @@ public void Retention_removes_links_with_operations_and_unreferenced_conversatio
 
 - [ ] **Step 2: RED** — `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~ActivityJournalTests|FullyQualifiedName~JournalRetentionTests"`.
 
-- [ ] **Step 3: Implement.** `CurrentVersion = 10`; `Version10` = the DDL above; `if (locked < 10) Execute(connection, JournalSchema.Version10);`. In `JournalRetention.DeleteOrphans`, after the sessions batch:
+- [ ] **Step 3: Implement.** The feature branch initially used `CurrentVersion = 10` and `Version10` for the DDL above. On integration, Plan 068 already owned published schema v10, so keep its `Version10` migration unchanged, set `CurrentVersion = 11`, add the transcript DDL as `Version11`, and apply v10 before v11 when migrating an older journal. In `JournalRetention.DeleteOrphans`, after the sessions batch:
 
 ```csharp
         DeleteInBatches(connection, null, _ => { }, $"""
