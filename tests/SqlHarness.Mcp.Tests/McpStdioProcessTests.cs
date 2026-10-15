@@ -632,7 +632,9 @@ public sealed class McpStdioProcessTests
     public async Task Built_cli_child_process_exposes_compare_policy_and_request_target_over_stdio()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-        var cliDll = Path.Combine(McpStdioProcessHarness.FindRepositoryRoot(), "src", "SqlHarness.Cli", "bin", "Debug", "net10.0", "sqlharness.dll");
+        var configuration = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyConfigurationAttribute>(
+            typeof(McpStdioProcessTests).Assembly)!.Configuration;
+        var cliDll = Path.Combine(McpStdioProcessHarness.FindRepositoryRoot(), "src", "SqlHarness.Cli", "bin", configuration, "net10.0", "sqlharness.dll");
         Assert.True(File.Exists(cliDll), $"Expected built CLI DLL at {cliDll}.");
 
         static Dictionary<string, object?> Target() => new()
