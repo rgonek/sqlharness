@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 using SqlHarness.Core.Journal;
 using SqlHarness.Core.Targets;
+
 using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Core;

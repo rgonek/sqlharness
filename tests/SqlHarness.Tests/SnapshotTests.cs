@@ -4,8 +4,8 @@ using SqlHarness.Cli.Commands;
 using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
-using SqlHarness.Core.Targets;
 using SqlHarness.Core.Journal;
+using SqlHarness.Core.Targets;
 using SqlHarness.Tests.Journal;
 
 namespace SqlHarness.Tests;

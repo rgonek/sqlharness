@@ -5,9 +5,9 @@ using Microsoft.Data.SqlClient;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
+using SqlHarness.Core.Journal;
 using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
-using SqlHarness.Core.Journal;
 using SqlHarness.Tests.Journal;
 
 using OperationPhase = SqlHarness.Core.Journal.OperationPhase;
