@@ -75,6 +75,7 @@ internal enum SqlUsage
 {
     Query,
     CompareSetup,
+    Mutation,
 }
 
 internal enum SqlSafetyReason
@@ -100,6 +101,10 @@ internal sealed record SqlSafetyDecision(
         new HashSet<string>(StringComparer.Ordinal);
 
     internal bool HasSessionLocalWork { get; init; }
+
+    internal SqlRiskTier Tier { get; init; }
+
+    internal IReadOnlyList<string> Grantees { get; init; } = [];
 
     internal IReadOnlySet<string> SessionTempTables { get; init; } = NoSessionTempTables;
 
@@ -207,6 +212,7 @@ internal sealed class SqlSafetyClassifier
         {
             SqlUsage.Query => ClassifyQuery(script.Batches, inspection, database, allowMutation, confirmDatabase),
             SqlUsage.CompareSetup => ClassifyCompareSetup(script.Batches, inspection),
+            SqlUsage.Mutation => ClassifyMutation(script.Batches, inspection),
             _ => Denied(SqlSafetyReason.UnsupportedStatement),
         };
     }
@@ -223,8 +229,56 @@ internal sealed class SqlSafetyClassifier
             return Denied(SqlSafetyReason.SelectIntoNotAllowed);
         }
 
-        var hasMutation = false;
-        var hasSessionLocal = false;
+        var denied = ClassifyStatements(batches, inspection, out var hasMutation, out var hasSessionLocal, out var tier);
+        if (denied is not null)
+            return denied;
+
+        if (!hasMutation)
+        {
+            return Allowed(hasSessionLocal: hasSessionLocal) with { Tier = tier };
+        }
+
+        if (!allowMutation)
+        {
+            return Denied(SqlSafetyReason.MutationNotAllowed);
+        }
+
+        if (confirmDatabase is null)
+        {
+            return Denied(SqlSafetyReason.DatabaseConfirmationRequired);
+        }
+
+        if (!string.Equals(database, confirmDatabase, StringComparison.Ordinal))
+        {
+            return Denied(SqlSafetyReason.DatabaseConfirmationMismatch);
+        }
+
+        return Allowed(hasMutation: true, hasSessionLocal: hasSessionLocal) with { Tier = tier };
+    }
+
+    private static SqlSafetyDecision ClassifyMutation(
+        IList<TSqlBatch> batches,
+        SafetyInspectionVisitor inspection)
+    {
+        if (inspection.HasNonLocalSelectInto)
+        {
+            return Denied(SqlSafetyReason.SelectIntoNotAllowed);
+        }
+
+        var denied = ClassifyStatements(batches, inspection, out _, out var hasSessionLocal, out var tier);
+        return denied ?? Allowed(hasMutation: tier >= SqlRiskTier.Dml, hasSessionLocal: hasSessionLocal) with { Tier = tier };
+    }
+
+    private static SqlSafetyDecision? ClassifyStatements(
+        IList<TSqlBatch> batches,
+        SafetyInspectionVisitor inspection,
+        out bool hasMutation,
+        out bool hasSessionLocal,
+        out SqlRiskTier tier)
+    {
+        hasMutation = false;
+        hasSessionLocal = false;
+        tier = SqlRiskTier.ReadOnly;
         foreach (var batch in batches)
         {
             // 011/T2, 011/T3: SET targets and table variables are proven
@@ -245,30 +299,11 @@ internal sealed class SqlSafetyClassifier
 
                 hasMutation |= classification.HasPersistentWrite;
                 hasSessionLocal |= classification.HasSessionLocalWrite;
+                tier = SqlRiskTiers.Max(tier, classification.Tier);
             }
         }
 
-        if (!hasMutation)
-        {
-            return Allowed(hasSessionLocal: hasSessionLocal);
-        }
-
-        if (!allowMutation)
-        {
-            return Denied(SqlSafetyReason.MutationNotAllowed);
-        }
-
-        if (confirmDatabase is null)
-        {
-            return Denied(SqlSafetyReason.DatabaseConfirmationRequired);
-        }
-
-        if (!string.Equals(database, confirmDatabase, StringComparison.Ordinal))
-        {
-            return Denied(SqlSafetyReason.DatabaseConfirmationMismatch);
-        }
-
-        return Allowed(hasMutation: true, hasSessionLocal: hasSessionLocal);
+        return null;
     }
 
     private static SqlSafetyDecision ClassifyCompareSetup(
@@ -281,6 +316,7 @@ internal sealed class SqlSafetyClassifier
         }
 
         var hasSessionLocal = false;
+        var tier = SqlRiskTier.ReadOnly;
         foreach (var batch in batches)
         {
             // Table variables and scalar assignments reuse the same-batch
@@ -333,10 +369,11 @@ internal sealed class SqlSafetyClassifier
                 }
 
                 hasSessionLocal |= classification.HasSessionLocalWrite;
+                tier = SqlRiskTiers.Max(tier, classification.Tier);
             }
         }
 
-        return Allowed(hasSessionLocal: hasSessionLocal);
+        return Allowed(hasSessionLocal: hasSessionLocal) with { Tier = tier };
     }
 
     private static StatementClassification ClassifyStatement(TSqlStatement statement, BatchVariableScope scope)
@@ -491,7 +528,8 @@ internal sealed class SqlSafetyClassifier
         : new(
             null,
             left.HasSessionLocalWrite || right.HasSessionLocalWrite,
-            left.HasPersistentWrite || right.HasPersistentWrite);
+            left.HasPersistentWrite || right.HasPersistentWrite,
+            Tier: SqlRiskTiers.Max(left.Tier, right.Tier));
 
     // 011/T2: same-batch proof for SET targets (Ruling R3, fail closed).
     // A name counts as a scalar local only when a same-batch
@@ -675,7 +713,11 @@ internal sealed class SqlSafetyClassifier
                 hasPersistent = true;
         }
 
-        return new StatementClassification(null, hasSessionLocal, hasPersistent);
+        return new StatementClassification(
+            null,
+            hasSessionLocal,
+            hasPersistent,
+            Tier: hasPersistent ? SqlRiskTier.Dml : hasSessionLocal ? SqlRiskTier.Session : SqlRiskTier.ReadOnly);
     }
 
     private static TargetResolution ResolveTarget(TableReference? target, FromClause? fromClause, BatchVariableScope scope)
@@ -830,11 +872,12 @@ internal sealed class SqlSafetyClassifier
         SqlSafetyReason? DenyReason,
         bool HasSessionLocalWrite,
         bool HasPersistentWrite,
-        TSqlStatement? DeniedStatement = null)
+        TSqlStatement? DeniedStatement = null,
+        SqlRiskTier Tier = SqlRiskTier.ReadOnly)
     {
-        internal static StatementClassification ReadOnly { get; } = new(null, false, false);
-        internal static StatementClassification SessionLocal { get; } = new(null, true, false);
-        internal static StatementClassification Persistent { get; } = new(null, false, true);
+        internal static StatementClassification ReadOnly { get; } = new(null, false, false, Tier: SqlRiskTier.ReadOnly);
+        internal static StatementClassification SessionLocal { get; } = new(null, true, false, Tier: SqlRiskTier.Session);
+        internal static StatementClassification Persistent { get; } = new(null, false, true, Tier: SqlRiskTier.Dml);
         internal static StatementClassification Denied(SqlSafetyReason reason, TSqlStatement? deniedStatement = null) =>
             new(reason, false, false, deniedStatement);
     }
