@@ -203,14 +203,92 @@ public sealed class CapabilitiesCommandTests
             Assert.All(new[] { "nvarchar(n)", "varchar(n)", "char(n)", "nchar(n)", "varbinary(n)", "binary(n)" }, t => Assert.Contains(t, SqlHarnessCapabilitiesProvider.Get(engine, "p").ParameterTypes!));
     }
 
+    // Distinctive tokens only: the wording belongs to the registry entry, the facts to these tests.
+    private static readonly string[] PostgresOnlyTokens = ["READ ONLY", "TEMP setup", "least-privilege", "sslMode", "verify-full", "user functions"];
+    private static readonly string[] SqlServerOnlyTokens = ["#temp"];
+
+    private static string Serialize(SqlHarnessCapabilities capabilities) => JsonSerializer.Serialize(capabilities, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
     [Fact]
-    public void Query_description_keeps_the_user_function_least_privilege_caveat()
+    public void Engine_neutral_discovery_carries_no_engine_specific_guidance()
     {
-        var query = SqlHarnessCapabilitiesProvider.Get().Commands.Single(c => c.Name == "query").Description;
-        Assert.Contains("READ ONLY", query, StringComparison.Ordinal);
-        Assert.Contains("TEMP setup", query, StringComparison.Ordinal);
-        Assert.Contains("user functions", query, StringComparison.Ordinal);
-        Assert.Contains("least-privilege", query, StringComparison.Ordinal);
+        var caps = SqlHarnessCapabilitiesProvider.Get();
+        var commands = string.Join('\n', caps.Commands.Select(c => c.Description));
+        var targetIdentity = caps.Limits["targetIdentity"].ToString()!;
+
+        foreach (var token in PostgresOnlyTokens.Concat(SqlServerOnlyTokens))
+        {
+            Assert.DoesNotContain(token, commands, StringComparison.Ordinal);
+            Assert.DoesNotContain(token, targetIdentity, StringComparison.Ordinal);
+        }
+        Assert.Null(caps.Profile);
+        Assert.Null(caps.EngineGuidance);
+        Assert.DoesNotContain("engineGuidance", Serialize(caps), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Postgres_scope_carries_postgres_guidance_and_no_sqlserver_setup_rule()
+    {
+        var caps = SqlHarnessCapabilitiesProvider.Get(SqlEngine.Postgres, "pg-profile");
+        var guidance = Assert.IsType<SqlHarnessEngineGuidance>(caps.EngineGuidance);
+        var all = Serialize(caps);
+
+        Assert.Contains("TEMP", guidance.Setup, StringComparison.Ordinal);
+        Assert.Contains("least-privilege", guidance.Setup, StringComparison.Ordinal);
+        Assert.Contains("READ ONLY", guidance.Query, StringComparison.Ordinal);
+        Assert.Contains("sslMode", guidance.TargetServer, StringComparison.Ordinal);
+        Assert.DoesNotContain("#temp", all, StringComparison.Ordinal);
+        Assert.DoesNotContain("sqlserver", all, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SqlServer_scope_carries_sqlserver_guidance_and_no_postgres_facts()
+    {
+        var caps = SqlHarnessCapabilitiesProvider.Get(SqlEngine.SqlServer, "sql-profile");
+        var guidance = Assert.IsType<SqlHarnessEngineGuidance>(caps.EngineGuidance);
+        var all = Serialize(caps);
+
+        Assert.Contains("#temp", guidance.Setup, StringComparison.Ordinal);
+        foreach (var token in PostgresOnlyTokens)
+            Assert.DoesNotContain(token, all, StringComparison.Ordinal);
+        Assert.DoesNotContain("postgres", all, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Scoped_documents_keep_commands_and_parameter_types_and_limits_of_the_neutral_document()
+    {
+        var neutral = SqlHarnessCapabilitiesProvider.Get();
+        foreach (var engine in Enum.GetValues<SqlEngine>())
+        {
+            var scoped = SqlHarnessCapabilitiesProvider.Get(engine, "any-profile");
+            Assert.Equal(neutral.Commands, scoped.Commands);
+            Assert.Equal(neutral.Limits["targetIdentity"].ToString(), scoped.Limits["targetIdentity"].ToString());
+            Assert.Equal(neutral.Limits["queryMaxRows"], scoped.Limits["queryMaxRows"]);
+            Assert.Contains("nvarchar(n)", scoped.ParameterTypes!);
+        }
+    }
+
+    [Fact]
+    public void Every_registered_engine_has_one_guidance_entry()
+    {
+        foreach (var engine in Enum.GetValues<SqlEngine>())
+        {
+            var guidance = SqlHarnessCapabilitiesProvider.GuidanceFor(engine);
+            Assert.False(string.IsNullOrWhiteSpace(guidance.Query), engine.ToString());
+            Assert.False(string.IsNullOrWhiteSpace(guidance.Setup), engine.ToString());
+            Assert.False(string.IsNullOrWhiteSpace(guidance.TargetServer), engine.ToString());
+        }
+        Assert.Throws<InvalidOperationException>(() => SqlHarnessCapabilitiesProvider.GuidanceFor((SqlEngine)999));
+        Assert.Throws<InvalidOperationException>(() => SqlHarnessCapabilitiesProvider.Get((SqlEngine)999, "p"));
+    }
+
+    [Fact]
+    public void Profile_without_engine_defaults_to_sqlserver_and_unknown_engine_is_rejected()
+    {
+        Assert.Equal("sqlserver", SqlHarnessCapabilitiesProvider.Get("p", null).Profile!.Engine);
+        Assert.Equal("sqlserver", SqlHarnessCapabilitiesProvider.Get("p", "").Profile!.Engine);
+        Assert.Equal("postgres", SqlHarnessCapabilitiesProvider.Get("p", "Postgres").Profile!.Engine);
+        Assert.Throws<SqlHarnessSafetyException>(() => SqlHarnessCapabilitiesProvider.Get("p", "oracle"));
     }
 
     [Fact]
