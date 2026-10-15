@@ -45,3 +45,24 @@ Output: `Passed: 1501, Failed: 0, Skipped: 11, Total: 1512`. The 11 skipped test
 The qualification guard is called only for `SqlUsage.Mutation`, so the new PostgreSQL rules cannot change Query or CompareSetup outcomes. The generic DROP fallback now fails closed for Stage and future enum categories. The server-trigger guard checks both the create/alter trigger body node and the distinct drop-trigger node before tier promotion, including nested traversal.
 
 The installed parser does not parse the task-brief's PostgreSQL CREATE PROCEDURE example (it yields ParseError); no semantic regression input can exercise that AST branch with this parser version. The qualification helper covers the CreateProcedure target if a future parser version exposes it. Live database behavior and full Windows/Linux gates were not run in this fix wave; the controller owns those final gates.
+## Scoped re-review correction
+
+The final scoped reviewer found that PostgreSQL `CREATE SEQUENCE ... OWNED BY` names a column and may therefore have three parts (`schema.table.column`). The relation-name check incorrectly rejected this valid form. The helper now uses a separate column-name limit for `OwnedBy`: three parts are allowed and four or more are rejected. Other relation-name checks still allow at most two parts.
+
+RED command:
+
+```text
+dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~PostgresSafetyTierTests"
+```
+
+Output: `Failed: 1, Passed: 74, Skipped: 0, Total: 75`. The new accepted `CREATE SEQUENCE public.order_ids OWNED BY public.orders.id` case failed with `UnsupportedStatement`, as expected before the correction.
+
+GREEN command:
+
+```text
+dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~PostgresSafetyTierTests"
+```
+
+Output: `Passed: 75, Failed: 0, Skipped: 0, Total: 75`. This includes the accepted three-part ownership name and the existing rejected four-part `otherdb.public.orders.id` case.
+
+Files changed in this correction: `src/SqlHarness.Core/Postgres/PostgresSafetyClassifier.cs` and `tests/SqlHarness.Tests/Postgres/PostgresSafetyTierTests.cs`. No additional concerns identified; full gates remain controller-owned.

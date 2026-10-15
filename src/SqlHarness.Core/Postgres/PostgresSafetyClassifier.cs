@@ -455,7 +455,7 @@ internal sealed class PostgresSafetyClassifier
         Statement.CreateSchema createSchema => HasMultiplePartsInSchemaName(createSchema.Name),
         Statement.CreateSequence createSequence =>
             HasCrossDatabaseQualification(createSequence.Name) ||
-            HasCrossDatabaseQualification(createSequence.OwnedBy),
+            HasCrossDatabaseColumnQualification(createSequence.OwnedBy),
         Statement.CreateFunction createFunction => HasCrossDatabaseQualification(createFunction.Name),
         Statement.CreateProcedure createProcedure => HasCrossDatabaseQualification(createProcedure.Name),
         Statement.CreateType createType => HasCrossDatabaseQualification(createType.Name),
@@ -473,6 +473,9 @@ internal sealed class PostgresSafetyClassifier
 
     private static bool HasCrossDatabaseQualification(ObjectName? name) =>
         name is not null && name.Values.Count > 2;
+
+    private static bool HasCrossDatabaseColumnQualification(ObjectName? name) =>
+        name is not null && name.Values.Count > 3;
 
     private static bool HasMultiplePartsInSchemaName(SchemaName name) => name switch
     {

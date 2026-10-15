@@ -22,6 +22,7 @@ public sealed class PostgresSafetyTierTests
     [InlineData("CREATE VIEW public.order_totals AS SELECT 1 AS total", SqlRiskTier.Schema)]
     [InlineData("CREATE SCHEMA app", SqlRiskTier.Schema)]
     [InlineData("CREATE SEQUENCE app.order_ids", SqlRiskTier.Schema)]
+    [InlineData("CREATE SEQUENCE public.order_ids OWNED BY public.orders.id", SqlRiskTier.Schema)]
     [InlineData("CREATE FUNCTION app.answer() RETURNS int LANGUAGE sql AS 'SELECT 42'", SqlRiskTier.Schema)]
     [InlineData("CREATE TYPE app.mood AS ENUM ('sad', 'ok')", SqlRiskTier.Schema)]
     [InlineData("CREATE TRIGGER order_change AFTER INSERT ON public.orders FOR EACH ROW EXECUTE FUNCTION app.on_order_change()", SqlRiskTier.Schema)]
