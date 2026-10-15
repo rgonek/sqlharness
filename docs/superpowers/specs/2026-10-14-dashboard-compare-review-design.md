@@ -1,8 +1,6 @@
 # Dashboard compare review (Spec B)
 
-Status: design agreed with the operator, 2026-10-14. Implementation plan: not yet written. Order: after Plan 062, [session curation](2026-10-14-dashboard-session-curation-design.md) (A) and [agent transcript matching](2026-10-14-dashboard-agent-transcript-matching-design.md) (C).
-
-> **Checkpoint before execution.** The editor choice (CodeMirror 6) is provisional. The implementation plan's first step must ask the operator whether CodeMirror 6 is the final decision, and must not start until they answer. If they choose differently (e.g. Monaco), revise this spec first.
+Status: design agreed with the operator, 2026-10-14; editor decision updated before implementation to Monaco behind a provider-neutral SQL editor contract. Implementation plan: [Plan 071](../../../plans/071-dashboard-compare-review.md). Order: after Plan 062, [session curation](2026-10-14-dashboard-session-curation-design.md) (A) and [agent transcript matching](2026-10-14-dashboard-agent-transcript-matching-design.md) (C).
 
 ## Goal
 
@@ -10,13 +8,15 @@ After an agent optimises SQL, the operator opens a PR and shows the reviewer wha
 
 ## Builds on Plan 062
 
-062 delivers compare context (`subject`/`scope`), SQL versions per subject/scope, `CompareDetail`, `CompareSessionOverview` and a bounded `SqlDiff` (256 KiB total / 4000 lines, no new diff package). This spec replaces 062's `SqlDiff` rendering with the editor-based one and keeps 062's limits, version model and the rule that different measurement conditions never form one trend.
+062 delivers compare context (`subject`/`scope`), SQL versions per subject/scope, `CompareDetail`, `CompareSessionOverview` and a bounded `SqlDiff` (256 KiB total / 4000 lines, no diff package in that implementation). This spec replaces 062's `SqlDiff` rendering with the editor-based one, adds a small pure diff package, and keeps 062's limits, version model and the rule that different measurement conditions never form one trend.
 
 ## Editor
 
-- `@codemirror/merge` (`MergeView` side by side, `unifiedMergeView` unified) and `@codemirror/lang-sql` with the engine's dialect; read-only.
-- Bundled by Vite as same-origin files; CSP stays `script-src 'self'` (no `blob:` workers, no CDN). Loaded lazily with `import()` so other pages do not pay for it.
-- Light/dark theme follows `ThemeMenu`.
+- Use `@monaco-editor/react` and `monaco-editor` in a provider module loaded lazily from `SqlEditors.tsx`. Keep provider-neutral `SqlViewer` and `SqlMergeView` props; Monaco types and APIs stay inside `sql-editor/monaco.tsx` so a later provider replacement does not change consumers.
+- Bundle Monaco's core editor worker as a same-origin Vite `?worker` asset. Configure the React wrapper with the locally imported Monaco package. Do not use a CDN, `blob:`/`data:` workers, `eval`, or expand the existing CSP.
+- Register provider-owned SQL tokenizers/configurations for PostgreSQL and T-SQL explicitly. Do not leak editor vendor dialect types across the provider boundary.
+- Keep `unifiedDiffText` in a pure `lib/` helper using a small maintained diff package such as `diff`; it must remain usable without importing or initializing the editor.
+- Read-only. The provider follows light/dark changes made by `ThemeMenu`.
 
 ## SQL card on a compare operation
 
@@ -70,10 +70,10 @@ In `CompareSessionOverview` (062) each subject/scope group gets a **Diff** butto
 
 ## Tests
 
-- Vitest: Table IO (union, only-in, zero/null baseline, total, matrix); Plan changes (Scan→Seek, warnings, same plan, missing plan); Copy (Markdown content; no server/database/vars/parameters/setup); diff (limits, ignore formatting, formatter failure, `storeSensitive` off); session version selection; lazy loading does not break other pages.
+- Vitest: Table IO (union, only-in, zero/null baseline, total, matrix); Plan changes (Scan→Seek, warnings, same plan, missing plan); Copy (Markdown content; no server/database/vars/parameters/setup); diff (limits, ignore formatting, formatter failure, `storeSensitive` off); session version selection; lazy loading does not break other pages. Verify build output keeps the provider lazy, emits the worker same-origin, and leaves the CSP unchanged.
 - xUnit: SQL-by-version endpoint if added (bounds, 404, hash-only mode).
 - Isolated fixture page: desktop and 390 px width, keyboard navigation through tabs and controls, light/dark. No operator dashboard or real data.
-- `npm run check`, `npm run build`, then both gates, one at a time.
+- `npm run check`, `npm run build`, then `just verify`, one at a time. `just verify-linux` is optional under the current local-CI policy in `docs/agents/verification.md`.
 
 ## Documentation
 
