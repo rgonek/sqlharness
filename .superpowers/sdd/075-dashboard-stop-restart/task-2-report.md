@@ -43,11 +43,23 @@ The 3 skipped tests are Unix-only permission checks on this Windows run. The lif
 - `.superpowers/sdd/075-dashboard-stop-restart/task-2-brief.md`
 - `.superpowers/sdd/075-dashboard-stop-restart/task-2-report.md`
 
-## Coverage notes
+## Review follow-up
 
-- The stale endpoint test exercises a missing PID; there is no separate test where only the published start time is stale.
-- Unauthorized, connection-failure, and request-timeout tests verify failure while the captured instance remains live. The code checks independently observable lock release and process exit before deciding failure, but there is no dedicated test for a lost/unauthorized response racing with independently confirmed shutdown.
-- Whole-repository verification is assigned to the controller after task integration.
+Added dedicated coverage for a stale published start time and for a lost shutdown response followed by independently confirmed lock release and process exit. The existing `Self_only_reader_cannot_claim_captured_process_stopped` test covers inability to verify a non-self PID.
+
+Final focused lifecycle command:
+
+```text
+dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~DashboardLifecycleTests
+```
+
+Final output:
+
+```text
+Passed! - Failed: 0, Passed: 17, Skipped: 0, Total: 17, Duration: 4 s - SqlHarness.Tests.dll
+```
+
+Whole-repository verification is assigned to the controller after task integration.
 
 ## Concerns
 

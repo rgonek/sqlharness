@@ -100,6 +100,21 @@ public sealed class DashboardLifecycleTests
         Assert.Equal(DashboardStopStatus.AlreadyStopped, result.Status);
     }
 
+    [Fact]
+    public async Task Stale_start_time_returns_AlreadyStopped_without_contacting_its_endpoint()
+    {
+        using var home = new TempHome();
+        var processes = new FakeProcesses().Alive(4242, Started.AddHours(1));
+        using var endpointServer = new StatusServer(HttpStatusCode.Accepted);
+        using (var held = DashboardLock.TryAcquire(home.Path)!)
+            held.Publish(new DashboardEndpoint(4242, Started, endpointServer.Port, "stale-start-token"));
+
+        var result = await DashboardLifecycle.StopAsync(home.Path, processes, TimeSpan.FromSeconds(1), CancellationToken.None);
+
+        Assert.Equal(DashboardStopStatus.AlreadyStopped, result.Status);
+        Assert.Empty(endpointServer.RequestText);
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.NotFound)]
     [InlineData(HttpStatusCode.MethodNotAllowed)]
@@ -244,6 +259,27 @@ public sealed class DashboardLifecycleTests
     }
 
     [Fact]
+    public async Task Lost_shutdown_response_returns_Stopped_after_lock_and_process_exit_are_confirmed()
+    {
+        using var home = new TempHome();
+        var processes = new FakeProcesses().Alive(4242, Started);
+        var held = DashboardLock.TryAcquire(home.Path)!;
+        held.Publish(new DashboardEndpoint(4242, Started, 30001, "lost-response-token"));
+        using var handler = new LostResponseHandler(() =>
+        {
+            held.Dispose();
+            processes.Clear();
+        });
+
+        var result = await DashboardLifecycle.StopAsync(home.Path, processes, TimeSpan.FromSeconds(1), handler, CancellationToken.None);
+
+        Assert.Equal(DashboardStopStatus.Stopped, result.Status);
+        Assert.Null(result.Error);
+        using var reacquired = DashboardLock.TryAcquire(home.Path);
+        Assert.NotNull(reacquired);
+    }
+
+    [Fact]
     public async Task Self_only_reader_cannot_claim_captured_process_stopped()
     {
         using var home = new TempHome();
@@ -286,6 +322,15 @@ public sealed class DashboardLifecycleTests
             Requests++;
             onSend();
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Accepted));
+        }
+    }
+
+    private sealed class LostResponseHandler(Action stopCapturedInstance) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            stopCapturedInstance();
+            return Task.FromException<HttpResponseMessage>(new HttpRequestException("connection lost after shutdown"));
         }
     }
 
