@@ -96,7 +96,7 @@ public sealed class ActivityJournalTests
         Assert.True(JournalDb.Contains(sensitiveBytes, "SQLH_SETUP_MARKER"));
         Assert.True(JournalDb.Contains(sensitiveBytes, "SQLH_VALUE_MARKER"));
         Assert.True(JournalDb.Contains(sensitiveBytes, "SQLH_CLI_MATRIX_MARKER"));
-        Assert.Equal(8L, JournalDb.Rows(sensitive.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(sensitive.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
     }
 
     [Fact]
@@ -443,7 +443,7 @@ public sealed class ActivityJournalTests
 
         Open(temp, TextWriter.Null);
 
-        Assert.Equal(8L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
         var session = JournalDb.Rows(temp.DatabasePath, "SELECT client_title, roots_json FROM sessions")[0];
         Assert.Null(session["client_title"]);
         Assert.Null(session["roots_json"]);
@@ -477,7 +477,7 @@ public sealed class ActivityJournalTests
 
         Open(temp, TextWriter.Null);
 
-        Assert.Equal(8L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
         var row = JournalDb.Rows(temp.DatabasePath,
             "SELECT operation_ref, parent_operation_ref, dry_run, raw_bytes, emitted_bytes, compare_subject, compare_scope, compare_conditions_json FROM operations").Single();
         Assert.Null(row["operation_ref"]);
@@ -488,6 +488,34 @@ public sealed class ActivityJournalTests
         Assert.Null(row["compare_subject"]);
         Assert.Null(row["compare_scope"]);
         Assert.Null(row["compare_conditions_json"]);
+    }
+
+    [Fact]
+    public void Previous_journal_migrates_to_v9_with_an_empty_annotation_table()
+    {
+        using var temp = new JournalTempDirectory();
+        Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
+        using (var connection = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = JournalSchema.Version1 + JournalSchema.Version2 + JournalSchema.Version3
+                + JournalSchema.Version4 + JournalSchema.Version5 + JournalSchema.Version6 + JournalSchema.Version7
+                + JournalSchema.Version8 + """
+                INSERT INTO sessions (session_key, agent_kind, transport, source, host_pid, first_seen, last_seen)
+                VALUES ('cli:v8', 'agent', 'cli', 'process-tree', 1, 't', 't');
+                PRAGMA user_version = 8;
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        Open(temp, TextWriter.Null);
+
+        Assert.Equal(9L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        Assert.Equal("cli:v8", JournalDb.Rows(temp.DatabasePath, "SELECT session_key FROM sessions").Single()["session_key"]);
+        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT * FROM session_annotations"));
+        Assert.Single(JournalDb.Rows(temp.DatabasePath,
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'ix_session_annotations_starred'"));
     }
 
     [Fact]

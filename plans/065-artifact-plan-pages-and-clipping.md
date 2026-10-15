@@ -14,7 +14,7 @@
 
 ## Status
 
-- IN PROGRESS — implementation is committed as `0b6dce4`; the feature tree including the main merge and gate repair is verified at `7acf039`. Feature-to-main integration and integrated-main verification remain pending authorization. No installation, publication or push authorization is implied.
+- DONE — implementation and local feature-to-main integration are complete; integrated `main` at `cf0e7c4` passed Windows and Linux gates. Evidence: [verification record](../docs/verification/plan-065.md). No push, installation or publication was performed.
 - Planning base: `ed44649`, 2026-10-14.
 - Priority: P1 for clipping correctness; P2 for page efficiency. Effort: M; risk: MEDIUM (shared projection and pagination).
 - Owner: this follow-up; 055 and 058 are DONE historical prerequisites. Do not reopen their implementation status.

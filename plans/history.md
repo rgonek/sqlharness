@@ -2,6 +2,9 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
+## Plan 065 completion — 2026-10-15
+
+Plan 065 is DONE and integrated locally into `main` at `cf0e7c4d45c64105677c14563aed910aefe47788`. Post-merge verification passed on that exact revision: Windows `just verify` exit 0 (Core 3,511 passed/11 skipped; MCP 374 passed/4 skipped; format skipped with 0 changed C# files) and Linux `just verify-linux` exit 0 (9 stages; UI 163 tests; Core 3,516 passed/6 skipped; MCP 375 passed/3 skipped; build 0 warnings/errors; format passed for 7 changed C# files). Full stage details: [Plan 065 verification](../docs/verification/plan-065.md). This is local integration evidence; no push, install or publication was performed.
 # Plany po audycie SQLHarness 2026-09-28
 
 Zapis: 2026-09-29, skill improve. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.
@@ -205,9 +208,10 @@ Baseline at planning time: the build had 0 warnings and local tests passed (2811
 | [066](066-regression-resolution-floor-and-cost-thresholds.md) | Regression policy v2: 2 ms elapsed spread floor; documented reads/CPU diagnostic thresholds | P2 | S | 051 DONE; coordinate 064 descriptions | DONE — merged locally to main (`36f2213`..`aba5e34`, incl. dashboard `(policy vN)` label); Windows `verify: OK` on `aba5e34`; Linux gate waived by operator (shared-clone interference); no push/live DB |
 | [067](067-cell-limit-parity-and-default.md) | MCP `maxCellChars` 0..4096 with CLI parity; shared default 2048 | P2 | S–M | 060 DONE; coordinate 064/065 | TODO — planning accepted 2026-10-14 at `ed44649`; no implementation/publication authorization |
 | [068](068-operation-phase-timings-and-diagnostics.md) | Journal phase timings (connect/setup/execute/artifact) and opt-in `diagnostics.enabled` connection events | P2 | M–L | Coordinate 062 (operation page, journal reader) | TODO — planning accepted 2026-10-14 at `ed44649`; no implementation/publication authorization |
-| [069](069-dashboard-session-curation.md) | Dashboard session curation: title, note, star/pin, archive, search (journal `session_annotations`, guarded PATCH) | P2 | M | 062 DONE first; coordinate journal schema version with 062/068 | TODO — planned 2026-10-14 at `380307c`; spec accepted; followed by Spec C (transcript matching) and Spec B (compare review, CodeMirror 6 checkpoint), not yet planned |
+| [069](069-dashboard-session-curation.md) | Dashboard session curation: title, note, star/pin, archive, search (journal `session_annotations`, guarded PATCH) | P2 | M | 062 DONE first; coordinate journal schema version with 062/068 | DONE — locally merged to main from `feat/plan-069-session-curation` (implementation `563e484`..`dd2b2de`); journal v9 `session_annotations`; per-task reviews, whole-branch review and one fix wave clean; Windows `verify: OK stages=6` on `dd2b2de`; Linux gate waived by the operator; no push/live DB |
 | [070](070-dashboard-agent-transcript-matching.md) | Opt-in agent transcript matching: Claude/Codex conversation titles, Claude model/effort per operation (journal v10 derived tables, housekeeping cycle) | P2 | L | 062 and 069 DONE first; re-verify transcript formats | TODO — planned 2026-10-14 at `54dc621`; spec accepted |
 | [071](071-dashboard-compare-review.md) | Compare review: CodeMirror 6 SQL tabs + side-by-side/unified diff, per-table IO and plan changes, Copy Markdown for PRs, session version diff | P2 | M–L | 062 DONE; **ask the operator to confirm CodeMirror 6 before starting** | TODO — planned 2026-10-14 at `40a6871`; spec accepted |
+| [074](074-session-search-case-folding.md) | Session search ignores letter case beyond ASCII via `sqlh_fold` (NFC + invariant lower case); accent-sensitive | P3 | S | 069 DONE | TODO — planned 2026-10-15 at `a99ac3f` on the operator's request |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED, SUPERSEDED or REVERTED (with one-line rationale).
 

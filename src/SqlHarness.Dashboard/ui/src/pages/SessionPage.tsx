@@ -5,6 +5,8 @@ import { ErrorState } from "@/components/ErrorState"
 import { OperationTable } from "@/components/OperationTable"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { SessionAnnotationHeader } from "@/components/SessionAnnotationHeader"
+import { SessionNoteCard } from "@/components/SessionNoteCard"
 import { CompareSessionOverview } from "@/components/CompareSessionOverview"
 import { formatTimestamp } from "@/lib/format"
 import { clientLabel, rootLabel } from "@/lib/roots"
@@ -37,15 +39,15 @@ function SessionView({ id, returnSubject, returnScope, returnUnassigned }: { id:
   if (detail.error) return <ErrorState error={detail.error} />
   if (detail.isPending) return <Skeleton className="h-64 w-full" />
 
-  const { session, operations, compareSubjects = [], unassignedCompareCount = 0 } = detail.data
+  const { session, operations, note = null, compareSubjects = [], unassignedCompareCount = 0 } = detail.data
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
           <CardTitle>
-            <h1>Session {session.id}</h1>
+            <SessionAnnotationHeader key={session.id} session={session} />
           </CardTitle>
-          <div className="font-mono">{session.sessionKey}</div>
+          {session.title && <div className="font-mono">{session.sessionKey}</div>}
           <CardDescription>{agentLabel(session.agentKind)} via {session.transport} ({session.source})</CardDescription>
         </CardHeader>
         <CardContent>
@@ -82,6 +84,7 @@ function SessionView({ id, returnSubject, returnScope, returnUnassigned }: { id:
           </details>
         </CardContent>
       </Card>
+      <SessionNoteCard key={session.id} sessionId={session.id} note={note} />
       <CompareSessionOverview sessionId={id} subjects={compareSubjects} unassignedCompareCount={unassignedCompareCount} returnSubject={returnSubject} returnScope={returnScope} returnUnassigned={returnUnassigned} />
       <Card>
         <CardHeader>

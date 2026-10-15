@@ -212,4 +212,29 @@ public sealed class JournalRetentionTests
         // Two operation batches, two plan batches, one session batch; an unbatched orphan delete would give at most four.
         Assert.Equal(5, writes);
     }
+
+    [Fact]
+    public void Retention_deletes_the_annotation_with_its_session()
+    {
+        using var temp = new JournalTempDirectory();
+        Seed(temp, Now.AddDays(-40), key: "cli:old");
+        Seed(temp, Now.AddDays(-1), key: "cli:new");
+        using (var connection = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO session_annotations (session_id, title, starred, updated_at)
+                SELECT id, 'kept or not', 1, 't' FROM sessions;
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        var result = JournalRetention.Run(temp.DatabasePath, Config(maxAgeDays: 30), new Processes(), new FixedTimeProvider(Now));
+
+        Assert.Equal(1, result.DeletedSessions);
+        var remaining = JournalDb.Rows(temp.DatabasePath,
+            "SELECT s.session_key FROM session_annotations a JOIN sessions s ON s.id = a.session_id").Single();
+        Assert.Equal("cli:new", remaining["session_key"]);
+    }
 }

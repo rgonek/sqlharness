@@ -2,7 +2,7 @@ namespace SqlHarness.Core;
 
 internal static class JournalSchema
 {
-    internal const int CurrentVersion = 8;
+    internal const int CurrentVersion = 9;
 
     internal const string Version1 = """
         CREATE TABLE sessions (
@@ -163,5 +163,17 @@ internal static class JournalSchema
         ALTER TABLE operations ADD COLUMN compare_subject TEXT;
         ALTER TABLE operations ADD COLUMN compare_scope TEXT;
         ALTER TABLE operations ADD COLUMN compare_conditions_json TEXT;
+        """;
+
+    internal const string Version9 = """
+        CREATE TABLE session_annotations (
+            session_id INTEGER PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+            title TEXT,
+            note TEXT,
+            starred INTEGER NOT NULL DEFAULT 0,
+            archived_at TEXT,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX ix_session_annotations_starred ON session_annotations(starred) WHERE starred = 1;
         """;
 }

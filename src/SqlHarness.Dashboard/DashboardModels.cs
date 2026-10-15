@@ -4,9 +4,16 @@ namespace SqlHarness.Dashboard;
 
 public sealed record Page<T>(IReadOnlyList<T> Items, long? NextCursor);
 
+/// <summary>
+/// Session list filter. With <c>Starred</c> set the list is ordered by id and pages by an exact id cursor; unfiltered, starred
+/// sessions sort first, the id cursor would not be exact across the star boundary, so only the first page is returned
+/// (<c>NextCursor</c> is null).
+/// <c>Archived</c> null lists archived and active sessions together.
+/// </summary>
 public sealed record SessionQuery(
     string? Agent = null, string? Transport = null, DateTimeOffset? From = null, DateTimeOffset? To = null,
-    long? Cursor = null, int Limit = JournalReader.DefaultLimit);
+    long? Cursor = null, int Limit = JournalReader.DefaultLimit,
+    bool? Archived = false, bool? Starred = null, string? Search = null);
 
 public sealed record OperationQuery(
     long? SessionId = null, string? Status = null, string? Operation = null, DateTimeOffset? From = null,
@@ -23,7 +30,8 @@ public sealed record SessionSummary(
     long Id, string SessionKey, string AgentKind, string Transport, string Source, string? ClientName,
     string? ClientVersion, string? McpMode, string? Cwd, string FirstSeen, string LastSeen,
     int Operations, int Failed, int Rejected, int Running, int Abandoned,
-    string? ClientTitle, IReadOnlyList<SessionRoot>? Roots, string? ProtocolVersion);
+    string? ClientTitle, IReadOnlyList<SessionRoot>? Roots, string? ProtocolVersion,
+    string? Title, bool Starred, bool Archived, string? NotePreview);
 
 public sealed record OperationSummary(
     long Id, long SessionId, string AgentKind, string Operation, string Status, int? ExitCode, string? ErrorKind,
@@ -38,7 +46,7 @@ public sealed record AgentCall(
     string? TurnTrigger, string? ThreadSource);
 
 public sealed record SessionDetail(SessionSummary Session, IReadOnlyList<OperationSummary> Operations,
-    IReadOnlyList<CompareSubjectSummary> CompareSubjects, int UnassignedCompareCount);
+    IReadOnlyList<CompareSubjectSummary> CompareSubjects, int UnassignedCompareCount, string? Note);
 
 public sealed record Spread(long Min, long Median, long Max);
 
@@ -139,3 +147,5 @@ public sealed record DashboardStats(
     IReadOnlyList<ProfileOperationCount> ProfileOperations,
     ProfileDimensionStats ProfileDimensions,
     IReadOnlyList<WorkflowCost> WorkflowCosts);
+
+public sealed record SessionAnnotation(string? Title, string? Note, bool Starred, bool Archived);

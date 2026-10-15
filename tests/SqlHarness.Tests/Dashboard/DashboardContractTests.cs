@@ -33,15 +33,16 @@ public sealed class DashboardContractTests
     [Fact]
     public void Session_summary_names_match_the_ui()
     {
-        var session = new SessionSummary(1, "k", "claude", "cli", "process-tree", null, null, null, null, "f", "l", 0, 0, 0, 0, 0, null, null, null);
+        var session = new SessionSummary(1, "k", "claude", "cli", "process-tree", null, null, null, null, "f", "l", 0, 0, 0, 0, 0, null, null, null, null, false, false, null);
 
         Assert.Equal(
             ["id", "sessionKey", "agentKind", "transport", "source", "clientName", "clientVersion", "mcpMode", "cwd",
-             "firstSeen", "lastSeen", "operations", "failed", "rejected", "running", "abandoned", "clientTitle", "roots", "protocolVersion"],
+             "firstSeen", "lastSeen", "operations", "failed", "rejected", "running", "abandoned", "clientTitle", "roots", "protocolVersion",
+             "title", "starred", "archived", "notePreview"],
             Names(session));
 
-        Assert.Equal(["session", "operations", "compareSubjects", "unassignedCompareCount"],
-            Names(new SessionDetail(session, [], [], 0)));
+        Assert.Equal(["session", "operations", "compareSubjects", "unassignedCompareCount", "note"],
+            Names(new SessionDetail(session, [], [], 0, null)));
         Assert.Equal(["operationId", "subject", "scope", "baselineHash", "candidateHash", "baselineVersion",
                 "candidateVersion", "status", "startedAt", "regression", "cases", "conditions", "summary"],
             Names(new CompareAttemptSummary(1, "orders", "whole", null, null, null, null, "running", "t", null, null, null, null)));
@@ -106,13 +107,13 @@ public sealed class DashboardContractTests
     [Fact]
     public void Serialized_compare_contracts_match_the_typescript_declarations()
     {
-        var session = new SessionSummary(1, "k", "claude", "cli", "process-tree", null, null, null, null, "f", "l", 0, 0, 0, 0, 0, null, null, null);
+        var session = new SessionSummary(1, "k", "claude", "cli", "process-tree", null, null, null, null, "f", "l", 0, 0, 0, 0, 0, null, null, null, null, false, false, null);
         var attempt = new CompareAttemptSummary(1, "orders", "whole", "a", "b", "v0", "v1", "succeeded", "t", null, [], null, null);
         var subject = new CompareSubjectSummary("orders", ["whole"], attempt, attempt, attempt);
 
         AssertTypescriptFieldsMatch("CompareAttemptSummary", attempt);
         AssertTypescriptFieldsMatch("CompareSubjectSummary", subject);
-        AssertTypescriptFieldsMatch("SessionDetail", new SessionDetail(session, [], [subject], 0));
+        AssertTypescriptFieldsMatch("SessionDetail", new SessionDetail(session, [], [subject], 0, null));
         AssertTypescriptFieldsMatch("OperationDetail", new OperationDetail(default!, session, null, null, null, null,
             null, null, null, null, [], default!, null));
     }
