@@ -118,6 +118,34 @@ public sealed class DashboardLockTests
         Assert.Null(endpoint);
     }
 
+    [Fact]
+    public async Task Wait_for_running_rejects_an_endpoint_published_after_the_deadline()
+    {
+        using var home = new TempHome();
+        var processes = new FakeProcesses().Alive(4242, Started);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var publish = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(60));
+            using var held = DashboardLock.TryAcquire(home.Path)!;
+            held.Publish(new DashboardEndpoint(4242, Started, 47801, "tok"));
+            await release.Task;
+        });
+
+        DashboardEndpoint? endpoint;
+        try
+        {
+            endpoint = await DashboardLock.WaitForRunningAsync(home.Path, processes, TimeSpan.FromMilliseconds(40), CancellationToken.None);
+        }
+        finally
+        {
+            release.SetResult();
+        }
+        await publish;
+
+        Assert.Null(endpoint);
+    }
+
     [UnixFact]
     [UnsupportedOSPlatform("windows")]
     public void Info_file_is_owner_only_on_unix()

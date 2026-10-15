@@ -37,6 +37,7 @@ public sealed class DashboardLock : IDisposable
     internal const string InfoFileName = "dashboard.json";
     private const UnixFileMode OwnerReadWrite = UnixFileMode.UserRead | UnixFileMode.UserWrite;
     private const int DeleteAttempts = 5;
+    private static readonly TimeSpan RunningPollInterval = TimeSpan.FromMilliseconds(100);
     public static TimeSpan StartTimeTolerance { get; } = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan AcquireRetryDelay = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan DeleteRetryDelay = TimeSpan.FromMilliseconds(50);
@@ -203,14 +204,26 @@ public sealed class DashboardLock : IDisposable
     public static async Task<DashboardEndpoint?> WaitForRunningAsync(string home, IProcessInfo processes, TimeSpan timeout, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrEmpty(home);
-        var deadline = DateTimeOffset.UtcNow + timeout;
+        ArgumentNullException.ThrowIfNull(processes);
+        var started = TimeProvider.System.GetTimestamp();
+        TimeSpan Remaining() => timeout - TimeProvider.System.GetElapsedTime(started);
         while (true)
         {
-            if (ReadRunning(home, processes) is { } endpoint)
-                return endpoint;
-            if (DateTimeOffset.UtcNow >= deadline)
+            ct.ThrowIfCancellationRequested();
+            var remaining = Remaining();
+            if (remaining <= TimeSpan.Zero)
                 return null;
-            await Task.Delay(TimeSpan.FromMilliseconds(100), ct);
+
+            if (ReadRunning(home, processes) is { } endpoint)
+            {
+                ct.ThrowIfCancellationRequested();
+                return Remaining() > TimeSpan.Zero ? endpoint : null;
+            }
+
+            remaining = Remaining();
+            if (remaining <= TimeSpan.Zero)
+                return null;
+            await Task.Delay(remaining < RunningPollInterval ? remaining : RunningPollInterval, ct);
         }
     }
 

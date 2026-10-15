@@ -53,8 +53,10 @@ public sealed class DashboardCommandTests
         Assert.False(File.Exists(Path.Combine(home.Path, "dashboard-open.html")));
     }
 
-    [Fact]
-    public async Task Stop_failure_exits_with_local_storage_and_does_not_launch()
+    [Theory]
+    [InlineData("--stop")]
+    [InlineData("--restart")]
+    public async Task Stop_failure_exits_with_local_storage_and_does_not_launch(string option)
     {
         using var home = new TempHome();
         using var scope = new HomeScope(home.Path);
@@ -63,7 +65,7 @@ public sealed class DashboardCommandTests
         var output = new StringWriter();
         var error = new StringWriter();
 
-        var exitCode = await Create(lifecycle, launcher, output, error).RunAsync(["dashboard", "--stop"]);
+        var exitCode = await Create(lifecycle, launcher, output, error).RunAsync(["dashboard", option]);
 
         Assert.Equal((int)SqlHarnessExitCode.LocalStorage, exitCode);
         Assert.Empty(launcher.Launches);
@@ -146,12 +148,9 @@ public sealed class DashboardCommandTests
         Assert.Contains("did not publish its address", error.ToString(), StringComparison.Ordinal);
     }
 
-    [Fact]
+    [ProcessReaderFact]
     public async Task Restart_acceptance_replaces_only_the_isolated_home_instance_and_serves_authenticated_api()
     {
-        if (OperatingSystem.IsMacOS())
-            return; // ProcessInfo cannot inspect other PIDs on macOS, so publication identity is unavailable.
-
         using var home = new TempHome();
         var cliAssembly = Path.Combine(AppContext.BaseDirectory, "sqlharness.dll");
         using var oldProcess = StartCli(cliAssembly, home.Path, "dashboard", "--background");
