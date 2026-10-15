@@ -54,6 +54,7 @@ the tool. Keep workload values out.
 | 2026-10-14 point-lookup query (unmapped) | optimization | adopt (marginal) + reject | 1 | variant × case table, recommendation with trade-offs, question for a human, limits, follow-up offer | ~12 / ~15 | yes (trade-offs, cache argument, semantic question) | 3 | none; counterexample to journal-only rendering |
 | 2026-10-15 historical query experiment (unmapped) | optimization | partial | 1 | variant × case table, plans, limits, later correction | ~6 / ~9 | yes (source/Git applicability) | 1 | external context required; no API change |
 | 2026-10-15 current-source history query (unmapped) | optimization | partial | 1 | variant × case table, source context, outcome, limits, evidence links | ~8 / ~12 | yes (calling conditions, candidate rationale, deferred implementation) | 1 clarification | external context and review coverage; no API decision |
+| 2026-10-15 sync-key selection query (unmapped) | optimization | partial | 1 | pre-measurement source context, path × case table, plan comparison, limits, unmeasured side findings, follow-up offer | ~16 / ~24 | yes (source/caller context, Query Store prioritization, unmeasured write-path proposals, deferral) | 1 (unlabeled inference) | external context, unmeasurable side findings, partial evidence; no API decision |
 
 Rows for entries before the revision contain only what those entries state; "not recorded" means the
 original entry did not record the field, not that the value was zero.
@@ -540,3 +541,56 @@ from the historical-query experiment above.
   preserves a potential evidence gap for later analysis, without choosing an implementation.
 - **Operator decision:** Record the evidence gap as an observation only; do not create an
   implementation plan. Append this report observation. Product implementation remains deferred.
+
+### 2026-10-15 — sync-key selection query, path-dependent gain and unmeasurable write findings
+
+`Kind:` optimization · `Outcome:` partial · `Scopes:` 1 · `System label:` unmapped.
+A separate session from the two 2026-10-15 entries above; the label is not asserted to match them.
+
+- **Actual report:** The operator required source location, calling conditions and the construction of
+  the final SQL and parameters to be stated before any measurement, with Query Store used only after
+  matching it to current code. The agent used Query Store to prioritize. It set aside an expensive write
+  statement as unmeasurable read-only, then selected a read statement whose text matched source exactly.
+  Before measuring, it reported file, method, callers, branch selection and typed parameters. The final
+  report gave a path × case table, explaining where the gain appears and where it does not. It also gave
+  plan-shape comparisons, limits (parameter substitution, unmeasured transaction part, one lost cell,
+  timing noise) and three unmeasured side findings (list expansion, an apparently redundant index,
+  a missing-index hint judged not useful). It closed with a follow-up offer. The operator then deferred
+  implementation, because the purpose was testing the tool, and requested private documentation.
+- **Report blocks:** Pre-measurement source and parameter description; path × case results table;
+  plan comparison; limits; side findings explicitly labeled unmeasured; evidence file location; follow-up
+  offer. No question for a human in the final report.
+- **Evidence and interpretation:** Four matrix comparisons (one partial) supplied repetitions,
+  per-table IO, equality and regression verdicts. Six artifact reads (statements and plan sections)
+  separated plan shape from batch totals. Query rows supplied Query Store text matching, catalog
+  indexes, cardinalities and the parameter-type check. Application source supplied the callers and
+  SQL composition. The equivalence argument (a semi-join over a primary key cannot duplicate keys) is
+  agent inference, supported by observed multiset equality on the measured cases only.
+- **Content provenance:** Approximately sixteen numeric statements came from compare metrics
+  (table cells, per-table reads), about four from query rows (Query Store and catalog figures) and about
+  four from artifact plan nodes (node counts, estimates). That is roughly twenty-four numeric statements,
+  not numeric literals; counts are approximate. Numbers were transcribed by hand into chat and private
+  documents. Caller inventory, the selection rationale, the write-path proposals and the deferral have
+  no journal operation.
+- **Corrections:** One. The report said the candidate removed hash operators sized for a large
+  estimate (implying a smaller memory grant). This was inferred from estimates, not from grant values.
+  During the retro, journal grant fields supported the direction at batch level only. Cause: unlabeled
+  inference. See the [follow-up](../../observations/plan-memory-and-compilation-evidence.md#follow-up-2026-10-15).
+  The private documentation was corrected.
+- **Dashboard usefulness:** Retain the per-path table, the selected shape, the unmeasured side findings
+  as labeled hypotheses, and the partial run. The partial comparison's completed cells are absent from
+  the journal ([observation](../../observations/partial-compare-journal-coverage.md)), so the dashboard
+  could not reconstruct one of the four comparisons. The dashboard was not used.
+- **Observed workflow cost:** capabilities ×1, query ×11 (1 safety rejection, 3 Query Store text
+  extractions of which 2 were unsuccessful attempts), compare ×4 (1 partial), artifact ×6:
+  **22 investigation calls**. Journal-recorded emitted output for these calls totals about 120 KB.
+  Retro work (four read-only journal queries, source reads) is excluded.
+- **Cost coverage:** Input/schema overhead, final-chat and document duplication, and the share of
+  output due to per-instance temporary-object IO entries were not measured. No savings baseline exists.
+- **Optional API implications:** More evidence that reports carry authored context (callers, selection
+  rationale, deferral) and explicitly unmeasured proposals that no journal operation backs. Partial runs
+  need journal coverage before any journal-rendered report could be complete. No report API change or
+  readiness conclusion follows.
+- **Operator decision:** Record observations for table-valued parameters, write-path and index
+  maintenance evidence, statement metrics and partial-run journal coverage. Plan the partial-run
+  journal fix ([plan 076](../../../plans/076-partial-matrix-journal-runs.md)); no implementation authorized.

@@ -47,3 +47,16 @@ compilation attributes, traced through extraction, persistence and safe readback
 by an older-artifact case. No live database or raw-plan exposure is required for those checks.
 Output bytes, token costs and potential savings were not measured. This record authorizes
 no implementation, installation or publication.
+
+## Follow-up 2026-10-15
+
+Recorded against HEAD `4f1e5a1` from a separate optimization session; the original entry above is
+unchanged. In that session the agent told the operator that a candidate removed hash operators
+"sized for" a large estimate, implying a smaller memory grant. That claim came from estimated rows in
+saved plan nodes, not from grant values. During the retro, a bounded read-only check of the local
+journal found requested, granted and max-used memory and compile time recorded for every metric row of
+those operations (batch level), confirming a direction consistent with the claim. The values were
+reachable only through the journal or dashboard, not through any `artifact` section the agent had used.
+This supports the question above: whether a bounded artifact section should expose these fields. Batch-level
+values also mix fill statements with the statement under test. Statement-level grants were not checked.
+See also [statement metrics](statement-metrics-and-local-object-noise.md).
