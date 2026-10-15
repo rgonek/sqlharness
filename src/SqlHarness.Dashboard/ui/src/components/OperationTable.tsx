@@ -35,7 +35,7 @@ export function OperationTable({ operations, now }: { operations: OperationSumma
               <TableCell className="whitespace-nowrap">{formatTimestamp(operation.startedAt)}</TableCell>
               <TableCell>
                 {agentLabel(operation.agentKind)}
-                {operation.agentModel && <div className="text-sm text-muted-foreground">{operation.agentModel}</div>}
+                {operation.agentModel && <div className="text-sm text-muted-foreground">{operation.agentModel}{operation.agentModelSource === "transcript" ? " (transcript)" : ""}</div>}
               </TableCell>
               <TableCell>
                 <div>{operation.operation}</div>

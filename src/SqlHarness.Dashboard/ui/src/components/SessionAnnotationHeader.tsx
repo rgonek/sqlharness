@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { sessionDisplayName } from "@/lib/sessionName"
+import { agentTitleSource, sessionDisplayName } from "@/lib/sessionName"
 
 export function SessionAnnotationHeader({ session }: { session: SessionSummary }) {
   const update = useUpdateSessionAnnotation(session.id)
@@ -24,13 +24,14 @@ export function SessionAnnotationHeader({ session }: { session: SessionSummary }
         {draft === null ? (
           <>
             <h1 className="cursor-text" onClick={() => setDraft(session.title ?? "")}>{sessionDisplayName(session)}</h1>
+            {!session.title && session.agentTitle && <span className="text-sm font-normal text-muted-foreground">{agentTitleSource(session.agentKind)}</span>}
             <Button variant="ghost" size="icon" aria-label="Edit title" onClick={() => setDraft(session.title ?? "")}>
               <Pencil />
             </Button>
           </>
         ) : (
           <Input
-            autoFocus aria-label="Session title" maxLength={200} value={draft} placeholder={session.sessionKey}
+            autoFocus aria-label="Session title" maxLength={200} value={draft} placeholder={session.agentTitle ?? session.sessionKey}
             onChange={event => setDraft(event.target.value)}
             onKeyDown={event => {
               if (event.key === "Enter") save()

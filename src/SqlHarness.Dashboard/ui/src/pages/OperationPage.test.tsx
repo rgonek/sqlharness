@@ -142,7 +142,8 @@ test("compare-matrix summary shows the matrix parameter and equivalent cells", a
 test("agent call card shows the client-supplied labels and is absent without them", async () => {
   stubFetch({
     "/api/operations/10": operationDetail({
-      agent: { callId: "exec-1", model: "gpt-6-sol", reasoningEffort: "low", sessionId: "s", turnId: "turn-1", turnTrigger: "exec", threadSource: "user" },
+      agent: { callId: "exec-1", model: "gpt-6-sol", reasoningEffort: "low", sessionId: "s", turnId: "turn-1", turnTrigger: "exec", threadSource: "user",
+        transcriptModel: null, transcriptReasoningEffort: null, conversationTitle: null },
     }),
   })
   renderApp("/operations/10")
@@ -152,6 +153,18 @@ test("agent call card shows the client-supplied labels and is absent without the
   expect(screen.getByText("low")).toBeInTheDocument()
   expect(screen.getByText("turn-1")).toBeInTheDocument()
   expect(screen.getByText("exec-1")).toBeInTheDocument()
+})
+
+test("shows transcript model and effort when the call has no client labels", async () => {
+  stubFetch({ "/api/operations/10": operationDetail({
+    agent: { callId: null, model: null, reasoningEffort: null, sessionId: null, turnId: null, turnTrigger: null, threadSource: null,
+      transcriptModel: "claude-opus-5-5", transcriptReasoningEffort: "high", conversationTitle: "Optimize orders" },
+  }) })
+  renderApp("/operations/10")
+  expect(await screen.findByText("claude-opus-5-5")).toBeInTheDocument()
+  expect(screen.getAllByText("from transcript")).toHaveLength(2)
+  expect(screen.getByText("high")).toBeInTheDocument()
+  expect(screen.getByText("Optimize orders")).toBeInTheDocument()
 })
 
 test("operations without call labels render no agent call card", async () => {

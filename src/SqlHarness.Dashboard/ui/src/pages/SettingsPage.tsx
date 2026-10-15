@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import { FieldErrorsError } from "@/api/client"
-import { usePrices, useRefreshPrices, useSaveSettings, useSettings } from "@/api/queries"
+import { useClearTranscripts, usePrices, useRefreshPrices, useSaveSettings, useSettings, useTranscriptStatus } from "@/api/queries"
 import type { Settings } from "@/api/types"
 import { ErrorState } from "@/components/ErrorState"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -85,6 +85,35 @@ function ModelPricesCard() {
         {refresh.error && <p className="text-sm text-destructive">{refresh.error.message}</p>}
       </CardContent>
     </Card>
+  )
+}
+
+function AgentTranscriptsStatus() {
+  const status = useTranscriptStatus()
+  const clear = useClearTranscripts()
+  const [confirming, setConfirming] = useState(false)
+  return (
+    <div className="grid gap-2">
+      {status.data && <p>Matched {status.data.matched} · Unmatched {status.data.unmatched} · Read errors {status.data.readErrors}</p>}
+      {status.data?.lastCycleAt && <p className="text-sm text-muted-foreground">Last cycle: {status.data.lastCycleAt}</p>}
+      {status.error && <p role="alert" className="text-sm text-destructive">{status.error.message}</p>}
+      <div>
+        <Button variant="outline" disabled={clear.isPending} onClick={() => setConfirming(true)}>Clear matched data</Button>
+      </div>
+      {clear.error && <p role="alert" className="text-sm text-destructive">{clear.error.message}</p>}
+      <Dialog open={confirming} onOpenChange={setConfirming}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clear matched data?</DialogTitle>
+            <DialogDescription>Removes matched titles, models and conversations. Your session titles and notes are kept.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirming(false)}>Cancel</Button>
+            <Button disabled={clear.isPending} onClick={() => { setConfirming(false); clear.mutate() }}>Clear matched data</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
 
@@ -186,6 +215,12 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent className="grid gap-4">
           <Toggle id="dashboard-autostart" label="Start with mcp serve" checked={draft.dashboard.autoStart} onChange={value => setDashboard({ autoStart: value })} />
+          <div className="grid gap-2">
+            <Toggle id="dashboard-agent-transcripts" label="Read agent transcripts" checked={draft.dashboard.agentTranscripts.enabled}
+              onChange={value => setDashboard({ agentTranscripts: { enabled: value } })} />
+            <p className="text-sm text-muted-foreground">Reads local Claude Code and Codex transcripts to show conversation titles and Claude's model and effort. Only titles, ids, model and effort are stored.</p>
+            <AgentTranscriptsStatus />
+          </div>
           <NumberField id="dashboard-idle" label="Idle shutdown (hours)" value={draft.dashboard.idleShutdownHours} min={1} max={168} error={fieldErrors["dashboard.idleShutdownHours"]} onCommit={value => setDashboard({ idleShutdownHours: value })} />
           <div className="grid gap-1">
             <span className="text-sm">Port</span>

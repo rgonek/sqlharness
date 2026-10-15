@@ -137,8 +137,15 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: { retur
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <Fact label="Model">{detail.agent.model ?? "—"}</Fact>
-              <Fact label="Effort">{detail.agent.reasoningEffort ?? "—"}</Fact>
+              <Fact label="Model">
+                {detail.agent.model ?? detail.agent.transcriptModel ?? "—"}
+                {!detail.agent.model && detail.agent.transcriptModel && <span className="ml-1 text-sm text-muted-foreground">from transcript</span>}
+              </Fact>
+              <Fact label="Effort">
+                {detail.agent.reasoningEffort ?? detail.agent.transcriptReasoningEffort ?? "—"}
+                {!detail.agent.reasoningEffort && detail.agent.transcriptReasoningEffort && <span className="ml-1 text-sm text-muted-foreground">from transcript</span>}
+              </Fact>
+              {detail.agent.conversationTitle && <Fact label="Conversation">{detail.agent.conversationTitle}</Fact>}
               <Fact label="Agent session"><span className="font-mono">{detail.agent.sessionId ?? "—"}</span></Fact>
               <Fact label="Turn"><span className="font-mono">{detail.agent.turnId ?? "—"}</span></Fact>
               <Fact label="Trigger">{detail.agent.turnTrigger ?? "—"}</Fact>

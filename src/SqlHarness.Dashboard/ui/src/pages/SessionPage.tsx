@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { SessionAnnotationHeader } from "@/components/SessionAnnotationHeader"
 import { SessionNoteCard } from "@/components/SessionNoteCard"
+import { SessionConversations } from "@/components/SessionConversations"
 import { CompareSessionOverview } from "@/components/CompareSessionOverview"
 import { formatTimestamp } from "@/lib/format"
 import { clientLabel, rootLabel } from "@/lib/roots"
@@ -39,7 +40,7 @@ function SessionView({ id, returnSubject, returnScope, returnUnassigned }: { id:
   if (detail.error) return <ErrorState error={detail.error} />
   if (detail.isPending) return <Skeleton className="h-64 w-full" />
 
-  const { session, operations, note = null, compareSubjects = [], unassignedCompareCount = 0 } = detail.data
+  const { session, operations, note = null, compareSubjects = [], unassignedCompareCount = 0, conversations = [] } = detail.data
   return (
     <div className="space-y-4">
       <Card>
@@ -85,6 +86,7 @@ function SessionView({ id, returnSubject, returnScope, returnUnassigned }: { id:
         </CardContent>
       </Card>
       <SessionNoteCard key={session.id} sessionId={session.id} note={note} />
+      {conversations.length > 0 && <SessionConversations conversations={conversations} />}
       <CompareSessionOverview sessionId={id} subjects={compareSubjects} unassignedCompareCount={unassignedCompareCount} returnSubject={returnSubject} returnScope={returnScope} returnUnassigned={returnUnassigned} />
       <Card>
         <CardHeader>

@@ -9,7 +9,7 @@ const response = (over: Partial<SettingsResponse> = {}): SettingsResponse => ({
   path: "C:/Users/me/.sqlharness/config.json",
   settings: {
     journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
-    dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8 },
+    dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, agentTranscripts: { enabled: false } },
     compare: { requireContext: true },
   },
   ...over,
@@ -210,4 +210,35 @@ test("refreshing model prices updates the shown snapshot and reports failures", 
   fail = true
   await userEvent.click(screen.getByRole("button", { name: "Refresh model prices" }))
   expect(await screen.findByText("Model prices could not be refreshed.")).toBeInTheDocument()
+})
+
+test("enables transcript reading, shows status, and confirms clearing matched data", async () => {
+  const puts: { body: unknown; search: string }[] = []
+  const posts: { body: unknown; header: string | null }[] = []
+  stubFetch({
+    "/api/settings": (url: URL, init?: RequestInit) => {
+      if (init?.method === "PUT") {
+        const body = JSON.parse(String(init.body))
+        puts.push({ body, search: url.search })
+        return new Response(JSON.stringify({ ...response(), settings: body }), { status: 200 })
+      }
+      return new Response(JSON.stringify(response()), { status: 200 })
+    },
+    "/api/transcripts": { enabled: false, matched: 3, unmatched: 1, readErrors: 0, lastCycleAt: null },
+    "/api/transcripts/clear": (_url: URL, init?: RequestInit) => {
+      posts.push({ body: JSON.parse(String(init?.body)), header: new Headers(init?.headers).get("X-SqlHarness-Dashboard") })
+      return new Response(JSON.stringify({ enabled: false, matched: 0, unmatched: 0, readErrors: 0, lastCycleAt: null }), { status: 200 })
+    },
+  })
+  renderApp("/settings")
+  await userEvent.click(await screen.findByRole("switch", { name: "Read agent transcripts" }))
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect((puts[0].body as { dashboard: { agentTranscripts: { enabled: boolean } } }).dashboard.agentTranscripts.enabled).toBe(true)
+  expect(await screen.findByText("Matched 3 · Unmatched 1 · Read errors 0")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Clear matched data" }))
+  const dialog = await screen.findByRole("dialog")
+  expect(dialog).toHaveTextContent("Removes matched titles, models and conversations. Your session titles and notes are kept.")
+  expect(posts).toHaveLength(0)
+  await userEvent.click(within(dialog).getByRole("button", { name: "Clear matched data" }))
+  await waitFor(() => expect(posts).toEqual([{ body: {}, header: "1" }]))
 })

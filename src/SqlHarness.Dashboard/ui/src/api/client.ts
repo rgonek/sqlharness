@@ -95,7 +95,10 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   })
   if (response.status === 401) throw new UnauthorizedError()
-  if (response.status === 502) throw new Error(((await response.json()) as { error: string }).error)
+  if (response.status === 502 || response.status === 503) {
+    const error = await response.json().then((data: { error?: string }) => data.error, () => undefined)
+    throw new Error(error ?? `Request failed with ${response.status}: ${path}`)
+  }
   if (!response.ok) throw new Error(`Request failed with ${response.status}: ${path}`)
   return (await response.json()) as T
 }
