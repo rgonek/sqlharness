@@ -1167,7 +1167,9 @@ public sealed class JournalReaderTests
     {
         using var home = new TempHome();
         var seed = new JournalSeed(home.DatabasePath);
-        for (var i = 0; i < 520; i++)
+        // Two full pages of starred sessions plus a partial one is what proves the id cursor;
+        // seeding ten times more only cost twelve seconds of the gate.
+        for (var i = 0; i < 240; i++)
         {
             seed.Operation(JournalSeed.Session($"cli:{i:D3}"));
             if (i % 2 == 0)
@@ -1184,7 +1186,7 @@ public sealed class JournalReaderTests
             cursor = page.NextCursor;
         } while (cursor is not null);
 
-        Assert.Equal(260, seen.Count);
+        Assert.Equal(120, seen.Count);
         Assert.Equal(seen.Count, seen.Distinct().Count());
     }
 }

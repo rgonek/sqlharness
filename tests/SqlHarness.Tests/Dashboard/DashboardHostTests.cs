@@ -41,6 +41,9 @@ public sealed class DashboardHostTests
             openBrowser, quiet, output, error, new FakeProcesses().Alive(Environment.ProcessId, null), browser)
         {
             PortOverride = 0,
+            // The tests here assert which branch of the takeover runs, not how patient it is;
+            // at the production five seconds they cost eleven seconds of the gate between them.
+            ExistingInstanceWait = TimeSpan.FromMilliseconds(200),
         };
 
     [Fact]
@@ -209,7 +212,14 @@ public sealed class DashboardHostTests
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
         var browser = new RecordingBrowser();
 
-        var exit = await DashboardHost.RunAsync(Options(home, new StringWriter(), new StringWriter(), browser), cts.Token)
+        // The wait budget has to outlive the cancellation, or the host gives up and reports
+        // LocalStorage before the token ever fires. This test is about the cancel path.
+        var exit = await DashboardHost.RunAsync(
+                Options(home, new StringWriter(), new StringWriter(), browser) with
+                {
+                    ExistingInstanceWait = TimeSpan.FromSeconds(5),
+                },
+                cts.Token)
             .WaitAsync(TimeSpan.FromSeconds(20));
 
         Assert.Equal((int)SqlHarnessExitCode.Success, exit);
@@ -287,12 +297,17 @@ public sealed class DashboardHostTests
         RunningDashboard? started = null;
         var release = Task.Run(async () =>
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(500));
+            await Task.Delay(TimeSpan.FromMilliseconds(250));
             held.Dispose();
         });
 
         var exit = await DashboardHost.RunAsync(
-            Options(home, new StringWriter(), new StringWriter(), new RecordingBrowser()) with { Started = s => { started = s; cts.Cancel(); } },
+            Options(home, new StringWriter(), new StringWriter(), new RecordingBrowser()) with
+            {
+                Started = s => { started = s; cts.Cancel(); },
+                // The release has to land inside the wait, which polls every 100 ms.
+                ExistingInstanceWait = TimeSpan.FromSeconds(2),
+            },
             cts.Token).WaitAsync(TimeSpan.FromSeconds(20));
         await release;
 

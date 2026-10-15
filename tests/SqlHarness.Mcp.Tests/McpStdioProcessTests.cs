@@ -20,8 +20,14 @@ namespace SqlHarness.Mcp.Tests;
 /// Owns the published server binary for this collection. The publish is cached per
 /// RID for the whole run and deleted here, once. Individual tests used to delete it,
 /// which made each of them pay a fresh 60-80 second self-contained publish.
+///
+/// This collection does not disable parallelization: every test here either drives a
+/// child process with the home passed in that child's environment, or runs the host
+/// over in-memory streams without asserting anything about the journal's location.
+/// The one test that did redirect the process-wide SQLHARNESS_HOME moved to
+/// McpScopeHome, which is where that global belongs.
 /// </summary>
-[CollectionDefinition("McpStdioProcess", DisableParallelization = true)]
+[CollectionDefinition("McpStdioProcess")]
 public sealed class McpStdioProcessCollection : IDisposable
 {
     public void Dispose() => McpStdioProcessHarness.DeleteAllPublishOutput();
@@ -506,15 +512,25 @@ internal sealed class RecordingStream(Stream inner) : Stream
 public sealed class McpStdioProcessTests
 {
     private static readonly TimeSpan SmokeBudget = TimeSpan.FromMinutes(6);
-    private static readonly TimeSpan SeamBudget = TimeSpan.FromSeconds(30);
+    internal static readonly TimeSpan SeamBudget = TimeSpan.FromSeconds(30);
 
-    private static IReadOnlyDictionary<string, TargetProfile> SeamProfiles() =>
+    internal static IReadOnlyDictionary<string, TargetProfile> SeamProfiles() =>
         new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
         {
             ["mcp-t3"] = new TargetProfile(
                 "mcp-unreachable.invalid", "reportdb",
                 new Dictionary<string, string>(), "integrated"),
         };
+
+    internal static void AssertValidateSuccess(CallToolResult result, string command)
+    {
+        Assert.False(result.IsError == true, McpStdioProcessHarness.Envelope(result).ToString());
+        var envelope = McpStdioProcessHarness.Envelope(result);
+        Assert.Equal("success", envelope.GetProperty("status").GetString());
+        Assert.Equal(0, envelope.GetProperty("exitCode").GetInt32());
+        Assert.Equal(command, envelope.GetProperty("command").GetString());
+        Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
+    }
 
     [Fact]
     public async Task Published_single_file_server_passes_the_stdio_smoke_on_this_rid() =>
@@ -904,74 +920,6 @@ public sealed class McpStdioProcessTests
     }
 
     /// <summary>
-    /// 001/T3 stdout boundary over the host seam: a full handshake plus an
-    /// offline validate call emits only JSON-RPC frames on stdout (every
-    /// recorded byte parses as a frame), and stdin EOF then exits 0.
-    /// No database is opened; the profile is synthetic and unreachable.
-    /// </summary>
-    [Fact]
-    public async Task Inprocess_session_keeps_stdout_pure_protocol_and_exits_zero_on_eof()
-    {
-        // The host journals module calls; keep any journal rows out of the real home.
-        var savedHome = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
-        var home = Path.Combine(Path.GetTempPath(), "sqlharness-mcp-stdio-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(home);
-        Environment.SetEnvironmentVariable("SQLHARNESS_HOME", home);
-        try
-        {
-            using var cts = new CancellationTokenSource(SeamBudget);
-            var ct = cts.Token;
-            var clientToServer = new Pipe();
-            var serverToClient = new Pipe();
-            var recording = new RecordingStream(serverToClient.Reader.AsStream());
-            var log = new StringWriter();
-
-            Task<int> hostTask = McpHost.RunAsync(
-                new McpServerOptions { Profile = "mcp-t3" },
-                clientToServer.Reader.AsStream(),
-                serverToClient.Writer.AsStream(),
-                log,
-                SeamProfiles,
-                ct);
-
-            await using (var client = await McpClient.CreateAsync(
-                new StreamClientTransport(
-                    clientToServer.Writer.AsStream(),
-                    recording,
-                    NullLoggerFactory.Instance),
-                new McpClientOptions
-                {
-                    ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
-                    ProtocolVersion = McpStdioProcessHarness.DefaultProtocolVersion,
-                },
-                NullLoggerFactory.Instance,
-                ct))
-            {
-                Assert.Equal(McpStdioProcessHarness.DefaultProtocolVersion, client.NegotiatedProtocolVersion);
-                var validate = await client.CallToolAsync(
-                    "sqlharness_query",
-                    new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1" },
-                    cancellationToken: ct);
-                AssertValidateSuccess(validate, "sqlharness_query");
-            }
-
-            await clientToServer.Writer.CompleteAsync();
-            Assert.Equal((int)SqlHarnessExitCode.Success, await hostTask.WaitAsync(SeamBudget, ct));
-
-            // Drain shutdown-phase bytes the client never read before judging
-            // purity; every emitted byte must still be a protocol frame.
-            await recording.DrainRemainingAsync(TimeSpan.FromSeconds(10), ct);
-            McpStdioProcessHarness.AssertStdoutIsPureProtocol(recording.Recorded);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("SQLHARNESS_HOME", savedHome);
-            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-            Directory.Delete(home, true);
-        }
-    }
-
-    /// <summary>
     /// 001/T3 normal EOF: immediate stdin EOF (no handshake, no frames)
     /// exits 0 and writes zero stdout bytes — there are no lifecycle lines
     /// on stdout; start/end diagnostics go to stderr only.
@@ -1019,16 +967,6 @@ public sealed class McpStdioProcessTests
 
         Assert.Equal((int)SqlHarnessExitCode.Success, await hostTask.WaitAsync(SeamBudget));
         Assert.Equal(0, output.Length);
-    }
-
-    private static void AssertValidateSuccess(CallToolResult result, string command)
-    {
-        Assert.False(result.IsError == true, McpStdioProcessHarness.Envelope(result).ToString());
-        var envelope = McpStdioProcessHarness.Envelope(result);
-        Assert.Equal("success", envelope.GetProperty("status").GetString());
-        Assert.Equal(0, envelope.GetProperty("exitCode").GetInt32());
-        Assert.Equal(command, envelope.GetProperty("command").GetString());
-        Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
     }
 }
 

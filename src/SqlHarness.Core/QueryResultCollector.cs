@@ -137,9 +137,16 @@ internal static class QueryResultCollector
 
     private static IReadOnlyList<string> RedactMessages(
         IReadOnlyList<string> messages,
-        IReadOnlyList<string> secrets) =>
-        messages.Select(message => SecretRedactor.Redact(message, secrets))
-            .ToArray();
+        IReadOnlyList<string> secrets)
+    {
+        // One compiled pattern for the whole batch: compiling it per message cost about two
+        // milliseconds each, which dominated any result set that carries many messages.
+        var redaction = SecretRedactor.For(secrets);
+        var safe = new string[messages.Count];
+        for (var index = 0; index < messages.Count; index++)
+            safe[index] = redaction.Apply(messages[index]);
+        return safe;
+    }
 
     private static object? NormalizeValue(object value) => value is DBNull ? null : value;
 }
