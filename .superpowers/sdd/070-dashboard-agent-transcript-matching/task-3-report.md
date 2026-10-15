@@ -31,3 +31,12 @@ Base: `edd1206768f9326e7f396dc83695607a5aa4d8c0` (`edd1206`)
 ## Concerns
 
 No task-level behavior concerns remain. Full repository verification gates were not run; this report records the requested focused Transcripts suite only.
+
+## Fix round 1
+
+- Updated `tests/SqlHarness.Tests/Dashboard/Transcripts/IncrementalTailTests.cs` so the old cursor offset is `4`, the replacement is also `4` bytes, and the original observed file size is `6` bytes. The test now expects both replacement lines, proving restart is based on `size < cursor.Size`.
+- Mutation RED: temporarily changed the restart condition to the defective `size < cursor.Offset` comparison, then ran `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~IncrementalTailTests.Shrink_restarts_even_when_cursor_offset_remains_in_range" --no-restore`.
+- Mutation RED result: exit 1; 1 failed, 0 passed. Actual failure was `Expected: ["z", "x"]; Actual: ["z"]` at `IncrementalTailTests.cs:87`.
+- Restored the production comparison to `size < cursor.Size`.
+- GREEN command: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~IncrementalTailTests" --no-restore`.
+- GREEN result: exit 0; 6 passed, 0 failed, 0 skipped (104 ms).

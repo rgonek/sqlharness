@@ -80,12 +80,12 @@ public sealed class IncrementalTailTests
         var first = IncrementalTail.Read(path, null, 4, _ => { });
         Assert.Equal(4, first.Cursor.Offset);
 
-        File.WriteAllText(path, "z\n");
+        File.WriteAllText(path, "z\nx\n");
         var lines = new List<string>();
         var restarted = IncrementalTail.Read(path, first.Cursor, 1024, l => lines.Add(Encoding.UTF8.GetString(l)));
 
-        Assert.Equal(["z"], lines);
-        Assert.Equal(2, restarted.Cursor.Offset);
+        Assert.Equal(["z", "x"], lines);
+        Assert.Equal(4, restarted.Cursor.Offset);
     }
 
     [Fact]
