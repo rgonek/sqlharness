@@ -1,12 +1,16 @@
-import { render, screen, within } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { expect, test } from "vitest"
+import { expect, test, vi } from "vitest"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { CompareDetail } from "./CompareDetail"
 import { operation, operationDetail, variant } from "@/test/fixtures"
 
+const renderCompare = (detail: ReturnType<typeof operationDetail>) => render(
+  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><CompareDetail detail={detail} /></QueryClientProvider>,
+)
+
 test("keeps execution, Core regression, result equivalence, and matrix case outcomes separate", () => {
-  render(<CompareDetail detail={operationDetail({
+  renderCompare(operationDetail({
     operation: operation({ operation: "compare", status: "succeeded", engine: "sqlserver" }),
     compareSubject: "orders", compareScope: "whole", baselineVersion: "v0", candidateVersion: "v1",
     compareRegression: { verdict: "fail", reasons: ["elapsed-regressed"] },
@@ -21,7 +25,7 @@ test("keeps execution, Core regression, result equivalence, and matrix case outc
       variant({ ordinal: 2, variant: "baseline", matrixCell: 1, elapsedMs: { min: 10, median: 12, max: 14 } }),
       variant({ ordinal: 3, variant: "candidate", matrixCell: 1, elapsedMs: { min: 16, median: 18, max: 20 } }),
     ],
-  })} />)
+  }))
   expect(screen.getAllByText(/Execution succeeded/)).toHaveLength(3)
   expect(screen.getAllByText("Regression detected")).toHaveLength(2)
   expect(screen.getByText("Results differ")).toBeInTheDocument()
@@ -33,10 +37,10 @@ test("keeps execution, Core regression, result equivalence, and matrix case outc
 })
 
 test("shows missing historic conditions and unrecorded equivalence without borrowing an assessment", async () => {
-  render(<CompareDetail detail={operationDetail({
+  renderCompare(operationDetail({
     operation: operation({ operation: "compare" }),
     compareConditions: null, summary: null, compareRegression: null, compareCases: null,
-  })} />)
+  }))
   expect(screen.getByText("Equivalence unavailable (legacy record)")).toBeInTheDocument()
   expect(screen.getByText("No assessment")).toBeInTheDocument()
   await userEvent.click(screen.getByRole("tab", { name: "Measurement conditions" }))
@@ -58,4 +62,25 @@ test("shows plans and table IO from both compare sides", async () => {
   expect(screen.getAllByText("BeforeRows")).toHaveLength(3)
   expect(screen.getAllByText("AfterRows")).toHaveLength(3)
   expect(screen.getAllByText(/plan not stored/)).toHaveLength(2)
+})
+
+test("copies compare Markdown without operation metadata or SQL when SQL text is unavailable", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
+  renderCompare(operationDetail({
+    operation: operation({ operation: "compare", engine: "sqlserver", server: "server-secret", database: "database-secret", profile: "profile-secret" }),
+    vars: { tenant: "var-secret" }, artifactDirectory: "artifact-secret", sqlText: null, candidateSqlText: null,
+    compareSubject: "orders", compareScope: "whole", baselineVersion: "v0", candidateVersion: "v1",
+    compareConditions: { setupSql: "setup-secret", parameters: [{ value: "parameter-secret" }] },
+  }))
+
+  await userEvent.click(screen.getByRole("button", { name: "Copy" }))
+
+  await waitFor(() => expect(writeText).toHaveBeenCalledOnce())
+  const markdown = writeText.mock.calls[0][0] as string
+  expect(markdown.startsWith("### SQL compare: orders / whole (v0 → v1)")).toBe(true)
+  expect(markdown).toContain("SQL diff not included (SQL text not stored or over the size limit).")
+  for (const secret of ["server-secret", "database-secret", "profile-secret", "var-secret", "setup-secret", "parameter-secret", "artifact-secret"]) {
+    expect(markdown).not.toContain(secret)
+  }
 })

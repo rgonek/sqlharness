@@ -165,10 +165,14 @@ export function useStats(
 export function useDistilledPlan(hash: string, enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.plan(hash),
-    queryFn: () => getJson<DistilledPlan>(`/api/plans/${hash}`, { view: "distilled" }),
+    queryFn: () => fetchDistilledPlan(hash),
     enabled,
     staleTime: Infinity,
   })
+}
+
+export function fetchDistilledPlan(hash: string): Promise<DistilledPlan> {
+  return getJson<DistilledPlan>(`/api/plans/${hash}`, { view: "distilled" })
 }
 
 export function useSettings() {

@@ -1,6 +1,9 @@
 import { useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import type { OperationDetail, VariantDetail } from "@/api/types"
+import { fetchDistilledPlan, queryKeys } from "@/api/queries"
 import { VariantPanel } from "@/components/VariantPanel"
+import { CopyButton } from "@/components/CopyButton"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -10,6 +13,10 @@ import { formatNumber } from "@/lib/format"
 import { SqlDiff } from "@/components/SqlDiff"
 import { TableIoComparison } from "@/components/TableIoComparison"
 import { PlanChanges } from "@/components/PlanChanges"
+import { loadUnifiedDiffText } from "@/components/SqlEditors"
+import { buildPrMarkdown } from "@/lib/prMarkdown"
+import { firstPlanHash, planChanges } from "@/lib/planChanges"
+import { diffTooLarge, normalizeForDiff } from "@/lib/sqlDiff"
 
 type JsonObject = Record<string, unknown>
 const object = (value: unknown): JsonObject | null => value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : null
@@ -36,12 +43,13 @@ function PairMetrics({ baseline, candidate, engine }: { baseline: VariantDetail;
   )
 }
 
-function Cases({ detail }: { detail: OperationDetail }) {
+type CompareCard = { key: string; label: string; pair: ReturnType<typeof comparePairs>[number] | null; equivalence: JsonObject | null; regression: JsonObject | null }
+
+function compareCards(detail: OperationDetail): CompareCard[] {
   const pairs = comparePairs(detail.variants)
   const cells = detail.compareCases ?? []
   const casePairs = new Map(pairs.filter(pair => pair.baseline.matrixCell !== null).map(pair => [pair.baseline.matrixCell!, pair]))
-  if (pairs.length === 0 && cells.length === 0) return <p className="text-sm text-muted-foreground">No complete baseline/candidate pairs are available.</p>
-  const cards = cells.length > 0 ? cells.map(matrixCase => ({
+  return cells.length > 0 ? cells.map(matrixCase => ({
     key: `cell ${String(matrixCase.index)}`,
     label: `Cell ${String(matrixCase.index)}`,
     pair: casePairs.get(typeof matrixCase.index === "number" ? matrixCase.index : -1) ?? null,
@@ -54,6 +62,13 @@ function Cases({ detail }: { detail: OperationDetail }) {
     equivalence: object(detail.summary),
     regression: object(detail.compareRegression),
   }))
+}
+
+function Cases({ detail }: { detail: OperationDetail }) {
+  const pairs = comparePairs(detail.variants)
+  const cells = detail.compareCases ?? []
+  const cards = compareCards(detail)
+  if (pairs.length === 0 && cells.length === 0) return <p className="text-sm text-muted-foreground">No complete baseline/candidate pairs are available.</p>
   return <div className="space-y-4">{cards.map(card => {
     return <Card key={card.key}>
       <CardHeader><CardTitle className="text-base">{card.label}</CardTitle><CardDescription className="flex flex-wrap gap-2"><span>Execution {detail.operation.status}</span><span>·</span><span>{regressionLabel(card.regression)}</span><span>·</span><Equivalence value={card.equivalence} /></CardDescription></CardHeader>
@@ -85,13 +100,68 @@ function Conditions({ detail }: { detail: OperationDetail }) {
 
 export function CompareDetail({ detail }: { detail: OperationDetail }) {
   const [tab, setTab] = useState("cases")
+  const queryClient = useQueryClient()
   const pairs = comparePairs(detail.variants)
+  const cards = compareCards(detail)
   const summary = object(detail.summary)
   const isMatrix = summary?.kind === "compare-matrix"
   const equivalence = summary && !isMatrix ? summary : null
+
+  async function copyMarkdown(): Promise<string> {
+    const plans = new Map<string, ReturnType<typeof planChanges> | "same" | "unavailable">()
+    await Promise.all(cards.flatMap(card => {
+      const pair = card.pair
+      if (!pair) return []
+      const baselineHash = firstPlanHash(pair.baseline)
+      const candidateHash = firstPlanHash(pair.candidate)
+      if (baselineHash === null || candidateHash === null) {
+        plans.set(pair.label, "unavailable")
+        return []
+      }
+      if (baselineHash === candidateHash) {
+        plans.set(pair.label, "same")
+        return []
+      }
+      return [queryClient.fetchQuery({ queryKey: queryKeys.plan(baselineHash), queryFn: () => fetchDistilledPlan(baselineHash), staleTime: Infinity })
+        .then(baseline => queryClient.fetchQuery({ queryKey: queryKeys.plan(candidateHash), queryFn: () => fetchDistilledPlan(candidateHash), staleTime: Infinity })
+          .then(candidate => plans.set(pair.label, planChanges(baseline, candidate))))
+        .catch(() => plans.set(pair.label, "unavailable"))]
+    }))
+
+    let sqlDiff: string | null = null
+    const baselineSql = detail.sqlText
+    const candidateSql = detail.candidateSqlText
+    if (baselineSql !== null && candidateSql !== null && !diffTooLarge(baselineSql, candidateSql)) {
+      const baseline = normalizeForDiff(baselineSql, detail.operation.engine, false).text
+      const candidate = normalizeForDiff(candidateSql, detail.operation.engine, false).text
+      if (!diffTooLarge(baseline, candidate)) {
+        try {
+          sqlDiff = await (await loadUnifiedDiffText())(baseline, candidate)
+        } catch {
+          sqlDiff = null
+        }
+      }
+    }
+
+    return buildPrMarkdown({
+      subject: detail.compareSubject,
+      scope: detail.compareScope,
+      baselineVersion: detail.baselineVersion,
+      candidateVersion: detail.candidateVersion,
+      engine: detail.operation.engine,
+      status: detail.operation.status,
+      regression: object(detail.compareRegression),
+      equivalence,
+      isMatrix,
+      cases: cards.map(card => ({ label: card.label, pair: card.pair, regression: card.regression, equivalence: card.equivalence })),
+      plans,
+      sqlDiff,
+    })
+  }
+
   return <Card role="region" aria-label="Compare detail">
     <CardHeader>
-      <div className="flex flex-wrap items-center gap-2"><CardTitle>Compare detail</CardTitle><Badge variant="outline">Execution {detail.operation.status}</Badge><Badge variant="outline">{regressionLabel(object(detail.compareRegression))}</Badge>{isMatrix ? <Badge variant="outline">Equivalence shown per case</Badge> : <Equivalence value={equivalence} />}</div>
+      <div className="flex flex-wrap items-center gap-2"><CardTitle>Compare detail</CardTitle><Badge variant="outline">Execution {detail.operation.status}</Badge><Badge variant="outline">{regressionLabel(object(detail.compareRegression))}</Badge>{isMatrix ? <Badge variant="outline">Equivalence shown per case</Badge> : <Equivalence value={equivalence} />}<CopyButton label="Copy" getText={copyMarkdown} /></div>
       <CardDescription>{detail.compareSubject ?? "Unassigned"} / {detail.compareScope ?? "Unassigned scope"} · {detail.baselineVersion ?? "Unknown"} → {detail.candidateVersion ?? "Unknown"}</CardDescription>
     </CardHeader>
     <CardContent className="space-y-4">
