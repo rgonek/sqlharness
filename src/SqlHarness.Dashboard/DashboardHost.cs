@@ -22,6 +22,9 @@ public sealed record DashboardHostOptions(
 
     public TimeSpan LivePollInterval { get; init; } = TimeSpan.FromSeconds(1);
 
+    /// <summary>How long to wait for another dashboard to publish before taking the lock over.</summary>
+    public TimeSpan ExistingInstanceWait { get; init; } = DashboardHost.ExistingInstanceWait;
+
     /// <summary>Test hook invoked once the server is listening and published.</summary>
     public Action<RunningDashboard>? Started { get; init; }
 
@@ -50,6 +53,7 @@ public sealed record DashboardHostOptions(
 /// </summary>
 public static class DashboardHost
 {
+    /// <summary>Default budget for another dashboard of the same home to publish its address.</summary>
     public static readonly TimeSpan ExistingInstanceWait = TimeSpan.FromSeconds(5);
 
     public static async Task<int> RunAsync(DashboardHostOptions options, CancellationToken ct)
@@ -85,7 +89,7 @@ public static class DashboardHost
         var acquired = DashboardLock.TryAcquire(options.Home);
         if (acquired is null)
         {
-            var existing = await DashboardLock.WaitForRunningAsync(options.Home, options.Processes, ExistingInstanceWait, ct);
+            var existing = await DashboardLock.WaitForRunningAsync(options.Home, options.Processes, options.ExistingInstanceWait, ct);
             if (existing is not null)
             {
                 Announce(options, existing.OpenUri);

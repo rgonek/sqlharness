@@ -74,7 +74,9 @@ internal sealed class JournalSeed
     public static void Annotate(string databasePath, string sessionKey, string? title = null, string? note = null,
         bool starred = false, bool archived = false)
     {
-        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath};Pooling=False");
+        // Pooled: seeding a few hundred annotations through one non-pooled connection each
+        // cost about 7.5 ms per call. TempHome clears the pools before deleting the file.
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath}");
         connection.Open();
         using var command = connection.CreateCommand();
         command.CommandText = """

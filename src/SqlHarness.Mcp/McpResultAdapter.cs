@@ -320,19 +320,21 @@ public static class McpResultAdapter
         omitted = 0;
         if (error is null)
             return null;
+        // The three fields share one secret set, so they share one compiled pattern.
+        var redaction = SecretRedactor.For(secrets);
         var redacted = error with
         {
-            Message = Clip(SecretRedactor.Redact(error.Message, secrets), maximumCellCharacters, ref omitted),
+            Message = Clip(redaction.Apply(error.Message), maximumCellCharacters, ref omitted),
             Hint = error.Hint is null
                 ? null
-                : Clip(SecretRedactor.Redact(error.Hint, secrets), maximumCellCharacters, ref omitted),
+                : Clip(redaction.Apply(error.Hint), maximumCellCharacters, ref omitted),
             Location = error.Location is null
                 ? null
                 : error.Location with
                 {
                     Path = error.Location.Path is null
                         ? null
-                        : Clip(SecretRedactor.Redact(error.Location.Path, secrets), maximumCellCharacters, ref omitted),
+                        : Clip(redaction.Apply(error.Location.Path), maximumCellCharacters, ref omitted),
                 },
         };
         return redacted;

@@ -203,12 +203,16 @@ public sealed class DashboardLock : IDisposable
     public static async Task<DashboardEndpoint?> WaitForRunningAsync(string home, IProcessInfo processes, TimeSpan timeout, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrEmpty(home);
+        var lockPath = Path.Combine(home, LockFileName);
         var deadline = DateTimeOffset.UtcNow + timeout;
         while (true)
         {
             if (ReadRunning(home, processes) is { } endpoint)
                 return endpoint;
-            if (DateTimeOffset.UtcNow >= deadline)
+            // A free lock means no dashboard is starting, so there is nothing left to wait for.
+            // Sitting out the whole timeout anyway made every takeover cost the full wait even
+            // after the holder was long gone.
+            if (!IsHeldElsewhere(lockPath) || DateTimeOffset.UtcNow >= deadline)
                 return null;
             await Task.Delay(TimeSpan.FromMilliseconds(100), ct);
         }

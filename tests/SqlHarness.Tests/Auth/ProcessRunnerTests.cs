@@ -186,7 +186,9 @@ public sealed class ProcessRunnerTests
         try
         {
             var wait = WaitForPidsAsync(path);
-            await Task.Delay(TimeSpan.FromSeconds(4));
+            // Forty poll attempts into the twelve-second budget is a slow publisher that is
+            // still alive. Four seconds proved the same thing four times over.
+            await Task.Delay(TimeSpan.FromSeconds(1));
             await File.WriteAllLinesAsync(path, ["123", "456"]);
 
             var publishedPids = await wait;
