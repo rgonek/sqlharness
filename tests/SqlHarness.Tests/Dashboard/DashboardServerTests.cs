@@ -99,6 +99,9 @@ public sealed class DashboardServerTests
         using var anonymous = new HttpClient { BaseAddress = server.BaseUri };
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.SendAsync(wrongCookie)).StatusCode);
 
+        using var missingCookie = ShutdownRequest();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.SendAsync(missingCookie)).StatusCode);
+
         using var noHeader = new HttpRequestMessage(HttpMethod.Post, "/api/shutdown") { Content = JsonContent.Create(new { }) };
         Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(noHeader)).StatusCode);
 
