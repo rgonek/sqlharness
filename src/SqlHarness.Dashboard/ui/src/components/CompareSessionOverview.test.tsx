@@ -164,7 +164,7 @@ test("loads more than 500 retained attempts without losing session context", asy
   }
   expect(await screen.findByRole("link", { name: "Compare #500" })).toBeInTheDocument()
   expect(screen.getAllByRole("link", { name: /^Compare #/ })).toHaveLength(501)
-  expect(screen.getByText("Session 7")).toBeInTheDocument()
+  expect(screen.getByRole("heading", { level: 1, name: "mcp:test" })).toBeInTheDocument()
   expect(request).toBe(6)
 })
 

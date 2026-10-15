@@ -1,4 +1,5 @@
 import { act, screen, waitFor, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
 import type { OperationSummary } from "@/api/types"
 import { operation, session } from "@/test/fixtures"
@@ -39,7 +40,8 @@ class FakeEventSource {
 
 const RECENT = "/api/operations?limit=100"
 const RUNNING = "/api/operations?status=running&limit=200"
-const SESSIONS = "/api/sessions?limit=100"
+const SESSIONS = "/api/sessions?archived=any&starred=false&limit=100"
+const STARRED = "/api/sessions?archived=any&starred=true&limit=100"
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } })
 const page = (items: unknown[]) => ({ items, nextCursor: null })
 const count = (calls: string[], url: string) => calls.filter(call => call === url).length
@@ -54,6 +56,7 @@ test("live page shows running, recent and pushed operations", async () => {
   stubFetch({
     [RECENT]: page([operation({ id: 1, operation: "ping" }), watch]),
     [RUNNING]: page([watch]),
+    [STARRED]: page([]),
     [SESSIONS]: page([session({ id: 1, running: 1, lastSeen: new Date().toISOString() })]),
   })
 
@@ -74,9 +77,45 @@ test("live page shows running, recent and pushed operations", async () => {
   expect(screen.getByText("connected")).toBeInTheDocument()
 })
 
+test("an archived session that is still active stays on the live page", async () => {
+  useFakeEventSource()
+  stubFetch({
+    [RECENT]: page([]),
+    [RUNNING]: page([]),
+    [STARRED]: page([]),
+    [SESSIONS]: page([session({ id: 9, sessionKey: "cli:archived", archived: true, lastSeen: new Date().toISOString() })]),
+  })
+  renderApp("/")
+  const active = await screen.findByRole("region", { name: "Active sessions" })
+  expect(await within(active).findByText("cli:archived")).toBeInTheDocument()
+})
+
+test("starring a live session updates its row", async () => {
+  useFakeEventSource()
+  const lastSeen = new Date().toISOString()
+  let starred = false
+  const row = () => session({ id: 4, sessionKey: "cli:live", starred, lastSeen })
+  stubFetch({
+    [RECENT]: page([]),
+    [RUNNING]: page([]),
+    [STARRED]: () => json(page(starred ? [row()] : [])),
+    [SESSIONS]: () => json(page(starred ? [] : [row()])),
+    "/api/sessions/4/annotation": () => {
+      starred = true
+      return json({ title: null, note: null, starred: true, archived: false })
+    },
+  })
+
+  renderApp("/")
+  const active = await screen.findByRole("region", { name: "Active sessions" })
+  await userEvent.click(await within(active).findByRole("button", { name: "Star session cli:live" }))
+
+  expect(await within(active).findByRole("button", { name: "Unstar session cli:live" })).toHaveAttribute("aria-pressed", "true")
+})
+
 test("the feed shows connecting until it first opens", async () => {
   useFakeEventSource()
-  stubFetch({ [RECENT]: page([]), [RUNNING]: page([]), [SESSIONS]: page([]) })
+  stubFetch({ [RECENT]: page([]), [RUNNING]: page([]), [STARRED]: page([]), [SESSIONS]: page([]) })
 
   renderApp("/")
 
@@ -96,6 +135,7 @@ test("live lists are refetched on every (re)connect so changes made during a gap
   const calls = stubFetch({
     [RECENT]: () => json(page([watch()])),
     [RUNNING]: () => json(page(finished ? [] : [watch()])),
+    [STARRED]: page([]),
     [SESSIONS]: () => json(page([session({ lastSeen: new Date().toISOString() })])),
   })
 
@@ -127,6 +167,7 @@ test("a long-running operation outside the recent page still shows in Running", 
   stubFetch({
     [RECENT]: page(recent),
     [RUNNING]: page([operation({ id: 7, status: "running", operation: "watch" })]),
+    [STARRED]: page([]),
     [SESSIONS]: page([]),
   })
 
@@ -145,6 +186,7 @@ test("a running operation missing from the refetched running list leaves Running
   stubFetch({
     [RECENT]: () => json(page(recent)),
     [RUNNING]: () => json(page(gone ? [] : [old])),
+    [STARRED]: page([]),
     [SESSIONS]: () => json(page([])),
   })
 
@@ -163,7 +205,7 @@ test("a running operation missing from the refetched running list leaves Running
 test("pushed events add running rows and remove finished ones without the recent cap", async () => {
   useFakeEventSource()
   const recent = Array.from({ length: 100 }, (_, index) => operation({ id: 1000 - index, operation: "ping" }))
-  stubFetch({ [RECENT]: page(recent), [RUNNING]: page([]), [SESSIONS]: page([]) })
+  stubFetch({ [RECENT]: page(recent), [RUNNING]: page([]), [STARRED]: page([]), [SESSIONS]: page([]) })
 
   renderApp("/")
   const running = await screen.findByRole("region", { name: "Running" })
@@ -182,7 +224,7 @@ test("a feed the server refuses (401) shows the reopen message without retrying"
   useFakeEventSource()
   let authorized = true
   const respond = (body: unknown) => () => (authorized ? json(body) : new Response("", { status: 401 }))
-  const calls = stubFetch({ [RECENT]: respond(page([])), [RUNNING]: respond(page([])), [SESSIONS]: respond(page([])) })
+  const calls = stubFetch({ [RECENT]: respond(page([])), [RUNNING]: respond(page([])), [STARRED]: respond(page([])), [SESSIONS]: respond(page([])) })
 
   renderApp("/")
   await screen.findByRole("region", { name: "Running" })

@@ -14,7 +14,7 @@
 
 ## Status
 
-- TODO; planned 2026-10-14 at `380307c`; spec accepted by the operator 2026-10-14. Executes after 062. Followed by Spec C (agent transcript matching) and Spec B (compare review), not yet planned.
+- DONE 2026-10-15; implementation `563e484`..`dd2b2de`, locally merged to main. Windows `verify: OK stages=6` on `dd2b2de`; Linux gate waived by the operator. Deviations from the plan text (operator-visible): `archived=any` for Live, Live fetches starred and unstarred lists, unfiltered list returns no cursor, session heading uses the display-name rule, 404 PATCH carries an `error` body.
 - Priority P2. Effort M. Risk MEDIUM (journal migration; first dashboard write into the journal).
 
 ## Global Constraints

@@ -39,6 +39,9 @@ public sealed record DashboardServerOptions(string DatabasePath, int PreferredPo
 
     /// <summary>Supplies the models.dev JSON on a refresh; null performs the HTTPS download. Tests inject this.</summary>
     public Func<CancellationToken, Task<Stream>>? PricesFetcher { get; init; }
+
+    /// <summary>Clock for operator writes (annotation timestamps).</summary>
+    public TimeProvider Time { get; init; } = TimeProvider.System;
 }
 
 public sealed class RunningDashboard : IAsyncDisposable
@@ -171,10 +174,16 @@ public static partial class DashboardServer
 
         var api = app.MapGroup("/api");
         MapRead(api, "/agents", () => Results.Json(reader.AgentKinds(), Json));
-        MapRead(api, "/sessions", (string? agent, string? transport, string? from, string? to, long? cursor, int? limit) =>
-            TryWindow(from, to, out var window)
-                ? Results.Json(reader.Sessions(new SessionQuery(agent, transport, window.From, window.To, cursor, limit ?? JournalReader.DefaultLimit)), Json)
-                : BadRequest("from/to must be ISO-8601 timestamps."));
+        MapRead(api, "/sessions", (string? agent, string? transport, string? from, string? to, long? cursor, int? limit,
+            string? archived, bool? starred, string? q) =>
+            q is { Length: > JournalReader.MaximumSearchLength }
+                ? BadRequest("q must be at most 200 characters.")
+                : !TryArchived(archived, out var archivedFilter)
+                    ? BadRequest("archived must be true, false or any.")
+                : TryWindow(from, to, out var window)
+                    ? Results.Json(reader.Sessions(new SessionQuery(agent, transport, window.From, window.To, cursor,
+                        limit ?? JournalReader.DefaultLimit, archivedFilter, starred, string.IsNullOrWhiteSpace(q) ? null : q.Trim())), Json)
+                    : BadRequest("from/to must be ISO-8601 timestamps."));
         MapRead(api, "/sessions/{id:long}", (long id) =>
             reader.Session(id) is { } detail ? Results.Json(detail, Json) : Results.NotFound());
         MapRead(api, "/sessions/{id:long}/compares", (long id, long? cursor, int? limit) =>
@@ -217,11 +226,14 @@ public static partial class DashboardServer
         });
         MapRead(api, "/settings", () => Results.Json(DashboardSettings.Read(options.ConfigPath), Json));
         MapRead(api, "/profiles", () => Results.Json(DashboardProfiles.Read(options.TargetsPath), Json));
-        // The two write routes (PUT settings, POST prices refresh); DashboardSecurity admits only these, with its extra checks.
+        // The three write routes (PUT settings, POST prices refresh, PATCH session annotation); DashboardSecurity admits only these, with its extra checks.
         api.MapMethods("/settings", [HttpMethods.Put], (Delegate)((HttpContext context) => DashboardSettings.PutAsync(context, options.ConfigPath, Json)));
         MapRead(api, "/prices", () => Results.Json(DashboardPrices.Describe(options.PricesPath), Json));
         api.MapMethods("/prices/refresh", [HttpMethods.Post], (Delegate)((HttpContext context) =>
             DashboardPrices.RefreshAsync(options.PricesPath, options.PricesFetcher ?? DashboardPrices.FetchModelsDevAsync, Json, context.RequestAborted)));
+        var annotationWriter = new SessionAnnotationWriter(options.DatabasePath, options.Time);
+        api.MapMethods("/sessions/{id:long}/annotation", [HttpMethods.Patch], (Delegate)((HttpContext context, long id) =>
+            SessionAnnotations.PatchAsync(context, id, annotationWriter, Json)));
         MapRead(api, "/{**rest}", () => Results.NotFound());
 
         var assets = DashboardAssets.Default;
@@ -302,6 +314,12 @@ public static partial class DashboardServer
         {
             return false;
         }
+    }
+
+    private static bool TryArchived(string? value, out bool? archived)
+    {
+        archived = value?.ToLowerInvariant() switch { null or "false" => false, "true" => true, _ => null };
+        return value is null || value.ToLowerInvariant() is "true" or "false" or "any";
     }
 
     private static bool TryWindow(string? from, string? to, out (DateTimeOffset? From, DateTimeOffset? To) window)

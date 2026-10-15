@@ -70,6 +70,24 @@ internal sealed class JournalSeed
                 [new JournalPlanLink(1, 0, new string('A', 64))]),
         ],
         [new JournalPlanDocument(new string('A', 64), "showplan-xml", Journal.PlanMetricsExtractorTests.ActualPlan)]);
+
+    public static void Annotate(string databasePath, string sessionKey, string? title = null, string? note = null,
+        bool starred = false, bool archived = false)
+    {
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath};Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO session_annotations (session_id, title, note, starred, archived_at, updated_at)
+            SELECT id, $title, $note, $starred, $archived, '2026-10-07T09:00:00.000Z' FROM sessions WHERE session_key = $key;
+            """;
+        command.Parameters.AddWithValue("$title", (object?)title ?? DBNull.Value);
+        command.Parameters.AddWithValue("$note", (object?)note ?? DBNull.Value);
+        command.Parameters.AddWithValue("$starred", starred ? 1 : 0);
+        command.Parameters.AddWithValue("$archived", archived ? "2026-10-07T09:00:00.000Z" : DBNull.Value);
+        command.Parameters.AddWithValue("$key", sessionKey);
+        Assert.Equal(1, command.ExecuteNonQuery());
+    }
 }
 
 /// <summary>Which token counts a seeded operation carries: both, raw only (MCP-style), or emitted only.</summary>

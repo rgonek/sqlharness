@@ -29,6 +29,10 @@ export type SessionSummary = {
   roots: SessionRoot[] | null
   /** Negotiated MCP revision; null for CLI sessions and unrecorded rows. */
   protocolVersion: string | null
+  title: string | null
+  starred: boolean
+  archived: boolean
+  notePreview: string | null
 }
 
 export type OperationSummary = {
@@ -99,8 +103,12 @@ export type CompareSubjectSummary = {
 }
 
 export type SessionDetail = {
-  session: SessionSummary; operations: OperationSummary[]; compareSubjects: CompareSubjectSummary[]; unassignedCompareCount: number
+  session: SessionSummary; operations: OperationSummary[]; compareSubjects: CompareSubjectSummary[]; unassignedCompareCount: number; note: string | null
 }
+
+export type SessionAnnotation = { title: string | null; note: string | null; starred: boolean; archived: boolean }
+
+export type AnnotationPatch = Partial<{ title: string | null; note: string | null; starred: boolean; archived: boolean }>
 
 export type Spread = { min: number; median: number; max: number }
 

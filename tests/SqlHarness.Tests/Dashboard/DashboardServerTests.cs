@@ -248,7 +248,7 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
-    public async Task Only_get_endpoints_and_the_two_guarded_writes_exist()
+    public async Task Only_get_endpoints_and_the_three_guarded_writes_exist()
     {
         using var home = new TempHome();
         await using var dashboard = await StartAuthenticated(home);
@@ -257,11 +257,13 @@ public sealed class DashboardServerTests
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PostAsync("/api/sessions", null)).StatusCode);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.DeleteAsync("/api/operations/1")).StatusCode);
         var writes = server.Endpoints.Where(endpoint => !endpoint.Methods.SequenceEqual(["GET", "HEAD"])).ToArray();
-        Assert.Equal(2, writes.Length);
+        Assert.Equal(3, writes.Length);
         var settingsPut = Assert.Single(writes, endpoint => endpoint.Route == "/api/settings");
         Assert.Equal(["PUT"], settingsPut.Methods);
         var pricesRefresh = Assert.Single(writes, endpoint => endpoint.Route == "/api/prices/refresh");
         Assert.Equal(["POST"], pricesRefresh.Methods);
+        var annotationPatch = Assert.Single(writes, endpoint => endpoint.Route == "/api/sessions/{id:long}/annotation");
+        Assert.Equal(["PATCH"], annotationPatch.Methods);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PutAsync("/api/sessions", null)).StatusCode);
         Assert.Contains(server.Endpoints, endpoint => endpoint.Route == "/api/live");
     }
@@ -316,6 +318,12 @@ public sealed class DashboardServerTests
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/plans/not-a-hash")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/stats?from=yesterday")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/operations?limit=abc")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/sessions?archived=maybe")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/sessions?archived=any")).StatusCode);
+        using (var anyCase = JsonDocument.Parse(await client.GetStringAsync("/api/sessions?archived=Any")))
+            Assert.NotEqual(0, anyCase.RootElement.GetProperty("items").GetArrayLength());
+        using (var archivedOnly = JsonDocument.Parse(await client.GetStringAsync("/api/sessions?archived=TRUE")))
+            Assert.Equal(0, archivedOnly.RootElement.GetProperty("items").GetArrayLength());
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/stats?from=2026-10-01T00:00:00Z")).StatusCode);
     }
 
@@ -547,5 +555,17 @@ public sealed class DashboardServerTests
         using var home = new TempHome();
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             DashboardServer.StartAsync(new DashboardServerOptions(home.DatabasePath, port, new FakeProcesses()), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Sessions_reject_an_overlong_search()
+    {
+        using var home = new TempHome();
+        await using var dashboard = await StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        var response = await client.GetAsync("/api/sessions?q=" + new string('a', 201));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }
