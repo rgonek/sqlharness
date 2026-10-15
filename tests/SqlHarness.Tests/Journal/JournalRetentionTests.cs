@@ -1,6 +1,9 @@
 using Microsoft.Data.Sqlite;
 
 using SqlHarness.Core;
+using SqlHarness.Core.Journal;
+
+using OperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Tests.Journal;
 
@@ -262,6 +265,26 @@ public sealed class JournalRetentionTests
         var batchesPerTable = (plans + TestBatchSize - 1) / TestBatchSize;
         Assert.Equal(batchesPerTable + batchesPerTable + 1, writes);
         Assert.True(writes > 3, "an unbatched orphan delete would commit only three times");
+    }
+
+    [Fact]
+    public void Retention_cascades_phase_aggregates_and_events()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = ActivityJournal.Open(temp.DatabasePath, new JournalConfig(), TextWriter.Null,
+            new FixedTimeProvider(Now.AddDays(-40)));
+        var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start())!;
+        journal.RecordPhases(handle,
+            [new PhaseAggregate(OperationPhase.Connect, 1, 2, 2)],
+            [new PhaseEvent(1, 1, OperationPhase.Connect, 2, "succeeded", null, null)], 0);
+        journal.Complete(handle, JournalTestData.End());
+
+        var result = JournalRetention.Run(temp.DatabasePath, Config(maxAgeDays: 30), new Processes(),
+            new FixedTimeProvider(Now));
+
+        Assert.Equal(1, result.DeletedOperations);
+        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT * FROM operation_phases"));
+        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT * FROM operation_events"));
     }
 
     [Fact]

@@ -29,12 +29,18 @@ public sealed record CompareConfig
     public bool RequireContext { get; init; } = true;
 }
 
+public sealed record DiagnosticsConfig
+{
+    public bool Enabled { get; init; }
+}
+
 /// <summary>Operator settings from <c>~/.sqlharness/config.json</c>; tool behavior only, never targets.</summary>
 public sealed record SqlHarnessConfig
 {
     public JournalConfig Journal { get; init; } = new();
     public DashboardConfig Dashboard { get; init; } = new();
     public CompareConfig Compare { get; init; } = new();
+    public DiagnosticsConfig Diagnostics { get; init; } = new();
 
     public static SqlHarnessConfig Default { get; } = new();
 }
@@ -65,7 +71,7 @@ public static class SqlHarnessConfigLoader
     internal const int MaximumBytes = 64 * 1024;
 
     internal const string InvalidWarning =
-        "sqlharness: config.json is invalid; using defaults (journal hash-only, no autostart, no retention).";
+        "sqlharness: config.json is invalid; using defaults (journal hash-only, diagnostics disabled, no autostart, no retention).";
 
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
     {
@@ -115,7 +121,7 @@ public static class SqlHarnessConfigLoader
         }
 
         if (config is null || !IsComplete(config))
-            return Failed("$", "The journal, journal.retention, dashboard and compare sections must be objects.");
+            return Failed("$", "The journal, journal.retention, dashboard, compare and diagnostics sections must be objects.");
 
         var errors = new List<SqlHarnessConfigFieldError>();
         if (config.Journal.Retention.MaxAgeDays is < 1 or > 3650)
@@ -136,5 +142,6 @@ public static class SqlHarnessConfigLoader
 
     // Explicit JSON nulls bypass initializers; treat them as invalid.
     private static bool IsComplete(SqlHarnessConfig config) =>
-        config.Journal is not null && config.Journal.Retention is not null && config.Dashboard is not null && config.Compare is not null;
+        config.Journal is not null && config.Journal.Retention is not null && config.Dashboard is not null &&
+        config.Compare is not null && config.Diagnostics is not null;
 }

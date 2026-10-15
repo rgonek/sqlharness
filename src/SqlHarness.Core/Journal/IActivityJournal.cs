@@ -1,3 +1,5 @@
+using SqlHarness.Core.Journal;
+
 namespace SqlHarness.Core;
 
 /// <summary>
@@ -15,6 +17,9 @@ public interface IActivityJournal
 
     /// <summary>Per-variant benchmark metrics; full plan documents only when the journal stores sensitive content.</summary>
     void RecordBenchmark(JournalHandle? handle, BenchmarkJournalRecord record) { }
+
+    /// <summary>Phase aggregates and bounded diagnostic events for one operation.</summary>
+    void RecordPhases(JournalHandle? handle, IReadOnlyList<PhaseAggregate> phases, IReadOnlyList<PhaseEvent> events, int droppedEvents) { }
 
     /// <summary>Latest progress of a running watch. Returns false when not written; callers stop reporting then.</summary>
     bool RecordWatchProgress(JournalHandle? handle, WatchProgress progress) => false;

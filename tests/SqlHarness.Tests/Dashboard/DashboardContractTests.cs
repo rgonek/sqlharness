@@ -97,10 +97,11 @@ public sealed class DashboardContractTests
     public void Operation_detail_exposes_the_agent_property()
     {
         Assert.Contains("agent", typeof(OperationDetail).GetProperties().Select(p => JsonNamingPolicy.CamelCase.ConvertName(p.Name)));
+        Assert.Contains("events", typeof(OperationDetail).GetProperties().Select(p => JsonNamingPolicy.CamelCase.ConvertName(p.Name)));
         Assert.Equal(["operation", "session", "vars", "candidateSqlHash", "sqlText", "candidateSqlText", "rawTokens",
                 "emittedTokens", "artifactDirectory", "summary", "variants", "dimensions", "agent", "rawBytes", "emittedBytes",
                 "tokenEstimationMethod", "compareSubject", "compareScope", "baselineVersion", "candidateVersion",
-                "compareRegression", "compareCases", "compareConditions"],
+                "compareRegression", "compareCases", "compareConditions", "phases"],
             Names(new OperationDetail(default!, default!, null, null, null, null, null, null, null, null, [], default!, null)));
     }
 
@@ -115,7 +116,7 @@ public sealed class DashboardContractTests
         AssertTypescriptFieldsMatch("CompareSubjectSummary", subject);
         AssertTypescriptFieldsMatch("SessionDetail", new SessionDetail(session, [], [subject], 0, null));
         AssertTypescriptFieldsMatch("OperationDetail", new OperationDetail(default!, session, null, null, null, null,
-            null, null, null, null, [], default!, null));
+            null, null, null, null, [], default!, null, Phases: [], Events: []));
     }
 
     private static void AssertTypescriptFieldsMatch<T>(string typeName, T value)

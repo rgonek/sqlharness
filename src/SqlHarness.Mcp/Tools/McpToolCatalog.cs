@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 
+using Microsoft.Extensions.AI;
+
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -80,14 +82,16 @@ public sealed class McpToolHandlers(
         int maxRows = 50,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
         [Description("Offline validation only; no execution or writes.")]
         bool dryRun = false,
         CancellationToken ct = default) =>
-        RunDbAsync("sqlharness_query", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
+        RunDbAsync("sqlharness_query", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
+            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"]);
             return await module.ExecuteAsync(
                 await McpOperationMapper.MapQueryAsync(scope, sql, file, parameters, timeout, maxRows, token, dryRun),
                 token);
@@ -97,7 +101,6 @@ public sealed class McpToolHandlers(
         RequestContext<CallToolRequestParams> ctx,
         [Description("Exactly one of sql/file.")]
         McpSqlSourceArgument query,
-        [Description(McpToolCatalog.SetupDescription)]
         McpSqlSourceArgument? setup = null,
         [Description("Typed values: culture-invariant text or JSON null.")]
         McpParameterArgument[]? parameters = null,
@@ -113,14 +116,16 @@ public sealed class McpToolHandlers(
         int? timeout = null,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
         [Description("Offline validation only; no execution or writes.")]
         bool dryRun = false,
         CancellationToken ct = default) =>
-        RunDbAsync("sqlharness_measure", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
+        RunDbAsync("sqlharness_measure", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["query", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
+            ThrowIfUnknown(ctx, ["query", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"]);
             return await module.ExecuteAsync(
                 await McpOperationMapper.MapMeasureAsync(scope, query, setup, parameters, parameterSetFiles, repeat, timeout, token, dryRun, parameterSets, matrix),
                 token);
@@ -136,7 +141,6 @@ public sealed class McpToolHandlers(
         string subject,
         [Description("SQL fragment under test, or exactly 'whole' for the full query.")]
         string scope,
-        [Description(McpToolCatalog.SetupDescription)]
         McpSqlSourceArgument? setup = null,
         [Description("Typed values: culture-invariant text or JSON null.")]
         McpParameterArgument[]? parameters = null,
@@ -157,14 +161,16 @@ public sealed class McpToolHandlers(
         bool compareNullability = false,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
         [Description("Offline validation only; no execution or writes.")]
         bool dryRun = false,
         CancellationToken ct = default) =>
-        RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
+        RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["baseline", "candidate", "subject", "scope", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "compareResults", "compareNullability", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
+            ThrowIfUnknown(ctx, ["baseline", "candidate", "subject", "scope", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "compareResults", "compareNullability", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"]);
             return await module.ExecuteAsync(
                 await McpOperationMapper.MapCompareAsync(this.scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun, parameterSets, parameterSetFiles, subject, scope, _compareConfig),
                 token);
@@ -184,12 +190,14 @@ public sealed class McpToolHandlers(
         string[]? parameterSetFiles = null,
         bool compareNullability = false,
         int? maxResultBytes = null,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
         int? maxOperationSeconds = null,
         bool dryRun = false,
         CancellationToken ct = default) =>
-        RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
+        RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "compareResults", "compareNullability", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
+            ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "compareResults", "compareNullability", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"]);
             return await module.ExecuteAsync(
                 await McpOperationMapper.MapCompareAsync(this.scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun, parameterSets, parameterSetFiles, compareConfig: new CompareConfig { RequireContext = false }),
                 token);
@@ -217,12 +225,14 @@ public sealed class McpToolHandlers(
         string? maxDuration = null,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
-        RunDbAsync("sqlharness_watch", ctx, maxResultBytes, maxOperationSeconds, async (token, remaining) =>
+        RunDbAsync("sqlharness_watch", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, remaining) =>
         {
-            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "until", "untilUnchanged", "interval", "maxDuration", "maxResultBytes", "maxOperationSeconds"]);
+            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "until", "untilUnchanged", "interval", "maxDuration", "maxResultBytes", "maxCellChars", "maxOperationSeconds"]);
             var operation = await McpOperationMapper.MapWatchAsync(scope, sql, file, parameters, timeout, maxRows, until, untilUnchanged, interval, maxDuration, token);
             // The watch deadline is bounded by the remaining request budget, so
             // a natural max-duration stop stays a controlled exit 7 inside it.
@@ -250,12 +260,14 @@ public sealed class McpToolHandlers(
         int maxRows = 50,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
-        RunDbAsync("sqlharness_snapshot", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
+        RunDbAsync("sqlharness_snapshot", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["action", "name", "sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxOperationSeconds"]);
+            ThrowIfUnknown(ctx, ["action", "name", "sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds"]);
             return await module.ExecuteAsync(
                 await McpOperationMapper.MapSnapshotAsync(scope, action, name, sql, file, parameters, timeout, maxRows, token),
                 token);
@@ -269,15 +281,17 @@ public sealed class McpToolHandlers(
         string? file = null,
         [Description("includeText (default true) returns bounded statement text and predicates; false returns metadata only.")]
         bool includeText = true,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
         CancellationToken ct = default) =>
         RunAsync("sqlharness_plan", ctx, async token =>
         {
-            ThrowIfUnknown(ctx, ["content", "file", "includeText"]);
+            ThrowIfUnknown(ctx, ["content", "file", "includeText", "maxCellChars"]);
             var outcome = await module.ExecuteAsync(await McpOperationMapper.MapPlanAsync(scope, content, file, token), token);
             return outcome.ExitCode == SqlHarnessExitCode.Success
                 ? outcome with { Report = McpPlanTextPolicy.Apply(outcome.Report, includeText) }
                 : outcome;
-        }, ct);
+        }, ct, maxCellChars);
 
     public Task<CallToolResult> ArtifactAsync(
         RequestContext<CallToolRequestParams> ctx,
@@ -298,13 +312,15 @@ public sealed class McpToolHandlers(
         int? repetition = null,
         [Description("Return bounded statement text and predicates in section=plan.")]
         bool includeText = false,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
         CancellationToken ct = default) =>
         RunAsync("sqlharness_artifact", ctx, async token =>
         {
-            ThrowIfUnknown(ctx, ["id", "section", "cursor", "variant", "statement", "parameterSet", "repetition", "includeText"]);
+            ThrowIfUnknown(ctx, ["id", "section", "cursor", "variant", "statement", "parameterSet", "repetition", "includeText", "maxCellChars"]);
             var operation = McpOperationMapper.MapArtifactRead(scope, id, section, cursor, variant, statement, parameterSet, repetition, includeText);
             return await module.ExecuteAsync(operation, token);
-        }, ct);
+        }, ct, maxCellChars);
 
     /// <summary>
     /// Rejects unknown argument keys before any mapping or execution. Keys
@@ -336,9 +352,20 @@ public sealed class McpToolHandlers(
         }
     }
 
-    private async Task<CallToolResult> RunAsync(string command, RequestContext<CallToolRequestParams>? context, Func<CancellationToken, Task<SqlHarnessOutcome>> run, CancellationToken ct)
+    private async Task<CallToolResult> RunAsync(string command, RequestContext<CallToolRequestParams>? context, Func<CancellationToken, Task<SqlHarnessOutcome>> run, CancellationToken ct, int? maxCellChars = null)
     {
-        var budget = new McpResultBudget(scope.MaxResultBytes);
+        McpResultBudget budget;
+        try
+        {
+            budget = McpResultBudget.Resolve(scope.MaxResultBytes, null, maxCellChars, McpLimits.MaxCellCharactersLimit);
+        }
+        catch (ArgumentOutOfRangeException exception)
+        {
+            var message = exception.ParamName == "callMaximumCellCharacters"
+                ? exception.Message
+                : "The requested budget is invalid.";
+            return Fail(SqlHarnessExitCode.Safety, message, command);
+        }
         try
         {
             // Discovery and local tools are bounded by the process time
@@ -381,6 +408,7 @@ public sealed class McpToolHandlers(
         string command,
         RequestContext<CallToolRequestParams>? context,
         int? maxResultBytes,
+        int? maxCellChars,
         int? maxOperationSeconds,
         Func<CancellationToken, TimeSpan, Task<SqlHarnessOutcome>> run,
         CancellationToken ct)
@@ -389,13 +417,16 @@ public sealed class McpToolHandlers(
         TimeSpan callBudget;
         try
         {
-            budget = McpResultBudget.Resolve(scope.MaxResultBytes, maxResultBytes);
+            budget = McpResultBudget.Resolve(scope.MaxResultBytes, maxResultBytes, maxCellChars, McpLimits.MaxCellCharactersLimit);
             callBudget = TimeSpan.FromSeconds(
                 McpLimits.ResolveOperationSeconds(scope.MaxOperationSeconds, maxOperationSeconds));
         }
-        catch (ArgumentOutOfRangeException)
+        catch (ArgumentOutOfRangeException exception)
         {
-            return Fail(SqlHarnessExitCode.Safety, "The requested budget is invalid.", command);
+            var message = exception.ParamName == "callMaximumCellCharacters"
+                ? exception.Message
+                : "The requested budget is invalid.";
+            return Fail(SqlHarnessExitCode.Safety, message, command);
         }
 
         try
@@ -465,7 +496,9 @@ public static class McpToolCatalog
         "Runtime configuration of this server: scopeMode, active compareContext policy, engines, allowedProfiles (request scope), inputRoots (paged), processLimits, configurationRef. Call when this connection's configuration is unknown; reuse the result for this connection and call again after a reconnect or server restart.";
     public const string IncludeDiagnosticsDescription = "Add inputRootCount and local directory existence flags.";
     public const string InputRootCursorDescription = "Offset into inputRoots; follow inputRootsNextCursor until it is null.";
-    public const string SetupDescription = "Once per measured session. SQL Server: create #temps before parameter use, then populate; setup locals do not cross batches.";
+    /// <summary>Common setup text; each catalog appends its engine's setup guidance.</summary>
+    private const string SetupParameterName = "setup";
+    public const string SetupDescription = "Once per measured session; setup locals do not carry into measured SQL.";
     public const string ParameterSetFilesDescription = "2..32 .sqljson files under input roots; exclusive with parameterSets/matrix; disjoint from fixed parameters.";
     public const string ParameterSetsDescription = "2..32 named sets, matching declared types; exclusive with parameterSetFiles/matrix; disjoint from fixed parameters.";
     public const string MatrixDescription = "2..32 distinct values for one parameter; exclusive with parameterSets/parameterSetFiles; disjoint from fixed parameters.";
@@ -486,6 +519,9 @@ public static class McpToolCatalog
         "sqlharness_artifact",
     ];
 
+    /// <summary>Request scope admits SQL Server profiles only (startup check), so its catalog carries SQL Server guidance.</summary>
+    private const SqlEngine RequestScopeEngine = SqlEngine.SqlServer;
+
     public static IReadOnlyList<McpServerTool> CreateTools(
         McpProcessContext process,
         IMcpClock? clock = null,
@@ -495,30 +531,17 @@ public static class McpToolCatalog
         ArgumentNullException.ThrowIfNull(process);
         if (!process.RequestScope)
             return CreateTools(process.FixedScope!, moduleFactory?.Invoke(process.FixedScope!) ?? process.Decorate(process.FixedScope!.CreateModule(process.CompareConfig)), clock, hostShutdown, process.CompareConfig);
-        var handlers = new McpRequestToolHandlers(process, clock, hostShutdown, moduleFactory);
-        var type = typeof(McpRequestToolHandlers);
-        McpServerTool Tool(string name, string method, string description, bool? readOnly, bool? destructive,
-            bool? idempotent, bool? openWorld) => McpServerTool.Create(
-            type.GetMethod(method) ?? throw new InvalidOperationException($"Unknown MCP tool method '{method}'."), handlers,
-            new McpServerToolCreateOptions
-            {
-                Name = name,
-                Description = description,
-                ReadOnly = readOnly,
-                Destructive = destructive,
-                Idempotent = idempotent,
-                OpenWorld = openWorld,
-            });
+        var factory = new ToolFactory(new McpRequestToolHandlers(process, clock, hostShutdown, moduleFactory), RequestScopeEngine);
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
-            Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
-            Tool(ToolNames[1], nameof(McpRequestToolHandlers.QueryAsync), "Run a bounded query against the supplied request scope.", true, false, null, true),
-            Tool(ToolNames[2], nameof(McpRequestToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
-            Tool(ToolNames[3], process.CompareConfig.RequireContext ? nameof(McpRequestToolHandlers.CompareAsync) : nameof(McpRequestToolHandlers.CompareWithoutContextAsync), CompareDescription, null, false, null, true),
-            Tool(ToolNames[4], nameof(McpRequestToolHandlers.WatchAsync), "Poll a bounded query against the supplied request scope.", true, false, null, true),
-            Tool(ToolNames[5], nameof(McpRequestToolHandlers.SnapshotAsync), "Capture or diff a snapshot against the supplied request scope.", null, false, null, true),
-            Tool(ToolNames[6], nameof(McpRequestToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
-            Tool(ToolNames[7], nameof(McpRequestToolHandlers.ArtifactAsync), "Read a safe section of an artifact against the supplied request scope.", true, false, true, false),
+            factory.Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
+            factory.Tool(ToolNames[1], nameof(McpRequestToolHandlers.QueryAsync), factory.QueryDescription("Run a bounded query against the supplied request scope."), true, false, null, true),
+            factory.Tool(ToolNames[2], nameof(McpRequestToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
+            factory.Tool(ToolNames[3], process.CompareConfig.RequireContext ? nameof(McpRequestToolHandlers.CompareAsync) : nameof(McpRequestToolHandlers.CompareWithoutContextAsync), CompareDescription, null, false, null, true),
+            factory.Tool(ToolNames[4], nameof(McpRequestToolHandlers.WatchAsync), "Poll a bounded query against the supplied request scope.", true, false, null, true),
+            factory.Tool(ToolNames[5], nameof(McpRequestToolHandlers.SnapshotAsync), "Capture or diff a snapshot against the supplied request scope.", null, false, null, true),
+            factory.Tool(ToolNames[6], nameof(McpRequestToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
+            factory.Tool(ToolNames[7], nameof(McpRequestToolHandlers.ArtifactAsync), "Read a safe section of an artifact against the supplied request scope.", true, false, true, false),
         };
         if (tools.Count != McpLimits.MaxTools)
             throw new InvalidOperationException($"The MCP catalog must serve exactly {McpLimits.MaxTools} tools.");
@@ -548,38 +571,17 @@ public static class McpToolCatalog
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(module);
         var policy = compareConfig ?? SqlHarnessConfig.Default.Compare;
-        var handlers = new McpToolHandlers(scope, module, clock, hostShutdown, compareConfig: policy);
-        var type = typeof(McpToolHandlers);
-        McpServerTool Tool(
-            string name,
-            string method,
-            string description,
-            bool? readOnly,
-            bool? destructive,
-            bool? idempotent,
-            bool? openWorld) =>
-            McpServerTool.Create(
-                type.GetMethod(method) ?? throw new InvalidOperationException($"Unknown MCP tool method '{method}'."),
-                handlers,
-                new McpServerToolCreateOptions
-                {
-                    Name = name,
-                    Description = description,
-                    ReadOnly = readOnly,
-                    Destructive = destructive,
-                    Idempotent = idempotent,
-                    OpenWorld = openWorld,
-                });
+        var factory = new ToolFactory(new McpToolHandlers(scope, module, clock, hostShutdown, compareConfig: policy), scope.ResolvedTarget.Engine);
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
-            Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
-            Tool(ToolNames[1], nameof(McpToolHandlers.QueryAsync), "Run a bounded query passing the static visible-effects text check; no persistent-mutation flags are offered on this path. Hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. Exactly one of inline sql (at most 1 MiB) or a file under an input root.", true, false, null, true),
-            Tool(ToolNames[2], nameof(McpToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
-            Tool(ToolNames[3], policy.RequireContext ? nameof(McpToolHandlers.CompareAsync) : nameof(McpToolHandlers.CompareWithoutContextAsync), CompareDescription, null, false, null, true),
-            Tool(ToolNames[4], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
-            Tool(ToolNames[5], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it.", null, false, null, true),
-            Tool(ToolNames[6], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
-            Tool(ToolNames[7], nameof(McpToolHandlers.ArtifactAsync), "Read a safe section (summary, metrics, operators, statements, matrix-cells, or plan) of a saved benchmark artifact.", true, false, true, false),
+            factory.Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
+            factory.Tool(ToolNames[1], nameof(McpToolHandlers.QueryAsync), factory.QueryDescription("Run a bounded query passing the static visible-effects text check; no persistent-mutation flags are offered on this path. Hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. Exactly one of inline sql (at most 1 MiB) or a file under an input root."), true, false, null, true),
+            factory.Tool(ToolNames[2], nameof(McpToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
+            factory.Tool(ToolNames[3], policy.RequireContext ? nameof(McpToolHandlers.CompareAsync) : nameof(McpToolHandlers.CompareWithoutContextAsync), CompareDescription, null, false, null, true),
+            factory.Tool(ToolNames[4], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
+            factory.Tool(ToolNames[5], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it.", null, false, null, true),
+            factory.Tool(ToolNames[6], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
+            factory.Tool(ToolNames[7], nameof(McpToolHandlers.ArtifactAsync), "Read a safe section (summary, metrics, operators, statements, matrix-cells, or plan) of a saved benchmark artifact.", true, false, true, false),
         };
         if (tools.Count != McpLimits.MaxTools)
             throw new InvalidOperationException($"The MCP catalog must serve exactly {McpLimits.MaxTools} tools.");
@@ -599,5 +601,46 @@ public static class McpToolCatalog
         foreach (var tool in CreateTools(scope, module, clock, hostShutdown, compareConfig))
             collection.Add(tool);
         options.ToolCollection = collection;
+    }
+
+    /// <summary>
+    /// Builds one catalog's tools with the selected engine's guidance from the Core registry.
+    /// The engine's setup text enters through the SDK schema-creation options while each input
+    /// schema is inferred, before registration; served schemas are never rewritten. Each catalog
+    /// owns its options, so independently built catalogs share no description state.
+    /// </summary>
+    private sealed class ToolFactory
+    {
+        private readonly object _handlers;
+        private readonly SqlHarnessEngineGuidance _guidance;
+        private readonly AIJsonSchemaCreateOptions _schemaOptions;
+
+        public ToolFactory(object handlers, SqlEngine engine)
+        {
+            _handlers = handlers;
+            _guidance = SqlHarnessCapabilitiesProvider.GuidanceFor(engine);
+            var setup = SetupDescription + " " + _guidance.Setup;
+            _schemaOptions = AIJsonSchemaCreateOptions.Default with
+            {
+                ParameterDescriptionProvider = parameter => parameter.Name == SetupParameterName ? setup : null,
+            };
+        }
+
+        public string QueryDescription(string common) => string.IsNullOrEmpty(_guidance.Query) ? common : common + " " + _guidance.Query;
+
+        public McpServerTool Tool(string name, string method, string description, bool? readOnly, bool? destructive, bool? idempotent, bool? openWorld) =>
+            McpServerTool.Create(
+                _handlers.GetType().GetMethod(method) ?? throw new InvalidOperationException($"Unknown MCP tool method '{method}'."),
+                _handlers,
+                new McpServerToolCreateOptions
+                {
+                    Name = name,
+                    Description = description,
+                    ReadOnly = readOnly,
+                    Destructive = destructive,
+                    Idempotent = idempotent,
+                    OpenWorld = openWorld,
+                    SchemaCreateOptions = _schemaOptions,
+                });
     }
 }

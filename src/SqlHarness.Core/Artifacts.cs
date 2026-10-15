@@ -3,6 +3,10 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
+using SqlHarness.Core.Journal;
+
+using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
+
 namespace SqlHarness.Core;
 
 public sealed record SqlHarnessTargetIdentityReport(
@@ -379,44 +383,77 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
         if (orderedCells.Length == 0 || orderedCells.Any(cell => string.IsNullOrWhiteSpace(cell.Compare.ArtifactDirectory)))
             return;
 
-        var directories = orderedCells.Select(cell => Path.GetFullPath(cell.Compare.ArtifactDirectory!)).ToArray();
-        foreach (var directory in directories)
-        {
-            if (!string.Equals(Path.GetDirectoryName(directory), _root, StringComparison.Ordinal)
-                || !Directory.Exists(directory)
-                || (File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
-                throw new IOException("Matrix artifact storage is unavailable.");
-        }
-
-        var firstDirectory = directories[0];
-        var manifestPath = Path.Combine(firstDirectory, "manifest.json");
-        var manifest = JsonSerializer.Deserialize<ArtifactManifest>(File.ReadAllText(manifestPath), ArtifactDirectoryPublisher.JsonOptions)
-            ?? throw new IOException("Matrix artifact storage is unavailable.");
-        var updatedManifest = manifest with
-        {
-            Sections = manifest.Sections.Append(ArtifactReader.MatrixCellsSection).Distinct(StringComparer.Ordinal).ToArray(),
-        };
-        var index = new
-        {
-            cases = orderedCells.Select((cell, position) => BenchmarkSummaryProjector.ProjectCase(
-                cell.Index, Path.GetFileName(directories[position]), cell.Compare, cell.ParameterValue,
-                string.IsNullOrEmpty(cell.SetName) ? null : cell.SetName)).ToArray(),
-        };
-
-        var indexPath = Path.Combine(firstDirectory, "matrix-cells.json");
-        var indexTemp = indexPath + ".tmp";
-        var manifestTemp = manifestPath + ".tmp";
+        var phaseScope = OperationPhaseRecorder.Current is { } matrixRecorder
+            ? matrixRecorder.Start(JournalOperationPhase.Artifact)
+            : default;
         try
         {
-            _publisher.WriteText(indexTemp, JsonSerializer.Serialize(index, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
-            _publisher.WriteText(manifestTemp, JsonSerializer.Serialize(updatedManifest, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
-            File.Move(indexTemp, indexPath, overwrite: true);
-            File.Move(manifestTemp, manifestPath, overwrite: true);
+            var directories = orderedCells.Select(cell => Path.GetFullPath(cell.Compare.ArtifactDirectory!)).ToArray();
+            foreach (var directory in directories)
+            {
+                if (!string.Equals(Path.GetDirectoryName(directory), _root, StringComparison.Ordinal)
+                    || !Directory.Exists(directory)
+                    || (File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException("Matrix artifact storage is unavailable.");
+            }
+
+            var firstDirectory = directories[0];
+            var manifestPath = Path.Combine(firstDirectory, "manifest.json");
+            var manifest = JsonSerializer.Deserialize<ArtifactManifest>(File.ReadAllText(manifestPath), ArtifactDirectoryPublisher.JsonOptions)
+                ?? throw new IOException("Matrix artifact storage is unavailable.");
+            var updatedManifest = manifest with
+            {
+                Sections = manifest.Sections.Append(ArtifactReader.MatrixCellsSection).Distinct(StringComparer.Ordinal).ToArray(),
+            };
+            var index = new
+            {
+                cases = orderedCells.Select((cell, position) => BenchmarkSummaryProjector.ProjectCase(
+                    cell.Index, Path.GetFileName(directories[position]), cell.Compare, cell.ParameterValue,
+                    string.IsNullOrEmpty(cell.SetName) ? null : cell.SetName)).ToArray(),
+            };
+
+            var indexPath = Path.Combine(firstDirectory, "matrix-cells.json");
+            var indexTemp = indexPath + ".tmp";
+            var manifestTemp = manifestPath + ".tmp";
+            try
+            {
+                _publisher.WriteText(indexTemp, JsonSerializer.Serialize(index, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
+                _publisher.WriteText(manifestTemp, JsonSerializer.Serialize(updatedManifest, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
+                File.Move(indexTemp, indexPath, overwrite: true);
+                File.Move(manifestTemp, manifestPath, overwrite: true);
+            }
+            finally
+            {
+                try { File.Delete(indexTemp); } catch (IOException) { }
+                try { File.Delete(manifestTemp); } catch (IOException) { }
+            }
+            if (OperationPhaseRecorder.Current?.CapturesEvents == true)
+            {
+                var fileCount = TryGetFileCount(firstDirectory);
+                if (fileCount is not null)
+                    phaseScope.Detail(JsonSerializer.Serialize(new { fileCount }));
+            }
+        }
+        catch
+        {
+            phaseScope.Fail(null);
+            if (OperationPhaseRecorder.Current?.CapturesEvents == true)
+            {
+                var fileCount = 0;
+                try
+                {
+                    var firstDirectory = Path.GetFullPath(orderedCells[0].Compare.ArtifactDirectory!);
+                    if (Directory.Exists(firstDirectory))
+                        fileCount = Directory.GetFiles(firstDirectory, "*", SearchOption.AllDirectories).Length;
+                }
+                catch { }
+                phaseScope.Detail(JsonSerializer.Serialize(new { fileCount }));
+            }
+            throw;
         }
         finally
         {
-            try { File.Delete(indexTemp); } catch (IOException) { }
-            try { File.Delete(manifestTemp); } catch (IOException) { }
+            phaseScope.Dispose();
         }
     }
 
@@ -432,52 +469,76 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
         // Rejects unsupported report types before any directory is reserved.
         var persistedReport = WithArtifactDirectory(report, null);
 
-        return _publisher.Publish(target, (staging, directory) =>
+        var phaseScope = OperationPhaseRecorder.Current is { } recorder
+            ? recorder.Start(JournalOperationPhase.Artifact)
+            : default;
+        try
         {
-            persistedReport = WithArtifactDirectory(persistedReport, directory);
-            var plansDirectory = Path.Combine(staging, "plans");
-            Directory.CreateDirectory(plansDirectory);
-            _publisher.WriteText(Path.Combine(staging, "report.json"),
-                JsonSerializer.Serialize(persistedReport, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
-            _publisher.WriteText(Path.Combine(staging, "manifest.json"),
-                JsonSerializer.Serialize(ArtifactManifest.ForReport(persistedReport, owner, operationRef), ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
-            var artifactKind = persistedReport switch
+            var directory = _publisher.Publish(target, (staging, directory) =>
             {
-                SqlHarnessCompareReport => ArtifactReader.CompareKind,
-                SqlHarnessMeasureReport => ArtifactReader.MeasureKind,
-                SqlHarnessMeasureSetReport => ArtifactReader.MeasureSetKind,
-                _ => throw new ArgumentOutOfRangeException(nameof(persistedReport)),
-            };
-            var statements = ArtifactStatementProjector.Project(artifactKind, runs);
-            _publisher.WriteText(Path.Combine(staging, ArtifactReader.StatementsFileName),
-                JsonSerializer.Serialize(statements, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
-            for (var index = 0; index < runs.Count; index++)
-            {
-                var run = runs[index];
-                for (var planIndex = 0; planIndex < preparedPlans[index].Length; planIndex++)
-                    WritePair(plansDirectory, run, index, planIndex, preparedPlans[index][planIndex]);
-            }
+                persistedReport = WithArtifactDirectory(persistedReport, directory);
+                var plansDirectory = Path.Combine(staging, "plans");
+                Directory.CreateDirectory(plansDirectory);
+                _publisher.WriteText(Path.Combine(staging, "report.json"),
+                    JsonSerializer.Serialize(persistedReport, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
+                _publisher.WriteText(Path.Combine(staging, "manifest.json"),
+                    JsonSerializer.Serialize(ArtifactManifest.ForReport(persistedReport, owner, operationRef), ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
+                var artifactKind = persistedReport switch
+                {
+                    SqlHarnessCompareReport => ArtifactReader.CompareKind,
+                    SqlHarnessMeasureReport => ArtifactReader.MeasureKind,
+                    SqlHarnessMeasureSetReport => ArtifactReader.MeasureSetKind,
+                    _ => throw new ArgumentOutOfRangeException(nameof(persistedReport)),
+                };
+                var statements = ArtifactStatementProjector.Project(artifactKind, runs);
+                _publisher.WriteText(Path.Combine(staging, ArtifactReader.StatementsFileName),
+                    JsonSerializer.Serialize(statements, ArtifactDirectoryPublisher.JsonOptions), new UTF8Encoding(false));
+                for (var index = 0; index < runs.Count; index++)
+                {
+                    var run = runs[index];
+                    for (var planIndex = 0; planIndex < preparedPlans[index].Length; planIndex++)
+                        WritePair(plansDirectory, run, index, planIndex, preparedPlans[index][planIndex]);
+                }
 
-            var lines = new StringBuilder();
-            for (var index = 0; index < runs.Count; index++)
+                var lines = new StringBuilder();
+                for (var index = 0; index < runs.Count; index++)
+                {
+                    var run = runs[index];
+                    // A null set is omitted so legacy measure and compare runs.jsonl bytes stay the same.
+                    lines.AppendLine(JsonSerializer.Serialize(new RunMetadata(
+                        run.Variant,
+                        run.ParameterSet is null ? null : SanitizeSetLabel(run.ParameterSet),
+                        run.Repetition,
+                        run.CpuTimeMilliseconds,
+                        run.ElapsedTimeMilliseconds,
+                        run.LogicalReads,
+                        run.LogicalReadsByTable,
+                        run.ResultHash,
+                        run.MessageCount,
+                        run.PlanXmls.Select((xml, planIndex) => PlanFileName(run, index, planIndex, xml)).ToArray(),
+                        run.PlanXmls.Select((_, planIndex) => PlanJsonFileName(run, index, planIndex)).ToArray()), ArtifactDirectoryPublisher.JsonLineOptions));
+                }
+                _publisher.WriteText(Path.Combine(staging, "runs.jsonl"), lines.ToString(), new UTF8Encoding(false));
+            });
+            if (OperationPhaseRecorder.Current?.CapturesEvents == true)
             {
-                var run = runs[index];
-                // A null set is omitted so legacy measure and compare runs.jsonl bytes stay the same.
-                lines.AppendLine(JsonSerializer.Serialize(new RunMetadata(
-                    run.Variant,
-                    run.ParameterSet is null ? null : SanitizeSetLabel(run.ParameterSet),
-                    run.Repetition,
-                    run.CpuTimeMilliseconds,
-                    run.ElapsedTimeMilliseconds,
-                    run.LogicalReads,
-                    run.LogicalReadsByTable,
-                    run.ResultHash,
-                    run.MessageCount,
-                    run.PlanXmls.Select((xml, planIndex) => PlanFileName(run, index, planIndex, xml)).ToArray(),
-                    run.PlanXmls.Select((_, planIndex) => PlanJsonFileName(run, index, planIndex)).ToArray()), ArtifactDirectoryPublisher.JsonLineOptions));
+                var fileCount = TryGetFileCount(directory);
+                if (fileCount is not null)
+                    phaseScope.Detail(JsonSerializer.Serialize(new { fileCount }));
             }
-            _publisher.WriteText(Path.Combine(staging, "runs.jsonl"), lines.ToString(), new UTF8Encoding(false));
-        });
+            return directory;
+        }
+        catch
+        {
+            phaseScope.Fail(null);
+            if (OperationPhaseRecorder.Current?.CapturesEvents == true)
+                phaseScope.Detail("{\"fileCount\":0}");
+            throw;
+        }
+        finally
+        {
+            phaseScope.Dispose();
+        }
     }
 
     private void WritePair(string directory, CompareRunArtifact run, int runIndex, int planIndex, PreparedPlan plan)
@@ -504,6 +565,18 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
             throw new IOException("Plan filename escaped the artifact directory.");
 
         return path;
+    }
+
+    internal static int? TryGetFileCount(string directory)
+    {
+        try
+        {
+            return Directory.GetFiles(directory, "*", SearchOption.AllDirectories).Length;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private sealed record PreparedPlan(string Xml, string Json);

@@ -5,6 +5,10 @@ using System.Text.Json;
 
 using Microsoft.Data.Sqlite;
 
+using SqlHarness.Core.Journal;
+
+using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
+
 namespace SqlHarness.Core;
 
 /// <summary>
@@ -18,6 +22,9 @@ public sealed class ActivityJournal : IActivityJournal
     private const int SqliteCorrupt = 11;
     private const int SqliteNotADatabase = 26;
     private const int MaximumCompareConditionsBytes = 64 * 1024;
+    private const int MaximumPhaseEventDetailLength = 512;
+    private const int MaximumPhaseEventInputLength = 4096;
+    private const int MaximumPhaseEvents = OperationPhaseRecorder.MaximumEvents;
 
     private static readonly (string Name, Func<CompareJournalConditions, object?> Value)[] SensitiveCompareConditionFields =
     [
@@ -173,6 +180,24 @@ public sealed class ActivityJournal : IActivityJournal
             update.Parameters.AddWithValue("$parentOperationRef", (object?)end.ParentOperationRef ?? DBNull.Value);
             update.Parameters.AddWithValue("$now", now);
             update.ExecuteNonQuery();
+
+            using (var other = connection.CreateCommand())
+            {
+                other.Transaction = transaction;
+                other.CommandText = """
+                    INSERT INTO operation_phases (operation_id, phase, count, total_ms, max_ms)
+                    SELECT $id, 'other', 1,
+                        MAX(0, $duration - COALESCE(SUM(total_ms), 0)),
+                        MAX(0, $duration - COALESCE(SUM(total_ms), 0))
+                    FROM operation_phases WHERE operation_id = $id AND phase <> 'other'
+                    ON CONFLICT(operation_id, phase) DO UPDATE SET
+                        count = excluded.count, total_ms = excluded.total_ms, max_ms = excluded.max_ms;
+                    """;
+                other.Parameters.AddWithValue("$id", handle.OperationId);
+                other.Parameters.AddWithValue("$duration", Math.Max(0, end.DurationMilliseconds));
+                other.ExecuteNonQuery();
+            }
+
             transaction.Commit();
             return true;
         }
@@ -180,6 +205,147 @@ public sealed class ActivityJournal : IActivityJournal
         {
             Warn();
             return false;
+        }
+    }
+
+    public void RecordPhases(
+        JournalHandle? handle,
+        IReadOnlyList<PhaseAggregate> phases,
+        IReadOnlyList<PhaseEvent> events,
+        int droppedEvents)
+    {
+        if (handle is null)
+            return;
+        try
+        {
+            using var connection = Connect();
+            using var transaction = connection.BeginTransaction();
+            foreach (var phase in phases)
+            {
+                using var insert = Command(connection, transaction, """
+                    INSERT INTO operation_phases (operation_id, phase, count, total_ms, max_ms)
+                    VALUES ($operation, $phase, $count, $total, $max)
+                    ON CONFLICT(operation_id, phase) DO UPDATE SET
+                        count = excluded.count, total_ms = excluded.total_ms, max_ms = excluded.max_ms;
+                    """);
+                insert.Parameters.AddWithValue("$operation", handle.OperationId);
+                insert.Parameters.AddWithValue("$phase", phase.Phase.ToString().ToLowerInvariant());
+                insert.Parameters.AddWithValue("$count", Math.Max(0, phase.Count));
+                insert.Parameters.AddWithValue("$total", Math.Max(0, phase.TotalMilliseconds));
+                insert.Parameters.AddWithValue("$max", Math.Max(0, phase.MaxMilliseconds));
+                insert.ExecuteNonQuery();
+            }
+
+            var orderedEvents = events.OrderBy(phaseEvent => phaseEvent.Sequence).Take(MaximumPhaseEvents).ToArray();
+            var eventCount = orderedEvents.Length;
+            for (var index = 0; index < eventCount; index++)
+                InsertPhaseEvent(connection, transaction, handle.OperationId, orderedEvents[index], index + 1);
+
+            if (droppedEvents > 0)
+            {
+                using var insert = Command(connection, transaction, """
+                    INSERT INTO operation_events (operation_id, seq, offset_ms, phase, duration_ms, outcome, error_number, detail_json)
+                    VALUES ($operation, $seq, 0, 'other', 0, 'truncated', NULL, $detail);
+                    """);
+                insert.Parameters.AddWithValue("$operation", handle.OperationId);
+                insert.Parameters.AddWithValue("$seq", eventCount + 1);
+                insert.Parameters.AddWithValue("$detail", $$"""{"dropped":{{droppedEvents}}}""");
+                insert.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
+        }
+        catch (Exception)
+        {
+            Warn();
+        }
+    }
+
+    private static void InsertPhaseEvent(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        long operationId,
+        PhaseEvent phaseEvent,
+        int sequence)
+    {
+        using var insert = Command(connection, transaction, """
+            INSERT INTO operation_events (operation_id, seq, offset_ms, phase, duration_ms, outcome, error_number, detail_json)
+            VALUES ($operation, $seq, $offset, $phase, $duration, $outcome, $error, $detail);
+            """);
+        insert.Parameters.AddWithValue("$operation", operationId);
+        insert.Parameters.AddWithValue("$seq", sequence);
+        insert.Parameters.AddWithValue("$offset", Math.Max(0, phaseEvent.OffsetMilliseconds));
+        insert.Parameters.AddWithValue("$phase", phaseEvent.Phase.ToString().ToLowerInvariant());
+        insert.Parameters.AddWithValue("$duration", Math.Max(0, phaseEvent.DurationMilliseconds));
+        insert.Parameters.AddWithValue("$outcome", phaseEvent.Outcome);
+        insert.Parameters.AddWithValue("$error", (object?)phaseEvent.ErrorNumber ?? DBNull.Value);
+        insert.Parameters.AddWithValue("$detail",
+            (object?)AllowlistedPhaseDetail(phaseEvent.Phase, phaseEvent.DetailJson) ?? DBNull.Value);
+        insert.ExecuteNonQuery();
+    }
+
+    private static string? AllowlistedPhaseDetail(JournalOperationPhase phase, string? detailJson)
+    {
+        if (string.IsNullOrEmpty(detailJson) || detailJson.Length > MaximumPhaseEventInputLength)
+            return null;
+
+        try
+        {
+            using var document = JsonDocument.Parse(detailJson, new JsonDocumentOptions { MaxDepth = 4 });
+            if (document.RootElement.ValueKind is not JsonValueKind.Object)
+                return null;
+
+            var values = new Dictionary<string, object?>(StringComparer.Ordinal);
+            var seenProperties = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (!seenProperties.Add(property.Name))
+                    return null;
+
+                if (phase is JournalOperationPhase.Connect)
+                {
+                    switch (property.Name)
+                    {
+                        case "clientConnectionId":
+                            if (property.Value.ValueKind is JsonValueKind.Null)
+                                values.Add(property.Name, null);
+                            else if (property.Value.ValueKind is JsonValueKind.String && property.Value.TryGetGuid(out var connectionId))
+                                values.Add(property.Name, connectionId);
+                            else
+                                return null;
+                            break;
+                        case "authStrategy":
+                            if (property.Value.ValueKind is not JsonValueKind.String || property.Value.GetString() is not (
+                                "ad-default" or "azure-cli" or "sql" or "postgres"))
+                                return null;
+                            values.Add(property.Name, property.Value.GetString());
+                            break;
+                        case "attempt":
+                            if (property.Value.ValueKind is not JsonValueKind.Number ||
+                                !property.Value.TryGetInt32(out var attempt) || attempt <= 0)
+                                return null;
+                            values.Add(property.Name, attempt);
+                            break;
+                    }
+                }
+                else if (phase is JournalOperationPhase.Artifact && property.Name is "fileCount")
+                {
+                    if (property.Value.ValueKind is not JsonValueKind.Number ||
+                        !property.Value.TryGetInt32(out var fileCount) || fileCount < 0)
+                        return null;
+                    values.Add(property.Name, fileCount);
+                }
+            }
+
+            if (values.Count == 0)
+                return null;
+
+            var serialized = JsonSerializer.Serialize(values);
+            return serialized.Length <= MaximumPhaseEventDetailLength ? serialized : null;
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 
@@ -375,6 +541,8 @@ public sealed class ActivityJournal : IActivityJournal
                 Execute(connection, JournalSchema.Version8);
             if (locked < 9)
                 Execute(connection, JournalSchema.Version9);
+            if (locked < 10)
+                Execute(connection, JournalSchema.Version10);
             Execute(connection, $"PRAGMA user_version = {JournalSchema.CurrentVersion};");
             Execute(connection, "COMMIT;");
         }

@@ -7,7 +7,7 @@ description: "Use when collecting SQL Server, Azure SQL or PostgreSQL query and 
 
 ## Prepare
 
-Keep the requested profile and variables; request-scoped MCP's allowlist permits profile switches, but changing variables needs a new request. Discover arguments and limits through installed tool schemas or CLI help. Read capabilities when the connection's configuration is unknown; reuse it until reconnect or restart.
+Keep the requested profile and variables; request-scoped MCP's allowlist permits profile switches, but changing variables needs a new request. Discover arguments and limits through installed tool schemas or CLI help. Read capabilities when the connection's configuration is unknown; reuse it until reconnect or restart. CLI `capabilities <profile> --json` (`engineGuidance`) and MCP tool descriptions carry the engine's setup and safety rules; follow them instead of assuming another engine's.
 
 <!-- docs-sync:example -->
 ```powershell

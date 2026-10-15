@@ -2,9 +2,25 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
+## Plan 064 completion — 2026-10-15
+
+Plan [064](064-engine-scoped-agent-guidance.md) is DONE and integrated locally into `main` from `feat/plan-064-engine-guidance`. Windows `just verify` passed on the merge of current main (with plan 067) into the branch, `1b1c0b4`: six stages in 6m25s. The final review built the pre-change and post-change catalogs and found the served MCP schemas byte-identical with descriptions stripped. Evidence is in the plan's verification section. Linux omitted per docs/agents/verification.md; no push, installation or publication.
+
+## Plan 068 completion — 2026-10-15
+
+Plan [068](068-operation-phase-timings-and-diagnostics.md) is DONE and integrated locally into `main` at `9904dfea18ab6b0fd89ac839304d2c26fa3bc998`. Windows `just verify` passed on the resolved merge tree before the merge commit: six stages in 7m41s; UI 181 passed; Core 3,589 passed/11 skipped; MCP 386 passed/4 skipped; build 0 warnings/errors; formatting passed for 34 C# files. Linux was skipped at the operator's direction. No push, installation or publication. See [verification evidence](../docs/verification/plan-068.md).
+
 ## Plan 065 completion — 2026-10-15
 
 Plan 065 is DONE and integrated locally into `main` at `cf0e7c4d45c64105677c14563aed910aefe47788`. Post-merge verification passed on that exact revision: Windows `just verify` exit 0 (Core 3,511 passed/11 skipped; MCP 374 passed/4 skipped; format skipped with 0 changed C# files) and Linux `just verify-linux` exit 0 (9 stages; UI 163 tests; Core 3,516 passed/6 skipped; MCP 375 passed/3 skipped; build 0 warnings/errors; format passed for 7 changed C# files). Full stage details: [Plan 065 verification](../docs/verification/plan-065.md). This is local integration evidence; no push, install or publication was performed.
+## Completed since the 2026-10-14 snapshot
+
+Plan 067 was subsequently integrated locally into `main` at `0fdd9db78e91698f0641f6ed7f3e5a4db396bb57`. Windows `just verify` passed on the resolved merge tree before the merge commit: Core/CLI 3547 passed/11 skipped, MCP 381 passed/4 skipped, UI 178 passed (36 files), and format passed for 16 C# files; six stages in 5m45s. Logs: `D:/temp/sqlharness-plan067-main-verify`. Linux omitted by operator instruction; no push, installation or publication. The table below preserves earlier feature-branch evidence.
+
+| Plan | Evidence |
+|---|---|
+| [067](067-cell-limit-parity-and-default.md) | DONE on feature branch `feat/plan-067-cell-limit` at implementation HEAD `3ae4dc5`; final Windows `just verify` passed on that exact revision (UI 163; Core/CLI 3519 passed, 11 skipped; MCP 381 passed, 4 skipped; build 0 warnings/errors; format skipped because no C# files changed). Linux was explicitly waived and remains unverified. No integration, installation or publication. See durable [final completion report](../final-completion-report.md). |
+
 # Plany po audycie SQLHarness 2026-09-28
 
 Zapis: 2026-09-29, skill improve. Baza: `8aa01f8bdf95ae6acbd1e5d4e3137449ddf0d17b`.

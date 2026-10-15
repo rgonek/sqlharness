@@ -1,3 +1,5 @@
+using SqlHarness.Core;
+
 namespace SqlHarness.Mcp;
 
 /// <summary>
@@ -43,10 +45,10 @@ public static class McpLimits
     public const int MaxCallToolResultBudgetBytes = 1048576;
 
     /// <summary>Default per-cell character limit for result content.</summary>
-    public const int DefaultMaximumCellCharacters = 512;
+    public const int DefaultMaximumCellCharacters = AgentOutputLimits.DefaultCellCharacters;
 
     /// <summary>Largest per-cell character limit an operator may configure (4096).</summary>
-    public const int MaxCellCharactersLimit = 4096;
+    public const int MaxCellCharactersLimit = AgentOutputLimits.MaximumCellCharacters;
 
     /// <summary>Default per-call budget: UTF-8 bytes of the text block the model reads.</summary>
     public const int DefaultCallToolResultBudgetBytes = 64 * 1024;

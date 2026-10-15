@@ -5,8 +5,11 @@ using System.Text.Json;
 
 using SqlHarness.Core.Auth;
 using SqlHarness.Core.Dialect;
+using SqlHarness.Core.Journal;
 using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
+
+using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Core;
 
@@ -104,7 +107,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         ISnapshotStore? snapshotStore = null,
         CompareConfig? compareConfig = null)
     {
-        _sessionFactory = sessionFactory ?? throw new ArgumentNullException(nameof(sessionFactory));
+        _sessionFactory = new TimedSessionFactory(sessionFactory ?? throw new ArgumentNullException(nameof(sessionFactory)));
         _artifactWriter = artifactWriter ?? throw new ArgumentNullException(nameof(artifactWriter));
         _cellRunner = new CompareCellRunner(_sessionFactory, _artifactWriter);
         _matrixRunner = new CompareMatrixRunner(_cellRunner);
@@ -199,17 +202,19 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     ? PostgresExecutionMode.ApprovedMutation
                     : PostgresExecutionMode.ReadOnly,
             };
-            var collected = await QueryResultCollector.CollectAsync(
-                session,
-                execution,
-                query.MaxRows,
-                knownSecrets,
-                () =>
-                {
-                    raw = new CanonicalResultAccumulator();
-                    return raw;
-                },
-                ct);
+            CollectedQueryResult collected;
+            using (OperationPhaseRecorder.Current?.Start(JournalOperationPhase.Execute))
+                collected = await QueryResultCollector.CollectAsync(
+                    session,
+                    execution,
+                    query.MaxRows,
+                    knownSecrets,
+                    () =>
+                    {
+                        raw = new CanonicalResultAccumulator();
+                        return raw;
+                    },
+                    ct);
             rawFootprint = raw!.Complete().Footprint;
             var targetReport = session.Identity;
             var report = new SqlHarnessQueryReport(

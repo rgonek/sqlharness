@@ -38,7 +38,7 @@ export const operationDetail = (over: Partial<OperationDetail> = {}): OperationD
     operations: null, percentage: null, totalDurationMs: null, durationAvailableOperations: null,
     durationUnavailableOperations: null, failed: null, rejected: null }] }, agent: null,
   compareSubject: null, compareScope: null, baselineVersion: null, candidateVersion: null,
-  compareRegression: null, compareCases: null, compareConditions: null, ...over,
+  compareRegression: null, compareCases: null, compareConditions: null, phases: [], ...over,
 })
 
 export const stats = (over: Partial<DashboardStats> = {}): DashboardStats => ({

@@ -193,7 +193,7 @@ sqlharness capabilities prod-eu --json
 sqlharness doctor --json
 ```
 
-`capabilities <profile> --json` describes the commands, the output modes each command accepts (`outputModesByCommand`) and the limits, scoped to that profile's engine: its parameter types, session-temp statements and engine-only limits. Without a profile it returns engine-neutral discovery only. It never takes `--var`; an unknown or unreadable profile returns a JSON error envelope with exit `2` (`profile_unknown`, `profile_unavailable`). `doctor --json` checks the local installation and omits accounts and environment values.
+`capabilities <profile> --json` describes the commands, the output modes each command accepts (`outputModesByCommand`) and the limits, scoped to that profile's engine: its parameter types, session-temp statements, engine-only limits and an `engineGuidance` object (`query`, `setup`; `query` may be empty) with the engine's native safety and setup rules, and the engine's server-identity rule in `limits.targetIdentity.server`. Without a profile it returns engine-neutral discovery only, and command `--help` stays engine-neutral too. Rules that hold for both engines (setup runs once per measured session, setup locals do not carry into measured SQL, comparison semantics, budgets) live in help and tool descriptions; the engine sections below are the complete reference, read only for the engine you use. It never takes `--var`; an unknown or unreadable profile returns a JSON error envelope with exit `2` (`profile_unknown`, `profile_unavailable`). `doctor --json` checks the local installation and omits accounts and environment values.
 
 `--dry-run` on `query`, `measure` and `compare` checks the exact invocation offline; the dry-run rule is in the [Safety contract](#safety-contract).
 
@@ -338,7 +338,7 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat `
 
 | Command | Purpose |
 | --- | --- |
-| `capabilities` | Describe commands, engines, limits, output modes and the active compare-context policy, offline. Pass a profile for that engine's parameter types and limits. |
+| `capabilities` | Describe commands, engines, limits, output modes and the active compare-context policy, offline. Pass a profile for that engine's parameter types, limits and `engineGuidance`. |
 | `doctor` | Check the local installation and profile-file availability, offline. |
 | `watch` | Poll a bounded read-only query until `--until` / `--until-unchanged` or max duration. |
 | `snapshot` | Capture or `--diff` a named canonical result under `~/.sqlharness/snapshots` (`--force` to replace). |
@@ -362,7 +362,7 @@ The `operators` section is paged too, but its noteworthy-operator source is capp
 
 SQL Server per-table read summaries normalize session-suffixed temporary table names before aggregating repetitions: `[schema].[#name<underscores><12 hex>]` becomes `[schema].[#name]`, and `#name<underscores><12 hex>` becomes `#name`. Other table names are unchanged.
 
-Output modes: `--json` writes the full report; `measure` and `compare` add the bounded `--json-summary`. `--output agent` writes schema version 2 (the MCP result shape), shrunk to `--max-output-bytes` (4096..1048576, default 65536) with each cell clipped to `--max-cell-chars` (0..4096, default 512).
+Output modes: `--json` writes the full report; `measure` and `compare` add the bounded `--json-summary`. `--output agent` writes schema version 2 (the MCP result shape), shrunk to `--max-output-bytes` (4096..1048576, default 65536) with each cell clipped to `--max-cell-chars` (0..4096, default 2048). The seven MCP tools that return projected output accept the matching `maxCellChars` limit; truncated results report the applied value as `truncation.maxCellChars`.
 
 Query projections retain the resolved database name, use CLR value aliases, omit the rest of the target identity and canonical hash/footprint, and identify every retained clipped cell by result-set-local row and column plus original/returned length; default omission counters and empty messages are left out while zero `recordsAffected` and empty-result columns remain. See [docs/mcp.md](docs/mcp.md#result-envelope-errors-and-budgets) for the shared projection rules.
 
@@ -468,7 +468,9 @@ For successful `measure` and `compare` runs the journal also stores per-variant 
 
 Metrics a run marks unavailable are stored as null, and `STATISTICS IO` lines without logical reads (localized output, columnstore segment lines) are not recorded. Per-statement rows contain hashes and plan details without SQL text; CPU and elapsed values come from SQL Server `QueryTimeStats`. A stored plan is the first actual plan observed for its shape (`PlanIdentity`); per-run metrics are kept separately, so later runs with the same shape do not store another copy.
 
-Schema v9 adds operator annotations of sessions (title, note, star, archive). Only the dashboard writes them; titles and notes are stored as plain text regardless of `journal.storeSensitive`; retention deletes them with their session, and a star does not protect a session from retention.
+Schema v9 adds operator annotations of sessions (title, note, star, archive). Only the dashboard writes them; titles and notes are stored as plain text regardless of `journal.storeSensitive`; retention deletes them with their session, and a star does not protect a session from retention. Schema v10 adds `operation_phases` aggregates (`operation_id`, `phase`, `count`, `total_ms`, `max_ms`) to every journaled operation; phases are `connect`, `setup`, `execute`, `artifact`, and `other`, whose total reconciles to the operation wall time.
+
+When `diagnostics.enabled` is true, schema v10 also stores bounded `operation_events` for connection attempts and artifact writes. Its fields are `operation_id`, `seq`, `offset_ms`, `phase`, `duration_ms`, `outcome`, `error_number`, and `detail_json`; details are limited to 512 characters and contain safe metadata such as a client connection ID, authentication strategy, attempt number, or artifact file count. Event capture is off by default and capped at 256 events per operation. Neither phase aggregates nor diagnostic events store SQL text, parameter or result values, credentials, or tokens.
 
 `sqlharness doctor --json` reports whether the config file is present and valid, the effective journal settings, and whether the journal file exists.
 
@@ -483,6 +485,7 @@ Schema v9 adds operator annotations of sessions (title, note, star, archive). On
 ```json
 {
   "journal": { "retention": { "enabled": true, "maxAgeDays": 30, "maxSizeMb": 500 } },
+  "diagnostics": { "enabled": false },
   "dashboard": { "autoStart": true, "idleShutdownHours": 8 }
 }
 ```
@@ -517,7 +520,7 @@ Browsers do not isolate cookies by port, so the session cookie is also sent to o
 
 Snap-confined browsers (for example Firefox or Chromium from a snap on Ubuntu) may not be allowed to open the redirect page under the hidden SQLHarness home directory; open the printed URL instead.
 
-Settings retains the optional model-price reference refresh (`POST /api/prices/refresh`); it is separate from workflow output measurements and does not produce savings estimates. The Settings page edits the operator settings in `config.json` (journal, retention, dashboard auto-start and idle shutdown) and autosaves (there is no Save button; numbers apply on blur or Enter); `dashboard.port` is not editable, and enabling `journal.storeSensitive`, enabling retention, or lowering retention limits while retention is on asks for confirmation first.
+Settings retains the optional model-price reference refresh (`POST /api/prices/refresh`); it is separate from workflow output measurements and does not produce savings estimates. The Settings page edits the operator settings in `config.json` (journal, retention, connection diagnostics, dashboard auto-start and idle shutdown) and autosaves (there is no Save button; numbers apply on blur or Enter); `dashboard.port` is not editable, and enabling `journal.storeSensitive`, enabling retention, or lowering retention limits while retention is on asks for confirmation first. Connection diagnostics records bounded connection and artifact metadata in the journal; it excludes credentials and target names and never stores SQL, parameter values, or tokens.
 
 Saved settings apply to new processes, so restart running `mcp serve` sessions. The Profiles page lists the `targets.json` profiles read-only and shows password variable names, never values. A failed or rejected operation shows its credential-redacted error in a tooltip on the status badge and in a details dialog; legacy rows without a message show that no message is available. Error messages may quote SQL and data values.
 

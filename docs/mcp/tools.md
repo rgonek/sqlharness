@@ -4,9 +4,12 @@
 
 Exactly 8 tools are registered explicitly by name. No assembly scanning is used, so adding a public method can never silently widen the surface.
 
+Descriptions are engine-scoped at startup. A fixed-scope process renders its resolved target's engine guidance (native setup, query safety) into the `query`, `measure` and `compare` descriptions; request scope is SQL Server only and renders SQL Server guidance. The text that holds for both engines (setup runs once per session, setup locals do not carry into measured SQL) is common. Capabilities for a CLI profile carry the same guidance as `engineGuidance`; the engine sections of the [README](../../README.md) are the complete reference. Descriptions never change what executes or is authorized.
+
 Tool and argument descriptions expose setup/session rules, mutually exclusive parameter-set inputs
 and saved-plan selection at the call site. Use capabilities for runtime configuration, and the result's
 status, omissions, continuation and evidence gaps to judge whether the returned evidence is complete.
+The seven projected tools accept `maxCellChars` (0..4096, default 2048), matching CLI agent output's `--max-cell-chars` option.
 
 | Tool | Behavior |
 |---|---|

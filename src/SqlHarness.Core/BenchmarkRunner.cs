@@ -1,4 +1,7 @@
 using SqlHarness.Core.Dialect;
+using SqlHarness.Core.Journal;
+
+using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Core;
 
@@ -30,17 +33,19 @@ internal static class BenchmarkRunner
         int comparisonMaximumRows,
         CancellationToken ct)
     {
-        var collected = await dialect.ExecuteBenchmarkRunAsync(
-            session,
-            sql,
-            parameters,
-            timeoutSeconds,
-            repetition,
-            variant,
-            raw,
-            captureComparison,
-            comparisonMaximumRows,
-            ct);
+        CollectedCompareRun collected;
+        using (OperationPhaseRecorder.Current?.Start(JournalOperationPhase.Execute))
+            collected = await dialect.ExecuteBenchmarkRunAsync(
+                session,
+                sql,
+                parameters,
+                timeoutSeconds,
+                repetition,
+                variant,
+                raw,
+                captureComparison,
+                comparisonMaximumRows,
+                ct);
         var artifact = collected.Artifact with { ParameterSet = parameterSet };
         return new CollectedBenchmarkRun(artifact, collected.Plans, artifact.PlanXmls.Select(PlanIdentity.Hash).ToArray())
         {

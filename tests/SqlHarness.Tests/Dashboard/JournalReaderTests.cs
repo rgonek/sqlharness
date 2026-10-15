@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using Microsoft.Data.Sqlite;
 
 using SqlHarness.Core;
@@ -208,6 +210,72 @@ public sealed class JournalReaderTests
         Assert.NotNull(detail);
         Assert.Equal("query", detail.Operation.Operation);
         Assert.Empty(hydratedIds);
+    }
+
+    [Fact]
+    public void Operation_detail_includes_phase_aggregates_and_events_but_omits_events_for_legacy_rows()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("cli:phase-detail");
+        var timed = seed.Operation(session, durationMs: 100);
+        var legacy = seed.Operation(session, durationMs: 200, complete: false);
+        using (var connection = OpenSeedDatabase(home.DatabasePath))
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT INTO operation_phases (operation_id, phase, count, total_ms, max_ms)
+                VALUES ($id, 'execute', 2, 30, 20);
+                INSERT INTO operation_events (operation_id, seq, offset_ms, phase, duration_ms, outcome, error_number, detail_json)
+                VALUES ($id, 1, 12, 'connect', 8, 'failed', 18456, '{"clientConnectionId":"550e8400-e29b-41d4-a716-446655440000"}');
+                INSERT INTO operation_events (operation_id, seq, offset_ms, phase, duration_ms, outcome, error_number, detail_json)
+                VALUES ($id, 2, 20, 'other', 0, 'truncated', NULL, '{"dropped":3}');
+                """;
+            command.Parameters.AddWithValue("$id", timed.OperationId);
+            command.ExecuteNonQuery();
+        }
+
+        var reader = Reader(home);
+        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        using var timedJson = JsonDocument.Parse(JsonSerializer.Serialize(reader.Operation(timed.OperationId), options));
+        using var legacyJson = JsonDocument.Parse(JsonSerializer.Serialize(reader.Operation(legacy.OperationId), options));
+
+        var phase = timedJson.RootElement.GetProperty("phases").EnumerateArray()
+            .Single(value => value.GetProperty("phase").GetString() == "execute");
+        Assert.Equal(2, phase.GetProperty("count").GetInt32());
+        Assert.Equal(30, phase.GetProperty("totalMs").GetInt64());
+        Assert.Equal(20, phase.GetProperty("maxMs").GetInt64());
+        var events = timedJson.RootElement.GetProperty("events").EnumerateArray().ToArray();
+        Assert.Equal(2, events.Length);
+        Assert.Equal(12, events[0].GetProperty("offsetMs").GetInt64());
+        Assert.Equal(8, events[0].GetProperty("durationMs").GetInt64());
+        Assert.Equal("failed", events[0].GetProperty("outcome").GetString());
+        Assert.Equal(18456, events[0].GetProperty("errorNumber").GetInt32());
+        Assert.Equal("550e8400-e29b-41d4-a716-446655440000", events[0].GetProperty("clientConnectionId").GetString());
+        Assert.Equal("truncated", events[1].GetProperty("outcome").GetString());
+        Assert.Equal(3, events[1].GetProperty("droppedCount").GetInt32());
+        Assert.Empty(legacyJson.RootElement.GetProperty("phases").EnumerateArray());
+        Assert.False(legacyJson.RootElement.TryGetProperty("events", out _));
+    }
+
+    [Fact]
+    public void Operation_detail_reads_a_v9_database_without_timing_tables()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        var handle = seed.Operation(JournalSeed.Session("cli:v9"));
+        using (var connection = OpenSeedDatabase(home.DatabasePath))
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "DROP TABLE operation_events; DROP TABLE operation_phases; PRAGMA user_version = 9;";
+            command.ExecuteNonQuery();
+        }
+
+        var detail = Reader(home).Operation(handle.OperationId);
+
+        Assert.NotNull(detail);
+        Assert.Empty(detail.Phases!);
+        Assert.Null(detail.Events);
     }
 
     private static void CorruptCompareEvidence(string databasePath, long operationId)
