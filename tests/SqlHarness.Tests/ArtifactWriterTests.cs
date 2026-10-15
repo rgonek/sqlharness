@@ -53,6 +53,12 @@ public class ArtifactWriterTests
     }
 
     [Fact]
+    public void Diagnostic_file_count_failure_is_best_effort()
+    {
+        Assert.Null(CompareArtifactWriter.TryGetFileCount("\0"));
+    }
+
+    [Fact]
     public void Writer_creates_safe_unique_metadata_and_exact_plan_files()
     {
         using var temp = new TempDirectory();

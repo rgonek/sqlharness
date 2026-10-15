@@ -428,7 +428,11 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
                 try { File.Delete(manifestTemp); } catch (IOException) { }
             }
             if (OperationPhaseRecorder.Current?.CapturesEvents == true)
-                phaseScope.Detail(JsonSerializer.Serialize(new { fileCount = Directory.GetFiles(firstDirectory, "*", SearchOption.AllDirectories).Length }));
+            {
+                var fileCount = TryGetFileCount(firstDirectory);
+                if (fileCount is not null)
+                    phaseScope.Detail(JsonSerializer.Serialize(new { fileCount }));
+            }
         }
         catch
         {
@@ -517,7 +521,11 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
                 _publisher.WriteText(Path.Combine(staging, "runs.jsonl"), lines.ToString(), new UTF8Encoding(false));
             });
             if (OperationPhaseRecorder.Current?.CapturesEvents == true)
-                phaseScope.Detail(JsonSerializer.Serialize(new { fileCount = Directory.GetFiles(directory, "*", SearchOption.AllDirectories).Length }));
+            {
+                var fileCount = TryGetFileCount(directory);
+                if (fileCount is not null)
+                    phaseScope.Detail(JsonSerializer.Serialize(new { fileCount }));
+            }
             return directory;
         }
         catch
@@ -557,6 +565,18 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
             throw new IOException("Plan filename escaped the artifact directory.");
 
         return path;
+    }
+
+    internal static int? TryGetFileCount(string directory)
+    {
+        try
+        {
+            return Directory.GetFiles(directory, "*", SearchOption.AllDirectories).Length;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private sealed record PreparedPlan(string Xml, string Json);
