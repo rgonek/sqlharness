@@ -14,6 +14,8 @@
 
 ## Status
 
+- Integrated locally into `main` at `0fdd9db78e91698f0641f6ed7f3e5a4db396bb57`. Windows `just verify -LogDirectory D:/temp/sqlharness-plan067-main-verify` passed on the resolved merge tree before creating this merge commit: Core/CLI 3547 passed, 11 skipped; MCP 381 passed, 4 skipped; UI 178 passed across 36 files; format passed for 16 C# files. All six stages passed in 5m45s. Linux omitted by operator instruction. No push, installation or publication.
+
 - DONE on feature branch `feat/plan-067-cell-limit` at implementation HEAD `3ae4dc5`. Final Windows `just verify -LogDirectory D:/temp/sqlharness-plan067-final-verify-3ae4dc5` passed on that exact revision: UI 163 passed; Core/CLI 3519 passed, 11 skipped; MCP 381 passed, 4 skipped; build had 0 warnings and 0 errors. All six stages completed in 8m36s; format was skipped because no C# files changed. Linux was explicitly waived and remains unverified. No integration, installation or publication performed.
 - Planning base: `ed44649`, 2026-10-14.
 - Priority: P2. Effort: S–M. Risk: LOW–MEDIUM (tool schema change; larger default output).
