@@ -118,6 +118,44 @@ public sealed class DashboardLockTests
         Assert.Null(endpoint);
     }
 
+    [Fact]
+    public async Task Wait_for_running_returns_promptly_when_the_lock_is_free()
+    {
+        using var home = new TempHome();
+        var timeout = TimeSpan.FromSeconds(2);
+        var started = System.Diagnostics.Stopwatch.StartNew();
+
+        var endpoint = await DashboardLock.WaitForRunningAsync(home.Path, new FakeProcesses(), timeout, CancellationToken.None);
+
+        Assert.Null(endpoint);
+        Assert.True(started.Elapsed < TimeSpan.FromSeconds(1), $"Waited {started.Elapsed} despite the lock being free.");
+    }
+
+    [Fact]
+    public async Task Wait_for_running_rejects_an_endpoint_read_after_the_deadline()
+    {
+        using var home = new TempHome();
+        using var held = DashboardLock.TryAcquire(home.Path)!;
+        held.Publish(new DashboardEndpoint(4242, Started, 47801, "tok"));
+
+        var endpoint = await DashboardLock.WaitForRunningAsync(home.Path,
+            new BlockingProcessInfo(4242, Started, TimeSpan.FromMilliseconds(150)),
+            TimeSpan.FromMilliseconds(40), CancellationToken.None);
+
+        Assert.Null(endpoint);
+    }
+
+    private sealed class BlockingProcessInfo(int pid, DateTimeOffset startedAt, TimeSpan delay) : IProcessInfo
+    {
+        public int CurrentPid => pid;
+
+        public ProcessSnapshot? Get(int requestedPid)
+        {
+            Thread.Sleep(delay);
+            return requestedPid == pid ? new ProcessSnapshot(pid, null, "process", startedAt, null) : null;
+        }
+    }
+
     [UnixFact]
     [UnsupportedOSPlatform("windows")]
     public void Info_file_is_owner_only_on_unix()
@@ -179,6 +217,29 @@ public sealed class DashboardLockTests
         held.Publish(new DashboardEndpoint(4242, Started, 47801, "tok"));
 
         Assert.Equal(new DashboardEndpoint(4242, Started, 47801, "tok"), await wait);
+    }
+
+    [Fact]
+    public async Task Lifecycle_waits_for_a_late_lock_and_publication_within_one_budget()
+    {
+        using var home = new TempHome();
+        var processes = new FakeProcesses().Alive(4242, Started);
+        var lifecycle = new DashboardLifecycleService(processes);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var wait = lifecycle.WaitForRunningAsync(home.Path, TimeSpan.FromSeconds(1), CancellationToken.None);
+
+        var publisher = Task.Run(async () =>
+        {
+            await Task.Delay(100);
+            using var held = DashboardLock.TryAcquire(home.Path)!;
+            await Task.Delay(100);
+            held.Publish(new DashboardEndpoint(4242, Started, 47801, "tok"));
+            await Task.Delay(100);
+        });
+
+        Assert.Equal(new DashboardEndpoint(4242, Started, 47801, "tok"), await wait);
+        await publisher;
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(1), $"Waited {watch.Elapsed} outside the shared one-second budget.");
     }
 
     [Fact]

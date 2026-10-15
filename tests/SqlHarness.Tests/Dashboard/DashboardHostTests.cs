@@ -289,6 +289,68 @@ public sealed class DashboardHostTests
     }
 
     [Fact]
+    public async Task Authenticated_shutdown_closes_live_stream_and_cleans_lifecycle_artifacts()
+    {
+        using var home = new TempHome();
+        using var cleanup = new CancellationTokenSource();
+        Task? shutdownFlow = null;
+        RunningDashboard? started = null;
+
+        var run = DashboardHost.RunAsync(
+            Options(home, new StringWriter(), new StringWriter(), new RecordingBrowser()) with
+            {
+                Started = server =>
+                {
+                    started = server;
+                    shutdownFlow = Task.Run(async () =>
+                    {
+                        var cookies = new System.Net.CookieContainer();
+                        using var client = new HttpClient(new HttpClientHandler { CookieContainer = cookies }) { BaseAddress = server.BaseUri };
+                        using var exchange = await client.GetAsync($"/?t={server.Token}");
+                        Assert.Equal(System.Net.HttpStatusCode.OK, exchange.StatusCode);
+                        using var live = await client.GetAsync("/api/live", HttpCompletionOption.ResponseHeadersRead);
+                        Assert.Equal(System.Net.HttpStatusCode.OK, live.StatusCode);
+
+                        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/shutdown")
+                        {
+                            Content = System.Net.Http.Json.JsonContent.Create(new { }),
+                        };
+                        request.Headers.Add("X-SqlHarness-Dashboard", "1");
+                        using var response = await client.SendAsync(request);
+                        Assert.Equal(System.Net.HttpStatusCode.Accepted, response.StatusCode);
+                        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+                        Assert.True(server.Stopping.WaitHandle.WaitOne(TimeSpan.FromSeconds(2)));
+                    });
+                },
+            },
+            cleanup.Token);
+
+        try
+        {
+            var exit = await run.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.NotNull(shutdownFlow);
+            await shutdownFlow!.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(0, exit);
+            Assert.NotNull(started);
+            Assert.False(File.Exists(Path.Combine(home.Path, "dashboard.json")));
+            Assert.False(File.Exists(PagePath(home)));
+            Assert.True(File.Exists(Path.Combine(home.Path, DashboardToken.FileName)));
+            Assert.Equal(started!.Token, File.ReadAllText(Path.Combine(home.Path, DashboardToken.FileName)).Trim());
+            using var again = DashboardLock.TryAcquire(home.Path);
+            Assert.NotNull(again);
+        }
+        finally
+        {
+            if (!run.IsCompleted)
+            {
+                cleanup.Cancel();
+                await run.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+        }
+    }
+
+    [Fact]
     public async Task Lock_released_during_the_wait_is_taken_over()
     {
         using var home = new TempHome();

@@ -37,7 +37,8 @@ public sealed class DashboardLock : IDisposable
     internal const string InfoFileName = "dashboard.json";
     private const UnixFileMode OwnerReadWrite = UnixFileMode.UserRead | UnixFileMode.UserWrite;
     private const int DeleteAttempts = 5;
-    private static readonly TimeSpan StartTolerance = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan RunningPollInterval = TimeSpan.FromMilliseconds(100);
+    public static TimeSpan StartTimeTolerance { get; } = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan AcquireRetryDelay = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan DeleteRetryDelay = TimeSpan.FromMilliseconds(50);
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -190,7 +191,7 @@ public sealed class DashboardLock : IDisposable
                 // (macOS) cannot tell, so the held lock is the only evidence and is trusted.
                 return processes is SelfOnlyProcessInfo ? endpoint : null;
             if (endpoint.StartedAt is { } published && process.StartedAt is { } actual
-                && (actual - published).Duration() > StartTolerance)
+                && (actual - published).Duration() > StartTimeTolerance)
                 return null;
             return endpoint;
         }
@@ -200,21 +201,44 @@ public sealed class DashboardLock : IDisposable
         }
     }
 
-    public static async Task<DashboardEndpoint?> WaitForRunningAsync(string home, IProcessInfo processes, TimeSpan timeout, CancellationToken ct)
+    public static Task<DashboardEndpoint?> WaitForRunningAsync(string home, IProcessInfo processes, TimeSpan timeout, CancellationToken ct) =>
+        WaitForRunningAsync(home, processes, timeout, waitForLockAcquisition: false, ct);
+
+    internal static async Task<DashboardEndpoint?> WaitForRunningAsync(
+        string home,
+        IProcessInfo processes,
+        TimeSpan timeout,
+        bool waitForLockAcquisition,
+        CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrEmpty(home);
+        ArgumentNullException.ThrowIfNull(processes);
         var lockPath = Path.Combine(home, LockFileName);
-        var deadline = DateTimeOffset.UtcNow + timeout;
+        var started = TimeProvider.System.GetTimestamp();
+        TimeSpan Remaining() => timeout - TimeProvider.System.GetElapsedTime(started);
         while (true)
         {
-            if (ReadRunning(home, processes) is { } endpoint)
-                return endpoint;
-            // A free lock means no dashboard is starting, so there is nothing left to wait for.
-            // Sitting out the whole timeout anyway made every takeover cost the full wait even
-            // after the holder was long gone.
-            if (!IsHeldElsewhere(lockPath) || DateTimeOffset.UtcNow >= deadline)
+            ct.ThrowIfCancellationRequested();
+            var remaining = Remaining();
+            if (remaining <= TimeSpan.Zero)
                 return null;
-            await Task.Delay(TimeSpan.FromMilliseconds(100), ct);
+
+            if (ReadRunning(home, processes) is { } endpoint)
+            {
+                ct.ThrowIfCancellationRequested();
+                return Remaining() > TimeSpan.Zero ? endpoint : null;
+            }
+
+            remaining = Remaining();
+            if (remaining <= TimeSpan.Zero)
+                return null;
+            if (!waitForLockAcquisition && !IsHeldElsewhere(lockPath))
+                return null;
+
+            remaining = Remaining();
+            if (remaining <= TimeSpan.Zero)
+                return null;
+            await Task.Delay(remaining < RunningPollInterval ? remaining : RunningPollInterval, ct);
         }
     }
 

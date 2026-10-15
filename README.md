@@ -506,7 +506,16 @@ Known limitation: the autostarted dashboard is not placed in a new session or pr
 ```powershell
 sqlharness dashboard            # serve on 127.0.0.1 and open the browser
 sqlharness dashboard --no-open  # print the URL only
+sqlharness dashboard --stop     # stop this SQLHarness home's dashboard
+sqlharness dashboard --restart  # replace it with this installed version
+sqlharness dashboard --restart --no-open  # restart and print the URL only
 ```
+
+`--stop` and `--restart` apply only to the effective SQLHarness home (`SQLHARNESS_HOME`, or the default home). Stop is successful when no dashboard is running. Restart stops the current instance, then starts this installed version in background mode; it opens the browser by default and follows the background dashboard's `idleShutdownHours` behavior. Use `--no-open` to print its URL without opening a browser. CLI help lists the option details.
+
+To bring a running dashboard onto a newly published version, either stop it, publish, then start it again (`sqlharness dashboard --stop`, `just publish`, `sqlharness dashboard`), or publish and restart in one step (`just publish`, `sqlharness dashboard --restart`). A dashboard started before guarded shutdown was added cannot be stopped by the new CLI; during that first upgrade, stop the older process manually once, then publish and start the new version. Later upgrades can use `--restart`.
+
+Stopping a dashboard does not immediately start another one. MCP autostart runs when an MCP server starts, and an MCP process that was already running keeps its installed version until its client restarts it.
 
 One dashboard runs per SQLHarness home; a second invocation opens the running one. It listens only on `127.0.0.1` (default port `47800`, then the next free port, then an ephemeral port when those are taken), and the printed URL carries the dashboard token, which is exchanged for an HttpOnly SameSite=Strict cookie valid for 400 days.
 
