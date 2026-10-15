@@ -54,6 +54,42 @@ public class SqlSafetyTierTests
         Assert.Equal(SqlRiskTier.Schema, decision.Tier);
     }
 
+    [Fact]
+    public void Privilege_statements_report_tier_and_grantees()
+    {
+        var decision = Mutation("GRANT SELECT ON dbo.T TO [Reader]; ALTER ROLE db_owner ADD MEMBER Reader;");
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.Equal(SqlRiskTier.Privilege, decision.Tier);
+        Assert.Equal(["Reader", "Reader"], decision.Grantees);
+    }
+
+    [Theory]
+    [InlineData("REVOKE INSERT ON dbo.T FROM app")]
+    [InlineData("DENY DELETE ON dbo.T TO app")]
+    [InlineData("CREATE USER app WITHOUT LOGIN")]
+    [InlineData("GRANT CONTROL TO app")]
+    public void Other_privilege_statements_are_privilege_tier(string sql)
+    {
+        var decision = Mutation(sql);
+        Assert.Equal(SqlRiskTier.Privilege, decision.Tier);
+        Assert.Equal(["app"], decision.Grantees);
+    }
+
+    [Fact]
+    public void Nested_privilege_statements_keep_grantees_in_source_order()
+    {
+        var decision = Mutation(
+            "GRANT SELECT ON dbo.T TO first, [PUBLIC]; IF 1 = 1 ALTER ROLE db_owner ADD MEMBER second; ELSE CREATE USER third WITHOUT LOGIN;");
+
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.Equal(SqlRiskTier.Privilege, decision.Tier);
+        Assert.Equal(["first", "public", "second", "third"], decision.Grantees);
+    }
+
+    [Fact]
+    public void Query_usage_still_rejects_grant() =>
+        Assert.False(Query("GRANT SELECT ON dbo.T TO app").Allowed);
+
     [Theory]
     [InlineData("DROP TABLE #t")]
     [InlineData("TRUNCATE TABLE #t")]

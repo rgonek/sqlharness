@@ -229,7 +229,7 @@ internal sealed class SqlSafetyClassifier
             return Denied(SqlSafetyReason.SelectIntoNotAllowed);
         }
 
-        var denied = ClassifyStatements(batches, inspection, out var hasMutation, out var hasSessionLocal, out var tier);
+        var denied = ClassifyStatements(batches, inspection, out var hasMutation, out var hasSessionLocal, out var tier, out _);
         if (denied is not null)
             return denied;
 
@@ -260,10 +260,19 @@ internal sealed class SqlSafetyClassifier
         IList<TSqlBatch> batches,
         SafetyInspectionVisitor inspection)
     {
-        var denied = ClassifyStatements(batches, inspection, out _, out var hasSessionLocal, out var tier, mutationUsage: true);
+        var denied = ClassifyStatements(
+            batches,
+            inspection,
+            out _,
+            out var hasSessionLocal,
+            out var tier,
+            out var grantees,
+            mutationUsage: true);
         if (denied is null && inspection.HasSequenceAdvance)
             tier = SqlRiskTiers.Max(tier, SqlRiskTier.Schema);
-        return denied ?? Allowed(hasMutation: tier >= SqlRiskTier.Dml, hasSessionLocal: hasSessionLocal) with { Tier = tier };
+        return denied is null
+            ? Allowed(hasMutation: tier >= SqlRiskTier.Dml, hasSessionLocal: hasSessionLocal) with { Tier = tier, Grantees = grantees }
+            : denied with { Grantees = grantees };
     }
 
     private static SqlSafetyDecision? ClassifyStatements(
@@ -272,11 +281,14 @@ internal sealed class SqlSafetyClassifier
         out bool hasMutation,
         out bool hasSessionLocal,
         out SqlRiskTier tier,
+        out IReadOnlyList<string> grantees,
         bool mutationUsage = false)
     {
         hasMutation = false;
         hasSessionLocal = false;
         tier = SqlRiskTier.ReadOnly;
+        var namedGrantees = new List<string>();
+        grantees = namedGrantees;
         foreach (var batch in batches)
         {
             // 011/T2, 011/T3: SET targets and table variables are proven
@@ -296,6 +308,9 @@ internal sealed class SqlSafetyClassifier
                             : deny == SqlSafetyReason.UnsupportedStatement
                                 ? StatementDetail(classification.DeniedStatement ?? statement)
                                 : null);
+
+                if (mutationUsage)
+                    namedGrantees.AddRange(SqlMutationStatementMap.Grantees(statement));
 
                 hasMutation |= classification.HasPersistentWrite;
                 hasSessionLocal |= classification.HasSessionLocalWrite;
@@ -430,18 +445,18 @@ internal sealed class SqlSafetyClassifier
             return combined;
         }
 
+        var statementType = statement.GetType();
+        if (SqlMutationStatementMap.PrivilegeStatementTypes.Any(statementType.IsAssignableTo))
+            return StatementClassification.Privilege;
+
         if (classification.DenyReason is null)
             return classification;
 
         if (statement is SelectStatement { Into: { } into } && !IsLocalTemp(into))
             return StatementClassification.Schema;
 
-        var statementType = statement.GetType();
-        if (SqlMutationStatementMap.RejectedStatementTypes.Any(statementType.IsAssignableTo) ||
-            SqlMutationStatementMap.PrivilegeStatementTypes.Any(statementType.IsAssignableTo))
-        {
+        if (SqlMutationStatementMap.RejectedStatementTypes.Any(statementType.IsAssignableTo))
             return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement, statement);
-        }
 
         return SqlMutationStatementMap.SchemaStatementTypes.Any(statementType.IsAssignableTo)
             ? StatementClassification.Schema
@@ -951,6 +966,7 @@ internal sealed class SqlSafetyClassifier
         internal static StatementClassification SessionLocal { get; } = new(null, true, false, Tier: SqlRiskTier.Session);
         internal static StatementClassification Persistent { get; } = new(null, false, true, Tier: SqlRiskTier.Dml);
         internal static StatementClassification Schema { get; } = new(null, false, true, Tier: SqlRiskTier.Schema);
+        internal static StatementClassification Privilege { get; } = new(null, false, true, Tier: SqlRiskTier.Privilege);
         internal static StatementClassification Denied(SqlSafetyReason reason, TSqlStatement? deniedStatement = null) =>
             new(reason, false, false, deniedStatement);
     }
