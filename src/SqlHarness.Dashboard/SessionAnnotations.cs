@@ -24,7 +24,7 @@ internal static class SessionAnnotations
         return status switch
         {
             AnnotationWriteStatus.Updated => Results.Json(annotation, json),
-            AnnotationWriteStatus.NotFound => Results.NotFound(),
+            AnnotationWriteStatus.NotFound => Error("The session no longer exists.", StatusCodes.Status404NotFound, json),
             AnnotationWriteStatus.SchemaMismatch => Error(
                 "The activity journal schema does not match this dashboard; restart the dashboard with the current sqlharness.",
                 StatusCodes.Status409Conflict, json),
@@ -99,12 +99,19 @@ internal static class SessionAnnotations
 
     private static bool TryText(JsonElement value, out string? text)
     {
-        text = value.ValueKind switch
+        text = null;
+        if (value.ValueKind is not JsonValueKind.String)
+            return value.ValueKind is JsonValueKind.Null;
+        try
         {
-            JsonValueKind.String => value.GetString(),
-            _ => null,
-        };
-        return value.ValueKind is JsonValueKind.String or JsonValueKind.Null;
+            text = value.GetString();
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            // An escaped lone surrogate is valid JSON but not a valid string.
+            return false;
+        }
     }
 
     private static IResult Error(string message, int status, JsonSerializerOptions json) =>

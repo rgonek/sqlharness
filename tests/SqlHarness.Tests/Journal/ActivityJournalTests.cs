@@ -514,6 +514,8 @@ public sealed class ActivityJournalTests
         Assert.Equal(9L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
         Assert.Equal("cli:v8", JournalDb.Rows(temp.DatabasePath, "SELECT session_key FROM sessions").Single()["session_key"]);
         Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT * FROM session_annotations"));
+        Assert.Single(JournalDb.Rows(temp.DatabasePath,
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'ix_session_annotations_starred'"));
     }
 
     [Fact]

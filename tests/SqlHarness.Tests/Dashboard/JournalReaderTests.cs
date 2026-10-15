@@ -263,8 +263,8 @@ public sealed class JournalReaderTests
         seed.Operation(b, status: "rejected", exitCode: 2);
 
         var reader = Reader(home);
-        var first = reader.Sessions(new SessionQuery(Limit: 1));
-        var second = reader.Sessions(new SessionQuery(Limit: 1, Cursor: first.NextCursor));
+        var first = reader.Sessions(new SessionQuery(Limit: 1, Starred: false));
+        var second = reader.Sessions(new SessionQuery(Limit: 1, Starred: false, Cursor: first.NextCursor));
 
         Assert.Equal("codex", Assert.Single(first.Items).AgentKind);
         Assert.Equal(1, first.Items[0].Rejected);
@@ -272,6 +272,9 @@ public sealed class JournalReaderTests
         Assert.Equal((2, 1), (claude.Operations, claude.Failed));
         Assert.Null(second.NextCursor);
         Assert.Equal("claude", Assert.Single(reader.Sessions(new SessionQuery(Agent: "claude")).Items).AgentKind);
+        var unfiltered = reader.Sessions(new SessionQuery(Limit: 1));
+        Assert.Single(unfiltered.Items);
+        Assert.Null(unfiltered.NextCursor);
     }
 
     [Fact]
@@ -1021,6 +1024,36 @@ public sealed class JournalReaderTests
         Assert.Equal(["cli:note"], Keys("50%"));
         Assert.Equal(["cli:note", "cli:title", "cli:wild"], Keys("cli:"));
         Assert.Equal(["cli:note", "cli:title", "cli:wild"], Keys("/work"));
+    }
+
+    [Fact]
+    public void Search_treats_backslash_and_underscore_literally_and_matches_the_client_title()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:path") with { Cwd = @"C:\work\a_b" });
+        seed.Operation(JournalSeed.Session("cli:underscore-decoy") with { Cwd = @"C:\work\aXb" });
+        seed.Operation(JournalSeed.Session("cli:backslash-decoy") with { Cwd = "/worka_b" });
+        seed.Operation(JournalSeed.Session("mcp:client") with { ClientTitle = "Claude_Code" });
+        seed.Operation(JournalSeed.Session("mcp:client-decoy") with { ClientTitle = "ClaudeXCode" });
+        var reader = new JournalReader(home.DatabasePath, new FakeProcesses());
+
+        string[] Keys(string q) => reader.Sessions(new SessionQuery(Search: q)).Items.Select(s => s.SessionKey).Order().ToArray();
+        Assert.Equal(["cli:path"], Keys(@"work\a_b"));
+        Assert.Equal(["cli:path"], Keys(@"\a_"));
+        Assert.Equal(["mcp:client"], Keys("claude_code"));
+    }
+
+    [Fact]
+    public void Note_preview_is_the_first_non_blank_line()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:a"));
+        JournalSeed.Annotate(home.DatabasePath, "cli:a", note: "\n\n  real line\nmore");
+        var reader = new JournalReader(home.DatabasePath, new FakeProcesses());
+
+        Assert.Equal("real line", reader.Sessions(new SessionQuery()).Items.Single().NotePreview);
     }
 
     [Fact]

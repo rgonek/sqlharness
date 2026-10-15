@@ -318,8 +318,8 @@ public static partial class DashboardServer
 
     private static bool TryArchived(string? value, out bool? archived)
     {
-        archived = value switch { null or "false" => false, "true" => true, _ => null };
-        return value is null or "true" or "false" or "any";
+        archived = value?.ToLowerInvariant() switch { null or "false" => false, "true" => true, _ => null };
+        return value is null || value.ToLowerInvariant() is "true" or "false" or "any";
     }
 
     private static bool TryWindow(string? from, string? to, out (DateTimeOffset? From, DateTimeOffset? To) window)

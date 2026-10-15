@@ -19,7 +19,7 @@ internal static class DashboardSecurity
     internal const string SettingsPath = "/api/settings";
     internal const string PricesRefreshPath = "/api/prices/refresh";
     private static readonly System.Text.RegularExpressions.Regex AnnotationPath =
-        new(@"^/api/sessions/[0-9]{1,19}/annotation$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        new(@"^/api/sessions/[0-9]{1,19}/annotation\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
     internal static readonly TimeSpan CookieMaxAge = TimeSpan.FromDays(400);
     private const string TokenQuery = "t";
 

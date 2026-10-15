@@ -54,8 +54,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         (SELECT a.title FROM session_annotations a WHERE a.session_id = s.id) AS title,
         COALESCE((SELECT a.starred FROM session_annotations a WHERE a.session_id = s.id), 0) AS starred,
         EXISTS (SELECT 1 FROM session_annotations a WHERE a.session_id = s.id AND a.archived_at IS NOT NULL) AS archived,
-        (SELECT substr(rtrim(CASE WHEN instr(a.note, char(10)) > 0 THEN substr(a.note, 1, instr(a.note, char(10)) - 1) ELSE a.note END, char(13)), 1, 120)
-         FROM session_annotations a WHERE a.session_id = s.id) AS note_preview
+        (SELECT substr(rtrim(CASE WHEN instr(n.note, char(10)) > 0 THEN substr(n.note, 1, instr(n.note, char(10)) - 1) ELSE n.note END, char(13)), 1, 120)
+         FROM (SELECT ltrim(a.note, char(10, 13, 32, 9)) AS note FROM session_annotations a WHERE a.session_id = s.id) n) AS note_preview
         """;
 
     public long? SchemaVersion()
@@ -150,7 +150,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             parameters,
             ReadSessionRow);
         var page = rows.Take(limit).ToArray();
-        return new Page<SessionSummary>(WithRunning(connection, page), rows.Count > limit ? page[^1].Id : null);
+        return new Page<SessionSummary>(WithRunning(connection, page),
+            query.Starred is not null && rows.Count > limit ? page[^1].Id : null);
     }
 
     public SessionDetail? Session(long id)

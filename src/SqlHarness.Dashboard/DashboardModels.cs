@@ -5,8 +5,9 @@ namespace SqlHarness.Dashboard;
 public sealed record Page<T>(IReadOnlyList<T> Items, long? NextCursor);
 
 /// <summary>
-/// Session list filter. With <c>Starred</c> set the list is ordered by id and the id cursor is exact; unfiltered, starred
-/// sessions sort first so the id cursor is not exact across the star boundary and only the first page is reliable.
+/// Session list filter. With <c>Starred</c> set the list is ordered by id and pages by an exact id cursor; unfiltered, starred
+/// sessions sort first, the id cursor would not be exact across the star boundary, so only the first page is returned
+/// (<c>NextCursor</c> is null).
 /// <c>Archived</c> null lists archived and active sessions together.
 /// </summary>
 public sealed record SessionQuery(

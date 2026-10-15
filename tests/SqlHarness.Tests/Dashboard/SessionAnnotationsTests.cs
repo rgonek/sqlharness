@@ -88,6 +88,7 @@ public sealed class SessionAnnotationsTests
     [InlineData("""{"starred":"yes"}""")]
     [InlineData("""{"title":42}""")]
     [InlineData("""{"title":"a\nb"}""")]
+    [InlineData("""{"title":"\ud800"}""")]
     [InlineData("""[]""")]
     [InlineData("""not json""")]
     public async Task Invalid_bodies_are_rejected_without_writing(string body)
@@ -122,7 +123,37 @@ public sealed class SessionAnnotationsTests
         await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
         var (_, client) = dashboard;
 
-        Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(Patch(999, """{"starred":true}"""))).StatusCode);
+        var response = await client.SendAsync(Patch(999, """{"starred":true}"""));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("The session no longer exists.", (await response.Content.ReadFromJsonAsync<Dictionary<string, string>>())!["error"]);
+    }
+
+    [Fact]
+    public async Task A_locked_journal_is_503_busy_without_writing()
+    {
+        using var home = new TempHome();
+        var id = SeedSession(home);
+        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
+        var (_, client) = dashboard;
+        HttpResponseMessage response;
+        using (var holder = new SqliteConnection($"Data Source={home.DatabasePath};Pooling=False"))
+        {
+            holder.Open();
+            using var begin = holder.CreateCommand();
+            begin.CommandText = "BEGIN IMMEDIATE;";
+            begin.ExecuteNonQuery();
+
+            response = await client.SendAsync(Patch(id, """{"starred":true}"""));
+
+            using var rollback = holder.CreateCommand();
+            rollback.CommandText = "ROLLBACK;";
+            rollback.ExecuteNonQuery();
+        }
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal("The journal is busy; try again.", (await response.Content.ReadFromJsonAsync<Dictionary<string, string>>())!["error"]);
+        Assert.Empty(Annotations(home));
     }
 
     [Fact]
