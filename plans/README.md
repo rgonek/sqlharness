@@ -18,6 +18,7 @@ Przeczytaj wybrany plan i jego spec przed wykonaniem. Wpis w kolejce nie jest zg
 | [072](072-mutation-risk-tiers.md) | Core risk tiers (`read-only`/`session`/`dml`/`schema`/`privilege`/`opaque`) via `SqlUsage.Mutation` in both engines; `tier` in dry runs; behaviour of existing commands unchanged | — | TODO |
 | [073](073-mutation-approval-broker.md) | `mutation` command/tool (CLI+MCP), per-profile modes, dashboard broker executes with writer credential, toast approval, optional WebAuthn; removes `query --allow-mutation`; supersedes tray plan 08 | 072 DONE; next free journal version | TODO |
 | [074](074-session-search-case-folding.md) | Session search ignores letter case beyond ASCII (Polish and other letters; accents must match) via a folding SQLite function | 069 DONE | TODO |
+| [076](076-partial-matrix-journal-runs.md) | A partial matrix `compare` journals the completed cells' benchmark metrics (runs carried on the failure exception and partial outcomes) | — | TODO |
 
 Przed rozpoczęciem 071 potwierdź u operatora CodeMirror 6. 071 wymaga zakończonego 062, a 070 także 069 (oba DONE). Koordynuj prace zmieniające wspólne kontrakty MCP, journal i dashboard według wybranego planu.
 
