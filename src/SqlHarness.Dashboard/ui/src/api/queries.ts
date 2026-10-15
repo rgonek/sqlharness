@@ -219,6 +219,11 @@ export function useClearTranscripts() {
       void client.invalidateQueries({ queryKey: ["session"] })
       void client.invalidateQueries({ queryKey: ["operations"] })
       void client.invalidateQueries({ queryKey: ["operation"] })
+      // These long-lived live queries merge fetched rows into their cache. Reset the cached rows
+      // first so equal timestamps cannot retain transcript-derived fields after a clear.
+      void client.resetQueries({ queryKey: queryKeys.liveOperations })
+      void client.resetQueries({ queryKey: queryKeys.liveRunning })
+      void client.resetQueries({ queryKey: queryKeys.liveSessions })
     },
   })
 }

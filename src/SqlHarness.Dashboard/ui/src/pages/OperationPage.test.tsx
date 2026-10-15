@@ -1,7 +1,7 @@
 import { screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
-import { operation, operationDetail, session, variant } from "@/test/fixtures"
+import { agentCall, operation, operationDetail, session, variant } from "@/test/fixtures"
 import { renderApp, stubFetch } from "@/test/render"
 
 test("compare operation returns to its session with the originating subject and scope", async () => {
@@ -142,8 +142,7 @@ test("compare-matrix summary shows the matrix parameter and equivalent cells", a
 test("agent call card shows the client-supplied labels and is absent without them", async () => {
   stubFetch({
     "/api/operations/10": operationDetail({
-      agent: { callId: "exec-1", model: "gpt-6-sol", reasoningEffort: "low", sessionId: "s", turnId: "turn-1", turnTrigger: "exec", threadSource: "user",
-        transcriptModel: null, transcriptReasoningEffort: null, conversationTitle: null },
+      agent: agentCall({ callId: "exec-1", model: "gpt-6-sol", reasoningEffort: "low", sessionId: "s", turnId: "turn-1", turnTrigger: "exec", threadSource: "user" }),
     }),
   })
   renderApp("/operations/10")
@@ -157,8 +156,7 @@ test("agent call card shows the client-supplied labels and is absent without the
 
 test("shows transcript model and effort when the call has no client labels", async () => {
   stubFetch({ "/api/operations/10": operationDetail({
-    agent: { callId: null, model: null, reasoningEffort: null, sessionId: null, turnId: null, turnTrigger: null, threadSource: null,
-      transcriptModel: "claude-opus-5-5", transcriptReasoningEffort: "high", conversationTitle: "Optimize orders" },
+    agent: agentCall({ transcriptModel: "claude-opus-5-5", transcriptReasoningEffort: "high", conversationTitle: "Optimize orders" }),
   }) })
   renderApp("/operations/10")
   expect(await screen.findByText("claude-opus-5-5")).toBeInTheDocument()
