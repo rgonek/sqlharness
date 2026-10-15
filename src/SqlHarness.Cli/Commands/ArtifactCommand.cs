@@ -82,11 +82,12 @@ public sealed class ArtifactCommand(ISqlHarnessModule module, OutputContext outp
         }
 
         var options = new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars);
-        if (mode == OutputMode.Agent
-            && (options.MaximumBytes is < 4096 or > 1048576 || options.MaximumCellCharacters is < 0 or > AgentOutputLimits.MaximumCellCharacters))
+        if (mode == OutputMode.Agent && options.MaximumBytes is < 4096 or > 1048576)
         {
             return Invalid($"Agent output limits must be --max-output-bytes 4096..1048576 and --max-cell-chars 0..{AgentOutputLimits.MaximumCellCharacters}.");
         }
+        if (mode == OutputMode.Agent && options.MaximumCellCharacters is < 0 or > AgentOutputLimits.MaximumCellCharacters)
+            return Invalid($"Cell limit must be 0..{AgentOutputLimits.MaximumCellCharacters} characters.");
 
         if (string.IsNullOrWhiteSpace(settings.Id) || string.IsNullOrWhiteSpace(settings.Section))
             return Invalid("artifact requires an artifact id and --section summary|metrics|operators|statements|matrix-cells|plan.");

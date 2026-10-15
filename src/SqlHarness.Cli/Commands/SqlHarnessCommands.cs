@@ -165,9 +165,15 @@ public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, Out
     protected async Task<int> Dispatch(SqlHarnessOperation operation, OutputMode mode, CancellationToken ct, AgentOutputOptions? agentOptions = null)
     {
         agentOptions ??= output.AgentOptions;
-        if (mode == OutputMode.Agent && (agentOptions.MaximumBytes is < 4096 or > 1048576 || agentOptions.MaximumCellCharacters is < 0 or > AgentOutputLimits.MaximumCellCharacters))
+        if (mode == OutputMode.Agent && agentOptions.MaximumBytes is < 4096 or > 1048576)
         {
             renderer.RenderError(SqlHarnessExitCode.Safety, $"Agent output limits must be --max-output-bytes 4096..1048576 and --max-cell-chars 0..{AgentOutputLimits.MaximumCellCharacters}.", mode, output.Command, output.Capture, agentOptions: agentOptions);
+            output.Capture.Flush();
+            return (int)SqlHarnessExitCode.Safety;
+        }
+        if (mode == OutputMode.Agent && agentOptions.MaximumCellCharacters is < 0 or > AgentOutputLimits.MaximumCellCharacters)
+        {
+            renderer.RenderError(SqlHarnessExitCode.Safety, $"Cell limit must be 0..{AgentOutputLimits.MaximumCellCharacters} characters.", mode, output.Command, output.Capture, agentOptions: agentOptions);
             output.Capture.Flush();
             return (int)SqlHarnessExitCode.Safety;
         }
