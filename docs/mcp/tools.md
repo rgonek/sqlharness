@@ -9,6 +9,7 @@ Descriptions are engine-scoped at startup. A fixed-scope process renders its res
 Tool and argument descriptions expose setup/session rules, mutually exclusive parameter-set inputs
 and saved-plan selection at the call site. Use capabilities for runtime configuration, and the result's
 status, omissions, continuation and evidence gaps to judge whether the returned evidence is complete.
+The seven projected tools accept `maxCellChars` (0..4096, default 2048), matching CLI agent output's `--max-cell-chars` option.
 
 | Tool | Behavior |
 |---|---|

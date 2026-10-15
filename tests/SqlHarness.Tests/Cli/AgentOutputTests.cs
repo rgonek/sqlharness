@@ -47,6 +47,25 @@ public sealed class AgentOutputTests
     }
 
     [Fact]
+    public void Default_agent_cell_limit_is_2048()
+    {
+        Assert.Equal(2048, new AgentOutputOptions().MaximumCellCharacters);
+        Assert.Equal(AgentOutputLimits.DefaultCellCharacters, new AgentOutputOptions().MaximumCellCharacters);
+    }
+
+    [Fact]
+    public void Query_cell_of_1500_characters_is_not_clipped_by_default()
+    {
+        var report = QueryShapeFixtures.Report(QueryShapeFixtures.Set(1, 1, width: 1500));
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "query",
+            new OutputCaptureWriter(output), new AgentOutputOptions());
+
+        Assert.DoesNotContain("clippedCells", output.ToString());
+    }
+
+    [Fact]
     public async Task Agent_success_uses_a_versioned_single_document_envelope()
     {
         var output = new StringWriter();
@@ -78,6 +97,35 @@ public sealed class AgentOutputTests
         Assert.Equal("safety_rejected", json.RootElement.GetProperty("error").GetProperty("code").GetString());
         Assert.DoesNotContain("secret-value", output.ToString(), StringComparison.Ordinal);
         Assert.Single(output.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    [Theory]
+    [InlineData("query", "-1")]
+    [InlineData("query", "4097")]
+    [InlineData("plan", "-1")]
+    [InlineData("plan", "4097")]
+    [InlineData("artifact", "-1")]
+    [InlineData("artifact", "4097")]
+    public async Task Invalid_cli_cell_limit_uses_the_mcp_diagnostic(string command, string cellLimit)
+    {
+        var output = new StringWriter();
+        var module = new FakeModule(new SqlHarnessOutcome(SqlHarnessExitCode.Success, null, null));
+        string[] args = command switch
+        {
+            "query" => ["query", "dev", "--file", SqlFile, "--output", "agent", "--max-cell-chars", cellLimit],
+            "plan" => ["plan", Path.Combine(AppContext.BaseDirectory, "Fixtures", "distiller-sample.sqlplan"),
+                "--output", "agent", "--max-cell-chars", cellLimit],
+            "artifact" => ["artifact", "sample", "--section", "summary", "--output", "agent",
+                "--max-cell-chars", cellLimit],
+            _ => throw new ArgumentOutOfRangeException(nameof(command), command, "Unknown CLI command."),
+        };
+
+        var exit = await SqlHarnessCli.Create(module, output).RunAsync(args);
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+        using var envelope = JsonDocument.Parse(output.ToString());
+        Assert.Equal("Cell limit must be 0..4096 characters.",
+            envelope.RootElement.GetProperty("error").GetProperty("message").GetString());
     }
 
     [Fact]

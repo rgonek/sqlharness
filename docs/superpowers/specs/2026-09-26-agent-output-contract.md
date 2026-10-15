@@ -14,11 +14,7 @@ The envelope fields are `schemaVersion` (currently `2`), lowercase `command`, `s
 
 ## Budgets and projection
 
-The complete text block is budgeted by its UTF-8 byte count, including JSON escaping and the final newline. MCP calls and CLI `--output agent` default to 65536 bytes. MCP's process ceiling is set with `--max-result-bytes` (default 262144; range 4096..1048576); a call may raise or lower its budget up to that ceiling. The CLI `--max-output-bytes` accepts 4096..1048576. MCP's tools/list catalog has a separate 32768-byte budget. Cell clipping defaults to 512 characters; CLI `--max-cell-chars` accepts 0..4096.
-
-> **Accepted follow-up, 2026-10-14 (operator):** [plan 067](../../../plans/067-cell-limit-parity-and-default.md)
-> raises the default to 2048 on both surfaces and adds MCP `maxCellChars` 0..4096 (raise or lower per call),
-> for CLI/MCP parity. Accepted planning only, not implemented; the sentence above describes current behavior.
+The complete text block is budgeted by its UTF-8 byte count, including JSON escaping and the final newline. MCP calls and CLI `--output agent` default to 65536 bytes. MCP's process ceiling is set with `--max-result-bytes` (default 262144; range 4096..1048576); a call may raise or lower its budget up to that ceiling. The CLI `--max-output-bytes` accepts 4096..1048576. MCP's tools/list catalog has a separate 32768-byte budget. Cell clipping defaults to 2048 characters on both MCP and CLI `--output agent`; each projected MCP tool accepts `maxCellChars` from 0..4096, matching CLI `--max-cell-chars`. A truncated result reports the applied value as `truncation.maxCellChars`.
 
 Every report tries detail limits in this order: `unbounded, 128, 64, 32, 16, 8, 4, 2, 1, 0`. If a report is reduced, `truncation` reports the selected `detailLimit`, `omittedItems`, and applied `maxCellChars`. JSON is not cut mid-document; if the minimum envelope does not fit, the result is `output_budget_too_small`.
 

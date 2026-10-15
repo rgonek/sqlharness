@@ -82,14 +82,16 @@ public sealed class McpToolHandlers(
         int maxRows = 50,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
         [Description("Offline validation only; no execution or writes.")]
         bool dryRun = false,
         CancellationToken ct = default) =>
-        RunDbAsync("sqlharness_query", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
+        RunDbAsync("sqlharness_query", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
+            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"]);
             return await module.ExecuteAsync(
                 await McpOperationMapper.MapQueryAsync(scope, sql, file, parameters, timeout, maxRows, token, dryRun),
                 token);
@@ -114,14 +116,16 @@ public sealed class McpToolHandlers(
         int? timeout = null,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
         [Description("Offline validation only; no execution or writes.")]
         bool dryRun = false,
         CancellationToken ct = default) =>
-        RunDbAsync("sqlharness_measure", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
+        RunDbAsync("sqlharness_measure", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["query", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
+            ThrowIfUnknown(ctx, ["query", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"]);
             return await module.ExecuteAsync(
                 await McpOperationMapper.MapMeasureAsync(scope, query, setup, parameters, parameterSetFiles, repeat, timeout, token, dryRun, parameterSets, matrix),
                 token);
@@ -157,14 +161,16 @@ public sealed class McpToolHandlers(
         bool compareNullability = false,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
         [Description("Offline validation only; no execution or writes.")]
         bool dryRun = false,
         CancellationToken ct = default) =>
-        RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
+        RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["baseline", "candidate", "subject", "scope", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "compareResults", "compareNullability", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
+            ThrowIfUnknown(ctx, ["baseline", "candidate", "subject", "scope", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "compareResults", "compareNullability", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"]);
             return await module.ExecuteAsync(
                 await McpOperationMapper.MapCompareAsync(this.scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun, parameterSets, parameterSetFiles, subject, scope, _compareConfig),
                 token);
@@ -184,12 +190,14 @@ public sealed class McpToolHandlers(
         string[]? parameterSetFiles = null,
         bool compareNullability = false,
         int? maxResultBytes = null,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
         int? maxOperationSeconds = null,
         bool dryRun = false,
         CancellationToken ct = default) =>
-        RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
+        RunDbAsync("sqlharness_compare", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "compareResults", "compareNullability", "maxResultBytes", "maxOperationSeconds", "dryRun"]);
+            ThrowIfUnknown(ctx, ["baseline", "candidate", "setup", "parameters", "parameterSets", "parameterSetFiles", "matrix", "repeat", "timeout", "compareResults", "compareNullability", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"]);
             return await module.ExecuteAsync(
                 await McpOperationMapper.MapCompareAsync(this.scope, baseline, candidate, setup, parameters, repeat, timeout, compareResults, matrix, token, compareNullability, dryRun, parameterSets, parameterSetFiles, compareConfig: new CompareConfig { RequireContext = false }),
                 token);
@@ -217,12 +225,14 @@ public sealed class McpToolHandlers(
         string? maxDuration = null,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
-        RunDbAsync("sqlharness_watch", ctx, maxResultBytes, maxOperationSeconds, async (token, remaining) =>
+        RunDbAsync("sqlharness_watch", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, remaining) =>
         {
-            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "until", "untilUnchanged", "interval", "maxDuration", "maxResultBytes", "maxOperationSeconds"]);
+            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "until", "untilUnchanged", "interval", "maxDuration", "maxResultBytes", "maxCellChars", "maxOperationSeconds"]);
             var operation = await McpOperationMapper.MapWatchAsync(scope, sql, file, parameters, timeout, maxRows, until, untilUnchanged, interval, maxDuration, token);
             // The watch deadline is bounded by the remaining request budget, so
             // a natural max-duration stop stays a controlled exit 7 inside it.
@@ -250,12 +260,14 @@ public sealed class McpToolHandlers(
         int maxRows = 50,
         [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
         int? maxResultBytes = null,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
         [Description("Seconds 1..86400; may only lower the process limit.")]
         int? maxOperationSeconds = null,
         CancellationToken ct = default) =>
-        RunDbAsync("sqlharness_snapshot", ctx, maxResultBytes, maxOperationSeconds, async (token, _) =>
+        RunDbAsync("sqlharness_snapshot", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
         {
-            ThrowIfUnknown(ctx, ["action", "name", "sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxOperationSeconds"]);
+            ThrowIfUnknown(ctx, ["action", "name", "sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds"]);
             return await module.ExecuteAsync(
                 await McpOperationMapper.MapSnapshotAsync(scope, action, name, sql, file, parameters, timeout, maxRows, token),
                 token);
@@ -269,15 +281,17 @@ public sealed class McpToolHandlers(
         string? file = null,
         [Description("includeText (default true) returns bounded statement text and predicates; false returns metadata only.")]
         bool includeText = true,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
         CancellationToken ct = default) =>
         RunAsync("sqlharness_plan", ctx, async token =>
         {
-            ThrowIfUnknown(ctx, ["content", "file", "includeText"]);
+            ThrowIfUnknown(ctx, ["content", "file", "includeText", "maxCellChars"]);
             var outcome = await module.ExecuteAsync(await McpOperationMapper.MapPlanAsync(scope, content, file, token), token);
             return outcome.ExitCode == SqlHarnessExitCode.Success
                 ? outcome with { Report = McpPlanTextPolicy.Apply(outcome.Report, includeText) }
                 : outcome;
-        }, ct);
+        }, ct, maxCellChars);
 
     public Task<CallToolResult> ArtifactAsync(
         RequestContext<CallToolRequestParams> ctx,
@@ -298,13 +312,15 @@ public sealed class McpToolHandlers(
         int? repetition = null,
         [Description("Return bounded statement text and predicates in section=plan.")]
         bool includeText = false,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
         CancellationToken ct = default) =>
         RunAsync("sqlharness_artifact", ctx, async token =>
         {
-            ThrowIfUnknown(ctx, ["id", "section", "cursor", "variant", "statement", "parameterSet", "repetition", "includeText"]);
+            ThrowIfUnknown(ctx, ["id", "section", "cursor", "variant", "statement", "parameterSet", "repetition", "includeText", "maxCellChars"]);
             var operation = McpOperationMapper.MapArtifactRead(scope, id, section, cursor, variant, statement, parameterSet, repetition, includeText);
             return await module.ExecuteAsync(operation, token);
-        }, ct);
+        }, ct, maxCellChars);
 
     /// <summary>
     /// Rejects unknown argument keys before any mapping or execution. Keys
@@ -336,9 +352,20 @@ public sealed class McpToolHandlers(
         }
     }
 
-    private async Task<CallToolResult> RunAsync(string command, RequestContext<CallToolRequestParams>? context, Func<CancellationToken, Task<SqlHarnessOutcome>> run, CancellationToken ct)
+    private async Task<CallToolResult> RunAsync(string command, RequestContext<CallToolRequestParams>? context, Func<CancellationToken, Task<SqlHarnessOutcome>> run, CancellationToken ct, int? maxCellChars = null)
     {
-        var budget = new McpResultBudget(scope.MaxResultBytes);
+        McpResultBudget budget;
+        try
+        {
+            budget = McpResultBudget.Resolve(scope.MaxResultBytes, null, maxCellChars, McpLimits.MaxCellCharactersLimit);
+        }
+        catch (ArgumentOutOfRangeException exception)
+        {
+            var message = exception.ParamName == "callMaximumCellCharacters"
+                ? exception.Message
+                : "The requested budget is invalid.";
+            return Fail(SqlHarnessExitCode.Safety, message, command);
+        }
         try
         {
             // Discovery and local tools are bounded by the process time
@@ -381,6 +408,7 @@ public sealed class McpToolHandlers(
         string command,
         RequestContext<CallToolRequestParams>? context,
         int? maxResultBytes,
+        int? maxCellChars,
         int? maxOperationSeconds,
         Func<CancellationToken, TimeSpan, Task<SqlHarnessOutcome>> run,
         CancellationToken ct)
@@ -389,13 +417,16 @@ public sealed class McpToolHandlers(
         TimeSpan callBudget;
         try
         {
-            budget = McpResultBudget.Resolve(scope.MaxResultBytes, maxResultBytes);
+            budget = McpResultBudget.Resolve(scope.MaxResultBytes, maxResultBytes, maxCellChars, McpLimits.MaxCellCharactersLimit);
             callBudget = TimeSpan.FromSeconds(
                 McpLimits.ResolveOperationSeconds(scope.MaxOperationSeconds, maxOperationSeconds));
         }
-        catch (ArgumentOutOfRangeException)
+        catch (ArgumentOutOfRangeException exception)
         {
-            return Fail(SqlHarnessExitCode.Safety, "The requested budget is invalid.", command);
+            var message = exception.ParamName == "callMaximumCellCharacters"
+                ? exception.Message
+                : "The requested budget is invalid.";
+            return Fail(SqlHarnessExitCode.Safety, message, command);
         }
 
         try

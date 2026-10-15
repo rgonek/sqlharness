@@ -20,7 +20,7 @@ namespace SqlHarness.Mcp.Tests;
 /// <summary>
 /// T4 token budgets, measured on the result text read by the model:
 /// 64 KiB (65536 B) by default, accepted range 4096..1048576, cell limit
-/// 512/4096, and a 32 KiB (32768 B) tools/list catalog. Budgets are met by
+/// 2048/4096, and a 32 KiB (32768 B) tools/list catalog. Budgets are met by
 /// bounding content, never by cutting runtime validation or truncating JSON.
 /// All data is synthetic; no database is opened.
 /// </summary>
@@ -246,7 +246,7 @@ public sealed class McpTokenBudgetTests
             new PlanNode("Scan", null, null, null, 1, 1, 1, 0.1, null, [], []))).ToArray();
         var section = new ArtifactPlanSection("artifact", "baseline", null, 0, 1, 1,
             "last-measured", [1], null, nodes.Length, nodes, null)
-        { StatementText = new string('s', 600) };
+        { StatementText = new string('s', 3000) };
 
         var result = McpResultAdapter.Adapt(
             new SqlHarnessOutcome(SqlHarnessExitCode.Success, section, null), "sqlharness_artifact");
@@ -254,7 +254,8 @@ public sealed class McpTokenBudgetTests
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
 
         Assert.Equal(1, document.RootElement.GetProperty("truncation").GetProperty("omittedItems").GetInt32());
-        Assert.Equal(512, document.RootElement.GetProperty("result").GetProperty("statementText").GetString()!.Length);
+        Assert.Equal(McpLimits.DefaultMaximumCellCharacters,
+            document.RootElement.GetProperty("result").GetProperty("statementText").GetString()!.Length);
     }
 
     [Fact]
@@ -653,7 +654,9 @@ public sealed class McpTokenBudgetTests
         Assert.Throws<ArgumentOutOfRangeException>(
             () => McpResultAdapter.Adapt(outcome, "sqlharness_query", new McpResultBudget(16384, 4097)));
 
-        var wide = McpResultBudget.Resolve(16384, null, null, 4096);
+        var defaultBudget = McpResultBudget.Resolve(16384, null, null, 4096);
+        Assert.Equal(McpLimits.DefaultMaximumCellCharacters, defaultBudget.MaximumCellCharacters);
+        var wide = McpResultBudget.Resolve(16384, null, 4096, 4096);
         Assert.Equal(4096, wide.MaximumCellCharacters);
         var narrowed = McpResultBudget.Resolve(16384, null, 100, 4096);
         Assert.Equal(100, narrowed.MaximumCellCharacters);
