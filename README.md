@@ -468,7 +468,7 @@ For successful `measure` and `compare` runs the journal also stores per-variant 
 
 Metrics a run marks unavailable are stored as null, and `STATISTICS IO` lines without logical reads (localized output, columnstore segment lines) are not recorded. Per-statement rows contain hashes and plan details without SQL text; CPU and elapsed values come from SQL Server `QueryTimeStats`. A stored plan is the first actual plan observed for its shape (`PlanIdentity`); per-run metrics are kept separately, so later runs with the same shape do not store another copy.
 
-Schema v9 adds operator annotations of sessions (title, note, star, archive). Only the dashboard writes them; retention deletes them with their session, and a star does not protect a session from retention.
+Schema v9 adds operator annotations of sessions (title, note, star, archive). Only the dashboard writes them; titles and notes are stored as plain text regardless of `journal.storeSensitive`; retention deletes them with their session, and a star does not protect a session from retention.
 
 `sqlharness doctor --json` reports whether the config file is present and valid, the effective journal settings, and whether the journal file exists.
 
