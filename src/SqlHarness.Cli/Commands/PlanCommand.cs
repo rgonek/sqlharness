@@ -21,7 +21,7 @@ public sealed class PlanCommand(ISqlHarnessModule module, OutputContext output, 
         [CommandOption("--output <MODE>")]
         public string? Output { get; set; }
         [CommandOption("--max-output-bytes <BYTES>")][DefaultValue(65536)] public int MaxOutputBytes { get; set; } = 65536;
-        [CommandOption("--max-cell-chars <CHARS>")][DefaultValue(512)] public int MaxCellChars { get; set; } = 512;
+        [CommandOption("--max-cell-chars <CHARS>")][DefaultValue(AgentOutputLimits.DefaultCellCharacters)] public int MaxCellChars { get; set; } = AgentOutputLimits.DefaultCellCharacters;
     }
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken ct)

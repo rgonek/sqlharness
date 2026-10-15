@@ -104,7 +104,7 @@ public sealed class Renderer
     private static void WriteAgent(SqlHarnessOutcome outcome, string command, TextWriter output, AgentOutputOptions options)
     {
         var requestedBytes = options.MaximumBytes is >= 4096 and <= 1048576 ? options.MaximumBytes : 16 * 1024;
-        var requestedCellChars = options.MaximumCellCharacters is >= 0 and <= 4096 ? options.MaximumCellCharacters : 512;
+        var requestedCellChars = options.MaximumCellCharacters is >= 0 and <= AgentOutputLimits.MaximumCellCharacters ? options.MaximumCellCharacters : AgentOutputLimits.DefaultCellCharacters;
         var error = outcome.MachineError;
         var errorOmitted = 0;
         string Clip(string value)

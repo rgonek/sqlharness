@@ -36,7 +36,7 @@ public abstract class TargetSettings : CommandSettings
     [CommandOption("--json")] public bool Json { get; set; }
     [CommandOption("--output <MODE>")] public string? Output { get; set; }
     [CommandOption("--max-output-bytes <BYTES>")][DefaultValue(65536)] public int MaxOutputBytes { get; set; } = 65536;
-    [CommandOption("--max-cell-chars <CHARS>")][DefaultValue(512)] public int MaxCellChars { get; set; } = 512;
+    [CommandOption("--max-cell-chars <CHARS>")][DefaultValue(AgentOutputLimits.DefaultCellCharacters)] public int MaxCellChars { get; set; } = AgentOutputLimits.DefaultCellCharacters;
 
     public bool TryTarget(out SqlTargetRequest target, out string error)
     {
@@ -165,9 +165,9 @@ public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, Out
     protected async Task<int> Dispatch(SqlHarnessOperation operation, OutputMode mode, CancellationToken ct, AgentOutputOptions? agentOptions = null)
     {
         agentOptions ??= output.AgentOptions;
-        if (mode == OutputMode.Agent && (agentOptions.MaximumBytes is < 4096 or > 1048576 || agentOptions.MaximumCellCharacters is < 0 or > 4096))
+        if (mode == OutputMode.Agent && (agentOptions.MaximumBytes is < 4096 or > 1048576 || agentOptions.MaximumCellCharacters is < 0 or > AgentOutputLimits.MaximumCellCharacters))
         {
-            renderer.RenderError(SqlHarnessExitCode.Safety, "Agent output limits must be --max-output-bytes 4096..1048576 and --max-cell-chars 0..4096.", mode, output.Command, output.Capture, agentOptions: agentOptions);
+            renderer.RenderError(SqlHarnessExitCode.Safety, $"Agent output limits must be --max-output-bytes 4096..1048576 and --max-cell-chars 0..{AgentOutputLimits.MaximumCellCharacters}.", mode, output.Command, output.Capture, agentOptions: agentOptions);
             output.Capture.Flush();
             return (int)SqlHarnessExitCode.Safety;
         }

@@ -47,6 +47,25 @@ public sealed class AgentOutputTests
     }
 
     [Fact]
+    public void Default_agent_cell_limit_is_2048()
+    {
+        Assert.Equal(2048, new AgentOutputOptions().MaximumCellCharacters);
+        Assert.Equal(AgentOutputLimits.DefaultCellCharacters, new AgentOutputOptions().MaximumCellCharacters);
+    }
+
+    [Fact]
+    public void Query_cell_of_1500_characters_is_not_clipped_by_default()
+    {
+        var report = QueryShapeFixtures.Report(QueryShapeFixtures.Set(1, 1, width: 1500));
+        var output = new StringWriter();
+
+        new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "query",
+            new OutputCaptureWriter(output), new AgentOutputOptions());
+
+        Assert.DoesNotContain("clippedCells", output.ToString());
+    }
+
+    [Fact]
     public async Task Agent_success_uses_a_versioned_single_document_envelope()
     {
         var output = new StringWriter();
