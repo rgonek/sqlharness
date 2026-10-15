@@ -3,6 +3,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
+using SqlHarness.Core.Journal;
+using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
+
 namespace SqlHarness.Core;
 
 public sealed record SqlHarnessTargetIdentityReport(
@@ -374,6 +377,7 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
 
     public void WriteMatrixIndex(IReadOnlyList<CompareMatrixCellReport> cells)
     {
+        using var phaseScope = OperationPhaseRecorder.Current?.Start(JournalOperationPhase.Artifact);
         ArgumentNullException.ThrowIfNull(cells);
         var orderedCells = cells.OrderBy(cell => cell.Index).ToArray();
         if (orderedCells.Length == 0 || orderedCells.Any(cell => string.IsNullOrWhiteSpace(cell.Compare.ArtifactDirectory)))
@@ -432,6 +436,7 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
         // Rejects unsupported report types before any directory is reserved.
         var persistedReport = WithArtifactDirectory(report, null);
 
+        using var phaseScope = OperationPhaseRecorder.Current?.Start(JournalOperationPhase.Artifact);
         return _publisher.Publish(target, (staging, directory) =>
         {
             persistedReport = WithArtifactDirectory(persistedReport, directory);

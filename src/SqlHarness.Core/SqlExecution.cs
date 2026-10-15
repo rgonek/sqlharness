@@ -49,6 +49,7 @@ internal interface ISqlSession : IAsyncDisposable
 {
     IReadOnlyList<string> Messages { get; }
     SqlHarnessTargetIdentityReport Identity { get; set; }
+    string? ClientConnectionId => null;
     Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct);
 
     /// <summary>
@@ -294,6 +295,7 @@ internal sealed class SqlClientSession(
 {
     public IReadOnlyList<string> Messages => messages.Snapshot();
     public SqlHarnessTargetIdentityReport Identity { get; set; } = null!;
+    public string? ClientConnectionId => connection.ClientConnectionId.ToString();
 
     public ConsumedSessionMessages ConsumeMessages(int startIndex) => messages.Consume(startIndex);
 

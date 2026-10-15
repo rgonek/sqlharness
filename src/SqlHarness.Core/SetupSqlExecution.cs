@@ -3,6 +3,8 @@ using System.Text;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 using SqlHarness.Core.Dialect;
+using SqlHarness.Core.Journal;
+using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Core;
 
@@ -122,7 +124,8 @@ internal static class SetupSqlExecution
             var execution = engine == SqlEngine.Postgres
                 ? command with { PostgresMode = PostgresExecutionMode.SessionSetup }
                 : command;
-            await BenchmarkRunner.ExecuteRawAsync(session, execution, raw, ct);
+            using (OperationPhaseRecorder.Current?.Start(JournalOperationPhase.Setup))
+                await BenchmarkRunner.ExecuteRawAsync(session, execution, raw, ct);
         }
     }
 
