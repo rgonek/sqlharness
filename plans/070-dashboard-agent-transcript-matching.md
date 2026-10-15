@@ -16,7 +16,7 @@
 
 ## Status
 
-- TODO; planned 2026-10-14 at `54dc621`; spec accepted by the operator 2026-10-14. Executes after 062 and 069.
+- DONE on branch `feat/plan-070-agent-transcripts`; implementation and corrected Windows verification range `54dc621..64bbec5`. `just verify` passed at `64bbec5`; the operator explicitly waived Linux verification on 2026-10-15. Sol's final low-effort whole-branch review passed spec compliance and code quality with no critical or important findings; it recorded two minor test coverage gaps. Evidence: [Plan 070 verification](070-verification-evidence.md).
 - Priority P2. Effort L. Risk MEDIUM (reads foreign, unversioned files; second dashboard writer into the journal; idle-shutdown accounting).
 
 ## Evidence (2026-10-14, keys/types only)
@@ -39,7 +39,7 @@
 - Retention deletes links with operations and conversations nobody references. **Clear matched data** empties all four new tables.
 - The matcher's journal commits are not activity for idle shutdown.
 - No auto-formatting; touch only lines the change needs.
-- Done = `pwsh ./scripts/verify.ps1`, then `pwsh ./scripts/verify-linux.ps1`, one at a time, both green.
+- Verification decision (2026-10-15): Windows `just verify` passed at `64bbec5`; the operator explicitly waived `just verify-linux`, which was not run and remains unverified. The branch-scoped formatter check passed for all 25 changed C# files.
 
 ## Review Focus
 
@@ -119,7 +119,7 @@ Add `public AgentTranscriptsConfig AgentTranscripts { get; init; } = new();` to 
 
 ---
 
-### Task 2: Journal schema v10 and retention
+### Task 2: Journal schema v11 and retention
 
 **Files:**
 - Modify: `src/SqlHarness.Core/Journal/JournalSchema.cs`, `ActivityJournal.cs` (`Migrate`), `JournalRetention.cs` (`DeleteOrphans`)
@@ -211,7 +211,7 @@ public void Retention_removes_links_with_operations_and_unreferenced_conversatio
 
 - [ ] **Step 4: GREEN** — `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~Journal|FullyQualifiedName~Dashboard"`.
 
-- [ ] **Step 5: Commit** — `git commit -m "feat(journal): agent transcript tables (schema v10)"`.
+- [ ] **Step 5: Commit** — `git commit -m "feat(journal): agent transcript tables (schema v11)"`.
 
 ---
 
@@ -1118,9 +1118,9 @@ Load the config once per pass and reuse it for the retention block (refactor the
 **Files:**
 - Modify: `README.md`, `plans/README.md`, `docs/superpowers/specs/2026-10-14-dashboard-agent-transcript-matching-design.md` (status line)
 
-- [ ] **Step 1: README.** Dashboard settings: `dashboard.agentTranscripts.enabled` (default off), what is read (`CLAUDE_CONFIG_DIR`/`~/.claude/projects/<cwd>/…jsonl` incl. subagents; `CODEX_HOME`/`~/.codex/session_index.jsonl`), what is stored (conversation id, title, tool-use id, model, effort), when (each housekeeping pass, ≤ 32 MiB per pass), exact-match rule, display-name order, Clear matched data, retention behaviour. Activity journal section: list the four derived tables as dashboard-written derived data. Not agent-facing: `Capabilities.cs` and `skills/sqlharness/SKILL.md` unchanged. Run `rg -n "three guarded writes|guarded writes" README.md src/SqlHarness.Dashboard` and update counts.
-- [ ] **Step 2: Gates** — `pwsh ./scripts/verify.ps1`, then `pwsh ./scripts/verify-linux.ps1`; record exit codes and pass lines; search logs case-sensitively for `FAILED`.
-- [ ] **Step 3: Plan row / spec status** — 070 DONE with commit range and gate results; spec `Status:` "implemented by Plan 070".
-- [ ] **Step 4: Commit** — `git commit -m "docs: agent transcript matching (plan 070)"`.
+- [x] **Step 1: README.** Documented the setting, source paths, allowlisted fields and limits, per-cycle budget, exact matching, display/model precedence, clear behavior, retention, and all four dashboard-written derived tables. `Capabilities.cs` and `skills/sqlharness/SKILL.md` remain unchanged. `rg -n "three guarded writes|guarded writes" README.md src/SqlHarness.Dashboard` found the accurate four-write count in README and server security comments.
+- [x] **Step 2: Gates** — Windows `just verify` passed at `64bbec5` (exit 0, `verify: OK`, stages=6). Linux verification was explicitly waived by the operator and was not run. The initial Windows gate at `5f25e19` exposed a nondeterministic exact-title assertion; the test was made scheduling-safe in `77348b4`, branch formatting was corrected in `64bbec5`, and the final gate passed. Final logs contain no case-sensitive `FAILED` match.
+- [x] **Step 3: Plan row / spec status** — 070 marked DONE with its commit range and Windows result; the spec status is "implemented by Plan 070". The Linux waiver and unverified state are recorded in the evidence.
+- [x] **Step 4: Commit** — README documentation: `5f25e19`; scheduling-safe regression assertion: `77348b4`; branch-scoped formatting corrections: `64bbec5`; plan/evidence status commit follows the verified implementation range.
 
 Integration into `main` and any push only on a separate operator instruction.

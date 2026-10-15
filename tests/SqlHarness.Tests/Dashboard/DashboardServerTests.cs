@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Text.Json;
 
+using SqlHarness.Core;
 using SqlHarness.Dashboard;
 
 namespace SqlHarness.Tests.Dashboard;
@@ -300,7 +301,7 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
-    public async Task Only_get_endpoints_and_the_four_guarded_writes_exist()
+    public async Task Only_get_endpoints_and_the_five_guarded_writes_exist()
     {
         using var home = new TempHome();
         await using var dashboard = await StartAuthenticated(home);
@@ -309,7 +310,7 @@ public sealed class DashboardServerTests
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PostAsync("/api/sessions", null)).StatusCode);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.DeleteAsync("/api/operations/1")).StatusCode);
         var writes = server.Endpoints.Where(endpoint => !endpoint.Methods.SequenceEqual(["GET", "HEAD"])).ToArray();
-        Assert.Equal(4, writes.Length);
+        Assert.Equal(5, writes.Length);
         var settingsPut = Assert.Single(writes, endpoint => endpoint.Route == "/api/settings");
         Assert.Equal(["PUT"], settingsPut.Methods);
         var pricesRefresh = Assert.Single(writes, endpoint => endpoint.Route == "/api/prices/refresh");
@@ -318,8 +319,40 @@ public sealed class DashboardServerTests
         Assert.Equal(["PATCH"], annotationPatch.Methods);
         var shutdown = Assert.Single(writes, endpoint => endpoint.Route == "/api/shutdown");
         Assert.Equal(["POST"], shutdown.Methods);
+        var transcriptsClear = Assert.Single(writes, endpoint => endpoint.Route == "/api/transcripts/clear");
+        Assert.Equal(["POST"], transcriptsClear.Methods);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PutAsync("/api/sessions", null)).StatusCode);
         Assert.Contains(server.Endpoints, endpoint => endpoint.Route == "/api/live");
+    }
+
+    [Fact]
+    public async Task Transcript_status_reports_the_setting_and_clear_requires_the_write_protections()
+    {
+        using var home = new TempHome();
+        var configPath = Path.Combine(home.Path, "config.json");
+        SqlHarnessConfigWriter.Write(configPath, SqlHarnessConfig.Default with
+        {
+            Dashboard = SqlHarnessConfig.Default.Dashboard with
+            {
+                AgentTranscripts = new AgentTranscriptsConfig { Enabled = true },
+            },
+        });
+        _ = new JournalSeed(home.DatabasePath);
+        await using var dashboard = await StartAuthenticated(home, options => options with { ConfigPath = configPath });
+        var (_, client) = dashboard;
+
+        using var status = JsonDocument.Parse(await client.GetStringAsync("/api/transcripts"));
+        Assert.True(status.RootElement.GetProperty("enabled").GetBoolean());
+
+        using var noHeader = new HttpRequestMessage(HttpMethod.Post, "/api/transcripts/clear") { Content = JsonContent.Create(new { }) };
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(noHeader)).StatusCode);
+
+        using var clear = new HttpRequestMessage(HttpMethod.Post, "/api/transcripts/clear") { Content = JsonContent.Create(new { }) };
+        clear.Headers.Add(DashboardSecurity.WriteHeader, "1");
+        using var response = await client.SendAsync(clear);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var cleared = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.True(cleared.RootElement.GetProperty("enabled").GetBoolean());
     }
 
     [Fact]

@@ -1,6 +1,6 @@
 import { keepPreviousData, QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ConflictError, getJson, NetworkError, NotFoundError, patchJson, postJson, putJson, UnauthorizedError } from "./client"
-import type { AnnotationPatch, CompareAttemptSummary, DashboardStats, DistilledPlan, KeyCount, OperationDetail, OperationSummary, Page, PricesInfo, ProfilesResponse, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse } from "./types"
+import type { AnnotationPatch, CompareAttemptSummary, DashboardStats, DistilledPlan, KeyCount, OperationDetail, OperationSummary, Page, PricesInfo, ProfilesResponse, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, TranscriptStatus } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string; archived?: boolean; starred?: boolean; q?: string }
 
@@ -201,6 +201,29 @@ export function useRefreshPrices() {
     onSuccess: data => {
       client.setQueryData(queryKeys.prices(), data)
       void client.invalidateQueries({ queryKey: ["stats"] })
+    },
+  })
+}
+
+export function useTranscriptStatus() {
+  return useQuery({ queryKey: ["transcripts"], queryFn: () => getJson<TranscriptStatus>("/api/transcripts") })
+}
+
+export function useClearTranscripts() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => postJson<TranscriptStatus>("/api/transcripts/clear", {}),
+    onSuccess: data => {
+      client.setQueryData(["transcripts"], data)
+      void client.invalidateQueries({ queryKey: ["sessions"] })
+      void client.invalidateQueries({ queryKey: ["session"] })
+      void client.invalidateQueries({ queryKey: ["operations"] })
+      void client.invalidateQueries({ queryKey: ["operation"] })
+      // These long-lived live queries merge fetched rows into their cache. Reset the cached rows
+      // first so equal timestamps cannot retain transcript-derived fields after a clear.
+      void client.resetQueries({ queryKey: queryKeys.liveOperations })
+      void client.resetQueries({ queryKey: queryKeys.liveRunning })
+      void client.resetQueries({ queryKey: queryKeys.liveSessions })
     },
   })
 }

@@ -33,6 +33,7 @@ export type SessionSummary = {
   starred: boolean
   archived: boolean
   notePreview: string | null
+  agentTitle: string | null
 }
 
 export type OperationSummary = {
@@ -69,13 +70,17 @@ export type OperationSummary = {
   operationRef: string | null
   parentOperationRef: string | null
   dryRun: boolean
+  agentModelSource: string | null
 }
 
 /** Allowlisted, client-supplied labels from tools/call _meta; never verified, never content. */
 export type AgentCall = {
   callId: string | null; model: string | null; reasoningEffort: string | null; sessionId: string | null
   turnId: string | null; turnTrigger: string | null; threadSource: string | null
+  transcriptModel: string | null; transcriptReasoningEffort: string | null; conversationTitle: string | null
 }
+
+export type AgentConversation = { agentKind: string; conversationId: string; title: string | null; operations: number }
 
 export type CompareAttemptSummary = {
   operationId: number
@@ -104,6 +109,7 @@ export type CompareSubjectSummary = {
 
 export type SessionDetail = {
   session: SessionSummary; operations: OperationSummary[]; compareSubjects: CompareSubjectSummary[]; unassignedCompareCount: number; note: string | null
+  conversations: AgentConversation[]
 }
 
 export type SessionAnnotation = { title: string | null; note: string | null; starred: boolean; archived: boolean }
@@ -291,12 +297,13 @@ export type JournalSettings = {
   storeSensitive: boolean
   retention: { enabled: boolean; maxAgeDays: number; maxSizeMb: number }
 }
-export type DashboardSettings = { autoStart: boolean; port: number; idleShutdownHours: number }
+export type DashboardSettings = { autoStart: boolean; port: number; idleShutdownHours: number; agentTranscripts: { enabled: boolean } }
 export type DiagnosticsSettings = { enabled: boolean }
 export type Settings = { journal: JournalSettings; dashboard: DashboardSettings; compare: { requireContext: boolean }; diagnostics: DiagnosticsSettings }
 export type SettingsFileStatus = "missing" | "valid" | "invalid"
 export type SettingsResponse = { status: SettingsFileStatus; path: string; settings: Settings }
 export type FieldError = { field: string; message: string }
+export type TranscriptStatus = { enabled: boolean; matched: number; unmatched: number; readErrors: number; lastCycleAt: string | null }
 
 export type ProfileVariable = { name: string; rule: string }
 export type ProfileView = {

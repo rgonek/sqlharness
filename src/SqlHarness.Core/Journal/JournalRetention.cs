@@ -187,6 +187,13 @@ public static class JournalRetention
                   AND ($cutoff IS NULL OR last_seen < $cutoff)
                 LIMIT {batchSize});
             """);
+        DeleteInBatches(connection, null, _ => { }, batchSize, $"""
+            DELETE FROM agent_conversations WHERE id IN (
+                SELECT id FROM agent_conversations c
+                WHERE NOT EXISTS (SELECT 1 FROM operation_agent_links l WHERE l.conversation = c.id)
+                  AND NOT EXISTS (SELECT 1 FROM agent_tool_calls t WHERE t.conversation = c.id)
+                LIMIT {batchSize});
+            """);
     }
 
     private static void DeleteInBatches(SqliteConnection connection, string? cutoff, Action<int> committed, int batchSize, string sql)

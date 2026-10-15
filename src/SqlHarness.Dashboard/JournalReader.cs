@@ -40,8 +40,13 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 WHERE m.operation_id = o.id AND t.cold_runs > 0) AS cold_cache,
         EXISTS (SELECT 1 FROM operation_metrics m WHERE m.operation_id = o.id AND m.grant_granted_kb >= {OverGrantMinimumKb}
                 AND m.grant_max_used_kb IS NOT NULL AND m.grant_max_used_kb * 4 < m.grant_granted_kb) AS over_granted,
-        o.error_message, o.cancel_reason, o.agent_model, o.agent_reasoning_effort,
-        o.operation_ref, o.parent_operation_ref, o.dry_run
+        o.error_message, o.cancel_reason,
+        COALESCE(o.agent_model, (SELECT l.model FROM operation_agent_links l WHERE l.operation_id = o.id)) AS agent_model,
+        COALESCE(o.agent_reasoning_effort, (SELECT l.effort FROM operation_agent_links l WHERE l.operation_id = o.id)) AS agent_reasoning_effort,
+        o.operation_ref, o.parent_operation_ref, o.dry_run,
+        CASE WHEN o.agent_model IS NOT NULL THEN 'call'
+             WHEN EXISTS (SELECT 1 FROM operation_agent_links l WHERE l.operation_id = o.id AND l.model IS NOT NULL) THEN 'transcript'
+        END AS agent_model_source
         """;
 
     private const string SessionColumns = """
@@ -55,7 +60,12 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         COALESCE((SELECT a.starred FROM session_annotations a WHERE a.session_id = s.id), 0) AS starred,
         EXISTS (SELECT 1 FROM session_annotations a WHERE a.session_id = s.id AND a.archived_at IS NOT NULL) AS archived,
         (SELECT substr(rtrim(CASE WHEN instr(n.note, char(10)) > 0 THEN substr(n.note, 1, instr(n.note, char(10)) - 1) ELSE n.note END, char(13)), 1, 120)
-         FROM (SELECT ltrim(a.note, char(10, 13, 32, 9)) AS note FROM session_annotations a WHERE a.session_id = s.id) n) AS note_preview
+         FROM (SELECT ltrim(a.note, char(10, 13, 32, 9)) AS note FROM session_annotations a WHERE a.session_id = s.id) n) AS note_preview,
+        (SELECT c.title FROM operation_agent_links l
+         JOIN agent_conversations c ON c.id = l.conversation
+         JOIN operations o2 ON o2.id = l.operation_id
+         WHERE o2.session_id = s.id AND c.title IS NOT NULL
+         ORDER BY o2.id DESC LIMIT 1) AS agent_title
         """;
 
     public long? SchemaVersion()
@@ -144,7 +154,10 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
               AND ($q IS NULL
                    OR s.session_key LIKE $q ESCAPE '\' OR s.cwd LIKE $q ESCAPE '\' OR s.client_title LIKE $q ESCAPE '\'
                    OR EXISTS (SELECT 1 FROM session_annotations a WHERE a.session_id = s.id
-                              AND (a.title LIKE $q ESCAPE '\' OR a.note LIKE $q ESCAPE '\')))
+                              AND (a.title LIKE $q ESCAPE '\' OR a.note LIKE $q ESCAPE '\'))
+                   OR EXISTS (SELECT 1 FROM operation_agent_links l JOIN agent_conversations c ON c.id = l.conversation
+                              JOIN operations o3 ON o3.id = l.operation_id
+                              WHERE o3.session_id = s.id AND c.title LIKE $q ESCAPE '\'))
             ORDER BY {order} LIMIT $limit;
             """,
             parameters,
@@ -179,9 +192,14 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             evidenceById.TryGetValue(attempt.OperationId, out var hydrated) ? hydrated : attempt).ToArray());
         var note = Query(connection, "SELECT note FROM session_annotations WHERE session_id = $id;", [("$id", id)],
             r => NullableString(r, 0)).FirstOrDefault();
+        var conversations = Query(connection, """
+            SELECT c.agent_kind, c.conversation_id, c.title, COUNT(*) FROM operation_agent_links l
+            JOIN agent_conversations c ON c.id = l.conversation JOIN operations o ON o.id = l.operation_id
+            WHERE o.session_id = $id GROUP BY c.id ORDER BY MAX(o.id) DESC;
+            """, [("$id", id)], r => new AgentConversation(r.GetString(0), r.GetString(1), NullableString(r, 2), r.GetInt32(3)));
         return new SessionDetail(WithRunning(connection, [session])[0], operations,
             subjects,
-            compares.Count(attempt => attempt.Subject is null || attempt.Scope is null), note);
+            compares.Count(attempt => attempt.Subject is null || attempt.Scope is null), note, conversations);
     }
 
     /// <summary>Full retained compare history is versioned before applying the endpoint page.</summary>
@@ -293,7 +311,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 """,
                 parameters,
                 reader => (Operation: ReadOperation(reader, liveness),
-                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 32))));
+                    Variables: OperationDimensionResolver.ReadRecordedValues(NullableString(reader, 33))));
             var filteredRows = rows.Where(row => !variableFiltered
                 || OperationDimensionResolver.Matches(query.Dimensions, row.Variables));
             matches.AddRange(liveFiltered
@@ -327,8 +345,11 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var extra = Query(connection, """
             SELECT vars_json, candidate_sql_hash, sql_text, candidate_sql_text, raw_tokens, emitted_tokens, artifact_dir, summary_json,
                    client_call_id, agent_model, agent_reasoning_effort, agent_session_id, agent_turn_id, agent_turn_trigger, agent_thread_source,
-                   raw_bytes, emitted_bytes, compare_subject, compare_scope, compare_conditions_json
-            FROM operations WHERE id = $id;
+                   raw_bytes, emitted_bytes, compare_subject, compare_scope, compare_conditions_json, l.model, l.effort, c.title
+            FROM operations
+            LEFT JOIN operation_agent_links l ON l.operation_id = operations.id
+            LEFT JOIN agent_conversations c ON c.id = l.conversation
+            WHERE operations.id = $id;
             """, [("$id", id)], reader => (
                 VarsJson: NullableString(reader, 0),
                 CandidateHash: NullableString(reader, 1),
@@ -433,7 +454,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     private static AgentCall? ReadAgent(SqliteDataReader r)
     {
         var agent = new AgentCall(NullableString(r, 8), NullableString(r, 9), NullableString(r, 10), NullableString(r, 11),
-            NullableString(r, 12), NullableString(r, 13), NullableString(r, 14));
+            NullableString(r, 12), NullableString(r, 13), NullableString(r, 14), NullableString(r, 20),
+            NullableString(r, 21), NullableString(r, 22));
         return agent == new AgentCall(null, null, null, null, null, null, null) ? null : agent;
     }
 
@@ -820,7 +842,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         NullableString(r, 6), NullableString(r, 7), NullableString(r, 8), r.GetString(9), r.GetString(10),
         r.GetInt32(11), r.GetInt32(12), r.GetInt32(13), 0, 0,
         NullableString(r, 14), Roots(NullableString(r, 15)), NullableString(r, 16),
-        NullableString(r, 17), r.GetInt64(18) != 0, r.GetInt64(19) != 0, NullableString(r, 20));
+        NullableString(r, 17), r.GetInt64(18) != 0, r.GetInt64(19) != 0, NullableString(r, 20), NullableString(r, 21));
 
     private static string EscapeLike(string value) =>
         value.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
@@ -833,7 +855,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         r.GetInt64(15) != 0, NullableString(r, 16), NullableLong(r, 17), NullableLong(r, 21),
         r.GetInt64(22) != 0, r.GetInt64(23) != 0, r.GetInt64(24) != 0, Json(NullableString(r, 18)),
         NullableString(r, 25), NullableString(r, 26), NullableString(r, 27), NullableString(r, 28),
-        NullableString(r, 29), NullableString(r, 30), r.GetInt64(31) != 0);
+        NullableString(r, 29), NullableString(r, 30), r.GetInt64(31) != 0, NullableString(r, 32));
 
     private static IReadOnlyList<SessionRoot>? Roots(string? json)
     {

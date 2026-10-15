@@ -12,7 +12,7 @@ public sealed class ActivityJournalPhaseTests
     [Theory]
     [InlineData(7)]
     [InlineData(9)]
-    public void Legacy_journals_migrate_to_v10_without_losing_rows(int version)
+    public void Legacy_journals_migrate_to_current_schema_with_phase_tables_without_losing_rows(int version)
     {
         using var temp = new JournalTempDirectory();
         CreateLegacyJournal(temp.DatabasePath, version);
@@ -20,7 +20,7 @@ public sealed class ActivityJournalPhaseTests
         _ = ActivityJournal.Open(temp.DatabasePath, new JournalConfig(), TextWriter.Null,
             new FixedTimeProvider(JournalTestData.T0));
 
-        Assert.Equal(10L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
         var row = JournalDb.Rows(temp.DatabasePath,
             "SELECT operation, status, compare_subject FROM operations").Single();
         Assert.Equal("query", row["operation"]);

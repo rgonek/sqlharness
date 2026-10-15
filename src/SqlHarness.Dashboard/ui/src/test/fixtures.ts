@@ -1,11 +1,11 @@
-import type { DashboardStats, OperationDetail, OperationSummary, SessionSummary, VariantDetail } from "@/api/types"
+import type { AgentCall, DashboardStats, OperationDetail, OperationSummary, SessionDetail, SessionSummary, VariantDetail } from "@/api/types"
 
 export const session = (over: Partial<SessionSummary> = {}): SessionSummary => ({
   id: 1, sessionKey: "cli:abc", agentKind: "claude", transport: "cli", source: "process-tree",
   clientName: null, clientVersion: null, mcpMode: null, cwd: "/work",
   firstSeen: "2026-10-07T09:00:00.000Z", lastSeen: "2026-10-07T09:05:00.000Z",
   operations: 3, failed: 1, rejected: 0, running: 0, abandoned: 0, clientTitle: null, roots: null, protocolVersion: null,
-  title: null, starred: false, archived: false, notePreview: null, ...over,
+  title: null, starred: false, archived: false, notePreview: null, agentTitle: null, ...over,
 })
 
 export const operation = (over: Partial<OperationSummary> = {}): OperationSummary => ({
@@ -14,7 +14,16 @@ export const operation = (over: Partial<OperationSummary> = {}): OperationSummar
   durationMs: 1200, profile: "local", engine: "sqlserver", server: "srv", database: "db", mutationRequested: false,
   sqlHash: "sha256:0123456789abcdef", rowsReturned: 3, logicalReadsMedian: null, hasSpill: false, coldCache: false,
   overGranted: false, progress: null, errorMessage: null, cancelReason: null, agentModel: null, agentReasoningEffort: null,
-  operationRef: null, parentOperationRef: null, dryRun: false, ...over,
+  operationRef: null, parentOperationRef: null, dryRun: false, agentModelSource: null, ...over,
+})
+
+export const agentCall = (over: Partial<AgentCall> = {}): AgentCall => ({
+  callId: null, model: null, reasoningEffort: null, sessionId: null, turnId: null, turnTrigger: null, threadSource: null,
+  transcriptModel: null, transcriptReasoningEffort: null, conversationTitle: null, ...over,
+})
+
+export const sessionDetail = (over: Partial<SessionDetail> = {}): SessionDetail => ({
+  session: session(), operations: [], compareSubjects: [], unassignedCompareCount: 0, note: null, conversations: [], ...over,
 })
 
 export const variant = (over: Partial<VariantDetail> = {}): VariantDetail => ({

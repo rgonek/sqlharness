@@ -96,6 +96,16 @@ test("a note shows an icon with its first line", async () => {
   expect(await screen.findByLabelText("Note: reads down 40%")).toBeInTheDocument()
 })
 
+test("uses an agent conversation title as the session link", async () => {
+  stubFetch({
+    "/api/agents": [],
+    "/api/sessions?archived=false&starred=true&limit=50": { items: [], nextCursor: null },
+    "/api/sessions?archived=false&starred=false&limit=50": { items: [session({ agentTitle: "Optimize orders" })], nextCursor: null },
+  })
+  renderApp("/sessions")
+  expect(await screen.findByRole("link", { name: "Optimize orders" })).toBeInTheDocument()
+})
+
 test("a failed save shows the server message and re-enables the button", async () => {
   stubFetch({
     "/api/agents": [],

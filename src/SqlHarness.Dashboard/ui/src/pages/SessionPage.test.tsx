@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, test } from "vitest"
-import { operation, session } from "@/test/fixtures"
+import { operation, session, sessionDetail } from "@/test/fixtures"
 import { renderApp, stubFetch } from "@/test/render"
 
 test("shows session facts and its operations", async () => {
@@ -27,7 +27,7 @@ test("unknown session shows not found", async () => {
 })
 
 test("session detail has a heading", async () => {
-  stubFetch({ "/api/sessions/7": { session: session({ id: 7 }), operations: [] } })
+  stubFetch({ "/api/sessions/7": sessionDetail({ session: session({ id: 7 }) }) })
   renderApp("/sessions/7")
   expect(await screen.findByRole("heading", { level: 1, name: "cli:abc" })).toBeInTheDocument()
   expect(screen.getAllByText("cli:abc")).toHaveLength(1)
@@ -38,6 +38,33 @@ test("a titled session shows its key under the title", async () => {
   renderApp("/sessions/7")
   expect(await screen.findByRole("heading", { level: 1, name: "BSI-1 orders" })).toBeInTheDocument()
   expect(screen.getByText("cli:abc")).toBeInTheDocument()
+})
+
+test("shows the agent title and conversation list, and clears back to that title", async () => {
+  let title: string | null = null
+  stubFetch({
+    "/api/sessions/1": () => new Response(JSON.stringify(sessionDetail({
+      session: session({ id: 1, title, agentTitle: title ? null : "Optimize orders", agentKind: "claude" }),
+      conversations: [{ agentKind: "claude", conversationId: "conv-1", title: "Optimize orders", operations: 2 }],
+    })), { status: 200 }),
+    "/api/sessions/1/annotation": (_url: URL, init?: RequestInit) => {
+      title = (JSON.parse(String(init?.body)) as { title: string | null }).title
+      return new Response(JSON.stringify({ title, note: null, starred: false, archived: false }), { status: 200 })
+    },
+  })
+  renderApp("/sessions/1")
+  expect(await screen.findByRole("heading", { level: 1, name: "Optimize orders" })).toBeInTheDocument()
+  expect(screen.getByText("from Claude")).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Edit title" }))
+  expect(screen.getByRole("textbox", { name: "Session title" })).toHaveAttribute("placeholder", "Optimize orders")
+  expect(screen.getByText("Conversations")).toBeInTheDocument()
+  expect(screen.getByText(/Claude Code.*2 operations/)).toBeInTheDocument()
+  await userEvent.type(screen.getByRole("textbox", { name: "Session title" }), "Saved{Enter}")
+  await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: "Saved" })).toBeInTheDocument())
+  await userEvent.click(screen.getByRole("button", { name: "Edit title" }))
+  await userEvent.clear(screen.getByRole("textbox", { name: "Session title" }))
+  await userEvent.type(screen.getByRole("textbox", { name: "Session title" }), "{Enter}")
+  await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: "Optimize orders" })).toBeInTheDocument())
 })
 
 test("a non-decimal session id shows not found without calling the api", async () => {

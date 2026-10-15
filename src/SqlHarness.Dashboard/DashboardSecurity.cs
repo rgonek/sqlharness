@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Http.Extensions;
 namespace SqlHarness.Dashboard;
 
 /// <summary>
-/// Loopback dashboard protection: exact Host allowlist (DNS rebinding), GET-only except four guarded writes (PUT /api/settings, POST /api/prices/refresh, PATCH /api/sessions/{id}/annotation, POST /api/shutdown),
+/// Loopback dashboard protection: exact Host allowlist (DNS rebinding), GET-only except five guarded writes (PUT /api/settings, POST /api/prices/refresh, PATCH /api/sessions/{id}/annotation, POST /api/transcripts/clear, POST /api/shutdown),
 /// persistent ?t= token exchanged into a long-lived HttpOnly SameSite=Strict cookie through a same-origin hand-off page, and
 /// cookie authentication on every other request. Tokens are compared in constant time.
 /// </summary>
@@ -21,6 +21,7 @@ internal static class DashboardSecurity
     internal const string SettingsPath = "/api/settings";
     internal const string PricesRefreshPath = "/api/prices/refresh";
     internal const string ShutdownPath = "/api/shutdown";
+    internal const string TranscriptsClearPath = "/api/transcripts/clear";
     private static readonly System.Text.RegularExpressions.Regex AnnotationPath =
         new(@"^/api/sessions/[0-9]{1,19}/annotation\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
     internal static readonly TimeSpan CookieMaxAge = TimeSpan.FromDays(400);
@@ -83,9 +84,11 @@ internal static class DashboardSecurity
             && string.Equals(context.Request.Path.Value, PricesRefreshPath, StringComparison.Ordinal);
         var isShutdown = HttpMethods.IsPost(context.Request.Method)
             && string.Equals(context.Request.Path.Value, ShutdownPath, StringComparison.Ordinal);
+        var isTranscriptsClear = HttpMethods.IsPost(context.Request.Method)
+            && string.Equals(context.Request.Path.Value, TranscriptsClearPath, StringComparison.Ordinal);
         var isAnnotationWrite = HttpMethods.IsPatch(context.Request.Method)
             && AnnotationPath.IsMatch(context.Request.Path.Value ?? string.Empty);
-        var isWrite = isSettingsWrite || isPricesRefresh || isAnnotationWrite || isShutdown;
+        var isWrite = isSettingsWrite || isPricesRefresh || isAnnotationWrite || isTranscriptsClear || isShutdown;
         if (!isRead && !isWrite)
         {
             context.Response.Headers.Allow = "GET, HEAD";

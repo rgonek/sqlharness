@@ -2,6 +2,8 @@ using System.Net;
 
 using SqlHarness.Core;
 using SqlHarness.Dashboard;
+using SqlHarness.Dashboard.Transcripts;
+using SqlHarness.Tests.Dashboard.Transcripts;
 
 namespace SqlHarness.Tests.Dashboard;
 
@@ -295,6 +297,156 @@ public sealed class DashboardHousekeepingTests
         Assert.Equal(0, await run);
         var remaining = Journal.JournalDb.Rows(home.DatabasePath, "SELECT id FROM operations").Count;
         Assert.InRange(remaining, 1, 10);
+    }
+
+    [Fact]
+    public async Task Housekeeping_links_transcripts_when_the_setting_is_enabled()
+    {
+        using var home = new TempHome();
+        using var agents = new TempHome();
+        var homes = new AgentHomes(Path.Combine(agents.Path, "claude"), Path.Combine(agents.Path, "codex"));
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("mcp:transcript", "claude"), agent: new AgentCallMetadata("toolu_housekeep", null, null, null, null, null, null));
+        var project = homes.ClaudeProjectDirectory("/work");
+        Directory.CreateDirectory(project);
+        File.WriteAllLines(Path.Combine(project, "conv-housekeep.jsonl"), [ClaudeFixtures.Assistant("conv-housekeep", "model", "high", ("toolu_housekeep", "mcp__sqlharness__query"))]);
+        var config = SqlHarnessConfig.Default with
+        {
+            Dashboard = SqlHarnessConfig.Default.Dashboard with { AgentTranscripts = new AgentTranscriptsConfig { Enabled = true } },
+        };
+        var passes = new Passes();
+        using var cts = new CancellationTokenSource();
+
+        var run = DashboardHost.RunAsync(Options(home, idle: null, Clock(), passes, config) with { AgentHomes = homes }, cts.Token);
+        await passes.MoreAsync();
+
+        Assert.Single(Journal.JournalDb.Rows(home.DatabasePath, "SELECT operation_id FROM operation_agent_links"));
+        cts.Cancel();
+        Assert.Equal(0, await run.WaitAsync(TimeSpan.FromSeconds(20)));
+    }
+
+    [Fact]
+    public async Task Matcher_commits_do_not_keep_an_idle_dashboard_up()
+    {
+        using var home = new TempHome();
+        using var agents = new TempHome();
+        var homes = new AgentHomes(Path.Combine(agents.Path, "claude"), Path.Combine(agents.Path, "codex"));
+        var seed = new JournalSeed(home.DatabasePath);
+        var project = homes.ClaudeProjectDirectory("/work");
+        Directory.CreateDirectory(project);
+        var transcript = Path.Combine(project, "conv-idle.jsonl");
+        var passCount = 0;
+        const string call = "toolu_idle";
+        void AppendTitle()
+        {
+            File.AppendAllLines(transcript, [ClaudeFixtures.Title("conv-idle", $"title-{Interlocked.Increment(ref passCount)}")]);
+        }
+        var session = JournalSeed.Session("mcp:idle-transcript", "claude");
+        seed.Operation(session, agent: new AgentCallMetadata(call, null, null, null, null, null, null));
+        seed.Operation(session, agent: new AgentCallMetadata("toolu_stays_pending", null, null, null, null, null, null));
+        File.WriteAllLines(transcript, [ClaudeFixtures.Assistant("conv-idle", "model", null, (call, "mcp__sqlharness__query"))]);
+        var config = SqlHarnessConfig.Default with
+        {
+            Dashboard = SqlHarnessConfig.Default.Dashboard with { AgentTranscripts = new AgentTranscriptsConfig { Enabled = true } },
+        };
+        var clock = Clock();
+        var passes = new Passes();
+        var run = DashboardHost.RunAsync(
+            Options(home, TimeSpan.FromMinutes(2), clock, passes, config) with
+            {
+                AgentHomes = homes,
+                Housekept = () => { AppendTitle(); passes.Completed(); },
+            }, CancellationToken.None);
+        // Each pass hook appends a title update before the next cycle, making the matcher commit without an agent journal write.
+        await WaitForAsync(() => Volatile.Read(ref passCount) >= 2);
+        clock.Advance(TimeSpan.FromMinutes(1));
+        await WaitForAsync(() => Volatile.Read(ref passCount) >= 4);
+        Assert.Single(Journal.JournalDb.Rows(home.DatabasePath, "SELECT operation_id FROM operation_agent_links"));
+        var matchedTitle = (string?)Assert.Single(Journal.JournalDb.Rows(home.DatabasePath, "SELECT title FROM agent_conversations"))["title"];
+        Assert.StartsWith("title-", matchedTitle);
+        Assert.True(int.TryParse(matchedTitle!["title-".Length..], out var matchedTitleIteration) && matchedTitleIteration >= 2,
+            $"Expected multiple matcher-owned title updates, found '{matchedTitle}'.");
+
+        clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.Equal(0, await run.WaitAsync(TimeSpan.FromSeconds(20)));
+    }
+
+    [Fact]
+    public async Task External_journal_commit_during_matching_refreshes_the_idle_window()
+    {
+        using var home = new TempHome();
+        using var agents = new TempHome();
+        var homes = new AgentHomes(Path.Combine(agents.Path, "claude"), Path.Combine(agents.Path, "codex"));
+        var seed = new JournalSeed(home.DatabasePath);
+        var session = JournalSeed.Session("mcp:in-cycle", "claude");
+        seed.Operation(session, agent: new AgentCallMetadata("toolu_stays_pending", null, null, null, null, null, null));
+        var project = homes.ClaudeProjectDirectory("/work");
+        Directory.CreateDirectory(project);
+        File.WriteAllLines(Path.Combine(project, "conv-in-cycle.jsonl"), [ClaudeFixtures.Assistant("conv-in-cycle", "model", null, ("toolu_external_during_scan", "mcp__sqlharness__query"))]);
+
+        var clock = Clock();
+        var passes = new Passes();
+        var triggerWrite = 0;
+        var wroteDuringScan = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var injected = 0;
+        bool Probe(string directory)
+        {
+            if (Volatile.Read(ref triggerWrite) != 0 && Interlocked.CompareExchange(ref injected, 1, 0) == 0)
+            {
+                seed.Operation(session, agent: new AgentCallMetadata("toolu_external_during_scan", null, null, null, null, null, null));
+                wroteDuringScan.TrySetResult();
+            }
+            return Directory.Exists(directory);
+        }
+
+        var config = SqlHarnessConfig.Default with
+        {
+            Dashboard = SqlHarnessConfig.Default.Dashboard with { AgentTranscripts = new AgentTranscriptsConfig { Enabled = true } },
+        };
+        var run = DashboardHost.RunAsync(Options(home, TimeSpan.FromMinutes(2), clock, passes, config) with
+        {
+            AgentHomes = homes,
+            AgentDirectoryProbe = Probe,
+        }, CancellationToken.None);
+        await passes.MoreAsync();
+        clock.Advance(TimeSpan.FromMinutes(1).Add(TimeSpan.FromSeconds(50)));
+        Volatile.Write(ref triggerWrite, 1);
+        await wroteDuringScan.Task.WaitAsync(TimeSpan.FromSeconds(20));
+        await passes.MoreAsync();
+        Assert.Single(Journal.JournalDb.Rows(home.DatabasePath, "SELECT operation_id FROM operation_agent_links"));
+
+        var nextPass = passes.MoreAsync();
+        clock.Advance(TimeSpan.FromSeconds(10));
+        Assert.Same(nextPass, await Task.WhenAny(run, nextPass));
+        await nextPass;
+        Assert.False(run.IsCompleted, "the in-cycle external commit starts a new idle window");
+
+        clock.Advance(TimeSpan.FromMinutes(1).Add(TimeSpan.FromSeconds(50)));
+        Assert.Equal(0, await run.WaitAsync(TimeSpan.FromSeconds(20)));
+    }
+
+    [Fact]
+    public async Task Disabled_matcher_does_not_probe_agent_directories()
+    {
+        using var home = new TempHome();
+        using var agents = new TempHome();
+        var homes = new AgentHomes(Path.Combine(agents.Path, "claude"), Path.Combine(agents.Path, "codex"));
+        var passes = new Passes();
+        using var cts = new CancellationTokenSource();
+        var config = SqlHarnessConfig.Default with
+        {
+            Dashboard = SqlHarnessConfig.Default.Dashboard with { AgentTranscripts = new AgentTranscriptsConfig { Enabled = false } },
+        };
+        var run = DashboardHost.RunAsync(Options(home, idle: null, Clock(), passes, config) with
+        {
+            AgentHomes = homes,
+            AgentDirectoryProbe = _ => throw new IOException("must not probe when disabled"),
+        }, cts.Token);
+
+        await passes.MoreAsync();
+        Assert.Empty(Journal.JournalDb.Rows(home.DatabasePath, "SELECT operation_id FROM operation_agent_links"));
+        cts.Cancel();
+        Assert.Equal(0, await run.WaitAsync(TimeSpan.FromSeconds(20)));
     }
 
     [Fact]

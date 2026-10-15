@@ -4,7 +4,7 @@ namespace SqlHarness.Core;
 
 internal static class JournalSchema
 {
-    internal const int CurrentVersion = 10;
+    internal const int CurrentVersion = 11;
 
     internal const string Version1 = """
         CREATE TABLE sessions (
@@ -198,6 +198,39 @@ internal static class JournalSchema
             error_number INTEGER,
             detail_json TEXT,
             PRIMARY KEY (operation_id, seq)
+        );
+        """;
+
+    internal const string Version11 = """
+        CREATE TABLE agent_conversations (
+            id INTEGER PRIMARY KEY,
+            agent_kind TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            title TEXT,
+            updated_at TEXT NOT NULL,
+            UNIQUE (agent_kind, conversation_id)
+        );
+        CREATE TABLE agent_tool_calls (
+            agent_kind TEXT NOT NULL,
+            call_id TEXT NOT NULL,
+            conversation INTEGER NOT NULL REFERENCES agent_conversations(id) ON DELETE CASCADE,
+            model TEXT,
+            effort TEXT,
+            seen_at TEXT NOT NULL,
+            PRIMARY KEY (agent_kind, call_id)
+        );
+        CREATE TABLE operation_agent_links (
+            operation_id INTEGER PRIMARY KEY REFERENCES operations(id) ON DELETE CASCADE,
+            conversation INTEGER NOT NULL REFERENCES agent_conversations(id) ON DELETE CASCADE,
+            model TEXT,
+            effort TEXT
+        );
+        CREATE INDEX ix_operation_agent_links_conversation ON operation_agent_links(conversation);
+        CREATE TABLE transcript_cursors (
+            path TEXT PRIMARY KEY,
+            size INTEGER NOT NULL,
+            mtime TEXT NOT NULL,
+            offset INTEGER NOT NULL
         );
         """;
 }

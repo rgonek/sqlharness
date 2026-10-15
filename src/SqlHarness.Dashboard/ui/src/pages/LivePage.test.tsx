@@ -161,6 +161,58 @@ test("live lists are refetched on every (re)connect so changes made during a gap
   expect(await within(recent).findByText("succeeded")).toBeInTheDocument()
 })
 
+test("clearing transcript data removes stale titles and models from the live caches", async () => {
+  useFakeEventSource()
+  let cleared = false
+  const liveOperation = () => operation({ id: 12, status: "running", operation: "watch", agentModel: cleared ? null : "claude-opus-5-5",
+    agentModelSource: cleared ? null : "transcript", updatedAt: "2026-10-07T09:00:01.000Z" })
+  const liveSession = () => session({ id: 14, sessionKey: "cli:live", running: 1, agentTitle: cleared ? null : "Optimize orders",
+    lastSeen: "2026-10-07T09:00:01.000Z" })
+  const calls = stubFetch({
+    [RECENT]: () => json(page([liveOperation()])),
+    [RUNNING]: () => json(page([liveOperation()])),
+    [STARRED]: page([]),
+    [SESSIONS]: () => json(page([liveSession()])),
+    "/api/settings": { status: "valid", path: "settings.json", settings: {
+      journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
+      dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, agentTranscripts: { enabled: false } }, compare: { requireContext: true },
+      diagnostics: { enabled: false },
+    } },
+    "/api/prices": { source: "embedded", fetchedAt: "2026-10-07T09:00:00Z", origin: "embedded" },
+    "/api/transcripts": { enabled: false, matched: 1, unmatched: 0, readErrors: 0, lastCycleAt: null },
+    "/api/transcripts/clear": () => {
+      cleared = true
+      return json({ enabled: false, matched: 0, unmatched: 0, readErrors: 0, lastCycleAt: null })
+    },
+  })
+
+  renderApp("/")
+  const running = await screen.findByRole("region", { name: "Running" })
+  expect(await screen.findByRole("link", { name: "Optimize orders" })).toBeInTheDocument()
+  expect(await within(running).findByText("claude-opus-5-5 (transcript)")).toBeInTheDocument()
+  expect(count(calls, RECENT)).toBe(1)
+  expect(count(calls, RUNNING)).toBe(1)
+  expect(count(calls, SESSIONS)).toBe(1)
+
+  await userEvent.click(screen.getByRole("link", { name: "Settings" }))
+  const clear = await screen.findByRole("button", { name: "Clear matched data" })
+  await userEvent.click(clear)
+  const dialog = await screen.findByRole("dialog")
+  await userEvent.click(within(dialog).getByRole("button", { name: "Clear matched data" }))
+  await waitFor(() => expect(calls).toContain("/api/transcripts/clear"))
+
+  await userEvent.click(screen.getByRole("link", { name: "Live" }))
+  await screen.findByRole("region", { name: "Running" })
+  await waitFor(() => {
+    expect(count(calls, RECENT)).toBe(2)
+    expect(count(calls, RUNNING)).toBe(2)
+    expect(count(calls, SESSIONS)).toBe(2)
+  })
+  expect(await screen.findByRole("link", { name: "cli:live" })).toBeInTheDocument()
+  expect(screen.queryByRole("link", { name: "Optimize orders" })).not.toBeInTheDocument()
+  expect(screen.queryByText("claude-opus-5-5 (transcript)")).not.toBeInTheDocument()
+})
+
 test("a long-running operation outside the recent page still shows in Running", async () => {
   useFakeEventSource()
   const recent = Array.from({ length: 100 }, (_, index) => operation({ id: 1000 - index, operation: "ping" }))

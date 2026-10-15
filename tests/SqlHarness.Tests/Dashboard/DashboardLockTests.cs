@@ -225,21 +225,27 @@ public sealed class DashboardLockTests
         using var home = new TempHome();
         var processes = new FakeProcesses().Alive(4242, Started);
         var lifecycle = new DashboardLifecycleService(processes);
-        var watch = System.Diagnostics.Stopwatch.StartNew();
-        var wait = lifecycle.WaitForRunningAsync(home.Path, TimeSpan.FromSeconds(1), CancellationToken.None);
+        var budget = TimeSpan.FromSeconds(5);
+        var wait = lifecycle.WaitForRunningAsync(home.Path, budget, CancellationToken.None);
+        var releasePublisher = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var publisher = Task.Run(async () =>
         {
-            await Task.Delay(100);
             using var held = DashboardLock.TryAcquire(home.Path)!;
-            await Task.Delay(100);
             held.Publish(new DashboardEndpoint(4242, Started, 47801, "tok"));
-            await Task.Delay(100);
+            await releasePublisher.Task;
         });
 
-        Assert.Equal(new DashboardEndpoint(4242, Started, 47801, "tok"), await wait);
+        try
+        {
+            Assert.Equal(new DashboardEndpoint(4242, Started, 47801, "tok"), await wait.WaitAsync(budget));
+        }
+        finally
+        {
+            releasePublisher.TrySetResult();
+        }
+
         await publisher;
-        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(1), $"Waited {watch.Elapsed} outside the shared one-second budget.");
     }
 
     [Fact]

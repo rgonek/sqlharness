@@ -26,7 +26,7 @@ public sealed class DashboardContractTests
             ["id", "sessionId", "agentKind", "operation", "status", "exitCode", "errorKind", "startedAt", "updatedAt",
              "finishedAt", "durationMs", "profile", "engine", "server", "database", "mutationRequested", "sqlHash",
              "rowsReturned", "logicalReadsMedian", "hasSpill", "coldCache", "overGranted", "progress", "errorMessage", "cancelReason", "agentModel", "agentReasoningEffort",
-             "operationRef", "parentOperationRef", "dryRun"],
+             "operationRef", "parentOperationRef", "dryRun", "agentModelSource"],
             Names(summary));
     }
 
@@ -38,11 +38,11 @@ public sealed class DashboardContractTests
         Assert.Equal(
             ["id", "sessionKey", "agentKind", "transport", "source", "clientName", "clientVersion", "mcpMode", "cwd",
              "firstSeen", "lastSeen", "operations", "failed", "rejected", "running", "abandoned", "clientTitle", "roots", "protocolVersion",
-             "title", "starred", "archived", "notePreview"],
+             "title", "starred", "archived", "notePreview", "agentTitle"],
             Names(session));
 
-        Assert.Equal(["session", "operations", "compareSubjects", "unassignedCompareCount", "note"],
-            Names(new SessionDetail(session, [], [], 0, null)));
+        Assert.Equal(["session", "operations", "compareSubjects", "unassignedCompareCount", "note", "conversations"],
+            Names(new SessionDetail(session, [], [], 0, null, [])));
         Assert.Equal(["operationId", "subject", "scope", "baselineHash", "candidateHash", "baselineVersion",
                 "candidateVersion", "status", "startedAt", "regression", "cases", "conditions", "summary"],
             Names(new CompareAttemptSummary(1, "orders", "whole", null, null, null, null, "running", "t", null, null, null, null)));
@@ -74,8 +74,11 @@ public sealed class DashboardContractTests
     [Fact]
     public void Agent_call_key_count_and_session_root_names_match_the_ui()
     {
-        Assert.Equal(["callId", "model", "reasoningEffort", "sessionId", "turnId", "turnTrigger", "threadSource"],
-            Names(new AgentCall(null, null, null, null, null, null, null)));
+        Assert.Equal(["callId", "model", "reasoningEffort", "sessionId", "turnId", "turnTrigger", "threadSource",
+                "transcriptModel", "transcriptReasoningEffort", "conversationTitle"],
+            Names(new AgentCall(null, null, null, null, null, null, null, null, null, null)));
+        Assert.Equal(["agentKind", "conversationId", "title", "operations"],
+            Names(new AgentConversation("claude", "conversation", null, 0)));
         Assert.Equal(["key", "count"], Names(new KeyCount("claude", 1)));
         Assert.Equal(["uri", "name"], Names(new SessionRoot("file:///w", null)));
     }
@@ -114,7 +117,7 @@ public sealed class DashboardContractTests
 
         AssertTypescriptFieldsMatch("CompareAttemptSummary", attempt);
         AssertTypescriptFieldsMatch("CompareSubjectSummary", subject);
-        AssertTypescriptFieldsMatch("SessionDetail", new SessionDetail(session, [], [subject], 0, null));
+        AssertTypescriptFieldsMatch("SessionDetail", new SessionDetail(session, [], [subject], 0, null, []));
         AssertTypescriptFieldsMatch("OperationDetail", new OperationDetail(default!, session, null, null, null, null,
             null, null, null, null, [], default!, null, Phases: [], Events: []));
     }
