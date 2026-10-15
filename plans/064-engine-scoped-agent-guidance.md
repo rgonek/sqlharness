@@ -10,7 +10,7 @@
 
 ## Status and base
 
-- Status: implemented on branch feat/plan-064-engine-guidance, pending final verification.
+- Status: DONE on branch `feat/plan-064-engine-guidance` (66bf672); Windows `just verify` OK; awaiting local merge to main.
 - Priority: P2; effort: M; risk: MEDIUM (changes discovery metadata, not SQL execution).
 - Planning base: `8a08859`, 2026-10-14, plus the pending operator-skill/description edits. Preserve those edits or start from their eventual integrated commit. Inspect drift before execution.
 - Relevant files: `src/SqlHarness.Core/Capabilities.cs`, `src/SqlHarness.Mcp/Tools/McpToolCatalog.cs`, `src/SqlHarness.Mcp/Tools/McpRequestToolHandlers.cs`, `src/SqlHarness.Mcp/McpProcessContext.cs`, `src/SqlHarness.Mcp/McpScope.cs`, `src/SqlHarness.Cli/Commands/CapabilitiesCommand.cs`, `src/SqlHarness.Cli/Commands/SqlHarnessCommands.cs`.
@@ -69,8 +69,15 @@ CLI `capabilities <profile>` already selects one engine's summary, parameter typ
 
 ## Final verification
 
-- [ ] Review the public diff for secrets, real targets and private investigation material.
-- [ ] Run `git diff --check` and the checks required by the repository contract at execution time. Under the current contract run `pwsh ./scripts/verify.ps1` and `pwsh ./scripts/verify-linux.ps1` sequentially; report unavailable prerequisites rather than treating them as success.
+- [x] Review the public diff for secrets, real targets and private investigation material.
+- [x] Run `git diff --check` and the checks required by the repository contract at execution time. Under the current contract run `pwsh ./scripts/verify.ps1` and `pwsh ./scripts/verify-linux.ps1` sequentially; report unavailable prerequisites rather than treating them as success.
 - [ ] Record results and update this plan's index row only when implementation lands. No live database, install, commit, push or publication is authorized by writing this plan.
 
 **Done:** selected CLI/MCP descriptions are engine-specific, neutral discovery/help stay brief, structural execution contracts remain unchanged, budgets hold, and users can work without the source checkout.
+
+## Verification evidence (2026-10-15)
+
+- Revision `66bf672` on `feat/plan-064-engine-guidance`: `just verify` → `verify: OK stages=6` (current contract, docs/agents/verification.md; the Linux gate is not a completion criterion). `git diff --check` clean.
+- Suites on the feature branch: Core 3547 passed/29 skipped; MCP 379 passed/4 skipped. Served `tools/list` 15.7–16.0 KB against the 32 KiB ceiling (fixed SQL Server, fixed PostgreSQL, request scope).
+- The final review built 7364117 and the branch head and compared six catalogs (three scopes × requireContext) with descriptions stripped. They were byte-identical, so only description text changed.
+- Public diff uses fictional profiles and `*.invalid` hosts only.
