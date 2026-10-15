@@ -80,6 +80,8 @@ public class SqlSafetyTierTests
     [InlineData("BACKUP DATABASE appdb TO DISK = 'c:\\x.bak'")]
     [InlineData("DBCC FREEPROCCACHE")]
     [InlineData("CREATE TRIGGER t ON ALL SERVER FOR CREATE_DATABASE AS SELECT 1 AS A")]
+    [InlineData("ALTER TRIGGER t ON ALL SERVER FOR CREATE_DATABASE AS SELECT 1 AS A")]
+    [InlineData("CREATE OR ALTER TRIGGER t ON ALL SERVER FOR CREATE_DATABASE AS SELECT 1 AS A")]
     [InlineData("DROP TABLE otherdb.dbo.T")]
     [InlineData("USE otherdb")]
     public void Server_scope_and_cross_database_stay_rejected(string sql) =>

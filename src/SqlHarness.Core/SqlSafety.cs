@@ -392,7 +392,7 @@ internal sealed class SqlSafetyClassifier
         StatementClassification classification,
         bool hasUnprovenUse)
     {
-        if (statement is CreateTriggerStatement
+        if (statement is TriggerStatementBody
             {
                 TriggerObject.TriggerScope: TriggerScope.AllServer,
             })
