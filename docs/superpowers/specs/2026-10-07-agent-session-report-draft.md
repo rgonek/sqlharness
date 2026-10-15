@@ -52,6 +52,8 @@ the tool. Keep workload values out.
 | 2026-10-12 System1 optimization | optimization | none | 1 | not recorded | not recorded | not recorded | not recorded | put/get |
 | 2026-10-14 System1 negative optimization | optimization | reject | not recorded | table, limits | not recorded | not recorded | 1 (retro clarification) | none |
 | 2026-10-14 point-lookup query (unmapped) | optimization | adopt (marginal) + reject | 1 | variant × case table, recommendation with trade-offs, question for a human, limits, follow-up offer | ~12 / ~15 | yes (trade-offs, cache argument, semantic question) | 3 | none; counterexample to journal-only rendering |
+| 2026-10-15 historical query experiment (unmapped) | optimization | partial | 1 | variant × case table, plans, limits, later correction | ~6 / ~9 | yes (source/Git applicability) | 1 | external context required; no API change |
+| 2026-10-15 current-source history query (unmapped) | optimization | partial | 1 | variant × case table, source context, outcome, limits, evidence links | ~8 / ~12 | yes (calling conditions, candidate rationale, deferred implementation) | 1 clarification | external context and review coverage; no API decision |
 
 Rows for entries before the revision contain only what those entries state; "not recorded" means the
 original entry did not record the field, not that the value was zero.
@@ -424,3 +426,117 @@ System label: unmapped. This entry does not assert identity with the System1/Sys
   Decision content without any journal operation came from application code (pattern recurrence, cache
   behavior, filter semantics) and agent inference (recommendation). Corrections: 3 (one from stale agent
   memory, two unlabeled code inferences).
+
+### 2026-10-15 — historical query experiment and later applicability correction
+
+`Kind:` optimization · `Outcome:` partial · `Scopes:` 1 · `System label:` unmapped.
+The label is not asserted to match System1/System2 in earlier entries.
+
+- **Actual report:** The agent selected a costly historical query without first verifying
+  that its SQL shape still existed in the current application. The initial successful
+  report showed a large measured improvement, result equality and an explicit fragment-only
+  limitation. A later report, prompted by the operator's question about actual calling
+  conditions, established that the historical shape had already been removed from source.
+  The experiment remained useful as a tool test, but did not establish an active production
+  optimization opportunity. No application or database change was made.
+- **Report blocks:** A variant × case table of elapsed medians and logical reads; result
+  equivalence and regression verdict; actual-plan interpretation; scope and resolution
+  limits; links to local evidence and later documentation; a subsequent applicability
+  correction. No final-report question for a human or recommendation to deploy was recorded.
+- **Evidence and interpretation:** Repeated multiset comparisons, complete last-measured
+  plan node sections for both variants in every case, a two-direction difference query,
+  and a later query of historical execution dates. Application source and Git history
+  supplied the calling conditions and removal of the measured query shape. Historical
+  telemetry in a test copy did not establish current production activity. Plan evidence
+  supported the changed access pattern, not an explanation for earlier timeout failures.
+- **Content provenance:** Approximately six numeric comparison statements in the results
+  table came from journal-backed compare metrics, and three later numeric/date statements
+  came from query rows (about nine in total). These are report-statement counts, not a
+  count of individual numeric literals. Two plan descriptions came from artifact sections.
+  Numbers were manually transcribed into chat and local documents. The main applicability
+  decision depended on application source/Git and agent interpretation outside SQLHarness
+  journal operations. References to those files are evidence sources, not journal-rendered
+  claims. Counts for additional prose statements are not recorded.
+- **Corrections:** One confirmed substantive correction after delivery: historical SQL
+  had initially been selected without establishing current application relevance. Its
+  cause was an agent scope/provenance error, not a tool defect. Separately, the effect of
+  changing the client timeout and the necessity of restarting the client were not verified;
+  successful later calls finished within the earlier client limit. Do not turn those
+  uncertainties into confirmed causes or count them as additional proven tool defects.
+- **Dashboard usefulness:** Retain successful experimental evidence alongside the later
+  applicability correction, limits and source-code context. A metric-only report would
+  miss the most important qualification. The dashboard was not used or assessed; its
+  reconstruction effort and usability benefit are not recorded.
+- **Observed workflow cost:** capabilities ×2, query ×5, compare ×4, artifact ×6: **17 calls**.
+  Comparisons included one SQL timeout, one client tool-call timeout without a SQLHarness
+  envelope, one successful three-repeat run and a five-repeat follow-up. The three-repeat
+  verdict was inconclusive due to too few runs; the agent had overridden the existing
+  five-repeat default. All six artifact reads were useful, complete plan selections with
+  no continuation. The empty initial cache check was a valid result, not tool friction.
+  Retro/discovery and client-configuration work are excluded from this count.
+- **Cost coverage:** Complete emitted bytes, tokenizer counts, tool-discovery/schema input,
+  caller arguments, chat, document duplication and retro costs were not measured. No output
+  or token savings baseline exists. Modeled report calls were not executed; their count and
+  cost are not recorded. No private workload values or identifiers are published here.
+- **Optional API implications:** Further evidence that agent-authored source context and
+  later corrections must coexist with journal-backed metrics; no new report API operation
+  is proposed. Collection remains open and does not establish API readiness. The separate
+  [timeout-layer observation](../../observations/mcp-timeout-layers.md) records a possible
+  documentation improvement for later decision, not an implementation commitment.
+- **Operator decision:** No candidate-selection skill change: this was a tool-version test;
+  ordinary future work will specify concrete SQL. Preserve this observation without adding
+  a new approval step or runtime assertion that source review occurred.
+
+### 2026-10-15 — current-source history query, reduced reads and deferred implementation
+
+`Kind:` optimization · `Outcome:` partial · `Scopes:` 1 · `System label:` unmapped.
+The label is not asserted to match earlier systems. This is a separate reviewed session
+from the historical-query experiment above.
+
+- **Actual report:** The agent located a query in current application source, described its
+  calling conditions and typed parameter construction before benchmarking, then tested two
+  ranking alternatives. The final report presented a candidate with reduced logical reads,
+  observed equality and no demonstrated latency improvement. No application or database
+  object was changed. The operator subsequently confirmed that the purpose was testing the
+  tool and requested retaining the finding in private documentation rather than implementing it.
+- **Report blocks:** Variant × case read-count table and relative deltas; source file,
+  method, branch and calling conditions; candidate rationale; repeated-result equivalence;
+  whole-data difference check; timing-resolution and plan-review limits; local evidence links.
+  No deployment recommendation or final-report question for a human was recorded.
+- **Evidence and interpretation:** Two matrix comparisons supplied repetitions, execution
+  metrics, equality and regression judgments. Catalog/data queries established input types,
+  distributions and uniqueness. Two-direction difference queries checked both candidates
+  across current data. Three saved-plan reads covered the initial candidate and baseline,
+  then the revised candidate, for the largest case only. Application source supplied the
+  invocation and SQL/parameter-building contract. Ranking identifiers before fetching payload
+  was an agent inference supported by the reviewed plans, not a journal-authored decision.
+- **Content provenance:** Approximately eight numeric report statements came from compare
+  metrics (four read/delta rows, repetition count, headline reduction and two timing medians),
+  three from query rows (result counts/differences), and one from an artifact section
+  (estimate versus actual rows). This is about twelve numeric statements, not numeric
+  literals; counts are approximate. Additional source-context statements came from application
+  code/Git, and candidate/limitation judgments from agent interpretation; their counts are
+  not recorded. Numbers were manually transcribed into chat and local documents. Calling
+  conditions, rationale and the operator's deferral have no SQLHarness journal operation.
+- **Corrections:** One later clarification: full node review covered only the largest case,
+  and unreviewed grant/compilation evidence must not be presented as proof that the tool
+  cannot collect it. Cause: imprecise distinction between review coverage and surface
+  availability, not a demonstrated tool defect. No corrected measured result was recorded.
+- **Dashboard usefulness:** Retain the case table, selected and superseded variants,
+  current-source context, observed equality, evidence-review coverage and deferred action.
+  Journal metrics alone cannot reconstruct those decisions. The dashboard was not used;
+  reconstruction effort and usability benefit are not recorded.
+- **Observed workflow cost:** capabilities ×1, query ×6, compare ×2, artifact ×3:
+  **12 investigation calls**, all successful, with no response truncation. All three artifact
+  reads completed without continuation. Discovery, source reads, private documentation and
+  retro work are separate and excluded. An overly broad tool-discovery filter printed
+  unrelated catalog entries: an agent discovery error, not evidence of an SQLHarness defect.
+- **Cost coverage:** Emitted bytes, estimated tokens, artifact volume, input/schema overhead,
+  final-chat and document duplication costs were not measured. No savings baseline exists.
+  Future report-write calls are modeled only; their count and cost are not recorded.
+- **Optional API implications:** Evidence for retaining authored source context, explicit
+  review coverage and later decisions alongside metrics. No report API change or readiness
+  conclusion follows. The separate [grant/compilation observation](../../observations/plan-memory-and-compilation-evidence.md)
+  preserves a potential evidence gap for later analysis, without choosing an implementation.
+- **Operator decision:** Record the evidence gap as an observation only; do not create an
+  implementation plan. Append this report observation. Product implementation remains deferred.
