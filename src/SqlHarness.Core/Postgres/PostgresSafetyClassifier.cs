@@ -73,6 +73,7 @@ internal sealed class PostgresSafetyClassifier
         {
             SqlUsage.Query => ClassifyQuery(parsed, database, allowMutation, confirmDatabase, knownTemps),
             SqlUsage.CompareSetup => ClassifyCompareSetup(parsed, knownTemps),
+            SqlUsage.Mutation => ClassifyMutation(parsed, knownTemps),
             _ => Denied(SqlSafetyReason.UnsupportedStatement),
         };
     }
@@ -105,10 +106,14 @@ internal sealed class PostgresSafetyClassifier
         var proofRequired = RunsReadWrite(database, allowMutation, confirmDatabase);
         var hasMutation = false;
         var hasSessionLocal = false;
+        var tier = SqlRiskTier.ReadOnly;
 
         foreach (var (statement, effect) in statements)
         {
-            var outcome = ClassifyStatement(statement, effect, knownTemps, proofRequired);
+            var outcome = ClassifyStatement(statement, effect, knownTemps, proofRequired, SqlUsage.Query);
+            tier = SqlRiskTiers.Max(tier, outcome.Tier);
+            if (effect.HasSequenceMutationFunction)
+                tier = SqlRiskTiers.Max(tier, SqlRiskTier.Schema);
             switch (outcome.Kind)
             {
                 case StatementKind.ReadOnly:
@@ -135,7 +140,7 @@ internal sealed class PostgresSafetyClassifier
         }
 
         if (!hasMutation)
-            return Allowed(hasSessionLocal: hasSessionLocal, sessionTemps: knownTemps);
+            return Allowed(hasSessionLocal: hasSessionLocal, sessionTemps: knownTemps) with { Tier = tier };
 
         if (!allowMutation)
             return DeniedWrite(SqlSafetyReason.MutationNotAllowed, knownTemps);
@@ -146,7 +151,56 @@ internal sealed class PostgresSafetyClassifier
         if (!string.Equals(database, confirmDatabase, StringComparison.Ordinal))
             return Denied(SqlSafetyReason.DatabaseConfirmationMismatch);
 
-        return Allowed(hasMutation: true, hasSessionLocal: hasSessionLocal, sessionTemps: knownTemps);
+        return Allowed(hasMutation: true, hasSessionLocal: hasSessionLocal, sessionTemps: knownTemps) with { Tier = tier };
+    }
+
+    private static SqlSafetyDecision ClassifyMutation(
+        List<(Statement Statement, StatementEffect Effect)> statements,
+        SessionTemps knownTemps)
+    {
+        var tier = SqlRiskTier.ReadOnly;
+        var grantees = new List<string>();
+        var hasSessionLocal = false;
+        foreach (var (statement, effect) in statements)
+        {
+            var outcome = ClassifyStatement(statement, effect, knownTemps, proofRequired: true, SqlUsage.Mutation);
+            switch (outcome.Kind)
+            {
+                case StatementKind.ReadOnly:
+                    break;
+                case StatementKind.SessionLocal:
+                    hasSessionLocal = true;
+                    break;
+                case StatementKind.Mutation:
+                case StatementKind.SessionLocalMutation:
+                case StatementKind.Schema:
+                case StatementKind.Privilege:
+                case StatementKind.Opaque:
+                    break;
+                case StatementKind.Unsupported:
+                    return Denied(SqlSafetyReason.UnsupportedStatement) with { Grantees = grantees };
+                case StatementKind.NonTemporaryWrite:
+                    return DeniedWrite(SqlSafetyReason.NonTemporaryWrite, knownTemps) with { Grantees = grantees };
+                case StatementKind.SelectInto:
+                    return Denied(SqlSafetyReason.SelectIntoNotAllowed) with { Grantees = grantees };
+                default:
+                    return Denied(SqlSafetyReason.UnsupportedStatement) with { Grantees = grantees };
+            }
+
+            tier = SqlRiskTiers.Max(tier, outcome.Tier);
+            if (effect.HasSequenceMutationFunction)
+                tier = SqlRiskTiers.Max(tier, SqlRiskTier.Schema);
+            grantees.AddRange(Grantees(statement));
+        }
+
+        return Allowed(
+            hasMutation: tier >= SqlRiskTier.Dml,
+            hasSessionLocal: hasSessionLocal,
+            sessionTemps: knownTemps) with
+        {
+            Tier = tier,
+            Grantees = grantees,
+        };
     }
 
     private static SqlSafetyDecision ClassifyCompareSetup(
@@ -157,9 +211,11 @@ internal sealed class PostgresSafetyClassifier
         // CREATE TEMP, CREATE INDEX, TRUNCATE and DROP in a read-only
         // transaction, so the name proof is all that is left here.
         var hasSessionLocal = false;
+        var tier = SqlRiskTier.ReadOnly;
         foreach (var (statement, effect) in statements)
         {
-            var outcome = ClassifyStatement(statement, effect, knownTemps, proofRequired: true);
+            var outcome = ClassifyStatement(statement, effect, knownTemps, proofRequired: true, SqlUsage.CompareSetup);
+            tier = SqlRiskTiers.Max(tier, outcome.Tier);
             switch (outcome.Kind)
             {
                 case StatementKind.ReadOnly:
@@ -177,14 +233,15 @@ internal sealed class PostgresSafetyClassifier
             }
         }
 
-        return Allowed(hasSessionLocal: hasSessionLocal, sessionTemps: knownTemps);
+        return Allowed(hasSessionLocal: hasSessionLocal, sessionTemps: knownTemps) with { Tier = tier };
     }
 
     private static StatementOutcome ClassifyStatement(
         Statement statement,
         StatementEffect effect,
         SessionTemps knownTemps,
-        bool proofRequired)
+        bool proofRequired,
+        SqlUsage usage)
     {
         if (effect.HasSelectInto && statement is not Statement.Select)
             return StatementOutcome.SelectInto;
@@ -197,7 +254,7 @@ internal sealed class PostgresSafetyClassifier
                 return ClassifySelect(select, effect, knownTemps, proofRequired);
 
             case Statement.Explain explain:
-                return ClassifyExplain(explain, knownTemps, proofRequired);
+                return ClassifyExplain(explain, knownTemps, proofRequired, usage);
 
             case Statement.Insert:
             case Statement.Update:
@@ -210,7 +267,7 @@ internal sealed class PostgresSafetyClassifier
             case Statement.CreateTable create:
                 {
                     if (!create.Element.Temporary)
-                        return StatementOutcome.Unsupported;
+                        return usage == SqlUsage.Mutation ? StatementOutcome.Schema : StatementOutcome.Unsupported;
 
                     var key = ObjectKey(create.Element.Name);
                     if (key is null)
@@ -241,7 +298,7 @@ internal sealed class PostgresSafetyClassifier
                     if (createIndex.Element.TableName is null)
                         return StatementOutcome.Unsupported;
                     if (!IsSessionLocal(createIndex.Element.TableName, knownTemps))
-                        return StatementOutcome.Unsupported;
+                        return usage == SqlUsage.Mutation ? StatementOutcome.Schema : StatementOutcome.Unsupported;
                     return StatementOutcome.SessionLocal;
                 }
 
@@ -251,7 +308,8 @@ internal sealed class PostgresSafetyClassifier
                     {
                         if (drop.Names.Count == 0)
                             return StatementOutcome.Unsupported;
-                        if (!drop.Names.All(name => IsSessionLocal(name, knownTemps)))
+                        var allSessionLocal = drop.Names.All(name => IsSessionLocal(name, knownTemps));
+                        if (!allSessionLocal && usage != SqlUsage.Mutation)
                             return StatementOutcome.Unsupported;
                         // Revocation must cover every temp the server may have
                         // dropped. With a known stored name that is one key. With
@@ -266,22 +324,31 @@ internal sealed class PostgresSafetyClassifier
                                 knownTemps.ForgetAll();
                         }
 
-                        return StatementOutcome.SessionLocal;
+                        return allSessionLocal ? StatementOutcome.SessionLocal : StatementOutcome.Schema;
                     }
 
                     if (drop.ObjectType == ObjectType.Index)
                     {
                         // Index drops do not name the table; Temporary is the only session-local signal.
-                        if (!drop.Temporary)
-                            return StatementOutcome.Unsupported;
-                        return StatementOutcome.SessionLocal;
+                        return drop.Temporary
+                            ? StatementOutcome.SessionLocal
+                            : usage == SqlUsage.Mutation ? StatementOutcome.Schema : StatementOutcome.Unsupported;
                     }
+
+                    if (drop.ObjectType == ObjectType.Database)
+                        return StatementOutcome.Unsupported;
+
+                    if (drop.ObjectType == ObjectType.Role)
+                        return usage == SqlUsage.Mutation ? StatementOutcome.Privilege : StatementOutcome.Unsupported;
+
+                    if (usage == SqlUsage.Mutation)
+                        return StatementOutcome.Schema;
 
                     return StatementOutcome.Unsupported;
                 }
 
             case Statement.Truncate truncate:
-                return ClassifyTruncate(truncate, knownTemps);
+                return ClassifyTruncate(truncate, knownTemps, usage);
 
             case Statement.StartTransaction:
             case Statement.Commit:
@@ -289,10 +356,8 @@ internal sealed class PostgresSafetyClassifier
             case Statement.Savepoint:
             case Statement.ReleaseSavepoint:
             case Statement.Prepare:
-            case Statement.Execute:
             case Statement.Deallocate:
             case Statement.Copy:
-            case Statement.Call:
             case Statement.SetVariable:
             case Statement.SetNames:
             case Statement.SetNamesDefault:
@@ -302,8 +367,16 @@ internal sealed class PostgresSafetyClassifier
             case Statement.Listen:
             case Statement.Notify:
             case Statement.Load:
+            case Statement.CreateExtension:
+            case Statement.CreateDatabase:
+                return StatementOutcome.Unsupported;
+
             case Statement.Grant:
             case Statement.Revoke:
+            case Statement.CreateRole:
+            case Statement.AlterRole:
+                return usage == SqlUsage.Mutation ? StatementOutcome.Privilege : StatementOutcome.Unsupported;
+
             case Statement.Analyze:
             case Statement.AlterTable:
             case Statement.AlterIndex:
@@ -313,19 +386,23 @@ internal sealed class PostgresSafetyClassifier
             case Statement.CreateSequence:
             case Statement.CreateFunction:
             case Statement.CreateProcedure:
-            case Statement.CreateExtension:
-            case Statement.CreateRole:
             case Statement.CreateType:
             case Statement.CreateTrigger:
-            case Statement.CreateDatabase:
-                return StatementOutcome.Unsupported;
+                return usage == SqlUsage.Mutation ? StatementOutcome.Schema : StatementOutcome.Unsupported;
+
+            case Statement.Call:
+            case Statement.Execute:
+                return usage == SqlUsage.Mutation ? StatementOutcome.Opaque : StatementOutcome.Unsupported;
 
             default:
                 return StatementOutcome.Unsupported;
         }
     }
 
-    private static StatementOutcome ClassifyTruncate(Statement.Truncate truncate, SessionTemps knownTemps)
+    private static StatementOutcome ClassifyTruncate(
+        Statement.Truncate truncate,
+        SessionTemps knownTemps,
+        SqlUsage usage)
     {
         // Closed option allowlist: anything whose effect reaches past the named
         // rows stays unsupported, even over proven temps. CASCADE follows foreign
@@ -346,7 +423,12 @@ internal sealed class PostgresSafetyClassifier
         foreach (var target in truncate.Names)
         {
             if (!IsProvenSessionTemp(target.Name, knownTemps))
+            {
+                var definitelyPersistent = target.Name.Values.Count > 1 && !IsPgTempAlias(target.Name.Values[0]);
+                if (usage == SqlUsage.Mutation && definitelyPersistent)
+                    return StatementOutcome.Schema;
                 return StatementOutcome.NonTemporaryWrite;
+            }
         }
 
         return StatementOutcome.SessionLocal;
@@ -428,7 +510,8 @@ internal sealed class PostgresSafetyClassifier
     private static StatementOutcome ClassifyExplain(
         Statement.Explain explain,
         SessionTemps knownTemps,
-        bool proofRequired)
+        bool proofRequired,
+        SqlUsage usage)
     {
         var innerEffect = StatementEffectVisitor.Inspect(explain.Statement);
         if (innerEffect.HasProhibitedFunction)
@@ -450,13 +533,13 @@ internal sealed class PostgresSafetyClassifier
                 PostgresQueryShape.HasWrite(innerSelect.Query))
                 return StatementOutcome.Unsupported;
             var inner = ClassifyStatement(
-                explain.Statement, innerEffect, new SessionTemps(knownTemps), proofRequired: true);
+                explain.Statement, innerEffect, new SessionTemps(knownTemps), proofRequired: true, usage);
             return inner.Kind is StatementKind.ReadOnly or StatementKind.SessionLocal
                 ? StatementOutcome.ReadOnly
                 : StatementOutcome.Unsupported;
         }
         // EXPLAIN ANALYZE executes the inner statement: full effect analysis, never auto-read.
-        return ClassifyStatement(explain.Statement, innerEffect, knownTemps, proofRequired);
+        return ClassifyStatement(explain.Statement, innerEffect, knownTemps, proofRequired, usage);
     }
 
     private static bool IsExplainAnalyze(Statement.Explain explain)
@@ -548,6 +631,15 @@ internal sealed class PostgresSafetyClassifier
                 span[i] = c is >= 'A' and <= 'Z' ? (char)(c + ('a' - 'A')) : c;
             }
         });
+
+    private static IEnumerable<string> Grantees(Statement statement) => statement switch
+    {
+        Statement.Grant grant => grant.Grantees.Select(FoldIdent),
+        Statement.Revoke revoke => revoke.Grantees.Select(FoldIdent),
+        Statement.AlterRole { Operation: AlterRoleOperation.AddMember addMember } =>
+            [FoldIdent(addMember.MemberName)],
+        _ => [],
+    };
 
     private static ObjectName? GetRelationName(TableFactor? relation) => relation switch
     {
@@ -713,20 +805,26 @@ internal sealed class PostgresSafetyClassifier
         SessionLocal,
         Mutation,
         SessionLocalMutation,
+        Schema,
+        Privilege,
+        Opaque,
         SelectInto,
         Unsupported,
         NonTemporaryWrite,
     }
 
-    private readonly record struct StatementOutcome(StatementKind Kind)
+    private readonly record struct StatementOutcome(StatementKind Kind, SqlRiskTier Tier)
     {
-        public static StatementOutcome ReadOnly { get; } = new(StatementKind.ReadOnly);
-        public static StatementOutcome SessionLocal { get; } = new(StatementKind.SessionLocal);
-        public static StatementOutcome Mutation { get; } = new(StatementKind.Mutation);
-        public static StatementOutcome SessionLocalMutation { get; } = new(StatementKind.SessionLocalMutation);
-        public static StatementOutcome SelectInto { get; } = new(StatementKind.SelectInto);
-        public static StatementOutcome Unsupported { get; } = new(StatementKind.Unsupported);
-        public static StatementOutcome NonTemporaryWrite { get; } = new(StatementKind.NonTemporaryWrite);
+        public static StatementOutcome ReadOnly { get; } = new(StatementKind.ReadOnly, SqlRiskTier.ReadOnly);
+        public static StatementOutcome SessionLocal { get; } = new(StatementKind.SessionLocal, SqlRiskTier.Session);
+        public static StatementOutcome Mutation { get; } = new(StatementKind.Mutation, SqlRiskTier.Dml);
+        public static StatementOutcome SessionLocalMutation { get; } = new(StatementKind.SessionLocalMutation, SqlRiskTier.Dml);
+        public static StatementOutcome Schema { get; } = new(StatementKind.Schema, SqlRiskTier.Schema);
+        public static StatementOutcome Privilege { get; } = new(StatementKind.Privilege, SqlRiskTier.Privilege);
+        public static StatementOutcome Opaque { get; } = new(StatementKind.Opaque, SqlRiskTier.Opaque);
+        public static StatementOutcome SelectInto { get; } = new(StatementKind.SelectInto, SqlRiskTier.ReadOnly);
+        public static StatementOutcome Unsupported { get; } = new(StatementKind.Unsupported, SqlRiskTier.ReadOnly);
+        public static StatementOutcome NonTemporaryWrite { get; } = new(StatementKind.NonTemporaryWrite, SqlRiskTier.ReadOnly);
     }
 
     private readonly record struct StatementEffect(
