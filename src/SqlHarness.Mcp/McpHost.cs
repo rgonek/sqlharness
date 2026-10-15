@@ -184,7 +184,8 @@ public static class McpHost
             identity,
             McpCallRegistry.Classify,
             () => roots.Current,
-            McpCallRegistry.Metadata));
+            McpCallRegistry.Metadata,
+            config.Config.Diagnostics));
         Tools.McpToolCatalog.Wire(serverOptions, process, hostShutdown: lifetime.Token);
         try
         {

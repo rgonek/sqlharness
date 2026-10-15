@@ -1,8 +1,10 @@
+using SqlHarness.Core.Journal;
+
 namespace SqlHarness.Core;
 
 internal static class JournalSchema
 {
-    internal const int CurrentVersion = 9;
+    internal const int CurrentVersion = 10;
 
     internal const string Version1 = """
         CREATE TABLE sessions (
@@ -175,5 +177,27 @@ internal static class JournalSchema
             updated_at TEXT NOT NULL
         );
         CREATE INDEX ix_session_annotations_starred ON session_annotations(starred) WHERE starred = 1;
+        """;
+
+    internal const string Version10 = """
+        CREATE TABLE operation_phases (
+            operation_id INTEGER NOT NULL REFERENCES operations(id) ON DELETE CASCADE,
+            phase TEXT NOT NULL,
+            count INTEGER NOT NULL,
+            total_ms INTEGER NOT NULL,
+            max_ms INTEGER NOT NULL,
+            PRIMARY KEY (operation_id, phase)
+        );
+        CREATE TABLE operation_events (
+            operation_id INTEGER NOT NULL REFERENCES operations(id) ON DELETE CASCADE,
+            seq INTEGER NOT NULL,
+            offset_ms INTEGER NOT NULL,
+            phase TEXT NOT NULL,
+            duration_ms INTEGER NOT NULL,
+            outcome TEXT NOT NULL,
+            error_number INTEGER,
+            detail_json TEXT,
+            PRIMARY KEY (operation_id, seq)
+        );
         """;
 }

@@ -57,7 +57,7 @@ function NumberField({ id, label, value, min, max, error, onCommit }: { id: stri
   )
 }
 
-type CardKey = "journal" | "dashboard" | "compare"
+type CardKey = "journal" | "dashboard" | "compare" | "diagnostics"
 type Status = { state: "saving" } | { state: "saved" } | { state: "error"; message: string }
 
 function StatusLine({ status }: { status?: Status }) {
@@ -111,6 +111,7 @@ export function SettingsPage() {
   const setRetention = (next: Partial<Settings["journal"]["retention"]>) => setJournal({ retention: { ...journal.retention, ...next } })
   const setDashboard = (next: Partial<Settings["dashboard"]>) => commit({ ...draft, dashboard: { ...draft.dashboard, ...next } }, "dashboard")
   const setCompare = (next: Partial<Settings["compare"]>) => commit({ ...draft, compare: { ...draft.compare, ...next } }, "compare")
+  const setDiagnostics = (next: Partial<Settings["diagnostics"]>) => commit({ ...draft, diagnostics: { ...draft.diagnostics, ...next } }, "diagnostics")
 
   function apply(next: Settings, card: CardKey) {
     setEdited(next)
@@ -204,6 +205,16 @@ export function SettingsPage() {
           <Toggle id="compare-require-context" label="Require compare subject and scope" checked={draft.compare.requireContext} onChange={value => setCompare({ requireContext: value })} />
           <p className="text-sm text-muted-foreground">When enabled, CLI compare needs both <code>--subject</code> and <code>--scope</code>, and MCP compare needs both fields. This setting is on by default.</p>
           <StatusLine status={status.compare} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Connection diagnostics</CardTitle>
+          <CardDescription>Record safe metadata about database connection attempts. Credentials and target names are excluded.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <Toggle id="diagnostics-enabled" label="Connection diagnostics" checked={draft.diagnostics.enabled} onChange={value => setDiagnostics({ enabled: value })} />
+          <StatusLine status={status.diagnostics} />
         </CardContent>
       </Card>
       <ModelPricesCard />

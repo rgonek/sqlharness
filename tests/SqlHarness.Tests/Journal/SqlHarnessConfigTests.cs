@@ -20,10 +20,23 @@ public sealed class SqlHarnessConfigTests : IDisposable
         Assert.True(result.Config.Journal.Enabled);
         Assert.False(result.Config.Journal.StoreSensitive);
         Assert.False(result.Config.Journal.Retention.Enabled);
+        Assert.False(result.Config.Diagnostics.Enabled);
         Assert.False(result.Config.Dashboard.AutoStart);
         Assert.Equal(47800, result.Config.Dashboard.Port);
         Assert.True(System.Text.Json.JsonDocument.Parse(SqlHarnessConfigWriter.Serialize(result.Config)).RootElement
             .GetProperty("compare").GetProperty("requireContext").GetBoolean());
+    }
+
+    [Fact]
+    public void Diagnostics_is_opt_in_and_rejects_unknown_or_wrong_typed_fields()
+    {
+        var enabled = SqlHarnessConfigLoader.Parse("""{ "diagnostics": { "enabled": true } }"""u8.ToArray());
+
+        Assert.Empty(enabled.Errors);
+        Assert.True(enabled.Config!.Diagnostics.Enabled);
+        Assert.NotEmpty(SqlHarnessConfigLoader.Parse("""{ "diagnostics": { "enabled": "true" } }"""u8.ToArray()).Errors);
+        Assert.NotEmpty(SqlHarnessConfigLoader.Parse("""{ "diagnostics": { "captureSecrets": true } }"""u8.ToArray()).Errors);
+        Assert.False(SqlHarnessConfigLoader.Parse("{}"u8.ToArray()).Config!.Diagnostics.Enabled);
     }
 
     [Fact]
@@ -91,6 +104,7 @@ public sealed class SqlHarnessConfigTests : IDisposable
     [InlineData("""{ "journal": { "storeSensitive": true, "retention": { "maxAgeDays": 0 } } }""")]
     [InlineData("""{ "journal": { "storeSensitive": "true" } }""")]
     [InlineData("""{ "journal": null }""")]
+    [InlineData("""{ "diagnostics": { "enabled": true, "unknown": 1 } }""")]
     [InlineData("""{ "journal": { "storeSensitive": true }, } """)]
     [InlineData("// comment\n        { \"journal\": { \"storeSensitive\": true } }")]
     [InlineData("not json")]
@@ -104,6 +118,7 @@ public sealed class SqlHarnessConfigTests : IDisposable
         Assert.NotNull(result.Warning);
         Assert.False(result.Config.Journal.StoreSensitive);
         Assert.False(result.Config.Dashboard.AutoStart);
+        Assert.False(result.Config.Diagnostics.Enabled);
         Assert.True(result.Config.Journal.Enabled);
     }
 
@@ -157,6 +172,7 @@ public sealed class SqlHarnessConfigTests : IDisposable
         {
             Journal = new JournalConfig { StoreSensitive = true, Retention = new JournalRetentionConfig { Enabled = true, MaxAgeDays = 7 } },
             Dashboard = new DashboardConfig { AutoStart = true, IdleShutdownHours = 2 },
+            Diagnostics = new DiagnosticsConfig { Enabled = true },
         };
 
         SqlHarnessConfigWriter.Write(ConfigPath, config);

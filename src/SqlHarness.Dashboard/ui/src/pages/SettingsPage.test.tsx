@@ -11,6 +11,7 @@ const response = (over: Partial<SettingsResponse> = {}): SettingsResponse => ({
     journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
     dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8 },
     compare: { requireContext: true },
+    diagnostics: { enabled: false },
   },
   ...over,
 })
@@ -46,6 +47,20 @@ test("compare context is on by default and disabling it preserves other settings
   expect((puts[0].body as Put & { compare: { requireContext: boolean } }).compare.requireContext).toBe(false)
   expect((puts[0].body as Put).journal).toEqual(response().settings.journal)
   expect((puts[0].body as Put).dashboard).toEqual(response().settings.dashboard)
+})
+
+test("connection diagnostics saves without confirmation and preserves other settings", async () => {
+  const puts = stubSettings(response())
+  renderApp("/settings")
+
+  const toggle = await screen.findByRole("switch", { name: "Connection diagnostics" })
+  expect(toggle).not.toBeChecked()
+  await userEvent.click(toggle)
+  await waitFor(() => expect(puts).toHaveLength(1))
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  expect((puts[0].body as { diagnostics: { enabled: boolean } }).diagnostics.enabled).toBe(true)
+  expect((puts[0].body as { journal: unknown }).journal).toEqual(response().settings.journal)
+  expect((puts[0].body as { compare: unknown }).compare).toEqual(response().settings.compare)
 })
 
 test("enabling storeSensitive asks for confirmation, then saves", async () => {

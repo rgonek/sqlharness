@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace SqlHarness.Dashboard;
 
@@ -74,7 +75,15 @@ public sealed record OperationDetail(
     string TokenEstimationMethod = "utf8-bytes-div-4",
     string? CompareSubject = null, string? CompareScope = null, string? BaselineVersion = null,
     string? CandidateVersion = null, JsonElement? CompareRegression = null,
-    IReadOnlyList<JsonElement>? CompareCases = null, JsonElement? CompareConditions = null);
+    IReadOnlyList<JsonElement>? CompareCases = null, JsonElement? CompareConditions = null,
+    IReadOnlyList<OperationPhaseSummary>? Phases = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<OperationEventSummary>? Events = null);
+
+public sealed record OperationPhaseSummary(string Phase, int Count, long TotalMs, long MaxMs);
+
+public sealed record OperationEventSummary(
+    long OffsetMs, string Phase, long DurationMs, string Outcome, int? ErrorNumber,
+    string? ClientConnectionId, int? DroppedCount);
 
 public sealed record StoredPlan(string Hash, string Format, string Document);
 

@@ -58,6 +58,7 @@ public sealed class DoctorCommand(OutputContext output) : AsyncCommand<DoctorCom
             configValid = config.Status != SqlHarnessConfigStatus.Invalid,
             journalEnabled = config.Config.Journal.Enabled,
             journalStoreSensitive = config.Config.Journal.StoreSensitive,
+            diagnosticsEnabled = config.Config.Diagnostics.Enabled,
             activityJournalPresent = File.Exists(SqlHarnessPaths.ActivityDatabase),
             homePath,
             homePresent,

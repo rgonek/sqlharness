@@ -47,6 +47,47 @@ test("measure shows facts, KPIs, table IO, waits and the sql-not-stored note", a
   expect(screen.queryByRole("link", { name: "Download plan" })).not.toBeInTheDocument()
 })
 
+test("operation details show phase timing shares and expandable connection diagnostics", async () => {
+  stubFetch({ "/api/operations/10": operationDetail({
+    operation: operation({ durationMs: 100 }),
+    phases: [{ phase: "execute", count: 2, totalMs: 30, maxMs: 20 }],
+    events: [
+      { offsetMs: 12, phase: "connect", durationMs: 8, outcome: "failed", errorNumber: 18456, clientConnectionId: "550e8400-e29b-41d4-a716-446655440000", droppedCount: null },
+      { offsetMs: 20, phase: "other", durationMs: 0, outcome: "truncated", errorNumber: null, clientConnectionId: null, droppedCount: 3 },
+    ],
+  }) })
+  renderApp("/operations/10")
+
+  const timing = await screen.findByRole("region", { name: "Time breakdown" })
+  expect(within(timing).getByRole("columnheader", { name: "Phase" })).toBeInTheDocument()
+  expect(within(timing).getByRole("cell", { name: "execute" })).toBeInTheDocument()
+  expect(within(timing).getByRole("cell", { name: "30 ms" })).toBeInTheDocument()
+  expect(within(timing).getByRole("cell", { name: "30%" })).toBeInTheDocument()
+
+  const events = screen.getByText("Connection events").closest("details")!
+  expect(events).not.toHaveAttribute("open")
+  await userEvent.click(screen.getByText("Connection events"))
+  expect(await screen.findByText("550e8400-e29b-41d4-a716-446655440000")).toBeInTheDocument()
+  expect(screen.getByText("Error number: 18456")).toBeInTheDocument()
+  expect(screen.getByText("Offset 12 ms")).toBeInTheDocument()
+  expect(screen.getByText("Duration 8 ms")).toBeInTheDocument()
+  expect(screen.getByText("Outcome: failed")).toBeInTheDocument()
+  expect(screen.getByText("3 diagnostic events omitted")).toBeInTheDocument()
+})
+
+test("legacy operation details show an empty time breakdown without zero-valued phases", async () => {
+  stubFetch({ "/api/operations/10": operationDetail({
+    operation: operation({ durationMs: 100 }),
+    phases: [],
+  }) })
+  renderApp("/operations/10")
+
+  const timing = await screen.findByRole("region", { name: "Time breakdown" })
+  expect(within(timing).getByRole("columnheader", { name: "Phase" })).toBeInTheDocument()
+  expect(within(timing).getByText("No phase timing data was recorded for this operation.")).toBeInTheDocument()
+  expect(within(timing).queryByRole("cell", { name: "0 ms" })).not.toBeInTheDocument()
+})
+
 test("compare shows baseline versus candidate and stored plans with operators", async () => {
   const hash = "B".repeat(64)
   stubFetch({

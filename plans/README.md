@@ -6,6 +6,7 @@ Przeczytaj wybrany plan i jego spec przed wykonaniem. Wpis w kolejce nie jest zg
 
 | Plan | Zakres | Zależności | Status |
 |---|---|---|---|
+| [068](068-operation-phase-timings-and-diagnostics.md) | Journal phase timings and opt-in connection events | 062 coordinated | IMPLEMENTED on `feat/plan-068-phase-timings`; local integration pending; [verification](../docs/verification/plan-068.md) |
 
 ## Oczekujące
 
@@ -13,7 +14,6 @@ Przeczytaj wybrany plan i jego spec przed wykonaniem. Wpis w kolejce nie jest zg
 |---|---|---|---|
 | [036](036-live-database-ci-lane.md) | Direction: opt-in CI lane against throwaway PG/SQL Server containers | 016 (028 for pins) | TODO |
 | [063](063-missing-index-overlap.md) | Missing-index hints in the saved `plan` artifact section carry an overlap verdict against the table's existing indexes (inventory captured after measurement) | 060 | TODO |
-| [068](068-operation-phase-timings-and-diagnostics.md) | Journal phase timings (connect/setup/execute/artifact) and opt-in `diagnostics.enabled` connection events | Coordinate 062 (operation page, journal reader) | TODO |
 | [070](070-dashboard-agent-transcript-matching.md) | Opt-in agent transcript matching: Claude/Codex conversation titles, Claude model/effort per operation (journal v10 derived tables, housekeeping cycle) | 062 and 069 DONE first; re-verify transcript formats | TODO |
 | [071](071-dashboard-compare-review.md) | Compare review: CodeMirror 6 SQL tabs + side-by-side/unified diff, per-table IO and plan changes, Copy Markdown for PRs, session version diff | 062 DONE; **ask the operator to confirm CodeMirror 6 before starting** | TODO |
 | [072](072-mutation-risk-tiers.md) | Core risk tiers (`read-only`/`session`/`dml`/`schema`/`privilege`/`opaque`) via `SqlUsage.Mutation` in both engines; `tier` in dry runs; behaviour of existing commands unchanged | — | TODO |

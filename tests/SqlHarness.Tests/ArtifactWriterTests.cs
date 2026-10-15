@@ -1,12 +1,63 @@
 using System.Text.Json;
 
 using SqlHarness.Core;
+using SqlHarness.Core.Journal;
+
+using OperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Tests;
 
 [Collection(SqlHarnessHomeCollection.Name)]
 public class ArtifactWriterTests
 {
+    [Fact]
+    public void Writer_records_actual_published_file_count()
+    {
+        using var temp = new TempDirectory();
+        var report = new SqlHarnessMeasureReport(
+            new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile"),
+            1, 1, true, Variant("measure"), null);
+        var run = new CompareRunArtifact("measure", 1, 1, 2, 3,
+            new Dictionary<string, long>(), "HASH", [FixturePlan()], 0);
+        using (OperationPhaseRecorder.Begin(TimeProvider.System, captureEvents: true))
+        {
+            var directory = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch)
+                .Write(report, [run], "wind");
+
+            var phaseEvent = Assert.Single(OperationPhaseRecorder.Current!.Events());
+            Assert.Equal(OperationPhase.Artifact, phaseEvent.Phase);
+            Assert.Equal("{\"fileCount\":6}", phaseEvent.DetailJson);
+            Assert.Equal(6, Directory.GetFiles(directory, "*", SearchOption.AllDirectories).Length);
+        }
+    }
+
+    [Fact]
+    public void Writer_marks_publication_failures_failed_and_matrix_noop_emits_nothing()
+    {
+        using var temp = new TempDirectory();
+        var report = new SqlHarnessMeasureReport(
+            new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile"),
+            1, 1, true, Variant("measure"), null);
+        var writer = new CompareArtifactWriter(temp.Path, () => DateTimeOffset.UnixEpoch,
+            (_, _, _) => throw new IOException("publish failed"));
+        using (OperationPhaseRecorder.Begin(TimeProvider.System, captureEvents: true))
+        {
+            Assert.Throws<IOException>(() => writer.Write(report, [], "wind"));
+            var phaseEvent = Assert.Single(OperationPhaseRecorder.Current!.Events());
+            Assert.Equal("failed", phaseEvent.Outcome);
+            Assert.Equal("{\"fileCount\":0}", phaseEvent.DetailJson);
+
+            writer.WriteMatrixIndex([]);
+            Assert.Single(OperationPhaseRecorder.Current.Events());
+        }
+    }
+
+    [Fact]
+    public void Diagnostic_file_count_failure_is_best_effort()
+    {
+        Assert.Null(CompareArtifactWriter.TryGetFileCount("\0"));
+    }
+
     [Fact]
     public void Writer_creates_safe_unique_metadata_and_exact_plan_files()
     {

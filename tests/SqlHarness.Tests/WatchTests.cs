@@ -4,13 +4,36 @@ using SqlHarness.Cli.Commands;
 using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
+using SqlHarness.Core.Journal;
 using SqlHarness.Core.Targets;
+using SqlHarness.Tests.Journal;
 
 namespace SqlHarness.Tests;
 
 public class WatchTests
 {
     private const string Token = "eyJsynthetic.access-never-emit.signature";
+
+    [Fact]
+    public async Task Watch_records_each_poll_as_execute_without_attributing_delay()
+    {
+        using var journalTemp = new JournalTempDirectory();
+        var journal = ActivityJournal.Open(journalTemp.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
+        var clock = new FakeWatchClock();
+        var session = FakeSession.WithScalarPolls(1, 1);
+        var module = new JournalingModule(
+            Module(session, clock),
+            () => journal,
+            () => JournalTestData.Session(),
+            diagnostics: new DiagnosticsConfig { Enabled = false });
+        await module.ExecuteAsync(Watch(untilUnchanged: 1));
+
+        var phases = JournalDb.Rows(journalTemp.DatabasePath,
+            "SELECT phase, count FROM operation_phases ORDER BY phase");
+        Assert.Equal(2L, phases.Single(phase => Equals(phase["phase"], "execute"))["count"]);
+        Assert.Equal(1L, phases.Single(phase => Equals(phase["phase"], "connect"))["count"]);
+        Assert.Contains(phases, phase => Equals(phase["phase"], "other"));
+    }
 
     [Fact]
     public async Task Watch_emits_first_and_changed_polls_only()

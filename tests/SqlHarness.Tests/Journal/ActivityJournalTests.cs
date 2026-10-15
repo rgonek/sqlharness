@@ -456,7 +456,7 @@ public sealed class ActivityJournalTests
     }
 
     [Fact]
-    public void Version_6_journal_migrates_to_v8_without_inventing_legacy_provenance_or_changing_bytes()
+    public void Version_6_journal_migrates_to_v10_without_inventing_legacy_provenance_or_changing_bytes()
     {
         using var temp = new JournalTempDirectory();
         Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
@@ -491,7 +491,7 @@ public sealed class ActivityJournalTests
     }
 
     [Fact]
-    public void Previous_journal_migrates_to_v9_with_an_empty_annotation_table()
+    public void Version_8_journal_migrates_to_v10_preserving_the_annotation_schema()
     {
         using var temp = new JournalTempDirectory();
         Directory.CreateDirectory(Path.GetDirectoryName(temp.DatabasePath)!);
@@ -511,7 +511,7 @@ public sealed class ActivityJournalTests
 
         Open(temp, TextWriter.Null);
 
-        Assert.Equal(9L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
+        Assert.Equal(10L, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
         Assert.Equal("cli:v8", JournalDb.Rows(temp.DatabasePath, "SELECT session_key FROM sessions").Single()["session_key"]);
         Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT * FROM session_annotations"));
         Assert.Single(JournalDb.Rows(temp.DatabasePath,

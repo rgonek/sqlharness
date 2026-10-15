@@ -4,7 +4,9 @@ using SqlHarness.Cli.Commands;
 using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
 using SqlHarness.Core.Auth;
+using SqlHarness.Core.Journal;
 using SqlHarness.Core.Targets;
+using SqlHarness.Tests.Journal;
 
 namespace SqlHarness.Tests;
 
@@ -12,6 +14,30 @@ public class SnapshotTests
 {
     private const string Token = "eyJsynthetic.access-never-emit.signature";
     private const string Name = "before-import";
+
+    [Fact]
+    public async Task Snapshot_records_execute_and_publication_phases()
+    {
+        using var journalTemp = new JournalTempDirectory();
+        var journal = ActivityJournal.Open(journalTemp.DatabasePath, new JournalConfig(), TextWriter.Null, TimeProvider.System);
+        var store = new FakeSnapshotStore();
+        var module = new JournalingModule(
+            Module(FakeSession.WithRows(1), store),
+            () => journal,
+            () => JournalTestData.Session(),
+            diagnostics: new DiagnosticsConfig { Enabled = true });
+        var outcome = await module.ExecuteAsync(Snapshot());
+
+        Assert.Equal(SqlHarnessExitCode.Success, outcome.ExitCode);
+        var phases = JournalDb.Rows(journalTemp.DatabasePath,
+            "SELECT phase, count FROM operation_phases ORDER BY phase");
+        Assert.Equal(1L, phases.Single(phase => Equals(phase["phase"], "execute"))["count"]);
+        Assert.Equal(1L, phases.Single(phase => Equals(phase["phase"], "artifact"))["count"]);
+        var artifactEvent = JournalDb.Rows(journalTemp.DatabasePath,
+            "SELECT outcome, detail_json FROM operation_events WHERE phase = 'artifact'").Single();
+        Assert.Equal("succeeded", artifactEvent["outcome"]);
+        Assert.Equal("{\"fileCount\":1}", artifactEvent["detail_json"]);
+    }
 
     [Fact]
     public async Task Snapshot_capture_stores_complete_bounded_result()
