@@ -89,3 +89,16 @@ test("explains when setup SQL is unavailable or omitted by journal limits", asyn
   expect(screen.getByText(/Setup SQL was omitted/)).toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "Copy" })).not.toBeInTheDocument()
 })
+
+test("uses the dedicated setup column even if the bounded conditions omitted setup", async () => {
+  const setup = "CREATE TABLE #big_data (id int);"
+  render(<CompareDetail detail={operationDetail({
+    operation: operation({ operation: "compare" }),
+    setupSqlText: setup,
+    compareConditions: { omittedSensitiveFields: ["setupSql"] },
+  })} />)
+  await userEvent.click(screen.getByRole("tab", { name: "SQL changes" }))
+  const section = screen.getByRole("region", { name: "Setup SQL" })
+  expect(within(section).getByTestId("sql-code")).toHaveTextContent(setup)
+  expect(screen.queryByText(/Setup SQL was omitted/)).not.toBeInTheDocument()
+})
