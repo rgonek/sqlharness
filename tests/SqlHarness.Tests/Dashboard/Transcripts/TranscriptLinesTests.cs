@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+
 using SqlHarness.Dashboard.Transcripts;
 
 namespace SqlHarness.Tests.Dashboard.Transcripts;
@@ -26,7 +27,8 @@ public sealed class TranscriptLinesTests
     {
         var line = JsonSerializer.Serialize(new
         {
-            type = "assistant", sessionId = "conv-2",
+            type = "assistant",
+            sessionId = "conv-2",
             message = new { model = "claude-sonnet", role = "assistant", content = new[] { new { type = "tool_use", id = "toolu_4", name = "mcp__sqlharness__sqlharness_query" } } },
         });
 
@@ -75,7 +77,10 @@ internal static class ClaudeFixtures
         blocks.AddRange(tools.Select(t => (object)new { type = "tool_use", id = t.Id, name = t.Name, input = new { sql = "SELECT secret" } }));
         return JsonSerializer.Serialize(new
         {
-            type = "assistant", sessionId = conversation, effort, cwd = "/work",
+            type = "assistant",
+            sessionId = conversation,
+            effort,
+            cwd = "/work",
             message = new { model, role = "assistant", content = blocks },
         });
     }

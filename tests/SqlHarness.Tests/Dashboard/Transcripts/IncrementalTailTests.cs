@@ -1,4 +1,5 @@
 using System.Text;
+
 using SqlHarness.Dashboard.Transcripts;
 
 namespace SqlHarness.Tests.Dashboard.Transcripts;
