@@ -193,7 +193,7 @@ sqlharness capabilities prod-eu --json
 sqlharness doctor --json
 ```
 
-`capabilities <profile> --json` describes the commands, the output modes each command accepts (`outputModesByCommand`) and the limits, scoped to that profile's engine: its parameter types, session-temp statements and engine-only limits. Without a profile it returns engine-neutral discovery only. It never takes `--var`; an unknown or unreadable profile returns a JSON error envelope with exit `2` (`profile_unknown`, `profile_unavailable`). `doctor --json` checks the local installation and omits accounts and environment values.
+`capabilities <profile> --json` describes the commands, the output modes each command accepts (`outputModesByCommand`) and the limits, scoped to that profile's engine: its parameter types, session-temp statements, engine-only limits and an `engineGuidance` object (`query`, `setup`; `query` may be empty) with the engine's native safety and setup rules, and the engine's server-identity rule in `limits.targetIdentity.server`. Without a profile it returns engine-neutral discovery only, and command `--help` stays engine-neutral too. Rules that hold for both engines (setup runs once per measured session, setup locals do not carry into measured SQL, comparison semantics, budgets) live in help and tool descriptions; the engine sections below are the complete reference, read only for the engine you use. It never takes `--var`; an unknown or unreadable profile returns a JSON error envelope with exit `2` (`profile_unknown`, `profile_unavailable`). `doctor --json` checks the local installation and omits accounts and environment values.
 
 `--dry-run` on `query`, `measure` and `compare` checks the exact invocation offline; the dry-run rule is in the [Safety contract](#safety-contract).
 
@@ -338,7 +338,7 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat `
 
 | Command | Purpose |
 | --- | --- |
-| `capabilities` | Describe commands, engines, limits, output modes and the active compare-context policy, offline. Pass a profile for that engine's parameter types and limits. |
+| `capabilities` | Describe commands, engines, limits, output modes and the active compare-context policy, offline. Pass a profile for that engine's parameter types, limits and `engineGuidance`. |
 | `doctor` | Check the local installation and profile-file availability, offline. |
 | `watch` | Poll a bounded read-only query until `--until` / `--until-unchanged` or max duration. |
 | `snapshot` | Capture or `--diff` a named canonical result under `~/.sqlharness/snapshots` (`--force` to replace). |

@@ -2,6 +2,7 @@ using System.IO.Pipelines;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -1321,6 +1322,154 @@ public sealed class McpToolSchemaTests : IDisposable
 
         Assert.Contains("static", byName["sqlharness_watch"].ProtocolTool.Description ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("visible", byName["sqlharness_watch"].ProtocolTool.Description ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private const string PgProfileName = "mcp-t3-schema-pg";
+
+    // Distinctive registry tokens: SQL Server setup orders #temp creation before the first
+    // parameter reference; PostgreSQL setup warns about user functions and READ ONLY commands.
+    private static readonly string[] SqlServerTokens = ["#temp", "first parameter reference"];
+    private static readonly string[] PostgresTokens = ["READ ONLY", "TEMP setup", "user function", "least-privilege"];
+
+    private McpScope PostgresScope()
+    {
+        var profiles = new Dictionary<string, TargetProfile>(Scope().Profiles, StringComparer.Ordinal)
+        {
+            [PgProfileName] = new TargetProfile(
+                "mcp-unreachable.invalid", "pgdb", new Dictionary<string, string>(), "sql",
+                SqlUser: "mcp", PasswordEnvVar: "SQLHARNESS_MCP_TEST_PW", Engine: "postgres"),
+        };
+        return McpScope.Create(new McpServerOptions { Profile = PgProfileName }, profiles);
+    }
+
+    private McpProcessContext RequestProcess()
+    {
+        var scope = Scope();
+        return McpProcessContext.Create(
+            new McpServerOptions { RequestScope = true, AllowedProfiles = [ProfileName] }, () => scope.Profiles);
+    }
+
+    private static async Task<IReadOnlyList<Tool>> ServedToolsAsync(ServedCatalog served) =>
+        (await served.Client.ListToolsAsync(cancellationToken: CancellationToken.None)).Select(tool => tool.ProtocolTool).ToList();
+
+    private static string ToolDescription(IReadOnlyList<Tool> tools, string name) =>
+        Assert.Single(tools, tool => tool.Name == name).Description ?? string.Empty;
+
+    private static string ArgumentDescription(IReadOnlyList<Tool> tools, string name, string argument) =>
+        Properties(Assert.Single(tools, tool => tool.Name == name).InputSchema).GetProperty(argument).GetProperty("description").GetString() ?? string.Empty;
+
+    private void AssertEngineGuidance(IReadOnlyList<Tool> tools, string[] expected, string[] foreign)
+    {
+        var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(tools));
+        _output.WriteLine($"tools/list bytes: {bytes} of {McpLimits.ToolsListBudgetBytes}.");
+        Assert.True(bytes <= McpLimits.ToolsListBudgetBytes, $"tools/list is {bytes} bytes.");
+        var setups = new[]
+        {
+            ArgumentDescription(tools, "sqlharness_measure", "setup"),
+            ArgumentDescription(tools, "sqlharness_compare", "setup"),
+        };
+        foreach (var setup in setups)
+        {
+            Assert.Contains("once per measured session", setup, StringComparison.OrdinalIgnoreCase);
+            // Engine-neutral fact (plan 064 decision 6): stated for every engine, once.
+            Assert.Contains("do not carry", setup, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(1, Regex.Count(setup, "do not (carry|cross)", RegexOptions.IgnoreCase));
+        }
+        var query = ToolDescription(tools, "sqlharness_query");
+        var guided = string.Join("\n", setups.Append(query));
+        foreach (var token in expected)
+            Assert.Contains(token, guided, StringComparison.Ordinal);
+        var all = JsonSerializer.Serialize(tools);
+        foreach (var token in foreign)
+            Assert.DoesNotContain(token, all, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Fixed_sql_server_catalog_carries_only_sql_server_guidance()
+    {
+        await using var served = await ServedCatalog.CreateAsync(Scope());
+        AssertEngineGuidance(await ServedToolsAsync(served), SqlServerTokens, PostgresTokens);
+    }
+
+    [Fact]
+    public async Task Fixed_postgres_catalog_carries_only_postgres_guidance()
+    {
+        var scope = PostgresScope();
+        Assert.Equal(SqlEngine.Postgres, scope.ResolvedTarget.Engine);
+        await using var served = await ServedCatalog.CreateAsync(scope);
+        AssertEngineGuidance(await ServedToolsAsync(served), PostgresTokens, [.. SqlServerTokens, "SQL Server", "#temps"]);
+    }
+
+    [Fact]
+    public async Task Request_scope_catalog_carries_sql_server_guidance()
+    {
+        await using var served = await ServedCatalog.CreateAsync(RequestProcess());
+        AssertEngineGuidance(await ServedToolsAsync(served), SqlServerTokens, PostgresTokens);
+    }
+
+    [Fact]
+    public async Task Engine_guidance_changes_descriptions_only()
+    {
+        await using var sqlServer = await ServedCatalog.CreateAsync(Scope());
+        await using var postgres = await ServedCatalog.CreateAsync(PostgresScope());
+        var sqlServerTools = (await ServedToolsAsync(sqlServer)).ToDictionary(tool => tool.Name, StringComparer.Ordinal);
+        var postgresTools = (await ServedToolsAsync(postgres)).ToDictionary(tool => tool.Name, StringComparer.Ordinal);
+
+        Assert.Equal(sqlServerTools.Keys.Order(StringComparer.Ordinal), postgresTools.Keys.Order(StringComparer.Ordinal));
+        foreach (var (name, tool) in sqlServerTools)
+        {
+            var other = postgresTools[name];
+            Assert.Equal(Structure(tool.InputSchema), Structure(other.InputSchema));
+            Assert.Equal(JsonSerializer.Serialize(tool.Annotations), JsonSerializer.Serialize(other.Annotations));
+            Assert.Null(other.OutputSchema);
+        }
+
+        Assert.NotEqual(
+            ArgumentDescription([.. sqlServerTools.Values], "sqlharness_measure", "setup"),
+            ArgumentDescription([.. postgresTools.Values], "sqlharness_measure", "setup"));
+    }
+
+    [Fact]
+    public void Independently_built_catalogs_share_no_description_objects()
+    {
+        var sqlServerScope = Scope();
+        var sqlServer = McpToolCatalog.CreateTools(sqlServerScope, sqlServerScope.CreateModule());
+        var before = JsonSerializer.Serialize(sqlServer.Select(tool => tool.ProtocolTool));
+        var postgresScope = PostgresScope();
+        var postgres = McpToolCatalog.CreateTools(postgresScope, postgresScope.CreateModule());
+        var again = McpToolCatalog.CreateTools(sqlServerScope, sqlServerScope.CreateModule());
+
+        Assert.Equal(before, JsonSerializer.Serialize(sqlServer.Select(tool => tool.ProtocolTool)));
+        Assert.Equal(before, JsonSerializer.Serialize(again.Select(tool => tool.ProtocolTool)));
+        foreach (var tool in sqlServer)
+        {
+            Assert.DoesNotContain(postgres, other => ReferenceEquals(other.ProtocolTool, tool.ProtocolTool));
+            Assert.DoesNotContain(again, other => ReferenceEquals(other.ProtocolTool, tool.ProtocolTool));
+        }
+    }
+
+    // Structural schema with every description removed: types, required, enums and defaults stay.
+    private static string Structure(JsonElement schema)
+    {
+        static System.Text.Json.Nodes.JsonNode? Strip(System.Text.Json.Nodes.JsonNode? node)
+        {
+            switch (node)
+            {
+                case System.Text.Json.Nodes.JsonObject obj:
+                    obj.Remove("description");
+                    foreach (var (_, child) in obj.ToList())
+                        Strip(child);
+                    break;
+                case System.Text.Json.Nodes.JsonArray array:
+                    foreach (var child in array)
+                        Strip(child);
+                    break;
+            }
+
+            return node;
+        }
+
+        return Strip(System.Text.Json.Nodes.JsonNode.Parse(schema.GetRawText()))!.ToJsonString();
     }
 
     [Fact]

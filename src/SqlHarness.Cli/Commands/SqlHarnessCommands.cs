@@ -227,7 +227,7 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
     public sealed class Settings : TargetSettings
     {
         [CommandOption("--file <PATH>")] public string? File { get; set; }
-        [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
+        [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, date, time, datetime, datetime2, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), varbinary(n), binary(n). SQL Server only: money, smallmoney, smalldatetime, hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
         [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
@@ -262,9 +262,9 @@ public sealed class MeasureCommand(ISqlHarnessModule module, OutputContext outpu
     public sealed class Settings : TargetSettings
     {
         [CommandOption("--query <PATH>")] public string? Query { get; set; }
-        [Description("Setup once on the measured session. SQL Server: create #temps before the first parameter reference, populate afterwards; batch locals do not cross into measured SQL.")]
+        [Description("Setup once on the measured session; setup locals do not carry into measured SQL. Native temp syntax and parameterized-setup rules: capabilities <profile> --json.")]
         [CommandOption("--setup <PATH>")] public string? Setup { get; set; }
-        [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
+        [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, date, time, datetime, datetime2, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), varbinary(n), binary(n). SQL Server only: money, smallmoney, smalldatetime, hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
         [Description("2..32 named JSON sets with matching declared types; only name and parameters (64 KiB; BOM/comments/trailing commas accepted). Fixed --param names must not overlap. One shared session/cache; setup binds the first set once; measured order rotates. Report per-set stability, not cross-set equivalence.")]
@@ -332,9 +332,9 @@ public sealed class CompareCommand(ISqlHarnessModule module, OutputContext outpu
         [CommandOption("--candidate <PATH>")] public string? Candidate { get; set; }
         [CommandOption("--subject <LABEL>")] public string? Subject { get; set; }
         [CommandOption("--scope <LABEL>")] public string? Scope { get; set; }
-        [Description("Setup once per case's session. SQL Server: create #temps before the first parameter reference, populate afterwards; batch locals do not cross into measured SQL.")]
+        [Description("Setup once per case's session; setup locals do not carry into measured SQL. Native temp syntax and parameterized-setup rules: capabilities <profile> --json.")]
         [CommandOption("--setup <PATH>")] public string? Setup { get; set; }
-        [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
+        [Description("Bind name[[:type]]=value. Types: nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, date, time, datetime, datetime2, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), varbinary(n), binary(n). SQL Server only: money, smallmoney, smalldatetime, hierarchyid, geography, geometry. Null: name:null or name:type:null.")]
         [CommandOption("--param <VALUE>")]
         public string[] Parameters { get; set; } = [];
         [Description("One typed parameter: 2..32 distinct, comma-separated nonempty values in supplied order; no overlap with fixed --param. A fresh session/setup per value. First failure stops the run; completed cell artifacts remain.")]

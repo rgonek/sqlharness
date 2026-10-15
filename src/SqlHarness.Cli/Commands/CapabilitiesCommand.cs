@@ -8,7 +8,7 @@ using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Cli.Commands;
 
-[Description("Describe the local SQLHarness command and engine contract plus active compare-context policy; with a profile, add that engine's parameter types and limits (offline, never connects).")]
+[Description("Describe the local SQLHarness command and engine contract plus active compare-context policy; with a profile, add that engine's parameter types, limits and engineGuidance (offline, never connects).")]
 public sealed class CapabilitiesCommand(OutputContext output, Renderer renderer, CompareConfig compareConfig) : AsyncCommand<CapabilitiesCommand.Settings>
 {
     public sealed class Settings : CommandSettings

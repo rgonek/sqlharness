@@ -73,10 +73,9 @@ public sealed class CommandTests
         Assert.True(process.ExitCode == 0, standardError);
         // Spectre wraps long option descriptions; collapse whitespace for a stable type-list check.
         var normalized = Regex.Replace(standardOutput, @"\s+", " ");
-        Assert.Contains(
-            "nvarchar, nvarchar(max), varchar, varchar(max), char, nchar, int, bigint, smallint, tinyint, bit, decimal, decimal(p,s), numeric, numeric(p,s), float, real, money, smallmoney, date, time, datetime, datetime2, smalldatetime, datetimeoffset, uniqueidentifier, varbinary, varbinary(max), hierarchyid, geography, geometry",
-            normalized,
-            StringComparison.Ordinal);
+        Assert.Contains("nvarchar, nvarchar(max), varchar, varchar(max)", normalized, StringComparison.Ordinal);
+        Assert.Contains("SQL Server only: money", normalized, StringComparison.Ordinal);
+        Assert.Contains("hierarchyid", normalized, StringComparison.Ordinal);
         Assert.Contains("name:null or name:type:null", normalized, StringComparison.Ordinal);
     }
 
