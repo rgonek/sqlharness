@@ -14,7 +14,7 @@
 
 ## Status
 
-- DONE. Implementation commit `de721be` on branch `feat/plan-074-session-search-case-folding`. Windows gate exit 0 on `de721be`; literal pass line `verify: OK  stages=6  3m01s`. Linux gate waived by docs/agents/verification.md; not run.
+- DONE. Locally integrated into `main` at `a093b8df` (feature commits `de721be`..`9b5cbd39`). Integrated Windows gate `just verify`: exit 0, literal pass line `verify: OK  stages=6  5m03s`. Final independent review: specification and code quality PASS, no blocking findings. Linux gate started, then interrupted at the operator's explicit request on 2026-10-15; no Linux pass claimed.
 - Priority P3. Effort S. Risk LOW: read path only, no schema change, no API change.
 
 ## Global Constraints
