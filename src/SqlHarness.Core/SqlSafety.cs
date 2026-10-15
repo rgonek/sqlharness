@@ -175,14 +175,14 @@ internal sealed class SqlSafetyClassifier
 
         var inspection = new SafetyInspectionVisitor();
         document.Fragment.Accept(inspection);
+        var mutationUsage = usage == SqlUsage.Mutation;
         if (inspection.HasCrossDatabaseReference)
         {
             return Denied(SqlSafetyReason.CrossDatabaseReference);
         }
 
         if (inspection.HasExternalAccess ||
-            inspection.HasStatefulExpression ||
-            inspection.HasStatefulTableSource ||
+            (!mutationUsage && (inspection.HasStatefulExpression || inspection.HasStatefulTableSource)) ||
             inspection.HasExecuteInsertSource ||
             inspection.HasHashNamedCommonTableExpression)
         {
@@ -260,12 +260,9 @@ internal sealed class SqlSafetyClassifier
         IList<TSqlBatch> batches,
         SafetyInspectionVisitor inspection)
     {
-        if (inspection.HasNonLocalSelectInto)
-        {
-            return Denied(SqlSafetyReason.SelectIntoNotAllowed);
-        }
-
-        var denied = ClassifyStatements(batches, inspection, out _, out var hasSessionLocal, out var tier);
+        var denied = ClassifyStatements(batches, inspection, out _, out var hasSessionLocal, out var tier, mutationUsage: true);
+        if (denied is null && inspection.HasSequenceAdvance)
+            tier = SqlRiskTiers.Max(tier, SqlRiskTier.Schema);
         return denied ?? Allowed(hasMutation: tier >= SqlRiskTier.Dml, hasSessionLocal: hasSessionLocal) with { Tier = tier };
     }
 
@@ -274,7 +271,8 @@ internal sealed class SqlSafetyClassifier
         SafetyInspectionVisitor inspection,
         out bool hasMutation,
         out bool hasSessionLocal,
-        out SqlRiskTier tier)
+        out SqlRiskTier tier,
+        bool mutationUsage = false)
     {
         hasMutation = false;
         hasSessionLocal = false;
@@ -288,6 +286,8 @@ internal sealed class SqlSafetyClassifier
             {
                 var hasUnprovenUse = HasUnprovenTableVariableUse(statement, scope);
                 var classification = ClassifyStatement(statement, scope);
+                if (mutationUsage)
+                    classification = ClassifyMutationStatement(statement, scope, classification, hasUnprovenUse);
                 if (classification.DenyReason is { } deny)
                     return Denied(
                         deny,
@@ -384,6 +384,78 @@ internal sealed class SqlSafetyClassifier
         return HasUnprovenTableVariableUse(statement, scope)
             ? StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement)
             : ClassifyProvenStatement(statement, scope);
+    }
+
+    private static StatementClassification ClassifyMutationStatement(
+        TSqlStatement statement,
+        BatchVariableScope scope,
+        StatementClassification classification,
+        bool hasUnprovenUse)
+    {
+        if (statement is CreateTriggerStatement
+            {
+                TriggerObject.TriggerScope: TriggerScope.AllServer,
+            })
+        {
+            return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement, statement);
+        }
+
+        if (statement is CreateProcedureStatement or AlterProcedureStatement or CreateOrAlterProcedureStatement or
+            CreateFunctionStatement or AlterFunctionStatement or CreateOrAlterFunctionStatement or
+            CreateTriggerStatement or AlterTriggerStatement or CreateOrAlterTriggerStatement)
+        {
+            return StatementClassification.Schema;
+        }
+
+        if (hasUnprovenUse)
+            return classification;
+
+        if (statement is IfStatement ifStatement)
+        {
+            var thenClassification = ClassifyMutationNestedStatement(ifStatement.ThenStatement, scope);
+            return ifStatement.ElseStatement is null
+                ? thenClassification
+                : Combine(thenClassification, ClassifyMutationNestedStatement(ifStatement.ElseStatement, scope));
+        }
+
+        if (statement is BeginEndBlockStatement block)
+        {
+            var combined = StatementClassification.ReadOnly;
+            foreach (var inner in block.StatementList.Statements)
+            {
+                combined = Combine(combined, ClassifyMutationNestedStatement(inner, scope));
+                if (combined.DenyReason is not null)
+                    return combined;
+            }
+            return combined;
+        }
+
+        if (classification.DenyReason is null)
+            return classification;
+
+        if (statement is SelectStatement { Into: { } into } && !IsLocalTemp(into))
+            return StatementClassification.Schema;
+
+        var statementType = statement.GetType();
+        if (SqlMutationStatementMap.RejectedStatementTypes.Any(statementType.IsAssignableTo) ||
+            SqlMutationStatementMap.PrivilegeStatementTypes.Any(statementType.IsAssignableTo))
+        {
+            return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement, statement);
+        }
+
+        return SqlMutationStatementMap.SchemaStatementTypes.Any(statementType.IsAssignableTo)
+            ? StatementClassification.Schema
+            : classification;
+    }
+
+    private static StatementClassification ClassifyMutationNestedStatement(TSqlStatement statement, BatchVariableScope scope)
+    {
+        var hasUnprovenUse = HasUnprovenTableVariableUse(statement, scope);
+        var classification = ClassifyStatement(statement, scope);
+        var mutationClassification = ClassifyMutationStatement(statement, scope, classification, hasUnprovenUse);
+        return mutationClassification.DenyReason is { } reason && mutationClassification.DeniedStatement is null
+            ? StatementClassification.Denied(reason, statement)
+            : mutationClassification;
     }
 
     // Callers have already established that the statement holds no unproven table-variable use.
@@ -878,6 +950,7 @@ internal sealed class SqlSafetyClassifier
         internal static StatementClassification ReadOnly { get; } = new(null, false, false, Tier: SqlRiskTier.ReadOnly);
         internal static StatementClassification SessionLocal { get; } = new(null, true, false, Tier: SqlRiskTier.Session);
         internal static StatementClassification Persistent { get; } = new(null, false, true, Tier: SqlRiskTier.Dml);
+        internal static StatementClassification Schema { get; } = new(null, false, true, Tier: SqlRiskTier.Schema);
         internal static StatementClassification Denied(SqlSafetyReason reason, TSqlStatement? deniedStatement = null) =>
             new(reason, false, false, deniedStatement);
     }
@@ -993,6 +1066,7 @@ internal sealed class SqlSafetyClassifier
         internal bool HasExternalAccess { get; private set; }
         internal bool HasStatefulExpression { get; private set; }
         internal bool HasStatefulTableSource { get; private set; }
+        internal bool HasSequenceAdvance { get; private set; }
         internal bool HasExecuteInsertSource { get; private set; }
         internal bool HasHashNamedCommonTableExpression { get; private set; }
         internal bool HasSelectInto { get; private set; }
@@ -1198,6 +1272,7 @@ internal sealed class SqlSafetyClassifier
         public override void ExplicitVisit(NextValueForExpression node)
         {
             HasStatefulExpression = true;
+            HasSequenceAdvance = true;
             base.ExplicitVisit(node);
         }
 
