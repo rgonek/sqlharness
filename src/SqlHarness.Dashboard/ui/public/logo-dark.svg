@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 364 64" width="364" height="64" role="img" aria-label="SQLHarness">
+  <g>
+    <path fill="#F8FAFC" d="M11 5 25 13v10l-5 2v14l5 2v10l-14 8c-1.5.9-3-.2-3-2V8c0-1.2 1.4-2.6 3-3Z"/>
+    <path fill="#F8FAFC" d="M53 5 39 13v10l5 2v14l-5 2v10l14 8c1.5.9 3-.2 3-2V8c0-1.2-1.4-2.6-3-3Z"/>
+    <path fill="#1765FF" d="m20 27 4-1c5 1.6 11 1.6 16 0l4 1v10l-4 1c-5-1.6-11-1.6-16 0l-4-1Z"/>
+  </g>
+  <text x="76" y="45" fill="#F8FAFC" font-family="Arial, Helvetica, sans-serif" font-size="40" font-weight="700" letter-spacing="-1.2">SQL<tspan fill="#1765FF">Harness</tspan></text>
+</svg>

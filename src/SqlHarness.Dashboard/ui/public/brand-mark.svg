@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SQLHarness mark">
+  <path fill="#1C2028" d="M11 5 25 13v10l-5 2v14l5 2v10l-14 8c-1.5.9-3-.2-3-2V8c0-1.2 1.4-2.6 3-3Z"/>
+  <path fill="#1C2028" d="M53 5 39 13v10l5 2v14l-5 2v10l14 8c1.5.9 3-.2 3-2V8c0-1.2-1.4-2.6-3-3Z"/>
+  <path fill="#1765FF" d="m20 27 4-1c5 1.6 11 1.6 16 0l4 1v10l-4 1c-5-1.6-11-1.6-16 0l-4-1Z"/>
+</svg>
