@@ -226,7 +226,7 @@ public static partial class DashboardServer
         });
         MapRead(api, "/settings", () => Results.Json(DashboardSettings.Read(options.ConfigPath), Json));
         MapRead(api, "/profiles", () => Results.Json(DashboardProfiles.Read(options.TargetsPath), Json));
-        // The three write routes (PUT settings, POST prices refresh, PATCH session annotation); DashboardSecurity admits only these, with its extra checks.
+        // The four write routes (PUT settings, POST prices refresh, PATCH session annotation, POST shutdown); DashboardSecurity admits only these, with its extra checks.
         api.MapMethods("/settings", [HttpMethods.Put], (Delegate)((HttpContext context) => DashboardSettings.PutAsync(context, options.ConfigPath, Json)));
         MapRead(api, "/prices", () => Results.Json(DashboardPrices.Describe(options.PricesPath), Json));
         api.MapMethods("/prices/refresh", [HttpMethods.Post], (Delegate)((HttpContext context) =>
@@ -234,6 +234,20 @@ public static partial class DashboardServer
         var annotationWriter = new SessionAnnotationWriter(options.DatabasePath, options.Time);
         api.MapMethods("/sessions/{id:long}/annotation", [HttpMethods.Patch], (Delegate)((HttpContext context, long id) =>
             SessionAnnotations.PatchAsync(context, id, annotationWriter, Json)));
+        api.MapMethods("/shutdown", ReadMethods, (Delegate)((HttpContext context) =>
+        {
+            context.Response.Headers.Allow = HttpMethods.Post;
+            return Results.StatusCode(StatusCodes.Status405MethodNotAllowed);
+        }));
+        api.MapMethods("/shutdown", [HttpMethods.Post], (Delegate)((HttpContext context) =>
+        {
+            context.Response.OnCompleted(() =>
+            {
+                app.Lifetime.StopApplication();
+                return Task.CompletedTask;
+            });
+            return Results.StatusCode(StatusCodes.Status202Accepted);
+        }));
         MapRead(api, "/{**rest}", () => Results.NotFound());
 
         var assets = DashboardAssets.Default;

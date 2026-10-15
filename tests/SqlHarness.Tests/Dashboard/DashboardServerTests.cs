@@ -73,6 +73,55 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
+    public async Task Shutdown_requires_the_write_protections_and_stops_after_successful_response()
+    {
+        using var home = new TempHome();
+        await using var dashboard = await StartAuthenticated(home);
+        var (server, client) = dashboard;
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/shutdown") { Content = JsonContent.Create(new { }) };
+        request.Headers.Add(DashboardSecurity.WriteHeader, "1");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+        Assert.True(server.Stopping.WaitHandle.WaitOne(TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact]
+    public async Task Rejected_shutdown_requests_never_stop_the_server()
+    {
+        using var home = new TempHome();
+        await using var dashboard = await StartAuthenticated(home);
+        var (server, client) = dashboard;
+        using var wrongCookie = ShutdownRequest();
+        wrongCookie.Headers.Add("Cookie", $"{DashboardSecurity.CookieName}=wrong");
+        using var anonymous = new HttpClient { BaseAddress = server.BaseUri };
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.SendAsync(wrongCookie)).StatusCode);
+
+        using var noHeader = new HttpRequestMessage(HttpMethod.Post, "/api/shutdown") { Content = JsonContent.Create(new { }) };
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(noHeader)).StatusCode);
+
+        using var foreignOrigin = ShutdownRequest();
+        foreignOrigin.Headers.Add("Origin", "http://attacker.example");
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(foreignOrigin)).StatusCode);
+
+        using var queryToken = ShutdownRequest($"?t={server.Token}");
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(queryToken)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.GetAsync("/api/shutdown")).StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.DeleteAsync("/api/shutdown")).StatusCode);
+        Assert.False(server.Stopping.IsCancellationRequested);
+
+        static HttpRequestMessage ShutdownRequest(string suffix = "")
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/shutdown" + suffix) { Content = JsonContent.Create(new { }) };
+            request.Headers.Add(DashboardSecurity.WriteHeader, "1");
+            return request;
+        }
+    }
+
+    [Fact]
     public async Task Price_refresh_writes_the_reduced_table_and_failure_keeps_it()
     {
         using var home = new TempHome();
@@ -248,7 +297,7 @@ public sealed class DashboardServerTests
     }
 
     [Fact]
-    public async Task Only_get_endpoints_and_the_three_guarded_writes_exist()
+    public async Task Only_get_endpoints_and_the_four_guarded_writes_exist()
     {
         using var home = new TempHome();
         await using var dashboard = await StartAuthenticated(home);
@@ -257,13 +306,15 @@ public sealed class DashboardServerTests
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PostAsync("/api/sessions", null)).StatusCode);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.DeleteAsync("/api/operations/1")).StatusCode);
         var writes = server.Endpoints.Where(endpoint => !endpoint.Methods.SequenceEqual(["GET", "HEAD"])).ToArray();
-        Assert.Equal(3, writes.Length);
+        Assert.Equal(4, writes.Length);
         var settingsPut = Assert.Single(writes, endpoint => endpoint.Route == "/api/settings");
         Assert.Equal(["PUT"], settingsPut.Methods);
         var pricesRefresh = Assert.Single(writes, endpoint => endpoint.Route == "/api/prices/refresh");
         Assert.Equal(["POST"], pricesRefresh.Methods);
         var annotationPatch = Assert.Single(writes, endpoint => endpoint.Route == "/api/sessions/{id:long}/annotation");
         Assert.Equal(["PATCH"], annotationPatch.Methods);
+        var shutdown = Assert.Single(writes, endpoint => endpoint.Route == "/api/shutdown");
+        Assert.Equal(["POST"], shutdown.Methods);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.PutAsync("/api/sessions", null)).StatusCode);
         Assert.Contains(server.Endpoints, endpoint => endpoint.Route == "/api/live");
     }
