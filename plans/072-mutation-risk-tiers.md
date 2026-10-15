@@ -19,7 +19,7 @@ No command reaches `SqlUsage.Mutation` in this plan. Plan 073 wires it to the `m
 
 ## Status
 
-- DONE on `feat/plan-072-mutation-risk-tiers`, implementation range `7a2482c..2aafd6a`. Final product revision `2aafd6a8e053ce146608541c1855d4a2aa145db7` passed Windows `just verify`; Linux was skipped at the operator's direction and is not required while CI runs locally. Final review findings are resolved. Plan 073 depends on it.
+- DONE and integrated locally into `main` at merge commit `a500d62`; implementation range `7a2482c..2aafd6a`. Final integrated revision `90d32c7f44b1af1bac2759285a7d95f191f0f5cf` passed Windows `just verify`; Format and UI install stages were skipped as recorded below. Linux was skipped at the operator's direction and is not required while CI runs locally. Final review findings are resolved. Plan 073 depends on it.
 - Priority P1. Effort M. Risk MEDIUM: safety classifier code, but `Query` and `CompareSetup` behaviour must not change.
 
 ## Global Constraints
@@ -589,11 +589,12 @@ The MCP test project requires `-p:IsTestProject=true` in this checkout; without 
 
 ### PostgreSQL parser limits
 
-SqlParserCS 0.6.5 does not parse `DO`, the PostgreSQL `CREATE/ALTER USER` aliases, canonical `ANALYZE`, or the tested `ALTER VIEW ... RENAME` and `CREATE PROCEDURE` forms; they remain fail-closed parse errors. `DROP ROLE` is represented as generic `Drop(ObjectType.Role)` and classified as `Privilege`. See the Task 5 report for test evidence.
+SqlParserCS 0.6.5 does not parse `DO`, the PostgreSQL `CREATE/ALTER USER` aliases, canonical `ANALYZE`, or the tested `ALTER VIEW ... RENAME` and `CREATE PROCEDURE` forms; they remain fail-closed parse errors. `DROP ROLE` is represented as generic `Drop(ObjectType.Role)` and classified as `Privilege`.
 
 ## Final verification evidence
 
-- Product revision: `2aafd6a8e053ce146608541c1855d4a2aa145db7`; implementation range: `7a2482c..2aafd6a`.
-- Windows command: `just verify --LogDirectory C:/Users/rgone/AppData/Local/Temp/sqlharness-plan072-20261015/windows`; exit 0, all six stages passed. Core: 3,831 passed and 11 skipped; MCP: 386 passed and 4 skipped. UI checks and build passed.
+- Implemented on feature branch `feat/plan-072-mutation-risk-tiers`, range `7a2482c..2aafd6a`, and merged into `main` at `a500d62`.
+- Integrated product revision: `90d32c7f44b1af1bac2759285a7d95f191f0f5cf`.
+- Windows command: `just verify --LogDirectory C:/Users/rgone/AppData/Local/Temp/sqlharness-plan072-20261015/main-windows`; exit 0, the six-stage gate passed. Core: 3,835 passed and 11 skipped; MCP: 386 passed and 4 skipped. UI checks and build passed. Format was skipped because 0 C# files changed; UI install was skipped because the lockfile was unchanged.
 - Linux: skipped at the operator's direction. An earlier attempt was interrupted and exited 1; no Linux pass is claimed. Per [verification policy](../docs/agents/verification.md), Linux is not a completion criterion while CI runs locally.
 - Final scoped review findings were resolved on `2aafd6a`; the final Sol low re-review was clean.
