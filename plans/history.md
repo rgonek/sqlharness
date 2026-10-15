@@ -2,6 +2,10 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
+## Plan 075 completion — 2026-10-15
+
+Plan [075](075-dashboard-stop-restart.md) is DONE on `feat/plan-075-dashboard-lifecycle`; local integration pending. Final product revision `1524b44` passed Windows `just verify` (UI 178; Core/CLI 3587 passed/11 skipped; MCP 386 passed/4 skipped; build 0 warnings/errors; six stages in 5m14s). Luna high implementation, Luna xhigh task reviews and Sol low whole-branch review completed; final scoped review approved. Linux was explicitly waived by the operator during its run; no full Linux pass is claimed. [Evidence](../docs/verification/plan-075.md). No merge, push, installation, publication or operator-dashboard shutdown.
+
 ## Plan 064 completion — 2026-10-15
 
 Plan [064](064-engine-scoped-agent-guidance.md) is DONE and integrated locally into `main` from `feat/plan-064-engine-guidance`. Windows `just verify` passed on the merge of current main (with plan 067) into the branch, `1b1c0b4`: six stages in 6m25s. The final review built the pre-change and post-change catalogs and found the served MCP schemas byte-identical with descriptions stripped. Evidence is in the plan's verification section. Linux omitted per docs/agents/verification.md; no push, installation or publication.

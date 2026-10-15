@@ -12,7 +12,7 @@
 
 ## Status
 
-- IN PROGRESS on `feat/plan-075-dashboard-lifecycle`; implementation started 2026-10-15 from `d78ee8f`.
+- DONE on `feat/plan-075-dashboard-lifecycle`; final product revision `1524b44`, Windows gate passed; Linux explicitly waived by operator. Local integration pending. See [verification](../docs/verification/plan-075.md).
 - Operator authorized implementation using Luna high, task review Luna xhigh, whole-branch review Sol low. Tests use isolated homes; publishing and operator dashboard shutdown remain outside scope.
 - Before execution, reread repository instructions, inspect status/worktrees, create an isolated worktree, and check for concurrent dashboard changes (especially plans 070/071/073).
 
@@ -93,14 +93,14 @@
 
 ## Completion and verification
 
-- [ ] Review final diff for credential/token leakage, exact shutdown route allowlisting, cancellation/deadline behavior and truthful version claims. Verify no live operator processes were touched.
-- [ ] Run `just verify` on the final product tree; inspect failing-stage logs and fix before proceeding.
-- [ ] Commit final product changes, then run `just verify-linux` (tests committed code in the provisioned WSL ext4 clone). Run gates sequentially; record revision, results and any explicit waiver separately.
-- [ ] Record focused RED/GREEN and both gate results here. Move this plan's queue entry to `plans/history.md` when complete. Preserve unrelated work; integration, pushing and publishing follow the operator's selected scope.
+- [x] Review final diff for credential/token leakage, exact shutdown route allowlisting, cancellation/deadline behavior and truthful version claims. Verify no live operator processes were touched.
+- [x] Run `just verify` on the final product tree; inspect failing-stage logs and fix before proceeding.
+- [x] Final product committed; Linux gate started sequentially after Windows, then interrupted and explicitly waived by the operator. No Linux test/format pass claimed.
+- [x] Record focused RED/GREEN and both gate results here. Move this plan's queue entry to `plans/history.md` when complete. Preserve unrelated work; integration, pushing and publishing follow the operator's selected scope.
 
 ## Plan self-review
 
 - Approved stop/restart behavior maps to Tasks 2/3; graceful server cleanup and protections map to Task 1.
 - Each Review Focus item has an explicit owning test. No journal migration or new MCP tool is required.
 - The old-server bootstrap limitation and concurrent-autostart race are explicit; no fallback kill or automatic publishing behavior is implied.
-- Implementation has not started; execution method remains for the operator to choose.
+- Implemented using the operator-selected Luna high / Luna xhigh / Sol low routing. Focused RED/GREEN, task and whole-branch reviews, Windows gate and explicit Linux waiver are recorded in [verification](../docs/verification/plan-075.md).
