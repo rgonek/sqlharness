@@ -1,6 +1,6 @@
 # Dashboard agent transcript matching (Spec C)
 
-Status: design agreed with the operator, 2026-10-14. Implementation plan: not yet written. Order: after Plan 062 and [session curation](2026-10-14-dashboard-session-curation-design.md) (A); before [compare review](2026-10-14-dashboard-compare-review-design.md) (B).
+Status: implemented by Plan 070 (2026-10-15). Windows verification passed at `64bbec5`; Linux verification was explicitly waived by the operator and not run. See [Plan 070 verification evidence](../../../plans/070-verification-evidence.md). Order: after Plan 062 and [session curation](2026-10-14-dashboard-session-curation-design.md) (A); before [compare review](2026-10-14-dashboard-compare-review-design.md) (B).
 
 ## Goal
 
