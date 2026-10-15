@@ -209,25 +209,33 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         if (connection is null)
             return null;
         var rows = Query(connection, """
-            SELECT text
-            FROM (
-                SELECT sql_text AS text, id, 0 AS side
+            WITH matching_rows AS (
+                SELECT id, 0 AS side, CASE WHEN sql_text IS NULL THEN 0 ELSE 1 END AS has_text
                 FROM operations
                 WHERE session_id = $session AND sql_hash = $hash
                 UNION ALL
-                SELECT candidate_sql_text AS text, id, 1 AS side
+                SELECT id, 1 AS side, CASE WHEN candidate_sql_text IS NULL THEN 0 ELSE 1 END AS has_text
                 FROM operations
                 WHERE session_id = $session AND candidate_sql_hash = $hash
-            ) AS matching_texts
-            ORDER BY (text IS NULL), id DESC, side ASC
-            LIMIT 1;
-            """, [("$session", sessionId), ("$hash", hash)], r => NullableString(r, 0));
+            )
+            SELECT
+                CASE WHEN length(CAST(CASE WHEN selected.side = 0 THEN operation.sql_text ELSE operation.candidate_sql_text END AS BLOB)) <= $maximum
+                     THEN CASE WHEN selected.side = 0 THEN operation.sql_text ELSE operation.candidate_sql_text END END AS text,
+                CASE WHEN selected.has_text = 1
+                          AND length(CAST(CASE WHEN selected.side = 0 THEN operation.sql_text ELSE operation.candidate_sql_text END AS BLOB)) > $maximum
+                     THEN 1 ELSE 0 END AS too_large
+            FROM (
+                SELECT id, side, has_text
+                FROM matching_rows
+                ORDER BY has_text DESC, id DESC, side ASC
+                LIMIT 1
+            ) AS selected
+            JOIN operations AS operation ON operation.id = selected.id;
+            """, [("$session", sessionId), ("$hash", hash), ("$maximum", MaximumSqlVersionBytes)],
+            r => (Text: NullableString(r, 0), TooLarge: r.GetInt32(1) != 0));
         if (rows.Count == 0)
             return null;
-        var text = rows[0];
-        if (text is not null && Encoding.UTF8.GetByteCount(text) > MaximumSqlVersionBytes)
-            return new SqlVersionText(hash, null, true);
-        return new SqlVersionText(hash, text, false);
+        return new SqlVersionText(hash, rows[0].Text, rows[0].TooLarge);
     }
 
     /// <summary>Full retained compare history is versioned before applying the endpoint page.</summary>

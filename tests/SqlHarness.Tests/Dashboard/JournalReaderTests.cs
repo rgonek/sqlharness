@@ -24,12 +24,16 @@ public sealed class JournalReaderTests
         var hashOnly = seed.Compare(session, "orders", "whole", "sha256:" + new string('1', 64), "sha256:" + new string('2', 64));
         var oversized = seed.Compare(session, "orders", "whole", "sha256:" + new string('3', 64), "sha256:" + new string('4', 64));
         var sharedHash = seed.Compare(session, "orders", "whole", "sha256:" + new string('5', 64), "sha256:" + new string('5', 64));
+        var exactByteLimit = seed.Compare(session, "orders", "whole", "sha256:" + new string('6', 64), "sha256:" + new string('7', 64));
         SetSqlText(home.DatabasePath, first.OperationId, "baseline SQL", "candidate SQL");
         SetSqlText(home.DatabasePath, second.OperationId, "candidate SQL v1", "candidate SQL v2");
         SetSqlText(home.DatabasePath, other.OperationId, "private other session", "private other session candidate");
         SetSqlText(home.DatabasePath, hashOnly.OperationId, null, null);
         SetSqlText(home.DatabasePath, oversized.OperationId, new string('x', 300 * 1024), null);
         SetSqlText(home.DatabasePath, sharedHash.OperationId, null, "candidate wins when baseline text is absent");
+        var atLimitText = new string('界', 256 * 1024 / 3) + "a";
+        var multibyteOverLimitText = new string('界', 256 * 1024 / 3) + "ab";
+        SetSqlText(home.DatabasePath, exactByteLimit.OperationId, atLimitText, multibyteOverLimitText);
 
         var sessionId = Assert.Single(Reader(home).Sessions(new SessionQuery()).Items, item => item.SessionKey == "cli:session-sql").Id;
         var reader = Reader(home);
@@ -44,6 +48,12 @@ public sealed class JournalReaderTests
         Assert.Null(tooLarge.Text);
         Assert.True(tooLarge.TooLarge);
         Assert.Equal("candidate wins when baseline text is absent", reader.SessionSqlText(sessionId, "sha256:" + new string('5', 64))!.Text);
+        var exactLimit = reader.SessionSqlText(sessionId, "sha256:" + new string('6', 64))!;
+        Assert.Equal(256 * 1024, System.Text.Encoding.UTF8.GetByteCount(exactLimit.Text!));
+        Assert.False(exactLimit.TooLarge);
+        var multibyteOverLimit = reader.SessionSqlText(sessionId, "sha256:" + new string('7', 64))!;
+        Assert.Null(multibyteOverLimit.Text);
+        Assert.True(multibyteOverLimit.TooLarge);
     }
 
     private static void SetSqlText(string databasePath, long operationId, string? baseline, string? candidate)
