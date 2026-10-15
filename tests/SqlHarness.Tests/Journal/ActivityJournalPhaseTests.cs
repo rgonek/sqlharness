@@ -45,8 +45,9 @@ public sealed class ActivityJournalPhaseTests
         ];
         PhaseEvent[] events =
         [
-            new(3, 15, OperationPhase.Artifact, 4, "succeeded", null, "{\"path\":\"" + new string('x', 600) + "\"}"),
-            new(1, 1, OperationPhase.Connect, 5, "succeeded", null, "{\"client\":\"postgres\"}"),
+            new(3, 15, OperationPhase.Artifact, 4, "succeeded", null, "{\"fileCount\":3,\"path\":\"SQLH_SECRET_PATH\"}"),
+            new(1, 1, OperationPhase.Connect, 5, "succeeded", null,
+                "{\"clientConnectionId\":\"d85b1407-351d-4694-9392-03acc5870eb1\",\"authStrategy\":\"postgres\",\"attempt\":1}"),
             new(2, 8, OperationPhase.Connect, 3, "failed", 18456, null),
         ];
 
@@ -60,8 +61,62 @@ public sealed class ActivityJournalPhaseTests
         var storedEvents = JournalDb.Rows(temp.DatabasePath,
             "SELECT seq, offset_ms, phase, duration_ms, outcome, error_number, detail_json FROM operation_events ORDER BY seq");
         Assert.Equal(new[] { 1L, 2L, 3L }, storedEvents.Select(row => (long)row["seq"]!));
-        Assert.Equal("{\"client\":\"postgres\"}", storedEvents[0]["detail_json"]);
-        Assert.Equal(512, ((string)storedEvents[2]["detail_json"]!).Length);
+        Assert.Equal("{\"clientConnectionId\":\"d85b1407-351d-4694-9392-03acc5870eb1\",\"authStrategy\":\"postgres\",\"attempt\":1}", storedEvents[0]["detail_json"]);
+        Assert.Equal("{\"fileCount\":3}", storedEvents[2]["detail_json"]);
+        Assert.False(JournalDb.Contains(JournalDb.AllBytes(temp.DatabasePath), "SQLH_SECRET_PATH"));
+    }
+
+    [Fact]
+    public void Detail_persistence_keeps_valid_allowlisted_metadata_and_discards_unknown_fields()
+    {
+        var details = PersistEventDetails(
+        [
+            new(1, 1, OperationPhase.Connect, 2, "succeeded", null,
+                """{"clientConnectionId":"d85b1407-351d-4694-9392-03acc5870eb1","authStrategy":"azure-cli","attempt":2,"sql":"SQLH_SECRET_SQL","user":"SQLH_SECRET_USER"}"""),
+            new(2, 2, OperationPhase.Artifact, 1, "succeeded", null,
+                """{"fileCount":7,"path":"SQLH_SECRET_PATH","nested":{"token":"SQLH_SECRET_TOKEN"}}"""),
+            new(3, 3, OperationPhase.Connect, 1, "succeeded", null, """{"clientConnectionId":null,"attempt":1}"""),
+            new(4, 4, OperationPhase.Connect, 1, "succeeded", null, """{"authStrategy":"ad-default","attempt":1}"""),
+            new(5, 5, OperationPhase.Connect, 1, "succeeded", null, """{"authStrategy":"sql","attempt":1}"""),
+        ]);
+
+        Assert.Equal("""{"clientConnectionId":"d85b1407-351d-4694-9392-03acc5870eb1","authStrategy":"azure-cli","attempt":2}""", details[0]);
+        Assert.Equal("""{"fileCount":7}""", details[1]);
+        Assert.Equal("""{"clientConnectionId":null,"attempt":1}""", details[2]);
+        Assert.Equal("""{"authStrategy":"ad-default","attempt":1}""", details[3]);
+        Assert.Equal("""{"authStrategy":"sql","attempt":1}""", details[4]);
+        Assert.All(details, detail => Assert.InRange(Assert.IsType<string>(detail).Length, 1, 512));
+    }
+
+    [Fact]
+    public void Detail_persistence_discards_malformed_and_non_object_json()
+    {
+        var details = PersistEventDetails(
+        [
+            new(1, 1, OperationPhase.Connect, 1, "succeeded", null, "{\"attempt\":1"),
+            new(2, 2, OperationPhase.Connect, 1, "succeeded", null, "[]"),
+            new(3, 3, OperationPhase.Connect, 1, "succeeded", null, "\"text\""),
+            new(4, 4, OperationPhase.Connect, 1, "succeeded", null, "null"),
+        ]);
+
+        Assert.All(details, detail => Assert.Null(detail));
+    }
+
+    [Fact]
+    public void Detail_persistence_discards_invalid_values_for_known_fields()
+    {
+        var details = PersistEventDetails(
+        [
+            new(1, 1, OperationPhase.Connect, 1, "succeeded", null, """{"clientConnectionId":"not-a-guid"}"""),
+            new(2, 2, OperationPhase.Connect, 1, "succeeded", null, """{"authStrategy":"integrated"}"""),
+            new(3, 3, OperationPhase.Connect, 1, "succeeded", null, """{"attempt":0}"""),
+            new(4, 4, OperationPhase.Connect, 1, "succeeded", null, """{"attempt":1.5}"""),
+            new(5, 5, OperationPhase.Connect, 1, "succeeded", null, """{"attempt":-1}"""),
+            new(6, 6, OperationPhase.Artifact, 1, "succeeded", null, """{"fileCount":"4"}"""),
+            new(7, 7, OperationPhase.Artifact, 1, "succeeded", null, """{"fileCount":-1}"""),
+        ]);
+
+        Assert.All(details, detail => Assert.Null(detail));
     }
 
     [Fact]
@@ -150,5 +205,18 @@ public sealed class ActivityJournalPhaseTests
             (version >= 9 ? "INSERT INTO session_annotations (session_id, title, updated_at) VALUES (1, 'legacy-title', 'now');" : string.Empty) +
             $"PRAGMA user_version = {version};";
         seed.ExecuteNonQuery();
+    }
+
+    private static List<object?> PersistEventDetails(IReadOnlyList<PhaseEvent> events)
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = ActivityJournal.Open(temp.DatabasePath, new JournalConfig(), TextWriter.Null,
+            new FixedTimeProvider(JournalTestData.T0));
+        var handle = journal.Begin(JournalTestData.Session(), JournalTestData.Start())!;
+        journal.RecordPhases(handle, [], events, droppedEvents: 0);
+        journal.Complete(handle, JournalTestData.End());
+        return JournalDb.Rows(temp.DatabasePath, "SELECT detail_json FROM operation_events ORDER BY seq")
+            .Select(row => row["detail_json"])
+            .ToList();
     }
 }

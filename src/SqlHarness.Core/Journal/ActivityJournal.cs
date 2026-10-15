@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.Data.Sqlite;
 
 using SqlHarness.Core.Journal;
+using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Core;
 
@@ -21,6 +22,7 @@ public sealed class ActivityJournal : IActivityJournal
     private const int SqliteNotADatabase = 26;
     private const int MaximumCompareConditionsBytes = 64 * 1024;
     private const int MaximumPhaseEventDetailLength = 512;
+    private const int MaximumPhaseEventInputLength = 4096;
     private const int MaximumPhaseEvents = OperationPhaseRecorder.MaximumEvents;
 
     private static readonly (string Name, Func<CompareJournalConditions, object?> Value)[] SensitiveCompareConditionFields =
@@ -276,11 +278,74 @@ public sealed class ActivityJournal : IActivityJournal
         insert.Parameters.AddWithValue("$duration", Math.Max(0, phaseEvent.DurationMilliseconds));
         insert.Parameters.AddWithValue("$outcome", phaseEvent.Outcome);
         insert.Parameters.AddWithValue("$error", (object?)phaseEvent.ErrorNumber ?? DBNull.Value);
-        var detail = phaseEvent.DetailJson;
-        insert.Parameters.AddWithValue("$detail", (object?)(detail is { Length: > MaximumPhaseEventDetailLength }
-            ? detail[..MaximumPhaseEventDetailLength]
-            : detail) ?? DBNull.Value);
+        insert.Parameters.AddWithValue("$detail",
+            (object?)AllowlistedPhaseDetail(phaseEvent.Phase, phaseEvent.DetailJson) ?? DBNull.Value);
         insert.ExecuteNonQuery();
+    }
+
+    private static string? AllowlistedPhaseDetail(JournalOperationPhase phase, string? detailJson)
+    {
+        if (string.IsNullOrEmpty(detailJson) || detailJson.Length > MaximumPhaseEventInputLength)
+            return null;
+
+        try
+        {
+            using var document = JsonDocument.Parse(detailJson, new JsonDocumentOptions { MaxDepth = 4 });
+            if (document.RootElement.ValueKind is not JsonValueKind.Object)
+                return null;
+
+            var values = new Dictionary<string, object?>(StringComparer.Ordinal);
+            var seenProperties = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (!seenProperties.Add(property.Name))
+                    return null;
+
+                if (phase is JournalOperationPhase.Connect)
+                {
+                    switch (property.Name)
+                    {
+                        case "clientConnectionId":
+                            if (property.Value.ValueKind is JsonValueKind.Null)
+                                values.Add(property.Name, null);
+                            else if (property.Value.ValueKind is JsonValueKind.String && property.Value.TryGetGuid(out var connectionId))
+                                values.Add(property.Name, connectionId);
+                            else
+                                return null;
+                            break;
+                        case "authStrategy":
+                            if (property.Value.ValueKind is not JsonValueKind.String || property.Value.GetString() is not (
+                                "ad-default" or "azure-cli" or "sql" or "postgres"))
+                                return null;
+                            values.Add(property.Name, property.Value.GetString());
+                            break;
+                        case "attempt":
+                            if (property.Value.ValueKind is not JsonValueKind.Number ||
+                                !property.Value.TryGetInt32(out var attempt) || attempt <= 0)
+                                return null;
+                            values.Add(property.Name, attempt);
+                            break;
+                    }
+                }
+                else if (phase is JournalOperationPhase.Artifact && property.Name is "fileCount")
+                {
+                    if (property.Value.ValueKind is not JsonValueKind.Number ||
+                        !property.Value.TryGetInt32(out var fileCount) || fileCount < 0)
+                        return null;
+                    values.Add(property.Name, fileCount);
+                }
+            }
+
+            if (values.Count == 0)
+                return null;
+
+            var serialized = JsonSerializer.Serialize(values);
+            return serialized.Length <= MaximumPhaseEventDetailLength ? serialized : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     public void RecordEmission(JournalHandle? handle, OutputFootprint? raw, OutputFootprint emitted)
