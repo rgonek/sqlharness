@@ -307,23 +307,33 @@ public sealed class McpToolSchemaTests : IDisposable
 
         var watch = await served.Client.CallToolAsync("sqlharness_watch", new Dictionary<string, object?>
         {
-            ["sql"] = "SELECT 1", ["untilUnchanged"] = 1, ["maxCellChars"] = 2048,
+            ["sql"] = "SELECT 1",
+            ["untilUnchanged"] = 1,
+            ["maxCellChars"] = 2048,
         }, cancellationToken: CancellationToken.None);
         var snapshot = await served.Client.CallToolAsync("sqlharness_snapshot", new Dictionary<string, object?>
         {
-            ["action"] = "diff", ["name"] = "sample", ["sql"] = "SELECT 1", ["maxCellChars"] = 4096,
+            ["action"] = "diff",
+            ["name"] = "sample",
+            ["sql"] = "SELECT 1",
+            ["maxCellChars"] = 4096,
         }, cancellationToken: CancellationToken.None);
         var plan = await served.Client.CallToolAsync("sqlharness_plan", new Dictionary<string, object?>
         {
-            ["content"] = "<ShowPlanXML />", ["maxCellChars"] = 0,
+            ["content"] = "<ShowPlanXML />",
+            ["maxCellChars"] = 0,
         }, cancellationToken: CancellationToken.None);
         var artifact = await served.Client.CallToolAsync("sqlharness_artifact", new Dictionary<string, object?>
         {
-            ["id"] = "artifact1", ["section"] = "summary", ["cursor"] = 1, ["maxCellChars"] = 100,
+            ["id"] = "artifact1",
+            ["section"] = "summary",
+            ["cursor"] = 1,
+            ["maxCellChars"] = 100,
         }, cancellationToken: CancellationToken.None);
         var rejected = await served.Client.CallToolAsync("sqlharness_query", new Dictionary<string, object?>
         {
-            ["sql"] = "SELECT 1", ["maxCellChars"] = 4097,
+            ["sql"] = "SELECT 1",
+            ["maxCellChars"] = 4097,
         }, cancellationToken: CancellationToken.None);
 
         Assert.Equal(2048, ServedEnvelope(watch, "sqlharness_watch").GetProperty("truncation").GetProperty("maxCellChars").GetInt32());

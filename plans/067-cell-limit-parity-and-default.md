@@ -14,7 +14,7 @@
 
 ## Status
 
-- DONE on feature branch `feat/plan-067-cell-limit`, at `3388917`. Windows `just verify` passed. The operator waived Linux after the Linux test stage ran for about 15 minutes without completing; see verification evidence below. No integration, installation or publication performed.
+- DONE on feature branch `feat/plan-067-cell-limit`, at `3388917`. Windows `just verify` passed. A later branch-scoped Windows format check passed after whitespace-only changes (`pwsh -NoProfile ./scripts/format-changed.ps1 -Mode branch -BaseRef cf0e7c4`, 16 C# files in scope); tests were not rerun for formatting. The operator explicitly waived Linux after its test stage ran for about 15 minutes without completing; Linux tests and formatting remain unverified. No integration, installation or publication performed.
 - Planning base: `ed44649`, 2026-10-14.
 - Priority: P2. Effort: S–M. Risk: LOW–MEDIUM (tool schema change; larger default output).
 - Owner: this plan.
