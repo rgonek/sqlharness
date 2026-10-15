@@ -14,7 +14,7 @@
 
 ## Status
 
-- IMPLEMENTED on `feat/plan-068-phase-timings`; local integration is pending. No installation, push or publication was performed. Linux verification was skipped at the operator's direction; see [verification evidence](../docs/verification/plan-068.md).
+- DONE; integrated locally into `main` at `9904dfea18ab6b0fd89ac839304d2c26fa3bc998` after Windows verification of the resolved merge tree. No installation, push or publication was performed. Linux verification was skipped at the operator's direction; see [verification evidence](../docs/verification/plan-068.md).
 - Planning base: `ed44649`, 2026-10-14. Implementation base: `cf0e7c4`.
 - Priority: P2. Effort: M–L. Risk: MEDIUM (journal schema migration; decorator on every connection; dashboard).
 - Owner: this plan. Coordinate with 062 (operation page, journal reader).

@@ -6,7 +6,6 @@ Przeczytaj wybrany plan i jego spec przed wykonaniem. Wpis w kolejce nie jest zg
 
 | Plan | Zakres | Zależności | Status |
 |---|---|---|---|
-| [068](068-operation-phase-timings-and-diagnostics.md) | Journal phase timings and opt-in connection events | 062 coordinated | IMPLEMENTED on `feat/plan-068-phase-timings`; local integration pending; [verification](../docs/verification/plan-068.md) |
 
 ## Oczekujące
 

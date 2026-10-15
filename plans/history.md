@@ -6,9 +6,9 @@ Snapshot of the previous index, archived on 2026-10-14. Status and queue notes b
 
 Plan [064](064-engine-scoped-agent-guidance.md) is DONE and integrated locally into `main` from `feat/plan-064-engine-guidance`. Windows `just verify` passed on the merge of current main (with plan 067) into the branch, `1b1c0b4`: six stages in 6m25s. The final review built the pre-change and post-change catalogs and found the served MCP schemas byte-identical with descriptions stripped. Evidence is in the plan's verification section. Linux omitted per docs/agents/verification.md; no push, installation or publication.
 
-## Plan 068 implementation — 2026-10-15 (integration pending)
+## Plan 068 completion — 2026-10-15
 
-Plan 068 is implemented on `feat/plan-068-phase-timings` at `bccf7de1171352845e0a1e343cb6f4a286658d97`. Branch formatting passed for all 28 changed C# files after a scoped whitespace/newline/import-order fix. Windows `just verify` passed on that revision (UI 181 passed; Core 3,566 passed/11 skipped; MCP 374 passed/4 skipped; build 0 warnings/errors). Linux verification was skipped at the operator's direction. This is feature-branch evidence; no merge, push, installation, or publication occurred. See [Plan 068 verification](../docs/verification/plan-068.md).
+Plan [068](068-operation-phase-timings-and-diagnostics.md) is DONE and integrated locally into `main` at `9904dfea18ab6b0fd89ac839304d2c26fa3bc998`. Windows `just verify` passed on the resolved merge tree before the merge commit: six stages in 7m41s; UI 181 passed; Core 3,589 passed/11 skipped; MCP 386 passed/4 skipped; build 0 warnings/errors; formatting passed for 34 C# files. Linux was skipped at the operator's direction. No push, installation or publication. See [verification evidence](../docs/verification/plan-068.md).
 
 ## Plan 065 completion — 2026-10-15
 
