@@ -6,7 +6,6 @@ Przeczytaj wybrany plan i jego spec przed wykonaniem. Wpis w kolejce nie jest zg
 
 | Plan | Zakres | Zależności | Status |
 |---|---|---|---|
-| [072](072-mutation-risk-tiers.md) | Core risk tiers (`read-only`/`session`/`dml`/`schema`/`privilege`/`opaque`) via `SqlUsage.Mutation` in both engines; `tier` in dry runs; behaviour of existing commands unchanged | — | Implementation committed; final gates pending |
 
 ## Oczekujące
 
@@ -19,7 +18,7 @@ Przeczytaj wybrany plan i jego spec przed wykonaniem. Wpis w kolejce nie jest zg
 | [074](074-session-search-case-folding.md) | Session search ignores letter case beyond ASCII (Polish and other letters; accents must match) via a folding SQLite function | 069 DONE | TODO |
 | [076](076-partial-matrix-journal-runs.md) | A partial matrix `compare` journals the completed cells' benchmark metrics (runs carried on the failure exception and partial outcomes) | — | TODO |
 
-Plan 070 is DONE; see its evidence in [history](history.md). Before starting 071, confirm CodeMirror 6 with the operator; 071 requires 062 DONE. Coordinate work that changes shared MCP, journal, and dashboard contracts through the selected plan.
+Plans 070 and 072 are DONE; see their evidence in [history](history.md). Before starting 071, confirm CodeMirror 6 with the operator; 071 requires 062 DONE. Coordinate work that changes shared MCP, journal, and dashboard contracts through the selected plan.
 
 ## Historia
 
