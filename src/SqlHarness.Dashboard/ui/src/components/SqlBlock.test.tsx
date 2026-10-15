@@ -12,3 +12,11 @@ test("shows formatted SQL and toggles to the original", async () => {
   expect(text()).toBe("select a from t")
   expect(screen.getByRole("button", { name: "Show formatted" })).toBeInTheDocument()
 })
+
+test("can show unmodified SQL first for replaying setup", async () => {
+  render(<SqlBlock sql="select a from t" engine="sqlserver" initiallyFormatted={false} />)
+  expect(text()).toBe("select a from t")
+  expect(screen.getByRole("button", { name: "Show formatted" })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Show formatted" }))
+  expect(text()).toBe("select\n  a\nfrom\n  t")
+})
