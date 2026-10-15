@@ -189,7 +189,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             if (query.DryRun)
             {
                 MissingParameterCheck.RequireSupplied(target.Engine, parameters, query.Sql);
-                return Checked(query, DryRunOutcome("query", BenchmarkReports.ClassificationLabel(safety), parameters, 1));
+                return Checked(query, DryRunOutcome("query", BenchmarkReports.ClassificationLabel(safety), SqlRiskTiers.Label(safety.Tier), parameters, 1));
             }
 
             phase = OperationPhase.Authentication;
@@ -302,6 +302,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
     private static SqlHarnessOutcome DryRunOutcome(
         string command,
         string classification,
+        string tier,
         IReadOnlyList<SqlHarnessParameter> parameters,
         int parameterSets) =>
         WithReceipt(
@@ -310,6 +311,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 new SqlHarnessDryRunReport(
                     command,
                     classification,
+                    tier,
                     BenchmarkReports.ToParameterReports(parameters),
                     parameterSets),
                 null),
@@ -350,6 +352,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 return DryRunOutcome(
                     "compare",
                     prepared.Classification.Baseline,
+                    SqlRiskTiers.Label(prepared.Tier),
                     prepared.FixedParameters,
                     parameterSets: 1);
             }
@@ -467,6 +470,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 return DryRunOutcome(
                     "compare",
                     prepared.Classification.Baseline,
+                    SqlRiskTiers.Label(prepared.Tier),
                     cellParameters[0],
                     cellParameters.Length);
             }
@@ -615,6 +619,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     return DryRunOutcome(
                         "measure",
                         BenchmarkReports.ClassificationLabel(querySafety),
+                        SqlRiskTiers.Label(SqlRiskTiers.Max(querySafety.Tier, setupSafety?.Tier ?? SqlRiskTier.ReadOnly)),
                         boundSets[0].Parameters,
                         boundSets.Count);
                 }
@@ -660,6 +665,7 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 return DryRunOutcome(
                     "measure",
                     BenchmarkReports.ClassificationLabel(querySafety),
+                    SqlRiskTiers.Label(SqlRiskTiers.Max(querySafety.Tier, setupSafety?.Tier ?? SqlRiskTier.ReadOnly)),
                     parameters,
                     parameterSets: 1);
             }

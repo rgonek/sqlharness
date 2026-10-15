@@ -102,11 +102,72 @@ public sealed class DryRunCommandTests : IDisposable
         AssertAllowed(run, "query");
         var report = Report(run.Output);
         Assert.Equal("read-only", report.GetProperty("classification").GetString());
+        Assert.Equal("read-only", report.GetProperty("tier").GetString());
         Assert.Equal(1, report.GetProperty("parameterSets").GetInt32());
         var parameter = Assert.Single(report.GetProperty("parameters").EnumerateArray());
         Assert.Equal("@customerId", parameter.GetProperty("name").GetString());
         Assert.Equal("int", parameter.GetProperty("type").GetString());
         Assert.DoesNotContain("42", run.Output, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("CREATE TABLE #t (Id int); SELECT 1 AS A;", "session")]
+    [InlineData("SELECT 1 AS A", "read-only")]
+    public async Task Query_dry_run_reports_the_highest_risk_tier(string sql, string expectedTier)
+    {
+        var run = await Query(SqlServer, sql);
+
+        AssertAllowed(run, "query");
+        Assert.Equal(expectedTier, Report(run.Output).GetProperty("tier").GetString());
+    }
+
+    [Fact]
+    public async Task Measure_and_compare_dry_runs_report_the_maximum_tier_from_setup_and_measured_sql()
+    {
+        var measure = await Measure(SqlServer, "SELECT 1 AS A", "CREATE TABLE #t (Id int);");
+        var compare = await Compare(SqlServer, "SELECT 1 AS A", "SELECT 2 AS A", "CREATE TABLE #t (Id int);");
+
+        AssertAllowed(measure, "measure");
+        Assert.Equal("session", Report(measure.Output).GetProperty("tier").GetString());
+        AssertAllowed(compare, "compare");
+        Assert.Equal("session", Report(compare.Output).GetProperty("tier").GetString());
+    }
+
+    [Theory]
+    [InlineData("CREATE TABLE #baseline (Id int);", "SELECT 2 AS A")]
+    [InlineData("SELECT 1 AS A", "CREATE TABLE #candidate (Id int);")]
+    public async Task Compare_dry_run_includes_session_tier_from_each_measured_side(string baseline, string candidate)
+    {
+        var run = await Compare(SqlServer, baseline, candidate, null);
+
+        AssertAllowed(run, "compare");
+        Assert.Equal("session", Report(run.Output).GetProperty("tier").GetString());
+    }
+
+    [Theory]
+    [InlineData("CREATE TABLE #baseline (Id int); SELECT @id;", "SELECT @id;")]
+    [InlineData("SELECT @id;", "CREATE TABLE #candidate (Id int); SELECT @id;")]
+    public async Task Compare_matrix_dry_run_includes_each_measured_side_tier(string baseline, string candidate)
+    {
+        var run = await Compare(
+            SqlServer,
+            baseline,
+            candidate,
+            null,
+            "--matrix",
+            "id:int=1,2");
+
+        AssertAllowed(run, "compare");
+        Assert.Equal("session", Report(run.Output).GetProperty("tier").GetString());
+    }
+
+    [Fact]
+    public async Task Measure_dry_run_includes_the_measured_query_tier()
+    {
+        var run = await Measure(SqlServer, "CREATE TABLE #t (Id int); SELECT 1 AS A;", "SELECT 1 AS SetupOnly;");
+
+        AssertAllowed(run, "measure");
+        Assert.Equal("session", Report(run.Output).GetProperty("tier").GetString());
     }
 
     [Fact]
@@ -118,6 +179,7 @@ public sealed class DryRunCommandTests : IDisposable
         Assert.Contains("Dry run", run.Output, StringComparison.Ordinal);
         Assert.Contains("query", run.Output, StringComparison.Ordinal);
         Assert.Contains("read-only", run.Output, StringComparison.Ordinal);
+        Assert.Contains("tier: read-only", run.Output, StringComparison.Ordinal);
         AssertOffline();
     }
 

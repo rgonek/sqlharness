@@ -18,6 +18,7 @@ internal sealed record PreparedCompareFamily(
     IReadOnlySet<string> SetupTempTables)
 {
     internal SqlSafetyDecision? SetupSafety { get; init; }
+    internal SqlRiskTier Tier { get; init; }
 }
 
 internal static class CompareOperationPreparer
@@ -89,6 +90,9 @@ internal static class CompareOperationPreparer
             setupTemps)
         {
             SetupSafety = setupSafety,
+            Tier = SqlRiskTiers.Max(
+                setupSafety?.Tier ?? SqlRiskTier.ReadOnly,
+                SqlRiskTiers.Max(baselineSafety.Tier, candidateSafety.Tier)),
         };
     }
 

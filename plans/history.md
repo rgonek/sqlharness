@@ -2,6 +2,10 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
+## Plan 072 completion — 2026-10-15
+
+Plan [072](072-mutation-risk-tiers.md) is DONE on `feat/plan-072-mutation-risk-tiers`, implementation range `7a2482c..2aafd6a`; local integration is pending. Final product revision `2aafd6a8e053ce146608541c1855d4a2aa145db7` passed Windows `just verify` (six stages; Core 3,831 passed/11 skipped; MCP 386 passed/4 skipped; UI checks and build passed). Linux was skipped at the operator's direction and is unverified; it is not a completion criterion while CI runs locally. Final scoped review findings were resolved and the last re-review was clean. SqlParserCS 0.6.5 parser limits remain fail-closed for `DO`, `CREATE/ALTER USER`, canonical `ANALYZE`, tested `ALTER VIEW ... RENAME`, and `CREATE PROCEDURE` forms. [Verification evidence](072-mutation-risk-tiers.md#final-verification-evidence). No push, installation or publication.
+
 ## Plan 075 completion — 2026-10-15
 
 Plan [075](075-dashboard-stop-restart.md) is DONE on `feat/plan-075-dashboard-lifecycle`; local integration pending. Final product revision `1524b44` passed Windows `just verify` (UI 178; Core/CLI 3587 passed/11 skipped; MCP 386 passed/4 skipped; build 0 warnings/errors; six stages in 5m14s). Luna high implementation, Luna xhigh task reviews and Sol low whole-branch review completed; final scoped review approved. Linux was explicitly waived by the operator during its run; no full Linux pass is claimed. [Evidence](../docs/verification/plan-075.md). No merge, push, installation, publication or operator-dashboard shutdown.

@@ -1166,6 +1166,7 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.Empty(McpResultAdapter.ValidateEnvelope(successEnvelope));
         Assert.Equal("success", successEnvelope.GetProperty("status").GetString());
         Assert.Equal(0, successEnvelope.GetProperty("exitCode").GetInt32());
+        Assert.Equal("read-only", successEnvelope.GetProperty("result").GetProperty("tier").GetString());
         var failure = await served.Client.CallToolAsync(
             "sqlharness_query",
             new Dictionary<string, object?> { ["dryRun"] = true, ["sql"] = "SELECT 1", ["bogus"] = 1 },
