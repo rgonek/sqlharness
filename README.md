@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="src/SqlHarness.Dashboard/ui/public/logo-dark.svg">
+  <img src="src/SqlHarness.Dashboard/ui/public/logo.svg" alt="SQLHarness" width="320">
+</picture>
+
 # SQLHarness
 
 SQLHarness helps engineers and coding agents measure SQL changes on SQL Server, Azure SQL, and PostgreSQL. Run bounded queries, compare a baseline with a candidate, check their results, and inspect compact execution plans. SQLHarness also records workflow output costs locally. The engine is a property of the locked target profile (omit `engine` for SQL Server; set `"engine": "postgres"` for Postgres).
