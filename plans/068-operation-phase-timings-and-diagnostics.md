@@ -209,7 +209,7 @@ CREATE TABLE operation_events (
 ### Task 5: Documentation and gates
 
 - [x] README journal section describes always-recorded phase aggregates and opt-in diagnostic events, their fields and bounds, and the absence of SQL, values, credentials, or tokens; the optional config example and Settings description include diagnostics. Schema v10 is documented next to v9.
-- [x] Windows `just verify` passed and counts are recorded. Linux `just verify-linux` was skipped at the operator's direction. Status, index, history, and evidence are updated.
+- [x] Branch formatting passed for all 28 changed C# files. Windows `just verify` passed and counts are recorded. Linux `just verify-linux` was skipped at the operator's direction. Status, index, history, and evidence are updated.
 
 ## Acceptance
 

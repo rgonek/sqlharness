@@ -4,7 +4,7 @@ Snapshot of the previous index, archived on 2026-10-14. Status and queue notes b
 
 ## Plan 068 implementation — 2026-10-15 (integration pending)
 
-Plan 068 is implemented on `feat/plan-068-phase-timings` at `9840d5c105063f57834603747a36366f0f7a4782`. Windows `just verify` passed on that revision (UI 181 passed; Core 3,566 passed/11 skipped; MCP 374 passed/4 skipped; build 0 warnings/errors). Linux verification was skipped at the operator's direction. This is feature-branch evidence; no merge, push, installation, or publication occurred. See [Plan 068 verification](../docs/verification/plan-068.md).
+Plan 068 is implemented on `feat/plan-068-phase-timings` at `bccf7de1171352845e0a1e343cb6f4a286658d97`. Branch formatting passed for all 28 changed C# files after a scoped whitespace/newline/import-order fix. Windows `just verify` passed on that revision (UI 181 passed; Core 3,566 passed/11 skipped; MCP 374 passed/4 skipped; build 0 warnings/errors). Linux verification was skipped at the operator's direction. This is feature-branch evidence; no merge, push, installation, or publication occurred. See [Plan 068 verification](../docs/verification/plan-068.md).
 
 ## Plan 065 completion — 2026-10-15
 
