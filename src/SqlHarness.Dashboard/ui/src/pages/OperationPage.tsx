@@ -241,6 +241,13 @@ function OperationView({ id, returnSearch }: { id: number; returnSearch: { retur
             <p className="text-sm text-muted-foreground">SQL text is not stored (journal.storeSensitive is off).</p>
           ) : (
             <>
+              {op.operation === "measure" && typeof detail.setupSqlText === "string" && detail.setupSqlText.trim() !== "" && (
+                <section aria-label="Setup SQL" className="space-y-2">
+                  <h3 className="font-medium">Setup SQL</h3>
+                  <p className="text-sm text-muted-foreground">Run setup and the measured SQL in the same database session, with the original parameter values.</p>
+                  <SqlBlock sql={detail.setupSqlText} engine={op.engine} initiallyFormatted={false} />
+                </section>
+              )}
               <SqlBlock sql={detail.sqlText} engine={op.engine} label={detail.candidateSqlText !== null ? "Baseline" : undefined} />
               {detail.candidateSqlText !== null && <SqlBlock sql={detail.candidateSqlText} engine={op.engine} label="Candidate" />}
             </>

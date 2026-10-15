@@ -94,11 +94,11 @@ public sealed class ActivityJournal : IActivityJournal
                 INSERT INTO operations (session_id, operation, host_pid, host_started_at, started_at, updated_at,
                     status, profile, vars_json, mutation_requested, sql_hash, candidate_sql_hash, sql_text, candidate_sql_text,
                     client_call_id, agent_model, agent_reasoning_effort, agent_session_id, agent_turn_id, agent_turn_trigger, agent_thread_source,
-                    operation_ref, dry_run, compare_subject, compare_scope, compare_conditions_json)
+                    operation_ref, dry_run, compare_subject, compare_scope, compare_conditions_json, setup_sql_text)
                 VALUES ($session, $operation, $hostPid, $hostStarted, $now, $now,
                     'running', $profile, $vars, $mutation, $sqlHash, $candidateHash, $sqlText, $candidateText,
                     $callId, $agentModel, $agentEffort, $agentSession, $agentTurn, $agentTrigger, $agentSource,
-                    $operationRef, $dryRun, $compareSubject, $compareScope, $compareConditions)
+                    $operationRef, $dryRun, $compareSubject, $compareScope, $compareConditions, $setupSqlText)
                 RETURNING id;
                 """;
             insert.Parameters.AddWithValue("$session", sessionId);
@@ -125,6 +125,7 @@ public sealed class ActivityJournal : IActivityJournal
             insert.Parameters.AddWithValue("$compareSubject", (object?)start.Context?.Subject ?? DBNull.Value);
             insert.Parameters.AddWithValue("$compareScope", (object?)start.Context?.Scope ?? DBNull.Value);
             insert.Parameters.AddWithValue("$compareConditions", (object?)CompareConditionsJson(start.CompareConditions) ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$setupSqlText", _storeSensitive ? (object?)start.SetupSqlText ?? DBNull.Value : DBNull.Value);
             var id = (long)insert.ExecuteScalar()!;
             transaction.Commit();
             return new JournalHandle(id);
@@ -545,6 +546,8 @@ public sealed class ActivityJournal : IActivityJournal
                 Execute(connection, JournalSchema.Version10);
             if (locked < 11)
                 Execute(connection, JournalSchema.Version11);
+            if (locked < 12)
+                Execute(connection, JournalSchema.Version12);
             Execute(connection, $"PRAGMA user_version = {JournalSchema.CurrentVersion};");
             Execute(connection, "COMMIT;");
         }

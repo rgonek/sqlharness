@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { comparePairs, compareRows, equivalenceLabel, formatChange, regressionLabel } from "@/lib/compare"
 import { formatNumber } from "@/lib/format"
 import { SqlDiff } from "@/components/SqlDiff"
+import { SqlBlock } from "@/components/SqlBlock"
 
 type JsonObject = Record<string, unknown>
 const object = (value: unknown): JsonObject | null => value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : null
@@ -60,6 +61,30 @@ function Cases({ detail }: { detail: OperationDetail }) {
   })}</div>
 }
 
+function SetupSql({ detail }: { detail: OperationDetail }) {
+  const conditions = object(detail.compareConditions)
+  const recordedSetup = conditions?.setupSql
+  // Pre-v12 journals kept setup only inside bounded compare conditions.
+  const setup = detail.setupSqlText ?? (typeof recordedSetup === "string" ? recordedSetup : null)
+  const omittedFields = conditions?.omittedSensitiveFields
+  const omitted = Array.isArray(omittedFields) && omittedFields.includes("setupSql")
+  return <section aria-label="Setup SQL" className="space-y-2">
+    <h3 className="font-medium">Setup SQL</h3>
+    {typeof setup === "string" && setup.trim() !== "" ? (
+      <>
+        <p className="text-sm text-muted-foreground">Run setup and the chosen SQL in the same database session, with the original parameter values.</p>
+        <SqlBlock sql={setup} engine={detail.operation.engine} initiallyFormatted={false} />
+      </>
+    ) : omitted ? (
+      <p className="text-sm text-muted-foreground">Setup SQL was omitted because journal storage limits were reached.</p>
+    ) : conditions && "setupSql" in conditions ? (
+      <p className="text-sm text-muted-foreground">No setup SQL was supplied.</p>
+    ) : (
+      <p className="text-sm text-muted-foreground">Setup SQL is not stored (journal.storeSensitive is off or historical data is unavailable).</p>
+    )}
+  </section>
+}
+
 function Conditions({ detail }: { detail: OperationDetail }) {
   const conditions = object(detail.compareConditions)
   if (!conditions) return <p className="text-sm text-muted-foreground">Historical measurement conditions are unavailable.</p>
@@ -98,7 +123,7 @@ export function CompareDetail({ detail }: { detail: OperationDetail }) {
           <TabsTrigger className="min-w-0 whitespace-normal leading-tight" value="cases">Cases</TabsTrigger><TabsTrigger className="min-w-0 whitespace-normal leading-tight" value="sql">SQL changes</TabsTrigger><TabsTrigger className="min-w-0 whitespace-normal leading-tight" value="plans">Plans and IO</TabsTrigger><TabsTrigger className="min-w-0 whitespace-normal leading-tight" value="conditions">Measurement conditions</TabsTrigger>
         </TabsList>
         <TabsContent value="cases"><Cases detail={detail} /></TabsContent>
-        <TabsContent value="sql"><SqlDiff baseline={detail.sqlText} candidate={detail.candidateSqlText} /></TabsContent>
+        <TabsContent value="sql"><div className="space-y-4"><SetupSql detail={detail} /><SqlDiff baseline={detail.sqlText} candidate={detail.candidateSqlText} /></div></TabsContent>
         <TabsContent value="plans"><div className="grid gap-4 xl:grid-cols-2">{pairs.map(pair => <section key={pair.label} aria-label={`${pair.label} plans and IO`} className="min-w-0 space-y-2"><h2 className="font-medium">{pair.label}</h2><div className="grid gap-4 lg:grid-cols-2"><div><h3 className="mb-2 text-sm font-medium">Baseline</h3><VariantPanel variant={pair.baseline} engine={detail.operation.engine} compareMetrics /></div><div><h3 className="mb-2 text-sm font-medium">Candidate</h3><VariantPanel variant={pair.candidate} engine={detail.operation.engine} compareMetrics /></div></div></section>)}</div>{pairs.length === 0 && <p className="text-sm text-muted-foreground">No paired plans or IO are available.</p>}</TabsContent>
         <TabsContent value="conditions"><Conditions detail={detail} /></TabsContent>
       </Tabs>

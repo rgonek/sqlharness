@@ -26,8 +26,10 @@ internal static class OperationJournalDescriber
         };
         start = operation switch
         {
+            SqlHarnessMeasureOperation measure => start with { SetupSqlText = measure.SetupSql },
             SqlHarnessCompareOperation compare => start with
             {
+                SetupSqlText = compare.SetupSql,
                 Context = compare.Context,
                 CompareConditions = new CompareJournalConditions(
                     compare.TimeoutSeconds, compare.Repeat, compare.CompareResults, compare.CompareNullability,
@@ -35,6 +37,7 @@ internal static class OperationJournalDescriber
             },
             SqlHarnessCompareMatrixOperation matrix => start with
             {
+                SetupSqlText = matrix.SetupSql,
                 Context = matrix.Context,
                 CompareConditions = new CompareJournalConditions(
                     matrix.TimeoutSeconds, matrix.Repeat, matrix.CompareResults, matrix.CompareNullability,

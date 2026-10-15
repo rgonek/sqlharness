@@ -326,6 +326,20 @@ public sealed class JournalReaderTests
         Assert.Equal("2025-06-18", reader.Session(id)!.Session.ProtocolVersion);
     }
 
+    [Fact]
+    public void Operation_detail_reads_sensitive_setup_sql()
+    {
+        using var home = new TempHome();
+        var setup = "CREATE TABLE #data (id int);";
+        var handle = new JournalSeed(home.DatabasePath, storeSensitive: true)
+            .Operation(JournalSeed.Session("cli:setup"), operation: "measure", sql: "SELECT id FROM #data", setupSql: setup);
+
+        var detail = Reader(home).Operation(handle.OperationId)!;
+
+        Assert.Equal("SELECT id FROM #data", detail.SqlText);
+        Assert.Equal(setup, detail.SetupSqlText);
+    }
+
     // The reader never migrates (the dashboard host opens the journal first and refuses an older
     // schema), so "unknown" is a v6 row whose metadata columns were never written.
     [Fact]

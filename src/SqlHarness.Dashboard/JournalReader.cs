@@ -345,7 +345,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var extra = Query(connection, """
             SELECT vars_json, candidate_sql_hash, sql_text, candidate_sql_text, raw_tokens, emitted_tokens, artifact_dir, summary_json,
                    client_call_id, agent_model, agent_reasoning_effort, agent_session_id, agent_turn_id, agent_turn_trigger, agent_thread_source,
-                   raw_bytes, emitted_bytes, compare_subject, compare_scope, compare_conditions_json, l.model, l.effort, c.title
+                   raw_bytes, emitted_bytes, compare_subject, compare_scope, compare_conditions_json, l.model, l.effort, c.title, setup_sql_text
             FROM operations
             LEFT JOIN operation_agent_links l ON l.operation_id = operations.id
             LEFT JOIN agent_conversations c ON c.id = l.conversation
@@ -363,7 +363,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
                 RawBytes: NullableLong(reader, 15),
                 EmittedBytes: NullableLong(reader, 16),
                 CompareSubject: NullableString(reader, 17), CompareScope: NullableString(reader, 18),
-                CompareConditions: Json(NullableString(reader, 19)))).Single();
+                CompareConditions: Json(NullableString(reader, 19)),
+                SetupSqlText: NullableString(reader, 23))).Single();
         var session = Query(connection, $"SELECT {SessionColumns} FROM sessions s WHERE s.id = $id;",
             [("$id", summary.SessionId)], ReadSessionRow).Single();
 
@@ -417,7 +418,8 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             CompareCases: compareVersion?.Cases,
             CompareConditions: extra.CompareConditions,
             Phases: phases,
-            Events: events.Count == 0 ? null : events);
+            Events: events.Count == 0 ? null : events,
+            SetupSqlText: extra.SetupSqlText);
     }
 
     private static OperationEventSummary ReadOperationEvent(SqliteDataReader reader)

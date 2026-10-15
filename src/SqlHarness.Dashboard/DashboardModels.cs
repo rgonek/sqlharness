@@ -81,7 +81,8 @@ public sealed record OperationDetail(
     string? CandidateVersion = null, JsonElement? CompareRegression = null,
     IReadOnlyList<JsonElement>? CompareCases = null, JsonElement? CompareConditions = null,
     IReadOnlyList<OperationPhaseSummary>? Phases = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<OperationEventSummary>? Events = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<OperationEventSummary>? Events = null,
+    string? SetupSqlText = null);
 
 public sealed record OperationPhaseSummary(string Phase, int Count, long TotalMs, long MaxMs);
 

@@ -40,7 +40,7 @@ export const variant = (over: Partial<VariantDetail> = {}): VariantDetail => ({
 
 export const operationDetail = (over: Partial<OperationDetail> = {}): OperationDetail => ({
   operation: operation({ operation: "measure", logicalReadsMedian: 50, hasSpill: true, coldCache: true, overGranted: true }),
-  session: session(), vars: { tenant: "acme" }, candidateSqlHash: null, sqlText: null, candidateSqlText: null,
+  session: session(), vars: { tenant: "acme" }, candidateSqlHash: null, sqlText: null, candidateSqlText: null, setupSqlText: null,
   rawTokens: 100, emittedTokens: 10, rawBytes: 400, emittedBytes: 40, tokenEstimationMethod: "utf8-bytes-div-4",
   artifactDirectory: "/artifacts/m1", summary: { kind: "measure", resultsStable: true },
   variants: [variant()], dimensions: { values: [{ name: "tenant", value: "acme", isUnknown: false, source: "recorded",
