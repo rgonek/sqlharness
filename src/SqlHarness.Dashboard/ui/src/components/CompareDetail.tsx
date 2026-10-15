@@ -98,7 +98,7 @@ export function CompareDetail({ detail }: { detail: OperationDetail }) {
           <TabsTrigger className="min-w-0 whitespace-normal leading-tight" value="cases">Cases</TabsTrigger><TabsTrigger className="min-w-0 whitespace-normal leading-tight" value="sql">SQL changes</TabsTrigger><TabsTrigger className="min-w-0 whitespace-normal leading-tight" value="plans">Plans and IO</TabsTrigger><TabsTrigger className="min-w-0 whitespace-normal leading-tight" value="conditions">Measurement conditions</TabsTrigger>
         </TabsList>
         <TabsContent value="cases"><Cases detail={detail} /></TabsContent>
-        <TabsContent value="sql"><SqlDiff baseline={detail.sqlText} candidate={detail.candidateSqlText} /></TabsContent>
+        <TabsContent value="sql"><SqlDiff baseline={detail.sqlText} candidate={detail.candidateSqlText} engine={detail.operation.engine} /></TabsContent>
         <TabsContent value="plans"><div className="grid gap-4 xl:grid-cols-2">{pairs.map(pair => <section key={pair.label} aria-label={`${pair.label} plans and IO`} className="min-w-0 space-y-2"><h2 className="font-medium">{pair.label}</h2><div className="grid gap-4 lg:grid-cols-2"><div><h3 className="mb-2 text-sm font-medium">Baseline</h3><VariantPanel variant={pair.baseline} engine={detail.operation.engine} compareMetrics /></div><div><h3 className="mb-2 text-sm font-medium">Candidate</h3><VariantPanel variant={pair.candidate} engine={detail.operation.engine} compareMetrics /></div></div></section>)}</div>{pairs.length === 0 && <p className="text-sm text-muted-foreground">No paired plans or IO are available.</p>}</TabsContent>
         <TabsContent value="conditions"><Conditions detail={detail} /></TabsContent>
       </Tabs>

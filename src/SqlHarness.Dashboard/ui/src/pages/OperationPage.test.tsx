@@ -110,7 +110,7 @@ test("compare shows baseline versus candidate and stored plans with operators", 
   expect(within(comparison).getByText("-50%")).toBeInTheDocument()
   expect(screen.getAllByText("Results equivalent").length).toBeGreaterThan(0)
   await userEvent.click(screen.getByRole("tab", { name: "SQL changes" }))
-  expect(screen.getByRole("button", { name: "Show full SQL versions" })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Copy diff" })).toBeInTheDocument()
   await userEvent.click(screen.getByRole("tab", { name: "Plans and IO" }))
   expect(screen.getByRole("link", { name: "Download plan" })).toHaveAttribute("href", `/api/plans/${hash}`)
 
