@@ -118,10 +118,23 @@ public class SqlSafetyTierTests
     [InlineData("CREATE TRIGGER t ON ALL SERVER FOR CREATE_DATABASE AS SELECT 1 AS A")]
     [InlineData("ALTER TRIGGER t ON ALL SERVER FOR CREATE_DATABASE AS SELECT 1 AS A")]
     [InlineData("CREATE OR ALTER TRIGGER t ON ALL SERVER FOR CREATE_DATABASE AS SELECT 1 AS A")]
+    [InlineData("DROP TRIGGER audit_trigger ON ALL SERVER")]
+    [InlineData("IF 1 = 1 DROP TRIGGER audit_trigger ON ALL SERVER")]
+    [InlineData("BEGIN DROP TRIGGER audit_trigger ON ALL SERVER; END")]
     [InlineData("DROP TABLE otherdb.dbo.T")]
     [InlineData("USE otherdb")]
     public void Server_scope_and_cross_database_stay_rejected(string sql) =>
         Assert.False(Mutation(sql).Allowed);
+
+    [Theory]
+    [InlineData("DROP TRIGGER database_trigger ON DATABASE")]
+    [InlineData("DROP TRIGGER table_trigger")]
+    public void Database_and_table_trigger_drops_remain_schema_tier(string sql)
+    {
+        var decision = Mutation(sql);
+        Assert.True(decision.Allowed, decision.RejectionDescription);
+        Assert.Equal(SqlRiskTier.Schema, decision.Tier);
+    }
 
     [Fact]
     public void Routine_body_is_not_classified_as_a_separate_mutation() =>

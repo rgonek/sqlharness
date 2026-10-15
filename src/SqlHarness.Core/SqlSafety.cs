@@ -410,6 +410,9 @@ internal sealed class SqlSafetyClassifier
         if (statement is TriggerStatementBody
             {
                 TriggerObject.TriggerScope: TriggerScope.AllServer,
+            } or DropTriggerStatement
+            {
+                TriggerScope: TriggerScope.AllServer,
             })
         {
             return StatementClassification.Denied(SqlSafetyReason.UnsupportedStatement, statement);

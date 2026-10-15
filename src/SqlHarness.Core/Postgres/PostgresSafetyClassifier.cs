@@ -243,6 +243,9 @@ internal sealed class PostgresSafetyClassifier
         bool proofRequired,
         SqlUsage usage)
     {
+        if (usage == SqlUsage.Mutation && HasUnsupportedDdlQualification(statement))
+            return StatementOutcome.Unsupported;
+
         if (effect.HasSelectInto && statement is not Statement.Select)
             return StatementOutcome.SelectInto;
         if (effect.UnresolvedWrite)
@@ -341,7 +344,8 @@ internal sealed class PostgresSafetyClassifier
                     if (drop.ObjectType == ObjectType.Role)
                         return usage == SqlUsage.Mutation ? StatementOutcome.Privilege : StatementOutcome.Unsupported;
 
-                    if (usage == SqlUsage.Mutation)
+                    if (usage == SqlUsage.Mutation && drop.ObjectType is
+                        ObjectType.View or ObjectType.Schema or ObjectType.Sequence or ObjectType.Type)
                         return StatementOutcome.Schema;
 
                     return StatementOutcome.Unsupported;
@@ -419,7 +423,8 @@ internal sealed class PostgresSafetyClassifier
             return StatementOutcome.Unsupported;
 
         // Every target must be proven; one unproven name denies the statement.
-        // Never approvable: persistent TRUNCATE does not join the mutation path.
+        // Persistent TRUNCATE needs Mutation approval and is Schema tier there;
+        // Query and CompareSetup still reject it.
         foreach (var target in truncate.Names)
         {
             if (!IsProvenSessionTemp(target.Name, knownTemps))
@@ -432,6 +437,49 @@ internal sealed class PostgresSafetyClassifier
 
         return StatementOutcome.SessionLocal;
     }
+
+    private static bool HasUnsupportedDdlQualification(Statement statement) => statement switch
+    {
+        Statement.CreateTable create =>
+            HasCrossDatabaseQualification(create.Element.Name),
+        Statement.CreateIndex createIndex =>
+            HasCrossDatabaseQualification(createIndex.Element.Name) ||
+            HasCrossDatabaseQualification(createIndex.Element.TableName),
+        Statement.AlterTable alterTable => HasCrossDatabaseQualification(alterTable.Name),
+        Statement.AlterIndex alterIndex => HasCrossDatabaseQualification(alterIndex.Name),
+        Statement.AlterView alterView => HasCrossDatabaseQualification(alterView.Name),
+        Statement.Analyze analyze => HasCrossDatabaseQualification(analyze.Name),
+        Statement.CreateView createView =>
+            HasCrossDatabaseQualification(createView.Name) ||
+            HasCrossDatabaseQualification(createView.To),
+        Statement.CreateSchema createSchema => HasMultiplePartsInSchemaName(createSchema.Name),
+        Statement.CreateSequence createSequence =>
+            HasCrossDatabaseQualification(createSequence.Name) ||
+            HasCrossDatabaseQualification(createSequence.OwnedBy),
+        Statement.CreateFunction createFunction => HasCrossDatabaseQualification(createFunction.Name),
+        Statement.CreateProcedure createProcedure => HasCrossDatabaseQualification(createProcedure.Name),
+        Statement.CreateType createType => HasCrossDatabaseQualification(createType.Name),
+        Statement.CreateTrigger createTrigger =>
+            HasCrossDatabaseQualification(createTrigger.Name) ||
+            HasCrossDatabaseQualification(createTrigger.TableName) ||
+            HasCrossDatabaseQualification(createTrigger.ReferencedTableName),
+        Statement.Drop drop => drop.Names.Any(name =>
+            HasCrossDatabaseQualification(name) ||
+            (drop.ObjectType == ObjectType.Schema && name.Values.Count > 1)),
+        Statement.Truncate truncate => truncate.Names.Any(target =>
+            HasCrossDatabaseQualification(target.Name)),
+        _ => false,
+    };
+
+    private static bool HasCrossDatabaseQualification(ObjectName? name) =>
+        name is not null && name.Values.Count > 2;
+
+    private static bool HasMultiplePartsInSchemaName(SchemaName name) => name switch
+    {
+        SchemaName.Simple simple => simple.Name.Values.Count > 1,
+        SchemaName.NamedAuthorization named => named.Name.Values.Count > 1,
+        _ => false,
+    };
 
     // Stricter than IsSessionLocal, and used by TRUNCATE only: the sole proof is
     // a relation name that this session flow recorded from CREATE TEMP /

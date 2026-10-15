@@ -133,6 +133,34 @@ public sealed class DryRunCommandTests : IDisposable
         Assert.Equal("session", Report(compare.Output).GetProperty("tier").GetString());
     }
 
+    [Theory]
+    [InlineData("CREATE TABLE #baseline (Id int);", "SELECT 2 AS A")]
+    [InlineData("SELECT 1 AS A", "CREATE TABLE #candidate (Id int);")]
+    public async Task Compare_dry_run_includes_session_tier_from_each_measured_side(string baseline, string candidate)
+    {
+        var run = await Compare(SqlServer, baseline, candidate, null);
+
+        AssertAllowed(run, "compare");
+        Assert.Equal("session", Report(run.Output).GetProperty("tier").GetString());
+    }
+
+    [Theory]
+    [InlineData("CREATE TABLE #baseline (Id int); SELECT @id;", "SELECT @id;")]
+    [InlineData("SELECT @id;", "CREATE TABLE #candidate (Id int); SELECT @id;")]
+    public async Task Compare_matrix_dry_run_includes_each_measured_side_tier(string baseline, string candidate)
+    {
+        var run = await Compare(
+            SqlServer,
+            baseline,
+            candidate,
+            null,
+            "--matrix",
+            "id:int=1,2");
+
+        AssertAllowed(run, "compare");
+        Assert.Equal("session", Report(run.Output).GetProperty("tier").GetString());
+    }
+
     [Fact]
     public async Task Measure_dry_run_includes_the_measured_query_tier()
     {

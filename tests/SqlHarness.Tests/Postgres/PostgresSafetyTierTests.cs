@@ -11,6 +11,10 @@ public sealed class PostgresSafetyTierTests
     [Theory]
     [InlineData("UPDATE public.orders SET total = 0 WHERE id = 1", SqlRiskTier.Dml)]
     [InlineData("DROP TABLE public.orders", SqlRiskTier.Schema)]
+    [InlineData("DROP VIEW public.order_totals", SqlRiskTier.Schema)]
+    [InlineData("DROP SCHEMA app", SqlRiskTier.Schema)]
+    [InlineData("DROP SEQUENCE app.order_ids", SqlRiskTier.Schema)]
+    [InlineData("DROP TYPE app.mood", SqlRiskTier.Schema)]
     [InlineData("TRUNCATE public.orders", SqlRiskTier.Schema)]
     [InlineData("TRUNCATE orders", SqlRiskTier.Schema)]
     [InlineData("CREATE INDEX ix_orders_id ON public.orders (id)", SqlRiskTier.Schema)]
@@ -72,6 +76,7 @@ public sealed class PostgresSafetyTierTests
     [InlineData("SET ROLE postgres")]
     [InlineData("CREATE DATABASE other")]
     [InlineData("DROP DATABASE other")]
+    [InlineData("DROP STAGE mystage")]
     [InlineData("SELECT pg_terminate_backend(1)")]
     [InlineData("LOAD 'extension' ")]
     [InlineData("LISTEN orders_changed")]
@@ -81,6 +86,29 @@ public sealed class PostgresSafetyTierTests
     [InlineData("DEALLOCATE p")]
     public void Rejected_under_mutation(string sql) =>
         Assert.False(Classify(sql, SqlUsage.Mutation).Allowed);
+
+    [Theory]
+    [InlineData("DROP TABLE otherdb.public.orders")]
+    [InlineData("DROP SCHEMA otherdb.public")]
+    [InlineData("CREATE TABLE otherdb.public.orders (id int)")]
+    [InlineData("CREATE INDEX ix_orders_id ON otherdb.public.orders (id)")]
+    [InlineData("CREATE INDEX otherdb.public.ix_orders_id ON public.orders (id)")]
+    [InlineData("ALTER TABLE otherdb.public.orders ADD COLUMN note text")]
+    [InlineData("TRUNCATE otherdb.public.orders")]
+    [InlineData("CREATE VIEW otherdb.public.order_totals AS SELECT 1 AS total")]
+    [InlineData("CREATE SCHEMA otherdb.public")]
+    [InlineData("CREATE SEQUENCE otherdb.public.order_ids")]
+    [InlineData("CREATE SEQUENCE public.order_ids OWNED BY otherdb.public.orders.id")]
+    [InlineData("CREATE FUNCTION otherdb.public.answer() RETURNS int LANGUAGE sql AS 'SELECT 42'")]
+    [InlineData("CREATE TYPE otherdb.public.mood AS ENUM ('sad', 'ok')")]
+    [InlineData("CREATE TRIGGER order_change AFTER INSERT ON otherdb.public.orders FOR EACH ROW EXECUTE FUNCTION app.on_order_change()")]
+    [InlineData("ANALYZE TABLE otherdb.public.orders")]
+    public void Mutation_rejects_cross_database_qualification_on_ddl_targets(string sql)
+    {
+        var decision = Classify(sql, SqlUsage.Mutation);
+        Assert.False(decision.Allowed);
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
+    }
 
     [Fact]
     public void Do_block_remains_a_parse_error_when_parser_has_no_do_statement() =>
@@ -104,6 +132,14 @@ public sealed class PostgresSafetyTierTests
         Assert.False(decision.Allowed);
         Assert.Equal(SqlSafetyReason.UnsupportedStatement, decision.Reason);
     }
+
+    [Theory]
+    [InlineData("DROP TABLE otherdb.public.orders", "Query")]
+    [InlineData("DROP STAGE mystage", "Query")]
+    [InlineData("CREATE TABLE otherdb.public.orders (id int)", "CompareSetup")]
+    [InlineData("DROP SCHEMA otherdb.public", "CompareSetup")]
+    public void New_mutation_rules_do_not_change_legacy_usage_rejections(string sql, string usage) =>
+        Assert.Equal(SqlSafetyReason.UnsupportedStatement, Classify(sql, Enum.Parse<SqlUsage>(usage)).Reason);
 
     [Fact]
     public void Mutation_requires_read_write_temp_name_proof() =>
