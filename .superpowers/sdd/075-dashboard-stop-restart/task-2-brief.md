@@ -1,0 +1,12 @@
+## Task 2: Safe lifecycle client and bounded stop confirmation
+
+**Interfaces:** Create `public enum DashboardStopStatus { AlreadyStopped, Stopped, Failed }` and `public sealed record DashboardStopResult(DashboardStopStatus Status, string? Error)`. Produce `public static Task<DashboardStopResult> DashboardLifecycle.StopAsync(string home, IProcessInfo processes, TimeSpan timeout, CancellationToken ct)`. Internal injectable HTTP/time hooks may support deterministic failure tests; keep production callers simple. Errors contain no token. Cancellation propagates for the CLI to handle consistently.
+
+- [x] Add failing tests named for these outcomes: no holder -> AlreadyStopped; real published host -> Stopped and lock released; held/unpublished or corrupt metadata -> Failed by timeout; stale PID/start time -> no HTTP to stale endpoint; 404/405 -> Failed with older-version/PID guidance; 401, connection failure and timeout -> Failed unless actual shutdown is independently confirmed; replacement endpoint -> Failed rather than shutting down the replacement.
+- [x] Add HTTP transport assertions: exact loopback destination, cookie/header/JSON, no redirects/proxy, no token in URL or returned errors. Test an endpoint redirect never reaches the redirect destination.
+- [x] Run `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~DashboardLifecycleTests`; capture RED.
+- [x] Implement discovery using `DashboardLock.ReadRunning` and PID/start-time validation. For a null discovery result, prove the home lock is acquirable before returning AlreadyStopped; otherwise retry within the same deadline. Keep probe scopes short and dispose acquired locks. Do not mistake `ReadRunning == null` for shutdown.
+- [x] Send one guarded shutdown request to the captured instance, then poll for lock release within the remaining deadline. Confirm the captured process identity is gone before reporting Stopped, so publishing is not racing process exit; if identity cannot be verified, report failure rather than claim process exit. Detect changed published identity and stop with a race diagnostic. Never delete a replacement's files or kill a process.
+- [x] Rerun focused lifecycle, lock and host tests; expect pass. Commit the task.
+
+Task 2 evidence: [task-2-report.md](task-2-report.md)
