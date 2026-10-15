@@ -104,6 +104,9 @@ public sealed class DashboardCommand(IDashboardLauncher launcher, IDashboardLife
             return Fail("The dashboard could not be safely stopped; it may still be running.", SqlHarnessExitCode.LocalStorage);
         }
 
+        if (ct.IsCancellationRequested)
+            return (int)SqlHarnessExitCode.Success;
+
         if (stopped.Status == DashboardStopStatus.Failed)
             return Fail(stopped.Error ?? "The dashboard could not be safely stopped; it may still be running.", SqlHarnessExitCode.LocalStorage);
 
@@ -148,10 +151,16 @@ public sealed class DashboardCommand(IDashboardLauncher launcher, IDashboardLife
             return Fail("The replacement dashboard address could not be confirmed.", SqlHarnessExitCode.LocalStorage);
         }
 
+        if (ct.IsCancellationRequested)
+            return (int)SqlHarnessExitCode.Success;
+
         if (endpoint is null)
             return Fail("The replacement dashboard did not publish its address before the startup deadline.", SqlHarnessExitCode.LocalStorage);
         if (!identity.Matches(endpoint))
             return Fail($"Dashboard PID {endpoint.Pid} published during restart, but it is not the requested process; no success was announced.", SqlHarnessExitCode.LocalStorage);
+
+        if (ct.IsCancellationRequested)
+            return (int)SqlHarnessExitCode.Success;
 
         DashboardAnnouncement.Announce(home, endpoint.OpenUri, output.Capture, console.Error,
             openBrowser: !settings.NoOpen, new SystemBrowserLauncher());

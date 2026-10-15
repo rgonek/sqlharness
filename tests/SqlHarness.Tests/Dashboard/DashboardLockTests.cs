@@ -119,31 +119,28 @@ public sealed class DashboardLockTests
     }
 
     [Fact]
-    public async Task Wait_for_running_rejects_an_endpoint_published_after_the_deadline()
+    public async Task Wait_for_running_rejects_an_endpoint_read_after_the_deadline()
     {
         using var home = new TempHome();
-        var processes = new FakeProcesses().Alive(4242, Started);
-        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var publish = Task.Run(async () =>
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(60));
-            using var held = DashboardLock.TryAcquire(home.Path)!;
-            held.Publish(new DashboardEndpoint(4242, Started, 47801, "tok"));
-            await release.Task;
-        });
+        using var held = DashboardLock.TryAcquire(home.Path)!;
+        held.Publish(new DashboardEndpoint(4242, Started, 47801, "tok"));
 
-        DashboardEndpoint? endpoint;
-        try
-        {
-            endpoint = await DashboardLock.WaitForRunningAsync(home.Path, processes, TimeSpan.FromMilliseconds(40), CancellationToken.None);
-        }
-        finally
-        {
-            release.SetResult();
-        }
-        await publish;
+        var endpoint = await DashboardLock.WaitForRunningAsync(home.Path,
+            new BlockingProcessInfo(4242, Started, TimeSpan.FromMilliseconds(150)),
+            TimeSpan.FromMilliseconds(40), CancellationToken.None);
 
         Assert.Null(endpoint);
+    }
+
+    private sealed class BlockingProcessInfo(int pid, DateTimeOffset startedAt, TimeSpan delay) : IProcessInfo
+    {
+        public int CurrentPid => pid;
+
+        public ProcessSnapshot? Get(int requestedPid)
+        {
+            Thread.Sleep(delay);
+            return requestedPid == pid ? new ProcessSnapshot(pid, null, "process", startedAt, null) : null;
+        }
     }
 
     [UnixFact]

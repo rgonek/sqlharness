@@ -74,6 +74,52 @@ public sealed class DashboardCommandTests
     }
 
     [Fact]
+    public async Task Cancellation_after_successful_stop_does_not_launch()
+    {
+        using var home = new TempHome();
+        using var scope = new HomeScope(home.Path);
+        using var cancellation = new CancellationTokenSource();
+        var lifecycle = new RecordingLifecycle(
+            new DashboardStopResult(DashboardStopStatus.Stopped, null), cancelOnStop: cancellation);
+        var launcher = new RecordingLauncher();
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = await Create(lifecycle, launcher, output, error)
+            .RunAsync(["dashboard", "--restart", "--no-open"], cancellation.Token);
+
+        Assert.Equal((int)SqlHarnessExitCode.Success, exitCode);
+        Assert.Empty(launcher.Launches);
+        Assert.Empty(output.ToString());
+    }
+
+    [Fact]
+    public async Task Cancellation_after_publication_does_not_announce_or_open_browser()
+    {
+        using var home = new TempHome();
+        using var scope = new HomeScope(home.Path);
+        using var cancellation = new CancellationTokenSource();
+        var launchedAt = DateTimeOffset.UtcNow;
+        var identity = new DashboardLaunchIdentity(8123, launchedAt);
+        var lifecycle = new RecordingLifecycle(
+            new DashboardStopResult(DashboardStopStatus.AlreadyStopped, null),
+            new DashboardEndpoint(identity.Pid, launchedAt, 47800, "cancelled-test-token"),
+            cancelOnWait: cancellation);
+        var launcher = new RecordingLauncher(identity);
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var exitCode = await Create(lifecycle, launcher, output, error)
+            .RunAsync(["dashboard", "--restart", "--no-open"], cancellation.Token);
+
+        Assert.Equal((int)SqlHarnessExitCode.Success, exitCode);
+        Assert.Single(launcher.Launches);
+        Assert.Empty(output.ToString());
+        Assert.Empty(error.ToString());
+        Assert.False(File.Exists(Path.Combine(home.Path, "dashboard-open.html")));
+    }
+
+    [Fact]
     public async Task Restart_launches_once_in_effective_home_and_announces_only_its_publication()
     {
         using var home = new TempHome();
@@ -232,7 +278,11 @@ public sealed class DashboardCommandTests
         }
     }
 
-    private sealed class RecordingLifecycle(DashboardStopResult stopResult, DashboardEndpoint? endpoint = null) : IDashboardLifecycle
+    private sealed class RecordingLifecycle(
+        DashboardStopResult stopResult,
+        DashboardEndpoint? endpoint = null,
+        CancellationTokenSource? cancelOnStop = null,
+        CancellationTokenSource? cancelOnWait = null) : IDashboardLifecycle
     {
         public string? Home { get; private set; }
         public TimeSpan StopTimeout { get; private set; }
@@ -242,6 +292,7 @@ public sealed class DashboardCommandTests
         {
             Home = home;
             StopTimeout = timeout;
+            cancelOnStop?.Cancel();
             return Task.FromResult(stopResult);
         }
 
@@ -249,6 +300,7 @@ public sealed class DashboardCommandTests
         {
             Home = home;
             WaitTimeout = timeout;
+            cancelOnWait?.Cancel();
             return Task.FromResult(endpoint);
         }
     }

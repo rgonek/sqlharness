@@ -111,12 +111,12 @@ public static class SqlHarnessCli
 
 public sealed class SqlHarnessApp(CommandApp app, OutputContext output)
 {
-    public Task<int> RunAsync(IEnumerable<string> args)
+    public Task<int> RunAsync(IEnumerable<string> args, CancellationToken ct = default)
     {
         var normalized = args.ToArray();
         output.Configure(normalized);
         if (normalized.Length >= 2 && string.Equals(normalized[0], "plan", StringComparison.OrdinalIgnoreCase) && normalized[1] == "-")
             normalized = [normalized[0], .. normalized.Skip(2)];
-        return app.RunAsync(normalized);
+        return app.RunAsync(normalized, ct);
     }
 }
