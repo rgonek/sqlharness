@@ -2,6 +2,10 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
+## Plan 068 implementation — 2026-10-15 (integration pending)
+
+Plan 068 is implemented on `feat/plan-068-phase-timings` at `9840d5c105063f57834603747a36366f0f7a4782`. Windows `just verify` passed on that revision (UI 181 passed; Core 3,566 passed/11 skipped; MCP 374 passed/4 skipped; build 0 warnings/errors). Linux verification was skipped at the operator's direction. This is feature-branch evidence; no merge, push, installation, or publication occurred. See [Plan 068 verification](../docs/verification/plan-068.md).
+
 ## Plan 065 completion — 2026-10-15
 
 Plan 065 is DONE and integrated locally into `main` at `cf0e7c4d45c64105677c14563aed910aefe47788`. Post-merge verification passed on that exact revision: Windows `just verify` exit 0 (Core 3,511 passed/11 skipped; MCP 374 passed/4 skipped; format skipped with 0 changed C# files) and Linux `just verify-linux` exit 0 (9 stages; UI 163 tests; Core 3,516 passed/6 skipped; MCP 375 passed/3 skipped; build 0 warnings/errors; format passed for 7 changed C# files). Full stage details: [Plan 065 verification](../docs/verification/plan-065.md). This is local integration evidence; no push, install or publication was performed.

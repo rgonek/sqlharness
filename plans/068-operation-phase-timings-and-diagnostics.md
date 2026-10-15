@@ -14,8 +14,8 @@
 
 ## Status
 
-- TODO; planning accepted 2026-10-14 (operator). No implementation, installation, integration or publication authorization.
-- Planning base: `ed44649`, 2026-10-14.
+- IMPLEMENTED on `feat/plan-068-phase-timings`; local integration is pending. No installation, push or publication was performed. Linux verification was skipped at the operator's direction; see [verification evidence](../docs/verification/plan-068.md).
+- Planning base: `ed44649`, 2026-10-14. Implementation base: `cf0e7c4`.
 - Priority: P2. Effort: M–L. Risk: MEDIUM (journal schema migration; decorator on every connection; dashboard).
 - Owner: this plan. Coordinate with 062 (operation page, journal reader).
 
@@ -23,7 +23,7 @@
 
 - A five-cell compare took several times longer than an equivalent compare minutes later. Per-cell artifact timestamps showed cells taking tens of seconds versus a few seconds; statements ran in about a millisecond. Database resource statistics for that window showed the database idle. The journal stores only one `duration_ms` per operation (`JournalSchema.cs` `operations`), so connection, execution and artifact time could not be separated. The cause stayed unproven. Workload values are omitted.
 - Each compare cell opens one session per variant (`CompareCellRunner.cs:182`); `measure`, `query`, `watch` and `snapshot` connect in `SqlHarnessModule.cs:177,601,646`, `WatchRunner.cs:95,194`, `SnapshotRunner.cs:76`. All go through `ISqlSessionFactory` (`SqlExecution.cs:150-160`), built in `SqlHarnessModule.cs:65`.
-- `ActivityJournal` already owns a `TimeProvider` (`ActivityJournal.cs:26`) and migrates by `user_version` (`:340-360`, current version 7).
+- At planning time, `ActivityJournal` owned a `TimeProvider` and used `user_version` migrations (then version 7). Plan 069 later used v9 for session annotations; this plan therefore landed as v10.
 
 ## Design decisions
 
@@ -47,7 +47,7 @@
 2. A connection that fails (timeout, auth error) still records a `connect` phase and, with diagnostics on, an event with `outcome: "failed"` and the SQL error number.
 3. `watch` reconnects (`WatchRunner.cs:194`): count increments, max reflects the slowest.
 4. Journal disabled (`journal.enabled: false`): recorder is a no-op, no per-call allocation beyond a null check.
-5. Schema migration from v7 with existing rows; dashboard on a v7 journal reading a v8 file fails with the existing "schema newer" path, not a crash.
+5. Schema migration from v9 with existing rows; a v9 dashboard reading a v10 file fails with the existing "schema newer" path, not a crash.
 
 ---
 
@@ -90,7 +90,7 @@ public struct PhaseScope : IDisposable
 }
 ```
 
-- [ ] **Step 1: Failing tests** (use `Microsoft.Extensions.Time.Testing.FakeTimeProvider` if the test project references it; otherwise a minimal `TimeProvider` subclass with a settable timestamp):
+- [x] **Step 1: Failing tests** (use `Microsoft.Extensions.Time.Testing.FakeTimeProvider` if the test project references it; otherwise a minimal `TimeProvider` subclass with a settable timestamp):
 
 ```csharp
     [Fact]
@@ -142,15 +142,15 @@ public struct PhaseScope : IDisposable
 
 `TimedSessionFactoryTests`: a fake inner factory that advances time and either returns a session or throws `SqlException`-like `SqlHarnessError` with a number. Assert a `Connect` aggregate is recorded in both cases, `Fail` sets outcome `failed`, and no recorder (null `Current`) means pass-through without exceptions.
 
-- [ ] **Step 2: Run** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~OperationPhaseRecorderTests|FullyQualifiedName~TimedSessionFactoryTests"` — FAIL (types missing).
-- [ ] **Step 3: Implement** the recorder with `AsyncLocal<OperationPhaseRecorder?>`, thread-safe aggregation (`lock` on a small dictionary; phases are few). `TimedSessionFactory : ISqlSessionFactory` wraps both `ConnectAsync` overloads in `Current?.Start(OperationPhase.Connect)`. On `SqlException` it calls `Fail(ex.Number)`. With diagnostics on, it calls `Detail` with `{"clientConnectionId":..., "authStrategy":..., "attempt":n}`, reading `ClientConnectionId` from the opened `SqlConnection` through a new optional `ISqlSession.ClientConnectionId` (default `null`; set in the SqlClient session). Wrap the factory at `SqlHarnessModule.cs:65`. Add `Start(Setup)`, `Start(Execute)` and `Start(Artifact)` scopes at the listed call sites, around the existing awaits only.
-- [ ] **Step 4: Run** the full `tests/SqlHarness.Tests` project — PASS.
-- [ ] **Step 5: Commit** `git commit -m "Core: per-operation phase recorder and timed session factory"`
+- [x] **Step 2: Run** `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~OperationPhaseRecorderTests|FullyQualifiedName~TimedSessionFactoryTests"` — FAIL (types missing).
+- [x] **Step 3: Implement** the recorder with `AsyncLocal<OperationPhaseRecorder?>`, thread-safe aggregation (`lock` on a small dictionary; phases are few). `TimedSessionFactory : ISqlSessionFactory` wraps both `ConnectAsync` overloads in `Current?.Start(OperationPhase.Connect)`. On `SqlException` it calls `Fail(ex.Number)`. With diagnostics on, it calls `Detail` with `{"clientConnectionId":..., "authStrategy":..., "attempt":n}`, reading `ClientConnectionId` from the opened `SqlConnection` through a new optional `ISqlSession.ClientConnectionId` (default `null`; set in the SqlClient session). Wrap the factory at `SqlHarnessModule.cs:65`. Add `Start(Setup)`, `Start(Execute)` and `Start(Artifact)` scopes at the listed call sites, around the existing awaits only.
+- [x] **Step 4: Run** the full `tests/SqlHarness.Tests` project — PASS.
+- [x] **Step 5: Commit** `git commit -m "Core: per-operation phase recorder and timed session factory"`
 
-### Task 2: Journal schema v8 and recording
+### Task 2: Journal schema v10 and recording
 
 **Files:**
-- Modify: `src/SqlHarness.Core/Journal/JournalSchema.cs` (add `Version8`, `CurrentVersion = 8`), `ActivityJournal.cs` (migration line after `Version7`; new write method), `IActivityJournal.cs` (default no-op), `JournalingModule.cs` (open recorder in the operation wrapper; record before `Complete`)
+- Modify: `src/SqlHarness.Core/Journal/JournalSchema.cs` (add `Version10`, `CurrentVersion = 10`), `ActivityJournal.cs` (migration line after `Version9`; new write method), `IActivityJournal.cs` (default no-op), `JournalingModule.cs` (open recorder in the operation wrapper; record before `Complete`)
 - Test: `tests/SqlHarness.Tests/Journal/ActivityJournalTests.cs` (or the existing migration test file)
 
 **Interfaces:**
@@ -158,7 +158,7 @@ public struct PhaseScope : IDisposable
 - Produces: `void IActivityJournal.RecordPhases(JournalHandle? handle, IReadOnlyList<PhaseAggregate> phases, IReadOnlyList<PhaseEvent> events, int droppedEvents) { }`
 
 ```sql
--- Version8
+-- Version10
 CREATE TABLE operation_phases (
     operation_id INTEGER NOT NULL REFERENCES operations(id) ON DELETE CASCADE,
     phase TEXT NOT NULL,
@@ -180,11 +180,11 @@ CREATE TABLE operation_events (
 );
 ```
 
-- [ ] **Step 1: Failing tests:** (a) a v7 database migrates to v8 with existing rows intact. (b) After a fake operation with two connects and one execute, `operation_phases` has `connect|2` and `execute|1`, plus an `other` row equal to `duration_ms − sum`, clamped at 0. (c) With `captureEvents: false`, `operation_events` is empty. (d) With `true`, events are in `seq` order, and when events were dropped a final row has `outcome = 'truncated'` and `detail_json = '{"dropped":N}'`.
-- [ ] **Step 2: Run** the journal tests — FAIL.
-- [ ] **Step 3: Implement.** In `JournalingModule`, open `OperationPhaseRecorder.Begin(time, config.Diagnostics.Enabled)` only when the journal handle is non-null. Call `RecordPhases` inside the same guard pattern as `RecordBenchmark`, before `Complete`. The `other` phase is computed at write time from `OperationEnd.DurationMilliseconds`.
-- [ ] **Step 4: Run** the full Core tests — PASS.
-- [ ] **Step 5: Commit** `git commit -m "Journal v8: operation phases and opt-in events"`
+- [x] **Step 1: Failing tests:** (a) a v9 database migrates to v10 with existing rows intact. (b) After a fake operation with two connects and one execute, `operation_phases` has `connect|2` and `execute|1`, plus an `other` row equal to `duration_ms − sum`, clamped at 0. (c) With `captureEvents: false`, `operation_events` is empty. (d) With `true`, events are in `seq` order, and when events were dropped a final row has `outcome = 'truncated'` and `detail_json = '{"dropped":N}'`.
+- [x] **Step 2: Run** the journal tests — FAIL.
+- [x] **Step 3: Implement.** In `JournalingModule`, open `OperationPhaseRecorder.Begin(time, config.Diagnostics.Enabled)` only when the journal handle is non-null. Call `RecordPhases` inside the same guard pattern as `RecordBenchmark`, before `Complete`. The `other` phase is computed at write time from `OperationEnd.DurationMilliseconds`.
+- [x] **Step 4: Run** the full Core tests — PASS.
+- [x] **Step 5: Commit** Journal v10 operation phases and opt-in events.
 
 ### Task 3: `diagnostics.enabled` setting
 
@@ -192,9 +192,9 @@ CREATE TABLE operation_events (
 - Modify: `src/SqlHarness.Core/SqlHarnessConfig.cs` (add `DiagnosticsConfig { bool Enabled }` and `SqlHarnessConfig.Diagnostics`), `SqlHarnessConfigWriter.cs`, `src/SqlHarness.Cli/Commands/DoctorCommand.cs` (report effective value), `src/SqlHarness.Dashboard/DashboardSettings.cs`, `src/SqlHarness.Dashboard/ui/src/pages/SettingsPage.tsx`, `ui/src/api/types.ts`
 - Test: config loader tests, `SettingsPage.test.tsx`
 
-- [ ] **Step 1: Failing tests:** `{"diagnostics":{"enabled":true}}` loads as enabled; an unknown field under `diagnostics` makes the file invalid → defaults (off); the writer round-trips the field; the Settings page renders a "Connection diagnostics" switch and saves without confirmation (non-sensitive).
-- [ ] **Step 2–4:** Implement, run Core and UI tests (`npm test` in `src/SqlHarness.Dashboard/ui`), PASS. Rebuild `ui/dist` with the repository's normal UI build command if dist is committed (check AGENTS.md).
-- [ ] **Step 5: Commit** `git commit -m "Settings: diagnostics.enabled for connection events"`
+- [x] **Step 1: Failing tests:** `{"diagnostics":{"enabled":true}}` loads as enabled; an unknown field under `diagnostics` makes the file invalid → defaults (off); the writer round-trips the field; the Settings page renders a "Connection diagnostics" switch and saves without confirmation (non-sensitive).
+- [x] **Step 2–4:** Implement, run Core and UI tests (`npm test` in `src/SqlHarness.Dashboard/ui`), PASS. Rebuild `ui/dist` with the repository's normal UI build command if dist is committed (check AGENTS.md).
+- [x] **Step 5: Commit** `git commit -m "Settings: diagnostics.enabled for connection events"`
 
 ### Task 4: Dashboard operation detail
 
@@ -202,14 +202,14 @@ CREATE TABLE operation_events (
 - Modify: `src/SqlHarness.Dashboard/JournalReader.cs`, `DashboardModels.cs`, `ui/src/api/types.ts`, `ui/src/pages/OperationPage.tsx`
 - Test: `OperationPage.test.tsx`, JournalReader tests
 
-- [ ] **Step 1: Failing tests:** operation detail JSON contains `phases: [{phase,count,totalMs,maxMs}]` (empty for v7 rows) and `events` (present only when rows exist). The page shows a "Time breakdown" table (phase, count, total, max, share of wall time). When events exist, a collapsible "Connection events" list shows offset, duration, outcome, error number and client connection id.
-- [ ] **Step 2–4:** Implement and run, PASS.
-- [ ] **Step 5: Commit** `git commit -m "Dashboard: operation time breakdown and diagnostic events"`
+- [x] **Step 1: Failing tests:** operation detail JSON contains `phases: [{phase,count,totalMs,maxMs}]` (empty for v9 rows) and `events` (present only when rows exist). The page shows a "Time breakdown" table (phase, count, total, max, share of wall time). When events exist, a collapsible "Connection events" list shows offset, duration, outcome, error number and client connection id.
+- [x] **Step 2–4:** Implement and run, PASS.
+- [x] **Step 5: Commit** `git commit -m "Dashboard: operation time breakdown and diagnostic events"`
 
 ### Task 5: Documentation and gates
 
-- [ ] README journal section: describe `operation_phases` (always with the journal) and `operation_events` (only with `diagnostics.enabled`), the exact fields, and that neither stores SQL, values or tokens. Add `diagnostics` to the optional-behavior `config.json` example and the Settings description. Schema v8 sentence next to the v7 one.
-- [ ] Run Windows and Linux gates; record counts. Update Status and the `plans/README.md` row.
+- [x] README journal section describes always-recorded phase aggregates and opt-in diagnostic events, their fields and bounds, and the absence of SQL, values, credentials, or tokens; the optional config example and Settings description include diagnostics. Schema v10 is documented next to v9.
+- [x] Windows `just verify` passed and counts are recorded. Linux `just verify-linux` was skipped at the operator's direction. Status, index, history, and evidence are updated.
 
 ## Acceptance
 
