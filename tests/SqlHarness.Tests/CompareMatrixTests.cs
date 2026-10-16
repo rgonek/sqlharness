@@ -895,6 +895,45 @@ public class CompareMatrixTests
     }
 
     [Fact]
+    public async Task Partial_matrix_after_sql_failure_exposes_runs_of_completed_cells_only()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory(failSqlAt: 2);
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix("BatchSize:int=1,20,100"));
+
+        Assert.Equal(SqlHarnessExitCode.SqlExecution, outcome.ExitCode);
+        var runs = Assert.IsAssignableFrom<IReadOnlyList<CompareRunArtifact>>(outcome.BenchmarkRuns);
+        Assert.Equal([0, 1], runs.Select(run => run.MatrixCell!.Value).Distinct().Order());
+        Assert.All(runs, run => Assert.Contains(run.Variant, new[] { "baseline", "candidate" }));
+    }
+
+    [Fact]
+    public async Task Partial_matrix_after_artifact_failure_exposes_runs_of_completed_cells()
+    {
+        using var artifacts = new DirectoryArtifactWriter(failWriteAt: 2);
+
+        var outcome = await Module(new MatrixSessionFactory(), artifacts).ExecuteAsync(Matrix("BatchSize:int=1,20,100"));
+
+        Assert.Equal(SqlHarnessExitCode.LocalStorage, outcome.ExitCode);
+        var partialReport = Assert.IsType<SqlHarnessCompareMatrixReport>(outcome.Report);
+        Assert.Equal([0, 1], partialReport.Cells.Select(cell => cell.Index));
+        Assert.Equal([0, 1], outcome.BenchmarkRuns!.Select(run => run.MatrixCell!.Value).Distinct().Order());
+    }
+
+    [Fact]
+    public async Task Matrix_failing_in_the_first_cell_exposes_no_runs()
+    {
+        using var artifacts = new DirectoryArtifactWriter();
+        var factory = new MatrixSessionFactory(failSqlAt: 0);
+
+        var outcome = await Module(factory, artifacts).ExecuteAsync(Matrix("BatchSize:int=1,20"));
+
+        Assert.Null(outcome.Report);
+        Assert.True(outcome.BenchmarkRuns is null || outcome.BenchmarkRuns.Count == 0);
+    }
+
+    [Fact]
     public async Task Matrix_case_inventory_retains_parameter_values_when_detail_is_limited()
     {
         using var artifacts = new DirectoryArtifactWriter();
@@ -984,10 +1023,18 @@ public class CompareMatrixTests
         public List<string> Directories { get; } = [];
         public string Root { get; } = Path.Combine(Path.GetTempPath(), "sqlharness-matrix-" + Guid.NewGuid().ToString("N"));
 
-        public DirectoryArtifactWriter() => Directory.CreateDirectory(Root);
+        private readonly int? _failWriteAt;
+
+        public DirectoryArtifactWriter(int? failWriteAt = null)
+        {
+            _failWriteAt = failWriteAt;
+            Directory.CreateDirectory(Root);
+        }
 
         public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target)
         {
+            if (_failWriteAt == Directories.Count)
+                throw new UnauthorizedAccessException("Access to the staging path is denied.");
             var directory = Path.Combine(Root, "cell-" + Directories.Count.ToString(CultureInfo.InvariantCulture));
             Directory.CreateDirectory(directory);
             Directories.Add(directory);

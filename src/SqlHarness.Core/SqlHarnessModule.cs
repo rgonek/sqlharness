@@ -526,7 +526,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     catch (Exception exception)
                     {
                         return WithReceipt(
-                            new SqlHarnessOutcome(SqlHarnessExitCode.LocalStorage, partialReport, SecretRedactor.Redact(exception, knownSecrets)),
+                            new SqlHarnessOutcome(SqlHarnessExitCode.LocalStorage, partialReport, SecretRedactor.Redact(exception, knownSecrets))
+                            {
+                                BenchmarkRuns = failed.CompletedRuns,
+                            },
                             rawFootprint);
                     }
                     phase = failed.Phase switch
@@ -540,7 +543,10 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     ? SqlHarnessExitCode.LocalStorage
                     : OperationFailureMapper.Map(failed.InnerException ?? failed, phase);
                 return WithReceipt(
-                    new SqlHarnessOutcome(exitCode, failed.PartialReport, FormatMatrixCellError(failed, knownSecrets)),
+                    new SqlHarnessOutcome(exitCode, failed.PartialReport, FormatMatrixCellError(failed, knownSecrets))
+                    {
+                        BenchmarkRuns = failed.CompletedRuns,
+                    },
                     rawFootprint);
             }
 

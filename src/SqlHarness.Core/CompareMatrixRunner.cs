@@ -16,8 +16,9 @@ internal sealed class CompareMatrixCellFailedException : Exception
     internal CompareCellPhase Phase { get; }
     internal OutputFootprint RawFootprint { get; }
     internal SqlHarnessCompareMatrixReport? PartialReport { get; }
+    internal IReadOnlyList<CompareRunArtifact> CompletedRuns { get; }
 
-    internal CompareMatrixCellFailedException(int index, string? parameterName, string? parameterType, string setName, CompareCellFailedException inner, IReadOnlyList<CompareMatrixCellReport> completedCells, OutputFootprint rawFootprint)
+    internal CompareMatrixCellFailedException(int index, string? parameterName, string? parameterType, string setName, CompareCellFailedException inner, IReadOnlyList<CompareMatrixCellReport> completedCells, IReadOnlyList<CompareRunArtifact> completedRuns, OutputFootprint rawFootprint)
         : base(null, Unwrap(inner))
     {
         Index = index;
@@ -31,6 +32,7 @@ internal sealed class CompareMatrixCellFailedException : Exception
                 parameterName,
                 parameterType,
                 completedCells.ToArray());
+        CompletedRuns = completedRuns.ToArray();
     }
 
     private static Exception Unwrap(CompareCellFailedException inner)
@@ -103,6 +105,7 @@ internal sealed class CompareMatrixRunner(CompareCellRunner cells)
                     set.Name,
                     failed,
                     reports,
+                    runs,
                     new OutputFootprint(bytes, lines));
             }
         }
