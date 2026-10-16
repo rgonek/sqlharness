@@ -350,6 +350,23 @@ public sealed class IndexInventoryCaptureTests
     }
 
     [Fact]
+    public async Task Column_rows_are_read_in_ascending_ordinal_order()
+    {
+        var reader = new SequentialGridReader(
+        [
+            Grid(ObjectColumns, [Row(1, 1)]),
+            Grid(IndexColumns, [Index(1, 1, "IX_Orders")]),
+            Grid(ColumnColumns, [Column(1, 1, "Id"), Column(1, 1, "Note", included: true)]),
+        ]);
+
+        var tables = await IndexInventoryQuery.ReadAsync(reader, [("dbo", "Orders")], CancellationToken.None);
+
+        var index = Assert.Single(Assert.Single(tables).Indexes);
+        Assert.Equal(["Id"], index.KeyColumns);
+        Assert.Equal(["Note"], index.IncludeColumns);
+    }
+
+    [Fact]
     public async Task Postgres_never_runs_the_inventory_batch()
     {
         using var temp = new TempDirectory();
@@ -638,6 +655,54 @@ public sealed class IndexInventoryCaptureTests
                 return Task.FromResult<ISqlReader>(new RowReader(["QUERY PLAN"], [[Explain]]));
 
             return Task.FromResult<ISqlReader>(new RowReader(["n"], [[1]]));
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    /// <summary>Rejects a decreasing <see cref="ISqlReader.GetValue"/> ordinal, as SqlClient does under <c>CommandBehavior.SequentialAccess</c>.</summary>
+    private sealed class SequentialGridReader(IReadOnlyList<(string[] Names, object?[][] Rows)> grids) : ISqlReader
+    {
+        private readonly (string[] Names, object?[][] Rows)[] _grids = grids.ToArray();
+        private int _grid;
+        private int _row = -1;
+        private int _highestOrdinal = -1;
+
+        private (string[] Names, object?[][] Rows) Current => _grids[_grid];
+
+        public int FieldCount => _grids.Length == 0 ? 0 : Current.Names.Length;
+
+        public int RecordsAffected => -1;
+
+        public string GetName(int ordinal) => Current.Names[ordinal];
+
+        public Type GetFieldType(int ordinal) => Current.Rows[0][ordinal]?.GetType() ?? typeof(object);
+
+        public bool GetAllowNull(int ordinal) => false;
+
+        public object GetValue(int ordinal)
+        {
+            if (ordinal <= _highestOrdinal)
+                throw new InvalidOperationException($"Invalid attempt to read from column ordinal '{ordinal}'.");
+
+            _highestOrdinal = ordinal;
+            return Current.Rows[_row][ordinal] ?? DBNull.Value;
+        }
+
+        public Task<bool> ReadAsync(CancellationToken ct)
+        {
+            _highestOrdinal = -1;
+            return Task.FromResult(_grids.Length > 0 && ++_row < Current.Rows.Length);
+        }
+
+        public Task<bool> NextResultAsync(CancellationToken ct)
+        {
+            _highestOrdinal = -1;
+            if (_grids.Length == 0 || ++_grid >= _grids.Length)
+                return Task.FromResult(false);
+
+            _row = -1;
+            return Task.FromResult(true);
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;

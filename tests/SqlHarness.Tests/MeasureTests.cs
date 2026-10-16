@@ -902,10 +902,16 @@ public class SqlHarnessMeasureTests
     private sealed class FakeReader : ISqlReader
     {
         private readonly IReadOnlyList<Result> _results;
+        private readonly bool _sequential;
         private int _result;
         private int _row = -1;
+        private int _highestOrdinal = -1;
         private Result Current => _results[_result];
-        private FakeReader(IReadOnlyList<Result> results) => _results = results;
+        private FakeReader(IReadOnlyList<Result> results, bool sequential = false)
+        {
+            _results = results;
+            _sequential = sequential;
+        }
         public int FieldCount => _results.Count == 0 ? 0 : Current.Names.Length;
         public int RecordsAffected => -1;
         public static FakeReader Empty() => new([]);
@@ -914,14 +920,27 @@ public class SqlHarnessMeasureTests
         public static FakeReader WithPlan(string[] names, object?[][] rows, string plan) =>
             new([new(names, rows), new(["Microsoft SQL Server 2005 XML Showplan"], [[plan]])]);
         public static FakeReader FromGrids(IReadOnlyList<(string[] Names, object?[][] Rows)> grids) =>
-            new(grids.Select(grid => new Result(grid.Names, grid.Rows)).ToArray());
+            new(grids.Select(grid => new Result(grid.Names, grid.Rows)).ToArray(), sequential: true);
         public string GetName(int ordinal) => Current.Names[ordinal];
         public Type GetFieldType(int ordinal) => Current.Rows[0][ordinal]?.GetType() ?? typeof(object);
         public bool GetAllowNull(int ordinal) => false;
-        public object GetValue(int ordinal) => Current.Rows[_row][ordinal] ?? DBNull.Value;
-        public Task<bool> ReadAsync(CancellationToken ct) => Task.FromResult(_results.Count > 0 && ++_row < Current.Rows.Length);
+        public object GetValue(int ordinal)
+        {
+            // Inventory grids match SqlClient SequentialAccess: a lower ordinal cannot be read again.
+            if (_sequential && ordinal <= _highestOrdinal)
+                throw new InvalidOperationException($"Invalid attempt to read from column ordinal '{ordinal}'.");
+
+            _highestOrdinal = ordinal;
+            return Current.Rows[_row][ordinal] ?? DBNull.Value;
+        }
+        public Task<bool> ReadAsync(CancellationToken ct)
+        {
+            _highestOrdinal = -1;
+            return Task.FromResult(_results.Count > 0 && ++_row < Current.Rows.Length);
+        }
         public Task<bool> NextResultAsync(CancellationToken ct)
         {
+            _highestOrdinal = -1;
             if (_results.Count == 0 || ++_result >= _results.Count)
                 return Task.FromResult(false);
             _row = -1;
