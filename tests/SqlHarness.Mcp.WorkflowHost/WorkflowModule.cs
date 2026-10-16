@@ -53,7 +53,8 @@ public sealed class WorkflowModule : ISqlHarnessModule
             return UnknownSql();
         if (_scenario.MatrixValues is { Count: > 0 })
             return UnknownSql();
-        return Persist(BuildPairReport());
+        var shape = ShapeFor(null);
+        return Persist(BuildPairReport(shape), shape);
     }
 
     private SqlHarnessOutcome ExecuteMatrix(SqlHarnessCompareMatrixOperation matrix)
@@ -69,8 +70,9 @@ public sealed class WorkflowModule : ISqlHarnessModule
         for (var index = 0; index < _scenario.MatrixValues.Count; index++)
         {
             var value = _scenario.MatrixValues[index];
-            var report = BuildPairReport($"matrix-{index:D2}-{value}", CellVerdict(index));
-            var directory = Write(report);
+            var shape = ShapeFor(index);
+            var report = BuildPairReport(shape);
+            var directory = Write(report, shape);
             cells.Add(new CompareMatrixCellReport(index, value, report with { ArtifactDirectory = directory }));
         }
 
@@ -79,104 +81,142 @@ public sealed class WorkflowModule : ISqlHarnessModule
         return Success(new SqlHarnessCompareMatrixReport(_scenario.MatrixName, _scenario.MatrixType, cells));
     }
 
-    private SqlHarnessOutcome Persist(SqlHarnessCompareReport report)
+    private SqlHarnessOutcome Persist(SqlHarnessCompareReport report, PairShape shape)
     {
-        var directory = Write(report);
+        var directory = Write(report, shape);
         _lastArtifactDirectory = directory;
         return Success(report with { ArtifactDirectory = directory });
     }
 
-    private string Write(SqlHarnessCompareReport report)
+    private string Write(SqlHarnessCompareReport report, PairShape shape)
     {
-        var runs = BuildRuns(report);
+        var runs = BuildRuns(report, shape);
         return _writer.Write(report, runs, _scenario.ProfileName, _owner);
     }
 
-    private SqlHarnessCompareReport BuildPairReport(string? label = null, string? verdict = null)
-    {
-        var target = Target();
-        var baseline = Variant("baseline", 40, 12, warning: false);
-        var candidate = Variant("candidate", 12, 4, warning: _scenario.Id == WorkflowScenarios.CollidingOperatorsId);
-        if (_scenario.Id == WorkflowScenarios.UnavailableMetricsId)
-        {
-            baseline = PostgresVariant("baseline", 0, 0.8m);
-            candidate = PostgresVariant("candidate", 0, 0.4m);
-        }
+    private readonly record struct PairShape(
+        bool Equivalent,
+        decimal BaselineElapsed,
+        decimal CandidateElapsed,
+        long BaselineReads,
+        long CandidateReads,
+        bool UnstableBaseline,
+        bool WarningOnCandidate);
 
-        var equivalent = _scenario.Id is WorkflowScenarios.NoImprovementId or WorkflowScenarios.RequestScopeId
-            ? false
-            : true;
-        var regression = _scenario.Id is WorkflowScenarios.NoImprovementId or WorkflowScenarios.RequestScopeId
-            ? new RegressionReport(
-                "inconclusive",
-                ["result-equivalence", "baseline-unstable"],
-                RegressionPolicy.PolicyVersion,
-                new RegressionDiagnostic("inconclusive", 40, 12, -28, -70),
-                new RegressionDiagnostic("pass", 12, 4, -8, -66.7m),
-                new RegressionDiagnostic("unavailable", null, null, null, null))
-            : new RegressionReport(
-                verdict ?? "pass",
-                [],
-                RegressionPolicy.PolicyVersion,
-                new RegressionDiagnostic("pass", 40, 12, -28, -70),
-                new RegressionDiagnostic("pass", 12, 4, -8, -66.7m),
-                new RegressionDiagnostic(
-                    _scenario.Id == WorkflowScenarios.UnavailableMetricsId ? "unavailable" : "pass",
-                    _scenario.Id == WorkflowScenarios.UnavailableMetricsId ? null : 40,
-                    _scenario.Id == WorkflowScenarios.UnavailableMetricsId ? null : 12,
-                    _scenario.Id == WorkflowScenarios.UnavailableMetricsId ? null : -28,
-                    _scenario.Id == WorkflowScenarios.UnavailableMetricsId ? null : -70));
+    private PairShape ShapeFor(int? matrixIndex)
+    {
+        if (_scenario.Id is WorkflowScenarios.NoImprovementId or WorkflowScenarios.RequestScopeId)
+            return new(false, 40m, 12m, 12, 4, false, false);
+        if (_scenario.Id == WorkflowScenarios.UnavailableMetricsId)
+            return new(true, 0.8m, 0.4m, 0, 0, false, false);
+        if (matrixIndex == 7)
+            return new(true, 40m, 80m, 12, 4, false, false);
+        if (matrixIndex == 15)
+            return new(true, 40m, 12m, 12, 4, true, false);
+        return new(true, 40m, 12m, 12, 4, false, _scenario.Id == WorkflowScenarios.CollidingOperatorsId);
+    }
+
+    private SqlHarnessCompareReport BuildPairReport(PairShape shape)
+    {
+        var postgres = _scenario.Id == WorkflowScenarios.UnavailableMetricsId;
+        var baselineElapsed = ElapsedSamples(shape.BaselineElapsed, shape.UnstableBaseline);
+        var candidateElapsed = ElapsedSamples(shape.CandidateElapsed, false);
+        var baseline = postgres
+            ? PostgresVariant("baseline", 0, shape.BaselineElapsed)
+            : Variant("baseline", shape.BaselineElapsed, shape.BaselineReads, baselineElapsed, warning: false);
+        var candidate = postgres
+            ? PostgresVariant("candidate", 0, shape.CandidateElapsed)
+            : Variant("candidate", shape.CandidateElapsed, shape.CandidateReads, candidateElapsed, shape.WarningOnCandidate);
+
+        var equivalence = new ResultEquivalenceReport(
+            ResultComparisonMode.Ordered,
+            shape.Equivalent,
+            shape.Equivalent ? 0 : 3,
+            shape.Equivalent ? 0 : 1,
+            shape.Equivalent ? 0 : 1,
+            MismatchReason: shape.Equivalent ? null : "rows");
+        var regression = RegressionPolicy.Evaluate(new RegressionInput(
+            postgres ? SqlEngine.Postgres : SqlEngine.SqlServer,
+            new RegressionVariantInput(
+                baselineElapsed,
+                ReadSamples(shape.BaselineReads),
+                postgres ? [0L, 0, 0, 0, 0] : WholeSamples(baselineElapsed),
+                BenchmarkMetricReport.Measured,
+                postgres ? BenchmarkMetricReport.Unavailable : BenchmarkMetricReport.Measured,
+                postgres ? BenchmarkMetricReport.Unavailable : BenchmarkMetricReport.Measured),
+            new RegressionVariantInput(
+                candidateElapsed,
+                ReadSamples(shape.CandidateReads),
+                postgres ? [0L, 0, 0, 0, 0] : WholeSamples(candidateElapsed),
+                BenchmarkMetricReport.Measured,
+                postgres ? BenchmarkMetricReport.Unavailable : BenchmarkMetricReport.Measured,
+                postgres ? BenchmarkMetricReport.Unavailable : BenchmarkMetricReport.Measured),
+            equivalence));
 
         return new SqlHarnessCompareReport(
-            target, 5, 10, equivalent, baseline, candidate, null)
+            Target(), 5, 10, shape.Equivalent, baseline, candidate, null)
         {
-            Equivalence = new ResultEquivalenceReport(
-                ResultComparisonMode.Ordered,
-                equivalent,
-                equivalent ? 0 : 3,
-                equivalent ? 0 : 1,
-                equivalent ? 0 : 1,
-                MismatchReason: equivalent ? null : "rows"),
+            Equivalence = equivalence,
             Regression = regression,
-            Parameters = label is null
-                ? [new BenchmarkParameterReport("Region", "nvarchar", 32, null, null)]
-                : [new BenchmarkParameterReport("BatchSize", "int", null, null, null)],
+            Parameters = Parameters(),
         };
     }
 
-    private static string CellVerdict(int index) =>
-        index switch
+    private IReadOnlyList<BenchmarkParameterReport> Parameters() =>
+        _scenario.Id switch
         {
-            7 => "fail",
-            15 => "inconclusive",
-            _ => "pass",
+            WorkflowScenarios.NoImprovementId or WorkflowScenarios.RequestScopeId =>
+                [new BenchmarkParameterReport("Region", "nvarchar", 32, null, null)],
+            WorkflowScenarios.PartialMatrixId =>
+                [new BenchmarkParameterReport("BatchSize", "int", null, null, null)],
+            _ => [],
         };
 
-    private IReadOnlyList<CompareRunArtifact> BuildRuns(SqlHarnessCompareReport report)
+    private static IReadOnlyList<decimal> ElapsedSamples(decimal median, bool unstable) =>
+        unstable
+            ? [median - 20m, median - 10m, median, median + 10m, median + 30m]
+            : median < 2m
+                ? [median, median, median, median, median]
+                : [median - 2m, median - 1m, median, median + 1m, median + 2m];
+
+    private static IReadOnlyList<long> ReadSamples(long reads) => [reads, reads, reads, reads, reads];
+
+    private static IReadOnlyList<long> WholeSamples(IReadOnlyList<decimal> elapsed) =>
+        elapsed.Select(sample => (long)decimal.Round(sample, MidpointRounding.AwayFromZero)).ToArray();
+
+    private IReadOnlyList<CompareRunArtifact> BuildRuns(SqlHarnessCompareReport report, PairShape shape)
     {
         var baselinePlan = PlanXml(_scenario.BaselineSql, warningOnSecond: false);
-        var candidatePlan = PlanXml(_scenario.CandidateSql, warningOnSecond: _scenario.Id == WorkflowScenarios.CollidingOperatorsId);
+        var candidatePlan = PlanXml(_scenario.CandidateSql, warningOnSecond: shape.WarningOnCandidate);
+        var baselineElapsed = ElapsedSamples(shape.BaselineElapsed, shape.UnstableBaseline);
+        var candidateElapsed = ElapsedSamples(shape.CandidateElapsed, false);
+        var table = _scenario.Id == WorkflowScenarios.CollidingOperatorsId ? "Accounts" : "Orders";
         var runs = new List<CompareRunArtifact>(10);
-        for (var repetition = 1; repetition <= 5; repetition++)
+        for (var index = 0; index < 5; index++)
         {
-            runs.Add(Run("baseline", repetition, 40 + repetition, 12, baselinePlan, report.Baseline.MetricReport));
-            runs.Add(Run("candidate", repetition, 12 + repetition, 4, candidatePlan, report.Candidate.MetricReport));
+            runs.Add(Run("baseline", index + 1, baselineElapsed[index], shape.BaselineReads, table, baselinePlan, report.Baseline.MetricReport));
+            runs.Add(Run("candidate", index + 1, candidateElapsed[index], shape.CandidateReads, table, candidatePlan, report.Candidate.MetricReport));
         }
 
         return runs;
     }
 
     private static CompareRunArtifact Run(
-        string variant, int repetition, long elapsed, long reads, string plan, BenchmarkMetricReport? metrics) =>
-        new(variant, repetition, metrics?.CpuTimeAvailability == BenchmarkMetricReport.Unavailable ? 0 : elapsed,
-            elapsed, reads, new Dictionary<string, long> { ["Orders"] = reads }, "hash-" + variant,
-            [plan], 0, Metrics: metrics is null ? null : new BenchmarkRunMetrics(
+        string variant, int repetition, decimal elapsed, long reads, string table, string plan, BenchmarkMetricReport? metrics)
+    {
+        var whole = (long)decimal.Round(elapsed, MidpointRounding.AwayFromZero);
+        var cpu = metrics?.CpuTimeAvailability == BenchmarkMetricReport.Unavailable ? 0 : whole;
+        return new(
+            variant, repetition, cpu, whole, reads,
+            reads == 0 ? new Dictionary<string, long>() : new Dictionary<string, long> { [table] = reads },
+            "hash-" + variant, [plan], 0,
+            Metrics: metrics is null ? null : new BenchmarkRunMetrics(
                 metrics.CpuTimeAvailability,
                 metrics.ElapsedTimeAvailability,
-                metrics.ElapsedTimeMillisecondsExact?.Median,
+                elapsed,
                 metrics.ElapsedWholeMillisecondsAreExact,
                 null,
-                metrics.ElapsedTimeMillisecondsExact?.Median,
+                elapsed,
                 metrics.LogicalReadsAvailability,
                 metrics.LogicalReadsSource,
                 metrics.RelationBufferSource,
@@ -184,21 +224,45 @@ public sealed class WorkflowModule : ISqlHarnessModule
                 metrics.ResultRowSource,
                 metrics.ResultRowSourceDescription,
                 metrics.Warnings));
+    }
 
-    private static CompareVariantReport Variant(string name, long elapsed, long reads, bool warning) => new(
-        name,
-        new CompareDistribution(elapsed - 2, elapsed, elapsed + 2),
-        new CompareDistribution(elapsed - 2, elapsed, elapsed + 2),
-        new CompareDistribution(reads, reads, reads),
-        new Dictionary<string, long> { ["Orders"] = reads },
-        [
-            new CompareOperatorReport(1, "Index Seek", "[dbo].[Orders]", warning, warning, false),
-            new CompareOperatorReport(1, "Clustered Index Scan", "[dbo].[Accounts]", false, false, false),
-        ],
-        warning ? ["SpillToTempDb"] : [])
+    private CompareVariantReport Variant(
+        string name, decimal elapsedMedian, long reads, IReadOnlyList<decimal> elapsedSamples, bool warning)
     {
-        LogicalReadsByTable = new Dictionary<string, CompareDistribution> { ["Orders"] = new(reads, reads, reads) },
-    };
+        var whole = elapsedSamples.Select(sample => (long)decimal.Round(sample, MidpointRounding.AwayFromZero)).ToArray();
+        var table = _scenario.Id == WorkflowScenarios.CollidingOperatorsId ? "Accounts" : "Orders";
+        return new(
+            name,
+            new CompareDistribution(whole.Min(), Median(whole), whole.Max()),
+            new CompareDistribution(whole.Min(), Median(whole), whole.Max()),
+            new CompareDistribution(reads, reads, reads),
+            reads == 0 ? new Dictionary<string, long>() : new Dictionary<string, long> { [table] = reads },
+            Operators(warning),
+            warning ? ["SpillToTempDb"] : [])
+        {
+            LogicalReadsByTable = reads == 0
+                ? new Dictionary<string, CompareDistribution>()
+                : new Dictionary<string, CompareDistribution> { [table] = new(reads, reads, reads) },
+        };
+    }
+
+    private IReadOnlyList<CompareOperatorReport> Operators(bool warning) =>
+        _scenario.Id == WorkflowScenarios.CollidingOperatorsId
+            ?
+            [
+                new CompareOperatorReport(1, "Index Seek", "[dbo].[Accounts]", false, false, false),
+                new CompareOperatorReport(1, "Clustered Index Scan", "[dbo].[Accounts]", warning, warning, false),
+            ]
+            :
+            [
+                new CompareOperatorReport(1, "Index Seek", "[dbo].[Orders]", false, false, false),
+            ];
+
+    private static long Median(long[] values)
+    {
+        var ordered = values.Order().ToArray();
+        return ordered[ordered.Length / 2];
+    }
 
     private static CompareVariantReport PostgresVariant(string name, long cpu, decimal elapsed) => new(
         name,
@@ -259,13 +323,18 @@ public sealed class WorkflowModule : ISqlHarnessModule
         var warnings = warning
             ? "<Warnings><SpillToTempDb SpillLevel=\"1\" /></Warnings>"
             : "";
+        var clustered = statementText.Contains("COUNT_BIG", StringComparison.OrdinalIgnoreCase);
+        var accounts = statementText.Contains("dbo.Accounts", StringComparison.OrdinalIgnoreCase);
+        var physical = clustered ? "Clustered Index Scan" : "Index Seek";
+        var table = accounts ? "[dbo].[Accounts]" : "[dbo].[Orders]";
+        var index = clustered ? "[PK_Accounts]" : accounts ? "[IX_Accounts]" : "[IX_Orders]";
         return $"""
                     <StmtSimple StatementText="{escaped}">
                       <QueryPlan>
-                        <RelOp NodeId="1" PhysicalOp="Index Seek" LogicalOp="Index Seek" EstimateRows="7" EstimatedTotalSubtreeCost="0.6">
+                        <RelOp NodeId="1" PhysicalOp="{physical}" LogicalOp="{physical}" EstimateRows="7" EstimatedTotalSubtreeCost="0.6">
                           {warnings}
                           <IndexScan>
-                            <Object Table="[dbo].[Orders]" Index="[IX_Orders]" />
+                            <Object Table="{table}" Index="{index}" />
                           </IndexScan>
                         </RelOp>
                       </QueryPlan>

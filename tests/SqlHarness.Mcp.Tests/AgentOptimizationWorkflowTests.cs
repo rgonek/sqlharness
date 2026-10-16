@@ -59,7 +59,13 @@ public sealed class AgentOptimizationWorkflowTests
             Assert.Equal("prechange", row.GetProperty("phase").GetString());
             Assert.Equal("grok-4.6", row.GetProperty("model").GetString());
             Assert.Equal("medium", row.GetProperty("effort").GetString());
+            Assert.True(row.TryGetProperty("contaminated", out _));
         });
+        var run1 = summary.RootElement.EnumerateArray().Single(row =>
+            row.GetProperty("family").GetString() == "no-improvement" && row.GetProperty("run").GetInt32() == 1);
+        Assert.True(run1.GetProperty("contaminated").GetBoolean());
+        Assert.Equal("temp-host-dll-search", run1.GetProperty("contamination").GetString());
+        Assert.NotEqual("incomplete", run1.GetProperty("outcome").GetString());
     }
 
     [Fact]
@@ -180,6 +186,7 @@ public sealed class AgentOptimizationWorkflowTests
                     ["calls"] = calls,
                 };
                 var json = Normalize(JsonSerializer.Serialize(record, JsonOptions), session.Home);
+                AssertScenarioRecord(scenario, budget, json);
                 var path = Path.Combine(recordsDir, $"{scenario}-{budget}.json");
                 if (File.Exists(path))
                     Assert.Equal(Normalize(File.ReadAllText(path)), json);
@@ -393,7 +400,64 @@ public sealed class AgentOptimizationWorkflowTests
         unix = unix.Replace("<home>\\", "<home>/", StringComparison.Ordinal);
         unix = unix.Replace("\\\\compare\\\\", "/compare/", StringComparison.Ordinal);
         unix = unix.Replace("\\compare\\", "/compare/", StringComparison.Ordinal);
+        unix = unix.Replace("/compare\\\\", "/compare/", StringComparison.Ordinal);
+        unix = unix.Replace("/compare\\", "/compare/", StringComparison.Ordinal);
+        unix = unix.Replace("\\\\<artifact-id>", "/<artifact-id>", StringComparison.Ordinal);
+        unix = unix.Replace("\\<artifact-id>", "/<artifact-id>", StringComparison.Ordinal);
         return unix.TrimEnd() + "\n";
+    }
+
+    private static void AssertScenarioRecord(string scenario, int budget, string json)
+    {
+        Assert.DoesNotContain("<home>\\", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("/compare\\\\", json, StringComparison.Ordinal);
+        using var document = JsonDocument.Parse(json);
+        var first = document.RootElement.GetProperty("calls")[0].GetProperty("text").GetString()!;
+        using var envelope = JsonDocument.Parse(first);
+        var result = envelope.RootElement.GetProperty("result");
+        var artifact = result.TryGetProperty("artifactDirectory", out var directory)
+            ? directory.GetString()
+            : result.TryGetProperty("matrixArtifactId", out var matrixId)
+                ? matrixId.GetString()
+                : null;
+        Assert.False(string.IsNullOrWhiteSpace(artifact), first[..Math.Min(400, first.Length)]);
+        Assert.DoesNotContain("\\", artifact, StringComparison.Ordinal);
+        Assert.DoesNotContain(":", artifact, StringComparison.Ordinal);
+        switch (scenario)
+        {
+            case WorkflowScenarios.UnavailableMetricsId:
+                Assert.Equal("[]", result.GetProperty("parameters").GetRawText());
+                var regression = result.GetProperty("regression");
+                Assert.Equal(0.8m, regression.GetProperty("elapsed").GetProperty("baselineMedian").GetDecimal());
+                Assert.Equal(0.4m, regression.GetProperty("elapsed").GetProperty("candidateMedian").GetDecimal());
+                Assert.Equal("unavailable", regression.GetProperty("logicalReads").GetProperty("status").GetString());
+                Assert.Equal("unavailable", regression.GetProperty("cpu").GetProperty("status").GetString());
+                break;
+            case WorkflowScenarios.CollidingOperatorsId:
+                Assert.Equal("[]", result.GetProperty("parameters").GetRawText());
+                Assert.Contains("Clustered Index Scan", first, StringComparison.Ordinal);
+                Assert.Contains("[dbo].[Accounts]", first, StringComparison.Ordinal);
+                break;
+            case WorkflowScenarios.PartialMatrixId when budget == 65536:
+                JsonElement Detail(int index) => result.GetProperty("details").EnumerateArray()
+                    .Single(item => item.GetProperty("index").GetInt32() == index)
+                    .GetProperty("compare").GetProperty("regression");
+                var fail = Detail(7);
+                Assert.Equal("fail", fail.GetProperty("verdict").GetString());
+                Assert.Contains("elapsed-regressed", fail.GetProperty("reasons").EnumerateArray().Select(value => value.GetString()));
+                Assert.Equal("regressed", fail.GetProperty("elapsed").GetProperty("status").GetString());
+                var inconclusive = Detail(15);
+                Assert.Equal("inconclusive", inconclusive.GetProperty("verdict").GetString());
+                Assert.Contains("unstable-elapsed", inconclusive.GetProperty("reasons").EnumerateArray().Select(value => value.GetString()));
+                Assert.Equal("inconclusive", inconclusive.GetProperty("elapsed").GetProperty("status").GetString());
+                break;
+            case WorkflowScenarios.NoImprovementId:
+                Assert.Contains("Region", result.GetProperty("parameters").GetRawText(), StringComparison.Ordinal);
+                var noImprovement = result.GetProperty("regression");
+                Assert.Equal("inconclusive", noImprovement.GetProperty("verdict").GetString());
+                Assert.Contains("results-not-equivalent", noImprovement.GetProperty("reasons").EnumerateArray().Select(value => value.GetString()));
+                break;
+        }
     }
 
     private static string Fixture(params string[] path) =>

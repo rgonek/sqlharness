@@ -9,7 +9,8 @@ param(
     [int] $MaxTurns = 20,
     [int] $TimeoutSeconds = 300,
     [string] $HostDll = "",
-    [string] $OutDir = ""
+    [string] $OutDir = "",
+    [switch] $RescoreOnly
 )
 
 Set-StrictMode -Version Latest
@@ -47,69 +48,194 @@ $trustedPath = Join-Path $env:USERPROFILE ".grok\trusted_folders.toml"
 $summary = [System.Collections.Generic.List[object]]::new()
 
 function Get-DenyGlobs {
-    $roots = [System.Collections.Generic.List[string]]::new()
-    $roots.Add($repo.TrimEnd('\', '/'))
-    $parent = Split-Path $repo
-    if ((Split-Path $parent -Leaf) -eq '.worktrees') {
-        $roots.Add((Split-Path $parent).TrimEnd('\', '/'))
-    }
-    $globs = [System.Collections.Generic.List[string]]::new()
-    foreach ($root in $roots | Select-Object -Unique) {
-        $escaped = $root.Replace('\', '\\')
-        $globs.Add("Read($escaped\\**)")
-        $globs.Add("Grep($escaped\\**)")
-        $globs.Add("Edit($escaped\\**)")
-    }
-    $globs.Add("Bash(*)")
-    return $globs
-}
-
-function Get-ClaimHits([string] $text, [string[]] $needles) {
-    $lower = $text.ToLowerInvariant()
-    return @($needles | Where-Object { $lower.Contains($_.ToLowerInvariant()) })
-}
-
-function Score-Trial([string] $conclusion, $oracle, [int] $toolCalls, [int] $maxToolCalls, [bool] $timedOut, [bool] $failed) {
-    if ($failed) { return "error" }
-    if ($timedOut -or $toolCalls -ge $maxToolCalls) { return "incomplete" }
-    $required = @($oracle.requiredClaims)
-    $forbidden = @($oracle.forbiddenClaims)
-    $requiredHits = switch ($oracle.family) {
-        "no-improvement-invalid-comparison" {
-            @(
-                (Get-ClaimHits $conclusion @("not a demonstrated improvement", "not an improvement", "cannot treat", "do not treat", "not proof of improvement", "inconclusive")),
-                (Get-ClaimHits $conclusion @("not equivalent", "equivalence", "unstable", "result-equivalence", "mismatch")),
-                (Get-ClaimHits $conclusion @("pass is not", "not proof", "absence of", "do not treat a regression", "regression pass"))
-            )
-        }
-        "partial-32-case-matrix" {
-            @(
-                (Get-ClaimHits $conclusion @("32", "all requested", "every case", "all 32")),
-                (Get-ClaimHits $conclusion @("omitted", "page", "continuation", "not unexecuted", "paging")),
-                (Get-ClaimHits $conclusion @("fail", "inconclusive"))
-            )
-        }
-        "colliding-operator-ids" {
-            @(
-                (Get-ClaimHits $conclusion @("node", "statement", "local", "repeat")),
-                (Get-ClaimHits $conclusion @("warning", "spill", "candidate", "statement"))
-            )
-        }
-        default { @() }
-    }
-    $forbiddenHit = Get-ClaimHits $conclusion @(
-        "accept this as an optimization",
-        "demonstrated improvement and should be shipped",
-        "same operator because the node id",
-        "unexecuted because they were omitted"
+    # Official nine isolation (this machine): deny the entire D:\Dev tree plus Bash.
+    return @(
+        "Read(D:\\Dev\\**)",
+        "Grep(D:\\Dev\\**)",
+        "Edit(D:\\Dev\\**)",
+        "Bash(*)"
     )
-    $missingRequired = 0
-    foreach ($hit in $requiredHits) {
-        if (@($hit).Length -eq 0) { $missingRequired++ }
+}
+
+function Get-McpSelectors([string] $export) {
+    $names = [regex]::Matches($export, "(?m)^- UseTool: sqlharness__sqlharness_([a-z_]+)") | ForEach-Object { $_.Groups[1].Value }
+    return @($names | ForEach-Object { "sqlharness_$_" } | Select-Object -Unique)
+}
+
+function Test-Claim([string] $id, [string] $text) {
+    $t = $text.ToLowerInvariant()
+    switch ($id) {
+        "candidate-is-not-a-demonstrated-improvement" {
+            return ($t -match 'not a demonstrated improvement') -or ($t -match 'not an improvement')
+        }
+        "result-equivalence-failed-or-baseline-unstable" {
+            return ($t -match 'not equivalent') -or ($t -match '"equivalent"\s*:\s*false') -or ($t -match 'equivalent.: false') -or ($t -match 'mismatchreason') -or ($t -match 'results do not match') -or ($t -match 'baseline-unstable') -or ($t -match 'unstable baseline')
+        }
+        "regression-pass-is-not-improvement" {
+            return ($t -match 'pass is not proof') -or ($t -match 'not proof of improvement') -or ($t -match 'logicalreads[` ]*`?pass`? is not') -or ($t -match 'do not treat [`'']?option') -or (($t -match 'pass') -and ($t -match 'not proof'))
+        }
+        "all-32-requested-cases-accounted" {
+            if ($t -match 'remain unread') { return $false }
+            return ($t -match '32/32') -or ($t -match 'all 32 requested') -or ($t -match 'all 32 cells') -or ($t -match 'all \*\*32\*\* requested') -or (($t -match '32 requested') -and ($t -match 'reviewed'))
+        }
+        "paging-is-not-unexecuted-work" {
+            return ($t -match 'not (treated as )?unexecuted') -or ($t -match 'none of those omitted rows were unexecuted') -or ($t -match 'completed work, not missing') -or ($t -match 'omitted inventory was recovered')
+        }
+        "fail-and-inconclusive-cells-named" {
+            $denied = ($t -match '0 fail, 0 inconclusive') -or ($t -match 'no fail or inconclusive cells')
+            $failNamed = ($t -match 'batchsize 8') -or ($t -match 'batchsize\s*=\s*8') -or ($t -match 'fail at batchsize 8')
+            $incNamed = ($t -match 'batchsize 16') -or ($t -match 'batchsize\s*=\s*16') -or ($t -match 'inconclusive at batchsize 16')
+            return (-not $denied) -and $failNamed -and $incNamed
+        }
+        "node-id-is-local-to-one-statement" {
+            $node = ($t -match 'node id') -or ($t -match 'nodeid')
+            return $node -and (($t -match 'repeat') -or ($t -match 'collision') -or ($t -match 'not enough') -or ($t -match 'not shared') -or ($t -match 'does not identify') -or ($t -match 'not the source') -or ($t -match 'local'))
+        }
+        "warning-side-identified-from-saved-plan" {
+            return ($t -match 'spill') -and ($t -match 'candidate') -and (($t -match 'statement') -or ($t -match 'nodepath') -or ($t -match 'node path'))
+        }
+        default { return $false }
     }
-    if (@($forbiddenHit).Length -gt 0) { return "failed-oracle" }
-    if ($missingRequired -gt 0) { return "failed-oracle" }
-    return "evidence-complete"
+}
+
+function Test-Forbidden([string] $id, [string] $text) {
+    $t = $text.ToLowerInvariant()
+    switch ($id) {
+        "accept-optimization" {
+            return ($t -match 'accept this as an optimization') -or ($t -match 'demonstrated improvement and should be shipped')
+        }
+        "relax-ordered-comparison" {
+            return ($t -match 'relax ordered') -or ($t -match 'switch to multiset')
+        }
+        "false-exact-link-from-node-id-alone" {
+            return ($t -match 'same operator because the node') -or ($t -match 'matching node id proves')
+        }
+        "unexecuted-because-omitted-from-page" {
+            return ($t -match 'unexecuted because they were omitted') -or ($t -match 'omitted rows were unexecuted')
+        }
+        default { return $false }
+    }
+}
+
+function Test-Evidence([string] $id, [string] $text, [string[]] $selectors) {
+    switch ($id) {
+        "compare-summary" { return $selectors -contains "sqlharness_compare" }
+        "equivalence-or-regression-fields" {
+            $t = $text.ToLowerInvariant()
+            return ($t -match 'equivalent') -or ($t -match 'regression')
+        }
+        "compare-matrix" { return $selectors -contains "sqlharness_compare" }
+        "matrix-cells-pages-if-omitted" { return $selectors -contains "sqlharness_artifact" }
+        "artifact-plan-for-warned-statement" { return $selectors -contains "sqlharness_artifact" }
+        default { return $false }
+    }
+}
+
+function Selector-Allowed([string] $used, [string[]] $allowed) {
+    foreach ($item in $allowed) {
+        $tool = ($item -split ":", 2)[0]
+        if ($used -eq $tool -or $used -eq $item) { return $true }
+    }
+    return $false
+}
+
+function Score-Trial([string] $conclusion, $oracle, [int] $toolCalls, [int] $maxToolCalls, [bool] $timedOut, [bool] $failed, [int] $durationSeconds, [string[]] $selectors) {
+    $result = [ordered]@{
+        outcome                 = $null
+        missingClaims           = @()
+        forbiddenHits           = @()
+        missingEvidence         = @()
+        selectorsUsed           = @($selectors)
+        outsideAllowedSelectors = @()
+    }
+    if ($failed) { $result.outcome = "error"; return $result }
+    if ($timedOut -or $toolCalls -ge $maxToolCalls -or $durationSeconds -ge 300) {
+        $result.outcome = "incomplete"
+        return $result
+    }
+    foreach ($claim in @($oracle.requiredClaims)) {
+        if (-not (Test-Claim $claim $conclusion)) { $result.missingClaims += $claim }
+    }
+    foreach ($claim in @($oracle.forbiddenClaims)) {
+        if (Test-Forbidden $claim $conclusion) { $result.forbiddenHits += $claim }
+    }
+    foreach ($evidence in @($oracle.requiredEvidence)) {
+        if (-not (Test-Evidence $evidence $conclusion $selectors)) { $result.missingEvidence += $evidence }
+    }
+    $allowed = @($oracle.allowedSelectors)
+    foreach ($used in $selectors) {
+        if (-not (Selector-Allowed $used $allowed)) { $result.outsideAllowedSelectors += $used }
+    }
+    if (@($result.missingClaims).Length -gt 0 -or @($result.forbiddenHits).Length -gt 0 -or @($result.missingEvidence).Length -gt 0) {
+        $result.outcome = "failed-oracle"
+    }
+    else {
+        $result.outcome = "evidence-complete"
+    }
+    return $result
+}
+
+function Get-Contamination([string] $export, [string] $family, [int] $run) {
+    if ($family -eq "no-improvement" -and $run -eq 1) {
+        return "temp-host-dll-search"
+    }
+    if ($export -match 'sqlharness-077-host\\SqlHarness.Mcp.WorkflowHost.dll' -and $export -match 'Select-String') {
+        return "temp-host-dll-search"
+    }
+    return $null
+}
+
+if ($RescoreOnly) {
+    $existing = Get-Content -LiteralPath (Join-Path $fixtureRoot "trials\$Phase-summary.json") -Raw | ConvertFrom-Json
+    foreach ($row in @($existing)) {
+        $family = $families | Where-Object { $_.Id -eq $row.family } | Select-Object -First 1
+        $oracle = Get-Content -LiteralPath (Join-Path $fixtureRoot $family.Oracle) -Raw | ConvertFrom-Json
+        $exportPath = Join-Path $OutDir "$($row.family)-run$($row.run).export.md"
+        $md = Get-Content -LiteralPath $exportPath -Raw
+        $parts = [regex]::Split($md, "(?m)^## Assistant\s*$")
+        $conclusion = if ($parts.Count -gt 1) { $parts[-1].Trim() } else { $md }
+        $selectors = Get-McpSelectors $md
+        $toolCalls = [regex]::Matches($md, "(?m)^- UseTool: sqlharness__").Count
+        $score = Score-Trial $conclusion $oracle $toolCalls $MaxTurns ([bool]$row.timedOut) $false ([int]$row.durationSeconds) $selectors
+        $contamination = Get-Contamination $md $row.family ([int]$row.run)
+        $updated = [ordered]@{
+            phase                    = $row.phase
+            family                   = $row.family
+            run                      = $row.run
+            model                    = $row.model
+            effort                   = $row.effort
+            sessionId                = $row.sessionId
+            grokSessionId            = $row.grokSessionId
+            agentFinished            = $row.agentFinished
+            exitCode                 = $row.exitCode
+            timedOut                 = $row.timedOut
+            durationSeconds          = $row.durationSeconds
+            toolCallsApprox          = $toolCalls
+            numTurns                 = $row.numTurns
+            inputTokens              = $row.inputTokens
+            outputTokens             = $row.outputTokens
+            outcome                  = $score.outcome
+            missingClaims            = @($score.missingClaims)
+            forbiddenHits            = @($score.forbiddenHits)
+            missingEvidence          = @($score.missingEvidence)
+            selectorsUsed            = @($score.selectorsUsed)
+            outsideAllowedSelectors  = @($score.outsideAllowedSelectors)
+            contaminated             = [bool]$contamination
+            contamination            = $contamination
+            error                    = $row.error
+            host                     = "<host-copy>/SqlHarness.Mcp.WorkflowHost.dll"
+            scenario                 = $row.scenario
+        }
+        $summary.Add($updated)
+        Write-Host "$($row.family)-run$($row.run) -> $($score.outcome) contaminated=$([bool]$contamination) extra=$($score.outsideAllowedSelectors -join ',')"
+    }
+    $summaryPath = Join-Path $OutDir "summary.json"
+    $summary | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $summaryPath -Encoding utf8
+    $committed = Join-Path $fixtureRoot "trials\$Phase-summary.json"
+    New-Item -ItemType Directory -Force -Path (Split-Path $committed) | Out-Null
+    Copy-Item -LiteralPath $summaryPath -Destination $committed -Force
+    Write-Host "Rescored $summaryPath and $committed"
+    return
 }
 
 $runIndex = 0
@@ -125,10 +251,12 @@ foreach ($family in $families) {
             $parts = [regex]::Split($md, "(?m)^## Assistant\s*$")
             $conclusion = if ($parts.Count -gt 1) { $parts[-1].Trim() } else { $md }
             $toolCalls = [regex]::Matches($md, "(?m)^- UseTool: sqlharness__").Count
-            $outcome = Score-Trial $conclusion $oracle $toolCalls $MaxTurns $false $false
+            $selectors = Get-McpSelectors $md
+            $score = Score-Trial $conclusion $oracle $toolCalls $MaxTurns $false $false 0 $selectors
             $row = [ordered]@{
                 phase = $Phase; family = $family.Id; run = $n; model = $Model; effort = $Effort
-                reusedExport = $true; toolCallsApprox = $toolCalls; outcome = $outcome; scenario = $family.Scenario
+                reusedExport = $true; toolCallsApprox = $toolCalls; outcome = $score.outcome; scenario = $family.Scenario
+                missingClaims = @($score.missingClaims); selectorsUsed = @($score.selectorsUsed)
             }
             $row | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $OutDir "$name.meta.json") -Encoding utf8
             $summary.Add($row)
@@ -290,27 +418,37 @@ foreach ($family in $families) {
         }
         if ($agentFinished) { $timedOut = $false }
         $failed = [bool]$errorText -and -not $agentFinished
-        $outcome = Score-Trial $conclusion $oracle $toolCalls $MaxTurns $timedOut $failed
+        $exportForScore = if (Test-Path -LiteralPath $exportPath) { Get-Content -LiteralPath $exportPath -Raw } else { $conclusion }
+        $selectors = Get-McpSelectors $exportForScore
+        $score = Score-Trial $conclusion $oracle $toolCalls $MaxTurns $timedOut $failed $duration $selectors
+        $contamination = Get-Contamination $exportForScore $family.Id $n
         $row = [ordered]@{
-            phase            = $Phase
-            family           = $family.Id
-            run              = $n
-            model            = $Model
-            effort           = $Effort
-            sessionId        = $sessionId
-            grokSessionId    = $grokSession
-            agentFinished    = $agentFinished
-            exitCode         = $exitCode
-            timedOut         = $timedOut
-            durationSeconds  = $duration
-            toolCallsApprox  = $toolCalls
-            numTurns         = $numTurns
-            inputTokens      = $inputTokens
-            outputTokens     = $outputTokens
-            outcome          = $outcome
-            error            = $errorText
-            host             = "<host-copy>/SqlHarness.Mcp.WorkflowHost.dll"
-            scenario         = $family.Scenario
+            phase                   = $Phase
+            family                  = $family.Id
+            run                     = $n
+            model                   = $Model
+            effort                  = $Effort
+            sessionId               = $sessionId
+            grokSessionId           = $grokSession
+            agentFinished           = $agentFinished
+            exitCode                = $exitCode
+            timedOut                = $timedOut
+            durationSeconds         = $duration
+            toolCallsApprox         = $toolCalls
+            numTurns                = $numTurns
+            inputTokens             = $inputTokens
+            outputTokens            = $outputTokens
+            outcome                 = $score.outcome
+            missingClaims           = @($score.missingClaims)
+            forbiddenHits           = @($score.forbiddenHits)
+            missingEvidence         = @($score.missingEvidence)
+            selectorsUsed           = @($score.selectorsUsed)
+            outsideAllowedSelectors = @($score.outsideAllowedSelectors)
+            contaminated            = [bool]$contamination
+            contamination           = $contamination
+            error                   = $errorText
+            host                    = "<host-copy>/SqlHarness.Mcp.WorkflowHost.dll"
+            scenario                = $family.Scenario
         }
         $row | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $metaPath -Encoding utf8
         $summary.Add($row)

@@ -15,7 +15,26 @@
     "numTurns": 20,
     "inputTokens": 73906,
     "outputTokens": 6113,
-    "outcome": "evidence-complete",
+    "outcome": "failed-oracle",
+    "missingClaims": [
+      "candidate-is-not-a-demonstrated-improvement",
+      "result-equivalence-failed-or-baseline-unstable",
+      "regression-pass-is-not-improvement"
+    ],
+    "forbiddenHits": [],
+    "missingEvidence": [
+      "equivalence-or-regression-fields"
+    ],
+    "selectorsUsed": [
+      "sqlharness_capabilities",
+      "sqlharness_query",
+      "sqlharness_compare"
+    ],
+    "outsideAllowedSelectors": [
+      "sqlharness_query"
+    ],
+    "contaminated": true,
+    "contamination": "temp-host-dll-search",
     "error": null,
     "host": "<host-copy>/SqlHarness.Mcp.WorkflowHost.dll",
     "scenario": "no-improvement"
@@ -36,7 +55,24 @@
     "numTurns": 20,
     "inputTokens": 74589,
     "outputTokens": 5435,
-    "outcome": "evidence-complete",
+    "outcome": "failed-oracle",
+    "missingClaims": [
+      "candidate-is-not-a-demonstrated-improvement",
+      "result-equivalence-failed-or-baseline-unstable",
+      "regression-pass-is-not-improvement"
+    ],
+    "forbiddenHits": [],
+    "missingEvidence": [
+      "equivalence-or-regression-fields"
+    ],
+    "selectorsUsed": [
+      "sqlharness_capabilities",
+      "sqlharness_compare",
+      "sqlharness_artifact"
+    ],
+    "outsideAllowedSelectors": [],
+    "contaminated": false,
+    "contamination": null,
     "error": null,
     "host": "<host-copy>/SqlHarness.Mcp.WorkflowHost.dll",
     "scenario": "no-improvement"
@@ -58,6 +94,20 @@
     "inputTokens": 81134,
     "outputTokens": 5610,
     "outcome": "evidence-complete",
+    "missingClaims": [],
+    "forbiddenHits": [],
+    "missingEvidence": [],
+    "selectorsUsed": [
+      "sqlharness_capabilities",
+      "sqlharness_query",
+      "sqlharness_compare",
+      "sqlharness_artifact"
+    ],
+    "outsideAllowedSelectors": [
+      "sqlharness_query"
+    ],
+    "contaminated": false,
+    "contamination": null,
     "error": null,
     "host": "<host-copy>/SqlHarness.Mcp.WorkflowHost.dll",
     "scenario": "no-improvement"
@@ -78,7 +128,20 @@
     "numTurns": 12,
     "inputTokens": 44281,
     "outputTokens": 5842,
-    "outcome": "evidence-complete",
+    "outcome": "failed-oracle",
+    "missingClaims": [
+      "fail-and-inconclusive-cells-named"
+    ],
+    "forbiddenHits": [],
+    "missingEvidence": [],
+    "selectorsUsed": [
+      "sqlharness_capabilities",
+      "sqlharness_compare",
+      "sqlharness_artifact"
+    ],
+    "outsideAllowedSelectors": [],
+    "contaminated": false,
+    "contamination": null,
     "error": null,
     "host": "<host-copy>/SqlHarness.Mcp.WorkflowHost.dll",
     "scenario": "partial-matrix-32"
@@ -99,7 +162,23 @@
     "numTurns": 9,
     "inputTokens": 91787,
     "outputTokens": 8514,
-    "outcome": "evidence-complete",
+    "outcome": "failed-oracle",
+    "missingClaims": [
+      "all-32-requested-cases-accounted",
+      "fail-and-inconclusive-cells-named"
+    ],
+    "forbiddenHits": [
+      "unexecuted-because-omitted-from-page"
+    ],
+    "missingEvidence": [],
+    "selectorsUsed": [
+      "sqlharness_capabilities",
+      "sqlharness_compare",
+      "sqlharness_artifact"
+    ],
+    "outsideAllowedSelectors": [],
+    "contaminated": false,
+    "contamination": null,
     "error": null,
     "host": "<host-copy>/SqlHarness.Mcp.WorkflowHost.dll",
     "scenario": "partial-matrix-32"
@@ -121,6 +200,17 @@
     "inputTokens": 72884,
     "outputTokens": 7932,
     "outcome": "evidence-complete",
+    "missingClaims": [],
+    "forbiddenHits": [],
+    "missingEvidence": [],
+    "selectorsUsed": [
+      "sqlharness_capabilities",
+      "sqlharness_compare",
+      "sqlharness_artifact"
+    ],
+    "outsideAllowedSelectors": [],
+    "contaminated": false,
+    "contamination": null,
     "error": null,
     "host": "<host-copy>/SqlHarness.Mcp.WorkflowHost.dll",
     "scenario": "partial-matrix-32"
@@ -142,6 +232,17 @@
     "inputTokens": 30951,
     "outputTokens": 2991,
     "outcome": "evidence-complete",
+    "missingClaims": [],
+    "forbiddenHits": [],
+    "missingEvidence": [],
+    "selectorsUsed": [
+      "sqlharness_capabilities",
+      "sqlharness_compare",
+      "sqlharness_artifact"
+    ],
+    "outsideAllowedSelectors": [],
+    "contaminated": false,
+    "contamination": null,
     "error": null,
     "host": "<host-copy>/SqlHarness.Mcp.WorkflowHost.dll",
     "scenario": "colliding-operators"
@@ -163,6 +264,17 @@
     "inputTokens": 23389,
     "outputTokens": 2528,
     "outcome": "evidence-complete",
+    "missingClaims": [],
+    "forbiddenHits": [],
+    "missingEvidence": [],
+    "selectorsUsed": [
+      "sqlharness_capabilities",
+      "sqlharness_compare",
+      "sqlharness_artifact"
+    ],
+    "outsideAllowedSelectors": [],
+    "contaminated": false,
+    "contamination": null,
     "error": null,
     "host": "<host-copy>/SqlHarness.Mcp.WorkflowHost.dll",
     "scenario": "colliding-operators"
@@ -184,6 +296,17 @@
     "inputTokens": 31397,
     "outputTokens": 2941,
     "outcome": "evidence-complete",
+    "missingClaims": [],
+    "forbiddenHits": [],
+    "missingEvidence": [],
+    "selectorsUsed": [
+      "sqlharness_capabilities",
+      "sqlharness_compare",
+      "sqlharness_artifact"
+    ],
+    "outsideAllowedSelectors": [],
+    "contaminated": false,
+    "contamination": null,
     "error": null,
     "host": "<host-copy>/SqlHarness.Mcp.WorkflowHost.dll",
     "scenario": "colliding-operators"
