@@ -367,6 +367,28 @@ public sealed class IndexInventoryCaptureTests
     }
 
     [Fact]
+    public async Task Reader_keeps_only_positive_key_ordinals_when_a_leading_column_is_not_included()
+    {
+        var reader = new SequentialGridReader(
+        [
+            Grid(ObjectColumns, [Row(1, 1)]),
+            Grid(IndexColumns, [Index(1, 1, "IX_Orders")]),
+            Grid(ColumnColumns,
+            [
+                Column(1, 1, "OrderDate", keyOrdinal: 0),
+                Column(1, 1, "CustomerId", keyOrdinal: 1),
+                Column(1, 1, "OrderId", keyOrdinal: 2),
+            ]),
+        ]);
+
+        var tables = await IndexInventoryQuery.ReadAsync(reader, [("dbo", "Orders")], CancellationToken.None);
+
+        var index = Assert.Single(Assert.Single(tables).Indexes);
+        Assert.Equal(["CustomerId", "OrderId"], index.KeyColumns);
+        Assert.Empty(index.IncludeColumns);
+    }
+
+    [Fact]
     public async Task Postgres_never_runs_the_inventory_batch()
     {
         using var temp = new TempDirectory();
@@ -600,8 +622,8 @@ public sealed class IndexInventoryCaptureTests
     private static object?[] Index(int slot, int indexId, string name, string type = "NONCLUSTERED", bool unique = false, bool primary = false) =>
         [slot, indexId, name, type, unique, primary, false, false, false];
 
-    private static object?[] Column(int slot, int indexId, string name, bool included = false) =>
-        [slot, indexId, name, included ? 0 : 1, included];
+    private static object?[] Column(int slot, int indexId, string name, bool included = false, int? keyOrdinal = null) =>
+        [slot, indexId, name, keyOrdinal ?? (included ? 0 : 1), included];
 
     private readonly record struct MissingHint(string? Database, string? Schema, string Table);
 

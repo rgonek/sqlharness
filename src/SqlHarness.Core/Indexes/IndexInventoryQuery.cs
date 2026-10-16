@@ -174,11 +174,12 @@ ORDER BY x.slot, ic.index_id, ic.is_included_column, ic.key_ordinal, ic.index_co
         var columns = ColumnMap(reader, "slot", "index_id", "column_name", "key_ordinal", "is_included_column");
         while (await reader.ReadAsync(ct))
         {
-            // SequentialAccess allows only a later ordinal. column_name precedes key_ordinal.
+            // SequentialAccess allows only a later ordinal, so every selected column is read in order.
+            // key_ordinal 0 and not included is a partition or non-relational column, not a key.
             var slotNumber = ReadInt(Value(reader, columns, "slot"));
             var indexId = ReadInt(Value(reader, columns, "index_id"));
             var name = ReadString(Value(reader, columns, "column_name"));
-            _ = ReadInt(Value(reader, columns, "key_ordinal"));
+            var keyOrdinal = ReadInt(Value(reader, columns, "key_ordinal"));
             var included = ReadBool(Value(reader, columns, "is_included_column"));
             var slot = SlotAt(slots, slotNumber);
             if (!slot.Found || !slot.ById.TryGetValue(indexId, out var builder))
@@ -186,7 +187,7 @@ ORDER BY x.slot, ic.index_id, ic.is_included_column, ic.key_ordinal, ic.index_co
 
             if (included)
                 builder.Includes.Add(name);
-            else
+            else if (keyOrdinal > 0)
                 builder.Keys.Add(name);
         }
     }
