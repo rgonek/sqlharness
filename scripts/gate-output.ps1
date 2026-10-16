@@ -183,10 +183,20 @@ function Start-BackgroundGateStage {
     # end before the other deadlocks as soon as the second pipe buffer fills, which hung
     # the UI check stage for 38 minutes; Complete- only collects what these two have
     # already gathered.
-    $script:BackgroundGateStages[$process.Id] = [pscustomobject]@{
-        Stopwatch      = [System.Diagnostics.Stopwatch]::StartNew()
-        StandardOutput = $process.StandardOutput.ReadToEndAsync()
-        StandardError  = $process.StandardError.ReadToEndAsync()
+    try {
+        $script:BackgroundGateStages[$process.Id] = [pscustomobject]@{
+            Stopwatch      = [System.Diagnostics.Stopwatch]::StartNew()
+            StandardOutput = $process.StandardOutput.ReadToEndAsync()
+            StandardError  = $process.StandardError.ReadToEndAsync()
+        }
+    }
+    catch {
+        # A running process nothing tracks would fill a pipe nobody drains and survive the
+        # gate, so a stage that cannot be registered is killed rather than orphaned.
+        if (-not $script:BackgroundGateStages.ContainsKey($process.Id)) {
+            try { $process.Kill($true) } catch { }
+        }
+        throw
     }
 
     return $process
@@ -206,7 +216,6 @@ function Complete-BackgroundGateStage {
     $state = $null
     if ($null -ne $script:BackgroundGateStages -and $script:BackgroundGateStages.ContainsKey($Process.Id)) {
         $state = $script:BackgroundGateStages[$Process.Id]
-        $script:BackgroundGateStages.Remove($Process.Id)
     }
     if ($null -eq $state) {
         # Joining a process Start- never returned would write an empty log and report
@@ -214,40 +223,69 @@ function Complete-BackgroundGateStage {
         throw "'$Name' was completed with a process Start-BackgroundGateStage did not return. A stage that never started must never look green."
     }
 
-    $Process.WaitForExit()
-    $stdout = $state.StandardOutput.GetAwaiter().GetResult()
-    $stderr = $state.StandardError.GetAwaiter().GetResult()
-    $state.Stopwatch.Stop()
+    try {
+        $Process.WaitForExit()
+        $stdout = $state.StandardOutput.GetAwaiter().GetResult()
+        $stderr = $state.StandardError.GetAwaiter().GetResult()
+        $state.Stopwatch.Stop()
 
-    if (-not (Test-Path -LiteralPath $LogDirectory)) {
-        New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
+        if (-not (Test-Path -LiteralPath $LogDirectory)) {
+            New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
+        }
+        $logPath = Join-Path $LogDirectory ("$Name.log")
+
+        $capturedOutput = [System.Collections.Generic.List[string]]::new()
+        if (-not [string]::IsNullOrEmpty($stdout)) { $stdout.TrimEnd("`r", "`n") -split "`r?`n" | ForEach-Object { $capturedOutput.Add($_) } }
+        if (-not [string]::IsNullOrEmpty($stderr)) { $stderr.TrimEnd("`r", "`n") -split "`r?`n" | ForEach-Object { $capturedOutput.Add($_) } }
+        Set-Content -LiteralPath $logPath -Value $capturedOutput
+
+        $result = [pscustomobject]@{
+            Name       = $Name
+            ExitCode   = [int]$Process.ExitCode
+            Seconds    = [Math]::Round($state.Stopwatch.Elapsed.TotalSeconds, 1)
+            LogPath    = $logPath
+            Skipped    = $false
+            SkipReason = $null
+        }
+
+        # The same one line and the same failure tail a foreground stage prints, so an
+        # overlapped stage is indistinguishable in the transcript from one that ran
+        # alone. This is the stage's only report: whoever decides what a failure means
+        # must not print the tail a second time.
+        Write-Host (Get-StageLine -Result $result)
+        if ($Stream) { Get-Content -LiteralPath $logPath | ForEach-Object { Write-Host $_ } }
+        if ($result.ExitCode -ne 0) {
+            $failure = Get-StageFailureText -Result $result -TailLines 40
+            if ($failure) { Write-Host $failure }
+        }
+
+        return $result
     }
-    $logPath = Join-Path $LogDirectory ("$Name.log")
-
-    $capturedOutput = [System.Collections.Generic.List[string]]::new()
-    if (-not [string]::IsNullOrEmpty($stdout)) { $stdout.TrimEnd("`r", "`n") -split "`r?`n" | ForEach-Object { $capturedOutput.Add($_) } }
-    if (-not [string]::IsNullOrEmpty($stderr)) { $stderr.TrimEnd("`r", "`n") -split "`r?`n" | ForEach-Object { $capturedOutput.Add($_) } }
-    Set-Content -LiteralPath $logPath -Value $capturedOutput
-
-    $result = [pscustomobject]@{
-        Name       = $Name
-        ExitCode   = [int]$Process.ExitCode
-        Seconds    = [Math]::Round($state.Stopwatch.Elapsed.TotalSeconds, 1)
-        LogPath    = $logPath
-        Skipped    = $false
-        SkipReason = $null
+    finally {
+        # The entry holds two pending read tasks. Removing it here rather than before the
+        # work means a throw anywhere in the join cannot leave a stale entry behind to
+        # leak both tasks and collide with the next process id.
+        $script:BackgroundGateStages.Remove($Process.Id)
     }
+}
 
-    # The same one line and the same failure tail a foreground stage prints, so an
-    # overlapped stage is indistinguishable in the transcript from one that ran alone.
-    Write-Host (Get-StageLine -Result $result)
-    if ($Stream) { Get-Content -LiteralPath $logPath | ForEach-Object { Write-Host $_ } }
-    if ($result.ExitCode -ne 0) {
-        $failure = Get-StageFailureText -Result $result -TailLines 40
-        if ($failure) { Write-Host $failure }
-    }
+function Get-ReportedFailureStage {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)]$Result
+    )
 
-    return $result
+    # A stage that runs more than one command in a single script names the command whose
+    # exit code it returned. Reporting the wrapper's name instead would let a UI-only
+    # failure read "stage=build" with the UI check's exit code beside it.
+    if ($Result.ExitCode -eq 0 -or $Result.Skipped -or [string]::IsNullOrWhiteSpace($Result.LogPath)) { return $Name }
+    if (-not (Test-Path -LiteralPath $Result.LogPath)) { return $Name }
+
+    $marker = Select-String -LiteralPath $Result.LogPath -Pattern '(?m)^stage-failure: (?<stage>\S+)$' |
+        Select-Object -First 1
+    if ($marker) { return $marker.Matches[0].Groups['stage'].Value }
+
+    return $Name
 }
 
 function Format-Duration {

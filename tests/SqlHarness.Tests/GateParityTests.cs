@@ -27,13 +27,28 @@ public sealed class GateParityTests
         var content = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
 
         Assert.Contains("-warnaserror", StageCommand(content, "build"), StringComparison.Ordinal);
-        // Neither gate may pass --no-restore: build restores implicitly, and a gate that
-        // skipped the restore would fail on an unbuilt tree rather than restore. This
-        // keeps the two gates agreeing on that, which the deleted identical-restore
-        // comparison used to do.
-        Assert.DoesNotContain("--no-restore", StageCommand(content, "build"), StringComparison.Ordinal);
         Assert.Contains("--verify-no-changes", StageCommand(content, "format"), StringComparison.Ordinal);
         Assert.Contains("SqlHarness.sln", StageCommand(content, "format"), StringComparison.Ordinal);
+    }
+
+    // CI is in this theory, not only the two local gates. The UI-before-build anchor moved
+    // from `dotnet restore` to `dotnet build`, but that changed the anchor, not the scope:
+    // when this check only covered the local scripts, adding `--no-restore` to CI's build
+    // step or putting a standalone `dotnet restore` back into ci.yml left the suite green.
+    // CI's `dotnet build` runs from the repository root and names no solution, which is why
+    // this is separate from the format assertions above.
+    [Theory]
+    [InlineData("scripts/verify.ps1")]
+    [InlineData("scripts/verify-linux.ps1")]
+    [InlineData(".github/workflows/ci.yml")]
+    public void Every_gate_builds_with_warnaserror_and_lets_the_build_restore(string path)
+    {
+        // `dotnet build` restores implicitly. A gate that passes --no-restore would fail on
+        // an unbuilt tree instead of restoring, so none of the three may pass it.
+        var command = StageCommand(File.ReadAllText(RepositoryFile.Locate(path.Split('/'))), "build");
+
+        Assert.Contains("-warnaserror", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("--no-restore", command, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -79,12 +94,14 @@ public sealed class GateParityTests
     }
 
     [Fact]
-    public void Neither_local_gate_runs_a_standalone_restore_stage()
+    public void No_gate_runs_a_standalone_restore_stage()
     {
         // dotnet build restores implicitly and performs the same restore, so a separate
         // restore stage is duplicated work. This replaces the deleted identical-restore
-        // comparison with a stronger claim than it made.
-        foreach (var path in new[] { "scripts/verify.ps1", "scripts/verify-linux.ps1" })
+        // comparison with a stronger claim than it made, and it covers ci.yml too: the
+        // local gates were guarded here while CI's `dotnet restore` step could come back
+        // unnoticed.
+        foreach (var path in new[] { "scripts/verify.ps1", "scripts/verify-linux.ps1", ".github/workflows/ci.yml" })
         {
             var content = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
 
@@ -409,6 +426,23 @@ public sealed class GateParityTests
         Assert.Contains("Get-UiInstallState", windows, StringComparison.Ordinal);
         Assert.Contains(".sqlharness-install-stamp", linux, StringComparison.Ordinal);
         Assert.Contains("sha256sum", linux, StringComparison.Ordinal);
+    }
+
+    // CI is asserted here as well as in the theory above, on purpose. When the UI-order
+    // anchor moved from `dotnet restore` to `dotnet build` the checks kept only the two
+    // local scripts, and adding `--no-restore` to CI's build step or restoring a
+    // `dotnet restore` step there both left the suite green. A CI-only fact survives that
+    // failure mode: trimming ci.yml out of the theory's InlineData list no longer leaves
+    // CI unguarded.
+    [Fact]
+    public void Ci_builds_with_warnaserror_and_never_skips_or_duplicates_the_restore()
+    {
+        var content = File.ReadAllText(RepositoryFile.Locate(".github", "workflows", "ci.yml"));
+        var build = StageCommand(content, "build");
+
+        Assert.Contains("-warnaserror", build, StringComparison.Ordinal);
+        Assert.DoesNotContain("--no-restore", build, StringComparison.Ordinal);
+        Assert.DoesNotContain("dotnet restore", content, StringComparison.Ordinal);
     }
 
     [Fact]

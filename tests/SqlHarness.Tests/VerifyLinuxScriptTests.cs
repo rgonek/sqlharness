@@ -44,6 +44,24 @@ public sealed class VerifyLinuxScriptTests
     }
 
     [Fact]
+    public void Linux_gate_names_the_failing_command_of_its_coupled_build_stage()
+    {
+        // The build stage runs the UI check and the build in one bash script. Both
+        // failures are echoed into the log so a red stage names its cause, but only the
+        // command whose exit code the script returns writes `stage-failure:` - without
+        // that, a UI-only failure is reported as "stage=build" carrying the UI check's
+        // exit code.
+        var script = Script();
+        var buildStage = script.IndexOf("Invoke-LinuxStage -Name 'build'", StringComparison.Ordinal);
+        Assert.True(buildStage > 0, "the Linux gate must run a build stage");
+
+        Assert.Contains("'if [ \"$build_status\" -ne 0 ]; then echo \"stage-failure: build\" >&2; exit \"$build_status\"; fi',", script, StringComparison.Ordinal);
+        Assert.Contains("'if [ \"$ui_check_status\" -ne 0 ]; then echo \"stage-failure: ui-check\" >&2; exit \"$ui_check_status\"; fi',", script, StringComparison.Ordinal);
+        Assert.Contains("Get-ReportedFailureStage -Name $Name -Result $result", script, StringComparison.Ordinal);
+        Assert.Contains("-FailureStage $reported", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Linux_gate_syncs_the_gate_clone_and_never_writes_this_working_tree()
     {
         var script = Script();

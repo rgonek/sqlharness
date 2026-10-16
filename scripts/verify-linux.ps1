@@ -189,7 +189,10 @@ export PATH="$HOME/.node/current/bin:$HOME/.dotnet:$PATH"
 
     $failure = Get-StageFailureText -Result $result -TailLines 40
     if ($failure) { Write-Host $failure }
-    Write-Host (Get-GateSummaryLine -Gate 'verify-linux' -StageCount $script:stageCount -Seconds $total.Elapsed.TotalSeconds -FailureStage $Name -FailureExitCode $result.ExitCode)
+    # A stage that runs more than one command names the one whose exit code it returned,
+    # so a UI-only failure in the coupled build stage is not reported as the build.
+    $reported = Get-ReportedFailureStage -Name $Name -Result $result
+    Write-Host (Get-GateSummaryLine -Gate 'verify-linux' -StageCount $script:stageCount -Seconds $total.Elapsed.TotalSeconds -FailureStage $reported -FailureExitCode $result.ExitCode)
     exit $result.ExitCode
 }
 
@@ -237,8 +240,10 @@ Invoke-LinuxStage -Name 'ui-install' -Arguments @($gateClone) -Lines @(
 # only way to overlap the two: two concurrent WSL launches would race each other over
 # the clone. Coupling them inside one invocation is why the stage lines here stay
 # sequential. set +e around both commands is what lets the UI check be joined even when
-# the build has already failed; the script then exits with the build's code, matching
-# the Windows gate.
+# the build has already failed. Both failures are named in the log, but `stage-failure:`
+# names only the command whose exit code the script returns, so the summary line pairs a
+# stage name with that stage's own code instead of reporting a UI-only failure as the
+# build.
 Invoke-LinuxStage -Name 'build' -Arguments @($gateClone) -Lines @(
     'cd "$1"',
     'npm run check --prefix src/SqlHarness.Dashboard/ui &',
@@ -251,8 +256,9 @@ Invoke-LinuxStage -Name 'build' -Arguments @($gateClone) -Lines @(
     'set -e',
     'if [ "$ui_check_status" -ne 0 ]; then echo "==> ui-check FAILED (exit $ui_check_status)" >&2; fi',
     'if [ "$build_status" -ne 0 ]; then echo "==> build FAILED (exit $build_status)" >&2; fi',
-    'if [ "$build_status" -ne 0 ]; then exit "$build_status"; fi',
-    'exit "$ui_check_status"'
+    'if [ "$build_status" -ne 0 ]; then echo "stage-failure: build" >&2; exit "$build_status"; fi',
+    'if [ "$ui_check_status" -ne 0 ]; then echo "stage-failure: ui-check" >&2; exit "$ui_check_status"; fi',
+    'exit 0'
 )
 
 Invoke-LinuxStage -Name 'test' -Arguments @($gateClone) -Lines @(

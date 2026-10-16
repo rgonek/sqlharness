@@ -71,23 +71,28 @@ function Add-Stage {
         Get-Content -LiteralPath $result.LogPath | ForEach-Object { Write-Host $_ }
     }
 
+    if ($result.ExitCode -ne 0) {
+        # The stage reports its own tail here, once. Stop-Gate prints the summary alone,
+        # so a caller that decides a failure ends the gate cannot print it a second time.
+        $failure = Get-StageFailureText -Result $result -TailLines 40
+        if ($failure) { Write-Host $failure }
+    }
+
     if ($ReportOnly) { return $result }
     if ($result.ExitCode -eq 0) { return }
 
     Stop-Gate -Name $Name -Result $result
 }
 
-# Named separately from Add-Stage so the overlap site can report both stages and only
-# then decide. The function always exits; a caller that wants to keep going must catch
-# the results itself.
+# The summary line and the exit code, and nothing else: each stage has already printed
+# its own line and its own failure tail by the time anything calls this. The function
+# always exits, so a caller that wants to keep going has to keep the results itself.
 function Stop-Gate {
     param(
         [Parameter(Mandatory)][string]$Name,
         [Parameter(Mandatory)]$Result
     )
 
-    $failure = Get-StageFailureText -Result $Result -TailLines 40
-    if ($failure) { Write-Host $failure }
     Write-Host (Get-GateSummaryLine -Gate 'verify' -StageCount $script:stageCount -Seconds $total.Elapsed.TotalSeconds -FailureStage $Name -FailureExitCode $Result.ExitCode)
     exit $Result.ExitCode
 }
@@ -104,16 +109,36 @@ Add-Stage -Name 'ui-install' -Skipped:$uiState.Installed -SkipReason $uiState.Re
 # ui-check needs no .NET artifacts, so it runs beside the build instead of in front of
 # it. WorkingDirectory is the repository root so the --prefix argument means the same
 # thing here as it does when the gate is launched from the root.
-$uiCheck = Start-BackgroundGateStage -Name 'ui-check' -LogDirectory $LogDirectory -FilePath 'npm' `
-    -Arguments @('run', 'check', '--prefix', 'src/SqlHarness.Dashboard/ui') -WorkingDirectory $repoRoot
-$script:stageCount++
-$buildResult = Add-Stage -Name 'build' -ReportOnly -Action { dotnet build SqlHarness.sln -warnaserror }
-$uiCheckResult = Complete-BackgroundGateStage -Name 'ui-check' -LogDirectory $LogDirectory -Process $uiCheck -Stream:$Stream
+$uiCheck = $null
+try {
+    $uiCheck = Start-BackgroundGateStage -Name 'ui-check' -LogDirectory $LogDirectory -FilePath 'npm' `
+        -Arguments @('run', 'check', '--prefix', 'src/SqlHarness.Dashboard/ui') -WorkingDirectory $repoRoot
+}
+catch {
+    $uiCheckStartFailure = $_.Exception.Message
+}
 
-# Both stages are reported before either stops the gate, so a UI failure is never
-# hidden behind a build failure. The build's code wins: it is the stage that ran first.
-if ($buildResult.ExitCode -ne 0) { Stop-Gate -Name 'build' -Result $buildResult }
-if ($uiCheckResult.ExitCode -ne 0) { Stop-Gate -Name 'ui-check' -Result $uiCheckResult }
+if ($null -eq $uiCheck) {
+    # An unresolvable or unstartable npm throws out of Start-, and dying on the spot
+    # would leave the run with no ui-check line, no log and no summary at all - less
+    # than a foreground stage reported. Report it through the stage path, and do not
+    # attempt the build: compiling cannot fix a missing npm, and before the overlap the
+    # gate stopped here too. Add-Stage ends the run, so the overlap below never runs
+    # with a process that was never started.
+    $script:stageCount++
+    Add-Stage -Name 'ui-check' -Action ([scriptblock]::Create("throw '" + $uiCheckStartFailure.Replace("'", "''") + "'"))
+}
+else {
+    $script:stageCount++
+    $buildResult = Add-Stage -Name 'build' -ReportOnly -Action { dotnet build SqlHarness.sln -warnaserror }
+    $uiCheckResult = Complete-BackgroundGateStage -Name 'ui-check' -LogDirectory $LogDirectory -Process $uiCheck -Stream:$Stream
+
+    # Both stages are reported before either stops the gate, so a UI failure is never
+    # hidden behind a build failure. The build's code wins: it is the stage that ran
+    # first, and it is the code the gate returns.
+    if ($buildResult.ExitCode -ne 0) { Stop-Gate -Name 'build' -Result $buildResult }
+    if ($uiCheckResult.ExitCode -ne 0) { Stop-Gate -Name 'ui-check' -Result $uiCheckResult }
+}
 
 Add-Stage -Name 'test' -Action { dotnet test SqlHarness.sln --no-build --filter 'FullyQualifiedName!~Integration' }
 

@@ -134,8 +134,13 @@ verify: FAILED  stage=build  exit=5  0,9s
 
 Both stage lines print, both log tails print, and the gate exits with the build's code (Review Focus 2). With only the
 UI check failing, the gate printed `verify: FAILED stage=ui-check exit=1` and returned 1. The probe incidentally
-confirmed `-FilePath 'npm'` resolves through `PATHEXT` to `npm.cmd` and really launches npm — npm itself rejected the
-`/c` argument the probe passed.
+confirmed `-FilePath 'npm'` resolves and really launches npm — npm itself rejected the `/c` argument the probe passed.
+That resolution is **not** PATHEXT: `Process.Start` applies no PATHEXT, which is the whole reason a bare `npm` fails.
+`Resolve-GateStageExecutable` asks `Get-Command -CommandType Application` for the candidates and keeps only the first
+whose extension is `.exe`, `.com`, `.cmd` or `.bat`. On this machine that restriction is what picks
+`...\nodejs-lts\current\bin\npm.cmd`; without it the first candidate is the extensionless bash shim
+`C:\Users\rgone\.local\bin\npm`, which `CreateProcess` cannot launch. Nothing is resolved when no candidate has one of
+those extensions, and the resolver throws.
 
 The same four outcomes were checked directly in bash for the Linux gate's coupled stage, with `npm` and `dotnet` replaced
 by shell functions: both pass → 0; build fails → 1; UI check fails → 7; both fail → 3 (the build's code), with
@@ -164,7 +169,11 @@ dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter '
 # Passed!  - Failed: 0, Passed: 48, Skipped: 0, Total: 48
 
 pwsh -NoProfile -Command "Import-Module Pester -MaximumVersion 3.99; Invoke-Pester -Path tests/scripts -EnableExit"
-# Passed: 68 Failed: 0
+# Passed: 76 Failed: 0
+```
+
+(The first Task 4 commit recorded 68 here against an actual 69. The fix round added 7 tests, so the number on the
+committed tree is 76.)
 ```
 
 The Pester suite must be run under `pwsh`, not `powershell.exe`: the brief's literal command starts Windows PowerShell
@@ -205,3 +214,136 @@ directly (so its output is visible) gives `Test Run Failed. Total tests: 4015 / 
 Both fail 3/3 in isolation, and both fail identically with the gate clone checked out at `24c4070c` — the commit
 immediately before this one. This commit changes no `src/` file and neither of those test files, so the Linux gate was
 already red here before Task 4.
+
+### Task 4 fix round — failure-surface repairs
+
+Five findings, all on the failure surface, plus three in-file corrections. Three were proved by mutation: the guard is
+shown to turn red when the thing it guards is broken, and green again when it is restored.
+
+**I-1 — the UI check's tail printed twice.** `Complete-BackgroundGateStage` printed the failure tail and
+`Stop-Gate` printed it again. Printing is now owned by the stage that owns the result: `Add-Stage` prints the tail when
+its stage failed, `Complete-BackgroundGateStage` prints its own, and `Stop-Gate` prints the summary line and the exit
+code and nothing else. Probe, build passing and the UI check failing:
+
+```
+==> ui-install skipped (lockfile unchanged)
+==> build ok 0,1s
+==> ui-check FAILED (exit 2)
+UI-CHECK-TAIL-MARKER
+full log: D:\temp\opencode\probe-i1\ui-check.log
+verify: FAILED  stage=ui-check  exit=2  0,4s
+===== exit code: 2 =====
+```
+
+`UI-CHECK-TAIL-MARKER occurrences: 1`, `full log:` lines for ui-check: 1. Before the fix the transcript carried the tail
+twice, as recorded in the first Task 4 report's §9. With both stages failing, both tails still print and the build's code
+still wins:
+
+```
+==> build FAILED (exit 5)
+BUILD-TAIL-MARKER
+full log: ...\build.log
+==> ui-check FAILED (exit 2)
+UI-CHECK-TAIL-MARKER
+full log: ...\ui-check.log
+verify: FAILED  stage=build  exit=5  0,5s     ===== exit code: 5 =====
+```
+
+**I-2 — an unresolvable `npm` threw outside any try/catch,** so the run produced no stage line, no log and no summary.
+The start is now wrapped and the failure is reported as a failed `ui-check` stage. The resolver's fail-closed intent is
+kept: the message still says a stage that cannot start must never look green. Probe, with `-FilePath` pointed at a
+command that does not exist:
+
+```
+==> ui-install skipped (lockfile unchanged)
+==> ui-check FAILED (exit 1)
+'sqlharness-no-such-npm-9f3a' could not be resolved to an executable on PATH. A stage that cannot start must never look green.
+full log: D:\temp\opencode\probe-i2\ui-check.log
+verify: FAILED  stage=ui-check  exit=1  0,3s
+===== exit code: 1 =====
+```
+
+`ui-check.log` was written with that message in it. The build is not attempted in this case, which matches the gate's
+behaviour before the overlap: a UI stage that fails stops the run before the .NET stages.
+
+**I-3 — CI had lost its shape protection.** Re-keying the UI-order anchor from `dotnet restore` to `dotnet build`
+changed the anchor, not the scope. CI is now in the guarded set twice over: the build-shape theory takes a third
+`InlineData` for `.github/workflows/ci.yml`, and a dedicated `Ci_builds_with_warnaserror_and_never_skips_or_duplicates_the_restore`
+fact asserts the same three claims independently, so trimming CI out of the theory can no longer leave CI unguarded.
+`No_gate_runs_a_standalone_restore_stage` (renamed from `Neither_local_gate_…`) iterates all three files.
+
+| mutation | result |
+|---|---|
+| M3: `- run: dotnet build --no-restore -warnaserror` in `ci.yml` | **`Failed: 2`** — `Every_gate_builds_with_warnaserror_and_lets_the_build_restore(path: ".github/workflows/ci.yml")` and `Ci_builds_with_warnaserror_and_never_skips_or_duplicates_the_restore` |
+| M8: `- run: dotnet restore` step re-added to `ci.yml` | **`Failed: 2`** — `No_gate_runs_a_standalone_restore_stage` and `Ci_builds_with_warnaserror_and_never_skips_or_duplicates_the_restore` |
+| extra: `dotnet build` moved above `npm ci` and `npm run check` in `ci.yml` | **`Failed: 1`** — `Every_gate_installs_and_checks_the_ui_before_the_dotnet_build(path: ".github/workflows/ci.yml")` |
+
+All three were reverted with `git checkout .github/workflows/ci.yml`; the suite returns to 53/53.
+
+**I-4 — the two `Complete-` tests re-derived their expectations.** They now capture the information stream
+(`Invoke-CapturingReport` merges stream 6 into the success stream and splits `InformationRecord` from the returned
+value) and assert on what the helper printed: exactly one `==> build ok <duration>` line, the `-Stream` echo, the
+failure line plus its tail, and a new test that the tail appears **exactly once**. Mutation proof — the print block was
+replaced with equivalent no-ops that keep the file parsing (`$null = Get-StageLine …`, `if ($Stream) { $null = Get-Content … }`,
+`if ($failure) { $null = $failure }`):
+
+```
+[-] reports a background stage with the same one-line summary a foreground stage gets   Expected: {1}
+[-] replays the log with -Stream so a watcher still sees a background stage              Expected: {2}
+[-] returns the failing exit code and prints the stage line and the failure tail        Expected: {2}
+[-] prints the failure tail exactly once for a failed background stage                  Expected: {1}
+Passed: 24 Failed: 4
+```
+
+All four went red, and the file returned to 28/28 on restore. A first attempt that deleted the lines outright only
+produced `Error occurred in test script` — a parse failure that proves nothing about which assertions have teeth — so
+the no-op mutation was used instead.
+
+One assertion had to be loosened while being rewritten: the duration separator is the machine's culture decimal
+separator, so `==> build ok 0,0s` on this box, and the regex is `\d+([.,]\d+)?s$` rather than `\d+(\.\d+)?s$`.
+
+**I-5 — a UI-only Linux failure was reported as `stage=build`.** The bash already named both failures in the log, but
+`Invoke-LinuxStage` named the wrapper stage in the summary, so a UI-only failure read `FAILED stage=build` carrying the
+UI check's exit code. The coupled bash now writes `stage-failure: <name>` for **only** the command whose exit code it
+returns, and `Invoke-LinuxStage` resolves the reported name through the new `Get-ReportedFailureStage`, which falls
+back to the stage name when the log names nothing. Real bash in WSL with `npm` and `dotnet` replaced by shell
+functions, each captured log then fed through `Get-ReportedFailureStage` and `Get-GateSummaryLine`:
+
+| outcome | bash exit | markers written | reported | summary line |
+|---|---|---|---|---|
+| both pass | 0 | none | `build` | (no summary — the stage is green) |
+| UI check only fails | 7 | `==> ui-check FAILED (exit 7)`, `stage-failure: ui-check` | **`ui-check`** | `verify-linux: FAILED  stage=ui-check  exit=7` |
+| build only fails | 5 | `==> build FAILED (exit 5)`, `stage-failure: build` | `build` | `verify-linux: FAILED  stage=build  exit=5` |
+| both fail | 3 | both `==> …` lines, `stage-failure: build` | `build` | `verify-linux: FAILED  stage=build  exit=3` |
+
+Before the fix the second row read `FAILED stage=build exit=7`.
+
+**m-5 — a `finally` so the shared state hashtable cannot be left half-populated.** `Complete-BackgroundGateStage`
+removes its entry in a `finally` wrapping the whole join rather than removing it before the work, so a throw anywhere in
+the drain cannot leave a stale entry holding two pending read tasks and collide with the next process id. `Start-`
+wraps its registration too: a process that cannot be registered is killed rather than left running with nobody draining
+its pipes. Covered by `removes its state even when the join throws`.
+
+**m-2 and m-3 corrected in this file:** the `npm` resolution is attributed to the deliberate `.exe/.com/.cmd/.bat`
+restriction rather than to PATHEXT (see above), and the Pester count is 76.
+
+### Verification on the fix-round tree
+
+```powershell
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter 'FullyQualifiedName~GateParityTests|FullyQualifiedName~VerifyLinuxScriptTests'
+# Passed!  - Failed: 0, Passed: 53, Skipped: 0, Total: 53
+
+pwsh -NoProfile -Command "Import-Module Pester -MaximumVersion 3.99; Invoke-Pester -Path tests/scripts -EnableExit"
+# Passed: 76 Failed: 0
+
+just verify -LogDirectory D:/temp/opencode/gate-t4-fix1
+# ==> ui-install skipped (lockfile unchanged)
+# ==> build ok 19,8s
+# ==> ui-check ok 6m03s
+# ==> test ok 1m42s
+# ==> format ok 57,5s
+# verify: OK  stages=5  8m43s
+# ===== just verify exit code: 0 =====
+```
+
+The stage times are contended for the same reason as the Task 4 measurements above and carry no claim.

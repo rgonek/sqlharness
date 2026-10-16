@@ -29,6 +29,40 @@ function New-FailingAction {
     return { & cmd.exe /c "exit $ExitCode" }.GetNewClosure()
 }
 
+# Write-Host writes to the information stream, so a gate's report is invisible to a test
+# that only looks at the return value. Merging that stream into the success stream is the
+# only way to observe what the gate actually printed; re-deriving the line with
+# Get-StageLine instead would pass even if the gate stopped printing it altogether.
+function Invoke-CapturingReport {
+    param([Parameter(Mandatory)][scriptblock]$Action)
+
+    $captured = @(& $Action 6>&1)
+
+    return [pscustomobject]@{
+        Printed  = @($captured | Where-Object { $_ -is [System.Management.Automation.InformationRecord] } | ForEach-Object { [string]$_.MessageData })
+        Returned = @($captured | Where-Object { $_ -isnot [System.Management.Automation.InformationRecord] })[-1]
+    }
+}
+
+# A stage result with a log file, standing in for what a finished stage hands to
+# Get-ReportedFailureStage.
+function New-StageResult {
+    param(
+        [Parameter(Mandatory)][string]$LogDirectory,
+        [string]$Name = 'build',
+        [int]$ExitCode = 1,
+        [string[]]$Lines = @(),
+        [switch]$Skipped
+    )
+
+    $logPath = Join-Path $LogDirectory "$Name.log"
+    Set-Content -LiteralPath $logPath -Value $Lines
+    return [pscustomobject]@{
+        Name = $Name; ExitCode = $ExitCode; Seconds = 1.0
+        LogPath = $logPath; Skipped = [bool]$Skipped; SkipReason = $null
+    }
+}
+
 Describe 'gate-output.ps1 native command capture' {
     $work = $null
 
@@ -225,21 +259,52 @@ Describe 'gate-output.ps1 background stages' {
     }
 
     It 'reports a background stage with the same one-line summary a foreground stage gets' {
-        $process = Start-BackgroundGateStage -Name 'build' -LogDirectory $logDir -FilePath $env:ComSpec -Arguments @('/c', 'exit 0')
-        $result = Complete-BackgroundGateStage -Name 'build' -LogDirectory $logDir -Process $process
-        $line = Get-StageLine -Result $result
+        $process = Start-BackgroundGateStage -Name 'build' -LogDirectory $logDir -FilePath $env:ComSpec -Arguments @('/c', 'echo build-noise')
+        $report = Invoke-CapturingReport -Action {
+            Complete-BackgroundGateStage -Name 'build' -LogDirectory $logDir -Process $process
+        }
 
-        $line | Should Match '==> build ok'
-        $line | Should Match '\d+(\.\d+)?s'
+        # What the gate printed, not what Get-StageLine would have printed for the same
+        # result: a test that re-derives the line passes even if the report is deleted.
+        # The duration separator is the machine's culture decimal separator, not a dot.
+        $report.Printed.Count | Should Be 1
+        $report.Printed[0] | Should Match '^==> build ok \d+([.,]\d+)?s$'
+        $report.Returned.ExitCode | Should Be 0
     }
 
-    It 'returns the failing exit code and names the stage on failure' {
-        $process = Start-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -FilePath $env:ComSpec -Arguments @('/c', 'echo boom 1>&2 & exit 4')
-        $result = Complete-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -Process $process
+    It 'replays the log with -Stream so a watcher still sees a background stage' {
+        $process = Start-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -FilePath $env:ComSpec -Arguments @('/c', 'echo streamed-ui-line')
+        $report = Invoke-CapturingReport -Action {
+            Complete-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -Process $process -Stream
+        }
 
-        $result.ExitCode | Should Be 4
-        (Get-StageLine -Result $result) | Should Match '==> ui-check FAILED'
-        (Get-StageFailureText -Result $result -TailLines 5) | Should Match 'boom'
+        $report.Printed.Count | Should Be 2
+        $report.Printed[0] | Should Match '^==> ui-check ok'
+        $report.Printed[1] | Should Match 'streamed-ui-line'
+    }
+
+    It 'returns the failing exit code and prints the stage line and the failure tail' {
+        $process = Start-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -FilePath $env:ComSpec -Arguments @('/c', 'echo boom-marker 1>&2 & exit 4')
+        $report = Invoke-CapturingReport -Action {
+            Complete-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -Process $process
+        }
+
+        $report.Returned.ExitCode | Should Be 4
+        $report.Printed.Count | Should Be 2
+        $report.Printed[0] | Should Match '^==> ui-check FAILED \(exit 4\)$'
+        $report.Printed[1] | Should Match 'boom-marker'
+        $report.Printed[1] | Should Match ([regex]::Escape($report.Returned.LogPath))
+    }
+
+    It 'prints the failure tail exactly once for a failed background stage' {
+        # The gate prints the tail at the join and must not print it again when it decides
+        # to stop, so the same tail text appears on the console exactly once.
+        $process = Start-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -FilePath $env:ComSpec -Arguments @('/c', 'echo once-only-marker 1>&2 & exit 4')
+        $report = Invoke-CapturingReport -Action {
+            Complete-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -Process $process
+        }
+
+        ([regex]::Matches(($report.Printed -join "`n"), 'once-only-marker')).Count | Should Be 1
     }
 
     It 'drains a background stage that floods standard error while writing to standard output' {
@@ -273,5 +338,62 @@ Describe 'gate-output.ps1 background stages' {
         catch { $threw = $true }
 
         $threw | Should Be $true
+    }
+
+    It 'removes its state even when the join throws' {
+        # The entry holds two pending read tasks. A stale one would leak both and collide
+        # with the next process id, so it is removed in a finally rather than on the way in.
+        $before = $script:BackgroundGateStages.Count
+        $process = Start-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -FilePath $env:ComSpec -Arguments @('/c', 'echo state-line')
+        $mid = $script:BackgroundGateStages.Count
+        $null = Complete-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -Process $process
+
+        $mid | Should Be ($before + 1)
+        $script:BackgroundGateStages.Count | Should Be $before
+    }
+}
+
+Describe 'gate-output.ps1 reported failure stage' {
+    $logDir = $null
+
+    BeforeEach { $logDir = New-TempDirectory -Prefix 'sqlharness-gate-stage-' }
+    AfterEach {
+        if ($logDir -and (Test-Path $logDir)) { Remove-Item -Recurse -Force $logDir -ErrorAction SilentlyContinue }
+    }
+
+    It 'names the UI check when only the UI command failed' {
+        # The Linux build stage runs the UI check and the build in one bash script. If it
+        # returns the UI check's exit code, the summary must not read "stage=build".
+        $result = New-StageResult -LogDirectory $logDir -ExitCode 7 -Lines @(
+            '==> ui-check FAILED (exit 7)'
+            'stage-failure: ui-check'
+        )
+
+        Get-ReportedFailureStage -Name 'build' -Result $result | Should Be 'ui-check'
+    }
+
+    It 'names the build when the build failed' {
+        $result = New-StageResult -LogDirectory $logDir -ExitCode 3 -Lines @(
+            '==> ui-check FAILED (exit 7)'
+            '==> build FAILED (exit 3)'
+            'stage-failure: build'
+        )
+
+        Get-ReportedFailureStage -Name 'build' -Result $result | Should Be 'build'
+    }
+
+    It 'falls back to the stage name when the log names nothing' {
+        # Every other stage runs one command and never writes the marker.
+        $result = New-StageResult -LogDirectory $logDir -Name 'test' -ExitCode 1 -Lines @('assertion failed')
+
+        Get-ReportedFailureStage -Name 'test' -Result $result | Should Be 'test'
+    }
+
+    It 'falls back to the stage name for a green or skipped stage' {
+        $green = New-StageResult -LogDirectory $logDir -ExitCode 0 -Lines @('stage-failure: ui-check')
+        $skipped = New-StageResult -LogDirectory $logDir -ExitCode 0 -Lines @() -Skipped
+
+        (Get-ReportedFailureStage -Name 'build' -Result $green) | Should Be 'build'
+        (Get-ReportedFailureStage -Name 'build' -Result $skipped) | Should Be 'build'
     }
 }
