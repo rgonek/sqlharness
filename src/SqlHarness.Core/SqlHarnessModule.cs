@@ -650,13 +650,22 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     execution,
                     boundSets);
 
+                // Still the measured-SQL phase: a catalog failure stays a gap and cancellation maps like a measured batch.
+                var setInventory = await IndexInventoryCapture.CaptureAsync(
+                    dialect.Engine,
+                    multiSession,
+                    execution.Runs.SelectMany(run => run.Artifact.PlanXmls).ToArray(),
+                    measure.TimeoutSeconds,
+                    knownSecrets,
+                    ct);
                 phase = OperationPhase.Artifact;
                 var setDirectory = _artifactWriter.Write(
                     setReport,
                     execution.Runs.Select(run => run.Artifact).ToArray(),
                     target.Database,
                     ArtifactOwner.From(measure.Target, target),
-                    measure.OperationRef);
+                    measure.OperationRef,
+                    setInventory);
                 setReport = setReport with { ArtifactDirectory = setDirectory };
                 var setSuccess = new SqlHarnessOutcome(SqlHarnessExitCode.Success, setReport, null)
                 {
@@ -714,8 +723,22 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 Parameters = BenchmarkReports.ToParameterReports(parameters),
             };
 
+            // Still the measured-SQL phase: a catalog failure stays a gap and cancellation maps like a measured batch.
+            var inventory = await IndexInventoryCapture.CaptureAsync(
+                dialect.Engine,
+                session,
+                runs.SelectMany(run => run.Artifact.PlanXmls).ToArray(),
+                measure.TimeoutSeconds,
+                knownSecrets,
+                ct);
             phase = OperationPhase.Artifact;
-            var directory = _artifactWriter.Write(report, runs.Select(run => run.Artifact).ToArray(), target.Database, ArtifactOwner.From(measure.Target, target), measure.OperationRef);
+            var directory = _artifactWriter.Write(
+                report,
+                runs.Select(run => run.Artifact).ToArray(),
+                target.Database,
+                ArtifactOwner.From(measure.Target, target),
+                measure.OperationRef,
+                inventory);
             report = report with { ArtifactDirectory = directory };
             var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null)
             {

@@ -340,8 +340,9 @@ internal interface ICompareArtifactWriter
 
     // Owner-aware publish. The default keeps existing fakes compiling
     // with their behavior unchanged; the production writer overrides it
-    // to stamp the manifest. Callers always use this overload.
-    string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target, ArtifactOwner? owner, string? operationRef = null) =>
+    // to stamp the manifest and, when present, index-inventory.json.
+    // Callers always use this overload.
+    string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target, ArtifactOwner? owner, string? operationRef = null, IndexInventory? inventory = null) =>
         Write(report, runs, target);
 
     void WriteMatrixIndex(IReadOnlyList<CompareMatrixCellReport> cells) { }
@@ -460,7 +461,7 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
     public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target) =>
         Write(report, runs, target, owner: null, operationRef: null);
 
-    public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target, ArtifactOwner? owner, string? operationRef = null)
+    public string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target, ArtifactOwner? owner, string? operationRef = null, IndexInventory? inventory = null)
     {
         ArgumentNullException.ThrowIfNull(report);
         ArgumentNullException.ThrowIfNull(runs);
@@ -519,6 +520,13 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
                         run.PlanXmls.Select((_, planIndex) => PlanJsonFileName(run, index, planIndex)).ToArray()), ArtifactDirectoryPublisher.JsonLineOptions));
                 }
                 _publisher.WriteText(Path.Combine(staging, "runs.jsonl"), lines.ToString(), new UTF8Encoding(false));
+                if (inventory is not null)
+                {
+                    _publisher.WriteText(
+                        Path.Combine(staging, "index-inventory.json"),
+                        JsonSerializer.Serialize(inventory, ArtifactDirectoryPublisher.JsonOptions),
+                        new UTF8Encoding(false));
+                }
             });
             if (OperationPhaseRecorder.Current?.CapturesEvents == true)
             {

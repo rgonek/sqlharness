@@ -780,6 +780,10 @@ public class SqlHarnessMeasureTests
         public IReadOnlyList<string> Messages => _messages;
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("test-server", "testdb-a", "test-server", "testdb-a", "profile");
+        public Func<string, string>? PlanForSql { get; set; }
+        public CancellationTokenSource? CancelInventory { get; set; }
+        public Exception? InventoryFailure { get; set; }
+        public IReadOnlyList<(string[] Names, object?[][] Rows)>? InventoryResults { get; set; }
 
         private FakeMeasureSession(
             bool changeLastResult,
@@ -851,6 +855,21 @@ public class SqlHarnessMeasureTests
                 return Task.FromResult<ISqlReader>(_includeSetupResult ? FakeReader.Single(["SetupValue"], ["setup-result-value"]) : FakeReader.Empty());
             }
 
+            // Not a measured repetition: no label and no query count.
+            if (string.Equals(command.Sql, IndexInventoryQuery.Sql, StringComparison.Ordinal))
+            {
+                if (CancelInventory is not null)
+                {
+                    CancelInventory.Cancel();
+                    return Task.FromException<ISqlReader>(new OperationCanceledException(ct));
+                }
+
+                if (InventoryFailure is not null)
+                    return Task.FromException<ISqlReader>(InventoryFailure);
+
+                return Task.FromResult<ISqlReader>(FakeReader.FromGrids(InventoryResults ?? []));
+            }
+
             if (_cancelOnQuery is not null)
             {
                 _cancelOnQuery.Cancel();
@@ -874,7 +893,7 @@ public class SqlHarnessMeasureTests
             object?[][] rows = Enumerable.Range(0, _resultRowCount)
                 .Select(index => new object?[] { value + index })
                 .ToArray();
-            return Task.FromResult<ISqlReader>(FakeReader.WithPlan(["Value"], rows, _plan));
+            return Task.FromResult<ISqlReader>(FakeReader.WithPlan(["Value"], rows, PlanForSql?.Invoke(command.Sql) ?? _plan));
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -894,6 +913,8 @@ public class SqlHarnessMeasureTests
         public static FakeReader WithPlan(string[] names, object?[] row, string plan) => WithPlan(names, [row], plan);
         public static FakeReader WithPlan(string[] names, object?[][] rows, string plan) =>
             new([new(names, rows), new(["Microsoft SQL Server 2005 XML Showplan"], [[plan]])]);
+        public static FakeReader FromGrids(IReadOnlyList<(string[] Names, object?[][] Rows)> grids) =>
+            new(grids.Select(grid => new Result(grid.Names, grid.Rows)).ToArray());
         public string GetName(int ordinal) => Current.Names[ordinal];
         public Type GetFieldType(int ordinal) => Current.Rows[0][ordinal]?.GetType() ?? typeof(object);
         public bool GetAllowNull(int ordinal) => false;

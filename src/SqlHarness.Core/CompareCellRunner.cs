@@ -248,9 +248,23 @@ internal sealed class CompareCellRunner(ISqlSessionFactory sessions, ICompareArt
                     equivalence)),
             };
 
+            // Still the measured-SQL phase: a catalog failure stays a gap and cancellation maps like a measured batch.
+            var inventory = await IndexInventoryCapture.CaptureAsync(
+                request.Target.Engine,
+                session,
+                runs.SelectMany(run => run.Artifact.PlanXmls).ToArray(),
+                request.TimeoutSeconds,
+                request.KnownSecrets,
+                ct);
             phase = CompareCellPhase.Artifact;
             var publicRuns = runs.Select(run => run.Artifact).ToArray();
-            var directory = _artifacts.Write(report, publicRuns, request.Target.Database, request.Owner, request.OperationRef);
+            var directory = _artifacts.Write(
+                report,
+                publicRuns,
+                request.Target.Database,
+                request.Owner,
+                request.OperationRef,
+                inventory);
             report = report with { ArtifactDirectory = directory };
             return new CompareCellResult(report, publicRuns, rawFootprint);
         }
