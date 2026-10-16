@@ -1,0 +1,469 @@
+{
+  "formatVersion": 1,
+  "kind": "historical-workflow-output-observations",
+  "source": "SQLHarness activity journal; read-only export",
+  "journalSchemaVersion": 12,
+  "sourceRevision": null,
+  "responseBudgetBytes": null,
+  "replayable": false,
+  "unit": "emitted UTF-8 text bytes",
+  "excluded": [
+    "tools/list discovery",
+    "model input",
+    "final chat",
+    "database performance comparison"
+  ],
+  "limitations": [
+    "No original response JSON, SQL, parameters, result data or plans are included.",
+    "Recorded bytes are authoritative historical observations, not a current-version rendering fixture.",
+    "Successful execution does not establish regression pass, equivalence or completed optimization evidence.",
+    "Follow-up sections, selectors and reasons for repeated reads are unavailable in this export.",
+    "No before/after savings claim may use a different workload or only a response-shape estimate."
+  ],
+  "sessions": [
+    {
+      "id": "session-1",
+      "totalRecordedCalls": 21,
+      "totalRecordedEmittedBytes": 121578,
+      "missingEmissionMeasurements": 0,
+      "compareArtifactEmittedBytes": 85224,
+      "workflows": [
+        {
+          "id": "workflow-1-1",
+          "producerStatus": "succeeded",
+          "artifactReads": 3,
+          "emittedBytes": 32656,
+          "calls": [
+            {
+              "id": "call-1",
+              "operation": "compare",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 17127,
+              "parentCall": null
+            },
+            {
+              "id": "call-2",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 8619,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-3",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 5050,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-4",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 1860,
+              "parentCall": "call-1"
+            }
+          ]
+        },
+        {
+          "id": "workflow-1-2",
+          "producerStatus": "failed",
+          "artifactReads": 2,
+          "emittedBytes": 19082,
+          "calls": [
+            {
+              "id": "call-1",
+              "operation": "compare",
+              "status": "failed",
+              "dryRun": false,
+              "emittedBytes": 12184,
+              "parentCall": null
+            },
+            {
+              "id": "call-2",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 1866,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-3",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 5032,
+              "parentCall": "call-1"
+            }
+          ]
+        },
+        {
+          "id": "workflow-1-3",
+          "producerStatus": "succeeded",
+          "artifactReads": 1,
+          "emittedBytes": 20716,
+          "calls": [
+            {
+              "id": "call-1",
+              "operation": "compare",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 17198,
+              "parentCall": null
+            },
+            {
+              "id": "call-2",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 3518,
+              "parentCall": "call-1"
+            }
+          ]
+        },
+        {
+          "id": "workflow-1-4",
+          "producerStatus": "succeeded",
+          "artifactReads": 0,
+          "emittedBytes": 12770,
+          "calls": [
+            {
+              "id": "call-1",
+              "operation": "compare",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 12770,
+              "parentCall": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "session-2",
+      "totalRecordedCalls": 15,
+      "totalRecordedEmittedBytes": 77611,
+      "missingEmissionMeasurements": 0,
+      "compareArtifactEmittedBytes": 51734,
+      "workflows": [
+        {
+          "id": "workflow-2-1",
+          "producerStatus": "failed",
+          "artifactReads": 0,
+          "emittedBytes": 488,
+          "calls": [
+            {
+              "id": "call-1",
+              "operation": "compare",
+              "status": "failed",
+              "dryRun": false,
+              "emittedBytes": 488,
+              "parentCall": null
+            }
+          ]
+        },
+        {
+          "id": "workflow-2-2",
+          "producerStatus": "succeeded",
+          "artifactReads": 0,
+          "emittedBytes": 12116,
+          "calls": [
+            {
+              "id": "call-1",
+              "operation": "compare",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 12116,
+              "parentCall": null
+            }
+          ]
+        },
+        {
+          "id": "workflow-2-3",
+          "producerStatus": "succeeded",
+          "artifactReads": 0,
+          "emittedBytes": 12094,
+          "calls": [
+            {
+              "id": "call-1",
+              "operation": "compare",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 12094,
+              "parentCall": null
+            }
+          ]
+        },
+        {
+          "id": "workflow-2-4",
+          "producerStatus": "succeeded",
+          "artifactReads": 6,
+          "emittedBytes": 27036,
+          "calls": [
+            {
+              "id": "call-1",
+              "operation": "compare",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 12033,
+              "parentCall": null
+            },
+            {
+              "id": "call-2",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 3215,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-3",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 1786,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-4",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 3215,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-5",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 1786,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-6",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 3215,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-7",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 1786,
+              "parentCall": "call-1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "session-3",
+      "totalRecordedCalls": 10,
+      "totalRecordedEmittedBytes": 42911,
+      "missingEmissionMeasurements": 0,
+      "compareArtifactEmittedBytes": 38386,
+      "workflows": [
+        {
+          "id": "workflow-3-1",
+          "producerStatus": "succeeded",
+          "artifactReads": 2,
+          "emittedBytes": 20895,
+          "calls": [
+            {
+              "id": "call-1",
+              "operation": "compare",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 14282,
+              "parentCall": null
+            },
+            {
+              "id": "call-2",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 3181,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-3",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 3432,
+              "parentCall": "call-1"
+            }
+          ]
+        },
+        {
+          "id": "workflow-3-2",
+          "producerStatus": "succeeded",
+          "artifactReads": 1,
+          "emittedBytes": 17491,
+          "calls": [
+            {
+              "id": "call-1",
+              "operation": "compare",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 14281,
+              "parentCall": null
+            },
+            {
+              "id": "call-2",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 3210,
+              "parentCall": "call-1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "session-4",
+      "totalRecordedCalls": 19,
+      "totalRecordedEmittedBytes": 95153,
+      "missingEmissionMeasurements": 0,
+      "compareArtifactEmittedBytes": 91225,
+      "workflows": [
+        {
+          "id": "workflow-4-1",
+          "producerStatus": "succeeded",
+          "artifactReads": 14,
+          "emittedBytes": 91225,
+          "calls": [
+            {
+              "id": "call-1",
+              "operation": "compare",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 13759,
+              "parentCall": null
+            },
+            {
+              "id": "call-2",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 8859,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-3",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 9662,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-4",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 7774,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-5",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 2157,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-6",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 8217,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-7",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 1430,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-8",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 7801,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-9",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 2163,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-10",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 8247,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-11",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 1432,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-12",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 7832,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-13",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 2173,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-14",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 8283,
+              "parentCall": "call-1"
+            },
+            {
+              "id": "call-15",
+              "operation": "artifact",
+              "status": "succeeded",
+              "dryRun": false,
+              "emittedBytes": 1436,
+              "parentCall": "call-1"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
