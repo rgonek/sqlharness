@@ -146,6 +146,47 @@ public sealed class MutationExecutorTests
         Environment.SetEnvironmentVariable(variable, null);
     }
 
+    [Fact]
+    public async Task Automatic_dml_is_rejected_if_mode_changed_from_yolo_to_operator()
+    {
+        const string variable = "SQLHARNESS_TEST_AUTO_PASSWORD";
+        Environment.SetEnvironmentVariable(variable, "writer-secret");
+        var module = new FakeModule();
+        var executor = Executor(module, Profile("operator", new MutationWriter("writer", variable)));
+
+        var result = await executor.ExecuteAsync(
+            Request(), Context(origin: MutationExecutionOrigin.Automatic), default);
+
+        Assert.Equal(MutationStatus.Disabled, result.Status);
+        Assert.Empty(module.Operations);
+        Environment.SetEnvironmentVariable(variable, null);
+    }
+
+    [Fact]
+    public async Task Same_database_server_change_between_executor_and_core_resolution_never_connects()
+    {
+        var original = new TargetProfile(
+            "server", "db", new Dictionary<string, string>(), "integrated",
+            Mutations: new ProfileMutations("operator", new MutationWriter(SameAsReader: true)));
+        var changed = original with { Server = "changed-server" };
+        var reads = 0;
+        IReadOnlyDictionary<string, TargetProfile> LoadProfiles() =>
+            new Dictionary<string, TargetProfile>(StringComparer.Ordinal)
+            {
+                ["local"] = Interlocked.Increment(ref reads) == 1 ? original : changed,
+            };
+        var sessions = new TrackingSessionFactory();
+        var module = new SqlHarnessModule(sessions, LoadProfiles);
+        var executor = new MutationExecutor(module, LoadProfiles,
+            () => new SqlHarnessConfig(), new RecordingJournal(), TimeProvider.System);
+
+        var result = await executor.ExecuteAsync(Request(), Context("server-drift"), default);
+
+        Assert.Equal(MutationStatus.Failed, result.Status);
+        Assert.Equal(2, reads);
+        Assert.Empty(sessions.ConnectedTargets);
+    }
+
     private static MutationExecutor Executor(FakeModule module, TargetProfile profile, IActivityJournal? journal = null) =>
         new(module, () => new Dictionary<string, TargetProfile>(StringComparer.Ordinal) { ["local"] = profile },
             () => new SqlHarnessConfig(), journal ?? new RecordingJournal(), TimeProvider.System);
@@ -192,5 +233,16 @@ public sealed class MutationExecutorTests
         public void RecordEmission(JournalHandle? handle, OutputFootprint? raw, OutputFootprint emitted) { }
         public void UpdateMutation(string requestId, string state, string? status, string? verification, DateTimeOffset at) =>
             Updates.Add((requestId, state, status));
+    }
+
+    private sealed class TrackingSessionFactory : ISqlSessionFactory
+    {
+        public List<string> ConnectedTargets { get; } = [];
+
+        public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
+        {
+            ConnectedTargets.Add(target.Server);
+            throw new InvalidOperationException("The test must reject target drift before connecting.");
+        }
     }
 }

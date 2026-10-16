@@ -49,8 +49,8 @@ internal sealed class MutationExecutor(
         if (!Enum.TryParse<MutationMode>(modeText, true, out var mode))
             return Result(MutationStatus.Failed, "The mutation mode is invalid.");
         if (mode == MutationMode.Never ||
-            (mode == MutationMode.Yolo && context.Origin == MutationExecutionOrigin.Automatic &&
-             !string.Equals(request.Tier, "dml", StringComparison.OrdinalIgnoreCase)))
+            (context.Origin == MutationExecutionOrigin.Automatic &&
+             (mode != MutationMode.Yolo || !string.Equals(request.Tier, "dml", StringComparison.OrdinalIgnoreCase))))
             return Result(MutationStatus.Disabled, null);
 
         var reader = target.Auth;
