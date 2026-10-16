@@ -260,6 +260,60 @@ public sealed class AgentOutputTests
     }
 
     [Fact]
+    public void Agent_plan_output_keeps_overlap_within_the_existing_take_limit()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "sqlharness-agent-overlap-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            const string id = "agent-overlap";
+            var directory = Path.Combine(root, id);
+            Directory.CreateDirectory(Path.Combine(directory, "plans"));
+            File.WriteAllText(Path.Combine(directory, "manifest.json"),
+                "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"plan\"]}");
+            const string planName = "baseline-001-000-000.plan.json";
+            var hint = """{"table":"Orders","schema":"dbo","equalityColumns":["CustomerId"],"inequalityColumns":[],"includeColumns":["Total"],"impact":87.5}""";
+            File.WriteAllText(Path.Combine(directory, "plans", planName),
+                "{\"statements\":[{\"root\":{\"physicalOp\":\"Scan\"},\"missingIndexes\":[" + hint + "," + hint + "," + hint + "]}]}");
+            File.WriteAllText(Path.Combine(directory, "runs.jsonl"),
+                "{\"variant\":\"baseline\",\"repetition\":1,\"planJsonFiles\":[\"" + planName + "\"]}");
+            File.WriteAllText(Path.Combine(directory, "index-inventory.json"), JsonSerializer.Serialize(new IndexInventory(
+                "AdventureWorks",
+                DateTimeOffset.UnixEpoch,
+                [new InventoryTable("dbo", "Orders", true, [new InventoryIndex(2, "IX_C", "NONCLUSTERED", ["CustomerId"], ["Status"], false, false, false, false, false)], false)],
+                []), ArtifactDirectoryPublisher.JsonOptions));
+
+            var section = Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(root, id, "plan",
+                planSelector: new ArtifactPlanSelector("baseline")));
+            var limited = Assert.IsType<ArtifactPlanSection>(AgentOutputProjection.Project(section, 512, 2, out var omitted, 65536));
+            var limitedJson = JsonSerializer.Serialize(limited, ArtifactDirectoryPublisher.JsonOptions);
+            using var limitedDocument = JsonDocument.Parse(limitedJson);
+            var limitedHints = limitedDocument.RootElement.GetProperty("missingIndexes");
+
+            Assert.Equal(3, section.MissingIndexes.Count);
+            Assert.Equal(2, limitedHints.GetArrayLength());
+            Assert.Equal(1, omitted);
+            Assert.All(limitedHints.EnumerateArray(), item =>
+            {
+                Assert.Equal("include-gap", item.GetProperty("overlap").GetProperty("verdict").GetString());
+                Assert.Equal("IX_C", item.GetProperty("overlap").GetProperty("index").GetProperty("name").GetString());
+            });
+
+            var output = new StringWriter();
+            new Renderer().RenderAgent(new SqlHarnessOutcome(SqlHarnessExitCode.Success, section, null), "artifact",
+                new OutputCaptureWriter(output), new AgentOutputOptions(65536, 512));
+            using var envelope = JsonDocument.Parse(output.ToString());
+            var rendered = envelope.RootElement.GetProperty("result").GetProperty("missingIndexes");
+            Assert.Equal(3, rendered.GetArrayLength());
+            Assert.All(rendered.EnumerateArray(), item =>
+                Assert.Equal("include-gap", item.GetProperty("overlap").GetProperty("verdict").GetString()));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Agent_projection_clips_unicode_cells_and_reports_safe_prefix_metadata()
     {
         var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");

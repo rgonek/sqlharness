@@ -327,6 +327,221 @@ public class ArtifactReaderTests
     }
 
     [Fact]
+    public void Plan_section_hint_carries_the_overlap_verdict()
+    {
+        using var temp = new TempDirectory();
+        const string id = "overlap-include-gap";
+        WriteOverlapArtifact(temp.Path, id, PlanJson(OrdersHint(schema: null, database: null)), Inventory(
+            "AdventureWorks",
+            [Table("DBO", "orders", found: true, truncated: false, Ix("IX_C", ["CustomerId"], ["Status"]))]));
+
+        var section = ReadOverlapPlan(temp.Path, id);
+        var json = SectionJson(section);
+        var hint = json.GetProperty("missingIndexes")[0];
+        var overlap = hint.GetProperty("overlap");
+
+        Assert.False(hint.TryGetProperty("schema", out _));
+        Assert.False(hint.TryGetProperty("database", out _));
+        Assert.Equal("Orders", hint.GetProperty("table").GetString());
+        Assert.Equal("include-gap", overlap.GetProperty("verdict").GetString());
+        Assert.Equal("IX_C", overlap.GetProperty("index").GetProperty("name").GetString());
+        Assert.Equal("Total", Assert.Single(overlap.GetProperty("missingIncludeColumns").EnumerateArray()).GetString());
+        Assert.Empty(section.EvidenceGaps);
+
+        var nextPage = ReadOverlapPlan(temp.Path, id, cursor: 1);
+        Assert.Empty(nextPage.MissingIndexes);
+    }
+
+    [Fact]
+    public void Legacy_artifact_without_inventory_reads_without_overlap()
+    {
+        using var temp = new TempDirectory();
+        const string id = "overlap-legacy";
+        WriteOverlapArtifact(temp.Path, id, PlanJson(OrdersHint(), OrdersHint()), inventoryJson: null);
+
+        var section = ReadOverlapPlan(temp.Path, id);
+        var json = SectionJson(section);
+
+        Assert.Equal(2, json.GetProperty("missingIndexes").GetArrayLength());
+        Assert.All(json.GetProperty("missingIndexes").EnumerateArray(), hint => Assert.False(hint.TryGetProperty("overlap", out _)));
+        Assert.Equal(
+            ["Index inventory was not captured for this artifact; missing-index hints have no overlap verdict."],
+            section.EvidenceGaps);
+    }
+
+    [Fact]
+    public void Not_found_table_gives_no_verdict()
+    {
+        using var temp = new TempDirectory();
+        const string id = "overlap-not-found";
+        WriteOverlapArtifact(temp.Path, id, PlanJson(OrdersHint(), OrdersHint()), Inventory(
+            "AdventureWorks",
+            [Table("dbo", "Orders", found: false, truncated: false, Ix("IX_C", ["CustomerId"], ["Total"]))]));
+
+        var section = ReadOverlapPlan(temp.Path, id);
+        var json = SectionJson(section);
+
+        Assert.Equal(2, json.GetProperty("missingIndexes").GetArrayLength());
+        Assert.All(json.GetProperty("missingIndexes").EnumerateArray(), hint => Assert.False(hint.TryGetProperty("overlap", out _)));
+        Assert.Equal(
+            ["dbo.Orders was not found when the index inventory was captured."],
+            section.EvidenceGaps);
+    }
+
+    [Fact]
+    public void Skipped_table_gives_no_verdict_and_inventory_gaps_are_surfaced()
+    {
+        using var temp = new TempDirectory();
+        const string id = "overlap-skipped";
+        const string skipGap = "Index inventory covers the first 8 hinted tables; 3 more were skipped.";
+        WriteOverlapArtifact(temp.Path, id, PlanJson(OrdersHint(), OrdersHint()), Inventory(
+            "AdventureWorks",
+            [Table("dbo", "Customers", found: true, truncated: false, Ix("IX_C", ["CustomerId"]))],
+            skipGap));
+
+        var section = ReadOverlapPlan(temp.Path, id);
+        var json = SectionJson(section);
+
+        Assert.Equal(2, json.GetProperty("missingIndexes").GetArrayLength());
+        Assert.All(json.GetProperty("missingIndexes").EnumerateArray(), hint => Assert.False(hint.TryGetProperty("overlap", out _)));
+        Assert.Equal([skipGap], section.EvidenceGaps);
+    }
+
+    [Fact]
+    public void Truncated_index_list_downgrades_new_shape_to_unavailable()
+    {
+        using var temp = new TempDirectory();
+        const string id = "overlap-truncated";
+        WriteOverlapArtifact(
+            temp.Path,
+            id,
+            PlanJson(
+                OrdersHint(),
+                OrdersHint(equality: ["Status"], include: []),
+                OrdersHint(table: "Payments", equality: ["Zip"], include: [])),
+            Inventory(
+                "AdventureWorks",
+                [
+                    Table("dbo", "Orders", found: true, truncated: true, Ix("IX_C", ["CustomerId"], ["Status"])),
+                    Table("dbo", "Payments", found: true, truncated: false, Ix("IX_P", ["Id"])),
+                ]));
+
+        var section = ReadOverlapPlan(temp.Path, id);
+        var hints = SectionJson(section).GetProperty("missingIndexes");
+        var kept = hints[0].GetProperty("overlap");
+        var fresh = hints[2].GetProperty("overlap");
+
+        Assert.Equal("include-gap", kept.GetProperty("verdict").GetString());
+        Assert.Equal("IX_C", kept.GetProperty("index").GetProperty("name").GetString());
+        Assert.False(hints[1].TryGetProperty("overlap", out _));
+        Assert.Equal("new-shape", fresh.GetProperty("verdict").GetString());
+        Assert.False(fresh.TryGetProperty("index", out _));
+        Assert.Equal(
+            ["dbo.Orders has more than 64 indexes; a new-shape verdict cannot be trusted."],
+            section.EvidenceGaps);
+    }
+
+    [Fact]
+    public void Invalid_inventory_file_is_a_gap_not_a_failure()
+    {
+        using var temp = new TempDirectory();
+        const string id = "overlap-corrupt";
+        WriteOverlapArtifact(temp.Path, id, PlanJson(OrdersHint()), "{");
+
+        var section = ReadOverlapPlan(temp.Path, id);
+        var hint = SectionJson(section).GetProperty("missingIndexes")[0];
+
+        Assert.Equal("Scan", Assert.Single(section.Nodes).Operator.PhysicalOp);
+        Assert.Equal("Orders", hint.GetProperty("table").GetString());
+        Assert.False(hint.TryGetProperty("overlap", out _));
+        Assert.Equal(["Index inventory is unreadable."], section.EvidenceGaps);
+    }
+
+    [Fact]
+    public void Hint_for_another_database_has_no_verdict()
+    {
+        using var temp = new TempDirectory();
+        const string id = "overlap-other-database";
+        WriteOverlapArtifact(
+            temp.Path,
+            id,
+            PlanJson(OrdersHint(database: "Contoso"), OrdersHint(database: "adventureworks")),
+            Inventory(
+                "AdventureWorks",
+                [Table("dbo", "Orders", found: true, truncated: false, Ix("IX_C", ["CustomerId"], ["Status"]))]));
+
+        var section = ReadOverlapPlan(temp.Path, id);
+        var hints = SectionJson(section).GetProperty("missingIndexes");
+
+        Assert.False(hints[0].TryGetProperty("overlap", out _));
+        Assert.Equal("include-gap", hints[1].GetProperty("overlap").GetProperty("verdict").GetString());
+        Assert.Empty(section.EvidenceGaps);
+    }
+
+    private static ArtifactPlanSection ReadOverlapPlan(string root, string id, int cursor = 0) =>
+        Assert.IsType<ArtifactPlanSection>(ArtifactReader.ReadSection(root, id, "plan", cursor: cursor,
+            planSelector: new ArtifactPlanSelector("baseline")));
+
+    private static JsonElement SectionJson(ArtifactPlanSection section)
+    {
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(section, ArtifactDirectoryPublisher.JsonOptions));
+        return document.RootElement.Clone();
+    }
+
+    private static void WriteOverlapArtifact(string root, string id, string planJson, string? inventoryJson)
+    {
+        var directory = Path.Combine(root, id);
+        Directory.CreateDirectory(Path.Combine(directory, "plans"));
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"plan\"]}");
+        const string planName = "baseline-001-000-000.plan.json";
+        File.WriteAllText(Path.Combine(directory, "plans", planName), planJson);
+        File.WriteAllText(Path.Combine(directory, "runs.jsonl"),
+            "{\"variant\":\"baseline\",\"repetition\":1,\"planJsonFiles\":[\"" + planName + "\"]}");
+        if (inventoryJson is not null)
+            File.WriteAllText(Path.Combine(directory, "index-inventory.json"), inventoryJson);
+    }
+
+    private static string PlanJson(params object[] hints) =>
+        JsonSerializer.Serialize(new
+        {
+            statements = new[]
+            {
+                new
+                {
+                    root = new { physicalOp = "Scan" },
+                    missingIndexes = hints,
+                },
+            },
+        });
+
+    private static object OrdersHint(
+        string[]? equality = null,
+        string[]? include = null,
+        string? schema = "dbo",
+        string? database = null,
+        string table = "Orders",
+        double impact = 87.5) => new
+        {
+            database,
+            schema,
+            table,
+            equalityColumns = equality ?? ["CustomerId"],
+            inequalityColumns = Array.Empty<string>(),
+            includeColumns = include ?? ["Total"],
+            impact,
+        };
+
+    private static string Inventory(string database, IReadOnlyList<InventoryTable> tables, params string[] gaps) =>
+        JsonSerializer.Serialize(new IndexInventory(database, DateTimeOffset.UnixEpoch, tables, gaps), ArtifactDirectoryPublisher.JsonOptions);
+
+    private static InventoryTable Table(string schema, string table, bool found, bool truncated, params InventoryIndex[] indexes) =>
+        new(schema, table, found, indexes, truncated);
+
+    private static InventoryIndex Ix(string name, string[] keys, string[]? include = null) =>
+        new(2, name, "NONCLUSTERED", keys, include ?? [], false, false, false, false, false);
+
+    [Fact]
     public void CompareWorkflow_SummaryMatchesSavedReport_WithoutRebenchmark()
     {
         using var temp = new TempDirectory();

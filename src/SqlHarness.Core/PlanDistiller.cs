@@ -31,6 +31,8 @@ public sealed record PlanNode(
     IReadOnlyList<PlanNode> Children);
 
 public sealed record MissingIndex(
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Database,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Schema,
     string Table,
     IReadOnlyList<string> EqualityColumns,
     IReadOnlyList<string> InequalityColumns,
@@ -132,7 +134,9 @@ public static class PlanDistiller
             .Elements(Showplan("MissingIndexes"))
             .Elements(Showplan("MissingIndexGroup"))
             .SelectMany(group => group.Elements(Showplan("MissingIndex")), (group, index) => new MissingIndex(
-                Attribute(index, "Table") ?? string.Empty,
+                Unbracket(Attribute(index, "Database")),
+                Unbracket(Attribute(index, "Schema")),
+                Unbracket(Attribute(index, "Table")) ?? string.Empty,
                 Columns(index, "EQUALITY"),
                 Columns(index, "INEQUALITY"),
                 Columns(index, "INCLUDE"),
@@ -143,7 +147,7 @@ public static class PlanDistiller
         index.Elements(Showplan("ColumnGroup"))
             .Where(group => string.Equals(Attribute(group, "Usage"), usage, StringComparison.OrdinalIgnoreCase))
             .SelectMany(group => group.Elements(Showplan("Column")))
-            .Select(column => Attribute(column, "Name"))
+            .Select(column => Unbracket(Attribute(column, "Name")))
             .Where(name => name is not null)
             .Cast<string>()
             .ToArray();
@@ -239,6 +243,11 @@ public static class PlanDistiller
 
     private static string? Attribute(XElement? element, string localName) =>
         element?.Attribute(localName)?.Value;
+
+    internal static string? Unbracket(string? name) =>
+        name is { Length: >= 2 } && name[0] == '[' && name[^1] == ']'
+            ? name[1..^1].Replace("]]", "]", StringComparison.Ordinal)
+            : name;
 
     private static bool IsUnqualified(XAttribute attribute) => attribute.Name.NamespaceName.Length == 0;
 

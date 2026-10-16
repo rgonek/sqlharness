@@ -26,7 +26,15 @@ Report execution status, result equivalence and performance verdict separately. 
 
 Before changing SQL, measure the baseline on representative cases: common and rare values, ordering ties, boundary dates and empty results. Keep dependent work sequential, benchmarks free of competing work and shared caches intact.
 
-Compare repeated measurements and variability on matching targets and conditions. Inspect plan details to explain measured results; validate proposed indexes against existing indexes and measurements. Label unmeasured proposals as hypotheses.
+Compare repeated measurements and variability on matching targets and conditions. Inspect plan details to explain measured results. On a SQL Server missing-index hint, follow `overlap.verdict` from the artifact `plan` section:
+
+- `covered`: do not propose a new index; look at why the plan did not use the existing one.
+- `include-gap`: extend the named index's INCLUDE.
+- `partial-key`: compare the hint with the named index before proposing a new one.
+- `new-shape`: treat a new index as a hypothesis and prove it with `compare` after approved DDL.
+- When `overlap` is absent: read `evidenceGaps`, then fall back to a scoped catalog `query`.
+
+Creating or altering an index is a persistent mutation and needs approval. Label every other unmeasured proposal as a hypothesis.
 
 ## Finish
 

@@ -371,7 +371,10 @@ public sealed class Renderer
         {
             RenderNode(statement.Root, 0, output);
             foreach (var index in statement.MissingIndexes)
-                output.WriteLine($"Missing index: {index.Table} — impact {index.Impact.ToString("0.##", CultureInfo.InvariantCulture)} — equality [{string.Join(", ", index.EqualityColumns)}] — inequality [{string.Join(", ", index.InequalityColumns)}] — include [{string.Join(", ", index.IncludeColumns)}]");
+            {
+                var table = index.Schema is { Length: > 0 } schema ? $"{schema}.{index.Table}" : index.Table;
+                output.WriteLine($"Missing index: {table} — impact {index.Impact.ToString("0.##", CultureInfo.InvariantCulture)} — equality [{string.Join(", ", index.EqualityColumns)}] — inequality [{string.Join(", ", index.InequalityColumns)}] — include [{string.Join(", ", index.IncludeColumns)}]");
+            }
         }
     }
     private static void RenderNode(PlanNode node, int depth, TextWriter output)

@@ -38,8 +38,9 @@ public static class StoredPlanReader
                     if (++count > MaximumElements || index.ValueKind != JsonValueKind.Object
                         || !TryGet(index, "table", out var table) || table.ValueKind != JsonValueKind.String)
                         throw new JsonException("Stored plan index is invalid.");
-                    indexes.Add(new MissingIndex(table.GetString()!, Strings(index, "equalityColumns"),
-                        Strings(index, "inequalityColumns"), Strings(index, "includeColumns"), Number(index, "impact") ?? 0));
+                    indexes.Add(new MissingIndex(String(index, "database"), String(index, "schema"), table.GetString()!,
+                        Strings(index, "equalityColumns"), Strings(index, "inequalityColumns"), Strings(index, "includeColumns"),
+                        Number(index, "impact") ?? 0));
                 }
             }
             result.Add(new PlanStatement(sql, ReadNode(node, 0, ref count), indexes));

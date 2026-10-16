@@ -780,6 +780,10 @@ public class SqlHarnessMeasureTests
         public IReadOnlyList<string> Messages => _messages;
         public SqlHarnessTargetIdentityReport Identity { get; set; } =
             new("test-server", "testdb-a", "test-server", "testdb-a", "profile");
+        public Func<string, string>? PlanForSql { get; set; }
+        public CancellationTokenSource? CancelInventory { get; set; }
+        public Exception? InventoryFailure { get; set; }
+        public IReadOnlyList<(string[] Names, object?[][] Rows)>? InventoryResults { get; set; }
 
         private FakeMeasureSession(
             bool changeLastResult,
@@ -851,6 +855,21 @@ public class SqlHarnessMeasureTests
                 return Task.FromResult<ISqlReader>(_includeSetupResult ? FakeReader.Single(["SetupValue"], ["setup-result-value"]) : FakeReader.Empty());
             }
 
+            // Not a measured repetition: no label and no query count.
+            if (string.Equals(command.Sql, IndexInventoryQuery.Sql, StringComparison.Ordinal))
+            {
+                if (CancelInventory is not null)
+                {
+                    CancelInventory.Cancel();
+                    return Task.FromException<ISqlReader>(new OperationCanceledException(ct));
+                }
+
+                if (InventoryFailure is not null)
+                    return Task.FromException<ISqlReader>(InventoryFailure);
+
+                return Task.FromResult<ISqlReader>(FakeReader.FromGrids(InventoryResults ?? []));
+            }
+
             if (_cancelOnQuery is not null)
             {
                 _cancelOnQuery.Cancel();
@@ -874,7 +893,7 @@ public class SqlHarnessMeasureTests
             object?[][] rows = Enumerable.Range(0, _resultRowCount)
                 .Select(index => new object?[] { value + index })
                 .ToArray();
-            return Task.FromResult<ISqlReader>(FakeReader.WithPlan(["Value"], rows, _plan));
+            return Task.FromResult<ISqlReader>(FakeReader.WithPlan(["Value"], rows, PlanForSql?.Invoke(command.Sql) ?? _plan));
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -883,10 +902,16 @@ public class SqlHarnessMeasureTests
     private sealed class FakeReader : ISqlReader
     {
         private readonly IReadOnlyList<Result> _results;
+        private readonly bool _sequential;
         private int _result;
         private int _row = -1;
+        private int _highestOrdinal = -1;
         private Result Current => _results[_result];
-        private FakeReader(IReadOnlyList<Result> results) => _results = results;
+        private FakeReader(IReadOnlyList<Result> results, bool sequential = false)
+        {
+            _results = results;
+            _sequential = sequential;
+        }
         public int FieldCount => _results.Count == 0 ? 0 : Current.Names.Length;
         public int RecordsAffected => -1;
         public static FakeReader Empty() => new([]);
@@ -894,13 +919,28 @@ public class SqlHarnessMeasureTests
         public static FakeReader WithPlan(string[] names, object?[] row, string plan) => WithPlan(names, [row], plan);
         public static FakeReader WithPlan(string[] names, object?[][] rows, string plan) =>
             new([new(names, rows), new(["Microsoft SQL Server 2005 XML Showplan"], [[plan]])]);
+        public static FakeReader FromGrids(IReadOnlyList<(string[] Names, object?[][] Rows)> grids) =>
+            new(grids.Select(grid => new Result(grid.Names, grid.Rows)).ToArray(), sequential: true);
         public string GetName(int ordinal) => Current.Names[ordinal];
         public Type GetFieldType(int ordinal) => Current.Rows[0][ordinal]?.GetType() ?? typeof(object);
         public bool GetAllowNull(int ordinal) => false;
-        public object GetValue(int ordinal) => Current.Rows[_row][ordinal] ?? DBNull.Value;
-        public Task<bool> ReadAsync(CancellationToken ct) => Task.FromResult(_results.Count > 0 && ++_row < Current.Rows.Length);
+        public object GetValue(int ordinal)
+        {
+            // Inventory grids match SqlClient SequentialAccess: a lower ordinal cannot be read again.
+            if (_sequential && ordinal <= _highestOrdinal)
+                throw new InvalidOperationException($"Invalid attempt to read from column ordinal '{ordinal}'.");
+
+            _highestOrdinal = ordinal;
+            return Current.Rows[_row][ordinal] ?? DBNull.Value;
+        }
+        public Task<bool> ReadAsync(CancellationToken ct)
+        {
+            _highestOrdinal = -1;
+            return Task.FromResult(_results.Count > 0 && ++_row < Current.Rows.Length);
+        }
         public Task<bool> NextResultAsync(CancellationToken ct)
         {
+            _highestOrdinal = -1;
             if (_results.Count == 0 || ++_result >= _results.Count)
                 return Task.FromResult(false);
             _row = -1;

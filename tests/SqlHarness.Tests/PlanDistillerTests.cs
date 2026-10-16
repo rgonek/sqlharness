@@ -47,16 +47,43 @@ public sealed class PlanDistillerTests
 
         var missing = Assert.Single(statement.MissingIndexes);
         Assert.Equal(87.5, missing.Impact);
-        Assert.Equal("[Orders]", missing.Table);
-        Assert.Equal(["[CustomerId]"], missing.EqualityColumns);
+        Assert.Equal("db", missing.Database);
+        Assert.Equal("dbo", missing.Schema);
+        Assert.Equal("Orders", missing.Table);
+        Assert.Equal(["CustomerId"], missing.EqualityColumns);
         Assert.Empty(missing.InequalityColumns);
-        Assert.Equal(["[OrderDate]"], missing.IncludeColumns);
+        Assert.Equal(["OrderDate"], missing.IncludeColumns);
 
         Assert.All(Flatten(statement.Root), node =>
         {
             Assert.NotNull(node.CostFraction);
             Assert.InRange(node.CostFraction!.Value, 0, 1);
         });
+    }
+
+    [Fact]
+    public void Missing_index_keeps_unbracketed_database_schema_table_and_columns()
+    {
+        var plan = PlanDistiller.Distill(ShowplanWithMissingIndex(
+            """<MissingIndex Database="[db]" Schema="[sales]" Table="[Order]]s]"><ColumnGroup Usage="EQUALITY"><Column Name="[CustomerId]" ColumnId="2" /></ColumnGroup><ColumnGroup Usage="INCLUDE"><Column Name="[Total]" ColumnId="5" /></ColumnGroup></MissingIndex>"""));
+
+        var hint = Assert.Single(plan.Statements[0].MissingIndexes);
+        Assert.Equal("db", hint.Database);
+        Assert.Equal("sales", hint.Schema);
+        Assert.Equal("Order]s", hint.Table);
+        Assert.Equal(["CustomerId"], hint.EqualityColumns);
+        Assert.Equal(["Total"], hint.IncludeColumns);
+    }
+
+    [Fact]
+    public void Missing_index_json_names_database_and_schema()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var json = JsonSerializer.Serialize(PlanDistiller.Distill(ShowplanWithMissingIndex(
+            """<MissingIndex Database="[db]" Schema="[dbo]" Table="[Orders]"><ColumnGroup Usage="EQUALITY"><Column Name="[CustomerId]" ColumnId="2" /></ColumnGroup></MissingIndex>""")), options);
+        Assert.Contains("\"database\":\"db\"", json);
+        Assert.Contains("\"schema\":\"dbo\"", json);
+        Assert.Contains("\"table\":\"Orders\"", json);
     }
 
     [Fact]
@@ -279,6 +306,18 @@ public sealed class PlanDistillerTests
 
     private static string Fixture(string name) =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", name));
+
+    private static string ShowplanWithMissingIndex(string missingIndexXml) =>
+        $"""
+        <ShowPlanXML xmlns="{ShowplanNamespace}">
+          <BatchSequence><Batch><Statements>
+            <StmtSimple><QueryPlan>
+              <MissingIndexes><MissingIndexGroup Impact="87.5">{missingIndexXml}</MissingIndexGroup></MissingIndexes>
+              <RelOp PhysicalOp="Scan" />
+            </QueryPlan></StmtSimple>
+          </Statements></Batch></BatchSequence>
+        </ShowPlanXML>
+        """;
 
     private static string MinimalPlan(string statementAttributes, string relOpAttributes, string content)
     {
