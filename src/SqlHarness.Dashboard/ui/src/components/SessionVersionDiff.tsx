@@ -30,7 +30,7 @@ function sideState(version: string, query: ReturnType<typeof useSessionSqlText>)
 export function SessionVersionDiff({ sessionId, engine, options }: {
   sessionId: number
   engine: string | null
-  options: { version: string; hash: string }[]
+  options: SqlVersionOption[]
 }) {
   const [fromSelection, setFromSelection] = useState<string | null>(() => keyOf(options[0]))
   const [toSelection, setToSelection] = useState<string | null>(() => keyOf(options.at(-1)))
@@ -84,12 +84,12 @@ export function SessionVersionDiff({ sessionId, engine, options }: {
     <div className="grid gap-3 sm:grid-cols-2">
       <label className="grid gap-1 text-sm">From version
         <select aria-label="From version" value={keyOf(fromOption) ?? ""} onChange={event => setFromSelection(event.target.value)}>
-          {options.map(option => <option key={keyOf(option)!} value={keyOf(option)!}>{option.version}</option>)}
+          {options.map(option => <option key={keyOf(option)!} value={keyOf(option)!}>{option.label ?? option.version}</option>)}
         </select>
       </label>
       <label className="grid gap-1 text-sm">To version
         <select aria-label="To version" value={keyOf(toOption) ?? ""} onChange={event => setToSelection(event.target.value)}>
-          {options.map(option => <option key={keyOf(option)!} value={keyOf(option)!}>{option.version}</option>)}
+          {options.map(option => <option key={keyOf(option)!} value={keyOf(option)!}>{option.label ?? option.version}</option>)}
         </select>
       </label>
     </div>

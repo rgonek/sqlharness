@@ -1,9 +1,16 @@
 import { screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { expect, test } from "vitest"
+import { expect, test, vi } from "vitest"
 import type { CompareAttemptSummary, CompareSubjectSummary } from "@/api/types"
 import { operation, operationDetail, session } from "@/test/fixtures"
 import { renderApp, stubFetch } from "@/test/render"
+
+vi.mock("@/components/SessionVersionDiff", () => ({
+  SessionVersionDiff: ({ options }: { options: { version: string; hash: string; label?: string }[] }) => <div>
+    <select aria-label="From version">{options.map(option => <option key={option.hash}>{option.label ?? option.version}</option>)}</select>
+    <select aria-label="To version">{options.map(option => <option key={option.hash}>{option.label ?? option.version}</option>)}</select>
+  </div>,
+}))
 
 const attempt = (over: Partial<CompareAttemptSummary> = {}): CompareAttemptSummary => ({
   operationId: 70, subject: "orders", scope: "whole", baselineHash: "a", candidateHash: "b",
@@ -14,6 +21,7 @@ const attempt = (over: Partial<CompareAttemptSummary> = {}): CompareAttemptSumma
 const subject = (over: Partial<CompareSubjectSummary> = {}): CompareSubjectSummary => ({
   subject: "orders", scopes: ["whole", "history"], latestWhole: attempt(), latestCompletedWhole: attempt(),
   startToLatestWhole: attempt({ baselineVersion: "v0", candidateVersion: "v2", startedAt: "2026-10-12T12:00:00Z" }),
+  scopeVersions: [],
   versionsFromRetainedHistory: true, ...over,
 })
 
@@ -54,7 +62,10 @@ test("groups subjects, scopes and chronological attempts while linking back to t
 
 test("offers a session SQL diff only when a scope has at least two distinct versions", async () => {
   const oneVersion = attempt({ operationId: 90, scope: "single", baselineVersion: "v4", candidateVersion: "v4", baselineHash: "same", candidateHash: "same" })
-  stubSession([subject({ scopes: ["whole", "single"] })], [
+  stubSession([subject({ scopes: ["whole", "single"], scopeVersions: [
+    { scope: "whole", versions: [{ version: "v0", hash: "hash0" }, { version: "v1", hash: "hash1" }, { version: "v3", hash: "hash3" }] },
+    { scope: "single", versions: [{ version: "v4", hash: "same" }] },
+  ] })], [
     attempt({ operationId: 91, scope: "whole", baselineVersion: "v0", candidateVersion: "v1", baselineHash: "hash0", candidateHash: "hash1" }),
     attempt({ operationId: 92, scope: "whole", baselineVersion: "v1", candidateVersion: "v3", baselineHash: "hash1", candidateHash: "hash3" }),
     oneVersion,
@@ -70,6 +81,45 @@ test("offers a session SQL diff only when a scope has at least two distinct vers
   const single = within(group).getByText("single", { selector: "summary" }).closest("details")!
   await userEvent.click(within(single).getByText("single", { selector: "summary" }))
   expect(within(single).queryByRole("button", { name: "Diff versions" })).not.toBeInTheDocument()
+})
+
+test("uses complete per-scope version inventory before compare-attempt pagination is loaded", async () => {
+  const loadedHistory = Array.from({ length: 100 }, (_, index) => attempt({
+    operationId: 100 - index, scope: "history", baselineVersion: "v0", candidateVersion: "v1",
+    baselineHash: "sha256:aaaa", candidateHash: "sha256:bbbb",
+  }))
+  stubFetch({
+    "/api/sessions/7": {
+      session: session({ id: 7, sessionKey: "mcp:test" }), operations: [],
+      compareSubjects: [subject({ scopes: ["whole", "history"], scopeVersions: [
+        { scope: "whole", versions: [
+          { version: "v0", hash: "sha256:00000000" }, { version: "v1", hash: "sha256:11111111" },
+          { version: "v2", hash: "sha256:22222222" }, { version: "v3", hash: "sha256:33333333" },
+        ] },
+        { scope: "history", versions: [{ version: "v0", hash: "sha256:aaaa" }, { version: "v1", hash: "sha256:bbbb" }] },
+      ] })], unassignedCompareCount: 0,
+    },
+    "/api/sessions/7/compares": { items: loadedHistory, nextCursor: 1 },
+    "/api/sessions/7/sql": (url: URL) => {
+      const hash = url.searchParams.get("hash")
+      return new Response(JSON.stringify({ hash, text: `SELECT '${hash}'`, tooLarge: false }), { status: 200 })
+    },
+  })
+  renderApp("/sessions/7")
+
+  const subjectGroup = (await screen.findByText("orders", { selector: "summary" })).closest("details")!
+  await userEvent.click(within(subjectGroup).getByText("orders", { selector: "summary" }))
+  const whole = within(subjectGroup).getByText("whole", { selector: "summary" }).closest("details")!
+  await userEvent.click(within(whole).getByText("whole", { selector: "summary" }))
+  await userEvent.click(within(whole).getByRole("button", { name: "Diff versions" }))
+
+  const from = within(whole).getByRole("combobox", { name: "From version" })
+  const to = within(whole).getByRole("combobox", { name: "To version" })
+  expect(from.querySelectorAll("option")).toHaveLength(4)
+  expect(Array.from((from as HTMLSelectElement).options, option => option.textContent)).toEqual(["v0", "v1", "v2", "v3"])
+  expect(Array.from((to as HTMLSelectElement).options, option => option.textContent)).toEqual(["v0", "v1", "v2", "v3"])
+  expect(screen.getByRole("button", { name: "Load more compare attempts" })).toBeInTheDocument()
+  expect(within(whole).getByText("No attempts loaded for this scope yet.")).toBeInTheDocument()
 })
 
 test("a failed latest completed whole compare never borrows an earlier pass", async () => {

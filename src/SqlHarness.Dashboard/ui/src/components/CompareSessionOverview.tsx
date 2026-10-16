@@ -38,31 +38,30 @@ function AttemptLink({ attempt, sessionId, returnUnassigned = false }: { attempt
   )
 }
 
-function ScopeOverview({ subject, scope, sessionId, engine, attempts, shouldOpen }: {
+function ScopeOverview({ subject, scope, sessionId, engine, attempts, versions, shouldOpen }: {
   subject: string
   scope: string
   sessionId: number
   engine: string | null
   attempts: CompareAttemptSummary[]
+  versions: { version: string; hash: string }[]
   shouldOpen: boolean
 }) {
   const [showDiff, setShowDiff] = useState(false)
-  const options = versionOptions(attempts, subject, scope)
+  const options = versionOptions(versions)
   const group = attempts.filter(item => item.subject === subject && item.scope === scope)
     .sort((left, right) => left.startedAt.localeCompare(right.startedAt) || left.operationId - right.operationId)
   return <details className="rounded-md border px-3" open={shouldOpen}>
     <summary className="cursor-pointer py-2">{scope}</summary>
-    {group.length ? <>
-      {options.length >= 2 && <div className="py-2">
+    {options.length >= 2 && <div className="py-2">
         <Button type="button" variant="outline" size="sm" aria-expanded={showDiff} onClick={() => setShowDiff(value => !value)}>
           {showDiff ? "Hide version diff" : "Diff versions"}
         </Button>
         {showDiff && <div className="mt-3"><SessionVersionDiff sessionId={sessionId} engine={engine} options={options} /></div>}
-      </div>}
-      <ol className="divide-y" aria-label={`${subject} ${scope} compare attempts`}>
+    </div>}
+    {group.length ? <ol className="divide-y" aria-label={`${subject} ${scope} compare attempts`}>
         {group.map(attempt => <AttemptLink key={attempt.operationId} attempt={attempt} sessionId={sessionId} />)}
-      </ol>
-    </> : <p className="pb-2 text-sm text-muted-foreground">No attempts loaded for this scope yet.</p>}
+    </ol> : <p className="pb-2 text-sm text-muted-foreground">No attempts loaded for this scope yet.</p>}
   </details>
 }
 
@@ -97,8 +96,9 @@ function SubjectOverview({ subject, sessionId, engine, attempts, returnSubject, 
           <p className="text-muted-foreground">SQL hashes define versions; no winning version is selected.</p>
         </div>
         {scopes.map(scope => {
+          const versions = subject.scopeVersions.find(item => item.scope === scope)?.versions ?? []
           return <ScopeOverview key={scope} subject={subject.subject} scope={scope} sessionId={sessionId} engine={engine}
-            attempts={attempts} shouldOpen={shouldOpen && returnScope === scope} />
+            attempts={attempts} versions={versions} shouldOpen={shouldOpen && returnScope === scope} />
         })}
       </div>
     </details>

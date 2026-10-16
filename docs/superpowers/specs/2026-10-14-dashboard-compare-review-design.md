@@ -65,6 +65,7 @@ Excluded: server and database names, vars, parameter values, setup SQL. Success 
 In `CompareSessionOverview` (062) each subject/scope group gets a **Diff** button:
 
 - Default pair: first SQL version (v0) vs latest in the group; two selects allow any pair (e.g. v0→v3).
+- Version choices come from the complete retained hash inventory in the session aggregate, independent of the paginated compare-attempt list; the inventory carries version labels and hashes only.
 - Text is fetched only for the two selected versions (no N+1). If 062 does not expose SQL by version, add a bounded endpoint for it.
 - Same editor component. No metrics or percentages across versions from different compares; metrics stay on each compare's page.
 

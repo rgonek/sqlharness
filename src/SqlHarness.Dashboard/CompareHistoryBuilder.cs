@@ -16,7 +16,11 @@ public sealed record CompareAttemptSummary(
 public sealed record CompareSubjectSummary(
     string Subject, IReadOnlyList<string> Scopes, CompareAttemptSummary? LatestWhole,
     CompareAttemptSummary? LatestCompletedWhole, CompareAttemptSummary? StartToLatestWhole,
-    bool VersionsFromRetainedHistory = true);
+    IReadOnlyList<CompareScopeVersions> ScopeVersions, bool VersionsFromRetainedHistory = true);
+
+public sealed record CompareScopeVersions(string Scope, IReadOnlyList<CompareSqlVersion> Versions);
+
+public sealed record CompareSqlVersion(string Version, string Hash);
 
 /// <summary>
 /// Assigns stable-in-retained-history version labels. The full input must be supplied before paging;
@@ -88,9 +92,25 @@ public static class CompareHistoryBuilder
                     .OrderBy(attempt => attempt.StartedAt, StringComparer.Ordinal).ThenBy(attempt => attempt.OperationId).ToArray();
                 var completed = whole.Where(attempt => attempt.Status is "succeeded" or "failed" or "rejected" or "abandoned").LastOrDefault();
                 var start = completed is { BaselineVersion: "v0" } ? completed : null;
+                var scopeVersions = group.GroupBy(attempt => attempt.Scope!, StringComparer.Ordinal)
+                    .OrderBy(scope => scope.Key, StringComparer.Ordinal)
+                    .Select(scope => new CompareScopeVersions(scope.Key, scope.SelectMany(attempt => new[]
+                        {
+                            (Version: attempt.BaselineVersion, Hash: attempt.BaselineHash),
+                            (Version: attempt.CandidateVersion, Hash: attempt.CandidateHash),
+                        })
+                        .Where(version => version.Version is not null && version.Hash is not null)
+                        .Select(version => new CompareSqlVersion(version.Version!, version.Hash!))
+                        .DistinctBy(version => (version.Version, version.Hash))
+                        .OrderBy(version => NumericVersion(version.Version)).ThenBy(version => version.Version, StringComparer.Ordinal)
+                        .ThenBy(version => version.Hash, StringComparer.Ordinal).ToArray()))
+                    .ToArray();
                 return new CompareSubjectSummary(group.Key,
                     group.Select(attempt => attempt.Scope!).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
-                    whole.LastOrDefault(), completed, start);
+                    whole.LastOrDefault(), completed, start, scopeVersions);
             }).ToArray();
     }
+
+    private static long NumericVersion(string version) =>
+        version.Length > 1 && version[0] == 'v' && long.TryParse(version.AsSpan(1), out var value) ? value : long.MaxValue;
 }

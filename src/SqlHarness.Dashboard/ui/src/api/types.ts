@@ -104,7 +104,18 @@ export type CompareSubjectSummary = {
   latestWhole: CompareAttemptSummary | null
   latestCompletedWhole: CompareAttemptSummary | null
   startToLatestWhole: CompareAttemptSummary | null
+  scopeVersions: CompareScopeVersions[]
   versionsFromRetainedHistory: boolean
+}
+
+export type CompareScopeVersions = {
+  scope: string
+  versions: CompareSqlVersion[]
+}
+
+export type CompareSqlVersion = {
+  version: string
+  hash: string
 }
 
 export type SessionDetail = {

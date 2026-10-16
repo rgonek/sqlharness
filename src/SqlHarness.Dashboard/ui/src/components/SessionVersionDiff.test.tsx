@@ -27,15 +27,22 @@ const hash1 = `sha256:${"1".repeat(64)}`
 const hash3 = `sha256:${"3".repeat(64)}`
 const options = [{ version: "v0", hash: hash0 }, { version: "v1", hash: hash1 }, { version: "v3", hash: hash3 }]
 
-test("builds distinct hash-backed versions in numeric order for only the selected scope", () => {
-  const rows = [
-    { subject: "orders", scope: "whole", baselineVersion: "v10", baselineHash: "h10", candidateVersion: "v11", candidateHash: "h11" },
-    { subject: "orders", scope: "whole", baselineVersion: "v1", baselineHash: "h1", candidateVersion: "v10", candidateHash: "h10" },
-    { subject: "orders", scope: "history", baselineVersion: "v0", baselineHash: "elsewhere", candidateVersion: "v2", candidateHash: "elsewhere2" },
-  ] as never[]
-  expect(versionOptions(rows, "orders", "whole")).toEqual([
+test("builds distinct hash-backed versions in numeric order", () => {
+  const versions = [
+    { version: "v10", hash: "h10" }, { version: "v11", hash: "h11" },
+    { version: "v1", hash: "h1" }, { version: "v10", hash: "h10" },
+  ]
+  expect(versionOptions(versions)).toEqual([
     { version: "v1", hash: "h1" }, { version: "v10", hash: "h10" }, { version: "v11", hash: "h11" },
   ])
+})
+
+test("adds hash suffixes when retained versions share a label", () => {
+  const labeled = versionOptions([{ version: "v2", hash: "sha256:aaaaaaaa" }, { version: "v2", hash: "sha256:bbbbbbbb" }])
+  renderDiff(labeled)
+
+  expect(screen.getAllByRole("option", { name: "v2 (aaaaaaaa)" })).toHaveLength(2)
+  expect(screen.getAllByRole("option", { name: "v2 (bbbbbbbb)" })).toHaveLength(2)
 })
 
 test("defaults to retained endpoints, fetches each selected hash, and keeps mode keyboard accessible", async () => {

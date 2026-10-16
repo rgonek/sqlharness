@@ -1,17 +1,11 @@
-import type { CompareAttemptSummary, VariantDetail } from "@/api/types"
+import type { VariantDetail } from "@/api/types"
 import { formatPercent } from "@/lib/format"
 
-export type SqlVersionOption = { version: string; hash: string }
+export type SqlVersionOption = { version: string; hash: string; label?: string }
 
-export function versionOptions(attempts: CompareAttemptSummary[], subject: string, scope: string): SqlVersionOption[] {
+export function versionOptions(versions: SqlVersionOption[]): SqlVersionOption[] {
   const options = new Map<string, SqlVersionOption>()
-  for (const attempt of attempts) {
-    if (attempt.subject !== subject || attempt.scope !== scope) continue
-    for (const [version, hash] of [[attempt.baselineVersion, attempt.baselineHash], [attempt.candidateVersion, attempt.candidateHash]] as const) {
-      if (!version || !hash) continue
-      options.set(JSON.stringify([version, hash]), { version, hash })
-    }
-  }
+  for (const option of versions) options.set(JSON.stringify([option.version, option.hash]), { version: option.version, hash: option.hash })
   return [...options.values()].sort((left, right) => {
     const leftNumber = /^v(\d+)$/.exec(left.version)?.[1]
     const rightNumber = /^v(\d+)$/.exec(right.version)?.[1]
@@ -21,7 +15,12 @@ export function versionOptions(attempts: CompareAttemptSummary[], subject: strin
     } else if (leftNumber !== undefined) return -1
     else if (rightNumber !== undefined) return 1
     return left.version.localeCompare(right.version) || left.hash.localeCompare(right.hash)
-  })
+  }).map(option => ({
+    ...option,
+    ...(versions.some(candidate => candidate.version === option.version && candidate.hash !== option.hash)
+      ? { label: `${option.version} (${option.hash.slice(-8)})` }
+      : {}),
+  }))
 }
 
 export function variantLabel(variant: VariantDetail): string {

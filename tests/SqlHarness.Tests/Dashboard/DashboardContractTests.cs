@@ -46,8 +46,10 @@ public sealed class DashboardContractTests
         Assert.Equal(["operationId", "subject", "scope", "baselineHash", "candidateHash", "baselineVersion",
                 "candidateVersion", "status", "startedAt", "regression", "cases", "conditions", "summary"],
             Names(new CompareAttemptSummary(1, "orders", "whole", null, null, null, null, "running", "t", null, null, null, null)));
-        Assert.Equal(["subject", "scopes", "latestWhole", "latestCompletedWhole", "startToLatestWhole", "versionsFromRetainedHistory"],
-            Names(new CompareSubjectSummary("orders", [], null, null, null)));
+        Assert.Equal(["subject", "scopes", "latestWhole", "latestCompletedWhole", "startToLatestWhole", "scopeVersions", "versionsFromRetainedHistory"],
+            Names(new CompareSubjectSummary("orders", [], null, null, null, [])));
+        Assert.Equal(["scope", "versions"], Names(new CompareScopeVersions("whole", [])));
+        Assert.Equal(["version", "hash"], Names(new CompareSqlVersion("v0", "h0")));
     }
 
     [Fact]
@@ -119,10 +121,12 @@ public sealed class DashboardContractTests
     {
         var session = new SessionSummary(1, "k", "claude", "cli", "process-tree", null, null, null, null, "f", "l", 0, 0, 0, 0, 0, null, null, null, null, false, false, null);
         var attempt = new CompareAttemptSummary(1, "orders", "whole", "a", "b", "v0", "v1", "succeeded", "t", null, [], null, null);
-        var subject = new CompareSubjectSummary("orders", ["whole"], attempt, attempt, attempt);
+        var subject = new CompareSubjectSummary("orders", ["whole"], attempt, attempt, attempt, []);
 
         AssertTypescriptFieldsMatch("CompareAttemptSummary", attempt);
         AssertTypescriptFieldsMatch("CompareSubjectSummary", subject);
+        AssertTypescriptFieldsMatch("CompareScopeVersions", new CompareScopeVersions("whole", []));
+        AssertTypescriptFieldsMatch("CompareSqlVersion", new CompareSqlVersion("v0", "a"));
         AssertTypescriptFieldsMatch("SessionDetail", new SessionDetail(session, [], [subject], 0, null, []));
         AssertTypescriptFieldsMatch("OperationDetail", new OperationDetail(default!, session, null, null, null, null,
             null, null, null, null, [], default!, null, Phases: [], Events: []));

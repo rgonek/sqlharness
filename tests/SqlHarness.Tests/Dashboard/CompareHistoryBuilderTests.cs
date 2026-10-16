@@ -84,6 +84,27 @@ public sealed class CompareHistoryBuilderTests
         Assert.True(subject.VersionsFromRetainedHistory);
     }
 
+    [Fact]
+    public void Subject_summary_includes_complete_hash_versions_for_each_scope()
+    {
+        var attempts = CompareHistoryBuilder.Build([
+            Row(1, 1, "orders", "whole", "h0", "h1", startedAt: "2026-01-01T00:00:00Z"),
+            Row(2, 1, "orders", "history", "h4", "h5", startedAt: "2026-01-02T00:00:00Z"),
+            Row(3, 1, "orders", "whole", "h1", "h2", startedAt: "2026-01-03T00:00:00Z"),
+            Row(4, 1, "orders", "whole", "h2", "h3", startedAt: "2026-01-04T00:00:00Z"),
+        ]);
+
+        var subject = Assert.Single(CompareHistoryBuilder.Subjects(attempts));
+
+        Assert.Equal(["history", "whole"], subject.Scopes);
+        Assert.Equal([("v0", "h0"), ("v1", "h1"), ("v2", "h2"), ("v3", "h3")],
+            subject.ScopeVersions.Single(scope => scope.Scope == "whole").Versions
+                .Select(version => (version.Version, version.Hash)));
+        Assert.Equal([("v0", "h4"), ("v1", "h5")],
+            subject.ScopeVersions.Single(scope => scope.Scope == "history").Versions
+                .Select(version => (version.Version, version.Hash)));
+    }
+
     [Theory]
     [InlineData("rejected")]
     [InlineData("abandoned")]

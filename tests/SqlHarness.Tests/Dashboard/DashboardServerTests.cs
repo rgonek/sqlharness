@@ -427,6 +427,12 @@ public sealed class DashboardServerTests
         await using var dashboard = await StartAuthenticated(home);
         var (_, client) = dashboard;
 
+        using var sessionDetail = JsonDocument.Parse(await client.GetStringAsync($"/api/sessions/{id}"));
+        var wholeVersions = sessionDetail.RootElement.GetProperty("compareSubjects")[0]
+            .GetProperty("scopeVersions")[0].GetProperty("versions");
+        Assert.Equal(["v0", "v1", "v2"], wholeVersions.EnumerateArray()
+            .Select(version => version.GetProperty("version").GetString()!).ToArray());
+
         using var first = JsonDocument.Parse(await client.GetStringAsync($"/api/sessions/{id}/compares?limit=1"));
         var firstAttempt = first.RootElement.GetProperty("items")[0];
         var cursor = first.RootElement.GetProperty("nextCursor").GetInt64();
