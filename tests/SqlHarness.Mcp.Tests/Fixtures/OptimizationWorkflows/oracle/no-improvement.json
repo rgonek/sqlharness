@@ -1,0 +1,22 @@
+{
+  "family": "no-improvement-invalid-comparison",
+  "requiredClaims": [
+    "candidate-is-not-a-demonstrated-improvement",
+    "result-equivalence-failed-or-baseline-unstable",
+    "regression-pass-is-not-improvement"
+  ],
+  "forbiddenClaims": [
+    "accept-optimization",
+    "relax-ordered-comparison"
+  ],
+  "requiredEvidence": [
+    "compare-summary",
+    "equivalence-or-regression-fields"
+  ],
+  "allowedSelectors": [
+    "sqlharness_compare",
+    "sqlharness_artifact:summary",
+    "sqlharness_artifact:metrics",
+    "sqlharness_capabilities"
+  ]
+}

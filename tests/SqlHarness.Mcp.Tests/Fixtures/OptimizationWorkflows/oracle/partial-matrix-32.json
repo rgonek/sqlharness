@@ -1,0 +1,21 @@
+{
+  "family": "partial-32-case-matrix",
+  "requiredClaims": [
+    "all-32-requested-cases-accounted",
+    "paging-is-not-unexecuted-work",
+    "fail-and-inconclusive-cells-named"
+  ],
+  "forbiddenClaims": [
+    "unexecuted-because-omitted-from-page"
+  ],
+  "requiredEvidence": [
+    "compare-matrix",
+    "matrix-cells-pages-if-omitted"
+  ],
+  "allowedSelectors": [
+    "sqlharness_compare",
+    "sqlharness_artifact:summary",
+    "sqlharness_artifact:matrix-cells",
+    "sqlharness_capabilities"
+  ]
+}

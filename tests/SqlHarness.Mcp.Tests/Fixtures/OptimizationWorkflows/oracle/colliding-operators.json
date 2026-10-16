@@ -1,0 +1,22 @@
+{
+  "family": "colliding-operator-ids",
+  "requiredClaims": [
+    "node-id-is-local-to-one-statement",
+    "warning-side-identified-from-saved-plan"
+  ],
+  "forbiddenClaims": [
+    "false-exact-link-from-node-id-alone"
+  ],
+  "requiredEvidence": [
+    "compare-summary",
+    "artifact-plan-for-warned-statement"
+  ],
+  "allowedSelectors": [
+    "sqlharness_compare",
+    "sqlharness_artifact:summary",
+    "sqlharness_artifact:operators",
+    "sqlharness_artifact:plan",
+    "sqlharness_plan",
+    "sqlharness_capabilities"
+  ]
+}
