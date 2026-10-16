@@ -4,12 +4,15 @@ namespace SqlHarness.Tests;
 
 public sealed class GateParityTests
 {
-    private static readonly string[] ExpectedVerbs = ["restore", "build", "test", "format"];
+    // `dotnet build` restores implicitly, so there is no separate restore verb to keep
+    // in step between the gates. `VerbGroup` below still lists it so the extractor can
+    // find a restore command if one is ever added back and the expectations catch it.
+    private static readonly string[] ExpectedVerbs = ["build", "test", "format"];
 
     [Theory]
     [InlineData("scripts/verify.ps1")]
     [InlineData("scripts/verify-linux.ps1")]
-    public void Every_local_gate_runs_the_same_four_stages_in_the_same_order(string path)
+    public void Every_local_gate_runs_the_same_three_dotnet_stages_in_the_same_order(string path)
     {
         var verbs = StageVerbs(File.ReadAllText(RepositoryFile.Locate(path.Split('/'))));
 
@@ -24,7 +27,11 @@ public sealed class GateParityTests
         var content = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
 
         Assert.Contains("-warnaserror", StageCommand(content, "build"), StringComparison.Ordinal);
-        Assert.Contains("--no-restore", StageCommand(content, "build"), StringComparison.Ordinal);
+        // Neither gate may pass --no-restore: build restores implicitly, and a gate that
+        // skipped the restore would fail on an unbuilt tree rather than restore. This
+        // keeps the two gates agreeing on that, which the deleted identical-restore
+        // comparison used to do.
+        Assert.DoesNotContain("--no-restore", StageCommand(content, "build"), StringComparison.Ordinal);
         Assert.Contains("--verify-no-changes", StageCommand(content, "format"), StringComparison.Ordinal);
         Assert.Contains("SqlHarness.sln", StageCommand(content, "format"), StringComparison.Ordinal);
     }
@@ -63,21 +70,26 @@ public sealed class GateParityTests
     }
 
     [Fact]
-    public void The_two_gates_have_identical_restore_commands()
-    {
-        var windows = StageCommand(File.ReadAllText(RepositoryFile.Locate("scripts", "verify.ps1")), "restore");
-        var linux = StageCommand(File.ReadAllText(RepositoryFile.Locate("scripts", "verify-linux.ps1")), "restore");
-
-        Assert.Equal(windows, linux);
-    }
-
-    [Fact]
     public void The_two_gates_have_identical_build_commands()
     {
         var windows = StageCommand(File.ReadAllText(RepositoryFile.Locate("scripts", "verify.ps1")), "build");
         var linux = StageCommand(File.ReadAllText(RepositoryFile.Locate("scripts", "verify-linux.ps1")), "build");
 
         Assert.Equal(windows, linux);
+    }
+
+    [Fact]
+    public void Neither_local_gate_runs_a_standalone_restore_stage()
+    {
+        // dotnet build restores implicitly and performs the same restore, so a separate
+        // restore stage is duplicated work. This replaces the deleted identical-restore
+        // comparison with a stronger claim than it made.
+        foreach (var path in new[] { "scripts/verify.ps1", "scripts/verify-linux.ps1" })
+        {
+            var content = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
+
+            Assert.DoesNotContain("dotnet restore", content, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -232,10 +244,8 @@ public sealed class GateParityTests
         var windows = File.ReadAllText(RepositoryFile.Locate("scripts", "verify.ps1"));
         var linux = File.ReadAllText(RepositoryFile.Locate("scripts", "verify-linux.ps1"));
 
-        Assert.Equal("dotnet restore SqlHarness.sln", StageCommand(windows, "restore"));
-        Assert.Equal("dotnet restore SqlHarness.sln", StageCommand(linux, "restore"));
-        Assert.Equal("dotnet build SqlHarness.sln --no-restore -warnaserror", StageCommand(windows, "build"));
-        Assert.Equal("dotnet build SqlHarness.sln --no-restore -warnaserror", StageCommand(linux, "build"));
+        Assert.Equal("dotnet build SqlHarness.sln -warnaserror", StageCommand(windows, "build"));
+        Assert.Equal("dotnet build SqlHarness.sln -warnaserror", StageCommand(linux, "build"));
         Assert.Equal("dotnet test SqlHarness.sln --no-build --filter \"FullyQualifiedName!~Integration\"", StageCommand(windows, "test"));
         Assert.Equal("dotnet test SqlHarness.sln --no-build --filter \"FullyQualifiedName!~Integration\" --logger \"console;verbosity=normal\"", StageCommand(linux, "test"));
         Assert.Equal("dotnet format SqlHarness.sln --no-restore --include $changedFiles --verify-no-changes", FormatShape(StageCommand(windows, "format")));
@@ -331,10 +341,26 @@ public sealed class GateParityTests
         Assert.Contains("GitHub Actions", verification, StringComparison.Ordinal);
     }
 
-    private static readonly string[] UiCommands =
-    [
-        "npm run check --prefix src/SqlHarness.Dashboard/ui",
-    ];
+    private const string UiCheckCommand = "npm run check --prefix src/SqlHarness.Dashboard/ui";
+
+    // The Windows gate starts the UI check as a background process, so the command
+    // arrives as a FilePath plus an argument vector instead of one literal line. Both
+    // spellings name the same check against the same directory, so the assertion is
+    // equally strong either way; only the surface form differs. Returns the position
+    // of the anchor so the caller can still pin the order, or -1 when the gate never
+    // names the check at all.
+    private static int UiCheckIndex(string path, string content)
+    {
+        if (path != "scripts/verify.ps1")
+        {
+            return content.IndexOf(UiCheckCommand, StringComparison.Ordinal);
+        }
+
+        var filePath = content.IndexOf("-FilePath 'npm'", StringComparison.Ordinal);
+        if (filePath < 0) { return -1; }
+        var argumentList = content.IndexOf("@('run', 'check', '--prefix', 'src/SqlHarness.Dashboard/ui')", StringComparison.Ordinal);
+        return argumentList < 0 ? -1 : Math.Min(filePath, argumentList);
+    }
 
     // The Windows gate installs through scripts/ui-install.ps1, the Linux gate with
     // its own stamp logic in bash, CI with a plain npm ci.
@@ -349,23 +375,23 @@ public sealed class GateParityTests
     [InlineData("scripts/verify.ps1")]
     [InlineData("scripts/verify-linux.ps1")]
     [InlineData(".github/workflows/ci.yml")]
-    public void Every_gate_installs_and_checks_the_ui_before_restore(string path)
+    public void Every_gate_installs_and_checks_the_ui_before_the_dotnet_build(string path)
     {
+        // dotnet build is the first .NET stage in every gate, so "before the build" is
+        // the earliest .NET work a gate can do; the UI must be installed and checked by
+        // then or the gate pays for the UI twice.
         var content = File.ReadAllText(RepositoryFile.Locate(path.Split('/')));
-        var restore = content.IndexOf("dotnet restore", StringComparison.Ordinal);
+        var build = content.IndexOf("dotnet build", StringComparison.Ordinal);
+        var uiCheck = UiCheckIndex(path, content);
 
-        Assert.True(restore > 0, "the gate must restore");
+        Assert.True(build > 0, "the gate must build");
         var install = UiInstallMarker(path);
         var installIndex = content.IndexOf(install, StringComparison.Ordinal);
 
         Assert.True(installIndex >= 0, $"{path} must install the UI with '{install}'");
-        Assert.True(installIndex < restore, $"{path} must install the UI before dotnet restore");
-        foreach (var command in UiCommands)
-        {
-            var index = content.IndexOf(command, StringComparison.Ordinal);
-            Assert.True(index >= 0, $"{path} must run '{command}'");
-            Assert.True(index < restore, $"{path} must run '{command}' before dotnet restore");
-        }
+        Assert.True(installIndex < build, $"{path} must install the UI before dotnet build");
+        Assert.True(uiCheck >= 0, $"{path} must run '{UiCheckCommand}'");
+        Assert.True(uiCheck < build, $"{path} must check the UI before dotnet build");
     }
 
     [Fact]

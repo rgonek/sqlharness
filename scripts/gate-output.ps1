@@ -129,6 +129,127 @@ function Invoke-GateStage {
     }
 }
 
+# Keyed by process id, and only ever written by Start-BackgroundGateStage. The reads
+# have to be in flight before the caller starts the stage it is overlapping, so they
+# cannot be reconstructed from the process alone at join time.
+$script:BackgroundGateStages = @{}
+
+function Resolve-GateStageExecutable {
+    param([Parameter(Mandatory)][string]$FilePath)
+
+    # Process.Start applies no PATHEXT: 'npm' does not resolve the way `npm run` does in
+    # PowerShell, and the bare name is not something CreateProcess can launch. Only a
+    # real executable path is accepted, so a stage that cannot start fails loudly.
+    if (Test-Path -LiteralPath $FilePath -PathType Leaf) {
+        return (Resolve-Path -LiteralPath $FilePath).ProviderPath
+    }
+
+    $launchable = @('.exe', '.com', '.cmd', '.bat')
+    $command = Get-Command -Name $FilePath -CommandType Application -ErrorAction SilentlyContinue |
+        Where-Object { $launchable -contains [System.IO.Path]::GetExtension($_.Source) } |
+        Select-Object -First 1
+    if ($command) { return $command.Source }
+
+    throw "'$FilePath' could not be resolved to an executable on PATH. A stage that cannot start must never look green."
+}
+
+function Start-BackgroundGateStage {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$LogDirectory,
+        [Parameter(Mandatory)][string]$FilePath,
+        [string[]]$Arguments = @(),
+        [string]$WorkingDirectory
+    )
+
+    # The command is a native executable rather than a scriptblock because the only
+    # overlapped stage is `npm run check`: a scriptblock would make the caller capture
+    # and redirect its own output, which is the part that has to be shared.
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = Resolve-GateStageExecutable -FilePath $FilePath
+    foreach ($argument in $Arguments) { $null = $startInfo.ArgumentList.Add($argument) }
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    if ($WorkingDirectory) { $startInfo.WorkingDirectory = $WorkingDirectory }
+
+    $process = [System.Diagnostics.Process]::Start($startInfo)
+    if ($null -eq $process) {
+        throw "'$FilePath' could not be started. A stage that cannot start must never look green."
+    }
+
+    # Both reads start here, before the caller runs anything else. Reading one to the
+    # end before the other deadlocks as soon as the second pipe buffer fills, which hung
+    # the UI check stage for 38 minutes; Complete- only collects what these two have
+    # already gathered.
+    $script:BackgroundGateStages[$process.Id] = [pscustomobject]@{
+        Stopwatch      = [System.Diagnostics.Stopwatch]::StartNew()
+        StandardOutput = $process.StandardOutput.ReadToEndAsync()
+        StandardError  = $process.StandardError.ReadToEndAsync()
+    }
+
+    return $process
+}
+
+function Complete-BackgroundGateStage {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$LogDirectory,
+        [Parameter(Mandatory)][System.Diagnostics.Process]$Process,
+
+        # Replay the stage's output the way -Stream does for a foreground stage.
+        [switch]$Stream
+    )
+
+    $state = $null
+    if ($null -ne $script:BackgroundGateStages -and $script:BackgroundGateStages.ContainsKey($Process.Id)) {
+        $state = $script:BackgroundGateStages[$Process.Id]
+        $script:BackgroundGateStages.Remove($Process.Id)
+    }
+    if ($null -eq $state) {
+        # Joining a process Start- never returned would write an empty log and report
+        # green for a stage that never ran.
+        throw "'$Name' was completed with a process Start-BackgroundGateStage did not return. A stage that never started must never look green."
+    }
+
+    $Process.WaitForExit()
+    $stdout = $state.StandardOutput.GetAwaiter().GetResult()
+    $stderr = $state.StandardError.GetAwaiter().GetResult()
+    $state.Stopwatch.Stop()
+
+    if (-not (Test-Path -LiteralPath $LogDirectory)) {
+        New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
+    }
+    $logPath = Join-Path $LogDirectory ("$Name.log")
+
+    $capturedOutput = [System.Collections.Generic.List[string]]::new()
+    if (-not [string]::IsNullOrEmpty($stdout)) { $stdout.TrimEnd("`r", "`n") -split "`r?`n" | ForEach-Object { $capturedOutput.Add($_) } }
+    if (-not [string]::IsNullOrEmpty($stderr)) { $stderr.TrimEnd("`r", "`n") -split "`r?`n" | ForEach-Object { $capturedOutput.Add($_) } }
+    Set-Content -LiteralPath $logPath -Value $capturedOutput
+
+    $result = [pscustomobject]@{
+        Name       = $Name
+        ExitCode   = [int]$Process.ExitCode
+        Seconds    = [Math]::Round($state.Stopwatch.Elapsed.TotalSeconds, 1)
+        LogPath    = $logPath
+        Skipped    = $false
+        SkipReason = $null
+    }
+
+    # The same one line and the same failure tail a foreground stage prints, so an
+    # overlapped stage is indistinguishable in the transcript from one that ran alone.
+    Write-Host (Get-StageLine -Result $result)
+    if ($Stream) { Get-Content -LiteralPath $logPath | ForEach-Object { Write-Host $_ } }
+    if ($result.ExitCode -ne 0) {
+        $failure = Get-StageFailureText -Result $result -TailLines 40
+        if ($failure) { Write-Host $failure }
+    }
+
+    return $result
+}
+
 function Format-Duration {
     param([Parameter(Mandatory)][double]$Seconds)
 

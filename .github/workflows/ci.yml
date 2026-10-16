@@ -36,8 +36,7 @@ jobs:
           cache-dependency-path: src/SqlHarness.Dashboard/ui/package-lock.json
       - run: npm ci --prefix src/SqlHarness.Dashboard/ui
       - run: npm run check --prefix src/SqlHarness.Dashboard/ui
-      - run: dotnet restore
-      - run: dotnet build --no-restore -warnaserror
+      - run: dotnet build -warnaserror
       - run: dotnet test --no-build --filter "FullyQualifiedName!~Integration" --logger trx --results-directory TestResults
       - uses: actions/upload-artifact@v4
         if: always()

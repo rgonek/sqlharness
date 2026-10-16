@@ -198,3 +198,80 @@ Describe 'gate-output.ps1' {
             }) -TailLines 40 | Should BeNullOrEmpty
     }
 }
+
+Describe 'gate-output.ps1 background stages' {
+    $logDir = $null
+
+    BeforeEach {
+        $logDir = New-TempDirectory -Prefix 'sqlharness-gate-bg-'
+    }
+
+    AfterEach {
+        if ($logDir -and (Test-Path $logDir)) {
+            Remove-Item -Recurse -Force $logDir -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'returns a running process from Start and finishes it in Complete' {
+        $process = Start-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -FilePath $env:ComSpec -Arguments @('/c', 'echo background-line')
+
+        $process | Should Not BeNullOrEmpty
+        $result = Complete-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -Process $process
+
+        $result.ExitCode | Should Be 0
+        $result.Name | Should Be 'ui-check'
+        $result.LogPath | Should Be (Join-Path $logDir 'ui-check.log')
+        (Get-Content -Raw -LiteralPath $result.LogPath) | Should Match 'background-line'
+    }
+
+    It 'reports a background stage with the same one-line summary a foreground stage gets' {
+        $process = Start-BackgroundGateStage -Name 'build' -LogDirectory $logDir -FilePath $env:ComSpec -Arguments @('/c', 'exit 0')
+        $result = Complete-BackgroundGateStage -Name 'build' -LogDirectory $logDir -Process $process
+        $line = Get-StageLine -Result $result
+
+        $line | Should Match '==> build ok'
+        $line | Should Match '\d+(\.\d+)?s'
+    }
+
+    It 'returns the failing exit code and names the stage on failure' {
+        $process = Start-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -FilePath $env:ComSpec -Arguments @('/c', 'echo boom 1>&2 & exit 4')
+        $result = Complete-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -Process $process
+
+        $result.ExitCode | Should Be 4
+        (Get-StageLine -Result $result) | Should Match '==> ui-check FAILED'
+        (Get-StageFailureText -Result $result -TailLines 5) | Should Match 'boom'
+    }
+
+    It 'drains a background stage that floods standard error while writing to standard output' {
+        # Both pipes must be drained from the moment the process starts. Waiting first
+        # and reading after deadlocks as soon as the stderr buffer fills, which hung the
+        # UI check stage for 38 minutes in the foreground path.
+        $process = Start-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -FilePath $env:ComSpec -Arguments @('/c', 'for /L %i in (1,1,20000) do @echo stderr-line-%i 1>&2 & echo stdout-line')
+        $result = Complete-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -Process $process
+
+        $log = Get-Content -Raw -LiteralPath $result.LogPath
+        $log | Should Match 'stdout-line'
+        ([regex]::Matches($log, 'stderr-line-').Count) | Should BeGreaterThan 19990
+    }
+
+    It 'reports a process the gate cannot start instead of a green stage' {
+        $threw = $false
+        try { $null = Start-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -FilePath 'sqlharness-no-such-command-9f3a.exe' -Arguments @() }
+        catch { $threw = $true }
+
+        $threw | Should Be $true
+    }
+
+    It 'refuses to complete a process it never started' {
+        # Completing a process with no pending read tasks would write an empty log and
+        # report green for a stage that never ran.
+        $threw = $false
+        try {
+            $foreign = Start-Process -FilePath $env:ComSpec -ArgumentList '/c', 'exit 0' -PassThru
+            $null = Complete-BackgroundGateStage -Name 'ui-check' -LogDirectory $logDir -Process $foreign
+        }
+        catch { $threw = $true }
+
+        $threw | Should Be $true
+    }
+}

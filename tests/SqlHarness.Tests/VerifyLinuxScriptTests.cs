@@ -7,13 +7,13 @@ public sealed class VerifyLinuxScriptTests
     private static string Script() => File.ReadAllText(RepositoryFile.Locate("scripts", "verify-linux.ps1"));
 
     [Fact]
-    public void Linux_gate_runs_the_four_ci_stages_in_order()
+    public void Linux_gate_runs_the_three_ci_stages_in_order()
     {
         var stages = Regex.Matches(Script(), @"\bdotnet\s+(restore|build|test|format)\b")
             .Select(match => match.Groups[1].Value)
             .ToArray();
 
-        Assert.Equal(["restore", "build", "test", "format"], stages);
+        Assert.Equal(["build", "test", "format"], stages);
     }
 
     [Fact]
@@ -21,8 +21,8 @@ public sealed class VerifyLinuxScriptTests
     {
         var script = Script();
 
-        Assert.Contains("dotnet restore SqlHarness.sln", script, StringComparison.Ordinal);
-        Assert.Contains("dotnet build SqlHarness.sln --no-restore -warnaserror", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("dotnet restore", script, StringComparison.Ordinal);
+        Assert.Contains("dotnet build SqlHarness.sln -warnaserror", script, StringComparison.Ordinal);
         Assert.Contains(
             "dotnet test SqlHarness.sln --no-build --filter \"FullyQualifiedName!~Integration\"",
             script,

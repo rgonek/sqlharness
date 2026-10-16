@@ -6,9 +6,10 @@
 .DESCRIPTION
     Syncs the current branch into the disposable gate clone created by
     scripts/setup-linux-gate.ps1, checks that the provisioned Node matches
-    .nvmrc, installs and checks the dashboard UI, then runs the same four .NET
-    stages CI runs: restore, build -warnaserror, test, and format
-    --verify-no-changes.
+    .nvmrc, installs the dashboard UI, then runs the same three .NET stages CI
+    runs: build -warnaserror (which restores implicitly), test, and format
+    --verify-no-changes. The UI check runs beside the build inside the build
+    stage, so the stage lines here stay sequential.
 
     The gate clone is reset to the branch tip, so the format stage checks the
     C# files the branch changed relative to origin/main, not the working tree:
@@ -230,19 +231,28 @@ Invoke-LinuxStage -Name 'ui-install' -Arguments @($gateClone) -Lines @(
     'printf %s "$lock_hash" > "$stamp"'
 )
 
-Invoke-LinuxStage -Name 'ui-check' -Arguments @($gateClone) -Lines @(
-    'cd "$1"',
-    'npm run check --prefix src/SqlHarness.Dashboard/ui'
-)
-
-Invoke-LinuxStage -Name 'restore' -Arguments @($gateClone) -Lines @(
-    'cd "$1"',
-    'dotnet restore SqlHarness.sln'
-)
-
+# The UI check needs no .NET artifacts, so it overlaps the build here rather than
+# running in front of it. Each stage is one wsl.exe run of one bash script against the
+# same gate clone, so a background `npm run check &` inside the build script is the
+# only way to overlap the two: two concurrent WSL launches would race each other over
+# the clone. Coupling them inside one invocation is why the stage lines here stay
+# sequential. set +e around both commands is what lets the UI check be joined even when
+# the build has already failed; the script then exits with the build's code, matching
+# the Windows gate.
 Invoke-LinuxStage -Name 'build' -Arguments @($gateClone) -Lines @(
     'cd "$1"',
-    'dotnet build SqlHarness.sln --no-restore -warnaserror'
+    'npm run check --prefix src/SqlHarness.Dashboard/ui &',
+    'ui_check_pid=$!',
+    'set +e',
+    'dotnet build SqlHarness.sln -warnaserror',
+    'build_status=$?',
+    'wait "$ui_check_pid"',
+    'ui_check_status=$?',
+    'set -e',
+    'if [ "$ui_check_status" -ne 0 ]; then echo "==> ui-check FAILED (exit $ui_check_status)" >&2; fi',
+    'if [ "$build_status" -ne 0 ]; then echo "==> build FAILED (exit $build_status)" >&2; fi',
+    'if [ "$build_status" -ne 0 ]; then exit "$build_status"; fi',
+    'exit "$ui_check_status"'
 )
 
 Invoke-LinuxStage -Name 'test' -Arguments @($gateClone) -Lines @(
