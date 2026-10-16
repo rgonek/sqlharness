@@ -441,7 +441,7 @@ Execution order:
 3. POST with `HttpClient.Timeout = TTL + timeout + 30 s`, reporting progress every 5 s.
 4. Map an HTTP failure before a response to `approval_unavailable`. A dropped connection after the request was sent maps to `outcome_unknown`, because the broker may have executed.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - submit without bearer → 401;
   - submit with a body whose database differs from the resolution → 400 `database_mismatch`;
   - approve without the write header → 403;
@@ -511,10 +511,10 @@ While waiting, send progress through the existing `McpProgressReporter`, stage `
   - `approval_timeout` → `isError=true`, `status:"approval_timeout"`;
   - unknown arguments such as `approved` or `confirmDatabase` are rejected by `ThrowIfUnknown`;
   - progress notifications are sent while waiting.
-- [ ] **Step 2: Run them to verify they fail.**
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `dotnet test tests/SqlHarness.Mcp.Tests`.
-- [ ] **Step 5: Commit**: `git commit -m "Add the sqlharness_mutation MCP tool"`.
+- [x] **Step 2: Run them to verify they fail.** Catalog RED: expected 9 tools, received 8.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `dotnet test tests/SqlHarness.Mcp.Tests` (400 passed, 4 skipped).
+- [x] **Step 5: Commit**: `git commit -m "Add the sqlharness_mutation MCP tool"`.
 
 ### Task 9: Approval UI: toast, notification, dialog
 

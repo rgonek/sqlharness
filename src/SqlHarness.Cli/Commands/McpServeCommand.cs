@@ -3,6 +3,7 @@ using System.ComponentModel;
 using Spectre.Console.Cli;
 
 using SqlHarness.Core;
+using SqlHarness.Core.Mutations;
 using SqlHarness.Core.Targets;
 using SqlHarness.Dashboard;
 
@@ -25,7 +26,11 @@ public sealed class McpHostConsole(TextWriter error)
 /// request scopes are resolved immutably per call, with no mutable selection.
 /// Raw targets, --unsafe-direct, and unsupported startup options are rejected.
 /// </summary>
-public sealed class McpServeCommand(McpHostConsole console, IDashboardLauncher launcher) : AsyncCommand<McpServeCommand.Settings>
+public sealed class McpServeCommand(
+    McpHostConsole console,
+    IDashboardLauncher launcher,
+    IMutationBrokerClient mutationBroker,
+    string mutationSessionKey) : AsyncCommand<McpServeCommand.Settings>
 {
     public sealed class Settings : CommandSettings
     {
@@ -120,7 +125,9 @@ public sealed class McpServeCommand(McpHostConsole console, IDashboardLauncher l
             console.Error,
             () => ProfileStore.Load(),
             ct,
-            OnStarted(launcher, console.Error));
+            OnStarted(launcher, console.Error),
+            mutationBroker,
+            mutationSessionKey);
     }
 
     /// <summary>

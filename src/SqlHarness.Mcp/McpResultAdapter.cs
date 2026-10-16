@@ -4,6 +4,7 @@ using System.Text.Json;
 using ModelContextProtocol.Protocol;
 
 using SqlHarness.Core;
+using SqlHarness.Core.Mutations;
 
 namespace SqlHarness.Mcp;
 
@@ -306,6 +307,8 @@ public static class McpResultAdapter
 
     private static string StatusFor(SqlHarnessOutcome outcome, SqlHarnessError? error)
     {
+        if (outcome.Report is MutationBrokerResult mutation)
+            return mutation.Status;
         if (error is null)
             return "success";
         return outcome.ExitCode switch

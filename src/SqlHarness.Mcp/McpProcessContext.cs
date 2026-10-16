@@ -24,6 +24,7 @@ public sealed class McpProcessContext
         string configurationRef)
     {
         ConfigurationRef = configurationRef;
+        MutationSessionKey = "mcp:" + Guid.NewGuid().ToString("N");
         RequestScope = requestScope;
         Profiles = profiles;
         AllowedProfiles = allowedProfiles;
@@ -36,6 +37,9 @@ public sealed class McpProcessContext
 
     /// <summary>Opaque random identity of this process configuration; every page and call returns the same value.</summary>
     public string ConfigurationRef { get; }
+
+    /// <summary>Stable caller identity for mutation deduplication within this MCP process.</summary>
+    public string MutationSessionKey { get; }
 
     public bool RequestScope { get; }
     public IReadOnlyDictionary<string, TargetProfile> Profiles { get; }

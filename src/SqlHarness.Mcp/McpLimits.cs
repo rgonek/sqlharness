@@ -26,7 +26,7 @@ public static class McpLimits
     public const long MaxInlineBytes = 1L * 1024 * 1024;
 
     /// <summary>Maximum number of tools served by one MCP server process.</summary>
-    public const int MaxTools = 8;
+    public const int MaxTools = 9;
 
     /// <summary>Budget for the whole tools/list catalog (schemas and descriptions) in UTF-8 bytes.</summary>
     public const long ToolsListBudgetBytes = 32L * 1024;

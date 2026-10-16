@@ -561,7 +561,7 @@ public sealed class McpStdioProcessTests
             Assert.Equal(McpHost.ServerName, client.ServerInfo.Name);
 
             var tools = await client.ListToolsAsync(cancellationToken: ct);
-            Assert.Equal(8, tools.Count);
+            Assert.Equal(9, tools.Count);
             Assert.Equal(
                 McpToolCatalog.ToolNames.Order(StringComparer.Ordinal),
                 tools.Select(tool => tool.Name).Order(StringComparer.Ordinal).ToArray());
@@ -720,7 +720,7 @@ public sealed class McpStdioProcessTests
                 await using var client = await McpStdioProcessHarness.ConnectAsync(child, stdin, cts.Token);
 
                 var tools = await client.ListToolsAsync(cancellationToken: cts.Token);
-                Assert.Equal(8, tools.Count);
+                Assert.Equal(9, tools.Count);
                 var compareSchema = JsonSerializer.SerializeToElement(
                     Assert.Single(tools, tool => tool.Name == "sqlharness_compare").ProtocolTool).GetProperty("inputSchema");
                 var compareProperties = compareSchema.GetProperty("properties");

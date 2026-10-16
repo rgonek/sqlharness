@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 using SqlHarness.Core;
+using SqlHarness.Core.Mutations;
 
 using SqlHarness.Mcp.Tools;
 
@@ -257,6 +258,34 @@ public static partial class McpOperationMapper
         {
             TypedParameters = MapParameters(parameters),
             DryRun = dryRun,
+        };
+    }
+
+    public static async Task<SqlHarnessMutationOperation> MapMutationAsync(
+        McpScope scope,
+        string? sql,
+        string? file,
+        IReadOnlyList<McpParameterArgument>? parameters,
+        int timeout,
+        int maxRows,
+        string? expectDatabase,
+        string sessionKey,
+        CancellationToken ct,
+        bool dryRun = false)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionKey);
+        var sqlText = await McpInputReader.ReadSqlAsync(sql, file, scope, ct);
+        return new SqlHarnessMutationOperation(
+            scope.TargetRequest,
+            sqlText,
+            MapParameters(parameters),
+            RequireTimeout(timeout),
+            RequireMaxRows(maxRows),
+            expectDatabase)
+        {
+            DryRun = dryRun,
+            SessionKey = sessionKey,
         };
     }
 
