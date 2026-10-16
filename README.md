@@ -605,6 +605,13 @@ overlapped. When both it and the build fail, both are reported and the gate exit
 code. `just verify-linux` cannot do this: every Linux stage is one WSL run of one bash script, so
 its UI check is backgrounded inside the build stage and that stage's line covers both.
 
+The two test projects are named explicitly and started at the same time, so the test stage costs
+the slower project rather than the sum of both. Each project writes its own log and the failure
+tail names the project that failed. `just verify-linux` gets the same result by backgrounding both
+`dotnet test` commands inside one bash block; `ci.yml` keeps two separate steps instead, so the
+GitHub job summary names the project that failed. A third test project added to the solution fails
+the gate parity tests until every gate names it.
+
 The format stage is scoped to the C# files a change touched, because `dotnet format` spends nearly all of its time loading the MSBuild workspace: a full-solution check took 129s here against 34s scoped to what changed. `just verify` checks the working tree; `just verify-linux` checks what the branch changed relative to `origin/main`, because the gate clone is reset to the branch tip and a working-tree diff there is always empty.
 
 CI still runs `dotnet format --no-restore --verify-no-changes` over the whole solution. The Linux gate syncs committed code only: it verifies the branch tip, not uncommitted work in the working tree. `just fix` rewrites the formatting of the same file set the gates check.

@@ -269,6 +269,142 @@ function Complete-BackgroundGateStage {
     }
 }
 
+# One process per project, all started before any of them is waited for, so a stage over
+# several projects costs the slowest project instead of the sum of all of them. Each project
+# writes its own log, and the result names the FIRST project that failed: a stage whose exit
+# code came from whichever process was joined last would hide the project that broke.
+#
+# Placed after the launch helpers because it reuses Resolve-GateStageExecutable, which is why
+# a bare 'dotnet' is resolved here even though it would resolve on its own.
+function Invoke-ParallelGateStage {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$LogDirectory,
+
+        # One `dotnet test <project>` process per entry, listed explicitly and never
+        # discovered: a project the gate does not name is a project the gate does not run.
+        [Parameter(Mandatory)][string[]]$Project,
+        [string[]]$Arguments = @(),
+
+        # Report the stage as skipped without running it.
+        [switch]$Skipped,
+
+        [string]$SkipReason
+    )
+
+    if ($Skipped) {
+        return [pscustomobject]@{
+            Name       = $Name
+            ExitCode   = 0
+            Seconds    = 0.0
+            LogPath    = $null
+            Skipped    = $true
+            SkipReason = $SkipReason
+            Projects   = @()
+        }
+    }
+
+    if (-not (Test-Path -LiteralPath $LogDirectory)) {
+        New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
+    }
+
+    # Resolved once, and before anything starts: a missing dotnet throws here rather than
+    # after some projects have already run and reported green.
+    $filePath = Resolve-GateStageExecutable -FilePath 'dotnet'
+
+    $runs = [System.Collections.Generic.List[object]]::new()
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        foreach ($projectPath in $Project) {
+            $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+            $startInfo.FileName = $filePath
+            $null = $startInfo.ArgumentList.Add('test')
+            $null = $startInfo.ArgumentList.Add($projectPath)
+            foreach ($argument in $Arguments) { $null = $startInfo.ArgumentList.Add($argument) }
+            $startInfo.UseShellExecute = $false
+            $startInfo.RedirectStandardOutput = $true
+            $startInfo.RedirectStandardError = $true
+
+            $process = [System.Diagnostics.Process]::Start($startInfo)
+            if ($null -eq $process) {
+                throw "'dotnet test $projectPath' could not be started. A stage that cannot start must never look green."
+            }
+
+            # Both pipes are drained from the moment the process starts, and before the next
+            # project is launched. Reading one to the end before the other deadlocks as soon
+            # as the second pipe buffer fills, which hung the UI check stage for 38 minutes.
+            $runs.Add([pscustomobject]@{
+                Project        = $projectPath
+                Process        = $process
+                StandardOutput = $process.StandardOutput.ReadToEndAsync()
+                StandardError  = $process.StandardError.ReadToEndAsync()
+            })
+        }
+    }
+    catch {
+        # A project that started and is not waited for would outlive the gate and fill a
+        # pipe nobody drains, so the ones already running are killed rather than orphaned.
+        foreach ($run in $runs) { try { $run.Process.Kill($true) } catch { } }
+        throw
+    }
+
+    foreach ($run in $runs) { $run.Process.WaitForExit() }
+    $stopwatch.Stop()
+
+    $projects = foreach ($run in $runs) {
+        $stdout = $run.StandardOutput.GetAwaiter().GetResult()
+        $stderr = $run.StandardError.GetAwaiter().GetResult()
+
+        $lines = [System.Collections.Generic.List[string]]::new()
+        # The command that ran is the first line and the project with its exit code is the
+        # last, so a reader who opens the log or reads only its tail can tell which project
+        # this is and how it ended without another lookup.
+        $lines.Add(('dotnet test {0} {1}' -f $run.Project, ($Arguments -join ' ')).Trim())
+        if (-not [string]::IsNullOrEmpty($stdout)) { $stdout.TrimEnd("`r", "`n") -split "`r?`n" | ForEach-Object { $lines.Add($_) } }
+        if (-not [string]::IsNullOrEmpty($stderr)) { $stderr.TrimEnd("`r", "`n") -split "`r?`n" | ForEach-Object { $lines.Add($_) } }
+        $lines.Add("==> $Name project: $($run.Project) exit $($run.Process.ExitCode)")
+
+        $logPath = Join-Path $LogDirectory ("$Name-{0}.log" -f [System.IO.Path]::GetFileNameWithoutExtension($run.Project))
+        Set-Content -LiteralPath $logPath -Value $lines
+
+        [pscustomobject]@{
+            Project  = $run.Project
+            ExitCode = [int]$run.Process.ExitCode
+            LogPath  = $logPath
+        }
+    }
+
+    # The first failure in project order, not the last process joined: the order the projects
+    # were started in is the order the gate promises to report them in.
+    $failed = @($projects | Where-Object { $_.ExitCode -ne 0 })
+
+    return [pscustomobject]@{
+        Name       = $Name
+        ExitCode   = if ($failed.Count -gt 0) { [int]$failed[0].ExitCode } else { 0 }
+        Seconds    = [Math]::Round($stopwatch.Elapsed.TotalSeconds, 1)
+        LogPath    = if ($failed.Count -gt 0) { $failed[0].LogPath } else { $null }
+        Skipped    = $false
+        SkipReason = $null
+        Projects   = @($projects)
+    }
+}
+
+# The log files a result stands for: one for a foreground or background stage, one per
+# project for a parallel stage. A parallel stage's LogPath names the first FAILING project
+# only, so reading or streaming from LogPath alone would show nothing at all when the stage
+# is green - the case where a watcher most wants to see the output.
+function Get-StageLogPaths {
+    param([Parameter(Mandatory)]$Result)
+
+    if ($Result.Skipped) { return @() }
+    if ($null -ne $Result.PSObject.Properties['Projects']) {
+        return @($Result.Projects | Where-Object { $_.LogPath } | ForEach-Object { $_.LogPath })
+    }
+    if ([string]::IsNullOrWhiteSpace($Result.LogPath)) { return @() }
+    return @($Result.LogPath)
+}
+
 function Get-ReportedFailureStage {
     param(
         [Parameter(Mandatory)][string]$Name,

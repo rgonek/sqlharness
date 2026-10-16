@@ -347,3 +347,212 @@ just verify -LogDirectory D:/temp/opencode/gate-t4-fix1
 ```
 
 The stage times are contended for the same reason as the Task 4 measurements above and carry no claim.
+
+## Task 3 — the two test projects run at once (2026-10-16)
+
+**Change:** `dotnet test SqlHarness.sln` ran the two test projects one after another. Both gates now
+name the two projects explicitly and start them at the same time: `scripts/verify.ps1` through the
+new `Invoke-ParallelGateStage` in `scripts/gate-output.ps1`, `scripts/verify-linux.ps1` by backgrounding
+both `dotnet test` commands inside its test stage's bash block, and `.github/workflows/ci.yml` with one
+step per project. No `src/` file changed.
+
+### Step 10: sequential against concurrent, both orders, on this box
+
+Sixteen runs, back to back, alternating which arm goes first (`S C C S S C C S`) so a drifting machine
+cannot favour one of them. Eight runs per arm rather than the three the plan asks for, because one
+failure appeared in the first eight and a bigger sample was worth the wall clock.
+
+The sequential arm runs `dotnet test <project>` for each project in turn, timed from the start of the
+first to the end of the second. The concurrent arm calls the real `Invoke-ParallelGateStage` with the
+same two projects and the same `--no-build --filter FullyQualifiedName!~Integration` arguments, timed
+across the whole call, so what is measured is the code path the gate now runs. Both arms read the
+per-project result out of the stage log.
+
+```powershell
+# sequential, per project, in order
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter FullyQualifiedName!~Integration
+dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-build --filter FullyQualifiedName!~Integration
+# concurrent, through the real helper
+Invoke-ParallelGateStage -Name test -LogDirectory <dir> -Arguments @('--no-build','--filter','FullyQualifiedName!~Integration') `
+    -Project @('tests/SqlHarness.Tests/SqlHarness.Tests.csproj','tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj')
+```
+
+| arm | runs, seconds | median |
+|---|---|---|
+| sequential | 153,9 · 129,3 · 128,2 · 132,3 · 143,2 · 132,8 · 129,2 · 127,3 | **130,8 s** |
+| concurrent | 81,3 · 83,7 · 86,9 · 84,5 · 85,8 · 82,7 · 90,2 · 82,7 | **84,1 s** |
+
+**Improvement 35,7 %, against the 15 % the plan sets as the bar for landing this. The change is
+landed.** Every concurrent run beat every sequential run; the two distributions do not overlap, so the
+verdict does not depend on which run of either arm is picked.
+
+**Machine.** The foreign `CivicLens.Importer --resweep` job that inflated Task 4's runs by 9–10× had
+**finished** before this measurement (`0` such processes at the start and end), so these absolute
+numbers are far more comparable than Task 4's. They are still not the plan header's 076 baseline:
+`SqlHarness.Tests` alone measured 67,2–77,7 s across the eight sequential runs, and the header records
+the whole solution-level `test` stage at `1m22s`. The concurrent median of 84,1 s is about what that
+whole stage used to cost, which is the honest reading — **the stage now costs roughly the slower
+project alone instead of the sum of both.**
+
+### Step 10b: the same comparison with a build in front of every arm
+
+`just verify` reported `test ok 1m51s` on the first run of the new gate, which is well above the 84,1 s
+above — so the gate runs its test stage under conditions this first comparison did not reproduce, the
+most likely one being the MSBuild worker nodes a `dotnet build` leaves resident. Rather than quote a
+number that does not describe the gate, the comparison was repeated with a build in front of every
+arm, alternating `S C C S S C`, three runs each:
+
+| arm | runs, seconds | median |
+|---|---|---|
+| sequential | 139,5 · 153,8 · 160,4 | **153,8 s** |
+| concurrent | 94,9 · 101,0 · 107,3 | **101,0 s** |
+
+**Improvement 34,3 %**, which is what the gate actually saves. The two measurements bracket the
+answer at **34–36 %**, both well clear of the 15 % bar, and in both of them every concurrent run beat
+every sequential run — 22 runs, no overlap between the distributions. Twelve project executions in
+this round, no failures.
+
+### The load-induced flakes: what was counted, in which project
+
+This is the risk the plan named, so it is counted rather than characterised loosely. The counts below
+cover **53 whole-project executions**: 32 from the Step 10 measurement, 9 from the follow-up
+experiment, 12 from Step 10b.
+
+- **`PostgresParameterTests.Matrix_measure_sets_watch_and_snapshot_use_the_postgres_reference_scan`,
+  the test the ledger asked this task to watch first: 0 failures in 53 executions.** It did not fail
+  once, in either arm.
+- **`DashboardHousekeepingTests.External_journal_commit_during_matching_refreshes_the_idle_window`:
+  1 failure in 11 concurrent executions**, in measurement round 3. This is the flake Task 1 made
+  diagnosable, and the plan already records it as a known recurring race.
+- **`DashboardHostTests.Second_invocation_reuses_the_running_dashboard`: 1 failure in 3 runs of
+  `SqlHarness.Tests` ALONE**, in the follow-up experiment — the *sequential* arm.
+
+That is two failures in 53 executions, one per arm, on two different dashboard tests, both in
+`SqlHarness.Tests`. The follow-up experiment ran the two configurations six more times, alternating,
+with the only difference being whether `SqlHarness.Mcp.Tests` ran at the same time: 0 failures in 3
+concurrent runs, 1 in 3 alone runs, on the *other* dashboard test. `DashboardHostTests` then passes
+17/17 in six consecutive focused runs, so neither failure is a deterministic break, and the single
+concurrent failure was not reproduced in the eleven concurrent executions that followed it. No
+`src/` file changed in this task and neither failing test file was touched by it.
+
+**The failure rate does not track the concurrency this task adds.** That is an observation over 53
+runs on one machine, not a proof that concurrency cannot affect these tests; the honest summary is
+that no flake signal appeared in the direction this change could cause, and the known dashboard flake
+family is untouched by it.
+
+### Parity assertions this task changed, and why
+
+Every one of these was proved by a live mutation; the table names the red test each mutation produced.
+`GateParityTests` went from 44 to 56 cases and `VerifyLinuxScriptTests` from 8 to 9.
+
+| assertion | change | why |
+|---|---|---|
+| `StageVerbs` | distinct in first-occurrence order, and each entry of the Windows `-Project` list contributes a `test` | a project list is one `dotnet test` command per project, and the Windows gate no longer spells them out, so `StageCommand(content, "test")` finds nothing there |
+| `StageCommands` / `StageCommand` | plural added; the singular is its first element | every test-command assertion reads a list, because "the test command" of this gate is two commands |
+| `TestCommands`, `CommandsFor`, `ArgumentsOf`, `TestProjectOf`, `SolutionTestProjects` | new | the Windows commands are composed from `-Project` and `-Arguments`, and the solution is read so a new test project fails a guard instead of being silently skipped |
+| `Every_gate_runs_the_same_non_integration_test_selection` | every command; `.github/workflows/ci.yml` added | a gate can carry the right filter on one project and the wrong one on the other |
+| `Every_gate_names_the_same_test_filter_value` | every command, all three surfaces | its previous form read the first `--filter` in two files |
+| `Every_gate_runs_integration_tests_filtered` | every command, all three surfaces; now asserts exactly one `--filter` whose whole value is the exclusion | the old quoted-substring regex cannot tell an unquoted value or a second `--filter` from a correct one |
+| `Every_gate_runs_the_windows_test_commands_plus_its_own_logger` | replaces `The_two_gates_have_equal_test_commands_modulo_the_linux_logger`; a theory over the Linux gate **and CI**, comparing argument vectors | comparing command *text* across three shells compares their quoting, not what they run; CI was outside every test-command assertion, which is the narrowing Task 4 was corrected for |
+| `The_windows_gate_runs_no_test_logger` | every Windows test command | as above |
+| `The_only_logger_occurrences_are_the_ones_that_surface_asks_for` | every command of every verb on all three surfaces | it previously read only the first command per verb and never looked at CI |
+| `The_extractor_returns_the_expected_commands_for_the_real_gate_files` | per-project strings for all three surfaces | the Windows commands no longer exist as literal lines |
+| `Every_local_gate_runs_build_and_format_exactly_once` | new | `StageVerbs` is now distinct, which would otherwise let a second `dotnet build` slip in |
+| `Every_gate_names_every_test_project_in_the_solution` | new, theory over all three surfaces | Review Focus 4: a third test project would silently not run |
+| `The_windows_gate_runs_its_test_projects_through_the_shared_parallel_stage` | new | one `Add-Stage` over a project list, not one per project, and the helper comes from `gate-output.ps1` |
+| `The_linux_gate_starts_both_test_projects_in_the_background_and_waits_for_both` | new | two `&`, two `$!`, two `wait`, counted inside the test stage's own bash block |
+| `Ci_runs_one_dotnet_test_step_per_test_project` | new | the step-per-project shape; the solution-scan test above cannot see it |
+| `Linux_gate_runs_the_three_ci_stages_in_order` | distinct verbs | the test stage holds two commands of the same verb |
+| `Linux_gate_uses_the_shared_stage_commands` | two per-project command lines; asserts `dotnet test SqlHarness.sln` is gone | the solution-wide form is the sequential one |
+| `Linux_gate_names_the_failing_project_of_its_parallel_test_stage` | new | both projects share one Linux log, so the `stage-failure:` marker is the only thing naming the project |
+| Pester `runs the same three .NET stages plus the two UI stages` | whole-line comments stripped before the verb check; `Invoke-ParallelGateStage` counts as the test stage | it passed for the wrong reason: a `dotnet test` phrase in a comment satisfied `dotnet test ` |
+
+### Mutation proofs
+
+Each mutation was applied to the working tree, the suite run, and the tree restored from a file copy.
+**M13 and M15 in the first pass turned nothing red**, which is why both the fake and the assertions
+below were rewritten and both re-run; that is recorded rather than quietly fixed.
+
+| # | mutation | red |
+|---|---|---|
+| M1 | Windows parallel stage grows `--logger` | `The_extractor_returns_the_expected_commands_for_the_real_gate_files`, `Every_gate_runs_the_windows_test_commands_plus_its_own_logger` (×2 surfaces), `The_only_logger_occurrences_are_the_ones_that_surface_asks_for`, `The_windows_gate_runs_no_test_logger` |
+| M2 | Windows drops the Mcp project from `-Project` | `Every_gate_names_every_test_project_in_the_solution(verify.ps1)`, the logger theory (×2), `The_extractor_returns_…` |
+| M3 | Windows reverted to one solution-wide `dotnet test` | 10 red, including `Every_local_gate_runs_the_same_three_dotnet_stages_in_the_same_order`'s sibling assertions, `The_windows_gate_runs_its_test_projects_through_the_shared_parallel_stage`, plus the Pester `starts every test project at once in both gates` |
+| M4 | a second `dotnet build` in the Windows gate | `Every_local_gate_runs_build_and_format_exactly_once(verify.ps1)` |
+| M5 | one Linux project stops being backgrounded | `The_linux_gate_starts_both_test_projects_in_the_background_and_waits_for_both`, `Linux_gate_uses_the_shared_stage_commands`, plus the Pester shape test |
+| M6 | the Linux gate filters one project differently | 6 red, including `Every_gate_runs_integration_tests_filtered(verify-linux.ps1)` |
+| M7 | the Linux gate stops waiting for the second project | `The_linux_gate_starts_both_test_projects_in_the_background_and_waits_for_both`, plus the Pester shape test |
+| M8 | CI collapses to one solution-wide step | `Ci_runs_one_dotnet_test_step_per_test_project`, `Every_gate_names_every_test_project_in_the_solution(ci.yml)`, the logger theory, `The_extractor_returns_…` |
+| M9 | CI drops `--logger trx` from one step | `Every_gate_runs_the_windows_test_commands_plus_its_own_logger(ci.yml)`, `The_only_logger_occurrences_are_the_ones_that_surface_asks_for`, `The_extractor_returns_…` |
+| M10 | the Linux gate stops naming the failing project | `Linux_gate_names_the_failing_project_of_its_parallel_test_stage` |
+| M11 | the Windows gate routes the parallel stage through `Invoke-GateStage` instead | `The_windows_gate_runs_its_test_projects_through_the_shared_parallel_stage`, plus the Pester stage-shape test |
+| M12 | neither launch helper drains stderr | 11 Pester red, including both flood tests — the 38-minute deadlock cannot return |
+| M13 | the parallel stage returns the **last** process exit code | `reports the first project that failed, not the last process it joined` — **nothing was red on the first pass**, because both projects failed with the same code |
+| M14 | the parallel stage names the **last** failing project's log | `reports the first project that failed, not the last process it joined` |
+| M15 | the per-project log's last line stops naming the project | `reports the exit code and the log of the project that failed` — **nothing was red on the first pass**, because the log's first line still named the project |
+| M16 | the parallel stage ignores `-Skipped` | `reports a skipped parallel stage without starting anything`, `reports a skipped stage instead of pretending it ran` |
+| M17 | the stage joins each project before starting the next | `runs the projects at once rather than one after the other` |
+| M18 | the stage writes no per-project log | 4 Pester red |
+| M19 | every project writes to the same log | 5 Pester red |
+
+The fake now maps a **different exit code per project** (M13) and the log assertions read the **last
+line** (M15), which is what those two mutations needed. M17's proof is a rendezvous: each fake project
+blocks on a release file the test creates only once *both* have started, so a sequential stage shows
+one start line. That is structural rather than a timing comparison, so it does not weaken on a loaded
+box.
+
+### Live failure path of the real gate
+
+`scripts/verify.ps1` run with a fake `npm` and a fake `dotnet` on PATH, so only the two test projects
+are real work: `SqlHarness.Tests` answers 0, `SqlHarness.Mcp.Tests` answers 4.
+
+```
+==> ui-install skipped (lockfile unchanged)
+==> build ok 0,1s
+==> ui-check ok 0,1s
+==> test FAILED (exit 4)
+dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-build --filter FullyQualifiedName!~Integration
+PASS! - Failed: 0, Passed: 4015, Skipped: 0, Total: 4015
+==> test project: tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj exit 4
+full log: D:\temp\opencode\t3-probe-logs\test-SqlHarness.Mcp.Tests.log
+verify: FAILED  stage=test  exit=4  0,6s
+===== verify.ps1 exit code: 4 =====
+```
+
+The exit code is the failing project's, not the last-waited one; the printed tail names the project;
+the green project's own log is untouched beside it. Review Focus 1 holds on the real gate, not only in
+the unit test.
+
+### The gate itself
+
+```powershell
+just verify -LogDirectory D:/temp/opencode/gate-t3-final
+# ==> ui-install skipped (lockfile unchanged)
+# ==> build ok 48,5s
+# ==> ui-check ok 59,9s
+# ==> test ok 1m51s
+# format: 2 changed C# file(s) (working-tree)
+# ==> format ok 1m01s
+# verify: OK  stages=5  3m53s
+# ===== just verify exit code: 0 =====
+```
+
+Exit 0, which is the contract in `docs/agents/verification.md`. The `test` stage wrote two logs,
+`test-SqlHarness.Tests.log` (`Duration: 1 m 39 s`, 4018 passed / 11 skipped) and
+`test-SqlHarness.Mcp.Tests.log` (`Duration: 1 m 44 s`, 402 passed / 4 skipped), and printed one line.
+`ui-check` at 59,9 s against Task 4's contended 5m51s is the clearest sign that the importer job was
+gone for this run. This evidence note is appended after the gate run and changes no executable
+behaviour, so the run stands for the product tree.
+
+### Focused runs
+
+```powershell
+dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter 'FullyQualifiedName~GateParityTests|FullyQualifiedName~VerifyLinuxScriptTests'
+# Passed!  - Failed: 0, Passed: 65, Skipped: 0, Total: 65
+
+pwsh -NoProfile -Command "Import-Module Pester -MaximumVersion 3.99; Invoke-Pester -Path tests/scripts -EnableExit"
+# Passed: 84 Failed: 0
+```
+
+(The plan header records the `test` stage at `1m22s` sequential; the 84 here is 76 before this task
+plus 8 new Pester cases.)

@@ -30,12 +30,54 @@ Describe 'the local gates' {
         $gates = @('verify.ps1', 'verify-linux.ps1') | ForEach-Object { [IO.File]::ReadAllText((Join-Path $script:ScriptsDirectory $_)) }
 
         foreach ($gate in $gates) {
+            # Whole-line comments are stripped before the verb check: a stage named in prose
+            # is not a stage, and a gate that lost its test stage entirely would otherwise
+            # still pass this test on the strength of a sentence describing it.
+            $code = ($gate -split "`r?`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
             foreach ($verb in @('build', 'test', 'format')) {
-                if ($gate -notmatch "dotnet $verb ") { throw "a gate is missing the '$verb' stage" }
+                # verify.ps1 hands its test projects to the shared parallel stage helper rather
+                # than spelling one `dotnet test` line per project, so the helper is the test
+                # stage there.
+                if ($verb -eq 'test' -and $code -match 'Invoke-ParallelGateStage') { continue }
+                if ($code -notmatch "dotnet $verb ") { throw "a gate is missing the '$verb' stage" }
             }
             # dotnet build restores implicitly, so a separate restore stage is duplicated work.
-            if ($gate -match 'dotnet restore') { throw 'a gate still runs a standalone dotnet restore' }
+            if ($code -match 'dotnet restore') { throw 'a gate still runs a standalone dotnet restore' }
+            # Read from the raw text on purpose: in verify.ps1 the only mention of `npm ci` is
+            # the comment explaining why the install is skipped, and that check has always
+            # been coarse. GateParityTests owns the real shape of the install stage.
             if ($gate -notmatch [regex]::Escape('npm ci')) { throw "a gate is missing 'npm ci'" }
+        }
+    }
+
+    It 'starts every test project at once in both gates' {
+        # One Add-Stage over a project list on Windows, two backgrounded commands in one bash
+        # block on Linux. A gate that spelled one stage per project would be sequential again
+        # and would report only the first project's failure.
+        $windows = [IO.File]::ReadAllText((Join-Path $script:ScriptsDirectory 'verify.ps1'))
+        $linux = [IO.File]::ReadAllText((Join-Path $script:ScriptsDirectory 'verify-linux.ps1'))
+
+        if ($windows -notmatch "Add-Stage -Name 'test' -Project") {
+            throw 'verify.ps1 does not run its test projects through the parallel stage helper'
+        }
+        if ($windows -match 'dotnet test SqlHarness.sln') { throw 'verify.ps1 still hands the whole solution to dotnet test' }
+
+        # Both Linux commands live in the test stage's own bash block: two concurrent WSL
+        # launches would race each other over the gate clone.
+        $stage = $linux.IndexOf("Invoke-LinuxStage -Name 'test'")
+        if ($stage -lt 0) { throw 'verify-linux.ps1 does not run a test stage' }
+        $block = $linux.Substring($stage)
+        $next = $block.IndexOf('Invoke-LinuxStage -Name', 1)
+        if ($next -ge 0) { $block = $block.Substring(0, $next) }
+
+        if ([regex]::Matches($block, "'dotnet test [^']+ &',").Count -ne 2) {
+            throw 'the Linux test stage does not start both test projects in the background'
+        }
+        if ([regex]::Matches($block, '\w+_pid=\$!').Count -ne 2) {
+            throw 'the Linux test stage does not record both process ids'
+        }
+        if ([regex]::Matches($block, "'wait ""\$\w+_pid""").Count -ne 2) {
+            throw 'the Linux test stage does not wait for both test projects'
         }
     }
 

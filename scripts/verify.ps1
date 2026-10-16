@@ -6,9 +6,14 @@
 
 .DESCRIPTION
     Installs the dashboard UI, then runs the same three .NET stages as the GitHub
-    Actions CI workflow on SqlHarness.sln - build -warnaserror (which restores
+    Actions CI workflow - build -warnaserror on SqlHarness.sln (which restores
     implicitly), test, and format --verify-no-changes - stopping at the first
     failure. Excludes integration tests and does not touch ~/.sqlharness.
+
+    The two test projects are named explicitly and started at the same time, so the test
+    stage costs the slower project rather than the sum of both; handing dotnet the whole
+    solution instead runs them one after the other. Every project writes its own log, and
+    the failure tail names the project that failed.
 
     Output is written for an agent first: every stage runs with its output in a
     log file, so a green stage prints one line and a red stage prints the stage,
@@ -53,7 +58,14 @@ function Add-Stage {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Name,
-        [Parameter(Mandatory)][scriptblock]$Action,
+
+        # One command, run by this process and logged to <name>.log.
+        [scriptblock]$Action,
+
+        # Several commands started at the same time, one test process per entry, each
+        # logged to <name>-<project>.log. Projects are listed, never discovered.
+        [string[]]$Project,
+        [string[]]$Arguments,
         [switch]$Skipped,
         [string]$SkipReason,
 
@@ -63,12 +75,31 @@ function Add-Stage {
         [switch]$ReportOnly
     )
 
+    # Exactly one of the two ways to run something. A stage given neither would run nothing
+    # and report green; one given both would silently run only the first. Both are bugs in
+    # this script, and a bug here must not reach the summary line as a result.
+    if (($null -eq $Action) -eq ($null -eq $Project)) {
+        throw "stage '$Name' must have exactly one of -Action or -Project"
+    }
+
     $script:stageCount++
-    $result = Invoke-GateStage -Name $Name -LogDirectory $LogDirectory -Action $Action -Skipped:$Skipped -SkipReason $SkipReason
+    # The parallel stage returns its own exit code and the log of the project that failed.
+    # Routing it through Invoke-GateStage's scriptblock instead would throw both away and
+    # leave the stage reporting whatever LASTEXITCODE happened to hold.
+    $result = if ($null -ne $Project) {
+        Invoke-ParallelGateStage -Name $Name -LogDirectory $LogDirectory -Project $Project -Arguments $Arguments -Skipped:$Skipped -SkipReason $SkipReason
+    }
+    else {
+        Invoke-GateStage -Name $Name -LogDirectory $LogDirectory -Action $Action -Skipped:$Skipped -SkipReason $SkipReason
+    }
 
     Write-Host (Get-StageLine -Result $result)
-    if ($Stream -and -not $result.Skipped -and (Test-Path -LiteralPath $result.LogPath)) {
-        Get-Content -LiteralPath $result.LogPath | ForEach-Object { Write-Host $_ }
+    if ($Stream) {
+        # A parallel stage has one log per project, and its LogPath names only the failing
+        # one, so a green stage would stream nothing at all if this read LogPath alone.
+        foreach ($path in (Get-StageLogPaths -Result $result)) {
+            if (Test-Path -LiteralPath $path) { Get-Content -LiteralPath $path | ForEach-Object { Write-Host $_ } }
+        }
     }
 
     if ($result.ExitCode -ne 0) {
@@ -140,7 +171,14 @@ else {
     if ($uiCheckResult.ExitCode -ne 0) { Stop-Gate -Name 'ui-check' -Result $uiCheckResult }
 }
 
-Add-Stage -Name 'test' -Action { dotnet test SqlHarness.sln --no-build --filter 'FullyQualifiedName!~Integration' }
+# The test projects are named here rather than handed to dotnet as a solution, because that
+# is what lets them run at the same time. The list is explicit on purpose: GateParityTests
+# reads SqlHarness.sln and fails when a project appears there that neither gate names, so
+# adding a test project cannot quietly leave it unrun.
+Add-Stage -Name 'test' -Project @(
+    'tests/SqlHarness.Tests/SqlHarness.Tests.csproj'
+    'tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj'
+) -Arguments @('--no-build', '--filter', 'FullyQualifiedName!~Integration')
 
 # The list is resolved before the stage runs so an unchanged tree never pays for
 # loading the MSBuild workspace inside dotnet format.

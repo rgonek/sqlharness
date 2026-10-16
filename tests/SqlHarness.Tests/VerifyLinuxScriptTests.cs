@@ -9,8 +9,12 @@ public sealed class VerifyLinuxScriptTests
     [Fact]
     public void Linux_gate_runs_the_three_ci_stages_in_order()
     {
+        // Distinct, because the test stage runs one command per test project and both spell
+        // the same verb. GateParityTests pins the order of the distinct verbs for all three
+        // surfaces; this one is the cheap local check that the bash block really holds them.
         var stages = Regex.Matches(Script(), @"\bdotnet\s+(restore|build|test|format)\b")
             .Select(match => match.Groups[1].Value)
+            .Distinct()
             .ToArray();
 
         Assert.Equal(["build", "test", "format"], stages);
@@ -23,14 +27,37 @@ public sealed class VerifyLinuxScriptTests
 
         Assert.DoesNotContain("dotnet restore", script, StringComparison.Ordinal);
         Assert.Contains("dotnet build SqlHarness.sln -warnaserror", script, StringComparison.Ordinal);
+        // One command per test project, because the stage starts them all at once. The
+        // solution is not named: that is the form that runs the projects one after another.
+        Assert.DoesNotContain("dotnet test SqlHarness.sln", script, StringComparison.Ordinal);
         Assert.Contains(
-            "dotnet test SqlHarness.sln --no-build --filter \"FullyQualifiedName!~Integration\"",
+            "'dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter \"FullyQualifiedName!~Integration\" --logger \"console;verbosity=normal\" &',",
+            script,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "'dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-build --filter \"FullyQualifiedName!~Integration\" --logger \"console;verbosity=normal\" &',",
             script,
             StringComparison.Ordinal);
         Assert.Contains(
             "dotnet format SqlHarness.sln --no-restore --include \"${changedFiles[@]}\" --verify-no-changes",
             script,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Linux_gate_names_the_failing_project_of_its_parallel_test_stage()
+    {
+        // Both projects write into one stage log, so the ==> lines and the stage-failure:
+        // marker are the only thing that tell a reader which project broke. The marker names
+        // the project whose exit code the script returns, which is what
+        // Get-ReportedFailureStage turns into the summary line.
+        var script = Script();
+        var testStage = script.IndexOf("Invoke-LinuxStage -Name 'test'", StringComparison.Ordinal);
+        Assert.True(testStage > 0, "the Linux gate must run a test stage");
+
+        Assert.Contains("'set +e',", script, StringComparison.Ordinal);
+        Assert.Contains("'if [ \"$tests_status\" -ne 0 ]; then echo \"stage-failure: tests/SqlHarness.Tests\" >&2; exit \"$tests_status\"; fi',", script, StringComparison.Ordinal);
+        Assert.Contains("'if [ \"$mcp_status\" -ne 0 ]; then echo \"stage-failure: tests/SqlHarness.Mcp.Tests\" >&2; exit \"$mcp_status\"; fi',", script, StringComparison.Ordinal);
     }
 
     [Fact]

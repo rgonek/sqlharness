@@ -353,6 +353,254 @@ Describe 'gate-output.ps1 background stages' {
     }
 }
 
+# Invoke-ParallelGateStage launches `dotnet test <project> <arguments>`, so a test has to
+# intercept dotnet itself rather than fake a project. It cannot name the command as a bare
+# 'dotnet': Process.Start applies no PATHEXT and cannot launch a bare name, which is exactly
+# why the stage resolves the command before starting anything. This fake records every
+# argument line it is called with, and exits with the code mapped to the project it was
+# asked about - different codes per project, so "the first project that failed" and "the
+# last process joined" cannot be the same answer.
+function New-FakeDotnetRoot {
+    param(
+        # Project text -> exit code. A project that is not mapped exits 0.
+        [hashtable]$ExitCodes = @{}
+    )
+
+    $root = New-TempDirectory -Prefix 'sqlharness-fake-dotnet-'
+    $calls = Join-Path $root 'calls.txt'
+    $lines = @('@echo off', ">>`"$calls`" echo %*")
+    foreach ($project in ($ExitCodes.Keys | Sort-Object)) {
+        $lines += "echo %* | findstr /C:`"$project`" >nul && exit /b $($ExitCodes[$project])"
+    }
+    $lines += 'exit /b 0'
+    Set-Content -LiteralPath (Join-Path $root 'dotnet.cmd') -Value ($lines -join "`r`n") -NoNewline
+
+    return [pscustomobject]@{ Root = $root; Calls = $calls }
+}
+
+# Every project blocks until a release file exists, and records the moment it started. Two
+# processes that both reach their start line before either is released were alive at the
+# same time; a stage that started the second project only after joining the first would show
+# one start line, because the first is still waiting for the release the test has not made
+# yet. That is a structural proof of overlap rather than a timing comparison, so it does not
+# weaken on a loaded machine.
+function New-RendezvousFakeDotnetRoot {
+    $root = New-TempDirectory -Prefix 'sqlharness-fake-meet-'
+    $mark = Join-Path $root 'mark.txt'
+    $release = Join-Path $root 'release.txt'
+    $body = @"
+@echo off
+>>"$mark" echo start %2
+:wait
+if exist "$release" goto :done
+ping -n 2 127.0.0.1 > nul
+goto :wait
+:done
+>>"$mark" echo end %2
+exit /b 0
+"@
+    Set-Content -LiteralPath (Join-Path $root 'dotnet.cmd') -Value $body -NoNewline
+    return [pscustomobject]@{ Root = $root; Mark = $mark; Release = $release }
+}
+
+# One project floods standard error while writing to standard output. The other waits, so a
+# stage that drains one project's pipes only after that project exits would deadlock here.
+function New-LogFloodingFakeDotnetRoot {
+    $root = New-TempDirectory -Prefix 'sqlharness-fake-flood-'
+    $body = @'
+@echo off
+if "%2"=="tests/Flood/Flood.csproj" (
+  for /L %%i in (1,1,20000) do @echo stderr-line-%%i 1>&2
+  echo stdout-line
+)
+exit /b 0
+'@
+    Set-Content -LiteralPath (Join-Path $root 'dotnet.cmd') -Value $body -NoNewline
+    return [pscustomobject]@{ Root = $root }
+}
+
+function Get-FakeDotnetCalls {
+    param([Parameter(Mandatory)][string]$CallsFile)
+
+    if (-not (Test-Path -LiteralPath $CallsFile)) { return @() }
+    return @(Get-Content -LiteralPath $CallsFile)
+}
+
+Describe 'gate-output.ps1 parallel stages' {
+    $logDir = $null
+    $fake = $null
+    $previousPath = $null
+
+    BeforeEach {
+        $logDir = New-TempDirectory -Prefix 'sqlharness-gate-par-'
+        $previousPath = $env:PATH
+    }
+
+    AfterEach {
+        $env:PATH = $previousPath
+        foreach ($path in @($logDir, $(if ($fake) { $fake.Root }))) {
+            if ($path -and (Test-Path $path)) { Remove-Item -Recurse -Force $path -ErrorAction SilentlyContinue }
+        }
+    }
+
+    It 'runs every project and writes a log per project' {
+        $fake = New-FakeDotnetRoot
+        $env:PATH = $fake.Root + [IO.Path]::PathSeparator + $previousPath
+
+        $result = Invoke-ParallelGateStage -Name 'test' -LogDirectory $logDir -Arguments @('--no-build', '--filter', 'FullyQualifiedName!~Integration') `
+            -Project @('tests/A/A.csproj', 'tests/B/B.csproj')
+
+        $result.Name | Should Be 'test'
+        $result.ExitCode | Should Be 0
+        $result.Skipped | Should Be $false
+        $result.Seconds | Should BeGreaterThan 0
+        $result.Projects.Count | Should Be 2
+        Test-Path (Join-Path $logDir 'test-A.log') | Should Be $true
+        Test-Path (Join-Path $logDir 'test-B.log') | Should Be $true
+
+        # Both projects really ran, with the command the stage says it runs.
+        $calls = Get-FakeDotnetCalls -CallsFile $fake.Calls
+        $calls.Count | Should Be 2
+        $calls[0] | Should Match '^test tests/A/A\.csproj --no-build --filter FullyQualifiedName!~Integration$'
+        $calls[1] | Should Match '^test tests/B/B\.csproj --no-build --filter FullyQualifiedName!~Integration$'
+    }
+
+    It 'reports the exit code and the log of the project that failed' {
+        $fake = New-FakeDotnetRoot -ExitCodes @{ 'tests/B/B.csproj' = 3 }
+        $env:PATH = $fake.Root + [IO.Path]::PathSeparator + $previousPath
+
+        $result = Invoke-ParallelGateStage -Name 'test' -LogDirectory $logDir -Arguments @('--no-build') `
+            -Project @('tests/A/A.csproj', 'tests/B/B.csproj')
+
+        $result.ExitCode | Should Be 3
+        $result.LogPath | Should Be (Join-Path $logDir 'test-B.log')
+
+        # The printed tail is the failing project's log, so it has to name the project and
+        # its exit code on its own. The LAST line specifically: the gate prints a 40-line
+        # tail, and a header at the top of a long log is never in it.
+        $last = @(Get-Content -LiteralPath $result.LogPath)[-1]
+        $last | Should Match 'tests/B/B\.csproj'
+        $last | Should Match 'exit 3'
+        (Get-StageLine -Result $result) | Should Match '^==> test FAILED \(exit 3\)$'
+        (Get-StageFailureText -Result $result -TailLines 40) | Should Match 'tests/B/B\.csproj exit 3'
+    }
+
+    It 'reports the first project that failed, not the last process it joined' {
+        # LASTEXITCODE holds whichever process was waited for last, so the stage cannot take
+        # it from there. Both projects fail with DIFFERENT codes: a stage that returned the
+        # last one, or the last one's log, would answer 4 here instead of 3.
+        $fake = New-FakeDotnetRoot -ExitCodes @{ 'tests/A/A.csproj' = 3; 'tests/B/B.csproj' = 4 }
+        $env:PATH = $fake.Root + [IO.Path]::PathSeparator + $previousPath
+
+        $result = Invoke-ParallelGateStage -Name 'test' -LogDirectory $logDir -Arguments @('--no-build') `
+            -Project @('tests/A/A.csproj', 'tests/B/B.csproj')
+
+        $result.ExitCode | Should Be 3
+        $result.LogPath | Should Be (Join-Path $logDir 'test-A.log')
+        $codes = @($result.Projects | ForEach-Object { $_.ExitCode })
+        $codes | Should Be @(3, 4)
+    }
+
+    It 'runs the projects at once rather than one after the other' {
+        # A sequential stage would pass every other assertion in this block and still cost the
+        # sum of both projects. Each fake project waits for a release file the test only
+        # creates once BOTH have started, so one start line means the stage is sequential.
+        $fake = New-RendezvousFakeDotnetRoot
+        $job = Start-Job -ScriptBlock {
+            param($GateOutput, $FakeRoot, $LogDir)
+            . $GateOutput
+            $env:PATH = $FakeRoot + [IO.Path]::PathSeparator + $env:PATH
+            return Invoke-ParallelGateStage -Name 'test' -LogDirectory $LogDir `
+                -Project @('tests/A/A.csproj', 'tests/B/B.csproj') -Arguments @('--no-build')
+        } -ArgumentList $script:GateOutput, $fake.Root, $logDir
+
+        $deadline = (Get-Date).AddSeconds(60)
+        $started = 0
+        while ((Get-Date) -lt $deadline -and $started -lt 2) {
+            if (Test-Path -LiteralPath $fake.Mark) {
+                $started = @(Get-Content -LiteralPath $fake.Mark | Where-Object { $_ -like 'start *' }).Count
+            }
+            if ($started -lt 2) { Start-Sleep -Milliseconds 200 }
+        }
+        # Released whether or not the second one arrived, so a sequential stage still ends
+        # and the assertion below is what reports the problem.
+        New-Item -ItemType File -Path $fake.Release -Force | Out-Null
+
+        $finished = Wait-Job -Job $job -Timeout 60
+        $isFinished = $null -ne $finished
+        $payload = if ($isFinished) { Receive-Job -Job $job } else { $null }
+        Stop-Job -Job $job -ErrorAction SilentlyContinue
+        Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+
+        $isFinished | Should Be $true
+        $started | Should Be 2
+        $payload.Projects.Count | Should Be 2
+        $payload.ExitCode | Should Be 0
+        Test-Path (Join-Path $logDir 'test-A.log') | Should Be $true
+        Test-Path (Join-Path $logDir 'test-B.log') | Should Be $true
+    }
+
+    It 'reports a skipped parallel stage without starting anything' {
+        $fake = New-FakeDotnetRoot
+        $env:PATH = $fake.Root + [IO.Path]::PathSeparator + $previousPath
+
+        $result = Invoke-ParallelGateStage -Name 'test' -LogDirectory $logDir -Arguments @('--no-build') `
+            -Project @('tests/A/A.csproj') -Skipped -SkipReason '0 changed test projects'
+
+        $result.Skipped | Should Be $true
+        $result.ExitCode | Should Be 0
+        $result.LogPath | Should BeNullOrEmpty
+        $result.Projects.Count | Should Be 0
+        (Get-StageLine -Result $result) | Should Match '^==> test skipped \(0 changed test projects\)$'
+        (Get-FakeDotnetCalls -CallsFile $fake.Calls).Count | Should Be 0
+    }
+
+    It 'drains both pipes of a project that floods stderr while writing to stdout' {
+        # Waiting for a project to exit before reading its pipes deadlocks as soon as the
+        # stderr buffer fills, which hung the UI check stage for 38 minutes. The job bounds
+        # the test so a regression fails instead of hanging the suite.
+        $flood = New-LogFloodingFakeDotnetRoot
+        $job = Start-Job -ScriptBlock {
+            param($GateOutput, $FakeRoot, $LogDir)
+            . $GateOutput
+            $env:PATH = $FakeRoot + [IO.Path]::PathSeparator + $env:PATH
+            $result = Invoke-ParallelGateStage -Name 'test' -LogDirectory $LogDir -Arguments @('--no-build') `
+                -Project @('tests/Flood/Flood.csproj', 'tests/Quiet/Quiet.csproj')
+            return @{ ExitCode = $result.ExitCode }
+        } -ArgumentList $script:GateOutput, $flood.Root, $logDir
+
+        $finished = Wait-Job -Job $job -Timeout 180
+        $isFinished = $null -ne $finished
+        $payload = if ($isFinished) { Receive-Job -Job $job } else { $null }
+        Stop-Job -Job $job -ErrorAction SilentlyContinue
+        Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+
+        $isFinished | Should Be $true
+        $payload.ExitCode | Should Be 0
+        $log = Get-Content -Raw -LiteralPath (Join-Path $logDir 'test-Flood.log')
+        $log | Should Match 'stdout-line'
+        ([regex]::Matches($log, 'stderr-line-').Count) | Should BeGreaterThan 19990
+    }
+
+    It 'reports a stage whose command cannot start instead of a green stage' {
+        # Process.Start applies no PATHEXT, so a PATH with nothing launchable on it leaves
+        # the stage with no command to run. It must throw rather than report green.
+        $fake = [pscustomobject]@{ Root = (New-TempDirectory -Prefix 'sqlharness-empty-path-') }
+        $env:PATH = $fake.Root
+
+        $threw = $false
+        try {
+            $result = Invoke-ParallelGateStage -Name 'test' -LogDirectory $logDir -Arguments @('--no-build') -Project @('tests/A/A.csproj')
+            if ($result.ExitCode -eq 0) { throw 'a stage that never started reported success' }
+        }
+        catch {
+            $threw = $true
+        }
+
+        $threw | Should Be $true
+    }
+}
+
 Describe 'gate-output.ps1 reported failure stage' {
     $logDir = $null
 

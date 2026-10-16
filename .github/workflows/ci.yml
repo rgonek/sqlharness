@@ -37,7 +37,12 @@ jobs:
       - run: npm ci --prefix src/SqlHarness.Dashboard/ui
       - run: npm run check --prefix src/SqlHarness.Dashboard/ui
       - run: dotnet build -warnaserror
-      - run: dotnet test --no-build --filter "FullyQualifiedName!~Integration" --logger trx --results-directory TestResults
+      # One step per test project instead of one `dotnet test` over the solution, so the job
+      # summary names the project that failed instead of "the test step". They run one after
+      # another here on purpose: the runners charge for wall clock, and a green step that
+      # hides a red one is worse than a slow log.
+      - run: dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter "FullyQualifiedName!~Integration" --logger trx --results-directory TestResults
+      - run: dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-build --filter "FullyQualifiedName!~Integration" --logger trx --results-directory TestResults
       - uses: actions/upload-artifact@v4
         if: always()
         with:

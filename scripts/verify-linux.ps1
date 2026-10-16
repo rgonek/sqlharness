@@ -9,7 +9,8 @@
     .nvmrc, installs the dashboard UI, then runs the same three .NET stages CI
     runs: build -warnaserror (which restores implicitly), test, and format
     --verify-no-changes. The UI check runs beside the build inside the build
-    stage, so the stage lines here stay sequential.
+    stage, and the two test projects run beside each other inside the test stage,
+    so the stage lines here stay sequential.
 
     The gate clone is reset to the branch tip, so the format stage checks the
     C# files the branch changed relative to origin/main, not the working tree:
@@ -261,9 +262,30 @@ Invoke-LinuxStage -Name 'build' -Arguments @($gateClone) -Lines @(
     'exit 0'
 )
 
+# The two test projects run at once, the same way the Windows gate runs them: dotnet test
+# on the solution runs them one after the other. Both live in one bash block because two
+# concurrent WSL launches would race each other over the gate clone, which is the same
+# reason the UI check is coupled into the build stage. set +e around the waits is what lets
+# a green project still be joined when the other one has already failed; stage-failure:
+# names the project whose exit code the script returns, so the summary line pairs a project
+# with its own code instead of reporting one project's failure as the other's.
+# Unlike the Windows gate, this block writes no per-project log: both projects write to the
+# one stage log and interleave there. The ==> lines below are what name the project.
 Invoke-LinuxStage -Name 'test' -Arguments @($gateClone) -Lines @(
     'cd "$1"',
-    'dotnet test SqlHarness.sln --no-build --filter "FullyQualifiedName!~Integration" --logger "console;verbosity=normal"'
+    'dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter "FullyQualifiedName!~Integration" --logger "console;verbosity=normal" &',
+    'tests_pid=$!',
+    'dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj --no-build --filter "FullyQualifiedName!~Integration" --logger "console;verbosity=normal" &',
+    'mcp_pid=$!',
+    'set +e',
+    'wait "$tests_pid"; tests_status=$?',
+    'wait "$mcp_pid"; mcp_status=$?',
+    'set -e',
+    'if [ "$tests_status" -ne 0 ]; then echo "==> tests/SqlHarness.Tests FAILED (exit $tests_status)" >&2; fi',
+    'if [ "$mcp_status" -ne 0 ]; then echo "==> tests/SqlHarness.Mcp.Tests FAILED (exit $mcp_status)" >&2; fi',
+    'if [ "$tests_status" -ne 0 ]; then echo "stage-failure: tests/SqlHarness.Tests" >&2; exit "$tests_status"; fi',
+    'if [ "$mcp_status" -ne 0 ]; then echo "stage-failure: tests/SqlHarness.Mcp.Tests" >&2; exit "$mcp_status"; fi',
+    'exit 0'
 )
 
 $changedFiles = @(& (Join-Path $PSScriptRoot 'format-changed.ps1') -Mode branch -ListOnly | Where-Object { $_ -match '\.cs$' })
