@@ -26,7 +26,7 @@
 
 ## Status
 
-- Implementation verified on Windows on 2026-10-16; final whole-branch review pending. Linux verification was waived and remains unverified. Planned 2026-10-14 at `488598d`, scope updated 2026-10-16. Executes after 072.
+- Implementation and the final combined fix wave verified on Windows on 2026-10-16; the review at `655f0df` found five minor items, all addressed in the fix wave. Scoped re-review is pending. Linux verification was waived and remains unverified. Planned 2026-10-14 at `488598d`, scope updated 2026-10-16. Executes after 072.
 - Supersedes [plan 08 — Windows approval tray](../docs/superpowers/plans/2026-09-26-audit-08-windows-approval-tray.md); the tray stays deferred.
 - Priority P1. Effort L. Risk HIGH: the first persistent-write path through MCP, a new dashboard write surface, and a journal migration.
 

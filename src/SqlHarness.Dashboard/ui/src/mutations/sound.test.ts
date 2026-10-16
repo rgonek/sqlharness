@@ -53,6 +53,19 @@ test("closes AudioContext when custom audio decoding fails", async () => {
   }
 })
 
+test("returns inline validation feedback when AudioContext construction fails", async () => {
+  class RefusingAudioContext { constructor() { throw new Error("audio unavailable") } }
+  const previousAudioContext = Object.getOwnPropertyDescriptor(globalThis, "AudioContext")
+  Object.defineProperty(globalThis, "AudioContext", { configurable: true, value: RefusingAudioContext })
+  try {
+    const file = new File([new Uint8Array([1, 2, 3])], "alert.wav", { type: "audio/wav" })
+    await expect(validateCustomSound(file)).resolves.toMatch(/could not be validated/i)
+  } finally {
+    if (previousAudioContext) Object.defineProperty(globalThis, "AudioContext", previousAudioContext)
+    else Reflect.deleteProperty(globalThis, "AudioContext")
+  }
+})
+
 test("sound choice and custom audio bytes survive a fresh module load from IndexedDB", async () => {
   const stored = new Map<string, unknown>()
   const db = {

@@ -92,6 +92,20 @@ test("a 409 approve shows the pending-state message and removed closes the dialo
   vi.restoreAllMocks()
 })
 
+test("a profile execution conflict explains that the approved request did not run", async () => {
+  const { source } = await setup()
+  stubFetch({ "/api/profiles": profiles, "/api/mutations/r-1/approve": () => new Response(JSON.stringify({ status: "busy", error: "profile_execution_busy" }), { status: 409 }) })
+  act(() => source().emit("added", request))
+  vi.useFakeTimers()
+  fireEvent.click(screen.getByRole("button", { name: "Review" }))
+  act(() => vi.advanceTimersByTime(1_000))
+  fireEvent.click(screen.getByRole("button", { name: "Approve" }))
+  await act(async () => { await Promise.resolve(); await Promise.resolve() })
+  expect(screen.getByText("Another change is already running for this profile. This request was not executed.")).toBeInTheDocument()
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
+
 test("an autoplay rejection does not hide the toast or its review action", async () => {
   const { source, play } = await setup()
   play.mockRejectedValueOnce(new Error("autoplay blocked"))

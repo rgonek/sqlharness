@@ -73,8 +73,10 @@ public sealed class MutationBrokerTests
             var submit = broker.SubmitAsync(request, MutationDecisionKind.AskOperator, Ttl, View("1", request), default);
             clock.Advance(Ttl, dispatchTimers: false);
 
-            var approve = Task.Run(() => broker.TryApprove("1", "click"));
-            var expire = Task.Run(() => clock.DispatchTimers());
+            using var start = new Barrier(3);
+            var approve = Task.Run(() => { start.SignalAndWait(); return broker.TryApprove("1", "click"); });
+            var expire = Task.Run(() => { start.SignalAndWait(); clock.DispatchTimers(); });
+            start.SignalAndWait();
             await Task.WhenAll(approve, expire);
             var result = await submit;
 
@@ -321,6 +323,31 @@ public sealed class MutationBrokerTests
 
         Assert.Equal(MutationStatus.Success, (await firstSubmit).Status);
         Assert.Equal(MutationStatus.Success, (await secondSubmit).Status);
+    }
+
+    [Fact]
+    public async Task Approving_while_profile_is_executing_reports_busy_and_consumes_the_pending_request()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var broker = Broker(clock, async (_, _) =>
+        {
+            started.TrySetResult();
+            await release.Task;
+            return Success();
+        });
+        var firstRequest = Request(session: "first");
+        var firstSubmit = broker.SubmitAsync(firstRequest, MutationDecisionKind.Execute, Ttl, View("first", firstRequest), default);
+        await started.Task;
+        var secondRequest = Request(session: "second");
+        var secondSubmit = broker.SubmitAsync(secondRequest, MutationDecisionKind.AskOperator, Ttl, View("second", secondRequest), default);
+
+        Assert.Equal(MutationApprovalResult.Busy, broker.TryApproveWithResult("second", "click"));
+        Assert.Equal(MutationStatus.Busy, (await secondSubmit).Status);
+        Assert.Empty(broker.Pending);
+        release.TrySetResult();
+        Assert.Equal(MutationStatus.Success, (await firstSubmit).Status);
     }
 
     private static MutationBroker Broker(TimeProvider clock, Func<MutationRequest, CancellationToken, Task<MutationBrokerResult>> execute) => new(clock, execute);

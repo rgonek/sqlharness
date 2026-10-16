@@ -118,10 +118,49 @@ public sealed class MutationExecutorTests
             .Select(update => update.State));
         Assert.Contains(journal.Updates, update => update.RequestId == "request-success" && update.State == "succeeded");
         Assert.DoesNotContain("writer-secret", result.Message ?? string.Empty, StringComparison.Ordinal);
+        var executed = Assert.Single(module.Operations.OfType<SqlHarnessMutationOperation>());
+        Assert.Equal(Request().Digest, executed.Approval!.Digest);
+        Assert.Equal("UPDATE dbo.T SET Value = 1", executed.Sql);
+        Assert.Equal("session", executed.SessionKey);
+        Assert.Equal("writer", executed.Approval.Writer.SqlUser);
         var resultReport = Assert.IsType<SqlHarnessQueryReport>(result.Result);
         Assert.Equal("[REDACTED]", resultReport.ResultSets[0].Rows[0][0]);
         Assert.Equal("[REDACTED]", resultReport.ResultSets[0].Rows[0][1]);
         Environment.SetEnvironmentVariable(variable, null);
+    }
+
+    [Fact]
+    public async Task Matching_prepared_digest_executes_frozen_sql_through_core_with_writer_target()
+    {
+        const string variable = "SQLHARNESS_TEST_APPROVED_PATH_PASSWORD";
+        Environment.SetEnvironmentVariable(variable, "writer-secret");
+        var profile = Profile("operator", new MutationWriter("writer", variable));
+        var profiles = new Dictionary<string, TargetProfile>(StringComparer.Ordinal) { ["local"] = profile };
+        var sessions = new RecordingMutationSessionFactory();
+        var module = new SqlHarnessModule(sessions, () => profiles);
+        var request = Request();
+        var prepared = await module.ExecuteAsync(new SqlHarnessMutationOperation(
+            new SqlTargetRequest(request.Profile, request.Vars), request.Sql, request.Parameters,
+            request.TimeoutSeconds, request.MaxRows, request.Database)
+        { SessionKey = request.SessionKey });
+        var frozen = Assert.IsType<SqlHarnessMutationPrepared>(prepared.Report).Request;
+        var executor = new MutationExecutor(module, () => profiles, () => new SqlHarnessConfig(),
+            new RecordingJournal(), TimeProvider.System);
+
+        try
+        {
+            var result = await executor.ExecuteAsync(frozen, Context("request-core-approved"), default);
+
+            Assert.Equal(MutationStatus.Success, result.Status);
+            Assert.Equal("writer", sessions.Target!.Auth.SqlUser);
+            Assert.Contains(sessions.Commands, command => command.Sql == frozen.Sql);
+            Assert.Equal(frozen.Digest, Request().Digest);
+            Assert.Equal(frozen.SessionKey, request.SessionKey);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(variable, null);
+        }
     }
 
     [Fact]
@@ -243,6 +282,46 @@ public sealed class MutationExecutorTests
         {
             ConnectedTargets.Add(target.Server);
             throw new InvalidOperationException("The test must reject target drift before connecting.");
+        }
+    }
+
+    private sealed class RecordingMutationSessionFactory : ISqlSessionFactory
+    {
+        public ResolvedTarget? Target { get; private set; }
+        public List<SqlExecutionCommand> Commands { get; } = [];
+
+        public Task<ISqlSession> ConnectAsync(ResolvedTarget target, CancellationToken ct)
+        {
+            Target = target;
+            return Task.FromResult<ISqlSession>(new RecordingMutationSession(target, Commands));
+        }
+
+        private sealed class RecordingMutationSession(ResolvedTarget target, List<SqlExecutionCommand> commands) : ISqlSession
+        {
+            public IReadOnlyList<string> Messages => [];
+            public SqlHarnessTargetIdentityReport Identity { get; set; } = new(target.Server, target.Database,
+                target.Server, target.Database, "local", SqlEngineNames.Format(target.Engine));
+
+            public Task<ISqlReader> ExecuteReaderAsync(SqlExecutionCommand command, CancellationToken ct)
+            {
+                commands.Add(command);
+                return Task.FromResult<ISqlReader>(new EmptyMutationReader());
+            }
+
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+
+        private sealed class EmptyMutationReader : ISqlReader
+        {
+            public int FieldCount => 0;
+            public int RecordsAffected => 1;
+            public string GetName(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+            public Type GetFieldType(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+            public bool GetAllowNull(int ordinal) => false;
+            public object GetValue(int ordinal) => throw new ArgumentOutOfRangeException(nameof(ordinal));
+            public Task<bool> ReadAsync(CancellationToken ct) => Task.FromResult(false);
+            public Task<bool> NextResultAsync(CancellationToken ct) => Task.FromResult(false);
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         }
     }
 }

@@ -9,28 +9,32 @@ import { mutationStore, usePendingMutations } from "./mutationStore"
 export function ApprovalDialog({ requestId }: { requestId: string | null }) {
   const pending = usePendingMutations()
   const item = pending.find(request => request.requestId === requestId)
-  const [openedAt, setOpenedAt] = useState<number | null>(null)
-  const [now, setNow] = useState(Date.now())
-  const [message, setMessage] = useState("")
+  const [openedAtState, setOpenedAtState] = useState<{ requestId: string | null; time: number | null }>({ requestId: null, time: null })
+  const [now, setNow] = useState(0)
+  const [messageState, setMessageState] = useState<{ requestId: string | null; message: string }>({ requestId: null, message: "" })
   useEffect(() => {
-    if (!requestId) return
-    setOpenedAt(Date.now())
-    setNow(Date.now())
-    setMessage("")
+    const initialize = window.setTimeout(() => {
+      const currentTime = Date.now()
+      setOpenedAtState({ requestId, time: requestId ? currentTime : null })
+      setNow(currentTime)
+    }, 0)
     const timer = window.setInterval(() => setNow(Date.now()), 250)
-    return () => window.clearInterval(timer)
+    return () => { window.clearTimeout(initialize); window.clearInterval(timer) }
   }, [requestId])
+  const openedAt = openedAtState.requestId === requestId ? openedAtState.time : null
+  const message = messageState.requestId === requestId ? messageState.message : ""
   const close = () => mutationStore.close()
   const decide = async (decision: "approve" | "deny") => {
-    const currentTime = Date.now()
+    const currentTime = now
     if (!requestId || (decision === "approve" && (openedAt === null || currentTime - openedAt < 1_000 || !item || Date.parse(item.expiresAt) <= currentTime))) return
-    setMessage("")
+    setMessageState({ requestId, message: "" })
     try {
       const result = await postMutationDecision(requestId, decision)
-      if (result === "not-pending") setMessage("This request is no longer pending")
+      if (result === "not-pending") setMessageState({ requestId, message: "This request is no longer pending" })
+      else if (result === "busy") setMessageState({ requestId, message: "Another change is already running for this profile. This request was not executed." })
       else if (decision === "deny") close()
     } catch {
-      setMessage("The decision could not be submitted. Try again.")
+      setMessageState({ requestId, message: "The decision could not be submitted. Try again." })
     }
   }
   const remaining = item ? Math.max(0, Math.ceil((Date.parse(item.expiresAt) - now) / 1_000)) : 0

@@ -6,7 +6,7 @@ Przeczytaj wybrany plan i jego spec przed wykonaniem. Wpis w kolejce nie jest zg
 
 | Plan | Zakres | Zależności | Status |
 |---|---|---|---|
-| [073](073-mutation-approval-broker.md) | `mutation` command/tool (CLI+MCP), per-profile modes, dashboard broker executes with writer credential, click approval and configurable notification sound; removes `query --allow-mutation`; supersedes tray plan 08 | 072 DONE; next free journal version | Windows verified; final whole-branch review pending; Linux unverified |
+| [073](073-mutation-approval-broker.md) | `mutation` command/tool (CLI+MCP), per-profile modes, dashboard broker executes with writer credential, click approval and configurable notification sound; removes `query --allow-mutation`; supersedes tray plan 08 | 072 DONE; next free journal version | Final review at `655f0df` found five minor items; combined fix wave verified on Windows, scoped re-review pending; Linux unverified |
 
 ## Oczekujące
 

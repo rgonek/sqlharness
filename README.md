@@ -200,7 +200,7 @@ sqlharness doctor --json
 
 `capabilities <profile> --json` describes the commands, the output modes each command accepts (`outputModesByCommand`) and the limits, scoped to that profile's engine: its parameter types, session-temp statements, engine-only limits and an `engineGuidance` object (`query`, `setup`; `query` may be empty) with the engine's native safety and setup rules, and the engine's server-identity rule in `limits.targetIdentity.server`. It also reports the effective mutation mode and whether that profile has a writer configured; the global `mutations` object carries default mode, click verification, approval timeout and dashboard reachability. Without a profile it returns engine-neutral discovery and global mutation settings, and command `--help` stays engine-neutral too. Dashboard reachability means the current home has a validated live lock/PID publication; no network probe or database connection is made. Rules that hold for both engines (setup runs once per measured session, setup locals do not carry into measured SQL, comparison semantics, budgets) live in help and tool descriptions; the engine sections below are the complete reference, read only for the engine you use. It never takes `--var`; an unknown or unreadable profile returns a JSON error envelope with exit `2` (`profile_unknown`, `profile_unavailable`). `doctor --json` checks the local installation and omits accounts and environment values.
 
-`--dry-run` on `query`, `measure` and `compare` checks the exact invocation offline; the dry-run rule is in the [Safety contract](#safety-contract).
+`--dry-run` on `query`, `mutation`, `measure` and `compare` checks the exact invocation offline; the dry-run rule is in the [Safety contract](#safety-contract).
 
 Queries and benchmarks validate their inputs before connecting, including setup and multiple cases. A separate dry run is optional: use it to check an invocation while preparing it. It cannot predict execution cost or database errors.
 
@@ -404,7 +404,7 @@ In text mode, unhandled CLI errors, including command-line parse errors, return 
 
 ### Closed targets
 
-Profiles in `~/.sqlharness/targets.json` define server, database template, variables, authentication, and optional `engine` (`sqlserver` default, or `postgres`). Missing, extra, or invalid variables are rejected. A different profile or variable set needs a new explicit user request. In request-scope MCP the operator's `--allow-profile` list approves switching to a listed profile; a different variable set still needs a new explicit user request ([docs/mcp.md](docs/mcp.md#scope-lifetime)).
+Profiles in `~/.sqlharness/targets.json` define server, database template, variables, authentication, and optional `engine` (`sqlserver` default, or `postgres`). Missing, extra, or invalid variables are rejected. A different profile or variable set needs a new explicit user request. In request-scope MCP the operator's `--allow-profile` list approves switching to a listed profile for `query` and `mutation`; a different variable set still needs a new explicit user request ([docs/mcp.md](docs/mcp.md#scope-lifetime)).
 
 ### Direct targets
 

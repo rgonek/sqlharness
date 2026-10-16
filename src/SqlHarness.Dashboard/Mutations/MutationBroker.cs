@@ -5,6 +5,7 @@ using SqlHarness.Core.Mutations;
 namespace SqlHarness.Dashboard.Mutations;
 
 internal enum MutationState { Pending, Approved, Denied, Expired, Cancelled, Executing, Succeeded, Failed, OutcomeUnknown }
+internal enum MutationApprovalResult { Accepted, Busy, NotPending }
 
 internal sealed record PendingMutationView(string RequestId, MutationRequest Request, string Environment, bool WriterSameAsReader,
     DateTimeOffset ExpiresAt);
@@ -143,6 +144,9 @@ internal sealed class MutationBroker
 
     /// <summary>False when the request is no longer Pending (expired, cancelled, decided).</summary>
     internal bool TryApprove(string requestId, string verification)
+        => TryApproveWithResult(requestId, verification) == MutationApprovalResult.Accepted;
+
+    internal MutationApprovalResult TryApproveWithResult(string requestId, string verification)
     {
         PendingRequest? approved = null;
         PendingRequest? expired = null;
@@ -151,7 +155,7 @@ internal sealed class MutationBroker
         lock (_gate)
         {
             if (!_pendingById.TryGetValue(requestId, out var pending) || pending.State != MutationState.Pending)
-                return false;
+                return MutationApprovalResult.NotPending;
             if (time.GetUtcNow() > pending.View.ExpiresAt)
             {
                 if (Transition(pending, MutationState.Expired))
@@ -162,9 +166,9 @@ internal sealed class MutationBroker
                 busy = false;
             }
             else if (!string.Equals(verification, "click", StringComparison.Ordinal))
-                return false;
+                return MutationApprovalResult.NotPending;
             else if (!Transition(pending, MutationState.Approved))
-                return false;
+                return MutationApprovalResult.NotPending;
             else
             {
                 approved = pending;
@@ -182,7 +186,7 @@ internal sealed class MutationBroker
             if (busy) approved.Completion.TrySetResult(Result(MutationStatus.Busy));
             else _ = RunExecutionAsync(approved.Request, approved.View.RequestId, MutationExecutionOrigin.Operator, approved);
         }
-        return approved is not null && !busy;
+        return approved is null ? MutationApprovalResult.NotPending : busy ? MutationApprovalResult.Busy : MutationApprovalResult.Accepted;
     }
 
     internal bool TryDeny(string requestId)

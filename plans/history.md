@@ -2,7 +2,11 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
-## Plan 073 implementation evidence — 2026-10-16 (final review pending)
+## Plan 073 final fix wave — 2026-10-16 (scoped re-review pending)
+
+The final whole-branch review at `655f0df` found five minor items: browser audio context construction feedback, truthful busy approval feedback, synchronized race-test starts, a positive prepared-digest writer execution path, and two README omissions. The combined fix wave addresses each and removes the approval dialog purity warning. Windows `just verify` passed in 8m19s: UI 260/260, Core/CLI 3,960 passed/11 skipped, MCP 401 passed/4 skipped; build and C# formatting passed. The logs are at `D:/temp/sqlharness-plan073-finalfix-20261016-1450`; detailed evidence is in the ignored local [final fix report](../.superpowers/sdd/073-mutation-approval-broker/final-fix-report.md). Localhost refusal and Happy DOM teardown output remain non-failing fixture diagnostics without an established baseline or traceable branch source. Node `DEP0190` is emitted by the unchanged `scripts/check.mjs` Windows `shell: true` spawn, also present at `655f0df`. Scoped re-review is pending. Linux remains unverified by operator direction.
+
+## Plan 073 implementation evidence — 2026-10-16
 
 Plan [073](073-mutation-approval-broker.md) passed the Windows `just verify` gate on its feature worktree: six stages in 8m18s; UI 258 passed, Core/CLI 3,958 passed/11 skipped, MCP 401 passed/4 skipped, build passed, format passed for 12 changed C# files. The focused DocsSync/Contracts/Capabilities filter passed 131/131. Linux was waived by the operator and remains unverified. Whole-branch review is pending, so plan 073 is not marked DONE or integrated. Final gate logs: `D:/temp/sqlharness-plan073-verify-final4`.
 

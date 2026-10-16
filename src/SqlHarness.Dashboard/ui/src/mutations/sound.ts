@@ -73,7 +73,9 @@ export async function validateCustomSound(file: File): Promise<string | null> {
     return "Choose an MP3, WAV, or OGG audio file with a matching file type."
   if (file.size > MAX_CUSTOM_SOUND_BYTES) return "Audio files must be 2 MiB or smaller."
   if (typeof AudioContext === "undefined") return null
-  const context = new AudioContext()
+  let context: AudioContext
+  try { context = new AudioContext() }
+  catch { return "The selected file could not be validated as audio in this browser." }
   try {
     await context.decodeAudioData(await file.arrayBuffer())
   } catch { return "The selected file could not be decoded as audio." }

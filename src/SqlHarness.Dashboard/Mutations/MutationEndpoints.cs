@@ -158,8 +158,17 @@ internal static class MutationEndpoints
         if (!IsSupportedConfiguration(services.LoadConfigResult()))
             return ConfigurationUnavailable();
 
-        var accepted = approve ? services.Broker.TryApprove(id, "click") : services.Broker.TryDeny(id);
-        return accepted ? Results.Ok() : Results.Conflict(new { error = "request_not_pending" });
+        if (approve)
+        {
+            var result = services.Broker.TryApproveWithResult(id, "click");
+            return result switch
+            {
+                MutationApprovalResult.Accepted => Results.Ok(),
+                MutationApprovalResult.Busy => Results.Conflict(new { status = MutationStatus.Busy, error = "profile_execution_busy" }),
+                _ => Results.Conflict(new { error = "request_not_pending" }),
+            };
+        }
+        return services.Broker.TryDeny(id) ? Results.Ok() : Results.Conflict(new { error = "request_not_pending" });
     }
 
     private static async Task EventsAsync(HttpContext context, MutationEndpointServices services)
