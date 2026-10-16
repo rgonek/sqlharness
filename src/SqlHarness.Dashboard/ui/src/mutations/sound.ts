@@ -7,7 +7,7 @@ export type BuiltInSoundId = typeof BUILT_IN_SOUNDS[number]["id"]
 export type SoundSelection = BuiltInSoundId | "custom"
 export type SoundPreferences = { selection: SoundSelection; muted: boolean; customAudio: Blob | null }
 export const MAX_CUSTOM_SOUND_BYTES = 2 * 1024 * 1024
-const ACCEPTED_CUSTOM_AUDIO = new Set(["audio/mpeg", "audio/wav", "audio/x-wav", "audio/ogg", "application/ogg"])
+const ACCEPTED_CUSTOM_AUDIO = new Set(["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "application/ogg"])
 const DATABASE = "sqlharness-dashboard-local"
 const STORE = "mutation-sound"
 const KEY = "preferences"
@@ -73,11 +73,11 @@ export async function validateCustomSound(file: File): Promise<string | null> {
     return "Choose an MP3, WAV, or OGG audio file with a matching file type."
   if (file.size > MAX_CUSTOM_SOUND_BYTES) return "Audio files must be 2 MiB or smaller."
   if (typeof AudioContext === "undefined") return null
+  const context = new AudioContext()
   try {
-    const context = new AudioContext()
     await context.decodeAudioData(await file.arrayBuffer())
-    await context.close()
   } catch { return "The selected file could not be decoded as audio." }
+  finally { await context.close().catch(() => {}) }
   return null
 }
 

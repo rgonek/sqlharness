@@ -12,6 +12,7 @@ const response = (over: Partial<SettingsResponse> = {}): SettingsResponse => ({
     dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, agentTranscripts: { enabled: false } },
     compare: { requireContext: true },
     diagnostics: { enabled: false },
+    mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 },
   },
   ...over,
 })
@@ -93,6 +94,7 @@ test("Toggle_saves_immediately", async () => {
   await userEvent.click(await screen.findByRole("switch", { name: "Start with mcp serve" }))
   await waitFor(() => expect(puts).toHaveLength(1))
   expect((puts[0].body as Put).dashboard.autoStart).toBe(true)
+  expect((puts[0].body as { mutations: unknown }).mutations).toEqual(response().settings.mutations)
   expect(await screen.findByText("Saved")).toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument()
 })

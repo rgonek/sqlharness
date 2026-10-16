@@ -17,6 +17,7 @@ const links = [
   { to: "/operations", label: "Operations", exact: false },
   { to: "/stats", label: "Statistics", exact: false },
   { to: "/profiles", label: "Profiles", exact: false },
+  { to: "/mutations", label: "Mutations", exact: false },
   { to: "/settings", label: "Settings", exact: false },
 ] as const
 

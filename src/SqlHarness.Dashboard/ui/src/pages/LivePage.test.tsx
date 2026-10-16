@@ -177,6 +177,7 @@ test("clearing transcript data removes stale titles and models from the live cac
       journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
       dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, agentTranscripts: { enabled: false } }, compare: { requireContext: true },
       diagnostics: { enabled: false },
+      mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 },
     } },
     "/api/prices": { source: "embedded", fetchedAt: "2026-10-07T09:00:00Z", origin: "embedded" },
     "/api/transcripts": { enabled: false, matched: 1, unmatched: 0, readErrors: 0, lastCycleAt: null },
