@@ -99,4 +99,15 @@ public sealed class JournalingBenchmarkTests
 
         Assert.Equal("succeeded", JournalDb.Rows(temp.DatabasePath, "SELECT status FROM operations").Single()["status"]);
     }
+
+    [Fact]
+    public async Task Failed_exit_outcome_with_completed_runs_is_journaled()
+    {
+        var outcome = BenchmarkOutcome(matrixCell: 0) with { ExitCode = SqlHarnessExitCode.LocalStorage };
+
+        using var temp = await RunAsync(outcome, storeSensitive: false);
+
+        Assert.Equal(0L, JournalDb.Rows(temp.DatabasePath, "SELECT matrix_cell FROM operation_metrics").Single()["matrix_cell"]);
+        Assert.NotEqual("succeeded", JournalDb.Rows(temp.DatabasePath, "SELECT status FROM operations").Single()["status"]);
+    }
 }
