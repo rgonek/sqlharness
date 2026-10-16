@@ -34,8 +34,8 @@ public sealed class MutationJournalTests
 
         Assert.Equal(13, JournalSchema.CurrentVersion);
         Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version").Single()["user_version"]);
-        Assert.Equal(new[] { "id", "request_id", "session_key", "host_pid", "host_started_at", "profile", "engine", "server", "database_name", "tier", "mode", "digest", "sql_text",
-            "parameters_json", "state", "status", "verification", "created_at", "decided_at", "finished_at" },
+        Assert.Equal(new[] { "id", "request_id", "session_key", "host_pid", "host_started_at", "profile", "engine", "server", "database_name", "tier", "mode", "digest",
+            "environment", "sql_text", "parameters_json", "state", "status", "verification", "created_at", "decided_at", "finished_at" },
             JournalDb.Rows(temp.DatabasePath, "SELECT name FROM pragma_table_info('mutation_requests') ORDER BY cid")
                 .Select(row => (string)row["name"]!).ToArray());
         Assert.Single(JournalDb.Rows(temp.DatabasePath,
@@ -63,6 +63,19 @@ public sealed class MutationJournalTests
         Assert.Equal(record.CreatedAt.AddSeconds(2).UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"), row["finished_at"]);
         Assert.Equal(record.Sql, row["sql_text"]);
         Assert.Equal(record.ParametersJson, row["parameters_json"]);
+    }
+
+    [Fact]
+    public void Mutation_history_keeps_the_environment_label_from_submission()
+    {
+        using var temp = new JournalTempDirectory();
+        var record = Record("environment") with { Environment = "production" };
+
+        Open(temp).RecordMutation(record);
+
+        var summary = new SqlHarness.Dashboard.JournalReader(temp.DatabasePath, SqlHarness.Core.ProcessInfo.Current)
+            .MutationRequests().Items.Single();
+        Assert.Equal("production", summary.Environment);
     }
 
     [Fact]

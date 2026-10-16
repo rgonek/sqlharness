@@ -245,7 +245,7 @@ internal static class JournalSchema
           session_key TEXT NOT NULL,
           host_pid INTEGER NOT NULL, host_started_at TEXT NULL,
           profile TEXT NOT NULL, engine TEXT NOT NULL, server TEXT NOT NULL, database_name TEXT NOT NULL,
-          tier TEXT NOT NULL, mode TEXT NOT NULL, digest TEXT NOT NULL,
+          tier TEXT NOT NULL, mode TEXT NOT NULL, digest TEXT NOT NULL, environment TEXT NULL,
           sql_text TEXT NULL, parameters_json TEXT NULL,
           state TEXT NOT NULL, status TEXT NULL, verification TEXT NULL,
           created_at TEXT NOT NULL, decided_at TEXT NULL, finished_at TEXT NULL);

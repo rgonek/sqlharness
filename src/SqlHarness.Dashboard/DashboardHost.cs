@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using Microsoft.Data.Sqlite;
 
 using SqlHarness.Core;
+using SqlHarness.Core.Journal;
 using SqlHarness.Dashboard.Transcripts;
 
 namespace SqlHarness.Dashboard;
@@ -112,8 +113,9 @@ public static class DashboardHost
 
         using var held = acquired;
 
-        if (options.Config.Config.Journal.Enabled)
-            _ = ActivityJournal.Open(options.DatabasePath, options.Config.Config.Journal, TextWriter.Null, TimeProvider.System);
+        var mutationJournal = options.Config.Config.Journal.Enabled
+            ? ActivityJournal.Open(options.DatabasePath, options.Config.Config.Journal, TextWriter.Null, options.Time)
+            : NullActivityJournal.Instance;
         var reader = new JournalReader(options.DatabasePath, options.Processes);
         long? version;
         try
@@ -169,6 +171,7 @@ public static class DashboardHost
                     Time = options.Time,
                     AgentHomes = options.AgentHomes ?? AgentHomes.Current(),
                     AgentDirectoryProbe = options.AgentDirectoryProbe,
+                    MutationJournal = mutationJournal,
                 },
                 ct);
         }

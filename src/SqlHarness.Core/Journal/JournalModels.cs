@@ -96,4 +96,5 @@ public sealed record WatchProgress(int Polls, int ChangedPolls, long ElapsedMill
 /// <summary>Mutation approval lifecycle metadata. SQL and parameter values are stored only when journal.storeSensitive is enabled.</summary>
 public sealed record MutationJournalRecord(
     string RequestId, string SessionKey, string Profile, string Engine, string Server, string Database,
-    string Tier, string Mode, string Digest, string? Sql, string? ParametersJson, DateTimeOffset CreatedAt);
+    string Tier, string Mode, string Digest, string? Sql, string? ParametersJson, DateTimeOffset CreatedAt,
+    string? Environment = null);

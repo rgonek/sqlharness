@@ -274,7 +274,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var pageLimit = Math.Clamp(limit, 1, MaximumLimit);
         var rows = Query(connection, """
             SELECT id, request_id, session_key, profile, engine, server, database_name, tier, mode, digest,
-                   sql_text, parameters_json, state, status, verification, created_at, decided_at, finished_at
+                   sql_text, parameters_json, state, status, verification, created_at, decided_at, finished_at, environment
             FROM mutation_requests
             WHERE $cursor IS NULL OR id < $cursor
             ORDER BY id DESC LIMIT $limit;
@@ -282,7 +282,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
             reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4),
             reader.GetString(5), reader.GetString(6), reader.GetString(7), reader.GetString(8), reader.GetString(9),
             NullableString(reader, 10), NullableString(reader, 11), reader.GetString(12), NullableString(reader, 13),
-            NullableString(reader, 14), reader.GetString(15), NullableString(reader, 16), NullableString(reader, 17)));
+            NullableString(reader, 14), reader.GetString(15), NullableString(reader, 16), NullableString(reader, 17), NullableString(reader, 18)));
         var hasMore = rows.Count > pageLimit;
         var page = rows.Take(pageLimit).ToArray();
         return new Page<MutationRequestSummary>(page, hasMore ? page[^1].Id : null);

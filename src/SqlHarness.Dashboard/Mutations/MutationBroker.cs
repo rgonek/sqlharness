@@ -1,3 +1,5 @@
+using System.Threading.Channels;
+
 using SqlHarness.Core.Mutations;
 
 namespace SqlHarness.Dashboard.Mutations;
@@ -10,6 +12,15 @@ internal sealed record PendingMutationView(string RequestId, MutationRequest Req
 internal abstract record BrokerEvent;
 internal sealed record MutationAdded(PendingMutationView View) : BrokerEvent;
 internal sealed record MutationRemoved(string RequestId, MutationState State) : BrokerEvent;
+internal sealed record MutationEventEnvelope(long Sequence, BrokerEvent Event);
+
+internal sealed class MutationBrokerSubscription(MutationBroker broker, ChannelReader<MutationEventEnvelope> events) : IDisposable
+{
+    public ChannelReader<MutationEventEnvelope> Events { get; } = events;
+    public IReadOnlyList<PendingMutationView> Snapshot { get; internal init; } = [];
+    public long Sequence { get; internal init; }
+    public void Dispose() => broker.Unsubscribe(this);
+}
 
 internal sealed class MutationBroker
 {
@@ -30,10 +41,37 @@ internal sealed class MutationBroker
     private readonly Dictionary<string, PendingRequest> _pendingById = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTimeOffset> _deniedDigests = new(StringComparer.Ordinal);
     private readonly HashSet<string> _executingProfiles = new(StringComparer.Ordinal);
-    private readonly Queue<BrokerEvent> _events = new();
+    private readonly Queue<MutationEventEnvelope> _events = new();
+    private readonly Dictionary<MutationBrokerSubscription, Channel<MutationEventEnvelope>> _subscriptions = [];
+    private long _eventSequence;
     private bool _dispatchingEvents;
 
     internal event Action<BrokerEvent>? Changed;
+
+    internal MutationBrokerSubscription Subscribe()
+    {
+        lock (_gate)
+        {
+            var channel = Channel.CreateUnbounded<MutationEventEnvelope>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
+            var subscription = new MutationBrokerSubscription(this, channel.Reader)
+            {
+                Snapshot = _pendingById.Values.Where(pending => pending.State == MutationState.Pending)
+                    .Select(pending => pending.View).ToArray(),
+                Sequence = _eventSequence,
+            };
+            _subscriptions.Add(subscription, channel);
+            return subscription;
+        }
+    }
+
+    internal void Unsubscribe(MutationBrokerSubscription subscription)
+    {
+        lock (_gate)
+        {
+            if (!_subscriptions.Remove(subscription, out var channel)) return;
+            channel.Writer.TryComplete();
+        }
+    }
 
     internal IReadOnlyList<PendingMutationView> Pending
     {
@@ -265,7 +303,7 @@ internal sealed class MutationBroker
 
     private bool QueueEventUnderLock(BrokerEvent change)
     {
-        _events.Enqueue(change);
+        _events.Enqueue(new MutationEventEnvelope(++_eventSequence, change));
         if (_dispatchingEvents) return false;
         _dispatchingEvents = true;
         return true;
@@ -275,7 +313,7 @@ internal sealed class MutationBroker
     {
         while (true)
         {
-            BrokerEvent change;
+            MutationEventEnvelope envelope;
             Delegate[]? handlers;
             lock (_gate)
             {
@@ -284,14 +322,17 @@ internal sealed class MutationBroker
                     _dispatchingEvents = false;
                     return;
                 }
-                change = _events.Dequeue();
+                envelope = _events.Dequeue();
                 handlers = Changed?.GetInvocationList();
+                foreach (var (subscription, channel) in _subscriptions)
+                    if (envelope.Sequence > subscription.Sequence)
+                        channel.Writer.TryWrite(envelope);
             }
 
             if (handlers is null) continue;
             foreach (var handler in handlers)
             {
-                try { ((Action<BrokerEvent>)handler)(change); }
+                try { ((Action<BrokerEvent>)handler)(envelope.Event); }
                 catch { }
             }
         }

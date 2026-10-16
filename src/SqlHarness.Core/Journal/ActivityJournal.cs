@@ -418,9 +418,9 @@ public sealed class ActivityJournal : IActivityJournal
             using var insert = connection.CreateCommand();
             insert.CommandText = """
                 INSERT INTO mutation_requests (request_id, session_key, host_pid, host_started_at, profile, engine, server, database_name,
-                    tier, mode, digest, sql_text, parameters_json, state, created_at)
+                    tier, mode, digest, environment, sql_text, parameters_json, state, created_at)
                 VALUES ($requestId, $sessionKey, $hostPid, $hostStartedAt, $profile, $engine, $server, $database,
-                    $tier, $mode, $digest, $sql, $parameters, 'pending', $createdAt);
+                    $tier, $mode, $digest, $environment, $sql, $parameters, 'pending', $createdAt);
                 """;
             insert.Parameters.AddWithValue("$requestId", record.RequestId);
             insert.Parameters.AddWithValue("$sessionKey", record.SessionKey);
@@ -433,6 +433,7 @@ public sealed class ActivityJournal : IActivityJournal
             insert.Parameters.AddWithValue("$tier", record.Tier);
             insert.Parameters.AddWithValue("$mode", record.Mode);
             insert.Parameters.AddWithValue("$digest", record.Digest);
+            insert.Parameters.AddWithValue("$environment", (object?)record.Environment ?? DBNull.Value);
             insert.Parameters.AddWithValue("$sql", _storeSensitive ? (object?)record.Sql ?? DBNull.Value : DBNull.Value);
             insert.Parameters.AddWithValue("$parameters", _storeSensitive ? (object?)record.ParametersJson ?? DBNull.Value : DBNull.Value);
             insert.Parameters.AddWithValue("$createdAt", Timestamp(record.CreatedAt));

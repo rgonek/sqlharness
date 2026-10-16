@@ -8,7 +8,7 @@ public sealed record Page<T>(IReadOnlyList<T> Items, long? NextCursor);
 public sealed record MutationRequestSummary(
     long Id, string RequestId, string SessionKey, string Profile, string Engine, string Server, string Database,
     string Tier, string Mode, string Digest, string? Sql, string? ParametersJson, string State, string? Status,
-    string? Verification, string CreatedAt, string? DecidedAt, string? FinishedAt);
+    string? Verification, string CreatedAt, string? DecidedAt, string? FinishedAt, string? Environment = null);
 
 /// <summary>
 /// Session list filter. With <c>Starred</c> set the list is ordered by id and pages by an exact id cursor; unfiltered, starred
