@@ -189,6 +189,7 @@ export type OperationDetail = {
   candidateSqlHash: string | null
   sqlText: string | null
   candidateSqlText: string | null
+  setupSqlText: string | null
   rawTokens: number | null
   emittedTokens: number | null
   rawBytes: number | null

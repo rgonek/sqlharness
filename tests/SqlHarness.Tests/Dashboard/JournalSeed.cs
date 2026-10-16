@@ -21,11 +21,14 @@ internal sealed class JournalSeed
         string sql = "SELECT 1", long durationMs = 10, BenchmarkJournalRecord? benchmark = null, bool complete = true,
         SeedTokens tokens = SeedTokens.Both, string? profile = "local", IReadOnlyDictionary<string, string>? variables = null,
         string engine = "sqlserver", string server = "srv", string database = "db",
-        string? errorKind = null, string? cancelReason = null, AgentCallMetadata? agent = null)
+        string? errorKind = null, string? cancelReason = null, AgentCallMetadata? agent = null, string? setupSql = null)
     {
         variables ??= new Dictionary<string, string> { ["tenant"] = "acme" };
         var handle = _journal.Begin(session, new OperationStart(operation, profile, variables,
-            false, OperationJournalDescriber.SqlHash(sql), null, sql, null, agent))!;
+            false, OperationJournalDescriber.SqlHash(sql), null, sql, null, agent)
+        {
+            SetupSqlText = setupSql,
+        })!;
         _time.Now = _time.Now.AddSeconds(1);
         if (complete)
         {

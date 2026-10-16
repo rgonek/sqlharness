@@ -2,8 +2,8 @@ import { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { formatSql, highlightSql } from "@/lib/sql"
 
-export function SqlBlock({ sql, engine, label }: { sql: string; engine: string | null | undefined; label?: string }) {
-  const [formatted, setFormatted] = useState(true)
+export function SqlBlock({ sql, engine, label, initiallyFormatted = true }: { sql: string; engine: string | null | undefined; label?: string; initiallyFormatted?: boolean }) {
+  const [formatted, setFormatted] = useState(initiallyFormatted)
   const text = useMemo(() => (formatted ? formatSql(sql, engine) : sql), [formatted, sql, engine])
   const html = useMemo(() => highlightSql(text), [text])
   return (

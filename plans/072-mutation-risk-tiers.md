@@ -19,7 +19,7 @@ No command reaches `SqlUsage.Mutation` in this plan. Plan 073 wires it to the `m
 
 ## Status
 
-- TODO; planned 2026-10-14 at `488598d`. Plan 073 depends on it.
+- DONE and integrated locally into `main` at merge commit `a500d62`; implementation range `7a2482c..2aafd6a`. Final integrated revision `90d32c7f44b1af1bac2759285a7d95f191f0f5cf` passed Windows `just verify`; Format and UI install stages were skipped as recorded below. Linux was skipped at the operator's direction and is not required while CI runs locally. Final review findings are resolved. Plan 073 depends on it.
 - Priority P1. Effort M. Risk MEDIUM: safety classifier code, but `Query` and `CompareSetup` behaviour must not change.
 
 ## Global Constraints
@@ -40,7 +40,7 @@ No command reaches `SqlUsage.Mutation` in this plan. Plan 073 wires it to the `m
   
   Names are unquoted identifier values in source order, without deduplication.
 - Do not auto-format files; touch only the lines the change needs (operator rule).
-- Done means `just verify` then `just verify-linux`, run one at a time, both green ([Development](../README.md#development)).
+- Done means `just verify` passes on the final product tree ([Development](../README.md#development)). `just verify-linux` is not a completion criterion while CI runs locally; report it as unverified when skipped.
 
 ## Review Focus
 
@@ -82,7 +82,7 @@ No command reaches `SqlUsage.Mutation` in this plan. Plan 073 wires it to the `m
   - `SqlSafetyDecision.Tier { get; init; }` (default `ReadOnly`)
   - `SqlSafetyDecision.Grantees { get; init; }` (default empty `IReadOnlyList<string>`)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```csharp
 using SqlHarness.Core;
@@ -134,12 +134,12 @@ public class SqlSafetyTierTests
 }
 ```
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
 
 Run: `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~SqlSafetyTierTests`
 Expected: compile failure (`SqlRiskTier` and `SqlUsage.Mutation` do not exist).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/SqlHarness.Core/SqlRiskTier.cs`:
 
@@ -192,12 +192,12 @@ In `SqlSafety.cs`:
 4. In `ClassifyQuery`, accumulate `tier = SqlRiskTiers.Max(tier, classification.Tier)` next to `hasMutation`, and set `Tier = tier` on every `Allowed(...)` it returns. Do the same in `ClassifyCompareSetup` (its batches can only reach `Session`).
 5. Route `SqlUsage.Mutation` to a new `ClassifyMutation(script.Batches, inspection)`. For now it copies `ClassifyQuery`'s statement loop and returns `Allowed(hasMutation: tier >= SqlRiskTier.Dml, hasSessionLocal: …) with { Tier = tier }`. There is no `allowMutation`/`confirmDatabase` check: under `Mutation`, approval is the broker's job (plan 073).
 
-- [ ] **Step 4: Run the tier tests and the full safety suite**
+- [x] **Step 4: Run the tier tests and the full safety suite**
 
 Run: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~SqlSafety|FullyQualifiedName~Postgres"`
 Expected: PASS, with every existing test unchanged.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/SqlHarness.Core/SqlRiskTier.cs src/SqlHarness.Core/SqlSafety.cs tests/SqlHarness.Tests/SqlSafetyTierTests.cs
@@ -251,7 +251,7 @@ Rules under `Mutation`. Each statement goes through these steps in order:
 - `CreateEndpointStatement`, `AlterServerConfigurationStatement` subclasses;
 - `UseStatement`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```csharp
 [Theory]
@@ -303,19 +303,19 @@ In `SqlSafetyNodeCoverageTests`, add a coverage test. It enumerates every concre
 
 Other types are listed in a test-local `KnownDeniedByOmission` set with a one-line comment per group, following the existing `KnownDeniedTableReferenceTypes` pattern. The test fails on any unlisted type, so a ScriptDom upgrade forces a decision.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~SqlSafetyTierTests|FullyQualifiedName~SqlSafetyNodeCoverageTests"`
 Expected: the schema-tier tests FAIL (denied).
 
-- [ ] **Step 3: Implement the map and the `ClassifyMutation` arm** as described above. Keep `Query` and `CompareSetup` paths untouched: the new code runs only when `usage == SqlUsage.Mutation`.
+- [x] **Step 3: Implement the map and the `ClassifyMutation` arm** as described above. Keep `Query` and `CompareSetup` paths untouched: the new code runs only when `usage == SqlUsage.Mutation`.
 
-- [ ] **Step 4: Run the full safety suites**
+- [x] **Step 4: Run the full safety suites**
 
 Run: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~SqlSafety|FullyQualifiedName~Dialect"`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/SqlHarness.Core/SqlMutationStatementMap.cs src/SqlHarness.Core/SqlSafety.cs tests/SqlHarness.Tests/SqlSafetyTierTests.cs tests/SqlHarness.Tests/SqlSafetyNodeCoverageTests.cs
@@ -348,7 +348,7 @@ Grantee extraction:
 - `CreateUserStatement.Name.Value`;
 - `AlterUserStatement.Name.Value`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```csharp
 [Fact]
@@ -377,19 +377,19 @@ public void Query_usage_still_rejects_grant() =>
     Assert.False(Query("GRANT SELECT ON dbo.T TO app").Allowed);
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~SqlSafetyTierTests`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement** the set, the extraction and the arm in `ClassifyMutation`. Accumulate grantees across statements in source order.
+- [x] **Step 3: Implement** the set, the extraction and the arm in `ClassifyMutation`. Accumulate grantees across statements in source order.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~SqlSafety"`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/SqlHarness.Core/SqlMutationStatementMap.cs src/SqlHarness.Core/SqlSafety.cs tests/SqlHarness.Tests/SqlSafetyTierTests.cs
@@ -417,7 +417,7 @@ git commit -m "Classify T-SQL privilege statements and collect grantees under Mu
 
 The `opaque` tier also covers statements nested in `IF`/`BEGIN…END` through the existing `Combine` path.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```csharp
 [Theory]
@@ -448,19 +448,19 @@ public void Query_usage_still_rejects_exec() =>
     Assert.False(Query("EXEC dbo.P").Allowed);
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~SqlSafetyTierTests`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement** `IsAllowedOpaque` and the `ExecuteStatement` arm in `ClassifyMutation`.
+- [x] **Step 3: Implement** `IsAllowedOpaque` and the `ExecuteStatement` arm in `ClassifyMutation`.
 
-- [ ] **Step 4: Run the T-SQL suites**
+- [x] **Step 4: Run the T-SQL suites**
 
 Run: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~SqlSafety"`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/SqlHarness.Core/SqlMutationStatementMap.cs src/SqlHarness.Core/SqlSafety.cs tests/SqlHarness.Tests/SqlSafetyTierTests.cs
@@ -492,7 +492,7 @@ Rules under `Mutation`:
   - anything in `DeniedExactFunctions` (unchanged);
   - every `default:` arm.
 
-- [ ] **Step 1: Write the failing tests** (follow the `PostgresSafetyTests` construction: `new PostgresSafetyClassifier().Classify(sql, SqlUsage.Mutation, "appdb", false, null, Empty)`).
+- [x] **Step 1: Write the failing tests** (follow the `PostgresSafetyTests` construction: `new PostgresSafetyClassifier().Classify(sql, SqlUsage.Mutation, "appdb", false, null, Empty)`).
 
 ```csharp
 [Theory]
@@ -531,22 +531,22 @@ public void Query_usage_is_unchanged(string sql) =>
     Assert.False(Classify(sql, SqlUsage.Query).Allowed);
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~PostgresSafetyTierTests`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   1. Add `Schema`, `Privilege` and `Opaque` to `StatementKind`, and a `Tier` property to the outcome.
   2. Pass `usage` into `ClassifyStatement`. The new arms return the new kinds only when `usage == SqlUsage.Mutation`; otherwise the original `Unsupported` stays.
   3. Add a `ClassifyMutation` that loops like `ClassifyQuery`, takes the maximum tier and collects grantees.
 
-- [ ] **Step 4: Run the PostgreSQL suites**
+- [x] **Step 4: Run the PostgreSQL suites**
 
 Run: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~Postgres"`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/SqlHarness.Core/Postgres/PostgresSafetyClassifier.cs tests/SqlHarness.Tests/Postgres/PostgresSafetyTierTests.cs
@@ -562,32 +562,39 @@ git commit -m "Classify PostgreSQL schema, privilege and opaque statements under
 **Interfaces:**
 - Produces: `SqlHarnessDryRunReport(string Command, string Classification, string Tier, IReadOnlyList<BenchmarkParameterReport> Parameters, int ParameterSets)`. `Tier` is a `SqlRiskTiers.Label` value. For `measure`/`compare` it is the maximum over the measured SQL and the setup.
 
-- [ ] **Step 1: Write the failing test** in `DryRunCommandTests`: `query --dry-run` over `CREATE TABLE #t (Id int); SELECT 1 AS A;` emits `"tier":"session"`, and over `SELECT 1 AS A` emits `"tier":"read-only"`. Mirror the existing assertions in that file for JSON output.
+- [x] **Step 1: Write the failing test** in `DryRunCommandTests`: `query --dry-run` over `CREATE TABLE #t (Id int); SELECT 1 AS A;` emits `"tier":"session"`, and over `SELECT 1 AS A` emits `"tier":"read-only"`. Mirror the existing assertions in that file for JSON output.
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~DryRunCommandTests`
 Expected: FAIL (no `tier`).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   1. Add `Tier` after `Classification` in the record and fill it from the decision(s).
   2. Update every JSON shape test that pins the dry-run report.
   3. README › Dry run: add `tier` to the listed report fields: "`tier` (`read-only`, `session`, `dml`, `schema`, `privilege`, `opaque`; the highest-risk statement wins)".
 
-- [ ] **Step 4: Run both test projects**
+- [x] **Step 4: Run both test projects**
 
-Run: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~DryRun|FullyQualifiedName~Contracts|FullyQualifiedName~DocsSync"` and `dotnet test tests/SqlHarness.Mcp.Tests`
+Run: `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~DryRun|FullyQualifiedName~Contracts|FullyQualifiedName~DocsSync"` and `dotnet test tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj -p:IsTestProject=true`
 Expected: PASS.
 
-- [ ] **Step 5: Gates, then commit**
+- [x] **Step 5: Final gate and completion bookkeeping** — Windows `just verify` passed on reviewed product revision `2aafd6a`. Linux was skipped at the operator's direction; it is not a completion criterion while CI runs locally.
 
-Run `just verify`, then `just verify-linux`, one at a time.
+Run: `just verify --LogDirectory C:/Users/rgone/AppData/Local/Temp/sqlharness-plan072-20261015/windows`
 
-```bash
-git add src/SqlHarness.Core/Contracts.cs src/SqlHarness.Core/SqlHarnessModule.cs README.md tests plans/README.md plans/072-mutation-risk-tiers.md
-git commit -m "Report the risk tier in dry runs; mark plan 072 done"
-```
+Expected: PASS on the final reviewed product tree.
 
-Plan bookkeeping in that commit:
-- set this plan's Status to DONE with the commit range;
-- move its row in `plans/README.md` from Pending to History (`plans/history.md`).
+The MCP test project requires `-p:IsTestProject=true` in this checkout; without it `dotnet test` only builds and discovers no tests.
+
+### PostgreSQL parser limits
+
+SqlParserCS 0.6.5 does not parse `DO`, the PostgreSQL `CREATE/ALTER USER` aliases, canonical `ANALYZE`, or the tested `ALTER VIEW ... RENAME` and `CREATE PROCEDURE` forms; they remain fail-closed parse errors. `DROP ROLE` is represented as generic `Drop(ObjectType.Role)` and classified as `Privilege`.
+
+## Final verification evidence
+
+- Implemented on feature branch `feat/plan-072-mutation-risk-tiers`, range `7a2482c..2aafd6a`, and merged into `main` at `a500d62`.
+- Integrated product revision: `90d32c7f44b1af1bac2759285a7d95f191f0f5cf`.
+- Windows command: `just verify --LogDirectory C:/Users/rgone/AppData/Local/Temp/sqlharness-plan072-20261015/main-windows`; exit 0, the six-stage gate passed. Core: 3,835 passed and 11 skipped; MCP: 386 passed and 4 skipped. UI checks and build passed. Format was skipped because 0 C# files changed; UI install was skipped because the lockfile was unchanged.
+- Linux: skipped at the operator's direction. An earlier attempt was interrupted and exited 1; no Linux pass is claimed. Per [verification policy](../docs/agents/verification.md), Linux is not a completion criterion while CI runs locally.
+- Final scoped review findings were resolved on `2aafd6a`; the final Sol low re-review was clean.

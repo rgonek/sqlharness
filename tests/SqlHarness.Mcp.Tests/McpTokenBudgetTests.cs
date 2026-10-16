@@ -93,7 +93,7 @@ public sealed class McpTokenBudgetTests
     {
         var outcome = new SqlHarnessOutcome(
             SqlHarnessExitCode.Success,
-            new SqlHarnessDryRunReport("query", "read-only", [], 0),
+            new SqlHarnessDryRunReport("query", "read-only", "read-only", [], 0),
             null);
         var result = McpResultAdapter.Adapt(outcome, "inspect");
 
@@ -615,7 +615,7 @@ public sealed class McpTokenBudgetTests
     {
         var outcome = new SqlHarnessOutcome(
             SqlHarnessExitCode.Success,
-            new SqlHarnessDryRunReport("query", "read-only", [], 0),
+            new SqlHarnessDryRunReport("query", "read-only", "read-only", [], 0),
             null);
 
         var fits = McpResultAdapter.Adapt(outcome, "sqlharness_query", new McpResultBudget(4096));
@@ -645,7 +645,7 @@ public sealed class McpTokenBudgetTests
     {
         var outcome = new SqlHarnessOutcome(
             SqlHarnessExitCode.Success,
-            new SqlHarnessDryRunReport("query", "read-only", [], 0),
+            new SqlHarnessDryRunReport("query", "read-only", "read-only", [], 0),
             null);
 
         var zero = McpResultAdapter.Adapt(outcome, "sqlharness_query", new McpResultBudget(16384, 0));
@@ -734,7 +734,7 @@ public sealed class McpTokenBudgetTests
         // reported for the record.
         var outcome = new SqlHarnessOutcome(
             SqlHarnessExitCode.Success,
-            new SqlHarnessDryRunReport("query", "read-only", [], 0),
+            new SqlHarnessDryRunReport("query", "read-only", "read-only", [], 0),
             null);
 
         var result = McpResultAdapter.Adapt(outcome, "sqlharness_query");

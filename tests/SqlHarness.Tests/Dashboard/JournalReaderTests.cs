@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 
 using Microsoft.Data.Sqlite;
@@ -379,6 +381,20 @@ public sealed class JournalReaderTests
         var id = Assert.Single(reader.Sessions(new SessionQuery()).Items).Id;
 
         Assert.Equal("2025-06-18", reader.Session(id)!.Session.ProtocolVersion);
+    }
+
+    [Fact]
+    public void Operation_detail_reads_sensitive_setup_sql()
+    {
+        using var home = new TempHome();
+        var setup = "CREATE TABLE #data (id int);";
+        var handle = new JournalSeed(home.DatabasePath, storeSensitive: true)
+            .Operation(JournalSeed.Session("cli:setup"), operation: "measure", sql: "SELECT id FROM #data", setupSql: setup);
+
+        var detail = Reader(home).Operation(handle.OperationId)!;
+
+        Assert.Equal("SELECT id FROM #data", detail.SqlText);
+        Assert.Equal(setup, detail.SetupSqlText);
     }
 
     // The reader never migrates (the dashboard host opens the journal first and refuses an older
@@ -1203,6 +1219,46 @@ public sealed class JournalReaderTests
         Assert.Equal(["cli:path"], Keys(@"work\a_b"));
         Assert.Equal(["cli:path"], Keys(@"\a_"));
         Assert.Equal(["mcp:client"], Keys("claude_code"));
+    }
+
+    [Fact]
+    public void Search_ignores_case_beyond_ascii_but_keeps_accents()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:city"));
+        seed.Operation(JournalSeed.Session("cli:turtle") with { Cwd = "/praca/ŻÓŁW" });
+        seed.Operation(JournalSeed.Session("cli:plain"));
+        JournalSeed.Annotate(home.DatabasePath, "cli:city", title: "Raport ŁÓDŹ", note: "Zażółć gęślą jaźń");
+        var reader = new JournalReader(home.DatabasePath, new FakeProcesses());
+
+        string[] Keys(string q) => reader.Sessions(new SessionQuery(Search: q)).Items.Select(s => s.SessionKey).Order().ToArray();
+        Assert.Equal(["cli:city"], Keys("łódź"));
+        Assert.Equal(["cli:city"], Keys("ZAŻÓŁĆ GĘŚLĄ"));
+        Assert.Equal(["cli:turtle"], Keys("żółw"));
+        Assert.Equal(["cli:city"], Keys("łódź".Normalize(NormalizationForm.FormD)));
+        Assert.Empty(Keys("lodz"));
+        Assert.Equal(["cli:city", "cli:plain", "cli:turtle"], Keys("CLI:"));
+    }
+
+    [Fact]
+    public void Search_folding_does_not_depend_on_the_process_culture()
+    {
+        using var home = new TempHome();
+        var seed = new JournalSeed(home.DatabasePath);
+        seed.Operation(JournalSeed.Session("cli:tr"));
+        JournalSeed.Annotate(home.DatabasePath, "cli:tr", title: "INFO report");
+        var reader = new JournalReader(home.DatabasePath, new FakeProcesses());
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("tr-TR");
+            Assert.Equal(["cli:tr"], reader.Sessions(new SessionQuery(Search: "info")).Items.Select(s => s.SessionKey).ToArray());
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
     }
 
     [Fact]

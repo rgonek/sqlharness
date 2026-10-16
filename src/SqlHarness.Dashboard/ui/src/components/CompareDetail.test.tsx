@@ -84,3 +84,49 @@ test("copies compare Markdown without operation metadata or SQL when SQL text is
     expect(markdown).not.toContain(secret)
   }
 })
+
+test("shows original setup SQL with an independent copy control beside compare SQL", async () => {
+  const setup = "CREATE TABLE #session_data (id int);\nINSERT INTO #session_data VALUES (1);"
+  renderCompare(operationDetail({
+    operation: operation({ operation: "compare" }),
+    sqlText: "SELECT id FROM #session_data",
+    candidateSqlText: "SELECT id FROM #session_data WHERE id > 0",
+    compareConditions: { setupSql: setup, timeoutSeconds: 30 },
+  }))
+  await userEvent.click(screen.getByRole("tab", { name: "SQL changes" }))
+  const panel = screen.getByRole("region", { name: "Setup SQL" })
+  expect(within(panel).getByTestId("sql-code").textContent).toBe(setup)
+  expect(within(panel).getByRole("button", { name: "Show formatted" })).toBeInTheDocument()
+  expect(within(panel).getByRole("button", { name: "Copy" })).toBeInTheDocument()
+  expect(within(panel).getByText(/same database session/)).toBeInTheDocument()
+  expect(screen.getByRole("tab", { name: "Diff" })).toBeInTheDocument()
+})
+
+test("explains when setup SQL is unavailable or omitted by journal limits", async () => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const { rerender } = render(<QueryClientProvider client={queryClient}><CompareDetail detail={operationDetail({
+    operation: operation({ operation: "compare" }),
+    compareConditions: { timeoutSeconds: 30 },
+  })} /></QueryClientProvider>)
+  await userEvent.click(screen.getByRole("tab", { name: "SQL changes" }))
+  expect(screen.getByText(/Setup SQL is not stored/)).toBeInTheDocument()
+  rerender(<QueryClientProvider client={queryClient}><CompareDetail detail={operationDetail({
+    operation: operation({ operation: "compare" }),
+    compareConditions: { omittedSensitiveFields: ["setupSql"], timeoutSeconds: 30 },
+  })} /></QueryClientProvider>)
+  expect(screen.getByText(/Setup SQL was omitted/)).toBeInTheDocument()
+  expect(within(screen.getByRole("region", { name: "Setup SQL" })).queryByRole("button", { name: "Copy" })).not.toBeInTheDocument()
+})
+
+test("uses the dedicated setup column even if the bounded conditions omitted setup", async () => {
+  const setup = "CREATE TABLE #big_data (id int);"
+  renderCompare(operationDetail({
+    operation: operation({ operation: "compare" }),
+    setupSqlText: setup,
+    compareConditions: { omittedSensitiveFields: ["setupSql"] },
+  }))
+  await userEvent.click(screen.getByRole("tab", { name: "SQL changes" }))
+  const section = screen.getByRole("region", { name: "Setup SQL" })
+  expect(within(section).getByTestId("sql-code")).toHaveTextContent(setup)
+  expect(screen.queryByText(/Setup SQL was omitted/)).not.toBeInTheDocument()
+})

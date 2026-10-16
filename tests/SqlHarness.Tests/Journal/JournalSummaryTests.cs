@@ -161,5 +161,5 @@ public sealed class JournalSummaryTests
 
     [Fact]
     public void Non_benchmark_reports_have_no_summary() =>
-        Assert.Null(JournalSummary.Build(new SqlHarnessDryRunReport("query", "read-only", [], 0)));
+        Assert.Null(JournalSummary.Build(new SqlHarnessDryRunReport("query", "read-only", "read-only", [], 0)));
 }

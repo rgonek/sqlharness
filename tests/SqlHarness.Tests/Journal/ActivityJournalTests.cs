@@ -100,6 +100,41 @@ public sealed class ActivityJournalTests
     }
 
     [Fact]
+    public void Setup_sql_is_stored_for_measure_and_compare_only_when_sensitive_including_large_setup()
+    {
+        using var hashOnly = new JournalTempDirectory();
+        using var sensitive = new JournalTempDirectory();
+        var target = new SqlTargetRequest("local", new Dictionary<string, string>());
+        var setup = "/* SQLH_SETUP_MARKER */" + new string('x', 70_000);
+        SqlHarnessOperation[] operations =
+        [
+            new SqlHarnessMeasureOperation(target, setup, "SELECT 1", [], 30, 1),
+            new SqlHarnessCompareOperation(target, setup, "SELECT 1", "SELECT 2", [], 30, 1),
+            new SqlHarnessCompareMatrixOperation(target, setup, "SELECT 1", "SELECT 2", [], 30, 1, "id:int=1"),
+        ];
+
+        var defaultJournal = Open(hashOnly, TextWriter.Null);
+        var sensitiveJournal = Open(sensitive, TextWriter.Null, storeSensitive: true);
+        foreach (var operation in operations)
+        {
+            var start = OperationJournalDescriber.DescribeStart(operation);
+            defaultJournal.Begin(JournalTestData.Session(), start);
+            sensitiveJournal.Begin(JournalTestData.Session(), start);
+        }
+
+        var normalRows = JournalDb.Rows(hashOnly.DatabasePath, "SELECT setup_sql_text FROM operations ORDER BY id");
+        var sensitiveRows = JournalDb.Rows(sensitive.DatabasePath, "SELECT setup_sql_text FROM operations ORDER BY id");
+        Assert.Equal(3, normalRows.Count);
+        Assert.All(normalRows, row => Assert.Null(row["setup_sql_text"]));
+        Assert.All(sensitiveRows, row => Assert.Equal(setup, row["setup_sql_text"]));
+        Assert.False(JournalDb.Contains(JournalDb.AllBytes(hashOnly.DatabasePath), "SQLH_SETUP_MARKER"));
+        // The dedicated column retains setup even if the bounded compare-conditions JSON omits it.
+        var compareJson = (string)JournalDb.Rows(sensitive.DatabasePath,
+            "SELECT compare_conditions_json FROM operations WHERE operation = 'compare' ORDER BY id LIMIT 1").Single()["compare_conditions_json"]!;
+        Assert.Contains("omittedSensitiveFields", compareJson);
+    }
+
+    [Fact]
     public void Oversized_sensitive_conditions_remain_valid_bounded_json_with_omission_metadata()
     {
         using var temp = new JournalTempDirectory();
@@ -544,6 +579,7 @@ public sealed class ActivityJournalTests
         Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version")[0]["user_version"]);
         Assert.Equal("cli:v10", JournalDb.Rows(temp.DatabasePath, "SELECT session_key FROM sessions").Single()["session_key"]);
         Assert.Single(JournalDb.Rows(temp.DatabasePath, "SELECT id FROM operations"));
+        Assert.Null(JournalDb.Rows(temp.DatabasePath, "SELECT setup_sql_text FROM operations").Single()["setup_sql_text"]);
         Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT * FROM operation_phases"));
         Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT * FROM operation_events"));
         foreach (var table in new[] { "agent_conversations", "agent_tool_calls", "operation_agent_links", "transcript_cursors" })
