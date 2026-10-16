@@ -2,6 +2,10 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
+## Plan 076 completion — 2026-10-16
+
+Plan [076](076-partial-matrix-journal-runs.md) is DONE on branch `plan-076` at `57a1e7d`. Completed cells of a partial matrix comparison are journaled; the failing cell contributes no metrics. Windows `just verify` exited 0 on the working tree that commit records (parent `1d9dbfe` plus the journal test): `verify: OK  stages=6  3m47s` (ui-install 27,8s; ui-check 31,1s, 238 tests; restore 7,7s; build 15,5s, 0 warnings/errors; test 1m35s, Core 3,843 passed/11 skipped, MCP 386 passed/4 skipped; format 49,9s, 1 changed C# file). Linux was not run. No push, installation, or publication.
+
 ## Plan 071 completion — 2026-10-15
 
 Integrated locally into `main` on 2026-10-16 at `6fd982ca762ada4f2a4d6a42a720eaa6b4c3d674`, preserving setup-SQL replay, Plan 072, and Plan 074. Final review found incomplete version choices beyond the first compare-history page; fix `904b04d` supplies complete per-scope version/hash inventories and disambiguates repeated labels. Luna xhigh task/integration reviews and Sol low whole-branch/scoped re-review approved. Post-integration Windows `just verify` on `6fd982c` exited 0, six stages in 3m00s: UI 238 passed; Core 3,839 passed/11 skipped; MCP 386 passed/4 skipped; build passed; format skipped on the clean tree after the resolved merge tree had passed formatting for 26 C# files. No `FAILED` stage-log markers. Full UI runs print non-failing localhost:3000 EventSource errors and DEP0190; isolated page suites pass. Linux omitted per policy; no push. Summary log: `D:/temp/sqlharness-plan071-main-verify.log`. Earlier feature-only evidence follows; SDD scratch reports are temporary and removed after completion.

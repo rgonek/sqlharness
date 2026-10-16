@@ -4,6 +4,11 @@ Status: collecting observations. A follow-up implementation plan was requested s
 [plan 076](../../plans/076-partial-matrix-journal-runs.md). Recorded 2026-10-15 against
 repository HEAD `4f1e5a1`.
 
+## Resolved by plan 076 — 2026-10-16
+
+Completed cells are journaled. The failing cell contributes no metrics. The access-denied
+rename cause was not found. The observation below is the 2026-10-15 record and is unchanged.
+
 ## Observed workflow
 
 A three-cell matrix `compare` completed two cells and then failed while publishing the third

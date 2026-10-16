@@ -12,9 +12,9 @@
 
 ## Status
 
-- TODO; prepared 2026-10-15 against `4f1e5a1e8880594466753e1f62c420f0e7bf3e7d`.
-- Planning only. No implementation, installation, publishing or live database use is authorized by this document.
-- **HEAD drift check before execution:** run `git log --oneline 4f1e5a1..HEAD -- src/SqlHarness.Core/CompareMatrixRunner.cs src/SqlHarness.Core/SqlHarnessModule.cs src/SqlHarness.Core/Journal/JournalingModule.cs`. If any commit touches the partial-matrix path, re-verify the Evidence section before continuing.
+- DONE on branch `plan-076` at `57a1e7d` (2026-10-16). Not integrated into `main`. No push, installation, or publication.
+- Tests: `Partial_matrix_after_sql_failure_exposes_runs_of_completed_cells_only`, `Partial_matrix_after_artifact_failure_exposes_runs_of_completed_cells`, `Matrix_failing_in_the_first_cell_exposes_no_runs`, and `Failed_exit_outcome_with_completed_runs_is_journaled`.
+- Windows `just verify` exited 0 on the working tree this commit records (parent `1d9dbfe` plus `tests/SqlHarness.Tests/Journal/JournalingBenchmarkTests.cs`). Literal line: `verify: OK  stages=6  3m47s`. Stages: ui-install ok 27,8s; ui-check ok 31,1s (238 tests, 45 files); restore ok 7,7s; build ok 15,5s (0 warnings, 0 errors); test ok 1m35s (SqlHarness.Tests 3,843 passed/11 skipped; SqlHarness.Mcp.Tests 386 passed/4 skipped); format ok 49,9s (1 changed C# file). Linux was not run.
 
 ## Global Constraints
 
