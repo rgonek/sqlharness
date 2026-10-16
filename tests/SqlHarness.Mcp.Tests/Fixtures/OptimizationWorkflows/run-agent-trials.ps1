@@ -117,16 +117,27 @@ function Test-Forbidden([string] $id, [string] $text) {
     }
 }
 
+function Get-AssistantExport([string] $export) {
+    $parts = [regex]::Split($export, "(?m)^## Assistant\s*$")
+    if ($parts.Count -le 1) { return $export }
+    return (($parts | Select-Object -Skip 1) -join "`n")
+}
+
 function Test-Evidence([string] $id, [string] $text, [string[]] $selectors) {
+    $t = $text.ToLowerInvariant()
     switch ($id) {
         "compare-summary" { return $selectors -contains "sqlharness_compare" }
         "equivalence-or-regression-fields" {
-            $t = $text.ToLowerInvariant()
             return ($t -match 'equivalent') -or ($t -match 'regression')
         }
         "compare-matrix" { return $selectors -contains "sqlharness_compare" }
-        "matrix-cells-pages-if-omitted" { return $selectors -contains "sqlharness_artifact" }
-        "artifact-plan-for-warned-statement" { return $selectors -contains "sqlharness_artifact" }
+        "matrix-cells-pages-if-omitted" {
+            return ($selectors -contains "sqlharness_artifact") -and ($t -match 'matrix-cells')
+        }
+        "artifact-plan-for-warned-statement" {
+            $planSection = ($t -match 'section\s*=\s*plan') -or ($t -match 'artifact .{0,3}plan.{0,3}') -or ($t -match 'saved plan') -or ($t -match 'plan pages')
+            return ($selectors -contains "sqlharness_plan") -or (($selectors -contains "sqlharness_artifact") -and $planSection)
+        }
         default { return $false }
     }
 }
@@ -139,7 +150,7 @@ function Selector-Allowed([string] $used, [string[]] $allowed) {
     return $false
 }
 
-function Score-Trial([string] $conclusion, $oracle, [int] $toolCalls, [int] $maxToolCalls, [bool] $timedOut, [bool] $failed, [int] $durationSeconds, [string[]] $selectors) {
+function Score-Trial([string] $conclusion, $oracle, [int] $toolCalls, [int] $maxToolCalls, [bool] $timedOut, [bool] $failed, [int] $durationSeconds, [string[]] $selectors, [string] $export = "") {
     $result = [ordered]@{
         outcome                 = $null
         missingClaims           = @()
@@ -153,6 +164,7 @@ function Score-Trial([string] $conclusion, $oracle, [int] $toolCalls, [int] $max
         $result.outcome = "incomplete"
         return $result
     }
+    $evidenceText = if ($export) { Get-AssistantExport $export } else { $conclusion }
     foreach ($claim in @($oracle.requiredClaims)) {
         if (-not (Test-Claim $claim $conclusion)) { $result.missingClaims += $claim }
     }
@@ -160,13 +172,13 @@ function Score-Trial([string] $conclusion, $oracle, [int] $toolCalls, [int] $max
         if (Test-Forbidden $claim $conclusion) { $result.forbiddenHits += $claim }
     }
     foreach ($evidence in @($oracle.requiredEvidence)) {
-        if (-not (Test-Evidence $evidence $conclusion $selectors)) { $result.missingEvidence += $evidence }
+        if (-not (Test-Evidence $evidence $evidenceText $selectors)) { $result.missingEvidence += $evidence }
     }
     $allowed = @($oracle.allowedSelectors)
     foreach ($used in $selectors) {
         if (-not (Selector-Allowed $used $allowed)) { $result.outsideAllowedSelectors += $used }
     }
-    if (@($result.missingClaims).Length -gt 0 -or @($result.forbiddenHits).Length -gt 0 -or @($result.missingEvidence).Length -gt 0) {
+    if (@($result.missingClaims).Length -gt 0 -or @($result.forbiddenHits).Length -gt 0 -or @($result.missingEvidence).Length -gt 0 -or @($result.outsideAllowedSelectors).Length -gt 0) {
         $result.outcome = "failed-oracle"
     }
     else {
@@ -175,13 +187,10 @@ function Score-Trial([string] $conclusion, $oracle, [int] $toolCalls, [int] $max
     return $result
 }
 
-function Get-Contamination([string] $export, [string] $family, [int] $run) {
-    if ($family -eq "no-improvement" -and $run -eq 1) {
-        return "temp-host-dll-search"
-    }
-    if ($export -match 'sqlharness-077-host\\SqlHarness.Mcp.WorkflowHost.dll' -and $export -match 'Select-String') {
-        return "temp-host-dll-search"
-    }
+function Get-Contamination([string] $export) {
+    $hostDll = $export -match 'sqlharness-077-host[/\\]SqlHarness\.Mcp\.WorkflowHost\.dll'
+    $probed = ($export -match 'Select-String') -or ($export -match 'ReadAllBytes') -or ($export -match 'ListDir:\s*D:\\temp\\sqlharness-077-host')
+    if ($hostDll -and $probed) { return "temp-host-dll-search" }
     return $null
 }
 
@@ -196,8 +205,8 @@ if ($RescoreOnly) {
         $conclusion = if ($parts.Count -gt 1) { $parts[-1].Trim() } else { $md }
         $selectors = Get-McpSelectors $md
         $toolCalls = [regex]::Matches($md, "(?m)^- UseTool: sqlharness__").Count
-        $score = Score-Trial $conclusion $oracle $toolCalls $MaxTurns ([bool]$row.timedOut) $false ([int]$row.durationSeconds) $selectors
-        $contamination = Get-Contamination $md $row.family ([int]$row.run)
+        $score = Score-Trial $conclusion $oracle $toolCalls $MaxTurns ([bool]$row.timedOut) $false ([int]$row.durationSeconds) $selectors $md
+        $contamination = Get-Contamination $md
         $updated = [ordered]@{
             phase                    = $row.phase
             family                   = $row.family
@@ -252,15 +261,28 @@ foreach ($family in $families) {
             $conclusion = if ($parts.Count -gt 1) { $parts[-1].Trim() } else { $md }
             $toolCalls = [regex]::Matches($md, "(?m)^- UseTool: sqlharness__").Count
             $selectors = Get-McpSelectors $md
-            $score = Score-Trial $conclusion $oracle $toolCalls $MaxTurns $false $false 0 $selectors
+            $timedOut = $false
+            $duration = 0
+            $metaFile = Join-Path $OutDir "$name.meta.json"
+            if (Test-Path -LiteralPath $metaFile) {
+                $prev = Get-Content -LiteralPath $metaFile -Raw | ConvertFrom-Json
+                if ($prev.PSObject.Properties.Name -contains "timedOut") { $timedOut = [bool]$prev.timedOut }
+                if ($prev.PSObject.Properties.Name -contains "durationSeconds") { $duration = [int]$prev.durationSeconds }
+            }
+            $score = Score-Trial $conclusion $oracle $toolCalls $MaxTurns $timedOut $false $duration $selectors $md
+            $contamination = Get-Contamination $md
             $row = [ordered]@{
                 phase = $Phase; family = $family.Id; run = $n; model = $Model; effort = $Effort
                 reusedExport = $true; toolCallsApprox = $toolCalls; outcome = $score.outcome; scenario = $family.Scenario
-                missingClaims = @($score.missingClaims); selectorsUsed = @($score.selectorsUsed)
+                timedOut = $timedOut; durationSeconds = $duration
+                missingClaims = @($score.missingClaims); forbiddenHits = @($score.forbiddenHits)
+                missingEvidence = @($score.missingEvidence); selectorsUsed = @($score.selectorsUsed)
+                outsideAllowedSelectors = @($score.outsideAllowedSelectors)
+                contaminated = [bool]$contamination; contamination = $contamination
             }
-            $row | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $OutDir "$name.meta.json") -Encoding utf8
+            $row | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $metaFile -Encoding utf8
             $summary.Add($row)
-            Write-Host "$name -> $outcome (reused export, mcpCalls=$toolCalls)"
+            Write-Host "$name -> $($score.outcome) (reused export, mcpCalls=$toolCalls)"
             continue
         }
         Write-Host "=== $Phase $name ($runIndex/9) ==="
@@ -420,8 +442,8 @@ foreach ($family in $families) {
         $failed = [bool]$errorText -and -not $agentFinished
         $exportForScore = if (Test-Path -LiteralPath $exportPath) { Get-Content -LiteralPath $exportPath -Raw } else { $conclusion }
         $selectors = Get-McpSelectors $exportForScore
-        $score = Score-Trial $conclusion $oracle $toolCalls $MaxTurns $timedOut $failed $duration $selectors
-        $contamination = Get-Contamination $exportForScore $family.Id $n
+        $score = Score-Trial $conclusion $oracle $toolCalls $MaxTurns $timedOut $failed $duration $selectors $exportForScore
+        $contamination = Get-Contamination $exportForScore
         $row = [ordered]@{
             phase                   = $Phase
             family                  = $family.Id
@@ -452,7 +474,7 @@ foreach ($family in $families) {
         }
         $row | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $metaPath -Encoding utf8
         $summary.Add($row)
-        Write-Host "$name -> $outcome exit=$exitCode timeout=$timedOut seconds=$duration"
+        Write-Host "$name -> $($score.outcome) exit=$exitCode timeout=$timedOut seconds=$duration"
         try { Remove-Item -LiteralPath $trialRoot -Recurse -Force -ErrorAction SilentlyContinue } catch { }
     }
 }

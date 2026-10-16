@@ -66,6 +66,19 @@ public sealed class AgentOptimizationWorkflowTests
         Assert.True(run1.GetProperty("contaminated").GetBoolean());
         Assert.Equal("temp-host-dll-search", run1.GetProperty("contamination").GetString());
         Assert.NotEqual("incomplete", run1.GetProperty("outcome").GetString());
+        var ni3 = summary.RootElement.EnumerateArray().Single(row =>
+            row.GetProperty("family").GetString() == "no-improvement" && row.GetProperty("run").GetInt32() == 3);
+        Assert.Equal("failed-oracle", ni3.GetProperty("outcome").GetString());
+        Assert.Contains(
+            "sqlharness_query",
+            ni3.GetProperty("outsideAllowedSelectors").EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal(
+            4,
+            summary.RootElement.EnumerateArray().Count(row => row.GetProperty("outcome").GetString() == "evidence-complete"));
+        Assert.All(
+            summary.RootElement.EnumerateArray().Where(row =>
+                row.GetProperty("family").GetString() != "no-improvement" || row.GetProperty("run").GetInt32() != 1),
+            row => Assert.False(row.GetProperty("contaminated").GetBoolean()));
     }
 
     [Fact]
@@ -437,6 +450,8 @@ public sealed class AgentOptimizationWorkflowTests
                 Assert.Equal("[]", result.GetProperty("parameters").GetRawText());
                 Assert.Contains("Clustered Index Scan", first, StringComparison.Ordinal);
                 Assert.Contains("[dbo].[Accounts]", first, StringComparison.Ordinal);
+                Assert.Equal("pass", result.GetProperty("regression").GetProperty("verdict").GetString());
+                Assert.DoesNotContain("unstable-elapsed", first, StringComparison.Ordinal);
                 break;
             case WorkflowScenarios.PartialMatrixId when budget == 65536:
                 JsonElement Detail(int index) => result.GetProperty("details").EnumerateArray()
@@ -450,12 +465,20 @@ public sealed class AgentOptimizationWorkflowTests
                 Assert.Equal("inconclusive", inconclusive.GetProperty("verdict").GetString());
                 Assert.Contains("unstable-elapsed", inconclusive.GetProperty("reasons").EnumerateArray().Select(value => value.GetString()));
                 Assert.Equal("inconclusive", inconclusive.GetProperty("elapsed").GetProperty("status").GetString());
+                var verdicts = result.GetProperty("details").EnumerateArray()
+                    .Select(cell => cell.GetProperty("compare").GetProperty("regression").GetProperty("verdict").GetString())
+                    .ToArray();
+                Assert.Equal(1, verdicts.Count(value => value == "fail"));
+                Assert.Equal(1, verdicts.Count(value => value == "inconclusive"));
+                Assert.Equal(30, verdicts.Count(value => value == "pass"));
                 break;
             case WorkflowScenarios.NoImprovementId:
                 Assert.Contains("Region", result.GetProperty("parameters").GetRawText(), StringComparison.Ordinal);
                 var noImprovement = result.GetProperty("regression");
                 Assert.Equal("inconclusive", noImprovement.GetProperty("verdict").GetString());
-                Assert.Contains("results-not-equivalent", noImprovement.GetProperty("reasons").EnumerateArray().Select(value => value.GetString()));
+                var reasons = noImprovement.GetProperty("reasons").EnumerateArray().Select(value => value.GetString()).ToArray();
+                Assert.Contains("results-not-equivalent", reasons);
+                Assert.DoesNotContain("unstable-elapsed", reasons);
                 break;
         }
     }

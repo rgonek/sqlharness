@@ -175,9 +175,7 @@ public sealed class WorkflowModule : ISqlHarnessModule
     private static IReadOnlyList<decimal> ElapsedSamples(decimal median, bool unstable) =>
         unstable
             ? [median - 20m, median - 10m, median, median + 10m, median + 30m]
-            : median < 2m
-                ? [median, median, median, median, median]
-                : [median - 2m, median - 1m, median, median + 1m, median + 2m];
+            : [median, median, median, median, median];
 
     private static IReadOnlyList<long> ReadSamples(long reads) => [reads, reads, reads, reads, reads];
 

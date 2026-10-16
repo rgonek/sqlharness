@@ -93,7 +93,7 @@
     "numTurns": 13,
     "inputTokens": 81134,
     "outputTokens": 5610,
-    "outcome": "evidence-complete",
+    "outcome": "failed-oracle",
     "missingClaims": [],
     "forbiddenHits": [],
     "missingEvidence": [],

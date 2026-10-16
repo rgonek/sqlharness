@@ -80,7 +80,7 @@ The official nine and the committed runner use those four denials. `--always-app
 
 Grok often stays alive after `headless: no pending background tasks, exiting`. The runner treats that debug tail or `"stopReason":"end_turn"` as agent completion, kills the process, and recovers the conclusion with `grok export <sessionId>`. Exit code 1 after that kill is not a model-service failure.
 
-Bounds: 20 MCP tool calls and five minutes. Reaching either cap is incomplete, not success. `--max-turns 20` is a Grok CLI turn budget; it is not the D7 call bound. A stored run with `numTurns` 20 remains scorable when MCP tool calls were under 20 and duration was under five minutes. Model `grok-4.6`, effort `medium`. MCP call counts come from `grok export` lines matching `UseTool: sqlharness__`. Reported `input_tokens` / `output_tokens` come from Grok JSON usage; they are not manufactured from raw_bytes or byte/4. Scoring uses the hidden oracle's `requiredClaims`, `requiredEvidence`, `allowedSelectors`, and `forbiddenClaims`.
+Bounds: 20 MCP tool calls and five minutes. Reaching either cap is incomplete, not success. `--max-turns 20` is a Grok CLI turn budget; it is not the D7 call bound. A stored run with `numTurns` 20 remains scorable when MCP tool calls were under 20 and duration was under five minutes. Model `grok-4.6`, effort `medium`. MCP call counts come from `grok export` lines matching `UseTool: sqlharness__`. Reported `input_tokens` / `output_tokens` come from Grok JSON usage; they are not manufactured from raw_bytes or byte/4. Scoring uses the hidden oracle's `requiredClaims`, `requiredEvidence`, `allowedSelectors`, and `forbiddenClaims`. Extra selectors outside `allowedSelectors` fail the outcome. Section-qualified evidence (`matrix-cells-pages-if-omitted`, `artifact-plan-for-warned-statement`) requires that section in the assistant export, not any `sqlharness_artifact` call.
 
 Detailed logs: `artifacts/plan-077/prechange/` (gitignored). Compact summary: `tests/SqlHarness.Mcp.Tests/Fixtures/OptimizationWorkflows/trials/prechange-summary.json`.
 
@@ -90,12 +90,12 @@ Discovery is `tools/list` UTF-8 bytes of the served catalog (separate from call 
 
 | Scenario | Budget | Discovery | Calls | Model-visible UTF-8 (sum) |
 |---|---|---|---|---|
-| no-improvement | 4096 | 18399 | 2 | 3492 |
-| no-improvement | 65536 | 18399 | 2 | 3492 |
+| no-improvement | 4096 | 18399 | 2 | 3454 |
+| no-improvement | 65536 | 18399 | 2 | 3454 |
 | partial-matrix-32 | 4096 | 18399 | 2 | 12598 |
-| partial-matrix-32 | 65536 | 18399 | 1 | 49312 |
-| colliding-operators | 4096 | 18399 | 3 | 2960 |
-| colliding-operators | 65536 | 18399 | 3 | 2960 |
+| partial-matrix-32 | 65536 | 18399 | 1 | 48562 |
+| colliding-operators | 4096 | 18399 | 3 | 2935 |
+| colliding-operators | 65536 | 18399 | 3 | 2935 |
 | unavailable-metrics | 4096 | 18727 | 1 | 3962 |
 | unavailable-metrics | 65536 | 18727 | 1 | 4154 |
 
@@ -105,13 +105,13 @@ At 4096 bytes the 32-case matrix compare omits 25 cases (`continuation` 7) and t
 
 Nine fresh Grok processes, three families × three runs, 2026-10-16, model `grok-4.6`, effort `medium`. Post-change nine are Task 7. No trial was rerun for a better answer. Invalid isolation attempts (oracle/repo reads) were discarded and are not in this table.
 
-Official exports were rescored from the oracle fields. Isolation grep of the official exports found no `D:\Dev\sqlharness`, `oracle/`, `WorkflowModule`, or `requiredClaims`. Evidence-complete count is 5/9.
+Official exports were rescored from the oracle fields. Isolation grep of the official exports found no `D:\Dev\sqlharness`, `oracle/`, `WorkflowModule`, or `requiredClaims`. Evidence-complete count is 4/9.
 
 | Family | Run | Session | Seconds | MCP tools | Turns | Input tok | Output tok | Exit | Outcome |
 |---|---|---|---|---|---|---|---|---|---|
 | no-improvement | 1 | `9d987f0b-d73e-4c69-a2b0-26f84dd9239a` | 222 | 5 | 20 | 73906 | 6113 | 1 | failed-oracle; contaminated (temp/host-DLL search); no conclusion |
 | no-improvement | 2 | `215e4f6f-ff88-493d-bfc7-12ce877755cc` | 184 | 7 | 20 | 74589 | 5435 | 1 | failed-oracle (no scored conclusion; 20 Grok turns, MCP calls 7) |
-| no-improvement | 3 | `f96741b9-24c9-484c-b714-af2269b7c4bf` | 155 | 14 | 13 | 81134 | 5610 | 0 | evidence-complete (`sqlharness_query` outside allowed selectors) |
+| no-improvement | 3 | `f96741b9-24c9-484c-b714-af2269b7c4bf` | 155 | 14 | 13 | 81134 | 5610 | 0 | failed-oracle (`sqlharness_query` outside allowed selectors) |
 | partial-matrix-32 | 1 | `4d147426-b80e-482a-8d50-8b8259c4037e` | 124 | 6 | 12 | 44281 | 5842 | 0 | failed-oracle (reported 0 fail / 0 inconclusive) |
 | partial-matrix-32 | 2 | `2acbd0f4-f2c7-47f7-88c0-9f7a65326fe8` | 162 | 19 | 9 | 91787 | 8514 | 0 | failed-oracle (13 cells unread) |
 | partial-matrix-32 | 3 | `ef4ceb92-67c9-499a-bc3f-91a0c918ef18` | 151 | 9 | 13 | 72884 | 7932 | 0 | evidence-complete |
@@ -138,7 +138,7 @@ Two no-improvement runs exhausted 20 Grok turns with 5–7 MCP calls. They are n
 
 - `InternalsVisibleTo` for `SqlHarness.Mcp.WorkflowHost` on Core and Mcp is a test-host seam, not a product fixture flag.
 - Frozen model-visible bytes substitute isolated homes; on-wire MCP still emits absolute `artifactDirectory` paths until Task 2.
-- Oracle scoring of the stored nine yields 5/9 evidence-complete. Task 7 must use that count, not the earlier keyword scores.
+- Oracle scoring of the stored nine yields 4/9 evidence-complete. Task 7 must use that count, not the earlier keyword scores. Extra tools outside `allowedSelectors` fail the outcome.
 - Grok `--always-approve` can still filesystem-search unless `Bash(*)` and `Read/Grep/Edit(D:\Dev\**)` are denied and `trusted_folders.toml` is replaced for the trial.
 - Grok headless often hangs after end_turn; kill-on-exit yields process exit 1 for some completed runs.
 - Two no-improvement runs hit 20 Grok turns. The MCP call bound was not reached; those rows are not incomplete.
