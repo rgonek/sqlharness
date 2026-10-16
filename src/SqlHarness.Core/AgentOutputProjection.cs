@@ -24,7 +24,9 @@ public sealed record AgentCompactResultSet(
     long RowCount,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] long OmittedRowCount = 0,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int OmittedColumnCount = 0,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<AgentClippedCell>? ClippedCells = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<AgentClippedCell>? ClippedCells = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] long ProjectionOmittedRowCount = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] long SourceOmittedRowCount = 0);
 
 /// <summary>
 /// Compact agent projection of a query report. <c>Database</c> is the
@@ -95,9 +97,16 @@ public sealed record AgentWatchOutput(
     int PollCount,
     long ElapsedMilliseconds,
     string ExitReason,
-    IReadOnlyList<SqlHarnessWatchPoll> EmittedPolls,
+    IReadOnlyList<AgentWatchPollOutput> EmittedPolls,
     int TotalChangedPolls = 0,
-    int OmittedPolls = 0);
+    int OmittedPolls = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int OmittedEmittedPolls = 0);
+
+public sealed record AgentWatchPollOutput(
+    int Poll,
+    long ElapsedMilliseconds,
+    string ResultHash,
+    IReadOnlyList<AgentCompactResultSet> ResultSets);
 
 /// <summary>MCP snapshot projection with a documented <c>verdict</c> string.</summary>
 public sealed record AgentSnapshotOutput(
@@ -133,22 +142,11 @@ public static class AgentOutputProjection
         var omissions = 0;
         var clippedItems = 0;
         string? Clip(string? value) => ClipText(value, maximumCellCharacters, ref clippedItems);
-        object? ProjectCell(object? value) => ProjectCellValue(value, maximumCellCharacters, ref clippedItems);
         IReadOnlyList<T> Take<T>(IReadOnlyList<T> values)
         {
             var selected = values.Take(detailLimit).ToArray();
             omissions += Math.Max(0, values.Count - selected.Length);
             return selected;
-        }
-        IReadOnlyList<SqlHarnessResultSetReport> ProjectResultSets(IReadOnlyList<SqlHarnessResultSetReport> resultSets)
-        {
-            var selectedSets = Take(resultSets);
-            return selectedSets.Select(set =>
-            {
-                var columns = Take(set.Columns);
-                var rows = Take(set.Rows).Select(row => Take(row).Select(ProjectCell).ToArray()).ToArray();
-                return new SqlHarnessResultSetReport(columns, rows, set.RowCount, set.OmittedRowCount + Math.Max(0, set.Rows.Count - rows.Length));
-            }).ToArray();
         }
         try
         {
@@ -323,19 +321,27 @@ public static class AgentOutputProjection
                     omissions += clippedItems;
                     return planProjection.Report;
                 case SqlHarnessWatchReport watch:
-                    var polls = Take(watch.EmittedPolls).Select(poll => new SqlHarnessWatchPoll(poll.Poll, poll.ElapsedMilliseconds, poll.ResultHash, ProjectResultSets(poll.ResultSets))).ToArray();
+                    var selectedPolls = Take(watch.EmittedPolls);
+                    var polls = selectedPolls.Select(poll =>
+                    {
+                        var query = new SqlHarnessQueryReport(
+                            watch.Target, "read-only", poll.ResultSets, [], 0, poll.ElapsedMilliseconds, poll.ResultHash, new OutputFootprint(0, 0));
+                        var compact = detailLimit > 0
+                            ? ProjectQueryRowSample(query, [], detailLimit, maximumCellCharacters, maximumBytes, out var pollOmitted)
+                            : ProjectQueryInventory(query, [], maximumCellCharacters, maximumBytes, out pollOmitted);
+                        omissions += pollOmitted;
+                        return new AgentWatchPollOutput(poll.Poll, poll.ElapsedMilliseconds, poll.ResultHash, compact.ResultSets);
+                    }).ToArray();
                     omissions += clippedItems;
-                    var projectedWatch = watch with { EmittedPolls = polls };
-                    return profile == AgentProjectionProfile.Mcp
-                        ? new AgentWatchOutput(
-                            projectedWatch.Target,
-                            projectedWatch.PollCount,
-                            projectedWatch.ElapsedMilliseconds,
-                            AgentProjectionNames.WatchExitReason(projectedWatch.ExitReason),
-                            projectedWatch.EmittedPolls,
-                            projectedWatch.TotalChangedPolls,
-                            projectedWatch.OmittedPolls)
-                        : projectedWatch;
+                    return new AgentWatchOutput(
+                        watch.Target,
+                        watch.PollCount,
+                        watch.ElapsedMilliseconds,
+                        AgentProjectionNames.WatchExitReason(watch.ExitReason),
+                        polls,
+                        watch.TotalChangedPolls,
+                        watch.OmittedPolls,
+                        watch.EmittedPolls.Count - polls.Length);
                 case SqlHarnessSnapshotReport snapshot:
                     var snapshotName = Clip(snapshot.Name)!;
                     var differences = Take(snapshot.Differences);
@@ -580,7 +586,8 @@ public static class AgentOutputProjection
         for (var ordinal = 0; ordinal < count; ordinal++)
         {
             var set = query.ResultSets[ordinal];
-            rowless[ordinal] = new AgentCompactResultSet(ordinal, set.Columns.Select(CompactColumn).ToArray(), [], set.RowCount, set.OmittedRowCount + set.Rows.Count, 0);
+            rowless[ordinal] = new AgentCompactResultSet(ordinal, set.Columns.Select(CompactColumn).ToArray(), [], set.RowCount,
+                set.OmittedRowCount + set.Rows.Count, 0, null, set.Rows.Count, set.OmittedRowCount);
         }
 
         long reserve = PreFilterBudget(maximumBytes) - SerializedLength(QueryShell(query, rowless, 0, messages));
@@ -615,6 +622,8 @@ public static class AgentOutputProjection
                 Rows = rows,
                 OmittedRowCount = query.ResultSets[ordinal].OmittedRowCount + setOmitted,
                 ClippedCells = clippedCells,
+                ProjectionOmittedRowCount = setOmitted,
+                SourceOmittedRowCount = query.ResultSets[ordinal].OmittedRowCount,
             };
         }
 
@@ -657,7 +666,8 @@ public static class AgentOutputProjection
         var kept = 0;
         foreach (var set in query.ResultSets)
         {
-            var inventory = new AgentCompactResultSet(kept, [], [], set.RowCount, set.OmittedRowCount + set.Rows.Count, set.Columns.Count);
+            var inventory = new AgentCompactResultSet(kept, [], [], set.RowCount,
+                set.OmittedRowCount + set.Rows.Count, set.Columns.Count, null, set.Rows.Count, set.OmittedRowCount);
             var cost = SerializedLength(inventory) + 1;
             if (cost > remaining)
                 break;
@@ -761,7 +771,9 @@ public static class AgentOutputProjection
                 set.RowCount,
                 set.OmittedRowCount + omittedRows,
                 omittedColumns,
-                retainedClippedCells);
+                retainedClippedCells,
+                omittedRows,
+                set.OmittedRowCount);
         }
 
         omittedItems = omitted;
@@ -943,19 +955,53 @@ public static class AgentOutputProjection
             if (nodesRemaining <= 0)
             {
                 omitted += 1;
-                return node with { PhysicalOp = clip(node.PhysicalOp)!, LogicalOp = clip(node.LogicalOp), ObjectName = clip(node.ObjectName), IndexName = clip(node.IndexName), Predicate = clip(node.Predicate), Warnings = [], Children = [] };
+                omitted += node.Warnings.Count;
+                return ClipPlanNode(node) with
+                {
+                    Warnings = [],
+                    Children = [],
+                    OmittedChildCount = node.Children.Count,
+                    OmittedSubtreeCount = CountDescendants(node),
+                };
             }
             nodesRemaining--;
             if (depth >= 6)
             {
                 omitted += node.Children.Count;
                 omitted += node.Warnings.Count;
-                return node with { PhysicalOp = clip(node.PhysicalOp)!, LogicalOp = clip(node.LogicalOp), ObjectName = clip(node.ObjectName), IndexName = clip(node.IndexName), Predicate = clip(node.Predicate), Warnings = [], Children = [] };
+                return ClipPlanNode(node) with
+                {
+                    Warnings = [],
+                    Children = [],
+                    OmittedChildCount = node.Children.Count,
+                    OmittedSubtreeCount = CountDescendants(node),
+                };
             }
             omitted += Math.Max(0, node.Warnings.Count - detailLimit);
-            var children = takeNodes(node.Children).Select(child => ProjectNode(child, depth + 1)).ToArray();
-            return node with { PhysicalOp = clip(node.PhysicalOp)!, LogicalOp = clip(node.LogicalOp), ObjectName = clip(node.ObjectName), IndexName = clip(node.IndexName), Predicate = clip(node.Predicate), Warnings = node.Warnings.Take(detailLimit).Select(value => clip(value)!).ToArray(), Children = children };
+            var selectedChildren = takeNodes(node.Children);
+            var omittedChildren = node.Children.Skip(selectedChildren.Count).ToArray();
+            var children = selectedChildren.Select(child => ProjectNode(child, depth + 1)).ToArray();
+            var omittedSubtreeCount = omittedChildren.Sum(child => CountDescendants(child) + 1);
+            return ClipPlanNode(node) with
+            {
+                Warnings = node.Warnings.Take(detailLimit).Select(value => clip(value)!).ToArray(),
+                Children = children,
+                OmittedChildCount = omittedChildren.Length,
+                OmittedSubtreeCount = omittedSubtreeCount,
+            };
         }
+
+        PlanNode ClipPlanNode(PlanNode node) => node with
+        {
+            PhysicalOp = clip(node.PhysicalOp)!,
+            LogicalOp = clip(node.LogicalOp),
+            ObjectName = clip(node.ObjectName),
+            IndexName = clip(node.IndexName),
+            Predicate = clip(node.Predicate),
+        };
+
+        static long CountDescendants(PlanNode node) =>
+            node.Children.Sum(child => 1 + CountDescendants(child));
 
     }
 

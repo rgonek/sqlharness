@@ -1200,6 +1200,68 @@ public sealed class AgentOutputTests
         Assert.Equal(200 - detailRows, truncation.GetProperty("omittedItems").GetInt32());
     }
 
+    [Fact]
+    public void Offline_plan_projection_marks_omitted_descendants_at_the_retained_node()
+    {
+        var root = new PlanNode("Root", null, null, null, null, null, null, null, null, [],
+        [
+            new PlanNode("Kept", null, null, null, null, null, null, null, null, [], []),
+            new PlanNode("Omitted", null, null, null, null, null, null, null, null, [],
+            [new PlanNode("Grandchild", null, null, null, null, null, null, null, null, [], [])]),
+        ]);
+        var report = new DistilledPlan([new PlanStatement(null, root, [])]);
+
+        var projected = AgentOutputProjection.Project(report, 64, 1, out var omitted, 4096);
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(projected, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var projectedRoot = json.RootElement.GetProperty("statements")[0].GetProperty("root");
+
+        Assert.Equal(1, projectedRoot.GetProperty("omittedChildCount").GetInt32());
+        Assert.Equal(2, projectedRoot.GetProperty("omittedSubtreeCount").GetInt32());
+        Assert.Equal("Kept", projectedRoot.GetProperty("children")[0].GetProperty("physicalOp").GetString());
+        Assert.True(omitted > 0);
+    }
+
+    [Fact]
+    public void Offline_plan_projection_marks_deep_truncation_instead_of_emitting_a_complete_leaf()
+    {
+        var node = new PlanNode("Leaf", null, null, null, null, null, null, null, null, [], []);
+        node = new PlanNode("Boundary", null, null, null, null, null, null, null, null, [], [node]);
+        for (var depth = 5; depth >= 0; depth--)
+            node = new PlanNode("Level" + depth, null, null, null, null, null, null, null, null, [], [node]);
+        var report = new DistilledPlan([new PlanStatement(null, node, [])]);
+
+        var projected = AgentOutputProjection.Project(report, 64, 1, out _, 65536);
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(projected, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var boundary = json.RootElement.GetProperty("statements")[0].GetProperty("root");
+        for (var depth = 0; depth < 6; depth++)
+            boundary = boundary.GetProperty("children")[0];
+
+        Assert.Equal(1, boundary.GetProperty("omittedChildCount").GetInt32());
+        Assert.Equal(1, boundary.GetProperty("omittedSubtreeCount").GetInt64());
+        Assert.False(boundary.TryGetProperty("children", out _));
+    }
+
+    [Fact]
+    public void Dry_run_projection_states_validation_and_non_execution_and_preserves_variant_classes()
+    {
+        var report = new SqlHarnessDryRunReport("compare", "read-only", "schema", [], 1)
+        {
+            CompareClassification = new CompareClassificationReport("session-local", "read-only", "schema"),
+        };
+
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(
+            AgentOutputProjection.Project(report, 2048, 128, out _, 4096),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var result = json.RootElement;
+
+        Assert.Equal("passed", result.GetProperty("validation").GetString());
+        Assert.Equal("not-run", result.GetProperty("execution").GetString());
+        Assert.Equal("schema", result.GetProperty("tier").GetString());
+        Assert.Equal("session-local", result.GetProperty("compareClassification").GetProperty("setup").GetString());
+        Assert.Equal("read-only", result.GetProperty("compareClassification").GetProperty("baseline").GetString());
+        Assert.Equal("schema", result.GetProperty("compareClassification").GetProperty("candidate").GetString());
+    }
+
     private static SqlHarnessCompareReport BuildCompare(string warning, string artifactPath)
     {
         var target = new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile");

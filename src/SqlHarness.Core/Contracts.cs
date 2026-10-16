@@ -283,7 +283,17 @@ public sealed record SqlHarnessDryRunReport(
     string Classification,
     string Tier,
     IReadOnlyList<BenchmarkParameterReport> Parameters,
-    int ParameterSets);
+    int ParameterSets)
+{
+    public string Validation { get; init; } = "passed";
+    public string Execution { get; init; } = "not-run";
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BenchmarkClassificationReport? BenchmarkClassification { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CompareClassificationReport? CompareClassification { get; init; }
+}
 
 public sealed record SqlHarnessPlanOperation(string ShowplanXml, OutputFootprint RawFootprint) : SqlHarnessOperation;
 

@@ -546,6 +546,25 @@ public sealed class DryRunCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Compare_dry_run_reports_each_classification_without_execution()
+    {
+        var run = await Compare(SqlServer,
+            "SELECT 1;",
+            "CREATE TABLE #candidate (x int);",
+            "CREATE TABLE #setup (x int);");
+
+        AssertAllowed(run, "compare");
+        var report = Report(run.Output);
+        Assert.Equal("passed", report.GetProperty("validation").GetString());
+        Assert.Equal("not-run", report.GetProperty("execution").GetString());
+        Assert.Equal("session", report.GetProperty("tier").GetString());
+        var classification = report.GetProperty("compareClassification");
+        Assert.Equal("session-local", classification.GetProperty("setup").GetString());
+        Assert.Equal("read-only", classification.GetProperty("baseline").GetString());
+        Assert.Equal("session-local", classification.GetProperty("candidate").GetString());
+    }
+
+    [Fact]
     public async Task Matrix_and_parameter_set_names_count_as_supplied()
     {
         var small = Path.Combine(_directory, "s1.json");

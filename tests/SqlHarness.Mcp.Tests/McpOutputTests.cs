@@ -63,6 +63,8 @@ public sealed class McpOutputTests
         Assert.Equal("read-only", dryRun.GetProperty("result").GetProperty("tier").GetString());
         AssertOmitted(dryRun, "error");
         AssertOmitted(dryRun, "truncation");
+        Assert.Equal("passed", dryRun.GetProperty("result").GetProperty("validation").GetString());
+        Assert.Equal("not-run", dryRun.GetProperty("result").GetProperty("execution").GetString());
 
         var validation = EnvelopeOf(McpResultAdapter.Adapt(
             new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, "Unknown argument. Supported arguments: sql, file."),
@@ -1119,7 +1121,8 @@ public sealed class McpOutputTests
         AssertValidEnvelope(envelope);
         var truncation = envelope.GetProperty("truncation");
         Assert.Equal(JsonValueKind.Object, truncation.ValueKind);
-        Assert.True(truncation.GetProperty("detailLimit").GetInt32() > 1);
+        Assert.False(truncation.TryGetProperty("detailLimit", out _));
+        Assert.True(truncation.GetProperty("maxCellChars").GetInt32() > 0);
         var projected = envelope.GetProperty("result");
         QueryShapeFixtures.AssertAccounted(projected, report);
         var sets = projected.GetProperty("resultSets");
@@ -1150,7 +1153,7 @@ public sealed class McpOutputTests
             var envelope = EnvelopeOf(result);
             AssertValidEnvelope(envelope);
             Assert.Equal("success", envelope.GetProperty("status").GetString());
-            Assert.Equal(0, envelope.GetProperty("truncation").GetProperty("detailLimit").GetInt32());
+            Assert.False(envelope.GetProperty("truncation").TryGetProperty("detailLimit", out _));
             var projected = envelope.GetProperty("result");
             Assert.False(projected.TryGetProperty("resultHash", out _));
             Assert.Equal("db", projected.GetProperty("database").GetString());
@@ -1171,7 +1174,7 @@ public sealed class McpOutputTests
         Assert.True(McpResultAdapter.MeasureBytes(result) <= budget);
         var envelope = EnvelopeOf(result);
         AssertValidEnvelope(envelope);
-        Assert.Equal(0, envelope.GetProperty("truncation").GetProperty("detailLimit").GetInt32());
+        Assert.False(envelope.GetProperty("truncation").TryGetProperty("detailLimit", out _));
         var projected = envelope.GetProperty("result");
         QueryShapeFixtures.AssertAccounted(projected, report);
         var sets = projected.GetProperty("resultSets");

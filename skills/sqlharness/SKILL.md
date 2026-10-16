@@ -20,7 +20,7 @@ Execute once the target and required inputs are resolved, using parameters and q
 
 Start with compact output. Check execution status, errors, omitted cases and clipped cells. Retrieve the pages or artifact sections needed for the question. Plan pages fit the response byte budget, so node counts can vary; follow each continuation to cover the saved plan. Each case supporting a conclusion needs reviewed evidence or an explicit gap.
 
-Report execution status, result equivalence and performance verdict separately. Match equivalence semantics to ordering and duplicates; validate domain meaning with two-direction EXCEPT or duplicate-aware grouped counts when needed. Report inconclusive verdicts as inconclusive.
+Report execution status, result equivalence and performance verdict separately. A `pass` means the configured regression condition was not met; it does not mean the candidate improved. Observed equivalence follows the selected ordering, duplicate and nullability rules; it does not establish equivalence in the application's domain. Validate domain meaning with two-direction EXCEPT or duplicate-aware grouped counts when needed. Report inconclusive verdicts as inconclusive. A query's elapsed duration is not benchmark evidence. Where plan fields are present, `estimatedRows` is the optimizer estimate, `actualRows` is observed runtime rows and `executions` is the operator execution count; consider them together when evaluating estimate accuracy and repeated work.
 
 ## Optimization
 

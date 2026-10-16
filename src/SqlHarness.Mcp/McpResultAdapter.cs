@@ -67,7 +67,7 @@ public sealed record McpResultBudget(
 }
 
 /// <summary>Truncation marker carried by the agent envelope when content was bounded.</summary>
-public sealed record McpTruncationInfo(int OmittedItems, int DetailLimit, int MaxCellChars);
+public sealed record McpTruncationInfo(int OmittedItems, int MaxCellChars);
 
 /// <summary>
 /// Maps a Core <see cref="SqlHarnessOutcome"/> onto an SDK
@@ -153,7 +153,7 @@ public static class McpResultAdapter
                 return rawResult;
 
             var truncation = totalOmitted > 0
-                ? new McpTruncationInfo(totalOmitted, detailLimit, maximumCellCharacters)
+                ? new McpTruncationInfo(totalOmitted, maximumCellCharacters)
                 : null;
             if (TryEnvelopeBytes(status, projected, error, truncation, out var envelopeBytes) &&
                 TryBuildWithinBudget(envelopeBytes, isError, maximumBytes, out var built))
@@ -168,7 +168,7 @@ public static class McpResultAdapter
                 "output_budget_too_small",
                 "render",
                 "The minimum agent response does not fit the configured byte budget."),
-            new McpTruncationInfo(1, 0, maximumCellCharacters));
+            new McpTruncationInfo(1, maximumCellCharacters));
         var minimalBytes = JsonSerializer.SerializeToUtf8Bytes(minimal, Json);
         if (TryBuildWithinBudget(minimalBytes, isError: true, maximumBytes, out var minimalResult))
             return minimalResult;
@@ -296,7 +296,6 @@ public static class McpResultAdapter
             else
             {
                 Check(truncation, "omittedItems", JsonValueKind.Number, violations);
-                Check(truncation, "detailLimit", JsonValueKind.Number, violations);
                 Check(truncation, "maxCellChars", JsonValueKind.Number, violations);
             }
         }

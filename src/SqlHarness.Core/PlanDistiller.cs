@@ -32,6 +32,12 @@ public sealed record PlanNode(
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? NodeId { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int OmittedChildCount { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public long OmittedSubtreeCount { get; init; }
 }
 
 public sealed record MissingIndex(
@@ -349,6 +355,10 @@ internal sealed class PlanNodeJsonConverter : JsonConverter<PlanNode>
             writer.WritePropertyName(Name(options, nameof(value.Warnings)));
             JsonSerializer.Serialize(writer, value.Warnings, options);
         }
+        if (value.OmittedChildCount > 0)
+            writer.WriteNumber(Name(options, nameof(value.OmittedChildCount)), value.OmittedChildCount);
+        if (value.OmittedSubtreeCount > 0)
+            writer.WriteNumber(Name(options, nameof(value.OmittedSubtreeCount)), value.OmittedSubtreeCount);
         if (value.Children.Count > 0)
         {
             writer.WritePropertyName(Name(options, nameof(value.Children)));

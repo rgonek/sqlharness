@@ -153,6 +153,7 @@ public class ArtifactReaderTests
         var noNodeSpace = Assert.IsType<ArtifactPlanSection>(AgentOutputProjection.Project(selected, 128, int.MaxValue, out _, 1));
         Assert.Empty(noNodeSpace.Nodes);
         Assert.Null(noNodeSpace.Continuation);
+        Assert.Equal(selected.Cursor, noNodeSpace.Cursor);
         Assert.Contains("cannot fit", noNodeSpace.PageError, StringComparison.Ordinal);
         Assert.Empty(selected.Nodes[0].Operator.Children);
         Assert.Null(selected.Nodes[0].Operator.Predicate);

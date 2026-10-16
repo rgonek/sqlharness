@@ -15,6 +15,54 @@ public class WatchTests
     private const string Token = "eyJsynthetic.access-never-emit.signature";
 
     [Fact]
+    public void Watch_projection_uses_compact_query_rows_and_keeps_source_and_projection_omissions()
+    {
+        var columns = new[]
+        {
+            new SqlHarnessColumnReport(0, "wide", "nvarchar", true),
+            new SqlHarnessColumnReport(1, "bytes", "varbinary", true),
+            new SqlHarnessColumnReport(2, "number", "int", false),
+        };
+        var resultSets = new[]
+        {
+            new SqlHarnessResultSetReport(columns,
+                [
+                    [new string('é', 20), Enumerable.Range(0, 32).Select(value => (byte)value).ToArray(), 7],
+                    .. Enumerable.Range(0, 99).Select(value => (IReadOnlyList<object?>)["row-" + value, new byte[] { 1, 2 }, value]),
+                ],
+                102, 2),
+        };
+        var report = new SqlHarnessWatchReport(
+            new SqlHarnessTargetIdentityReport("server", "db", "server", "db", "profile"),
+            8, 100, WatchExitReason.MaxDuration,
+            [new SqlHarnessWatchPoll(1, 10, "hash", resultSets), new SqlHarnessWatchPoll(4, 40, "hash-4", resultSets)],
+            TotalChangedPolls: 1,
+            OmittedPolls: 3);
+
+        var projected = AgentOutputProjection.Project(report, 4, 1, out var omitted, 4096, AgentProjectionProfile.Mcp);
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(projected, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var watch = json.RootElement;
+        var poll = watch.GetProperty("emittedPolls")[0];
+        var set = poll.GetProperty("resultSets")[0];
+
+        Assert.Equal(3, watch.GetProperty("omittedPolls").GetInt32());
+        Assert.Equal(1, watch.GetProperty("omittedEmittedPolls").GetInt32());
+        Assert.Equal(102, set.GetProperty("rowCount").GetInt64());
+        Assert.Equal(101, set.GetProperty("omittedRowCount").GetInt64());
+        Assert.Equal(2, set.GetProperty("sourceOmittedRowCount").GetInt64());
+        Assert.Equal(99, set.GetProperty("projectionOmittedRowCount").GetInt64());
+        Assert.Equal(3, set.GetProperty("columns").GetArrayLength());
+        Assert.Equal(3, set.GetProperty("rows")[0].GetArrayLength());
+        Assert.Equal("éééé", set.GetProperty("rows")[0][0].GetString());
+        Assert.Equal(2, set.GetProperty("clippedCells").GetArrayLength());
+        Assert.Equal(20, set.GetProperty("clippedCells")[0].GetProperty("originalLength").GetInt64());
+        Assert.Equal("utf16-code-units", set.GetProperty("clippedCells")[0].GetProperty("unit").GetString());
+        Assert.Equal("bytes", set.GetProperty("clippedCells")[1].GetProperty("unit").GetString());
+        Assert.Equal(32, set.GetProperty("clippedCells")[1].GetProperty("originalLength").GetInt64());
+        Assert.True(omitted > 0);
+    }
+
+    [Fact]
     public async Task Watch_records_each_poll_as_execute_without_attributing_delay()
     {
         using var journalTemp = new JournalTempDirectory();
