@@ -127,7 +127,11 @@ public sealed record ArtifactMatrixCellsSection(
     string ArtifactId,
     IReadOnlyList<AgentMatrixCase> Cases,
     int? Continuation,
-    int Cursor = 0);
+    int Cursor = 0)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public MatrixExecutionCoverage? Coverage { get; init; }
+}
 
 /// <summary>Safe refusal of a selective artifact read. The message never carries artifact content.</summary>
 public sealed class ArtifactReadException(string message, SqlHarnessExitCode exitCode) : Exception(message)
@@ -276,7 +280,17 @@ public static class ArtifactReader
                 return matrixCase;
             }).ToArray();
             var next = cursor + page.Length;
-            return new ArtifactMatrixCellsSection(artifactId, page, next < cases.GetArrayLength() ? next : null, cursor);
+            MatrixExecutionCoverage? coverage = null;
+            if (document.RootElement.TryGetProperty("coverage", out var coverageElement)
+                && coverageElement.ValueKind == JsonValueKind.Object)
+            {
+                coverage = JsonSerializer.Deserialize<MatrixExecutionCoverage>(
+                    coverageElement.GetRawText(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            }
+            return new ArtifactMatrixCellsSection(artifactId, page, next < cases.GetArrayLength() ? next : null, cursor)
+            {
+                Coverage = coverage,
+            };
         }
         catch (ArtifactReadException)
         {

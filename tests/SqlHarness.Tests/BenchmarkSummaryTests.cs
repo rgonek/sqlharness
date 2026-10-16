@@ -600,6 +600,121 @@ public sealed class BenchmarkSummaryTests
         Assert.Null(legacyCase.MismatchReasons);
     }
 
+    [Fact]
+    public void Matrix_case_copies_regression_verdict_and_elapsed_range_from_the_cell()
+    {
+        var exact = new FractionalMilliseconds(1.5m, 10.5m, 20.5m);
+        var candidateExact = new FractionalMilliseconds(2.5m, 40.5m, 80.5m);
+        var compare = MinimalCompare([], []) with
+        {
+            Baseline = MinimalCompare([], []).Baseline with
+            {
+                ElapsedTimeMilliseconds = new CompareDistribution(1, 10, 20),
+                MetricReport = new BenchmarkMetricReport(
+                    BenchmarkMetricReport.Measured, BenchmarkMetricReport.Measured, exact,
+                    false, null, null, BenchmarkMetricReport.Measured, null, null, null,
+                    BenchmarkMetricReport.ResultStatement, BenchmarkMetricText.StatementRows, []),
+            },
+            Candidate = MinimalCompare([], []).Candidate with
+            {
+                ElapsedTimeMilliseconds = new CompareDistribution(2, 40, 80),
+                MetricReport = new BenchmarkMetricReport(
+                    BenchmarkMetricReport.Measured, BenchmarkMetricReport.Measured, candidateExact,
+                    false, null, null, BenchmarkMetricReport.Measured, null, null, null,
+                    BenchmarkMetricReport.ResultStatement, BenchmarkMetricText.StatementRows, []),
+            },
+            Regression = new RegressionReport(
+                RegressionPolicy.Fail,
+                [RegressionPolicy.ReasonElapsedRegressed],
+                RegressionPolicy.PolicyVersion,
+                new RegressionDiagnostic(RegressionPolicy.StatusRegressed, 10.5m, 40.5m, 30m, 286m),
+                new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 1m, 1m, 0m, 0m),
+                new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 1m, 1m, 0m, 0m)),
+        };
+
+        var matrixCase = BenchmarkSummaryProjector.ProjectCase(7, "cell-fail", compare, "8");
+
+        Assert.Equal("fail", matrixCase.Regression!.Verdict);
+        Assert.Equal([RegressionPolicy.ReasonElapsedRegressed], matrixCase.Regression.Reasons);
+        Assert.Equal(1.5m, matrixCase.Baseline.ElapsedMinimum);
+        Assert.Equal(20.5m, matrixCase.Baseline.ElapsedMaximum);
+        Assert.Equal(2.5m, matrixCase.Candidate.ElapsedMinimum);
+        Assert.Equal(80.5m, matrixCase.Candidate.ElapsedMaximum);
+        Assert.Null(matrixCase.MismatchReasons);
+    }
+
+    [Fact]
+    public void Thirty_two_mixed_cases_keep_unique_decision_fields_and_do_not_recompute_reasons()
+    {
+        var cells = Enumerable.Range(0, 32).Select(MixedDecisionCell).ToArray();
+        var report = new SqlHarnessCompareMatrixReport("@BatchSize", "int", cells)
+        {
+            Coverage = MatrixExecutionCoverage.AllCompleted(32),
+        };
+
+        var summary = BenchmarkSummaryProjector.Project(report);
+
+        Assert.Equal(32, summary.Cases.Count);
+        Assert.Equal(Enumerable.Range(0, 32), summary.Cases.Select(item => item.Index));
+        Assert.Equal("fail", summary.Cases[7].Regression!.Verdict);
+        Assert.Equal("inconclusive", summary.Cases[15].Regression!.Verdict);
+        Assert.Equal(30, summary.Cases.Count(item => item.Regression!.Verdict == "pass"));
+        Assert.Equal([ResultMismatchReasons.Rows], summary.Cases[7].MismatchReasons);
+        Assert.Equal(summary.Cases[7].MismatchReasons, cells[7].Compare.Equivalence.MismatchReasons);
+        Assert.Equal(4m, summary.Cases[0].Baseline.ElapsedMinimum);
+        Assert.Equal(6m, summary.Cases[0].Baseline.ElapsedMaximum);
+        Assert.Equal(40m, summary.Cases[0].Candidate.ElapsedMinimum);
+        Assert.Equal(60m, summary.Cases[0].Candidate.ElapsedMaximum);
+        Assert.Equal(32, summary.Coverage!.RequestedCases);
+        Assert.Equal(32, summary.Coverage.CompletedCases);
+        Assert.Equal(0, summary.Coverage.NotExecutedCases);
+        Assert.Null(summary.Coverage.FailedCase);
+    }
+
+    private static CompareMatrixCellReport MixedDecisionCell(int index)
+    {
+        var verdict = index == 7 ? RegressionPolicy.Fail : index == 15 ? RegressionPolicy.Inconclusive : RegressionPolicy.Pass;
+        var reasons = verdict switch
+        {
+            RegressionPolicy.Fail => (IReadOnlyList<string>)[RegressionPolicy.ReasonElapsedRegressed],
+            RegressionPolicy.Inconclusive => [RegressionPolicy.ReasonUnstableElapsed],
+            _ => [],
+        };
+        var mismatch = verdict == RegressionPolicy.Fail
+            ? (IReadOnlyList<string>)[ResultMismatchReasons.Rows]
+            : null;
+        var compare = MinimalCompare([], []) with
+        {
+            Baseline = MinimalCompare([], []).Baseline with
+            {
+                ElapsedTimeMilliseconds = new CompareDistribution(4 + index, 5 + index, 6 + index),
+            },
+            Candidate = MinimalCompare([], []).Candidate with
+            {
+                ElapsedTimeMilliseconds = new CompareDistribution(40 + index, 50 + index, 60 + index),
+            },
+            ArtifactDirectory = $"/artifacts/cell-{index:D2}",
+            Equivalence = new ResultEquivalenceReport(
+                ResultComparisonMode.Ordered,
+                mismatch is null,
+                mismatch is null ? 0 : 2,
+                0,
+                0,
+                BaselineStable: true,
+                CandidateStable: true,
+                SchemaEquivalent: true,
+                MismatchReasons: mismatch),
+            Regression = new RegressionReport(
+                verdict,
+                reasons,
+                RegressionPolicy.PolicyVersion,
+                new RegressionDiagnostic("status", 5m, 6m, 1m, 20m),
+                new RegressionDiagnostic("status", 1m, 1m, 0m, 0m),
+                new RegressionDiagnostic("status", 1m, 1m, 0m, 0m)),
+        };
+        return new CompareMatrixCellReport(index, (index + 1).ToString(), compare);
+    }
+
     private static CompareVariantReport SetVariant(
         string name,
         CompareDistribution cpu,

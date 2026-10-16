@@ -515,8 +515,60 @@ public sealed class McpTokenBudgetTests
         var bytes = ResultTextBytes(result, (int)McpLimits.DefaultCallToolResultBudgetBytes);
         _output.WriteLine($"compare matrix result with regression: {bytes} bytes of {McpLimits.DefaultCallToolResultBudgetBytes}");
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
-        var first = document.RootElement.GetProperty("result").GetProperty("details")[0];
-        Assert.Equal("fail", first.GetProperty("compare").GetProperty("regression").GetProperty("verdict").GetString());
+        var cases = document.RootElement.GetProperty("result").GetProperty("cases");
+        Assert.True(cases.GetArrayLength() > 0);
+        Assert.Equal("fail", cases[0].GetProperty("regression").GetProperty("verdict").GetString());
+        Assert.Equal(
+            [RegressionPolicy.ReasonElapsedRegressed],
+            cases[0].GetProperty("regression").GetProperty("reasons").EnumerateArray().Select(value => value.GetString()!).ToArray());
+        Assert.False(document.RootElement.GetProperty("result").TryGetProperty("details", out var details) && details.GetArrayLength() > 0);
+    }
+
+    [Fact]
+    public void Thirty_two_mixed_matrix_pages_fit_4096_and_keep_verdicts()
+    {
+        var comparePass = BuildCompareReport();
+        var cells = Enumerable.Range(0, 32).Select(i =>
+        {
+            var verdict = i == 7 ? FailVerdict() : i == 15
+                ? new RegressionReport(RegressionPolicy.Inconclusive, [RegressionPolicy.ReasonUnstableElapsed],
+                    RegressionPolicy.PolicyVersion,
+                    new RegressionDiagnostic(RegressionPolicy.StatusInconclusive, 40m, 12m, -28m, -70m),
+                    new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 1m, 1m, 0m, 0m),
+                    new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 1m, 1m, 0m, 0m))
+                : new RegressionReport(RegressionPolicy.Pass, [], RegressionPolicy.PolicyVersion,
+                    new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 40m, 12m, -28m, -70m),
+                    new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 1m, 1m, 0m, 0m),
+                    new RegressionDiagnostic(RegressionPolicy.StatusNotRegressed, 1m, 1m, 0m, 0m));
+            return new CompareMatrixCellReport(i, i.ToString(), BuildCompareReport(verdict) with
+            {
+                ArtifactDirectory = $"/artifacts/case-{i:D2}",
+            });
+        }).ToArray();
+        var matrix = new SqlHarnessCompareMatrixReport("batch", "int", cells)
+        {
+            Coverage = MatrixExecutionCoverage.AllCompleted(32),
+        };
+
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, matrix, null) { Coverage = matrix.Coverage },
+            "sqlharness_compare", new McpResultBudget(4096, 128));
+
+        var bytes = ResultTextBytes(result, 4096);
+        _output.WriteLine($"32-case matrix page: {bytes} bytes of 4096");
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        var projected = document.RootElement.GetProperty("result");
+        Assert.True(projected.GetProperty("cases").GetArrayLength() < 32);
+        Assert.True(projected.GetProperty("omittedCaseCount").GetInt32() > 0);
+        foreach (var matrixCase in projected.GetProperty("cases").EnumerateArray())
+        {
+            Assert.True(matrixCase.TryGetProperty("regression", out var regression));
+            Assert.False(string.IsNullOrEmpty(regression.GetProperty("verdict").GetString()));
+            Assert.True(matrixCase.TryGetProperty("artifactId", out var id));
+            Assert.False(string.IsNullOrEmpty(id.GetString()));
+        }
+        Assert.Equal(32, projected.GetProperty("coverage").GetProperty("requestedCases").GetInt32());
+        Assert.Equal(32, projected.GetProperty("coverage").GetProperty("completedCases").GetInt32());
     }
 
     [Fact]
@@ -548,11 +600,21 @@ public sealed class McpTokenBudgetTests
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
         var projected = document.RootElement.GetProperty("result");
         var cases = projected.GetProperty("cases");
-        Assert.Equal(6, cases.GetArrayLength());
         Assert.Equal(6, projected.GetProperty("caseCount").GetInt32());
-        Assert.Equal(Enumerable.Range(0, 6), cases.EnumerateArray().Select(item => item.GetProperty("index").GetInt32()));
+        Assert.InRange(cases.GetArrayLength(), 1, 6);
+        Assert.Equal(6 - cases.GetArrayLength(), projected.GetProperty("omittedCaseCount").GetInt32());
+        if (budget >= 65536)
+            Assert.Equal(6, cases.GetArrayLength());
+        Assert.Equal(Enumerable.Range(0, cases.GetArrayLength()), cases.EnumerateArray().Select(item => item.GetProperty("index").GetInt32()));
+        foreach (var matrixCase in cases.EnumerateArray())
+        {
+            Assert.True(matrixCase.TryGetProperty("delta", out _));
+            Assert.Equal("not-requested", matrixCase.GetProperty("equivalenceAvailability").GetString());
+            Assert.True(matrixCase.TryGetProperty("baseline", out var baseline));
+            Assert.True(baseline.TryGetProperty("elapsedMinimum", out _));
+            Assert.True(baseline.TryGetProperty("elapsedMaximum", out _));
+        }
         Assert.Equal(10m, cases[0].GetProperty("delta").GetProperty("elapsedMilliseconds").GetDecimal());
-        Assert.Equal("not-requested", cases[0].GetProperty("equivalenceAvailability").GetString());
         Assert.Equal(JsonValueKind.Null, cases[0].GetProperty("equivalent").ValueKind);
     }
 

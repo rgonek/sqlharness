@@ -76,9 +76,14 @@ public sealed class WorkflowModule : ISqlHarnessModule
             cells.Add(new CompareMatrixCellReport(index, value, report with { ArtifactDirectory = directory }));
         }
 
-        _writer.WriteMatrixIndex(cells);
+        var coverage = MatrixExecutionCoverage.AllCompleted(cells.Count);
+        _writer.WriteMatrixIndex(cells, coverage);
         _lastArtifactDirectory = cells[0].Compare.ArtifactDirectory;
-        return Success(new SqlHarnessCompareMatrixReport(_scenario.MatrixName, _scenario.MatrixType, cells));
+        return Success(new SqlHarnessCompareMatrixReport(_scenario.MatrixName, _scenario.MatrixType, cells)
+        {
+            Coverage = coverage,
+        }) with
+        { Coverage = coverage };
     }
 
     private SqlHarnessOutcome Persist(SqlHarnessCompareReport report, PairShape shape)

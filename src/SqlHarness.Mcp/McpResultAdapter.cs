@@ -137,8 +137,11 @@ public static class McpResultAdapter
             : outcome.Report;
         foreach (var detailLimit in AgentOutputProjection.CandidateDetailLimits)
         {
-            var projected = AgentOutputProjection.Project(
-                report, maximumCellCharacters, detailLimit, out var omitted, maximumBytes, AgentProjectionProfile.Mcp);
+            var projected = PlaceCoverage(
+                AgentOutputProjection.Project(
+                    report, maximumCellCharacters, detailLimit, out var omitted, maximumBytes, AgentProjectionProfile.Mcp),
+                outcome,
+                ref error);
             var totalOmitted = omitted + errorOmitted;
 
             // Reports the shared projection does not know (capabilities,
@@ -353,7 +356,48 @@ public static class McpResultAdapter
     }
 
     private static McpAgentError? ToMcpError(SqlHarnessError? error) =>
-        error is null ? null : new McpAgentError(error.Code, error.Phase, error.Message, error.Hint, error.Location);
+        error is null
+            ? null
+            : new McpAgentError(error.Code, error.Phase, error.Message, error.Hint, error.Location)
+            {
+                MatrixStop = error.MatrixStop,
+            };
+
+    private static object? PlaceCoverage(object? projected, SqlHarnessOutcome outcome, ref McpAgentError? error)
+    {
+        var coverage = outcome.Coverage
+            ?? (outcome.Report as SqlHarnessCompareMatrixReport)?.Coverage
+            ?? (projected as AgentMatrixOutput)?.Coverage
+            ?? (projected as CompareMatrixBenchmarkSummary)?.Coverage
+            ?? (projected as ArtifactMatrixCellsSection)?.Coverage
+            ?? error?.MatrixStop;
+        projected = projected switch
+        {
+            AgentMatrixOutput matrix => matrix.Coverage is null && coverage is not null
+                ? matrix with { Coverage = coverage }
+                : matrix,
+            CompareMatrixBenchmarkSummary summary => summary.Coverage is null && coverage is not null
+                ? summary with { Coverage = coverage }
+                : summary,
+            ArtifactMatrixCellsSection section => section.Coverage is null && coverage is not null
+                ? section with { Coverage = coverage }
+                : section,
+            _ => projected,
+        };
+        var resultHasCoverage = projected is AgentMatrixOutput { Coverage: not null }
+            or CompareMatrixBenchmarkSummary { Coverage: not null }
+            or ArtifactMatrixCellsSection { Coverage: not null };
+        if (resultHasCoverage)
+        {
+            if (error is { MatrixStop: not null })
+                error = error with { MatrixStop = null };
+            return projected;
+        }
+
+        if (projected is null && coverage is not null)
+            error = (error ?? McpAgentError.Internal()) with { MatrixStop = coverage };
+        return projected;
+    }
 
     private static string Clip(string value, int maximumCellCharacters, ref int omitted)
     {

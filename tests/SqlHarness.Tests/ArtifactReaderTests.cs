@@ -695,6 +695,65 @@ public class ArtifactReaderTests
         Assert.Null(legacy.Cases[0].Baseline.CpuMilliseconds);
         Assert.Equal("cell-000", legacy.Cases[0].ArtifactId);
         Assert.Null(legacy.Cases[0].SetName);
+        Assert.Null(legacy.Coverage);
+        Assert.Null(legacy.Cases[0].Regression);
+        Assert.Null(legacy.Cases[0].Baseline.ElapsedMinimum);
+        Assert.Null(legacy.Cases[0].MismatchReasons);
+    }
+
+    [Fact]
+    public void Matrix_index_preserves_coverage_and_decision_fields_across_pages()
+    {
+        using var temp = new TempDirectory();
+        const string id = "matrix-index-d4";
+        var directory = Path.Combine(temp.Path, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"matrix-cells\"]}");
+        var coverage = MatrixExecutionCoverage.AllCompleted(40);
+        var cases = Enumerable.Range(0, 40).Select(index => new AgentMatrixCase(
+            index, $"cell-{index:D3}", true, "compared",
+            new AgentMedianMetrics(1, 2, 3) { ElapsedMinimum = 1, ElapsedMaximum = 4 },
+            new AgentMedianMetrics(4, 5, 6) { ElapsedMinimum = 4, ElapsedMaximum = 8 },
+            new AgentMedianMetrics(3, 3, 3), ["warning"])
+        {
+            SetName = $"set-{index:D2}",
+            Regression = new AgentMatrixRegression(index == 7 ? "fail" : index == 15 ? "inconclusive" : "pass",
+                index == 7 ? ["elapsed-regressed"] : index == 15 ? ["unstable-elapsed"] : []),
+            BaselineStable = true,
+            CandidateStable = true,
+            SchemaEquivalent = true,
+        }).ToArray();
+        var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        File.WriteAllText(Path.Combine(directory, "matrix-cells.json"), JsonSerializer.Serialize(new
+        {
+            cases,
+            coverage,
+        }, jsonOptions));
+
+        var recovered = new List<AgentMatrixCase>();
+        int? cursor = 0;
+        while (cursor is { } pageCursor)
+        {
+            var page = Assert.IsType<ArtifactMatrixCellsSection>(
+                ArtifactReader.ReadSection(temp.Path, id, "matrix-cells", cursor: pageCursor));
+            Assert.Equal(40, page.Coverage!.RequestedCases);
+            Assert.Equal(40, page.Coverage.CompletedCases);
+            Assert.Equal(0, page.Coverage.NotExecutedCases);
+            Assert.Null(page.Coverage.FailedCase);
+            recovered.AddRange(page.Cases);
+            cursor = page.Continuation;
+            if (page.Continuation is { } next)
+                Assert.True(next > pageCursor);
+        }
+
+        Assert.Equal(40, recovered.Count);
+        Assert.Equal(Enumerable.Range(0, 40), recovered.Select(item => item.Index));
+        Assert.Equal(40, recovered.Select(item => item.Index).Distinct().Count());
+        Assert.Equal("fail", recovered[7].Regression!.Verdict);
+        Assert.Equal("inconclusive", recovered[15].Regression!.Verdict);
+        Assert.Equal(1m, recovered[0].Baseline.ElapsedMinimum);
+        Assert.Equal($"cell-000", recovered[0].ArtifactId);
     }
 
     [Fact]

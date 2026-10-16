@@ -86,7 +86,17 @@ public sealed record MeasureSetBenchmarkSummary(
     MeasureCrossSetSummary CrossSetSummary,
     string? ArtifactDirectory);
 
-public sealed record AgentMedianMetrics(decimal? CpuMilliseconds, decimal? ElapsedMilliseconds, long? LogicalReads);
+public sealed record AgentMedianMetrics(decimal? CpuMilliseconds, decimal? ElapsedMilliseconds, long? LogicalReads)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? ElapsedMinimum { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? ElapsedMaximum { get; init; }
+}
+
+/// <summary>Policy v2 verdict carried on a matrix case without duplicating metric diagnostics.</summary>
+public sealed record AgentMatrixRegression(string Verdict, IReadOnlyList<string> Reasons);
 
 /// <summary>Decision-oriented outcome for one completed matrix case.</summary>
 public sealed record AgentMatrixCase(
@@ -114,6 +124,9 @@ public sealed record AgentMatrixCase(
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<string>? MismatchReasons { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AgentMatrixRegression? Regression { get; init; }
 }
 
 /// <summary>Optional per-case diagnostics; matrix-wide identity and method live on the envelope.</summary>
@@ -140,7 +153,11 @@ public sealed record CompareMatrixBenchmarkSummary(
     int OmittedCaseCount,
     int OmittedDetailCount,
     string? MatrixArtifactId,
-    int? Continuation);
+    int? Continuation)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public MatrixExecutionCoverage? Coverage { get; init; }
+}
 
 public static class BenchmarkSummaryProjector
 {
@@ -214,7 +231,10 @@ public static class BenchmarkSummaryProjector
             0,
             0,
             cells.FirstOrDefault() is { } firstCell ? SafeArtifactId(firstCell.Compare.ArtifactDirectory) : null,
-            null);
+            null)
+        {
+            Coverage = report.Coverage,
+        };
     }
 
     public static AgentMatrixCase ProjectCase(CompareMatrixCellReport cell) =>
@@ -249,6 +269,9 @@ public static class BenchmarkSummaryProjector
             CandidateStable = equivalence.CandidateStable,
             SchemaEquivalent = equivalence.SchemaEquivalent,
             MismatchReasons = equivalence.MismatchReasons,
+            Regression = compare.Regression is { } regression
+                ? new AgentMatrixRegression(regression.Verdict, regression.Reasons)
+                : null,
         };
     }
 
@@ -288,13 +311,24 @@ public static class BenchmarkSummaryProjector
     private static AgentMedianMetrics MedianMetrics(CompareVariantReport variant)
     {
         var report = variant.MetricReport;
-        decimal? elapsed = report?.ElapsedTimeAvailability == BenchmarkMetricReport.Unavailable
+        var elapsedUnavailable = report?.ElapsedTimeAvailability == BenchmarkMetricReport.Unavailable;
+        decimal? elapsed = elapsedUnavailable
             ? null
             : report?.ElapsedTimeMillisecondsExact?.Median ?? variant.ElapsedTimeMilliseconds.Median;
+        decimal? elapsedMin = elapsedUnavailable
+            ? null
+            : report?.ElapsedTimeMillisecondsExact?.Min ?? variant.ElapsedTimeMilliseconds.Min;
+        decimal? elapsedMax = elapsedUnavailable
+            ? null
+            : report?.ElapsedTimeMillisecondsExact?.Max ?? variant.ElapsedTimeMilliseconds.Max;
         return new(
             report?.CpuTimeAvailability == BenchmarkMetricReport.Unavailable ? null : variant.CpuTimeMilliseconds.Median,
             elapsed,
-            report?.LogicalReadsAvailability == BenchmarkMetricReport.Unavailable ? null : variant.LogicalReads.Median);
+            report?.LogicalReadsAvailability == BenchmarkMetricReport.Unavailable ? null : variant.LogicalReads.Median)
+        {
+            ElapsedMinimum = elapsedMin,
+            ElapsedMaximum = elapsedMax,
+        };
     }
 
     private static decimal? Delta(decimal? baseline, decimal? candidate) =>

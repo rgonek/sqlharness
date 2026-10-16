@@ -32,6 +32,9 @@ public record McpAgentError(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Hint = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SqlHarnessErrorLocation? Location = null)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public MatrixExecutionCoverage? MatrixStop { get; init; }
+
     public const string InternalCode = "internal_error";
     public const string InternalPhase = "internal";
     public const string InternalMessage = "The tool failed without a safe error.";

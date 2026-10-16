@@ -130,12 +130,13 @@ public sealed record AgentMatrixOutput(
     string? ParameterName,
     string? ParameterType,
     IReadOnlyList<AgentMatrixCase> Cases,
-    IReadOnlyList<AgentMatrixCellDetail> Details,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<AgentMatrixCellDetail>? Details,
     int CaseCount,
     int OmittedCaseCount,
     int OmittedDetailCount,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MatrixArtifactId,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Continuation);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Continuation,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MatrixExecutionCoverage? Coverage = null);
 
 /// <summary>Maps CLI/storage summaries onto MCP benchmark DTOs without changing stored measurements.</summary>
 public static class AgentBenchmarkProjection
@@ -207,7 +208,8 @@ public static class AgentBenchmarkProjection
             summary.OmittedCaseCount,
             summary.OmittedDetailCount,
             summary.MatrixArtifactId,
-            summary.Continuation);
+            summary.Continuation,
+            summary.Coverage);
 
     public static AgentBenchmarkVariant Variant(BenchmarkVariantSummary variant)
     {

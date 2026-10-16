@@ -478,23 +478,26 @@ public sealed class AgentOptimizationWorkflowTests
                 Assert.DoesNotContain("unstable-elapsed", first, StringComparison.Ordinal);
                 break;
             case WorkflowScenarios.PartialMatrixId when budget == 65536:
-                JsonElement Detail(int index) => result.GetProperty("details").EnumerateArray()
-                    .Single(item => item.GetProperty("index").GetInt32() == index)
-                    .GetProperty("compare").GetProperty("regression");
-                var fail = Detail(7);
+                JsonElement CaseAt(int index) => result.GetProperty("cases").EnumerateArray()
+                    .Single(item => item.GetProperty("index").GetInt32() == index);
+                var fail = CaseAt(7).GetProperty("regression");
                 Assert.Equal("fail", fail.GetProperty("verdict").GetString());
                 Assert.Contains("elapsed-regressed", fail.GetProperty("reasons").EnumerateArray().Select(value => value.GetString()));
-                Assert.Equal("regressed", fail.GetProperty("elapsed").GetProperty("status").GetString());
-                var inconclusive = Detail(15);
+                var inconclusive = CaseAt(15).GetProperty("regression");
                 Assert.Equal("inconclusive", inconclusive.GetProperty("verdict").GetString());
                 Assert.Contains("unstable-elapsed", inconclusive.GetProperty("reasons").EnumerateArray().Select(value => value.GetString()));
-                Assert.Equal("inconclusive", inconclusive.GetProperty("elapsed").GetProperty("status").GetString());
-                var verdicts = result.GetProperty("details").EnumerateArray()
-                    .Select(cell => cell.GetProperty("compare").GetProperty("regression").GetProperty("verdict").GetString())
+                var verdicts = result.GetProperty("cases").EnumerateArray()
+                    .Select(cell => cell.GetProperty("regression").GetProperty("verdict").GetString())
                     .ToArray();
                 Assert.Equal(1, verdicts.Count(value => value == "fail"));
                 Assert.Equal(1, verdicts.Count(value => value == "inconclusive"));
                 Assert.Equal(30, verdicts.Count(value => value == "pass"));
+                var coverage = result.GetProperty("coverage");
+                Assert.Equal(32, coverage.GetProperty("requestedCases").GetInt32());
+                Assert.Equal(32, coverage.GetProperty("completedCases").GetInt32());
+                Assert.Equal(0, coverage.GetProperty("notExecutedCases").GetInt32());
+                Assert.False(coverage.TryGetProperty("failedCase", out _));
+                Assert.False(envelope.RootElement.TryGetProperty("error", out var liveError) && liveError.TryGetProperty("matrixStop", out _));
                 break;
             case WorkflowScenarios.NoImprovementId:
                 Assert.Contains("Region", result.GetProperty("parameters").GetRawText(), StringComparison.Ordinal);

@@ -368,7 +368,7 @@ internal interface ICompareArtifactWriter
     string Write(object report, IReadOnlyList<CompareRunArtifact> runs, string target, ArtifactOwner? owner, string? operationRef = null, IndexInventory? inventory = null) =>
         Write(report, runs, target);
 
-    void WriteMatrixIndex(IReadOnlyList<CompareMatrixCellReport> cells) { }
+    void WriteMatrixIndex(IReadOnlyList<CompareMatrixCellReport> cells, MatrixExecutionCoverage? coverage = null) { }
 }
 
 internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
@@ -400,7 +400,7 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
 
     public void CheckStorage() => _publisher.CheckStorage();
 
-    public void WriteMatrixIndex(IReadOnlyList<CompareMatrixCellReport> cells)
+    public void WriteMatrixIndex(IReadOnlyList<CompareMatrixCellReport> cells, MatrixExecutionCoverage? coverage = null)
     {
         ArgumentNullException.ThrowIfNull(cells);
         var orderedCells = cells.OrderBy(cell => cell.Index).ToArray();
@@ -429,12 +429,20 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
             {
                 Sections = manifest.Sections.Append(ArtifactReader.MatrixCellsSection).Distinct(StringComparer.Ordinal).ToArray(),
             };
-            var index = new
-            {
-                cases = orderedCells.Select((cell, position) => BenchmarkSummaryProjector.ProjectCase(
-                    cell.Index, ArtifactIds.FromDirectory(directories[position]), cell.Compare, cell.ParameterValue,
-                    string.IsNullOrEmpty(cell.SetName) ? null : cell.SetName)).ToArray(),
-            };
+            object index = coverage is null
+                ? new
+                {
+                    cases = orderedCells.Select((cell, position) => BenchmarkSummaryProjector.ProjectCase(
+                        cell.Index, ArtifactIds.FromDirectory(directories[position]), cell.Compare, cell.ParameterValue,
+                        string.IsNullOrEmpty(cell.SetName) ? null : cell.SetName)).ToArray(),
+                }
+                : new
+                {
+                    cases = orderedCells.Select((cell, position) => BenchmarkSummaryProjector.ProjectCase(
+                        cell.Index, ArtifactIds.FromDirectory(directories[position]), cell.Compare, cell.ParameterValue,
+                        string.IsNullOrEmpty(cell.SetName) ? null : cell.SetName)).ToArray(),
+                    coverage,
+                };
 
             var indexPath = Path.Combine(firstDirectory, "matrix-cells.json");
             var indexTemp = indexPath + ".tmp";

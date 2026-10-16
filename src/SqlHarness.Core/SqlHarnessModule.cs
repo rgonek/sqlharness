@@ -618,15 +618,17 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                     try
                     {
                         phase = OperationPhase.Artifact;
-                        _artifactWriter.WriteMatrixIndex(partialReport.Cells);
+                        _artifactWriter.WriteMatrixIndex(partialReport.Cells, failed.Coverage);
                     }
                     catch (Exception exception)
                     {
                         return WithReceipt(
-                            new SqlHarnessOutcome(SqlHarnessExitCode.LocalStorage, partialReport, SecretRedactor.Redact(exception, knownSecrets))
-                            {
-                                BenchmarkRuns = failed.CompletedRuns,
-                            },
+                            MatrixOutcome(
+                                SqlHarnessExitCode.LocalStorage,
+                                partialReport,
+                                SecretRedactor.Redact(exception, knownSecrets),
+                                failed.Coverage,
+                                failed.CompletedRuns),
                             rawFootprint);
                     }
                     phase = failed.Phase switch
@@ -639,21 +641,16 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 var exitCode = phase == OperationPhase.Artifact
                     ? SqlHarnessExitCode.LocalStorage
                     : OperationFailureMapper.Map(failed.InnerException ?? failed, phase);
+                var message = FormatMatrixCellError(failed, knownSecrets);
                 return WithReceipt(
-                    new SqlHarnessOutcome(exitCode, failed.PartialReport, FormatMatrixCellError(failed, knownSecrets))
-                    {
-                        BenchmarkRuns = failed.CompletedRuns,
-                    },
+                    MatrixOutcome(exitCode, failed.PartialReport, message, failed.Coverage, failed.CompletedRuns),
                     rawFootprint);
             }
 
             rawFootprint = result.RawFootprint;
             phase = OperationPhase.Artifact;
-            _artifactWriter.WriteMatrixIndex(result.Report.Cells);
-            var success = new SqlHarnessOutcome(SqlHarnessExitCode.Success, result.Report, null)
-            {
-                BenchmarkRuns = result.Runs,
-            };
+            _artifactWriter.WriteMatrixIndex(result.Report.Cells, result.Coverage);
+            var success = MatrixOutcome(SqlHarnessExitCode.Success, result.Report, null, result.Coverage, result.Runs);
             return WithReceipt(success, rawFootprint);
         }
         catch (Exception exception)
@@ -665,6 +662,23 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 Error: (exception as ArtifactStoragePreflightException)?.ToError(knownSecrets));
             return WithReceipt(failure, rawFootprint);
         }
+    }
+
+    private static SqlHarnessOutcome MatrixOutcome(
+        SqlHarnessExitCode exitCode,
+        object? report,
+        string? safeError,
+        MatrixExecutionCoverage coverage,
+        IReadOnlyList<CompareRunArtifact>? runs)
+    {
+        var error = report is null && safeError is not null
+            ? SqlHarnessError.From(exitCode, safeError) with { MatrixStop = coverage }
+            : null;
+        return new SqlHarnessOutcome(exitCode, report, safeError, Error: error)
+        {
+            BenchmarkRuns = runs,
+            Coverage = coverage,
+        };
     }
 
     private static string FormatMatrixCellError(CompareMatrixCellFailedException failed, IReadOnlyList<string> knownSecrets)

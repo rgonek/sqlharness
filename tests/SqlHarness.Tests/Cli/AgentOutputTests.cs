@@ -778,10 +778,21 @@ public sealed class AgentOutputTests
         using var json = JsonDocument.Parse(output.ToString());
         var result = json.RootElement.GetProperty("result");
         var cases = result.GetProperty("cases");
-        Assert.Equal(6, cases.GetArrayLength());
         Assert.Equal(6, result.GetProperty("caseCount").GetInt32());
-        Assert.Equal(0, result.GetProperty("omittedCaseCount").GetInt32());
-        Assert.Equal(Enumerable.Range(0, 6), cases.EnumerateArray().Select(item => item.GetProperty("index").GetInt32()));
+        Assert.InRange(cases.GetArrayLength(), 1, 6);
+        Assert.Equal(6 - cases.GetArrayLength(), result.GetProperty("omittedCaseCount").GetInt32());
+        if (budget >= 65536)
+        {
+            Assert.Equal(6, cases.GetArrayLength());
+            Assert.Equal(0, result.GetProperty("omittedCaseCount").GetInt32());
+        }
+        Assert.Equal(Enumerable.Range(0, cases.GetArrayLength()), cases.EnumerateArray().Select(item => item.GetProperty("index").GetInt32()));
+        Assert.All(cases.EnumerateArray(), item =>
+        {
+            Assert.True(item.TryGetProperty("baseline", out var baseline));
+            Assert.True(baseline.TryGetProperty("elapsedMinimum", out _));
+            Assert.True(baseline.TryGetProperty("elapsedMaximum", out _));
+        });
         Assert.Equal("case-0", cases[0].GetProperty("artifactId").GetString());
         Assert.Equal(40m, cases[0].GetProperty("baseline").GetProperty("elapsedMilliseconds").GetDecimal());
         Assert.Equal(50m, cases[0].GetProperty("candidate").GetProperty("elapsedMilliseconds").GetDecimal());

@@ -212,8 +212,9 @@ public static class AgentOutputProjection
                         Cases = [],
                         Details = [],
                         OmittedCaseCount = orderedMatrixCells.Length,
-                        OmittedDetailCount = orderedMatrixCells.Length,
+                        OmittedDetailCount = profile == AgentProjectionProfile.Mcp ? 0 : orderedMatrixCells.Length,
                         Continuation = null,
+                        Coverage = shared.Coverage,
                     };
                     var cases = new List<AgentMatrixCase>();
                     var omittedCaseWarnings = 0;
@@ -230,14 +231,18 @@ public static class AgentOutputProjection
                     {
                         var candidateCases = cases.Append(item).ToArray();
                         var omittedCaseCount = orderedMatrixCells.Length - candidateCases.Length;
-                        var candidate = inventoryShell with
+                        var candidateSummary = inventoryShell with
                         {
                             Cases = candidateCases,
                             OmittedCaseCount = omittedCaseCount,
                             Continuation = omittedCaseCount > 0 && matrixArtifactId is not null ? candidateCases.Length : null,
+                            Coverage = shared.Coverage,
                         };
+                        var fitted = profile == AgentProjectionProfile.Mcp
+                            ? (object)(AgentBenchmarkProjection.Matrix(candidateSummary) with { Details = null, OmittedDetailCount = 0 })
+                            : candidateSummary;
                         // Leave room for the outer command/status/error/truncation envelope.
-                        if (SerializedLength(candidate) + 384 > maximumBytes)
+                        if (SerializedLength(fitted) + 384 > maximumBytes)
                             break;
                         cases.Add(item);
                     }
@@ -245,16 +250,19 @@ public static class AgentOutputProjection
                     var omittedCases = orderedMatrixCells.Length - cases.Count;
                     var selectedDetails = new List<CompareMatrixCellDetail>();
                     var nestedOmitted = 0;
-                    foreach (var cell in orderedMatrixCells.Take(cases.Count).Take(detailLimit))
+                    if (profile != AgentProjectionProfile.Mcp)
                     {
-                        var projected = Project(BenchmarkSummaryProjector.Project(cell.Compare), maximumCellCharacters, detailLimit,
-                            out var cellOmitted, maximumBytes, AgentProjectionProfile.Cli);
-                        nestedOmitted += cellOmitted;
-                        var summary = (CompareBenchmarkSummary)projected!;
-                        selectedDetails.Add(new CompareMatrixCellDetail(cell.Index, new CompareMatrixCellDetailContent(
-                            summary.Baseline, summary.Candidate, summary.Equivalence, summary.NoteworthyOperators, summary.Regression)));
+                        foreach (var cell in orderedMatrixCells.Take(cases.Count).Take(detailLimit))
+                        {
+                            var projected = Project(BenchmarkSummaryProjector.Project(cell.Compare), maximumCellCharacters, detailLimit,
+                                out var cellOmitted, maximumBytes, profile);
+                            nestedOmitted += cellOmitted;
+                            var summary = (CompareBenchmarkSummary)projected!;
+                            selectedDetails.Add(new CompareMatrixCellDetail(cell.Index, new CompareMatrixCellDetailContent(
+                                summary.Baseline, summary.Candidate, summary.Equivalence, summary.NoteworthyOperators, summary.Regression)));
+                        }
                     }
-                    var omittedDetails = orderedMatrixCells.Length - selectedDetails.Count;
+                    var omittedDetails = profile == AgentProjectionProfile.Mcp ? 0 : orderedMatrixCells.Length - selectedDetails.Count;
                     omissions += omittedCases + omittedDetails + nestedOmitted + clippedItems;
                     var matrixSummary = inventoryShell with
                     {
@@ -263,9 +271,10 @@ public static class AgentOutputProjection
                         OmittedCaseCount = omittedCases,
                         OmittedDetailCount = omittedDetails,
                         Continuation = omittedCases > 0 && matrixArtifactId is not null ? cases.Count : null,
+                        Coverage = shared.Coverage,
                     };
                     return profile == AgentProjectionProfile.Mcp
-                        ? AgentBenchmarkProjection.Matrix(matrixSummary)
+                        ? AgentBenchmarkProjection.Matrix(matrixSummary) with { Details = null, OmittedDetailCount = 0 }
                         : matrixSummary;
                 case SqlHarnessCompareReport compare:
                     {

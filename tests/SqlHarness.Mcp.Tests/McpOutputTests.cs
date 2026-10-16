@@ -360,6 +360,63 @@ public sealed class McpOutputTests
         Assert.Equal("partial", envelope.GetProperty("status").GetString());
         Assert.Equal("Cell 2 failed.", envelope.GetProperty("error").GetProperty("message").GetString());
         Assert.Equal("batch", envelope.GetProperty("result").GetProperty("parameterName").GetString());
+        Assert.False(envelope.GetProperty("error").TryGetProperty("matrixStop", out _));
+        Assert.False(envelope.GetProperty("result").TryGetProperty("coverage", out _));
+    }
+
+    [Fact]
+    public void First_cell_matrix_failure_puts_coverage_on_error_matrix_stop_only()
+    {
+        var coverage = MatrixExecutionCoverage.IdentifiedFailure(
+            32, 0, new MatrixFailedCase(0, ParameterValue: "1", Phase: "sql") { IncludeParameterValue = true });
+        var outcome = new SqlHarnessOutcome(
+            SqlHarnessExitCode.SqlExecution, null, "Comparison matrix cell 0 failed.",
+            Error: SqlHarnessError.From(SqlHarnessExitCode.SqlExecution, "Comparison matrix cell 0 failed.") with { MatrixStop = coverage })
+        {
+            Coverage = coverage,
+        };
+
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_compare");
+        var envelope = EnvelopeOf(result);
+
+        Assert.True(result.IsError == true);
+        Assert.Equal("error", envelope.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, envelope.GetProperty("result").ValueKind);
+        var stop = envelope.GetProperty("error").GetProperty("matrixStop");
+        Assert.Equal(32, stop.GetProperty("requestedCases").GetInt32());
+        Assert.Equal(0, stop.GetProperty("completedCases").GetInt32());
+        Assert.Equal(31, stop.GetProperty("notExecutedCases").GetInt32());
+        Assert.Equal(0, stop.GetProperty("failedCase").GetProperty("index").GetInt32());
+        Assert.Equal("1", stop.GetProperty("failedCase").GetProperty("parameterValue").GetString());
+        Assert.Equal("sql", stop.GetProperty("failedCase").GetProperty("phase").GetString());
+        Assert.False(envelope.GetProperty("result").ValueKind == JsonValueKind.Object &&
+            envelope.GetProperty("result").TryGetProperty("coverage", out _));
+    }
+
+    [Fact]
+    public void Partial_matrix_puts_coverage_on_result_never_error()
+    {
+        var compare = BuildCompareReport("ok");
+        var cells = Enumerable.Range(0, 15).Select(i => new CompareMatrixCellReport(i, (i + 1).ToString(), compare)).ToArray();
+        var coverage = MatrixExecutionCoverage.IdentifiedFailure(
+            32, 15, new MatrixFailedCase(15, ParameterValue: "16", Phase: "sql") { IncludeParameterValue = true });
+        var matrix = new SqlHarnessCompareMatrixReport("batch", "int", cells) { Coverage = coverage };
+        var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.SqlExecution, matrix, "Comparison matrix cell 15 failed.")
+        {
+            Coverage = coverage,
+        };
+
+        var result = McpResultAdapter.Adapt(outcome, "sqlharness_compare", new McpResultBudget(65536, 128));
+        var envelope = EnvelopeOf(result);
+        var resultObj = envelope.GetProperty("result");
+        var reported = resultObj.GetProperty("coverage");
+        Assert.Equal("partial", envelope.GetProperty("status").GetString());
+        Assert.Equal(32, reported.GetProperty("requestedCases").GetInt32());
+        Assert.Equal(15, reported.GetProperty("completedCases").GetInt32());
+        Assert.Equal(16, reported.GetProperty("notExecutedCases").GetInt32());
+        Assert.Equal(15, reported.GetProperty("failedCase").GetProperty("index").GetInt32());
+        Assert.False(envelope.GetProperty("error").TryGetProperty("matrixStop", out _));
+        Assert.False(resultObj.TryGetProperty("details", out var details) && details.GetArrayLength() > 0);
     }
 
     [Fact]
@@ -838,6 +895,81 @@ public sealed class McpOutputTests
     }
 
     [Fact]
+    public void Thirty_two_mixed_cases_at_4096_preserve_decisions_across_pages()
+    {
+        var owner = new ArtifactOwner("profile", new Dictionary<string, string>(), "sqlserver", "server", "db");
+        var root = Path.Combine(Path.GetTempPath(), $"sqlharness-mcp-matrix32-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var cells = Enumerable.Range(0, 32).Select(i => MixedMatrixCell(root, owner, i)).ToArray();
+            var coverage = MatrixExecutionCoverage.AllCompleted(32);
+            var matrix = new SqlHarnessCompareMatrixReport("batch", "int", cells) { Coverage = coverage };
+            new CompareArtifactWriter(root, () => DateTimeOffset.UnixEpoch).WriteMatrixIndex(cells, coverage);
+            var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, matrix, null) { Coverage = coverage };
+
+            var recovered = new List<(int Index, string? ArtifactId, string? Verdict, string? ParameterValue)>();
+            var result = McpResultAdapter.Adapt(outcome, "sqlharness_compare", new McpResultBudget(4096, 128));
+            Assert.True(McpResultAdapter.MeasureBytes(result) <= 4096, Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+            var envelope = EnvelopeOf(result);
+            AssertValidEnvelope(envelope);
+            var projected = envelope.GetProperty("result");
+            Assert.False(projected.TryGetProperty("details", out var details) && details.GetArrayLength() > 0);
+            var pageCoverage = projected.GetProperty("coverage");
+            Assert.Equal(32, pageCoverage.GetProperty("requestedCases").GetInt32());
+            Assert.Equal(32, pageCoverage.GetProperty("completedCases").GetInt32());
+            Assert.Equal(0, pageCoverage.GetProperty("notExecutedCases").GetInt32());
+            Assert.False(pageCoverage.TryGetProperty("failedCase", out _));
+            Assert.False(envelope.TryGetProperty("error", out var error) && error.TryGetProperty("matrixStop", out _));
+            CollectDecisionCases(projected.GetProperty("cases"), recovered);
+            Assert.True(projected.GetProperty("cases").GetArrayLength() < 32);
+            Assert.True(projected.GetProperty("omittedCaseCount").GetInt32() > 0);
+            var matrixArtifactId = projected.GetProperty("matrixArtifactId").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(matrixArtifactId));
+            var cursor = projected.TryGetProperty("continuation", out var continuation) && continuation.ValueKind == JsonValueKind.Number
+                ? continuation.GetInt32()
+                : (int?)null;
+            var previousCursor = -1;
+            while (cursor is { } pageCursor)
+            {
+                Assert.True(pageCursor > previousCursor);
+                previousCursor = pageCursor;
+                var page = Assert.IsType<ArtifactMatrixCellsSection>(ArtifactReader.ReadSection(
+                    root, matrixArtifactId!, "matrix-cells", owner, pageCursor));
+                var pageOutcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, page, null);
+                var pageResult = McpResultAdapter.Adapt(pageOutcome, "sqlharness_artifact", new McpResultBudget(4096, 128));
+                Assert.True(McpResultAdapter.MeasureBytes(pageResult) <= 4096);
+                var pageEnvelope = EnvelopeOf(pageResult);
+                var pageResultObj = pageEnvelope.GetProperty("result");
+                CollectDecisionCases(pageResultObj.GetProperty("cases"), recovered);
+                foreach (var matrixCase in pageResultObj.GetProperty("cases").EnumerateArray())
+                {
+                    Assert.True(matrixCase.TryGetProperty("regression", out var regression));
+                    Assert.Contains(regression.GetProperty("verdict").GetString(), new[] { "pass", "fail", "inconclusive" });
+                    var id = matrixCase.GetProperty("artifactId").GetString()!;
+                    Assert.True(ArtifactIds.IsValid(id));
+                    Assert.IsType<ArtifactMetricsSection>(ArtifactReader.ReadSection(root, id, "metrics", owner));
+                }
+
+                cursor = pageResultObj.TryGetProperty("continuation", out var next) && next.ValueKind == JsonValueKind.Number
+                    ? next.GetInt32()
+                    : null;
+            }
+
+            Assert.Equal(32, recovered.Count);
+            Assert.Equal(Enumerable.Range(0, 32), recovered.Select(item => item.Index));
+            Assert.Equal(32, recovered.Select(item => item.ArtifactId).Distinct().Count());
+            Assert.Equal("fail", recovered[7].Verdict);
+            Assert.Equal("inconclusive", recovered[15].Verdict);
+            Assert.Equal(30, recovered.Count(item => item.Verdict == "pass"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Matrix_omitted_cells_are_reachable_through_artifact_scope()
     {
         var owner = new ArtifactOwner("profile", new Dictionary<string, string>(), "sqlserver", "server", "db");
@@ -1084,6 +1216,69 @@ public sealed class McpOutputTests
         var detail = projected.GetProperty("resultSets")[0];
         Assert.Equal(columns, detail.GetProperty("columns").GetArrayLength()
             + (detail.TryGetProperty("omittedColumnCount", out var omittedColumns) ? omittedColumns.GetInt32() : 0));
+    }
+
+    private static void CollectDecisionCases(
+        JsonElement cases,
+        List<(int Index, string? ArtifactId, string? Verdict, string? ParameterValue)> recovered)
+    {
+        foreach (var matrixCase in cases.EnumerateArray())
+        {
+            Assert.True(matrixCase.TryGetProperty("regression", out var regression), "Paged cases must keep the verdict.");
+            recovered.Add((
+                matrixCase.GetProperty("index").GetInt32(),
+                matrixCase.GetProperty("artifactId").GetString(),
+                regression.GetProperty("verdict").GetString(),
+                matrixCase.TryGetProperty("parameterValue", out var value) && value.ValueKind != JsonValueKind.Null
+                    ? value.GetString()
+                    : null));
+        }
+    }
+
+    private static CompareMatrixCellReport MixedMatrixCell(string root, ArtifactOwner owner, int index)
+    {
+        var id = $"matrixcell{index:D3}";
+        var directory = Path.Combine(root, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"summary\",\"metrics\",\"operators\"],\"owner\":"
+            + JsonSerializer.Serialize(owner, new JsonSerializerOptions(JsonSerializerDefaults.Web)) + "}");
+        var compare = MixedCompare(index, directory);
+        File.WriteAllText(Path.Combine(directory, "report.json"),
+            JsonSerializer.Serialize(compare, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        return new CompareMatrixCellReport(index, (index + 1).ToString(), compare);
+    }
+
+    private static SqlHarnessCompareReport MixedCompare(int index, string? artifactDirectory = null)
+    {
+        var verdict = index == 7 ? RegressionPolicy.Fail : index == 15 ? RegressionPolicy.Inconclusive : RegressionPolicy.Pass;
+        var reasons = verdict switch
+        {
+            RegressionPolicy.Fail => (IReadOnlyList<string>)[RegressionPolicy.ReasonElapsedRegressed],
+            RegressionPolicy.Inconclusive => [RegressionPolicy.ReasonUnstableElapsed],
+            _ => [],
+        };
+        var mismatch = verdict == RegressionPolicy.Fail ? (IReadOnlyList<string>)[ResultMismatchReasons.Rows] : null;
+        return BuildCompareReport($"cell-{index}", artifactDirectory) with
+        {
+            Equivalence = new ResultEquivalenceReport(
+                ResultComparisonMode.Ordered, mismatch is null, mismatch is null ? 0 : 2, 0, 0,
+                BaselineStable: true, CandidateStable: true, SchemaEquivalent: true, MismatchReasons: mismatch),
+            Regression = new RegressionReport(
+                verdict, reasons, RegressionPolicy.PolicyVersion,
+                new RegressionDiagnostic("status", 10m, 12m, 2m, 20m),
+                new RegressionDiagnostic("status", 1m, 1m, 0m, 0m),
+                new RegressionDiagnostic("status", 1m, 1m, 0m, 0m)),
+            Baseline = BuildCompareReport("b").Baseline with
+            {
+                ElapsedTimeMilliseconds = new CompareDistribution(index + 1, index + 10, index + 20),
+                MetricReport = new BenchmarkMetricReport(
+                    BenchmarkMetricReport.Measured, BenchmarkMetricReport.Measured,
+                    new FractionalMilliseconds(index + 1, index + 10, index + 20),
+                    true, null, null, BenchmarkMetricReport.Measured, null, null, null,
+                    BenchmarkMetricReport.ResultStatement, BenchmarkMetricText.StatementRows, []),
+            },
+        };
     }
 
     private static SqlHarnessCompareReport BuildCompareReport(string marker, string? artifactDirectory = null) => new(
