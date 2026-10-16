@@ -20,8 +20,8 @@ using Xunit.Abstractions;
 namespace SqlHarness.Mcp.Tests;
 
 /// <summary>
-/// T3 catalog contract: exactly the 8 spec tools with strict input schemas,
-/// no target/auth/mutation surface, and unknown-property rejection without
+/// T3 catalog contract: exactly the 9 spec tools with strict input schemas,
+/// no raw target/auth or caller-approval surface, and unknown-property rejection without
 /// ever echoing values. Only synthetic HOME directories are used; the
 /// unreachable profile target is never connected (unknown properties are
 /// rejected at binding time, before any handler runs).
@@ -37,6 +37,7 @@ public sealed class McpToolSchemaTests : IDisposable
     [
         "sqlharness_capabilities",
         "sqlharness_query",
+        "sqlharness_mutation",
         "sqlharness_measure",
         "sqlharness_compare",
         "sqlharness_watch",
@@ -276,11 +277,11 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
-    public void Catalog_registers_exactly_the_8_spec_tools()
+    public void Catalog_registers_exactly_the_9_spec_tools()
     {
         var scope = Scope();
         var tools = McpToolCatalog.CreateTools(scope, scope.CreateModule());
-        Assert.Equal(8, McpLimits.MaxTools);
+        Assert.Equal(9, McpLimits.MaxTools);
         Assert.Equal(McpLimits.MaxTools, tools.Count);
         Assert.Equal(ExpectedTools, tools.Select(tool => tool.ProtocolTool.Name));
         Assert.Equal(ExpectedTools, McpToolCatalog.ToolNames);
@@ -347,7 +348,7 @@ public sealed class McpToolSchemaTests : IDisposable
     }
 
     [Fact]
-    public async Task Request_scope_schema_is_required_only_on_the_eight_target_tools()
+    public async Task Request_scope_schema_is_required_only_on_the_target_tools()
     {
         var scope = Scope();
         var process = McpProcessContext.Create(new McpServerOptions
@@ -360,14 +361,14 @@ public sealed class McpToolSchemaTests : IDisposable
             .ToDictionary(tool => tool.Name, ServedSchema, StringComparer.Ordinal);
         Assert.Equal(["summary", "metrics", "operators", "statements", "matrix-cells", "plan"], EnumOf(requestSchemas["sqlharness_artifact"], "section"));
         Assert.Contains("cursor", Properties(requestSchemas["sqlharness_artifact"]).EnumerateObject().Select(property => property.Name));
-        var projectedTools = new[] { "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot", "sqlharness_plan", "sqlharness_artifact" };
+        var projectedTools = new[] { "sqlharness_query", "sqlharness_mutation", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot", "sqlharness_plan", "sqlharness_artifact" };
         foreach (var tool in projectedTools)
             Assert.True(Properties(requestSchemas[tool]).TryGetProperty("maxCellChars", out _), $"{tool} must expose maxCellChars.");
         Assert.False(Properties(requestSchemas["sqlharness_capabilities"]).TryGetProperty("maxCellChars", out _));
         var requestCompare = Properties(requestSchemas["sqlharness_compare"]).GetProperty("compareNullability");
         Assert.Equal("boolean", requestCompare.GetProperty("type").GetString());
         Assert.False(requestCompare.GetProperty("default").GetBoolean());
-        var targetTools = new[] { "sqlharness_query", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot", "sqlharness_artifact" };
+        var targetTools = new[] { "sqlharness_query", "sqlharness_mutation", "sqlharness_measure", "sqlharness_compare", "sqlharness_watch", "sqlharness_snapshot", "sqlharness_artifact" };
         foreach (var tool in targetTools)
         {
             Assert.Contains("target", Required(requestSchemas[tool]));
@@ -391,6 +392,8 @@ public sealed class McpToolSchemaTests : IDisposable
         Assert.DoesNotContain("auth", rawNames);
         Assert.DoesNotContain("engine", rawNames);
         Assert.DoesNotContain("allowMutation", rawNames);
+        Assert.DoesNotContain("approved", rawNames);
+        Assert.DoesNotContain("confirmDatabase", rawNames);
 
         await using var fixedServed = await ServedCatalog.CreateAsync(scope);
         var fixedSchemas = (await fixedServed.Client.ListToolsAsync(cancellationToken: CancellationToken.None))
@@ -493,6 +496,7 @@ public sealed class McpToolSchemaTests : IDisposable
         {
             ["sqlharness_capabilities"] = new(),
             ["sqlharness_query"] = new() { ["sql"] = "SELECT 1", ["dryRun"] = true, ["target"] = target },
+            ["sqlharness_mutation"] = new() { ["sql"] = "INSERT INTO dbo.T (Id) VALUES (1)", ["dryRun"] = true, ["target"] = target },
             ["sqlharness_measure"] = new() { ["query"] = new { sql = "SELECT 1" }, ["dryRun"] = true, ["target"] = target },
             ["sqlharness_compare"] = new() { ["baseline"] = new { sql = "SELECT 1" }, ["candidate"] = new { sql = "SELECT 1" }, ["target"] = target },
             ["sqlharness_watch"] = new() { ["sql"] = "SELECT 1", ["target"] = target },

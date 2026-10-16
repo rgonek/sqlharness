@@ -13,6 +13,7 @@ public sealed class DashboardSettingsTests
         { "journal": { "enabled": true, "storeSensitive": true,
                        "retention": { "enabled": true, "maxAgeDays": 7, "maxSizeMb": 100 } },
           "dashboard": { "autoStart": true, "port": 50000, "idleShutdownHours": 2 },
+          "mutations": { "defaultMode": "operator", "verification": "click", "approvalTimeoutSeconds": 150 },
           "diagnostics": { "enabled": true } }
         """;
 
@@ -76,6 +77,9 @@ public sealed class DashboardSettingsTests
         Assert.True(loaded.Config.Journal.StoreSensitive);
         Assert.Equal(7, loaded.Config.Journal.Retention.MaxAgeDays);
         Assert.True(loaded.Config.Diagnostics.Enabled);
+        Assert.Equal("operator", loaded.Config.Mutations.DefaultMode);
+        Assert.Equal("click", loaded.Config.Mutations.Verification);
+        Assert.Equal(150, loaded.Config.Mutations.ApprovalTimeoutSeconds);
         Assert.Equal(47800, loaded.Config.Dashboard.Port);
         Assert.Equal("valid", (await Json(response)).GetProperty("status").GetString());
     }
@@ -94,6 +98,41 @@ public sealed class DashboardSettingsTests
         var error = Assert.Single((await Json(response)).GetProperty("errors").EnumerateArray());
         Assert.Equal("journal.retention.maxAgeDays", error.GetProperty("field").GetString());
         Assert.Equal("{}", File.ReadAllText(ConfigPath(home)));
+    }
+
+    [Fact]
+    public async Task Put_with_unsupported_mutation_verification_preserves_the_existing_value()
+    {
+        using var home = new TempHome();
+        const string original = """{ "mutations": { "verification": "click" } }""";
+        File.WriteAllText(ConfigPath(home), original);
+        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
+        var (server, client) = dashboard;
+        const string unsupported = """{ "mutations": { "verification": "webauthn" } }""";
+
+        var response = await client.SendAsync(Put(server, unsupported));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = Assert.Single((await Json(response)).GetProperty("errors").EnumerateArray());
+        Assert.Equal("mutations.verification", error.GetProperty("field").GetString());
+        Assert.Equal(original, File.ReadAllText(ConfigPath(home)));
+    }
+
+    [Fact]
+    public async Task Put_with_numeric_mutation_verification_preserves_the_existing_value()
+    {
+        using var home = new TempHome();
+        const string original = """{ "mutations": { "verification": "click" } }""";
+        File.WriteAllText(ConfigPath(home), original);
+        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
+        var (server, client) = dashboard;
+
+        var response = await client.SendAsync(Put(server, """{ "mutations": { "verification": "0" } }"""));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = Assert.Single((await Json(response)).GetProperty("errors").EnumerateArray());
+        Assert.Equal("mutations.verification", error.GetProperty("field").GetString());
+        Assert.Equal(original, File.ReadAllText(ConfigPath(home)));
     }
 
     [Fact]

@@ -5,13 +5,13 @@ using System.Text.RegularExpressions;
 namespace SqlHarness.Tests.Cli;
 
 /// <summary>
-/// Plan 060: the CLI command surface stays consistent with the eight MCP tools.
+/// Plan 060/073: CLI and MCP expose matching command surfaces, including persistent mutation.
 /// </summary>
 public sealed class CliCommandSurfaceTests
 {
     private static readonly string[] Remaining =
     [
-        "artifact", "capabilities", "compare", "dashboard", "doctor", "mcp", "measure", "plan", "query", "snapshot", "watch",
+        "artifact", "capabilities", "compare", "dashboard", "doctor", "mcp", "measure", "mutation", "plan", "query", "snapshot", "watch",
     ];
 
     [Fact]

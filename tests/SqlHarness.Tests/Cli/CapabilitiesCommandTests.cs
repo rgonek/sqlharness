@@ -5,6 +5,8 @@ using SqlHarness.Cli;
 using SqlHarness.Core;
 using SqlHarness.Core.Dialect;
 using SqlHarness.Core.Postgres;
+using SqlHarness.Core.Targets;
+using SqlHarness.Dashboard;
 
 namespace SqlHarness.Tests.Cli;
 
@@ -22,7 +24,11 @@ public sealed class CapabilitiesCommandTests
         Assert.Empty(module.Operations);
         using var document = JsonDocument.Parse(output.ToString());
         var root = document.RootElement;
-        Assert.Equal(3, root.GetProperty("contractVersion").GetInt32());
+        Assert.Equal(5, root.GetProperty("contractVersion").GetInt32());
+        var mutations = root.GetProperty("mutations");
+        Assert.Equal("never", mutations.GetProperty("defaultMode").GetString());
+        Assert.Equal("click", mutations.GetProperty("verification").GetString());
+        Assert.Equal(120, mutations.GetProperty("approvalTimeoutSeconds").GetInt32());
         var context = root.GetProperty("compareContext");
         Assert.True(context.GetProperty("requireContext").GetBoolean());
         Assert.Equal("whole", context.GetProperty("wholeScope").GetString());
@@ -49,8 +55,8 @@ public sealed class CapabilitiesCommandTests
     [Fact]
     public void Contract_version_is_pinned()
     {
-        Assert.Equal(3, SqlHarnessCapabilitiesProvider.ContractVersion);
-        Assert.Equal(3, SqlHarnessCapabilitiesProvider.Get().ContractVersion);
+        Assert.Equal(5, SqlHarnessCapabilitiesProvider.ContractVersion);
+        Assert.Equal(5, SqlHarnessCapabilitiesProvider.Get().ContractVersion);
     }
 
     [Fact]
@@ -84,6 +90,8 @@ public sealed class CapabilitiesCommandTests
         var root = document.RootElement;
         Assert.Equal(profile, root.GetProperty("profile").GetProperty("name").GetString());
         Assert.Equal(engine, root.GetProperty("profile").GetProperty("engine").GetString());
+        Assert.Equal("never", root.GetProperty("profile").GetProperty("mutationMode").GetString());
+        Assert.False(root.GetProperty("profile").GetProperty("writerConfigured").GetBoolean());
         Assert.Equal([engine], root.GetProperty("engines").EnumerateArray().Select(e => e.GetProperty("name").GetString()!));
         var types = root.GetProperty("parameterTypes").EnumerateArray().Select(t => t.GetString()!).ToArray();
         Assert.Contains("nvarchar(n)", types);
@@ -93,6 +101,45 @@ public sealed class CapabilitiesCommandTests
         Assert.Equal(JsonValueKind.Array, temp.ValueKind);
         Assert.Equal(sqlServer, temp.GetRawText().Contains("#temp", StringComparison.Ordinal));
         Assert.DoesNotContain("\"name\": \"" + other + "\"", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Mutation_capability_reports_only_effective_policy_and_writer_presence()
+    {
+        var config = new SqlHarnessConfig { Mutations = new MutationsConfig { DefaultMode = "operator", Verification = "click", ApprovalTimeoutSeconds = 180 } };
+        var profile = new TargetProfile("host", "db", new Dictionary<string, string>(), "integrated");
+        var enabledProfile = profile with { Mutations = new ProfileMutations("yolo", new MutationWriter(SameAsReader: true)) };
+
+        using var global = JsonDocument.Parse(Serialize(SqlHarnessCapabilitiesProvider.Get(mutationsConfig: config.Mutations, dashboardReachable: true)));
+        var globalPolicy = global.RootElement.GetProperty("mutations");
+        Assert.Equal("operator", globalPolicy.GetProperty("defaultMode").GetString());
+        Assert.Equal(180, globalPolicy.GetProperty("approvalTimeoutSeconds").GetInt32());
+        Assert.True(globalPolicy.GetProperty("dashboardReachable").GetBoolean());
+
+        using var scoped = JsonDocument.Parse(Serialize(SqlHarnessCapabilitiesProvider.Get(SqlEngine.SqlServer, "p", targetProfile: profile, mutationsConfig: config.Mutations)));
+        Assert.Equal("operator", scoped.RootElement.GetProperty("profile").GetProperty("mutationMode").GetString());
+        Assert.False(scoped.RootElement.GetProperty("profile").GetProperty("writerConfigured").GetBoolean());
+
+        using var enabled = JsonDocument.Parse(Serialize(SqlHarnessCapabilitiesProvider.Get(SqlEngine.SqlServer, "p", targetProfile: enabledProfile, mutationsConfig: config.Mutations)));
+        Assert.Equal("yolo", enabled.RootElement.GetProperty("profile").GetProperty("mutationMode").GetString());
+        Assert.True(enabled.RootElement.GetProperty("profile").GetProperty("writerConfigured").GetBoolean());
+        Assert.DoesNotContain("sameAsReader", enabled.RootElement.GetRawText(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Capabilities_dashboard_reachability_tracks_the_live_home_lock_without_exposing_its_token()
+    {
+        using var home = new TempProfiles();
+        using var held = DashboardLock.TryAcquire(home.HomePath)!;
+        held.Publish(new DashboardEndpoint(Environment.ProcessId, null, 47831, "capability-test-token"));
+        var output = new StringWriter();
+
+        var exitCode = await SqlHarnessCli.Create(new RecordingModule(), output).RunAsync(["capabilities", "--json"]);
+
+        Assert.Equal(0, exitCode);
+        using var document = JsonDocument.Parse(output.ToString());
+        Assert.True(document.RootElement.GetProperty("mutations").GetProperty("dashboardReachable").GetBoolean());
+        Assert.DoesNotContain("capability-test-token", output.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -308,6 +355,17 @@ public sealed class CapabilitiesCommandTests
             Assert.Contains("offline", commands[command], StringComparison.Ordinal);
             Assert.DoesNotContain("no CLI switch", commands[command], StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void Mutation_is_advertised_with_agent_facing_status_contract()
+    {
+        var capabilities = SqlHarnessCapabilitiesProvider.Get();
+        var mutation = capabilities.Commands.Single(command => command.Name == "mutation");
+
+        Assert.Contains("dashboard mutation policy", mutation.Description, StringComparison.Ordinal);
+        Assert.Contains("non-success status", mutation.Description, StringComparison.Ordinal);
+        Assert.Equal(["text", "json", "agent"], capabilities.OutputModesByCommand["mutation"]);
     }
 
     [Theory]
@@ -718,6 +776,7 @@ public sealed class CapabilitiesCommandTests
     {
         private readonly string? _original = Environment.GetEnvironmentVariable("SQLHARNESS_HOME");
         private readonly string _path = Path.Combine(Path.GetTempPath(), "sqlharness-caps-" + Guid.NewGuid().ToString("N"));
+        public string HomePath => _path;
 
         public TempProfiles(string? targetsJson = null)
         {

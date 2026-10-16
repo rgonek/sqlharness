@@ -152,6 +152,10 @@ public static class SqlInputReader
 
 public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, OutputContext output, Renderer renderer) : AsyncCommand<TSettings> where TSettings : CommandSettings
 {
+    protected ISqlHarnessModule Module => module;
+    protected OutputContext Output => output;
+    protected Renderer Renderer => renderer;
+
     protected int Invalid(string error, SqlHarnessError? structuredError = null)
     {
         var code = SqlHarnessExitCode.Safety;
@@ -165,18 +169,8 @@ public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, Out
     protected async Task<int> Dispatch(SqlHarnessOperation operation, OutputMode mode, CancellationToken ct, AgentOutputOptions? agentOptions = null)
     {
         agentOptions ??= output.AgentOptions;
-        if (mode == OutputMode.Agent && agentOptions.MaximumBytes is < 4096 or > 1048576)
-        {
-            renderer.RenderError(SqlHarnessExitCode.Safety, $"Agent output limits must be --max-output-bytes 4096..1048576 and --max-cell-chars 0..{AgentOutputLimits.MaximumCellCharacters}.", mode, output.Command, output.Capture, agentOptions: agentOptions);
-            output.Capture.Flush();
-            return (int)SqlHarnessExitCode.Safety;
-        }
-        if (mode == OutputMode.Agent && agentOptions.MaximumCellCharacters is < 0 or > AgentOutputLimits.MaximumCellCharacters)
-        {
-            renderer.RenderError(SqlHarnessExitCode.Safety, $"Cell limit must be 0..{AgentOutputLimits.MaximumCellCharacters} characters.", mode, output.Command, output.Capture, agentOptions: agentOptions);
-            output.Capture.Flush();
-            return (int)SqlHarnessExitCode.Safety;
-        }
+        if (ValidateAgentOutputOptions(mode, agentOptions) is int invalidOutputOptions)
+            return invalidOutputOptions;
         var mark = output.Begin();
         var outcome = await module.ExecuteAsync(operation, ct);
         if (mode == OutputMode.Agent)
@@ -185,6 +179,23 @@ public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, Out
             renderer.Render(outcome, mode, output.Capture, output.Command);
         output.Capture.Flush();
         return await output.CompleteAsync(outcome, mark, ct);
+    }
+
+    protected int? ValidateAgentOutputOptions(OutputMode mode, AgentOutputOptions options)
+    {
+        var message = mode != OutputMode.Agent
+            ? null
+            : options.MaximumBytes is < 4096 or > 1048576
+                ? $"Agent output limits must be --max-output-bytes 4096..1048576 and --max-cell-chars 0..{AgentOutputLimits.MaximumCellCharacters}."
+                : options.MaximumCellCharacters is < 0 or > AgentOutputLimits.MaximumCellCharacters
+                    ? $"Cell limit must be 0..{AgentOutputLimits.MaximumCellCharacters} characters."
+                    : null;
+        if (message is null)
+            return null;
+
+        renderer.RenderError(SqlHarnessExitCode.Safety, message, mode, output.Command, output.Capture, agentOptions: options);
+        output.Capture.Flush();
+        return (int)SqlHarnessExitCode.Safety;
     }
 
     /// <summary>
@@ -233,8 +244,6 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
         [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
         [Description("Presentation-only row cap (0..500). The server still computes the full result; canonical hashes and equivalence cover all rows.")]
         [CommandOption("--max-rows <COUNT>")][DefaultValue(50)] public int MaxRows { get; set; } = 50;
-        [CommandOption("--allow-mutation")] public bool AllowMutation { get; set; }
-        [CommandOption("--confirm-database <DATABASE>")] public string? ConfirmDatabase { get; set; }
         [Description("Check the exact arguments offline (bounds, safety classification, parameter binding, setup shape) and stop before connecting, authenticating or writing. Same report as MCP dryRun; exit 0 when allowed, 2 when rejected.")]
         [CommandOption("--dry-run")] public bool DryRun { get; set; }
     }
@@ -249,7 +258,7 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
         try
         {
             var sql = hasFile ? await SqlInputReader.ReadFileAsync(settings.File!, ct) : await SqlInputReader.ReadStdinAsync(input.Stdin, ct);
-            return await Dispatch(new SqlHarnessQueryOperation(target, sql, settings.Parameters, settings.Timeout, settings.MaxRows, settings.AllowMutation, settings.ConfirmDatabase) { DryRun = settings.DryRun }, ResolveOutputMode(settings.Json, output: settings.Output), ct, new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
+            return await Dispatch(new SqlHarnessQueryOperation(target, sql, settings.Parameters, settings.Timeout, settings.MaxRows, false, null) { DryRun = settings.DryRun }, ResolveOutputMode(settings.Json, output: settings.Output), ct, new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
         }
         catch (OperationCanceledException) { throw; }
         catch (SqlInputTooLargeException) { return InvalidInputTooLarge(); }

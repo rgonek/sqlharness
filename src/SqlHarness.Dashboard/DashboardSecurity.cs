@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Http.Extensions;
 namespace SqlHarness.Dashboard;
 
 /// <summary>
-/// Loopback dashboard protection: exact Host allowlist (DNS rebinding), GET-only except five guarded writes (PUT /api/settings, POST /api/prices/refresh, PATCH /api/sessions/{id}/annotation, POST /api/transcripts/clear, POST /api/shutdown),
+/// Loopback dashboard protection: exact Host allowlist (DNS rebinding), GET-only except guarded writes and the bearer-authenticated mutation submit route,
 /// persistent ?t= token exchanged into a long-lived HttpOnly SameSite=Strict cookie through a same-origin hand-off page, and
 /// cookie authentication on every other request. Tokens are compared in constant time.
 /// </summary>
@@ -22,6 +22,7 @@ internal static class DashboardSecurity
     internal const string PricesRefreshPath = "/api/prices/refresh";
     internal const string ShutdownPath = "/api/shutdown";
     internal const string TranscriptsClearPath = "/api/transcripts/clear";
+    internal const string MutationsPath = "/api/mutations";
     private static readonly System.Text.RegularExpressions.Regex AnnotationPath =
         new(@"^/api/sessions/[0-9]{1,19}/annotation\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
     internal static readonly TimeSpan CookieMaxAge = TimeSpan.FromDays(400);
@@ -88,8 +89,13 @@ internal static class DashboardSecurity
             && string.Equals(context.Request.Path.Value, TranscriptsClearPath, StringComparison.Ordinal);
         var isAnnotationWrite = HttpMethods.IsPatch(context.Request.Method)
             && AnnotationPath.IsMatch(context.Request.Path.Value ?? string.Empty);
-        var isWrite = isSettingsWrite || isPricesRefresh || isAnnotationWrite || isTranscriptsClear || isShutdown;
-        if (!isRead && !isWrite)
+        var isMutationSubmit = HttpMethods.IsPost(context.Request.Method)
+            && string.Equals(context.Request.Path.Value, MutationsPath, StringComparison.Ordinal);
+        var isMutationDecision = HttpMethods.IsPost(context.Request.Method)
+            && System.Text.RegularExpressions.Regex.IsMatch(context.Request.Path.Value ?? string.Empty,
+                @"^/api/mutations/[a-f0-9]{32}/(?:approve|deny)\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        var isWrite = isSettingsWrite || isPricesRefresh || isAnnotationWrite || isTranscriptsClear || isShutdown || isMutationDecision;
+        if (!isRead && !isWrite && !isMutationSubmit)
         {
             context.Response.Headers.Allow = "GET, HEAD";
             await Reject(context, StatusCodes.Status405MethodNotAllowed, "Method not allowed.");
@@ -101,6 +107,18 @@ internal static class DashboardSecurity
         if (isWrite && !IsTrustedWrite(context.Request, allowedPort))
         {
             await Reject(context, StatusCodes.Status403Forbidden, "Forbidden.");
+            return;
+        }
+
+        if (isMutationSubmit)
+        {
+            if (!context.Request.HasJsonContentType() ||
+                !MatchesBearer(context.Request.Headers.Authorization.ToString(), token))
+            {
+                await Reject(context, StatusCodes.Status401Unauthorized, "Bearer authentication required.");
+                return;
+            }
+            await next();
             return;
         }
 
@@ -166,6 +184,9 @@ internal static class DashboardSecurity
     private static bool Matches(string? supplied, string token) =>
         supplied is not null
         && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(supplied), Encoding.UTF8.GetBytes(token));
+
+    private static bool MatchesBearer(string supplied, string token) =>
+        supplied.StartsWith("Bearer ", StringComparison.Ordinal) && Matches(supplied[7..], token);
 
     private static Task Reject(HttpContext context, int status, string message)
     {

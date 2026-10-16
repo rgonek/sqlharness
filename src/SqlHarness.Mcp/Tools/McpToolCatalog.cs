@@ -7,6 +7,7 @@ using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 using SqlHarness.Core;
+using SqlHarness.Core.Mutations;
 
 namespace SqlHarness.Mcp.Tools;
 
@@ -44,13 +45,17 @@ public sealed class McpToolHandlers(
     IMcpClock? clock = null,
     CancellationToken hostShutdown = default,
     bool acceptRequestScope = false,
-    CompareConfig? compareConfig = null)
+    CompareConfig? compareConfig = null,
+    IMutationBrokerClient? mutationBroker = null,
+    string? mutationSessionKey = null)
 {
     private readonly McpScope scope = mcpScope;
     private readonly IMcpClock _clock = clock ?? SystemMcpClock.Instance;
     private readonly CancellationToken _hostShutdown = hostShutdown;
     private readonly bool _acceptRequestScope = acceptRequestScope;
     private readonly CompareConfig _compareConfig = compareConfig ?? SqlHarnessConfig.Default.Compare;
+    private readonly IMutationBrokerClient _mutationBroker = mutationBroker ?? UnavailableMutationBrokerClient.Instance;
+    private readonly string _mutationSessionKey = mutationSessionKey ?? "mcp:" + Guid.NewGuid().ToString("N");
 
     public Task<CallToolResult> CapabilitiesAsync(
         RequestContext<CallToolRequestParams> ctx,
@@ -95,6 +100,64 @@ public sealed class McpToolHandlers(
             return await module.ExecuteAsync(
                 await McpOperationMapper.MapQueryAsync(scope, sql, file, parameters, timeout, maxRows, token, dryRun),
                 token);
+        }, ct);
+
+    public Task<CallToolResult> MutationAsync(
+        RequestContext<CallToolRequestParams> ctx,
+        [Description("Inline SQL, at most 1 MiB. Exactly one of sql or file.")]
+        string? sql = null,
+        [Description("SQL file under an operator input root. Exactly one of sql or file.")]
+        string? file = null,
+        [Description("Typed values: culture-invariant text or JSON null.")]
+        McpParameterArgument[]? parameters = null,
+        [Description("SQL timeout 1..300 seconds.")]
+        int timeout = 30,
+        [Description("Presentation row cap 0..500.")]
+        int maxRows = 50,
+        [Description("Database name this change is intended for.")]
+        string? expectDatabase = null,
+        [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")]
+        int? maxResultBytes = null,
+        [Description("Cell clip 0..4096 characters; default 2048.")]
+        int? maxCellChars = null,
+        [Description("Seconds 1..86400; may only lower the process limit.")]
+        int? maxOperationSeconds = null,
+        [Description("Offline validation only; no execution or approval request.")]
+        bool dryRun = false,
+        CancellationToken ct = default) =>
+        RunDbAsync("sqlharness_mutation", ctx, maxResultBytes, maxCellChars, maxOperationSeconds, async (token, _) =>
+        {
+            ThrowIfUnknown(ctx, ["sql", "file", "parameters", "timeout", "maxRows", "expectDatabase", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"]);
+            var operation = await McpOperationMapper.MapMutationAsync(
+                scope, sql, file, parameters, timeout, maxRows, expectDatabase, _mutationSessionKey, token, dryRun);
+            var outcome = await module.ExecuteAsync(operation, token);
+            if (dryRun || outcome.Report is not SqlHarnessMutationPrepared prepared)
+                return outcome;
+
+            var progress = new McpProgressReporter(_clock);
+            using var progressCancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
+            var progressTask = ReportApprovalProgressAsync(ctx, progress, progressCancellation.Token);
+            MutationBrokerResult brokerResult;
+            try
+            {
+                brokerResult = await _mutationBroker.SubmitAsync(prepared.Request, progress: null, token);
+            }
+            finally
+            {
+                await progressCancellation.CancelAsync();
+                await progressTask.ConfigureAwait(false);
+            }
+
+            var status = IsMutationStatus(brokerResult.Status) ? brokerResult.Status : MutationStatus.Failed;
+            brokerResult = brokerResult with { Status = status };
+            var error = status == MutationStatus.Success
+                ? null
+                : new SqlHarnessError(status, "mutation", brokerResult.Message ?? status);
+            return new SqlHarnessOutcome(MutationExitCode(status), brokerResult, brokerResult.Message, Error: error)
+            {
+                OperationRef = outcome.OperationRef,
+                ParentOperationRef = outcome.ParentOperationRef,
+            };
         }, ct);
 
     public Task<CallToolResult> MeasureAsync(
@@ -479,10 +542,50 @@ public sealed class McpToolHandlers(
                 string.IsNullOrWhiteSpace(message) ? "The tool failed without a safe error." : message),
             command,
             budget ?? new McpResultBudget(scope.MaxResultBytes));
+
+    private static async Task ReportApprovalProgressAsync(
+        RequestContext<CallToolRequestParams>? context,
+        McpProgressReporter progress,
+        CancellationToken ct)
+    {
+        if (context?.Params?.ProgressToken is null)
+            return;
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+                await progress.ReportAsync(context, "sqlharness_mutation", "awaiting_approval", ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+    }
+
+    private static SqlHarnessExitCode MutationExitCode(string status) => status switch
+    {
+        MutationStatus.Success => SqlHarnessExitCode.Success,
+        MutationStatus.DatabaseMismatch => SqlHarnessExitCode.TargetMismatch,
+        MutationStatus.Failed or MutationStatus.OutcomeUnknown => SqlHarnessExitCode.SqlExecution,
+        _ => SqlHarnessExitCode.Safety,
+    };
+
+    private static bool IsMutationStatus(string status) => status is
+        MutationStatus.Success or MutationStatus.Disabled or MutationStatus.Unavailable or MutationStatus.Timeout or
+        MutationStatus.Denied or MutationStatus.Busy or MutationStatus.NotAMutation or MutationStatus.DatabaseMismatch or
+        MutationStatus.PrincipalProtected or MutationStatus.Failed or MutationStatus.OutcomeUnknown;
+}
+
+internal sealed class UnavailableMutationBrokerClient : IMutationBrokerClient
+{
+    internal static readonly UnavailableMutationBrokerClient Instance = new();
+    private UnavailableMutationBrokerClient() { }
+
+    public Task<MutationBrokerResult> SubmitAsync(MutationRequest request, IProgress<string>? progress, CancellationToken ct) =>
+        Task.FromResult(new MutationBrokerResult(MutationStatus.Unavailable, null, null));
 }
 
 /// <summary>
-/// Explicit tool catalog: exactly the 8 MCP tools, registered one by one
+/// Explicit tool catalog: exactly the 9 MCP tools, registered one by one
 /// by name. No assembly scanning (WithToolsFromAssembly) is used anywhere on
 /// this path, so adding a public method can never silently widen the surface.
 /// Annotations are conservative local-effect hints only: benchmark and
@@ -502,6 +605,7 @@ public static class McpToolCatalog
     public const string ParameterSetFilesDescription = "2..32 .sqljson files under input roots; exclusive with parameterSets/matrix; disjoint from fixed parameters.";
     public const string ParameterSetsDescription = "2..32 named sets, matching declared types; exclusive with parameterSetFiles/matrix; disjoint from fixed parameters.";
     public const string MatrixDescription = "2..32 distinct values for one parameter; exclusive with parameterSets/parameterSetFiles; disjoint from fixed parameters.";
+    public const string MutationDescription = "Persistent change (DML/DDL/GRANT/EXEC) on the scope's profile. The operator's dashboard policy decides; the call waits up to the approval timeout. Any status other than success: stop and report; do not retry.";
     public const string MeasureDescription = "Measure one query across repeats. Sets rotate on one session/shared cache; setup binds the first set once. Results report per-set stability, not cross-set equivalence.";
     public const string CompareDescription = "Compare baseline/candidate measurements and observed rows. subject and textual scope follow the frozen compare.requireContext policy reported by capabilities; request-scoped target selects the database. Each set has its own session/setup; first failure stops the run and retains completed cells. Read regression verdict/reasons separately from exitCode.";
     public const string ArtifactSectionDescription = "Safe saved section. operators is capped; planShapeStable compares plan shape, not timing or row counts; null means insufficient evidence.";
@@ -511,6 +615,7 @@ public static class McpToolCatalog
     [
         "sqlharness_capabilities",
         "sqlharness_query",
+        "sqlharness_mutation",
         "sqlharness_measure",
         "sqlharness_compare",
         "sqlharness_watch",
@@ -526,22 +631,25 @@ public static class McpToolCatalog
         McpProcessContext process,
         IMcpClock? clock = null,
         CancellationToken hostShutdown = default,
-        Func<McpScope, ISqlHarnessModule>? moduleFactory = null)
+        Func<McpScope, ISqlHarnessModule>? moduleFactory = null,
+        IMutationBrokerClient? mutationBroker = null,
+        string? mutationSessionKey = null)
     {
         ArgumentNullException.ThrowIfNull(process);
         if (!process.RequestScope)
-            return CreateTools(process.FixedScope!, moduleFactory?.Invoke(process.FixedScope!) ?? process.Decorate(process.FixedScope!.CreateModule(process.CompareConfig)), clock, hostShutdown, process.CompareConfig);
-        var factory = new ToolFactory(new McpRequestToolHandlers(process, clock, hostShutdown, moduleFactory), RequestScopeEngine);
+            return CreateTools(process.FixedScope!, moduleFactory?.Invoke(process.FixedScope!) ?? process.Decorate(process.FixedScope!.CreateModule(process.CompareConfig)), clock, hostShutdown, process.CompareConfig, mutationBroker, mutationSessionKey ?? process.MutationSessionKey);
+        var factory = new ToolFactory(new McpRequestToolHandlers(process, clock, hostShutdown, moduleFactory, mutationBroker, mutationSessionKey ?? process.MutationSessionKey), RequestScopeEngine);
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
             factory.Tool(ToolNames[0], nameof(McpRequestToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
             factory.Tool(ToolNames[1], nameof(McpRequestToolHandlers.QueryAsync), factory.QueryDescription("Run a bounded query against the supplied request scope."), true, false, null, true),
-            factory.Tool(ToolNames[2], nameof(McpRequestToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
-            factory.Tool(ToolNames[3], process.CompareConfig.RequireContext ? nameof(McpRequestToolHandlers.CompareAsync) : nameof(McpRequestToolHandlers.CompareWithoutContextAsync), CompareDescription, null, false, null, true),
-            factory.Tool(ToolNames[4], nameof(McpRequestToolHandlers.WatchAsync), "Poll a bounded query against the supplied request scope.", true, false, null, true),
-            factory.Tool(ToolNames[5], nameof(McpRequestToolHandlers.SnapshotAsync), "Capture or diff a snapshot against the supplied request scope.", null, false, null, true),
-            factory.Tool(ToolNames[6], nameof(McpRequestToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
-            factory.Tool(ToolNames[7], nameof(McpRequestToolHandlers.ArtifactAsync), "Read a safe section of an artifact against the supplied request scope.", true, false, true, false),
+            factory.Tool(ToolNames[2], nameof(McpRequestToolHandlers.MutationAsync), MutationDescription, null, false, null, true),
+            factory.Tool(ToolNames[3], nameof(McpRequestToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
+            factory.Tool(ToolNames[4], process.CompareConfig.RequireContext ? nameof(McpRequestToolHandlers.CompareAsync) : nameof(McpRequestToolHandlers.CompareWithoutContextAsync), CompareDescription, null, false, null, true),
+            factory.Tool(ToolNames[5], nameof(McpRequestToolHandlers.WatchAsync), "Poll a bounded query against the supplied request scope.", true, false, null, true),
+            factory.Tool(ToolNames[6], nameof(McpRequestToolHandlers.SnapshotAsync), "Capture or diff a snapshot against the supplied request scope.", null, false, null, true),
+            factory.Tool(ToolNames[7], nameof(McpRequestToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
+            factory.Tool(ToolNames[8], nameof(McpRequestToolHandlers.ArtifactAsync), "Read a safe section of an artifact against the supplied request scope.", true, false, true, false),
         };
         if (tools.Count != McpLimits.MaxTools)
             throw new InvalidOperationException($"The MCP catalog must serve exactly {McpLimits.MaxTools} tools.");
@@ -553,11 +661,13 @@ public static class McpToolCatalog
         McpProcessContext process,
         IMcpClock? clock = null,
         CancellationToken hostShutdown = default,
-        Func<McpScope, ISqlHarnessModule>? moduleFactory = null)
+        Func<McpScope, ISqlHarnessModule>? moduleFactory = null,
+        IMutationBrokerClient? mutationBroker = null,
+        string? mutationSessionKey = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         var collection = new McpServerPrimitiveCollection<McpServerTool>();
-        foreach (var tool in CreateTools(process, clock, hostShutdown, moduleFactory)) collection.Add(tool);
+        foreach (var tool in CreateTools(process, clock, hostShutdown, moduleFactory, mutationBroker, mutationSessionKey)) collection.Add(tool);
         options.ToolCollection = collection;
     }
 
@@ -566,22 +676,26 @@ public static class McpToolCatalog
         ISqlHarnessModule module,
         IMcpClock? clock = null,
         CancellationToken hostShutdown = default,
-        CompareConfig? compareConfig = null)
+        CompareConfig? compareConfig = null,
+        IMutationBrokerClient? mutationBroker = null,
+        string? mutationSessionKey = null)
     {
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(module);
         var policy = compareConfig ?? SqlHarnessConfig.Default.Compare;
-        var factory = new ToolFactory(new McpToolHandlers(scope, module, clock, hostShutdown, compareConfig: policy), scope.ResolvedTarget.Engine);
+        var factory = new ToolFactory(new McpToolHandlers(scope, module, clock, hostShutdown, compareConfig: policy,
+            mutationBroker: mutationBroker, mutationSessionKey: mutationSessionKey ?? "mcp:" + Guid.NewGuid().ToString("N")), scope.ResolvedTarget.Engine);
         var tools = new List<McpServerTool>(ToolNames.Count)
         {
             factory.Tool(ToolNames[0], nameof(McpToolHandlers.CapabilitiesAsync), CapabilitiesDescription, true, false, true, false),
             factory.Tool(ToolNames[1], nameof(McpToolHandlers.QueryAsync), factory.QueryDescription("Run a bounded query passing the static visible-effects text check; no persistent-mutation flags are offered on this path. Hidden effects beyond the text are limited only by the DB account role prepared outside SQLHarness. Exactly one of inline sql (at most 1 MiB) or a file under an input root."), true, false, null, true),
-            factory.Tool(ToolNames[2], nameof(McpToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
-            factory.Tool(ToolNames[3], policy.RequireContext ? nameof(McpToolHandlers.CompareAsync) : nameof(McpToolHandlers.CompareWithoutContextAsync), CompareDescription, null, false, null, true),
-            factory.Tool(ToolNames[4], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
-            factory.Tool(ToolNames[5], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it.", null, false, null, true),
-            factory.Tool(ToolNames[6], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
-            factory.Tool(ToolNames[7], nameof(McpToolHandlers.ArtifactAsync), "Read a safe section (summary, metrics, operators, statements, matrix-cells, or plan) of a saved benchmark artifact.", true, false, true, false),
+            factory.Tool(ToolNames[2], nameof(McpToolHandlers.MutationAsync), MutationDescription, null, false, null, true),
+            factory.Tool(ToolNames[3], nameof(McpToolHandlers.MeasureAsync), MeasureDescription, null, false, null, true),
+            factory.Tool(ToolNames[4], policy.RequireContext ? nameof(McpToolHandlers.CompareAsync) : nameof(McpToolHandlers.CompareWithoutContextAsync), CompareDescription, null, false, null, true),
+            factory.Tool(ToolNames[5], nameof(McpToolHandlers.WatchAsync), "Poll a bounded query passing the static visible-effects text check until until/untilUnchanged, within interval/maxDuration bounds.", true, false, null, true),
+            factory.Tool(ToolNames[6], nameof(McpToolHandlers.SnapshotAsync), "Capture a named result (never overwrites) or diff live results against it.", null, false, null, true),
+            factory.Tool(ToolNames[7], nameof(McpToolHandlers.PlanAsync), "Distill a plan document offline. includeText (default true) returns bounded statement text and predicates; false returns metadata only.", true, false, true, false),
+            factory.Tool(ToolNames[8], nameof(McpToolHandlers.ArtifactAsync), "Read a safe section (summary, metrics, operators, statements, matrix-cells, or plan) of a saved benchmark artifact.", true, false, true, false),
         };
         if (tools.Count != McpLimits.MaxTools)
             throw new InvalidOperationException($"The MCP catalog must serve exactly {McpLimits.MaxTools} tools.");
@@ -594,11 +708,13 @@ public static class McpToolCatalog
         ISqlHarnessModule module,
         IMcpClock? clock = null,
         CancellationToken hostShutdown = default,
-        CompareConfig? compareConfig = null)
+        CompareConfig? compareConfig = null,
+        IMutationBrokerClient? mutationBroker = null,
+        string? mutationSessionKey = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         var collection = new McpServerPrimitiveCollection<McpServerTool>();
-        foreach (var tool in CreateTools(scope, module, clock, hostShutdown, compareConfig))
+        foreach (var tool in CreateTools(scope, module, clock, hostShutdown, compareConfig, mutationBroker, mutationSessionKey))
             collection.Add(tool);
         options.ToolCollection = collection;
     }

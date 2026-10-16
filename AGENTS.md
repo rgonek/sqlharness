@@ -6,6 +6,7 @@ These instructions govern development of SQLHarness in this repository.
 
 - **Plans:** read [plans/README.md](plans/README.md) before plan-backed work; update the plan and index when work lands.
 - **Security:** protect resolved credentials and persistent-mutation classification. Keep caller SQL, parameters, plans, results and target names readable; bound output size instead of masking them.
+- **Database writes:** persistent changes go through `mutation`; the operator's dashboard policy approves them. Never supply approval yourself.
 - **Documentation:** README serves humans. Keep interface contracts in tool descriptions/schemas and capabilities; update each affected surface when behavior changes.
 - **Verification:** before declaring implementation complete, follow [verification](docs/agents/verification.md). Documentation-only changes use its scoped checks.
 

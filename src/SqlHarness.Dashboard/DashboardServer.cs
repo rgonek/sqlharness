@@ -15,6 +15,10 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using SqlHarness.Core;
+using SqlHarness.Core.Journal;
+using SqlHarness.Core.Mutations;
+using SqlHarness.Core.Targets;
+using SqlHarness.Dashboard.Mutations;
 using SqlHarness.Dashboard.Transcripts;
 
 namespace SqlHarness.Dashboard;
@@ -47,6 +51,10 @@ public sealed record DashboardServerOptions(string DatabasePath, int PreferredPo
     internal AgentHomes AgentHomes { get; init; } = AgentHomes.Current();
 
     internal Func<string, bool>? AgentDirectoryProbe { get; init; }
+
+    internal ISqlHarnessModule? MutationModule { get; init; }
+
+    internal IActivityJournal? MutationJournal { get; init; }
 }
 
 public sealed class RunningDashboard : IAsyncDisposable
@@ -171,6 +179,18 @@ public static partial class DashboardServer
 
         var app = builder.Build();
         var reader = new JournalReader(options.DatabasePath, options.Processes);
+        var loadConfigResult = () => SqlHarnessConfigLoader.Load(options.ConfigPath);
+        var loadConfig = () => loadConfigResult().Config;
+        var loadProfiles = () => ProfileStore.Load(options.TargetsPath);
+        var initialConfig = loadConfig();
+        var module = options.MutationModule ?? new SqlHarnessModule(loadProfiles, initialConfig.Compare);
+        var journal = options.MutationJournal ?? NullActivityJournal.Instance;
+        var executor = new MutationExecutor(module, loadProfiles, loadConfig, journal, options.Time);
+        var mutationBroker = new MutationBroker(options.Time,
+            (request, execution, ct) => executor.ExecuteAsync(request, execution, ct));
+        var mutationServices = new MutationEndpointServices(mutationBroker, module, loadProfiles, loadConfigResult,
+            journal, options.Time, activity, app.Lifetime.ApplicationStopping, Json);
+        mutationBroker.Changed += change => MutationEndpoints.PersistEvent(mutationServices, change);
         var matcher = new TranscriptMatcher(options.DatabasePath, options.AgentHomes, options.Time)
         {
             DirectoryExists = options.AgentDirectoryProbe ?? Directory.Exists,
@@ -217,6 +237,7 @@ public static partial class DashboardServer
             reader.Operation(id, DashboardProfiles.DimensionNames(options.TargetsPath)) is { } detail
                 ? Results.Json(detail, Json)
                 : Results.NotFound());
+        MutationEndpoints.Map(api, mutationServices, reader);
         MapRead(api, "/plans/{hash}", (string hash, string? view) => Plan(reader, hash, view));
         MapRead(api, "/stats", (string? from, string? to, string? profile, string? dimensions,
             string? rowDimension, string? columnDimension, bool? unprofiled) =>

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { FieldErrorsError } from "@/api/client"
 import { useClearTranscripts, usePrices, useRefreshPrices, useSaveSettings, useSettings, useTranscriptStatus } from "@/api/queries"
 import type { Settings } from "@/api/types"
@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { createSaveQueue } from "@/lib/saveQueue"
 import { isDestructive } from "@/lib/settingsRules"
+import { BUILT_IN_SOUNDS, getSoundPreferences, MAX_CUSTOM_SOUND_BYTES, previewApprovalSound, saveSoundPreferences, validateCustomSound, type SoundPreferences } from "@/mutations/sound"
 
 function Toggle({ id, label, checked, onChange }: { id: string; label: string; checked: boolean; onChange: (value: boolean) => void }) {
   return (
@@ -57,7 +58,7 @@ function NumberField({ id, label, value, min, max, error, onCommit }: { id: stri
   )
 }
 
-type CardKey = "journal" | "dashboard" | "compare" | "diagnostics"
+type CardKey = "journal" | "dashboard" | "compare" | "diagnostics" | "mutations"
 type Status = { state: "saving" } | { state: "saved" } | { state: "error"; message: string }
 
 function StatusLine({ status }: { status?: Status }) {
@@ -83,6 +84,86 @@ function ModelPricesCard() {
           <Button variant="outline" onClick={() => refresh.mutate()} disabled={refresh.isPending}>Refresh model prices</Button>
         </div>
         {refresh.error && <p className="text-sm text-destructive">{refresh.error.message}</p>}
+      </CardContent>
+    </Card>
+  )
+}
+
+function BrowserSoundSettings() {
+  const [preferences, setPreferences] = useState<SoundPreferences | null>(null)
+  const [error, setError] = useState<string>()
+  const [notice, setNotice] = useState<string>()
+  const [permission, setPermission] = useState(() => typeof Notification === "undefined" ? "unsupported" : Notification.permission)
+
+  useEffect(() => {
+    let active = true
+    void getSoundPreferences().then(value => { if (active) setPreferences(value) })
+    return () => { active = false }
+  }, [])
+
+  function store(next: SoundPreferences, preview = false) {
+    setPreferences(next)
+    setError(undefined)
+    setNotice(undefined)
+    const persistence = saveSoundPreferences(next)
+    if (preview) void previewApprovalSound()
+    void persistence.then(
+      () => setNotice("Sound preference saved for reload."),
+      reason => setError(`Sound is active for this page but could not be saved for reload: ${reason instanceof Error ? reason.message : "IndexedDB write failed"}.`),
+    )
+  }
+
+  async function chooseFile(file?: File) {
+    if (!file) return
+    const message = await validateCustomSound(file)
+    if (message) { setError(message); setNotice(undefined); return }
+    store({ ...(preferences ?? { selection: "warm-chime", muted: false, customAudio: null }), selection: "custom", customAudio: file })
+  }
+
+  async function requestNotifications() {
+    setError(undefined)
+    if (typeof Notification === "undefined") { setPermission("unsupported"); return }
+    try { setPermission(await Notification.requestPermission()) }
+    catch (reason) { setError(`Browser notification permission could not be requested: ${reason instanceof Error ? reason.message : "request failed"}.`) }
+  }
+
+  return (
+    <Card>
+      <CardHeader><CardTitle>Browser notifications and approval sound</CardTitle>
+        <CardDescription>Sound choices and custom audio stay in this browser. Custom audio is stored locally in IndexedDB, up to 2 MiB.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        {preferences ? <>
+          <div className="grid gap-1">
+            <Label htmlFor="approval-sound">Approval sound</Label>
+            <select id="approval-sound" className="h-9 w-fit rounded-lg border border-input bg-background px-2 text-sm" value={preferences.selection}
+              onChange={event => store({ ...preferences, selection: event.target.value as SoundPreferences["selection"] })}>
+              {BUILT_IN_SOUNDS.map(sound => <option key={sound.id} value={sound.id}>{sound.label}</option>)}
+              {preferences.customAudio && <option value="custom">Custom audio</option>}
+            </select>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {BUILT_IN_SOUNDS.map(sound => <Button key={sound.id} type="button" variant="outline" disabled={preferences.muted}
+              aria-label={`Preview ${sound.label}`} onClick={() => store({ ...preferences, selection: sound.id }, true)}>Preview {sound.label}</Button>)}
+            {preferences.selection === "custom" && preferences.customAudio && <Button type="button" variant="outline" disabled={preferences.muted}
+              aria-label="Preview custom audio" onClick={() => { void previewApprovalSound() }}>Preview custom audio</Button>}
+          </div>
+          <Toggle id="approval-sound-muted" label="Mute approval sound" checked={preferences.muted} onChange={muted => store({ ...preferences, muted })} />
+          <div className="grid gap-1">
+            <Label htmlFor="custom-audio">Custom audio file</Label>
+            <Input id="custom-audio" type="file" accept=".mp3,.wav,.ogg,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,application/ogg"
+              onChange={event => { void chooseFile(event.target.files?.[0]); event.target.value = "" }} />
+            <p className="text-sm text-muted-foreground">Choose an MP3, WAV, or OGG file no larger than {MAX_CUSTOM_SOUND_BYTES / (1024 * 1024)} MiB.</p>
+          </div>
+          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+          {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
+        </> : <p className="text-sm text-muted-foreground">Loading browser-local sound settings…</p>}
+        <div className="grid gap-1">
+          <Button type="button" variant="outline" className="w-fit" onClick={() => { void requestNotifications() }}>
+            {permission === "granted" ? "Browser notifications enabled" : "Enable browser notifications"}
+          </Button>
+          <p className="text-sm text-muted-foreground">Permission: {permission}. The browser asks only after you press the button.</p>
+        </div>
       </CardContent>
     </Card>
   )
@@ -141,6 +222,7 @@ export function SettingsPage() {
   const setDashboard = (next: Partial<Settings["dashboard"]>) => commit({ ...draft, dashboard: { ...draft.dashboard, ...next } }, "dashboard")
   const setCompare = (next: Partial<Settings["compare"]>) => commit({ ...draft, compare: { ...draft.compare, ...next } }, "compare")
   const setDiagnostics = (next: Partial<Settings["diagnostics"]>) => commit({ ...draft, diagnostics: { ...draft.diagnostics, ...next } }, "diagnostics")
+  const setMutations = (next: Partial<Settings["mutations"]>) => commit({ ...draft, mutations: { ...draft.mutations, ...next } }, "mutations")
 
   function apply(next: Settings, card: CardKey) {
     setEdited(next)
@@ -252,6 +334,28 @@ export function SettingsPage() {
           <StatusLine status={status.diagnostics} />
         </CardContent>
       </Card>
+      <Card>
+        <CardHeader><CardTitle>Mutations</CardTitle><CardDescription>Choose the default approval behavior and the time an approval request remains open.</CardDescription></CardHeader>
+        <CardContent className="grid gap-4">
+          <div className="grid gap-1">
+            <Label htmlFor="mutation-default-mode">Default mutation mode</Label>
+            <select id="mutation-default-mode" aria-label="Default mutation mode" className="h-9 w-fit rounded-lg border border-input bg-background px-2 text-sm"
+              value={draft.mutations.defaultMode} onChange={event => setMutations({ defaultMode: event.target.value as Settings["mutations"]["defaultMode"] })}>
+              <option value="never">Never</option><option value="operator">Operator approval</option><option value="yolo">YOLO</option>
+            </select>
+          </div>
+          <div className="grid gap-1">
+            <span className="text-sm">Verification</span>
+            <code>{draft.mutations.verification}</code>
+            {draft.mutations.verification !== "click" && <p role="alert" className="text-sm text-destructive">Verification value “{draft.mutations.verification}” is unsupported. This plan supports click verification only; the value was retained without changing it.</p>}
+            <p className="text-sm text-muted-foreground">Approval decisions use a deliberate click. WebAuthn is not available in this plan.</p>
+          </div>
+          <NumberField id="mutation-approval-timeout" label="Approval timeout (seconds)" value={draft.mutations.approvalTimeoutSeconds} min={1} max={3600}
+            error={fieldErrors["mutations.approvalTimeoutSeconds"]} onCommit={value => setMutations({ approvalTimeoutSeconds: value })} />
+          <StatusLine status={status.mutations} />
+        </CardContent>
+      </Card>
+      <BrowserSoundSettings />
       <ModelPricesCard />
       {replaceError && <ErrorState error={replaceError} />}
 

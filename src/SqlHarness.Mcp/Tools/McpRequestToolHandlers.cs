@@ -6,6 +6,7 @@ using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 using SqlHarness.Core;
+using SqlHarness.Core.Mutations;
 
 namespace SqlHarness.Mcp.Tools;
 
@@ -16,11 +17,15 @@ public sealed class McpRequestToolHandlers(
     McpProcessContext process,
     IMcpClock? clock = null,
     CancellationToken hostShutdown = default,
-    Func<McpScope, ISqlHarnessModule>? moduleFactory = null)
+    Func<McpScope, ISqlHarnessModule>? moduleFactory = null,
+    IMutationBrokerClient? mutationBroker = null,
+    string? mutationSessionKey = null)
 {
     private static readonly JsonSerializerOptions ScopeJsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IMcpClock _clock = clock ?? SystemMcpClock.Instance;
     private readonly Func<McpScope, ISqlHarnessModule> _moduleFactory = moduleFactory ?? (scope => process.Decorate(scope.CreateModule(process.CompareConfig)));
+    private readonly IMutationBrokerClient _mutationBroker = mutationBroker ?? UnavailableMutationBrokerClient.Instance;
+    private readonly string _mutationSessionKey = mutationSessionKey ?? "mcp:" + Guid.NewGuid().ToString("N");
 
     public Task<CallToolResult> CapabilitiesAsync(RequestContext<CallToolRequestParams> ctx,
         [Description(McpToolCatalog.IncludeDiagnosticsDescription)] bool includeDiagnostics = false,
@@ -45,6 +50,23 @@ public sealed class McpRequestToolHandlers(
         [Description("Offline validation only; no execution or writes.")] bool dryRun = false,
         CancellationToken ct = default) =>
         Invoke(ctx, "sqlharness_query", target, ["target", "sql", "file", "parameters", "timeout", "maxRows", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"], handler => handler.QueryAsync(ctx, sql, file, parameters, timeout, maxRows, maxResultBytes, maxCellChars, maxOperationSeconds, dryRun, ct));
+
+    public Task<CallToolResult> MutationAsync(RequestContext<CallToolRequestParams> ctx,
+        [Description("Request target.")] McpRequestScopeArgument target,
+        [Description("Inline SQL, at most 1 MiB. Exactly one of sql or file.")] string? sql = null,
+        [Description("SQL file under an operator input root.")] string? file = null,
+        [Description("Typed values: culture-invariant text or JSON null.")] McpParameterArgument[]? parameters = null,
+        [Description("SQL timeout 1..300 seconds.")] int timeout = 30,
+        [Description("Presentation row cap 0..500.")] int maxRows = 50,
+        [Description("Database name this change is intended for.")] string? expectDatabase = null,
+        [Description("Result text: 4096..1048576 bytes; default 65536; capped by process limit.")] int? maxResultBytes = null,
+        [Description("Cell clip 0..4096 characters; default 2048.")] int? maxCellChars = null,
+        [Description("Seconds 1..86400; may only lower the process limit.")] int? maxOperationSeconds = null,
+        [Description("Offline validation only; no execution or approval request.")] bool dryRun = false,
+        CancellationToken ct = default) =>
+        Invoke(ctx, "sqlharness_mutation", target,
+            ["target", "sql", "file", "parameters", "timeout", "maxRows", "expectDatabase", "maxResultBytes", "maxCellChars", "maxOperationSeconds", "dryRun"],
+            handler => handler.MutationAsync(ctx, sql, file, parameters, timeout, maxRows, expectDatabase, maxResultBytes, maxCellChars, maxOperationSeconds, dryRun, ct));
 
     public Task<CallToolResult> MeasureAsync(RequestContext<CallToolRequestParams> ctx,
         [Description("Query source: exactly one of inline sql or file.")] McpSqlSourceArgument query,
@@ -184,7 +206,8 @@ public sealed class McpRequestToolHandlers(
         {
             return Task.FromResult(Failure("The MCP request scope is invalid.", command, process.MaxResultBytes));
         }
-        var handlers = new McpToolHandlers(scope, _moduleFactory(scope), _clock, hostShutdown, acceptRequestScope: true, compareConfig: process.CompareConfig);
+        var handlers = new McpToolHandlers(scope, _moduleFactory(scope), _clock, hostShutdown, acceptRequestScope: true,
+            compareConfig: process.CompareConfig, mutationBroker: _mutationBroker, mutationSessionKey: _mutationSessionKey);
         return invoke(handlers);
     }
 

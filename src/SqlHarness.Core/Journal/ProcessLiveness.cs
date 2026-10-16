@@ -48,7 +48,7 @@ internal sealed class ProcessLiveness(IProcessInfo processes, DeadProcesses dead
     /// <summary>True when the host process of a running row still exists (pid plus start time).</summary>
     internal bool IsRunningAlive(long hostPid, string? hostStartedAt) => Status("running", hostPid, hostStartedAt) == "running";
 
-    private bool IsAlive(long pid, string? startedAt)
+    internal bool IsAlive(long pid, string? startedAt)
     {
         if (processes is SelfOnlyProcessInfo)
             return true;

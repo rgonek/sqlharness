@@ -10,7 +10,7 @@ test("lists profiles with the password variable name only", async () => {
       profiles: [{
         name: "pg", engine: "postgres", server: "pg.example", database: "app_{env}", auth: "sql", sqlUser: "reader",
         passwordEnvVar: "PG_PASSWORD", sslMode: "verify-full", trustServerCertificate: false, tls: "verify-full", rootCertificate: "C:\\certs\\pg.crt",
-        vars: [{ name: "env", rule: "uat|test" }],
+        vars: [{ name: "env", rule: "uat|test" }], environment: "staging", mutationMode: "operator", mutationWriterKind: "sameAsReader", acknowledgeProductionYolo: false,
       }],
     },
   })
@@ -22,6 +22,9 @@ test("lists profiles with the password variable name only", async () => {
   expect(screen.getByText("env: uat|test")).toBeInTheDocument()
   expect(screen.getByText("verify-full")).toBeInTheDocument()
   expect(screen.getByText("root: C:\\certs\\pg.crt")).toBeInTheDocument()
+  expect(screen.getByRole("cell", { name: "staging" })).toBeInTheDocument()
+  expect(screen.getByRole("cell", { name: "operator" })).toBeInTheDocument()
+  expect(screen.getByRole("cell", { name: "sameAsReader" })).toBeInTheDocument()
   expect(screen.queryByRole("button", { name: /edit/i })).not.toBeInTheDocument()
 })
 

@@ -67,11 +67,11 @@ test("shows the agent title and conversation list, and clears back to that title
   await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: "Optimize orders" })).toBeInTheDocument())
 })
 
-test("a non-decimal session id shows not found without calling the api", async () => {
+test("a non-decimal session id shows not found without fetching session data", async () => {
   const calls = stubFetch({ "/api/sessions/16": { session: session({ id: 16 }), operations: [] } })
   renderApp("/sessions/0x10")
   expect(await screen.findByText("Not found")).toBeInTheDocument()
-  expect(calls).toEqual([])
+  expect(calls).toEqual(["/api/profiles"])
 })
 
 test("shows the client title and workspace roots", async () => {

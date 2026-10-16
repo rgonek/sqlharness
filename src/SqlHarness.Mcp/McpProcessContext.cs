@@ -21,9 +21,12 @@ public sealed class McpProcessContext
         int maxResultBytes,
         int maxOperationSeconds,
         CompareConfig compareConfig,
+        SqlHarnessConfig config,
+        Func<bool> dashboardReachability,
         string configurationRef)
     {
         ConfigurationRef = configurationRef;
+        MutationSessionKey = "mcp:" + Guid.NewGuid().ToString("N");
         RequestScope = requestScope;
         Profiles = profiles;
         AllowedProfiles = allowedProfiles;
@@ -32,10 +35,15 @@ public sealed class McpProcessContext
         MaxResultBytes = maxResultBytes;
         MaxOperationSeconds = maxOperationSeconds;
         CompareConfig = compareConfig;
+        Config = config;
+        DashboardReachability = dashboardReachability;
     }
 
     /// <summary>Opaque random identity of this process configuration; every page and call returns the same value.</summary>
     public string ConfigurationRef { get; }
+
+    /// <summary>Stable caller identity for mutation deduplication within this MCP process.</summary>
+    public string MutationSessionKey { get; }
 
     public bool RequestScope { get; }
     public IReadOnlyDictionary<string, TargetProfile> Profiles { get; }
@@ -45,6 +53,9 @@ public sealed class McpProcessContext
     public int MaxResultBytes { get; }
     public int MaxOperationSeconds { get; }
     public CompareConfig CompareConfig { get; }
+    public SqlHarnessConfig Config { get; }
+    private Func<bool> DashboardReachability { get; }
+    public bool IsDashboardReachable() => DashboardReachability();
 
     private Func<ISqlHarnessModule, ISqlHarnessModule> _decorator = static module => module;
 
@@ -56,7 +67,9 @@ public sealed class McpProcessContext
     public static McpProcessContext Create(
         McpServerOptions options,
         Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
-        CompareConfig? compareConfig = null)
+        CompareConfig? compareConfig = null,
+        SqlHarnessConfig? config = null,
+        Func<bool>? dashboardReachability = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(loadProfiles);
@@ -93,6 +106,8 @@ public sealed class McpProcessContext
                 options.MaxResultBytes,
                 options.MaxOperationSeconds,
                 compareConfig ?? SqlHarnessConfig.Default.Compare,
+                config ?? SqlHarnessConfig.Default,
+                dashboardReachability ?? (static () => false),
                 McpScope.NewConfigurationRef());
         }
 
@@ -108,6 +123,8 @@ public sealed class McpProcessContext
             options.MaxResultBytes,
             options.MaxOperationSeconds,
             compareConfig ?? SqlHarnessConfig.Default.Compare,
+            config ?? SqlHarnessConfig.Default,
+            dashboardReachability ?? (static () => false),
             fixedScope.ConfigurationRef);
     }
 

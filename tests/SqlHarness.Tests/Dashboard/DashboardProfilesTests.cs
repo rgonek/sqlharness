@@ -56,6 +56,28 @@ public sealed class DashboardProfilesTests
     }
 
     [Fact]
+    public async Task Profiles_expose_mutation_policy_without_writer_environment_values()
+    {
+        using var home = new TempHome();
+        File.WriteAllText(TargetsPath(home), """
+            { "p": { "server": "s", "database": "d", "auth": "integrated", "vars": {}, "environment": "staging",
+                     "mutations": { "mode": "yolo", "acknowledgeProductionYolo": true,
+                                    "writer": { "sqlUser": "writer", "passwordEnvVar": "SQLH_WRITER_PASSWORD" } } } }
+            """);
+        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
+        var (_, client) = dashboard;
+
+        var text = await client.GetStringAsync("/api/profiles");
+        var profile = JsonDocument.Parse(text).RootElement.GetProperty("profiles")[0];
+
+        Assert.Equal("staging", profile.GetProperty("environment").GetString());
+        Assert.Equal("yolo", profile.GetProperty("mutationMode").GetString());
+        Assert.Equal("separate", profile.GetProperty("mutationWriterKind").GetString());
+        Assert.True(profile.GetProperty("acknowledgeProductionYolo").GetBoolean());
+        Assert.DoesNotContain("SQLH_WRITER_PASSWORD", text);
+    }
+
+    [Fact]
     public async Task Profiles_never_contain_password_values()
     {
         using var home = new TempHome();

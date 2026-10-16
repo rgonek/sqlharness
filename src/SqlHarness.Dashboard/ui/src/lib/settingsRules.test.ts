@@ -7,6 +7,7 @@ const make = (enabled: boolean, maxAgeDays = 30, maxSizeMb = 500): Settings => (
   dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, agentTranscripts: { enabled: false } },
   compare: { requireContext: true },
   diagnostics: { enabled: false },
+  mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 },
 })
 
 test("enabling retention is destructive", () => expect(isDestructive(make(false), make(true))).toBe(true))

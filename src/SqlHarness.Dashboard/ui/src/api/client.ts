@@ -103,6 +103,19 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
   return (await response.json()) as T
 }
 
+/** Sends an operator decision and returns the server's fixed pending-state conflict without leaking request data. */
+export async function postMutationDecision(requestId: string, decision: "approve" | "deny"): Promise<"ok" | "not-pending" | "busy"> {
+  const path = `/api/mutations/${encodeURIComponent(requestId)}/${decision}`
+  const response = await send(path, { method: "POST", credentials: "same-origin", headers: { Accept: "application/json", "X-SqlHarness-Dashboard": "1" } })
+  if (response.status === 401) throw new UnauthorizedError()
+  if (response.status === 409) {
+    const body = await response.json().catch(() => undefined) as { status?: string } | undefined
+    return body?.status === "busy" ? "busy" : "not-pending"
+  }
+  if (!response.ok) throw new Error(`Request failed with ${response.status}: ${path}`)
+  return "ok"
+}
+
 /** A write whose failure carries the server's `error` text, shown to the operator as is. */
 export class RequestError extends Error {
   constructor(message: string) {

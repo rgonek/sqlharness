@@ -40,6 +40,9 @@ public sealed record AgentCompactQuery(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? RecordsAffected = null,
     long DurationMilliseconds = 0);
 
+/// <summary>Bounded agent projection of a mutation broker response.</summary>
+public sealed record AgentMutationResult(string Status, string? Message, object? Result);
+
 /// <summary>The version shared by CLI and MCP agent response envelopes.</summary>
 public static class AgentEnvelopeSchema
 {
@@ -102,6 +105,17 @@ public static class AgentOutputProjection
                         omissions += queryOmitted;
                         omissions += clippedItems;
                         return queryProjection;
+                    }
+                case Mutations.MutationBrokerResult mutation:
+                    {
+                        var message = Clip(mutation.Message);
+                        object? projected = null;
+                        var queryOmitted = 0;
+                        if (mutation.Result is not null)
+                            projected = Project(mutation.Result, maximumCellCharacters, detailLimit, out queryOmitted, maximumBytes);
+                        omissions += clippedItems;
+                        omissions += queryOmitted;
+                        return new AgentMutationResult(mutation.Status, message, projected);
                     }
                 case SqlHarnessMeasureSetReport setReport:
                     var selectedSets = Take(setReport.Sets).Select(set => new MeasureParameterSetSummary(

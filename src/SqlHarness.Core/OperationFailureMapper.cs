@@ -26,6 +26,16 @@ internal enum OperationPhase
 /// </summary>
 internal static class OperationFailureMapper
 {
+    internal static bool IsMutationOutcomeUnknown(Exception exception)
+    {
+        if (exception is TimeoutException or OperationCanceledException)
+            return true;
+        if (exception is Microsoft.Data.SqlClient.SqlException sqlException)
+            return sqlException.Errors.Cast<Microsoft.Data.SqlClient.SqlError>().Any(error => error.Number is
+                -2 or 0 or 64 or 233 or 10053 or 10054 or 10060 or 10928 or 10929 or 40197 or 40501 or 40613);
+        return exception is Npgsql.NpgsqlException and not Npgsql.PostgresException;
+    }
+
     internal static SqlHarnessExitCode Map(Exception exception, OperationPhase phase)
     {
         if (PostgresReadOnlyFailure.ContainsReadOnlyViolation(exception))

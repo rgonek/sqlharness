@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using SqlHarness.Core.Mutations;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Core;
@@ -62,6 +63,25 @@ public sealed record SqlHarnessQueryOperation(
     /// <summary>Typed alternative to <see cref="Parameters"/> (012). When it is set, <see cref="Parameters"/> must be empty.</summary>
     public IReadOnlyList<SqlHarnessParameterInput>? TypedParameters { get; init; }
     public bool DryRun { get; init; }
+
+    [JsonIgnore]
+    internal ResolvedTarget? ResolvedTarget { get; init; }
+
+    [JsonIgnore]
+    internal SqlUsage? UsageOverride { get; init; }
+}
+
+public sealed record SqlHarnessMutationOperation(
+    SqlTargetRequest Target,
+    string Sql,
+    IReadOnlyList<SqlHarnessParameterInput> Parameters,
+    int TimeoutSeconds,
+    int MaxRows,
+    string? ExpectDatabase) : SqlHarnessOperation
+{
+    public bool DryRun { get; init; }
+    public string SessionKey { get; init; } = "";
+    internal ApprovedMutation? Approval { get; init; }
 }
 
 public sealed record SqlHarnessCompareOperation(
@@ -357,6 +377,10 @@ public sealed record SqlHarnessOutcome(
     SqlHarnessEmissionReceipt? EmissionReceipt = null,
     SqlHarnessError? Error = null)
 {
+    /// <summary>True only for an approved mutation whose transport failed after entering command execution.</summary>
+    [JsonIgnore]
+    internal bool MutationOutcomeUnknown { get; init; }
+
     [JsonIgnore]
     public string? OperationRef { get; init; }
 

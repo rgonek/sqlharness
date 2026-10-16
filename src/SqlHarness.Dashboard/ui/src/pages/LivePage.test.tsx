@@ -9,7 +9,7 @@ class FakeEventSource {
   static readonly CONNECTING = 0
   static readonly OPEN = 1
   static readonly CLOSED = 2
-  static last: FakeEventSource | undefined
+  static instances: FakeEventSource[] = []
   listeners = new Map<string, ((event: MessageEvent<string>) => void)[]>()
   onopen: (() => void) | null = null
   onerror: (() => void) | null = null
@@ -17,7 +17,7 @@ class FakeEventSource {
   url: string
   constructor(url: string) {
     this.url = url
-    FakeEventSource.last = this
+    FakeEventSource.instances.push(this)
   }
   addEventListener(type: string, listener: (event: MessageEvent<string>) => void) {
     this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener])
@@ -47,8 +47,11 @@ const page = (items: unknown[]) => ({ items, nextCursor: null })
 const count = (calls: string[], url: string) => calls.filter(call => call === url).length
 
 function useFakeEventSource() {
+  FakeEventSource.instances = []
   globalThis.EventSource = FakeEventSource as unknown as typeof EventSource
 }
+
+const liveFeed = () => FakeEventSource.instances.findLast(source => source.url === "/api/live")!
 
 test("live page shows running, recent and pushed operations", async () => {
   useFakeEventSource()
@@ -68,8 +71,8 @@ test("live page shows running, recent and pushed operations", async () => {
   expect(await screen.findByText("cli:abc")).toBeInTheDocument()
 
   act(() => {
-    FakeEventSource.last!.open()
-    FakeEventSource.last!.emit("operation", operation({ id: 3, operation: "measure" }))
+    liveFeed().open()
+    liveFeed().emit("operation", operation({ id: 3, operation: "measure" }))
   })
 
   const recent = screen.getByRole("region", { name: "Recent operations" })
@@ -120,9 +123,9 @@ test("the feed shows connecting until it first opens", async () => {
   renderApp("/")
 
   expect(await screen.findByText("connecting")).toBeInTheDocument()
-  act(() => FakeEventSource.last!.open())
+  act(() => liveFeed().open())
   expect(screen.getByText("connected")).toBeInTheDocument()
-  act(() => FakeEventSource.last!.fail(FakeEventSource.CONNECTING))
+  act(() => liveFeed().fail(FakeEventSource.CONNECTING))
   expect(screen.getByText("disconnected")).toBeInTheDocument()
 })
 
@@ -143,15 +146,15 @@ test("live lists are refetched on every (re)connect so changes made during a gap
   const running = await screen.findByRole("region", { name: "Running" })
   expect(await within(running).findByText("watch")).toBeInTheDocument()
 
-  act(() => FakeEventSource.last!.open())
+  act(() => liveFeed().open())
   await waitFor(() => expect(count(calls, RECENT)).toBe(2))
   await waitFor(() => expect(count(calls, RUNNING)).toBe(2))
   expect(count(calls, SESSIONS)).toBe(2)
 
-  act(() => FakeEventSource.last!.fail(FakeEventSource.CONNECTING))
+  act(() => liveFeed().fail(FakeEventSource.CONNECTING))
   expect(screen.getByText("disconnected")).toBeInTheDocument()
   finished = true
-  act(() => FakeEventSource.last!.open())
+  act(() => liveFeed().open())
 
   await waitFor(() => expect(count(calls, RECENT)).toBe(3))
   await waitFor(() => expect(count(calls, RUNNING)).toBe(3))
@@ -177,6 +180,7 @@ test("clearing transcript data removes stale titles and models from the live cac
       journal: { enabled: true, storeSensitive: false, retention: { enabled: false, maxAgeDays: 30, maxSizeMb: 500 } },
       dashboard: { autoStart: false, port: 47800, idleShutdownHours: 8, agentTranscripts: { enabled: false } }, compare: { requireContext: true },
       diagnostics: { enabled: false },
+      mutations: { defaultMode: "never", verification: "click", approvalTimeoutSeconds: 120 },
     } },
     "/api/prices": { source: "embedded", fetchedAt: "2026-10-07T09:00:00Z", origin: "embedded" },
     "/api/transcripts": { enabled: false, matched: 1, unmatched: 0, readErrors: 0, lastCycleAt: null },
@@ -246,10 +250,10 @@ test("a running operation missing from the refetched running list leaves Running
   const running = await screen.findByRole("region", { name: "Running" })
   expect(await within(running).findByText("watch")).toBeInTheDocument()
 
-  act(() => FakeEventSource.last!.open())
-  act(() => FakeEventSource.last!.fail(FakeEventSource.CONNECTING))
+  act(() => liveFeed().open())
+  act(() => liveFeed().fail(FakeEventSource.CONNECTING))
   gone = true
-  act(() => FakeEventSource.last!.open())
+  act(() => liveFeed().open())
 
   expect(await within(running).findByText("Nothing is running.")).toBeInTheDocument()
 })
@@ -262,13 +266,13 @@ test("pushed events add running rows and remove finished ones without the recent
   renderApp("/")
   const running = await screen.findByRole("region", { name: "Running" })
   expect(await within(running).findByText("Nothing is running.")).toBeInTheDocument()
-  act(() => FakeEventSource.last!.open())
+  act(() => liveFeed().open())
 
   const old = operation({ id: 5, status: "running", operation: "watch", updatedAt: "2026-10-07T09:00:01.000Z" })
-  act(() => FakeEventSource.last!.emit("operation", old))
+  act(() => liveFeed().emit("operation", old))
   expect(await within(running).findByText("watch")).toBeInTheDocument()
 
-  act(() => FakeEventSource.last!.emit("operation", { ...old, status: "succeeded", updatedAt: "2026-10-07T09:00:02.000Z" }))
+  act(() => liveFeed().emit("operation", { ...old, status: "succeeded", updatedAt: "2026-10-07T09:00:02.000Z" }))
   expect(await within(running).findByText("Nothing is running.")).toBeInTheDocument()
 })
 
@@ -280,11 +284,11 @@ test("a feed the server refuses (401) shows the reopen message without retrying"
 
   renderApp("/")
   await screen.findByRole("region", { name: "Running" })
-  act(() => FakeEventSource.last!.open())
+  act(() => liveFeed().open())
   await waitFor(() => expect(count(calls, RECENT)).toBe(2))
 
   authorized = false
-  act(() => FakeEventSource.last!.fail(FakeEventSource.CLOSED))
+  act(() => liveFeed().fail(FakeEventSource.CLOSED))
 
   expect(await screen.findByText(/Run sqlharness dashboard again/)).toBeInTheDocument()
   const settled = calls.length

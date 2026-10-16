@@ -123,6 +123,7 @@ public sealed class AgentOutputTests
         var exit = await SqlHarnessCli.Create(module, output).RunAsync(args);
 
         Assert.Equal((int)SqlHarnessExitCode.Safety, exit);
+        Assert.Empty(module.Operations);
         using var envelope = JsonDocument.Parse(output.ToString());
         Assert.Equal("Cell limit must be 0..4096 characters.",
             envelope.RootElement.GetProperty("error").GetProperty("message").GetString());

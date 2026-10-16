@@ -1,6 +1,6 @@
 # Mutation approval through the dashboard — design
 
-**Status:** open questions resolved by the operator on 2026-10-14 (§11). No implementation plan has been written yet. Supersedes the approval model of the [Windows tray spec](2026-09-26-windows-approval-tray-design.md). The native tray stays deferred: it is another app to build and ship on three operating systems.
+**Status:** open questions resolved by the operator on 2026-10-14 (§11); click-only scope for plan 073 recorded on 2026-10-16 (§12). The implementation plan is [plan 073](../../../plans/073-mutation-approval-broker.md). Supersedes the approval model of the [Windows tray spec](2026-09-26-windows-approval-tray-design.md). The native tray stays deferred: it is another app to build and ship on three operating systems.
 
 **Inputs:** the operator's decisions of 2026-10-14 and a security review by Opus, Codex (gpt-6.1-sol) and Grok. The tray spec's state machine, digest and outcome rules are reused below where they still fit.
 
@@ -15,7 +15,7 @@ It is **not** a boundary against a determined agent running as the same OS user.
 - drive the browser;
 - reach the database without SQLHarness.
 
-The README must say this, as it already does for the CLI. Optional WebAuthn (§6) and a separate writer credential (§5) raise the bar for accidental or casually injected self-approval. They do not create isolation.
+The README must say this, as it already does for the CLI. A separate writer credential (§5) raises the bar for accidental or casually injected self-approval. It does not create isolation. WebAuthn is deferred to a separate plan and does not change this threat model.
 
 Out of scope:
 
@@ -124,6 +124,7 @@ Notifications are delivered by SSE to open dashboard tabs:
 
 - an in-page toast;
 - a browser Web Notification when the tab is in the background (permission is requested once from Settings).
+- a pleasant dashboard sound ping when a new approval request arrives. The default is "Warm chime"; Settings offers three built-in sounds with user-gesture previews, mute, and a custom local audio file. Custom audio is limited to MP3, WAV, or OGG files up to 2 MiB, validated by type/extension and size, and stored in browser-local IndexedDB. No arbitrary filesystem path is accepted or uploaded to the dashboard.
 
 The notification text is generic ("SQLHarness: a change needs your decision"), with no SQL, names or values. It opens the approval view and approves nothing.
 
@@ -139,15 +140,11 @@ The approval view shows:
 
 Buttons are **Approve** and **Deny**. Enter does not approve. A truncated or oversized preview cannot be approved.
 
-Approval verification is a dashboard setting, `mutations.verification`:
+Plan 073 supports click-only approval, `mutations.verification: "click"` (default). Any unsupported verification value, including `webauthn`, is rejected with a visible configuration or validation error; it is never silently downgraded to click. WebAuthn, Windows Hello enrollment and recovery are deferred to [plan 078](../../../plans/078-mutation-approval-webauthn.md).
 
-- `click` (default): Approve is enough.
-- `webauthn`: Approve runs a WebAuthn ceremony on the dashboard origin. The challenge is bound to the request digest. User verification is preferred (Windows Hello, Touch ID, or a security key with PIN or biometrics). Presence-only security keys are allowed when the operator registers them as such.
-  - Enrolment happens in Settings. Adding a second credential requires an assertion from an existing one.
-  - Switching back to `click` requires an assertion.
-  - A lost authenticator is recovered by deleting the credential file by hand (documented).
+One pending request is allowed per caller session, plus one executing mutation per profile. A repeat of a request with an identical digest while one is pending joins it and raises no second toast or sound ping. A repeat after `denied_by_operator` within 60 s returns the same denial without asking. Initial SSE snapshots and reconnect/replay events synchronize the UI but never replay notification sounds.
 
-One pending request is allowed per caller session, plus one executing mutation per profile. A repeat of a request with an identical digest while one is pending joins it and raises no second toast. A repeat after `denied_by_operator` within 60 s returns the same denial without asking.
+Sound playback failure due to browser autoplay restrictions is ignored and must never block the toast, notification, approval controls, or request handling. Sound previews are explicit user gestures in Settings.
 
 ## 7. Waiting, outcomes and result codes
 
@@ -215,3 +212,9 @@ These measures reduce accidents; per §1 they are not a security boundary.
 1. The reader principal for the `privilege` rule is resolved at execution time (§3). At work, agents often connect with the operator's own Entra account, so the principal depends on how the profile is configured.
 2. `yolo` never auto-approves `schema`, `privilege` or `opaque`, whatever the environment label. Those always ask.
 3. A closed browser means the notification goes unseen and the call ends in `approval_timeout`. This is accepted for v1. The deferred tray remains the later fix.
+
+## 12. Scope decisions (operator, 2026-10-16)
+
+1. Plan 073 ships click approval only. Windows Hello/WebAuthn, package selection, registration and assertion flows, digest-bound challenges, credential storage/lifecycle, settings transitions, and recovery are deferred together to plan 078. Until that plan is implemented, unsupported verification values are rejected and never silently changed to click.
+2. The approval notification has a default "Warm chime", three selectable built-in sounds with preview, mute, and an optional custom local audio file. Custom audio is MP3, WAV, or OGG, no larger than 2 MiB, stored in browser-local IndexedDB; arbitrary server paths and uploads are excluded.
+3. Sound plays only for a newly observed live approval event. SSE snapshots, reconnects/replays, and digest joins never replay it. Autoplay restrictions must not disrupt approval.

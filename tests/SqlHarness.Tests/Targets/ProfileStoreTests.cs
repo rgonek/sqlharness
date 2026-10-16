@@ -41,6 +41,97 @@ public sealed class ProfileStoreTests
         Assert.Empty(ProfileStore.Load(Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}.json")));
 
     [Fact]
+    public void Production_yolo_requires_acknowledgement()
+    {
+        var error = LoadError("""
+            { "p": { "server": "s", "database": "d", "auth": "integrated", "vars": {},
+                     "environment": "Prod", "mutations": { "mode": "yolo", "writer": { "sameAsReader": true } } } }
+            """);
+
+        Assert.Contains("yolo on a prod or staging profile needs mutations.acknowledgeProductionYolo: true.", error.Message);
+    }
+
+    [Fact]
+    public void Production_yolo_loads_when_acknowledged_and_ack_is_inert_on_other_modes()
+    {
+        var production = LoadProfiles("""
+            { "p": { "server": "s", "database": "d", "auth": "integrated", "vars": {},
+                     "environment": "Prod", "mutations": { "mode": "yolo", "writer": { "sameAsReader": true }, "acknowledgeProductionYolo": true } } }
+            """);
+        var nonYolo = LoadProfiles("""
+            { "p": { "server": "s", "database": "d", "auth": "integrated", "vars": {},
+                     "mutations": { "mode": "never", "acknowledgeProductionYolo": true } } }
+            """);
+
+        Assert.Equal(true, ProfileProperty(ProfileProperty(production["p"], "Mutations")!, "AcknowledgeProductionYolo"));
+        Assert.Equal(true, ProfileProperty(ProfileProperty(nonYolo["p"], "Mutations")!, "AcknowledgeProductionYolo"));
+    }
+
+    [Fact]
+    public void Mutation_mode_requires_a_writer()
+    {
+        var error = LoadError("""
+            { "p": { "server": "s", "database": "d", "auth": "integrated", "vars": {}, "mutations": { "mode": "operator" } } }
+            """);
+
+        Assert.Contains("A profile that allows mutations needs mutations.writer.", error.Message);
+    }
+
+    [Fact]
+    public void Mutation_mode_rejects_numeric_enum_strings()
+    {
+        var error = LoadError("""
+            { "p": { "server": "s", "database": "d", "auth": "integrated", "vars": {},
+                     "mutations": { "mode": "2", "writer": { "sameAsReader": true } } } }
+            """);
+
+        Assert.Contains("A profile mutation mode is invalid.", error.Message);
+    }
+
+    [Fact]
+    public void Mutation_writer_rejects_both_credential_forms()
+    {
+        var error = LoadError("""
+            { "p": { "server": "s", "database": "d", "auth": "integrated", "vars": {},
+                     "mutations": { "mode": "operator", "writer": { "sqlUser": "writer", "passwordEnvVar": "SQLH_WRITER_PASSWORD", "sameAsReader": true } } } }
+            """);
+
+        Assert.Contains("mutations.writer needs sqlUser and passwordEnvVar, or sameAsReader.", error.Message);
+    }
+
+    [Theory]
+    [InlineData("{ \"sameAsReader\": true, \"sqlUser\": \"writer\" }")]
+    [InlineData("{ \"sameAsReader\": true, \"passwordEnvVar\": \"SQLH_WRITER_PASSWORD\" }")]
+    [InlineData("{ \"sqlUser\": \"writer\" }")]
+    [InlineData("{ \"passwordEnvVar\": \"SQLH_WRITER_PASSWORD\" }")]
+    public void Mutation_writer_rejects_mixed_or_partial_credential_forms(string writer)
+    {
+        var error = LoadError($$"""
+            { "p": { "server": "s", "database": "d", "auth": "integrated", "vars": {},
+                     "mutations": { "mode": "operator", "writer": {{writer}} } } }
+            """);
+
+        Assert.Contains("mutations.writer needs sqlUser and passwordEnvVar, or sameAsReader.", error.Message);
+    }
+
+    [Fact]
+    public void Valid_mutation_profile_loads_and_profiles_without_mutations_keep_defaults()
+    {
+        var valid = LoadProfiles("""
+            { "p": { "server": "s", "database": "d", "auth": "integrated", "vars": {}, "environment": "dev",
+                     "mutations": { "mode": "yolo", "writer": { "sameAsReader": true } } } }
+            """);
+        var legacy = LoadProfiles("""
+            { "p": { "server": "s", "database": "d", "auth": "integrated", "vars": {} } }
+            """);
+
+        Assert.Equal("yolo", ProfileProperty(ProfileProperty(valid["p"], "Mutations")!, "Mode"));
+        Assert.Equal("dev", ProfileProperty(valid["p"], "Environment"));
+        Assert.Null(ProfileProperty(legacy["p"], "Mutations"));
+        Assert.Null(ProfileProperty(legacy["p"], "Environment"));
+    }
+
+    [Fact]
     public void Malformed_json_reports_path_without_content()
     {
         const string secret = "SUPER_SECRET_CONTENT";
@@ -299,4 +390,27 @@ public sealed class ProfileStoreTests
         File.WriteAllText(path, content);
         return path;
     }
+
+    private static SqlHarnessSafetyException LoadError(string content)
+    {
+        var path = WriteTemp(content);
+        try
+        {
+            return Assert.Throws<SqlHarnessSafetyException>(() => ProfileStore.Load(path));
+        }
+        finally { File.Delete(path); }
+    }
+
+    private static IReadOnlyDictionary<string, TargetProfile> LoadProfiles(string content)
+    {
+        var path = WriteTemp(content);
+        try
+        {
+            return ProfileStore.Load(path);
+        }
+        finally { File.Delete(path); }
+    }
+
+    private static object? ProfileProperty(object target, string name) =>
+        target.GetType().GetProperty(name)?.GetValue(target);
 }

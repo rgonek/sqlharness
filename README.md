@@ -180,7 +180,7 @@ For SQL Server, you can configure an allowlist of profiles and choose a target f
 sqlharness mcp serve --request-scope --allow-profile sample-country --allow-profile sample-shared --input-root C:\work\sqlharness-inputs
 ```
 
-The eight MCP tools mirror the CLI commands of the same names (`capabilities`, `query`, `measure`, `compare`, `watch`, `snapshot`, `plan`, `artifact`); tools removed from one interface are also removed from the other. `capabilities`: MCP returns the server's runtime configuration, including its active compare-context policy, while CLI `capabilities` describes commands, engines, limits and that same policy. CLI `--dry-run` is MCP `dryRun: true`.
+The nine MCP tools mirror the CLI commands of the same names (`capabilities`, `query`, `mutation`, `measure`, `compare`, `watch`, `snapshot`, `plan`, `artifact`); tools removed from one interface are also removed from the other. `capabilities`: MCP returns the server's runtime configuration, including its active compare-context and mutation policy, while CLI `capabilities` describes commands, engines, limits and those policies. CLI `--dry-run` is MCP `dryRun: true`.
 
 Request mode is SQL Server only: `query`, `measure`, `compare`, `watch`, `snapshot`, and `artifact` require a nested `target` with an allowlisted profile and its variables, while `capabilities` and `plan` remain target-free. The process snapshots profiles, input roots, and budgets at startup. Tool calls run concurrently and benchmarks are not serialized ([concurrency](docs/mcp.md#concurrency-deadline-cancellation-and-progress)). SQLHarness does not register or edit client configuration. `sqlharness_capabilities` discloses the configured input roots (`inputRoots`), so callers can find where file inputs are allowed.
 
@@ -198,9 +198,9 @@ sqlharness capabilities prod-eu --json
 sqlharness doctor --json
 ```
 
-`capabilities <profile> --json` describes the commands, the output modes each command accepts (`outputModesByCommand`) and the limits, scoped to that profile's engine: its parameter types, session-temp statements, engine-only limits and an `engineGuidance` object (`query`, `setup`; `query` may be empty) with the engine's native safety and setup rules, and the engine's server-identity rule in `limits.targetIdentity.server`. Without a profile it returns engine-neutral discovery only, and command `--help` stays engine-neutral too. Rules that hold for both engines (setup runs once per measured session, setup locals do not carry into measured SQL, comparison semantics, budgets) live in help and tool descriptions; the engine sections below are the complete reference, read only for the engine you use. It never takes `--var`; an unknown or unreadable profile returns a JSON error envelope with exit `2` (`profile_unknown`, `profile_unavailable`). `doctor --json` checks the local installation and omits accounts and environment values.
+`capabilities <profile> --json` describes the commands, the output modes each command accepts (`outputModesByCommand`) and the limits, scoped to that profile's engine: its parameter types, session-temp statements, engine-only limits and an `engineGuidance` object (`query`, `setup`; `query` may be empty) with the engine's native safety and setup rules, and the engine's server-identity rule in `limits.targetIdentity.server`. It also reports the effective mutation mode and whether that profile has a writer configured; the global `mutations` object carries default mode, click verification, approval timeout and dashboard reachability. Without a profile it returns engine-neutral discovery and global mutation settings, and command `--help` stays engine-neutral too. Dashboard reachability means the current home has a validated live lock/PID publication; no network probe or database connection is made. Rules that hold for both engines (setup runs once per measured session, setup locals do not carry into measured SQL, comparison semantics, budgets) live in help and tool descriptions; the engine sections below are the complete reference, read only for the engine you use. It never takes `--var`; an unknown or unreadable profile returns a JSON error envelope with exit `2` (`profile_unknown`, `profile_unavailable`). `doctor --json` checks the local installation and omits accounts and environment values.
 
-`--dry-run` on `query`, `measure` and `compare` checks the exact invocation offline; the dry-run rule is in the [Safety contract](#safety-contract).
+`--dry-run` on `query`, `mutation`, `measure` and `compare` checks the exact invocation offline; the dry-run rule is in the [Safety contract](#safety-contract).
 
 Queries and benchmarks validate their inputs before connecting, including setup and multiple cases. A separate dry run is optional: use it to check an invocation while preparing it. It cannot predict execution cost or database errors.
 
@@ -251,7 +251,7 @@ SQL Server accepts IF, ELSE and BEGIN … END at any nesting depth. WHILE, BREAK
 
 ### PostgreSQL temp target proof
 
-Session temps are native `CREATE TEMP TABLE` / `TEMPORARY`; no `#temp` translation. Persistent DML still needs `--allow-mutation --confirm-database`; persistent DDL stays denied.
+Session temps are native `CREATE TEMP TABLE` / `TEMPORARY`; no `#temp` translation. Persistent changes use `mutation`; classification and profile policy decide whether the dashboard asks for approval or executes under the configured `yolo` DML rule.
 
 A `DROP TABLE`, `CREATE INDEX` or `TRUNCATE` target, and every DML target on the approved mutation path, is session-local only when it is a proven current-session temp: an unqualified name recorded from `CREATE TEMP TABLE` / `SELECT INTO TEMP` in this flow, declared without `ON COMMIT DROP`, and spelled quoted or all-ASCII-unquoted in at most 63 UTF-8 bytes both where declared and where used. Any other name is never proven; quote or shorten it.
 
@@ -261,11 +261,11 @@ When `search_path` may be non-default, write to session temps as `pg_temp.<relat
 
 `DROP TABLE` revokes the proof of the name it drops; when that name's stored form is unknown offline (unquoted non-ASCII or over 63 bytes, reachable only as `pg_temp.<relation>`), it revokes every proof in the flow until a new `CREATE TEMP TABLE` proves a name again. Query and measured DML needs no such proof: it runs in the per-command `READ ONLY` transaction, where PostgreSQL allows DML on a temp and refuses any persistent target with SQLSTATE `25006` (safety exit `2`).
 
-An unqualified DML target therefore reaches the server and the server decides; a `search_path` that puts another schema ahead of `pg_temp` is resolved by the server rather than by the name. With `--allow-mutation --confirm-database` the batch executes read-write, so there the same unqualified target stays unproven and is an ordinary persistent mutation (`MutationNotAllowed` without approval).
+An unqualified DML target therefore reaches the server and the server decides; a `search_path` that puts another schema ahead of `pg_temp` is resolved by the server rather than by the name. Through `mutation`, the approved batch executes read-write, so there the same unqualified target stays unproven and is an ordinary persistent mutation (`MutationNotAllowed` without approval).
 
-With `--allow-mutation` but a missing or mismatched `--confirm-database` the batch is not approved, so a persistent target is still denied offline (`DatabaseConfirmationRequired` / `DatabaseConfirmationMismatch`) but an unqualified DML target now classifies as session-local and runs read-only: that batch ends in exit `2` from the server's `25006` rather than from the confirmation error.
+The `mutation` command verifies the resolved database before submission and the broker rechecks it at execution; a mismatch returns `database_mismatch` (exit `4`) before SQL is sent.
 
-Whenever the flow declared a TEMP table that recorded no proof, every write denial that remains (`MutationNotAllowed` or `NonTemporaryWrite`, an unproven `TRUNCATE` target in query or setup among them) carries one fixed hint to quote or shorten the name instead of asking for mutation approval. A `pg_temp_<N>` schema, a foreign schema and a three-part name are persistent on the server too, so their DML still needs approval. An unproven `DROP TABLE` / `CREATE INDEX` target is denied.
+Whenever the flow declared a TEMP table that recorded no proof, every write denial that remains (`MutationNotAllowed` or `NonTemporaryWrite`, an unproven `TRUNCATE` target in query or setup among them) carries one fixed hint to quote or shorten the name instead of asking for mutation approval. A `pg_temp_<N>` schema, a foreign schema and a three-part name are persistent on the server too, so their DML must use `mutation`. An unproven `DROP TABLE` / `CREATE INDEX` target is denied.
 
 `TRUNCATE [ONLY] <temp[, ...]>` is allowed only when every target is a proven temp, named unqualified or as `pg_temp.<relation>`; a persistent, mixed, or otherwise schema-qualified target (`public.t`, `pg_temp_<N>.t`, a three-part name, `pg_temp.<unproven>`) is denied as `NonTemporaryWrite`, and `CASCADE` / `RESTART IDENTITY` as `UnsupportedStatement`, with or without mutation approval. Canonical `ANALYZE tbl` stays rejected until the parser supports it (design-only spike: `plans/011-analyze-parser-spike.md`).
 
@@ -343,11 +343,12 @@ sqlharness compare prod-eu --var tenant=acme --var env=uat `
 
 | Command | Purpose |
 | --- | --- |
-| `capabilities` | Describe commands, engines, limits, output modes and the active compare-context policy, offline. Pass a profile for that engine's parameter types, limits and `engineGuidance`. |
+| `capabilities` | Describe commands, engines, limits, output modes, active compare-context policy and mutation settings, offline. Pass a profile for that engine's parameter types, limits and `engineGuidance`. |
 | `doctor` | Check the local installation and profile-file availability, offline. |
 | `watch` | Poll a bounded read-only query until `--until` / `--until-unchanged` or max duration. |
 | `snapshot` | Capture or `--diff` a named canonical result under `~/.sqlharness/snapshots` (`--force` to replace). |
-| `query` | Run one bounded, classified SQL batch. `query`, `measure` and `compare` take `--dry-run`. |
+| `query` | Run one bounded, classified SQL batch. `query`, `mutation`, `measure` and `compare` take `--dry-run`. |
+| `mutation` | Submit a persistent change through the dashboard mutation policy. |
 | `measure` | Collect repeated timing, IO, and plan evidence for one query. |
 | `compare` | Compare baseline and candidate queries, including result equivalence. |
 | `plan` | Distill a showplan XML file or stdin without connecting to a database. |
@@ -384,7 +385,7 @@ sqlharness watch prod-eu --var tenant=acme --var env=uat --file .\queries\progre
 
 Use a least-privilege reader account for each profile. The classifier and mutation flags help prevent accidental writes; database permissions enforce the account's access. A CLI agent shares the shell's environment: it can read the profile's password variable, call `az`, and run `--unsafe-direct`, so the principal's database permissions are the real boundary.
 
-An MCP client without a shell reaches the database only through the server's tools, which run no explicit persistent mutations; PostgreSQL TEMP setup can still reach a persistent-writing user function, so the least-privilege principal applies here too ([docs/mcp.md](docs/mcp.md#no-persistent-mutations)).
+An MCP client without a shell reaches the database only through the server's tools. Persistent changes use the `sqlharness_mutation` tool and the local dashboard policy; PostgreSQL TEMP setup can still reach a persistent-writing user function, so the least-privilege principal applies here too ([docs/mcp.md](docs/mcp.md#persistent-mutations)).
 
 ### Exit codes
 
@@ -393,17 +394,17 @@ In text mode, unhandled CLI errors, including command-line parse errors, return 
 | Code | Meaning |
 | --- | --- |
 | `0` | Success. |
-| `2` | Validation or safety rejection. |
+| `2` | Validation or safety rejection; mutation rejection and approval outcomes (including denied, timeout, busy or unavailable). |
 | `3` | Authentication failure. |
-| `4` | The connected database differs from the resolved database (exact ordinal comparison). |
-| `5` | SQL execution failure. |
+| `4` | The connected database differs from the resolved database (exact ordinal comparison); mutation `database_mismatch`. |
+| `5` | SQL execution failure; mutation `failed` or `outcome_unknown` (check mutation history before any separately requested action). |
 | `6` | Local storage failure. |
 | `7` | `watch` reached its max duration without a stop condition. |
 | `8` | `snapshot --diff` found differences in a valid comparison. |
 
 ### Closed targets
 
-Profiles in `~/.sqlharness/targets.json` define server, database template, variables, authentication, and optional `engine` (`sqlserver` default, or `postgres`). Missing, extra, or invalid variables are rejected. A different profile or variable set needs a new explicit user request. In request-scope MCP the operator's `--allow-profile` list approves switching to a listed profile; a different variable set still needs a new explicit user request ([docs/mcp.md](docs/mcp.md#scope-lifetime)).
+Profiles in `~/.sqlharness/targets.json` define server, database template, variables, authentication, and optional `engine` (`sqlserver` default, or `postgres`). Missing, extra, or invalid variables are rejected. A different profile or variable set needs a new explicit user request. In request-scope MCP the operator's `--allow-profile` list approves switching to a listed profile for `query` and `mutation`; a different variable set still needs a new explicit user request ([docs/mcp.md](docs/mcp.md#scope-lifetime)).
 
 ### Direct targets
 
@@ -411,7 +412,9 @@ Profiles in `~/.sqlharness/targets.json` define server, database template, varia
 
 ### Mutations
 
-Read-only is the default. Explicit persistent-object mutation requires fresh, single-use user approval for the exact batch and exact resolved database. After that approval the agent supplies `--allow-mutation --confirm-database <exact-resolved-name>`: a deliberate-act check that records the approval, not a prompt to the user. Exception: read-write PostgreSQL TEMP setup can statically accept a setup `SELECT` that invokes an opaque user-defined function which writes persistently, without approval; review setup SQL (see PostgreSQL execution).
+Read-only is the default. Persistent changes go through the dedicated `mutation` command or `sqlharness_mutation` MCP tool. The dashboard applies the selected profile's policy and, in `operator` mode or for risk tiers that always require review, asks the operator to approve the exact batch and resolved database with a click. The broker executes a consumed approval once with the profile's writer credential. A non-success result is terminal: report it and do not retry or switch transports. `never` is the default mode; `yolo` auto-executes only the `dml` tier, while `schema`, `privilege` and `opaque` still require a click. On profiles labeled `prod`, `production` or `staging`, `yolo` requires `mutations.acknowledgeProductionYolo: true`; the dashboard keeps a warning visible and history marks unasked executions. The `environment` label is static: if profile variables select both development and production systems, SQLHarness cannot infer the actual environment and the same label remains in force. This protects against agent accidents; it is not isolation from a same-user adversary. PostgreSQL TEMP setup remains an exception: a setup `SELECT` can invoke an opaque user-defined function that writes persistently without approval; review setup SQL and use least-privilege roles.
+
+Plan 073 supports click verification only. Unsupported verification values, including `webauthn`, are rejected; WebAuthn enrollment, assertion, credential storage and recovery are deferred to [plan 078](plans/078-mutation-approval-webauthn.md).
 
 ### PostgreSQL execution
 
@@ -433,7 +436,7 @@ Fixed-width `nchar`/`char` have no `max`: they use size 4000 through 4000 charac
 
 ### Dry run
 
-`query`, `measure`, and `compare` accept a dry run (CLI `--dry-run`, MCP `dryRun: true`) of the exact invocation, setup, matrix values and parameter-set contents included: offline argument/bounds checks, safety classification, parameter binding/references, setup-shape checks and matrix/parameter-set binding, then a return before connection or artifact storage. Success exits `0` with a `SqlHarnessDryRunReport` (`command`, `classification`, `tier` (`read-only`, `session`, `dml`, `schema`, `privilege`, `opaque`; the highest-risk statement wins), `parameters` with canonical name, type, size, precision and scale, and `parameterSets`); for `measure` and `compare`, `tier` is the maximum over setup and measured SQL. A rejection exits `2`, and a referenced parameter without a value is `missing_parameters` with its names.
+`query`, `mutation`, `measure`, and `compare` accept a dry run (CLI `--dry-run`, MCP `dryRun: true`) of the exact invocation, setup, matrix values and parameter-set contents included where applicable: offline argument/bounds checks, safety classification, parameter binding/references, setup-shape checks and matrix/parameter-set binding, then a return before connection or artifact storage or approval request. Success exits `0` with a `SqlHarnessDryRunReport` (`command`, `classification`, `tier` (`read-only`, `session`, `dml`, `schema`, `privilege`, `opaque`; the highest-risk statement wins), `parameters` with canonical name, type, size, precision and scale, and `parameterSets`); for `measure` and `compare`, `tier` is the maximum over setup and measured SQL. A rejection exits `2`, and a referenced parameter without a value is `missing_parameters` with its names.
 
 It creates no raw-token emission receipt. It cannot check runtime artifact storage, authentication, connection identity, catalog contents or database permissions, so success does not guarantee execution, and it never authorizes a later mutation. It does not check parameter references inside `--setup`. The first executed result's `database` is the verified target: every connection compares it with the resolved database (exit `4`). Safety rejection details identify the ScriptDom statement type and starting line, such as `IfStatement at line 14`.
 
@@ -544,7 +547,7 @@ Only conversation ids, titles, tool-use ids, model names, and effort values are 
 
 Connection diagnostics records bounded connection and artifact metadata in the journal; it excludes credentials and target names and never stores SQL, parameter values, or tokens.
 
-Saved settings apply to new processes, so restart running `mcp serve` sessions. The Profiles page lists the `targets.json` profiles read-only and shows password variable names, never values. A failed or rejected operation shows its credential-redacted error in a tooltip on the status badge and in a details dialog; legacy rows without a message show that no message is available. Error messages may quote SQL and data values.
+Saved settings apply to new processes, so restart running `mcp serve` sessions. The Mutations settings show the global default mode, click-only verification and approval timeout. The three built-in sounds can be previewed, notifications enabled through the browser permission prompt, and sound muted or replaced by a local MP3/WAV/OGG file up to 2 MiB. Sound and custom audio stay in browser IndexedDB. Autoplay may wait for a user interaction with the page. A new live request appears in the dashboard as a toast and approval view; browser notifications and toast titles omit SQL, names and values. The approval view renders SQL and parameters as text. The Profiles page lists `targets.json` profiles read-only and shows password variable names, never values. A failed or rejected operation shows its credential-redacted error in a tooltip on the status badge and in a details dialog; legacy rows without a message show that no message is available. Error messages may quote SQL and data values.
 
 The theme menu switches between system, light, and dark and is remembered per browser.
 
@@ -578,7 +581,7 @@ On Unix, SQLHarness creates its home with mode 0700; `doctor` warns when an exis
 
 ## Roadmap after v1
 
-- Windows approval tray for one-time local approval of persistent DML requested over MCP: designed, not implemented; deferred ([plan](docs/superpowers/plans/2026-09-26-audit-08-windows-approval-tray.md)).
+- WebAuthn verification for dashboard mutation approvals: deferred to [plan 078](plans/078-mutation-approval-webauthn.md). Plan 073 provides click approval.
 
 The local MCP server over stdio is implemented: see [docs/mcp.md](docs/mcp.md).
 

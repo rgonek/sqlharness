@@ -5,8 +5,8 @@ namespace SqlHarness.Mcp.Tools;
 /// <summary>
 /// MCP tool argument shapes (spec section 4). These DTOs carry only tool-level
 /// inputs: SQL sources, typed parameters, bounds, and modes. They never carry
-/// target, auth, mutation, or credential fields, not even as hidden members:
-/// the process scope owns the closed profile and mutation stays unavailable.
+/// raw target, auth, or credential fields, not even as hidden members. The
+/// mutation tool has no caller-supplied approval switch.
 /// Unknown JSON properties are rejected at binding time via
 /// <see cref="JsonUnmappedMemberHandling.Disallow"/>.
 /// </summary>

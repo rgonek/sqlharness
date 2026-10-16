@@ -5,6 +5,8 @@ using Spectre.Console.Cli;
 using SqlHarness.Cli.Commands;
 using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
+using SqlHarness.Core.Mutations;
+using SqlHarness.Dashboard.Mutations;
 
 namespace SqlHarness.Cli;
 
@@ -22,12 +24,16 @@ public static class SqlHarnessCli
             || string.Equals(args[0], "dashboard", StringComparison.Ordinal));
     }
 
-    public static SqlHarnessApp Create(ISqlHarnessModule module, TextWriter? output = null, TextReader? stdin = null, bool? stdinRedirected = null, Stream? planStdin = null, TextWriter? mcpError = null, SqlHarness.Dashboard.IDashboardLauncher? dashboardLauncher = null, CompareConfig? compareConfig = null, SqlHarness.Dashboard.IDashboardLifecycle? dashboardLifecycle = null)
+    public static SqlHarnessApp Create(ISqlHarnessModule module, TextWriter? output = null, TextReader? stdin = null, bool? stdinRedirected = null, Stream? planStdin = null, TextWriter? mcpError = null, SqlHarness.Dashboard.IDashboardLauncher? dashboardLauncher = null, CompareConfig? compareConfig = null, SqlHarness.Dashboard.IDashboardLifecycle? dashboardLifecycle = null, IMutationBrokerClient? mutationBroker = null, int mutationApprovalTimeoutSeconds = 120, Func<string>? mutationSessionKey = null, SqlHarnessConfig? config = null)
     {
         var registrar = new Registrar();
         registrar.Add(new McpHostConsole(mcpError ?? Console.Error));
         registrar.Add(dashboardLauncher ?? new SqlHarness.Dashboard.DetachedDashboardLauncher());
         registrar.Add(dashboardLifecycle ?? new SqlHarness.Dashboard.DashboardLifecycleService(ProcessInfo.Current));
+        registrar.Add(mutationBroker ?? new HttpMutationBrokerClient());
+        registrar.Add(mutationApprovalTimeoutSeconds);
+        registrar.Add(config ?? SqlHarnessConfig.Default);
+        registrar.Add(mutationSessionKey?.Invoke() ?? SessionIdentities.Cli(ProcessInfo.Current).SessionKey);
         var outputContext = new OutputContext(output ?? Console.Out);
         registrar.Add(module); registrar.Add(outputContext); registrar.Add(new Renderer());
         registrar.Add(compareConfig ?? new CompareConfig());
@@ -63,6 +69,7 @@ public static class SqlHarnessCli
             // Relaxed parsing would ignore --matrix on measure and query instead of rejecting it.
             c.UseStrictParsing();
             c.AddCommand<QueryCommand>("query").WithDescription("Run a bounded SQL query passing the static visible-effects check.");
+            c.AddCommand<MutationCommand>("mutation").WithDescription("Submit a persistent change through the dashboard mutation policy.");
             c.AddCommand<MeasureCommand>("measure").WithDescription("Measure query performance across repeated runs.");
             c.AddCommand<CompareCommand>("compare").WithDescription("Compare baseline and candidate performance and results.");
             c.AddCommand<PlanCommand>("plan").WithDescription("Distill a saved execution plan offline.");

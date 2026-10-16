@@ -29,6 +29,9 @@ export function ProfilesPage() {
                 <TableHead>Engine</TableHead>
                 <TableHead>Server</TableHead>
                 <TableHead>Database</TableHead>
+                <TableHead>Environment</TableHead>
+                <TableHead>Mutation mode</TableHead>
+                <TableHead>Mutation writer</TableHead>
                 <TableHead>Auth</TableHead>
                 <TableHead>Password variable</TableHead>
                 <TableHead>TLS</TableHead>
@@ -42,6 +45,9 @@ export function ProfilesPage() {
                   <TableCell>{profile.engine}</TableCell>
                   <TableCell>{profile.server}</TableCell>
                   <TableCell>{profile.database}</TableCell>
+                  <TableCell>{profile.environment ?? "—"}</TableCell>
+                  <TableCell>{profile.mutationMode || "never"}</TableCell>
+                  <TableCell>{profile.mutationWriterKind ?? "—"}</TableCell>
                   <TableCell>{profile.sqlUser ? `${profile.auth} (${profile.sqlUser})` : profile.auth}</TableCell>
                   <TableCell>{profile.passwordEnvVar ?? "—"}</TableCell>
                   <TableCell>

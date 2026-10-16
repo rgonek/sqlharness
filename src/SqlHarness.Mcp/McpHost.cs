@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using SqlHarness.Core;
+using SqlHarness.Core.Mutations;
 using SqlHarness.Core.Targets;
 
 namespace SqlHarness.Mcp;
@@ -11,7 +12,7 @@ namespace SqlHarness.Mcp;
 /// section 2): stdout carries only protocol frames, while operator diagnostics go to
 /// stderr with resolved credential redaction. T2 starts
 /// the transport with a frozen scope and clean shutdown; the explicit T3
-/// tool catalog registers exactly 10 tools on the frozen scope.
+/// tool catalog registers exactly 9 tools on the frozen scope.
 /// </summary>
 public static class McpHost
 {
@@ -86,7 +87,10 @@ public static class McpHost
         TextWriter log,
         Func<IReadOnlyDictionary<string, TargetProfile>> loadProfiles,
         CancellationToken ct = default,
-        Action<SqlHarnessConfig>? started = null)
+        Action<SqlHarnessConfig>? started = null,
+        IMutationBrokerClient? mutationBroker = null,
+        string? mutationSessionKey = null,
+        Func<bool>? dashboardReachability = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(input);
@@ -106,7 +110,7 @@ public static class McpHost
         {
             var profiles = loadProfiles();
             knownSecrets = ResolveKnownSecrets(options, profiles);
-            process = McpProcessContext.Create(options, () => profiles, config.Config.Compare);
+            process = McpProcessContext.Create(options, () => profiles, config.Config.Compare, config.Config, dashboardReachability);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -137,7 +141,7 @@ public static class McpHost
         var journal = new Lazy<IActivityJournal>(
             () => ActivityJournal.Open(config.Config.Journal, log),
             LazyThreadSafetyMode.ExecutionAndPublication);
-        var sessionKey = "mcp:" + Guid.NewGuid().ToString("N");
+        var sessionKey = mutationSessionKey ?? process.MutationSessionKey;
         var mcpMode = process.RequestScope ? "request" : "fixed";
         ModelContextProtocol.Server.McpServer? running = null;
         // The session key stays fixed for this serve process, while client info can first
@@ -186,7 +190,8 @@ public static class McpHost
             () => roots.Current,
             McpCallRegistry.Metadata,
             config.Config.Diagnostics));
-        Tools.McpToolCatalog.Wire(serverOptions, process, hostShutdown: lifetime.Token);
+        Tools.McpToolCatalog.Wire(serverOptions, process, hostShutdown: lifetime.Token,
+            mutationBroker: mutationBroker, mutationSessionKey: sessionKey);
         try
         {
             started?.Invoke(config.Config);

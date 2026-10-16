@@ -7,7 +7,7 @@ description: "Use when collecting SQL Server, Azure SQL or PostgreSQL query and 
 
 ## Prepare
 
-Keep the requested profile and variables; request-scoped MCP's allowlist permits profile switches, but changing variables needs a new request. Discover arguments and limits through installed tool schemas or CLI help. Read capabilities when the connection's configuration is unknown; reuse it until reconnect or restart. CLI `capabilities <profile> --json` (`engineGuidance`) and MCP tool descriptions carry the engine's setup and safety rules; follow them instead of assuming another engine's.
+Keep the requested profile and variables; request-scoped MCP's allowlist permits profile switches, but changing variables needs a new request. Discover arguments and limits through installed tool schemas or CLI help. Read capabilities when the connection's configuration is unknown; reuse it until reconnect or restart. Capabilities also reports mutation policy; CLI `capabilities <profile> --json` (`engineGuidance`) and MCP tool descriptions carry the engine's setup and safety rules; follow them instead of assuming another engine's.
 
 <!-- docs-sync:example -->
 ```powershell
@@ -44,6 +44,6 @@ Answer the user's question with the target, covered cases, verdict and relevant 
 
 Stop and report tool unavailability, authentication/access failure, target mismatch or SQL safety rejection. Read error details; retry only a clear SQL/argument error corrected within the same read-only scope. Ambiguous rejections, timeouts and cancellations require a report before further execution. Keep rejected work stopped rather than switching transports or creating persistent helpers.
 
-Persistent writes need fresh approval for the exact batch and resolved database; an attempt consumes approval. Use the installed interface's approval mechanism; MCP supports no explicit persistent mutations. Session-local preparation needs no persistent-write approval.
+For persistent writes, use `mutation` in the CLI or `sqlharness_mutation` in MCP. The operator's dashboard policy decides whether to reject, ask for a click, or run an eligible DML request. If the mutation result is anything other than `success`, stop and report its status; do not retry it or switch transports. Session-local preparation needs no persistent-write approval.
 
 Keep secrets in configured environment variables. Obtain user review before publishing results or artifacts. Leave the operator's dashboard and API alone.

@@ -313,7 +313,8 @@ export type JournalSettings = {
 }
 export type DashboardSettings = { autoStart: boolean; port: number; idleShutdownHours: number; agentTranscripts: { enabled: boolean } }
 export type DiagnosticsSettings = { enabled: boolean }
-export type Settings = { journal: JournalSettings; dashboard: DashboardSettings; compare: { requireContext: boolean }; diagnostics: DiagnosticsSettings }
+export type MutationSettings = { defaultMode: "never" | "operator" | "yolo"; verification: string; approvalTimeoutSeconds: number }
+export type Settings = { journal: JournalSettings; dashboard: DashboardSettings; compare: { requireContext: boolean }; diagnostics: DiagnosticsSettings; mutations: MutationSettings }
 export type SettingsFileStatus = "missing" | "valid" | "invalid"
 export type SettingsResponse = { status: SettingsFileStatus; path: string; settings: Settings }
 export type FieldError = { field: string; message: string }
@@ -333,7 +334,17 @@ export type ProfileView = {
   tls: string
   rootCertificate: string | null
   vars: ProfileVariable[]
+  environment: string | null
+  mutationMode: string
+  mutationWriterKind: string | null
+  acknowledgeProductionYolo: boolean
 }
 export type ProfilesResponse = { status: "missing" | "valid" | "invalid"; profiles: ProfileView[]; message: string | null }
+
+export type MutationRequestSummary = {
+  id: number; requestId: string; sessionKey: string; profile: string; engine: string; server: string; database: string
+  tier: string; mode: string; digest: string; sql: string | null; parametersJson: string | null; state: string; status: string | null
+  verification: string | null; createdAt: string; decidedAt: string | null; finishedAt: string | null; environment: string | null
+}
 
 export type PricesInfo = { source: string; fetchedAt: string; origin: "embedded" | "refreshed" }

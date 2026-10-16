@@ -1,6 +1,6 @@
 import { keepPreviousData, QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ConflictError, getJson, NetworkError, NotFoundError, patchJson, postJson, putJson, UnauthorizedError } from "./client"
-import type { AnnotationPatch, CompareAttemptSummary, DashboardStats, DistilledPlan, KeyCount, OperationDetail, OperationSummary, Page, PricesInfo, ProfilesResponse, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
+import type { AnnotationPatch, CompareAttemptSummary, DashboardStats, DistilledPlan, KeyCount, MutationRequestSummary, OperationDetail, OperationSummary, Page, PricesInfo, ProfilesResponse, SessionAnnotation, SessionDetail, SessionSummary, Settings, SettingsResponse, SqlVersionText, TranscriptStatus } from "./types"
 
 export type SessionFilters = { agent?: string; transport?: string; archived?: boolean; starred?: boolean; q?: string }
 
@@ -22,6 +22,7 @@ export const queryKeys = {
   profiles: () => ["profiles"] as const,
   prices: () => ["prices"] as const,
   plan: (hash: string) => ["plan", hash] as const,
+  mutations: ["mutations"] as const,
   liveOperations: ["live", "operations"] as const,
   liveRunning: ["live", "running"] as const,
   liveSessions: ["live", "sessions"] as const,
@@ -190,6 +191,15 @@ export function useSettings() {
 
 export function useProfiles() {
   return useQuery({ queryKey: queryKeys.profiles(), queryFn: () => getJson<ProfilesResponse>("/api/profiles") })
+}
+
+export function useMutationHistory() {
+  return useInfiniteQuery({
+    queryKey: queryKeys.mutations,
+    queryFn: ({ pageParam }) => getJson<Page<MutationRequestSummary>>("/api/mutations", { cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: page => page.nextCursor ?? undefined,
+  })
 }
 
 export function useSaveSettings() {

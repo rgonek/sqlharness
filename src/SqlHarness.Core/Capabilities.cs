@@ -1,6 +1,8 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
 
+using SqlHarness.Core.Targets;
+
 namespace SqlHarness.Core;
 
 public sealed record SqlHarnessCapabilities(
@@ -16,7 +18,8 @@ public sealed record SqlHarnessCapabilities(
     SqlHarnessCompareContextCapability CompareContext,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SqlHarnessProfileCapability? Profile = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? ParameterTypes = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SqlHarnessEngineGuidance? EngineGuidance = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SqlHarnessEngineGuidance? EngineGuidance = null,
+    SqlHarnessMutationCapability? Mutations = null);
 
 /// <summary>
 /// One engine's operation guidance: facts a caller needs at the call site that the shared command
@@ -37,14 +40,18 @@ public sealed record SqlHarnessCommandCapability(string Name, string Description
 
 public sealed record SqlHarnessEngineSummary(string Name, string Summary);
 
-public sealed record SqlHarnessProfileCapability(string Name, string Engine);
+public sealed record SqlHarnessProfileCapability(string Name, string Engine, string MutationMode, bool WriterConfigured);
+
+public sealed record SqlHarnessMutationCapability(string DefaultMode, string Verification, int ApprovalTimeoutSeconds, bool DashboardReachable);
+
 
 public static class SqlHarnessCapabilitiesProvider
 {
     // Bump when the document shape changes. 2: engines became a short { name, summary } list;
     // parameter types, session-temp rules and engine-only limits moved behind a profile.
     // 3: report the active compare-context requirement and version/history semantics.
-    public const int ContractVersion = 3;
+    // 4: add the persistent mutation command and remove query mutation switches.
+    public const int ContractVersion = 5;
 
     public static SqlHarnessCompareContextCapability CompareContextPolicy(CompareConfig? config = null)
     {
@@ -114,27 +121,38 @@ public static class SqlHarnessCapabilitiesProvider
         ?? throw new InvalidOperationException($"No capabilities entry is registered for engine {engine}.");
 
     /// <summary>Engine-neutral document: commands, active compare-context policy, modes, shared limits and engine summaries.</summary>
-    public static SqlHarnessCapabilities Get(CompareConfig? compareConfig = null) =>
-        Build(Details.Select(d => new SqlHarnessEngineSummary(d.Name, d.Summary)).ToList(), null, null, null, null, compareConfig);
+    public static SqlHarnessCapabilities Get(CompareConfig? compareConfig = null, MutationsConfig? mutationsConfig = null, bool dashboardReachable = false) =>
+        Build(Details.Select(d => new SqlHarnessEngineSummary(d.Name, d.Summary)).ToList(), null, null, null, null, compareConfig,
+            mutationCapability: MutationCapability(mutationsConfig, dashboardReachable));
 
     /// <summary>Document scoped to one engine; the profile name is echoed back. Offline, no connection.</summary>
-    public static SqlHarnessCapabilities Get(SqlEngine engine, string profileName, CompareConfig? compareConfig = null)
+    public static SqlHarnessCapabilities Get(SqlEngine engine, string profileName, CompareConfig? compareConfig = null,
+        TargetProfile? targetProfile = null, MutationsConfig? mutationsConfig = null, bool dashboardReachable = false)
     {
         var detail = DetailFor(engine);
         return Build(
             [new SqlHarnessEngineSummary(detail.Name, detail.Summary)],
-            new SqlHarnessProfileCapability(profileName, detail.Name),
+            new SqlHarnessProfileCapability(profileName, detail.Name,
+                targetProfile?.Mutations?.Mode ?? mutationsConfig?.DefaultMode ?? "never", targetProfile?.Mutations?.Writer is not null),
             detail.ParameterTypes,
             detail.EngineLimits,
             detail.SessionTempStatements,
             compareConfig,
             detail.Guidance,
-            detail.TargetServer);
+            detail.TargetServer,
+            MutationCapability(mutationsConfig, dashboardReachable));
     }
 
     /// <summary>Scoped document for a profile's declared engine string (null or empty means sqlserver).</summary>
-    public static SqlHarnessCapabilities Get(string profileName, string? profileEngine, CompareConfig? compareConfig = null) =>
-        Get(SqlEngineNames.Parse(profileEngine), profileName, compareConfig);
+    public static SqlHarnessCapabilities Get(string profileName, string? profileEngine, CompareConfig? compareConfig = null,
+        TargetProfile? targetProfile = null, MutationsConfig? mutationsConfig = null, bool dashboardReachable = false) =>
+        Get(SqlEngineNames.Parse(profileEngine), profileName, compareConfig, targetProfile, mutationsConfig, dashboardReachable);
+
+    public static SqlHarnessMutationCapability MutationCapability(MutationsConfig? config, bool dashboardReachable) =>
+        new(config?.DefaultMode ?? "never", config?.Verification ?? "click", config?.ApprovalTimeoutSeconds ?? 120, dashboardReachable);
+
+    public static (string Mode, bool WriterConfigured) ProfileMutationCapability(TargetProfile profile, MutationsConfig? config = null) =>
+        (profile.Mutations?.Mode ?? config?.DefaultMode ?? "never", profile.Mutations?.Writer is not null);
 
     private sealed record EngineDetail(
         SqlEngine Engine,
@@ -154,7 +172,8 @@ public static class SqlHarnessCapabilitiesProvider
         IReadOnlyList<string>? sessionTempStatements,
         CompareConfig? compareConfig = null,
         SqlHarnessEngineGuidance? guidance = null,
-        string targetServer = DefaultTargetServer)
+        string targetServer = DefaultTargetServer,
+        SqlHarnessMutationCapability? mutationCapability = null)
     {
         var assembly = typeof(SqlHarnessCapabilitiesProvider).Assembly;
         var version = assembly.GetName().Version?.ToString(3) ?? "0.0.0";
@@ -202,7 +221,8 @@ public static class SqlHarnessCapabilitiesProvider
             [
                 new("capabilities", "Describe commands, engines, limits, modes, and the active compare-context policy. Pass a profile for the parameter types, limits and engine guidance (engineGuidance) of its engine."),
                 new("doctor", "Check installation and profiles."),
-                new("query", "Run a bounded query; CLI --dry-run and MCP dryRun check exact arguments offline; no connection or writes. Every output replaces the profile password and Azure CLI access token fetched for the operation; other text, including SQL quoted in server errors, stays readable."),
+                new("query", "Run a bounded query passing the static visible-effects check; CLI --dry-run and MCP dryRun check exact arguments offline. Persistent changes use mutation. Every output replaces the profile password and Azure CLI access token fetched for the operation; other text, including SQL quoted in server errors, stays readable."),
+                new("mutation", "Submit a persistent change through the dashboard mutation policy. CLI --dry-run and MCP dryRun check exact arguments offline; any non-success status must be reported without retrying."),
                 new("measure", "Measure one query across repeats; CLI --param-set or MCP parameterSets, parameterSetFiles or matrix vary inputs. Sets share a session/cache and rotate; setup binds the first set once. Optional offline check: CLI --dry-run or MCP dryRun. Use command help for arguments."),
                 new("compare", "Compare baseline/candidate measurements and observed rows; MCP parameterSets, parameterSetFiles or matrix use a session/setup per set. Read regression verdict/reasons separately from exit code. Optional offline check: CLI --dry-run or MCP dryRun. Use command help for arguments."),
                 new("watch", "Poll a bounded query passing the static visible-effects check."),
@@ -225,7 +245,8 @@ public static class SqlHarnessCapabilitiesProvider
             CompareContextPolicy(compareConfig),
             profile,
             parameterTypes,
-            guidance);
+            guidance,
+            mutationCapability);
     }
 
     private static Dictionary<string, IReadOnlyList<string>> OutputModesByCommand()
@@ -236,6 +257,7 @@ public static class SqlHarnessCapabilitiesProvider
         map["artifact"] = ["json", "agent"];
         foreach (var command in new[] { "query", "snapshot", "plan" })
             map[command] = ["text", "json", "agent"];
+        map["mutation"] = ["text", "json", "agent"];
         foreach (var command in new[] { "measure", "compare" })
             map[command] = ["text", "json", "json-summary", "agent"];
         map["watch"] = ["text", "json", "agent", "ndjson"];
