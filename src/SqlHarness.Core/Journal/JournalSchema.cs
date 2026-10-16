@@ -243,6 +243,7 @@ internal static class JournalSchema
           id INTEGER PRIMARY KEY,
           request_id TEXT NOT NULL UNIQUE,
           session_key TEXT NOT NULL,
+          host_pid INTEGER NOT NULL, host_started_at TEXT NULL,
           profile TEXT NOT NULL, engine TEXT NOT NULL, server TEXT NOT NULL, database_name TEXT NOT NULL,
           tier TEXT NOT NULL, mode TEXT NOT NULL, digest TEXT NOT NULL,
           sql_text TEXT NULL, parameters_json TEXT NULL,

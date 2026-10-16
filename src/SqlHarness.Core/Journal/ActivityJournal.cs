@@ -411,16 +411,21 @@ public sealed class ActivityJournal : IActivityJournal
         ArgumentNullException.ThrowIfNull(record);
         try
         {
+            var processInfo = ProcessInfo.Current;
+            var hostPid = processInfo.CurrentPid;
+            var hostStartedAt = processInfo.Get(hostPid)?.StartedAt;
             using var connection = Connect();
             using var insert = connection.CreateCommand();
             insert.CommandText = """
-                INSERT INTO mutation_requests (request_id, session_key, profile, engine, server, database_name,
+                INSERT INTO mutation_requests (request_id, session_key, host_pid, host_started_at, profile, engine, server, database_name,
                     tier, mode, digest, sql_text, parameters_json, state, created_at)
-                VALUES ($requestId, $sessionKey, $profile, $engine, $server, $database,
+                VALUES ($requestId, $sessionKey, $hostPid, $hostStartedAt, $profile, $engine, $server, $database,
                     $tier, $mode, $digest, $sql, $parameters, 'pending', $createdAt);
                 """;
             insert.Parameters.AddWithValue("$requestId", record.RequestId);
             insert.Parameters.AddWithValue("$sessionKey", record.SessionKey);
+            insert.Parameters.AddWithValue("$hostPid", hostPid);
+            insert.Parameters.AddWithValue("$hostStartedAt", Nullable(hostStartedAt));
             insert.Parameters.AddWithValue("$profile", record.Profile);
             insert.Parameters.AddWithValue("$engine", record.Engine);
             insert.Parameters.AddWithValue("$server", record.Server);

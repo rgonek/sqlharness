@@ -10,15 +10,20 @@ public sealed record RetentionResult(bool Ran, int DeletedOperations, int Delete
 }
 
 /// <summary>
-/// Opt-in journal retention: operations older than maxAgeDays, then unreferenced plans and
-/// empty sessions, then the oldest operations while the used size exceeds maxSizeMb, and
-/// finally an incremental vacuum. A running operation is deleted only when its host process
-/// is gone (abandoned). Work is done in short BEGIN IMMEDIATE batches so concurrent journal
+/// Opt-in journal retention: operations and mutation requests older than maxAgeDays, then unreferenced plans and
+/// empty sessions, then the oldest rows while the used size exceeds maxSizeMb, and finally an incremental vacuum.
+/// A running operation or live in-flight mutation request is deleted only when its host process is gone (abandoned).
+/// Work is done in short BEGIN IMMEDIATE batches so concurrent journal
 /// writers (1 s budget) are never starved. Never throws.
 /// </summary>
 public static class JournalRetention
 {
     public const int BatchSize = 500;
+
+    private static readonly HashSet<string> ActiveMutationStates = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "pending", "approved", "executing",
+    };
 
     /// <summary>Operations removed per size-cap step before the used size is measured again.</summary>
     public const int SizeStep = 100;
@@ -67,14 +72,14 @@ public static class JournalRetention
                 .ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
 
             DeleteOperations(connection, liveness, "AND started_at < $cutoff", cutoff, int.MaxValue, batchSize, totals);
-            DeleteMutationRequests(connection, cutoff, int.MaxValue, batchSize, totals);
+            DeleteMutationRequests(connection, liveness, cutoff, int.MaxValue, batchSize, totals);
             DeleteOrphans(connection, cutoff, batchSize, totals);
 
             var limit = (long)journal.Retention.MaxSizeMb * 1024 * 1024;
             while (UsedBytes(connection) > limit)
             {
                 var deleted = DeleteOperations(connection, liveness, string.Empty, cutoff, sizeStep, batchSize, totals);
-                deleted += DeleteMutationRequests(connection, cutoff: null, sizeStep, batchSize, totals);
+                deleted += DeleteMutationRequests(connection, liveness, cutoff: null, sizeStep, batchSize, totals);
                 DeleteOrphans(connection, cutoff: null, batchSize, totals);
                 if (deleted == 0)
                     break;
@@ -200,43 +205,60 @@ public static class JournalRetention
             """);
     }
 
-    /// <summary>Deletes oldest mutation requests in short transactions using the operations age and size limits.</summary>
-    private static int DeleteMutationRequests(SqliteConnection connection, string? cutoff, int max, int batchSize, Totals totals)
+    /// <summary>Deletes oldest eligible mutation requests in short transactions, retaining live in-flight requests.</summary>
+    private static int DeleteMutationRequests(SqliteConnection connection, ProcessLiveness liveness, string? cutoff, int max, int batchSize, Totals totals)
     {
         var deleted = 0;
+        var after = 0L;
         while (deleted < max)
         {
-            var limit = Math.Min(batchSize, max - deleted);
-            Execute(connection, "BEGIN IMMEDIATE;");
-            int changed;
-            try
+            var candidates = new List<(long Id, string State, long Pid, string? Started)>();
+            using (var select = connection.CreateCommand())
             {
-                using var delete = connection.CreateCommand();
-                delete.CommandText = """
-                    DELETE FROM mutation_requests
-                    WHERE id IN (
-                        SELECT id FROM mutation_requests
-                        WHERE $cutoff IS NULL OR created_at < $cutoff
-                        ORDER BY created_at, id LIMIT $limit);
+                select.CommandText = """
+                    SELECT id, state, host_pid, host_started_at FROM mutation_requests
+                    WHERE id > $after AND ($cutoff IS NULL OR created_at < $cutoff)
+                    ORDER BY id LIMIT $limit;
                     """;
-                delete.Parameters.AddWithValue("$cutoff", (object?)cutoff ?? DBNull.Value);
-                delete.Parameters.AddWithValue("$limit", limit);
-                changed = delete.ExecuteNonQuery();
-                Execute(connection, "COMMIT;");
-            }
-            catch
-            {
-                Execute(connection, "ROLLBACK;");
-                throw;
+                select.Parameters.AddWithValue("$after", after);
+                select.Parameters.AddWithValue("$cutoff", (object?)cutoff ?? DBNull.Value);
+                select.Parameters.AddWithValue("$limit", batchSize);
+                using var reader = select.ExecuteReader();
+                while (reader.Read())
+                    candidates.Add((reader.GetInt64(0), reader.GetString(1), reader.GetInt64(2), reader.IsDBNull(3) ? null : reader.GetString(3)));
             }
 
-            if (changed > 0)
+            if (candidates.Count == 0)
+                return deleted;
+
+            var ids = candidates
+                .Where(row => !ActiveMutationStates.Contains(row.State) || !liveness.IsAlive(row.Pid, row.Started))
+                .Select(row => row.Id)
+                .Take(max - deleted)
+                .ToArray();
+            after = ids.Length == max - deleted ? ids[^1] : candidates[^1].Id;
+
+            if (ids.Length > 0)
             {
-                deleted += changed;
-                totals.CommittedMutationRequests(changed);
+                Execute(connection, "BEGIN IMMEDIATE;");
+                try
+                {
+                    // Terminal rows cannot become active again; a dead host cannot resume this request.
+                    Execute(connection, $"DELETE FROM mutation_requests WHERE id IN ({string.Join(",", ids)});");
+                    Execute(connection, "COMMIT;");
+                }
+                catch
+                {
+                    Execute(connection, "ROLLBACK;");
+                    throw;
+                }
+
+                deleted += ids.Length;
+                totals.CommittedMutationRequests(ids.Length);
             }
-            if (changed < limit)
-                break;
+
+            if (candidates.Count < batchSize)
+                return deleted;
         }
 
         return deleted;

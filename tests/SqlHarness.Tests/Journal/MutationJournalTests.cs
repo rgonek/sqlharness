@@ -34,7 +34,7 @@ public sealed class MutationJournalTests
 
         Assert.Equal(13, JournalSchema.CurrentVersion);
         Assert.Equal((long)JournalSchema.CurrentVersion, JournalDb.Rows(temp.DatabasePath, "PRAGMA user_version").Single()["user_version"]);
-        Assert.Equal(new[] { "id", "request_id", "session_key", "profile", "engine", "server", "database_name", "tier", "mode", "digest", "sql_text",
+        Assert.Equal(new[] { "id", "request_id", "session_key", "host_pid", "host_started_at", "profile", "engine", "server", "database_name", "tier", "mode", "digest", "sql_text",
             "parameters_json", "state", "status", "verification", "created_at", "decided_at", "finished_at" },
             JournalDb.Rows(temp.DatabasePath, "SELECT name FROM pragma_table_info('mutation_requests') ORDER BY cid")
                 .Select(row => (string)row["name"]!).ToArray());
@@ -63,6 +63,19 @@ public sealed class MutationJournalTests
         Assert.Equal(record.CreatedAt.AddSeconds(2).UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"), row["finished_at"]);
         Assert.Equal(record.Sql, row["sql_text"]);
         Assert.Equal(record.ParametersJson, row["parameters_json"]);
+    }
+
+    [Fact]
+    public void Record_mutation_stores_current_journal_process_ownership()
+    {
+        using var temp = new JournalTempDirectory();
+        Open(temp).RecordMutation(Record("owned"));
+
+        var row = JournalDb.Rows(temp.DatabasePath, "SELECT host_pid, host_started_at FROM mutation_requests").Single();
+
+        Assert.Equal((long)Environment.ProcessId, row["host_pid"]);
+        var current = ProcessInfo.Current.Get(Environment.ProcessId);
+        Assert.Equal(current?.StartedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"), row["host_started_at"]);
     }
 
     [Fact]
@@ -114,35 +127,69 @@ public sealed class MutationJournalTests
     }
 
     [Fact]
-    public void Retention_deletes_old_mutation_requests()
+    public void Retention_deletes_old_abandoned_and_terminal_requests_but_preserves_live_requests()
     {
         using var temp = new JournalTempDirectory();
         var clock = new FixedTimeProvider(JournalTestData.T0);
         var journal = Open(temp, storeSensitive: true, clock);
-        journal.RecordMutation(Record("old", JournalTestData.T0.AddDays(-40)));
-        journal.RecordMutation(Record("new", JournalTestData.T0.AddDays(-1)));
+        journal.RecordMutation(Record("live-pending", JournalTestData.T0.AddDays(-40)));
+        journal.RecordMutation(Record("live-executing", JournalTestData.T0.AddDays(-41)));
+        journal.RecordMutation(Record("abandoned-approved", JournalTestData.T0.AddDays(-42)));
+        journal.RecordMutation(Record("terminal", JournalTestData.T0.AddDays(-43)));
+        SetOwnerAndState(temp, "live-pending", "pending", 101, JournalTestData.T0);
+        SetOwnerAndState(temp, "live-executing", "executing", 101, JournalTestData.T0);
+        SetOwnerAndState(temp, "abandoned-approved", "approved", 202, JournalTestData.T0);
+        SetOwnerAndState(temp, "terminal", "succeeded", 101, JournalTestData.T0);
 
         var result = JournalRetention.Run(temp.DatabasePath,
             new JournalConfig { Retention = new JournalRetentionConfig { Enabled = true, MaxAgeDays = 30 } },
-            ProcessInfo.Current, clock);
+            new FakeProcesses(JournalTestData.T0, 101), clock);
 
-        Assert.Equal(1, result.DeletedMutationRequests);
-        Assert.Equal(new[] { "new" }, JournalDb.Rows(temp.DatabasePath, "SELECT request_id FROM mutation_requests").Select(row => (string)row["request_id"]!));
+        Assert.Equal(2, result.DeletedMutationRequests);
+        Assert.Equal(new[] { "live-executing", "live-pending" }, JournalDb.Rows(temp.DatabasePath, "SELECT request_id FROM mutation_requests ORDER BY request_id")
+            .Select(row => (string)row["request_id"]!));
     }
 
     [Fact]
-    public void Retention_deletes_oldest_mutation_requests_when_the_size_limit_is_exceeded()
+    public void Retention_deletes_oldest_abandoned_and_terminal_requests_under_size_pressure_but_preserves_live_requests()
     {
         using var temp = new JournalTempDirectory();
         var journal = Open(temp, storeSensitive: true);
-        journal.RecordMutation(Record("oldest") with { Sql = new string('x', 600_000) });
-        journal.RecordMutation(Record("newest", JournalTestData.T0.AddSeconds(1)) with { Sql = new string('y', 600_000) });
+        journal.RecordMutation(Record("live-pending") with { Sql = new string('x', 600_000) });
+        journal.RecordMutation(Record("abandoned-executing", JournalTestData.T0.AddSeconds(1)) with { Sql = new string('y', 600_000) });
+        journal.RecordMutation(Record("terminal", JournalTestData.T0.AddSeconds(2)) with { Sql = new string('z', 600_000) });
+        SetOwnerAndState(temp, "live-pending", "pending", 101, JournalTestData.T0);
+        SetOwnerAndState(temp, "abandoned-executing", "executing", 202, JournalTestData.T0);
+        SetOwnerAndState(temp, "terminal", "succeeded", 101, JournalTestData.T0);
 
         var result = JournalRetention.Run(temp.DatabasePath,
             new JournalConfig { Retention = new JournalRetentionConfig { Enabled = true, MaxAgeDays = 3650, MaxSizeMb = 1 } },
-            ProcessInfo.Current, new FixedTimeProvider(JournalTestData.T0));
+            new FakeProcesses(JournalTestData.T0, 101), new FixedTimeProvider(JournalTestData.T0));
 
-        Assert.True(result.DeletedMutationRequests > 0);
-        Assert.Empty(JournalDb.Rows(temp.DatabasePath, "SELECT id FROM mutation_requests"));
+        Assert.Equal(2, result.DeletedMutationRequests);
+        Assert.Equal(new[] { "live-pending" }, JournalDb.Rows(temp.DatabasePath, "SELECT request_id FROM mutation_requests")
+            .Select(row => (string)row["request_id"]!));
+    }
+
+    private static void SetOwnerAndState(JournalTempDirectory temp, string requestId, string state, int hostPid, DateTimeOffset startedAt)
+    {
+        using var connection = new SqliteConnection($"Data Source={temp.DatabasePath};Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE mutation_requests SET state = $state, host_pid = $pid, host_started_at = $started WHERE request_id = $id;";
+        command.Parameters.AddWithValue("$state", state);
+        command.Parameters.AddWithValue("$pid", hostPid);
+        command.Parameters.AddWithValue("$started", startedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"));
+        command.Parameters.AddWithValue("$id", requestId);
+        Assert.Equal(1, command.ExecuteNonQuery());
+    }
+
+    private sealed class FakeProcesses(DateTimeOffset startedAt, params int[] livePids) : IProcessInfo
+    {
+        public int CurrentPid => 999;
+
+        public ProcessSnapshot? Get(int pid) => livePids.Contains(pid)
+            ? new ProcessSnapshot(pid, null, "test", startedAt, null)
+            : null;
     }
 }

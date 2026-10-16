@@ -299,6 +299,7 @@ CREATE TABLE mutation_requests (
   id INTEGER PRIMARY KEY,
   request_id TEXT NOT NULL UNIQUE,
   session_key TEXT NOT NULL,
+  host_pid INTEGER NOT NULL, host_started_at TEXT NULL,
   profile TEXT NOT NULL, engine TEXT NOT NULL, server TEXT NOT NULL, database_name TEXT NOT NULL,
   tier TEXT NOT NULL, mode TEXT NOT NULL, digest TEXT NOT NULL,
   sql_text TEXT NULL, parameters_json TEXT NULL,
@@ -307,7 +308,7 @@ CREATE TABLE mutation_requests (
 CREATE INDEX ix_mutation_requests_created ON mutation_requests (created_at);
 ```
 
-`sql_text` and `parameters_json` are stored only when `journal.storeSensitive` is on; otherwise they are NULL. Retention deletes rows with the same age and size rules as operations. Extend `JournalRetention` and its tests.
+`sql_text` and `parameters_json` are stored only when `journal.storeSensitive` is on; otherwise they are NULL. Retention applies the same age and size rules as operations, while preserving live `pending`, `approved`, and `executing` rows by their journal host PID and start time; abandoned in-flight and terminal rows remain eligible. Extend `JournalRetention` and its tests.
 
 - [x] **Step 1: Write the failing tests**:
   - migration from N-1 to N;
