@@ -124,7 +124,7 @@ Notifications are delivered by SSE to open dashboard tabs:
 
 - an in-page toast;
 - a browser Web Notification when the tab is in the background (permission is requested once from Settings).
-- a pleasant dashboard sound ping when a new approval request arrives. The default is "Soft ping"; Settings offers three built-in sounds with user-gesture previews, mute, and a custom local audio file. Custom audio is limited to MP3, WAV, or OGG files up to 2 MiB, validated by type/extension and size, and stored in browser-local IndexedDB. No arbitrary filesystem path is accepted or uploaded to the dashboard.
+- a pleasant dashboard sound ping when a new approval request arrives. The default is "Warm chime"; Settings offers three built-in sounds with user-gesture previews, mute, and a custom local audio file. Custom audio is limited to MP3, WAV, or OGG files up to 2 MiB, validated by type/extension and size, and stored in browser-local IndexedDB. No arbitrary filesystem path is accepted or uploaded to the dashboard.
 
 The notification text is generic ("SQLHarness: a change needs your decision"), with no SQL, names or values. It opens the approval view and approves nothing.
 
@@ -216,5 +216,5 @@ These measures reduce accidents; per §1 they are not a security boundary.
 ## 12. Scope decisions (operator, 2026-10-16)
 
 1. Plan 073 ships click approval only. Windows Hello/WebAuthn, package selection, registration and assertion flows, digest-bound challenges, credential storage/lifecycle, settings transitions, and recovery are deferred together to plan 077. Until that plan is implemented, unsupported verification values are rejected and never silently changed to click.
-2. The approval notification has a default "Soft ping", three selectable built-in sounds with preview, mute, and an optional custom local audio file. Custom audio is MP3, WAV, or OGG, no larger than 2 MiB, stored in browser-local IndexedDB; arbitrary server paths and uploads are excluded.
+2. The approval notification has a default "Warm chime", three selectable built-in sounds with preview, mute, and an optional custom local audio file. Custom audio is MP3, WAV, or OGG, no larger than 2 MiB, stored in browser-local IndexedDB; arbitrary server paths and uploads are excluded.
 3. Sound plays only for a newly observed live approval event. SSE snapshots, reconnects/replays, and digest joins never replay it. Autoplay restrictions must not disrupt approval.

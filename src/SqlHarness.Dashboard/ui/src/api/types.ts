@@ -333,6 +333,10 @@ export type ProfileView = {
   tls: string
   rootCertificate: string | null
   vars: ProfileVariable[]
+  environment: string | null
+  mutationMode: string
+  mutationWriterKind: string | null
+  acknowledgeProductionYolo: boolean
 }
 export type ProfilesResponse = { status: "missing" | "valid" | "invalid"; profiles: ProfileView[]; message: string | null }
 

@@ -545,7 +545,7 @@ Behaviour:
   - Escape closes without deciding.
 - `removed` closes the toast and the dialog with the terminal state shown briefly.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - an `added` event shows a toast without SQL text;
   - the initial SSE snapshot and reconnect snapshot synchronize the request list without playing sound or issuing a new notification;
   - a newly observed live `added` event plays once, and a duplicate/digest join does not replay it;
@@ -555,10 +555,10 @@ Behaviour:
   - Enter does not call approve;
   - a 409 on approve shows "This request is no longer pending";
   - `removed` closes the dialog.
-- [ ] **Step 2: Run them to verify they fail** (`cd src/SqlHarness.Dashboard/ui && npm test -- mutations`).
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run them to verify they pass**, then build the UI as described in README › Building the dashboard UI. Verify the default soft ping plays once for a new live event, not for initial SSE snapshots, reconnects, or digest joins; an autoplay restriction must not disrupt approval.
-- [ ] **Step 5: Commit**: `git commit -m "Show mutation approvals as toasts with a review dialog"`.
+- [x] **Step 2: Run them to verify they fail**: `npm test -- mutations/Approval.test.tsx` failed at the not-yet-created `./sound` module.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run them to verify they pass**, then build the UI as described in README › Building the dashboard UI. Verify the default Warm chime plays once for a new live event, not for initial SSE snapshots, reconnects, or digest joins; an autoplay restriction must not disrupt approval.
+- [x] **Step 5: Commit**: `git commit -m "Show mutation approvals as toasts with a review dialog"`.
 
 ### Task 10: Mutations history and settings UI
 
@@ -569,7 +569,7 @@ Behaviour:
 **Interfaces:**
 - Consumes: `GET /api/mutations`, `GET/PUT /api/settings`, `GET /api/profiles`.
 
-Sound settings are browser-local and do not add server-side file paths or upload routes. Offer three pleasant built-in sounds (default: "Soft ping"), each with a user-gesture preview, plus mute and a custom local audio file. Accept MP3, WAV, or OGG files up to 2 MiB; validate both file type/extension and size, and persist the chosen option and custom bytes in IndexedDB. Reject invalid files with an inline explanation. Preview is user-initiated so browser autoplay restrictions do not affect approval. Verification displays only `click`; unsupported values are rejected, never silently downgraded.
+Sound settings are browser-local and do not add server-side file paths or upload routes. Offer three pleasant built-in sounds (default: "Warm chime"), each with a user-gesture preview, plus mute and a custom local audio file. Accept MP3, WAV, or OGG files up to 2 MiB; validate both file type/extension and size, and persist the chosen option and custom bytes in IndexedDB. Reject invalid files with an inline explanation. Preview is user-initiated so browser autoplay restrictions do not affect approval. Verification displays only `click`; unsupported values are rejected, never silently downgraded.
 
 - [ ] **Step 1: Write the failing tests:**
   - the history table lists time, profile, database, tier, mode, status and verification;

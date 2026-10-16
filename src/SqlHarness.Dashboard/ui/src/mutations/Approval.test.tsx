@@ -1,0 +1,145 @@
+import { act, fireEvent, screen, waitFor } from "@testing-library/react"
+import { expect, test, vi } from "vitest"
+import { renderApp, stubFetch } from "@/test/render"
+import * as sound from "./sound"
+
+class FakeEventSource {
+  static readonly CONNECTING = 0
+  static readonly OPEN = 1
+  static readonly CLOSED = 2
+  static last: FakeEventSource | undefined
+  listeners = new Map<string, ((event: MessageEvent<string>) => void)[]>()
+  onopen: (() => void) | null = null
+  onerror: (() => void) | null = null
+  readyState = FakeEventSource.CONNECTING
+  url: string
+  constructor(url: string) { this.url = url; FakeEventSource.last = this }
+  addEventListener(type: string, listener: (event: MessageEvent<string>) => void) { this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]) }
+  close() { this.readyState = FakeEventSource.CLOSED }
+  open() { this.readyState = FakeEventSource.OPEN; this.onopen?.() }
+  emit(type: string, data: unknown) { for (const listener of this.listeners.get(type) ?? []) listener(new MessageEvent(type, { data: JSON.stringify(data) })) }
+}
+
+const request = {
+  requestId: "r-1",
+  request: { profile: "prod-db", server: "db.example", database: "payments", engine: "postgres", tier: "dml", digest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", grantees: [], sql: "<script>alert(1)</script>", parameters: [{ name: "p", type: "text", value: "<img src=x onerror=1>" }] },
+  environment: "production", writerSameAsReader: false, expiresAt: new Date(Date.now() + 60_000).toISOString(),
+}
+const profiles = { status: "valid", message: null, profiles: [{ name: "prod-db", environment: "production", mutationMode: "yolo", acknowledgeProductionYolo: true }] }
+
+async function setup() {
+  globalThis.EventSource = FakeEventSource as unknown as typeof EventSource
+  const play = vi.spyOn(sound, "playApprovalSound").mockResolvedValue(undefined)
+  stubFetch({ "/api/profiles": profiles })
+  renderApp("/")
+  await screen.findByRole("main")
+  expect(FakeEventSource.last).toBeDefined()
+  return { play, source: () => FakeEventSource.last! }
+}
+
+test("live added event shows a safe toast and the default sound; snapshots and digest joins stay silent", async () => {
+  const { play, source } = await setup()
+  expect(source().url).toBe("/api/mutations/events")
+  act(() => source().emit("snapshot", [request]))
+  expect(play).not.toHaveBeenCalled()
+  act(() => source().emit("snapshot", [{ ...request, requestId: "r-reconnect", request: { ...request.request, digest: "c".repeat(64) } }]))
+  expect(play).not.toHaveBeenCalled()
+  expect(await screen.findByText("YOLO is on for production profile prod-db")).toBeInTheDocument()
+  expect(screen.getByText("A change needs your decision")).toBeInTheDocument()
+  expect(screen.queryByText(request.request.sql)).not.toBeInTheDocument()
+  act(() => source().emit("added", request))
+  expect(play).not.toHaveBeenCalled()
+  act(() => source().emit("added", { ...request, requestId: "r-2" }))
+  expect(play).not.toHaveBeenCalled()
+  act(() => source().emit("added", { ...request, requestId: "r-3", request: { ...request.request, digest: "b".repeat(64) } }))
+  await waitFor(() => expect(play).toHaveBeenCalledTimes(1))
+  act(() => source().emit("added", { ...request, requestId: "r-3", request: { ...request.request, digest: "b".repeat(64) } }))
+  expect(play).toHaveBeenCalledTimes(1)
+})
+
+test("approval dialog renders SQL and parameter values as literal text and waits before approval", async () => {
+  const { source } = await setup()
+  vi.useFakeTimers()
+  act(() => source().emit("snapshot", [request]))
+  fireEvent.click(screen.getByRole("button", { name: "Review" }))
+  expect(screen.getByText("production")).toBeInTheDocument()
+  expect(screen.getByTestId("sql-code").textContent).toBe("<script>alert(1)</script>")
+  expect(screen.getByText("<img src=x onerror=1>")).toBeInTheDocument()
+  expect(document.querySelector("script")).toBeNull()
+  expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled()
+  act(() => vi.advanceTimersByTime(1_000))
+  expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled()
+  const fetchSpy = vi.spyOn(globalThis, "fetch")
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Enter" })
+  expect(fetchSpy).not.toHaveBeenCalled()
+  fetchSpy.mockRestore()
+  vi.useRealTimers()
+})
+
+test("a 409 approve shows the pending-state message and removed closes the dialog", async () => {
+  const { source } = await setup()
+  stubFetch({ "/api/profiles": profiles, "/api/mutations/r-1/approve": () => new Response(JSON.stringify({ error: "request_not_pending" }), { status: 409 }) })
+  act(() => source().emit("added", request))
+  vi.useFakeTimers()
+  fireEvent.click(screen.getByRole("button", { name: "Review" }))
+  act(() => vi.advanceTimersByTime(1_000))
+  fireEvent.click(screen.getByRole("button", { name: "Approve" }))
+  await act(async () => { await Promise.resolve(); await Promise.resolve() })
+  expect(screen.getByText("This request is no longer pending")).toBeInTheDocument()
+  act(() => source().emit("removed", { requestId: "r-1", state: "denied" }))
+  expect(screen.getByRole("dialog")).toHaveAttribute("data-closed", "")
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
+
+test("an autoplay rejection does not hide the toast or its review action", async () => {
+  const { source, play } = await setup()
+  play.mockRejectedValueOnce(new Error("autoplay blocked"))
+  act(() => source().emit("added", request))
+  expect(await screen.findByRole("button", { name: "Review" })).toBeInTheDocument()
+  await waitFor(() => expect(play).toHaveBeenCalledTimes(1))
+  expect(screen.getByRole("button", { name: "Review" })).toBeEnabled()
+})
+
+test("a completed request releases its digest so a later request can notify", async () => {
+  const { source, play } = await setup()
+  const first = { ...request, requestId: "r-first" }
+  const later = { ...request, requestId: "r-later" }
+  act(() => source().emit("added", first))
+  await waitFor(() => expect(play).toHaveBeenCalledTimes(1))
+  act(() => source().emit("removed", { requestId: first.requestId, state: "denied" }))
+  act(() => source().emit("added", later))
+  await waitFor(() => expect(play).toHaveBeenCalledTimes(2))
+})
+
+test("a hidden tab receives only a safe notification whose click opens the approval", async () => {
+  class FakeNotification {
+    static permission = "granted"
+    static last: FakeNotification | undefined
+    onclick: (() => void) | null = null
+    title: string
+    constructor(title: string) { this.title = title; FakeNotification.last = this }
+    close() {}
+  }
+  const previousNotification = Object.getOwnPropertyDescriptor(window, "Notification")
+  const previousVisibility = Object.getOwnPropertyDescriptor(document, "visibilityState")
+  Object.defineProperty(window, "Notification", { configurable: true, value: FakeNotification })
+  Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" })
+  const focus = vi.spyOn(window, "focus").mockImplementation(() => {})
+  const { source } = await setup()
+  const hiddenSnapshot = { ...request, requestId: "r-hidden", request: { ...request.request, digest: "d".repeat(64) } }
+  act(() => source().emit("snapshot", [hiddenSnapshot]))
+  act(() => source().emit("snapshot", [hiddenSnapshot]))
+  expect(FakeNotification.last).toBeUndefined()
+  const liveRequest = { ...request, requestId: "r-live", request: { ...request.request, digest: "e".repeat(64) } }
+  act(() => source().emit("added", liveRequest))
+  expect(FakeNotification.last?.title).toBe("SQLHarness: a change needs your decision")
+  expect(FakeNotification.last?.title).not.toContain(liveRequest.request.sql)
+  act(() => FakeNotification.last?.onclick?.())
+  expect(focus).toHaveBeenCalledOnce()
+  expect(screen.getByRole("dialog")).toBeInTheDocument()
+  if (previousNotification) Object.defineProperty(window, "Notification", previousNotification)
+  else delete (window as Window & { Notification?: typeof Notification }).Notification
+  if (previousVisibility) Object.defineProperty(document, "visibilityState", previousVisibility)
+  vi.restoreAllMocks()
+})
