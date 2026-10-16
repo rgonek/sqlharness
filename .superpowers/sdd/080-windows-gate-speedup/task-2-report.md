@@ -326,3 +326,67 @@ the `SessionInsert` XML comment: *"One prepared session insert carrying the writ
 writer columns stay null because `Session` leaves them null."* It is inaccurate for the same two columns. Fixing it
 means either correcting the comment or adding the columns; both touch `JournalSeed.cs`, which this round excludes,
 so I have left it and am flagging it for the controller.
+
+---
+
+## Fix round 2
+
+**Status:** DONE
+**Commit:** the commit that carries this section and the comment fix (message:
+`test: state the journal seed helper's column gap in its comment`). It touches `JournalSeed.cs` comments and this
+report only.
+
+### Finding
+
+Round 1 left one occurrence of the false fidelity claim in shipped code, which the controller ruled on: **correct the
+comment, do not add the columns.** The `SessionInsert` XML comment claimed both that the insert carries "the writer's
+own column set" and that omitted columns "stay null because `Session` leaves them null". Both are false for
+`agent_pid` and `agent_started_at` — `JournalSeed.Session` passes `4242` and `HostStarted.AddMinutes(-5)`
+(`tests/SqlHarness.Tests/Dashboard/JournalSeed.cs:20-21`) and `UpsertSession` writes both
+(`src/SqlHarness.Core/Journal/ActivityJournal.cs:670-673`, `691-692`).
+
+### What I changed (comments only, two hunks in one file)
+
+1. **`SessionInsert` XML comment** — now states that the insert carries the writer's columns for a `Session`
+   *except* `agent_pid` and `agent_started_at`, that the writer does populate those two, that no reader test selects
+   them today, and that a test which starts selecting them must add them here. Three content lines, same length as
+   the two-line comment it replaces.
+2. **`Operations` inline comment above the operation insert** — checking the rest of the helper, as the fix round
+   asked, turned up a second claim of the same kind that the round-1 review had not flagged: *"Only the columns
+   JournalReader selects; the rest keep their default or stay null, **which is what the writer stores for a default
+   query operation**."* That is false too. For a default `seed.Operation` the writer writes
+   `vars_json = '{"tenant":"acme"}'` (`JournalSeed.Operation` → `VarsJson`) and, through `RecordEmission`, fills
+   `raw_tokens`, `emitted_tokens`, `raw_bytes`, `raw_lines`, `emitted_bytes` and `emitted_lines`
+   (`src/SqlHarness.Core/Journal/ActivityJournal.cs:362-373`); the bulk row leaves all of them null. The comment now
+   says the omitted writer columns stay null *instead of* matching the writer, and names those two groups.
+
+`Compares` needs no change: its XML comment describes the versioning shape, which is accurate, and it shares
+`SessionInsert`, which now carries the caveat.
+
+### Not changed
+
+- **`agent_pid` and `agent_started_at` were not added**, per the controller's ruling and the fix-round instruction.
+  The recommendation recorded in the round-1 concerns list stands: adding them remains correct, and it is now a
+  one-line change to the SQL and one to the parameters, but the gap is documented instead.
+- **No test, no assertion, and no SQL changed.** The diff is 2 comment hunks, 4 lines replaced by 5.
+- **`plans/080-verification-evidence.md` is untouched**, as instructed. No measurement in it is affected.
+
+### Verification
+
+Comment-only change, so the scoped checks the fix round named:
+
+```
+> dotnet build tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-restore -warnaserror
+Build succeeded.  0 Warning(s)  0 Error(s)
+
+> dotnet test tests/SqlHarness.Tests/SqlHarness.Tests.csproj --no-build --filter 'FullyQualifiedName~JournalReaderTests'
+Passed!  - Failed: 0, Passed: 64, Skipped: 0, Total: 64, Duration: 15 s - SqlHarness.Tests.dll (net10.0)
+```
+
+Also run: `pwsh ./scripts/format-changed.ps1` → `format: OK` (1 changed C# file), and `git diff --check` → clean.
+`insert_final_newline = false` honoured: `JournalSeed.cs` still ends `0x0A, 0x7D`.
+
+The 15 s wall time above is the `dotnet test` reporting line for a run on a loaded machine, not a measurement;
+nothing about the class changed, and the recorded before/after totals in
+`plans/080-verification-evidence.md` (18,35 s → 8,09 s) still stand. The full `just verify` gate was not re-run for
+a comment-only change, per `docs/agents/verification.md`, which scopes the gate to changed executable behaviour.

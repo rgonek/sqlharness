@@ -121,8 +121,8 @@ internal sealed class JournalSeed
             using var session = SessionInsert(connection, transaction, identity);
             using var operation = connection.CreateCommand();
             operation.Transaction = transaction;
-            // Only the columns JournalReader selects; the rest keep their default or stay null,
-            // which is what the writer stores for a default query operation.
+            // The columns JournalReader selects. Writer columns left out stay null instead of
+            // matching the writer: vars_json and the emission footprints stay empty here.
             operation.CommandText = """
                 INSERT INTO operations (session_id, operation, host_pid, host_started_at, started_at, updated_at,
                     finished_at, status, exit_code, duration_ms, profile, engine, server, database,
@@ -198,8 +198,9 @@ internal sealed class JournalSeed
         _ = ActivityJournal.Open(databasePath, new JournalConfig(), TextWriter.Null, new FixedTimeProvider(HostStarted));
 
     /// <summary>
-    /// One prepared session insert carrying the writer's own column set, reused for every row;
-    /// nullable writer columns stay null because <see cref="Session"/> leaves them null.
+    /// One prepared session insert reused for every row, carrying the writer's columns for a
+    /// <see cref="Session"/> except <c>agent_pid</c> and <c>agent_started_at</c>, which the writer does
+    /// populate and which no reader test selects today — a test that starts selecting them must add them here.
     /// </summary>
     private static SqliteCommand SessionInsert(SqliteConnection connection, SqliteTransaction transaction, SessionIdentity identity)
     {
