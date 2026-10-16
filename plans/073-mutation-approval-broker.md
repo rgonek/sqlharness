@@ -26,7 +26,7 @@
 
 ## Status
 
-- DONE on feature branch `plan-073` at product revision `2085f0ff` on 2026-10-16. Luna high implementation, Luna xhigh task reviews, Sol low whole-branch review and scoped re-review approved; all five final findings are addressed. Windows `just verify` passed; Linux was explicitly waived and remains unverified. Local integration and push are pending. WebAuthn is deferred to plan 078.
+- DONE on feature branch `plan-073` at product revision `2085f0ff` on 2026-10-16. Luna high implementation, Luna xhigh task reviews, Sol low whole-branch review and scoped re-review approved; all five final findings are addressed. Windows `just verify` passed; Linux was explicitly waived and remains unverified. Integrated locally into `main` at `bb2fa5d`; post-merge Windows verification passed. Push remains pending. WebAuthn is deferred to plan 078.
 - Supersedes [plan 08 — Windows approval tray](../docs/superpowers/plans/2026-09-26-audit-08-windows-approval-tray.md); the tray stays deferred.
 - Priority P1. Effort L. Risk HIGH: the first persistent-write path through MCP, a new dashboard write surface, and a journal migration.
 
@@ -627,3 +627,10 @@ Extend the blocklist (the hook stays fail-open on bad JSON, as documented):
 Implemented range: `b3cdf315..2085f0ff`. The final combined fix addresses audio-constructor feedback, busy approval feedback, synchronized race starts, a real-Core matching-digest writer/session test, and README summaries. Warm chime is the operator-selected default; all three bundled options, previews, mute and browser-local custom audio are available. Task 11 is deferred to [078](078-mutation-approval-webauthn.md).
 
 Verification is feature-branch evidence; no local merge, push, publish or live database run occurred. Final UI logs retain non-failing localhost:3000/Happy DOM diagnostics and Node DEP0190; prior Plan 071 completion evidence already records localhost EventSource and DEP0190 output. Happy DOM teardown provenance remains unverified. The Windows gate is passing, not a claim of pristine console output. The runtime-capability implementation preceded its new tests; the actual sequence is recorded without claiming test-first RED.
+
+
+## Local integration — 2026-10-16
+
+Merged locally into `main` at `bb2fa5d` (parents `82b4a3e` and `8ebee2d`). The index/history conflicts preserve completed plans 063 and 076 and existing plan 077 for agent optimization evidence. Deferred WebAuthn is renumbered to [078](078-mutation-approval-webauthn.md), with references updated; no WebAuthn implementation was added. All 170 local Markdown links in the affected documentation were checked.
+
+Post-merge Windows `just verify -LogDirectory D:/temp/sqlharness-plan073-main-verify` exited 0 on `bb2fa5d`: six stages in 8m10s; UI 260 passed, Core/CLI 4006 passed/11 skipped, MCP 402 passed/4 skipped; build succeeded with zero warnings/errors. UI install was skipped (unchanged lockfile), formatting skipped (clean tree, zero changed C# files). Linux was not run. No push, installation, publication or live database execution. The feature worktree/branch are retained because their ignored scratch reports had deletion blocked by automatic approval review.
