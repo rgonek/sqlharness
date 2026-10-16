@@ -811,17 +811,18 @@ public sealed class BenchmarkSummaryTests
     {
         var baseline = new[]
         {
-            OriginOp(1, "Clustered Index Scan", "dbo.Accounts", false, false, false, statement: 0, nodePath: "0", cursor: 0),
+            OriginOp(7, "Clustered Index Scan", "dbo.Accounts", false, false, false, statement: 0, nodePath: "0", cursor: 0),
         };
         var candidate = new[]
         {
-            OriginOp(1, "Clustered Index Scan", "dbo.Accounts", true, true, false, statement: 1, nodePath: "0", cursor: 0, repetition: 5),
+            OriginOp(12, "Clustered Index Scan", "dbo.Accounts", true, true, false, statement: 1, nodePath: "0", cursor: 0, repetition: 5),
         };
 
         var summary = BenchmarkSummaryProjector.Project(MinimalCompare(baseline, candidate, ArtifactDir));
         var op = Assert.Single(summary.NoteworthyOperators);
 
         Assert.Equal("both", op.Side);
+        Assert.Null(op.NodeId);
         Assert.True(op.HasWarnings);
         Assert.True(op.HasSpill);
         Assert.False(op.Baseline!.HasWarnings);
@@ -836,6 +837,11 @@ public sealed class BenchmarkSummaryTests
         var baselineRef = Assert.Single(op.PlanRefs, href => href.Variant == "baseline");
         Assert.Equal(0, baselineRef.Statement);
         Assert.Equal(1, baselineRef.Repetition);
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(summary, summary.GetType(), WebJson));
+        var projected = Assert.Single(document.RootElement.GetProperty("noteworthyOperators").EnumerateArray());
+        Assert.False(projected.TryGetProperty("nodeId", out _));
+        Assert.Equal(2, projected.GetProperty("planRefs").GetArrayLength());
     }
 
     [Fact]
@@ -856,7 +862,7 @@ public sealed class BenchmarkSummaryTests
         var op = Assert.Single(summary.NoteworthyOperators);
 
         Assert.Equal("both", op.Side);
-        Assert.Equal(2, op.NodeId);
+        Assert.Null(op.NodeId);
         Assert.Equal("0/1", Assert.Single(op.PlanRefs!, href => href.Variant == "baseline").NodePath);
         Assert.Equal("0/1", Assert.Single(op.PlanRefs!, href => href.Variant == "candidate").NodePath);
         Assert.Equal(2, Assert.Single(op.PlanRefs!, href => href.Variant == "baseline").Cursor);

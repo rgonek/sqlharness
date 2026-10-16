@@ -26,7 +26,7 @@ public sealed record NoteworthyOperatorSideEvidence(bool HasWarnings, bool HasSp
 
 public sealed record NoteworthyOperatorSummary(
     string Side,
-    int NodeId,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? NodeId,
     string PhysicalOp,
     string? Object,
     bool HasWarnings,
@@ -411,7 +411,7 @@ public static class BenchmarkSummaryProjector
                 planRefs.Add(rightRef);
             selected.Add(new NoteworthyOperatorSummary(
                 side,
-                representative.NodeId,
+                side == "both" ? null : representative.NodeId,
                 representative.PhysicalOp,
                 representative.Object,
                 hasWarnings,
