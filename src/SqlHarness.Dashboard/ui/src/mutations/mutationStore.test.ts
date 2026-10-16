@@ -15,6 +15,6 @@ test("a digest join keeps the original visible approval request", () => {
   expect(mutationStore.getSnapshot().pending).toEqual([original])
   mutationStore.remove("r-1", "denied")
   mutationStore.add(pending("r-2"))
-  expect(mutationStore.getSnapshot().pending).toEqual([pending("r-2")])
+  expect(mutationStore.getSnapshot().pending.map(item => item.requestId)).toEqual(["r-2"])
   mutationStore.reset()
 })

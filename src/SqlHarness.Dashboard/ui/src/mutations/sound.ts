@@ -41,19 +41,24 @@ async function readPreferences(): Promise<SoundPreferences> {
   return memoryPreferences
 }
 
+/** Keeps the page-session fallback current and rejects if IndexedDB cannot persist the preference. */
 export async function saveSoundPreferences(preferences: SoundPreferences): Promise<void> {
   memoryPreferences = preferences
   preferencesLoaded = true
+  let db: IDBDatabase | undefined
   try {
-    const db = await openDatabase()
+    const database = await openDatabase()
+    db = database
     await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(STORE, "readwrite")
+      const transaction = database.transaction(STORE, "readwrite")
       transaction.objectStore(STORE).put(preferences, KEY)
       transaction.oncomplete = () => resolve()
-      transaction.onerror = () => reject(transaction.error)
+      transaction.onerror = () => reject(transaction.error ?? new Error("IndexedDB preference write failed"))
+      transaction.onabort = () => reject(transaction.error ?? new Error("IndexedDB preference write was aborted"))
     })
-    db.close()
-  } catch { /* Settings remain usable if a browser disables IndexedDB. */ }
+  } finally {
+    db?.close()
+  }
 }
 
 export async function getSoundPreferences(): Promise<SoundPreferences> { return readPreferences() }
