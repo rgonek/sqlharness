@@ -12,6 +12,17 @@
 
 **Spec:** [docs/superpowers/specs/2026-10-16-session-control-flow-safety-design.md](../docs/superpowers/specs/2026-10-16-session-control-flow-safety-design.md)
 
+## Review amendments (2026-10-16, cross-plan review) — these override task text below
+
+1. **Threading the read-only gate (Task 1).** `ClassifyProvenStatement` has no usage today and the mutation path reuses it. Thread a `bool readOnlyAdmissions` through `ClassifyStatements` → `ClassifyStatement` → `ClassifyProvenStatement` → `ClassifyNestedStatement`: true only for `SqlUsage.CompareSetup` and for `SqlUsage.Query` with `allowMutation == false`; `ClassifyMutationNestedStatement` and the mutation entry always pass `false`. The characterization test stays as planned.
+2. **Cursors.** Deny `GLOBAL` cursors (spec amended to LOCAL only); `EndLogicalBatchAsync` additionally deallocates any session cursors defensively. Fix the sample: `DECLARE @a int; DECLARE c CURSOR LOCAL FAST_FORWARD FOR SELECT a FROM dbo.T; OPEN c; FETCH NEXT FROM c INTO @a; CLOSE c; DEALLOCATE c`.
+3. **Cleanup placement (Task 2).** `EndLogicalBatchAsync` runs after `SET STATISTICS … OFF` and after the measured window's messages are consumed, so its messages never enter a measured window; it is a no-op for PostgreSQL.
+4. **Message numbers** come from 079 amendment 5 (`SessionMessage(int Number, string Text)`); fakes emit numbered messages.
+5. **Warnings storage (Task 4).** `has_warnings` is the plan-warning flag on `operation_metrics`, not operation warnings. Add `operations.warnings_json` in a new journal step (`VersionN`, next free; pin in `JournalContractTests`; follows 079's `FirstRetainedVersion` rule). Add MCP output tests that the new report warnings pass through 077's v3 projection.
+6. **Missing tests.** `batch reached its timeout` notice; `RETURN 1` at batch level denied; `SET DEADLOCK_PRIORITY @v` denied (variables not allowed for this option).
+7. **Toast.** Reuse the styling/mounting pattern of `ui/src/mutations/ApprovalToast.tsx`.
+8. **Per-case sequence shared with 083:** connect → materialize TVP/list sources (083) → setup → capture session state (this plan) → measured runs.
+
 ## Status and dependencies
 
 - TODO. Planning base `1737091`. Depends on 079 (message numbers). Independent of 080. Stage C becomes plan 082, stage D plan 083.

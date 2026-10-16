@@ -12,6 +12,16 @@
 
 **Spec:** [docs/superpowers/specs/2026-10-16-table-and-list-parameters-design.md](../docs/superpowers/specs/2026-10-16-table-and-list-parameters-design.md)
 
+## Review amendments (2026-10-16, cross-plan review) — these override task text below
+
+1. **Classifier must know TVP names (new Task 1b, before Task 3).** `SELECT … FROM @Ids` is denied today (`HasUnprovenTableVariableUse`). Pass declared TVP parameter names into `Classify` as proven **read-only** table sources (DML/OUTPUT INTO targeting them stays denied). `IN @Ids` is not valid T-SQL for ScriptDom: every path (query, measure, compare, watch, snapshot, setup, dry run) classifies the representative expansion; execution then uses the full expansion. Modify `src/SqlHarness.Core/SqlSafety.cs` (`Classify` signature and table-variable proof) with tests.
+2. **Cases with different lists/TVPs use parameter sets**, not matrix (matrix stays one scalar parameter). The "10 ids vs 5,000 ids" focus test uses two named sets.
+3. **Materialization on every accepting path.** Besides compare/measure runners, add it to the `query` path in `SqlHarnessModule`, `WatchRunner` and `SnapshotRunner`. Per-case order: connect → materialize → setup → (081) capture session state → measured runs.
+4. **Conditions fields.** `ConditionsParameter` gains `Kind`, `Count`, `Columns`, `ContentHash`, `SourceText` (storeSensitive only); bump `ConditionsModel.Version`. `ContentHash` is an HMAC computed by `ActivityJournal` with the journal salt (079 amendment 2) — never an unkeyed hash. The model is re-recorded via `RecordConditions` after per-case materialization so `rowsFrom` content is fingerprinted.
+5. **077 `ValueHash`.** For tvp/list kinds in measure sets, `ValueHash` is `null` (an unkeyed hash of their values would disclose low-entropy ids); scalar `ValueHash` is unchanged. Document it in the measure tool description.
+6. **Version identity** already hashes the operation text (unexpanded); keep `List_length_is_condition_not_version` as a regression test.
+7. **Tool catalog budget.** New schema members must keep 077's 32 KiB tool-catalog budget; add/adjust its pin test.
+
 ## Status and dependencies
 
 - TODO. Planning base `3be878e`. Depends on 077 (MCP schemas) and 079 (conditions, scripts). Independent of 080–082.

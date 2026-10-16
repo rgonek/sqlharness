@@ -12,6 +12,14 @@
 
 **Spec:** [docs/superpowers/specs/2026-10-16-statement-io-attribution-design.md](../docs/superpowers/specs/2026-10-16-statement-io-attribution-design.md)
 
+## Review amendments (2026-10-16, cross-plan review) — these override task text below
+
+1. **No per-run table; reconcile at build time (Task 2).** In `JournalBenchmarkBuilder`, per (variant, case): pick the median-total run (lower median), reconcile that run's plan counters against its `CompareRunArtifact.TableIo`, and journal only that run's statement objects and statuses. Drop `operation_runs.median_total_run`. Status of a statement = its status in the median-total run.
+2. **Journal version.** Declare a new step (`VersionN`, next free at execution; follows 079's `FirstRetainedVersion` rule) for `operation_statement_objects` and new `operation_statements` columns; pin in `JournalContractTests`.
+3. **Statement cap stays artifact-neutral (Task 1).** Do not change `StatementMetricsExtractor.MaximumStatements` (it shapes 077's artifact `statements` section). Add a journal-only extraction path with a byte bound. Put extractor tests in 077's `StatementMetricsTests.cs` (not `PlanMetricsExtractorTests`, which tests another class).
+4. **Statement text.** Text comes only from plan XML (`storeSensitive`); without it `StatementRow.Text` = `statement {ordinal} ({shortHash})`.
+5. **Readers and producers.** Task 3 also modifies `JournalReader` (load keys, objects, statuses into `CompareEvidence`). Task 4's measure view needs operation-detail fields: extend `GET /api/operations/{id}` with `statements` (same `StatementRow` shape, no comparison).
+
 ## Status and dependencies
 
 - TODO. Planning base `760f7d6`. Depends on 079, 080, 081.

@@ -12,6 +12,15 @@
 
 **Spec:** [docs/superpowers/specs/2026-10-16-optimization-dashboard-design.md](../docs/superpowers/specs/2026-10-16-optimization-dashboard-design.md)
 
+## Review amendments (2026-10-16, cross-plan review) — these override task text below
+
+1. **Operation-scoped endpoint (Task 3, used by Task 5).** Add `GET /api/operations/{id}/optimization?case=all&aggregate=sum` returning `OptimizationComparison` for that compare's own pair (works for unassigned compares). Register all new routes before the `/{**rest}` catch-all.
+2. **Case joins.** Use 079's `caseId` in `summary_json` and on `operation_metrics`/`operation_statements` to join per-case equivalence/regression with measurements.
+3. **Labels without stored values.** `ConditionsGroup.Label` falls back to `{n} cases` plus set names when present, else `{n} cases (values not stored)`.
+4. **PostgreSQL (spec call 5).** The comparer returns elapsed, CPU and buffer totals when present and sets `TableIoUnavailable`; add a test.
+5. **over-granted.** The ≥ 1 MB / < 25% rule already exists (`JournalReader.cs:27,43`); keep `Over_granted_requires_one_megabyte` as a characterization test (expected to pass immediately).
+6. **Plan 082 amends this plan's comparer** (verdict basis, statement rows); keep `OptimizationComparison` extensible (records with optional members).
+
 ## Status and dependencies
 
 - TODO. Planning base `4154fe7` (2026-10-16). Blocked until 077 and 079 are merged.

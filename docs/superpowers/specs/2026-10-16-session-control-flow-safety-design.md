@@ -36,7 +36,8 @@ admitted only when everything inside it is admitted):
 3. **Transactions**: `BEGIN TRAN[SACTION]`, `COMMIT`, `ROLLBACK`, `SAVE TRAN`. After every executed command on a
    read-only path (setup, warm-up, measured run, query, watch poll, snapshot), SQLHarness checks `@@TRANCOUNT` and
    rolls back if it is greater than zero, reporting a warning (`open transaction rolled back`).
-4. **Cursors** over admitted `SELECT`s: `DECLARE … CURSOR` (local or global), `OPEN`, `FETCH` (into admitted local
+4. **Cursors** over admitted `SELECT`s: `DECLARE … CURSOR LOCAL` only (GLOBAL cursors survive the batch and would
+   leak between repetitions and variants — denied after the cross-plan review), `OPEN`, `FETCH` (into admitted local
    variables), `CLOSE`, `DEALLOCATE`. `WHERE CURRENT OF` updates/deletes follow the normal DML rules (persistent
    targets stay denied).
 5. **Bug fix**: DML through a CTE whose base is a same-batch table variable or local `#temp`
