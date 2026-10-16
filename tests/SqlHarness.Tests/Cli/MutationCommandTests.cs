@@ -80,6 +80,24 @@ public sealed class MutationCommandTests : IDisposable
     }
 
     [Theory]
+    [InlineData("--max-output-bytes", "4095")]
+    [InlineData("--max-output-bytes", "1048577")]
+    [InlineData("--max-cell-chars", "-1")]
+    [InlineData("--max-cell-chars", "4097")]
+    public async Task Invalid_agent_output_limits_stop_before_module_preparation_or_broker_submit(string option, string value)
+    {
+        var broker = new RecordingBroker(new(MutationStatus.Success, null, QueryReport()));
+
+        var run = await Run(broker, "mutation", "ss", "--file", Sql("DELETE FROM dbo.T;"), "--output", "agent", option, value);
+
+        Assert.Equal((int)SqlHarnessExitCode.Safety, run.Exit);
+        Assert.Equal(0, run.ModuleCalls);
+        Assert.Equal(0, broker.SubmitCount);
+        using var json = JsonDocument.Parse(run.Output);
+        Assert.Equal("error", json.RootElement.GetProperty("status").GetString());
+    }
+
+    [Theory]
     [InlineData("--allow-mutation")]
     [InlineData("--confirm-database")]
     public async Task Query_rejects_removed_mutation_options_as_parse_errors(string removedOption)
@@ -123,7 +141,7 @@ public sealed class MutationCommandTests : IDisposable
             json.RootElement.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
-    private async Task<(int Exit, string Output, string Error)> Run(RecordingBroker broker, params string[] args)
+    private async Task<(int Exit, string Output, string Error, int ModuleCalls)> Run(RecordingBroker broker, params string[] args)
     {
         var output = new StringWriter();
         var error = new StringWriter();
@@ -134,7 +152,7 @@ public sealed class MutationCommandTests : IDisposable
             : new SqlHarnessOutcome(SqlHarnessExitCode.Safety, null, "unexpected operation"));
         var exit = await SqlHarnessCli.Create(module, output, mutationBroker: broker, mcpError: error)
             .RunAsync(args);
-        return (exit, output.ToString(), error.ToString());
+        return (exit, output.ToString(), error.ToString(), module.Calls);
     }
 
     private string Sql(string sql)
@@ -173,8 +191,16 @@ public sealed class MutationCommandTests : IDisposable
 
     private sealed class RecordingModule(Func<SqlHarnessOperation, SqlHarnessOutcome> execute) : ISqlHarnessModule
     {
+        public int Calls { get; private set; }
+
         public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default) =>
-            Task.FromResult(execute(operation));
+            Record(operation);
+
+        private Task<SqlHarnessOutcome> Record(SqlHarnessOperation operation)
+        {
+            Calls++;
+            return Task.FromResult(execute(operation));
+        }
     }
 
     private sealed class NoConnectionFactory : ISqlSessionFactory

@@ -169,18 +169,8 @@ public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, Out
     protected async Task<int> Dispatch(SqlHarnessOperation operation, OutputMode mode, CancellationToken ct, AgentOutputOptions? agentOptions = null)
     {
         agentOptions ??= output.AgentOptions;
-        if (mode == OutputMode.Agent && agentOptions.MaximumBytes is < 4096 or > 1048576)
-        {
-            renderer.RenderError(SqlHarnessExitCode.Safety, $"Agent output limits must be --max-output-bytes 4096..1048576 and --max-cell-chars 0..{AgentOutputLimits.MaximumCellCharacters}.", mode, output.Command, output.Capture, agentOptions: agentOptions);
-            output.Capture.Flush();
-            return (int)SqlHarnessExitCode.Safety;
-        }
-        if (mode == OutputMode.Agent && agentOptions.MaximumCellCharacters is < 0 or > AgentOutputLimits.MaximumCellCharacters)
-        {
-            renderer.RenderError(SqlHarnessExitCode.Safety, $"Cell limit must be 0..{AgentOutputLimits.MaximumCellCharacters} characters.", mode, output.Command, output.Capture, agentOptions: agentOptions);
-            output.Capture.Flush();
-            return (int)SqlHarnessExitCode.Safety;
-        }
+        if (ValidateAgentOutputOptions(mode, agentOptions) is int invalidOutputOptions)
+            return invalidOutputOptions;
         var mark = output.Begin();
         var outcome = await module.ExecuteAsync(operation, ct);
         if (mode == OutputMode.Agent)
@@ -189,6 +179,23 @@ public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, Out
             renderer.Render(outcome, mode, output.Capture, output.Command);
         output.Capture.Flush();
         return await output.CompleteAsync(outcome, mark, ct);
+    }
+
+    protected int? ValidateAgentOutputOptions(OutputMode mode, AgentOutputOptions options)
+    {
+        var message = mode != OutputMode.Agent
+            ? null
+            : options.MaximumBytes is < 4096 or > 1048576
+                ? $"Agent output limits must be --max-output-bytes 4096..1048576 and --max-cell-chars 0..{AgentOutputLimits.MaximumCellCharacters}."
+                : options.MaximumCellCharacters is < 0 or > AgentOutputLimits.MaximumCellCharacters
+                    ? $"Cell limit must be 0..{AgentOutputLimits.MaximumCellCharacters} characters."
+                    : null;
+        if (message is null)
+            return null;
+
+        renderer.RenderError(SqlHarnessExitCode.Safety, message, mode, output.Command, output.Capture, agentOptions: options);
+        output.Capture.Flush();
+        return (int)SqlHarnessExitCode.Safety;
     }
 
     /// <summary>

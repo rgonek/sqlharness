@@ -67,6 +67,9 @@ public sealed class MutationCommand(
                 SessionKey = sessionKey,
             };
             var mode = ResolveOutputMode(settings.Json, output: settings.Output);
+            var agentOptions = new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars);
+            if (ValidateAgentOutputOptions(mode, agentOptions) is int invalidOutputOptions)
+                return invalidOutputOptions;
             var mark = Output.Begin();
             var outcome = await Module.ExecuteAsync(operation, ct);
 
@@ -81,18 +84,15 @@ public sealed class MutationCommand(
                     OperationRef = outcome.OperationRef,
                     ParentOperationRef = outcome.ParentOperationRef,
                 };
-                Renderer.RenderMutation(terminal, brokerResult, mode, Output.Capture, "mutation",
-                    new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
+                Renderer.RenderMutation(terminal, brokerResult, mode, Output.Capture, "mutation", agentOptions);
                 Output.Capture.Flush();
                 return await Output.CompleteAsync(terminal, mark, ct);
             }
 
             if (outcome.Report is MutationBrokerResult preflightResult)
-                Renderer.RenderMutation(outcome, preflightResult, mode, Output.Capture, "mutation",
-                    new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
+                Renderer.RenderMutation(outcome, preflightResult, mode, Output.Capture, "mutation", agentOptions);
             else if (mode == OutputMode.Agent)
-                Renderer.RenderAgent(outcome, "mutation", Output.Capture,
-                    new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
+                Renderer.RenderAgent(outcome, "mutation", Output.Capture, agentOptions);
             else
                 Renderer.Render(outcome, mode, Output.Capture, "mutation");
             Output.Capture.Flush();
