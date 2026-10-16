@@ -11,9 +11,21 @@ internal abstract record BrokerEvent;
 internal sealed record MutationAdded(PendingMutationView View) : BrokerEvent;
 internal sealed record MutationRemoved(string RequestId, MutationState State) : BrokerEvent;
 
-internal sealed class MutationBroker(TimeProvider time, Func<MutationRequest, CancellationToken, Task<MutationBrokerResult>> execute)
+internal sealed class MutationBroker
 {
     private static readonly TimeSpan DenialCooldown = TimeSpan.FromSeconds(60);
+    private readonly TimeProvider time;
+    private readonly Func<MutationRequest, MutationExecutionContext, CancellationToken, Task<MutationBrokerResult>> execute;
+
+    internal MutationBroker(TimeProvider time, Func<MutationRequest, CancellationToken, Task<MutationBrokerResult>> execute)
+        : this(time, (request, _, ct) => execute(request, ct)) { }
+
+    internal MutationBroker(TimeProvider time, Func<MutationRequest, MutationExecutionContext, CancellationToken, Task<MutationBrokerResult>> execute)
+    {
+        this.time = time ?? throw new ArgumentNullException(nameof(time));
+        this.execute = execute ?? throw new ArgumentNullException(nameof(execute));
+    }
+
     private readonly object _gate = new();
     private readonly Dictionary<string, PendingRequest> _pendingById = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTimeOffset> _deniedDigests = new(StringComparer.Ordinal);
@@ -43,7 +55,7 @@ internal sealed class MutationBroker(TimeProvider time, Func<MutationRequest, Ca
             return Task.FromResult(Result(MutationStatus.Disabled));
 
         if (kind == MutationDecisionKind.Execute)
-            return StartImmediateExecution(request, ct);
+            return StartImmediateExecution(request, view.RequestId, ct);
 
         PendingRequest? created = null;
         PendingRequest? join = null;
@@ -130,7 +142,7 @@ internal sealed class MutationBroker(TimeProvider time, Func<MutationRequest, Ca
         {
             DisposePendingSignals(approved);
             if (busy) approved.Completion.TrySetResult(Result(MutationStatus.Busy));
-            else _ = RunExecutionAsync(approved);
+            else _ = RunExecutionAsync(approved.Request, approved.View.RequestId, MutationExecutionOrigin.Operator, approved);
         }
         return approved is not null && !busy;
     }
@@ -172,7 +184,7 @@ internal sealed class MutationBroker(TimeProvider time, Func<MutationRequest, Ca
         return denied is not null;
     }
 
-    private Task<MutationBrokerResult> StartImmediateExecution(MutationRequest request, CancellationToken ct)
+    private Task<MutationBrokerResult> StartImmediateExecution(MutationRequest request, string requestId, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         lock (_gate)
@@ -180,18 +192,19 @@ internal sealed class MutationBroker(TimeProvider time, Func<MutationRequest, Ca
             ct.ThrowIfCancellationRequested();
             if (!_executingProfiles.Add(request.Profile)) return Task.FromResult(Result(MutationStatus.Busy));
         }
-        return RunExecutionAsync(request, null);
+        return RunExecutionAsync(request, requestId, MutationExecutionOrigin.Automatic, null);
     }
 
-    private async Task<MutationBrokerResult> RunExecutionAsync(PendingRequest pending) =>
-        await RunExecutionAsync(pending.Request, pending).ConfigureAwait(false);
-
-    private async Task<MutationBrokerResult> RunExecutionAsync(MutationRequest request, PendingRequest? pending)
+    private async Task<MutationBrokerResult> RunExecutionAsync(
+        MutationRequest request,
+        string requestId,
+        MutationExecutionOrigin origin,
+        PendingRequest? pending)
     {
         MutationBrokerResult result;
         try
         {
-            result = await execute(request, CancellationToken.None).ConfigureAwait(false);
+            result = await execute(request, new MutationExecutionContext(requestId, origin), CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception exception)
         {

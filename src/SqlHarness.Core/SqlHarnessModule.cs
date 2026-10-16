@@ -242,7 +242,11 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             var failure = new SqlHarnessOutcome(
                 exitCode,
                 null,
-                SecretRedactor.Redact(exception, knownSecrets));
+                SecretRedactor.Redact(exception, knownSecrets))
+            {
+                MutationOutcomeUnknown = query.UsageOverride == SqlUsage.Mutation &&
+                    phase == OperationPhase.Sql && OperationFailureMapper.IsMutationOutcomeUnknown(exception),
+            };
             return Checked(query, WithReceipt(failure, rawFootprint));
         }
         finally

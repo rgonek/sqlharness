@@ -383,11 +383,12 @@ Rules:
 
 **Files:**
 - Create: `src/SqlHarness.Dashboard/Mutations/MutationExecutor.cs`
-- Test: `tests/SqlHarness.Tests/Dashboard/MutationExecutorTests.cs`
+- Modify: `src/SqlHarness.Dashboard/Mutations/MutationBroker.cs` (forward private request id and execution origin), `src/SqlHarness.Core/OperationFailureMapper.cs`, `src/SqlHarness.Core/Contracts.cs`, `src/SqlHarness.Core/SqlHarnessModule.cs` (mark sent-command transport failures)
+- Test: `tests/SqlHarness.Tests/Dashboard/MutationExecutorTests.cs`, `tests/SqlHarness.Tests/Dashboard/MutationBrokerTests.cs`, `tests/SqlHarness.Tests/Postgres/PostgresReadOnlyRuntimeTests.cs`
 
 **Interfaces:**
 - Consumes: Task 2 `SqlHarnessMutationOperation` and `ApprovedMutation`; Task 3 journal; Task 1 profile; Core `SqlHarnessModule`.
-- Produces: `internal sealed class MutationExecutor { Task<MutationBrokerResult> ExecuteAsync(MutationRequest request, CancellationToken ct); }`. It is the `execute` delegate for `MutationBroker`.
+- Produces: `internal sealed class MutationExecutor` with the two-argument compatibility method and a context overload. The broker carries an internal `MutationExecutionContext(RequestId, Origin)`; neither value is added to public `MutationRequest`.
 
 Execution order:
 
@@ -405,16 +406,16 @@ Execution order:
    - connection loss or timeout after the command was sent → `outcome_unknown`. Use the existing `OperationFailureMapper` categories, and add one if it does not distinguish "sent" from "not sent". A connect failure before sending is `failed`.
 6. Journal the terminal state. Never retry.
 
-- [ ] **Step 1: Write the failing tests** with a fake module/execution:
+- [x] **Step 1: Write the failing tests** with a fake module/execution:
   - the mode changed to `never` → `mutations_disabled` with no execution;
   - a grantee equals `USER_NAME()` → `principal_protected`;
   - a writer env var is missing → `failed` and the message contains the variable name;
   - the fake throws a connection-lost error after send → `outcome_unknown`, executed once;
   - success → journal `Succeeded`.
-- [ ] **Step 2: Run them to verify they fail.**
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run them to verify they pass.**
-- [ ] **Step 5: Commit**: `git commit -m "Execute approved mutations with the writer credential and protect the reader principal"`.
+- [x] **Step 2: Run them to verify they fail.** The initial focused run failed to compile because the executor and execution context were not present.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run them to verify they pass.** Focused executor, broker-context, and failure-mapper tests passed; full plan gates remain Task 13.
+- [x] **Step 5: Commit**: `git commit -m "Execute approved mutations with the writer credential and protect the reader principal"`.
 
 ### Task 6: Dashboard endpoints and client
 

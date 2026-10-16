@@ -377,6 +377,10 @@ public sealed record SqlHarnessOutcome(
     SqlHarnessEmissionReceipt? EmissionReceipt = null,
     SqlHarnessError? Error = null)
 {
+    /// <summary>True only for an approved mutation whose transport failed after entering command execution.</summary>
+    [JsonIgnore]
+    internal bool MutationOutcomeUnknown { get; init; }
+
     [JsonIgnore]
     public string? OperationRef { get; init; }
 

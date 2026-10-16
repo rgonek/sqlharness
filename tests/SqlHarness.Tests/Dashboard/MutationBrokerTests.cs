@@ -248,6 +248,29 @@ public sealed class MutationBrokerTests
         Assert.Empty(broker.Pending);
     }
 
+    [Theory]
+    [InlineData(MutationDecisionKind.Execute, "Automatic")]
+    [InlineData(MutationDecisionKind.AskOperator, "Operator")]
+    public async Task Execution_forwards_origin_and_exact_request_id(
+        MutationDecisionKind decision, string expectedOrigin)
+    {
+        var clock = new ManualTimeProvider(Start);
+        MutationExecutionContext? context = null;
+        var broker = new MutationBroker(clock, (_, execution, _) =>
+        {
+            context = execution;
+            return Task.FromResult(Success());
+        });
+        var request = Request();
+        var submit = broker.SubmitAsync(request, decision, Ttl, View("request-id-7", request), default);
+
+        if (decision == MutationDecisionKind.AskOperator)
+            Assert.True(broker.TryApprove("request-id-7", "click"));
+        Assert.Equal(MutationStatus.Success, (await submit).Status);
+
+        Assert.Equal(new MutationExecutionContext("request-id-7", Enum.Parse<MutationExecutionOrigin>(expectedOrigin)), context);
+    }
+
     [Fact]
     public async Task Cancellation_after_execution_starts_does_not_cancel_executor_or_result()
     {

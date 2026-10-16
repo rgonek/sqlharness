@@ -30,6 +30,15 @@ public sealed class PostgresReadOnlyRuntimeTests
     }
 
     [Fact]
+    public void Mutation_transport_loss_is_unknown_but_server_rejection_is_failed()
+    {
+        Assert.True(OperationFailureMapper.IsMutationOutcomeUnknown(new NpgsqlException("connection lost")));
+        Assert.True(OperationFailureMapper.IsMutationOutcomeUnknown(new TimeoutException("command timed out")));
+        Assert.False(OperationFailureMapper.IsMutationOutcomeUnknown(
+            new PostgresException("syntax error", "ERROR", "ERROR", "42601")));
+    }
+
+    [Fact]
     public void New_execution_commands_default_to_read_only_with_narrow_explicit_modes()
     {
         var safe = new SqlExecutionCommand("SELECT 1", [], 5);
