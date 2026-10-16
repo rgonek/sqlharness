@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 
 namespace SqlHarness.Core;
 
@@ -61,6 +60,20 @@ public sealed record MeasureParameterSetSummary(
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public BenchmarkMetricReport? MetricReport { get; init; }
+
+    public int Repetitions { get; init; }
+
+    public long MinimumElapsedMilliseconds { get; init; }
+
+    public long MaximumElapsedMilliseconds { get; init; }
+
+    public long MinimumCpuMilliseconds { get; init; }
+
+    public long MaximumCpuMilliseconds { get; init; }
+
+    public long MinimumLogicalReads { get; init; }
+
+    public long MaximumLogicalReads { get; init; }
 }
 
 public sealed record MeasureSetBenchmarkSummary(
@@ -76,7 +89,7 @@ public sealed record AgentMedianMetrics(decimal? CpuMilliseconds, decimal? Elaps
 /// <summary>Decision-oriented outcome for one completed matrix case.</summary>
 public sealed record AgentMatrixCase(
     int Index,
-    string ArtifactId,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ArtifactId,
     bool? Equivalent,
     string EquivalenceAvailability,
     AgentMedianMetrics Baseline,
@@ -162,18 +175,7 @@ public static class BenchmarkSummaryProjector
             report.Target,
             report.MeasuredOrderRule,
             report.PlanCacheWarning,
-            report.Sets.Select(set => new MeasureParameterSetSummary(
-                set.Name,
-                set.Parameters,
-                set.ValueHash,
-                set.ResultsStable,
-                set.Metrics.ElapsedTimeMilliseconds.Median,
-                set.Metrics.CpuTimeMilliseconds.Median,
-                set.Metrics.LogicalReads.Median,
-                SelectMeasureNoteworthy(set.Metrics.Operators))
-            {
-                MetricReport = set.Metrics.MetricReport,
-            }).ToArray(),
+            report.Sets.Select(ProjectSet).ToArray(),
             report.CrossSetSummary,
             report.ArtifactDirectory);
     }
@@ -216,7 +218,7 @@ public static class BenchmarkSummaryProjector
         var candidate = MedianMetrics(compare.Candidate);
         return new AgentMatrixCase(
             index,
-            artifactId ?? string.Empty,
+            artifactId,
             equivalent,
             availability,
             baseline,
@@ -239,10 +241,42 @@ public static class BenchmarkSummaryProjector
             projected.Equivalence, projected.NoteworthyOperators, projected.Regression));
     }
 
-    private static AgentMedianMetrics MedianMetrics(CompareVariantReport variant) => new(
-        variant.MetricReport?.CpuTimeAvailability == BenchmarkMetricReport.Unavailable ? null : variant.CpuTimeMilliseconds.Median,
-        variant.MetricReport?.ElapsedTimeAvailability == BenchmarkMetricReport.Unavailable ? null : variant.ElapsedTimeMilliseconds.Median,
-        variant.MetricReport?.LogicalReadsAvailability == BenchmarkMetricReport.Unavailable ? null : variant.LogicalReads.Median);
+    public static MeasureParameterSetSummary ProjectSet(MeasureParameterSetReport set) =>
+        ProjectSet(set, SelectMeasureNoteworthy(set.Metrics.Operators));
+
+    public static MeasureParameterSetSummary ProjectSet(
+        MeasureParameterSetReport set, IReadOnlyList<NoteworthyOperatorSummary> operators) =>
+        new(
+            set.Name,
+            set.Parameters,
+            set.ValueHash,
+            set.ResultsStable,
+            set.Metrics.ElapsedTimeMilliseconds.Median,
+            set.Metrics.CpuTimeMilliseconds.Median,
+            set.Metrics.LogicalReads.Median,
+            operators)
+        {
+            MetricReport = set.Metrics.MetricReport,
+            Repetitions = set.Repetitions,
+            MinimumElapsedMilliseconds = set.Metrics.ElapsedTimeMilliseconds.Min,
+            MaximumElapsedMilliseconds = set.Metrics.ElapsedTimeMilliseconds.Max,
+            MinimumCpuMilliseconds = set.Metrics.CpuTimeMilliseconds.Min,
+            MaximumCpuMilliseconds = set.Metrics.CpuTimeMilliseconds.Max,
+            MinimumLogicalReads = set.Metrics.LogicalReads.Min,
+            MaximumLogicalReads = set.Metrics.LogicalReads.Max,
+        };
+
+    private static AgentMedianMetrics MedianMetrics(CompareVariantReport variant)
+    {
+        var report = variant.MetricReport;
+        decimal? elapsed = report?.ElapsedTimeAvailability == BenchmarkMetricReport.Unavailable
+            ? null
+            : report?.ElapsedTimeMillisecondsExact?.Median ?? variant.ElapsedTimeMilliseconds.Median;
+        return new(
+            report?.CpuTimeAvailability == BenchmarkMetricReport.Unavailable ? null : variant.CpuTimeMilliseconds.Median,
+            elapsed,
+            report?.LogicalReadsAvailability == BenchmarkMetricReport.Unavailable ? null : variant.LogicalReads.Median);
+    }
 
     private static decimal? Delta(decimal? baseline, decimal? candidate) =>
         baseline is { } left && candidate is { } right ? right - left : null;
@@ -250,12 +284,7 @@ public static class BenchmarkSummaryProjector
     private static long? Delta(long? baseline, long? candidate) =>
         baseline is { } left && candidate is { } right ? right - left : null;
 
-    private static string? SafeArtifactId(string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path)) return null;
-        var id = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        return Regex.IsMatch(id, "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$", RegexOptions.CultureInvariant) ? id : null;
-    }
+    private static string? SafeArtifactId(string? path) => ArtifactIds.FromDirectory(path);
 
     private static BenchmarkVariantSummary ProjectVariant(CompareVariantReport variant) =>
         new(

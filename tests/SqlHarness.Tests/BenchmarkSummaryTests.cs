@@ -309,7 +309,7 @@ public sealed class BenchmarkSummaryTests
 
         Assert.Equal("not-requested", summary.Cases[2].EquivalenceAvailability);
         Assert.Null(summary.Cases[2].Equivalent);
-        Assert.Empty(summary.Cases[2].ArtifactId);
+        Assert.Null(summary.Cases[2].ArtifactId);
         Assert.Empty(summary.Details[2].Compare.NoteworthyOperators);
 
         Assert.DoesNotContain("\"operators\"", json, StringComparison.OrdinalIgnoreCase);
@@ -372,10 +372,16 @@ public sealed class BenchmarkSummaryTests
         Assert.Equal("order-rule", summary.MeasuredOrderRule);
         Assert.Equal("act-d", summary.Target.ActualDatabase);
         Assert.Equal(["small", "large"], summary.Sets.Select(set => set.Name).ToArray());
+        Assert.Equal(5, summary.Sets[0].Repetitions);
+        Assert.Equal(10, summary.Sets[0].MinimumElapsedMilliseconds);
         Assert.Equal(20, summary.Sets[0].MedianElapsedMilliseconds);
+        Assert.Equal(40, summary.Sets[0].MaximumElapsedMilliseconds);
         Assert.Equal(2, summary.Sets[0].MedianCpuMilliseconds);
         Assert.Equal(200, summary.Sets[0].MedianLogicalReads);
+        Assert.Equal(5, summary.Sets[1].Repetitions);
+        Assert.Equal(50, summary.Sets[1].MinimumElapsedMilliseconds);
         Assert.Equal(80, summary.Sets[1].MedianElapsedMilliseconds);
+        Assert.Equal(90, summary.Sets[1].MaximumElapsedMilliseconds);
         Assert.Equal("hash-small", summary.Sets[0].ValueHash);
         Assert.Equal([new MeasureParameterMetadata("@id", "int")], summary.Sets[0].Parameters);
         Assert.True(summary.Sets[0].ResultsStable);
@@ -451,6 +457,71 @@ public sealed class BenchmarkSummaryTests
         Assert.Contains("\"cpuTimeAvailability\": \"unavailable\"", json, StringComparison.Ordinal);
         Assert.DoesNotContain("\"elapsedTimeMillisecondsExact\": {\r\n      \"min\": 0,\r\n      \"median\": 0,\r\n      \"max\": 0", json, StringComparison.Ordinal);
         Assert.DoesNotContain("\"elapsedTimeMillisecondsExact\": {\n      \"min\": 0,\n      \"median\": 0,\n      \"max\": 0", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Artifact_id_round_trips_dots_and_ignores_deep_parent_paths()
+    {
+        var dotted = Path.Combine("C:", new string('p', 180), "deep", "root", "2026.10.16T000000000Z-host.example-ab12cd34ef");
+        var overlongLeaf = new string('a', 129);
+        var overlong = Path.Combine("C:", "artifacts", overlongLeaf);
+        var invalid = Path.Combine("C:", "artifacts", "-leading-dash");
+        var missing = (string?)null;
+
+        var dottedCase = BenchmarkSummaryProjector.ProjectCase(0, ArtifactIds.FromDirectory(dotted), MinimalCompare([], []), "1");
+        var overlongCase = BenchmarkSummaryProjector.ProjectCase(1, ArtifactIds.FromDirectory(overlong), MinimalCompare([], []), "2");
+        var invalidCase = BenchmarkSummaryProjector.ProjectCase(2, ArtifactIds.FromDirectory(invalid), MinimalCompare([], []), "3");
+        var missingCase = BenchmarkSummaryProjector.ProjectCase(3, ArtifactIds.FromDirectory(missing), MinimalCompare([], []), "4");
+
+        Assert.Equal("2026.10.16T000000000Z-host.example-ab12cd34ef", dottedCase.ArtifactId);
+        Assert.True(ArtifactIds.IsValid(dottedCase.ArtifactId));
+        Assert.Null(overlongCase.ArtifactId);
+        Assert.Null(invalidCase.ArtifactId);
+        Assert.Null(missingCase.ArtifactId);
+        Assert.True(ArtifactIds.IsValid(overlongLeaf[..128]));
+        Assert.False(ArtifactIds.IsValid(""));
+        Assert.Null(ArtifactIds.FromDirectory(overlong));
+    }
+
+    [Fact]
+    public void True_zero_metrics_stay_zero_and_unavailable_metrics_are_null()
+    {
+        var zero = new CompareVariantReport(
+            "baseline",
+            new CompareDistribution(0, 0, 0),
+            new CompareDistribution(0, 0, 0),
+            new CompareDistribution(0, 0, 0),
+            new Dictionary<string, long>(),
+            [],
+            [])
+        {
+            MetricReport = new BenchmarkMetricReport(
+                BenchmarkMetricReport.Measured, BenchmarkMetricReport.Measured, new FractionalMilliseconds(0, 0, 0),
+                true, null, null, BenchmarkMetricReport.Measured, null, null, null,
+                BenchmarkMetricReport.ResultStatement, BenchmarkMetricText.StatementRows, []),
+        };
+        var unavailable = zero with
+        {
+            Name = "candidate",
+            MetricReport = new BenchmarkMetricReport(
+                BenchmarkMetricReport.Unavailable, BenchmarkMetricReport.Measured, new FractionalMilliseconds(0.4m, 0.4m, 0.4m),
+                false, null, null, BenchmarkMetricReport.Unavailable, null, null, null,
+                BenchmarkMetricReport.ResultStatement, BenchmarkMetricText.StatementRows,
+                [BenchmarkMetricText.PostgresCpuUnavailable]),
+        };
+        var compare = new SqlHarnessCompareReport(
+            new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "profile"),
+            5, 10, true, zero, unavailable, null);
+        var matrixCase = BenchmarkSummaryProjector.ProjectCase(0, "cell-zero", compare);
+
+        Assert.Equal(0m, matrixCase.Baseline.CpuMilliseconds);
+        Assert.Equal(0m, matrixCase.Baseline.ElapsedMilliseconds);
+        Assert.Equal(0L, matrixCase.Baseline.LogicalReads);
+        Assert.Null(matrixCase.Candidate.CpuMilliseconds);
+        Assert.Equal(0.4m, matrixCase.Candidate.ElapsedMilliseconds);
+        Assert.Null(matrixCase.Candidate.LogicalReads);
+        Assert.Null(matrixCase.Delta.CpuMilliseconds);
+        Assert.Null(matrixCase.Delta.LogicalReads);
     }
 
     [Fact]

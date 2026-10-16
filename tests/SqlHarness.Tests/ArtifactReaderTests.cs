@@ -770,6 +770,38 @@ public class ArtifactReaderTests
         Assert.IsType<MeasureSetBenchmarkSummary>(ArtifactReader.ReadSection(temp.Path, setId, "summary"));
     }
 
+    [Fact]
+    public void Dotted_id_under_deep_parent_round_trips_with_owner_checks()
+    {
+        using var temp = new TempDirectory();
+        var root = Path.Combine(temp.Path, "deep", new string('p', 120), "artifacts");
+        Directory.CreateDirectory(root);
+        var id = "2026.10.16T000000000Z-host.example-ab12cd34ef";
+        var owner = new ArtifactOwner("profile", new Dictionary<string, string>(), "sqlserver", "sql-a", "AdventureWorks");
+        var report = CompareReport() with
+        {
+            Target = new SqlHarnessTargetIdentityReport("sql-a", "AdventureWorks", "sql-a", "AdventureWorks", "profile", Engine: "sqlserver"),
+            ArtifactDirectory = Path.Combine(root, id),
+        };
+        var directory = Path.Combine(root, id);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), JsonSerializer.Serialize(
+            ArtifactManifest.ForReport(report, owner), ArtifactDirectoryPublisher.JsonOptions));
+        File.WriteAllText(Path.Combine(directory, "report.json"), JsonSerializer.Serialize(report, ArtifactDirectoryPublisher.JsonOptions));
+
+        Assert.True(ArtifactIds.IsValid(id));
+        var summary = Assert.IsType<CompareBenchmarkSummary>(ArtifactReader.ReadSection(root, id, "summary", owner));
+        Assert.Equal(report.Baseline.ElapsedTimeMilliseconds, summary.Baseline.ElapsedTimeMilliseconds);
+        var foreign = Assert.Throws<ArtifactReadException>(() =>
+            ArtifactReader.ReadSection(root, id, "summary", owner with { Server = "sql-b" }));
+        Assert.Equal("The artifact is not available in the current scope.", foreign.Message);
+
+        var prefix = id[..8];
+        Assert.True(ArtifactIds.IsValid(prefix));
+        var clipped = Assert.Throws<ArtifactReadException>(() => ArtifactReader.ReadSection(root, prefix, "summary", owner));
+        Assert.Equal("Unknown artifact id.", clipped.Message);
+    }
+
     [Theory]
     [InlineData("does-not-exist")]
     [InlineData("..")]

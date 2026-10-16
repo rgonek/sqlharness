@@ -349,12 +349,12 @@ public sealed class AgentOptimizationWorkflowTests
     {
         if (!envelope.TryGetProperty("result", out var result) || result.ValueKind != JsonValueKind.Object)
             return null;
-        if (result.TryGetProperty("artifactDirectory", out var directory) && directory.ValueKind == JsonValueKind.String)
-            return Path.GetFileName(directory.GetString());
-        if (result.TryGetProperty("matrixArtifactId", out var matrix) && matrix.ValueKind == JsonValueKind.String)
-            return matrix.GetString();
         if (result.TryGetProperty("artifactId", out var id) && id.ValueKind == JsonValueKind.String)
             return id.GetString();
+        if (result.TryGetProperty("matrixArtifactId", out var matrix) && matrix.ValueKind == JsonValueKind.String)
+            return matrix.GetString();
+        if (result.TryGetProperty("artifactDirectory", out var directory) && directory.ValueKind == JsonValueKind.String)
+            return Path.GetFileName(directory.GetString());
         return null;
     }
 
@@ -426,11 +426,13 @@ public sealed class AgentOptimizationWorkflowTests
         var first = document.RootElement.GetProperty("calls")[0].GetProperty("text").GetString()!;
         using var envelope = JsonDocument.Parse(first);
         var result = envelope.RootElement.GetProperty("result");
-        var artifact = result.TryGetProperty("artifactDirectory", out var directory)
-            ? directory.GetString()
+        var artifact = result.TryGetProperty("artifactId", out var artifactId)
+            ? artifactId.GetString()
             : result.TryGetProperty("matrixArtifactId", out var matrixId)
                 ? matrixId.GetString()
-                : null;
+                : result.TryGetProperty("artifactDirectory", out var directory)
+                    ? directory.GetString()
+                    : null;
         Assert.False(string.IsNullOrWhiteSpace(artifact), first[..Math.Min(400, first.Length)]);
         Assert.DoesNotContain("\\", artifact, StringComparison.Ordinal);
         Assert.DoesNotContain(":", artifact, StringComparison.Ordinal);
@@ -438,11 +440,14 @@ public sealed class AgentOptimizationWorkflowTests
         {
             case WorkflowScenarios.UnavailableMetricsId:
                 Assert.Equal("[]", result.GetProperty("parameters").GetRawText());
+                Assert.Equal(0.8m, result.GetProperty("baseline").GetProperty("elapsedTimeMilliseconds").GetProperty("median").GetDecimal());
+                Assert.Equal(0.4m, result.GetProperty("candidate").GetProperty("elapsedTimeMilliseconds").GetProperty("median").GetDecimal());
+                Assert.Equal(JsonValueKind.Null, result.GetProperty("baseline").GetProperty("cpuTimeMilliseconds").ValueKind);
+                Assert.Equal(JsonValueKind.Null, result.GetProperty("baseline").GetProperty("logicalReads").ValueKind);
                 var regression = result.GetProperty("regression");
-                Assert.Equal(0.8m, regression.GetProperty("elapsed").GetProperty("baselineMedian").GetDecimal());
-                Assert.Equal(0.4m, regression.GetProperty("elapsed").GetProperty("candidateMedian").GetDecimal());
                 Assert.Equal("unavailable", regression.GetProperty("logicalReads").GetProperty("status").GetString());
                 Assert.Equal("unavailable", regression.GetProperty("cpu").GetProperty("status").GetString());
+                Assert.False(regression.GetProperty("elapsed").TryGetProperty("baselineMedian", out _));
                 break;
             case WorkflowScenarios.CollidingOperatorsId:
                 Assert.Equal("[]", result.GetProperty("parameters").GetRawText());

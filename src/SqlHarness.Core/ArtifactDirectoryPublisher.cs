@@ -68,7 +68,7 @@ internal sealed partial class ArtifactDirectoryPublisher
         string directory;
         do
         {
-            directory = Path.Combine(_root, $"{_utcNow():yyyyMMddTHHmmssfffZ}-{safeTarget}-{Guid.NewGuid():N}");
+            directory = Path.Combine(_root, ComposeLeaf(safeTarget));
         } while (Directory.Exists(directory));
 
         var staging = directory + ".staging-" + Guid.NewGuid().ToString("N");
@@ -107,6 +107,24 @@ internal sealed partial class ArtifactDirectoryPublisher
 
     internal static string SanitizePathSegment(string value) =>
         UnsafePathCharacter().Replace(value, "-").Trim('-');
+
+    private string ComposeLeaf(string target)
+    {
+        var prefix = $"{_utcNow():yyyyMMddTHHmmssfffZ}-";
+        var suffix = "-" + Guid.NewGuid().ToString("N");
+        var budget = ArtifactIds.MaxLength - prefix.Length - suffix.Length;
+        var segment = target;
+        if (budget < 1)
+            throw new IOException("Artifact storage is unavailable.");
+        if (segment.Length > budget)
+            segment = segment[..budget].Trim('-');
+        if (string.IsNullOrEmpty(segment))
+            segment = budget >= 6 ? "target" : "t";
+        var leaf = prefix + segment + suffix;
+        if (!ArtifactIds.IsValid(leaf))
+            throw new IOException("Artifact storage is unavailable.");
+        return leaf;
+    }
 
     private void Cleanup(string directory)
     {

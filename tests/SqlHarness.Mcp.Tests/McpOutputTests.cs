@@ -356,7 +356,14 @@ public sealed class McpOutputTests
             new CompareDistribution(10, 12, 15),
             new CompareDistribution(100, 110, 120),
             new Dictionary<string, CompareDistribution>(),
-            [BenchmarkMetricText.PostgresCpuUnavailable]);
+            [BenchmarkMetricText.PostgresCpuUnavailable])
+        {
+            MetricReport = new BenchmarkMetricReport(
+                BenchmarkMetricReport.Unavailable, BenchmarkMetricReport.Measured, null, true, null, null,
+                BenchmarkMetricReport.Measured, null, null, null,
+                BenchmarkMetricReport.ResultStatement, BenchmarkMetricText.StatementRows,
+                [BenchmarkMetricText.PostgresCpuUnavailable]),
+        };
         var summary = new MeasureBenchmarkSummary(
             Target, 5, true,
             new BenchmarkClassificationReport("none", "read-only"), [],
@@ -370,11 +377,217 @@ public sealed class McpOutputTests
         AssertValidEnvelope(envelope);
         Assert.Equal("success", envelope.GetProperty("status").GetString());
         var projected = envelope.GetProperty("result").GetProperty("query");
-        Assert.Equal(0, projected.GetProperty("cpuTimeMilliseconds").GetProperty("median").GetInt64());
+        Assert.Equal(JsonValueKind.Null, projected.GetProperty("cpuTimeMilliseconds").ValueKind);
+        Assert.Equal("unavailable", projected.GetProperty("cpuTimeAvailability").GetString());
         Assert.Contains(
             BenchmarkMetricText.PostgresCpuUnavailable,
             projected.GetProperty("warnings").EnumerateArray().Select(item => item.GetString()!),
             StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public void Mcp_compare_emits_artifact_id_resolved_target_and_truthful_metrics()
+    {
+        var owner = new ArtifactOwner("profile", new Dictionary<string, string>(), "sqlserver", "sql-a", "AdventureWorks");
+        var home = Path.Combine(Path.GetTempPath(), "sqlharness-mcp-id-" + Guid.NewGuid().ToString("N"));
+        var parent = Path.Combine(home, "deep", new string('p', 90), "artifacts");
+        Directory.CreateDirectory(parent);
+        try
+        {
+            var id = "2026.10.16T000000000Z-host.example-ab12cd34ef";
+            var directory = Path.Combine(parent, id);
+            Directory.CreateDirectory(directory);
+            var zeroCpu = new CompareDistribution(0, 0, 0);
+            var exactElapsed = new FractionalMilliseconds(0.3m, 0.4m, 0.5m);
+            var baseline = new CompareVariantReport(
+                "baseline",
+                zeroCpu,
+                new CompareDistribution(0, 0, 1),
+                new CompareDistribution(0, 0, 0),
+                new Dictionary<string, long>(),
+                [],
+                [])
+            {
+                MetricReport = new BenchmarkMetricReport(
+                    BenchmarkMetricReport.Measured, BenchmarkMetricReport.Measured, exactElapsed, false,
+                    null, exactElapsed, BenchmarkMetricReport.Measured, null, null, null,
+                    BenchmarkMetricReport.ResultStatement, BenchmarkMetricText.StatementRows, []),
+            };
+            var candidate = baseline with
+            {
+                Name = "candidate",
+                CpuTimeMilliseconds = new CompareDistribution(0, 0, 0),
+                LogicalReads = new CompareDistribution(0, 0, 0),
+                MetricReport = new BenchmarkMetricReport(
+                    BenchmarkMetricReport.Unavailable, BenchmarkMetricReport.Measured,
+                    new FractionalMilliseconds(0.1m, 0.2m, 0.3m), false, null, null,
+                    BenchmarkMetricReport.Unavailable, BenchmarkMetricText.PostgresLogicalReadsSource,
+                    BenchmarkMetricText.PostgresRelationBufferSource, false,
+                    BenchmarkMetricReport.ResultStatement, BenchmarkMetricText.StatementRows,
+                    [BenchmarkMetricText.PostgresCpuUnavailable]),
+            };
+            var report = new SqlHarnessCompareReport(
+                new SqlHarnessTargetIdentityReport("requested-sql", "AdventureWorks", "sql-a", "AdventureWorks", "profile",
+                    Engine: "sqlserver", TransportPolicy: "strict"),
+                5, 10, true, baseline, candidate, directory)
+            {
+                Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Ordered, true, 0, 0, 0),
+                Classification = new CompareClassificationReport("none", "read-only", "read-only"),
+                Regression = new RegressionReport(
+                    "pass", [], 2,
+                    new RegressionDiagnostic("not-regressed", 0.4m, 0.2m, -0.2m, -50m),
+                    new RegressionDiagnostic("unavailable", null, null, null, null),
+                    new RegressionDiagnostic("unavailable", null, null, null, null)),
+            };
+            File.WriteAllText(Path.Combine(directory, "manifest.json"), JsonSerializer.Serialize(
+                ArtifactManifest.ForReport(report, owner), new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+            File.WriteAllText(Path.Combine(directory, "report.json"), JsonSerializer.Serialize(
+                report, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
+            var result = McpResultAdapter.Adapt(
+                new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null),
+                "sqlharness_compare",
+                new McpResultBudget(65536, 8));
+            var envelope = EnvelopeOf(result);
+            AssertV3Shape(envelope);
+            var projected = envelope.GetProperty("result");
+            Assert.Equal(id, projected.GetProperty("artifactId").GetString());
+            Assert.False(projected.TryGetProperty("artifactDirectory", out _));
+            Assert.DoesNotContain(parent, envelope.GetRawText(), StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("sql-a", projected.GetProperty("target").GetProperty("server").GetString());
+            Assert.Equal("AdventureWorks", projected.GetProperty("target").GetProperty("database").GetString());
+            Assert.Equal("sqlserver", projected.GetProperty("target").GetProperty("engine").GetString());
+            Assert.Equal("requested-sql", projected.GetProperty("target").GetProperty("requestedServer").GetString());
+            Assert.False(projected.GetProperty("target").TryGetProperty("requestedDatabase", out _));
+            Assert.Equal("strict", projected.GetProperty("target").GetProperty("transportPolicy").GetString());
+            Assert.False(projected.GetProperty("target").TryGetProperty("mode", out _));
+            Assert.False(projected.GetProperty("target").TryGetProperty("actualServer", out _));
+
+            var baselineMetrics = projected.GetProperty("baseline");
+            Assert.Equal(0, baselineMetrics.GetProperty("cpuTimeMilliseconds").GetProperty("median").GetDecimal());
+            Assert.Equal(0.4m, baselineMetrics.GetProperty("elapsedTimeMilliseconds").GetProperty("median").GetDecimal());
+            Assert.Equal(0.3m, baselineMetrics.GetProperty("elapsedTimeMilliseconds").GetProperty("min").GetDecimal());
+            Assert.Equal(0, baselineMetrics.GetProperty("logicalReads").GetProperty("median").GetDecimal());
+            Assert.False(baselineMetrics.TryGetProperty("elapsedTimeMillisecondsExact", out _));
+            Assert.False(baselineMetrics.TryGetProperty("metricReport", out _));
+            Assert.Equal(JsonValueKind.Null, projected.GetProperty("candidate").GetProperty("cpuTimeMilliseconds").ValueKind);
+            Assert.Equal(JsonValueKind.Null, projected.GetProperty("candidate").GetProperty("logicalReads").ValueKind);
+            Assert.Equal("unavailable", projected.GetProperty("candidate").GetProperty("cpuTimeAvailability").GetString());
+            Assert.False(projected.GetProperty("candidate").GetProperty("relationBuffersAreAdditive").GetBoolean());
+            var regression = projected.GetProperty("regression");
+            Assert.Equal("pass", regression.GetProperty("verdict").GetString());
+            Assert.Equal(-0.2m, regression.GetProperty("elapsed").GetProperty("delta").GetDecimal());
+            Assert.False(regression.GetProperty("elapsed").TryGetProperty("baselineMedian", out _));
+            Assert.False(regression.GetProperty("elapsed").TryGetProperty("candidateMedian", out _));
+
+            var section = Assert.IsType<ArtifactMetricsSection>(ArtifactReader.ReadSection(parent, id, "metrics", owner));
+            Assert.Equal(id, section.ArtifactId);
+            Assert.Throws<ArtifactReadException>(() =>
+                ArtifactReader.ReadSection(parent, id, "metrics", owner with { Server = "sql-b" }));
+        }
+        finally
+        {
+            Directory.Delete(home, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Mcp_omits_unusable_artifact_id_and_does_not_clip_a_valid_id()
+    {
+        var missing = EnvelopeOf(McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, BuildCompareReport("m"), null),
+            "sqlharness_compare"));
+        Assert.False(missing.GetProperty("result").TryGetProperty("artifactId", out _));
+        Assert.False(missing.GetProperty("result").TryGetProperty("artifactDirectory", out _));
+
+        var invalid = EnvelopeOf(McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, BuildCompareReport("m", @"C:\artifacts\-leading-dash"), null),
+            "sqlharness_compare"));
+        Assert.False(invalid.GetProperty("result").TryGetProperty("artifactId", out _));
+
+        var overlongLeaf = new string('a', 129);
+        var overlong = EnvelopeOf(McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, BuildCompareReport("m", Path.Combine(@"C:\artifacts", overlongLeaf)), null),
+            "sqlharness_compare",
+            new McpResultBudget(65536, 8)));
+        Assert.False(overlong.GetProperty("result").TryGetProperty("artifactId", out _));
+        Assert.DoesNotContain(overlongLeaf[..8], overlong.GetRawText(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Mcp_resolved_target_distinguishes_same_database_on_different_servers()
+    {
+        var left = EnvelopeOf(McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, BuildCompareReport("m") with
+            {
+                Target = new SqlHarnessTargetIdentityReport("sql-a", "AdventureWorks", "sql-a", "AdventureWorks", "profile", Engine: "sqlserver"),
+            }, null),
+            "sqlharness_compare"));
+        var right = EnvelopeOf(McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, BuildCompareReport("m") with
+            {
+                Target = new SqlHarnessTargetIdentityReport("sql-b", "AdventureWorks", "sql-b", "AdventureWorks", "profile", Engine: "sqlserver"),
+            }, null),
+            "sqlharness_compare"));
+
+        Assert.Equal("AdventureWorks", left.GetProperty("result").GetProperty("target").GetProperty("database").GetString());
+        Assert.Equal("AdventureWorks", right.GetProperty("result").GetProperty("target").GetProperty("database").GetString());
+        Assert.Equal("sql-a", left.GetProperty("result").GetProperty("target").GetProperty("server").GetString());
+        Assert.Equal("sql-b", right.GetProperty("result").GetProperty("target").GetProperty("server").GetString());
+        Assert.False(left.GetProperty("result").GetProperty("target").TryGetProperty("requestedServer", out _));
+    }
+
+    [Fact]
+    public void Mcp_measure_set_keeps_repetitions_elapsed_range_and_cross_set_extrema()
+    {
+        var sets = Enumerable.Range(0, 20).Select(i => new MeasureParameterSetReport(
+            $"set-{i}-" + new string('n', 80),
+            [new MeasureParameterMetadata("@id", "int")],
+            $"hash-{i}",
+            i + 2,
+            true,
+            null,
+            new CompareVariantReport(
+                $"set-{i}",
+                new CompareDistribution(i, i + 1, i + 2),
+                new CompareDistribution(10 * (i + 1), 20 * (i + 1), 40 * (i + 1)),
+                new CompareDistribution(1, 2, 3),
+                new Dictionary<string, long>(),
+                [],
+                []),
+            ["plan-hash-should-stay-out"])).ToArray();
+        var report = new SqlHarnessMeasureSetReport(
+            new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "profile", Engine: "sqlserver"),
+            5, 20, 1, sets.Select(set => set.Name).ToArray(), "order-rule", "cache-warning",
+            sets,
+            new MeasureCrossSetSummary("set-0-" + new string('n', 80), 20, "set-19-" + new string('n', 80), 400, "set-0-" + new string('n', 80), 1, "set-19-" + new string('n', 80), 20, "set-0-" + new string('n', 80), 2, "set-19-" + new string('n', 80), 2)
+            {
+                CpuTimeAvailability = BenchmarkMetricReport.Measured,
+                ElapsedTimeAvailability = BenchmarkMetricReport.Measured,
+                LogicalReadsAvailability = BenchmarkMetricReport.Measured,
+            },
+            @"C:\artifacts\sets\20260101T000000000Z-sets-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null),
+            "sqlharness_measure",
+            new McpResultBudget(4096, 32));
+        var envelope = EnvelopeOf(result);
+        AssertV3Shape(envelope);
+        var projected = envelope.GetProperty("result");
+        Assert.Equal("20260101T000000000Z-sets-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", projected.GetProperty("artifactId").GetString());
+        Assert.False(projected.TryGetProperty("artifactDirectory", out _));
+        Assert.Equal("set-0-" + new string('n', 80), projected.GetProperty("crossSetSummary").GetProperty("minimumMedianElapsedSet").GetString());
+        Assert.Equal("set-19-" + new string('n', 80), projected.GetProperty("crossSetSummary").GetProperty("maximumMedianElapsedSet").GetString());
+        Assert.True(projected.GetProperty("sets").GetArrayLength() < 20, envelope.GetRawText());
+        var first = projected.GetProperty("sets")[0];
+        Assert.Equal(2, first.GetProperty("repetitions").GetInt32());
+        Assert.Equal(10, first.GetProperty("elapsedTimeMilliseconds").GetProperty("min").GetInt64());
+        Assert.Equal(20, first.GetProperty("elapsedTimeMilliseconds").GetProperty("median").GetInt64());
+        Assert.Equal(40, first.GetProperty("elapsedTimeMilliseconds").GetProperty("max").GetInt64());
+        Assert.False(first.TryGetProperty("valueHash", out _));
+        Assert.DoesNotContain("plan-hash-should-stay-out", envelope.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain("hash-0", envelope.GetRawText(), StringComparison.Ordinal);
     }
 
     [Fact]

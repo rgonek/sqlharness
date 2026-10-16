@@ -9,6 +9,29 @@ using JournalOperationPhase = SqlHarness.Core.Journal.OperationPhase;
 
 namespace SqlHarness.Core;
 
+/// <summary>
+/// Opaque benchmark artifact directory names accepted by the reader, writer and
+/// projector. An unusable name is unavailable evidence; it is never clipped into
+/// a different valid id.
+/// </summary>
+public static partial class ArtifactIds
+{
+    public const int MaxLength = 128;
+
+    public static bool IsValid(string? id) =>
+        !string.IsNullOrWhiteSpace(id) && id.Length <= MaxLength && Pattern().IsMatch(id);
+
+    public static string? FromDirectory(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        var id = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        return IsValid(id) ? id : null;
+    }
+
+    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", RegexOptions.CultureInvariant)]
+    private static partial Regex Pattern();
+}
+
 public sealed record SqlHarnessTargetIdentityReport(
     string RequestedServer, string RequestedDatabase, string ActualServer, string ActualDatabase, string Mode,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Engine = null,
@@ -409,7 +432,7 @@ internal sealed partial class CompareArtifactWriter : ICompareArtifactWriter
             var index = new
             {
                 cases = orderedCells.Select((cell, position) => BenchmarkSummaryProjector.ProjectCase(
-                    cell.Index, Path.GetFileName(directories[position]), cell.Compare, cell.ParameterValue,
+                    cell.Index, ArtifactIds.FromDirectory(directories[position]), cell.Compare, cell.ParameterValue,
                     string.IsNullOrEmpty(cell.SetName) ? null : cell.SetName)).ToArray(),
             };
 

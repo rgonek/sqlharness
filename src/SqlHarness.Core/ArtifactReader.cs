@@ -1,7 +1,6 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 
 namespace SqlHarness.Core;
 
@@ -142,7 +141,7 @@ public sealed class ArtifactReadException(string message, SqlHarnessExitCode exi
 /// Opens no connection and reads only bounded report, index, and distilled
 /// plan JSON files; it never reads raw plan XML, queries.jsonl, or source SQL.
 /// </summary>
-public static partial class ArtifactReader
+public static class ArtifactReader
 {
     public const int CurrentManifestVersion = 2;
 
@@ -264,7 +263,7 @@ public static partial class ArtifactReader
                     || !item.TryGetProperty("artifactId", out var id)
                     || id.ValueKind != JsonValueKind.String
                     || id.GetString() is not { } artifactCellId
-                    || !ArtifactIdPattern().IsMatch(artifactCellId))
+                    || !ArtifactIds.IsValid(artifactCellId))
                     throw new ArtifactReadException("Artifact matrix index is invalid.", SqlHarnessExitCode.Safety);
                 var matrixCase = hasLegacyCells
                     ? new AgentMatrixCase(cellIndex, artifactCellId, null, "unavailable",
@@ -295,8 +294,7 @@ public static partial class ArtifactReader
 
     private static string ResolveDirectory(string root, string artifactId)
     {
-        if (string.IsNullOrWhiteSpace(artifactId) || artifactId.Length > 128
-            || !ArtifactIdPattern().IsMatch(artifactId))
+        if (!ArtifactIds.IsValid(artifactId))
             throw new ArtifactReadException("Unknown artifact id.", SqlHarnessExitCode.Safety);
 
         string rootFull;
@@ -857,7 +855,4 @@ public static partial class ArtifactReader
 
     internal static bool IsEscapeLink(string? linkTarget, FileAttributes attributes) =>
         linkTarget is not null || (attributes & FileAttributes.ReparsePoint) != 0;
-
-    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", RegexOptions.CultureInvariant)]
-    private static partial Regex ArtifactIdPattern();
 }

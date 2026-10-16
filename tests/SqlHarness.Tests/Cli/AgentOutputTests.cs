@@ -64,6 +64,10 @@ public sealed class AgentOutputTests
         Assert.Equal(0, compareJson.RootElement.GetProperty("exitCode").GetInt32());
         Assert.Equal(1, compareJson.RootElement.GetProperty("result").GetProperty("equivalence").GetProperty("mode").GetInt32());
         Assert.Equal(JsonValueKind.Null, compareJson.RootElement.GetProperty("error").ValueKind);
+        Assert.Equal("/artifacts/cell", compareJson.RootElement.GetProperty("result").GetProperty("artifactDirectory").GetString());
+        Assert.False(compareJson.RootElement.GetProperty("result").TryGetProperty("artifactId", out _));
+        Assert.Equal("server", compareJson.RootElement.GetProperty("result").GetProperty("target").GetProperty("actualServer").GetString());
+        Assert.Equal(5, compareJson.RootElement.GetProperty("result").GetProperty("baseline").GetProperty("elapsedTimeMilliseconds").GetProperty("median").GetInt64());
     }
 
     [Fact]

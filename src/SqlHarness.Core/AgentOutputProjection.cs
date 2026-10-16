@@ -176,19 +176,25 @@ public static class AgentOutputProjection
                         return new AgentMutationResult(mutation.Status, message, projected);
                     }
                 case SqlHarnessMeasureSetReport setReport:
-                    var selectedSets = Take(setReport.Sets).Select(set => new MeasureParameterSetSummary(
-                        Clip(set.Name)!, set.Parameters, set.ValueHash, set.ResultsStable,
-                        set.Metrics.ElapsedTimeMilliseconds.Median, set.Metrics.CpuTimeMilliseconds.Median,
-                        set.Metrics.LogicalReads.Median,
-                        ProjectSetOperators(set.Metrics.Operators)
-                            .Select(op => new NoteworthyOperatorSummary("query", op.NodeId, Clip(op.PhysicalOp)!, Clip(op.Object), op.HasWarnings, op.HasSpill, op.HasImplicitConversion)).ToArray())
+                    var selectedSets = Take(setReport.Sets).Select(set =>
                     {
-                        MetricReport = set.Metrics.MetricReport,
+                        var projected = BenchmarkSummaryProjector.ProjectSet(
+                            set,
+                            ProjectSetOperators(set.Metrics.Operators)
+                                .Select(op => new NoteworthyOperatorSummary("query", op.NodeId, Clip(op.PhysicalOp)!, Clip(op.Object), op.HasWarnings, op.HasSpill, op.HasImplicitConversion)).ToArray());
+                        return projected with { Name = Clip(projected.Name)! };
                     }).ToArray();
                     var planCacheWarning = Clip(setReport.PlanCacheWarning)!;
-                    var artifactDirectory = Clip(setReport.ArtifactDirectory);
+                    var measureSetDirectory = profile == AgentProjectionProfile.Mcp
+                        ? setReport.ArtifactDirectory
+                        : Clip(setReport.ArtifactDirectory);
                     omissions += clippedItems;
-                    return new MeasureSetBenchmarkSummary(setReport.Target, setReport.MeasuredOrderRule, planCacheWarning, selectedSets, setReport.CrossSetSummary, artifactDirectory);
+                    var measureSetSummary = new MeasureSetBenchmarkSummary(
+                        setReport.Target, setReport.MeasuredOrderRule, planCacheWarning, selectedSets,
+                        setReport.CrossSetSummary, measureSetDirectory);
+                    return profile == AgentProjectionProfile.Mcp
+                        ? AgentBenchmarkProjection.MeasureSet(measureSetSummary)
+                        : measureSetSummary;
                 case SqlHarnessCompareMatrixReport matrix:
                     var shared = BenchmarkSummaryProjector.Project(matrix);
                     var orderedMatrixCells = matrix.Cells.OrderBy(cell => cell.Index).ToArray();
@@ -238,7 +244,7 @@ public static class AgentOutputProjection
                     foreach (var cell in orderedMatrixCells.Take(cases.Count).Take(detailLimit))
                     {
                         var projected = Project(BenchmarkSummaryProjector.Project(cell.Compare), maximumCellCharacters, detailLimit,
-                            out var cellOmitted, maximumBytes, profile);
+                            out var cellOmitted, maximumBytes, AgentProjectionProfile.Cli);
                         nestedOmitted += cellOmitted;
                         var summary = (CompareBenchmarkSummary)projected!;
                         selectedDetails.Add(new CompareMatrixCellDetail(cell.Index, new CompareMatrixCellDetailContent(
@@ -246,7 +252,7 @@ public static class AgentOutputProjection
                     }
                     var omittedDetails = orderedMatrixCells.Length - selectedDetails.Count;
                     omissions += omittedCases + omittedDetails + nestedOmitted + clippedItems;
-                    return inventoryShell with
+                    var matrixSummary = inventoryShell with
                     {
                         Cases = cases,
                         Details = selectedDetails,
@@ -254,6 +260,9 @@ public static class AgentOutputProjection
                         OmittedDetailCount = omittedDetails,
                         Continuation = omittedCases > 0 && matrixArtifactId is not null ? cases.Count : null,
                     };
+                    return profile == AgentProjectionProfile.Mcp
+                        ? AgentBenchmarkProjection.Matrix(matrixSummary)
+                        : matrixSummary;
                 case SqlHarnessCompareReport compare:
                     {
                         var nestedProjection = Project(BenchmarkSummaryProjector.Project(compare), maximumCellCharacters, detailLimit, out var compareSummaryOmitted, maximumBytes, profile);
@@ -272,19 +281,23 @@ public static class AgentOutputProjection
                         Baseline = ClipVariant(summary.Baseline),
                         Candidate = ClipVariant(summary.Candidate),
                         NoteworthyOperators = Take(summary.NoteworthyOperators.Take(10).ToArray()).Select(op => op with { PhysicalOp = Clip(op.PhysicalOp)!, Object = Clip(op.Object) }).ToArray(),
-                        ArtifactDirectory = Clip(summary.ArtifactDirectory),
+                        ArtifactDirectory = profile == AgentProjectionProfile.Mcp ? summary.ArtifactDirectory : Clip(summary.ArtifactDirectory),
                     };
                     omissions += clippedItems;
-                    return compareProjection;
+                    return profile == AgentProjectionProfile.Mcp
+                        ? AgentBenchmarkProjection.Compare(compareProjection)
+                        : compareProjection;
                 case MeasureBenchmarkSummary summary:
                     var measureProjection = summary with
                     {
                         Query = ClipVariant(summary.Query),
                         NoteworthyOperators = Take(summary.NoteworthyOperators.Take(10).ToArray()).Select(op => op with { PhysicalOp = Clip(op.PhysicalOp)!, Object = Clip(op.Object) }).ToArray(),
-                        ArtifactDirectory = Clip(summary.ArtifactDirectory),
+                        ArtifactDirectory = profile == AgentProjectionProfile.Mcp ? summary.ArtifactDirectory : Clip(summary.ArtifactDirectory),
                     };
                     omissions += clippedItems;
-                    return measureProjection;
+                    return profile == AgentProjectionProfile.Mcp
+                        ? AgentBenchmarkProjection.Measure(measureProjection)
+                        : measureProjection;
                 case DistilledPlan plan:
                     var nodeCostEstimate = Math.Max(1024L, (long)Math.Max(1, maximumCellCharacters) * 36);
                     var planProjection = ProjectPlan(plan, detailLimit, Clip, Take, Math.Max(1, (int)(maximumBytes / nodeCostEstimate)));
@@ -928,13 +941,4 @@ public static class AgentOutputProjection
 
     }
 
-    private static string? SafeArtifactId(string? directory)
-    {
-        var id = Path.GetFileName(directory);
-        if (string.IsNullOrEmpty(id) || id.Length > 128 || !char.IsAsciiLetterOrDigit(id[0]))
-            return null;
-        return id.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-')
-            ? id
-            : null;
-    }
 }
