@@ -16,6 +16,7 @@
 
 ## Status
 
+- Integrated locally into `main` at `6fd982ca762ada4f2a4d6a42a720eaa6b4c3d674` on 2026-10-16, including final-review fix `904b04d` (complete retained-history version inventory and duplicate-label hash suffixes). Luna xhigh task/integration reviews and Sol low whole-branch/scoped re-review approved. Post-integration Windows `just verify` on that exact revision exited 0: six stages in 3m00s; UI 238 passed; Core 3,839 passed/11 skipped; MCP 386 passed/4 skipped; build passed; format skipped on the clean tree (26 changed C# files passed before the merge commit). No `FAILED` markers in stage logs. Full UI runs emit non-failing localhost:3000 EventSource errors and Node DEP0190; isolated affected page suites pass. Linux omitted per current policy. No push. Earlier feature-only evidence follows.
 - DONE on branch `plan-071`; implementation range `47a303d..218f39e` after Plan 062. `just verify` passed all six stages on `218f39e`; UI check passed 231 tests and build emitted separate main/editor/worker assets (1,329.06/2,722.79/303.93 kB). Synthetic browser fixture passed 18/18 checks, including same-origin worker success and zero page, console, or CSP errors. Linux gate omitted per `docs/agents/verification.md`. Monaco remains behind the provider-neutral contract; its diff widget uses explicit API lifecycle ordering. See [Plan 071 history](history.md).
 - Priority P2. Effort M–L. Risk LOW–MEDIUM (new frontend dependency in the embedded bundle; CSP; clipboard).
 
