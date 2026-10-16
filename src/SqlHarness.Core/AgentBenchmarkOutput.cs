@@ -72,14 +72,42 @@ public sealed record AgentMeasureSetItem(
     AgentMetricDistribution? CpuTimeMilliseconds,
     AgentMetricDistribution? ElapsedTimeMilliseconds,
     AgentMetricDistribution? LogicalReads,
-    IReadOnlyList<NoteworthyOperatorSummary> NoteworthyOperators);
+    IReadOnlyList<NoteworthyOperatorSummary> NoteworthyOperators,
+    IReadOnlyList<string> Warnings,
+    string CpuTimeAvailability,
+    string ElapsedTimeAvailability,
+    string LogicalReadsAvailability,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LogicalReadsSource = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RelationBufferSource = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? RelationBuffersAreAdditive = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ResultRowSource = null);
+
+/// <summary>
+/// Cross-set extrema for MCP. Missing evidence is a null value; elapsed uses the exact median when present.
+/// </summary>
+public sealed record AgentMeasureCrossSetSummary(
+    string? MinimumMedianElapsedSet,
+    decimal? MinimumMedianElapsedMilliseconds,
+    string? MaximumMedianElapsedSet,
+    decimal? MaximumMedianElapsedMilliseconds,
+    string? MinimumMedianCpuSet,
+    decimal? MinimumMedianCpuMilliseconds,
+    string? MaximumMedianCpuSet,
+    decimal? MaximumMedianCpuMilliseconds,
+    string? MinimumMedianReadsSet,
+    decimal? MinimumMedianLogicalReads,
+    string? MaximumMedianReadsSet,
+    decimal? MaximumMedianLogicalReads,
+    string CpuTimeAvailability,
+    string ElapsedTimeAvailability,
+    string LogicalReadsAvailability);
 
 public sealed record AgentMeasureSetOutput(
     AgentResolvedTarget Target,
     string MeasuredOrderRule,
     string PlanCacheWarning,
     IReadOnlyList<AgentMeasureSetItem> Sets,
-    MeasureCrossSetSummary CrossSetSummary,
+    AgentMeasureCrossSetSummary CrossSetSummary,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ArtifactId = null);
 
 public sealed record AgentMatrixCellDetail(
@@ -154,7 +182,7 @@ public static class AgentBenchmarkProjection
             summary.MeasuredOrderRule,
             summary.PlanCacheWarning,
             summary.Sets.Select(Set).ToArray(),
-            summary.CrossSetSummary,
+            CrossSet(summary.CrossSetSummary),
             ArtifactIds.FromDirectory(summary.ArtifactDirectory));
 
     public static AgentMatrixOutput Matrix(CompareMatrixBenchmarkSummary summary) =>
@@ -228,7 +256,48 @@ public static class AgentBenchmarkProjection
             readsAvailability == BenchmarkMetricReport.Unavailable
                 ? null
                 : new AgentMetricDistribution(set.MinimumLogicalReads, set.MedianLogicalReads, set.MaximumLogicalReads),
-            set.NoteworthyOperators);
+            set.NoteworthyOperators,
+            MergeWarnings(set.Warnings, report?.Warnings),
+            cpuAvailability,
+            elapsedAvailability,
+            readsAvailability,
+            report?.LogicalReadsSource,
+            report?.RelationBufferSource,
+            report?.RelationBuffersAreAdditive,
+            report?.ResultRowSource);
+    }
+
+    private static AgentMeasureCrossSetSummary CrossSet(MeasureCrossSetSummary summary)
+    {
+        ArgumentNullException.ThrowIfNull(summary);
+        var elapsedUnavailable = summary.ElapsedTimeAvailability == BenchmarkMetricReport.Unavailable;
+        var cpuUnavailable = summary.CpuTimeAvailability == BenchmarkMetricReport.Unavailable;
+        var readsUnavailable = summary.LogicalReadsAvailability == BenchmarkMetricReport.Unavailable;
+        return new AgentMeasureCrossSetSummary(
+            summary.MinimumMedianElapsedSet,
+            elapsedUnavailable ? null : summary.MinimumMedianElapsedMillisecondsExact ?? summary.MinimumMedianElapsedMilliseconds,
+            summary.MaximumMedianElapsedSet,
+            elapsedUnavailable ? null : summary.MaximumMedianElapsedMillisecondsExact ?? summary.MaximumMedianElapsedMilliseconds,
+            summary.MinimumMedianCpuSet,
+            cpuUnavailable ? null : summary.MinimumMedianCpuMilliseconds,
+            summary.MaximumMedianCpuSet,
+            cpuUnavailable ? null : summary.MaximumMedianCpuMilliseconds,
+            summary.MinimumMedianReadsSet,
+            readsUnavailable ? null : summary.MinimumMedianLogicalReads,
+            summary.MaximumMedianReadsSet,
+            readsUnavailable ? null : summary.MaximumMedianLogicalReads,
+            summary.CpuTimeAvailability,
+            summary.ElapsedTimeAvailability,
+            summary.LogicalReadsAvailability);
+    }
+
+    private static IReadOnlyList<string> MergeWarnings(IReadOnlyList<string> variant, IReadOnlyList<string>? report)
+    {
+        if (report is null || report.Count == 0)
+            return variant;
+        if (variant.Count == 0)
+            return report;
+        return variant.Concat(report).Distinct(StringComparer.Ordinal).ToArray();
     }
 
     private static AgentRegressionReport? Regression(RegressionReport? report) =>

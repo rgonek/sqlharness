@@ -182,7 +182,11 @@ public static class AgentOutputProjection
                             set,
                             ProjectSetOperators(set.Metrics.Operators)
                                 .Select(op => new NoteworthyOperatorSummary("query", op.NodeId, Clip(op.PhysicalOp)!, Clip(op.Object), op.HasWarnings, op.HasSpill, op.HasImplicitConversion)).ToArray());
-                        return projected with { Name = Clip(projected.Name)! };
+                        return projected with
+                        {
+                            Name = Clip(projected.Name)!,
+                            Warnings = Take(projected.Warnings).Select(warning => Clip(warning)!).ToArray(),
+                        };
                     }).ToArray();
                     var planCacheWarning = Clip(setReport.PlanCacheWarning)!;
                     var measureSetDirectory = profile == AgentProjectionProfile.Mcp

@@ -540,31 +540,50 @@ public sealed class McpOutputTests
     [Fact]
     public void Mcp_measure_set_keeps_repetitions_elapsed_range_and_cross_set_extrema()
     {
-        var sets = Enumerable.Range(0, 20).Select(i => new MeasureParameterSetReport(
-            $"set-{i}-" + new string('n', 80),
-            [new MeasureParameterMetadata("@id", "int")],
-            $"hash-{i}",
-            i + 2,
-            true,
-            null,
-            new CompareVariantReport(
+        var sets = Enumerable.Range(0, 20).Select(i =>
+        {
+            var metrics = new CompareVariantReport(
                 $"set-{i}",
                 new CompareDistribution(i, i + 1, i + 2),
                 new CompareDistribution(10 * (i + 1), 20 * (i + 1), 40 * (i + 1)),
                 new CompareDistribution(1, 2, 3),
                 new Dictionary<string, long>(),
                 [],
-                []),
-            ["plan-hash-should-stay-out"])).ToArray();
+                i == 0 ? ["PlanWarning"] : [])
+            {
+                MetricReport = i == 0
+                    ? new BenchmarkMetricReport(
+                        BenchmarkMetricReport.Unavailable, BenchmarkMetricReport.Measured, null, true, null, null,
+                        BenchmarkMetricReport.Unavailable, BenchmarkMetricText.PostgresLogicalReadsSource,
+                        BenchmarkMetricText.PostgresRelationBufferSource, false,
+                        BenchmarkMetricReport.ResultStatement, BenchmarkMetricText.StatementRows,
+                        [BenchmarkMetricText.PostgresCpuUnavailable])
+                    : null,
+            };
+            return new MeasureParameterSetReport(
+                $"set-{i}-" + new string('n', 80),
+                [new MeasureParameterMetadata("@id", "int")],
+                $"hash-{i}",
+                i + 2,
+                true,
+                null,
+                metrics,
+                ["plan-hash-should-stay-out"]);
+        }).ToArray();
+        var minSet = "set-0-" + new string('n', 80);
+        var maxSet = "set-19-" + new string('n', 80);
         var report = new SqlHarnessMeasureSetReport(
-            new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "profile", Engine: "sqlserver"),
+            new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "profile", Engine: "postgres"),
             5, 20, 1, sets.Select(set => set.Name).ToArray(), "order-rule", "cache-warning",
             sets,
-            new MeasureCrossSetSummary("set-0-" + new string('n', 80), 20, "set-19-" + new string('n', 80), 400, "set-0-" + new string('n', 80), 1, "set-19-" + new string('n', 80), 20, "set-0-" + new string('n', 80), 2, "set-19-" + new string('n', 80), 2)
+            new MeasureCrossSetSummary(minSet, 0, maxSet, 1, null, 0, null, 0, null, 0, null, 0)
             {
-                CpuTimeAvailability = BenchmarkMetricReport.Measured,
+                CpuTimeAvailability = BenchmarkMetricReport.Unavailable,
                 ElapsedTimeAvailability = BenchmarkMetricReport.Measured,
-                LogicalReadsAvailability = BenchmarkMetricReport.Measured,
+                LogicalReadsAvailability = BenchmarkMetricReport.Unavailable,
+                ElapsedWholeMillisecondsAreExact = false,
+                MinimumMedianElapsedMillisecondsExact = 0.3m,
+                MaximumMedianElapsedMillisecondsExact = 0.8m,
             },
             @"C:\artifacts\sets\20260101T000000000Z-sets-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
@@ -577,14 +596,42 @@ public sealed class McpOutputTests
         var projected = envelope.GetProperty("result");
         Assert.Equal("20260101T000000000Z-sets-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", projected.GetProperty("artifactId").GetString());
         Assert.False(projected.TryGetProperty("artifactDirectory", out _));
-        Assert.Equal("set-0-" + new string('n', 80), projected.GetProperty("crossSetSummary").GetProperty("minimumMedianElapsedSet").GetString());
-        Assert.Equal("set-19-" + new string('n', 80), projected.GetProperty("crossSetSummary").GetProperty("maximumMedianElapsedSet").GetString());
+        Assert.Equal(minSet, projected.GetProperty("crossSetSummary").GetProperty("minimumMedianElapsedSet").GetString());
+        Assert.Equal(maxSet, projected.GetProperty("crossSetSummary").GetProperty("maximumMedianElapsedSet").GetString());
+        var cross = projected.GetProperty("crossSetSummary");
+        Assert.Equal(0.3m, cross.GetProperty("minimumMedianElapsedMilliseconds").GetDecimal());
+        Assert.Equal(0.8m, cross.GetProperty("maximumMedianElapsedMilliseconds").GetDecimal());
+        Assert.False(cross.TryGetProperty("minimumMedianElapsedMillisecondsExact", out _));
+        Assert.False(cross.TryGetProperty("maximumMedianElapsedMillisecondsExact", out _));
+        Assert.False(cross.TryGetProperty("elapsedWholeMillisecondsAreExact", out _));
+        Assert.Equal("unavailable", cross.GetProperty("cpuTimeAvailability").GetString());
+        Assert.Equal("unavailable", cross.GetProperty("logicalReadsAvailability").GetString());
+        Assert.Equal(JsonValueKind.Null, cross.GetProperty("minimumMedianCpuMilliseconds").ValueKind);
+        Assert.Equal(JsonValueKind.Null, cross.GetProperty("maximumMedianCpuMilliseconds").ValueKind);
+        Assert.Equal(JsonValueKind.Null, cross.GetProperty("minimumMedianLogicalReads").ValueKind);
+        Assert.Equal(JsonValueKind.Null, cross.GetProperty("maximumMedianLogicalReads").ValueKind);
+        Assert.Equal(JsonValueKind.Null, cross.GetProperty("minimumMedianCpuSet").ValueKind);
+        Assert.Equal(JsonValueKind.Null, cross.GetProperty("minimumMedianReadsSet").ValueKind);
         Assert.True(projected.GetProperty("sets").GetArrayLength() < 20, envelope.GetRawText());
         var first = projected.GetProperty("sets")[0];
         Assert.Equal(2, first.GetProperty("repetitions").GetInt32());
         Assert.Equal(10, first.GetProperty("elapsedTimeMilliseconds").GetProperty("min").GetInt64());
         Assert.Equal(20, first.GetProperty("elapsedTimeMilliseconds").GetProperty("median").GetInt64());
         Assert.Equal(40, first.GetProperty("elapsedTimeMilliseconds").GetProperty("max").GetInt64());
+        Assert.Equal(JsonValueKind.Null, first.GetProperty("cpuTimeMilliseconds").ValueKind);
+        Assert.Equal(JsonValueKind.Null, first.GetProperty("logicalReads").ValueKind);
+        Assert.Equal("unavailable", first.GetProperty("cpuTimeAvailability").GetString());
+        Assert.Equal("unavailable", first.GetProperty("logicalReadsAvailability").GetString());
+        Assert.Equal("measured", first.GetProperty("elapsedTimeAvailability").GetString());
+        Assert.Equal(BenchmarkMetricText.PostgresLogicalReadsSource, first.GetProperty("logicalReadsSource").GetString());
+        Assert.Equal(BenchmarkMetricText.PostgresRelationBufferSource, first.GetProperty("relationBufferSource").GetString());
+        Assert.False(first.GetProperty("relationBuffersAreAdditive").GetBoolean());
+        Assert.Equal(BenchmarkMetricReport.ResultStatement, first.GetProperty("resultRowSource").GetString());
+        Assert.False(first.TryGetProperty("resultRowSourceDescription", out _));
+        Assert.False(first.TryGetProperty("metricReport", out _));
+        var warnings = first.GetProperty("warnings").EnumerateArray().Select(item => item.GetString()!).ToArray();
+        Assert.Contains("PlanWarning", warnings);
+        Assert.Contains(BenchmarkMetricText.PostgresCpuUnavailable, warnings);
         Assert.False(first.TryGetProperty("valueHash", out _));
         Assert.DoesNotContain("plan-hash-should-stay-out", envelope.GetRawText(), StringComparison.Ordinal);
         Assert.DoesNotContain("hash-0", envelope.GetRawText(), StringComparison.Ordinal);

@@ -61,6 +61,8 @@ public sealed record MeasureParameterSetSummary(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public BenchmarkMetricReport? MetricReport { get; init; }
 
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+
     public int Repetitions { get; init; }
 
     public long MinimumElapsedMilliseconds { get; init; }
@@ -257,6 +259,7 @@ public static class BenchmarkSummaryProjector
             operators)
         {
             MetricReport = set.Metrics.MetricReport,
+            Warnings = set.Metrics.Warnings,
             Repetitions = set.Repetitions,
             MinimumElapsedMilliseconds = set.Metrics.ElapsedTimeMilliseconds.Min,
             MaximumElapsedMilliseconds = set.Metrics.ElapsedTimeMilliseconds.Max,
