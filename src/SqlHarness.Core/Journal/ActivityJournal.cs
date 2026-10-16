@@ -456,7 +456,7 @@ public sealed class ActivityJournal : IActivityJournal
                 SET state = $state, status = COALESCE($status, status), verification = COALESCE($verification, verification),
                     decided_at = COALESCE(decided_at, CASE WHEN $state <> 'pending' THEN $at END),
                     finished_at = CASE WHEN $status IS NOT NULL THEN $at ELSE finished_at END
-                WHERE request_id = $requestId;
+                WHERE request_id = $requestId AND ($state <> 'cancelled' OR state = 'pending');
                 """;
             update.Parameters.AddWithValue("$requestId", requestId);
             update.Parameters.AddWithValue("$state", state);

@@ -79,6 +79,25 @@ public sealed class MutationEndpointsTests
         Assert.Equal(1, handler.Sends);
     }
 
+    [Theory]
+    [InlineData(MutationStatus.DatabaseMismatch)]
+    [InlineData(MutationStatus.NotAMutation)]
+    public async Task Client_preserves_preflight_rejection_status(string status)
+    {
+        using var home = new TempHome();
+        var token = DashboardToken.LoadOrCreate(home.Path);
+        using var held = DashboardLock.TryAcquire(home.Path)!;
+        var current = ProcessInfo.Current.Get(Environment.ProcessId);
+        held.Publish(new DashboardEndpoint(Environment.ProcessId, current?.StartedAt, 47899, token));
+        var client = new HttpMutationBrokerClient(
+            () => new SqlHarnessConfig(), home.Path, ProcessInfo.Current, new RecordingLauncher(),
+            handlerFactory: () => new StatusResponseHandler(status));
+
+        var result = await client.SubmitAsync(Request(), null, CancellationToken.None);
+
+        Assert.Equal(status, result.Status);
+    }
+
     [Fact]
     public async Task Mutation_submit_rejects_a_database_that_differs_from_server_resolution()
     {
@@ -92,7 +111,27 @@ public sealed class MutationEndpointsTests
         using var response = await client.PostAsJsonAsync("/api/mutations", Request(database: "wrong-db"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(MutationStatus.DatabaseMismatch, (await response.Content.ReadFromJsonAsync<ErrorBody>())!.Error);
+        var error = (await response.Content.ReadFromJsonAsync<StatusErrorBody>())!;
+        Assert.Equal(MutationStatus.DatabaseMismatch, error.Status);
+        Assert.Equal(MutationStatus.DatabaseMismatch, error.Error);
+    }
+
+    [Fact]
+    public async Task Mutation_submit_returns_a_status_envelope_when_the_body_is_not_a_mutation()
+    {
+        using var home = new TempHome();
+        ConfigureHome(home);
+        await using var dashboard = await StartMutationDashboard(home);
+        var (server, _) = dashboard;
+        using var client = new HttpClient { BaseAddress = server.BaseUri };
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", server.Token);
+
+        using var response = await client.PostAsJsonAsync("/api/mutations", Request(sql: "SELECT 1"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = (await response.Content.ReadFromJsonAsync<StatusErrorBody>())!;
+        Assert.Equal(MutationStatus.NotAMutation, error.Status);
+        Assert.Equal(MutationStatus.NotAMutation, error.Error);
     }
 
     [Fact]
@@ -263,8 +302,56 @@ public sealed class MutationEndpointsTests
         Assert.Equal("cancelled", await WaitForRequestState(client, requestId));
     }
 
-    private static MutationRequest Request(string database = "db", IReadOnlyList<string>? grantees = null) => new(
-        "app", new Dictionary<string, string>(), "sqlserver", "srv", database, "UPDATE dbo.T SET x = 1",
+    [Fact]
+    public async Task Cancellation_after_journaling_but_before_broker_ownership_terminalizes_the_row()
+    {
+        using var home = new TempHome();
+        ConfigureHome(home);
+        using var cancellation = new CancellationTokenSource();
+        var executorCalls = 0;
+        await using var dashboard = await StartMutationDashboard(home,
+            afterPrepared: cancellation.Cancel, onExecute: () => Interlocked.Increment(ref executorCalls));
+        var (server, client) = dashboard;
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", server.Token);
+
+        var submitTask = client.PostAsJsonAsync("/api/mutations", Request(), cancellation.Token);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => submitTask);
+        var requestId = await WaitForRequestId(client);
+
+        Assert.Equal("cancelled", await WaitForRequestState(client, requestId));
+        Assert.Equal(0, Volatile.Read(ref executorCalls));
+    }
+
+    [Fact]
+    public async Task Cancelling_a_joined_submit_terminalizes_only_its_journal_row()
+    {
+        using var home = new TempHome();
+        ConfigureHome(home);
+        var executorCalls = 0;
+        await using var dashboard = await StartMutationDashboard(home, onExecute: () => Interlocked.Increment(ref executorCalls));
+        var (server, client) = dashboard;
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", server.Token);
+        using var firstCancellation = new CancellationTokenSource();
+        var firstSubmit = client.PostAsJsonAsync("/api/mutations", Request(), firstCancellation.Token);
+        var firstId = await WaitForRequestId(client);
+
+        using var joinedCancellation = new CancellationTokenSource();
+        var joinedSubmit = client.PostAsJsonAsync("/api/mutations", Request(), joinedCancellation.Token);
+        var requestIds = await WaitForRequestCount(client, 2);
+        var joinedId = Assert.Single(requestIds, requestId => requestId != firstId);
+        joinedCancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => joinedSubmit);
+
+        Assert.Equal("cancelled", await WaitForRequestState(client, joinedId));
+        Assert.Equal("pending", await ReadRequestState(client, firstId));
+        Assert.Equal(0, Volatile.Read(ref executorCalls));
+        firstCancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => firstSubmit);
+        Assert.Equal("cancelled", await WaitForRequestState(client, firstId));
+    }
+
+    private static MutationRequest Request(string database = "db", IReadOnlyList<string>? grantees = null, string sql = "UPDATE dbo.T SET x = 1") => new(
+        "app", new Dictionary<string, string>(), "sqlserver", "srv", database, sql,
         [], 30, 10, "dml", grantees ?? [], "session");
 
     private static void ConfigureHome(TempHome home)
@@ -277,10 +364,11 @@ public sealed class MutationEndpointsTests
             """);
     }
 
-    private static async Task<DashboardServerTests.AuthenticatedDashboard> StartMutationDashboard(TempHome home)
+    private static async Task<DashboardServerTests.AuthenticatedDashboard> StartMutationDashboard(TempHome home,
+        Action? afterPrepared = null, Action? onExecute = null)
     {
         var profiles = () => ProfileStore.Load(Path.Combine(home.Path, "targets.json"));
-        var module = new TestMutationModule(new SqlHarnessModule(profiles));
+        var module = new TestMutationModule(new SqlHarnessModule(profiles), afterPrepared, onExecute);
         var config = SqlHarnessConfigLoader.Load(Path.Combine(home.Path, "config.json")).Config;
         var journal = ActivityJournal.Open(home.DatabasePath, config.Journal, TextWriter.Null, TimeProvider.System);
         return await DashboardServerTests.StartAuthenticated(home, options => options with
@@ -310,17 +398,36 @@ public sealed class MutationEndpointsTests
     {
         for (var attempt = 0; attempt < 100; attempt++)
         {
-            using var response = await client.GetAsync("/api/mutations?limit=1");
-            using var page = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            var items = page.RootElement.GetProperty("items");
-            if (items.GetArrayLength() != 0 && items[0].GetProperty("requestId").GetString() == requestId)
-            {
-                var state = items[0].GetProperty("state").GetString();
-                if (state != "pending") return state!;
-            }
+            var state = await ReadRequestState(client, requestId);
+            if (state != "pending") return state;
             await Task.Delay(10);
         }
         throw new TimeoutException("The mutation lifecycle did not reach a terminal state.");
+    }
+
+    private static async Task<string> ReadRequestState(HttpClient client, string requestId)
+    {
+        using var response = await client.GetAsync("/api/mutations?limit=20");
+        using var page = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var item = page.RootElement.GetProperty("items").EnumerateArray()
+            .FirstOrDefault(value => value.GetProperty("requestId").GetString() == requestId);
+        return item.ValueKind == JsonValueKind.Undefined
+            ? throw new TimeoutException("The mutation journal row was not recorded.")
+            : item.GetProperty("state").GetString()!;
+    }
+
+    private static async Task<IReadOnlyList<string>> WaitForRequestCount(HttpClient client, int count)
+    {
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            using var response = await client.GetAsync("/api/mutations?limit=20");
+            using var page = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var ids = page.RootElement.GetProperty("items").EnumerateArray()
+                .Select(item => item.GetProperty("requestId").GetString()!).ToArray();
+            if (ids.Length >= count) return ids;
+            await Task.Delay(10);
+        }
+        throw new TimeoutException("The expected mutation journal rows were not recorded.");
     }
 
     private static async Task<string> ReadEventName(StreamReader reader)
@@ -352,13 +459,23 @@ public sealed class MutationEndpointsTests
     private sealed record ErrorBody(string Error);
     private sealed record StatusErrorBody(string Status, string Error, string Message);
 
-    private sealed class TestMutationModule(ISqlHarnessModule core) : ISqlHarnessModule
+    private sealed class TestMutationModule(ISqlHarnessModule core, Action? afterPrepared = null, Action? onExecute = null) : ISqlHarnessModule
     {
         public Task<SqlHarnessOutcome> ExecuteAsync(SqlHarnessOperation operation, CancellationToken ct = default)
         {
             if (operation is SqlHarnessMutationOperation { Approval: not null })
+            {
+                onExecute?.Invoke();
                 return Task.FromResult(new SqlHarnessOutcome(SqlHarnessExitCode.Success, QueryReport(), null));
-            return core.ExecuteAsync(operation, ct);
+            }
+            return ExecuteCoreAsync(operation, ct);
+        }
+
+        private async Task<SqlHarnessOutcome> ExecuteCoreAsync(SqlHarnessOperation operation, CancellationToken ct)
+        {
+            var outcome = await core.ExecuteAsync(operation, ct);
+            if (operation is SqlHarnessMutationOperation { DryRun: false }) afterPrepared?.Invoke();
+            return outcome;
         }
 
         private static SqlHarnessQueryReport QueryReport() => new(
@@ -382,5 +499,14 @@ public sealed class MutationEndpointsTests
             _ = await request.Content!.ReadAsByteArrayAsync(cancellationToken);
             throw new HttpRequestException("connection dropped");
         }
+    }
+
+    private sealed class StatusResponseHandler(string status) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = JsonContent.Create(new { status, error = status }),
+            });
     }
 }

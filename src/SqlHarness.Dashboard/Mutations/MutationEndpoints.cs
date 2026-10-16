@@ -125,8 +125,17 @@ internal static class MutationEndpoints
             report.Tier, mode.ToString().ToLowerInvariant(), request.Digest,
             request.Sql, JsonSerializer.Serialize(request.Parameters, services.Json), services.Time.GetUtcNow(), profile.Environment));
 
-        var brokerResult = await services.Broker.SubmitAsync(request, decision.Kind,
-            TimeSpan.FromSeconds(config.Mutations.ApprovalTimeoutSeconds), view, context.RequestAborted).ConfigureAwait(false);
+        MutationBrokerResult brokerResult;
+        try
+        {
+            brokerResult = await services.Broker.SubmitAsync(request, decision.Kind,
+                TimeSpan.FromSeconds(config.Mutations.ApprovalTimeoutSeconds), view, context.RequestAborted).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            services.Journal.UpdateMutation(id, "cancelled", null, null, services.Time.GetUtcNow());
+            throw;
+        }
         PersistTerminal(services, id, brokerResult.Status);
         return Results.Json(brokerResult, services.Json);
     }
@@ -263,7 +272,12 @@ internal static class MutationEndpoints
         _ => "failed",
     };
 
-    private static IResult Error(int status, string error) => Results.Json(new { error }, statusCode: status);
+    private static IResult Error(int httpStatus, string error)
+    {
+        var wireStatus = error is MutationStatus.Unavailable or MutationStatus.DatabaseMismatch or
+            MutationStatus.NotAMutation or MutationStatus.PrincipalProtected ? error : null;
+        return Results.Json(new { status = wireStatus, error }, statusCode: httpStatus);
+    }
 
     private static IResult ConfigurationUnavailable() => Results.Json(new
     {

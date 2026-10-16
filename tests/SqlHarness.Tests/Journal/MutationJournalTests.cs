@@ -107,6 +107,25 @@ public sealed class MutationJournalTests
     }
 
     [Fact]
+    public void Cancellation_update_does_not_overwrite_executing_or_terminal_lifecycle_state()
+    {
+        using var temp = new JournalTempDirectory();
+        var journal = Open(temp);
+        journal.RecordMutation(Record("executing"));
+        journal.RecordMutation(Record("terminal"));
+        journal.UpdateMutation("executing", "executing", "success", null, JournalTestData.T0.AddSeconds(1));
+        journal.UpdateMutation("terminal", "succeeded", "success", null, JournalTestData.T0.AddSeconds(1));
+
+        journal.UpdateMutation("executing", "cancelled", null, null, JournalTestData.T0.AddSeconds(2));
+        journal.UpdateMutation("terminal", "cancelled", null, null, JournalTestData.T0.AddSeconds(2));
+
+        var states = JournalDb.Rows(temp.DatabasePath, "SELECT request_id, state, status FROM mutation_requests ORDER BY request_id")
+            .ToDictionary(row => (string)row["request_id"]!, row => (State: (string)row["state"]!, Status: (string?)row["status"]));
+        Assert.Equal(("executing", "success"), states["executing"]);
+        Assert.Equal(("succeeded", "success"), states["terminal"]);
+    }
+
+    [Fact]
     public void Mutation_sql_and_parameters_are_not_stored_without_sensitive_journaling()
     {
         using var temp = new JournalTempDirectory();
