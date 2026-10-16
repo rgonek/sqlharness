@@ -1,7 +1,12 @@
+using System.IO.Pipelines;
 using System.Text;
 using System.Text.Json;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
+using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Targets;
@@ -1414,5 +1419,90 @@ public sealed class McpMappingTests : IDisposable
         var legacyPayload = string.Concat(result.Content.OfType<TextContentBlock>().Select(block => block.Text));
         Assert.DoesNotContain("Index Seek", legacyPayload, StringComparison.Ordinal);
         Assert.NotNull(ArtifactReader.ReadSection(SqlHarnessPaths.CompareDir, id, "metrics"));
+    }
+
+    [Fact]
+    public async Task Artifact_plan_section_carries_overlap()
+    {
+        WriteArtifactTargetsFile();
+        var scope = ArtifactScope(ArtifactScopeProfile);
+        const string id = "served-overlap-plan";
+        var directory = Path.Combine(SqlHarnessPaths.CompareDir, id);
+        Directory.CreateDirectory(Path.Combine(directory, "plans"));
+        File.WriteAllText(
+            Path.Combine(directory, "manifest.json"),
+            "{\"manifestVersion\":1,\"artifactKind\":\"compare\",\"reportFile\":\"report.json\",\"sections\":[\"plan\"],\"owner\":"
+            + ArtifactOwnerJson(scope) + "}");
+        const string planName = "baseline-001-000-000.plan.json";
+        File.WriteAllText(
+            Path.Combine(directory, "plans", planName),
+            "{\"statements\":[{\"root\":{\"physicalOp\":\"Scan\"},\"missingIndexes\":[{\"schema\":\"dbo\",\"table\":\"Orders\",\"equalityColumns\":[\"CustomerId\"],\"inequalityColumns\":[],\"includeColumns\":[\"Total\"],\"impact\":87.5}]}]}");
+        File.WriteAllText(
+            Path.Combine(directory, "runs.jsonl"),
+            "{\"variant\":\"baseline\",\"repetition\":1,\"planJsonFiles\":[\"" + planName + "\"]}");
+        File.WriteAllText(
+            Path.Combine(directory, "index-inventory.json"),
+            JsonSerializer.Serialize(
+                new IndexInventory(
+                    "AdventureWorks",
+                    DateTimeOffset.UnixEpoch,
+                    [new InventoryTable("dbo", "Orders", true, [new InventoryIndex(2, "IX_C", "NONCLUSTERED", ["CustomerId"], ["Status"], false, false, false, false, false)], false)],
+                    []),
+                ArtifactDirectoryPublisher.JsonOptions));
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var clientToServer = new Pipe();
+        var serverToClient = new Pipe();
+        var serverOptions = new ModelContextProtocol.Server.McpServerOptions
+        {
+            ServerInfo = new Implementation { Name = McpHost.ServerName, Version = "overlap-test" },
+            ProtocolVersion = McpHost.FallbackProtocolVersion,
+        };
+        McpToolCatalog.Wire(serverOptions, scope, scope.CreateModule());
+        await using var server = McpServer.Create(
+            new StreamServerTransport(clientToServer.Reader.AsStream(), serverToClient.Writer.AsStream(), "overlap-server", NullLoggerFactory.Instance),
+            serverOptions,
+            NullLoggerFactory.Instance,
+            serviceProvider: null);
+        var serverTask = server.RunAsync(cts.Token);
+        try
+        {
+            await using var client = await McpClient.CreateAsync(
+                new StreamClientTransport(clientToServer.Writer.AsStream(), serverToClient.Reader.AsStream(), NullLoggerFactory.Instance),
+                new McpClientOptions
+                {
+                    ClientInfo = new Implementation { Name = "sqlharness-mcp-tests", Version = "1.0.0" },
+                    ProtocolVersion = McpHost.FallbackProtocolVersion,
+                },
+                NullLoggerFactory.Instance,
+                cts.Token);
+            var result = await client.CallToolAsync(
+                "sqlharness_artifact",
+                new Dictionary<string, object?>
+                {
+                    ["id"] = id,
+                    ["section"] = "plan",
+                    ["variant"] = "baseline",
+                },
+                cancellationToken: cts.Token);
+            var text = TextOf(result);
+            Assert.False(result.IsError == true, text);
+            using var document = JsonDocument.Parse(text);
+            var overlap = document.RootElement.GetProperty("result").GetProperty("missingIndexes")[0].GetProperty("overlap");
+            Assert.Equal("include-gap", overlap.GetProperty("verdict").GetString());
+            Assert.Equal("IX_C", overlap.GetProperty("index").GetProperty("name").GetString());
+            Assert.Equal("Total", Assert.Single(overlap.GetProperty("missingIncludeColumns").EnumerateArray()).GetString());
+        }
+        finally
+        {
+            await cts.CancelAsync();
+            try
+            {
+                await serverTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
     }
 }

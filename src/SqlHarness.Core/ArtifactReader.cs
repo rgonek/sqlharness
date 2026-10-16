@@ -73,13 +73,24 @@ public sealed record ArtifactOperatorsSection(
 
 public sealed record ArtifactPlanSelector(string Variant, int Statement = 0, string? ParameterSet = null, int? Repetition = null);
 public sealed record ArtifactPlanNode(string NodePath, string? ParentPath, PlanNode Operator);
+
+public sealed record ArtifactMissingIndex(
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Database,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Schema,
+    string Table,
+    IReadOnlyList<string> EqualityColumns,
+    IReadOnlyList<string> InequalityColumns,
+    IReadOnlyList<string> IncludeColumns,
+    double Impact,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IndexOverlap? Overlap);
+
 public sealed record ArtifactPlanSection(string ArtifactId, string Variant, string? ParameterSet, int Statement,
     int StatementCount, int Repetition, string Selection, IReadOnlyList<int> AvailableRepetitions,
     bool? PlanShapeStable, int NodeCount, IReadOnlyList<ArtifactPlanNode> Nodes, int? Continuation)
 {
     [JsonIgnore]
     public int Cursor { get; init; }
-    public IReadOnlyList<MissingIndex> MissingIndexes { get; init; } = [];
+    public IReadOnlyList<ArtifactMissingIndex> MissingIndexes { get; init; } = [];
     public string? StatementText { get; init; }
     public IReadOnlyList<string> EvidenceGaps { get; init; } = [];
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -149,6 +160,10 @@ public static partial class ArtifactReader
     internal const string ReportFileName = "report.json";
     internal const string StatementsFileName = "statements.json";
     private const string ManifestFileName = "manifest.json";
+    private const string IndexInventoryFileName = "index-inventory.json";
+    private const string InventoryNotCapturedGap =
+        "Index inventory was not captured for this artifact; missing-index hints have no overlap verdict.";
+    private const string InventoryUnreadableGap = "Index inventory is unreadable.";
 
     /// <summary>Manifest bound: mirrors the 64 KiB strict parameter-set file cap.</summary>
     public const long MaxManifestBytes = 64L * 1024;
@@ -495,14 +510,25 @@ public static partial class ArtifactReader
                 if (comparable.Count >= 2 && !hasComparisonGap)
                     stable = comparable.All(statement => Shape(statement.Root) == Shape(comparable[0].Root));
             }
+            var evidenceGaps = new List<string>();
+            if (hasComparisonGap)
+                evidenceGaps.Add("One or more measured repetitions have incomplete stored plan evidence; shape stability is unavailable.");
+            IReadOnlyList<ArtifactMissingIndex> missingIndexes = [];
+            if (cursor == 0)
+            {
+                var overlaps = ReadHintOverlaps(directory, selected.MissingIndexes);
+                missingIndexes = overlaps.Indexes;
+                foreach (var gap in overlaps.Gaps)
+                    AddGap(evidenceGaps, gap);
+            }
             return new ArtifactPlanSection(artifactId, selector.Variant, selector.ParameterSet, selector.Statement,
                 statements.Length, selectedRepetition, selector.Repetition is null ? "last-measured" : "explicit",
                 repetitions, stable, allNodes.Length, nodes, cursor + nodes.Length < allNodes.Length ? cursor + nodes.Length : null)
             {
                 Cursor = cursor,
-                MissingIndexes = cursor == 0 ? selected.MissingIndexes : [],
+                MissingIndexes = missingIndexes,
                 StatementText = includeText && cursor == 0 ? selected.StatementText : null,
-                EvidenceGaps = hasComparisonGap ? ["One or more measured repetitions have incomplete stored plan evidence; shape stability is unavailable."] : []
+                EvidenceGaps = evidenceGaps,
             };
         }
         catch (ArtifactReadException) { throw; }
@@ -538,6 +564,122 @@ public static partial class ArtifactReader
             plans.Add(StoredPlanReader.Read(ReadBoundedText(planPath, MaxReportBytes)));
         }
         return plans;
+    }
+
+    private static (IReadOnlyList<ArtifactMissingIndex> Indexes, IReadOnlyList<string> Gaps) ReadHintOverlaps(
+        string directory, IReadOnlyList<MissingIndex> hints)
+    {
+        var gaps = new List<string>();
+        var path = Path.Combine(directory, IndexInventoryFileName);
+        if (!IsPlainFile(path))
+        {
+            if (InventoryEntryExists(path))
+                gaps.Add(InventoryUnreadableGap);
+            else if (hints.Count > 0)
+                gaps.Add(InventoryNotCapturedGap);
+            return (hints.Select(hint => ToArtifact(hint, null)).ToArray(), gaps);
+        }
+
+        IndexInventory? inventory;
+        try
+        {
+            // A legal inventory is 8 tables by 64 indexes of indented JSON, which exceeds the 64 KiB manifest cap.
+            inventory = JsonSerializer.Deserialize<IndexInventory>(
+                ReadBoundedText(path, MaxReportBytes), ArtifactDirectoryPublisher.JsonOptions);
+        }
+        catch (Exception exception) when (exception is JsonException or ArtifactReadException or IOException or UnauthorizedAccessException)
+        {
+            gaps.Add(InventoryUnreadableGap);
+            return (hints.Select(hint => ToArtifact(hint, null)).ToArray(), gaps);
+        }
+
+        if (!IsUsableInventory(inventory))
+        {
+            gaps.Add(InventoryUnreadableGap);
+            return (hints.Select(hint => ToArtifact(hint, null)).ToArray(), gaps);
+        }
+
+        var indexes = new List<ArtifactMissingIndex>(hints.Count);
+        foreach (var hint in hints)
+            indexes.Add(ClassifyHint(inventory!, hint, gaps));
+        foreach (var gap in inventory!.Gaps)
+            AddGap(gaps, gap);
+        return (indexes, gaps);
+    }
+
+    private static ArtifactMissingIndex ClassifyHint(IndexInventory inventory, MissingIndex hint, List<string> gaps)
+    {
+        if (hint.Database is not null
+            && !string.Equals(hint.Database, inventory.Database, StringComparison.OrdinalIgnoreCase))
+            return ToArtifact(hint, null);
+
+        var schema = hint.Schema ?? "dbo";
+        InventoryTable? table = null;
+        foreach (var candidate in inventory.Tables)
+        {
+            if (string.Equals(candidate.Schema, schema, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(candidate.Table, hint.Table, StringComparison.OrdinalIgnoreCase))
+            {
+                table = candidate;
+                break;
+            }
+        }
+
+        if (table is null)
+            return ToArtifact(hint, null);
+        if (!table.ObjectFound)
+        {
+            AddGap(gaps, $"{schema}.{hint.Table} was not found when the index inventory was captured.");
+            return ToArtifact(hint, null);
+        }
+
+        var overlap = IndexOverlapClassifier.Classify(hint, table);
+        if (table.IndexesTruncated && overlap.Verdict == IndexOverlapVerdict.NewShape)
+        {
+            AddGap(gaps, $"{schema}.{hint.Table} has more than 64 indexes; a new-shape verdict cannot be trusted.");
+            return ToArtifact(hint, null);
+        }
+
+        return ToArtifact(hint, overlap);
+    }
+
+    private static bool IsUsableInventory(IndexInventory? inventory)
+    {
+        if (inventory?.Database is null || inventory.Tables is null || inventory.Gaps is null)
+            return false;
+        foreach (var table in inventory.Tables)
+        {
+            if (table?.Schema is null || table.Table is null || table.Indexes is null)
+                return false;
+            foreach (var index in table.Indexes)
+            {
+                if (index?.Name is null || index.Type is null || index.KeyColumns is null || index.IncludeColumns is null)
+                    return false;
+            }
+        }
+
+        return inventory.Gaps.All(gap => gap is not null);
+    }
+
+    private static ArtifactMissingIndex ToArtifact(MissingIndex hint, IndexOverlap? overlap) =>
+        new(hint.Database, hint.Schema, hint.Table, hint.EqualityColumns, hint.InequalityColumns, hint.IncludeColumns, hint.Impact, overlap);
+
+    private static void AddGap(List<string> gaps, string gap)
+    {
+        if (!gaps.Contains(gap))
+            gaps.Add(gap);
+    }
+
+    private static bool InventoryEntryExists(string path)
+    {
+        try
+        {
+            return File.Exists(path) || Directory.Exists(path);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return true;
+        }
     }
 
     private static bool TryString(JsonElement element, string name, out string value)
