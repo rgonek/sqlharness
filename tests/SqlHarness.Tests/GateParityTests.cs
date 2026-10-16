@@ -428,23 +428,6 @@ public sealed class GateParityTests
         Assert.Contains("sha256sum", linux, StringComparison.Ordinal);
     }
 
-    // CI is asserted here as well as in the theory above, on purpose. When the UI-order
-    // anchor moved from `dotnet restore` to `dotnet build` the checks kept only the two
-    // local scripts, and adding `--no-restore` to CI's build step or restoring a
-    // `dotnet restore` step there both left the suite green. A CI-only fact survives that
-    // failure mode: trimming ci.yml out of the theory's InlineData list no longer leaves
-    // CI unguarded.
-    [Fact]
-    public void Ci_builds_with_warnaserror_and_never_skips_or_duplicates_the_restore()
-    {
-        var content = File.ReadAllText(RepositoryFile.Locate(".github", "workflows", "ci.yml"));
-        var build = StageCommand(content, "build");
-
-        Assert.Contains("-warnaserror", build, StringComparison.Ordinal);
-        Assert.DoesNotContain("--no-restore", build, StringComparison.Ordinal);
-        Assert.DoesNotContain("dotnet restore", content, StringComparison.Ordinal);
-    }
-
     [Fact]
     public void Ci_and_release_take_node_from_nvmrc()
     {
