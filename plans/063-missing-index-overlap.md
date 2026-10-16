@@ -14,7 +14,7 @@
 
 ## Status
 
-- Status: DONE on feature branch `plan-063` (not merged into main). Windows `just verify` exited 0 on product commit `ba02e91`: `verify: OK  stages=6  2m30s` (ui-install skipped; ui-check 24,5s; restore 5,3s; build 36,6s; test 1m24s; format skipped, 0 changed C# files). An earlier documentation commit `50a8b0f` also passed (`verify: OK  stages=6  2m58s`; SqlHarness.Tests 3,884 passed/11 skipped; MCP 387 passed/4 skipped). The evidence-gap wording commit `45ad1da` was not re-gated. Linux was not run. No push, installation, or publication. Evidence: [history](history.md).
+- Status: DONE and integrated locally into `main` at `84e3c26` (merge of `plan-063`; product commit `ba02e91`). Post-merge Windows `just verify` on `84e3c26` exited 0: `verify: OK  stages=6  2m27s` (ui-install skipped; ui-check 23,3s; restore 5,9s; build 34,7s; test 1m23s; format skipped, 0 changed C# files). Feature-branch `just verify` on `ba02e91` also exited 0 (`verify: OK  stages=6  2m30s`). Linux was not run. No push, installation, or publication. Evidence: [history](history.md).
 - Priority: P2
 - Effort: M
 - Risk: LOW–MEDIUM (one extra read-only catalog batch on the measured session after measurement; additive artifact field)
