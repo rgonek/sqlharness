@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 
 namespace SqlHarness.Core;
 
-public sealed record RetentionResult(bool Ran, int DeletedOperations, int DeletedPlans, int DeletedSessions)
+public sealed record RetentionResult(bool Ran, int DeletedOperations, int DeletedPlans, int DeletedSessions, int DeletedMutationRequests = 0)
 {
     internal static RetentionResult Skipped { get; } = new(false, 0, 0, 0);
 }
@@ -67,12 +67,14 @@ public static class JournalRetention
                 .ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
 
             DeleteOperations(connection, liveness, "AND started_at < $cutoff", cutoff, int.MaxValue, batchSize, totals);
+            DeleteMutationRequests(connection, cutoff, int.MaxValue, batchSize, totals);
             DeleteOrphans(connection, cutoff, batchSize, totals);
 
             var limit = (long)journal.Retention.MaxSizeMb * 1024 * 1024;
             while (UsedBytes(connection) > limit)
             {
                 var deleted = DeleteOperations(connection, liveness, string.Empty, cutoff, sizeStep, batchSize, totals);
+                deleted += DeleteMutationRequests(connection, cutoff: null, sizeStep, batchSize, totals);
                 DeleteOrphans(connection, cutoff: null, batchSize, totals);
                 if (deleted == 0)
                     break;
@@ -93,6 +95,7 @@ public static class JournalRetention
         internal int Operations { get; private set; }
         internal int Plans { get; private set; }
         internal int Sessions { get; private set; }
+        internal int MutationRequests { get; private set; }
 
         internal void CommittedOperations(int count)
         {
@@ -101,8 +104,9 @@ public static class JournalRetention
         }
         internal void CommittedPlans(int count) => Committed(() => Plans += count);
         internal void CommittedSessions(int count) => Committed(() => Sessions += count);
+        internal void CommittedMutationRequests(int count) => Committed(() => MutationRequests += count);
 
-        internal RetentionResult Result() => new(true, Operations, Plans, Sessions);
+        internal RetentionResult Result() => new(true, Operations, Plans, Sessions, MutationRequests);
 
         private void Committed(Action count)
         {
@@ -194,6 +198,48 @@ public static class JournalRetention
                   AND NOT EXISTS (SELECT 1 FROM agent_tool_calls t WHERE t.conversation = c.id)
                 LIMIT {batchSize});
             """);
+    }
+
+    /// <summary>Deletes oldest mutation requests in short transactions using the operations age and size limits.</summary>
+    private static int DeleteMutationRequests(SqliteConnection connection, string? cutoff, int max, int batchSize, Totals totals)
+    {
+        var deleted = 0;
+        while (deleted < max)
+        {
+            var limit = Math.Min(batchSize, max - deleted);
+            Execute(connection, "BEGIN IMMEDIATE;");
+            int changed;
+            try
+            {
+                using var delete = connection.CreateCommand();
+                delete.CommandText = """
+                    DELETE FROM mutation_requests
+                    WHERE id IN (
+                        SELECT id FROM mutation_requests
+                        WHERE $cutoff IS NULL OR created_at < $cutoff
+                        ORDER BY created_at, id LIMIT $limit);
+                    """;
+                delete.Parameters.AddWithValue("$cutoff", (object?)cutoff ?? DBNull.Value);
+                delete.Parameters.AddWithValue("$limit", limit);
+                changed = delete.ExecuteNonQuery();
+                Execute(connection, "COMMIT;");
+            }
+            catch
+            {
+                Execute(connection, "ROLLBACK;");
+                throw;
+            }
+
+            if (changed > 0)
+            {
+                deleted += changed;
+                totals.CommittedMutationRequests(changed);
+            }
+            if (changed < limit)
+                break;
+        }
+
+        return deleted;
     }
 
     private static void DeleteInBatches(SqliteConnection connection, string? cutoff, Action<int> committed, int batchSize, string sql)

@@ -21,6 +21,7 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
     public const int MaximumLimit = 200;
     public const int SessionOperationLimit = 500;
     public const int CompareHistoryPageLimit = 100;
+    public const int MutationHistoryPageLimit = 100;
     public const int TopLimit = 20;
     internal const int MaximumSqlVersionBytes = 256 * 1024;
     internal const long OverGrantMinimumKb = 1024;
@@ -262,6 +263,29 @@ public sealed class JournalReader(string databasePath, IProcessInfo processes)
         var page = ordered.Skip(start).Take(pageLimit).ToArray();
         page = HydrateCompareEvidence(connection, page).ToArray();
         return new Page<CompareAttemptSummary>(page, start + page.Length < ordered.Length ? page[^1].OperationId : null);
+    }
+
+    /// <summary>Reads bounded mutation history newest first; SQL and values are present only when sensitive journaling was enabled.</summary>
+    public Page<MutationRequestSummary> MutationRequests(long? cursor = null, int limit = MutationHistoryPageLimit)
+    {
+        using var connection = OpenSnapshot();
+        if (connection is null)
+            return new Page<MutationRequestSummary>([], null);
+        var pageLimit = Math.Clamp(limit, 1, MaximumLimit);
+        var rows = Query(connection, """
+            SELECT id, request_id, session_key, profile, engine, server, database_name, tier, mode, digest,
+                   sql_text, parameters_json, state, status, verification, created_at, decided_at, finished_at
+            FROM mutation_requests
+            WHERE $cursor IS NULL OR id < $cursor
+            ORDER BY id DESC LIMIT $limit;
+            """, [("$cursor", cursor), ("$limit", pageLimit + 1)], reader => new MutationRequestSummary(
+            reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4),
+            reader.GetString(5), reader.GetString(6), reader.GetString(7), reader.GetString(8), reader.GetString(9),
+            NullableString(reader, 10), NullableString(reader, 11), reader.GetString(12), NullableString(reader, 13),
+            NullableString(reader, 14), reader.GetString(15), NullableString(reader, 16), NullableString(reader, 17)));
+        var hasMore = rows.Count > pageLimit;
+        var page = rows.Take(pageLimit).ToArray();
+        return new Page<MutationRequestSummary>(page, hasMore ? page[^1].Id : null);
     }
 
     private IReadOnlyList<CompareHistoryRow> CompareHistoryRows(SqliteConnection connection, long sessionId)

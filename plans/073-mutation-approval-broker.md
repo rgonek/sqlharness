@@ -280,7 +280,7 @@ public sealed record SqlHarnessMutationPrepared(MutationRequest Request);
 ### Task 3: Journal `mutation_requests`
 
 **Files:**
-- Modify: `src/SqlHarness.Core/Journal/JournalSchema.cs` (`VersionN`, `CurrentVersion = N`), `ActivityJournal.cs` (migration and a writer method), `IActivityJournal.cs`, `JournalModels.cs`
+- Modify: `src/SqlHarness.Core/Journal/JournalSchema.cs` (`Version13`, `CurrentVersion = 13`), `ActivityJournal.cs` (migration and writers), `IActivityJournal.cs`, `JournalModels.cs`, `src/SqlHarness.Dashboard/JournalReader.cs` and `DashboardModels.cs` (bounded history read seam)
 - Test: `tests/SqlHarness.Tests/Journal/MutationJournalTests.cs`, the journal migration test that pins `CurrentVersion`
 
 **Interfaces:**
@@ -309,15 +309,15 @@ CREATE INDEX ix_mutation_requests_created ON mutation_requests (created_at);
 
 `sql_text` and `parameters_json` are stored only when `journal.storeSensitive` is on; otherwise they are NULL. Retention deletes rows with the same age and size rules as operations. Extend `JournalRetention` and its tests.
 
-- [ ] **Step 1: Write the failing tests**:
+- [x] **Step 1: Write the failing tests**:
   - migration from N-1 to N;
   - insert then update;
   - SQL is NULL when `storeSensitive` is off;
   - a retention pass deletes old rows.
-- [ ] **Step 2: Run them to verify they fail.**
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~Journal`. Expected: PASS.
-- [ ] **Step 5: Commit**: `git commit -m "Journal mutation requests (schema vN)"`.
+- [x] **Step 2: Run them to verify they fail.**
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~Journal`. Expected: PASS.
+- [x] **Step 5: Commit**: `git commit -m "Journal mutation requests (schema v13)"`.
 
 ### Task 4: `MutationBroker` state machine
 

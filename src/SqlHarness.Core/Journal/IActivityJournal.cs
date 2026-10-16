@@ -23,6 +23,12 @@ public interface IActivityJournal
 
     /// <summary>Latest progress of a running watch. Returns false when not written; callers stop reporting then.</summary>
     bool RecordWatchProgress(JournalHandle? handle, WatchProgress progress) => false;
+
+    /// <summary>Records a mutation approval request; SQL and values are retained only when storeSensitive is enabled.</summary>
+    void RecordMutation(MutationJournalRecord record) { }
+
+    /// <summary>Updates the latest state and lifecycle timestamps for a mutation request.</summary>
+    void UpdateMutation(string requestId, string state, string? status, string? verification, DateTimeOffset at) { }
 }
 
 public sealed class NullActivityJournal : IActivityJournal

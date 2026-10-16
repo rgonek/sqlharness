@@ -406,6 +406,65 @@ public sealed class ActivityJournal : IActivityJournal
         }
     }
 
+    public void RecordMutation(MutationJournalRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        try
+        {
+            using var connection = Connect();
+            using var insert = connection.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO mutation_requests (request_id, session_key, profile, engine, server, database_name,
+                    tier, mode, digest, sql_text, parameters_json, state, created_at)
+                VALUES ($requestId, $sessionKey, $profile, $engine, $server, $database,
+                    $tier, $mode, $digest, $sql, $parameters, 'pending', $createdAt);
+                """;
+            insert.Parameters.AddWithValue("$requestId", record.RequestId);
+            insert.Parameters.AddWithValue("$sessionKey", record.SessionKey);
+            insert.Parameters.AddWithValue("$profile", record.Profile);
+            insert.Parameters.AddWithValue("$engine", record.Engine);
+            insert.Parameters.AddWithValue("$server", record.Server);
+            insert.Parameters.AddWithValue("$database", record.Database);
+            insert.Parameters.AddWithValue("$tier", record.Tier);
+            insert.Parameters.AddWithValue("$mode", record.Mode);
+            insert.Parameters.AddWithValue("$digest", record.Digest);
+            insert.Parameters.AddWithValue("$sql", _storeSensitive ? (object?)record.Sql ?? DBNull.Value : DBNull.Value);
+            insert.Parameters.AddWithValue("$parameters", _storeSensitive ? (object?)record.ParametersJson ?? DBNull.Value : DBNull.Value);
+            insert.Parameters.AddWithValue("$createdAt", Timestamp(record.CreatedAt));
+            insert.ExecuteNonQuery();
+        }
+        catch (Exception)
+        {
+            Warn();
+        }
+    }
+
+    public void UpdateMutation(string requestId, string state, string? status, string? verification, DateTimeOffset at)
+    {
+        try
+        {
+            using var connection = Connect();
+            using var update = connection.CreateCommand();
+            update.CommandText = """
+                UPDATE mutation_requests
+                SET state = $state, status = COALESCE($status, status), verification = COALESCE($verification, verification),
+                    decided_at = COALESCE(decided_at, CASE WHEN $state <> 'pending' THEN $at END),
+                    finished_at = CASE WHEN $status IS NOT NULL THEN $at ELSE finished_at END
+                WHERE request_id = $requestId;
+                """;
+            update.Parameters.AddWithValue("$requestId", requestId);
+            update.Parameters.AddWithValue("$state", state);
+            update.Parameters.AddWithValue("$status", (object?)status ?? DBNull.Value);
+            update.Parameters.AddWithValue("$verification", (object?)verification ?? DBNull.Value);
+            update.Parameters.AddWithValue("$at", Timestamp(at));
+            update.ExecuteNonQuery();
+        }
+        catch (Exception)
+        {
+            Warn();
+        }
+    }
+
     public void RecordBenchmark(JournalHandle? handle, BenchmarkJournalRecord record)
     {
         if (handle is null || record is null || record.Variants.Count == 0)
@@ -548,6 +607,8 @@ public sealed class ActivityJournal : IActivityJournal
                 Execute(connection, JournalSchema.Version11);
             if (locked < 12)
                 Execute(connection, JournalSchema.Version12);
+            if (locked < 13)
+                Execute(connection, JournalSchema.Version13);
             Execute(connection, $"PRAGMA user_version = {JournalSchema.CurrentVersion};");
             Execute(connection, "COMMIT;");
         }

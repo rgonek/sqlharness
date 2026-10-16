@@ -4,7 +4,7 @@ namespace SqlHarness.Core;
 
 internal static class JournalSchema
 {
-    internal const int CurrentVersion = 12;
+    internal const int CurrentVersion = 13;
 
     internal const string Version1 = """
         CREATE TABLE sessions (
@@ -236,5 +236,18 @@ internal static class JournalSchema
 
     internal const string Version12 = """
         ALTER TABLE operations ADD COLUMN setup_sql_text TEXT;
+        """;
+
+    internal const string Version13 = """
+        CREATE TABLE mutation_requests (
+          id INTEGER PRIMARY KEY,
+          request_id TEXT NOT NULL UNIQUE,
+          session_key TEXT NOT NULL,
+          profile TEXT NOT NULL, engine TEXT NOT NULL, server TEXT NOT NULL, database_name TEXT NOT NULL,
+          tier TEXT NOT NULL, mode TEXT NOT NULL, digest TEXT NOT NULL,
+          sql_text TEXT NULL, parameters_json TEXT NULL,
+          state TEXT NOT NULL, status TEXT NULL, verification TEXT NULL,
+          created_at TEXT NOT NULL, decided_at TEXT NULL, finished_at TEXT NULL);
+        CREATE INDEX ix_mutation_requests_created ON mutation_requests (created_at);
         """;
 }

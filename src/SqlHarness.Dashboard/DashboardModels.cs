@@ -5,6 +5,11 @@ namespace SqlHarness.Dashboard;
 
 public sealed record Page<T>(IReadOnlyList<T> Items, long? NextCursor);
 
+public sealed record MutationRequestSummary(
+    long Id, string RequestId, string SessionKey, string Profile, string Engine, string Server, string Database,
+    string Tier, string Mode, string Digest, string? Sql, string? ParametersJson, string State, string? Status,
+    string? Verification, string CreatedAt, string? DecidedAt, string? FinishedAt);
+
 /// <summary>
 /// Session list filter. With <c>Starred</c> set the list is ordered by id and pages by an exact id cursor; unfiltered, starred
 /// sessions sort first, the id cursor would not be exact across the star boundary, so only the first page is returned
