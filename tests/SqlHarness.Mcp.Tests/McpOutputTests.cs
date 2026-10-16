@@ -289,7 +289,9 @@ public sealed class McpOutputTests
     {
         var report = BuildCompareReport("m") with
         {
-            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Ordered, false, 0, 0, 0, true, false, ResultMismatchReasons.Nullability),
+            Equivalence = new ResultEquivalenceReport(
+                ResultComparisonMode.Ordered, false, 0, 0, 0, true, false, ResultMismatchReasons.Nullability,
+                true, true, true, [ResultMismatchReasons.Nullability]),
         };
         var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
 
@@ -299,6 +301,49 @@ public sealed class McpOutputTests
         Assert.True(equivalence.GetProperty("compareNullability").GetBoolean());
         Assert.False(equivalence.GetProperty("nullabilityEquivalent").GetBoolean());
         Assert.Equal("nullability", equivalence.GetProperty("mismatchReason").GetString());
+        Assert.Equal(["nullability"], equivalence.GetProperty("mismatchReasons").EnumerateArray().Select(value => value.GetString()!).ToArray());
+        Assert.True(equivalence.GetProperty("baselineStable").GetBoolean());
+        Assert.True(equivalence.GetProperty("schemaEquivalent").GetBoolean());
+    }
+
+    [Fact]
+    public void Off_compare_omits_unknown_equivalence_diagnostics()
+    {
+        var report = BuildCompareReport("m") with
+        {
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Off, null, null, null, null),
+        };
+
+        var equivalence = EnvelopeOf(McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "sqlharness_compare"))
+            .GetProperty("result").GetProperty("equivalence");
+
+        Assert.Equal("off", equivalence.GetProperty("mode").GetString());
+        Assert.False(equivalence.TryGetProperty("baselineStable", out _));
+        Assert.False(equivalence.TryGetProperty("candidateStable", out _));
+        Assert.False(equivalence.TryGetProperty("schemaEquivalent", out _));
+        Assert.False(equivalence.TryGetProperty("mismatchReasons", out _));
+    }
+
+    [Fact]
+    public void Ordered_row_mismatch_keeps_ordered_mode_and_does_not_emit_order_only()
+    {
+        var report = BuildCompareReport("m") with
+        {
+            Equivalence = new ResultEquivalenceReport(
+                ResultComparisonMode.Ordered, false, 2, 0, 0,
+                BaselineStable: true, CandidateStable: true, SchemaEquivalent: true,
+                MismatchReasons: [ResultMismatchReasons.Rows]),
+        };
+
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null), "sqlharness_compare");
+        var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+        var equivalence = EnvelopeOf(result).GetProperty("result").GetProperty("equivalence");
+
+        Assert.Equal("ordered", equivalence.GetProperty("mode").GetString());
+        Assert.Equal(["rows"], equivalence.GetProperty("mismatchReasons").EnumerateArray().Select(value => value.GetString()!).ToArray());
+        Assert.DoesNotContain("order-only", text, StringComparison.Ordinal);
     }
 
     [Fact]

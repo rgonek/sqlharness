@@ -530,6 +530,76 @@ public sealed class BenchmarkSummaryTests
         Assert.Throws<ArgumentNullException>(() => BenchmarkSummaryProjector.Project((SqlHarnessMeasureSetReport)null!));
     }
 
+    [Fact]
+    public void Compare_projection_preserves_equivalence_diagnostics()
+    {
+        var report = MinimalCompare([], []) with
+        {
+            Equivalence = new ResultEquivalenceReport(
+                ResultComparisonMode.Ordered,
+                false,
+                2,
+                0,
+                0,
+                BaselineStable: true,
+                CandidateStable: true,
+                SchemaEquivalent: true,
+                MismatchReasons: [ResultMismatchReasons.Rows]),
+        };
+
+        var summary = BenchmarkSummaryProjector.Project(report);
+
+        Assert.Equal(report.Equivalence, summary.Equivalence);
+        Assert.True(summary.Equivalence.BaselineStable);
+        Assert.Equal([ResultMismatchReasons.Rows], summary.Equivalence.MismatchReasons);
+        Assert.DoesNotContain("order-only", summary.Equivalence.MismatchReasons!);
+    }
+
+    [Fact]
+    public void Matrix_case_copies_equivalence_diagnostics_and_does_not_guess_from_counters()
+    {
+        var diagnosed = MinimalCompare([], []) with
+        {
+            Equivalence = new ResultEquivalenceReport(
+                ResultComparisonMode.Ordered,
+                false,
+                2,
+                0,
+                0,
+                BaselineStable: false,
+                CandidateStable: true,
+                SchemaEquivalent: false,
+                MismatchReasons:
+                [
+                    ResultMismatchReasons.BaselineUnstable,
+                    ResultMismatchReasons.Schema,
+                    ResultMismatchReasons.Rows,
+                ]),
+        };
+        var legacy = MinimalCompare([], []) with
+        {
+            Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Ordered, false, 2, 0, 0),
+        };
+
+        var diagnosedCase = BenchmarkSummaryProjector.ProjectCase(0, "cell-diagnosed", diagnosed);
+        var legacyCase = BenchmarkSummaryProjector.ProjectCase(1, "cell-legacy", legacy);
+
+        Assert.False(diagnosedCase.BaselineStable);
+        Assert.True(diagnosedCase.CandidateStable);
+        Assert.False(diagnosedCase.SchemaEquivalent);
+        Assert.Equal(
+            [
+                ResultMismatchReasons.BaselineUnstable,
+                ResultMismatchReasons.Schema,
+                ResultMismatchReasons.Rows,
+            ],
+            diagnosedCase.MismatchReasons);
+        Assert.Null(legacyCase.BaselineStable);
+        Assert.Null(legacyCase.CandidateStable);
+        Assert.Null(legacyCase.SchemaEquivalent);
+        Assert.Null(legacyCase.MismatchReasons);
+    }
+
     private static CompareVariantReport SetVariant(
         string name,
         CompareDistribution cpu,

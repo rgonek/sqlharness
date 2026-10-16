@@ -102,6 +102,18 @@ public sealed record AgentMatrixCase(
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SetName { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? BaselineStable { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? CandidateStable { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? SchemaEquivalent { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? MismatchReasons { get; init; }
 }
 
 /// <summary>Optional per-case diagnostics; matrix-wide identity and method live on the envelope.</summary>
@@ -233,6 +245,10 @@ public static class BenchmarkSummaryProjector
             parameterValue)
         {
             SetName = setName,
+            BaselineStable = equivalence.BaselineStable,
+            CandidateStable = equivalence.CandidateStable,
+            SchemaEquivalent = equivalence.SchemaEquivalent,
+            MismatchReasons = equivalence.MismatchReasons,
         };
     }
 

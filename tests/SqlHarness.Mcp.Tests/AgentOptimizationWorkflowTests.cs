@@ -106,6 +106,27 @@ public sealed class AgentOptimizationWorkflowTests
     }
 
     [Fact]
+    public async Task Ordered_compare_requires_ordered_semantics_and_does_not_emit_order_only()
+    {
+        await using var session = await Session.StartAsync(WorkflowScenarios.NoImprovementId, Budget);
+        var compare = await session.Call("sqlharness_compare", CompareArguments(
+            WorkflowScenarios.NoImprovementBaselineSql, WorkflowScenarios.NoImprovementCandidateSql));
+        Assert.False(compare.IsError == true, Text(compare));
+        var text = Text(compare);
+        var equivalence = Envelope(compare).GetProperty("result").GetProperty("equivalence");
+
+        Assert.Equal("ordered", equivalence.GetProperty("mode").GetString());
+        Assert.False(equivalence.GetProperty("equivalent").GetBoolean());
+        var reasons = equivalence.GetProperty("mismatchReasons").EnumerateArray().Select(value => value.GetString()!).ToArray();
+        Assert.Contains("rows", reasons);
+        Assert.DoesNotContain("order-only", reasons);
+        Assert.DoesNotContain("order-only", text, StringComparison.Ordinal);
+        Assert.Equal("ordered", AgentProjectionNames.ComparisonMode(ResultComparisonMode.Ordered));
+        await session.ShutdownAsync();
+        session.AssertNoDatabaseConnections();
+    }
+
+    [Fact]
     public async Task Compare_follow_up_reads_a_real_offline_artifact()
     {
         await using var session = await Session.StartAsync(WorkflowScenarios.NoImprovementId, Budget);

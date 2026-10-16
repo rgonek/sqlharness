@@ -134,7 +134,11 @@ public sealed class WorkflowModule : ISqlHarnessModule
             shape.Equivalent ? 0 : 3,
             shape.Equivalent ? 0 : 1,
             shape.Equivalent ? 0 : 1,
-            MismatchReason: shape.Equivalent ? null : "rows");
+            MismatchReason: shape.Equivalent ? null : ResultMismatchReasons.Rows,
+            BaselineStable: true,
+            CandidateStable: true,
+            SchemaEquivalent: true,
+            MismatchReasons: shape.Equivalent ? [] : [ResultMismatchReasons.Rows]);
         var regression = RegressionPolicy.Evaluate(new RegressionInput(
             postgres ? SqlEngine.Postgres : SqlEngine.SqlServer,
             new RegressionVariantInput(
