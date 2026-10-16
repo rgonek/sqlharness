@@ -18,6 +18,8 @@ internal sealed class MutationBroker(TimeProvider time, Func<MutationRequest, Ca
     private readonly Dictionary<string, PendingRequest> _pendingById = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTimeOffset> _deniedDigests = new(StringComparer.Ordinal);
     private readonly HashSet<string> _executingProfiles = new(StringComparer.Ordinal);
+    private readonly Queue<BrokerEvent> _events = new();
+    private bool _dispatchingEvents;
 
     internal event Action<BrokerEvent>? Changed;
 
@@ -46,6 +48,7 @@ internal sealed class MutationBroker(TimeProvider time, Func<MutationRequest, Ca
         PendingRequest? created = null;
         PendingRequest? join = null;
         MutationBrokerResult? rejection = null;
+        var dispatchEvents = false;
         lock (_gate)
         {
             ct.ThrowIfCancellationRequested();
@@ -73,6 +76,7 @@ internal sealed class MutationBroker(TimeProvider time, Func<MutationRequest, Ca
                     var expiresAt = now + ttl;
                     created = new PendingRequest(request, view with { Request = request, ExpiresAt = expiresAt });
                     _pendingById.Add(view.RequestId, created);
+                    dispatchEvents = QueueEventUnderLock(new MutationAdded(created.View));
                     created.Timer = time.CreateTimer(_ => Expire(created), null, ttl, Timeout.InfiniteTimeSpan);
                 }
             }
@@ -82,7 +86,7 @@ internal sealed class MutationBroker(TimeProvider time, Func<MutationRequest, Ca
         if (join is not null) return AwaitWithCancellation(join.Completion.Task, ct);
 
         var pending = created!;
-        Changed?.Invoke(new MutationAdded(pending.View));
+        if (dispatchEvents) DispatchEvents();
         pending.CancellationRegistration = ct.Register(() => Cancel(pending));
         return pending.Completion.Task;
     }
@@ -92,6 +96,7 @@ internal sealed class MutationBroker(TimeProvider time, Func<MutationRequest, Ca
     {
         PendingRequest? approved = null;
         PendingRequest? expired = null;
+        var dispatchEvents = false;
         bool busy;
         lock (_gate)
         {
@@ -99,7 +104,11 @@ internal sealed class MutationBroker(TimeProvider time, Func<MutationRequest, Ca
                 return false;
             if (time.GetUtcNow() > pending.View.ExpiresAt)
             {
-                if (Transition(pending, MutationState.Expired)) expired = pending;
+                if (Transition(pending, MutationState.Expired))
+                {
+                    expired = pending;
+                    dispatchEvents = QueueEventUnderLock(new MutationRemoved(pending.View.RequestId, MutationState.Expired));
+                }
                 busy = false;
             }
             else if (!string.Equals(verification, "click", StringComparison.Ordinal))
@@ -111,13 +120,14 @@ internal sealed class MutationBroker(TimeProvider time, Func<MutationRequest, Ca
                 approved = pending;
                 busy = !_executingProfiles.Add(pending.Request.Profile);
                 if (!busy) pending.State = MutationState.Executing;
+                dispatchEvents = QueueEventUnderLock(new MutationRemoved(pending.View.RequestId, MutationState.Approved));
             }
         }
 
+        if (dispatchEvents) DispatchEvents();
         if (expired is not null) CompleteExpired(expired);
         if (approved is not null)
         {
-            Changed?.Invoke(new MutationRemoved(approved.View.RequestId, MutationState.Approved));
             DisposePendingSignals(approved);
             if (busy) approved.Completion.TrySetResult(Result(MutationStatus.Busy));
             else _ = RunExecutionAsync(approved);
@@ -129,13 +139,18 @@ internal sealed class MutationBroker(TimeProvider time, Func<MutationRequest, Ca
     {
         PendingRequest? denied = null;
         PendingRequest? expired = null;
+        var dispatchEvents = false;
         lock (_gate)
         {
             if (!_pendingById.TryGetValue(requestId, out var pending) || pending.State != MutationState.Pending)
                 return false;
             if (time.GetUtcNow() > pending.View.ExpiresAt)
             {
-                if (Transition(pending, MutationState.Expired)) expired = pending;
+                if (Transition(pending, MutationState.Expired))
+                {
+                    expired = pending;
+                    dispatchEvents = QueueEventUnderLock(new MutationRemoved(pending.View.RequestId, MutationState.Expired));
+                }
             }
             else if (!Transition(pending, MutationState.Denied))
                 return false;
@@ -143,13 +158,14 @@ internal sealed class MutationBroker(TimeProvider time, Func<MutationRequest, Ca
             {
                 _deniedDigests[pending.Request.Digest] = time.GetUtcNow();
                 denied = pending;
+                dispatchEvents = QueueEventUnderLock(new MutationRemoved(pending.View.RequestId, MutationState.Denied));
             }
         }
 
+        if (dispatchEvents) DispatchEvents();
         if (expired is not null) CompleteExpired(expired);
         if (denied is not null)
         {
-            Changed?.Invoke(new MutationRemoved(denied.View.RequestId, MutationState.Denied));
             DisposePendingSignals(denied);
             denied.Completion.TrySetResult(Result(MutationStatus.Denied));
         }
@@ -196,21 +212,26 @@ internal sealed class MutationBroker(TimeProvider time, Func<MutationRequest, Ca
 
     private void Expire(PendingRequest pending)
     {
+        var dispatchEvents = false;
         lock (_gate)
         {
             if (pending.State != MutationState.Pending || time.GetUtcNow() < pending.View.ExpiresAt) return;
             if (!Transition(pending, MutationState.Expired)) return;
+            dispatchEvents = QueueEventUnderLock(new MutationRemoved(pending.View.RequestId, MutationState.Expired));
         }
+        if (dispatchEvents) DispatchEvents();
         CompleteExpired(pending);
     }
 
     private void Cancel(PendingRequest pending)
     {
+        var dispatchEvents = false;
         lock (_gate)
         {
             if (!Transition(pending, MutationState.Cancelled)) return;
+            dispatchEvents = QueueEventUnderLock(new MutationRemoved(pending.View.RequestId, MutationState.Cancelled));
         }
-        Changed?.Invoke(new MutationRemoved(pending.View.RequestId, MutationState.Cancelled));
+        if (dispatchEvents) DispatchEvents();
         DisposePendingSignals(pending);
         pending.Completion.TrySetCanceled();
     }
@@ -225,9 +246,42 @@ internal sealed class MutationBroker(TimeProvider time, Func<MutationRequest, Ca
 
     private void CompleteExpired(PendingRequest pending)
     {
-        Changed?.Invoke(new MutationRemoved(pending.View.RequestId, MutationState.Expired));
         DisposePendingSignals(pending);
         pending.Completion.TrySetResult(Result(MutationStatus.Timeout));
+    }
+
+    private bool QueueEventUnderLock(BrokerEvent change)
+    {
+        _events.Enqueue(change);
+        if (_dispatchingEvents) return false;
+        _dispatchingEvents = true;
+        return true;
+    }
+
+    private void DispatchEvents()
+    {
+        while (true)
+        {
+            BrokerEvent change;
+            Delegate[]? handlers;
+            lock (_gate)
+            {
+                if (_events.Count == 0)
+                {
+                    _dispatchingEvents = false;
+                    return;
+                }
+                change = _events.Dequeue();
+                handlers = Changed?.GetInvocationList();
+            }
+
+            if (handlers is null) continue;
+            foreach (var handler in handlers)
+            {
+                try { ((Action<BrokerEvent>)handler)(change); }
+                catch { }
+            }
+        }
     }
 
     private static void DisposePendingSignals(PendingRequest pending)

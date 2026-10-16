@@ -140,6 +140,54 @@ public sealed class MutationBrokerTests
         Assert.Equal(MutationStatus.Success, (await second).Status);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Added_event_is_published_before_concurrent_removal(bool expire)
+    {
+        var clock = new ManualTimeProvider(Start);
+        var broker = Broker(clock, (_, _) => Task.FromResult(Success()));
+        var request = Request();
+        var addedHandlerStarted = new ManualResetEventSlim();
+        var releaseAddedHandler = new ManualResetEventSlim();
+        var published = new List<string>();
+        broker.Changed += change =>
+        {
+            if (change is MutationAdded)
+            {
+                addedHandlerStarted.Set();
+                releaseAddedHandler.Wait();
+                lock (published) published.Add("added");
+            }
+            else if (change is MutationRemoved)
+            {
+                lock (published) published.Add("removed");
+            }
+        };
+        var submit = Task.Run(async () => await broker.SubmitAsync(
+            request, MutationDecisionKind.AskOperator, Ttl, View("1", request), default));
+
+        try
+        {
+            Assert.True(addedHandlerStarted.Wait(TimeSpan.FromSeconds(5)));
+            if (expire)
+                clock.Advance(Ttl);
+            else
+                Assert.True(await Task.Run(() => broker.TryApprove("1", "click")));
+        }
+        finally
+        {
+            releaseAddedHandler.Set();
+        }
+
+        var result = await submit;
+
+        Assert.Equal(expire ? MutationStatus.Timeout : MutationStatus.Success, result.Status);
+        Assert.Equal(new[] { "added", "removed" }, published);
+        addedHandlerStarted.Dispose();
+        releaseAddedHandler.Dispose();
+    }
+
     [Fact]
     public async Task Different_pending_digest_in_same_session_returns_busy()
     {
