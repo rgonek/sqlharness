@@ -6,6 +6,7 @@ Przeczytaj wybrany plan i jego spec przed wykonaniem. Wpis w kolejce nie jest zg
 
 | Plan | Zakres | Zależności | Status |
 |---|---|---|---|
+| [080](080-windows-gate-speedup.md) | Skrócenie bramki Windows: restore wbudowany w build, `ui-check` równolegle z buildem, równoległe projekty testowe, szybsze seedowanie journalu w testach czytających, diagnozowalny flaky housekeeping, usunięcie testu atrybutów xunit | 076 DONE | IN PROGRESS |
 
 ## Oczekujące
 
