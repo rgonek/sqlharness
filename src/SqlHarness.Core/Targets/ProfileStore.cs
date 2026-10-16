@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using SqlHarness.Core.Mutations;
 using SqlHarness.Core.Postgres;
 
 namespace SqlHarness.Core.Targets;
@@ -43,6 +44,8 @@ public static class ProfileStore
                     throw new JsonException("A profile variable rule is invalid.");
                 }
 
+                ValidateMutations(profile);
+
                 if (!string.IsNullOrWhiteSpace(profile.Engine))
                 {
                     try
@@ -66,7 +69,45 @@ public static class ProfileStore
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
-            throw new SqlHarnessSafetyException($"Could not parse target profiles file '{path}'.");
+            var safeMutationMessage = exception.Message is
+                "A profile mutation mode is invalid." or
+                "A profile that allows mutations needs mutations.writer." or
+                "mutations.writer needs sqlUser and passwordEnvVar, or sameAsReader." or
+                "yolo on a prod or staging profile needs mutations.acknowledgeProductionYolo: true."
+                ? $" {exception.Message}"
+                : string.Empty;
+            throw new SqlHarnessSafetyException($"Could not parse target profiles file '{path}'.{safeMutationMessage}");
+        }
+    }
+
+    private static void ValidateMutations(TargetProfile profile)
+    {
+        if (profile.Mutations is not { } mutations)
+            return;
+
+        if (!Enum.TryParse<MutationMode>(mutations.Mode, ignoreCase: true, out var mode) || !Enum.IsDefined(mode))
+            throw new JsonException("A profile mutation mode is invalid.");
+
+        if (mode != MutationMode.Never && mutations.Writer is null)
+            throw new JsonException("A profile that allows mutations needs mutations.writer.");
+
+        if (mutations.Writer is { } writer)
+        {
+            var hasSqlUser = !string.IsNullOrWhiteSpace(writer.SqlUser);
+            var hasPasswordEnvVar = !string.IsNullOrWhiteSpace(writer.PasswordEnvVar);
+            var hasCredentials = hasSqlUser && hasPasswordEnvVar;
+            if (writer.SameAsReader == hasCredentials || (!writer.SameAsReader && !hasCredentials))
+                throw new JsonException("mutations.writer needs sqlUser and passwordEnvVar, or sameAsReader.");
+        }
+
+        if (mode == MutationMode.Yolo &&
+            profile.Environment is { } environment &&
+            (environment.Equals("prod", StringComparison.OrdinalIgnoreCase) ||
+             environment.Equals("production", StringComparison.OrdinalIgnoreCase) ||
+             environment.Equals("staging", StringComparison.OrdinalIgnoreCase)) &&
+            !mutations.AcknowledgeProductionYolo)
+        {
+            throw new JsonException("yolo on a prod or staging profile needs mutations.acknowledgeProductionYolo: true.");
         }
     }
 

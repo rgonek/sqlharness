@@ -10,4 +10,9 @@ public sealed record TargetProfile(
     bool TrustServerCertificate = false,
     string? Engine = null,
     string? SslMode = null,
-    string? RootCertificate = null);
+    string? RootCertificate = null,
+    string? Environment = null,
+    ProfileMutations? Mutations = null);
+
+public sealed record MutationWriter(string? SqlUser = null, string? PasswordEnvVar = null, bool SameAsReader = false);
+public sealed record ProfileMutations(string Mode, MutationWriter? Writer = null, bool AcknowledgeProductionYolo = false);

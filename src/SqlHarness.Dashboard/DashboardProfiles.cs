@@ -7,7 +7,8 @@ public sealed record ProfileVariable(string Name, string Rule);
 
 public sealed record ProfileView(
     string Name, string Engine, string Server, string Database, string Auth, string? SqlUser, string? PasswordEnvVar,
-    string? SslMode, bool TrustServerCertificate, string? RootCertificate, string Tls, IReadOnlyList<ProfileVariable> Vars);
+    string? SslMode, bool TrustServerCertificate, string? RootCertificate, string Tls, IReadOnlyList<ProfileVariable> Vars,
+    string? Environment, string MutationMode, string? MutationWriterKind, bool AcknowledgeProductionYolo);
 
 public sealed record ProfilesResponse(string Status, IReadOnlyList<ProfileView> Profiles, string? Message);
 
@@ -78,5 +79,9 @@ internal static class DashboardProfiles
         profile.TrustServerCertificate,
         profile.RootCertificate,
         Tls(profile),
-        profile.Vars.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => new ProfileVariable(pair.Key, pair.Value)).ToArray());
+        profile.Vars.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => new ProfileVariable(pair.Key, pair.Value)).ToArray(),
+        profile.Environment,
+        profile.Mutations?.Mode ?? "never",
+        profile.Mutations?.Writer is { } writer ? writer.SameAsReader ? "sameAsReader" : "separate" : null,
+        profile.Mutations?.AcknowledgeProductionYolo ?? false);
 }

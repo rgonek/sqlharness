@@ -158,7 +158,7 @@ Validation, inside the existing `ProfileStore.Load` loop:
 
 `SqlHarnessConfigLoader` keeps its strict, fail-closed style: unknown fields or out-of-range values yield `Default` with a warning. `ApprovalTimeoutSeconds` must be 30..600 and modes must be known names. The only supported verification value is `click`; an unsupported value is rejected with an explicit warning/error and is never normalized to click. Settings writes containing unsupported values return a validation error and preserve the existing value.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - A profile with `"mutations": {"mode":"yolo","writer":{"sameAsReader":true}}, "environment":"Prod"` fails to load with the acknowledgement message.
   - The same profile plus `"acknowledgeProductionYolo": true` loads.
   - `acknowledgeProductionYolo: true` on a non-yolo profile loads (it is inert).
@@ -168,10 +168,10 @@ Validation, inside the existing `ProfileStore.Load` loop:
   - A profile without `mutations` loads as before.
   - `config.json` with `"mutations":{"approvalTimeoutSeconds":10}` yields `Default` plus a warning.
   - `"verification":"webauthn"` is rejected with a visible warning/error and is never treated as an explicit click selection.
-- [ ] **Step 2: Run them to verify they fail** (`dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~ProfileStore|FullyQualifiedName~SqlHarnessConfig"`).
-- [ ] **Step 3: Implement** the records, validation, `DashboardSettings` read/write of `mutations` (same autosave rules as other settings) and the `DashboardProfiles` columns.
-- [ ] **Step 4: Run them to verify they pass**, plus `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~Dashboard`.
-- [ ] **Step 5: Commit**: `git commit -m "Add per-profile mutation modes, writer credentials and mutation settings"`.
+- [x] **Step 2: Run them to verify they fail** (`dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~ProfileStore|FullyQualifiedName~SqlHarnessConfig"`).
+- [x] **Step 3: Implement** the records, validation, `DashboardSettings` read/write of `mutations` (same autosave rules as other settings) and the `DashboardProfiles` columns.
+- [x] **Step 4: Run them to verify they pass**, plus `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~Dashboard`.
+- [x] **Step 5: Commit**: `git commit -m "Add per-profile mutation modes, writer credentials and mutation settings"`.
 
 ### Task 2: Policy, frozen request, approved execution in Core
 

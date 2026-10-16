@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using SqlHarness.Core.Mutations;
+
 namespace SqlHarness.Core;
 
 public sealed record JournalRetentionConfig
@@ -41,6 +43,13 @@ public sealed record DiagnosticsConfig
     public bool Enabled { get; init; }
 }
 
+public sealed record MutationsConfig
+{
+    public string DefaultMode { get; init; } = "never";
+    public string Verification { get; init; } = "click";
+    public int ApprovalTimeoutSeconds { get; init; } = 120;
+}
+
 /// <summary>Operator settings from <c>~/.sqlharness/config.json</c>; tool behavior only, never targets.</summary>
 public sealed record SqlHarnessConfig
 {
@@ -48,6 +57,7 @@ public sealed record SqlHarnessConfig
     public DashboardConfig Dashboard { get; init; } = new();
     public CompareConfig Compare { get; init; } = new();
     public DiagnosticsConfig Diagnostics { get; init; } = new();
+    public MutationsConfig Mutations { get; init; } = new();
 
     public static SqlHarnessConfig Default { get; } = new();
 }
@@ -100,9 +110,12 @@ public static class SqlHarnessConfigLoader
                 return Invalid();
 
             var parsed = Parse(File.ReadAllBytes(path));
-            return parsed.Config is { } config
-                ? new SqlHarnessConfigLoadResult(config, SqlHarnessConfigStatus.Valid, null)
-                : Invalid();
+            if (parsed.Config is { } config)
+                return new SqlHarnessConfigLoadResult(config, SqlHarnessConfigStatus.Valid, null);
+            var verificationUnsupported = parsed.Errors.Any(error => error.Field == "mutations.verification");
+            return Invalid(verificationUnsupported
+                ? "sqlharness: config.json mutations.verification is unsupported; using defaults (click is the only supported verification)."
+                : null);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
         {
@@ -139,16 +152,22 @@ public static class SqlHarnessConfigLoader
             errors.Add(new("dashboard.port", "Must be between 1024 and 65535."));
         if (config.Dashboard.IdleShutdownHours is < 1 or > 168)
             errors.Add(new("dashboard.idleShutdownHours", "Must be between 1 and 168."));
+        if (!Enum.TryParse<MutationMode>(config.Mutations.DefaultMode, ignoreCase: true, out var defaultMode) || !Enum.IsDefined(defaultMode))
+            errors.Add(new("mutations.defaultMode", "Must be never, operator or yolo."));
+        if (!Enum.TryParse<MutationVerification>(config.Mutations.Verification, ignoreCase: true, out var verification) || !Enum.IsDefined(verification))
+            errors.Add(new("mutations.verification", "Unsupported verification; click is the only supported value."));
+        if (config.Mutations.ApprovalTimeoutSeconds is < 30 or > 600)
+            errors.Add(new("mutations.approvalTimeoutSeconds", "Must be between 30 and 600."));
         return errors.Count == 0 ? new(config, []) : new(null, errors);
     }
 
     private static SqlHarnessConfigParseResult Failed(string field, string message) => new(null, [new(field, message)]);
 
-    private static SqlHarnessConfigLoadResult Invalid() =>
-        new(SqlHarnessConfig.Default, SqlHarnessConfigStatus.Invalid, InvalidWarning);
+    private static SqlHarnessConfigLoadResult Invalid(string? warning = null) =>
+        new(SqlHarnessConfig.Default, SqlHarnessConfigStatus.Invalid, warning ?? InvalidWarning);
 
     // Explicit JSON nulls bypass initializers; treat them as invalid.
     private static bool IsComplete(SqlHarnessConfig config) =>
         config.Journal is not null && config.Journal.Retention is not null && config.Dashboard is not null &&
-        config.Dashboard.AgentTranscripts is not null && config.Compare is not null && config.Diagnostics is not null;
+        config.Dashboard.AgentTranscripts is not null && config.Compare is not null && config.Diagnostics is not null && config.Mutations is not null;
 }

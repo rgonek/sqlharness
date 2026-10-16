@@ -28,6 +28,52 @@ public sealed class SqlHarnessConfigTests : IDisposable
     }
 
     [Fact]
+    public void Mutation_approval_timeout_out_of_range_uses_defaults_with_warning()
+    {
+        File.WriteAllText(ConfigPath, """{ "mutations": { "approvalTimeoutSeconds": 10 } }""");
+
+        var result = SqlHarnessConfigLoader.Load(ConfigPath);
+
+        Assert.Equal(SqlHarnessConfigStatus.Invalid, result.Status);
+        Assert.NotNull(result.Warning);
+        Assert.Equal(SqlHarnessConfig.Default, result.Config);
+    }
+
+    [Fact]
+    public void Unsupported_mutation_verification_is_reported_and_never_becomes_click()
+    {
+        const string json = """{ "mutations": { "verification": "webauthn" } }""";
+        var parsed = SqlHarnessConfigLoader.Parse(System.Text.Encoding.UTF8.GetBytes(json));
+        File.WriteAllText(ConfigPath, json);
+
+        var loaded = SqlHarnessConfigLoader.Load(ConfigPath);
+
+        Assert.Null(parsed.Config);
+        Assert.Contains(parsed.Errors, error => error.Field == "mutations.verification");
+        Assert.Equal(SqlHarnessConfigStatus.Invalid, loaded.Status);
+        Assert.NotNull(loaded.Warning);
+        Assert.Equal("click", ConfigProperty(ConfigProperty(loaded.Config, "Mutations")!, "Verification"));
+    }
+
+    [Fact]
+    public void Mutation_settings_default_and_round_trip_supported_values()
+    {
+        var defaults = SqlHarnessConfigLoader.Parse("{}"u8.ToArray()).Config!;
+        var parsed = SqlHarnessConfigLoader.Parse("""{ "mutations": { "defaultMode": "operator", "verification": "click", "approvalTimeoutSeconds": 240 } }"""u8.ToArray());
+
+        Assert.Equal("never", ConfigProperty(ConfigProperty(defaults, "Mutations")!, "DefaultMode"));
+        Assert.Equal("click", ConfigProperty(ConfigProperty(defaults, "Mutations")!, "Verification"));
+        Assert.Equal(120, ConfigProperty(ConfigProperty(defaults, "Mutations")!, "ApprovalTimeoutSeconds"));
+        Assert.Empty(parsed.Errors);
+        Assert.Equal("operator", ConfigProperty(ConfigProperty(parsed.Config!, "Mutations")!, "DefaultMode"));
+        Assert.Equal(240, ConfigProperty(ConfigProperty(parsed.Config!, "Mutations")!, "ApprovalTimeoutSeconds"));
+        Assert.Equal("click", ConfigProperty(ConfigProperty(parsed.Config!, "Mutations")!, "Verification"));
+    }
+
+    private static object? ConfigProperty(object target, string name) =>
+        target.GetType().GetProperty(name)?.GetValue(target);
+
+    [Fact]
     public void Diagnostics_is_opt_in_and_rejects_unknown_or_wrong_typed_fields()
     {
         var enabled = SqlHarnessConfigLoader.Parse("""{ "diagnostics": { "enabled": true } }"""u8.ToArray());
