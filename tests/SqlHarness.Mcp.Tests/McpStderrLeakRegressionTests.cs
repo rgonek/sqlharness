@@ -83,7 +83,7 @@ public sealed class McpStderrLeakRegressionTests
             Assert.False(valid.IsError == true, McpStdioProcessHarness.Envelope(valid).ToString());
             var validEnvelope = McpStdioProcessHarness.Envelope(valid);
             Assert.Equal("success", validEnvelope.GetProperty("status").GetString());
-            Assert.Equal(0, validEnvelope.GetProperty("exitCode").GetInt32());
+            Assert.False(validEnvelope.TryGetProperty("exitCode", out _));
             Assert.DoesNotContain(ScopeVarMarker, validEnvelope.ToString(), StringComparison.Ordinal);
 
             // Rejected file path carrying the path marker. This server has no

@@ -43,11 +43,69 @@ public sealed record AgentCompactQuery(
 /// <summary>Bounded agent projection of a mutation broker response.</summary>
 public sealed record AgentMutationResult(string Status, string? Message, object? Result);
 
-/// <summary>The version shared by CLI and MCP agent response envelopes.</summary>
+/// <summary>The CLI agent response envelope version. MCP uses its own constant.</summary>
 public static class AgentEnvelopeSchema
 {
     public const int Version = 2;
 }
+
+/// <summary>Audience for <see cref="AgentOutputProjection.Project"/>.</summary>
+public enum AgentProjectionProfile
+{
+    Cli,
+    Mcp,
+}
+
+/// <summary>Documented model-facing names for comparison, watch, and snapshot enums.</summary>
+public static class AgentProjectionNames
+{
+    public static readonly IReadOnlyList<string> ComparisonModes = ["ordered", "multiset", "set", "off"];
+    public static readonly IReadOnlyList<string> WatchExitReasons = ["condition-met", "unchanged", "max-duration"];
+    public static readonly IReadOnlyList<string> SnapshotVerdicts = ["stored", "identical", "different"];
+
+    public static string ComparisonMode(ResultComparisonMode mode) => mode switch
+    {
+        ResultComparisonMode.Ordered => "ordered",
+        ResultComparisonMode.Multiset => "multiset",
+        ResultComparisonMode.Set => "set",
+        ResultComparisonMode.Off => "off",
+        _ => throw new ArgumentOutOfRangeException(nameof(mode)),
+    };
+
+    public static string WatchExitReason(WatchExitReason reason) => reason switch
+    {
+        Core.WatchExitReason.ConditionMet => "condition-met",
+        Core.WatchExitReason.Unchanged => "unchanged",
+        Core.WatchExitReason.MaxDuration => "max-duration",
+        _ => throw new ArgumentOutOfRangeException(nameof(reason)),
+    };
+
+    public static string SnapshotVerdict(SnapshotVerdict verdict) => verdict switch
+    {
+        Core.SnapshotVerdict.Stored => "stored",
+        Core.SnapshotVerdict.Identical => "identical",
+        Core.SnapshotVerdict.Different => "different",
+        _ => throw new ArgumentOutOfRangeException(nameof(verdict)),
+    };
+}
+
+/// <summary>MCP watch projection with a documented <c>exitReason</c> string.</summary>
+public sealed record AgentWatchOutput(
+    SqlHarnessTargetIdentityReport Target,
+    int PollCount,
+    long ElapsedMilliseconds,
+    string ExitReason,
+    IReadOnlyList<SqlHarnessWatchPoll> EmittedPolls,
+    int TotalChangedPolls = 0,
+    int OmittedPolls = 0);
+
+/// <summary>MCP snapshot projection with a documented <c>verdict</c> string.</summary>
+public sealed record AgentSnapshotOutput(
+    SqlHarnessTargetIdentityReport Target,
+    string Name,
+    string Verdict,
+    int DifferenceCount,
+    IReadOnlyList<SqlHarnessSnapshotDifference> Differences);
 
 /// <summary>Presentation-only bounds for the opt-in agent response.</summary>
 public sealed record AgentOutputOptions(int MaximumBytes = 65_536, int MaximumCellCharacters = AgentOutputLimits.DefaultCellCharacters);
@@ -69,7 +127,7 @@ public static class AgentOutputProjection
             .ThenByDescending(pair => pair.Value.Max)
             .ThenBy(pair => pair.Key, StringComparer.Ordinal);
 
-    public static object? Project(object? report, int maximumCellCharacters, int detailLimit, out int omittedItems, int maximumBytes = 65_536)
+    public static object? Project(object? report, int maximumCellCharacters, int detailLimit, out int omittedItems, int maximumBytes = 65_536, AgentProjectionProfile profile = AgentProjectionProfile.Cli)
     {
         omittedItems = 0;
         var omissions = 0;
@@ -112,7 +170,7 @@ public static class AgentOutputProjection
                         object? projected = null;
                         var queryOmitted = 0;
                         if (mutation.Result is not null)
-                            projected = Project(mutation.Result, maximumCellCharacters, detailLimit, out queryOmitted, maximumBytes);
+                            projected = Project(mutation.Result, maximumCellCharacters, detailLimit, out queryOmitted, maximumBytes, profile);
                         omissions += clippedItems;
                         omissions += queryOmitted;
                         return new AgentMutationResult(mutation.Status, message, projected);
@@ -180,7 +238,7 @@ public static class AgentOutputProjection
                     foreach (var cell in orderedMatrixCells.Take(cases.Count).Take(detailLimit))
                     {
                         var projected = Project(BenchmarkSummaryProjector.Project(cell.Compare), maximumCellCharacters, detailLimit,
-                            out var cellOmitted, maximumBytes);
+                            out var cellOmitted, maximumBytes, profile);
                         nestedOmitted += cellOmitted;
                         var summary = (CompareBenchmarkSummary)projected!;
                         selectedDetails.Add(new CompareMatrixCellDetail(cell.Index, new CompareMatrixCellDetailContent(
@@ -198,13 +256,13 @@ public static class AgentOutputProjection
                     };
                 case SqlHarnessCompareReport compare:
                     {
-                        var nestedProjection = Project(BenchmarkSummaryProjector.Project(compare), maximumCellCharacters, detailLimit, out var compareSummaryOmitted, maximumBytes);
+                        var nestedProjection = Project(BenchmarkSummaryProjector.Project(compare), maximumCellCharacters, detailLimit, out var compareSummaryOmitted, maximumBytes, profile);
                         omissions += compareSummaryOmitted;
                         return nestedProjection;
                     }
                 case SqlHarnessMeasureReport measure:
                     {
-                        var nestedProjection = Project(BenchmarkSummaryProjector.Project(measure), maximumCellCharacters, detailLimit, out var measureSummaryOmitted, maximumBytes);
+                        var nestedProjection = Project(BenchmarkSummaryProjector.Project(measure), maximumCellCharacters, detailLimit, out var measureSummaryOmitted, maximumBytes, profile);
                         omissions += measureSummaryOmitted;
                         return nestedProjection;
                     }
@@ -236,12 +294,30 @@ public static class AgentOutputProjection
                 case SqlHarnessWatchReport watch:
                     var polls = Take(watch.EmittedPolls).Select(poll => new SqlHarnessWatchPoll(poll.Poll, poll.ElapsedMilliseconds, poll.ResultHash, ProjectResultSets(poll.ResultSets))).ToArray();
                     omissions += clippedItems;
-                    return watch with { EmittedPolls = polls };
+                    var projectedWatch = watch with { EmittedPolls = polls };
+                    return profile == AgentProjectionProfile.Mcp
+                        ? new AgentWatchOutput(
+                            projectedWatch.Target,
+                            projectedWatch.PollCount,
+                            projectedWatch.ElapsedMilliseconds,
+                            AgentProjectionNames.WatchExitReason(projectedWatch.ExitReason),
+                            projectedWatch.EmittedPolls,
+                            projectedWatch.TotalChangedPolls,
+                            projectedWatch.OmittedPolls)
+                        : projectedWatch;
                 case SqlHarnessSnapshotReport snapshot:
                     var snapshotName = Clip(snapshot.Name)!;
                     var differences = Take(snapshot.Differences);
                     omissions += clippedItems;
-                    return snapshot with { Name = snapshotName, Differences = differences };
+                    var projectedSnapshot = snapshot with { Name = snapshotName, Differences = differences };
+                    return profile == AgentProjectionProfile.Mcp
+                        ? new AgentSnapshotOutput(
+                            projectedSnapshot.Target,
+                            projectedSnapshot.Name,
+                            AgentProjectionNames.SnapshotVerdict(projectedSnapshot.Verdict),
+                            projectedSnapshot.DifferenceCount,
+                            projectedSnapshot.Differences)
+                        : projectedSnapshot;
                 case ArtifactMetricsSection metrics:
                     {
                         var variants = Take(metrics.Variants).Select(variant => variant with

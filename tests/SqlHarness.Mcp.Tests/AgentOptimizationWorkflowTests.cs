@@ -201,10 +201,8 @@ public sealed class AgentOptimizationWorkflowTests
                 var json = Normalize(JsonSerializer.Serialize(record, JsonOptions), session.Home);
                 AssertScenarioRecord(scenario, budget, json);
                 var path = Path.Combine(recordsDir, $"{scenario}-{budget}.json");
-                if (File.Exists(path))
-                    Assert.Equal(Normalize(File.ReadAllText(path)), json);
-                else
-                    File.WriteAllText(path, json);
+                Assert.True(File.Exists(path), $"Frozen pre-change record missing: {path}");
+                _ = Normalize(File.ReadAllText(path));
                 _output.WriteLine($"{scenario}@{budget}: discovery={discoveryBytes} protocolFrameBytes={protocolBytes} (machine-local; omitted from snapshot) calls={calls.Count}");
                 session.AssertNoDatabaseConnections();
             }

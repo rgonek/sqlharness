@@ -28,6 +28,45 @@ public sealed class AgentOutputTests
     }
 
     [Fact]
+    public void Cli_envelope_is_not_changed_for_mcp_parity()
+    {
+        var output = new StringWriter();
+        new Renderer().RenderAgent(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, new SqlHarnessDryRunReport("query", "read-only", "read-only", [], 0), null),
+            "query",
+            new OutputCaptureWriter(output),
+            new AgentOutputOptions());
+
+        using var json = JsonDocument.Parse(output.ToString());
+        var envelope = json.RootElement;
+        Assert.Equal(AgentEnvelopeSchema.Version, envelope.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(2, envelope.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal("query", envelope.GetProperty("command").GetString());
+        Assert.Equal("success", envelope.GetProperty("status").GetString());
+        Assert.Equal(0, envelope.GetProperty("exitCode").GetInt32());
+        Assert.Equal(JsonValueKind.Null, envelope.GetProperty("error").ValueKind);
+        Assert.Equal(JsonValueKind.Null, envelope.GetProperty("truncation").ValueKind);
+        Assert.Equal("read-only", envelope.GetProperty("result").GetProperty("classification").GetString());
+        Assert.Equal("read-only", envelope.GetProperty("result").GetProperty("tier").GetString());
+
+        var compareOutput = new StringWriter();
+        new Renderer().RenderAgent(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, BuildCompare("marker", "/artifacts/cell") with
+            {
+                Equivalence = new ResultEquivalenceReport(ResultComparisonMode.Multiset, true, null, 0, 0),
+            }, null),
+            "compare",
+            new OutputCaptureWriter(compareOutput),
+            new AgentOutputOptions());
+        using var compareJson = JsonDocument.Parse(compareOutput.ToString());
+        Assert.Equal(2, compareJson.RootElement.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal("compare", compareJson.RootElement.GetProperty("command").GetString());
+        Assert.Equal(0, compareJson.RootElement.GetProperty("exitCode").GetInt32());
+        Assert.Equal(1, compareJson.RootElement.GetProperty("result").GetProperty("equivalence").GetProperty("mode").GetInt32());
+        Assert.Equal(JsonValueKind.Null, compareJson.RootElement.GetProperty("error").ValueKind);
+    }
+
+    [Fact]
     public void Agent_output_default_budget_is_shared_by_cli_options_and_capabilities()
     {
         const int expectedBytes = 65536;

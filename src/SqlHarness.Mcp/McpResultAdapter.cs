@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using ModelContextProtocol.Protocol;
 
@@ -72,9 +73,9 @@ public sealed record McpTruncationInfo(int OmittedItems, int DetailLimit, int Ma
 /// Maps a Core <see cref="SqlHarnessOutcome"/> onto an SDK
 /// <see cref="CallToolResult"/> inside a caller-supplied byte budget.
 ///
-/// The single <see cref="TextContentBlock"/> carries the agent envelope
-/// (schemaVersion/command/status/exitCode/result/error/truncation) as compact
-/// JSON. There is no structured or third descriptive/table representation.
+/// The single <see cref="TextContentBlock"/> carries the MCP v3 agent envelope
+/// (schemaVersion/status/result, plus error and truncation when populated) as
+/// compact JSON. There is no structured or third descriptive/table representation.
 ///
 /// Projection and secret handling reuse the shared Core pieces: reports go
 /// through <see cref="AgentOutputProjection"/> (never a second projector)
@@ -92,12 +93,20 @@ public sealed record McpTruncationInfo(int OmittedItems, int DetailLimit, int Ma
 /// </summary>
 public static class McpResultAdapter
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = CreateJson();
 
-    /// <summary>Envelope schema version shared with the CLI agent output.</summary>
-    public const int SchemaVersion = AgentEnvelopeSchema.Version;
+    /// <summary>MCP envelope schema version. The CLI envelope stays on <see cref="AgentEnvelopeSchema.Version"/>.</summary>
+    public const int SchemaVersion = McpAgentEnvelope.Version;
 
-    /// <summary>
+    private static JsonSerializerOptions CreateJson()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new JsonStringEnumConverter<ResultComparisonMode>(JsonNamingPolicy.KebabCaseLower));
+        options.Converters.Add(new JsonStringEnumConverter<WatchExitReason>(JsonNamingPolicy.KebabCaseLower));
+        options.Converters.Add(new JsonStringEnumConverter<SnapshotVerdict>(JsonNamingPolicy.KebabCaseLower));
+        return options;
+    }
+
     /// <summary>
     /// Adapts one outcome to a budgeted SDK result. The returned content is
     /// one text block; <c>IsError</c> is true only for failures.
@@ -116,14 +125,12 @@ public static class McpResultAdapter
         var maximumBytes = active.MaximumBytes;
         var maximumCellCharacters = active.MaximumCellCharacters;
 
-        var error = RedactError(outcome.MachineError, secrets, maximumCellCharacters, out var errorOmitted);
-        var boundedCommand = Clip(command, maximumCellCharacters, ref errorOmitted);
+        var error = ToMcpError(RedactError(outcome.MachineError, secrets, maximumCellCharacters, out var errorOmitted));
         var status = StatusFor(outcome, error);
         var isError = outcome.ExitCode is not (
             SqlHarnessExitCode.Success or
             SqlHarnessExitCode.WatchMaxDuration or
             SqlHarnessExitCode.SnapshotDifferences);
-        var exitCode = (int)outcome.ExitCode;
 
         var report = outcome.Report is SqlHarnessArtifactReadReport artifactRead
             ? artifactRead.Section
@@ -131,32 +138,30 @@ public static class McpResultAdapter
         foreach (var detailLimit in AgentOutputProjection.CandidateDetailLimits)
         {
             var projected = AgentOutputProjection.Project(
-                report, maximumCellCharacters, detailLimit, out var omitted, maximumBytes);
+                report, maximumCellCharacters, detailLimit, out var omitted, maximumBytes, AgentProjectionProfile.Mcp);
             var totalOmitted = omitted + errorOmitted;
 
             // Reports the shared projection does not know (capabilities,
             // validation) travel raw when they fit, instead of degrading to a
             // bounded placeholder while bytes remain.
             if (projected is AgentBoundedOutput && report is not null &&
-                TryEnvelopeBytes(boundedCommand, status, exitCode, report, error, null, outcome.OperationRef, outcome.ParentOperationRef, out var rawBytes) &&
+                TryEnvelopeBytes(status, report, error, null, out var rawBytes) &&
                 TryBuildWithinBudget(rawBytes, isError, maximumBytes, out var rawResult))
                 return rawResult;
 
             var truncation = totalOmitted > 0
                 ? new McpTruncationInfo(totalOmitted, detailLimit, maximumCellCharacters)
                 : null;
-            if (TryEnvelopeBytes(boundedCommand, status, exitCode, projected, error, truncation, outcome.OperationRef, outcome.ParentOperationRef, out var envelopeBytes) &&
+            if (TryEnvelopeBytes(status, projected, error, truncation, out var envelopeBytes) &&
                 TryBuildWithinBudget(envelopeBytes, isError, maximumBytes, out var built))
                 return built;
         }
 
-        var minimal = new SqlHarnessAgentEnvelope(
+        var minimal = new McpAgentEnvelope(
             SchemaVersion,
-            boundedCommand,
             "error",
-            (int)SqlHarnessExitCode.Safety,
             null,
-            new SqlHarnessError(
+            new McpAgentError(
                 "output_budget_too_small",
                 "render",
                 "The minimum agent response does not fit the configured byte budget."),
@@ -168,7 +173,7 @@ public static class McpResultAdapter
         // Defensive only: the minimum budget (4096) always fits the envelope
         // above, so reaching here means misconfiguration, not content size.
         var fallback =
-            /*lang=json*/ $"{{\"schemaVersion\":{SchemaVersion},\"command\":\"unknown\",\"status\":\"error\",\"exitCode\":2,\"result\":null,\"error\":{{\"code\":\"output_budget_too_small\",\"phase\":\"render\",\"message\":\"Agent output unavailable.\"}},\"truncation\":null}}";
+            /*lang=json*/ $"{{\"schemaVersion\":{SchemaVersion},\"status\":\"error\",\"result\":null,\"error\":{{\"code\":\"output_budget_too_small\",\"phase\":\"render\",\"message\":\"Agent output unavailable.\"}}}}";
         return Build(Encoding.UTF8.GetBytes(fallback), isError: true);
     }
 
@@ -190,7 +195,7 @@ public static class McpResultAdapter
     internal static bool FitsRawSuccess(object report, string command, int maximumBytes)
     {
         ArgumentNullException.ThrowIfNull(report);
-        TryEnvelopeBytes(command, "success", (int)SqlHarnessExitCode.Success, report, null, null, null, null, out var bytes);
+        TryEnvelopeBytes("success", report, null, null, out var bytes);
         return TryBuildWithinBudget(bytes, isError: false, maximumBytes, out _);
     }
 
@@ -246,15 +251,14 @@ public static class McpResultAdapter
             return ["envelope must be a JSON object"];
 
         Check(envelope, "schemaVersion", JsonValueKind.Number, violations);
-        Check(envelope, "command", JsonValueKind.String, violations);
         Check(envelope, "status", JsonValueKind.String, violations);
-        Check(envelope, "exitCode", JsonValueKind.Number, violations);
         if (!envelope.TryGetProperty("result", out _))
             violations.Add("missing required property 'result'");
-        if (!envelope.TryGetProperty("error", out var error))
-            violations.Add("missing required property 'error'");
-        if (!envelope.TryGetProperty("truncation", out var truncation))
-            violations.Add("missing required property 'truncation'");
+        foreach (var removed in new[] { "command", "exitCode", "operationRef", "parentOperationRef" })
+        {
+            if (envelope.TryGetProperty(removed, out _))
+                violations.Add($"MCP v3 envelope must not include '{removed}'");
+        }
 
         if (envelope.TryGetProperty("schemaVersion", out var version) &&
             (version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var versionNumber) || versionNumber != SchemaVersion))
@@ -266,14 +270,12 @@ public static class McpResultAdapter
         if (status is not ("success" or "partial" or "error" or "watch_max_duration" or "snapshot_differences"))
             violations.Add($"status '{status}' is not a known envelope status");
 
-        if (envelope.TryGetProperty("exitCode", out var exitElement) &&
-            (!exitElement.TryGetInt32(out var exitCode) || !Enum.IsDefined(typeof(SqlHarnessExitCode), exitCode)))
-            violations.Add("exitCode must be a known SqlHarnessExitCode value");
-
-        if (envelope.TryGetProperty("error", out error) && error.ValueKind != JsonValueKind.Null)
+        if (envelope.TryGetProperty("error", out var error))
         {
-            if (error.ValueKind != JsonValueKind.Object)
-                violations.Add("error must be an object or null");
+            if (error.ValueKind == JsonValueKind.Null)
+                violations.Add("empty error must be omitted");
+            else if (error.ValueKind != JsonValueKind.Object)
+                violations.Add("error must be an object");
             else
             {
                 Check(error, "code", JsonValueKind.String, violations);
@@ -282,10 +284,12 @@ public static class McpResultAdapter
             }
         }
 
-        if (envelope.TryGetProperty("truncation", out truncation) && truncation.ValueKind != JsonValueKind.Null)
+        if (envelope.TryGetProperty("truncation", out var truncation))
         {
-            if (truncation.ValueKind != JsonValueKind.Object)
-                violations.Add("truncation must be an object or null");
+            if (truncation.ValueKind == JsonValueKind.Null)
+                violations.Add("empty truncation must be omitted");
+            else if (truncation.ValueKind != JsonValueKind.Object)
+                violations.Add("truncation must be an object");
             else
             {
                 Check(truncation, "omittedItems", JsonValueKind.Number, violations);
@@ -305,7 +309,7 @@ public static class McpResultAdapter
         }
     }
 
-    private static string StatusFor(SqlHarnessOutcome outcome, SqlHarnessError? error)
+    private static string StatusFor(SqlHarnessOutcome outcome, McpAgentError? error)
     {
         if (outcome.Report is MutationBrokerResult mutation)
             return mutation.Status;
@@ -348,6 +352,9 @@ public static class McpResultAdapter
         return redacted;
     }
 
+    private static McpAgentError? ToMcpError(SqlHarnessError? error) =>
+        error is null ? null : new McpAgentError(error.Code, error.Phase, error.Message, error.Hint, error.Location);
+
     private static string Clip(string value, int maximumCellCharacters, ref int omitted)
     {
         if (value.Length <= maximumCellCharacters)
@@ -360,17 +367,13 @@ public static class McpResultAdapter
     }
 
     private static bool TryEnvelopeBytes(
-        string command,
         string status,
-        int exitCode,
         object? result,
-        SqlHarnessError? error,
+        object? error,
         McpTruncationInfo? truncation,
-        string? operationRef,
-        string? parentOperationRef,
         out byte[] bytes)
     {
-        var envelope = new SqlHarnessAgentEnvelope(SchemaVersion, command, status, exitCode, result, error, truncation, operationRef, parentOperationRef);
+        var envelope = new McpAgentEnvelope(SchemaVersion, status, result, error, truncation);
         bytes = JsonSerializer.SerializeToUtf8Bytes(envelope, Json);
         return true;
     }

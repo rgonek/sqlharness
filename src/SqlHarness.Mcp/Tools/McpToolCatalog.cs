@@ -459,7 +459,7 @@ public sealed class McpToolHandlers(
         }
         catch (Exception)
         {
-            return Fail(SqlHarnessExitCode.SqlExecution, null, command, budget);
+            return InternalFailure(command, budget);
         }
     }
 
@@ -540,6 +540,16 @@ public sealed class McpToolHandlers(
                 exitCode,
                 null,
                 string.IsNullOrWhiteSpace(message) ? "The tool failed without a safe error." : message),
+            command,
+            budget ?? new McpResultBudget(scope.MaxResultBytes));
+
+    private CallToolResult InternalFailure(string command, McpResultBudget? budget = null) =>
+        McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(
+                SqlHarnessExitCode.Safety,
+                null,
+                McpAgentError.InternalMessage,
+                Error: McpAgentError.InternalOutcomeError()),
             command,
             budget ?? new McpResultBudget(scope.MaxResultBytes));
 

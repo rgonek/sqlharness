@@ -55,6 +55,7 @@ internal static class OperationFailureMapper
             TimeoutException => SqlHarnessExitCode.SqlExecution,
             OperationCanceledException when phase == OperationPhase.Sql => SqlHarnessExitCode.SqlExecution,
             _ when phase == OperationPhase.Authentication => SqlHarnessExitCode.Authentication,
+            _ when phase == OperationPhase.Validation => SqlHarnessExitCode.Safety,
             _ => SqlHarnessExitCode.SqlExecution,
         };
     }

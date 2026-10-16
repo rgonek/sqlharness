@@ -349,7 +349,7 @@ public sealed class McpMappingTests : IDisposable
             Assert.False(result.IsError == true, TextOf(result));
             Assert.True(McpResultAdapter.MeasureBytes(result) <= maxResultBytes, "A capabilities page exceeded the result budget.");
             var envelope = EnvelopeOf(result);
-            Assert.Equal(JsonValueKind.Null, envelope.GetProperty("truncation").ValueKind);
+            Assert.False(envelope.TryGetProperty("truncation", out _));
             var page = envelope.GetProperty("result");
             pages.Add(page);
             var next = NextCursorOf(page);
@@ -503,7 +503,8 @@ public sealed class McpMappingTests : IDisposable
 
         Assert.True(result.IsError == true);
         var envelope = EnvelopeOf(result);
-        Assert.Equal(2, envelope.GetProperty("exitCode").GetInt32());
+        Assert.Equal("error", envelope.GetProperty("status").GetString());
+        Assert.False(envelope.TryGetProperty("exitCode", out _));
         Assert.Equal("safety_rejected", envelope.GetProperty("error").GetProperty("code").GetString());
         Assert.Equal("The input root cursor is invalid.", envelope.GetProperty("error").GetProperty("message").GetString());
     }
@@ -1382,8 +1383,9 @@ public sealed class McpMappingTests : IDisposable
         Assert.Contains("Index Seek", payload, StringComparison.Ordinal);
         Assert.DoesNotContain("StatementText", payload, StringComparison.Ordinal);
         using var envelope = JsonDocument.Parse(payload);
-        Assert.False(string.IsNullOrWhiteSpace(envelope.RootElement.GetProperty("operationRef").GetString()));
-        Assert.Equal("producer-root", envelope.RootElement.GetProperty("parentOperationRef").GetString());
+        Assert.False(envelope.RootElement.TryGetProperty("operationRef", out _));
+        Assert.False(envelope.RootElement.TryGetProperty("parentOperationRef", out _));
+        Assert.DoesNotContain("producer-root", payload, StringComparison.Ordinal);
     }
 
     [Fact]

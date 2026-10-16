@@ -366,7 +366,7 @@ internal static class McpStdioProcessHarness
     internal static void AssertMutationGateRefusal(JsonElement envelope)
     {
         Assert.Equal("error", envelope.GetProperty("status").GetString());
-        Assert.Equal((int)SqlHarnessExitCode.Safety, envelope.GetProperty("exitCode").GetInt32());
+        Assert.False(envelope.TryGetProperty("exitCode", out _));
         var error = envelope.GetProperty("error");
         Assert.Equal(JsonValueKind.Object, error.ValueKind);
         Assert.Equal("safety_rejected", error.GetProperty("code").GetString());
@@ -527,9 +527,10 @@ public sealed class McpStdioProcessTests
         Assert.False(result.IsError == true, McpStdioProcessHarness.Envelope(result).ToString());
         var envelope = McpStdioProcessHarness.Envelope(result);
         Assert.Equal("success", envelope.GetProperty("status").GetString());
-        Assert.Equal(0, envelope.GetProperty("exitCode").GetInt32());
-        Assert.Equal(command, envelope.GetProperty("command").GetString());
+        Assert.False(envelope.TryGetProperty("exitCode", out _));
+        Assert.False(envelope.TryGetProperty("command", out _));
         Assert.Empty(McpResultAdapter.ValidateEnvelope(envelope));
+        _ = command;
     }
 
     [Fact]
@@ -613,8 +614,8 @@ public sealed class McpStdioProcessTests
             Assert.True(unsafeArguments.IsError == true);
             var unsafeArgumentsEnvelope = McpStdioProcessHarness.Envelope(unsafeArguments);
             Assert.Equal("error", unsafeArgumentsEnvelope.GetProperty("status").GetString());
-            Assert.Equal("sqlharness_query", unsafeArgumentsEnvelope.GetProperty("command").GetString());
-            Assert.Equal((int)SqlHarnessExitCode.Safety, unsafeArgumentsEnvelope.GetProperty("exitCode").GetInt32());
+            Assert.False(unsafeArgumentsEnvelope.TryGetProperty("command", out _));
+            Assert.False(unsafeArgumentsEnvelope.TryGetProperty("exitCode", out _));
             Assert.Equal("safety_rejected", unsafeArgumentsEnvelope.GetProperty("error").GetProperty("code").GetString());
             Assert.Equal("The MCP request scope is invalid.", unsafeArgumentsEnvelope.GetProperty("error").GetProperty("message").GetString());
 
@@ -644,7 +645,8 @@ public sealed class McpStdioProcessTests
                 var denied = await client.CallToolAsync(toolName, arguments, cancellationToken: ct);
                 var envelope = McpStdioProcessHarness.Envelope(denied);
                 Assert.True(denied.IsError);
-                Assert.Equal(6, envelope.GetProperty("exitCode").GetInt32());
+                Assert.Equal("error", envelope.GetProperty("status").GetString());
+                Assert.False(envelope.TryGetProperty("exitCode", out _));
                 var error = envelope.GetProperty("error");
                 Assert.Equal("artifact-preflight", error.GetProperty("phase").GetString());
                 Assert.Equal(blockedStorage, error.GetProperty("location").GetProperty("path").GetString());
@@ -764,7 +766,8 @@ public sealed class McpStdioProcessTests
                     cancellationToken: cts.Token);
                 Assert.True(legacyQueryTarget.IsError == true);
                 var legacyEnvelope = McpStdioProcessHarness.Envelope(legacyQueryTarget);
-                Assert.Equal((int)SqlHarnessExitCode.Safety, legacyEnvelope.GetProperty("exitCode").GetInt32());
+                Assert.Equal("error", legacyEnvelope.GetProperty("status").GetString());
+                Assert.False(legacyEnvelope.TryGetProperty("exitCode", out _));
                 Assert.Equal("The MCP request scope is invalid.", legacyEnvelope.GetProperty("error").GetProperty("message").GetString());
 
                 if (!requireContext)
@@ -777,7 +780,8 @@ public sealed class McpStdioProcessTests
                     var rejectedHidden = await client.CallToolAsync("sqlharness_compare", hiddenContext, cancellationToken: cts.Token);
                     Assert.True(rejectedHidden.IsError == true);
                     var hiddenEnvelope = McpStdioProcessHarness.Envelope(rejectedHidden);
-                    Assert.Equal((int)SqlHarnessExitCode.Safety, hiddenEnvelope.GetProperty("exitCode").GetInt32());
+                    Assert.Equal("error", hiddenEnvelope.GetProperty("status").GetString());
+                    Assert.False(hiddenEnvelope.TryGetProperty("exitCode", out _));
                     Assert.Equal("The MCP request scope is invalid.", hiddenEnvelope.GetProperty("error").GetProperty("message").GetString());
                 }
 
@@ -1076,8 +1080,8 @@ public sealed class McpStdioLiveTests
                 new Dictionary<string, object?> { ["sql"] = "SELECT * FROM dbo.McpLiveProbe" },
                 cancellationToken: ct);
             var probeEnvelope = McpStdioProcessHarness.Envelope(probeRead);
-            var probeCode = probeEnvelope.GetProperty("error").ValueKind == JsonValueKind.Object
-                ? probeEnvelope.GetProperty("error").GetProperty("code").GetString()
+            var probeCode = probeEnvelope.TryGetProperty("error", out var probeError) && probeError.ValueKind == JsonValueKind.Object
+                ? probeError.GetProperty("code").GetString()
                 : null;
             Assert.NotEqual("safety_rejected", probeCode);
 

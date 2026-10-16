@@ -232,8 +232,8 @@ public sealed class McpLifecycleTests
         Assert.True(rejected.IsError == true, Text(rejected));
         var rejectedEnvelope = Envelope(rejected);
         Assert.Equal("error", rejectedEnvelope.GetProperty("status").GetString());
-        Assert.Equal((int)SqlHarnessExitCode.Safety, rejectedEnvelope.GetProperty("exitCode").GetInt32());
-        Assert.Equal("sqlharness_query", rejectedEnvelope.GetProperty("command").GetString());
+        Assert.False(rejectedEnvelope.TryGetProperty("exitCode", out _));
+        Assert.False(rejectedEnvelope.TryGetProperty("command", out _));
         Assert.Empty(McpResultAdapter.ValidateEnvelope(rejectedEnvelope));
         Assert.Empty(module.Operations);
 
@@ -257,8 +257,9 @@ public sealed class McpLifecycleTests
         Assert.True(failed.IsError == true, Text(failed));
         var failedEnvelope = Envelope(failed);
         Assert.Equal("error", failedEnvelope.GetProperty("status").GetString());
-        Assert.Equal((int)SqlHarnessExitCode.SqlExecution, failedEnvelope.GetProperty("exitCode").GetInt32());
-        Assert.Equal("sqlharness_query", failedEnvelope.GetProperty("command").GetString());
+        Assert.False(failedEnvelope.TryGetProperty("exitCode", out _));
+        Assert.False(failedEnvelope.TryGetProperty("command", out _));
+        Assert.Equal("sql_execution_failed", failedEnvelope.GetProperty("error").GetProperty("code").GetString());
         Assert.Empty(McpResultAdapter.ValidateEnvelope(failedEnvelope));
         Assert.Single(module.Operations);
 
@@ -384,7 +385,8 @@ public sealed class McpLifecycleTests
         var cancelled = await inflight.WaitAsync(Budget, guard.Token);
         Assert.True(cancelled.IsError == true, Text(cancelled));
         var envelope = Envelope(cancelled);
-        Assert.Equal((int)SqlHarnessExitCode.SqlExecution, envelope.GetProperty("exitCode").GetInt32());
+        Assert.Equal("error", envelope.GetProperty("status").GetString());
+        Assert.False(envelope.TryGetProperty("exitCode", out _));
         Assert.Equal(McpCallOutcome.CancelledCode, envelope.GetProperty("error").GetProperty("code").GetString());
         Assert.Equal(McpCallOutcome.CancelledMessage, envelope.GetProperty("error").GetProperty("message").GetString());
     }

@@ -2,7 +2,7 @@
 
 ## Result envelope, errors, and budgets
 
-Every tool returns a schema version 2 agent envelope (`schemaVersion`, `command`, `status`, `exitCode`, `result`, `error`, `truncation`) in one text block containing compact JSON. The CLI `--output agent` uses the same version and query projection.
+Every tool returns a schema version 3 MCP agent envelope (`schemaVersion`, `status`, `result`; `error` and `truncation` only when populated) in one text block containing compact JSON. The CLI `--output agent` envelope remains schema version 2 and keeps `command` and `exitCode`. Comparison mode, watch exit reason and snapshot verdict are documented strings on the MCP path (`ordered`/`multiset`/`set`/`off`, `condition-met`/`unchanged`/`max-duration`, `stored`/`identical`/`different`).
 
 - Statuses: `success`, `partial` (failed matrix-cell batch), `error`, `watch_max_duration` (exit 7), and `snapshot_differences` (exit 8). The two controlled outcomes are valid results with `isError=false`; only failures set `isError=true`.
 - `mutation` returns its broker status directly: `success`, `mutations_disabled`, `approval_unavailable`, `approval_timeout`, `denied_by_operator`, `busy`, `not_a_mutation`, `database_mismatch`, `principal_protected`, `failed`, or `outcome_unknown`. Only `success` has exit 0. Every other status is an error result; stop and report it, and never retry the call or switch transport/profile. `approval_timeout` and `denied_by_operator` mean the write was not executed. `outcome_unknown` means execution may have started but completion could not be confirmed; inspect dashboard history before taking any further action.

@@ -237,12 +237,14 @@ public sealed class McpRequestScopeIsolationTests : IDisposable
         {
             var diff = await handlers.SnapshotAsync(null!, "diff", name, Scope("sample-b"), "SELECT 1");
             Assert.True(diff.IsError == true, Text(diff));
-            Assert.Equal((int)SqlHarnessExitCode.Safety, Envelope(diff).GetProperty("exitCode").GetInt32());
+            Assert.Equal("error", Envelope(diff).GetProperty("status").GetString());
+            Assert.False(Envelope(diff).TryGetProperty("exitCode", out _));
             Assert.Equal("The snapshot is not available in the current scope.", Envelope(diff).GetProperty("error").GetProperty("message").GetString());
 
             var capture = await handlers.SnapshotAsync(null!, "capture", name, Scope("sample-b"), "SELECT 1");
             Assert.True(capture.IsError == true, Text(capture));
-            Assert.Equal((int)SqlHarnessExitCode.Safety, Envelope(capture).GetProperty("exitCode").GetInt32());
+            Assert.Equal("error", Envelope(capture).GetProperty("status").GetString());
+            Assert.False(Envelope(capture).TryGetProperty("exitCode", out _));
             Assert.Equal("The snapshot is not available in the current scope.", Envelope(capture).GetProperty("error").GetProperty("message").GetString());
         }
     }

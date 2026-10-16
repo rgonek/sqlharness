@@ -56,17 +56,16 @@ public sealed class McpJournalTests : IDisposable
 
         var success = await handlers.ArtifactAsync(null!, successId, "matrix-cells");
         var successEnvelope = JsonDocument.Parse(McpText(success));
-        var successOperationRef = successEnvelope.RootElement.GetProperty("operationRef").GetString();
         Assert.False(success.IsError == true);
-        Assert.False(string.IsNullOrWhiteSpace(successOperationRef));
-        Assert.Equal("artifact-producer-success", successEnvelope.RootElement.GetProperty("parentOperationRef").GetString());
+        Assert.False(successEnvelope.RootElement.TryGetProperty("operationRef", out _));
+        Assert.False(successEnvelope.RootElement.TryGetProperty("parentOperationRef", out _));
+        Assert.DoesNotContain("artifact-producer-success", McpText(success), StringComparison.Ordinal);
 
         var failure = await handlers.ArtifactAsync(null!, failureId, "matrix-cells");
         var failureEnvelope = JsonDocument.Parse(McpText(failure));
-        var failureOperationRef = failureEnvelope.RootElement.GetProperty("operationRef").GetString();
         Assert.True(failure.IsError == true);
-        Assert.False(string.IsNullOrWhiteSpace(failureOperationRef));
-        Assert.True(!failureEnvelope.RootElement.TryGetProperty("parentOperationRef", out var parent) || parent.ValueKind == JsonValueKind.Null);
+        Assert.False(failureEnvelope.RootElement.TryGetProperty("operationRef", out _));
+        Assert.False(failureEnvelope.RootElement.TryGetProperty("parentOperationRef", out _));
 
         using var connection = new SqliteConnection($"Data Source={Path.Combine(_home, "data", "activity.db")};Mode=ReadOnly;Pooling=False");
         connection.Open();
@@ -74,11 +73,11 @@ public sealed class McpJournalTests : IDisposable
         command.CommandText = "SELECT operation_ref, parent_operation_ref, status FROM operations ORDER BY id";
         using var reader = command.ExecuteReader();
         Assert.True(reader.Read());
-        Assert.Equal(successOperationRef, reader.GetString(0));
+        Assert.False(reader.IsDBNull(0));
         Assert.Equal("artifact-producer-success", reader.GetString(1));
         Assert.Equal("succeeded", reader.GetString(2));
         Assert.True(reader.Read());
-        Assert.Equal(failureOperationRef, reader.GetString(0));
+        Assert.False(reader.IsDBNull(0));
         Assert.True(reader.IsDBNull(1));
         Assert.Equal("rejected", reader.GetString(2));
         Assert.False(reader.Read());

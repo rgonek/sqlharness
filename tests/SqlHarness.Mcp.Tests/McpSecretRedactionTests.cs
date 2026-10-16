@@ -151,7 +151,8 @@ public sealed class McpSecretRedactionTests
                 Assert.True(result.IsError == true);
                 var text = TextOf(result);
                 using var document = JsonDocument.Parse(text);
-                Assert.Equal((int)SqlHarnessExitCode.Safety, document.RootElement.GetProperty("exitCode").GetInt32());
+                Assert.Equal("error", document.RootElement.GetProperty("status").GetString());
+                Assert.False(document.RootElement.TryGetProperty("exitCode", out _));
                 Assert.Contains(FirstHalf, text, StringComparison.Ordinal);
                 Assert.Contains(SecondHalf, text, StringComparison.Ordinal);
             }
@@ -263,7 +264,7 @@ public sealed class McpSecretRedactionTests
         using var document = JsonDocument.Parse(text);
         var envelope = document.RootElement;
         Assert.Equal("success", envelope.GetProperty("status").GetString());
-        Assert.Equal(JsonValueKind.Null, envelope.GetProperty("error").ValueKind);
+        Assert.False(envelope.TryGetProperty("error", out _));
         Assert.Equal(
             InstructionLike,
             envelope.GetProperty("result").GetProperty("resultSets")[0].GetProperty("rows")[0][0].GetString());

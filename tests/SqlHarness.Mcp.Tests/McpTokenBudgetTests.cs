@@ -77,8 +77,8 @@ public sealed class McpTokenBudgetTests
         var report = new SqlHarnessQueryReport(Target, "read-only", [resultSet], [], 0, 1,
             "raw-hash", new OutputFootprint(0, 0));
         var outcome = new SqlHarnessOutcome(SqlHarnessExitCode.Success, report, null);
-        while (JsonSerializer.SerializeToUtf8Bytes(new SqlHarnessAgentEnvelope(
-                   McpResultAdapter.SchemaVersion, "query", "success", 0, report, null, null)).Length < targetBytes)
+        while (JsonSerializer.SerializeToUtf8Bytes(new McpAgentEnvelope(
+                   McpResultAdapter.SchemaVersion, "success", report)).Length < targetBytes)
         {
             rows.Add([new string('x', 32)]);
             resultSet = resultSet with { Rows = rows, RowCount = rows.Count };
@@ -114,7 +114,7 @@ public sealed class McpTokenBudgetTests
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
         using var document = JsonDocument.Parse(text);
 
-        Assert.Equal(AgentEnvelopeSchema.Version, document.RootElement.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(McpAgentEnvelope.Version, document.RootElement.GetProperty("schemaVersion").GetInt32());
         var query = document.RootElement.GetProperty("result");
         Assert.Equal("db", query.GetProperty("database").GetString());
         Assert.False(query.TryGetProperty("target", out _));
@@ -132,7 +132,7 @@ public sealed class McpTokenBudgetTests
 
         Assert.Equal(Encoding.UTF8.GetByteCount(text), McpResultAdapter.MeasureBytes(result));
         using var document = JsonDocument.Parse(text);
-        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("truncation").ValueKind);
+        Assert.False(document.RootElement.TryGetProperty("truncation", out _));
     }
 
     [Theory]
@@ -530,7 +530,7 @@ public sealed class McpTokenBudgetTests
         using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
         var cases = document.RootElement.GetProperty("result").GetProperty("cases");
         Assert.Equal(2, cases.GetArrayLength());
-        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("truncation").ValueKind);
+        Assert.False(document.RootElement.TryGetProperty("truncation", out _));
     }
 
     [Theory]

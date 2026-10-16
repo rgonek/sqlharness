@@ -252,7 +252,8 @@ public sealed class McpToolSchemaTests : IDisposable
         var text = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
         using var document = JsonDocument.Parse(text);
         var envelope = document.RootElement.Clone();
-        Assert.Equal(tool, envelope.GetProperty("command").GetString());
+        Assert.False(envelope.TryGetProperty("command", out _), $"{tool} envelope must omit command");
+        Assert.False(envelope.TryGetProperty("exitCode", out _), $"{tool} envelope must omit exitCode");
         return envelope;
     }
 
@@ -338,11 +339,20 @@ public sealed class McpToolSchemaTests : IDisposable
             ["maxCellChars"] = 4097,
         }, cancellationToken: CancellationToken.None);
 
-        Assert.Equal(2048, ServedEnvelope(watch, "sqlharness_watch").GetProperty("truncation").GetProperty("maxCellChars").GetInt32());
-        Assert.Equal(4096, ServedEnvelope(snapshot, "sqlharness_snapshot").GetProperty("truncation").GetProperty("maxCellChars").GetInt32());
+        var watchEnvelope = ServedEnvelope(watch, "sqlharness_watch");
+        Assert.Equal(2048, watchEnvelope.GetProperty("truncation").GetProperty("maxCellChars").GetInt32());
+        Assert.Equal(2048, watchEnvelope.GetProperty("result").GetProperty("resultSets")[0].GetProperty("rows")[0][0].GetString()!.Length);
+        var snapshotEnvelope = ServedEnvelope(snapshot, "sqlharness_snapshot");
+        Assert.Equal(4096, snapshotEnvelope.GetProperty("truncation").GetProperty("maxCellChars").GetInt32());
+        Assert.Equal(4096, snapshotEnvelope.GetProperty("result").GetProperty("resultSets")[0].GetProperty("rows")[0][0].GetString()!.Length);
         using (var planDocument = JsonDocument.Parse(Assert.Single(plan.Content.OfType<TextContentBlock>()).Text))
-            Assert.Equal(0, planDocument.RootElement.GetProperty("truncation").GetProperty("maxCellChars").GetInt32());
-        Assert.Equal(100, ServedEnvelope(artifact, "sqlharness_artifact").GetProperty("truncation").GetProperty("maxCellChars").GetInt32());
+        {
+            if (planDocument.RootElement.TryGetProperty("truncation", out var planTruncation))
+                Assert.Equal(0, planTruncation.GetProperty("maxCellChars").GetInt32());
+        }
+        var artifactEnvelope = ServedEnvelope(artifact, "sqlharness_artifact");
+        if (artifactEnvelope.TryGetProperty("truncation", out var artifactTruncation))
+            Assert.Equal(100, artifactTruncation.GetProperty("maxCellChars").GetInt32());
         Assert.True(rejected.IsError == true);
         Assert.Contains("Cell limit must be 0..4096 characters.", ServedEnvelope(rejected, "sqlharness_query").GetProperty("error").GetProperty("message").GetString());
     }
@@ -606,7 +616,7 @@ public sealed class McpToolSchemaTests : IDisposable
             ["sql"] = "SELECT 1",
             ["target"] = new { profile = "sample-b", vars = new Dictionary<string, string> { ["tenant"] = "frozen" } },
         }, cancellationToken: CancellationToken.None);
-        Assert.Equal(2, ServedEnvelope(wrongB, "sqlharness_query").GetProperty("exitCode").GetInt32());
+        Assert.Equal("error", ServedEnvelope(wrongB, "sqlharness_query").GetProperty("status").GetString());
         var malformedScope = new Dictionary<string, object?>
         {
             ["dryRun"] = true,
@@ -1042,7 +1052,7 @@ public sealed class McpToolSchemaTests : IDisposable
             cancellationToken: CancellationToken.None);
         var envelope = ServedEnvelope(result, "sqlharness_compare");
         Assert.True(result.IsError == true);
-        Assert.Equal((int)SqlHarnessExitCode.Safety, envelope.GetProperty("exitCode").GetInt32());
+        Assert.Equal("error", envelope.GetProperty("status").GetString());
         Assert.Equal(
             "The --matrix option for SQL parameter '@Label' duplicates a fixed parameter.",
             envelope.GetProperty("error").GetProperty("message").GetString());
@@ -1169,7 +1179,6 @@ public sealed class McpToolSchemaTests : IDisposable
         var successEnvelope = ServedEnvelope(success, "sqlharness_query");
         Assert.Empty(McpResultAdapter.ValidateEnvelope(successEnvelope));
         Assert.Equal("success", successEnvelope.GetProperty("status").GetString());
-        Assert.Equal(0, successEnvelope.GetProperty("exitCode").GetInt32());
         Assert.Equal("read-only", successEnvelope.GetProperty("result").GetProperty("tier").GetString());
         var failure = await served.Client.CallToolAsync(
             "sqlharness_query",
@@ -1179,7 +1188,6 @@ public sealed class McpToolSchemaTests : IDisposable
         var failureEnvelope = ServedEnvelope(failure, "sqlharness_query");
         Assert.Empty(McpResultAdapter.ValidateEnvelope(failureEnvelope));
         Assert.Equal("error", failureEnvelope.GetProperty("status").GetString());
-        Assert.Equal(2, failureEnvelope.GetProperty("exitCode").GetInt32());
         Assert.Equal("safety_rejected", failureEnvelope.GetProperty("error").GetProperty("code").GetString());
     }
 
@@ -1203,7 +1211,7 @@ public sealed class McpToolSchemaTests : IDisposable
         var partialEnvelope = ServedEnvelope(partial, "sqlharness_compare");
         Assert.Empty(McpResultAdapter.ValidateEnvelope(partialEnvelope));
         Assert.Equal("partial", partialEnvelope.GetProperty("status").GetString());
-        Assert.Equal(5, partialEnvelope.GetProperty("exitCode").GetInt32());
+        Assert.False(partialEnvelope.TryGetProperty("exitCode", out _));
         var watchModule = new CannedModule(new SqlHarnessOutcome(
             SqlHarnessExitCode.WatchMaxDuration,
             new SqlHarnessWatchReport(ConformanceTarget, 4, 900000, WatchExitReason.MaxDuration, []),
@@ -1217,7 +1225,7 @@ public sealed class McpToolSchemaTests : IDisposable
         var watchEnvelope = ServedEnvelope(watch, "sqlharness_watch");
         Assert.Empty(McpResultAdapter.ValidateEnvelope(watchEnvelope));
         Assert.Equal("watch_max_duration", watchEnvelope.GetProperty("status").GetString());
-        Assert.Equal(7, watchEnvelope.GetProperty("exitCode").GetInt32());
+        Assert.False(watchEnvelope.TryGetProperty("exitCode", out _));
         var snapshotModule = new CannedModule(new SqlHarnessOutcome(
             SqlHarnessExitCode.SnapshotDifferences,
             new SqlHarnessSnapshotReport(
@@ -1233,7 +1241,7 @@ public sealed class McpToolSchemaTests : IDisposable
         var snapshotEnvelope = ServedEnvelope(snapshot, "sqlharness_snapshot");
         Assert.Empty(McpResultAdapter.ValidateEnvelope(snapshotEnvelope));
         Assert.Equal("snapshot_differences", snapshotEnvelope.GetProperty("status").GetString());
-        Assert.Equal(8, snapshotEnvelope.GetProperty("exitCode").GetInt32());
+        Assert.False(snapshotEnvelope.TryGetProperty("exitCode", out _));
     }
 
     [Fact]
@@ -1283,7 +1291,7 @@ public sealed class McpToolSchemaTests : IDisposable
         using var document = JsonDocument.Parse(text);
         var envelope = document.RootElement;
         Assert.Equal("error", envelope.GetProperty("status").GetString());
-        Assert.Equal((int)SqlHarnessExitCode.Safety, envelope.GetProperty("exitCode").GetInt32());
+        Assert.False(envelope.TryGetProperty("exitCode", out _));
         Assert.DoesNotContain(sql, text, StringComparison.Ordinal);
     }
 
