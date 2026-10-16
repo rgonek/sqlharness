@@ -1,3 +1,5 @@
+using SqlHarness.Core.Mutations;
+
 namespace SqlHarness.Core;
 
 /// <summary>
@@ -15,6 +17,11 @@ internal static class OperationReportContract
         {
             [typeof(SqlHarnessArtifactReadOperation)] = new HashSet<Type> { typeof(SqlHarnessArtifactReadReport) },
             [typeof(SqlHarnessQueryOperation)] = new HashSet<Type> { typeof(SqlHarnessQueryReport), typeof(SqlHarnessDryRunReport) },
+            [typeof(SqlHarnessMutationOperation)] = new HashSet<Type>
+            {
+                typeof(SqlHarnessMutationPrepared), typeof(SqlHarnessDryRunReport),
+                typeof(MutationBrokerResult), typeof(SqlHarnessQueryReport),
+            },
             [typeof(SqlHarnessCompareOperation)] = new HashSet<Type> { typeof(SqlHarnessCompareReport), typeof(SqlHarnessDryRunReport) },
             [typeof(SqlHarnessCompareMatrixOperation)] = new HashSet<Type> { typeof(SqlHarnessCompareMatrixReport), typeof(SqlHarnessDryRunReport) },
             [typeof(SqlHarnessMeasureOperation)] = new HashSet<Type> { typeof(SqlHarnessMeasureReport), typeof(SqlHarnessMeasureSetReport), typeof(SqlHarnessDryRunReport) },

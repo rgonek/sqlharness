@@ -107,6 +107,7 @@ public class ContractsTests
                 typeof(SqlHarnessWatchOperation),
                 typeof(SqlHarnessSnapshotOperation),
                 typeof(SqlHarnessArtifactReadOperation),
+                typeof(SqlHarnessMutationOperation),
             ],
             typeof(SqlHarnessOperation).Assembly.GetTypes()
                 .Where(t => t.BaseType == typeof(SqlHarnessOperation))
@@ -123,6 +124,7 @@ public class ContractsTests
         nameof(SqlHarnessWatchOperation) => 5,
         nameof(SqlHarnessSnapshotOperation) => 6,
         nameof(SqlHarnessArtifactReadOperation) => 7,
+        nameof(SqlHarnessMutationOperation) => 8,
         _ => int.MaxValue,
     };
 
@@ -221,7 +223,7 @@ public class ContractsTests
     public void Every_operation_accepts_only_its_own_report_types()
     {
         var cases = OperationReportCases();
-        Assert.Equal(8, cases.Select(c => c.Operation.GetType()).Distinct().Count());
+        Assert.Equal(9, cases.Select(c => c.Operation.GetType()).Distinct().Count());
         foreach (var (operation, report, compatible) in cases)
         {
             var exception = Record.Exception(() =>
@@ -243,6 +245,7 @@ public class ContractsTests
         new SqlHarnessWatchOperation(Target(), "SELECT 1", [], 30, 100, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(15), null, 3),
         new SqlHarnessSnapshotOperation(Target(), "SELECT 1", [], 30, 100, "before", false, false),
         new SqlHarnessArtifactReadOperation("root", "artifact", "summary"),
+        new SqlHarnessMutationOperation(Target(), "UPDATE dbo.T SET Value = 1", [], 30, 100, null),
     ];
 
     private static IReadOnlyList<object> Reports() =>
@@ -258,6 +261,11 @@ public class ContractsTests
         new SqlHarnessWatchReport(Identity(), 1, 10, WatchExitReason.ConditionMet, []),
         new SqlHarnessSnapshotReport(Identity(), "before", SnapshotVerdict.Stored, 0, []),
         new SqlHarnessArtifactReadReport(new object(), null),
+        new SqlHarness.Core.Mutations.SqlHarnessMutationPrepared(new SqlHarness.Core.Mutations.MutationRequest(
+            "test", new Dictionary<string, string>(), "sqlserver", "server", "database", "UPDATE dbo.T SET Value = 1",
+            [], 30, 100, "dml", [], "session")),
+        new SqlHarnessDryRunReport("mutation", "batch", "dml", [], 1),
+        new SqlHarness.Core.Mutations.MutationBrokerResult("success", null, null),
     ];
 
     private static IReadOnlyList<(SqlHarnessOperation Operation, object Report, bool Compatible)> OperationReportCases()
@@ -267,6 +275,7 @@ public class ContractsTests
         var compatible = new HashSet<(int Operation, int Report)>
         {
             (0, 0), (1, 1), (2, 2), (3, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8),
+            (8, 0), (8, 9), (8, 10), (8, 11),
         };
         var cases = new List<(SqlHarnessOperation, object, bool)>();
         for (var o = 0; o < operations.Count; o++)

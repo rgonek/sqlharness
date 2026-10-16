@@ -6,6 +6,7 @@ using System.Text.Json;
 using SqlHarness.Core.Auth;
 using SqlHarness.Core.Dialect;
 using SqlHarness.Core.Journal;
+using SqlHarness.Core.Mutations;
 using SqlHarness.Core.Postgres;
 using SqlHarness.Core.Targets;
 
@@ -154,6 +155,9 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         if (operation is SqlHarnessSnapshotOperation snapshot)
             return Checked(snapshot, await ExecuteSnapshotAsync(snapshot, ct));
 
+        if (operation is SqlHarnessMutationOperation mutation)
+            return Checked(mutation, await ExecuteMutationAsync(mutation, ct));
+
         if (operation is not SqlHarnessQueryOperation query)
         {
             return new SqlHarnessOutcome(
@@ -171,12 +175,12 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
         try
         {
             ValidateBounds(query);
-            var target = TargetResolver.Resolve(query.Target, _loadProfiles());
+            var target = query.ResolvedTarget ?? TargetResolver.Resolve(query.Target, _loadProfiles());
             OperationSecrets.AddCredentials(knownSecrets, target);
             var dialect = SqlDialects.For(target.Engine);
             var safety = dialect.Classify(
                 query.Sql,
-                SqlUsage.Query,
+                query.UsageOverride ?? SqlUsage.Query,
                 target.Database,
                 query.AllowMutation,
                 query.ConfirmDatabase,
@@ -246,6 +250,90 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
             raw?.Dispose();
         }
     }
+
+    private async Task<SqlHarnessOutcome> ExecuteMutationAsync(SqlHarnessMutationOperation operation, CancellationToken ct)
+    {
+        var knownSecrets = new List<string>();
+        ResolvedTarget? target = null;
+        try
+        {
+            var query = new SqlHarnessQueryOperation(
+                operation.Target, operation.Sql, [], operation.TimeoutSeconds, operation.MaxRows, true,
+                operation.ExpectDatabase)
+            {
+                TypedParameters = operation.Parameters,
+                DryRun = operation.DryRun,
+            };
+            ValidateBounds(query);
+            target = TargetResolver.Resolve(operation.Target, _loadProfiles());
+            OperationSecrets.AddCredentials(knownSecrets, target);
+            var dialect = SqlDialects.For(target.Engine);
+            var safety = dialect.Classify(
+                operation.Sql, SqlUsage.Mutation, target.Database, false, null, NoSessionTemps);
+            if (!safety.Allowed)
+                throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
+
+            var parameters = dialect.BindParameters(operation.Parameters);
+            dialect.ValidateParameterReferences(parameters, operation.Sql);
+
+            if (safety.Tier is SqlRiskTier.ReadOnly or SqlRiskTier.Session)
+                return MutationOutcome(SqlHarnessExitCode.Safety, MutationStatus.NotAMutation,
+                    "The batch does not contain a persistent mutation.");
+
+            if (operation.ExpectDatabase is not null &&
+                !string.Equals(operation.ExpectDatabase, target.Database, StringComparison.Ordinal))
+                return MutationOutcome(SqlHarnessExitCode.TargetMismatch, MutationStatus.DatabaseMismatch,
+                    "The resolved database does not match the expected database.");
+
+            if (operation.DryRun)
+            {
+                MissingParameterCheck.RequireSupplied(target.Engine, parameters, operation.Sql);
+                return Checked(operation, DryRunOutcome(
+                    "mutation", BenchmarkReports.ClassificationLabel(safety), SqlRiskTiers.Label(safety.Tier), parameters, 1));
+            }
+
+            var request = new MutationRequest(
+                operation.Target.Profile ?? string.Empty,
+                operation.Target.Vars,
+                SqlEngineNames.Format(target.Engine),
+                target.Server,
+                target.Database,
+                operation.Sql,
+                operation.Parameters,
+                operation.TimeoutSeconds,
+                operation.MaxRows,
+                SqlRiskTiers.Label(safety.Tier),
+                safety.Grantees,
+                operation.SessionKey);
+
+            if (operation.Approval is null)
+                return Checked(operation, new SqlHarnessOutcome(SqlHarnessExitCode.Success,
+                    new SqlHarnessMutationPrepared(request), null));
+
+            if (!string.Equals(operation.Approval.Digest, request.Digest, StringComparison.Ordinal))
+                throw new SqlHarnessSafetyException("Approval does not match the request.");
+
+            var approvedQuery = query with
+            {
+                ConfirmDatabase = target.Database,
+                ResolvedTarget = target with { Auth = operation.Approval.Writer },
+                UsageOverride = SqlUsage.Mutation,
+                OperationRef = operation.OperationRef,
+            };
+            return Checked(operation, await ExecuteAssignedAsync(approvedQuery, ct));
+        }
+        catch (Exception exception)
+        {
+            var exitCode = OperationFailureMapper.Map(exception, OperationPhase.Validation);
+            return Checked(operation, new SqlHarnessOutcome(
+                exitCode,
+                null,
+                SecretRedactor.Redact(exception, knownSecrets)));
+        }
+    }
+
+    private static SqlHarnessOutcome MutationOutcome(SqlHarnessExitCode exitCode, string status, string message) =>
+        new(exitCode, new MutationBrokerResult(status, message, null), message);
 
     /// <summary>
     /// Enforces the internal typed-result contract on the dispatch boundary:
