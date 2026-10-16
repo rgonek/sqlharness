@@ -98,6 +98,53 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal(new McpProcessLimits(8192, 30), document.ProcessLimits);
         Assert.DoesNotContain("frozen", json, StringComparison.Ordinal);
         Assert.DoesNotContain(PgProfileName, json, StringComparison.Ordinal);
+        using var capabilityJson = JsonDocument.Parse(JsonSerializer.Serialize(document, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        Assert.Equal("never", capabilityJson.RootElement.GetProperty("mutations").GetProperty("defaultMode").GetString());
+        var policy = Assert.Single(capabilityJson.RootElement.GetProperty("allowedProfileMutations").EnumerateArray());
+        Assert.Equal(ProfileName, policy.GetProperty("profile").GetString());
+        Assert.Equal("never", policy.GetProperty("mode").GetString());
+        Assert.False(policy.GetProperty("writerConfigured").GetBoolean());
+        Assert.DoesNotContain("passwordEnvVar", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Request_capabilities_reports_live_global_mutation_policy_and_only_allowlisted_profile_modes()
+    {
+        var process = McpProcessContext.Create(new McpServerOptions
+        {
+            RequestScope = true,
+            AllowedProfiles = [ProfileName],
+        }, () => ProfileStore.Load(_targetsFile), config: new SqlHarnessConfig
+        {
+            Mutations = new MutationsConfig { DefaultMode = "operator", Verification = "click", ApprovalTimeoutSeconds = 240 },
+        }, dashboardReachability: () => true);
+
+        var document = JsonSerializer.SerializeToElement(McpOperationMapper.BuildCapabilities(process, includeDiagnostics: false), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Equal("operator", document.GetProperty("mutations").GetProperty("defaultMode").GetString());
+        Assert.Equal(240, document.GetProperty("mutations").GetProperty("approvalTimeoutSeconds").GetInt32());
+        Assert.True(document.GetProperty("mutations").GetProperty("dashboardReachable").GetBoolean());
+        Assert.Equal([ProfileName], document.GetProperty("allowedProfiles").EnumerateArray().Select(item => item.GetString()));
+        var profile = Assert.Single(document.GetProperty("allowedProfileMutations").EnumerateArray());
+        Assert.Equal(ProfileName, profile.GetProperty("profile").GetString());
+        Assert.Equal("operator", profile.GetProperty("mode").GetString());
+        Assert.False(profile.GetProperty("writerConfigured").GetBoolean());
+        Assert.False(document.TryGetProperty("profileMutations", out _));
+        Assert.DoesNotContain("passwordEnvVar", document.GetRawText(), StringComparison.OrdinalIgnoreCase);
+
+        var fixedProcess = McpProcessContext.Create(new McpServerOptions
+        {
+            Profile = ProfileName,
+            Vars = new Dictionary<string, string> { ["tenant"] = "frozen" },
+        }, () => ProfileStore.Load(_targetsFile), config: new SqlHarnessConfig
+        {
+            Mutations = new MutationsConfig { DefaultMode = "operator" },
+        }, dashboardReachability: () => false);
+        var fixedDocument = JsonSerializer.SerializeToElement(McpOperationMapper.BuildCapabilities(fixedProcess, includeDiagnostics: false), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var activeProfile = fixedDocument.GetProperty("profileMutations");
+        Assert.Equal(ProfileName, activeProfile.GetProperty("name").GetString());
+        Assert.Equal("operator", activeProfile.GetProperty("mutationMode").GetString());
+        Assert.False(activeProfile.GetProperty("writerConfigured").GetBoolean());
     }
 
     private static readonly string[] BroadFieldNames =
@@ -135,6 +182,8 @@ public sealed class McpMappingTests : IDisposable
         Assert.Equal("request", requestDocument.GetProperty("scopeMode").GetString());
         Assert.True(requestDocument.GetProperty("compareContext").GetProperty("requireContext").GetBoolean());
         Assert.Equal([ProfileName], requestDocument.GetProperty("allowedProfiles").EnumerateArray().Select(item => item.GetString()));
+        Assert.Equal([ProfileName], requestDocument.GetProperty("allowedProfileMutations").EnumerateArray().Select(item => item.GetProperty("profile").GetString()));
+        Assert.False(requestDocument.TryGetProperty("profileMutations", out _));
     }
 
     [Fact]
@@ -209,38 +258,17 @@ public sealed class McpMappingTests : IDisposable
     }
 
     [Fact]
-    public async Task Compact_capabilities_are_smaller_than_a_synthetic_broad_response_with_the_same_runtime_data()
+    public void Mutation_capabilities_fit_the_minimum_call_result_budget()
     {
         var scope = Scope();
         var compact = McpOperationMapper.BuildCapabilities(scope, includeDiagnostics: false, compareConfig: new CompareConfig { RequireContext = false });
-        var broad = new
-        {
-            server = "sqlharness",
-            serverVersion = "0.0.0",
-            protocolVersion = "2025-11-25",
-            engine = "sqlserver",
-            tools = McpToolCatalog.ToolNames,
-            limits = Enumerable.Range(0, 13).ToDictionary(index => "limit" + index, index => (long)index * 1000),
-            queryStoreAvailable = true,
-            indexesAvailable = true,
-            safetyAnalysis = new { analysisKind = "static-visible-effects", analysisContractVersion = 1, hiddenEffectsVerified = false, objectAndPermissionStatus = "unknown" },
-            scopeMode = "fixed",
-            supportedProtocolVersions = new[] { "2025-06-18", "2025-11-25", "2026-07-28" },
-            configurationRef = compact.ConfigurationRef,
-            compareContext = compact.CompareContext,
-            engines = compact.Engines,
-            processLimits = compact.ProcessLimits,
-            inputRoots = compact.InputRoots,
-            inputRootCount = compact.InputRootCount,
-            inputRootsComplete = true,
-            inputRootsNextCursor = (int?)null,
-            inputRootsOmitted = 0,
-        };
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, compact, null),
+            "sqlharness_capabilities",
+            new McpResultBudget(McpLimits.MinCallToolResultBudgetBytes));
 
-        var compactBytes = McpResultAdapter.MeasureBytes(McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, compact, null), "sqlharness_capabilities"));
-        var broadBytes = McpResultAdapter.MeasureBytes(McpResultAdapter.Adapt(new SqlHarnessOutcome(SqlHarnessExitCode.Success, broad, null), "sqlharness_capabilities"));
-        Assert.True(compactBytes < broadBytes, $"{compactBytes} >= {broadBytes}");
-        await Task.CompletedTask;
+        Assert.False(result.IsError);
+        Assert.True(McpResultAdapter.MeasureBytes(result) <= McpLimits.MinCallToolResultBudgetBytes);
     }
 
     private McpScope ScopeWithRoots(IReadOnlyList<string> roots, int maxResultBytes = McpLimits.DefaultProcessResultCeilingBytes) =>

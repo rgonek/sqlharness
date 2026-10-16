@@ -12,4 +12,4 @@ var module = new JournalingModule(
     diagnostics: config.Config.Diagnostics);
 
 return await SqlHarnessCli.Create(module, compareConfig: config.Config.Compare,
-    mutationApprovalTimeoutSeconds: config.Config.Mutations.ApprovalTimeoutSeconds).RunAsync(args);
+    mutationApprovalTimeoutSeconds: config.Config.Mutations.ApprovalTimeoutSeconds, config: config.Config).RunAsync(args);

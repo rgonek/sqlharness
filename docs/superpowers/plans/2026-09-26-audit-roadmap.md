@@ -1,6 +1,6 @@
 # SQLHarness — plan realizacji audytu 2026-09-26
 
-**Status (2026-10-08):** plany 01–07 wykonane (szczegóły i commity w nagłówku każdego planu); 08 TODO. Pierwotny status: plany zapisane; implementacja nierozpoczęta. Zapis planów nie oznacza wykonania napraw ani zgody na operacje na bazach.
+**Status (2026-10-16):** plany 01–07 wykonane (szczegóły i commity w nagłówku każdego planu); 08 superseded by plan 073 (dashboard approval), tray deferred. Zapis planów nie oznacza wykonania napraw ani zgody na operacje na bazach.
 
 **Źródło:** [pełny audyt i archiwum prób offline](../specs/2026-09-26-project-audit.md), commit `5e655942f4f99f6c84ae47a86ac210c19434b541`.
 
@@ -15,7 +15,7 @@
 | [05 — Architektura](2026-09-26-audit-05-architecture.md) | odpowiedzialności, wspólne mechanizmy, zbędne interfejsy | po naprawach 01/02 i ustaleniu kontraktów 03/04 |
 | [06 — Rozszerzenia](2026-09-26-audit-06-extensions.md) | bezpieczna składnia, artefakty, NDJSON, CI, pg_stat_statements | po właściwych fundamentach; część zadań kończy się specyfikacją |
 | [07 — MCP](2026-09-26-audit-07-mcp.md) | lokalny adapter stdio nad Core, niezmienny scope, narzędzia i budżety | **po zakończeniu 01–06**, zgodnie z decyzją użytkownika; wdrożony i udokumentowany w `docs/mcp.md` (T7) |
-| [08 — Windows tray i zgody](2026-09-26-audit-08-windows-approval-tray.md) | lokalny broker jednorazowych zgód na DML wyłącznie naszego MCP | **po 07**; Windows first, Unix w późniejszym osobnym wdrożeniu |
+| [08 — Windows tray i zgody](2026-09-26-audit-08-windows-approval-tray.md) | superseded by plan 073 (dashboard approval); tray deferred | status w nagłówku planu |
 
 Nie wykonywać planów równocześnie w jednym katalogu: wspólne pliki to `SqlHarnessModule.cs`, `Contracts.cs`, `ISqlDialect.cs`, `Renderer.cs`. Każdy etap powinien kończyć się spójnym, testowalnym stanem. W razie zlecenia implementacji realizować małe zadania i osobne lokalne commity; push nie jest częścią tych planów. Plan 07 ma osobną [specyfikację MCP](../specs/2026-09-26-mcp-adapter-design.md) i nie rozpoczyna się przed zamknięciem poprzedników.
 
@@ -86,7 +86,7 @@ Diagram przedstawia kolejność integracji całych planów. Niezależne zadania,
 | Timeout testu procesu | 04/T4 |
 | Dobre istniejące granice i zachowania | ograniczenia wszystkich planów, szczególnie 05 |
 | MCP z roadmapy README — dodany na prośbę użytkownika | 07/T1–T7, po zakończeniu 01–06 |
-| Tray i zgody na mutacje wyłącznie naszego MCP — dodane na prośbę użytkownika | 08/T1–T8, Windows po 07; T8 tylko przygotowuje późniejszy port |
+| Tray i zgody na mutacje wyłącznie naszego MCP — dodane na prośbę użytkownika | Superseded by plan 073 (dashboard approval); tray deferred |
 
 ## Stan dowodów i kryterium zamknięcia
 

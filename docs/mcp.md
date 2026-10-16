@@ -36,9 +36,9 @@ Read [client workspace roots](mcp/inputs.md#client-workspace-roots).
 
 Read [tools](mcp/tools.md#tools).
 
-## No persistent mutations
+## Persistent mutations
 
-Read [no persistent mutations](mcp/tools.md#no-persistent-mutations).
+Read [persistent mutations](mcp/tools.md#persistent-mutations) for the `sqlharness_mutation` contract, approval outcomes, and capability disclosure.
 
 ## Result envelope, errors, and budgets
 

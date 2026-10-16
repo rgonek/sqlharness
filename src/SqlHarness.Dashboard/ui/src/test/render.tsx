@@ -34,10 +34,11 @@ export function renderApp(url = "/") {
 /** Replaces fetch with a route table: exact path+query match first, then path only. */
 export function stubFetch(routes: Record<string, unknown | ((url: URL, init?: RequestInit) => Response)>) {
   const calls: string[] = []
+  const appRoutes: typeof routes = { "/api/profiles": { status: "missing", profiles: [], message: null }, ...routes }
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "http://127.0.0.1")
     calls.push(url.pathname + url.search)
-    const handler = routes[url.pathname + url.search] ?? routes[url.pathname]
+    const handler = appRoutes[url.pathname + url.search] ?? appRoutes[url.pathname]
     if (handler === undefined) return new Response("not found", { status: 404 })
     if (typeof handler === "function") return (handler as (u: URL, i?: RequestInit) => Response)(url, init)
     return new Response(JSON.stringify(handler), { status: 200, headers: { "Content-Type": "application/json" } })

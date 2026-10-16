@@ -26,7 +26,7 @@ export function AppLayout() {
   const { data: profiles } = useProfiles()
   const mutationState = useSyncExternalStore(mutationStore.subscribe, mutationStore.getSnapshot, mutationStore.getSnapshot)
   useMutationEvents()
-  const productionYoloProfiles = profiles?.profiles.filter(profile => profile.mutationMode.toLowerCase() === "yolo" && profile.acknowledgeProductionYolo && /^(prod|production|staging)$/i.test(profile.environment ?? "")) ?? []
+  const productionYoloProfiles = profiles?.profiles.filter(profile => profile.mutationMode?.toLowerCase() === "yolo" && profile.acknowledgeProductionYolo && /^(prod|production|staging)$/i.test(profile.environment ?? "")) ?? []
   return (
     <div className="min-h-screen">
       <ConnectionBanner />

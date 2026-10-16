@@ -24,7 +24,7 @@ public static class SqlHarnessCli
             || string.Equals(args[0], "dashboard", StringComparison.Ordinal));
     }
 
-    public static SqlHarnessApp Create(ISqlHarnessModule module, TextWriter? output = null, TextReader? stdin = null, bool? stdinRedirected = null, Stream? planStdin = null, TextWriter? mcpError = null, SqlHarness.Dashboard.IDashboardLauncher? dashboardLauncher = null, CompareConfig? compareConfig = null, SqlHarness.Dashboard.IDashboardLifecycle? dashboardLifecycle = null, IMutationBrokerClient? mutationBroker = null, int mutationApprovalTimeoutSeconds = 120, Func<string>? mutationSessionKey = null)
+    public static SqlHarnessApp Create(ISqlHarnessModule module, TextWriter? output = null, TextReader? stdin = null, bool? stdinRedirected = null, Stream? planStdin = null, TextWriter? mcpError = null, SqlHarness.Dashboard.IDashboardLauncher? dashboardLauncher = null, CompareConfig? compareConfig = null, SqlHarness.Dashboard.IDashboardLifecycle? dashboardLifecycle = null, IMutationBrokerClient? mutationBroker = null, int mutationApprovalTimeoutSeconds = 120, Func<string>? mutationSessionKey = null, SqlHarnessConfig? config = null)
     {
         var registrar = new Registrar();
         registrar.Add(new McpHostConsole(mcpError ?? Console.Error));
@@ -32,6 +32,7 @@ public static class SqlHarnessCli
         registrar.Add(dashboardLifecycle ?? new SqlHarness.Dashboard.DashboardLifecycleService(ProcessInfo.Current));
         registrar.Add(mutationBroker ?? new HttpMutationBrokerClient());
         registrar.Add(mutationApprovalTimeoutSeconds);
+        registrar.Add(config ?? SqlHarnessConfig.Default);
         registrar.Add(mutationSessionKey?.Invoke() ?? SessionIdentities.Cli(ProcessInfo.Current).SessionKey);
         var outputContext = new OutputContext(output ?? Console.Out);
         registrar.Add(module); registrar.Add(outputContext); registrar.Add(new Renderer());

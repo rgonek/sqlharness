@@ -274,7 +274,7 @@ public class ContractsTests
         var reports = Reports();
         var compatible = new HashSet<(int Operation, int Report)>
         {
-            (0, 0), (1, 1), (2, 2), (3, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8),
+            (0, 0), (0, 10), (1, 1), (1, 10), (2, 2), (2, 10), (3, 3), (3, 4), (3, 10), (4, 5), (5, 6), (6, 7), (7, 8),
             (8, 0), (8, 9), (8, 10), (8, 11),
         };
         var cases = new List<(SqlHarnessOperation, object, bool)>();

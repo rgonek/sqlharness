@@ -4,7 +4,7 @@
 
 **Status:** TODO. This plan is separate so the click-only mutation broker can ship and be reviewed without making authenticator support a prerequisite.
 
-**Dependency:** plan 073 DONE. Until this plan is implemented, `click` is the only supported verification value. Requests to enable WebAuthn must fail visibly; the application must not silently downgrade to click.
+**Dependency:** plan 073 implementation and final review complete. Until this plan is implemented, `click` is the only supported verification value. Requests to enable WebAuthn must fail visibly; the application must not silently downgrade to click.
 
 **Goal:** Add optional WebAuthn verification to the existing dashboard mutation approval flow, including authenticator enrollment, assertions bound to an approval digest, credential lifecycle, safe Settings transitions, and documented recovery.
 

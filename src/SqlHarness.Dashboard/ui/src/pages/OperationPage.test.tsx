@@ -148,11 +148,11 @@ test("failed operation with a variant that has no metrics renders", async () => 
   expect(within(screen.getByRole("region", { name: "Key metrics" })).getByText("— / —")).toBeInTheDocument()
 })
 
-test("a non-numeric operation id shows not found without calling the api", async () => {
+test("a non-numeric operation id shows not found without fetching operation data", async () => {
   const calls = stubFetch({})
   renderApp("/operations/abc")
   expect(await screen.findByText("Not found")).toBeInTheDocument()
-  expect(calls).toEqual([])
+  expect(calls).toEqual(["/api/profiles"])
 })
 
 test("measure-sets summary shows set stability", async () => {

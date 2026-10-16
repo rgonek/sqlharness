@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 
 using SqlHarness.Core;
 using SqlHarness.Core.Mutations;
+using SqlHarness.Core.Targets;
 
 using SqlHarness.Mcp.Tools;
 
@@ -40,7 +41,15 @@ public sealed record McpCapabilitiesDocument(
     int InputRootCount = 0,
     bool InputRootsComplete = true,
     int? InputRootsNextCursor = null,
-    int InputRootsOmitted = 0);
+    int InputRootsOmitted = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    SqlHarnessMutationCapability? Mutations = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    SqlHarnessProfileCapability? ProfileMutations = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<AllowedProfileMutationCapability>? AllowedProfileMutations = null);
+
+public sealed record AllowedProfileMutationCapability(string Profile, string Mode, bool WriterConfigured);
 
 /// <summary>
 /// Plan text policy for the offline plan tool. The caller supplies the plan
@@ -128,7 +137,9 @@ public static partial class McpOperationMapper
             [engine],
             new McpProcessLimits(scope.MaxResultBytes, scope.MaxOperationSeconds),
             SqlHarnessCapabilitiesProvider.CompareContextPolicy(compareConfig),
-            Diagnostics: includeDiagnostics ? LocalDiagnostics(scope.InputRoots) : null);
+            Diagnostics: includeDiagnostics ? LocalDiagnostics(scope.InputRoots) : null,
+            Mutations: SqlHarnessCapabilitiesProvider.MutationCapability(null, false),
+            ProfileMutations: ProfileMutation(scope.TargetRequest.Profile, scope.Profiles, null));
         return WithInputRootPage(document, scope.InputRoots, inputRootCursor, scope.MaxResultBytes);
     }
 
@@ -136,7 +147,14 @@ public static partial class McpOperationMapper
     {
         ArgumentNullException.ThrowIfNull(context);
         if (!context.RequestScope)
-            return BuildCapabilities(context.FixedScope!, includeDiagnostics, inputRootCursor, context.CompareConfig);
+        {
+            var fixedDocument = BuildCapabilities(context.FixedScope!, includeDiagnostics, inputRootCursor, context.CompareConfig);
+            return fixedDocument with
+            {
+                Mutations = SqlHarnessCapabilitiesProvider.MutationCapability(context.Config.Mutations, context.IsDashboardReachable()),
+                ProfileMutations = ProfileMutation(context.FixedScope!.TargetRequest.Profile, context.Profiles, context.Config.Mutations),
+            };
+        }
         ThrowIfInvalidInputRootCursor(context.InputRoots, inputRootCursor);
 
         var document = new McpCapabilitiesDocument(
@@ -146,8 +164,24 @@ public static partial class McpOperationMapper
             new McpProcessLimits(context.MaxResultBytes, context.MaxOperationSeconds),
             SqlHarnessCapabilitiesProvider.CompareContextPolicy(context.CompareConfig),
             context.AllowedProfiles,
-            includeDiagnostics ? LocalDiagnostics(context.InputRoots) : null);
+            includeDiagnostics ? LocalDiagnostics(context.InputRoots) : null,
+            Mutations: SqlHarnessCapabilitiesProvider.MutationCapability(context.Config.Mutations, context.IsDashboardReachable()),
+            AllowedProfileMutations: context.AllowedProfiles.Select(name =>
+            {
+                var policy = SqlHarnessCapabilitiesProvider.ProfileMutationCapability(context.Profiles[name], context.Config.Mutations);
+                return new AllowedProfileMutationCapability(name, policy.Mode, policy.WriterConfigured);
+            }).ToArray());
         return WithInputRootPage(document, context.InputRoots, inputRootCursor, context.MaxResultBytes);
+    }
+
+    private static SqlHarnessProfileCapability? ProfileMutation(string? profileName,
+        IReadOnlyDictionary<string, TargetProfile> profiles, MutationsConfig? config)
+    {
+        if (string.IsNullOrWhiteSpace(profileName) || !profiles.TryGetValue(profileName, out var profile))
+            return null;
+        var policy = SqlHarnessCapabilitiesProvider.ProfileMutationCapability(profile, config);
+        var engine = string.Equals(profile.Engine, "postgres", StringComparison.OrdinalIgnoreCase) ? "postgres" : "sqlserver";
+        return new SqlHarnessProfileCapability(profileName, engine, policy.Mode, policy.WriterConfigured);
     }
 
     private static void ThrowIfInvalidInputRootCursor(IReadOnlyList<string> inputRoots, int cursor)

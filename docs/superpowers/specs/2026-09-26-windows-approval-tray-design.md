@@ -1,6 +1,6 @@
 # SQLHarness — Windows tray i jednorazowe zgody na mutacje MCP
 
-**Status:** projekt do realizacji po planie 07 MCP. Zakres potwierdzony przez użytkownika: wyłącznie nasz SQLHarness MCP, najpierw Windows; port uniksowy później.
+**Status:** Superseded by plan 073 (dashboard approval); tray deferred.
 
 **Cel:** przed trwałym DML zgłoszonym przez SQLHarness MCP operator otrzymuje powiadomienie i lokalny podgląd dokładnej operacji, po czym zatwierdza ją jednorazowo albo odrzuca. Brak decyzji oznacza brak wykonania.
 

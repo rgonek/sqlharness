@@ -2,6 +2,10 @@
 
 Snapshot of the previous index, archived on 2026-10-14. Status and queue notes below are historical; use [the current queue](README.md) for pending work.
 
+## Plan 073 implementation evidence — 2026-10-16 (final review pending)
+
+Plan [073](073-mutation-approval-broker.md) passed the Windows `just verify` gate on its feature worktree: six stages in 8m18s; UI 258 passed, Core/CLI 3,958 passed/11 skipped, MCP 401 passed/4 skipped, build passed, format passed for 12 changed C# files. The focused DocsSync/Contracts/Capabilities filter passed 131/131. Linux was waived by the operator and remains unverified. Whole-branch review is pending, so plan 073 is not marked DONE or integrated. Final gate logs: `D:/temp/sqlharness-plan073-verify-final4`.
+
 ## Plan 071 completion — 2026-10-15
 
 Integrated locally into `main` on 2026-10-16 at `6fd982ca762ada4f2a4d6a42a720eaa6b4c3d674`, preserving setup-SQL replay, Plan 072, and Plan 074. Final review found incomplete version choices beyond the first compare-history page; fix `904b04d` supplies complete per-scope version/hash inventories and disambiguates repeated labels. Luna xhigh task/integration reviews and Sol low whole-branch/scoped re-review approved. Post-integration Windows `just verify` on `6fd982c` exited 0, six stages in 3m00s: UI 238 passed; Core 3,839 passed/11 skipped; MCP 386 passed/4 skipped; build passed; format skipped on the clean tree after the resolved merge tree had passed formatting for 26 C# files. No `FAILED` stage-log markers. Full UI runs print non-failing localhost:3000 EventSource errors and DEP0190; isolated page suites pass. Linux omitted per policy; no push. Summary log: `D:/temp/sqlharness-plan071-main-verify.log`. Earlier feature-only evidence follows; SDD scratch reports are temporary and removed after completion.
@@ -263,7 +267,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
 
 ## Direction verdict recorded
 
-- **Plan 08 (Windows approval tray for MCP mutations) is deferred, not rejected.** It is multi-week and Windows-only, adds a new trust surface, and its own spec admits weak isolation against same-user processes. The CLI already has an approved mutation path. Revisit after 051/036. If resumed, start with a spike of the platform-neutral approval state machine before any UI.
+- **Plan 08 (Windows approval tray for MCP mutations) is superseded by plan 073's dashboard approval flow; the native tray remains deferred.** The old direction note predates the broker implementation.
 
 ## Findings considered and rejected (2026-10-03)
 

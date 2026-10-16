@@ -89,7 +89,8 @@ public static class McpHost
         CancellationToken ct = default,
         Action<SqlHarnessConfig>? started = null,
         IMutationBrokerClient? mutationBroker = null,
-        string? mutationSessionKey = null)
+        string? mutationSessionKey = null,
+        Func<bool>? dashboardReachability = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(input);
@@ -109,7 +110,7 @@ public static class McpHost
         {
             var profiles = loadProfiles();
             knownSecrets = ResolveKnownSecrets(options, profiles);
-            process = McpProcessContext.Create(options, () => profiles, config.Config.Compare);
+            process = McpProcessContext.Create(options, () => profiles, config.Config.Compare, config.Config, dashboardReachability);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

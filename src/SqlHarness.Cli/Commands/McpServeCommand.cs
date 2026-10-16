@@ -127,7 +127,8 @@ public sealed class McpServeCommand(
             ct,
             OnStarted(launcher, console.Error),
             mutationBroker,
-            mutationSessionKey);
+            mutationSessionKey,
+            () => DashboardLock.ReadRunning(SqlHarnessPaths.Home, ProcessInfo.Current) is not null);
     }
 
     /// <summary>

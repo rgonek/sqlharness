@@ -26,7 +26,7 @@
 
 ## Status
 
-- IN PROGRESS; planned 2026-10-14 at `488598d`, scope updated 2026-10-16. Executes after 072.
+- Implementation verified on Windows on 2026-10-16; final whole-branch review pending. Linux verification was waived and remains unverified. Planned 2026-10-14 at `488598d`, scope updated 2026-10-16. Executes after 072.
 - Supersedes [plan 08 — Windows approval tray](../docs/superpowers/plans/2026-09-26-audit-08-windows-approval-tray.md); the tray stays deferred.
 - Priority P1. Effort L. Risk HIGH: the first persistent-write path through MCP, a new dashboard write surface, and a journal migration.
 
@@ -85,7 +85,7 @@
 **Process rules.**
 - Do not auto-format files; touch only lines the change needs (operator rule).
 - Do not touch the operator's own dashboard or API during development; use isolated homes (`SQLHARNESS_HOME` fixtures) in tests (AGENTS.md › Data).
-- Done means `just verify` then `just verify-linux`, one at a time, both green.
+- Completion requires Windows `just verify` on the final product tree. The operator waived `just verify-linux` on 2026-10-16; record Linux as unverified.
 
 ## Review Focus
 
@@ -618,6 +618,6 @@ Extend the blocklist (the hook stays fail-open on bad JSON, as documented):
   - `plans/README.md` and `plans/history.md`; this plan's Status.
 - Test: `DocsSyncTests`, `ContractsTests`, MCP catalog tests, skill tests if any (`grep -rln "SKILL.md" tests`)
 
-- [ ] **Step 1: Update the docs and capabilities.** Run `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~DocsSync|FullyQualifiedName~Contracts|FullyQualifiedName~Capabilities"` and `dotnet test tests/SqlHarness.Mcp.Tests`. Expected: PASS after the expected-shape updates.
-- [ ] **Step 2: Gates.** Run `just verify`, then `just verify-linux`, one at a time. Both must pass.
-- [ ] **Step 3: Commit**: `git commit -m "Document mutation approval; mark plan 073 done; supersede the tray plan"`.
+- [x] **Step 1: Update docs and capabilities.** Docs/Contracts/Capabilities filter passed 131/131; MCP suite passed 401, skipped 4, failed 0.
+- [x] **Step 2: Windows gate.** `just verify -LogDirectory D:/temp/sqlharness-plan073-verify-final4` passed all six stages in 8m18s. Linux is explicitly waived and remains unverified. Final whole-branch review is pending; do not mark the plan DONE before that review.
+- [x] **Step 3: Commit**: commit only the explicit product, test, and documentation paths; do not stage the Task 13 scratch report.
