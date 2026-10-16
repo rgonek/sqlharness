@@ -70,10 +70,10 @@ public sealed class DashboardHousekeepingTests
         }
     }
 
-    private static DashboardHostOptions Options(TempHome home, TimeSpan? idle, TimeProvider time, Passes passes, SqlHarnessConfig? config = null) =>
+    private static DashboardHostOptions Options(TempHome home, TimeSpan? idle, TimeProvider time, Passes passes, SqlHarnessConfig? config = null, TextWriter? errors = null) =>
         new(home.Path, home.DatabasePath,
             new SqlHarnessConfigLoadResult(config ?? SqlHarnessConfig.Default, SqlHarnessConfigStatus.Missing, null),
-            OpenBrowser: false, Quiet: true, TextWriter.Null, TextWriter.Null,
+            OpenBrowser: false, Quiet: true, TextWriter.Null, errors ?? TextWriter.Null,
             new FakeProcesses().Alive(Environment.ProcessId, null), new NoBrowser())
         {
             PortOverride = 0,
@@ -403,7 +403,8 @@ public sealed class DashboardHousekeepingTests
         {
             Dashboard = SqlHarnessConfig.Default.Dashboard with { AgentTranscripts = new AgentTranscriptsConfig { Enabled = true } },
         };
-        var run = DashboardHost.RunAsync(Options(home, TimeSpan.FromMinutes(2), clock, passes, config) with
+        var errors = new StringWriter();
+        var run = DashboardHost.RunAsync(Options(home, TimeSpan.FromMinutes(2), clock, passes, config, errors) with
         {
             AgentHomes = homes,
             AgentDirectoryProbe = Probe,
@@ -417,9 +418,12 @@ public sealed class DashboardHousekeepingTests
 
         var nextPass = passes.MoreAsync();
         clock.Advance(TimeSpan.FromSeconds(10));
-        Assert.Same(nextPass, await Task.WhenAny(run, nextPass));
+        // Passes.MoreAsync() already bounds itself at 20 s, so awaiting it is the wait; asserting
+        // which task finished first only added a race and hid the reason behind an Assert.Same diff.
         await nextPass;
-        Assert.False(run.IsCompleted, "the in-cycle external commit starts a new idle window");
+        var code = run.IsCompleted ? await run : -1;
+        Assert.False(run.IsCompleted,
+            $"the in-cycle external commit starts a new idle window; host exited with {code}: {errors}");
 
         clock.Advance(TimeSpan.FromMinutes(1).Add(TimeSpan.FromSeconds(50)));
         Assert.Equal(0, await run.WaitAsync(TimeSpan.FromSeconds(20)));
