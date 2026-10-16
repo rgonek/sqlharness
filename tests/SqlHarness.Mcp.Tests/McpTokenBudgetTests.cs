@@ -458,10 +458,17 @@ public sealed class McpTokenBudgetTests
     public void Operators_with_plan_refs_fit_the_budget_and_keep_callable_selectors(int budget)
     {
         var href = new OperatorPlanRef("artifact-001", "candidate", null, 1, 5, "0/4", 5);
-        var operators = Enumerable.Range(0, 8).Select(index => new NoteworthyOperatorSummary(
+        var operators = Enumerable.Range(0, 7).Select(index => new NoteworthyOperatorSummary(
             "candidate", index, "Clustered Index Scan", "dbo.Accounts", true, true, false)
         {
             PlanRefs = [href with { Cursor = index, NodePath = index == 0 ? "0" : "0/" + (index - 1) }],
+            SourceIsCapped = true,
+        }).Append(new NoteworthyOperatorSummary(
+            "both", null, "Clustered Index Scan", "dbo.Accounts", null, null, null)
+        {
+            Baseline = new NoteworthyOperatorSideEvidence(false, true, false),
+            Candidate = new NoteworthyOperatorSideEvidence(false, false, false),
+            PlanRefs = [href with { Variant = "baseline" }, href],
             SourceIsCapped = true,
         }).ToArray();
         var section = new ArtifactOperatorsSection("artifact-001", "compare", operators)
@@ -478,6 +485,13 @@ public sealed class McpTokenBudgetTests
         var returned = document.RootElement.GetProperty("result").GetProperty("operators");
         Assert.NotEmpty(returned.EnumerateArray());
         var first = returned[0].GetProperty("planRefs")[0];
+        Assert.True(returned[0].GetProperty("hasWarnings").GetBoolean());
+        var shared = Assert.Single(returned.EnumerateArray(), item => item.GetProperty("side").GetString() == "both");
+        Assert.False(shared.TryGetProperty("hasWarnings", out _));
+        Assert.False(shared.TryGetProperty("hasSpill", out _));
+        Assert.False(shared.TryGetProperty("hasImplicitConversion", out _));
+        Assert.True(shared.GetProperty("baseline").GetProperty("hasSpill").GetBoolean());
+        Assert.False(shared.GetProperty("candidate").GetProperty("hasSpill").GetBoolean());
         Assert.Equal("artifact-001", first.GetProperty("artifactId").GetString());
         Assert.Equal("candidate", first.GetProperty("variant").GetString());
         Assert.Equal(1, first.GetProperty("statement").GetInt32());

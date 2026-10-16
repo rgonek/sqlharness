@@ -106,7 +106,7 @@ public sealed class BenchmarkSummaryTests
         Assert.All(
             summary.NoteworthyOperators,
             op => Assert.True(
-                op.HasWarnings || op.HasSpill || op.HasImplicitConversion
+                op.HasAnyAttention
                 || !string.Equals(op.Side, "both", StringComparison.Ordinal),
                 "Noteworthy operators must be one-side-only or carry a warning/spill/conversion."));
     }
@@ -182,9 +182,10 @@ public sealed class BenchmarkSummaryTests
         Assert.Equal("both", op.Side);
         Assert.Equal("Index Seek", op.PhysicalOp);
         Assert.Equal("dbo.Orders", op.Object);
-        Assert.True(op.HasWarnings);
-        Assert.True(op.HasSpill);
-        Assert.False(op.HasImplicitConversion);
+        Assert.Null(op.HasWarnings);
+        Assert.Null(op.HasSpill);
+        Assert.Null(op.HasImplicitConversion);
+        Assert.True(op.HasAnyAttention);
     }
 
     [Fact]
@@ -248,7 +249,7 @@ public sealed class BenchmarkSummaryTests
         Assert.DoesNotContain("candidate", json, StringComparison.OrdinalIgnoreCase);
         Assert.All(
             summary.NoteworthyOperators,
-            op => Assert.True(op.HasWarnings || op.HasSpill || op.HasImplicitConversion));
+            op => Assert.True(op.HasAnyAttention));
     }
 
     [Fact]
@@ -289,9 +290,9 @@ public sealed class BenchmarkSummaryTests
         Assert.Equal(source.Candidate.Warnings, first.Candidate.Warnings);
         Assert.Equal("cell-100", summary.Cases[0].ArtifactId);
         Assert.Equal(10, first.NoteworthyOperators.Count);
-        Assert.Contains(first.NoteworthyOperators, op => op.HasWarnings);
-        Assert.Contains(first.NoteworthyOperators, op => op.HasSpill);
-        Assert.Contains(first.NoteworthyOperators, op => op.HasImplicitConversion);
+        Assert.Contains(first.NoteworthyOperators, op => op.HasWarnings == true || op.Baseline?.HasWarnings == true || op.Candidate?.HasWarnings == true);
+        Assert.Contains(first.NoteworthyOperators, op => op.HasSpill == true || op.Baseline?.HasSpill == true || op.Candidate?.HasSpill == true);
+        Assert.Contains(first.NoteworthyOperators, op => op.HasImplicitConversion == true || op.Baseline?.HasImplicitConversion == true || op.Candidate?.HasImplicitConversion == true);
 
         var second = summary.Details[1].Compare;
         Assert.Equal(report.Cells[1].Compare.Equivalence, second.Equivalence);
@@ -305,7 +306,7 @@ public sealed class BenchmarkSummaryTests
         Assert.Equal(report.Cells[1].Compare.Candidate.LogicalReadsByTable, second.Candidate.LogicalReadsByTable);
         Assert.Equal(report.Cells[1].Compare.Candidate.Warnings, second.Candidate.Warnings);
         Assert.Equal("cell-20", summary.Cases[1].ArtifactId);
-        Assert.Contains(second.NoteworthyOperators, op => op.HasWarnings && op.HasSpill);
+        Assert.Contains(second.NoteworthyOperators, op => op.HasAnyAttention);
 
         Assert.Equal("not-requested", summary.Cases[2].EquivalenceAvailability);
         Assert.Null(summary.Cases[2].Equivalent);
@@ -387,7 +388,7 @@ public sealed class BenchmarkSummaryTests
         Assert.True(summary.Sets[0].ResultsStable);
         Assert.False(summary.Sets[1].ResultsStable);
         Assert.Equal(10, summary.Sets[0].NoteworthyOperators.Count);
-        Assert.All(summary.Sets[0].NoteworthyOperators, op => Assert.True(op.HasWarnings || op.HasSpill || op.HasImplicitConversion));
+        Assert.All(summary.Sets[0].NoteworthyOperators, op => Assert.True(op.HasAnyAttention));
         Assert.DoesNotContain(summary.Sets[0].NoteworthyOperators, op => op.PhysicalOp == "CleanSeek");
         Assert.Equal("small", summary.CrossSetSummary.MinimumMedianElapsedSet);
         Assert.Equal("large", summary.CrossSetSummary.MaximumMedianElapsedSet);
@@ -823,8 +824,10 @@ public sealed class BenchmarkSummaryTests
 
         Assert.Equal("both", op.Side);
         Assert.Null(op.NodeId);
-        Assert.True(op.HasWarnings);
-        Assert.True(op.HasSpill);
+        Assert.Null(op.HasWarnings);
+        Assert.Null(op.HasSpill);
+        Assert.Null(op.HasImplicitConversion);
+        Assert.True(op.HasAnyAttention);
         Assert.False(op.Baseline!.HasWarnings);
         Assert.False(op.Baseline.HasSpill);
         Assert.True(op.Candidate!.HasWarnings);
@@ -841,7 +844,12 @@ public sealed class BenchmarkSummaryTests
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(summary, summary.GetType(), WebJson));
         var projected = Assert.Single(document.RootElement.GetProperty("noteworthyOperators").EnumerateArray());
         Assert.False(projected.TryGetProperty("nodeId", out _));
+        Assert.False(projected.TryGetProperty("hasWarnings", out _));
+        Assert.False(projected.TryGetProperty("hasSpill", out _));
+        Assert.False(projected.TryGetProperty("hasImplicitConversion", out _));
         Assert.Equal(2, projected.GetProperty("planRefs").GetArrayLength());
+        Assert.False(projected.GetProperty("baseline").GetProperty("hasWarnings").GetBoolean());
+        Assert.True(projected.GetProperty("candidate").GetProperty("hasWarnings").GetBoolean());
     }
 
     [Fact]
@@ -863,6 +871,10 @@ public sealed class BenchmarkSummaryTests
 
         Assert.Equal("both", op.Side);
         Assert.Null(op.NodeId);
+        Assert.Null(op.HasWarnings);
+        Assert.Null(op.HasSpill);
+        Assert.Null(op.HasImplicitConversion);
+        Assert.True(op.HasAnyAttention);
         Assert.Equal("0/1", Assert.Single(op.PlanRefs!, href => href.Variant == "baseline").NodePath);
         Assert.Equal("0/1", Assert.Single(op.PlanRefs!, href => href.Variant == "candidate").NodePath);
         Assert.Equal(2, Assert.Single(op.PlanRefs!, href => href.Variant == "baseline").Cursor);
@@ -888,6 +900,31 @@ public sealed class BenchmarkSummaryTests
         Assert.Null(op.PlanRefs);
         Assert.True(op.Baseline!.HasWarnings);
         Assert.False(op.Candidate!.HasWarnings);
+    }
+
+    [Fact]
+    public void Compare_noteworthy_keeps_identity_and_attention_flags_for_one_sided_rows()
+    {
+        var baseline = new[]
+        {
+            OriginOp(6, "Index Seek", "dbo.Orders", true, false, false, statement: 0, nodePath: "0", cursor: 0),
+        };
+
+        var summary = BenchmarkSummaryProjector.Project(MinimalCompare(baseline, [], ArtifactDir));
+        var op = Assert.Single(summary.NoteworthyOperators);
+
+        Assert.Equal("baseline", op.Side);
+        Assert.Equal(6, op.NodeId);
+        Assert.True(op.HasWarnings);
+        Assert.False(op.HasSpill);
+        Assert.False(op.HasImplicitConversion);
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(summary, summary.GetType(), WebJson));
+        var projected = Assert.Single(document.RootElement.GetProperty("noteworthyOperators").EnumerateArray());
+        Assert.Equal(6, projected.GetProperty("nodeId").GetInt32());
+        Assert.True(projected.GetProperty("hasWarnings").GetBoolean());
+        Assert.False(projected.GetProperty("hasSpill").GetBoolean());
+        Assert.False(projected.GetProperty("hasImplicitConversion").GetBoolean());
     }
 
     [Fact]

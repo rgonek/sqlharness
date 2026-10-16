@@ -29,10 +29,16 @@ public sealed record NoteworthyOperatorSummary(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? NodeId,
     string PhysicalOp,
     string? Object,
-    bool HasWarnings,
-    bool HasSpill,
-    bool HasImplicitConversion)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? HasWarnings,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? HasSpill,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? HasImplicitConversion)
 {
+    [JsonIgnore]
+    public bool HasAnyAttention =>
+        HasWarnings == true || HasSpill == true || HasImplicitConversion == true
+        || Baseline?.HasWarnings == true || Baseline?.HasSpill == true || Baseline?.HasImplicitConversion == true
+        || Candidate?.HasWarnings == true || Candidate?.HasSpill == true || Candidate?.HasImplicitConversion == true;
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<OperatorPlanRef>? PlanRefs { get; init; }
 
@@ -414,9 +420,9 @@ public static class BenchmarkSummaryProjector
                 side == "both" ? null : representative.NodeId,
                 representative.PhysicalOp,
                 representative.Object,
-                hasWarnings,
-                hasSpill,
-                hasImplicit)
+                side == "both" ? null : hasWarnings,
+                side == "both" ? null : hasSpill,
+                side == "both" ? null : hasImplicit)
             {
                 PlanRefs = planRefs.Count == 0 ? null : planRefs,
                 Baseline = side == "both" ? leftFlags : null,
@@ -477,8 +483,7 @@ public static class BenchmarkSummaryProjector
             .ToArray();
     }
 
-    private static bool HasAttention(NoteworthyOperatorSummary op) =>
-        op.HasWarnings || op.HasSpill || op.HasImplicitConversion;
+    internal static bool HasAttention(NoteworthyOperatorSummary op) => op.HasAnyAttention;
 
     private static bool HasAttention(CompareOperatorReport op) =>
         op.HasWarnings || op.HasSpill || op.HasImplicitConversion;

@@ -791,6 +791,18 @@ public class ArtifactReaderTests
         var scan = Assert.Single(operators.Operators, op => op.PhysicalOp == "Clustered Index Scan");
         Assert.NotEmpty(scan.PlanRefs!);
         Assert.True(operators.SourceIsCapped);
+        Assert.Equal("both", scan.Side);
+        Assert.Null(scan.HasWarnings);
+        Assert.Null(scan.HasSpill);
+        Assert.Null(scan.HasImplicitConversion);
+        using (var scanJson = JsonDocument.Parse(JsonSerializer.Serialize(scan, ArtifactDirectoryPublisher.JsonOptions)))
+        {
+            Assert.False(scanJson.RootElement.TryGetProperty("hasWarnings", out _));
+            Assert.False(scanJson.RootElement.TryGetProperty("hasSpill", out _));
+            Assert.False(scanJson.RootElement.TryGetProperty("hasImplicitConversion", out _));
+            Assert.True(scanJson.RootElement.GetProperty("baseline").GetProperty("hasSpill").GetBoolean());
+            Assert.True(scanJson.RootElement.GetProperty("candidate").GetProperty("hasSpill").GetBoolean());
+        }
 
         foreach (var href in scan.PlanRefs!)
         {
@@ -829,7 +841,7 @@ public class ArtifactReaderTests
         var id = Path.GetFileName(directory);
         var operators = Assert.IsType<ArtifactOperatorsSection>(
             ArtifactReader.ReadSection(temp.Path, id, "operators"));
-        var href = Assert.Single(Assert.Single(operators.Operators, op => op.HasSpill).PlanRefs!);
+        var href = Assert.Single(Assert.Single(operators.Operators, op => op.HasSpill == true).PlanRefs!);
         Assert.Equal(5, href.Repetition);
 
         var runsPath = Path.Combine(directory, "runs.jsonl");
