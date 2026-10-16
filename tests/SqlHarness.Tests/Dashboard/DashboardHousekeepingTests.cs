@@ -418,12 +418,13 @@ public sealed class DashboardHousekeepingTests
 
         var nextPass = passes.MoreAsync();
         clock.Advance(TimeSpan.FromSeconds(10));
-        // Passes.MoreAsync() already bounds itself at 20 s, so awaiting it is the wait; asserting
-        // which task finished first only added a race and hid the reason behind an Assert.Same diff.
-        await nextPass;
-        var code = run.IsCompleted ? await run : -1;
+        var finished = await Task.WhenAny(run, nextPass);
+        // Assert on the winner before awaiting nextPass: once the loop is down, MoreAsync can
+        // never complete, so awaiting it first would time out and hide the host's own reason.
+        var code = ReferenceEquals(finished, run) ? await run : -1;
         Assert.False(run.IsCompleted,
             $"the in-cycle external commit starts a new idle window; host exited with {code}: {errors}");
+        await nextPass;
 
         clock.Advance(TimeSpan.FromMinutes(1).Add(TimeSpan.FromSeconds(50)));
         Assert.Equal(0, await run.WaitAsync(TimeSpan.FromSeconds(20)));
