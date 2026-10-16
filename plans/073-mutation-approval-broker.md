@@ -6,27 +6,27 @@
 > - Plans 068, 069 and 070 take journal schema versions. This plan uses **the next free journal version**; call it `VersionN` everywhere, including the tests. That is adaptation, not a STOP.
 > - Line numbers are from `488598d`.
 
-**Goal:** Agents request persistent changes through a dedicated `mutation` command (CLI) or tool `sqlharness_mutation` (MCP). The local dashboard decides by the profile's mode, or asks the operator in the browser. It then executes the frozen batch with the profile's writer credential. `query --allow-mutation` is removed.
+**Goal:** Agents request persistent changes through a dedicated `mutation` command (CLI) or tool `sqlharness_mutation` (MCP). The local dashboard decides by the profile's mode, or asks the operator in the browser. It then executes the frozen batch with the profile's writer credential. `query --allow-mutation` is removed. This plan supports click approval only; WebAuthn enrollment and verification are deferred to plan 077.
 
 **Architecture:**
 - **Core** holds:
   - the policy (`MutationPolicy`: mode × tier → decision);
   - the frozen request and its SHA-256 digest (`MutationRequest`);
-  - `SqlHarnessMutationOperation`. It executes only with an `ApprovedMutation` token whose constructor is `internal`. Core already grants internals to `SqlHarness.Dashboard` only, so the CLI and MCP cannot build it.
+  - `SqlHarnessMutationOperation`. It executes only with an `ApprovedMutation` token whose constructor is `internal`. Product internals are available to `SqlHarness.Dashboard` and the existing test assemblies; the CLI and MCP cannot build the token.
 - **Dashboard** hosts:
   - `MutationBroker`, an in-memory state machine with a fake-able clock;
   - `MutationExecutor`, which runs through Core with the writer `AuthSpec`;
   - HTTP endpoints: a long-poll submit authenticated by the dashboard token, SSE events, approve/deny as guarded writes;
-  - the approval UI, and optional WebAuthn.
+  - the click-only approval UI, including an in-page notification ping and sound settings.
 - **CLI and MCP** share `HttpMutationBrokerClient`, defined in the Dashboard project. The CLI composition root wires it for both `mutation` and `mcp serve`.
 
-**Tech Stack:** .NET 10, C#, ASP.NET Core minimal APIs, Microsoft.Data.Sqlite, ModelContextProtocol, Spectre.Console.Cli, `Fido2` (fido2-net-lib) for WebAuthn, xUnit; React 19, TypeScript, TanStack Query/Router, Vitest, Testing Library.
+**Tech Stack:** .NET 10, C#, ASP.NET Core minimal APIs, Microsoft.Data.Sqlite, ModelContextProtocol, Spectre.Console.Cli, xUnit; React 19, TypeScript, TanStack Query/Router, Vitest, Testing Library.
 
 **Spec:** [2026-10-14-mutation-approval-design.md](../docs/superpowers/specs/2026-10-14-mutation-approval-design.md). [Plan 072](072-mutation-risk-tiers.md) provides the tiers.
 
 ## Status
 
-- TODO; planned 2026-10-14 at `488598d`. Executes after 072.
+- IN PROGRESS; planned 2026-10-14 at `488598d`, scope updated 2026-10-16. Executes after 072.
 - Supersedes [plan 08 — Windows approval tray](../docs/superpowers/plans/2026-09-26-audit-08-windows-approval-tray.md); the tray stays deferred.
 - Priority P1. Effort L. Risk HIGH: the first persistent-write path through MCP, a new dashboard write surface, and a journal migration.
 
@@ -39,6 +39,7 @@
 - `yolo` auto-executes only the `dml` tier. `schema`, `privilege` and `opaque` always ask.
 - `yolo` on a profile whose `environment` is `prod`, `production` or `staging` (case-insensitive) needs `mutations.acknowledgeProductionYolo: true`; without it the profile fails to load. While such a profile exists, the dashboard shows a persistent warning banner naming it, and history marks its unasked executions.
 - `operator` and `yolo` require `mutations.writer`, either `{ "sqlUser", "passwordEnvVar" }` or `{ "sameAsReader": true }`.
+- Verification is click-only in this plan. `click` is the default. Reject `webauthn` and every unknown verification value with a visible validation/configuration error; never silently convert an unsupported request to click. WebAuthn enrollment, assertion, credential storage, and recovery belong to plan 077.
 - The broker reads `targets.json` and `config.json` on every submit, never once at start.
 
 **Classification and limits.**
@@ -110,11 +111,10 @@
 | `src/SqlHarness.Dashboard/Mutations/MutationExecutor.cs` (new) | principal check, writer execution, outcome, journal |
 | `src/SqlHarness.Dashboard/Mutations/MutationEndpoints.cs` (new) | submit long-poll, SSE events, approve/deny, history |
 | `src/SqlHarness.Dashboard/Mutations/HttpMutationBrokerClient.cs` (new) | client: discovery, autostart, long-poll |
-| `src/SqlHarness.Dashboard/Mutations/WebAuthnVerifier.cs` (new) | enrolment, assertions, credential file |
 | `src/SqlHarness.Dashboard/DashboardSecurity.cs`, `DashboardServer.cs` | routes and guards |
 | `src/SqlHarness.Cli/Commands/MutationCommand.cs` (new), `SqlHarnessCommands.cs`, `SqlHarnessCli.cs` | CLI command; remove `--allow-mutation`/`--confirm-database` |
 | `src/SqlHarness.Mcp/Tools/McpToolCatalog.cs`, `McpOperationMapper.cs`, `McpLimits.cs` | `sqlharness_mutation` |
-| `src/SqlHarness.Dashboard/ui/src/mutations/*` (new), `pages/MutationsPage.tsx`, `pages/SettingsPage.tsx`, `components/AppLayout.tsx` | toast, approval dialog, history, settings |
+| `src/SqlHarness.Dashboard/ui/src/mutations/*` (new), `pages/MutationsPage.tsx`, `pages/SettingsPage.tsx`, `components/AppLayout.tsx` | toast and sound ping, approval dialog, history, settings |
 | `scripts/hooks/protect_sqlharness_config.py` + test | broader agent-side hygiene |
 | `README.md`, `docs/mcp.md`, `skills/sqlharness/SKILL.md`, `AGENTS.md`, `Capabilities.cs` | contract docs |
 
@@ -132,7 +132,7 @@
 ```csharp
 // Core/Mutations/MutationPolicy.cs (types only in this task)
 public enum MutationMode { Never, Operator, Yolo }
-public enum MutationVerification { Click, WebAuthn }
+public enum MutationVerification { Click }
 
 // Targets
 public sealed record MutationWriter(string? SqlUser = null, string? PasswordEnvVar = null, bool SameAsReader = false);
@@ -156,7 +156,7 @@ Validation, inside the existing `ProfileStore.Load` loop:
 - A writer with `SameAsReader` and `SqlUser`/`PasswordEnvVar` together, or neither → `JsonException("mutations.writer needs sqlUser and passwordEnvVar, or sameAsReader.")`.
 - `Yolo` with `Environment` in {`prod`, `production`, `staging`} (OrdinalIgnoreCase) and `AcknowledgeProductionYolo` false → `JsonException("yolo on a prod or staging profile needs mutations.acknowledgeProductionYolo: true.")`.
 
-`SqlHarnessConfigLoader` keeps its strict, fail-closed style: unknown fields or out-of-range values yield `Default` with a warning. `ApprovalTimeoutSeconds` must be 30..600; modes and verification must be the known names.
+`SqlHarnessConfigLoader` keeps its strict, fail-closed style: unknown fields or out-of-range values yield `Default` with a warning. `ApprovalTimeoutSeconds` must be 30..600 and modes must be known names. The only supported verification value is `click`; an unsupported value is rejected with an explicit warning/error and is never normalized to click. Settings writes containing unsupported values return a validation error and preserve the existing value.
 
 - [ ] **Step 1: Write the failing tests**
   - A profile with `"mutations": {"mode":"yolo","writer":{"sameAsReader":true}}, "environment":"Prod"` fails to load with the acknowledgement message.
@@ -167,7 +167,7 @@ Validation, inside the existing `ProfileStore.Load` loop:
   - A valid dev profile loads with `Mutations.Mode == "yolo"`.
   - A profile without `mutations` loads as before.
   - `config.json` with `"mutations":{"approvalTimeoutSeconds":10}` yields `Default` plus a warning.
-  - `"verification":"webauthn"` loads.
+  - `"verification":"webauthn"` is rejected with a visible warning/error and is never treated as an explicit click selection.
 - [ ] **Step 2: Run them to verify they fail** (`dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~ProfileStore|FullyQualifiedName~SqlHarnessConfig"`).
 - [ ] **Step 3: Implement** the records, validation, `DashboardSettings` read/write of `mutations` (same autosave rules as other settings) and the `DashboardProfiles` columns.
 - [ ] **Step 4: Run them to verify they pass**, plus `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~Dashboard`.
@@ -244,7 +244,7 @@ public sealed record MutationBrokerResult(string Status, string? Message, SqlHar
 public sealed record SqlHarnessMutationPrepared(MutationRequest Request);
 ```
 
-`SqlHarnessQueryResult` stands for whatever result record `SqlHarnessQueryOperation` returns today; use that exact type.
+`SqlHarnessQueryReport` is the current result type returned by `SqlHarnessQueryOperation`; use the current type if it changes before implementation.
 
 `SqlHarnessModule` handles `SqlHarnessMutationOperation` like this:
 
@@ -429,7 +429,7 @@ Execution order:
 |---|---|---|
 | `POST /api/mutations` | `Authorization: Bearer <dashboard token>` + JSON; no cookie needed | body = `MutationRequest` fields. The server re-resolves and re-classifies through `SqlHarnessModule` (a dry-run of a `SqlHarnessMutationOperation`) and rejects a body whose tier, server or database differs. Applies the policy, then long-polls `MutationBroker.SubmitAsync` with `RequestAborted` as `ct`. Returns `MutationBrokerResult` JSON. HTTP 200 for every terminal status. |
 | `GET /api/mutations/events` | cookie | SSE: `added` (a `PendingMutationView` with SQL and parameter values) and `removed`. The first event is a snapshot of the current pending list. |
-| `POST /api/mutations/{id}/approve` | guarded write (cookie + `X-SqlHarness-Dashboard` + JSON + origin) | body `{}` in `click` mode; `{ assertion }` in `webauthn` mode (Task 11). 409 if the request is no longer pending. |
+| `POST /api/mutations/{id}/approve` | guarded write (cookie + `X-SqlHarness-Dashboard` + JSON + origin) | body `{}` only. 409 if the request is no longer pending. |
 | `POST /api/mutations/{id}/deny` | guarded write | 409 if it is no longer pending. |
 | `GET /api/mutations` | cookie | journal history page (cursor and limit like `/operations`). |
 
@@ -525,8 +525,8 @@ While waiting, send progress through the existing `McpProgressReporter`, stage `
 - Produces: `usePendingMutations(): PendingMutation[]` and `<ApprovalDialog requestId />`.
 
 Behaviour:
-- **Event stream:** `EventSource('/api/mutations/events')` with reconnect handled like `live/useLiveFeed.ts`.
-- **Toast:** for each `added` event, a toast titled "A change needs your decision" with a "Review" button and no SQL. When the tab is hidden and `Notification.permission === "granted"`, also `new Notification("SQLHarness: a change needs your decision")`; its click focuses the window and opens the dialog.
+- **Event stream:** `EventSource('/api/mutations/events')` with reconnect handled like `live/useLiveFeed.ts`. Snapshot events and reconnect replay synchronize visible requests but never trigger sounds or new notifications. Track request IDs already observed by the live stream; a digest join emits no second `added` event and causes no second ping.
+- **Toast and ping:** each newly observed live `added` event shows a toast titled "A change needs your decision" with a "Review" button and no SQL. Play the selected sound once for that event. When the tab is hidden and `Notification.permission === "granted"`, also `new Notification("SQLHarness: a change needs your decision")`; its click focuses the window and opens the dialog. Browser autoplay rejection is caught and ignored; it must not block the toast, notification, approval controls, or request handling. The next user-gesture preview in Settings remains available.
 - **Dialog content:**
   - environment badge in large type (red for prod/staging);
   - a persistent `AppLayout` banner, "YOLO is on for production profile X", whenever `GET /api/profiles` reports an acknowledged production yolo profile;
@@ -545,6 +545,9 @@ Behaviour:
 
 - [ ] **Step 1: Write the failing tests:**
   - an `added` event shows a toast without SQL text;
+  - the initial SSE snapshot and reconnect snapshot synchronize the request list without playing sound or issuing a new notification;
+  - a newly observed live `added` event plays once, and a duplicate/digest join does not replay it;
+  - rejected browser autoplay leaves the toast and approval controls usable;
   - the dialog renders `<script>alert(1)</script>` from SQL and a parameter value as literal text, and no `script` element exists in the DOM;
   - Approve is disabled for 1 s (fake timers);
   - Enter does not call approve;
@@ -552,17 +555,19 @@ Behaviour:
   - `removed` closes the dialog.
 - [ ] **Step 2: Run them to verify they fail** (`cd src/SqlHarness.Dashboard/ui && npm test -- mutations`).
 - [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run them to verify they pass**, then build the UI as described in README › Building the dashboard UI.
+- [ ] **Step 4: Run them to verify they pass**, then build the UI as described in README › Building the dashboard UI. Verify the default soft ping plays once for a new live event, not for initial SSE snapshots, reconnects, or digest joins; an autoplay restriction must not disrupt approval.
 - [ ] **Step 5: Commit**: `git commit -m "Show mutation approvals as toasts with a review dialog"`.
 
 ### Task 10: Mutations history and settings UI
 
 **Files:**
 - Create: `src/SqlHarness.Dashboard/ui/src/pages/MutationsPage.tsx` + test
-- Modify: `ui/src/router.tsx`, `ui/src/components/AppLayout.tsx` (nav), `ui/src/pages/SettingsPage.tsx` (section "Mutations": default mode, verification, approval timeout, "Enable browser notifications" button calling `Notification.requestPermission()`), `ui/src/pages/ProfilesPage.tsx` (mode, environment, writer kind)
+- Modify: `ui/src/router.tsx`, `ui/src/components/AppLayout.tsx` (nav), `ui/src/pages/SettingsPage.tsx` (section "Mutations": default mode, click-only verification display, approval timeout, sound selection and custom sound, "Enable browser notifications" button calling `Notification.requestPermission()`), `ui/src/pages/ProfilesPage.tsx` (mode, environment, writer kind)
 
 **Interfaces:**
 - Consumes: `GET /api/mutations`, `GET/PUT /api/settings`, `GET /api/profiles`.
+
+Sound settings are browser-local and do not add server-side file paths or upload routes. Offer three pleasant built-in sounds (default: "Soft ping"), each with a user-gesture preview, plus mute and a custom local audio file. Accept MP3, WAV, or OGG files up to 2 MiB; validate both file type/extension and size, and persist the chosen option and custom bytes in IndexedDB. Reject invalid files with an inline explanation. Preview is user-initiated so browser autoplay restrictions do not affect approval. Verification displays only `click`; unsupported values are rejected, never silently downgraded.
 
 - [ ] **Step 1: Write the failing tests:**
   - the history table lists time, profile, database, tier, mode, status and verification;
@@ -570,53 +575,16 @@ Behaviour:
   - SQL appears only when it was stored, as text;
   - a `<script>` literal stays text;
   - the settings section saves `approvalTimeoutSeconds` on blur and rejects 10 with the server's message;
-  - switching verification to `click` while `webauthn` is active triggers the Task 11 assertion flow (mock it here; Task 11 implements it).
+  - the Settings page offers three built-in sounds with previews, mute, and custom local MP3/WAV/OGG up to 2 MiB; invalid types/sizes are rejected; preferences and custom audio persist in IndexedDB; no server path or upload is involved;
+  - unsupported verification values are rejected with an explanation and do not silently change the current setting.
 - [ ] **Step 2: Run them to verify they fail.**
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run them to verify they pass.**
 - [ ] **Step 5: Commit**: `git commit -m "Add mutation history and mutation settings to the dashboard"`.
 
-### Task 11: WebAuthn verification (optional per setting)
+### Task 11: Deferred to plan 077 — WebAuthn verification
 
-**Files:**
-- Create: `src/SqlHarness.Dashboard/Mutations/WebAuthnVerifier.cs`, `ui/src/mutations/webauthn.ts` + tests
-- Modify: `Directory.Packages.props` (add `Fido2` at the latest stable version that supports .NET 10), `src/SqlHarness.Dashboard/SqlHarness.Dashboard.csproj`, `MutationEndpoints.cs`, `DashboardSecurity.cs` (new guarded paths), `ApprovalDialog.tsx`, `SettingsPage.tsx`
-- Test: `tests/SqlHarness.Tests/Dashboard/WebAuthnVerifierTests.cs`
-
-**STOP and ask the operator** if `Fido2` has no .NET 10-compatible release or its license is not MIT. Do not hand-roll WebAuthn verification.
-
-**Interfaces:**
-- Produces:
-  - routes:
-    - `POST /api/webauthn/register/options`
-    - `POST /api/webauthn/register`
-    - `POST /api/webauthn/assert/options` (body `{ purpose: "approve", requestId }` or `{ purpose: "settings" }`)
-  - approve body `{ assertion }`.
-
-Rules:
-- Relying party ID `localhost` or `127.0.0.1`, matching the dashboard host.
-- `userVerification: "preferred"`, attestation `none`.
-- Credentials are stored in an owner-only file `webauthn-credentials.json` in the SQLHarness home, written with `OwnerOnlyFiles`.
-- **Challenge binding:**
-  - for `approve`, the challenge is 16 random bytes plus the request digest bytes, single-use, valid for 120 s;
-  - the server rejects an assertion whose challenge does not embed the request's digest.
-- **Gated actions:**
-  - registering a second credential requires an assertion from an existing one;
-  - switching `verification` from `webauthn` to `click` requires an assertion (`purpose: "settings"`), checked in `DashboardSettings.PutAsync`;
-  - enabling `webauthn` requires at least one registered credential.
-- The broker records `verification = "webauthn"` or `"click"` per approval.
-- Recovery: deleting `webauthn-credentials.json` by hand makes `verification` fall back to `click` at the next start, with a warning in Settings. Document it.
-
-- [ ] **Step 1: Write the failing tests** with Fido2's test helpers or recorded fixtures:
-  - an assertion for request A cannot approve request B;
-  - a reused challenge is rejected;
-  - a second registration without an assertion → 403;
-  - switching to `click` without an assertion → 403;
-  - approve without an assertion in `webauthn` mode → 403.
-- [ ] **Step 2: Run them to verify they fail.**
-- [ ] **Step 3: Implement** the server and the UI. The UI calls `navigator.credentials.create`/`get` with the server options and posts base64url JSON.
-- [ ] **Step 4: Run them to verify they pass.** Do a manual smoke test in a browser on Windows (Hello) if available, and note the result in the commit message.
-- [ ] **Step 5: Commit**: `git commit -m "Optional WebAuthn verification for mutation approvals"`.
+This task is intentionally out of scope for 073. Windows Hello/WebAuthn, package selection, enrollment and assertion routes, digest-bound approval, credential storage and lifecycle, Settings transitions, and recovery are assigned to [plan 077](077-mutation-approval-webauthn.md), which depends on the click-only broker in 073. No WebAuthn package or endpoint is introduced here. Tasks 12 and 13 retain their existing numbers.
 
 ### Task 12: Agent-side hygiene hook
 
@@ -624,9 +592,9 @@ Rules:
 - Modify: `scripts/hooks/protect_sqlharness_config.py`, `scripts/hooks/test_protect_sqlharness_config.py`
 
 Extend the blocklist (the hook stays fail-open on bad JSON, as documented):
-- reads of `dashboard-token`, `dashboard.json` and `webauthn-credentials.json` by any tool. Handle `Read`/`read_file` tool names with a `file_path`/`path` argument, besides Bash.
+- reads of `dashboard-token` and `dashboard.json` by any tool. Handle `Read`/`read_file` tool names with a `file_path`/`path` argument, besides Bash.
 - writes to `config.json` and `targets.json` under `.sqlharness` by `Write`/`Edit` tools or shell redirection (`>`, `Set-Content`, `Out-File`).
-- shell commands calling `/api/mutations/` or `/api/webauthn/` on `127.0.0.1` or `localhost`.
+- shell commands calling `/api/mutations/` on `127.0.0.1` or `localhost`.
 
 - [ ] **Step 1: Write the failing tests** (pytest, one case per new rule, plus negative cases: reading `targets.json` is allowed, and so is a curl to another port path).
 - [ ] **Step 2: Run them to verify they fail**: `python -m pytest scripts/hooks -q`.
@@ -638,7 +606,7 @@ Extend the blocklist (the hook stays fail-open on bad JSON, as documented):
 
 **Files:**
 - Modify:
-  - `README.md`: Safety contract › Mutations rewritten; the threat model in the spec §1 wording; `acknowledgeProductionYolo`, and the risk that a profile whose variables switch between dev and production keeps one `environment` label; the parity rule extended to additions at the `README.md:178` paragraph; Dashboard section for approvals, notifications, WebAuthn and recovery; Settings fields; exit codes; dry-run `mutation`.
+  - `README.md`: Safety contract › Mutations rewritten; the threat model in the spec §1 wording; `acknowledgeProductionYolo`, and the risk that a profile whose variables switch between dev and production keeps one `environment` label; the parity rule extended to additions at the `README.md:178` paragraph; Dashboard section for approvals, notifications and sound settings; Settings fields; exit codes; dry-run `mutation`. State that verification is click-only in 073 and point to plan 077 for deferred WebAuthn.
   - `docs/mcp.md`: replace "No persistent mutations" with the mutation tool contract; tool count 9; catalog budget.
   - `src/SqlHarness.Core/Capabilities.cs` and the MCP capabilities: active profile mode, `writerConfigured` (bool), verification, TTL, `dashboardReachable`.
   - `skills/sqlharness/SKILL.md`: use `query` to read and `mutation` for persistent changes; on any non-success status stop and report; never retry; never reach for another transport.
