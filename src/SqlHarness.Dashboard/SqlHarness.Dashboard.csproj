@@ -23,7 +23,7 @@
 
   <!--
     The React UI (ui/) is built with npm and embedded as manifest resources named
-    SqlHarness.Dashboard.ui/<path>. npm ci runs only when node_modules is missing;
+    SqlHarness.Dashboard.ui/<path>. npm ci runs when dependencies are missing or changed;
     vite build runs only when a UI input is newer than dist/index.html. Pass
     -p:SkipDashboardUi=true to build without Node; the placeholder page is served then.
   -->
@@ -38,12 +38,14 @@
                        Exclude="ui/src/**/*.test.ts;ui/src/**/*.test.tsx;ui/src/test/**/*" />
   </ItemGroup>
 
-  <Target Name="InstallDashboardUi" Condition="'$(DashboardUiEnabled)' == 'true' AND !Exists('$(DashboardUiDir)/node_modules/.package-lock.json')">
+  <Target Name="InstallDashboardUi" Condition="'$(DashboardUiEnabled)' == 'true'"
+          Inputs="$(DashboardUiDir)/package.json;$(DashboardUiDir)/package-lock.json"
+          Outputs="$(DashboardUiDir)/node_modules/.package-lock.json">
     <Exec Command="npm ci" WorkingDirectory="$(DashboardUiDir)" />
   </Target>
 
   <Target Name="BuildDashboardUi" DependsOnTargets="InstallDashboardUi" Condition="'$(DashboardUiEnabled)' == 'true'"
-          Inputs="@(DashboardUiSource)" Outputs="$(DashboardUiDist)/index.html">
+          Inputs="@(DashboardUiSource);$(DashboardUiDir)/node_modules/.package-lock.json" Outputs="$(DashboardUiDist)/index.html">
     <Exec Command="npm run build" WorkingDirectory="$(DashboardUiDir)" />
   </Target>
 
