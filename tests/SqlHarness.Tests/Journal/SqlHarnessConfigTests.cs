@@ -55,6 +55,18 @@ public sealed class SqlHarnessConfigTests : IDisposable
         Assert.Equal("click", ConfigProperty(ConfigProperty(loaded.Config, "Mutations")!, "Verification"));
     }
 
+    [Theory]
+    [InlineData("defaultMode", "2")]
+    [InlineData("verification", "0")]
+    public void Mutation_settings_reject_numeric_enum_strings(string field, string value)
+    {
+        var json = $$"""{ "mutations": { "{{field}}": "{{value}}" } }""";
+        var parsed = SqlHarnessConfigLoader.Parse(System.Text.Encoding.UTF8.GetBytes(json));
+
+        Assert.Null(parsed.Config);
+        Assert.Contains(parsed.Errors, error => error.Field == $"mutations.{field}");
+    }
+
     [Fact]
     public void Mutation_settings_default_and_round_trip_supported_values()
     {

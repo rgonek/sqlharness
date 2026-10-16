@@ -119,6 +119,23 @@ public sealed class DashboardSettingsTests
     }
 
     [Fact]
+    public async Task Put_with_numeric_mutation_verification_preserves_the_existing_value()
+    {
+        using var home = new TempHome();
+        const string original = """{ "mutations": { "verification": "click" } }""";
+        File.WriteAllText(ConfigPath(home), original);
+        await using var dashboard = await DashboardServerTests.StartAuthenticated(home);
+        var (server, client) = dashboard;
+
+        var response = await client.SendAsync(Put(server, """{ "mutations": { "verification": "0" } }"""));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = Assert.Single((await Json(response)).GetProperty("errors").EnumerateArray());
+        Assert.Equal("mutations.verification", error.GetProperty("field").GetString());
+        Assert.Equal(original, File.ReadAllText(ConfigPath(home)));
+    }
+
+    [Fact]
     public async Task Put_over_an_invalid_file_requires_explicit_overwrite()
     {
         using var home = new TempHome();

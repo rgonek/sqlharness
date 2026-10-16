@@ -85,7 +85,7 @@ public static class ProfileStore
         if (profile.Mutations is not { } mutations)
             return;
 
-        if (!Enum.TryParse<MutationMode>(mutations.Mode, ignoreCase: true, out var mode) || !Enum.IsDefined(mode))
+        if (!TryParseMutationMode(mutations.Mode, out var mode))
             throw new JsonException("A profile mutation mode is invalid.");
 
         if (mode != MutationMode.Never && mutations.Writer is null)
@@ -96,7 +96,7 @@ public static class ProfileStore
             var hasSqlUser = !string.IsNullOrWhiteSpace(writer.SqlUser);
             var hasPasswordEnvVar = !string.IsNullOrWhiteSpace(writer.PasswordEnvVar);
             var hasCredentials = hasSqlUser && hasPasswordEnvVar;
-            if (writer.SameAsReader == hasCredentials || (!writer.SameAsReader && !hasCredentials))
+            if (writer.SameAsReader ? hasSqlUser || hasPasswordEnvVar : !hasCredentials)
                 throw new JsonException("mutations.writer needs sqlUser and passwordEnvVar, or sameAsReader.");
         }
 
@@ -109,6 +109,28 @@ public static class ProfileStore
         {
             throw new JsonException("yolo on a prod or staging profile needs mutations.acknowledgeProductionYolo: true.");
         }
+    }
+
+    private static bool TryParseMutationMode(string? value, out MutationMode mode)
+    {
+        if (string.Equals(value, "never", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = MutationMode.Never;
+            return true;
+        }
+        if (string.Equals(value, "operator", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = MutationMode.Operator;
+            return true;
+        }
+        if (string.Equals(value, "yolo", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = MutationMode.Yolo;
+            return true;
+        }
+
+        mode = default;
+        return false;
     }
 
     private static void RejectDuplicateProperties(JsonElement element)

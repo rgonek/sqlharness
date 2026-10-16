@@ -152,9 +152,9 @@ public static class SqlHarnessConfigLoader
             errors.Add(new("dashboard.port", "Must be between 1024 and 65535."));
         if (config.Dashboard.IdleShutdownHours is < 1 or > 168)
             errors.Add(new("dashboard.idleShutdownHours", "Must be between 1 and 168."));
-        if (!Enum.TryParse<MutationMode>(config.Mutations.DefaultMode, ignoreCase: true, out var defaultMode) || !Enum.IsDefined(defaultMode))
+        if (!Enum.GetNames<MutationMode>().Any(name => string.Equals(name, config.Mutations.DefaultMode, StringComparison.OrdinalIgnoreCase)))
             errors.Add(new("mutations.defaultMode", "Must be never, operator or yolo."));
-        if (!Enum.TryParse<MutationVerification>(config.Mutations.Verification, ignoreCase: true, out var verification) || !Enum.IsDefined(verification))
+        if (!string.Equals(config.Mutations.Verification, "click", StringComparison.OrdinalIgnoreCase))
             errors.Add(new("mutations.verification", "Unsupported verification; click is the only supported value."));
         if (config.Mutations.ApprovalTimeoutSeconds is < 30 or > 600)
             errors.Add(new("mutations.approvalTimeoutSeconds", "Must be between 30 and 600."));
