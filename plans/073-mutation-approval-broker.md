@@ -598,11 +598,11 @@ Extend the blocklist (the hook stays fail-open on bad JSON, as documented):
 - writes to `config.json` and `targets.json` under `.sqlharness` by `Write`/`Edit` tools or shell redirection (`>`, `Set-Content`, `Out-File`).
 - shell commands calling `/api/mutations/` on `127.0.0.1` or `localhost`.
 
-- [ ] **Step 1: Write the failing tests** (pytest, one case per new rule, plus negative cases: reading `targets.json` is allowed, and so is a curl to another port path).
-- [ ] **Step 2: Run them to verify they fail**: `python -m pytest scripts/hooks -q`.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run them to verify they pass.**
-- [ ] **Step 5: Commit**: `git commit -m "Extend the SQLHarness agent hook to mutation and settings files"`.
+- [x] **Step 1: Write the failing tests** (pytest, one case per new rule, plus negative cases: reading `targets.json` is allowed, and so is a curl to another port path).
+- [x] **Step 2: Run them to verify they fail**: `python -m pytest scripts/hooks -q`.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run them to verify they pass.**
+- [x] **Step 5: Commit**: `git commit -m "Extend the SQLHarness agent hook to mutation and settings files"`.
 
 ### Task 13: Docs, capabilities, skill, bookkeeping
 
