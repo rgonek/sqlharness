@@ -26,7 +26,7 @@
 
 ## Status
 
-- Implementation and the final combined fix wave verified on Windows on 2026-10-16; the review at `655f0df` found five minor items, all addressed in the fix wave. Scoped re-review is pending. Linux verification was waived and remains unverified. Planned 2026-10-14 at `488598d`, scope updated 2026-10-16. Executes after 072.
+- DONE on feature branch `plan-073` at product revision `2085f0ff` on 2026-10-16. Luna high implementation, Luna xhigh task reviews, Sol low whole-branch review and scoped re-review approved; all five final findings are addressed. Windows `just verify` passed; Linux was explicitly waived and remains unverified. Local integration and push are pending. WebAuthn is deferred to plan 077.
 - Supersedes [plan 08 — Windows approval tray](../docs/superpowers/plans/2026-09-26-audit-08-windows-approval-tray.md); the tray stays deferred.
 - Priority P1. Effort L. Risk HIGH: the first persistent-write path through MCP, a new dashboard write surface, and a journal migration.
 
@@ -259,7 +259,7 @@ public sealed record SqlHarnessMutationPrepared(MutationRequest Request);
    - on mismatch, throw `SqlHarnessSafetyException("Approval does not match the request.")`;
    - otherwise execute through the existing query path with `resolved with { Auth = approval.Writer }`, `AllowMutation = true`, `ConfirmDatabase = resolved.Database` (PostgreSQL then selects `ApprovedMutation` mode), and the classifier usage `Mutation`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - Policy table: every mode × tier pair, `Dml`..`Opaque`.
   - Digest:
     - stable across dictionary insertion order;
@@ -272,10 +272,10 @@ public sealed record SqlHarnessMutationPrepared(MutationRequest Request);
     - `SELECT 1` gives `not_a_mutation`;
     - an `ExpectDatabase` mismatch gives exit 4;
     - a dry run gives tier `dml`.
-- [ ] **Step 2: Run them to verify they fail.**
-- [ ] **Step 3: Implement.** Keep the canonical JSON writer private to `MutationRequest`. Use `Utf8JsonWriter` with properties in fixed order and parameters encoded as `{name,type,size,precision,scale,value}`.
-- [ ] **Step 4: Run them to verify they pass**, plus `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~Query|FullyQualifiedName~Postgres"`.
-- [ ] **Step 5: Commit**: `git commit -m "Add mutation policy, frozen request digest and approval-gated execution in Core"`.
+- [x] **Step 2: Run them to verify they fail.**
+- [x] **Step 3: Implement.** Keep the canonical JSON writer private to `MutationRequest`. Use `Utf8JsonWriter` with properties in fixed order and parameters encoded as `{name,type,size,precision,scale,value}`.
+- [x] **Step 4: Run them to verify they pass**, plus `dotnet test tests/SqlHarness.Tests --filter "FullyQualifiedName~Query|FullyQualifiedName~Postgres"`.
+- [x] **Step 5: Commit**: `git commit -m "Add mutation policy, frozen request digest and approval-gated execution in Core"`.
 
 ### Task 3: Journal `mutation_requests`
 
@@ -450,10 +450,10 @@ Execution order:
   - SSE receives `added` and then `removed`;
   - the client, with no dashboard and autostart off → `approval_unavailable` without waiting;
   - the submitting client aborts → the broker shows `Cancelled`.
-- [ ] **Step 2: Run them to verify they fail.**
-- [ ] **Step 3: Implement.** In `DashboardSecurity`, list the new POST paths explicitly. Keep the 405 for every other non-read path.
-- [ ] **Step 4: Run** `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~Dashboard`.
-- [ ] **Step 5: Commit**: `git commit -m "Serve mutation submit, events and decisions from the dashboard"`.
+- [x] **Step 2: Run them to verify they fail.**
+- [x] **Step 3: Implement.** In `DashboardSecurity`, list the new POST paths explicitly. Keep the 405 for every other non-read path.
+- [x] **Step 4: Run** `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~Dashboard`.
+- [x] **Step 5: Commit**: `git commit -m "Serve mutation submit, events and decisions from the dashboard"`.
 
 ### Task 7: CLI `mutation`; remove `--allow-mutation`
 
@@ -477,7 +477,7 @@ Flow:
 
 `query` keeps the static dry-run behaviour. A persistent DML batch in `query` now fails with a hint: "Persistent changes use `sqlharness mutation`."
 
-- [ ] **Step 1: Write the failing tests** with a fake `IMutationBrokerClient` injected through the command's DI:
+- [x] **Step 1: Write the failing tests** with a fake `IMutationBrokerClient` injected through the command's DI:
   - success → exit 0 and the result is printed;
   - `denied_by_operator` → exit 2;
   - `database_mismatch` → exit 4;
@@ -485,10 +485,10 @@ Flow:
   - `--dry-run` → tier and no submit;
   - `query --allow-mutation` → a parse error (unknown option);
   - `query` with `DELETE` → exit 2 with the hint.
-- [ ] **Step 2: Run them to verify they fail.**
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~Cli`.
-- [ ] **Step 5: Commit**: `git commit -m "Add the mutation command and remove query --allow-mutation"`.
+- [x] **Step 2: Run them to verify they fail.**
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** `dotnet test tests/SqlHarness.Tests --filter FullyQualifiedName~Cli`.
+- [x] **Step 5: Commit**: `git commit -m "Add the mutation command and remove query --allow-mutation"`.
 
 ### Task 8: MCP `sqlharness_mutation`
 
@@ -505,7 +505,7 @@ Tool description (keep it short, because the catalog budget counts it):
 
 While waiting, send progress through the existing `McpProgressReporter`, stage `awaiting_approval`, every 5 s. The result uses the same agent envelope as `sqlharness_query`. `status` carries the mutation status, and `isError` is true for everything except `success`.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `tools/list` contains 9 tools within budget;
   - the call with a fake broker returns `success` with result sets;
   - `approval_timeout` → `isError=true`, `status:"approval_timeout"`;
@@ -571,7 +571,7 @@ Behaviour:
 
 Sound settings are browser-local and do not add server-side file paths or upload routes. Offer three pleasant built-in sounds (default: "Warm chime"), each with a user-gesture preview, plus mute and a custom local audio file. Accept MP3, WAV, or OGG files up to 2 MiB; validate both file type/extension and size, and persist the chosen option and custom bytes in IndexedDB. Reject invalid files with an inline explanation. Preview is user-initiated so browser autoplay restrictions do not affect approval. Verification displays only `click`; unsupported values are rejected, never silently downgraded.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - the history table lists time, profile, database, tier, mode, status and verification;
   - a row that ran without asking (`verification` null, mode `yolo`) on a prod/staging-labelled profile carries a warning badge "ran without approval on production";
   - SQL appears only when it was stored, as text;
@@ -579,10 +579,10 @@ Sound settings are browser-local and do not add server-side file paths or upload
   - the settings section saves `approvalTimeoutSeconds` on blur and rejects 10 with the server's message;
   - the Settings page offers three built-in sounds with previews, mute, and custom local MP3/WAV/OGG up to 2 MiB; invalid types/sizes are rejected; preferences and custom audio persist in IndexedDB; no server path or upload is involved;
   - unsupported verification values are rejected with an explanation and do not silently change the current setting.
-- [ ] **Step 2: Run them to verify they fail.**
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run them to verify they pass.**
-- [ ] **Step 5: Commit**: `git commit -m "Add mutation history and mutation settings to the dashboard"`.
+- [x] **Step 2: Run them to verify they fail.**
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run them to verify they pass.**
+- [x] **Step 5: Commit**: `git commit -m "Add mutation history and mutation settings to the dashboard"`.
 
 ### Task 11: Deferred to plan 077 — WebAuthn verification
 
@@ -598,8 +598,8 @@ Extend the blocklist (the hook stays fail-open on bad JSON, as documented):
 - writes to `config.json` and `targets.json` under `.sqlharness` by `Write`/`Edit` tools or shell redirection (`>`, `Set-Content`, `Out-File`).
 - shell commands calling `/api/mutations/` on `127.0.0.1` or `localhost`.
 
-- [x] **Step 1: Write the failing tests** (pytest, one case per new rule, plus negative cases: reading `targets.json` is allowed, and so is a curl to another port path).
-- [x] **Step 2: Run them to verify they fail**: `python -m pytest scripts/hooks -q`.
+- [x] **Step 1: Write the failing tests** (unittest, one case per new rule, plus negative cases: reading `targets.json` is allowed, and so is a curl to another port path).
+- [x] **Step 2: Run them to verify they fail**: `python -m unittest discover -s scripts/hooks -p 'test_*.py' -v`. The requested pytest runner was unavailable; the standard-library runner observed 3 failures and 10 errors before implementation, then all 17 tests passed.
 - [x] **Step 3: Implement.**
 - [x] **Step 4: Run them to verify they pass.**
 - [x] **Step 5: Commit**: `git commit -m "Extend the SQLHarness agent hook to mutation and settings files"`.
@@ -619,5 +619,11 @@ Extend the blocklist (the hook stays fail-open on bad JSON, as documented):
 - Test: `DocsSyncTests`, `ContractsTests`, MCP catalog tests, skill tests if any (`grep -rln "SKILL.md" tests`)
 
 - [x] **Step 1: Update docs and capabilities.** Docs/Contracts/Capabilities filter passed 131/131; MCP suite passed 401, skipped 4, failed 0.
-- [x] **Step 2: Windows gate.** `just verify -LogDirectory D:/temp/sqlharness-plan073-verify-final4` passed all six stages in 8m18s. Linux is explicitly waived and remains unverified. Final whole-branch review is pending; do not mark the plan DONE before that review.
+- [x] **Step 2: Windows gate.** Final product revision `2085f0ff` passed `just verify -LogDirectory D:/temp/sqlharness-plan073-finalfix-20261016-1450`: exit 0, six stages, 8m19s; UI 260 passed, Core/CLI 3960 passed/11 skipped, MCP 401 passed/4 skipped. Build and formatting passed. Sol low whole-branch review and scoped re-review approved. Linux was not run at the operator's explicit direction.
 - [x] **Step 3: Commit**: commit only the explicit product, test, and documentation paths; do not stage the Task 13 scratch report.
+
+## Completion evidence
+
+Implemented range: `b3cdf315..2085f0ff`. The final combined fix addresses audio-constructor feedback, busy approval feedback, synchronized race starts, a real-Core matching-digest writer/session test, and README summaries. Warm chime is the operator-selected default; all three bundled options, previews, mute and browser-local custom audio are available. Task 11 is deferred to [077](077-mutation-approval-webauthn.md).
+
+Verification is feature-branch evidence; no local merge, push, publish or live database run occurred. Final UI logs retain non-failing localhost:3000/Happy DOM diagnostics and Node DEP0190; prior Plan 071 completion evidence already records localhost EventSource and DEP0190 output. Happy DOM teardown provenance remains unverified. The Windows gate is passing, not a claim of pristine console output. The runtime-capability implementation preceded its new tests; the actual sequence is recorded without claiming test-first RED.
