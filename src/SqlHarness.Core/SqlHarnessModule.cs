@@ -186,7 +186,12 @@ public sealed class SqlHarnessModule : ISqlHarnessModule
                 query.ConfirmDatabase,
                 NoSessionTemps);
             if (!safety.Allowed)
-                throw new SqlHarnessSafetyException($"SQL safety rejection: {safety.RejectionDescription}");
+            {
+                var message = $"SQL safety rejection: {safety.RejectionDescription}";
+                if (operation is SqlHarnessQueryOperation && safety.Reason == SqlSafetyReason.MutationNotAllowed)
+                    message += "\nPersistent changes use `sqlharness mutation`.";
+                throw new SqlHarnessSafetyException(message);
+            }
             var parameters = dialect.BindParameters(SqlParameterInputs.Resolve(query.Parameters, query.TypedParameters));
             dialect.ValidateParameterReferences(parameters, query.Sql);
 

@@ -11,7 +11,7 @@ public sealed class CliCommandSurfaceTests
 {
     private static readonly string[] Remaining =
     [
-        "artifact", "capabilities", "compare", "dashboard", "doctor", "mcp", "measure", "plan", "query", "snapshot", "watch",
+        "artifact", "capabilities", "compare", "dashboard", "doctor", "mcp", "measure", "mutation", "plan", "query", "snapshot", "watch",
     ];
 
     [Fact]

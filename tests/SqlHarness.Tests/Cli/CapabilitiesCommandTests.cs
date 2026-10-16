@@ -22,7 +22,7 @@ public sealed class CapabilitiesCommandTests
         Assert.Empty(module.Operations);
         using var document = JsonDocument.Parse(output.ToString());
         var root = document.RootElement;
-        Assert.Equal(3, root.GetProperty("contractVersion").GetInt32());
+        Assert.Equal(4, root.GetProperty("contractVersion").GetInt32());
         var context = root.GetProperty("compareContext");
         Assert.True(context.GetProperty("requireContext").GetBoolean());
         Assert.Equal("whole", context.GetProperty("wholeScope").GetString());
@@ -49,8 +49,8 @@ public sealed class CapabilitiesCommandTests
     [Fact]
     public void Contract_version_is_pinned()
     {
-        Assert.Equal(3, SqlHarnessCapabilitiesProvider.ContractVersion);
-        Assert.Equal(3, SqlHarnessCapabilitiesProvider.Get().ContractVersion);
+        Assert.Equal(4, SqlHarnessCapabilitiesProvider.ContractVersion);
+        Assert.Equal(4, SqlHarnessCapabilitiesProvider.Get().ContractVersion);
     }
 
     [Fact]
@@ -308,6 +308,17 @@ public sealed class CapabilitiesCommandTests
             Assert.Contains("offline", commands[command], StringComparison.Ordinal);
             Assert.DoesNotContain("no CLI switch", commands[command], StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void Mutation_is_advertised_with_agent_facing_status_contract()
+    {
+        var capabilities = SqlHarnessCapabilitiesProvider.Get();
+        var mutation = capabilities.Commands.Single(command => command.Name == "mutation");
+
+        Assert.Contains("dashboard mutation policy", mutation.Description, StringComparison.Ordinal);
+        Assert.Contains("non-success status", mutation.Description, StringComparison.Ordinal);
+        Assert.Equal(["text", "json", "agent"], capabilities.OutputModesByCommand["mutation"]);
     }
 
     [Theory]

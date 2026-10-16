@@ -410,20 +410,20 @@ public sealed class DryRunCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task Allowed_persistent_mutation_dry_run_is_classified_as_mutation_with_exit_0()
+    public async Task Persistent_mutation_dry_run_is_rejected_with_the_mutation_command_hint()
     {
-        var run = await Query(SqlServer, "DELETE FROM dbo.T;", "--allow-mutation", "--confirm-database", "ssdb");
+        var run = await Query(SqlServer, "DELETE FROM dbo.T;");
 
-        AssertAllowed(run, "query");
-        Assert.Equal("mutation", Report(run.Output).GetProperty("classification").GetString());
+        AssertRejected(run, "Persistent changes use `sqlharness mutation`.");
     }
 
     [Fact]
-    public async Task Mutation_dry_run_with_a_wrong_confirm_database_is_rejected()
+    public async Task Query_rejects_removed_mutation_options()
     {
-        var run = await Query(SqlServer, "DELETE FROM dbo.T;", "--allow-mutation", "--confirm-database", "otherdb");
+        var run = await Query(SqlServer, "DELETE FROM dbo.T;", "--allow-mutation");
 
         Assert.Equal((int)SqlHarnessExitCode.Safety, run.Exit);
+        Assert.Contains("Invalid command line arguments", run.Output, StringComparison.Ordinal);
         AssertOffline();
     }
 

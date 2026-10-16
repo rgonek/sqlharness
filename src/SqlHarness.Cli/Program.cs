@@ -11,4 +11,5 @@ var module = new JournalingModule(
     () => SessionIdentities.Cli(ProcessInfo.Current),
     diagnostics: config.Config.Diagnostics);
 
-return await SqlHarnessCli.Create(module, compareConfig: config.Config.Compare).RunAsync(args);
+return await SqlHarnessCli.Create(module, compareConfig: config.Config.Compare,
+    mutationApprovalTimeoutSeconds: config.Config.Mutations.ApprovalTimeoutSeconds).RunAsync(args);

@@ -44,7 +44,8 @@ public static class SqlHarnessCapabilitiesProvider
     // Bump when the document shape changes. 2: engines became a short { name, summary } list;
     // parameter types, session-temp rules and engine-only limits moved behind a profile.
     // 3: report the active compare-context requirement and version/history semantics.
-    public const int ContractVersion = 3;
+    // 4: add the persistent mutation command and remove query mutation switches.
+    public const int ContractVersion = 4;
 
     public static SqlHarnessCompareContextCapability CompareContextPolicy(CompareConfig? config = null)
     {
@@ -202,7 +203,8 @@ public static class SqlHarnessCapabilitiesProvider
             [
                 new("capabilities", "Describe commands, engines, limits, modes, and the active compare-context policy. Pass a profile for the parameter types, limits and engine guidance (engineGuidance) of its engine."),
                 new("doctor", "Check installation and profiles."),
-                new("query", "Run a bounded query; CLI --dry-run and MCP dryRun check exact arguments offline; no connection or writes. Every output replaces the profile password and Azure CLI access token fetched for the operation; other text, including SQL quoted in server errors, stays readable."),
+                new("query", "Run a bounded query passing the static visible-effects check; CLI --dry-run and MCP dryRun check exact arguments offline. Persistent changes use mutation. Every output replaces the profile password and Azure CLI access token fetched for the operation; other text, including SQL quoted in server errors, stays readable."),
+                new("mutation", "Submit a persistent change through the dashboard mutation policy. CLI --dry-run and MCP dryRun check exact arguments offline; any non-success status must be reported without retrying."),
                 new("measure", "Measure one query across repeats; CLI --param-set or MCP parameterSets, parameterSetFiles or matrix vary inputs. Sets share a session/cache and rotate; setup binds the first set once. Optional offline check: CLI --dry-run or MCP dryRun. Use command help for arguments."),
                 new("compare", "Compare baseline/candidate measurements and observed rows; MCP parameterSets, parameterSetFiles or matrix use a session/setup per set. Read regression verdict/reasons separately from exit code. Optional offline check: CLI --dry-run or MCP dryRun. Use command help for arguments."),
                 new("watch", "Poll a bounded query passing the static visible-effects check."),
@@ -236,6 +238,7 @@ public static class SqlHarnessCapabilitiesProvider
         map["artifact"] = ["json", "agent"];
         foreach (var command in new[] { "query", "snapshot", "plan" })
             map[command] = ["text", "json", "agent"];
+        map["mutation"] = ["text", "json", "agent"];
         foreach (var command in new[] { "measure", "compare" })
             map[command] = ["text", "json", "json-summary", "agent"];
         map["watch"] = ["text", "json", "agent", "ndjson"];

@@ -152,6 +152,10 @@ public static class SqlInputReader
 
 public abstract class SqlHarnessCommand<TSettings>(ISqlHarnessModule module, OutputContext output, Renderer renderer) : AsyncCommand<TSettings> where TSettings : CommandSettings
 {
+    protected ISqlHarnessModule Module => module;
+    protected OutputContext Output => output;
+    protected Renderer Renderer => renderer;
+
     protected int Invalid(string error, SqlHarnessError? structuredError = null)
     {
         var code = SqlHarnessExitCode.Safety;
@@ -233,8 +237,6 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
         [CommandOption("--timeout <SECONDS>")][DefaultValue(30)] public int Timeout { get; set; } = 30;
         [Description("Presentation-only row cap (0..500). The server still computes the full result; canonical hashes and equivalence cover all rows.")]
         [CommandOption("--max-rows <COUNT>")][DefaultValue(50)] public int MaxRows { get; set; } = 50;
-        [CommandOption("--allow-mutation")] public bool AllowMutation { get; set; }
-        [CommandOption("--confirm-database <DATABASE>")] public string? ConfirmDatabase { get; set; }
         [Description("Check the exact arguments offline (bounds, safety classification, parameter binding, setup shape) and stop before connecting, authenticating or writing. Same report as MCP dryRun; exit 0 when allowed, 2 when rejected.")]
         [CommandOption("--dry-run")] public bool DryRun { get; set; }
     }
@@ -249,7 +251,7 @@ public sealed class QueryCommand(ISqlHarnessModule module, OutputContext output,
         try
         {
             var sql = hasFile ? await SqlInputReader.ReadFileAsync(settings.File!, ct) : await SqlInputReader.ReadStdinAsync(input.Stdin, ct);
-            return await Dispatch(new SqlHarnessQueryOperation(target, sql, settings.Parameters, settings.Timeout, settings.MaxRows, settings.AllowMutation, settings.ConfirmDatabase) { DryRun = settings.DryRun }, ResolveOutputMode(settings.Json, output: settings.Output), ct, new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
+            return await Dispatch(new SqlHarnessQueryOperation(target, sql, settings.Parameters, settings.Timeout, settings.MaxRows, false, null) { DryRun = settings.DryRun }, ResolveOutputMode(settings.Json, output: settings.Output), ct, new AgentOutputOptions(settings.MaxOutputBytes, settings.MaxCellChars));
         }
         catch (OperationCanceledException) { throw; }
         catch (SqlInputTooLargeException) { return InvalidInputTooLarge(); }

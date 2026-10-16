@@ -4,6 +4,7 @@ using System.Text.Json;
 
 using SqlHarness.Cli.Infrastructure;
 using SqlHarness.Core;
+using SqlHarness.Core.Mutations;
 
 namespace SqlHarness.Cli.Commands;
 
@@ -101,7 +102,39 @@ public sealed class Renderer
     public void RenderAgent(SqlHarnessOutcome outcome, string command, OutputCaptureWriter output, AgentOutputOptions options) =>
         WriteAgent(outcome, command, output, options);
 
-    private static void WriteAgent(SqlHarnessOutcome outcome, string command, TextWriter output, AgentOutputOptions options)
+    public void RenderMutation(SqlHarnessOutcome outcome, MutationBrokerResult result, OutputMode mode,
+        OutputCaptureWriter output, string command, AgentOutputOptions options)
+    {
+        if (mode == OutputMode.Agent)
+        {
+            WriteAgent(outcome with { Report = result.Result }, command, output, options, result.Status);
+            return;
+        }
+
+        var report = mode == OutputMode.JsonSummary ? ProjectSummary(result.Result) : result.Result;
+        if (mode is OutputMode.Json or OutputMode.JsonSummary)
+        {
+            var payload = new
+            {
+                status = result.Status,
+                result = report,
+                error = result.Status == MutationStatus.Success
+                    ? null
+                    : new { message = result.Message },
+            };
+            output.WriteLine(JsonSerializer.Serialize(payload, payload.GetType(), Json));
+            return;
+        }
+
+        if (result.Status == MutationStatus.Success && result.Result is not null)
+            Render(outcome with { Report = result.Result, SafeError = null, Error = null }, mode, output, command);
+        else if (result.Message is null)
+            output.WriteLine(result.Status);
+        else
+            output.WriteLine($"{result.Status}: {SecretRedactor.Redact(result.Message, [])}");
+    }
+
+    private static void WriteAgent(SqlHarnessOutcome outcome, string command, TextWriter output, AgentOutputOptions options, string? statusOverride = null)
     {
         var requestedBytes = options.MaximumBytes is >= 4096 and <= 1048576 ? options.MaximumBytes : 16 * 1024;
         var requestedCellChars = options.MaximumCellCharacters is >= 0 and <= AgentOutputLimits.MaximumCellCharacters ? options.MaximumCellCharacters : AgentOutputLimits.DefaultCellCharacters;
@@ -119,11 +152,11 @@ public sealed class Renderer
             error = error with { Message = Clip(error.Message), Hint = error.Hint is null ? null : Clip(error.Hint), Location = error.Location is null ? null : error.Location with { Path = error.Location.Path is null ? null : Clip(error.Location.Path) } };
         var boundedCommand = Clip(command);
         var report = outcome.Report is SqlHarnessArtifactReadReport artifactRead ? artifactRead.Section : outcome.Report;
-        var status = error is null
+        var status = statusOverride ?? (error is null
             ? "success"
             : report is SqlHarnessCompareMatrixReport
                 ? "partial"
-                : "error";
+                : "error");
         foreach (var detailLimit in AgentOutputProjection.CandidateDetailLimits)
         {
             var result = AgentOutputProjection.Project(report, requestedCellChars, detailLimit, out var omitted, requestedBytes);
