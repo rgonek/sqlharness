@@ -28,7 +28,7 @@ Before changing SQL, measure the baseline on representative cases: common and ra
 
 Compare repeated measurements and variability on matching targets and conditions. Inspect plan details to explain measured results. On a SQL Server missing-index hint, follow `overlap.verdict` from the artifact `plan` section:
 
-- `covered`: explain why the plan did not use the named index, and leave that index unchanged.
+- `covered`: do not propose a new index; look at why the plan did not use the existing one.
 - `include-gap`: extend the named index's INCLUDE.
 - `partial-key`: compare the hint with the named index before proposing a new one.
 - `new-shape`: treat a new index as a hypothesis and prove it with `compare` after approved DDL.

@@ -14,7 +14,7 @@
 
 ## Status
 
-- Status: DONE on feature branch `plan-063` (not merged into main). Windows `just verify` exited 0 on the working tree at parent `bcfebd2` plus this documentation change: `verify: OK  stages=6  2m58s` (ui-install 27,1s; ui-check 30,8s, 238 tests; restore 6,1s; build 7,2s, 0 warnings/errors; test 1m46s, SqlHarness.Tests 3,884 passed/11 skipped, MCP 387 passed/4 skipped; format skipped, 0 changed C# files). Linux was not run. No push, installation, or publication. Evidence: [history](history.md).
+- Status: DONE on feature branch `plan-063` (not merged into main). Windows `just verify` exited 0 on the earlier documentation commit `50a8b0f`: `verify: OK  stages=6  2m58s` (ui-install 27,1s; ui-check 30,8s, 238 tests; restore 6,1s; build 7,2s, 0 warnings/errors; test 1m46s, SqlHarness.Tests 3,884 passed/11 skipped, MCP 387 passed/4 skipped; format skipped, 0 changed C# files). The later correction to when a missing `overlap` has an evidence gap was not re-gated because executable behavior did not change. Linux was not run. No push, installation, or publication. Evidence: [history](history.md).
 - Priority: P2
 - Effort: M
 - Risk: LOW–MEDIUM (one extra read-only catalog batch on the measured session after measurement; additive artifact field)
