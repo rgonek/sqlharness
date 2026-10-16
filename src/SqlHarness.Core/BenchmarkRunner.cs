@@ -122,16 +122,22 @@ internal static class BenchmarkReports
 {
     internal static CompareVariantReport CreateVariantReport(string name, IReadOnlyList<CollectedBenchmarkRun> runs)
     {
-        var operators = runs
-            .SelectMany(run => run.Plans)
-            .SelectMany(plan => plan.Operators)
-            .Select(op => new CompareOperatorReport(op.NodeId, op.PhysicalOp, op.Object, op.HasWarnings, op.HasSpill, op.HasImplicitConversion))
-            .Distinct()
-            .ToArray();
+        var operators = new List<CompareOperatorReport>();
+        foreach (var run in runs)
+        {
+            var ordinalOffset = 0;
+            foreach (var plan in run.Plans)
+            {
+                foreach (var op in plan.Operators)
+                    operators.Add(ToOperatorReport(op, run, ordinalOffset));
+                ordinalOffset += plan.StatementCount;
+            }
+        }
+        var uniqueOperators = operators.Distinct().ToArray();
         var warnings = new HashSet<string>(StringComparer.Ordinal);
-        if (operators.Any(op => op.HasWarnings)) warnings.Add("PlanWarning");
-        if (operators.Any(op => op.HasSpill)) warnings.Add("SpillToTempDb");
-        if (operators.Any(op => op.HasImplicitConversion)) warnings.Add("ImplicitConversion");
+        if (uniqueOperators.Any(op => op.HasWarnings)) warnings.Add("PlanWarning");
+        if (uniqueOperators.Any(op => op.HasSpill)) warnings.Add("SpillToTempDb");
+        if (uniqueOperators.Any(op => op.HasImplicitConversion)) warnings.Add("ImplicitConversion");
         var tables = runs.SelectMany(run => run.Artifact.LogicalReadsByTable)
             .GroupBy(pair => pair.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Sum(pair => pair.Value), StringComparer.Ordinal);
@@ -151,11 +157,26 @@ internal static class BenchmarkReports
             ToPublic(Distribution.From(runs.Select(run => run.Artifact.ElapsedTimeMilliseconds))),
             ToPublic(Distribution.From(runs.Select(run => run.Artifact.LogicalReads))),
             tables,
-            operators,
+            uniqueOperators,
             warnings.Order(StringComparer.Ordinal).ToArray())
         {
             LogicalReadsByTable = logicalReadsByTable,
             MetricReport = BenchmarkMetricReport.FromArtifacts(runs.Select(run => run.Artifact).ToArray()),
+        };
+    }
+
+    private static CompareOperatorReport ToOperatorReport(PlanOperator op, CollectedBenchmarkRun run, int ordinalOffset)
+    {
+        var report = new CompareOperatorReport(op.NodeId, op.PhysicalOp, op.Object, op.HasWarnings, op.HasSpill, op.HasImplicitConversion);
+        if (op.NodePath is null || op.Cursor is null)
+            return report;
+        return report with
+        {
+            Statement = op.StatementOrdinal + ordinalOffset,
+            Repetition = run.Artifact.Repetition,
+            NodePath = op.NodePath,
+            Cursor = op.Cursor,
+            ParameterSet = run.Artifact.ParameterSet,
         };
     }
 

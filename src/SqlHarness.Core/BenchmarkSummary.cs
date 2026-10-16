@@ -13,6 +13,17 @@ public sealed record BenchmarkVariantSummary(
     public BenchmarkMetricReport? MetricReport { get; init; }
 }
 
+public sealed record OperatorPlanRef(
+    string ArtifactId,
+    string Variant,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ParameterSet,
+    int Statement,
+    int Repetition,
+    string NodePath,
+    int Cursor);
+
+public sealed record NoteworthyOperatorSideEvidence(bool HasWarnings, bool HasSpill, bool HasImplicitConversion);
+
 public sealed record NoteworthyOperatorSummary(
     string Side,
     int NodeId,
@@ -20,7 +31,20 @@ public sealed record NoteworthyOperatorSummary(
     string? Object,
     bool HasWarnings,
     bool HasSpill,
-    bool HasImplicitConversion);
+    bool HasImplicitConversion)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<OperatorPlanRef>? PlanRefs { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public NoteworthyOperatorSideEvidence? Baseline { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public NoteworthyOperatorSideEvidence? Candidate { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool SourceIsCapped { get; init; }
+}
 
 public sealed record CompareBenchmarkSummary(
     SqlHarnessTargetIdentityReport Target,
@@ -175,7 +199,7 @@ public static class BenchmarkSummaryProjector
             report.Equivalence,
             ProjectVariant(report.Baseline),
             ProjectVariant(report.Candidate),
-            SelectCompareNoteworthy(report.Baseline.Operators, report.Candidate.Operators),
+            SelectCompareNoteworthy(report.Baseline.Operators, report.Candidate.Operators, SafeArtifactId(report.ArtifactDirectory)),
             report.ArtifactDirectory)
         {
             Regression = report.Regression,
@@ -193,7 +217,7 @@ public static class BenchmarkSummaryProjector
             report.Classification,
             report.Parameters,
             ProjectVariant(report.Query),
-            SelectMeasureNoteworthy(report.Query.Operators),
+            SelectMeasureNoteworthy(report.Query.Operators, SafeArtifactId(report.ArtifactDirectory), "query", null),
             report.ArtifactDirectory);
     }
 
@@ -206,7 +230,9 @@ public static class BenchmarkSummaryProjector
             report.Target,
             report.MeasuredOrderRule,
             report.PlanCacheWarning,
-            report.Sets.Select(ProjectSet).ToArray(),
+            report.Sets.Select(set => ProjectSet(
+                set,
+                SelectMeasureNoteworthy(set.Metrics.Operators, SafeArtifactId(report.ArtifactDirectory), "query", set.Name))).ToArray(),
             report.CrossSetSummary,
             report.ArtifactDirectory);
     }
@@ -283,7 +309,7 @@ public static class BenchmarkSummaryProjector
     }
 
     public static MeasureParameterSetSummary ProjectSet(MeasureParameterSetReport set) =>
-        ProjectSet(set, SelectMeasureNoteworthy(set.Metrics.Operators));
+        ProjectSet(set, SelectMeasureNoteworthy(set.Metrics.Operators, artifactId: null, "query", set.Name));
 
     public static MeasureParameterSetSummary ProjectSet(
         MeasureParameterSetReport set, IReadOnlyList<NoteworthyOperatorSummary> operators) =>
@@ -350,29 +376,39 @@ public static class BenchmarkSummaryProjector
             MetricReport = variant.MetricReport,
         };
 
-    private static IReadOnlyList<NoteworthyOperatorSummary> SelectCompareNoteworthy(
+    internal static IReadOnlyList<NoteworthyOperatorSummary> SelectCompareNoteworthy(
         IReadOnlyList<CompareOperatorReport> baseline,
-        IReadOnlyList<CompareOperatorReport> candidate)
+        IReadOnlyList<CompareOperatorReport> candidate,
+        string? artifactId)
     {
-        // Collapse by (PhysicalOp, Object) per side, OR-ing attention flags within the group so a
-        // later flagged RelOp is not dropped when an earlier clean sibling shares the same key.
-        var baselineByKey = CollapseSide(baseline);
-        var candidateByKey = CollapseSide(candidate);
+        var baselineByKey = GroupSide(baseline);
+        var candidateByKey = GroupSide(candidate);
 
         var selected = new List<NoteworthyOperatorSummary>();
         foreach (var key in baselineByKey.Keys.Union(candidateByKey.Keys, OperatorKeyComparer.Instance))
         {
             baselineByKey.TryGetValue(key, out var left);
             candidateByKey.TryGetValue(key, out var right);
-            var oneSideOnly = left is null || right is null;
-            var hasWarnings = (left?.HasWarnings ?? false) || (right?.HasWarnings ?? false);
-            var hasSpill = (left?.HasSpill ?? false) || (right?.HasSpill ?? false);
-            var hasImplicit = (left?.HasImplicitConversion ?? false) || (right?.HasImplicitConversion ?? false);
+            left ??= [];
+            right ??= [];
+            var oneSideOnly = left.Count == 0 || right.Count == 0;
+            var leftFlags = Flags(left);
+            var rightFlags = Flags(right);
+            var hasWarnings = leftFlags.HasWarnings || rightFlags.HasWarnings;
+            var hasSpill = leftFlags.HasSpill || rightFlags.HasSpill;
+            var hasImplicit = leftFlags.HasImplicitConversion || rightFlags.HasImplicitConversion;
             if (!oneSideOnly && !(hasWarnings || hasSpill || hasImplicit))
                 continue;
 
-            var representative = left ?? right!;
-            var side = left is null ? "candidate" : right is null ? "baseline" : "both";
+            var leftRep = PickRepresentative(left);
+            var rightRep = PickRepresentative(right);
+            var side = left.Count == 0 ? "candidate" : right.Count == 0 ? "baseline" : "both";
+            var representative = side == "candidate" ? rightRep! : leftRep!;
+            var planRefs = new List<OperatorPlanRef>(2);
+            if (leftRep is not null && TryPlanRef(artifactId, "baseline", leftRep, out var leftRef))
+                planRefs.Add(leftRef);
+            if (rightRep is not null && TryPlanRef(artifactId, "candidate", rightRep, out var rightRef))
+                planRefs.Add(rightRef);
             selected.Add(new NoteworthyOperatorSummary(
                 side,
                 representative.NodeId,
@@ -380,61 +416,116 @@ public static class BenchmarkSummaryProjector
                 representative.Object,
                 hasWarnings,
                 hasSpill,
-                hasImplicit));
+                hasImplicit)
+            {
+                PlanRefs = planRefs.Count == 0 ? null : planRefs,
+                Baseline = side == "both" ? leftFlags : null,
+                Candidate = side == "both" ? rightFlags : null,
+                SourceIsCapped = left.Count > 1 || right.Count > 1,
+            });
         }
 
-        return selected
+        var ordered = selected
             .OrderByDescending(HasAttention)
             .ThenBy(op => op.PhysicalOp, StringComparer.Ordinal)
             .ThenBy(op => op.Object ?? string.Empty, StringComparer.Ordinal)
             .ThenBy(op => op.Side, StringComparer.Ordinal)
             .ThenBy(op => op.NodeId)
+            .ToArray();
+        var listCapped = ordered.Length > MaximumNoteworthyOperators;
+        return ordered
             .Take(MaximumNoteworthyOperators)
+            .Select(op => op with { SourceIsCapped = listCapped || op.SourceIsCapped })
             .ToArray();
     }
 
-    private static Dictionary<(string PhysicalOp, string Object), CompareOperatorReport> CollapseSide(
-        IReadOnlyList<CompareOperatorReport> operators) =>
-        operators
+    internal static IReadOnlyList<NoteworthyOperatorSummary> SelectMeasureNoteworthy(
+        IReadOnlyList<CompareOperatorReport> operators,
+        string? artifactId,
+        string variant,
+        string? parameterSet)
+    {
+        var flagged = operators.Where(HasAttention).ToArray();
+        var ordered = flagged
             .GroupBy(OperatorKey, OperatorKeyComparer.Instance)
-            .ToDictionary(
-                group => group.Key,
-                group =>
+            .Select(group =>
+            {
+                var representative = PickRepresentative(group)!;
+                TryPlanRef(artifactId, variant, representative with { ParameterSet = representative.ParameterSet ?? parameterSet }, out var planRef);
+                return new NoteworthyOperatorSummary(
+                    variant,
+                    representative.NodeId,
+                    representative.PhysicalOp,
+                    representative.Object,
+                    group.Any(op => op.HasWarnings),
+                    group.Any(op => op.HasSpill),
+                    group.Any(op => op.HasImplicitConversion))
                 {
-                    var first = group.First();
-                    return first with
-                    {
-                        HasWarnings = group.Any(op => op.HasWarnings),
-                        HasSpill = group.Any(op => op.HasSpill),
-                        HasImplicitConversion = group.Any(op => op.HasImplicitConversion),
-                    };
-                },
-                OperatorKeyComparer.Instance);
-
-    private static IReadOnlyList<NoteworthyOperatorSummary> SelectMeasureNoteworthy(
-        IReadOnlyList<CompareOperatorReport> operators) =>
-        operators
-            .Where(op => op.HasWarnings || op.HasSpill || op.HasImplicitConversion)
+                    PlanRefs = planRef is null ? null : [planRef],
+                    SourceIsCapped = group.Count() > 1,
+                };
+            })
             .OrderByDescending(HasAttention)
             .ThenBy(op => op.PhysicalOp, StringComparer.Ordinal)
             .ThenBy(op => op.Object ?? string.Empty, StringComparer.Ordinal)
             .ThenBy(op => op.NodeId)
-            .Take(MaximumNoteworthyOperators)
-            .Select(op => new NoteworthyOperatorSummary(
-                "query",
-                op.NodeId,
-                op.PhysicalOp,
-                op.Object,
-                op.HasWarnings,
-                op.HasSpill,
-                op.HasImplicitConversion))
             .ToArray();
+        var listCapped = ordered.Length > MaximumNoteworthyOperators || flagged.Length > MaximumNoteworthyOperators;
+        return ordered
+            .Take(MaximumNoteworthyOperators)
+            .Select(op => op with { SourceIsCapped = listCapped || op.SourceIsCapped })
+            .ToArray();
+    }
 
     private static bool HasAttention(NoteworthyOperatorSummary op) =>
         op.HasWarnings || op.HasSpill || op.HasImplicitConversion;
 
     private static bool HasAttention(CompareOperatorReport op) =>
         op.HasWarnings || op.HasSpill || op.HasImplicitConversion;
+
+    private static Dictionary<(string PhysicalOp, string Object), IReadOnlyList<CompareOperatorReport>> GroupSide(
+        IReadOnlyList<CompareOperatorReport> operators) =>
+        operators
+            .GroupBy(OperatorKey, OperatorKeyComparer.Instance)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<CompareOperatorReport>)group.ToArray(),
+                OperatorKeyComparer.Instance);
+
+    private static NoteworthyOperatorSideEvidence Flags(IReadOnlyList<CompareOperatorReport> operators) =>
+        new(
+            operators.Any(op => op.HasWarnings),
+            operators.Any(op => op.HasSpill),
+            operators.Any(op => op.HasImplicitConversion));
+
+    private static CompareOperatorReport? PickRepresentative(IEnumerable<CompareOperatorReport> operators) =>
+        operators
+            .OrderByDescending(HasAttention)
+            .ThenBy(op => op.Statement ?? int.MaxValue)
+            .ThenBy(op => op.Repetition ?? int.MaxValue)
+            .ThenBy(op => op.NodePath ?? string.Empty, StringComparer.Ordinal)
+            .ThenBy(op => op.NodeId)
+            .FirstOrDefault();
+
+    private static bool TryPlanRef(string? artifactId, string variant, CompareOperatorReport op, out OperatorPlanRef planRef)
+    {
+        planRef = null!;
+        if (artifactId is null
+            || op.NodePath is not { Length: > 0 }
+            || op.Statement is not >= 0
+            || op.Repetition is not > 0
+            || op.Cursor is not >= 0)
+            return false;
+        planRef = new OperatorPlanRef(
+            artifactId,
+            variant,
+            op.ParameterSet,
+            op.Statement.Value,
+            op.Repetition.Value,
+            op.NodePath,
+            op.Cursor.Value);
+        return true;
+    }
 
     private static (string PhysicalOp, string Object) OperatorKey(CompareOperatorReport op) =>
         (op.PhysicalOp, op.Object ?? string.Empty);

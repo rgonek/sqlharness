@@ -180,8 +180,13 @@ public static class AgentOutputProjection
                     {
                         var projected = BenchmarkSummaryProjector.ProjectSet(
                             set,
-                            ProjectSetOperators(set.Metrics.Operators)
-                                .Select(op => new NoteworthyOperatorSummary("query", op.NodeId, Clip(op.PhysicalOp)!, Clip(op.Object), op.HasWarnings, op.HasSpill, op.HasImplicitConversion)).ToArray());
+                            BenchmarkSummaryProjector.SelectMeasureNoteworthy(
+                                ProjectSetOperators(set.Metrics.Operators)
+                                    .Select(op => op with { PhysicalOp = Clip(op.PhysicalOp)!, Object = Clip(op.Object) })
+                                    .ToArray(),
+                                ArtifactIds.FromDirectory(setReport.ArtifactDirectory),
+                                "query",
+                                set.Name));
                         return projected with
                         {
                             Name = Clip(projected.Name)!,

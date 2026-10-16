@@ -28,7 +28,11 @@ public sealed record PlanNode(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? CostFraction,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Predicate,
     IReadOnlyList<string> Warnings,
-    IReadOnlyList<PlanNode> Children);
+    IReadOnlyList<PlanNode> Children)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? NodeId { get; init; }
+}
 
 public sealed record MissingIndex(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Database,
@@ -126,7 +130,24 @@ public static class PlanDistiller
             rootCost is > 0 && nodeCost is not null ? nodeCost / rootCost : null,
             ParsePredicate(owned),
             ParseWarnings(owned),
-            DirectChildOperators(relOp).Select(child => ParseNode(child, rootCost)).ToArray());
+            DirectChildOperators(relOp).Select(child => ParseNode(child, rootCost)).ToArray())
+        {
+            NodeId = IntAttribute(relOp, "NodeId"),
+        };
+    }
+
+    internal static IReadOnlyList<(string Path, string? Parent, PlanNode Node)> Preorder(PlanNode root)
+    {
+        var nodes = new List<(string Path, string? Parent, PlanNode Node)>();
+        Walk(root, null, "0");
+        return nodes;
+
+        void Walk(PlanNode node, string? parent, string path)
+        {
+            nodes.Add((path, parent, node));
+            for (var index = 0; index < node.Children.Count; index++)
+                Walk(node.Children[index], path, path + "/" + index);
+        }
     }
 
     private static IReadOnlyList<MissingIndex> ParseMissingIndexes(XElement queryPlan) =>
@@ -241,6 +262,16 @@ public static class PlanDistiller
         return parsed;
     }
 
+    private static int? IntAttribute(XElement element, string localName)
+    {
+        var value = Attribute(element, localName);
+        if (value is null)
+            return null;
+        if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+            throw SafetyFailure();
+        return parsed;
+    }
+
     private static string? Attribute(XElement? element, string localName) =>
         element?.Attribute(localName)?.Value;
 
@@ -303,6 +334,8 @@ internal sealed class PlanNodeJsonConverter : JsonConverter<PlanNode>
     {
         writer.WriteStartObject();
         writer.WriteString(Name(options, nameof(value.PhysicalOp)), value.PhysicalOp);
+        if (value.NodeId is { } nodeId)
+            writer.WriteNumber(Name(options, nameof(value.NodeId)), nodeId);
         Write(writer, Name(options, nameof(value.LogicalOp)), value.LogicalOp);
         Write(writer, Name(options, nameof(value.ObjectName)), value.ObjectName);
         Write(writer, Name(options, nameof(value.IndexName)), value.IndexName);

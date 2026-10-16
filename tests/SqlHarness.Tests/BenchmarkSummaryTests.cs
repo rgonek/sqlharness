@@ -777,9 +777,189 @@ public sealed class BenchmarkSummaryTests
         return new CompareMatrixCellReport(index, value, compare);
     }
 
+    [Fact]
+    public void Compare_noteworthy_plan_refs_keep_colliding_node_ids_on_their_statements()
+    {
+        var baseline = new[]
+        {
+            OriginOp(1, "Index Seek", "dbo.Accounts", false, false, false, statement: 0, nodePath: "0", cursor: 0),
+            OriginOp(1, "Clustered Index Scan", "dbo.Accounts", false, true, false, statement: 1, nodePath: "0", cursor: 0),
+        };
+        var candidate = new[]
+        {
+            OriginOp(1, "Index Seek", "dbo.Accounts", false, false, false, statement: 0, nodePath: "0", cursor: 0),
+            OriginOp(1, "Clustered Index Scan", "dbo.Accounts", false, true, false, statement: 1, nodePath: "0", cursor: 0),
+        };
+
+        var summary = BenchmarkSummaryProjector.Project(MinimalCompare(baseline, candidate, ArtifactDir));
+        var scan = Assert.Single(summary.NoteworthyOperators, op => op.PhysicalOp == "Clustered Index Scan");
+
+        Assert.Equal("both", scan.Side);
+        Assert.All(scan.PlanRefs!, href =>
+        {
+            Assert.Equal("artifact-001", href.ArtifactId);
+            Assert.Equal(1, href.Statement);
+            Assert.Equal("0", href.NodePath);
+            Assert.Equal(0, href.Cursor);
+        });
+        Assert.DoesNotContain(scan.PlanRefs!, href => href.Statement == 0);
+        Assert.Equal(["baseline", "candidate"], scan.PlanRefs!.Select(href => href.Variant).ToArray());
+    }
+
+    [Fact]
+    public void Compare_noteworthy_does_not_treat_a_one_side_warning_as_shared_proof()
+    {
+        var baseline = new[]
+        {
+            OriginOp(1, "Clustered Index Scan", "dbo.Accounts", false, false, false, statement: 0, nodePath: "0", cursor: 0),
+        };
+        var candidate = new[]
+        {
+            OriginOp(1, "Clustered Index Scan", "dbo.Accounts", true, true, false, statement: 1, nodePath: "0", cursor: 0, repetition: 5),
+        };
+
+        var summary = BenchmarkSummaryProjector.Project(MinimalCompare(baseline, candidate, ArtifactDir));
+        var op = Assert.Single(summary.NoteworthyOperators);
+
+        Assert.Equal("both", op.Side);
+        Assert.True(op.HasWarnings);
+        Assert.True(op.HasSpill);
+        Assert.False(op.Baseline!.HasWarnings);
+        Assert.False(op.Baseline.HasSpill);
+        Assert.True(op.Candidate!.HasWarnings);
+        Assert.True(op.Candidate.HasSpill);
+        Assert.Equal(2, op.PlanRefs!.Count);
+        var candidateRef = Assert.Single(op.PlanRefs, href => href.Variant == "candidate");
+        Assert.Equal(1, candidateRef.Statement);
+        Assert.Equal(5, candidateRef.Repetition);
+        Assert.Equal("0", candidateRef.NodePath);
+        var baselineRef = Assert.Single(op.PlanRefs, href => href.Variant == "baseline");
+        Assert.Equal(0, baselineRef.Statement);
+        Assert.Equal(1, baselineRef.Repetition);
+    }
+
+    [Fact]
+    public void Compare_noteworthy_picks_the_flagged_sibling_not_the_first_clean_key_match()
+    {
+        var baseline = new[]
+        {
+            OriginOp(1, "Index Seek", "dbo.Orders", false, false, false, statement: 0, nodePath: "0", cursor: 0),
+            OriginOp(2, "Index Seek", "dbo.Orders", true, false, false, statement: 0, nodePath: "0/1", cursor: 2),
+        };
+        var candidate = new[]
+        {
+            OriginOp(10, "Index Seek", "dbo.Orders", false, false, false, statement: 0, nodePath: "0", cursor: 0, repetition: 3),
+            OriginOp(11, "Index Seek", "dbo.Orders", false, true, false, statement: 0, nodePath: "0/1", cursor: 2, repetition: 3),
+        };
+
+        var summary = BenchmarkSummaryProjector.Project(MinimalCompare(baseline, candidate, ArtifactDir));
+        var op = Assert.Single(summary.NoteworthyOperators);
+
+        Assert.Equal("both", op.Side);
+        Assert.Equal(2, op.NodeId);
+        Assert.Equal("0/1", Assert.Single(op.PlanRefs!, href => href.Variant == "baseline").NodePath);
+        Assert.Equal("0/1", Assert.Single(op.PlanRefs!, href => href.Variant == "candidate").NodePath);
+        Assert.Equal(2, Assert.Single(op.PlanRefs!, href => href.Variant == "baseline").Cursor);
+        Assert.Equal(3, Assert.Single(op.PlanRefs!, href => href.Variant == "candidate").Repetition);
+        Assert.DoesNotContain(op.PlanRefs!, href => href.NodePath == "0");
+    }
+
+    [Fact]
+    public void Compare_noteworthy_omits_plan_refs_for_legacy_operators_without_origin()
+    {
+        var baseline = new[]
+        {
+            new CompareOperatorReport(1, "Index Seek", "dbo.Orders", true, false, false),
+        };
+        var candidate = new[]
+        {
+            new CompareOperatorReport(1, "Index Seek", "dbo.Orders", false, false, false),
+        };
+
+        var summary = BenchmarkSummaryProjector.Project(MinimalCompare(baseline, candidate, ArtifactDir));
+        var op = Assert.Single(summary.NoteworthyOperators);
+
+        Assert.Null(op.PlanRefs);
+        Assert.True(op.Baseline!.HasWarnings);
+        Assert.False(op.Candidate!.HasWarnings);
+    }
+
+    [Fact]
+    public void Compare_noteworthy_is_capped_and_discloses_the_cap()
+    {
+        var baseline = Enumerable.Range(0, 20)
+            .Select(i => OriginOp(i, $"Op{i:D2}", $"Obj{i:D2}", true, false, false, statement: 0, nodePath: "0/" + i, cursor: i + 1))
+            .ToArray();
+
+        var summary = BenchmarkSummaryProjector.Project(MinimalCompare(baseline, [], ArtifactDir));
+
+        Assert.Equal(10, summary.NoteworthyOperators.Count);
+        Assert.All(summary.NoteworthyOperators, op => Assert.True(op.SourceIsCapped));
+        Assert.All(summary.NoteworthyOperators, op => Assert.Equal("baseline", Assert.Single(op.PlanRefs!).Variant));
+    }
+
+    [Fact]
+    public void Measure_noteworthy_plan_refs_use_query_variant_and_parameter_set()
+    {
+        var operators = new[]
+        {
+            OriginOp(4, "Seq Scan", "public.foo", true, false, false, statement: 0, nodePath: "0/0", cursor: 1, parameterSet: "wide"),
+        };
+        var set = new MeasureParameterSetReport(
+            "wide",
+            [new MeasureParameterMetadata("n", "int")],
+            "hash",
+            3,
+            true,
+            "rh",
+            new CompareVariantReport("wide", new(1, 1, 1), new(1, 1, 1), new(1, 1, 1), new Dictionary<string, long>(), operators, ["PlanWarning"]),
+            ["ph"]);
+        var report = new SqlHarnessMeasureSetReport(
+            new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "profile"),
+            3, 3, 1, ["wide"], "order", "cache",
+            [set],
+            new MeasureCrossSetSummary("wide", 1, "wide", 1, "wide", 1, "wide", 1, "wide", 1, "wide", 1),
+            ArtifactDir);
+
+        var projected = BenchmarkSummaryProjector.Project(report);
+        var op = Assert.Single(projected.Sets[0].NoteworthyOperators);
+        var href = Assert.Single(op.PlanRefs!);
+
+        Assert.Equal("query", op.Side);
+        Assert.Equal("artifact-001", href.ArtifactId);
+        Assert.Equal("query", href.Variant);
+        Assert.Equal("wide", href.ParameterSet);
+        Assert.Equal("0/0", href.NodePath);
+        Assert.Equal(1, href.Cursor);
+    }
+
+    private const string ArtifactDir = @"C:\tmp\artifact-001";
+
+    private static CompareOperatorReport OriginOp(
+        int nodeId,
+        string physicalOp,
+        string? objectName,
+        bool warnings,
+        bool spill,
+        bool conversion,
+        int statement,
+        string nodePath,
+        int cursor,
+        int repetition = 1,
+        string? parameterSet = null) =>
+        new CompareOperatorReport(nodeId, physicalOp, objectName, warnings, spill, conversion)
+        {
+            Statement = statement,
+            Repetition = repetition,
+            NodePath = nodePath,
+            Cursor = cursor,
+            ParameterSet = parameterSet,
+        };
+
     private static SqlHarnessCompareReport MinimalCompare(
         IReadOnlyList<CompareOperatorReport> baseline,
-        IReadOnlyList<CompareOperatorReport> candidate) =>
+        IReadOnlyList<CompareOperatorReport> candidate,
+        string? artifactDirectory = null) =>
         new(
             new SqlHarnessTargetIdentityReport("s", "d", "s", "d", "profile"),
             1,
@@ -801,5 +981,5 @@ public sealed class BenchmarkSummaryTests
                 new Dictionary<string, long>(),
                 candidate,
                 []),
-            null);
+            artifactDirectory);
 }

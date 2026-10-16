@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -13,7 +14,14 @@ public sealed record StatementOperatorSummary(
     string? Index,
     double? EstimatedRows,
     long? ActualRows,
-    long? Executions);
+    long? Executions)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? NodePath { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Cursor { get; init; }
+}
 
 public sealed record StatementMetrics(
     int StatementOrdinal,
@@ -67,14 +75,20 @@ internal static class StatementMetricsExtractor
     {
         var queryPlan = statement.Element(Showplan + "QueryPlan");
         var text = Attribute(statement, "StatementText") ?? string.Empty;
-        var operators = queryPlan?.Descendants(Showplan + "RelOp")
-            .Select(ParseOperator)
+        var walked = new List<StatementOperatorSummary>();
+        var root = queryPlan?.Element(Showplan + "RelOp");
+        if (root is not null)
+        {
+            var cursor = 0;
+            WalkOperators(root, "0", walked, ref cursor);
+        }
+        var operators = walked
             .OrderByDescending(item => item.ActualRows.HasValue)
             .ThenByDescending(item => item.ActualRows)
             .ThenByDescending(item => item.Executions)
             .ThenBy(item => item.NodeId)
             .Take(MaximumOperators)
-            .ToArray() ?? [];
+            .ToArray();
 
         return new StatementMetrics(
             ordinal,
@@ -101,6 +115,33 @@ internal static class StatementMetricsExtractor
             Double(relOp, "EstimateRows"),
             actualRows,
             executions);
+    }
+
+    private static void WalkOperators(XElement relOp, string path, List<StatementOperatorSummary> operators, ref int cursor)
+    {
+        operators.Add(ParseOperator(relOp) with { NodePath = path, Cursor = cursor });
+        cursor++;
+        var index = 0;
+        foreach (var child in DirectChildOperators(relOp))
+        {
+            WalkOperators(child, path + "/" + index, operators, ref cursor);
+            index++;
+        }
+    }
+
+    private static IEnumerable<XElement> DirectChildOperators(XElement relOp)
+    {
+        foreach (var child in relOp.Elements())
+        {
+            if (child.Name == Showplan + "RelOp")
+            {
+                yield return child;
+                continue;
+            }
+
+            foreach (var descendant in DirectChildOperators(child))
+                yield return descendant;
+        }
     }
 
     private static long? Sum(IReadOnlyList<XElement> elements, string name)

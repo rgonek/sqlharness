@@ -61,7 +61,10 @@ public static class StoredPlanReader
             foreach (var child in children.EnumerateArray()) parsedChildren.Add(ReadNode(child, depth + 1, ref count));
         return new PlanNode(physical.GetString()!, String(value, "logicalOp"), String(value, "objectName"), String(value, "indexName"),
             Number(value, "estimatedRows"), Long(value, "actualRows"), Long(value, "executions"), Number(value, "costFraction"),
-            String(value, "predicate"), Strings(value, "warnings"), parsedChildren);
+            String(value, "predicate"), Strings(value, "warnings"), parsedChildren)
+        {
+            NodeId = Int(value, "nodeId"),
+        };
     }
 
     private static IReadOnlyList<string> Strings(JsonElement parent, string name)
@@ -81,6 +84,9 @@ public static class StoredPlanReader
     private static long? Long(JsonElement parent, string name) =>
         !TryGet(parent, name, out var value) || value.ValueKind == JsonValueKind.Null ? null :
         value.TryGetInt64(out var number) ? number : throw new JsonException("Stored plan integer is invalid.");
+    private static int? Int(JsonElement parent, string name) =>
+        !TryGet(parent, name, out var value) || value.ValueKind == JsonValueKind.Null ? null :
+        value.TryGetInt32(out var number) ? number : throw new JsonException("Stored plan integer is invalid.");
     private static bool TryGet(JsonElement element, string name, out JsonElement value)
     {
         if (element.TryGetProperty(name, out value)) return true;

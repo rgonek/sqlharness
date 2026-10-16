@@ -408,6 +408,7 @@ public sealed class McpTokenBudgetTests
         var children = Enumerable.Range(1, nodeCount - 1).Select(index => new
         {
             physicalOp = $"Synthetic-{index:D3}",
+            nodeId = index,
             logicalOp = "Scan",
             objectName = $"public.fixture_{index:D3}",
             indexName = "fixture_idx",
@@ -428,6 +429,7 @@ public sealed class McpTokenBudgetTests
                     root = new
                     {
                         physicalOp = "Synthetic-Root",
+                        nodeId = 0,
                         logicalOp = "Root",
                         objectName = "public.synthetic_fixture",
                         indexName = "fixture_root_idx",
@@ -448,6 +450,41 @@ public sealed class McpTokenBudgetTests
         File.WriteAllText(Path.Combine(directory, "runs.jsonl"),
             "{\"variant\":\"baseline\",\"repetition\":1,\"planJsonFiles\":[\"baseline-001-000-000.plan.json\"]}");
         return (root, id);
+    }
+
+    [Theory]
+    [InlineData(4096)]
+    [InlineData(65536)]
+    public void Operators_with_plan_refs_fit_the_budget_and_keep_callable_selectors(int budget)
+    {
+        var href = new OperatorPlanRef("artifact-001", "candidate", null, 1, 5, "0/4", 5);
+        var operators = Enumerable.Range(0, 8).Select(index => new NoteworthyOperatorSummary(
+            "candidate", index, "Clustered Index Scan", "dbo.Accounts", true, true, false)
+        {
+            PlanRefs = [href with { Cursor = index, NodePath = index == 0 ? "0" : "0/" + (index - 1) }],
+            SourceIsCapped = true,
+        }).ToArray();
+        var section = new ArtifactOperatorsSection("artifact-001", "compare", operators)
+        {
+            SourceIsCapped = true,
+        };
+
+        var result = McpResultAdapter.Adapt(
+            new SqlHarnessOutcome(SqlHarnessExitCode.Success, section, null),
+            "sqlharness_artifact", new McpResultBudget(budget, 64));
+        var bytes = ResultTextBytes(result, budget);
+        _output.WriteLine($"operators-plan-refs: budget={budget} emittedUtf8Bytes={bytes} estimatedTokensCeilBytesDiv4={(bytes + 3) / 4}");
+        using var document = JsonDocument.Parse(Assert.Single(result.Content.OfType<TextContentBlock>()).Text);
+        var returned = document.RootElement.GetProperty("result").GetProperty("operators");
+        Assert.NotEmpty(returned.EnumerateArray());
+        var first = returned[0].GetProperty("planRefs")[0];
+        Assert.Equal("artifact-001", first.GetProperty("artifactId").GetString());
+        Assert.Equal("candidate", first.GetProperty("variant").GetString());
+        Assert.Equal(1, first.GetProperty("statement").GetInt32());
+        Assert.Equal(5, first.GetProperty("repetition").GetInt32());
+        Assert.True(first.TryGetProperty("nodePath", out _));
+        Assert.True(first.TryGetProperty("cursor", out _));
+        Assert.False(first.TryGetProperty("nodeId", out _));
     }
 
     [Fact]

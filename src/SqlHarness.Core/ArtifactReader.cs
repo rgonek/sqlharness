@@ -68,6 +68,9 @@ public sealed record ArtifactOperatorsSection(
     public int? Continuation { get; init; }
     public int Cursor { get; init; }
     public bool SourceIsCapped { get; init; } = true;
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? EvidenceGaps { get; init; }
 }
 
 public sealed record ArtifactPlanSelector(string Variant, int Statement = 0, string? ParameterSet = null, int? Repetition = null);
@@ -427,8 +430,15 @@ public static class ArtifactReader
         if (cursor > operators.Count) throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
         const int pageSize = 32;
         var page = operators.Skip(cursor).Take(pageSize).ToArray();
+        IReadOnlyList<string>? gaps = operators.Count > 0 && operators.Any(op => op.PlanRefs is not { Count: > 0 })
+            ? ["Exact plan source was not retained for one or more noteworthy operators."]
+            : null;
         return new ArtifactOperatorsSection(artifactId, manifest.ArtifactKind, page)
-        { Cursor = cursor, Continuation = cursor + page.Length < operators.Count ? cursor + page.Length : null };
+        {
+            Cursor = cursor,
+            Continuation = cursor + page.Length < operators.Count ? cursor + page.Length : null,
+            EvidenceGaps = gaps,
+        };
     }
 
     private static string DefaultVariant(string artifactKind) => artifactKind switch
@@ -498,7 +508,9 @@ public static class ArtifactReader
             if (selector.Statement >= statements.Length)
                 throw new ArtifactReadException($"Statement {selector.Statement} is unavailable; available statement range: 0..{Math.Max(-1, statements.Length - 1)}.", SqlHarnessExitCode.Safety);
             var selected = statements[selector.Statement];
-            var allNodes = Flatten(selected.Root, null, "0").ToArray();
+            var allNodes = PlanDistiller.Preorder(selected.Root)
+                .Select(node => new ArtifactPlanNode(node.Path, node.Parent, node.Node with { Children = [] }))
+                .ToArray();
             if (cursor > allNodes.Length) throw new ArtifactReadException("The artifact cursor is invalid.", SqlHarnessExitCode.Safety);
             var nodes = allNodes.Skip(cursor).Take(MaxPlanPageSourceNodes).Select(node => includeText ? node : node with
             { Operator = node.Operator with { Predicate = null } }).ToArray();
@@ -548,15 +560,9 @@ public static class ArtifactReader
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         { throw new ArtifactReadException("Artifact storage is unavailable.", SqlHarnessExitCode.LocalStorage); }
 
-        static IEnumerable<ArtifactPlanNode> Flatten(PlanNode node, string? parent, string path)
+        static string Shape(PlanNode root) => JsonSerializer.Serialize(PlanDistiller.Preorder(root).Select(node => new[]
         {
-            yield return new ArtifactPlanNode(path, parent, node with { Children = [] });
-            for (var index = 0; index < node.Children.Count; index++)
-                foreach (var child in Flatten(node.Children[index], path, path + "/" + index)) yield return child;
-        }
-        static string Shape(PlanNode root) => JsonSerializer.Serialize(Flatten(root, null, "0").Select(node => new[]
-        {
-            node.Operator.PhysicalOp, node.Operator.LogicalOp, node.Operator.ObjectName, node.Operator.IndexName, node.Operator.Predicate,
+            node.Node.PhysicalOp, node.Node.LogicalOp, node.Node.ObjectName, node.Node.IndexName, node.Node.Predicate,
         }));
     }
 

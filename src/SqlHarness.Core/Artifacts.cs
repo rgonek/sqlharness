@@ -225,7 +225,23 @@ internal sealed record BenchmarkRunMetrics(
 
 public sealed record CompareOperatorReport(
     int NodeId, string PhysicalOp, string? Object,
-    bool HasWarnings, bool HasSpill, bool HasImplicitConversion);
+    bool HasWarnings, bool HasSpill, bool HasImplicitConversion)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Statement { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Repetition { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? NodePath { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Cursor { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ParameterSet { get; init; }
+}
 
 public sealed record CompareVariantReport(
     string Name,
