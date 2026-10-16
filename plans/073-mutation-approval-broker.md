@@ -363,7 +363,7 @@ Rules:
   - before `Executing`, the caller's `ct` → `Cancelled`;
   - after `Executing` starts, `ct` is ignored and the result is still journaled (by the executor).
 
-- [ ] **Step 1: Write the failing tests** (with a fake time provider and an `execute` delegate that counts calls):
+- [x] **Step 1: Write the failing tests** (with a fake time provider and an `execute` delegate that counts calls):
   1. Approve → executes once → `success`.
   2. Deny → `denied_by_operator`; the delegate is never called.
   3. Advance time past the TTL → `approval_timeout`; a later `TryApprove` returns false; delegate count is 0.
@@ -374,10 +374,10 @@ Rules:
   8. Resubmission within 60 s after a deny → `denied_by_operator` with no event; at 61 s → a new `Pending`.
   9. `yolo`+`Dml` kind `Execute` → no `Added` event.
   10. Two profiles execute concurrently; the same profile → `busy`.
-- [ ] **Step 2: Run them to verify they fail.**
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run them to verify they pass** (run the race test 5 times: `--filter …MutationBrokerTests` in a loop).
-- [ ] **Step 5: Commit**: `git commit -m "Add the dashboard mutation broker state machine"`.
+- [x] **Step 2: Run them to verify they fail.**
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run them to verify they pass** (run the race test 5 times: `--filter …MutationBrokerTests` in a loop).
+- [x] **Step 5: Commit**: `git commit -m "Add the dashboard mutation broker state machine"`.
 
 ### Task 5: `MutationExecutor`
 
