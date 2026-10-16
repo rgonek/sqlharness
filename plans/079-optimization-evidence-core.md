@@ -142,11 +142,13 @@
 - Test: `tests/SqlHarness.Tests/StatisticsIoDetailParserTests.cs`, `DialectMessageBudgetTests.cs`
 
 **Interfaces:**
-- Produces: `ConsumedSessionMessages(IReadOnlyList<string> Messages, int OmittedMessageCount, IReadOnlyList<TableIoCounters> TableIo, bool TableIoComplete)`; `sealed class TableIoAccumulator { void Add(string message); IReadOnlyList<TableIoCounters> Snapshot(); bool Complete { get; } }`.
+- Produces: `ConsumedSessionMessages(IReadOnlyList<string> Messages, int OmittedMessageCount, IReadOnlyList<TableIoCounters> TableIo, bool TableIoComplete)`; `sealed class TableIoAccumulator { void Add(int messageNumber, string message); IReadOnlyList<TableIoCounters> Snapshot(); bool Complete { get; } }`.
+- Message numbers: the session keeps each info message's number (`SqlError.Number` from `InfoMessage`); IO and time parsers consume only engine statistics messages (IO 3615; time 3612/3613 — verify exact numbers against a live run and pin them in a test), so `PRINT`/`RAISERROR` text that imitates statistics is ignored (needed by plan 081, which admits `PRINT`/`RAISERROR`).
 
 - [ ] **Step 1: Write failing tests:**
   - `Table_io_survives_message_and_character_caps` — feed 1,500 messages totalling > 256 KiB, each with `Table 'T'. Scan count 1, logical reads 2, … lob logical reads 1 …`; consumed `TableIo` has `T` with scans 1,500, logical 3,000, LOB 1,500; `OmittedMessageCount > 0`; `TableIoComplete == true`.
   - `Accumulate_matches_parse_for_same_text` — same counters as today's `Parse` for the fixtures in `StatisticsIoDetailParserTests`.
+  - `User_messages_imitating_statistics_are_ignored` — a message number 0 (PRINT) with text `Table 'X'. Scan count 1, logical reads 999…` and one imitating `SQL Server Execution Times` leave IO and time counters unchanged.
 - [ ] **Step 2:** Run → FAIL. **Step 3:** Implement: `SessionMessageBuffer.Add` feeds the accumulator before eviction; `Consume` returns and resets it; `SqlServerDialect` uses `consumed.TableIo` instead of dropping IO when messages were omitted. `TableIoComplete` is false only if a single message could not be parsed (oversized/garbled).
 - [ ] **Step 4:** Run → PASS. **Step 5:** Commit `fix(079): aggregate table IO while messages stream`.
 
