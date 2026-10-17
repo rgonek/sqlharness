@@ -321,6 +321,71 @@ public sealed class GateParityTests
         Assert.Equal(marked, IsMarkedNotATestProject(projectFile));
     }
 
+    // The four projects the synthetic solution below names. Paths are spelled the way the filter
+    // normalises them to, which is also the way the InlineData rows spell them.
+    private const string TestsProject = "tests/SqlHarness.Tests/SqlHarness.Tests.csproj";
+    private const string McpTestsProject = "tests/SqlHarness.Mcp.Tests/SqlHarness.Mcp.Tests.csproj";
+    private const string WorkflowHostProject = "tests/SqlHarness.Mcp.WorkflowHost/SqlHarness.Mcp.WorkflowHost.csproj";
+    private const string ThirdTestProject = "tests/SqlHarness.Mcp.Tests.Extra/SqlHarness.Mcp.Tests.Extra.csproj";
+
+    // The wiring, not just the predicate. Only_the_marker_..._marks_a_project pins what the
+    // filter DECIDES; nothing else on this branch can tell whether the filter is APPLIED, because
+    // no project in the repository declares the marker, so dropping the step would keep the whole
+    // suite green and the merged-main red this fix prevents would return unnoticed. So the three
+    // cases that were proven by editing SqlHarness.sln are run here over a solution and a reader
+    // that exist only in this method: the marked host is excluded, a genuine third test project is
+    // still demanded, and a project whose text cannot be read is a failure rather than a guess.
+    // The expected lists are in the Ordinal order the filter returns, which the comparisons below
+    // pin as well.
+    [Theory]
+    // The host is in the solution but its project cannot be read: unknown, so the guards fail.
+    [InlineData(WorkflowHostProject, false, null)]
+    // The host declares IsTestProject false: excluded, and the two test projects remain.
+    [InlineData(null, false, new string[] { McpTestsProject, TestsProject })]
+    // The host excluded AND a genuine third test project added: that project is still demanded.
+    [InlineData(null, true, new string[] { ThirdTestProject, McpTestsProject, TestsProject })]
+    public void The_filter_demands_only_the_projects_dotnet_test_would_run_and_reports_one_it_cannot_read(string? unreadable, bool thirdTestProject, string[]? expected)
+    {
+        // One Project line in the shape SqlHarness.sln spells it, which is all the filter reads -
+        // including the backslashes it has to normalise to the '/' the expected lists use.
+        static string Entry(string name, string project) =>
+            $@"Project(""{{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}}"") = ""{name}"", ""{project.Replace('/', '\\')}"", ""{{A1B2C3D4-0000-4000-8000-000000000001}}""";
+
+        var entries = new List<string>
+        {
+            Entry("SqlHarness.Tests", TestsProject),
+            Entry("SqlHarness.Mcp.Tests", McpTestsProject),
+            Entry("SqlHarness.Mcp.WorkflowHost", WorkflowHostProject),
+        };
+        if (thirdTestProject) { entries.Add(Entry("SqlHarness.Mcp.Tests.Extra", ThirdTestProject)); }
+        var solution = string.Join("\n", [.. entries, "Global", string.Empty]);
+
+        // The reader answers from strings and refuses exactly the project the row names, which is
+        // what RepositoryFile.Locate does for a project that is not there - same exception type,
+        // same message - so the unreadable row exercises the path production takes, not a
+        // stand-in for it.
+        var texts = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [TestsProject] = "<Project Sdk=\"Microsoft.NET.Sdk\" />",
+            [McpTestsProject] = "<Project Sdk=\"Microsoft.NET.Sdk\" />",
+            [WorkflowHostProject] = "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><IsTestProject>false</IsTestProject></PropertyGroup></Project>",
+            [ThirdTestProject] = "<Project Sdk=\"Microsoft.NET.Sdk\" />",
+        };
+        if (unreadable is not null) { texts.Remove(unreadable); }
+        Func<string, string?> readProject = project =>
+            texts.TryGetValue(project, out var text) ? text : throw new FileNotFoundException($"Could not locate repository file: {project}");
+
+        if (expected is null)
+        {
+            var failure = Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => SolutionTestProjects(solution, readProject));
+
+            Assert.Contains(unreadable!, failure.Message, StringComparison.Ordinal);
+            return;
+        }
+
+        Assert.Equal(expected, SolutionTestProjects(solution, readProject));
+    }
+
     [Fact]
     public void StageCommand_ignores_comment_shadow_above_wrapped_command()
     {
@@ -811,9 +876,17 @@ public sealed class GateParityTests
     // IsTestProject false is one `dotnet test` skips, so no gate may be made to name it, and
     // requiring that would fail the build over a project that must not be tested.
     internal static string[] SolutionTestProjects() =>
-        Regex.Matches(ReadRepositoryFile("SqlHarness.sln"), @"""(?<project>tests\\[^""]+\.csproj)""", RegexOptions.IgnoreCase)
+        SolutionTestProjects(ReadRepositoryFile("SqlHarness.sln"), project => ReadRepositoryFile(project.Split('/')));
+
+    // The same read over a solution and a project reader the caller supplies, which is what lets
+    // the filter be pinned by a test that touches no file in the repository: no project in this
+    // repository declares the marker, so nothing on this branch can tell a caller-supplied
+    // solution from SqlHarness.sln except the tests that pass one in. readProject returns the
+    // project's text, or null when it cannot be read.
+    internal static string[] SolutionTestProjects(string solution, Func<string, string?> readProject) =>
+        Regex.Matches(solution, @"""(?<project>tests\\[^""]+\.csproj)""", RegexOptions.IgnoreCase)
             .Select(match => match.Groups["project"].Value.Replace('\\', '/'))
-            .Where(DotnetTestWouldRun)
+            .Where(project => DotnetTestWouldRun(project, readProject))
             .OrderBy(project => project, StringComparer.Ordinal)
             .ToArray();
 
@@ -821,23 +894,31 @@ public sealed class GateParityTests
     // honours decides it, not the project's name and not a list kept here, so the next project
     // that declares the marker is handled without anybody editing this file.
     //
-    // A project whose file cannot be read fails loudly instead of defaulting either way.
+    // A project whose text cannot be obtained fails loudly instead of defaulting either way.
     // Assuming it is not a test project would drop a real one from the two guards above, which
     // is the single drift those guards exist to catch; assuming it is would demand a test step
-    // for a project no gate can run. Both guesses are quiet, and a solution this test cannot
-    // read is drift too - so it is a red guard naming the file, never a pass.
-    private static bool DotnetTestWouldRun(string project)
+    // for a project no gate can run. Both guesses are quiet, and a solution entry this test
+    // cannot read is drift too - so it is a red guard naming the file, never a pass.
+    private static bool DotnetTestWouldRun(string project, Func<string, string?> readProject)
     {
+        string? projectFile = null;
+        string? failure = null;
+
         try
         {
-            return !IsMarkedNotATestProject(ReadRepositoryFile(project.Split('/')));
+            projectFile = readProject(project);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Assert.Fail($"SqlHarness.sln lists {project}, but reading it failed, so whether `dotnet test` runs it is unknown. {ex.Message}");
-
-            throw;
+            failure = ex.Message;
         }
+
+        if (projectFile is null)
+        {
+            Assert.Fail($"SqlHarness.sln lists {project}, but reading it failed, so whether `dotnet test` runs it is unknown. {failure ?? "the reader returned no text for it."}");
+        }
+
+        return !IsMarkedNotATestProject(projectFile);
     }
 
     // The marker `dotnet test` skips a project on, read from the project's own text. A project
